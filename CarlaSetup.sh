@@ -94,33 +94,13 @@ else
 fi
 
 # -- DOWNLOAD + BUILD UNREAL ENGINE --
-if [ ! -z $CARLA_UNREAL_ENGINE_PATH ] && [ -d $CARLA_UNREAL_ENGINE_PATH ]; then
-    echo "Found CARLA Unreal Engine at $CARLA_UNREAL_ENGINE_PATH"
-elif [ -d ../UnrealEngine5_carla ]; then
-    echo "Found CARLA Unreal Engine at $workspace_path/UnrealEngine5_carla. Assuming already built..."
+if [ -n "$CARLA_UNREAL_ENGINE_PATH" ] && [ -d "$CARLA_UNREAL_ENGINE_PATH" ]; then
+    echo "Found Unreal Engine 5 at $CARLA_UNREAL_ENGINE_PATH"
 else
-    echo "Could not find CARLA Unreal Engine, downloading..."
-    pushd ..
-    if [ -z "$GIT_LOCAL_CREDENTIALS" ]
-    then
-        UE5_URL=https://github.com/CarlaUnreal/UnrealEngine.git
-    else
-        GIT_CREDENTIALS_INFO=(${GIT_LOCAL_CREDENTIALS//@/ })
-        GIT_LOCAL_USER=${GIT_CREDENTIALS_INFO[0]}
-        GIT_LOCAL_TOKEN=${GIT_CREDENTIALS_INFO[1]}
-        UE5_URL=https://$GIT_LOCAL_USER:$GIT_LOCAL_TOKEN@github.com/CarlaUnreal/UnrealEngine.git
-    fi
-    git clone -b ue5-dev-carla $UE5_URL UnrealEngine5_carla
-    pushd UnrealEngine5_carla
-    echo -e '\n#CARLA UnrealEngine5\nexport CARLA_UNREAL_ENGINE_PATH='$PWD >> ~/.bashrc
-    export CARLA_UNREAL_ENGINE_PATH=$PWD
-    echo "Running Unreal Engine pre-build steps..."
-    bash -x Setup.sh
-    bash -x GenerateProjectFiles.sh
-    echo "Building Unreal Engine 5..."
-    make
-    popd
-    popd
+    echo "ERROR: CARLA_UNREAL_ENGINE_PATH is not set or does not exist."
+    echo "Please set CARLA_UNREAL_ENGINE_PATH to the root of your UE 5.7.4 source build."
+    echo "Example: export CARLA_UNREAL_ENGINE_PATH=/path/to/UE_5_7_4"
+    exit 1
 fi
 
 # -- BUILD CARLA --

@@ -99,28 +99,11 @@ if not "%vs_env_bat%"=="" (
 rem -- DOWNLOAD + BUILD UNREAL ENGINE --
 if exist "%CARLA_UNREAL_ENGINE_PATH%" (
     echo Found Unreal Engine 5 at "%CARLA_UNREAL_ENGINE_PATH%".
-) else if exist ..\UnrealEngine5_carla (
-    echo Found CARLA Unreal Engine at %cd%/UnrealEngine5_carla. Assuming already built...
 ) else (
-    echo Could not find CARLA Unreal Engine, downloading...
-    pushd ..
-    git clone ^
-        -b ue5-dev-carla ^
-        https://github.com/CarlaUnreal/UnrealEngine.git ^
-        UnrealEngine5_carla || exit /b
-    pushd UnrealEngine5_carla
-    set CARLA_UNREAL_ENGINE_PATH=!cd!
-    setx CARLA_UNREAL_ENGINE_PATH !cd!
-    echo Running Unreal Engine pre-build steps...
-    call Setup.bat || exit /b
-    call GenerateProjectFiles.bat || exit /b
-    echo Building Unreal Engine 5...
-    msbuild ^
-        Engine\Intermediate\ProjectFiles\UE5.vcxproj ^
-        /property:Configuration="Development_Editor" ^
-        /property:Platform="x64" || exit /b
-    popd
-    popd
+    echo ERROR: CARLA_UNREAL_ENGINE_PATH is not set or does not exist.
+    echo Please set CARLA_UNREAL_ENGINE_PATH to the root of your UE 5.7.4 source build.
+    echo Example: set CARLA_UNREAL_ENGINE_PATH=g:\Projects\CarlaUE_5_7_4\UE_5_7_4
+    exit /b 1
 )
 
 rem -- BUILD CARLA --

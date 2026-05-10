@@ -66,14 +66,16 @@ set (
 	${UE_ROOT}/Engine/Source/ThirdParty CACHE PATH ""
 )
 
+# UE 5.7.4: ThirdParty/Unix/LibCxx no longer exists; LibCxx is now bundled
+# inside the clang sysroot under usr/include and usr/lib.
 set (
 	UE_INCLUDE
-	${UE_THIRD_PARTY}/Unix/LibCxx/include CACHE PATH ""
+	${UE_SYSROOT}/usr/include CACHE PATH ""
 )
 
 set (
 	UE_LIBS
-	${UE_THIRD_PARTY}/Unix/LibCxx/lib/Unix/${TARGET_TRIPLE} CACHE PATH ""
+	${UE_SYSROOT}/usr/lib CACHE PATH ""
 )
 
 set (

@@ -141,7 +141,7 @@ namespace ImageUtil
     auto Resource = RenderTarget.GameThread_GetRenderTargetResource();
     FReadSurfaceDataFlags ReadFlags(RCM_UNorm);
     ReadFlags.SetLinearToGamma(true);
-    return Resource->ReadPixels(Out, ReadFlags);
+    return static_cast<FRenderTarget*>(Resource)->ReadPixels(Out, ReadFlags);
   }
 
 

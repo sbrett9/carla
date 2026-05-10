@@ -91,8 +91,8 @@ fi
 # Ensure CARLA_UNREAL_ENGINE_PATH is defined
 if [ -z "${CARLA_UNREAL_ENGINE_PATH}" ]; then
   echo "[ERROR] \$CARLA_UNREAL_ENGINE_PATH is not set."
-  echo "Please export CARLA_UNREAL_ENGINE_PATH=/absolute/path/to/UnrealEngine5_carla first."
-  echo "Example: export CARLA_UNREAL_ENGINE_PATH=\"/home/username/UnrealEngine5_carla\""
+  echo "Please export CARLA_UNREAL_ENGINE_PATH=/absolute/path/to/UE_5_7_4 first."
+  echo "Example: export CARLA_UNREAL_ENGINE_PATH=\"/home/username/UE_5_7_4\""
   exit 1
 fi
 

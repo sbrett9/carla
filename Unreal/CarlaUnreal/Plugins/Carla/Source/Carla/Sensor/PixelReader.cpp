@@ -100,7 +100,7 @@ bool FPixelReader::WritePixelsToArray(
   }
   FReadSurfaceDataFlags ReadPixelFlags(RCM_UNorm);
   ReadPixelFlags.SetLinearToGamma(true);
-  return RTResource->ReadPixels(BitMap, ReadPixelFlags);
+  return static_cast<FRenderTarget*>(RTResource)->ReadPixels(BitMap, ReadPixelFlags);
 }
 
 TUniquePtr<TImagePixelData<FColor>> FPixelReader::DumpPixels(
