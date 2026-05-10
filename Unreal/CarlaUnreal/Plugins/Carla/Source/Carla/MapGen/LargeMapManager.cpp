@@ -72,6 +72,8 @@ void ALargeMapManager::BeginPlay()
   UWorldComposition* WorldComposition = World->WorldComposition;
   WorldComposition->bRebaseOriginIn3DSpace = true;
   WorldComposition->RebaseOriginDistance = RebaseOriginDistance;
+  AWorldSettings* WorldSettings = World->GetWorldSettings();
+  WorldSettings->bIgnoreLocalPlayerOnRebase = true;
 
   LayerStreamingDistanceSquared = LayerStreamingDistance * LayerStreamingDistance;
   ActorStreamingDistanceSquared = ActorStreamingDistance * ActorStreamingDistance;

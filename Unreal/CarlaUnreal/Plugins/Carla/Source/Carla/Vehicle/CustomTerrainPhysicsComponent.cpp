@@ -1556,8 +1556,8 @@ void UCustomTerrainPhysicsComponent::TickComponent(float DeltaTime,
     bool bDepthIsForeground = (0 == SDPG_Foreground);
     UWorld* World = GetWorld();
     ULineBatchComponent* LineBatcher = 
-        (World ? (bDepthIsForeground ? World->ForegroundLineBatcher : 
-        (( bPersistentLines || (LifeTime > 0.f) ) ? World->PersistentLineBatcher : World->LineBatcher)) : nullptr);
+        (World ? (bDepthIsForeground ? World->GetLineBatcher(UWorld::ELineBatcherType::Foreground) : 
+        (( bPersistentLines || (LifeTime > 0.f) ) ? World->GetLineBatcher(UWorld::ELineBatcherType::WorldPersistent) : World->GetLineBatcher(UWorld::ELineBatcherType::World))) : nullptr);
     if (!LineBatcher)
     {
       UE_LOG(LogCarla, Error, TEXT("Missing linebatcher"));
@@ -1590,8 +1590,8 @@ void UCustomTerrainPhysicsComponent::DrawParticles(UWorld* World, std::vector<FP
   bool bPersistentLines = false;
   bool bDepthIsForeground = (0 == SDPG_Foreground);
   ULineBatchComponent* LineBatcher = 
-      (World ? (bDepthIsForeground ? World->ForegroundLineBatcher : 
-      (( bPersistentLines || (LifeTime > 0.f) ) ? World->PersistentLineBatcher : World->LineBatcher)) : nullptr);
+      (World ? (bDepthIsForeground ? World->GetLineBatcher(UWorld::ELineBatcherType::Foreground) : 
+      (( bPersistentLines || (LifeTime > 0.f) ) ? World->GetLineBatcher(UWorld::ELineBatcherType::WorldPersistent) : World->GetLineBatcher(UWorld::ELineBatcherType::World))) : nullptr);
   if (!LineBatcher)
   {
     UE_LOG(LogCarla, Error, TEXT("Missing linebatcher"));
@@ -1617,8 +1617,8 @@ void UCustomTerrainPhysicsComponent::DrawParticlesArray(UWorld* World, TArray<fl
   bool bPersistentLines = false;
   bool bDepthIsForeground = (0 == SDPG_Foreground);
   ULineBatchComponent* LineBatcher = 
-      (World ? (bDepthIsForeground ? World->ForegroundLineBatcher : 
-      (( bPersistentLines || (LifeTime > 0.f) ) ? World->PersistentLineBatcher : World->LineBatcher)) : nullptr);
+      (World ? (bDepthIsForeground ? World->GetLineBatcher(UWorld::ELineBatcherType::Foreground) : 
+      (( bPersistentLines || (LifeTime > 0.f) ) ? World->GetLineBatcher(UWorld::ELineBatcherType::WorldPersistent) : World->GetLineBatcher(UWorld::ELineBatcherType::World))) : nullptr);
   if (!LineBatcher)
   {
     UE_LOG(LogCarla, Error, TEXT("Missing linebatcher"));
@@ -1641,8 +1641,8 @@ void UCustomTerrainPhysicsComponent::DrawOrientedBox(UWorld* World, const TArray
   bool bDepthIsForeground = (0 == SDPG_Foreground);
   float Thickness = 2.0f;
   ULineBatchComponent* LineBatcher = 
-      (World ? (bDepthIsForeground ? World->ForegroundLineBatcher : 
-      (( bPersistentLines || (LifeTime > 0.f) ) ? World->PersistentLineBatcher : World->LineBatcher)) : nullptr);
+      (World ? (bDepthIsForeground ? World->GetLineBatcher(UWorld::ELineBatcherType::Foreground) : 
+      (( bPersistentLines || (LifeTime > 0.f) ) ? World->GetLineBatcher(UWorld::ELineBatcherType::WorldPersistent) : World->GetLineBatcher(UWorld::ELineBatcherType::World))) : nullptr);
   if (!LineBatcher)
   {
     UE_LOG(LogCarla, Error, TEXT("Missing linebatcher"));
@@ -1702,8 +1702,8 @@ void UCustomTerrainPhysicsComponent::DrawTiles(UWorld* World, const std::vector<
   bool bDepthIsForeground = (0 == SDPG_Foreground);
   float Thickness = 2.0f;
   ULineBatchComponent* LineBatcher = 
-      (World ? (bDepthIsForeground ? World->ForegroundLineBatcher : 
-      (( bPersistentLines || (LifeTime > 0.f) ) ? World->PersistentLineBatcher : World->LineBatcher)) : nullptr);
+      (World ? (bDepthIsForeground ? World->GetLineBatcher(UWorld::ELineBatcherType::Foreground) : 
+      (( bPersistentLines || (LifeTime > 0.f) ) ? World->GetLineBatcher(UWorld::ELineBatcherType::WorldPersistent) : World->GetLineBatcher(UWorld::ELineBatcherType::World))) : nullptr);
   if (!LineBatcher)
   {
     UE_LOG(LogCarla, Error, TEXT("Missing linebatcher"));
@@ -2396,8 +2396,8 @@ void UCustomTerrainPhysicsComponent::ApplyForcesToVehicle(
     bool bDepthIsForeground = (0 == SDPG_Foreground);
     UWorld * World = GetWorld();
     ULineBatchComponent* LineBatcher = 
-        (World ? (bDepthIsForeground ? World->ForegroundLineBatcher : 
-        (( bPersistentLines || (LifeTime > 0.f) ) ? World->PersistentLineBatcher : World->LineBatcher)) : nullptr);
+        (World ? (bDepthIsForeground ? World->GetLineBatcher(UWorld::ELineBatcherType::Foreground) : 
+        (( bPersistentLines || (LifeTime > 0.f) ) ? World->GetLineBatcher(UWorld::ELineBatcherType::WorldPersistent) : World->GetLineBatcher(UWorld::ELineBatcherType::World))) : nullptr);
     if (!LineBatcher)
     {
       UE_LOG(LogCarla, Error, TEXT("Missing linebatcher"));
@@ -2448,8 +2448,8 @@ void UCustomTerrainPhysicsComponent::ApplyMeanAccelerationToVehicle(
     bool bDepthIsForeground = (0 == SDPG_Foreground);
     UWorld * World = GetWorld();
     ULineBatchComponent* LineBatcher = 
-        (World ? (bDepthIsForeground ? World->ForegroundLineBatcher : 
-        (( bPersistentLines || (LifeTime > 0.f) ) ? World->PersistentLineBatcher : World->LineBatcher)) : nullptr);
+        (World ? (bDepthIsForeground ? World->GetLineBatcher(UWorld::ELineBatcherType::Foreground) : 
+        (( bPersistentLines || (LifeTime > 0.f) ) ? World->GetLineBatcher(UWorld::ELineBatcherType::WorldPersistent) : World->GetLineBatcher(UWorld::ELineBatcherType::World))) : nullptr);
     if (!LineBatcher)
     {
       UE_LOG(LogCarla, Error, TEXT("Missing linebatcher"));

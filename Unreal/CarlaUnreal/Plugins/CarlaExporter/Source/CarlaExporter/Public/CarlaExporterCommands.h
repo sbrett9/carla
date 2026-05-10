@@ -19,7 +19,7 @@ public:
       TEXT("CarlaExporter"),
       NSLOCTEXT("Contexts", "CarlaExporter", "CarlaExporter Plugin"),
       NAME_None,
-      FEditorStyle::GetStyleSetName())
+      FAppStyle::GetAppStyleSetName())
   {
   }
 
