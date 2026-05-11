@@ -207,7 +207,7 @@ void AProceduralBuildingUtilities::CookProceduralMeshToMesh(
     StaticMesh->GetStaticMaterials().Add(FStaticMaterial(Material));
   }
 
-  StaticMesh->ImportVersion = EImportStaticMeshVersion::LastVersion;
+  StaticMesh->SetImportVersion(EImportStaticMeshVersion::LastVersion);
   StaticMesh->Build(false);
   StaticMesh->PostEditChange();
   FAssetRegistryModule::AssetCreated(StaticMesh);

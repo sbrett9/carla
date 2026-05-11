@@ -127,7 +127,7 @@ FCarlaActor *CarlaReplayerHelper::FindTrafficLightAt(FVector Location)
   // through all actors in registry
   for (auto It = Registry.begin(); It != Registry.end(); ++It)
   {
-    FCarlaActor* CarlaActor = It.Value().Get();
+    FCarlaActor* CarlaActor = It->Value.Get();
     if(CarlaActor->GetActorType() == FCarlaActor::ActorType::TrafficLight)
     {
       FVector vec = CarlaActor->GetActorGlobalLocation();

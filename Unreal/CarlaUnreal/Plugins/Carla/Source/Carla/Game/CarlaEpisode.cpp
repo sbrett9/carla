@@ -33,7 +33,7 @@
 #include "Misc/Paths.h"
 #include <util/ue-header-guard-end.h>
 
-constexpr TCHAR DefaultRecastBuilderPath[] = TEXT(RECASTBUILDER_PATH);
+constexpr TCHAR DefaultRecastBuilderPath[] = TEXT("");
 
 static FString BuildRecastBuilderFile()
 {

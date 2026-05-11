@@ -24,6 +24,9 @@ public class CarlaUnreal : ModuleRules
         bEnableExceptions = true;
         bUseRTTI = true;
 
+        PublicIncludePaths.Add(ModuleDirectory);
+        PublicIncludePaths.Add(System.IO.Path.Combine(ModuleDirectory, "../../../../LibCarla/source"));
+
 		PublicDependencyModuleNames.AddRange(new string[]
 		{
 			"Core",

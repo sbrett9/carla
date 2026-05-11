@@ -54,7 +54,7 @@ private:
         Message += String;
       }
       Message += TEXT(" ");
-      Message += FString::Printf(Format, std::forward<ARGS>(Args)...);
+      Message += FString(Format);
 
       UE_LOG(LogCarla, Error, TEXT("%s"), *Message);
 #if WITH_EDITOR
