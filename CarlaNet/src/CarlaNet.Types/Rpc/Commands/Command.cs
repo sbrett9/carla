@@ -37,7 +37,9 @@ public enum CommandType : int
 
 // Each command payload is serialized as a msgpack array per its MSGPACK_DEFINE_ARRAY.
 // The Command struct wraps one of these in [[index, payload]].
+// CommandFormatter handles the full [[variant_idx, payload]] encoding.
 
+[MessagePackFormatter(typeof(CommandFormatter))]
 public abstract record Command;
 
 // MSGPACK_DEFINE_ARRAY(description, transform, parent, do_after)
@@ -100,9 +102,19 @@ public record ConsoleCommandCommand(string Cmd) : Command;
 // MSGPACK_DEFINE_ARRAY(actor, traffic_light_state)
 public record SetTrafficLightStateCommand(ActorId Actor, TrafficLightState TrafficLightState) : Command;
 
-// Source: carla/rpc/CommandResponse.h — Response<ActorId>
-// Serializes as [error_or_nil, result_or_nil]
-[MessagePackObject]
-public record struct CommandResponse(
-    [property: Key(0)] uint? ActorId,
-    [property: Key(1)] string? Error);
+// Source: carla/rpc/CommandResponse.h — using CommandResponse = Response<ActorId>
+// Wire format: [[variant_idx, payload]] per Response<T>'s MSGPACK_DEFINE_ARRAY(_data)
+//   [[0, ["error message"]]] = failure
+//   [[1, actor_id]]          = success
+[MessagePackFormatter(typeof(CommandResponseFormatter))]
+public readonly struct CommandResponse
+{
+    public bool HasError { get; }
+    public string? Error { get; }
+    public uint ActorId { get; }
+
+    private CommandResponse(uint actorId, string? error) { ActorId = actorId; Error = error; HasError = error is not null; }
+    public static CommandResponse Success(uint actorId) => new(actorId, null);
+    public static CommandResponse Failure(string error) => new(0, error);
+    public override string ToString() => HasError ? $"Error({Error})" : $"Ok({ActorId})";
+}

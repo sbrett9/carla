@@ -1,6 +1,8 @@
 // §8 — Public CarlaClient facade. All 87 RPC methods from Client.h.
 // Default timeout: 5000ms (from LibCarla/source/carla/client/detail/Client.cpp).
 // Default port: 2000.
+using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.Reflection;
 using CarlaNet.Transport.MsgPackRpc;
 using CarlaNet.Transport.Streaming;
@@ -9,12 +11,28 @@ using Microsoft.Extensions.Logging;
 
 namespace CarlaNet.Transport;
 
+// Cached snapshot of one actor from the world observer stream (§10.14).
+// Parsed inline without CarlaNet.Sensors dependency.
+public sealed class ActorSnapshot
+{
+    public ActorId Id { get; init; }
+    public ActorState State { get; init; }
+    public Transform Transform { get; init; }
+    public Vector3D Velocity { get; init; }
+    public Vector3D AngularVelocity { get; init; }
+    public Vector3D Acceleration { get; init; }
+    // Raw 54-byte TypeDependentState union — parse with GetVehicleData() etc.
+    internal byte[] TypeDependentState { get; init; } = [];
+}
+
 public sealed class CarlaClient : IAsyncDisposable
 {
     private readonly MsgPackRpcClient _rpc;
     private readonly string _host;
     private readonly ILogger<CarlaClient>? _log;
     private readonly List<SensorStream> _streams = [];
+    private readonly ConcurrentDictionary<ActorId, ActorSnapshot> _actorCache = new();
+    private IDisposable? _worldObserver;
 
     public CarlaClient(string host, int port = 2000, TimeSpan? timeout = null, ILogger<CarlaClient>? logger = null)
     {
@@ -144,6 +162,44 @@ public sealed class CarlaClient : IAsyncDisposable
 
     public Task<Actor> SpawnActorAsync(ActorDescription desc, Transform transform)
         => _rpc.CallAsync<Actor>("spawn_actor", desc, transform);
+
+    // ── Convenience: spawn a vehicle by blueprint id at a spawn-point index ──────
+    // Combines GetActorDefinitionsAsync + GetMapInfoAsync + spawn_actor in one call.
+    public async Task<Actor> SpawnVehicleAsync(string blueprintId = "vehicle.lincoln.mkz", int spawnIndex = 0)
+    {
+        var defs      = await GetActorDefinitionsAsync().ConfigureAwait(false);
+        var mapInfo   = await GetMapInfoAsync().ConfigureAwait(false);
+        var def       = defs.First(d => d.Id == blueprintId);
+        var spawnPt   = mapInfo.RecommendedSpawnPoints[spawnIndex];
+        var attrs     = def.Attributes
+            .Select(a => new ActorAttributeValue(a.Id, a.Type, a.Value))
+            .ToList();
+        var desc = new ActorDescription(def.Uid, def.Id, attrs);
+        return await _rpc.CallAsync<Actor>("spawn_actor", desc, spawnPt).ConfigureAwait(false);
+    }
+
+    // ── Convenience: spawn an RGB camera sensor attached to a parent actor ────────
+    // Returns the camera Actor — actor.StreamToken gives the subscription token.
+    public async Task<Actor> SpawnCameraAsync(
+        ActorId parentId,
+        int width = 1280, int height = 720,
+        float boomX = -5.5f, float boomZ = 2.8f, float pitchDeg = -8f)
+    {
+        var defs = await GetActorDefinitionsAsync().ConfigureAwait(false);
+        var def  = defs.First(d => d.Id == "sensor.camera.rgb");
+        var attrs = def.Attributes
+            .Select(a => a.Id switch
+            {
+                "image_size_x" => new ActorAttributeValue(a.Id, a.Type, width.ToString()),
+                "image_size_y" => new ActorAttributeValue(a.Id, a.Type, height.ToString()),
+                _              => new ActorAttributeValue(a.Id, a.Type, a.Value)
+            }).ToList();
+        var desc   = new ActorDescription(def.Uid, def.Id, attrs);
+        var offset = new Transform(new Location(boomX, 0f, boomZ), new Rotation(pitchDeg, 0f, 0f));
+        return await _rpc.CallAsync<Actor>(
+            "spawn_actor_with_parent", desc, offset, parentId, AttachmentType.SpringArmGhost
+        ).ConfigureAwait(false);
+    }
 
     public Task<Actor> SpawnActorWithParentAsync(ActorDescription desc, Transform transform,
         ActorId parentId, AttachmentType attachType)
@@ -371,25 +427,39 @@ public sealed class CarlaClient : IAsyncDisposable
         => _rpc.CallVoidAsync("stop_replayer", keepActors);
 
     // ── §8.15 Sensor Subscription ─────────────────────────────────────────────
+    // actor.StreamToken is the raw 24-byte vector<unsigned char> from Actor.h.
+    // Use actor.StreamToken.Length == 24 to confirm the actor has a stream.
 
-    public IDisposable SubscribeToStream(RawToken rawToken, Action<SensorFrame> callback)
+    public IDisposable SubscribeToStream(byte[] rawTokenBytes, Action<SensorFrame> callback)
     {
-        var token = StreamToken.Parse(rawToken.Data, _host);
+        var token = StreamToken.Parse(rawTokenBytes, _host);
         var stream = new SensorStream(token, callback);
         lock (_streams) { _streams.Add(stream); }
         return new StreamDisposable(stream, () => { lock (_streams) { _streams.Remove(stream); } });
     }
 
-    public Task EnableForRosAsync(RawToken rawToken)
-        => _rpc.CallVoidAsync("enable_sensor_for_ros", rawToken);
+    // GBuffer token retrieved via get_gbuffer_token RPC, returns raw 24-byte token bytes.
+    public async Task<IDisposable> SubscribeToGBufferAsync(
+        ActorId actorId, uint gBufferId, Action<SensorFrame> callback)
+    {
+        var rawBytes = await _rpc.CallAsync<byte[]>("get_gbuffer_token", actorId, gBufferId)
+            .ConfigureAwait(false);
+        return SubscribeToStream(rawBytes, callback);
+    }
 
-    public Task DisableForRosAsync(RawToken rawToken)
-        => _rpc.CallVoidAsync("disable_sensor_for_ros", rawToken);
+    public Task EnableForRosAsync(byte[] rawTokenBytes)
+        => _rpc.CallVoidAsync("enable_sensor_for_ros", rawTokenBytes);
 
-    public Task<bool> IsEnabledForRosAsync(RawToken rawToken)
-        => _rpc.CallAsync<bool>("is_sensor_enabled_for_ros", rawToken);
+    public Task DisableForRosAsync(byte[] rawTokenBytes)
+        => _rpc.CallVoidAsync("disable_sensor_for_ros", rawTokenBytes);
+
+    public Task<bool> IsEnabledForRosAsync(byte[] rawTokenBytes)
+        => _rpc.CallAsync<bool>("is_sensor_enabled_for_ros", rawTokenBytes);
 
     // ── §8.16 Debug and Batch ─────────────────────────────────────────────────
+
+    public Task DrawDebugShapeAsync(DebugShape shape)
+        => _rpc.CallVoidAsync("draw_debug_shape", shape);
 
     public Task ApplyBatchAsync(IReadOnlyList<Command> commands, bool doTickCue)
         => _rpc.CallVoidAsync("apply_batch", commands, doTickCue);
@@ -407,10 +477,97 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<IReadOnlyList<LabelledPoint>> CastRayAsync(Location start, Location end)
         => _rpc.CallAsync<IReadOnlyList<LabelledPoint>>("cast_ray", start, end);
 
+    // ── World Observer (§10.14) ───────────────────────────────────────────────
+    // Subscribes to the episode state stream (FWorldObserver) and caches all
+    // actor snapshots.  Call once after construction; required for GetActorTransform etc.
+
+    public async Task StartWorldObserverAsync()
+    {
+        var info = await GetEpisodeInfoAsync().ConfigureAwait(false);
+        _worldObserver = SubscribeToStream(info.Token.Data, OnWorldObserverFrame);
+    }
+
+    private void OnWorldObserverFrame(SensorFrame frame)
+    {
+        try { ParseEpisodeState(frame.Payload.Span); }
+        catch (Exception ex) { _log?.LogWarning(ex, "World observer parse error"); }
+    }
+
+    private void ParseEpisodeState(ReadOnlySpan<byte> payload)
+    {
+        // Header layout (36 bytes): episode_id(8) platform_ts(8) delta_s(4) map_origin(12) state(1) pad(3)
+        if (payload.Length < 36) return;
+        const int HeaderSize = 36;
+        const int ActorSize  = 119;
+        var actors = payload[HeaderSize..];
+        int count  = actors.Length / ActorSize;
+        for (int i = 0; i < count; i++)
+        {
+            var a  = actors.Slice(i * ActorSize, ActorSize);
+            var id = BinaryPrimitives.ReadUInt32LittleEndian(a);
+            var st = (ActorState)a[4];
+            // Transform: Location(12) + Rotation(12) starting at offset 5
+            float lx  = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(a[5..]));
+            float ly  = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(a[9..]));
+            float lz  = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(a[13..]));
+            float rp  = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(a[17..]));
+            float ry  = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(a[21..]));
+            float rr  = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(a[25..]));
+            float vx  = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(a[29..]));
+            float vy  = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(a[33..]));
+            float vz  = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(a[37..]));
+            float avx = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(a[41..]));
+            float avy = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(a[45..]));
+            float avz = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(a[49..]));
+            float ax  = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(a[53..]));
+            float ay  = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(a[57..]));
+            float az  = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(a[61..]));
+            _actorCache[id] = new ActorSnapshot
+            {
+                Id = id, State = st,
+                Transform       = new Transform(new Location(lx, ly, lz), new Rotation(rp, ry, rr)),
+                Velocity        = new Vector3D(vx, vy, vz),
+                AngularVelocity = new Vector3D(avx, avy, avz),
+                Acceleration    = new Vector3D(ax, ay, az),
+                TypeDependentState = a[65..119].ToArray()
+            };
+        }
+    }
+
+    // ── Actor state queries (sourced from world observer cache) ───────────────
+    // Returns default(T) if actor not yet observed. Call StartWorldObserverAsync()
+    // once before using these — they read from the in-memory cache.
+
+    public Transform       GetActorTransform      (ActorId id) => _actorCache.TryGetValue(id, out var s) ? s.Transform       : default;
+    public Vector3D        GetActorVelocity       (ActorId id) => _actorCache.TryGetValue(id, out var s) ? s.Velocity        : default;
+    public Vector3D        GetActorAngularVelocity(ActorId id) => _actorCache.TryGetValue(id, out var s) ? s.AngularVelocity : default;
+    public Vector3D        GetActorAcceleration   (ActorId id) => _actorCache.TryGetValue(id, out var s) ? s.Acceleration    : default;
+    public ActorSnapshot?  GetActorSnapshot       (ActorId id) => _actorCache.TryGetValue(id, out var s) ? s : null;
+
+    /// All actor IDs currently in the world observer cache.
+    public IReadOnlyList<ActorId> GetCachedActorIds() => [.. _actorCache.Keys];
+
+    // Decode VehicleControl from the cached TypeDependentState union.
+    // VehicleData layout (pack=1): throttle(f) steer(f) brake(f) hand_brake(bool)
+    //   reverse(bool) manual_gear_shift(bool) gear(i32) = 19 bytes → PackedVehicleControl
+    public VehicleControl GetVehicleControl(ActorId id)
+    {
+        if (!_actorCache.TryGetValue(id, out var snap) || snap.TypeDependentState.Length < 19)
+            return default;
+        var d = snap.TypeDependentState.AsSpan();
+        return new VehicleControl(
+            BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(d)),       // throttle
+            BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(d[4..])),  // steer
+            BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(d[8..])),  // brake
+            d[12] != 0, d[13] != 0, d[14] != 0,                                              // hand_brake, reverse, manual_gear_shift
+            BinaryPrimitives.ReadInt32LittleEndian(d[15..]));                                 // gear
+    }
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     public async ValueTask DisposeAsync()
     {
+        _worldObserver?.Dispose();
         lock (_streams) { foreach (var s in _streams) s.Dispose(); _streams.Clear(); }
         await _rpc.DisposeAsync().ConfigureAwait(false);
     }

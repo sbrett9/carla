@@ -1,4 +1,5 @@
 // Source: carla/rpc/DebugShape.h
+using CarlaNet.Types.Formatters;
 // Outer MSGPACK_DEFINE_ARRAY(primitive, color, life_time, persistent_lines)
 // primitive is std::variant<Point, Line, Arrow, Box, String> -> [index, payload]
 // Each subtype MSGPACK:
@@ -19,8 +20,8 @@ public record StringPrimitive(Location Location, string Text, bool DrawShadow) :
 public enum PrimitiveType : int
 { Point = 0, Line = 1, Arrow = 2, Box = 3, String = 4 }
 
-// The DebugShape formatter writes: [primitive_variant, color, life_time, persistent_lines]
-// where primitive_variant is [primitive_index, [primitive_fields...]]
+// DebugShapeFormatter handles [[variant_idx, [fields...]], color, life_time, persistent_lines]
+[MessagePackFormatter(typeof(DebugShapeFormatter))]
 public record DebugShape(
     Primitive Primitive,
     Color Color,

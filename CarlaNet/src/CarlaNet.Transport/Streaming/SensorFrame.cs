@@ -24,6 +24,9 @@ public sealed class SensorFrame
     public RawSensorHeader Header { get; }
     public ReadOnlyMemory<byte> Payload { get; }
 
+    // Python-friendly accessor — pythonnet can't slice ReadOnlyMemory directly
+    public byte[] PayloadBytes => Payload.ToArray();
+
     public Location SensorLocation => new(Header.LocationX, Header.LocationY, Header.LocationZ);
     public Rotation SensorRotation => new(Header.RotationPitch, Header.RotationYaw, Header.RotationRoll);
     public Transform SensorTransform => new(SensorLocation, SensorRotation);

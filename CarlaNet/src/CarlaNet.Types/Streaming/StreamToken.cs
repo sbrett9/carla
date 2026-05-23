@@ -6,6 +6,7 @@
 using MessagePack;
 using System.Buffers.Binary;
 using System.Net;
+using System.Net.Sockets;
 
 namespace CarlaNet.Types.Streaming;
 
@@ -53,9 +54,9 @@ public readonly struct StreamToken
         {
             // 4 bytes IPv4, 12 bytes padding
             address = new IPAddress(raw.Slice(8, 4));
-            // If the address is 0.0.0.0 (unset), fall back to the RPC server host
+            // 0.0.0.0 means "same host as the RPC server" — resolve the server host
             if (address.Equals(IPAddress.Any))
-                address = IPAddress.Parse(serverHost);
+                address = ResolveHost(serverHost);
         }
         else if (addressType == StreamAddressType.Ipv6)
         {
@@ -63,9 +64,18 @@ public readonly struct StreamToken
         }
         else
         {
-            address = IPAddress.Parse(serverHost);
+            address = ResolveHost(serverHost);
         }
 
         return new StreamToken(streamId, port, protocol, addressType, address);
+    }
+
+    private static IPAddress ResolveHost(string host)
+    {
+        if (IPAddress.TryParse(host, out var parsed)) return parsed;
+        // hostname (e.g. "localhost") — resolve via DNS, prefer IPv4
+        var addrs = Dns.GetHostAddresses(host);
+        return addrs.FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork)
+               ?? addrs[0];
     }
 }

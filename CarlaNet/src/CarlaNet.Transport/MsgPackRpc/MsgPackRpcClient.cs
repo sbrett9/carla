@@ -91,12 +91,23 @@ internal sealed class MsgPackRpcClient : IAsyncDisposable
             string err = reader.ReadString() ?? "unknown error";
             throw new CarlaRpcException(err);
         }
-        // Result field is [[variant_idx, value]] — 1-element outer array wrapping [idx, val].
-        // Empirically confirmed: version() returns [1, 0, nil, [[1, "0.10.0"]]]
+        // Result field: Response<T> uses MSGPACK_DEFINE_ARRAY(_data) where _data is
+        // std::variant<ResponseError, T>.  Encoding: [[variant_idx, payload]].
+        //   variant_idx == 0 → ResponseError (MSGPACK_DEFINE_ARRAY(_what) = ["msg"])
+        //   variant_idx == 1 → success value T
+        // Response<void> uses std::optional<ResponseError>: [[false]] or [[true, [msg]]]
         int outer = reader.ReadArrayHeader();
         if (outer == 0) return default!;
-        reader.ReadArrayHeader();  // inner [variant_idx, value]
-        reader.ReadInt32();        // skip variant index
+        int inner = reader.ReadArrayHeader();   // 2 for variant, 1 for optional-void
+        int idx   = reader.ReadInt32();         // 0=error/false, 1=success/true
+        if (idx == 0 && inner == 2)
+        {
+            // ResponseError: MSGPACK_DEFINE_ARRAY(_what) → 1-element array ["msg"]
+            reader.ReadArrayHeader();
+            string carlaErr = reader.ReadString() ?? "unknown CARLA error";
+            throw new CarlaRpcException(carlaErr);
+        }
+        if (inner == 1) return default!;        // Response<void> success: [[false]]
         return MessagePackSerializer.Deserialize<T>(ref reader);
     }
 

@@ -1,4 +1,5 @@
 global using MessagePack;
+global using System.Linq;
 global using CarlaNet.Types.Geom;
 global using CarlaNet.Types.Rpc;
 global using CarlaNet.Types.Rpc.Actors;

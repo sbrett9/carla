@@ -2,29 +2,38 @@
 //          TrafficLightState.h, VehicleDoor.h, VehicleWheels.h,
 //          VehicleFailureState.h, MapLayer.h, ObjectLabel.h, MaterialParameter.h,
 //          LightState.h, VehicleLightState.h
+// Underlying types verified against source headers (uint8_t vs int).
 namespace CarlaNet.Types.Rpc.Enums;
 
+// ActorAttributeType has no explicit underlying type in C++ (defaults to int)
 public enum ActorAttributeType : uint
 { Bool, Int, Float, String, RGBColor, Vector, SIZE, INVALID }
 
+// ActorState : uint8_t (carla/rpc/ActorState.h)
 public enum ActorState : byte
 { Invalid, Active, Dormant, PendingKill }
 
-public enum AttachmentType : uint
+// AttachmentType : uint8_t (carla/rpc/AttachmentType.h)
+public enum AttachmentType : byte
 { Rigid, SpringArm, SpringArmGhost, SIZE, INVALID }
 
-public enum TrafficLightState : uint
+// TrafficLightState : uint8_t (carla/rpc/TrafficLightState.h)
+public enum TrafficLightState : byte
 { Red, Yellow, Green, Off, Unknown, SIZE }
 
-public enum VehicleDoor : uint
+// VehicleDoor : uint8_t (carla/rpc/VehicleDoor.h)
+public enum VehicleDoor : byte
 { FL = 0, FR = 1, RL = 2, RR = 3, Hood = 4, Trunk = 5, All = 6 }
 
+// VehicleWheelLocation has no explicit underlying type in source
 public enum VehicleWheelLocation : uint
 { FL = 0, FR = 1, BL = 2, BR = 3, FrontWheel = 0, BackWheel = 1 }
 
-public enum VehicleFailureState : uint
+// VehicleFailureState : uint8_t (carla/rpc/VehicleFailureState.h)
+public enum VehicleFailureState : byte
 { None, Rollover, Engine, TirePuncture }
 
+// MapLayer : uint16_t (carla/rpc/MapLayer.h — using MapLayerType = uint16_t)
 [Flags]
 public enum MapLayer : ushort
 {
@@ -33,6 +42,7 @@ public enum MapLayer : ushort
     Walls = 0x100, All = 0xFFFF
 }
 
+// CityObjectLabel / ObjectLabel — byte in sensor data
 public enum CityObjectLabel : byte
 {
     None = 0, Roads = 1, Sidewalks = 2, Buildings = 3, Walls = 4, Fences = 5,
@@ -43,12 +53,15 @@ public enum CityObjectLabel : byte
     RailTrack = 27, GuardRail = 28, Rock = 29, Any = 0xFF
 }
 
+// MaterialParameter has no explicit underlying type in C++ (defaults to int)
 public enum MaterialParameter : uint
 { TexNormal, TexAoRoughnessMetallicEmissive, TexDiffuse, TexEmissive }
 
+// LightGroup : uint8_t (carla/rpc/LightState.h)
 public enum LightGroup : byte
 { None = 0, Vehicle = 1, Street = 2, Building = 3, Other = 4 }
 
+// VehicleLightState.flag_type = uint32_t (carla/rpc/VehicleLightState.h)
 [Flags]
 public enum VehicleLightStateFlags : uint
 {
