@@ -77,6 +77,10 @@ string? carlaHost = Environment.GetEnvironmentVariable("CARLA_HOST");
 if (carlaHost is not null)
 {
     int carlaPort = int.TryParse(Environment.GetEnvironmentVariable("CARLA_PORT"), out int p) ? p : 2000;
+
+    // Raw protocol diagnostic first
+    await CarlaNet.Smoke.RawDiag.RunAsync(carlaHost, carlaPort);
+
     Console.WriteLine($"    Connecting to {carlaHost}:{carlaPort} ...");
     try
     {

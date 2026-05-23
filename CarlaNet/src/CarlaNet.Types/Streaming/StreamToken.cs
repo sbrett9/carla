@@ -1,9 +1,22 @@
 // Source: carla/streaming/detail/Token.h — #pragma pack(push,1), 24 bytes total
 // Layout: [stream_id:u32][port:u16][protocol:u8][address_type:u8][address_bytes:16]
+//
+// carla::streaming::Token serializes via MSGPACK_DEFINE_ARRAY(data) as [[bin24]] —
+// a 1-element msgpack array containing a 24-byte binary blob.
+using MessagePack;
 using System.Buffers.Binary;
 using System.Net;
 
 namespace CarlaNet.Types.Streaming;
+
+// Wire wrapper matching carla::streaming::Token's MSGPACK_DEFINE_ARRAY(data).
+// Empirically confirmed: EpisodeInfo.token arrives as fixarray(1) containing bin8(24).
+[MessagePackObject]
+public record struct RawToken(
+    [property: Key(0)] byte[] Data)
+{
+    public static readonly RawToken Empty = new(Array.Empty<byte>());
+}
 
 public enum StreamProtocol : byte { NotSet = 0, Tcp = 1, Udp = 2 }
 public enum StreamAddressType : byte { NotSet = 0, Ipv4 = 1, Ipv6 = 2 }

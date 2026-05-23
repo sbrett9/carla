@@ -372,22 +372,22 @@ public sealed class CarlaClient : IAsyncDisposable
 
     // ── §8.15 Sensor Subscription ─────────────────────────────────────────────
 
-    public IDisposable SubscribeToStream(byte[] tokenBytes, Action<SensorFrame> callback)
+    public IDisposable SubscribeToStream(RawToken rawToken, Action<SensorFrame> callback)
     {
-        var token = StreamToken.Parse(tokenBytes, _host);
-        var stream = new SensorStream(token.Address.ToString(), token.Port, callback);
+        var token = StreamToken.Parse(rawToken.Data, _host);
+        var stream = new SensorStream(token, callback);
         lock (_streams) { _streams.Add(stream); }
         return new StreamDisposable(stream, () => { lock (_streams) { _streams.Remove(stream); } });
     }
 
-    public Task EnableForRosAsync(byte[] tokenBytes)
-        => _rpc.CallVoidAsync("enable_sensor_for_ros", tokenBytes);
+    public Task EnableForRosAsync(RawToken rawToken)
+        => _rpc.CallVoidAsync("enable_sensor_for_ros", rawToken);
 
-    public Task DisableForRosAsync(byte[] tokenBytes)
-        => _rpc.CallVoidAsync("disable_sensor_for_ros", tokenBytes);
+    public Task DisableForRosAsync(RawToken rawToken)
+        => _rpc.CallVoidAsync("disable_sensor_for_ros", rawToken);
 
-    public Task<bool> IsEnabledForRosAsync(byte[] tokenBytes)
-        => _rpc.CallAsync<bool>("is_sensor_enabled_for_ros", tokenBytes);
+    public Task<bool> IsEnabledForRosAsync(RawToken rawToken)
+        => _rpc.CallAsync<bool>("is_sensor_enabled_for_ros", rawToken);
 
     // ── §8.16 Debug and Batch ─────────────────────────────────────────────────
 

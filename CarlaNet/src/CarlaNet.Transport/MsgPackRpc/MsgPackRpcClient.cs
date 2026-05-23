@@ -1,9 +1,13 @@
 // §5.1, §7 — msgpack-RPC over TCP matching rpclib wire format.
-// Frame: [uint32 LE length][msgpack payload]
-// Request payload:  [0, msg_id, "method", [args...]]
-// Response payload: [1, msg_id, error_or_nil, result_or_nil]
+//
+// WIRE FORMAT (verified from rpclib source — Build/_deps/rpclib-src/):
+//   rpclib uses raw msgpack streaming with NO length prefix.
+//   Sends/receives raw msgpack bytes via async_write/async_read_some + unpacker.
+//   MessagePackStreamReader handles message boundary detection on the receive side.
+//
+// Request:  [0, msg_id, "method_name", [arg0, arg1, ...]]  — raw msgpack array
+// Response: [1, msg_id, error_or_nil, result_or_nil]        — raw msgpack array
 using System.Buffers;
-using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
@@ -15,11 +19,11 @@ internal sealed class MsgPackRpcClient : IAsyncDisposable
     private readonly TcpClient _tcp;
     private readonly NetworkStream _stream;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
-    private readonly ConcurrentDictionary<uint, TaskCompletionSource<byte[]>> _pending = new();
+    private readonly ConcurrentDictionary<uint, TaskCompletionSource<ReadOnlySequence<byte>>> _pending = new();
     private readonly TimeSpan _timeout;
     private readonly ILogger? _log;
     private readonly Task _readerTask;
-    private uint _nextMsgId;
+    private uint _nextMsgId = uint.MaxValue; // Interlocked.Increment wraps to 0 on first call
     private volatile bool _disposed;
 
     public MsgPackRpcClient(string host, int port, TimeSpan timeout, ILogger? logger = null)
@@ -35,79 +39,94 @@ internal sealed class MsgPackRpcClient : IAsyncDisposable
     public async Task<T> CallAsync<T>(string method, params object?[] args)
     {
         uint msgId = Interlocked.Increment(ref _nextMsgId);
-        byte[] frame = BuildRequestFrame(msgId, method, args);
+        byte[] request = BuildRequest(msgId, method, args);
 
-        var tcs = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tcs = new TaskCompletionSource<ReadOnlySequence<byte>>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
         _pending[msgId] = tcs;
 
         await _writeLock.WaitAsync().ConfigureAwait(false);
-        try { await _stream.WriteAsync(frame).ConfigureAwait(false); }
+        try { await _stream.WriteAsync(request).ConfigureAwait(false); }
         finally { _writeLock.Release(); }
 
-        byte[] responsePayload = await tcs.Task.WaitAsync(_timeout).ConfigureAwait(false);
-        return UnpackResult<T>(responsePayload);
+        ReadOnlySequence<byte> responseSeq = await tcs.Task.WaitAsync(_timeout).ConfigureAwait(false);
+        return UnpackResult<T>(responseSeq);
     }
 
     public async Task CallVoidAsync(string method, params object?[] args)
         => await CallAsync<object?>(method, args).ConfigureAwait(false);
 
-    private static byte[] BuildRequestFrame(uint msgId, string method, object?[] args)
+    private static byte[] BuildRequest(uint msgId, string method, object?[] args)
     {
-        // [0, msg_id, method_str, [args]]
+        // Raw msgpack — no length prefix (rpclib uses streaming unpacker).
+        // CARLA wraps every bound function with Metadata as the first param.
+        // Source: carla/rpc/Client.h line 33 — _client.call(fn, Metadata::MakeSync(), args...)
+        // Metadata::MakeSync() = {_asynchronous_call=false} => serializes as [false]
+        // So params array is: [[false], arg0, arg1, ...]
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
         writer.WriteArrayHeader(4);
-        writer.Write(0);          // type = request
+        writer.Write(0);                    // type = request
         writer.Write(msgId);
         writer.Write(method);
-        writer.WriteArrayHeader(args.Length);
+        writer.WriteArrayHeader(1 + args.Length);  // Metadata + user args
+        // Metadata::MakeSync() serializes as [false]
+        writer.WriteArrayHeader(1);
+        writer.Write(false);                // _asynchronous_call = false
         foreach (var arg in args)
             MessagePackSerializer.Serialize(ref writer, arg);
         writer.Flush();
-
-        byte[] payload = buffer.WrittenSpan.ToArray();
-        // Prepend 4-byte LE length prefix (rpclib convention)
-        byte[] frame = new byte[4 + payload.Length];
-        BinaryPrimitives.WriteUInt32LittleEndian(frame, (uint)payload.Length);
-        payload.CopyTo(frame, 4);
-        return frame;
+        return buffer.WrittenSpan.ToArray();
     }
 
-    private static T UnpackResult<T>(byte[] responsePayload)
+    private static T UnpackResult<T>(ReadOnlySequence<byte> seq)
     {
-        var reader = new MessagePackReader(responsePayload);
+        var reader = new MessagePackReader(seq);
         int count = reader.ReadArrayHeader();
         if (count != 4) throw new InvalidDataException($"Unexpected response array size {count}");
-        reader.ReadInt32();       // type = 1
-        reader.ReadUInt32();      // msg_id (already matched by reader loop)
-        if (!reader.TryReadNil()) // error field
+        reader.ReadInt32();        // type = 1
+        reader.ReadUInt32();       // msg_id (already correlated by reader loop)
+        if (!reader.TryReadNil())  // error field: nil = success, str = error
         {
             string err = reader.ReadString() ?? "unknown error";
             throw new CarlaRpcException(err);
         }
+        // Result field is [[variant_idx, value]] — 1-element outer array wrapping [idx, val].
+        // Empirically confirmed: version() returns [1, 0, nil, [[1, "0.10.0"]]]
+        int outer = reader.ReadArrayHeader();
+        if (outer == 0) return default!;
+        reader.ReadArrayHeader();  // inner [variant_idx, value]
+        reader.ReadInt32();        // skip variant index
         return MessagePackSerializer.Deserialize<T>(ref reader);
     }
 
     private async Task RunReaderAsync()
     {
-        byte[] lenBuf = new byte[4];
+        // MessagePackStreamReader reads from the raw TCP stream and returns
+        // one complete msgpack message at a time with no framing required.
+        var msgpackReader = new MessagePackStreamReader(_stream);
         try
         {
             while (!_disposed)
             {
-                await ReadExactAsync(lenBuf, 4).ConfigureAwait(false);
-                uint payloadLen = BinaryPrimitives.ReadUInt32LittleEndian(lenBuf);
-                byte[] payload = new byte[payloadLen];
-                await ReadExactAsync(payload, (int)payloadLen).ConfigureAwait(false);
+                ReadOnlySequence<byte>? msgSeq = await msgpackReader
+                    .ReadAsync(CancellationToken.None).ConfigureAwait(false);
 
-                // Peek msg_id from the response array (type=1 at [0], msg_id at [1])
-                var peekReader = new MessagePackReader(payload);
+                if (msgSeq is null) break; // stream closed
+
+                // Peek the msg_id without consuming: [type, msg_id, ...]
+                var peekReader = new MessagePackReader(msgSeq.Value);
                 peekReader.ReadArrayHeader();
-                peekReader.ReadInt32(); // type
+                peekReader.ReadInt32();          // type
                 uint msgId = peekReader.ReadUInt32();
 
                 if (_pending.TryRemove(msgId, out var tcs))
-                    tcs.SetResult(payload);
+                {
+                    // MessagePackStreamReader reuses internal buffers on the next ReadAsync.
+                    // Copy the sequence to a flat array so UnpackResult can safely read it later.
+                    var snapshot = new ReadOnlySequence<byte>(msgSeq.Value.ToArray());
+                    tcs.SetResult(snapshot);
+                }
             }
         }
         catch (Exception ex) when (!_disposed)
@@ -116,13 +135,6 @@ internal sealed class MsgPackRpcClient : IAsyncDisposable
             foreach (var tcs in _pending.Values)
                 tcs.TrySetException(ex);
         }
-    }
-
-    private async Task ReadExactAsync(byte[] buf, int count)
-    {
-        int read = 0;
-        while (read < count)
-            read += await _stream.ReadAsync(buf.AsMemory(read, count - read)).ConfigureAwait(false);
     }
 
     public async ValueTask DisposeAsync()

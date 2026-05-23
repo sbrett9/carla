@@ -1,5 +1,10 @@
 // §9 — per-sensor TCP connection. One SensorStream per subscription.
-// Wire: [uint32 LE total_size][header_bytes + payload_bytes]
+//
+// Protocol verified from LibCarla/source/carla/streaming/detail/tcp/Client.cpp:
+//   1. Connect TCP to token.address:token.port
+//   2. Send stream_id (uint32 LE, 4 bytes) — subscribes to the specific stream
+//   3. Receive frames: [uint32 LE total_size][payload_bytes] repeatedly
+//      payload = sensor header bytes (48) + sensor data bytes concatenated
 using System.Buffers.Binary;
 using System.Net.Sockets;
 
@@ -13,17 +18,22 @@ internal sealed class SensorStream : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _readerTask;
 
-    internal SensorStream(string host, int port, Action<SensorFrame> callback)
+    internal SensorStream(StreamToken token, Action<SensorFrame> callback)
     {
         _callback = callback;
         _tcp = new TcpClient();
-        _tcp.Connect(host, port);
+        _tcp.Connect(token.Address, token.Port);
         _stream = _tcp.GetStream();
-        _readerTask = RunAsync(_cts.Token);
+        _readerTask = RunAsync(token.StreamId, _cts.Token);
     }
 
-    private async Task RunAsync(CancellationToken ct)
+    private async Task RunAsync(uint streamId, CancellationToken ct)
     {
+        // Send stream_id to subscribe (Client.cpp lines 114-116)
+        byte[] idBuf = new byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(idBuf, streamId);
+        await _stream.WriteAsync(idBuf, ct).ConfigureAwait(false);
+
         byte[] lenBuf = new byte[4];
         try
         {
