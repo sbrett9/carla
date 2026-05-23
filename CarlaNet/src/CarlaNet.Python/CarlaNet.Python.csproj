@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\CarlaNet.Types\CarlaNet.Types.csproj" />
+    <ProjectReference Include="..\CarlaNet.Transport\CarlaNet.Transport.csproj" />
+    <ProjectReference Include="..\CarlaNet.Sensors\CarlaNet.Sensors.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- Bundle the Python shim alongside the assembly -->
+  <ItemGroup>
+    <Content Include="carlanet.py" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
