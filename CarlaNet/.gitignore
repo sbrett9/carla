@@ -2,3 +2,18 @@ bin/
 obj/
 .vs/
 *.user
+
+# Publish output — binaries, symbols, generated manifests.
+# carlanet.py in publish/ is intentionally tracked (Python entry point).
+publish/*.dll
+publish/*.pdb
+publish/*.deps.json
+publish/*.runtimeconfig.json
+
+# NuGet package caches and lock files
+*.nupkg
+packages/
+
+# Rider / JetBrains
+.idea/
+*.sln.iml

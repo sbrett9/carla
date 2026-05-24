@@ -10,15 +10,6 @@ using System.Net.Sockets;
 
 namespace CarlaNet.Types.Streaming;
 
-// Wire wrapper matching carla::streaming::Token's MSGPACK_DEFINE_ARRAY(data).
-// Empirically confirmed: EpisodeInfo.token arrives as fixarray(1) containing bin8(24).
-[MessagePackObject]
-public record struct RawToken(
-    [property: Key(0)] byte[] Data)
-{
-    public static readonly RawToken Empty = new(Array.Empty<byte>());
-}
-
 public enum StreamProtocol : byte { NotSet = 0, Tcp = 1, Udp = 2 }
 public enum StreamAddressType : byte { NotSet = 0, Ipv4 = 1, Ipv6 = 2 }
 

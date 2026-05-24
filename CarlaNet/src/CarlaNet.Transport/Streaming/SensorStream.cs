@@ -22,9 +22,14 @@ internal sealed class SensorStream : IDisposable
     {
         _callback = callback;
         _tcp = new TcpClient();
+        _tcp.NoDelay = true; // match libcarla's no_delay socket option
         _tcp.Connect(token.Address, token.Port);
         _stream = _tcp.GetStream();
+        Console.Error.WriteLine($"[SensorStream] connected to {token.Address}:{token.Port}  stream_id={token.StreamId}");
         _readerTask = RunAsync(token.StreamId, _cts.Token);
+        _readerTask.ContinueWith(
+            t => Console.Error.WriteLine($"[SensorStream] reader FAILED: {t.Exception?.GetBaseException()}"),
+            TaskContinuationOptions.OnlyOnFaulted);
     }
 
     private async Task RunAsync(uint streamId, CancellationToken ct)
@@ -33,8 +38,10 @@ internal sealed class SensorStream : IDisposable
         byte[] idBuf = new byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(idBuf, streamId);
         await _stream.WriteAsync(idBuf, ct).ConfigureAwait(false);
+        Console.Error.WriteLine($"[SensorStream] stream_id={streamId} sent, awaiting frames...");
 
         byte[] lenBuf = new byte[4];
+        int frameCount = 0;
         try
         {
             while (!ct.IsCancellationRequested)
@@ -43,10 +50,22 @@ internal sealed class SensorStream : IDisposable
                 int totalSize = (int)BinaryPrimitives.ReadUInt32LittleEndian(lenBuf);
                 byte[] combined = new byte[totalSize];
                 await ReadExactAsync(combined, totalSize, ct).ConfigureAwait(false);
-                _callback(new SensorFrame(combined));
+                frameCount++;
+                if (frameCount <= 3)
+                    Console.Error.WriteLine($"[SensorStream] frame #{frameCount}: {totalSize} bytes");
+                try { _callback(new SensorFrame(combined)); }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[SensorStream] callback error (frame {frameCount}): {ex.Message}");
+                }
             }
         }
         catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[SensorStream] read error after {frameCount} frames: {ex.Message}");
+            throw;
+        }
     }
 
     private async Task ReadExactAsync(byte[] buf, int count, CancellationToken ct)

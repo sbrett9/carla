@@ -180,10 +180,11 @@ public sealed class CarlaClient : IAsyncDisposable
 
     // ── Convenience: spawn an RGB camera sensor attached to a parent actor ────────
     // Returns the camera Actor — actor.StreamToken gives the subscription token.
+    // Default offset matches manual_control.py camera[0]: x=-2*bound_x, z=2*bound_z, pitch=+8
     public async Task<Actor> SpawnCameraAsync(
         ActorId parentId,
         int width = 1280, int height = 720,
-        float boomX = -5.5f, float boomZ = 2.8f, float pitchDeg = -8f)
+        float boomX = -5.9f, float boomZ = 2.5f, float pitchDeg = 8f)
     {
         var defs = await GetActorDefinitionsAsync().ConfigureAwait(false);
         var def  = defs.First(d => d.Id == "sensor.camera.rgb");

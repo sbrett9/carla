@@ -8,6 +8,7 @@ global using CarlaNet.Types.Rpc.Commands;
 global using CarlaNet.Types.Rpc.Debug;
 global using CarlaNet.Types.Rpc.Environment;
 global using CarlaNet.Types.Rpc.Enums;
+global using CarlaNet.Types.Rpc.Lighting;
 global using CarlaNet.Types.Rpc.Physics;
 global using CarlaNet.Types.Rpc.Texture;
 global using CarlaNet.Types.Streaming;

@@ -108,40 +108,57 @@ def main():
             rpc(client.SetEpisodeSettingsAsync(sync_s))
             print("Synchronous mode ON (0.05s fixed step)")
 
-        # -- Spawn vehicle -----------------------------------------------------
-        print(f"Spawning {args.blueprint} at spawn point {args.spawn}...")
-        vehicle = rpc(client.SpawnVehicleAsync(args.blueprint, args.spawn))
+        # -- Spawn vehicle (try up to 10 consecutive spawn points) -------------
+        vehicle = None
+        for attempt in range(10):
+            idx = (args.spawn + attempt) % 155
+            try:
+                vehicle = rpc(client.SpawnVehicleAsync(args.blueprint, idx))
+                print(f"Vehicle spawned  id={vehicle.Id}  spawn_point={idx}")
+                break
+            except Exception as e:
+                print(f"  spawn_point {idx} blocked ({e}), trying next...")
+        if vehicle is None:
+            raise RuntimeError("Could not find a free spawn point after 10 tries")
         vehicle_id = vehicle.Id
-        print(f"Vehicle spawned  id={vehicle_id}")
 
-        # -- Spawn camera ------------------------------------------------------
-        print(f"Spawning RGB camera {WIDTH}x{HEIGHT}...")
-        camera = rpc(client.SpawnCameraAsync(vehicle_id, WIDTH, HEIGHT))
+        # -- Bounding box is in the Actor returned by spawn_actor (rpc::Actor.bounding_box)
+        # matches manual_control.py: bound = 0.5 + extent
+        bound_x = 0.5 + vehicle.BoundingBox.Extent.X
+        bound_z = 0.5 + vehicle.BoundingBox.Extent.Z
+
+        # -- Spawn camera (camera[0] from manual_control.py) ------------------
+        # carla.Transform(Location(x=-2*bound_x, y=0, z=2*bound_z), Rotation(pitch=8.0))
+        # Attachment.SpringArmGhost
+        boom_x = -2.0 * bound_x
+        boom_z =  2.0 * bound_z
+        print(f"Spawning RGB camera {WIDTH}x{HEIGHT}  boom=({boom_x:.2f}, 0, {boom_z:.2f})  pitch=8.0")
+        camera = rpc(client.SpawnCameraAsync(
+            vehicle_id, WIDTH, HEIGHT,
+            boomX=boom_x, boomZ=boom_z, pitchDeg=8.0))
         print(f"Camera spawned   id={camera.Id}")
 
         # -- Subscribe to camera stream ----------------------------------------
         frame_buf = FrameBuffer()
 
         def on_frame(sf):
-            raw = bytes(sf.PayloadBytes)
-            frame_buf.put(raw)
+            frame_buf.put(bytes(sf.PayloadBytes))
 
         from System import Action
         from CarlaNet.Transport.Streaming import SensorFrame
         cs_action = Action[SensorFrame](on_frame)
-        # camera.StreamToken is the raw 24-byte binary from Actor.stream_token
         sub = client.SubscribeToStream(camera.StreamToken, cs_action)
         print("Camera stream subscribed. Drive with WASD / arrow keys.")
 
         # -- Wait for first frame ----------------------------------------------
-        deadline = time.time() + 5.0
+        deadline = time.time() + 8.0
         while frame_buf.get() is None and time.time() < deadline:
             if args.sync:
                 rpc(client.SendTickCueAsync())
             time.sleep(0.05)
 
         if frame_buf.get() is None:
-            print("WARNING: No camera frames received yet — server may need a tick.")
+            print("WARNING: No camera frames received — token or stream connection may be wrong.")
 
         # -- Main loop ---------------------------------------------------------
         clock = pygame.time.Clock()
@@ -150,7 +167,9 @@ def main():
         autopilot = False
         throttle = 0.0
         brake = 0.0
+        hand_brake = False
         frame_count = 0
+        last_ctrl = None  # track last sent control to avoid redundant RPC calls
 
         while True:
             # -- Tick ----------------------------------------------------------
@@ -204,16 +223,21 @@ def main():
                 steer_cache = max(-0.7, min(0.7, steer_cache))
 
                 hand_brake = bool(keys[pygame.K_SPACE])
-                ctrl = make_control(throttle, brake, round(steer_cache, 2),
-                                    hand_brake, reverse)
-                rpc(client.ApplyControlToVehicleAsync(vehicle_id, ctrl))
+
+                steer_r = round(steer_cache, 2)
+                ctrl_key = (round(throttle, 2), round(brake, 2), steer_r, hand_brake, reverse)
+                if ctrl_key != last_ctrl:
+                    ctrl = make_control(throttle, brake, steer_r, hand_brake, reverse)
+                    rpc(client.ApplyControlToVehicleAsync(vehicle_id, ctrl))
+                    last_ctrl = ctrl_key
 
             # -- Render camera frame -------------------------------------------
             raw = frame_buf.get()
             if raw is not None:
-                # BGRA → RGB, shape (H, W, 4) → (H, W, 3)
-                arr = np.frombuffer(raw, dtype=np.uint8).reshape((HEIGHT, WIDTH, 4))
-                rgb = arr[:, :, [2, 1, 0]]   # BGR → RGB
+                # Skip ImageSerializer::ImageHeader (12 bytes: width+height+fov)
+                # BGRA → RGB: shape (H, W, 4) channel reorder [2,1,0]
+                arr = np.frombuffer(raw, dtype=np.uint8, offset=12).reshape((HEIGHT, WIDTH, 4))
+                rgb = arr[:, :, [2, 1, 0]]
                 surf = pygame.surfarray.make_surface(rgb.swapaxes(0, 1))
                 display.blit(surf, (0, 0))
 

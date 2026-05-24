@@ -91,23 +91,43 @@ internal sealed class MsgPackRpcClient : IAsyncDisposable
             string err = reader.ReadString() ?? "unknown error";
             throw new CarlaRpcException(err);
         }
-        // Result field: Response<T> uses MSGPACK_DEFINE_ARRAY(_data) where _data is
-        // std::variant<ResponseError, T>.  Encoding: [[variant_idx, payload]].
-        //   variant_idx == 0 → ResponseError (MSGPACK_DEFINE_ARRAY(_what) = ["msg"])
-        //   variant_idx == 1 → success value T
-        // Response<void> uses std::optional<ResponseError>: [[false]] or [[true, [msg]]]
-        int outer = reader.ReadArrayHeader();
+        // Result field — two cases (verified against carla/rpc/Response.h):
+        //
+        // Response<T>    → MSGPACK_DEFINE_ARRAY(_data), _data = std::variant<ResponseError,T>
+        //   error:   [[0, ["msg"]]]
+        //   success: [[1, value]]
+        //
+        // Response<void> → MSGPACK_DEFINE_ARRAY(_data), _data = std::optional<ResponseError>
+        //   success: [[false]]          (optional empty → [false] per MsgPackAdaptors.h)
+        //   error:   [[true, ["msg"]]]  (optional has value → [true, val])
+        int outer = reader.ReadArrayHeader();  // MSGPACK_DEFINE_ARRAY wraps in 1-element array
         if (outer == 0) return default!;
-        int inner = reader.ReadArrayHeader();   // 2 for variant, 1 for optional-void
-        int idx   = reader.ReadInt32();         // 0=error/false, 1=success/true
-        if (idx == 0 && inner == 2)
+        int inner = reader.ReadArrayHeader();  // variant [idx,val] = 2; optional [bool] = 1, [bool,val] = 2
+
+        if (inner == 1)
         {
-            // ResponseError: MSGPACK_DEFINE_ARRAY(_what) → 1-element array ["msg"]
-            reader.ReadArrayHeader();
+            // Response<void> success: [[false]] — optional is empty
+            reader.Skip();
+            return default!;
+        }
+
+        // inner == 2: Response<void> error [[true,[msg]]] or Response<T> variant [[idx,val]]
+        // Distinguish by next msgpack type: bool = void error path, int = value variant
+        if (reader.NextMessagePackType == MessagePackType.Boolean)
+        {
+            reader.ReadBoolean(); // true (has error); false shouldn't reach inner==2 but guard anyway
+            reader.ReadArrayHeader(); // ResponseError MSGPACK_DEFINE_ARRAY(_what)
             string carlaErr = reader.ReadString() ?? "unknown CARLA error";
             throw new CarlaRpcException(carlaErr);
         }
-        if (inner == 1) return default!;        // Response<void> success: [[false]]
+
+        int idx = reader.ReadInt32(); // variant index: 0=ResponseError, 1=T
+        if (idx == 0)
+        {
+            reader.ReadArrayHeader(); // ResponseError MSGPACK_DEFINE_ARRAY(_what)
+            string carlaErr = reader.ReadString() ?? "unknown CARLA error";
+            throw new CarlaRpcException(carlaErr);
+        }
         return MessagePackSerializer.Deserialize<T>(ref reader);
     }
 
