@@ -10,6 +10,11 @@
     <ProjectReference Include="..\CarlaNet.Types\CarlaNet.Types.csproj" />
     <ProjectReference Include="..\CarlaNet.Map\CarlaNet.Map.csproj" />
     <ProjectReference Include="..\CarlaNet.Transport\CarlaNet.Transport.csproj" />
+    <!-- Wave 5 (Nav port): TM tick loop drives the walker AI when walkers
+         are registered. The TM never proactively constructs a WalkerNavigation
+         — it polls NavigationFactory.TryGet on each tick, so TMs running
+         vehicle-only workloads never pay the navmesh-fetch cost. -->
+    <ProjectReference Include="..\CarlaNet.Nav\CarlaNet.Nav.csproj" />
   </ItemGroup>
 
   <ItemGroup>

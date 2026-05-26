@@ -214,12 +214,12 @@ def main():
         # 1. take all the random locations to spawn
         spawn_points = []
         for i in range(args.number_of_walkers):
-            spawn_point = carla.Transform()
+            # CarlaNet edit: C# Transform/Location are init-only record structs, so
+            # build the Transform immutably with the lifted Z baked in rather than
+            # mutating .location / .location.z as upstream does.
             loc = world.get_random_location_from_navigation()
-            if (loc != None):
-                spawn_point.location = loc
-                #Apply Offset in vertical to avoid collision spawning
-                spawn_point.location.z += 2
+            if (loc is not None):
+                spawn_point = carla.Transform(carla.Location(loc.x, loc.y, loc.z + 2))
                 spawn_points.append(spawn_point)
         # 2. we spawn the walker object
         batch = []

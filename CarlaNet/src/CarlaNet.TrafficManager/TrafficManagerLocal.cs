@@ -23,8 +23,10 @@
 #nullable enable
 
 using CarlaNet.Map.Road;
+using CarlaNet.Nav;
 using CarlaNet.TrafficManager.Stages;
 using CarlaNet.Transport;
+using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Commands;
 using Microsoft.Extensions.Logging;
 
@@ -356,14 +358,33 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
             if (TMDiagnostics.Enabled && numVehicles == 0 && (_tickCounter == 1 || _tickCounter % 60 == 0))
                 TMDiagnostics.Log($"[TM tick {_tickCounter}] idle (registered=0)");
 
-            // Early-out if no registered vehicles — still send a no-op
-            // batch in sync mode so the simulator doesn't wait on us.
-            if (numVehicles == 0)
+            // Early-out if no registered vehicles AND no registered walkers —
+            // still send a no-op batch in sync mode so the simulator doesn't
+            // wait on us. The walker subsystem is lazy: NavigationFactory.TryGet
+            // returns false (without forcing a navmesh fetch) until the Python
+            // shim calls WalkerAIController.start() for the first time.
+            var walkerNav = TryGetWalkerNavigation();
+            bool hasWalkers = walkerNav is { HasWalkers: true };
+            if (numVehicles == 0 && !hasWalkers)
             {
                 if (_parameters.GetSynchronousMode())
                 {
                     try { _client.ApplyBatchSyncAsync(_controlFrame, doTickCue: false).GetAwaiter().GetResult(); }
                     catch (Exception ex) { _logger?.LogDebug(ex, "Empty batch failed (likely no actors)"); }
+                }
+                return;
+            }
+
+            // Walker-only fast path: skip the vehicle pipeline entirely when
+            // no vehicles are registered but walkers are. The walker step
+            // below is the only contributor to _controlFrame this tick.
+            if (numVehicles == 0)
+            {
+                RunWalkerTick(walkerNav!, vehicleIds: Array.Empty<ActorId>());
+                if (_controlFrame.Count > 0 || _parameters.GetSynchronousMode())
+                {
+                    try { _client.ApplyBatchSyncAsync(_controlFrame, doTickCue: false).GetAwaiter().GetResult(); }
+                    catch (Exception ex) { _logger?.LogDebug(ex, "ApplyBatchSync (walker-only) failed"); }
                 }
                 return;
             }
@@ -438,6 +459,15 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
                 TMDiagnostics.Log($"[TM tick {_tickCounter}] registered={numVehicles} controlFrame={_controlFrame.Count}{sample}");
             }
 
+            // ── 6b. Walker AI tick (Wave 5 — only if any walker is registered) ─
+            // Pushes vehicle OBBs into the crowd, advances the per-walker
+            // state machine, and appends ApplyWalkerState commands to the
+            // same control frame so the simulator gets one batch per tick.
+            if (hasWalkers)
+            {
+                RunWalkerTick(walkerNav!, vehicleIds);
+            }
+
             // ── 7. Send the per-frame batch to the simulator ─────────
             if (_controlFrame.Count > 0 || _parameters.GetSynchronousMode())
             {
@@ -451,6 +481,109 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
 
             _vehicleLightStage.ClearPendingUpdates();
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    //                  Walker AI plumbing  (Wave 5)
+    //
+    //  The TM never proactively builds a WalkerNavigation. The first
+    //  Python-side WalkerAIController.start() call routes through
+    //  NavigationFactory.GetOrCreate(client) (fetches the navmesh, parses
+    //  it, registers the walker). From that point on the TM's per-tick
+    //  loop picks the factory's cached instance up via TryGet and drives
+    //  it. TMs that never see a walker pay zero navmesh cost.
+    // ─────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the cached walker-navigation instance if the Python shim has
+    /// already constructed one for this client; never triggers the navmesh
+    /// RPC itself.
+    /// </summary>
+    private WalkerNavigation? TryGetWalkerNavigation()
+    {
+        return NavigationFactory.TryGet(_client, out var wn) ? wn : null;
+    }
+
+    /// <summary>
+    /// One walker-subsystem tick: push the latest vehicle OBBs in, advance
+    /// the crowd, append the per-walker ApplyWalkerState commands to the
+    /// outgoing control frame. Called from <see cref="RunOneTick"/>.
+    /// </summary>
+    private void RunWalkerTick(WalkerNavigation wn, IReadOnlyList<ActorId> vehicleIds)
+    {
+        try
+        {
+            // 1. Refresh OBBs from the current registered-vehicle set.
+            wn.UpdateVehicleObbs(BuildObbList(vehicleIds));
+
+            // 2. Estimate dt. The TM doesn't carry a synchronised clock
+            //    (the time-sensitive stages above poll TickCount64 too),
+            //    so derive dt the same way: difference between successive
+            //    RunOneTick invocations, clamped to a sane range.
+            float dt = ComputeDeltaSeconds();
+
+            // 3. Advance crowd + walker state machine.
+            wn.Tick(dt);
+
+            // 4. Batch ApplyWalkerState commands.
+            var walkerCommands = wn.GetWalkerControlCommands();
+            for (int i = 0; i < walkerCommands.Count; i++)
+                _controlFrame.Add(walkerCommands[i]);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogDebug(ex, "Walker tick failed");
+            TMDiagnostics.LogFirstFailure("WalkerTick", ex, _tickCounter);
+        }
+    }
+
+    private long _lastWalkerTickTicks;
+    private float ComputeDeltaSeconds()
+    {
+        long now = Environment.TickCount64;
+        long delta = _lastWalkerTickTicks == 0 ? 50 : (now - _lastWalkerTickTicks);
+        _lastWalkerTickTicks = now;
+        // Clamp 1 ms .. 200 ms to avoid feeding the crowd nonsense numbers
+        // on the first tick or after a long stall.
+        if (delta < 1) delta = 1;
+        if (delta > 200) delta = 200;
+        return delta / 1000.0f;
+    }
+
+    /// <summary>
+    /// Builds an OBB snapshot for the currently-registered vehicles, pulled
+    /// from the world-observer cache. Vehicles not yet in the cache (e.g.
+    /// spawned this tick) are skipped — they'll show up next tick.
+    /// </summary>
+    private IReadOnlyList<(ActorId Id, Location Center, Vector3D Extent, float YawDeg)>
+        BuildObbList(IReadOnlyList<ActorId> vehicleIds)
+    {
+        if (vehicleIds.Count == 0)
+            return Array.Empty<(ActorId, Location, Vector3D, float)>();
+
+        var list = new List<(ActorId, Location, Vector3D, float)>(vehicleIds.Count);
+        for (int i = 0; i < vehicleIds.Count; i++)
+        {
+            var id = vehicleIds[i];
+            var snap = _client.GetActorSnapshot(id);
+            if (snap is null) continue;
+
+            // Extent is in the vehicle's local frame; we treat it as world
+            // half-size and let the OBB tracker rotate by yaw to do the
+            // axis-aligned containment test in vehicle-local space.
+            var center = snap.Transform.Location;
+            // SimulationState in TM keeps a per-actor BoundingBox snapshot,
+            // but pulling that here would tie this code to ALSM internals.
+            // The world-observer payload doesn't carry bbox extents (they
+            // live on the Actor record returned by spawn / get_actors_by_id);
+            // a 2 m × 1 m × 1.5 m default matches a passenger car closely
+            // enough for the walker-repulsion bias. Vehicles outside this
+            // approximation can be tracked exactly if needed; v1 ships the
+            // default.
+            var extent = new Vector3D(2.5f, 1.0f, 1.5f);
+            list.Add((id, center, extent, snap.Transform.Rotation.Yaw));
+        }
+        return list;
     }
 
     // ─────────────────────────────────────────────────────────────────

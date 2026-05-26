@@ -81,6 +81,16 @@ try:
 except FileNotFoundError:
     _CARLANET_TM_AVAILABLE = False
 
+# Wave 5 integration: CarlaNet.Nav provides the pedestrian-navigation
+# subsystem. Same lazy-with-fallback pattern as the TM block above —
+# users without walkers never load the navmesh, and a missing Nav
+# assembly falls back to a no-op WalkerAIController stub.
+try:
+    _ref("CarlaNet.Nav")
+    _CARLANET_NAV_AVAILABLE = True
+except FileNotFoundError:
+    _CARLANET_NAV_AVAILABLE = False
+
 # ── C# type imports ───────────────────────────────────────────────────────────
 from CarlaNet.Transport import CarlaClient as _CarlaClient
 from CarlaNet.Types.Geom import (Transform as _CSTransform,
@@ -248,6 +258,19 @@ if _CARLANET_TM_AVAILABLE:
         _CSTrafficManager = None  # type: ignore
 else:
     _CSTrafficManager = None  # type: ignore
+
+# Wave 5: NavigationFactory hands out the process-wide WalkerNavigation
+# instance lazily on first walker-related call. WalkerNavigation itself is
+# the C# facade matching upstream carla.WalkerAIController + the three
+# World.set_pedestrians_* / get_random_location_from_navigation entry points.
+if _CARLANET_NAV_AVAILABLE:
+    try:
+        from CarlaNet.Nav import NavigationFactory as _CSNavigationFactory
+    except Exception:
+        _CARLANET_NAV_AVAILABLE = False
+        _CSNavigationFactory = None  # type: ignore
+else:
+    _CSNavigationFactory = None  # type: ignore
 from System import TimeSpan
 from System.Collections.Generic import List
 import struct
@@ -412,6 +435,10 @@ class Actor:
         self._actor  = cs_actor
         self._client = client   # _CarlaClient (C# object)
         self._sub    = None     # sensor stream subscription
+        # Populated by World.spawn_actor when attach_to= is supplied; used by
+        # WalkerAIController.start/stop/go_to_location to route operations to
+        # the parent walker actor (matches upstream PythonAPI semantics).
+        self._parent = None
 
     @property
     def id(self) -> int:
@@ -498,6 +525,12 @@ class Actor:
     def set_simulate_physics(self, enabled: bool):
         _sync(self._client.SetActorSimulatePhysicsAsync(self._actor.Id, enabled))
 
+    def set_collisions(self, enabled: bool):
+        """Toggle the actor's collision response. Used by
+        WalkerAIController.start() to free the walker pose for Detour to drive
+        (matches upstream WalkerAIController::Start lines 28-29)."""
+        _sync(self._client.SetActorCollisionsAsync(self._actor.Id, enabled))
+
     def set_enable_gravity(self, enabled: bool):
         _sync(self._client.SetActorEnableGravityAsync(self._actor.Id, enabled))
 
@@ -583,9 +616,90 @@ class Walker(Actor):
     pass
 
 
+class _NoOpWalkerNavigation:
+    """Fallback returned by Client._get_walker_navigation() when the navmesh
+    is unavailable (CarlaNet.Nav DLL missing, server has no navmesh for the
+    current map, RPC failure). Calls no-op so the user script keeps running
+    instead of crashing; reports a warning on first construction only."""
+    def Start(self, *a, **kw): pass
+    def Stop(self, *a, **kw): pass
+    def GoToLocation(self, *a, **kw): pass
+    def SetMaxSpeed(self, *a, **kw): pass
+    def GetRandomLocationFromNavigation(self): return None
+    def SetPedestriansCrossFactor(self, *a, **kw): pass
+    def SetPedestriansSeed(self, *a, **kw): pass
+    HasWalkers = False
+    def IsWalkerAlive(self, *a, **kw): return True
+
+
 class WalkerAIController(Actor):
-    """Marker subclass for walker.controller.ai.* actors."""
-    pass
+    """Pedestrian AI controller — controls a parent walker via Detour.
+
+    Mirrors upstream carla.WalkerAIController (PythonAPI/carla/src/Actor.cpp
+    lines 226-232). Construction goes through World.spawn_actor with
+    attach_to=walker, which populates self._parent so start/stop/etc. can
+    dispatch operations to the underlying walker actor.
+    """
+
+    def _target_id(self) -> int:
+        """The actor id passed to WalkerNavigation — always the PARENT walker,
+        never the controller itself. Two paths:
+          - spawn_actor(attach_to=walker) populates self._parent (preferred).
+          - world.get_actors([ids]) lookup-by-id doesn't set _parent; fall
+            back to the C# Actor.ParentId field which CARLA populates server-side.
+        """
+        if self._parent is not None:
+            return int(self._parent.id)
+        try:
+            pid = int(self._actor.ParentId)
+            if pid != 0:
+                return pid
+        except Exception:
+            pass
+        return int(self.id)
+
+    def start(self):
+        """Register the parent walker into the crowd and start driving it.
+        Per upstream WalkerAIController::Start, also disables physics and
+        collisions on the walker so Detour can drive the pose directly."""
+        import sys
+        nav = Client._get_walker_navigation()
+        target_id = self._target_id()
+        # Issue RPCs directly against the parent walker id; we may not have an
+        # Actor wrapper for it (e.g., when the controller came from get_actors
+        # by-id rather than spawn_actor(attach_to=...)).
+        try:
+            _sync(self._client.SetActorSimulatePhysicsAsync(target_id, False))
+        except Exception as ex:
+            print(f"[carlanet] WalkerAIController.start: set_simulate_physics failed for {target_id}: {ex}", file=sys.stderr)
+        try:
+            _sync(self._client.SetActorCollisionsAsync(target_id, False))
+        except Exception as ex:
+            print(f"[carlanet] WalkerAIController.start: set_collisions failed for {target_id}: {ex}", file=sys.stderr)
+        try:
+            loc = self._client.GetActorTransform(target_id).location
+        except Exception:
+            loc = Location(0.0, 0.0, 0.0)
+        nav.Start(target_id, loc)
+
+    def stop(self):
+        """Unregister the parent walker from the crowd."""
+        nav = Client._get_walker_navigation()
+        nav.Stop(self._target_id())
+
+    def go_to_location(self, location):
+        """Route the parent walker to ``location``."""
+        nav = Client._get_walker_navigation()
+        # Coerce a Python Location-like object (anything with x/y/z) into the
+        # C# Location record-struct expected by WalkerNavigation.
+        if not isinstance(location, _CSLocation):
+            location = _CSLocation(float(location.x), float(location.y), float(location.z))
+        nav.GoToLocation(self._target_id(), location)
+
+    def set_max_speed(self, speed):
+        """Set the parent walker's maximum speed in m/s (default upstream: 1.4)."""
+        nav = Client._get_walker_navigation()
+        nav.SetMaxSpeed(self._target_id(), float(speed))
 
 
 class Sensor(Actor):
@@ -606,6 +720,9 @@ class TrafficLight(TrafficSign):
 def _actor_cls_for(type_id: str):
     if type_id.startswith("vehicle."):                       return Vehicle
     if type_id.startswith("walker.pedestrian"):              return Walker
+    # Upstream CARLA's walker AI controller blueprint id is "controller.ai.walker"
+    # (NOT "walker.controller"). Match both for safety.
+    if type_id.startswith("controller.ai.walker"):           return WalkerAIController
     if type_id.startswith("walker.controller"):              return WalkerAIController
     if type_id.startswith("sensor."):                        return Sensor
     if type_id == "traffic.traffic_light":                   return TrafficLight
@@ -933,7 +1050,14 @@ class World:
             cs_actor = _sync(self._client.SpawnActorWithParentAsync(desc, transform, parent_id, at))
         else:
             cs_actor = _sync(self._client.SpawnActorAsync(desc, transform))
-        return _wrap_actor(cs_actor, self._client)
+        wrapped = _wrap_actor(cs_actor, self._client)
+        # WalkerAIController.start() / stop() rely on locating the parent
+        # walker actor (controllers are spawned with attach_to=walker per
+        # upstream's generate_traffic.py pattern). Persist the attach link
+        # on the Python wrapper so the controller can dispatch to it.
+        if attach_to is not None:
+            wrapped._parent = attach_to if isinstance(attach_to, Actor) else None
+        return wrapped
 
     def try_spawn_actor(self, blueprint, transform: Transform,
                         attach_to=None, attachment_type=None):
@@ -956,15 +1080,36 @@ class World:
         _sync(self._client.SetWeatherParametersAsync(weather))
 
     def set_pedestrians_seed(self, seed: int):
-        # Not a direct RPC; uses console command to set navigation seed
-        pass  # Best-effort; server handles this internally in newer builds
+        """Re-seed the pedestrian RNG. Mirrors upstream
+        World.set_pedestrians_seed → WalkerNavigation::SetPedestriansSeed."""
+        try:
+            Client._get_walker_navigation().SetPedestriansSeed(int(seed))
+        except Exception as ex:
+            import sys
+            print(f"[carlanet] set_pedestrians_seed failed: {ex}", file=sys.stderr)
 
     def set_pedestrians_cross_factor(self, percentage: float):
-        pass  # Best-effort
+        """Probability [0..1] that a walker chooses to cross a road instead of
+        staying on the sidewalk. Mirrors upstream
+        World.set_pedestrians_cross_factor → WalkerNavigation::SetPedestriansCrossFactor."""
+        try:
+            Client._get_walker_navigation().SetPedestriansCrossFactor(float(percentage))
+        except Exception as ex:
+            import sys
+            print(f"[carlanet] set_pedestrians_cross_factor failed: {ex}", file=sys.stderr)
 
     def get_random_location_from_navigation(self):
-        # Returns None if not available; caller should handle None
-        return None
+        """Returns a random reachable Location on the navmesh, or None if
+        unavailable (no navmesh / RPC failure / DLL missing)."""
+        try:
+            wn = Client._get_walker_navigation()
+            loc = wn.GetRandomLocationFromNavigation()
+            # C# returns Location? (nullable); pythonnet maps None to Python None.
+            return loc
+        except Exception as ex:
+            import sys
+            print(f"[carlanet] get_random_location_from_navigation failed: {ex}", file=sys.stderr)
+            return None
 
     def load_map_layer(self, layer: MapLayer):
         _sync(self._client.LoadLevelLayerAsync(layer))
@@ -1065,6 +1210,11 @@ class Client:
         # the first RPC calls and can cause them to time out. Call
         # start_observer() explicitly if you need actor-transform caching.
         self._observer_started = False
+        # Stash the C# client reference so Client._get_walker_navigation()
+        # (a @staticmethod by upstream contract — see TM cache below) can
+        # find an inner client without scanning. Matches the way the TM
+        # cache is keyed off the most-recently-constructed Client.
+        Client._last_client_inner = self._inner
 
     def start_observer(self):
         """Subscribe to the world observer stream so actor transforms are cached."""
@@ -1173,6 +1323,49 @@ class Client:
         responses = [command.Response(cs_resp[i]) for i in range(cs_resp.Count)]
         Client._apply_tm_registration_from_batch(cmds, responses)
         return responses
+
+    # ── Walker navigation helper (Wave 5) ─────────────────────────────────────
+    # Process-wide singleton matching the _tm_cache pattern above. First
+    # access fetches the navmesh via the most-recently-created Client's
+    # inner CarlaClient and constructs a WalkerNavigation via the C# factory.
+    # On any failure (assemblies missing, RPC error, malformed blob) returns
+    # _NoOpWalkerNavigation so user scripts keep running without crashing.
+    _walker_nav_cache = None
+    _last_client_inner = None  # set in Client.__init__
+
+    @staticmethod
+    def _get_walker_navigation():
+        """Return the process-wide WalkerNavigation; lazily fetches the navmesh.
+
+        Mirrors the lazy-with-fallback pattern of get_trafficmanager().
+        """
+        if Client._walker_nav_cache is not None:
+            return Client._walker_nav_cache
+
+        if not _CARLANET_NAV_AVAILABLE or _CSNavigationFactory is None:
+            import sys
+            print("[carlanet] CarlaNet.Nav assemblies unavailable; "
+                  "WalkerAIController will be a no-op stub.", file=sys.stderr)
+            Client._walker_nav_cache = _NoOpWalkerNavigation()
+            return Client._walker_nav_cache
+
+        inner = Client._last_client_inner
+        if inner is None:
+            import sys
+            print("[carlanet] WalkerNavigation requested before any Client was "
+                  "constructed; returning no-op stub.", file=sys.stderr)
+            Client._walker_nav_cache = _NoOpWalkerNavigation()
+            return Client._walker_nav_cache
+
+        try:
+            wn = _CSNavigationFactory.GetOrCreate(inner, None)
+            Client._walker_nav_cache = wn
+            return wn
+        except Exception as ex:
+            import sys
+            print(f"[carlanet] WalkerNavigation unavailable: {ex}", file=sys.stderr)
+            Client._walker_nav_cache = _NoOpWalkerNavigation()
+            return Client._walker_nav_cache
 
     # ── TM registration helpers ───────────────────────────────────────────────
     @staticmethod
