@@ -209,6 +209,7 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
             Name = "CarlaNet.TM.Worker",
         };
         _workerThread.Start();
+        TMDiagnostics.Log($"[TM] Start: worker thread started, RPC server on port {_port}");
     }
 
     /// <summary>
@@ -326,13 +327,20 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
     /// Single tick of the pipeline. Wraps everything in the registration
     /// gate so RegisterVehicles / UnregisterVehicles can't race the frame.
     /// </summary>
+    private long _tickCounter;
     private void RunOneTick()
     {
         lock (_registrationGate)
         {
+            _tickCounter++;
+
             // ── 1. Update actor lifecycle + per-vehicle world state ──
             try { _alsm.Update(); }
-            catch (Exception ex) { _logger?.LogDebug(ex, "ALSM.Update failed"); }
+            catch (Exception ex)
+            {
+                _logger?.LogDebug(ex, "ALSM.Update failed");
+                TMDiagnostics.LogFirstFailure("ALSM.Update", ex, _tickCounter);
+            }
 
             // ── 2. Track changes in registered-vehicle set ────────────
             IReadOnlyList<ActorId> vehicleIds = _registeredVehicles.GetIDList();
@@ -343,6 +351,10 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
             }
             int numVehicles = vehicleIds.Count;
             _controlFrame.Clear();
+
+            // Heartbeat: even with no vehicles, prove the worker thread is alive.
+            if (TMDiagnostics.Enabled && numVehicles == 0 && (_tickCounter == 1 || _tickCounter % 60 == 0))
+                TMDiagnostics.Log($"[TM tick {_tickCounter}] idle (registered=0)");
 
             // Early-out if no registered vehicles — still send a no-op
             // batch in sync mode so the simulator doesn't wait on us.
@@ -365,40 +377,76 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
             for (int i = 0; i < numVehicles; i++)
             {
                 try { _localizationStage.Update(vehicleIds[i]); }
-                catch (Exception ex) { _logger?.LogDebug(ex, "Localization failed"); }
+                catch (Exception ex)
+                {
+                    _logger?.LogDebug(ex, "Localization failed");
+                    TMDiagnostics.LogFirstFailure("Localization", ex, _tickCounter);
+                }
             }
 
             // ── 4. CollisionStage per vehicle ────────────────────────
             for (int i = 0; i < numVehicles; i++)
             {
                 try { _collisionStage.Update(vehicleIds[i]); }
-                catch (Exception ex) { _logger?.LogDebug(ex, "Collision failed"); }
+                catch (Exception ex)
+                {
+                    _logger?.LogDebug(ex, "Collision failed");
+                    TMDiagnostics.LogFirstFailure("Collision", ex, _tickCounter);
+                }
             }
             _collisionStage.ClearCycleCache();
 
             // ── 5. VehicleLightStage world refresh (once) ────────────
             try { _vehicleLightStage.UpdateWorldInfo(); }
-            catch (Exception ex) { _logger?.LogDebug(ex, "VehicleLightStage UpdateWorldInfo failed"); }
+            catch (Exception ex)
+            {
+                _logger?.LogDebug(ex, "VehicleLightStage UpdateWorldInfo failed");
+                TMDiagnostics.LogFirstFailure("VehicleLight.UpdateWorldInfo", ex, _tickCounter);
+            }
 
             // ── 6. TrafficLight + MotionPlan + VehicleLight per veh ──
             for (int i = 0; i < numVehicles; i++)
             {
                 ActorId id = vehicleIds[i];
                 try { _trafficLightStage.Update(id); }
-                catch (Exception ex) { _logger?.LogDebug(ex, "TrafficLight failed"); }
+                catch (Exception ex)
+                {
+                    _logger?.LogDebug(ex, "TrafficLight failed");
+                    TMDiagnostics.LogFirstFailure("TrafficLight", ex, _tickCounter);
+                }
                 try { _motionPlanStage.Update(id); }
-                catch (Exception ex) { _logger?.LogDebug(ex, "MotionPlan failed"); }
+                catch (Exception ex)
+                {
+                    _logger?.LogDebug(ex, "MotionPlan failed");
+                    TMDiagnostics.LogFirstFailure("MotionPlan", ex, _tickCounter);
+                }
                 var mpOutputs = _motionPlanStage.GetOutput();
                 if (mpOutputs.TryGetValue(id, out var cmd))
                     _controlFrame.Add(cmd);
                 _vehicleLightStage.Update(id);
             }
 
+            if (TMDiagnostics.Enabled && (_tickCounter == 1 || _tickCounter % 30 == 0))
+            {
+                string sample = "";
+                if (_controlFrame.Count > 0 &&
+                    _controlFrame[0] is CarlaNet.Types.Rpc.Commands.ApplyVehicleControlCommand vc)
+                {
+                    var ctl = vc.Control;
+                    sample = $" sample[0]: actor={vc.Actor} throttle={ctl.Throttle:F2} steer={ctl.Steer:F2} brake={ctl.Brake:F2} reverse={ctl.Reverse} hand_brake={ctl.HandBrake}";
+                }
+                TMDiagnostics.Log($"[TM tick {_tickCounter}] registered={numVehicles} controlFrame={_controlFrame.Count}{sample}");
+            }
+
             // ── 7. Send the per-frame batch to the simulator ─────────
             if (_controlFrame.Count > 0 || _parameters.GetSynchronousMode())
             {
                 try { _client.ApplyBatchSyncAsync(_controlFrame, doTickCue: false).GetAwaiter().GetResult(); }
-                catch (Exception ex) { _logger?.LogDebug(ex, "ApplyBatchSync failed"); }
+                catch (Exception ex)
+                {
+                    _logger?.LogDebug(ex, "ApplyBatchSync failed");
+                    TMDiagnostics.LogFirstFailure("ApplyBatchSync", ex, _tickCounter);
+                }
             }
 
             _vehicleLightStage.ClearPendingUpdates();
