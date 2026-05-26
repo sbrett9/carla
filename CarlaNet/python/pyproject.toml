@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "carlanet"
+version = "0.1.0"
+description = "Managed .NET client for CARLA simulator"
+requires-python = ">=3.8"
+license = "MIT"
+authors = [{ name = "CarlaNet contributors" }]
+dependencies = [
+    "pythonnet>=3.0.5",
+    "clr-loader>=0.2",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.package-data]
+carlanet = [
+    "dlls/*.dll",
+    "dlls/*.pdb",
+    "dlls/*.deps.json",
+    "dlls/*.runtimeconfig.json",
+]

@@ -6,4 +6,9 @@ namespace CarlaNet.Types.Rpc.Actors;
 public record struct ActorDescription(
     [property: Key(0)] ActorId Uid,
     [property: Key(1)] string Id,
-    [property: Key(2)] IReadOnlyList<ActorAttributeValue> Attributes);
+    [property: Key(2)] IReadOnlyList<ActorAttributeValue> Attributes)
+{
+    [IgnoreMember] public ActorId uid => Uid;
+    [IgnoreMember] public string id => Id;
+    [IgnoreMember] public IReadOnlyList<ActorAttributeValue> attributes => Attributes;
+}

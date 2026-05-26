@@ -6,4 +6,10 @@ namespace CarlaNet.Types.Rpc;
 public record struct Color(
     [property: Key(0)] byte R,
     [property: Key(1)] byte G,
-    [property: Key(2)] byte B);
+    [property: Key(2)] byte B)
+{
+    public Color() : this((byte)0, (byte)0, (byte)0) {}
+    [IgnoreMember] public byte r => R;
+    [IgnoreMember] public byte g => G;
+    [IgnoreMember] public byte b => B;
+}

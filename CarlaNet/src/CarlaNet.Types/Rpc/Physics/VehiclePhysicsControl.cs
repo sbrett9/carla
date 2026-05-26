@@ -33,4 +33,36 @@ public record struct VehiclePhysicsControl(
     [property: Key(26)] float SleepSlopeLimit,
     [property: Key(27)] IReadOnlyList<Vector2D> SteeringCurve,
     [property: Key(28)] IReadOnlyList<WheelPhysicsControl> Wheels,
-    [property: Key(29)] bool UseSweepWheelCollision);
+    [property: Key(29)] bool UseSweepWheelCollision)
+{
+    [IgnoreMember] public IReadOnlyList<Vector2D> torque_curve => TorqueCurve;
+    [IgnoreMember] public float max_torque => MaxTorque;
+    [IgnoreMember] public float max_rpm => MaxRpm;
+    [IgnoreMember] public float idle_rpm => IdleRpm;
+    [IgnoreMember] public float brake_effect => BrakeEffect;
+    [IgnoreMember] public float rev_up_moi => RevUpMoi;
+    [IgnoreMember] public float rev_down_rate => RevDownRate;
+    [IgnoreMember] public byte differential_type => DifferentialType;
+    [IgnoreMember] public float front_rear_split => FrontRearSplit;
+    [IgnoreMember] public bool use_automatic_gears => UseAutomaticGears;
+    [IgnoreMember] public float gear_change_time => GearChangeTime;
+    [IgnoreMember] public float final_ratio => FinalRatio;
+    [IgnoreMember] public IReadOnlyList<float> forward_gear_ratios => ForwardGearRatios;
+    [IgnoreMember] public IReadOnlyList<float> reverse_gear_ratios => ReverseGearRatios;
+    [IgnoreMember] public float change_up_rpm => ChangeUpRpm;
+    [IgnoreMember] public float change_down_rpm => ChangeDownRpm;
+    [IgnoreMember] public float transmission_efficiency => TransmissionEfficiency;
+    [IgnoreMember] public float mass => Mass;
+    [IgnoreMember] public float drag_coefficient => DragCoefficient;
+    [IgnoreMember] public Location center_of_mass => CenterOfMass;
+    [IgnoreMember] public float chassis_width => ChassisWidth;
+    [IgnoreMember] public float chassis_height => ChassisHeight;
+    [IgnoreMember] public float downforce_coefficient => DownforceCoefficient;
+    [IgnoreMember] public float drag_area => DragArea;
+    [IgnoreMember] public Vector3D inertia_tensor_scale => InertiaTensorScale;
+    [IgnoreMember] public float sleep_threshold => SleepThreshold;
+    [IgnoreMember] public float sleep_slope_limit => SleepSlopeLimit;
+    [IgnoreMember] public IReadOnlyList<Vector2D> steering_curve => SteeringCurve;
+    [IgnoreMember] public IReadOnlyList<WheelPhysicsControl> wheels => Wheels;
+    [IgnoreMember] public bool use_sweep_wheel_collision => UseSweepWheelCollision;
+}

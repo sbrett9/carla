@@ -74,8 +74,9 @@ from CarlaNet.Types.Rpc.Control import (VehicleControl, VehicleAckermannControl,
                                          AckermannControllerSettings, WalkerControl)
 from CarlaNet.Types.Rpc.Environment import EpisodeSettings, WeatherParameters
 from CarlaNet.Types.Rpc.Enums import (TrafficLightState, MapLayer,
-                                       VehicleLightStateFlags, AttachmentType,
-                                       VehicleDoor, ActorAttributeType)
+                                       AttachmentType, VehicleDoor,
+                                       ActorAttributeType)
+from CarlaNet.Types.Rpc.Lighting import VehicleLightStateFlags
 from CarlaNet.Types.Rpc.Commands import (
     Command, SpawnActorCommand, DestroyActorCommand, SetAutopilotCommand,
     ApplyVehicleControlCommand, ApplyTransformCommand, ApplyLocationCommand,
@@ -689,17 +690,17 @@ class Client:
         self._port    = port
         self._timeout = TimeSpan.FromMilliseconds(5000)
         self._inner   = _CarlaClient(host, port, self._timeout)
-        # Start world observer in background so actor state cache fills
-        self._start_observer()
+        # World observer is opt-in. Auto-starting it from __init__ races with
+        # the first RPC calls and can cause them to time out. Call
+        # start_observer() explicitly if you need actor-transform caching.
+        self._observer_started = False
 
-    def _start_observer(self):
-        def _go():
-            try:
-                _sync(self._inner.StartWorldObserverAsync())
-            except Exception as e:
-                pass  # Server might not be ready yet; probes will still work
-        t = threading.Thread(target=_go, daemon=True)
-        t.start()
+    def start_observer(self):
+        """Subscribe to the world observer stream so actor transforms are cached."""
+        if self._observer_started:
+            return
+        _sync(self._inner.StartWorldObserverAsync())
+        self._observer_started = True
 
     def set_timeout(self, timeout_s: float):
         self._timeout = TimeSpan.FromMilliseconds(int(timeout_s * 1000))

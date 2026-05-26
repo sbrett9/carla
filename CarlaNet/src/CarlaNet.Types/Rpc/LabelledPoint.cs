@@ -6,4 +6,8 @@ namespace CarlaNet.Types.Rpc;
 [MessagePackObject]
 public record struct LabelledPoint(
     [property: Key(0)] Location Location,
-    [property: Key(1)] CityObjectLabel Label);
+    [property: Key(1)] CityObjectLabel Label)
+{
+    [IgnoreMember] public Location location => Location;
+    [IgnoreMember] public CityObjectLabel label => Label;
+}

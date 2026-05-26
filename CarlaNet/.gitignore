@@ -17,3 +17,12 @@ packages/
 # Rider / JetBrains
 .idea/
 *.sln.iml
+
+# Python wheel build artifacts
+python/carlanet/dlls/*.dll
+python/carlanet/dlls/*.pdb
+python/carlanet/dlls/*.deps.json
+python/carlanet/dlls/*.runtimeconfig.json
+python/build/
+python/dist/
+python/*.egg-info/

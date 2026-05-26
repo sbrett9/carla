@@ -5,4 +5,10 @@ namespace CarlaNet.Types.Geom;
 public record struct BoundingBox(
     [property: Key(0)] Location Location,
     [property: Key(1)] Vector3D Extent,
-    [property: Key(2)] Rotation Rotation);
+    [property: Key(2)] Rotation Rotation)
+{
+    public BoundingBox() : this(default, default, default) {}
+    [IgnoreMember] public Location location => Location;
+    [IgnoreMember] public Vector3D extent => Extent;
+    [IgnoreMember] public Rotation rotation => Rotation;
+}

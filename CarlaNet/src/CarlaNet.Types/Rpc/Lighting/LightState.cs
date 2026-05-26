@@ -15,4 +15,12 @@ public record struct LightState(
     [property: Key(2)] float Intensity,
     [property: Key(3)] LightGroup Group,
     [property: Key(4)] Color Color,
-    [property: Key(5)] bool Active);
+    [property: Key(5)] bool Active)
+{
+    [IgnoreMember] public LightId id => Id;
+    [IgnoreMember] public Location location => Location;
+    [IgnoreMember] public float intensity => Intensity;
+    [IgnoreMember] public LightGroup group => Group;
+    [IgnoreMember] public Color color => Color;
+    [IgnoreMember] public bool active => Active;
+}

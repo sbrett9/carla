@@ -5,4 +5,9 @@ namespace CarlaNet.Types.Geom;
 public record struct GeoLocation(
     [property: Key(0)] double Latitude,
     [property: Key(1)] double Longitude,
-    [property: Key(2)] double Altitude);
+    [property: Key(2)] double Altitude)
+{
+    [IgnoreMember] public double latitude => Latitude;
+    [IgnoreMember] public double longitude => Longitude;
+    [IgnoreMember] public double altitude => Altitude;
+}

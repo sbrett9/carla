@@ -6,4 +6,10 @@ namespace CarlaNet.Types.Geom;
 public record struct Location(
     [property: Key(0)] float X,
     [property: Key(1)] float Y,
-    [property: Key(2)] float Z);
+    [property: Key(2)] float Z)
+{
+    public Location() : this(0f, 0f, 0f) {}
+    [IgnoreMember] public float x => X;
+    [IgnoreMember] public float y => Y;
+    [IgnoreMember] public float z => Z;
+}

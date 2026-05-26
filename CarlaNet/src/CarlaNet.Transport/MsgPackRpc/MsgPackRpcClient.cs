@@ -20,7 +20,7 @@ internal sealed class MsgPackRpcClient : IAsyncDisposable
     private readonly NetworkStream _stream;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private readonly ConcurrentDictionary<uint, TaskCompletionSource<ReadOnlySequence<byte>>> _pending = new();
-    private readonly TimeSpan _timeout;
+    private TimeSpan _timeout;
     private readonly ILogger? _log;
     private readonly Task _readerTask;
     private uint _nextMsgId = uint.MaxValue; // Interlocked.Increment wraps to 0 on first call
@@ -35,6 +35,9 @@ internal sealed class MsgPackRpcClient : IAsyncDisposable
         _stream = _tcp.GetStream();
         _readerTask = RunReaderAsync();
     }
+
+    /// Update the per-call timeout. Affects all subsequent CallAsync invocations.
+    public void SetTimeout(TimeSpan timeout) => _timeout = timeout;
 
     public async Task<T> CallAsync<T>(string method, params object?[] args)
     {

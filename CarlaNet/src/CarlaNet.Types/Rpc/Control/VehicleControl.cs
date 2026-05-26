@@ -10,4 +10,14 @@ public record struct VehicleControl(
     [property: Key(3)] bool HandBrake,
     [property: Key(4)] bool Reverse,
     [property: Key(5)] bool ManualGearShift,
-    [property: Key(6)] int Gear);
+    [property: Key(6)] int Gear)
+{
+    public VehicleControl() : this(0f, 0f, 0f, false, false, false, 0) {}
+    [IgnoreMember] public float throttle => Throttle;
+    [IgnoreMember] public float steer => Steer;
+    [IgnoreMember] public float brake => Brake;
+    [IgnoreMember] public bool hand_brake => HandBrake;
+    [IgnoreMember] public bool reverse => Reverse;
+    [IgnoreMember] public bool manual_gear_shift => ManualGearShift;
+    [IgnoreMember] public int gear => Gear;
+}

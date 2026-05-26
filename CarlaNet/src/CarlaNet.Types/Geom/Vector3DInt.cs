@@ -5,4 +5,9 @@ namespace CarlaNet.Types.Geom;
 public record struct Vector3DInt(
     [property: Key(0)] int X,
     [property: Key(1)] int Y,
-    [property: Key(2)] int Z);
+    [property: Key(2)] int Z)
+{
+    [IgnoreMember] public int x => X;
+    [IgnoreMember] public int y => Y;
+    [IgnoreMember] public int z => Z;
+}

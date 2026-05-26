@@ -12,4 +12,11 @@ public record struct Actor(
     [property: Key(2)] ActorDescription Description,
     [property: Key(3)] BoundingBox BoundingBox,
     [property: Key(4)] byte[] SemanticTags,
-    [property: Key(5)] byte[] StreamToken);
+    [property: Key(5)] byte[] StreamToken)
+{
+    [IgnoreMember] public ActorId id => Id;
+    [IgnoreMember] public ActorId parent_id => ParentId;
+    [IgnoreMember] public ActorDescription description => Description;
+    [IgnoreMember] public BoundingBox bounding_box => BoundingBox;
+    [IgnoreMember] public string type_id => Description.Id;
+}

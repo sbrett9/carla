@@ -11,6 +11,16 @@ using Microsoft.Extensions.Logging;
 
 namespace CarlaNet.Transport;
 
+// World-tick timestamp emitted by CarlaClient.OnTick. Matches upstream's
+// carla.Timestamp: frame, elapsed_seconds (== SensorHeader.Timestamp),
+// delta_seconds (== EpisodeState delta), platform_timestamp (== EpisodeState
+// platform_ts; wall-clock seconds since simulation start).
+public sealed record TickTimestamp(
+    ulong Frame,
+    double ElapsedSeconds,
+    double DeltaSeconds,
+    double PlatformTimestamp);
+
 // Cached snapshot of one actor from the world observer stream (§10.14).
 // Parsed inline without CarlaNet.Sensors dependency.
 public sealed class ActorSnapshot
@@ -40,6 +50,16 @@ public sealed class CarlaClient : IAsyncDisposable
         _log = logger;
         _rpc = new MsgPackRpcClient(host, port, timeout ?? TimeSpan.FromMilliseconds(5000), logger);
     }
+
+    /// Update the per-call RPC timeout. Affects subsequent calls only.
+    public void SetTimeout(TimeSpan timeout) => _rpc.SetTimeout(timeout);
+
+    // ── §9.3 world.on_tick — fired once per world-observer frame ─────────────
+    // Subscribers receive a TickTimestamp built from the SensorFrame header
+    // (Frame, Timestamp) and the parsed EpisodeState header (DeltaSeconds,
+    // PlatformTimestamp). Multi-threaded — handlers should be cheap or marshal
+    // to their own thread / queue.
+    public event Action<TickTimestamp>? OnTick;
 
     // ── §8.1 Session / Traffic Manager ───────────────────────────────────────
 
@@ -301,11 +321,14 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<IReadOnlyList<Transform>> GetVehicleBoneWorldTransformsAsync(ActorId id)
         => _rpc.CallAsync<IReadOnlyList<Transform>>("get_vehicle_bone_world_transforms", id);
 
-    public Task<VehicleLightStateFlags> GetVehicleLightStateAsync(ActorId id)
-        => _rpc.CallAsync<VehicleLightStateFlags>("get_vehicle_light_state", id);
+    public async Task<VehicleLightStateFlags> GetVehicleLightStateAsync(ActorId id)
+    {
+        var s = await _rpc.CallAsync<VehicleLightState>("get_vehicle_light_state", id).ConfigureAwait(false);
+        return s.Flags;
+    }
 
     public Task SetVehicleLightStateAsync(ActorId id, VehicleLightStateFlags state)
-        => _rpc.CallVoidAsync("set_vehicle_light_state", id, state);
+        => _rpc.CallVoidAsync("set_vehicle_light_state", id, new VehicleLightState(state));
 
     public Task OpenVehicleDoorAsync(ActorId id, VehicleDoor door)
         => _rpc.CallVoidAsync("open_vehicle_door", id, door);
@@ -490,14 +513,37 @@ public sealed class CarlaClient : IAsyncDisposable
 
     private void OnWorldObserverFrame(SensorFrame frame)
     {
-        try { ParseEpisodeState(frame.Payload.Span); }
+        try
+        {
+            double platformTs = 0;
+            float deltaS = 0;
+            ParseEpisodeState(frame.Payload.Span, out platformTs, out deltaS);
+            // Emit a tick event so Python world.on_tick(callback) can fire.
+            var handlers = OnTick;
+            if (handlers is not null)
+            {
+                var ts = new TickTimestamp(
+                    frame.Header.Frame,
+                    frame.Header.Timestamp,
+                    deltaS,
+                    platformTs);
+                try { handlers(ts); }
+                catch (Exception cbEx) { _log?.LogWarning(cbEx, "OnTick handler threw"); }
+            }
+        }
         catch (Exception ex) { _log?.LogWarning(ex, "World observer parse error"); }
     }
 
-    private void ParseEpisodeState(ReadOnlySpan<byte> payload)
+    private void ParseEpisodeState(ReadOnlySpan<byte> payload, out double platformTimestamp, out float deltaSeconds)
     {
+        platformTimestamp = 0;
+        deltaSeconds = 0;
         // Header layout (36 bytes): episode_id(8) platform_ts(8) delta_s(4) map_origin(12) state(1) pad(3)
         if (payload.Length < 36) return;
+        platformTimestamp = BitConverter.Int64BitsToDouble(
+            BinaryPrimitives.ReadInt64LittleEndian(payload[8..]));
+        deltaSeconds = BitConverter.Int32BitsToSingle(
+            BinaryPrimitives.ReadInt32LittleEndian(payload[16..]));
         const int HeaderSize = 36;
         const int ActorSize  = 119;
         var actors = payload[HeaderSize..];

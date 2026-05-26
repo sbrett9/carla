@@ -19,4 +19,17 @@ public record struct EpisodeSettings(
     [property: Key(7)] bool DeterministicRagdolls,
     [property: Key(8)] float TileStreamDistance,
     [property: Key(9)] float ActorActiveDistance,
-    [property: Key(10)] bool SpectatorAsEgo);
+    [property: Key(10)] bool SpectatorAsEgo)
+{
+    [IgnoreMember] public bool synchronous_mode => SynchronousMode;
+    [IgnoreMember] public bool no_rendering_mode => NoRenderingMode;
+    [IgnoreMember] public double? fixed_delta_seconds => FixedDeltaSeconds;
+    [IgnoreMember] public bool substepping => Substepping;
+    [IgnoreMember] public double max_substep_delta_time => MaxSubstepDeltaTime;
+    [IgnoreMember] public int max_substeps => MaxSubsteps;
+    [IgnoreMember] public float max_culling_distance => MaxCullingDistance;
+    [IgnoreMember] public bool deterministic_ragdolls => DeterministicRagdolls;
+    [IgnoreMember] public float tile_stream_distance => TileStreamDistance;
+    [IgnoreMember] public float actor_active_distance => ActorActiveDistance;
+    [IgnoreMember] public bool spectator_as_ego => SpectatorAsEgo;
+}
