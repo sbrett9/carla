@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CarlaNet.Types\CarlaNet.Types.csproj" />
+    <ProjectReference Include="..\CarlaNet.Map\CarlaNet.Map.csproj" />
+    <ProjectReference Include="..\CarlaNet.Transport\CarlaNet.Transport.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MessagePack" Version="3.1.6" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.8" />
+  </ItemGroup>
+
+</Project>

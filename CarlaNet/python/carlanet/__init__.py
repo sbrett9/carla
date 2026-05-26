@@ -70,6 +70,16 @@ def _ref(name):
 _ref("CarlaNet.Types")
 _ref("CarlaNet.Transport")
 _ref("CarlaNet.Sensors")
+# Wave 4 integration: CarlaNet.Map + CarlaNet.TrafficManager provide the
+# in-process TrafficManager. Failure to load these is non-fatal — the shim
+# falls back to _NoOpTrafficManager in get_trafficmanager() if the assemblies
+# aren't available.
+try:
+    _ref("CarlaNet.Map")
+    _ref("CarlaNet.TrafficManager")
+    _CARLANET_TM_AVAILABLE = True
+except FileNotFoundError:
+    _CARLANET_TM_AVAILABLE = False
 
 # ── C# type imports ───────────────────────────────────────────────────────────
 from CarlaNet.Transport import CarlaClient as _CarlaClient
@@ -227,6 +237,17 @@ from CarlaNet.Types.Rpc.Commands import (
     Command, SpawnActorCommand, DestroyActorCommand, SetAutopilotCommand,
     ApplyVehicleControlCommand, ApplyTransformCommand, ApplyLocationCommand,
     ConsoleCommandCommand, SetVehicleLightStateCommand, CommandResponse)
+# Wave 4 integration: in-process TrafficManager. The import is guarded
+# because the Map / TrafficManager assemblies may be missing in stripped-down
+# deployments — get_trafficmanager() falls back to a no-op stub if so.
+if _CARLANET_TM_AVAILABLE:
+    try:
+        from CarlaNet.TrafficManager import TrafficManager as _CSTrafficManager
+    except Exception:
+        _CARLANET_TM_AVAILABLE = False
+        _CSTrafficManager = None  # type: ignore
+else:
+    _CSTrafficManager = None  # type: ignore
 from System import TimeSpan
 from System.Collections.Generic import List
 import struct
@@ -459,8 +480,11 @@ class Actor:
         _sync(self._client.ApplyAckermannControlToVehicleAsync(self._actor.Id,
                                                                _control_to_cs(control)))
 
-    def set_autopilot(self, enabled: bool):
+    def set_autopilot(self, enabled: bool, tm_port: int = 8000):
         _sync(self._client.SetActorAutopilotAsync(self._actor.Id, enabled))
+        # Register/unregister with the in-process TM so its worker picks
+        # up the vehicle. Server-side autopilot flag alone won't drive it.
+        Client._tm_register_ids([int(self._actor.Id)], int(tm_port), bool(enabled))
 
     def set_light_state(self, state):
         # Accept Python int / VehicleLightState wrapper / C# VehicleLightStateFlags
@@ -681,6 +705,7 @@ class command:
         def __init__(self, actor, enabled: bool, tm_port: int = 8000):
             self._id      = int(actor) if not isinstance(actor, Actor) else int(actor.id)
             self._enabled = bool(enabled)
+            self._tm_port = int(tm_port)
 
         def to_cs(self) -> Command:
             return SetAutopilotCommand(self._id, self._enabled)
@@ -733,96 +758,113 @@ def _cmds_to_cs(cmds):
 # ── Traffic Manager ───────────────────────────────────────────────────────────
 
 class TrafficManager:
-    def __init__(self, tm_client, port: int = 8000):
-        self._tm   = tm_client
-        self._port = port
+    """Wrapper around the in-process C# CarlaNet.TrafficManager.TrafficManager
+    facade. Mirrors the upstream `carla.TrafficManager` Python API (snake_case
+    method names).
+
+    Construction is synchronous and fairly heavy (~300-500 ms) because it
+    fetches the OpenDRIVE XML from the server and builds the dense waypoint
+    graph. Subsequent constructions reusing the same map name are cheap
+    (the C# side caches the parsed Map + InMemoryMap).
+    """
+
+    def __init__(self, tm, port: int = 8000):
+        # `tm` is a CarlaNet.TrafficManager.TrafficManager instance.
+        self._tm   = tm
+        self._port = int(getattr(tm, "Port", port))
 
     def get_port(self) -> int:
         return self._port
 
+    def start(self):
+        self._tm.Start()
+
     def set_percentage_speed_difference(self, actor: Actor, pct: float):
-        _sync(self._tm.SetPercentageSpeedDifferenceAsync(actor._actor, pct))
+        self._tm.SetPercentageSpeedDifference(actor._actor, float(pct))
 
     def set_desired_speed(self, actor: Actor, speed: float):
-        _sync(self._tm.SetDesiredSpeedAsync(actor._actor, speed))
+        self._tm.SetDesiredSpeed(actor._actor, float(speed))
 
     def set_global_percentage_speed_difference(self, pct: float):
-        _sync(self._tm.SetGlobalPercentageSpeedDifferenceAsync(pct))
+        self._tm.SetGlobalPercentageSpeedDifference(float(pct))
 
     def set_global_distance_to_leading_vehicle(self, distance: float):
-        _sync(self._tm.SetGlobalDistanceToLeadingVehicleAsync(distance))
+        self._tm.SetGlobalDistanceToLeadingVehicle(float(distance))
 
     def set_distance_to_leading_vehicle(self, actor: Actor, distance: float):
-        _sync(self._tm.SetDistanceToLeadingVehicleAsync(actor._actor, distance))
+        self._tm.SetDistanceToLeadingVehicle(actor._actor, float(distance))
 
     def set_collision_detection(self, reference: Actor, other: Actor, detect: bool):
-        _sync(self._tm.SetCollisionDetectionAsync(reference._actor, other._actor, detect))
+        self._tm.SetCollisionDetection(reference._actor, other._actor, bool(detect))
 
     def set_lane_offset(self, actor: Actor, offset: float):
-        _sync(self._tm.SetLaneOffsetAsync(actor._actor, offset))
+        self._tm.SetLaneOffset(actor._actor, float(offset))
 
     def set_global_lane_offset(self, offset: float):
-        _sync(self._tm.SetGlobalLaneOffsetAsync(offset))
+        self._tm.SetGlobalLaneOffset(float(offset))
 
     def set_auto_lane_change(self, actor: Actor, enable: bool):
-        _sync(self._tm.SetAutoLaneChangeAsync(actor._actor, enable))
+        self._tm.SetAutoLaneChange(actor._actor, bool(enable))
 
     def set_force_lane_change(self, actor: Actor, to_left: bool):
-        _sync(self._tm.SetForceLaneChangeAsync(actor._actor, to_left))
+        self._tm.SetForceLaneChange(actor._actor, bool(to_left))
 
     def set_percentage_ignore_walkers(self, actor: Actor, pct: float):
-        _sync(self._tm.SetPercentageIgnoreWalkersAsync(actor._actor, pct))
+        self._tm.SetPercentageIgnoreWalkers(actor._actor, float(pct))
 
     def set_percentage_ignore_vehicles(self, actor: Actor, pct: float):
-        _sync(self._tm.SetPercentageIgnoreVehiclesAsync(actor._actor, pct))
+        self._tm.SetPercentageIgnoreVehicles(actor._actor, float(pct))
 
     def set_percentage_running_light(self, actor: Actor, pct: float):
-        _sync(self._tm.SetPercentageRunningLightAsync(actor._actor, pct))
+        self._tm.SetPercentageRunningLight(actor._actor, float(pct))
 
     def set_percentage_running_sign(self, actor: Actor, pct: float):
-        _sync(self._tm.SetPercentageRunningSignAsync(actor._actor, pct))
+        self._tm.SetPercentageRunningSign(actor._actor, float(pct))
 
     def set_percentage_keep_slow_lane_rule(self, actor: Actor, pct: float):
-        _sync(self._tm.SetPercentageKeepSlowLaneRuleAsync(actor._actor, pct))
+        self._tm.SetKeepSlowLanePercentage(actor._actor, float(pct))
 
     def set_percentage_random_left_lanechange(self, actor: Actor, pct: float):
-        _sync(self._tm.SetPercentageRandomLeftLaneChangeAsync(actor._actor, pct))
+        self._tm.SetRandomLeftLaneChangePercentage(actor._actor, float(pct))
 
     def set_percentage_random_right_lanechange(self, actor: Actor, pct: float):
-        _sync(self._tm.SetPercentageRandomRightLaneChangeAsync(actor._actor, pct))
+        self._tm.SetRandomRightLaneChangePercentage(actor._actor, float(pct))
 
     def set_hybrid_physics_mode(self, enabled: bool):
-        _sync(self._tm.SetHybridPhysicsModeAsync(enabled))
+        self._tm.SetHybridPhysicsMode(bool(enabled))
 
     def set_hybrid_physics_radius(self, radius: float):
-        _sync(self._tm.SetHybridPhysicsRadiusAsync(radius))
+        self._tm.SetHybridPhysicsRadius(float(radius))
 
     def set_random_device_seed(self, seed: int):
-        _sync(self._tm.SetRandomDeviceSeedAsync(seed))
+        self._tm.SetRandomDeviceSeed(int(seed))
 
     def set_respawn_dormant_vehicles(self, enabled: bool):
-        _sync(self._tm.SetRespawnDormantVehiclesAsync(enabled))
+        self._tm.SetRespawnDormantVehicles(bool(enabled))
 
     def set_boundaries_respawn_dormant_vehicles(self, lower: float, upper: float):
-        _sync(self._tm.SetBoundariesRespawnDormantVehiclesAsync(lower, upper))
+        self._tm.SetBoundariesRespawnDormantVehicles(float(lower), float(upper))
 
     def set_synchronous_mode(self, enabled: bool):
-        _sync(self._tm.SetSynchronousModeAsync(enabled))
+        self._tm.SetSynchronousMode(bool(enabled))
 
     def set_synchronous_mode_timeout_in_milisecond(self, ms: float):
-        _sync(self._tm.SetSynchronousModeTimeoutAsync(ms))
+        self._tm.SetSynchronousModeTimeOutInMiliSecond(float(ms))
+
+    def set_osm_mode(self, enabled: bool):
+        self._tm.SetOsmMode(bool(enabled))
 
     def update_vehicle_lights(self, actor: Actor, enabled: bool):
-        _sync(self._tm.UpdateVehicleLightsAsync(actor._actor, enabled))
+        self._tm.SetUpdateVehicleLights(actor._actor, bool(enabled))
 
     def global_percentage_speed_difference(self, pct: float):
-        _sync(self._tm.SetGlobalPercentageSpeedDifferenceAsync(pct))
+        self._tm.SetGlobalPercentageSpeedDifference(float(pct))
 
     def synchronous_tick(self) -> bool:
-        return bool(_sync(self._tm.SynchronousTickAsync()))
+        return bool(self._tm.SynchronousTick())
 
     def shut_down(self):
-        _sync(self._tm.ShutDownAsync())
+        self._tm.ShutDown()
 
 
 class _NoOpTrafficManager:
@@ -1066,26 +1108,125 @@ class Client:
         return World(self._inner)
 
     def get_trafficmanager(self, port: int = 8000):
-        try:
-            tm = self._inner.GetTrafficManager(port)
-            return TrafficManager(tm, port)
-        except Exception as ex:
-            # CARLA's traffic manager is a separate process the upstream client
-            # auto-spawns; CarlaNet doesn't replicate that. Fall back to a no-op
-            # so scripts that only use TM for ambient AI keep working.
+        """Return an in-process TrafficManager bound to the given port.
+
+        Behaviour:
+          1. If a process-wide instance already exists for this port, reuse it.
+          2. Otherwise instantiate a new C# CarlaNet.TrafficManager.TrafficManager
+             (fetches OpenDRIVE XML, builds InMemoryMap, starts RPC server +
+             worker thread). Construction takes ~300-500 ms on first call
+             against a given map.
+          3. On any failure (assemblies missing, server not responding, map
+             parse failure) fall back to _NoOpTrafficManager so ambient-AI-only
+             scripts keep working with a warning.
+        """
+        port = int(port)
+        # Process-wide cache so repeat calls return the same instance.
+        cache = getattr(Client, "_tm_cache", None)
+        if cache is None:
+            cache = {}
+            Client._tm_cache = cache
+        cached = cache.get(port)
+        if cached is not None:
+            return cached
+
+        if not _CARLANET_TM_AVAILABLE or _CSTrafficManager is None:
             import sys
-            print(f"[carlanet] traffic manager unavailable on port {port} "
-                  f"({type(ex).__name__}); using no-op stub.", file=sys.stderr)
-            return _NoOpTrafficManager(port)
+            print(f"[carlanet] CarlaNet.TrafficManager assemblies unavailable; "
+                  f"using no-op stub on port {port}.", file=sys.stderr)
+            stub = _NoOpTrafficManager(port)
+            cache[port] = stub
+            return stub
+
+        # Ensure the world observer is running so the TM's ALSM can pull
+        # cached actor IDs without bootstrapping its own subscription.
+        if not self._observer_started:
+            try: self.start_observer()
+            except Exception: pass
+
+        try:
+            cs_tm = _CSTrafficManager(self._inner, port)
+            cs_tm.Start()
+            tm = TrafficManager(cs_tm, port=port)
+            cache[port] = tm
+            return tm
+        except Exception as ex:
+            import sys, traceback
+            print(f"[carlanet] traffic manager construction failed on port "
+                  f"{port} ({type(ex).__name__}: {ex}); using no-op stub.",
+                  file=sys.stderr)
+            traceback.print_exc()
+            stub = _NoOpTrafficManager(port)
+            cache[port] = stub
+            return stub
 
     def apply_batch(self, cmds, do_tick_cue: bool = False):
         cs_cmds = _cmds_to_cs(cmds)
         _sync(self._inner.ApplyBatchAsync(cs_cmds, do_tick_cue))
+        # Best-effort registration for standalone SetAutopilot commands; can't
+        # handle SpawnActor.then(SetAutopilot) without responses.
+        Client._apply_tm_registration_from_batch(cmds, responses=None)
 
     def apply_batch_sync(self, cmds, do_tick_cue: bool = False):
         cs_cmds = _cmds_to_cs(cmds)
         cs_resp = _sync(self._inner.ApplyBatchSyncAsync(cs_cmds, do_tick_cue))
-        return [command.Response(cs_resp[i]) for i in range(cs_resp.Count)]
+        responses = [command.Response(cs_resp[i]) for i in range(cs_resp.Count)]
+        Client._apply_tm_registration_from_batch(cmds, responses)
+        return responses
+
+    # ── TM registration helpers ───────────────────────────────────────────────
+    @staticmethod
+    def _tm_register_ids(actor_ids, tm_port: int, enabled: bool):
+        """Register/unregister actor IDs with the cached TM on tm_port (no-op if none)."""
+        cache = getattr(Client, "_tm_cache", None)
+        if not cache:
+            return
+        tm = cache.get(int(tm_port))
+        if tm is None:
+            return
+        cs_tm = getattr(tm, "_tm", None)
+        if cs_tm is None:
+            return
+        from System import UInt32
+        from System.Collections.Generic import List as _List
+        cs_ids = _List[UInt32]()
+        for i in actor_ids:
+            cs_ids.Add(UInt32(int(i)))
+        try:
+            if enabled:
+                cs_tm.RegisterVehicleIds(cs_ids)
+            else:
+                cs_tm.UnregisterVehicleIds(cs_ids)
+        except Exception as ex:
+            import sys
+            print(f"[carlanet] TM register failed (port {tm_port}): {ex}", file=sys.stderr)
+
+    @staticmethod
+    def _apply_tm_registration_from_batch(cmds, responses):
+        """Inspect a batch (and optional responses) and register spawned vehicles with TMs."""
+        # Group (tm_port, enabled) -> [actor_ids]
+        groups: dict = {}
+        for i, c in enumerate(cmds):
+            if not isinstance(c, command._Cmd):
+                continue
+            if isinstance(c, command.SpawnActor):
+                if responses is None:
+                    continue  # can't resolve FutureActor → real ID without responses
+                if i >= len(responses):
+                    continue
+                resp = responses[i]
+                if resp.error is not None:
+                    continue
+                spawned_id = resp.actor_id
+                for after in c._do_after:
+                    if isinstance(after, command.SetAutopilot):
+                        key = (after._tm_port, after._enabled)
+                        groups.setdefault(key, []).append(int(spawned_id))
+            elif isinstance(c, command.SetAutopilot):
+                key = (c._tm_port, c._enabled)
+                groups.setdefault(key, []).append(c._id)
+        for (tm_port, enabled), ids in groups.items():
+            Client._tm_register_ids(ids, tm_port, enabled)
 
     def start_recorder(self, name: str, additional_data: bool = False) -> str:
         return str(_sync(self._inner.StartRecorderAsync(name, additional_data)))

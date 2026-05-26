@@ -490,7 +490,8 @@ public sealed class CarlaClient : IAsyncDisposable
 
     public Task<IReadOnlyList<CommandResponse>> ApplyBatchSyncAsync(
         IReadOnlyList<Command> commands, bool doTickCue)
-        => _rpc.CallAsync<IReadOnlyList<CommandResponse>>("apply_batch_sync", commands, doTickCue);
+        // Server returns std::vector<CommandResponse> directly (no Response<T> wrap), so use raw path.
+        => _rpc.CallRawAsync<IReadOnlyList<CommandResponse>>("apply_batch", commands, doTickCue);
 
     // ── §8.17 Raycast and Queries ─────────────────────────────────────────────
 
@@ -592,7 +593,10 @@ public sealed class CarlaClient : IAsyncDisposable
     public ActorSnapshot?  GetActorSnapshot       (ActorId id) => _actorCache.TryGetValue(id, out var s) ? s : null;
 
     /// All actor IDs currently in the world observer cache.
-    public IReadOnlyList<ActorId> GetCachedActorIds() => [.. _actorCache.Keys];
+    // NOTE: must materialize as a concrete array (not the `[.. _actorCache.Keys]`
+    // collection-expression form) — that compiles to <>z__ReadOnlyArray<T> which
+    // MessagePack-csharp has no formatter for and crashes RPC serialization.
+    public IReadOnlyList<ActorId> GetCachedActorIds() => _actorCache.Keys.ToArray();
 
     // Decode VehicleControl from the cached TypeDependentState union.
     // VehicleData layout (pack=1): throttle(f) steer(f) brake(f) hand_brake(bool)

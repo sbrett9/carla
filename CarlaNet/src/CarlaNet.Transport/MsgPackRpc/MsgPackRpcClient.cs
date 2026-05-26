@@ -59,6 +59,44 @@ internal sealed class MsgPackRpcClient : IAsyncDisposable
     public async Task CallVoidAsync(string method, params object?[] args)
         => await CallAsync<object?>(method, args).ConfigureAwait(false);
 
+    /// Like CallAsync, but deserializes the result field directly without
+    /// expecting a Response&lt;T&gt; / Response&lt;void&gt; wrapper. Use this for
+    /// CARLA RPC methods bound to functors returning raw types (e.g.
+    /// apply_batch returns std::vector&lt;CommandResponse&gt; directly, NOT
+    /// R&lt;std::vector&lt;CommandResponse&gt;&gt;).
+    public async Task<T> CallRawAsync<T>(string method, params object?[] args)
+    {
+        uint msgId = Interlocked.Increment(ref _nextMsgId);
+        byte[] request = BuildRequest(msgId, method, args);
+
+        var tcs = new TaskCompletionSource<ReadOnlySequence<byte>>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _pending[msgId] = tcs;
+
+        await _writeLock.WaitAsync().ConfigureAwait(false);
+        try { await _stream.WriteAsync(request).ConfigureAwait(false); }
+        finally { _writeLock.Release(); }
+
+        ReadOnlySequence<byte> responseSeq = await tcs.Task.WaitAsync(_timeout).ConfigureAwait(false);
+        return UnpackResultRaw<T>(responseSeq);
+    }
+
+    private static T UnpackResultRaw<T>(ReadOnlySequence<byte> seq)
+    {
+        var reader = new MessagePackReader(seq);
+        int count = reader.ReadArrayHeader();
+        if (count != 4) throw new InvalidDataException($"Unexpected response array size {count}");
+        reader.ReadInt32();        // type = 1
+        reader.ReadUInt32();       // msg_id (already correlated by reader loop)
+        if (!reader.TryReadNil())  // error field: nil = success, str = error
+        {
+            string err = reader.ReadString() ?? "unknown error";
+            throw new CarlaRpcException(err);
+        }
+        // Result field — deserialize directly, no Response<T> unwrapping.
+        return MessagePackSerializer.Deserialize<T>(ref reader);
+    }
+
     private static byte[] BuildRequest(uint msgId, string method, object?[] args)
     {
         // Raw msgpack — no length prefix (rpclib uses streaming unpacker).
@@ -77,7 +115,21 @@ internal sealed class MsgPackRpcClient : IAsyncDisposable
         writer.WriteArrayHeader(1);
         writer.Write(false);                // _asynchronous_call = false
         foreach (var arg in args)
-            MessagePackSerializer.Serialize(ref writer, arg);
+        {
+            if (arg is null)
+            {
+                writer.WriteNil();
+            }
+            else
+            {
+                // Serialize using the runtime type so generic collections
+                // (e.g. IReadOnlyList<uint>) resolve to the correct formatter.
+                // The non-generic Serialize(ref writer, object) overload only
+                // knows `object` and fails on complex types.
+                MessagePackSerializer.Serialize(arg.GetType(), ref writer, arg,
+                    MessagePackSerializerOptions.Standard);
+            }
+        }
         writer.Flush();
         return buffer.WrittenSpan.ToArray();
     }
