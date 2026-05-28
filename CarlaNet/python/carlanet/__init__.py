@@ -23,6 +23,7 @@ Environment:
 import sys
 import os
 import time
+import math as _math
 import threading
 import fnmatch
 
@@ -101,29 +102,221 @@ from CarlaNet.Types.Geom import (Transform as _CSTransform,
                                   BoundingBox as _CSBoundingBox,
                                   GeoLocation)
 
-# Python factory wrappers so upstream kwarg construction (e.g.
-# `carla.Location(x=1.0, z=2.8)`) works — pythonnet won't translate Python
-# lowercase kwargs to C# PascalCase parameter names.
-def Location(x=0.0, y=0.0, z=0.0):
-    return _CSLocation(float(x), float(y), float(z))
+# Mutable Python wrappers around the C# init-only geom record structs.
+# Upstream scripts freely mutate (e.g. `transform.location.z += 2.0`); we
+# mirror that by exposing snake_case attributes and rebuilding a fresh C#
+# value at the RPC boundary via `_to_cs()`. Wrappers also restore upstream
+# behavior the bare C# structs lack: Vector3D arithmetic, Location+Vector3D,
+# `Rotation.get_forward_vector()`, and `Transform.transform(vec)`.
+#
+# Constructors accept either Python kwargs or duck-typed objects with
+# `.x/.y/.z` / `.pitch/.yaw/.roll`, so they also act as the "wrap a value
+# coming back from C#" path (CS record structs expose those lowercase
+# aliases via `[IgnoreMember] public float x => X;`).
 
-def Rotation(pitch=0.0, yaw=0.0, roll=0.0):
-    return _CSRotation(float(pitch), float(yaw), float(roll))
+class Vector3D:
+    __slots__ = ("x", "y", "z")
+    def __init__(self, x=0.0, y=0.0, z=0.0):
+        self.x = float(x); self.y = float(y); self.z = float(z)
+    def _to_cs(self):
+        return _CSVector3D(self.x, self.y, self.z)
+    def length(self):
+        return _math.sqrt(self.x*self.x + self.y*self.y + self.z*self.z)
+    def squared_length(self):
+        return self.x*self.x + self.y*self.y + self.z*self.z
+    def make_unit_vector(self):
+        n = self.length() or 1.0
+        return Vector3D(self.x / n, self.y / n, self.z / n)
+    def dot(self, o):
+        return self.x*o.x + self.y*o.y + self.z*o.z
+    def cross(self, o):
+        return Vector3D(self.y*o.z - self.z*o.y,
+                        self.z*o.x - self.x*o.z,
+                        self.x*o.y - self.y*o.x)
+    def __add__(self, o):  return Vector3D(self.x + o.x, self.y + o.y, self.z + o.z)
+    def __sub__(self, o):  return Vector3D(self.x - o.x, self.y - o.y, self.z - o.z)
+    def __mul__(self, s):  return Vector3D(self.x * s, self.y * s, self.z * s)
+    __rmul__ = __mul__
+    def __truediv__(self, s): return Vector3D(self.x / s, self.y / s, self.z / s)
+    def __neg__(self):     return Vector3D(-self.x, -self.y, -self.z)
+    def __eq__(self, o):
+        return (hasattr(o, "x") and hasattr(o, "y") and hasattr(o, "z")
+                and self.x == o.x and self.y == o.y and self.z == o.z)
+    def __ne__(self, o):   return not self.__eq__(o)
+    def __hash__(self):    return hash((self.x, self.y, self.z))
+    def __repr__(self):    return f"Vector3D(x={self.x}, y={self.y}, z={self.z})"
 
-def Vector3D(x=0.0, y=0.0, z=0.0):
-    return _CSVector3D(float(x), float(y), float(z))
 
-def Vector2D(x=0.0, y=0.0):
-    return _CSVector2D(float(x), float(y))
+class Vector2D:
+    __slots__ = ("x", "y")
+    def __init__(self, x=0.0, y=0.0):
+        self.x = float(x); self.y = float(y)
+    def _to_cs(self):
+        return _CSVector2D(self.x, self.y)
+    def length(self):         return _math.sqrt(self.x*self.x + self.y*self.y)
+    def squared_length(self): return self.x*self.x + self.y*self.y
+    def __add__(self, o):  return Vector2D(self.x + o.x, self.y + o.y)
+    def __sub__(self, o):  return Vector2D(self.x - o.x, self.y - o.y)
+    def __mul__(self, s):  return Vector2D(self.x * s, self.y * s)
+    __rmul__ = __mul__
+    def __truediv__(self, s): return Vector2D(self.x / s, self.y / s)
+    def __eq__(self, o):
+        return hasattr(o, "x") and hasattr(o, "y") and self.x == o.x and self.y == o.y
+    def __ne__(self, o):   return not self.__eq__(o)
+    def __hash__(self):    return hash((self.x, self.y))
+    def __repr__(self):    return f"Vector2D(x={self.x}, y={self.y})"
 
-def Transform(location=None, rotation=None):
-    return _CSTransform(location if location is not None else _CSLocation(),
-                        rotation if rotation is not None else _CSRotation())
 
-def BoundingBox(location=None, extent=None, rotation=None):
-    return _CSBoundingBox(location if location is not None else _CSLocation(),
-                          extent if extent is not None else _CSVector3D(),
-                          rotation if rotation is not None else _CSRotation())
+class Location:
+    """Mutable Location wrapper. In upstream libcarla, Location extends
+    Vector3D; here we keep them as sibling classes that share the same fields
+    and basic arithmetic. Supports Location + Vector3D (returns Location)."""
+    __slots__ = ("x", "y", "z")
+    def __init__(self, x=0.0, y=0.0, z=0.0):
+        self.x = float(x); self.y = float(y); self.z = float(z)
+    def _to_cs(self):
+        return _CSLocation(self.x, self.y, self.z)
+    def distance(self, other):
+        dx = self.x - other.x; dy = self.y - other.y; dz = self.z - other.z
+        return _math.sqrt(dx*dx + dy*dy + dz*dz)
+    def __add__(self, o):  return Location(self.x + o.x, self.y + o.y, self.z + o.z)
+    def __sub__(self, o):  return Location(self.x - o.x, self.y - o.y, self.z - o.z)
+    def __eq__(self, o):
+        return (hasattr(o, "x") and hasattr(o, "y") and hasattr(o, "z")
+                and self.x == o.x and self.y == o.y and self.z == o.z)
+    def __ne__(self, o):   return not self.__eq__(o)
+    def __hash__(self):    return hash((self.x, self.y, self.z))
+    def __repr__(self):    return f"Location(x={self.x}, y={self.y}, z={self.z})"
+
+
+class Rotation:
+    __slots__ = ("pitch", "yaw", "roll")
+    def __init__(self, pitch=0.0, yaw=0.0, roll=0.0):
+        self.pitch = float(pitch); self.yaw = float(yaw); self.roll = float(roll)
+    def _to_cs(self):
+        return _CSRotation(self.pitch, self.yaw, self.roll)
+    def get_forward_vector(self):
+        cp = _math.cos(_math.radians(self.pitch)); sp = _math.sin(_math.radians(self.pitch))
+        cy = _math.cos(_math.radians(self.yaw));   sy = _math.sin(_math.radians(self.yaw))
+        return Vector3D(cp * cy, cp * sy, sp)
+    def get_right_vector(self):
+        cp = _math.cos(_math.radians(self.pitch)); sp = _math.sin(_math.radians(self.pitch))
+        cy = _math.cos(_math.radians(self.yaw));   sy = _math.sin(_math.radians(self.yaw))
+        cr = _math.cos(_math.radians(self.roll));  sr = _math.sin(_math.radians(self.roll))
+        return Vector3D(cy * sp * sr - sy * cr,
+                        sy * sp * sr + cy * cr,
+                        -cp * sr)
+    def get_up_vector(self):
+        cp = _math.cos(_math.radians(self.pitch)); sp = _math.sin(_math.radians(self.pitch))
+        cy = _math.cos(_math.radians(self.yaw));   sy = _math.sin(_math.radians(self.yaw))
+        cr = _math.cos(_math.radians(self.roll));  sr = _math.sin(_math.radians(self.roll))
+        return Vector3D(-cy * sp * cr - sy * sr,
+                        -sy * sp * cr + cy * sr,
+                        cp * cr)
+    def __eq__(self, o):
+        return (hasattr(o, "pitch") and hasattr(o, "yaw") and hasattr(o, "roll")
+                and self.pitch == o.pitch and self.yaw == o.yaw and self.roll == o.roll)
+    def __ne__(self, o):   return not self.__eq__(o)
+    def __hash__(self):    return hash((self.pitch, self.yaw, self.roll))
+    def __repr__(self):
+        return f"Rotation(pitch={self.pitch}, yaw={self.yaw}, roll={self.roll})"
+
+
+def _as_location(v):
+    if v is None:                  return Location()
+    if isinstance(v, Location):    return v
+    return Location(float(v.x), float(v.y), float(v.z))
+
+def _as_rotation(v):
+    if v is None:                  return Rotation()
+    if isinstance(v, Rotation):    return v
+    return Rotation(float(v.pitch), float(v.yaw), float(v.roll))
+
+def _as_vector3d(v):
+    if v is None:                  return Vector3D()
+    if isinstance(v, Vector3D):    return v
+    return Vector3D(float(v.x), float(v.y), float(v.z))
+
+
+class Transform:
+    """Mutable Transform wrapper. `.location` is a Location wrapper and
+    `.rotation` is a Rotation wrapper — both are real fields (not properties
+    that rebuild), so `transform.location.z += 2.0` mutates in place and the
+    new value survives until `_to_cs()` is called at the RPC boundary."""
+    __slots__ = ("location", "rotation")
+    def __init__(self, location=None, rotation=None):
+        self.location = _as_location(location)
+        self.rotation = _as_rotation(rotation)
+
+    def _to_cs(self):
+        return _CSTransform(self.location._to_cs(), self.rotation._to_cs())
+
+    def get_matrix(self):
+        """4x4 transform matrix as a row-major flat list of 16 floats.
+        Order matches carla::geom::Transform::GetMatrix() so downstream math
+        (TransformPoint, TransformVector) ports directly."""
+        cy = _math.cos(_math.radians(self.rotation.yaw))
+        sy = _math.sin(_math.radians(self.rotation.yaw))
+        cr = _math.cos(_math.radians(self.rotation.roll))
+        sr = _math.sin(_math.radians(self.rotation.roll))
+        cp = _math.cos(_math.radians(self.rotation.pitch))
+        sp = _math.sin(_math.radians(self.rotation.pitch))
+        loc = self.location
+        return [
+            cp*cy, cy*sp*sr - sy*cr, -cy*sp*cr - sy*sr, loc.x,
+            cp*sy, sy*sp*sr + cy*cr, -sy*sp*cr + cy*sr, loc.y,
+            sp,    -cp*sr,            cp*cr,            loc.z,
+            0.0,   0.0,               0.0,              1.0,
+        ]
+
+    def transform(self, in_point):
+        """In-place: apply rotation + translation to a Vector3D / Location-like
+        point. Mutates `in_point.x/y/z` and returns it (upstream semantics)."""
+        M = self.get_matrix()
+        x, y, z = float(in_point.x), float(in_point.y), float(in_point.z)
+        in_point.x = M[0]*x + M[1]*y + M[2]*z + M[3]
+        in_point.y = M[4]*x + M[5]*y + M[6]*z + M[7]
+        in_point.z = M[8]*x + M[9]*y + M[10]*z + M[11]
+        return in_point
+
+    def transform_vector(self, in_vec):
+        """In-place: apply rotation only (no translation) to a Vector3D."""
+        M = self.get_matrix()
+        x, y, z = float(in_vec.x), float(in_vec.y), float(in_vec.z)
+        in_vec.x = M[0]*x + M[1]*y + M[2]*z
+        in_vec.y = M[4]*x + M[5]*y + M[6]*z
+        in_vec.z = M[8]*x + M[9]*y + M[10]*z
+        return in_vec
+
+    def get_forward_vector(self): return self.rotation.get_forward_vector()
+    def get_right_vector(self):   return self.rotation.get_right_vector()
+    def get_up_vector(self):      return self.rotation.get_up_vector()
+
+    def __eq__(self, o):
+        return (isinstance(o, Transform)
+                and self.location == o.location and self.rotation == o.rotation)
+    def __ne__(self, o):   return not self.__eq__(o)
+    def __repr__(self):    return f"Transform({self.location!r}, {self.rotation!r})"
+
+
+class BoundingBox:
+    __slots__ = ("location", "extent", "rotation")
+    def __init__(self, location=None, extent=None, rotation=None):
+        self.location = _as_location(location)
+        self.extent   = _as_vector3d(extent)
+        self.rotation = _as_rotation(rotation)
+    def _to_cs(self):
+        return _CSBoundingBox(self.location._to_cs(),
+                              self.extent._to_cs(),
+                              self.rotation._to_cs())
+    def __repr__(self):
+        return f"BoundingBox({self.location!r}, {self.extent!r}, {self.rotation!r})"
+
+
+def _to_cs(obj):
+    """Convert a Python wrapper (control or geom) to its C# value;
+    pass other values through unchanged."""
+    return obj._to_cs() if hasattr(obj, "_to_cs") else obj
 from CarlaNet.Types.Rpc.Actors import (Actor as _Actor, ActorDefinition,
                                         ActorDescription, ActorAttributeValue)
 from CarlaNet.Types.Rpc.Control import (
@@ -183,7 +376,9 @@ class WalkerControl:
         self.jump = bool(jump)
     def _to_cs(self):
         d = self.direction
-        if not isinstance(d, _CSVector3D):
+        if hasattr(d, "_to_cs"):
+            d = d._to_cs()
+        elif not isinstance(d, _CSVector3D):
             d = _CSVector3D(float(d.x), float(d.y), float(d.z))
         return _CSWalkerControl(d, self.speed, self.jump)
 
@@ -204,8 +399,9 @@ class AckermannControllerSettings:
 
 
 def _control_to_cs(ctrl):
-    """Convert a Python control wrapper to its C# value; pass others through."""
-    return ctrl._to_cs() if hasattr(ctrl, "_to_cs") else ctrl
+    """Backwards-compat alias for _to_cs (defined alongside the geom wrappers).
+    Works for any Python wrapper exposing `_to_cs()` — control or geom."""
+    return _to_cs(ctrl)
 
 
 class _PhysicsControlWrapper:
@@ -274,7 +470,6 @@ else:
 from System import TimeSpan
 from System.Collections.Generic import List
 import struct
-import math as _math
 
 
 def _sync(task):
@@ -416,11 +611,20 @@ class BlueprintLibrary:
 class Map:
     def __init__(self, name: str, spawn_points):
         self.name = name
-        self._spawn_points = [spawn_points[i]
-                               for i in range(spawn_points.Count)]
+        # Wrap each C# Transform into the mutable Python Transform so callers
+        # can safely do `sp.location.z += 2.0` without the C# init-only struct
+        # silently swallowing the write.
+        self._spawn_points = [
+            Transform(spawn_points[i].location, spawn_points[i].rotation)
+            for i in range(spawn_points.Count)
+        ]
 
     def get_spawn_points(self):
-        return list(self._spawn_points)
+        # Return fresh Transform wrappers each call so callers that mutate a
+        # spawn point (e.g. raising z before respawning) don't affect later
+        # callers — upstream libcarla's get_spawn_points() returns independent
+        # Transform values.
+        return [Transform(sp.location, sp.rotation) for sp in self._spawn_points]
 
     def __repr__(self):
         return f"Map(name={self.name!r}, spawn_points={len(self._spawn_points)})"
@@ -450,7 +654,8 @@ class Actor:
 
     @property
     def bounding_box(self) -> BoundingBox:
-        return self._actor.BoundingBox
+        cs = self._actor.BoundingBox
+        return BoundingBox(cs.location, cs.extent, cs.rotation)
 
     @property
     def attributes(self) -> dict:
@@ -464,19 +669,21 @@ class Actor:
     # ── State queries (from world observer cache) ─────────────────────────────
 
     def get_transform(self) -> Transform:
-        return self._client.GetActorTransform(self._actor.Id)
+        cs = self._client.GetActorTransform(self._actor.Id)
+        return Transform(cs.location, cs.rotation)
 
     def get_location(self) -> Location:
-        return self.get_transform().Location
+        cs = self._client.GetActorTransform(self._actor.Id)
+        return Location(cs.location.x, cs.location.y, cs.location.z)
 
     def get_velocity(self) -> Vector3D:
-        return self._client.GetActorVelocity(self._actor.Id)
+        return _as_vector3d(self._client.GetActorVelocity(self._actor.Id))
 
     def get_angular_velocity(self) -> Vector3D:
-        return self._client.GetActorAngularVelocity(self._actor.Id)
+        return _as_vector3d(self._client.GetActorAngularVelocity(self._actor.Id))
 
     def get_acceleration(self) -> Vector3D:
-        return self._client.GetActorAcceleration(self._actor.Id)
+        return _as_vector3d(self._client.GetActorAcceleration(self._actor.Id))
 
     def get_control(self):
         cs = self._client.GetVehicleControl(self._actor.Id)
@@ -490,10 +697,10 @@ class Actor:
     # ── Commands ──────────────────────────────────────────────────────────────
 
     def set_transform(self, transform: Transform):
-        _sync(self._client.SetActorTransformAsync(self._actor.Id, transform))
+        _sync(self._client.SetActorTransformAsync(self._actor.Id, _to_cs(transform)))
 
     def set_location(self, location: Location):
-        _sync(self._client.SetActorLocationAsync(self._actor.Id, location))
+        _sync(self._client.SetActorLocationAsync(self._actor.Id, _to_cs(location)))
 
     def apply_control(self, control):
         """Apply a control to a vehicle (VehicleControl) or walker (WalkerControl)."""
@@ -543,7 +750,7 @@ class Actor:
         _sync(self._client.ApplyPhysicsControlToVehicleAsync(self._actor.Id, cs))
 
     def enable_constant_velocity(self, velocity: Vector3D):
-        _sync(self._client.EnableActorConstantVelocityAsync(self._actor.Id, velocity))
+        _sync(self._client.EnableActorConstantVelocityAsync(self._actor.Id, _to_cs(velocity)))
 
     def disable_constant_velocity(self):
         _sync(self._client.DisableActorConstantVelocityAsync(self._actor.Id))
@@ -677,9 +884,11 @@ class WalkerAIController(Actor):
         except Exception as ex:
             print(f"[carlanet] WalkerAIController.start: set_collisions failed for {target_id}: {ex}", file=sys.stderr)
         try:
+            # nav.Start expects a C# Location; .location on a CS Transform is
+            # already a CS Location, so pass it straight through.
             loc = self._client.GetActorTransform(target_id).location
         except Exception:
-            loc = Location(0.0, 0.0, 0.0)
+            loc = _CSLocation(0.0, 0.0, 0.0)
         nav.Start(target_id, loc)
 
     def stop(self):
@@ -690,11 +899,13 @@ class WalkerAIController(Actor):
     def go_to_location(self, location):
         """Route the parent walker to ``location``."""
         nav = Client._get_walker_navigation()
-        # Coerce a Python Location-like object (anything with x/y/z) into the
-        # C# Location record-struct expected by WalkerNavigation.
-        if not isinstance(location, _CSLocation):
-            location = _CSLocation(float(location.x), float(location.y), float(location.z))
-        nav.GoToLocation(self._target_id(), location)
+        # WalkerNavigation.GoToLocation expects a C# Location; accept either a
+        # Python wrapper (preferred), a bare CS Location, or any duck-typed
+        # x/y/z object.
+        cs_loc = _to_cs(location)
+        if not isinstance(cs_loc, _CSLocation):
+            cs_loc = _CSLocation(float(cs_loc.x), float(cs_loc.y), float(cs_loc.z))
+        nav.GoToLocation(self._target_id(), cs_loc)
 
     def set_max_speed(self, speed):
         """Set the parent walker's maximum speed in m/s (default upstream: 1.4)."""
@@ -809,7 +1020,7 @@ class command:
                     else self._bp)
             parent_id = self._parent  # None → optional not set
             do_after_cs = _cs_list([c.to_cs() for c in self._do_after], Command)
-            return SpawnActorCommand(desc, self._transform, parent_id, do_after_cs)
+            return SpawnActorCommand(desc, _to_cs(self._transform), parent_id, do_after_cs)
 
     class DestroyActor(_Cmd):
         def __init__(self, actor):
@@ -841,7 +1052,7 @@ class command:
             self._tf = transform
 
         def to_cs(self) -> Command:
-            return ApplyTransformCommand(self._id, self._tf)
+            return ApplyTransformCommand(self._id, _to_cs(self._tf))
 
     class ApplyLocation(_Cmd):
         def __init__(self, actor, location: Location):
@@ -849,7 +1060,7 @@ class command:
             self._loc = location
 
         def to_cs(self) -> Command:
-            return ApplyLocationCommand(self._id, self._loc)
+            return ApplyLocationCommand(self._id, _to_cs(self._loc))
 
     class SetVehicleLightState(_Cmd):
         def __init__(self, actor, light_state):
@@ -1044,12 +1255,13 @@ class World:
                     attach_to=None, attachment_type=None) -> Actor:
         desc = (blueprint.to_description()
                 if isinstance(blueprint, ActorBlueprint) else blueprint)
+        cs_tf = _to_cs(transform)
         if attach_to is not None:
             parent_id = int(attach_to.id) if isinstance(attach_to, Actor) else int(attach_to)
             at = attachment_type if attachment_type is not None else AttachmentType.Rigid
-            cs_actor = _sync(self._client.SpawnActorWithParentAsync(desc, transform, parent_id, at))
+            cs_actor = _sync(self._client.SpawnActorWithParentAsync(desc, cs_tf, parent_id, at))
         else:
-            cs_actor = _sync(self._client.SpawnActorAsync(desc, transform))
+            cs_actor = _sync(self._client.SpawnActorAsync(desc, cs_tf))
         wrapped = _wrap_actor(cs_actor, self._client)
         # WalkerAIController.start() / stop() rely on locating the parent
         # walker actor (controllers are spawned with attach_to=walker per
@@ -1105,7 +1317,9 @@ class World:
             wn = Client._get_walker_navigation()
             loc = wn.GetRandomLocationFromNavigation()
             # C# returns Location? (nullable); pythonnet maps None to Python None.
-            return loc
+            if loc is None:
+                return None
+            return Location(loc.x, loc.y, loc.z)
         except Exception as ex:
             import sys
             print(f"[carlanet] get_random_location_from_navigation failed: {ex}", file=sys.stderr)
@@ -1685,7 +1899,8 @@ class SensorData:
         h = sensor_frame.Header
         self.frame = int(h.Frame)
         self.timestamp = float(h.Timestamp)
-        self.transform = sensor_frame.SensorTransform
+        cs_tf = sensor_frame.SensorTransform
+        self.transform = Transform(cs_tf.location, cs_tf.rotation)
 
 
 class Image(SensorData):
@@ -1848,7 +2063,7 @@ class CollisionEvent(SensorData):
                 sensor_frame.PayloadBytes)
             self.actor = _WrappedSensorActor(data.SelfActor, listener_actor._client if listener_actor else None) if listener_actor else None
             self.other_actor = _WrappedSensorActor(data.OtherActor, listener_actor._client if listener_actor else None)
-            self.normal_impulse = data.NormalImpulse
+            self.normal_impulse = _as_vector3d(data.NormalImpulse)
         except Exception:
             self.actor = listener_actor
             self.other_actor = _StubActor("unknown")
@@ -1922,8 +2137,8 @@ class IMUMeasurement(SensorData):
             from CarlaNet.Sensors import ImuSensorData
             from MessagePack import MessagePackSerializer
             d = MessagePackSerializer.Deserialize[ImuSensorData](sensor_frame.PayloadBytes)
-            self.accelerometer = d.Accelerometer
-            self.gyroscope = d.Gyroscope
+            self.accelerometer = _as_vector3d(d.Accelerometer)
+            self.gyroscope = _as_vector3d(d.Gyroscope)
             self.compass = float(d.Compass)
         except Exception:
             self.accelerometer = Vector3D(0.0, 0.0, 0.0)
@@ -2162,32 +2377,32 @@ class DebugHelper:
 
     def draw_point(self, location, size: float = 0.1, color=None,
                    life_time: float = -1.0, persistent_lines: bool = True):
-        prim = PointPrimitive(location, float(size))
+        prim = PointPrimitive(_to_cs(location), float(size))
         shape = DebugShape(prim, _to_cs_color(color), float(life_time), bool(persistent_lines))
         _sync(self._client.DrawDebugShapeAsync(shape))
 
     def draw_line(self, begin, end, thickness: float = 0.1, color=None,
                   life_time: float = -1.0, persistent_lines: bool = True):
-        prim = LinePrimitive(begin, end, float(thickness))
+        prim = LinePrimitive(_to_cs(begin), _to_cs(end), float(thickness))
         shape = DebugShape(prim, _to_cs_color(color), float(life_time), bool(persistent_lines))
         _sync(self._client.DrawDebugShapeAsync(shape))
 
     def draw_arrow(self, begin, end, thickness: float = 0.1, arrow_size: float = 0.1,
                    color=None, life_time: float = -1.0, persistent_lines: bool = True):
-        line = LinePrimitive(begin, end, float(thickness))
+        line = LinePrimitive(_to_cs(begin), _to_cs(end), float(thickness))
         prim = ArrowPrimitive(line, float(arrow_size))
         shape = DebugShape(prim, _to_cs_color(color), float(life_time), bool(persistent_lines))
         _sync(self._client.DrawDebugShapeAsync(shape))
 
     def draw_box(self, box, rotation, thickness: float = 0.1, color=None,
                  life_time: float = -1.0, persistent_lines: bool = True):
-        prim = BoxPrimitive(box, rotation, float(thickness))
+        prim = BoxPrimitive(_to_cs(box), _to_cs(rotation), float(thickness))
         shape = DebugShape(prim, _to_cs_color(color), float(life_time), bool(persistent_lines))
         _sync(self._client.DrawDebugShapeAsync(shape))
 
     def draw_string(self, location, text: str, draw_shadow: bool = False,
                     color=None, life_time: float = -1.0, persistent_lines: bool = True):
-        prim = StringPrimitive(location, str(text), bool(draw_shadow))
+        prim = StringPrimitive(_to_cs(location), str(text), bool(draw_shadow))
         shape = DebugShape(prim, _to_cs_color(color), float(life_time), bool(persistent_lines))
         _sync(self._client.DrawDebugShapeAsync(shape))
 
