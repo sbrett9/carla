@@ -61,6 +61,13 @@ internal sealed class SensorStream : IDisposable
             }
         }
         catch (OperationCanceledException) { }
+        // Dispose() races with the pending ReadAsync: if _stream.Close()
+        // wins ahead of the CT being observed, the read throws
+        // ObjectDisposedException/IOException instead of cancellation.
+        // Treat both as cancellation when shutdown is in progress so the
+        // OnlyOnFaulted continuation below stays quiet.
+        catch (ObjectDisposedException) when (ct.IsCancellationRequested) { }
+        catch (IOException) when (ct.IsCancellationRequested) { }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[SensorStream] read error after {frameCount} frames: {ex.Message}");
