@@ -220,12 +220,26 @@ public sealed class OsmConverter
             // Geometry/topology cleanup matching CARLA's osm2odr output.
             "--geometry.remove",
             "--roundabouts.guess",
-            "--junctions.join",
         };
 
         // A pinned origin must not be shifted; otherwise honour CenterMap.
         if (disableNormalization)
             args.Add("--offset.disable-normalization");
+
+        if (_options.GenerateTrafficLights)
+        {
+            // Merge clustered OSM nodes into single signalized intersections.
+            args.Add("--junctions.join");
+        }
+        else
+        {
+            // Fully suppress traffic lights so CARLA creates no (ungrouped)
+            // TrafficLightComponents that flood the runtime log. --tls.guess only
+            // blocks GUESSED lights, so also discard OSM-loaded ones; and skip
+            // --junctions.join, which re-creates TL-controlled junctions even after
+            // discard (verified on WrigleyVille: join -> 19 TLs, no-join -> 0).
+            args.Add("--tls.discard-loaded");
+        }
 
         args.AddRange(_options.ExtraArgs);
         return args;

@@ -439,6 +439,22 @@ try:
     from CarlaNet.Map import OsmConversionOptions as _OsmConversionOptions
 except Exception:
     _OsmConversionOptions = None  # type: ignore
+
+def _default_opendrive_params():
+    # OpendriveGenerationParameters is a C# record struct whose only ctor is the
+    # 7-arg primary (no pythonnet-callable parameterless ctor), so construct it
+    # explicitly with the upstream carla.Client.generate_opendrive_world defaults:
+    # vertex_distance=2.0, max_road_length=50.0, wall_height=1.0, additional_width=0.6,
+    # smooth_junctions=True, enable_mesh_visibility=True, enable_pedestrian_navigation=True.
+    return OpendriveGenerationParameters(2.0, 50.0, 1.0, 0.6, True, True, True)
+
+def _default_osm_opendrive_params():
+    # OSM-specific mesh defaults (CARLA Docs/tuto_G_openstreetmap.md): wall_height=0.0
+    # is strongly recommended — OSM encodes opposing lanes as separate roads, so walls
+    # overlap and cause spurious collisions. Larger max_road_length (500) reduces mesh
+    # fragmentation. (vertex_distance=2.0, max_road_length=500.0, wall_height=0.0,
+    # additional_width=0.6, smooth_junctions, enable_mesh_visibility, pedestrian_nav.)
+    return OpendriveGenerationParameters(2.0, 500.0, 0.0, 0.6, True, True, True)
 from CarlaNet.Types.Rpc.Enums import (TrafficLightState, MapLayer,
                                        AttachmentType, VehicleDoor,
                                        ActorAttributeType)
@@ -1490,7 +1506,7 @@ class Client:
         """
         if parameters is None:
             _sync(self._inner.GenerateOpenDriveWorldAsync(
-                opendrive, OpendriveGenerationParameters(), reset_settings))
+                opendrive, _default_opendrive_params(), reset_settings))
         else:
             _sync(self._inner.GenerateOpenDriveWorldAsync(
                 opendrive, parameters, reset_settings))
@@ -1506,7 +1522,7 @@ class Client:
         set to pin a world origin); when None, CARLA osm2odr defaults are used.
         *parameters* mirrors generate_opendrive_world.
         """
-        params = OpendriveGenerationParameters() if parameters is None else parameters
+        params = _default_osm_opendrive_params() if parameters is None else parameters
         _sync(self._inner.GenerateWorldFromOsmAsync(
             osm_path, osm_options, params, reset_settings))
         return World(self._inner)

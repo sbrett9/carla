@@ -39,6 +39,9 @@ _PROJ = os.path.join(_INSTALL, "share", "proj")
 ap = argparse.ArgumentParser()
 ap.add_argument("--convert-only", action="store_true")
 ap.add_argument("--no-origin", action="store_true")
+ap.add_argument("--traffic-lights", action="store_true",
+                help="generate traffic lights (OFF by default; ON spams "
+                     "'TrafficLightComponent has no Group' in CARLA 0.10.0)")
 ap.add_argument("--osm", default=os.path.join(_REPO, "Import", "Maps", "WrigleyVille.osm"))
 ap.add_argument("--lat", type=float, default=41.94813)
 ap.add_argument("--lon", type=float, default=-87.65593)
@@ -61,6 +64,9 @@ def make_options():
     opts = OsmConversionOptions()
     opts.NetconvertPath = _NETCONVERT
     opts.ProjDataDirectory = _PROJ
+    # Traffic-light signals from netconvert (--tls.guess) become ungrouped
+    # TrafficLightComponents in CARLA 0.10.0 and spam the log; off by default.
+    opts.GenerateTrafficLights = args.traffic_lights
     if not args.no_origin:
         opts.OriginLatitude = args.lat
         opts.OriginLongitude = args.lon

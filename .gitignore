@@ -40,3 +40,6 @@ _images*
 
 # Temp
 Help.md
+
+# Cesium plugin runtime tile cache
+cesium-request-cache.sqlite*
