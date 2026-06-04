@@ -43,9 +43,25 @@ public sealed record OsmConversionOptions
     /// <summary>Guess and emit traffic lights (<c>--tls.guess</c>).</summary>
     public bool GenerateTrafficLights { get; init; } = true;
 
-    /// <summary>Centre the generated map about the origin (<c>--proj.plain-geo false</c> +
-    /// <c>--offset.disable-normalization false</c> → netconvert centres by default).</summary>
+    /// <summary>Centre the generated map about the origin (netconvert auto-normalizes so the
+    /// map's min corner sits at 0,0). Ignored when <see cref="OriginLatitude"/> /
+    /// <see cref="OriginLongitude"/> are set (a pinned origin forces normalization OFF).</summary>
     public bool CenterMap { get; init; } = true;
+
+    /// <summary>
+    /// Optional georeferenced origin latitude (WGS84 degrees). When BOTH this and
+    /// <see cref="OriginLongitude"/> are set, the converter pins the projection so this exact
+    /// lat/lon maps to <b>(0,0)</b> in the OpenDRIVE / world frame — regardless of where the
+    /// OSM bounding box sits — and forces offset normalization OFF so the origin is not
+    /// shifted. This lets callers choose a semantic origin (e.g. a landmark such as a
+    /// stadium's home plate) without having to centre their OSM extract on it. Overrides
+    /// <see cref="ProjString"/> and <see cref="CenterMap"/> when set.
+    /// </summary>
+    public double? OriginLatitude { get; init; }
+
+    /// <summary>Optional georeferenced origin longitude (WGS84 degrees). See
+    /// <see cref="OriginLatitude"/>. Both must be set for origin pinning to take effect.</summary>
+    public double? OriginLongitude { get; init; }
 
     /// <summary>Escape hatch: extra raw netconvert arguments appended verbatim, for tuning
     /// without code changes. Each entry is passed as a single argument token.</summary>
@@ -172,11 +188,32 @@ public sealed class OsmConverter
     internal IReadOnlyList<string> BuildArguments(string osmPath, string xodrPath)
     {
         var inv = System.Globalization.CultureInfo.InvariantCulture;
+
+        // Resolve the projection + whether to keep netconvert's normalization offset.
+        // A georeferenced origin (lat/lon) pins that point to (0,0) via a fully-specified
+        // transverse-Mercator projection and MUST disable normalization, or the pinned
+        // origin gets shifted by the bounding-box offset. Otherwise: a bare ProjString is
+        // auto-centred (CenterMap=true) or left as raw projected coords (CenterMap=false).
+        string projString;
+        bool disableNormalization;
+        if (_options.OriginLatitude is double lat && _options.OriginLongitude is double lon)
+        {
+            projString = string.Format(inv,
+                "+proj=tmerc +lat_0={0} +lon_0={1} +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
+                lat, lon);
+            disableNormalization = true;
+        }
+        else
+        {
+            projString = _options.ProjString;
+            disableNormalization = !_options.CenterMap;
+        }
+
         var args = new List<string>
         {
             "--osm-files", osmPath,
             "--opendrive-output", xodrPath,
-            "--proj", _options.ProjString,
+            "--proj", projString,
             "--default.lanewidth", _options.DefaultLaneWidth.ToString(inv),
             "--default.sidewalk-width", _options.DefaultSidewalkWidth.ToString(inv),
             "--tls.guess", _options.GenerateTrafficLights ? "true" : "false",
@@ -186,8 +223,8 @@ public sealed class OsmConverter
             "--junctions.join",
         };
 
-        // CARLA centres the map by default; when disabled keep netconvert's raw geo coords.
-        if (!_options.CenterMap)
+        // A pinned origin must not be shifted; otherwise honour CenterMap.
+        if (disableNormalization)
             args.Add("--offset.disable-normalization");
 
         args.AddRange(_options.ExtraArgs);
