@@ -39,8 +39,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "[build_wheel] dotnet publish failed with exit code $LASTEXITCODE"
 }
 
-$strayShim = Join-Path $dllsDir 'carlanet.py'
-Remove-Item -Path $strayShim -Force -ErrorAction SilentlyContinue
+# Shim is python/carlanet/__init__.py (canonical); no stray carlanet.py is published.
 
 if ($Editable) {
     Write-Host "[build_wheel] performing editable install (pip install -e .)"

@@ -14,9 +14,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <!-- Bundle the Python shim alongside the assembly -->
-  <ItemGroup>
-    <Content Include="carlanet.py" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
+  <!-- The Python shim is python/carlanet/__init__.py (canonical). This project
+       builds only the managed assemblies it wraps; no .py is bundled here. -->
 
 </Project>

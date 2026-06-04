@@ -430,7 +430,15 @@ class _PhysicsControlWrapper:
     def _to_cs(self):
         from CarlaNet.Types.Rpc.Physics import VehiclePhysicsControl as _CSVPC
         return _CSVPC(*[getattr(self, f) for f in self._FIELDS])
-from CarlaNet.Types.Rpc.Environment import EpisodeSettings, WeatherParameters
+from CarlaNet.Types.Rpc.Environment import (EpisodeSettings, WeatherParameters,
+                                            OpendriveGenerationParameters)
+# OSM→OpenDRIVE→runtime-world: OsmConversionOptions lives in CarlaNet.Map (loaded
+# via the guarded _ref("CarlaNet.Map") above). generate_world_from_osm() falls back
+# to C# defaults when osm_options is None.
+try:
+    from CarlaNet.Map import OsmConversionOptions as _OsmConversionOptions
+except Exception:
+    _OsmConversionOptions = None  # type: ignore
 from CarlaNet.Types.Rpc.Enums import (TrafficLightState, MapLayer,
                                        AttachmentType, VehicleDoor,
                                        ActorAttributeType)
@@ -1469,6 +1477,38 @@ class Client:
 
     def load_world(self, map_name: str, reset_settings: bool = True) -> World:
         _sync(self._inner.LoadEpisodeAsync(map_name, reset_settings))
+        return World(self._inner)
+
+    def generate_opendrive_world(self, opendrive: str, parameters=None,
+                                 reset_settings: bool = True) -> World:
+        """Generate a runtime world from OpenDRIVE (.xodr) text.
+
+        Mirrors carla.Client.generate_opendrive_world: copies the .xodr to the
+        server then loads the special "OpenDriveMap" episode. When *parameters*
+        is None the C# side substitutes the upstream OpendriveGenerationParameters
+        defaults.
+        """
+        if parameters is None:
+            _sync(self._inner.GenerateOpenDriveWorldAsync(
+                opendrive, OpendriveGenerationParameters(), reset_settings))
+        else:
+            _sync(self._inner.GenerateOpenDriveWorldAsync(
+                opendrive, parameters, reset_settings))
+        return World(self._inner)
+
+    def generate_world_from_osm(self, osm_path: str, osm_options=None,
+                                parameters=None, reset_settings: bool = True) -> World:
+        """Drop an .osm file and fabricate the level at runtime.
+
+        Converts OSM→OpenDRIVE via the native SUMO netconvert (CarlaNet.Map),
+        then generates the OpenDRIVE world. *osm_options* may be a
+        CarlaNet.Map.OsmConversionOptions (e.g. with OriginLatitude/OriginLongitude
+        set to pin a world origin); when None, CARLA osm2odr defaults are used.
+        *parameters* mirrors generate_opendrive_world.
+        """
+        params = OpendriveGenerationParameters() if parameters is None else parameters
+        _sync(self._inner.GenerateWorldFromOsmAsync(
+            osm_path, osm_options, params, reset_settings))
         return World(self._inner)
 
     def get_trafficmanager(self, port: int = 8000):

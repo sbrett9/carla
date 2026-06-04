@@ -3,12 +3,9 @@ obj/
 .vs/
 *.user
 
-# Publish output — binaries, symbols, generated manifests.
-# carlanet.py in publish/ is intentionally tracked (Python entry point).
-publish/*.dll
-publish/*.pdb
-publish/*.deps.json
-publish/*.runtimeconfig.json
+# Publish output — build artifacts (binaries, symbols, manifests). The Python
+# shim is python/carlanet/__init__.py (canonical); nothing here is tracked.
+publish/
 
 # NuGet package caches and lock files
 *.nupkg
