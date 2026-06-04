@@ -103,6 +103,44 @@ else
     exit 1
 fi
 
+# -- BUILD SUMO netconvert (OSM -> OpenDRIVE converter, bundled for CarlaNet) --
+# CarlaNet shells out to stock SUMO `netconvert` at runtime to convert OSM maps
+# to OpenDRIVE, replacing CARLA's old in-tree osm2odr fork. We build ONLY the
+# `netconvert` target from SUMO release v1_27_0; that target's only real
+# dependencies are Xerces-C and PROJ (FOX/GUI and GDAL are NOT needed).
+# apt prerequisites belong in Util/SetupUtils/InstallPrerequisites.sh:
+#   cmake g++ libxerces-c-dev libproj-dev   (proj.db ships with libproj-dev/proj-data)
+sumo_src=$workspace_path/Build/sumo-src
+sumo_build=$workspace_path/Build/sumo-build
+sumo_install=$workspace_path/Build/sumo-install
+if [ -f "$sumo_install/bin/netconvert" ]; then
+    echo "Found SUMO netconvert at $sumo_install/bin/netconvert. Skipping SUMO build."
+else
+    echo "Building SUMO netconvert..."
+    if [ ! -d "$sumo_src" ]; then
+        echo "Cloning SUMO v1_27_0..."
+        git clone --depth 1 --branch v1_27_0 \
+            https://github.com/eclipse-sumo/sumo.git "$sumo_src"
+    fi
+    # Pin the exact commit (the tag already points here; this is an explicit guard).
+    git -C "$sumo_src" checkout e238ea04b7150ba23a348a285d3048919fa4830b
+    # Configure + build ONLY the netconvert target (Release).
+    cmake -B "$sumo_build" -S "$sumo_src" -DCMAKE_BUILD_TYPE=Release
+    cmake --build "$sumo_build" --target netconvert -j"$(nproc)"
+    # The SUMO build emits binaries into Build/sumo-src/bin/netconvert.
+    # Stage it (and a note about PROJ data) under Build/sumo-install for CarlaNet.
+    mkdir -p "$sumo_install/bin"
+    cp "$sumo_src/bin/netconvert" "$sumo_install/bin/netconvert"
+    echo "Staged netconvert at $sumo_install/bin/netconvert."
+fi
+# CarlaNet locates the tool via env vars (see NETCONVERT_INTEGRATION.md):
+#   CARLA_NETCONVERT -> the netconvert binary
+#   PROJ_LIB (a.k.a. PROJ_DATA) -> the directory containing proj.db (from libproj-dev,
+#     typically /usr/share/proj) so PROJ can resolve the +proj=tmerc projection.
+echo "To use netconvert from CarlaNet, export:"
+echo "  export CARLA_NETCONVERT=$sumo_install/bin/netconvert"
+echo "  export PROJ_LIB=/usr/share/proj   # dir containing proj.db (from libproj-dev)"
+
 # -- BUILD CARLA --
 echo "Configuring the CARLA CMake project..."
 cmake -G Ninja -S . -B Build \

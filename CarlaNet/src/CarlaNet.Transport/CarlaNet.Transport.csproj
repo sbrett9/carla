@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CarlaNet.Types\CarlaNet.Types.csproj" />
+    <ProjectReference Include="..\CarlaNet.Map\CarlaNet.Map.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -136,6 +136,39 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task CopyOpenDriveToServerAsync(string openDrive, OpendriveGenerationParameters p)
         => _rpc.CallVoidAsync("copy_opendrive_to_file", openDrive, p);
 
+    // Upstream OpendriveGenerationParameters defaults (PythonAPI Client.cpp). A
+    // `record struct default` is all-zero, which is wrong here — substitute these.
+    private static readonly OpendriveGenerationParameters DefaultOpendriveParams =
+        new(VertexDistance: 2.0, MaxRoadLength: 50.0, WallHeight: 1.0, AdditionalWidth: 0.6,
+            SmoothJunctions: true, EnableMeshVisibility: true, EnablePedestrianNavigation: true);
+
+    /// Equivalent of libcarla client.generate_opendrive_world: copy the .xodr to the
+    /// server then load the special "OpenDriveMap" episode (Simulator::LoadOpenDriveEpisode).
+    public async Task GenerateOpenDriveWorldAsync(
+        string openDrive,
+        OpendriveGenerationParameters parameters = default,
+        bool resetSettings = true)
+    {
+        if (parameters.Equals(default(OpendriveGenerationParameters)))
+            parameters = DefaultOpendriveParams;
+        await CopyOpenDriveToServerAsync(openDrive, parameters).ConfigureAwait(false);
+        await LoadEpisodeAsync("OpenDriveMap", resetSettings).ConfigureAwait(false);
+    }
+
+    /// Drop an .osm and fabricate the level at runtime: convert OSM→OpenDRIVE via the
+    /// native netconvert (CarlaNet.Map.OsmConverter), then generate the OpenDRIVE world.
+    public async Task GenerateWorldFromOsmAsync(
+        string osmPath,
+        CarlaNet.Map.OsmConversionOptions? osmOptions = null,
+        OpendriveGenerationParameters parameters = default,
+        bool resetSettings = true,
+        CancellationToken ct = default)
+    {
+        var xodr = await new CarlaNet.Map.OsmConverter(osmOptions)
+            .ConvertFileAsync(osmPath, ct).ConfigureAwait(false);
+        await GenerateOpenDriveWorldAsync(xodr, parameters, resetSettings).ConfigureAwait(false);
+    }
+
     public Task<IReadOnlyList<string>> GetNamesOfAllObjectsAsync()
         => _rpc.CallAsync<IReadOnlyList<string>>("get_names_of_all_objects");
 

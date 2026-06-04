@@ -106,6 +106,55 @@ if exist "%CARLA_UNREAL_ENGINE_PATH%" (
     exit /b 1
 )
 
+rem -- BUILD SUMO netconvert (OSM -> OpenDRIVE converter, bundled for CarlaNet) --
+rem CarlaNet shells out to stock SUMO `netconvert` at runtime to convert OSM maps
+rem to OpenDRIVE, replacing CARLA's old in-tree osm2odr fork. We build ONLY the
+rem `netconvert` target from SUMO release v1_27_0 (commit e238ea04). On Windows the
+rem build deps (Xerces-C, PROJ, sqlite3, ...) come from the prebuilt DLR-TS
+rem SUMOLibraries bundle; the build copies the needed DLLs next to netconvert.exe.
+set "sumo_src=%cd%\Build\sumo-src"
+set "sumo_build=%cd%\Build\sumo-build"
+set "sumo_install=%cd%\Build\sumo-install"
+set "sumo_libs=%cd%\Build\SUMOLibraries"
+
+if exist "%sumo_install%\bin\netconvert.exe" (
+    echo Found SUMO netconvert at "%sumo_install%\bin\netconvert.exe". Skipping SUMO build.
+) else (
+    echo Building SUMO netconvert...
+    if not exist "%sumo_libs%" (
+        echo Cloning SUMOLibraries prebuilt Windows deps ^(~3 GB, one-time^)...
+        git clone --depth 1 https://github.com/DLR-TS/SUMOLibraries.git "%sumo_libs%" || exit /b
+    )
+    if not exist "%sumo_src%" (
+        echo Cloning SUMO v1_27_0...
+        git clone --depth 1 --branch v1_27_0 https://github.com/eclipse-sumo/sumo.git "%sumo_src%" || exit /b
+    )
+    rem Pin the exact commit (the tag already points here; this is an explicit guard).
+    git -C "%sumo_src%" checkout e238ea04b7150ba23a348a285d3048919fa4830b || exit /b
+    rem Configure + build ONLY the netconvert target (Release) with the VS generator.
+    set "SUMO_LIBRARIES=%sumo_libs%"
+    cmake ^
+        -B "%sumo_build%" ^
+        -S "%sumo_src%" ^
+        -G "Visual Studio 17 2022" ^
+        -A x64 ^
+        -DCHECK_OPTIONAL_LIBS=false || exit /b
+    cmake --build "%sumo_build%" --target netconvert --config Release -- -m || exit /b
+    rem The build emits netconvert.exe + its runtime DLLs into Build\sumo-src\bin.
+    rem Stage the binary, its DLLs, and the PROJ data (proj.db) for CarlaNet.
+    if not exist "%sumo_install%\bin" mkdir "%sumo_install%\bin"
+    copy /Y "%sumo_src%\bin\netconvert.exe" "%sumo_install%\bin\" || exit /b
+    copy /Y "%sumo_src%\bin\*.dll" "%sumo_install%\bin\" || exit /b
+    xcopy /E /I /Y "%sumo_libs%\proj-9.5.0\share\proj" "%sumo_install%\share\proj" || exit /b
+    echo Staged netconvert at "%sumo_install%\bin\netconvert.exe".
+)
+rem CarlaNet locates the tool via env vars (see NETCONVERT_INTEGRATION.md):
+rem   CARLA_NETCONVERT -> the netconvert binary
+rem   PROJ_LIB / PROJ_DATA -> the directory containing proj.db
+echo To use netconvert from CarlaNet, set:
+echo   set CARLA_NETCONVERT=%sumo_install%\bin\netconvert.exe
+echo   set PROJ_LIB=%sumo_install%\share\proj
+
 rem -- BUILD CARLA --
 echo Configuring the CARLA CMake project...
 cmake ^
