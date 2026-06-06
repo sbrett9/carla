@@ -1,0 +1,26 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "Cesium-CARLA Bridge",
+	"Description": "Bridges CARLA and Cesium for Unreal: headless terrain-height sampling (ACesium3DTileset::SampleHeightMostDetailed) for georeferenced OpenDRIVE <elevation> injection. Seeds the sample_terrain_heights RPC.",
+	"Category": "CARLA",
+	"CreatedBy": "",
+	"EnabledByDefault": true,
+	"CanContainContent": false,
+	"IsBetaVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "CesiumCarlaBridge",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "CesiumForUnreal",
+			"Enabled": true
+		}
+	]
+}
