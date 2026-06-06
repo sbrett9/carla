@@ -3,6 +3,8 @@
 #include "CesiumHeightSampler.h"
 
 #include "Cesium3DTileset.h"
+#include "CesiumGeoreference.h"
+#include "OriginPlacement.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "EngineUtils.h" // TActorIterator
@@ -154,4 +156,87 @@ int32 UCesiumHeightSampler::GetSuccessCount()
 		}
 	}
 	return Ok;
+}
+
+bool UCesiumHeightSampler::ConfigureCesiumForOrigin(
+	UObject* WorldContextObject,
+	double OriginLatitude,
+	double OriginLongitude,
+	double OriginHeight,
+	const FString& IonAccessToken,
+	int64 IonAssetId,
+	bool bRefreshTileset)
+{
+	UWorld* World = GEngine
+		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
+		: nullptr;
+	if (!World)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] ConfigureCesiumForOrigin: no world."));
+		return false;
+	}
+
+	// Find or CREATE the default georeference. This is what makes the digital-twin
+	// pipeline fully procedural/headless: no pre-placed Cesium actors required — the
+	// OpenDriveMap reloads on every generate_opendrive_world, so we (re)establish the
+	// globe at runtime each time the client configures an origin.
+	ACesiumGeoreference* Georeference = ACesiumGeoreference::GetDefaultGeoreference(World);
+	if (!Georeference)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] ConfigureCesiumForOrigin: could not get/create a CesiumGeoreference."));
+		return false;
+	}
+
+	Georeference->SetOriginPlacement(EOriginPlacement::CartographicOrigin);
+	// SetOriginLongitudeLatitudeHeight takes (Longitude X, Latitude Y, Height Z).
+	Georeference->SetOriginLongitudeLatitudeHeight(
+		FVector(OriginLongitude, OriginLatitude, OriginHeight));
+
+	TArray<ACesium3DTileset*> Tilesets;
+	for (TActorIterator<ACesium3DTileset> It(World); It; ++It)
+	{
+		if (IsValid(*It)) Tilesets.Add(*It);
+	}
+
+	// Spawn a tileset if the world has none and we were given an Ion asset to point at.
+	bool bSpawnedTileset = false;
+	if (Tilesets.Num() == 0 && IonAssetId > 0)
+	{
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		ACesium3DTileset* NewTileset = World->SpawnActor<ACesium3DTileset>(SpawnParams);
+		if (NewTileset)
+		{
+			Tilesets.Add(NewTileset);
+			bSpawnedTileset = true;
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] ConfigureCesiumForOrigin: failed to spawn ACesium3DTileset."));
+		}
+	}
+
+	for (ACesium3DTileset* Tileset : Tilesets)
+	{
+		Tileset->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Georeference));
+		if (!IonAccessToken.IsEmpty())
+		{
+			Tileset->SetIonAccessToken(IonAccessToken);
+		}
+		if (IonAssetId > 0)
+		{
+			Tileset->SetTilesetSource(ETilesetSource::FromCesiumIon);
+			Tileset->SetIonAssetID(IonAssetId);
+		}
+		if (bRefreshTileset)
+		{
+			Tileset->RefreshTileset();
+		}
+	}
+
+	UE_LOG(LogTemp, Display,
+		TEXT("[CesiumCarlaBridge] Configured georeference (lat=%.7f lon=%.7f h=%.3f) + %d tileset(s)%s."),
+		OriginLatitude, OriginLongitude, OriginHeight, Tilesets.Num(),
+		bSpawnedTileset ? TEXT(" (spawned 1)") : TEXT(""));
+	return true;
 }

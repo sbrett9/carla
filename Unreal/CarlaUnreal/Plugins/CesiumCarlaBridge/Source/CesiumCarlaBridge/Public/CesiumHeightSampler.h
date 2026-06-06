@@ -69,4 +69,22 @@ public:
 	/** Count of results whose SampleSuccess is true. */
 	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
 	static int32 GetSuccessCount();
+
+	/**
+	 * Configure the Cesium globe at runtime for a georeference origin, so a freshly
+	 * (re)loaded world — e.g. OpenDriveMap.umap after generate_opendrive_world — lines
+	 * up with the active .xodr. Sets the first ACesiumGeoreference's cartographic origin
+	 * to (OriginLatitude, OriginLongitude, OriginHeight). For every ACesium3DTileset:
+	 * sets the Ion access token if non-empty, the Ion asset id if &gt; 0, and refreshes if
+	 * bRefreshTileset. Returns true if a CesiumGeoreference was found and configured.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
+	static bool ConfigureCesiumForOrigin(
+		UObject* WorldContextObject,
+		double OriginLatitude,
+		double OriginLongitude,
+		double OriginHeight,
+		const FString& IonAccessToken,
+		int64 IonAssetId,
+		bool bRefreshTileset);
 };

@@ -36,6 +36,7 @@
 #include <carla/rpc/Command.h>
 #include <carla/rpc/CommandResponse.h>
 #include <carla/rpc/DebugShape.h>
+#include <carla/geom/GeoLocation.h>
 #include <carla/rpc/EnvironmentObject.h>
 #include <carla/rpc/EpisodeInfo.h>
 #include <carla/rpc/EpisodeSettings.h>
@@ -70,12 +71,14 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Misc/FileHelper.h"
 #include "Animation/PoseSnapshot.h"
+#include "CesiumHeightSampler.h"
 #include <util/ue-header-guard-end.h>
 
 #include <vector>
 #include <atomic>
 #include <map>
 #include <tuple>
+#include <limits>
 
 template <typename T>
 using R = carla::rpc::Response<T>;
@@ -386,6 +389,96 @@ void FCarlaServer::FPimpl::BindActions()
       RESPOND_ERROR("opendrive could not be correctly parsed");
     }
     return R<void>::Success();
+  };
+
+  // ~~ Cesium terrain-height sampling (digital-twin elevation pipeline) ~~~~~~~
+  //
+  // Async by nature: ACesium3DTileset::SampleHeightMostDetailed streams tiles and
+  // fires its callback on the game thread across several ticks. A BIND_SYNC handler
+  // runs ON the game thread, so it CANNOT block waiting for that callback (it would
+  // starve the very ticks that resolve it). Hence a two-call protocol: kick off with
+  // request_terrain_heights, then poll_terrain_heights until results arrive. The game
+  // thread ticks freely between polls (async mode), driving the sample to completion.
+  // Coordinates are carla::geom::GeoLocation (doubles) — Vector3D's float32 would lose
+  // ~1 m of longitude precision. See CesiumCarlaBridge / DYNAMIC_WORLD_PIPELINE_PLAN.md.
+
+  BIND_SYNC(request_terrain_heights) << [this](std::vector<cg::GeoLocation> points) -> R<bool>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to sample terrain heights in");
+    }
+    TArray<FVector> LonLatHeight;
+    LonLatHeight.Reserve(static_cast<int32>(points.size()));
+    for (const auto& P : points)
+    {
+      // FVector is (X = longitude, Y = latitude, Z = ignored) per SampleHeightMostDetailed.
+      LonLatHeight.Add(FVector(P.longitude, P.latitude, 0.0));
+    }
+    if (!UCesiumHeightSampler::RequestSample(World, LonLatHeight, FString()))
+    {
+      RESPOND_ERROR_FSTRING(UCesiumHeightSampler::GetStatusMessage());
+    }
+    return true;
+  };
+
+  BIND_SYNC(poll_terrain_heights) << [this]() -> R<std::vector<cg::GeoLocation>>
+  {
+    REQUIRE_CARLA_EPISODE();
+    const ECesiumSampleState State = UCesiumHeightSampler::GetState();
+    if (State == ECesiumSampleState::Failed)
+    {
+      RESPOND_ERROR_FSTRING(UCesiumHeightSampler::GetStatusMessage());
+    }
+
+    std::vector<cg::GeoLocation> out;
+    if (State != ECesiumSampleState::Done)
+    {
+      return out; // empty == still sampling; client should poll again
+    }
+
+    const TArray<FCesiumSampleHeightResult> Results = UCesiumHeightSampler::GetResults();
+    out.reserve(static_cast<size_t>(Results.Num()));
+    for (const FCesiumSampleHeightResult& Res : Results)
+    {
+      const double lon = Res.LongitudeLatitudeHeight.X;
+      const double lat = Res.LongitudeLatitudeHeight.Y;
+      const double height = Res.SampleSuccess
+          ? Res.LongitudeLatitudeHeight.Z
+          : std::numeric_limits<double>::quiet_NaN();
+      // GeoLocation(latitude, longitude, altitude); altitude carries the sampled
+      // ellipsoidal height (NaN where the tileset had no height at that point).
+      out.emplace_back(lat, lon, height);
+    }
+    return out;
+  };
+
+  // Configure the Cesium globe at runtime for the active map's georeference origin and
+  // ion credentials. Needed because OpenDriveMap.umap reloads on every generated world,
+  // so the pre-placed CesiumGeoreference / Cesium3DTileset must be (re)pointed at the
+  // current .xodr origin. `origin` carries (latitude, longitude, altitude=OriginHeight).
+  BIND_SYNC(configure_cesium_georeference) << [this](
+      cg::GeoLocation origin,
+      std::string ion_token,
+      int64_t ion_asset_id,
+      bool refresh) -> R<bool>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to configure Cesium georeference in");
+    }
+    const bool ok = UCesiumHeightSampler::ConfigureCesiumForOrigin(
+        World, origin.latitude, origin.longitude, origin.altitude,
+        cr::ToFString(ion_token), static_cast<int64>(ion_asset_id), refresh);
+    if (!ok)
+    {
+      RESPOND_ERROR("no CesiumGeoreference found in the loaded world");
+    }
+    return true;
   };
 
   BIND_SYNC(apply_texture_to_actor) << [this](

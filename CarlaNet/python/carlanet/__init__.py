@@ -501,6 +501,19 @@ def _sync(task):
     return task.GetAwaiter().GetResult()
 
 
+def _to_cs_geo(p):
+    """Coerce a Python (lat, lon[, alt]) tuple / object to a C# GeoLocation."""
+    if isinstance(p, GeoLocation):
+        return p
+    if hasattr(p, "latitude"):
+        return GeoLocation(float(p.latitude), float(p.longitude),
+                           float(getattr(p, "altitude", 0.0)))
+    lat = float(p[0])
+    lon = float(p[1])
+    alt = float(p[2]) if len(p) > 2 else 0.0
+    return GeoLocation(lat, lon, alt)
+
+
 def _cs_list(items, cs_type=None):
     """Convert a Python iterable to a C# List.  If cs_type is None, uses object."""
     from System.Collections.Generic import List as _List
@@ -1258,6 +1271,34 @@ class World:
     def get_spectator(self) -> Actor:
         return _wrap_actor(_sync(self._client.GetSpectatorAsync()), self._client)
 
+    # ── CarlaNet digital-twin extensions (Cesium terrain elevation) ───────────
+    # Not part of upstream carla. These back the OpenDRIVE <elevation> injection
+    # pipeline (CarlaNet.Map.OpenDrive.ElevationInjector). Require a Cesium tileset
+    # in the loaded world and the server to be ticking (async mode).
+
+    def configure_cesium_georeference(self, latitude, longitude, height=0.0,
+                                      ion_token="", ion_asset_id=0, refresh=True):
+        """Point the loaded world's CesiumGeoreference at (latitude, longitude, height)
+        and optionally set the Ion token / asset id on its tilesets. Returns True on
+        success (False/raises if no CesiumGeoreference is present)."""
+        origin = GeoLocation(float(latitude), float(longitude), float(height))
+        return bool(_sync(self._client.ConfigureCesiumGeoreferenceAsync(
+            origin, str(ion_token), int(ion_asset_id), bool(refresh))))
+
+    def sample_terrain_heights(self, points, timeout=120.0):
+        """Sample Cesium terrain heights. `points` is an iterable of (lat, lon[, alt])
+        tuples / objects / GeoLocation. Returns a list of (latitude, longitude, height)
+        tuples; height is float('nan') where the tileset had no ground at that point."""
+        from System import TimeSpan
+        from System.Threading import CancellationToken
+        cs_points = _cs_list([_to_cs_geo(p) for p in points], GeoLocation)
+        results = _sync(self._client.SampleTerrainHeightsAsync(
+            cs_points,
+            TimeSpan.FromSeconds(float(timeout)),
+            TimeSpan.FromMilliseconds(50),
+            CancellationToken(False)))
+        return [(r.Latitude, r.Longitude, r.Altitude) for r in results]
+
     def get_actors(self, actor_ids=None):
         from System import UInt32
         if actor_ids is None:
@@ -1526,6 +1567,31 @@ class Client:
         _sync(self._inner.GenerateWorldFromOsmAsync(
             osm_path, osm_options, params, reset_settings))
         return World(self._inner)
+
+    def generate_world_from_osm_with_elevation(self, osm_path, ion_token, ion_asset_id,
+                                               osm_options=None, parameters=None,
+                                               sample_step_meters=10.0,
+                                               origin_height=None,
+                                               cesium_settle_seconds=5.0):
+        """Full headless digital-twin build (no editor): OSM -> elevated, Cesium-aligned
+        OpenDRIVE world. Converts OSM->.xodr, samples Cesium terrain heights at the road
+        reference line, injects them into the .xodr <elevationProfile>, generates the
+        elevated world, and re-establishes the Cesium visual overlay. Returns the elevated
+        .xodr string; call client.get_world() afterwards for the World.
+
+        Requires ion_token + ion_asset_id (the Cesium tileset is spawned at runtime).
+        osm_options should pin the origin (OriginLatitude/OriginLongitude). If origin_height
+        is None, the height sampled at the origin is used as the vertical datum.
+        """
+        from System import TimeSpan
+        from System.Threading import CancellationToken
+        params = _default_osm_opendrive_params() if parameters is None else parameters
+        settle = TimeSpan.FromSeconds(float(cesium_settle_seconds)) if cesium_settle_seconds else TimeSpan(0)
+        oh = None if origin_height is None else float(origin_height)
+        xodr = _sync(self._inner.GenerateWorldFromOsmWithElevationAsync(
+            osm_path, str(ion_token), int(ion_asset_id),
+            osm_options, params, float(sample_step_meters), oh, settle, CancellationToken(False)))
+        return str(xodr)
 
     def get_trafficmanager(self, port: int = 8000):
         """Return an in-process TrafficManager bound to the given port.

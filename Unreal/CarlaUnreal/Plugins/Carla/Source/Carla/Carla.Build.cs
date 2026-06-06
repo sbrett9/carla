@@ -119,7 +119,8 @@ public class Carla :
       "PhysicsCore",
       "MeshConversion",
       "Chaos",
-      "ChaosVehicles"
+      "ChaosVehicles",
+      "CesiumCarlaBridge"   // Cesium terrain-height sampling for sample_terrain_heights RPC
     });
 
     PublicDependencyModuleNames.AddRange(new string[]

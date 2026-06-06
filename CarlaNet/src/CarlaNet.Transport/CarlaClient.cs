@@ -172,6 +172,130 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<IReadOnlyList<string>> GetNamesOfAllObjectsAsync()
         => _rpc.CallAsync<IReadOnlyList<string>>("get_names_of_all_objects");
 
+    /// Full headless digital-twin world build (no editor): OSM -> flat .xodr (offline),
+    /// extract road reference-line samples + reproject to WGS84 (offline), spawn/point a
+    /// Cesium globe at the .xodr origin in the running episode, sample terrain heights,
+    /// inject them into the .xodr &lt;elevationProfile&gt;, then generate the elevated OpenDRIVE
+    /// world and re-establish Cesium as the visual overlay. Returns the elevated .xodr.
+    ///
+    /// The server must be running (any episode) and ticking (async mode). osmOptions MUST
+    /// pin the origin (OriginLatitude/Longitude) so the .xodr is georeferenced; the origin
+    /// is taken from the parsed map's geoReference. If originHeightOverride is null, the
+    /// ellipsoidal height sampled at the origin is used as the vertical datum.
+    public async Task<string> GenerateWorldFromOsmWithElevationAsync(
+        string osmPath,
+        string ionToken,
+        long ionAssetId,
+        CarlaNet.Map.OsmConversionOptions? osmOptions = null,
+        OpendriveGenerationParameters parameters = default,
+        double sampleStepMeters = 10.0,
+        double? originHeightOverride = null,
+        TimeSpan? cesiumSettle = null,
+        CancellationToken ct = default)
+    {
+        // 1) OSM -> flat .xodr (offline, native netconvert).
+        var flatXodr = await new CarlaNet.Map.OsmConverter(osmOptions)
+            .ConvertFileAsync(osmPath, ct).ConfigureAwait(false);
+
+        // 2) Parse + extract reference-line samples + reproject (all offline). The origin
+        //    is the .xodr geoReference (pinned by osmOptions).
+        var map = CarlaNet.Map.OpenDrive.OpenDriveParser.Load(flatXodr)
+            ?? throw new InvalidOperationException("generated .xodr failed to parse");
+        var origin = map.GeoReference;
+        var samples = CarlaNet.Map.OpenDrive.ElevationInjector
+            .ExtractCenterlineSamples(map, sampleStepMeters);
+        var geo = CarlaNet.Map.OpenDrive.ElevationInjector.ToGeo(samples, origin);
+
+        // 3) Spawn / point the Cesium globe at the origin in the CURRENT episode (the server's
+        //    startup map) — no flat world build needed; sampling only needs the tileset.
+        await ConfigureCesiumGeoreferenceAsync(origin, ionToken, ionAssetId, refresh: true)
+            .ConfigureAwait(false);
+        if (cesiumSettle is { } settle)
+            await Task.Delay(settle, ct).ConfigureAwait(false);
+
+        // 4) Sample heights: origin first (vertical datum), then every road sample.
+        var points = new List<GeoLocation>(geo.Count + 1)
+        {
+            new GeoLocation(origin.Latitude, origin.Longitude, 0.0)
+        };
+        foreach (var g in geo)
+            points.Add(new GeoLocation(g.Latitude, g.Longitude, 0.0));
+
+        var heights = await SampleTerrainHeightsAsync(points, ct: ct).ConfigureAwait(false);
+        if (heights.Count != points.Count)
+            throw new InvalidOperationException(
+                $"terrain-height result count {heights.Count} != requested {points.Count}");
+
+        double originHeight = originHeightOverride ?? heights[0].Altitude;
+        var roadEllipsoidal = new double[samples.Count];
+        for (int i = 0; i < samples.Count; i++)
+            roadEllipsoidal[i] = heights[i + 1].Altitude;
+
+        // 5) Inject the sampled heights into the .xodr <elevationProfile>.
+        var elevatedXodr = CarlaNet.Map.OpenDrive.ElevationInjector.InjectElevation(
+            flatXodr, samples, roadEllipsoidal, originHeight);
+
+        // 6) Generate the elevated OpenDRIVE world (builds road mesh + waypoints at correct Z).
+        await GenerateOpenDriveWorldAsync(elevatedXodr, parameters).ConfigureAwait(false);
+
+        // 7) The reload destroyed the runtime Cesium actors — re-establish them as the
+        //    visual overlay aligned to the same origin.
+        await ConfigureCesiumGeoreferenceAsync(origin, ionToken, ionAssetId, refresh: true)
+            .ConfigureAwait(false);
+
+        return elevatedXodr;
+    }
+
+    // ── Cesium terrain-height sampling (digital-twin elevation pipeline) ──────────
+    // Samples ground heights from the Cesium 3D tileset present in the loaded world,
+    // for the digital-twin OpenDRIVE <elevation> injection (CarlaNet.Map.OpenDrive.
+    // ElevationInjector). Input/output are GeoLocation(latitude, longitude, altitude);
+    // on output altitude carries the sampled ellipsoidal height (double.NaN where the
+    // tileset had no height at that point).
+    //
+    // The server splits this into request_terrain_heights + poll_terrain_heights
+    // because Cesium's sampler resolves asynchronously on the game thread across
+    // several ticks. We kick it off then poll until results arrive. REQUIRES the
+    // server to be ticking (async mode, e.g. during world generation) AND a Cesium
+    // tileset present in the level.
+    /// Point the loaded world's CesiumGeoreference at <paramref name="origin"/>
+    /// (latitude, longitude, altitude=OriginHeight) and optionally set the ion token /
+    /// asset id on its tilesets. Call after generate_opendrive_world so the reloaded
+    /// OpenDriveMap lines up with the active .xodr before sampling terrain heights.
+    public Task<bool> ConfigureCesiumGeoreferenceAsync(
+        GeoLocation origin, string ionToken = "", long ionAssetId = 0, bool refresh = true)
+        => _rpc.CallAsync<bool>("configure_cesium_georeference", origin, ionToken, ionAssetId, refresh);
+
+    public async Task<IReadOnlyList<GeoLocation>> SampleTerrainHeightsAsync(
+        IReadOnlyList<GeoLocation> points,
+        TimeSpan? timeout = null,
+        TimeSpan? pollInterval = null,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(points);
+        if (points.Count == 0)
+            return [];
+
+        await _rpc.CallAsync<bool>("request_terrain_heights", points).ConfigureAwait(false);
+
+        var poll = pollInterval ?? TimeSpan.FromMilliseconds(50);
+        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(120));
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            // poll returns empty while sampling is in progress; non-empty == done;
+            // a server-side failure surfaces as a CarlaRpcException.
+            var results = await _rpc.CallAsync<IReadOnlyList<GeoLocation>>("poll_terrain_heights")
+                .ConfigureAwait(false);
+            if (results.Count > 0)
+                return results;
+            if (DateTime.UtcNow > deadline)
+                throw new TimeoutException(
+                    $"terrain-height sampling did not complete within {(timeout ?? TimeSpan.FromSeconds(120)).TotalSeconds:0} s");
+            await Task.Delay(poll, ct).ConfigureAwait(false);
+        }
+    }
+
     // ── §8.4 File Management ──────────────────────────────────────────────────
 
     public Task<IReadOnlyList<string>> GetRequiredFilesAsync(string folder = "", bool download = true)

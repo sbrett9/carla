@@ -1,0 +1,133 @@
+"""Full headless digital-twin build (via the carlanet Python API) — NO editor.
+
+End-to-end Phase A->E: drops an .osm on a running headless CARLA server and produces
+an ELEVATED, Cesium-aligned OpenDRIVE world:
+
+  OSM -> flat .xodr (offline netconvert)
+       -> extract road reference-line samples + reproject to WGS84 (offline)
+       -> spawn a Cesium globe at the origin (runtime, no editor)
+       -> sample terrain heights
+       -> inject <elevationProfile> into the .xodr
+       -> generate_opendrive_world(elevated) + re-establish Cesium overlay
+  (-> optional: spawn traffic and let the TrafficManager drive it)
+
+Prereqs:
+  * Headless server running (RunCarlaServer.ps1) and ticking (async mode).
+  * SUMO netconvert staged under Build/sumo-install (CarlaSetup.bat SUMO section).
+  * CESIUM_ION_TOKEN env var (or --ion-token) for the spawned tileset.
+
+Usage:
+    python test_digital_twin.py [--osm <path>] [--lat <d>] [--lon <d>]
+        [--step <m>] [--ion-asset-id <n>] [--ion-token <jwt>] [--traffic <N>]
+        [--save <out.xodr>] [--host <h>] [--port <p>] [--timeout <sec>]
+"""
+import argparse
+import os
+import sys
+import time
+
+_THIS = os.path.dirname(os.path.abspath(__file__))
+_REPO = os.path.normpath(os.path.join(_THIS, "..", ".."))
+_INSTALL = os.path.join(_REPO, "Build", "sumo-install")
+_NETCONVERT = os.path.join(_INSTALL, "bin",
+                           "netconvert.exe" if os.name == "nt" else "netconvert")
+_PROJ = os.path.join(_INSTALL, "share", "proj")
+
+ap = argparse.ArgumentParser()
+ap.add_argument("--osm", default=os.path.join(_REPO, "Import", "Maps", "WrigleyVille.osm"))
+ap.add_argument("--lat", type=float, default=41.94813)
+ap.add_argument("--lon", type=float, default=-87.65593)
+ap.add_argument("--step", type=float, default=10.0, help="reference-line sample spacing (m)")
+ap.add_argument("--origin-height", type=float, default=None,
+                help="vertical datum (m); default = sample the origin")
+ap.add_argument("--ion-token", default=os.environ.get("CESIUM_ION_TOKEN", ""))
+ap.add_argument("--ion-asset-id", type=int, default=2275207)  # Google Photorealistic 3D Tiles
+ap.add_argument("--settle", type=float, default=10.0)
+ap.add_argument("--traffic", type=int, default=0, help="spawn N autopilot vehicles after build")
+ap.add_argument("--save", default=os.path.join(_REPO, "Build", "sumo-smoketest", "wrigley_elevated.xodr"))
+ap.add_argument("--host", default="127.0.0.1")
+ap.add_argument("--port", type=int, default=2000)
+ap.add_argument("--timeout", type=float, default=300.0)
+args = ap.parse_args()
+
+os.environ.setdefault("CARLA_NETCONVERT", _NETCONVERT)
+os.environ.setdefault("PROJ_LIB", _PROJ)
+os.environ.setdefault("PROJ_DATA", _PROJ)
+
+import carlanet as carla
+from CarlaNet.Map import OsmConversionOptions
+
+
+def make_options():
+    opts = OsmConversionOptions()
+    opts.NetconvertPath = _NETCONVERT
+    opts.ProjDataDirectory = _PROJ
+    opts.GenerateTrafficLights = False  # avoids the ungrouped-TL log spam (known issue #1)
+    opts.OriginLatitude = args.lat
+    opts.OriginLongitude = args.lon
+    return opts
+
+
+def main() -> int:
+    print("== Digital-twin build (headless, no editor) ==")
+    print(f"  osm        : {args.osm}")
+    print(f"  origin     : {args.lat}, {args.lon}  step={args.step} m")
+    print(f"  ion asset  : {args.ion_asset_id}  token: {'set' if args.ion_token else 'MISSING'}")
+    print()
+
+    if not os.path.exists(args.osm):
+        print(f"ERROR: OSM not found: {args.osm}", file=sys.stderr); return 1
+    if not os.path.exists(_NETCONVERT):
+        print(f"ERROR: netconvert not staged: {_NETCONVERT}", file=sys.stderr); return 1
+    if not args.ion_token:
+        print("WARNING: no Ion token; the tileset can't be spawned and sampling will fail.",
+              file=sys.stderr)
+
+    client = carla.Client(args.host, args.port)
+    client.set_timeout(15.0)
+    print(f"[1] server version: {client.get_server_version()}")
+
+    print("[2] generate_world_from_osm_with_elevation (convert -> sample -> inject -> build)...")
+    print("    (blocks while sampling heights and meshing the elevated road network)")
+    client.set_timeout(args.timeout)
+    t0 = time.time()
+    elevated = client.generate_world_from_osm_with_elevation(
+        args.osm, args.ion_token, args.ion_asset_id,
+        osm_options=make_options(),
+        sample_step_meters=args.step,
+        origin_height=args.origin_height,
+        cesium_settle_seconds=args.settle)
+    dt = time.time() - t0
+
+    roads = elevated.count("<road ")
+    elevs = elevated.count("<elevation ")
+    print(f"    done in {dt:.1f}s — {len(elevated):,} chars, {roads} roads, {elevs} elevation records")
+
+    if args.save:
+        os.makedirs(os.path.dirname(args.save), exist_ok=True)
+        with open(args.save, "w", encoding="utf-8") as f:
+            f.write(elevated)
+        print(f"    wrote elevated .xodr -> {args.save}")
+
+    client.set_timeout(30.0)
+    world = client.get_world()
+    print("[3] elevated world generated; Cesium overlay re-established.")
+
+    if args.traffic > 0:
+        print(f"[4] spawning {args.traffic} autopilot vehicle(s)...")
+        spawned = []
+        for i in range(args.traffic):
+            try:
+                v = client.spawn_vehicle(spawn_index=i)
+                v.set_autopilot(True)
+                spawned.append(v)
+            except Exception as e:
+                print(f"    spawn {i} failed: {e}", file=sys.stderr)
+        print(f"    {len(spawned)} vehicle(s) driving. Watch the photoreal streets.")
+
+    print("\nOK — digital twin built headlessly.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
