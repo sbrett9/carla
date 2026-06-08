@@ -6,6 +6,7 @@ interactive=0
 skip_prerequisites=0
 launch=0
 python_root=
+vibeue_ssh_key=
 
 workspace_path="$(dirname $(realpath "${BASH_SOURCE[-1]}"))"
 echo "workspace_path=$workspace_path"
@@ -13,7 +14,7 @@ echo "workspace_path=$workspace_path"
 options=$(\
     getopt \
     -o "i,p,l,pyroot:" \
-    --long "interactive,skip-prerequisites,launch,python-root:" \
+    --long "interactive,skip-prerequisites,launch,python-root:,vibeue-ssh-key:" \
     -n 'CarlaSetup.sh' -- "$@")
 
 eval set -- "$options"
@@ -33,6 +34,10 @@ while true; do
             ;;
         -pyroot|--python-root)
             python_root=$2
+            shift 2
+            ;;
+        --vibeue-ssh-key)
+            vibeue_ssh_key=$2
             shift 2
             ;;
         --)
@@ -140,6 +145,40 @@ fi
 echo "To use netconvert from CarlaNet, export:"
 echo "  export CARLA_NETCONVERT=$sumo_install/bin/netconvert"
 echo "  export PROJ_LIB=/usr/share/proj   # dir containing proj.db (from libproj-dev)"
+
+# -- VibeUE editor MCP plugin (OPTIONAL, private mirror, pinned) --
+# VibeUE is the in-editor MCP bridge used during digital-twin development. We pull a
+# PRIVATE mirror of kevinpbuckley/VibeUE with the vibeue.com API-key validation removed
+# (offline build). It is NOT referenced by the .uproject, so it is an optional, auto-
+# discovered UE project plugin -- the CARLA build proceeds fine without it. Pinned to an
+# exact commit; fetched over SSH using a key from --vibeue-ssh-key=<path> or $VIBEUE_SSH_KEY.
+vibeue_dir="$workspace_path/Unreal/CarlaUnreal/Plugins/VibeUE"
+vibeue_repo="git@github.com:sbrett9/VibeUE.git"
+vibeue_pin="379373709e68ce7f2c4e3a26ff931f703d87b817"
+vibeue_key="${vibeue_ssh_key:-$VIBEUE_SSH_KEY}"
+if [ -d "$vibeue_dir/.git" ]; then
+    [ -n "$vibeue_key" ] && export GIT_SSH_COMMAND="ssh -i $vibeue_key -o IdentitiesOnly=yes"
+    if git -C "$vibeue_dir" fetch origin && git -C "$vibeue_dir" checkout "$vibeue_pin"; then
+        echo "VibeUE pinned to $vibeue_pin."
+    else
+        echo "WARNING: VibeUE fetch/checkout failed; continuing (optional plugin)."
+    fi
+elif [ -n "$vibeue_key" ]; then
+    echo "Cloning VibeUE private mirror (pinned $vibeue_pin)..."
+    vibeue_tmp="$vibeue_dir.tmp.$$"
+    if GIT_SSH_COMMAND="ssh -i $vibeue_key -o IdentitiesOnly=yes" git clone "$vibeue_repo" "$vibeue_tmp" \
+        && git -C "$vibeue_tmp" checkout "$vibeue_pin"; then
+        rm -rf "$vibeue_dir" && mv "$vibeue_tmp" "$vibeue_dir"
+        echo "VibeUE installed at $vibeue_pin."
+    else
+        rm -rf "$vibeue_tmp"
+        echo "WARNING: VibeUE clone failed; leaving any existing copy. Continuing (optional plugin)."
+    fi
+elif [ -d "$vibeue_dir" ]; then
+    echo "VibeUE present as a non-git copy; leaving as-is (no SSH key to convert it to a pinned clone)."
+else
+    echo "VibeUE skipped (optional MCP plugin). Pass --vibeue-ssh-key=<path> or set VIBEUE_SSH_KEY to fetch it."
+fi
 
 # -- BUILD CARLA --
 echo "Configuring the CARLA CMake project..."

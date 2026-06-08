@@ -6,6 +6,7 @@ set launch=false
 set interactive=false
 set python_path=python
 set python_root=
+set vibeue_ssh_key=
 
 rem -- PARSE COMMAND LINE ARGUMENTS --
 
@@ -30,15 +31,24 @@ rem -- PARSE COMMAND LINE ARGUMENTS --
         if not errorlevel 1 (
             set python_root="%1"
             set python_root="!python_root:--python-root=!"
-        ) else if "%1"=="--python-root" (
-            set python_root=%2
-            shift
-        ) else if "%1"=="-pyroot" (
-            set python_root=%2
-            shift
         ) else (
-            echo Unknown argument "%1"
-            exit /b
+            echo %1 | findstr /B /C:"--vibeue-ssh-key=" >nul
+            if not errorlevel 1 (
+                set "vibeue_ssh_key=%1"
+                set "vibeue_ssh_key=!vibeue_ssh_key:--vibeue-ssh-key=!"
+            ) else if "%1"=="--python-root" (
+                set python_root=%2
+                shift
+            ) else if "%1"=="-pyroot" (
+                set python_root=%2
+                shift
+            ) else if "%1"=="--vibeue-ssh-key" (
+                set vibeue_ssh_key=%2
+                shift
+            ) else (
+                echo Unknown argument "%1"
+                exit /b
+            )
         )
     )
     shift
@@ -154,6 +164,36 @@ rem   PROJ_LIB / PROJ_DATA -> the directory containing proj.db
 echo To use netconvert from CarlaNet, set:
 echo   set CARLA_NETCONVERT=%sumo_install%\bin\netconvert.exe
 echo   set PROJ_LIB=%sumo_install%\share\proj
+
+rem -- VibeUE editor MCP plugin (OPTIONAL, private mirror, pinned) --
+rem In-editor MCP bridge for digital-twin development: a PRIVATE mirror of
+rem kevinpbuckley/VibeUE with the vibeue.com API-key validation removed (offline).
+rem NOT referenced by the .uproject, so it is an optional auto-discovered plugin and
+rem the CARLA build proceeds without it. Pinned to an exact commit; fetched over SSH
+rem with a key from --vibeue-ssh-key=<path> or %VIBEUE_SSH_KEY%. Use a space-free,
+rem forward-slash key path (e.g. C:/Users/you/.ssh/id_ed25519) to avoid quoting issues.
+set "vibeue_dir=%cd%\Unreal\CarlaUnreal\Plugins\VibeUE"
+set "vibeue_repo=git@github.com:sbrett9/VibeUE.git"
+set "vibeue_pin=379373709e68ce7f2c4e3a26ff931f703d87b817"
+set "vibeue_key=%vibeue_ssh_key%"
+if "%vibeue_key%"=="" set "vibeue_key=%VIBEUE_SSH_KEY%"
+
+if exist "%vibeue_dir%\.git" (
+    if not "%vibeue_key%"=="" set "GIT_SSH_COMMAND=ssh -i %vibeue_key% -o IdentitiesOnly=yes"
+    echo Pinning VibeUE to %vibeue_pin%...
+    git -C "%vibeue_dir%" fetch origin
+    git -C "%vibeue_dir%" checkout %vibeue_pin%
+) else if not "%vibeue_key%"=="" (
+    echo Cloning VibeUE private mirror ^(pinned %vibeue_pin%^)...
+    if exist "%vibeue_dir%" rmdir /S /Q "%vibeue_dir%"
+    set "GIT_SSH_COMMAND=ssh -i %vibeue_key% -o IdentitiesOnly=yes"
+    git clone "%vibeue_repo%" "%vibeue_dir%"
+    git -C "%vibeue_dir%" checkout %vibeue_pin%
+) else if exist "%vibeue_dir%" (
+    echo VibeUE present as a non-git copy; leaving as-is ^(no SSH key to convert it to a pinned clone^).
+) else (
+    echo VibeUE skipped ^(optional MCP plugin^). Pass --vibeue-ssh-key=^<path^> or set VIBEUE_SSH_KEY to fetch it.
+)
 
 rem -- BUILD CARLA --
 echo Configuring the CARLA CMake project...
