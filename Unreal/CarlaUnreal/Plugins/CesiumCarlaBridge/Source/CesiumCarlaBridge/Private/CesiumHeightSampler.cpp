@@ -4,6 +4,7 @@
 
 #include "Cesium3DTileset.h"
 #include "CesiumGeoreference.h"
+#include "CesiumSunSky.h"
 #include "OriginPlacement.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -234,9 +235,101 @@ bool UCesiumHeightSampler::ConfigureCesiumForOrigin(
 		}
 	}
 
+	// The generated OpenDriveMap has no weather/sun actor ("Missing weather class"), so the
+	// scene is unlit. Spawn a CesiumSunSky for physically-based georeferenced lighting
+	// (defaults: SolarTime 13:00, TimeZone -5 = Chicago daytime). Also the correct EO basis
+	// later (real solar angle / shadows).
+	bool bHasSunSky = false;
+	for (TActorIterator<ACesiumSunSky> It(World); It; ++It)
+	{
+		if (IsValid(*It)) { bHasSunSky = true; break; }
+	}
+	bool bSpawnedSunSky = false;
+	if (!bHasSunSky)
+	{
+		FActorSpawnParameters SunParams;
+		SunParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		ACesiumSunSky* SunSky = World->SpawnActor<ACesiumSunSky>(SunParams);
+		if (SunSky)
+		{
+			SunSky->UpdateSun();
+			bSpawnedSunSky = true;
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] failed to spawn ACesiumSunSky."));
+		}
+	}
+
 	UE_LOG(LogTemp, Display,
-		TEXT("[CesiumCarlaBridge] Configured georeference (lat=%.7f lon=%.7f h=%.3f) + %d tileset(s)%s."),
+		TEXT("[CesiumCarlaBridge] Configured georeference (lat=%.7f lon=%.7f h=%.3f) + %d tileset(s)%s%s."),
 		OriginLatitude, OriginLongitude, OriginHeight, Tilesets.Num(),
-		bSpawnedTileset ? TEXT(" (spawned 1)") : TEXT(""));
+		bSpawnedTileset ? TEXT(" (spawned tileset)") : TEXT(""),
+		bSpawnedSunSky ? TEXT(" (spawned sun)") : TEXT(""));
 	return true;
+}
+
+int32 UCesiumHeightSampler::SetCesiumTilesetsVisible(UObject* WorldContextObject, bool bVisible)
+{
+	UWorld* World = GEngine
+		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
+		: nullptr;
+	if (!World)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] SetCesiumTilesetsVisible: no world."));
+		return -1;
+	}
+
+	int32 Count = 0;
+	for (TActorIterator<ACesium3DTileset> It(World); It; ++It)
+	{
+		ACesium3DTileset* Tileset = *It;
+		if (!IsValid(Tileset)) continue;
+		Tileset->SetActorHiddenInGame(!bVisible);
+		++Count;
+	}
+	UE_LOG(LogTemp, Display, TEXT("[CesiumCarlaBridge] set %d tileset(s) visible=%d"), Count, bVisible ? 1 : 0);
+	return Count;
+}
+
+int32 UCesiumHeightSampler::SetCesiumCollisionEnabled(UObject* WorldContextObject, bool bEnabled)
+{
+	UWorld* World = GEngine
+		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
+		: nullptr;
+	if (!World)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] SetCesiumCollisionEnabled: no world."));
+		return -1;
+	}
+
+	int32 Count = 0;
+	for (TActorIterator<ACesium3DTileset> It(World); It; ++It)
+	{
+		ACesium3DTileset* Tileset = *It;
+		if (!IsValid(Tileset)) continue;
+		Tileset->SetCreatePhysicsMeshes(bEnabled);
+		Tileset->RefreshTileset();
+		++Count;
+	}
+	UE_LOG(LogTemp, Display, TEXT("[CesiumCarlaBridge] set %d tileset(s) collision=%d"), Count, bEnabled ? 1 : 0);
+	return Count;
+}
+
+FVector UCesiumHeightSampler::GetCesiumOrigin(UObject* WorldContextObject)
+{
+	UWorld* World = GEngine
+		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
+		: nullptr;
+	if (!World)
+	{
+		return FVector::ZeroVector;
+	}
+	ACesiumGeoreference* Georeference = ACesiumGeoreference::GetDefaultGeoreference(World);
+	if (!Georeference)
+	{
+		return FVector::ZeroVector;
+	}
+	// FVector(Longitude X, Latitude Y, Height Z).
+	return Georeference->GetOriginLongitudeLatitudeHeight();
 }

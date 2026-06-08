@@ -1285,6 +1285,39 @@ class World:
         return bool(_sync(self._client.ConfigureCesiumGeoreferenceAsync(
             origin, str(ion_token), int(ion_asset_id), bool(refresh))))
 
+    def set_cesium_visible(self, visible: bool):
+        """Show/hide the Cesium photogrammetry overlay (watch just the CARLA actors)."""
+        return bool(_sync(self._client.SetCesiumVisibleAsync(bool(visible))))
+
+    def set_cesium_collision(self, enabled: bool):
+        """Enable/disable physics collision on the Cesium photogrammetry tilesets.
+        Collision is ON by default; this toggle never changes spawn defaults."""
+        return bool(_sync(self._client.SetCesiumCollisionAsync(bool(enabled))))
+
+    def set_road_rendered(self, rendered: bool):
+        """Show/hide the CARLA OpenDRIVE road-mesh RENDERING (collision unaffected — cars
+        still drive). Stops the road mesh z-fighting with the photoreal Cesium streets."""
+        return bool(_sync(self._client.SetRoadRenderedAsync(bool(rendered))))
+
+    def get_cesium_origin(self):
+        """Cesium georeference origin as (latitude, longitude, height_m). The true elevation
+        of a local point at Unreal Z is height_m + Z."""
+        g = _sync(self._client.GetCesiumOriginAsync())
+        return (g.Latitude, g.Longitude, g.Altitude)
+
+    def ground_z_below(self, x, y, z, search=4000.0):
+        """Raycast straight down from (x, y, z) metres; return the surface Z (metres) hit
+        below, or None if nothing was hit within `search` metres. Used for AGL readout."""
+        from CarlaNet.Types.Geom import Location as _L, Vector3D as _V
+        res = _sync(self._client.ProjectPointAsync(
+            _L(float(x), float(y), float(z)), _V(0.0, 0.0, -1.0), float(search)))
+        # res is a C# (bool Hit, LabelledPoint Point) value tuple.
+        hit = res.Item1 if hasattr(res, "Item1") else res[0]
+        pt = res.Item2 if hasattr(res, "Item2") else res[1]
+        if not hit:
+            return None
+        return float(pt.Location.Z)
+
     def sample_terrain_heights(self, points, timeout=120.0):
         """Sample Cesium terrain heights. `points` is an iterable of (lat, lon[, alt])
         tuples / objects / GeoLocation. Returns a list of (latitude, longitude, height)
@@ -1572,6 +1605,7 @@ class Client:
                                                osm_options=None, parameters=None,
                                                sample_step_meters=10.0,
                                                origin_height=None,
+                                               outlier_threshold=4.0,
                                                cesium_settle_seconds=5.0):
         """Full headless digital-twin build (no editor): OSM -> elevated, Cesium-aligned
         OpenDRIVE world. Converts OSM->.xodr, samples Cesium terrain heights at the road
@@ -1590,7 +1624,8 @@ class Client:
         oh = None if origin_height is None else float(origin_height)
         xodr = _sync(self._inner.GenerateWorldFromOsmWithElevationAsync(
             osm_path, str(ion_token), int(ion_asset_id),
-            osm_options, params, float(sample_step_meters), oh, settle, CancellationToken(False)))
+            osm_options, params, float(sample_step_meters), oh,
+            float(outlier_threshold), settle, CancellationToken(False)))
         return str(xodr)
 
     def get_trafficmanager(self, port: int = 8000):

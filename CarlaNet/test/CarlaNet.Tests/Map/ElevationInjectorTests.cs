@@ -148,6 +148,38 @@ public class ElevationInjectorTests
     }
 
     [Fact]
+    public void Inject_RejectsOverStreetStructureSpikes()
+    {
+        var map = LoadFlat();
+        var samples = ElevationInjector.ExtractCenterlineSamples(map, 25.0); // s = 0,25,50,75,100
+        const double originHeight = 146.508;
+
+        // Flat street at +1 m, with an L-track / canopy spike of +9 m at s=50.
+        var heights = samples.Select(_ => originHeight + 1.0).ToList();
+        int mid = samples.ToList().FindIndex(s => s.S == 50.0);
+        heights[mid] = originHeight + 9.0;
+
+        var elevated = ElevationInjector.InjectElevation(FlatXodr, samples, heights, originHeight);
+        var road = (OpenDriveParser.Load(elevated) ?? throw new Exception("parse")).Roads[1u];
+        // The spike is snapped back to street level (~1 m), not left at 9 m.
+        Assert.Equal(1.0, RoadMap.GetDirectedPointInNoLaneOffset(road, 50.0).Location.Z, 1);
+    }
+
+    [Fact]
+    public void Inject_KeepsGenuineSlope()
+    {
+        var map = LoadFlat();
+        var samples = ElevationInjector.ExtractCenterlineSamples(map, 25.0);
+        const double originHeight = 146.508;
+        // A real 3% grade must NOT be flagged as outliers (slope-robust rejection).
+        var heights = samples.Select(s => originHeight + 0.03 * s.S).ToList();
+
+        var elevated = ElevationInjector.InjectElevation(FlatXodr, samples, heights, originHeight);
+        var road = (OpenDriveParser.Load(elevated) ?? throw new Exception("parse")).Roads[1u];
+        Assert.Equal(1.5, RoadMap.GetDirectedPointInNoLaneOffset(road, 50.0).Location.Z, 1);
+    }
+
+    [Fact]
     public void Inject_ReplacesExistingProfile_NoDuplicates()
     {
         var map = LoadFlat();

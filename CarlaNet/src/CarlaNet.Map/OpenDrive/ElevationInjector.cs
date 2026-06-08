@@ -129,7 +129,8 @@ public static class ElevationInjector
         IReadOnlyList<CenterlineSample> samples,
         IReadOnlyList<double> ellipsoidalHeights,
         double originHeight,
-        ElevationFitMode mode = ElevationFitMode.PiecewiseLinear)
+        ElevationFitMode mode = ElevationFitMode.PiecewiseLinear,
+        double outlierThresholdMeters = 4.0)
     {
         ArgumentNullException.ThrowIfNull(openDriveXml);
         ArgumentNullException.ThrowIfNull(samples);
@@ -152,7 +153,9 @@ public static class ElevationInjector
         foreach (var list in perRoad.Values)
         {
             list.Sort((a, b) => a.S.CompareTo(b.S));
-            FillGaps(list); // resolve NaNs left by failed height samples
+            FillGaps(list);                                  // failed samples (NaN) first
+            RejectOutliers(list, outlierThresholdMeters);    // L-tracks/trees/awnings/roofs -> NaN
+            FillGaps(list);                                  // interpolate the rejected spikes
         }
 
         var doc = XDocument.Parse(openDriveXml);
@@ -253,6 +256,39 @@ public static class ElevationInjector
             }
             list[i] = (list[i].S, z);
         }
+    }
+
+    // Reject points that sit more than thresholdMeters above OR below BOTH of their nearest
+    // valid neighbours — i.e. isolated peaks/pits, where the road centerline passed under an
+    // over-street structure the photogrammetry surface mesh captured (CTA "L" tracks, tree
+    // canopies, awnings, building overhangs) so the sampled height is that structure, not the
+    // street. This is slope-robust: on a real grade a point lies BETWEEN its neighbours, so it
+    // is never beyond both. Rejected points become NaN; FillGaps then interpolates the street
+    // level back in. Disabled when thresholdMeters <= 0.
+    private static void RejectOutliers(List<(double S, double Z)> list, double thresholdMeters)
+    {
+        int n = list.Count;
+        if (thresholdMeters <= 0.0 || n < 3) return;
+
+        var z = new double[n];
+        for (int i = 0; i < n; ++i) z[i] = list[i].Z;
+
+        var reject = new bool[n];
+        for (int i = 0; i < n; ++i)
+        {
+            if (double.IsNaN(z[i])) continue;
+            int p = i - 1; while (p >= 0 && (double.IsNaN(z[p]) || reject[p])) --p;
+            int q = i + 1; while (q < n && double.IsNaN(z[q])) ++q;
+            if (p < 0 || q >= n) continue; // road ends — nothing to bracket against
+
+            double hi = Math.Max(z[p], z[q]);
+            double lo = Math.Min(z[p], z[q]);
+            if (z[i] - hi > thresholdMeters || lo - z[i] > thresholdMeters)
+                reject[i] = true;
+        }
+
+        for (int i = 0; i < n; ++i)
+            if (reject[i]) list[i] = (list[i].S, double.NaN);
     }
 
     private static string F(double v) => v.ToString("R", CultureInfo.InvariantCulture);

@@ -23,6 +23,7 @@ Usage:
 """
 import argparse
 import os
+import re
 import sys
 import time
 
@@ -34,9 +35,10 @@ _NETCONVERT = os.path.join(_INSTALL, "bin",
 _PROJ = os.path.join(_INSTALL, "share", "proj")
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--osm", default=os.path.join(_REPO, "Import", "Maps", "WrigleyVille.osm"))
-ap.add_argument("--lat", type=float, default=41.94813)
-ap.add_argument("--lon", type=float, default=-87.65593)
+ap.add_argument("--osm", default=os.path.join(_REPO, "Import", "Lakeview_Carson.osm"))
+# Origin: if not given, it is DERIVED from the OSM <bounds> center (fully map-driven).
+ap.add_argument("--lat", type=float, default=None, help="origin lat (default: OSM bounds center)")
+ap.add_argument("--lon", type=float, default=None, help="origin lon (default: OSM bounds center)")
 ap.add_argument("--step", type=float, default=10.0, help="reference-line sample spacing (m)")
 ap.add_argument("--origin-height", type=float, default=None,
                 help="vertical datum (m); default = sample the origin")
@@ -44,11 +46,29 @@ ap.add_argument("--ion-token", default=os.environ.get("CESIUM_ION_TOKEN", ""))
 ap.add_argument("--ion-asset-id", type=int, default=2275207)  # Google Photorealistic 3D Tiles
 ap.add_argument("--settle", type=float, default=10.0)
 ap.add_argument("--traffic", type=int, default=0, help="spawn N autopilot vehicles after build")
-ap.add_argument("--save", default=os.path.join(_REPO, "Build", "sumo-smoketest", "wrigley_elevated.xodr"))
+ap.add_argument("--no-road-filter", action="store_true",
+                help="don't restrict netconvert to car-drivable roads (keeps sidewalks/rail/parking)")
+ap.add_argument("--save", default=None, help="output elevated .xodr (default: Build/sumo-smoketest/<osm>_elevated.xodr)")
 ap.add_argument("--host", default="127.0.0.1")
 ap.add_argument("--port", type=int, default=2000)
 ap.add_argument("--timeout", type=float, default=300.0)
 args = ap.parse_args()
+
+
+def read_osm_bounds(path):
+    """Return (minlat, minlon, maxlat, maxlon) from the OSM <bounds> element, or None."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                if "<bounds" in line:
+                    def g(k):
+                        m = re.search(k + r'="([-0-9.]+)"', line)
+                        return float(m.group(1)) if m else None
+                    vals = (g("minlat"), g("minlon"), g("maxlat"), g("maxlon"))
+                    return vals if None not in vals else None
+    except OSError:
+        return None
+    return None
 
 os.environ.setdefault("CARLA_NETCONVERT", _NETCONVERT)
 os.environ.setdefault("PROJ_LIB", _PROJ)
@@ -65,23 +85,50 @@ def make_options():
     opts.GenerateTrafficLights = False  # avoids the ungrouped-TL log spam (known issue #1)
     opts.OriginLatitude = args.lat
     opts.OriginLongitude = args.lon
+    if not args.no_road_filter:
+        # Restrict netconvert to car-drivable streets: drop sidewalks/footways/cycleways,
+        # all rail/subway/tram, and service/parking-aisle ways; then prune disconnected bits.
+        from System.Collections.Generic import List
+        extra = List[str]()
+        for a in ["--keep-edges.by-vclass", "passenger",
+                  "--keep-edges.components", "1",
+                  "--remove-edges.isolated", "true"]:
+            extra.Add(a)
+        opts.ExtraArgs = extra
     return opts
 
 
 def main() -> int:
     print("== Digital-twin build (headless, no editor) ==")
     print(f"  osm        : {args.osm}")
-    print(f"  origin     : {args.lat}, {args.lon}  step={args.step} m")
-    print(f"  ion asset  : {args.ion_asset_id}  token: {'set' if args.ion_token else 'MISSING'}")
-    print()
 
     if not os.path.exists(args.osm):
         print(f"ERROR: OSM not found: {args.osm}", file=sys.stderr); return 1
     if not os.path.exists(_NETCONVERT):
         print(f"ERROR: netconvert not staged: {_NETCONVERT}", file=sys.stderr); return 1
+
+    # Origin: derive from the OSM <bounds> center unless explicitly given.
+    if args.lat is None or args.lon is None:
+        b = read_osm_bounds(args.osm)
+        if b is None:
+            print("ERROR: no --lat/--lon given and could not read <bounds> from the OSM file",
+                  file=sys.stderr); return 1
+        args.lat = (b[0] + b[2]) / 2.0
+        args.lon = (b[1] + b[3]) / 2.0
+        print(f"  origin     : {args.lat:.7f}, {args.lon:.7f}  (derived from OSM bounds center)")
+    else:
+        print(f"  origin     : {args.lat:.7f}, {args.lon:.7f}  (explicit)")
+    print(f"  step       : {args.step} m   road-filter: {'OFF' if args.no_road_filter else 'ON (drivable only)'}")
+    print(f"  ion asset  : {args.ion_asset_id}  token: {'set' if args.ion_token else 'MISSING'}")
+    print()
+
     if not args.ion_token:
         print("WARNING: no Ion token; the tileset can't be spawned and sampling will fail.",
               file=sys.stderr)
+
+    save_path = args.save or os.path.join(
+        _REPO, "Build", "sumo-smoketest",
+        os.path.splitext(os.path.basename(args.osm))[0] + "_elevated.xodr")
 
     client = carla.Client(args.host, args.port)
     client.set_timeout(15.0)
@@ -103,11 +150,10 @@ def main() -> int:
     elevs = elevated.count("<elevation ")
     print(f"    done in {dt:.1f}s — {len(elevated):,} chars, {roads} roads, {elevs} elevation records")
 
-    if args.save:
-        os.makedirs(os.path.dirname(args.save), exist_ok=True)
-        with open(args.save, "w", encoding="utf-8") as f:
-            f.write(elevated)
-        print(f"    wrote elevated .xodr -> {args.save}")
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    with open(save_path, "w", encoding="utf-8") as f:
+        f.write(elevated)
+    print(f"    wrote elevated .xodr -> {save_path}")
 
     client.set_timeout(30.0)
     world = client.get_world()

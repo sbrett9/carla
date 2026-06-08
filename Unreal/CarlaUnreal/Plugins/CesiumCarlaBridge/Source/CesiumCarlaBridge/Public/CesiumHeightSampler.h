@@ -87,4 +87,31 @@ public:
 		const FString& IonAccessToken,
 		int64 IonAssetId,
 		bool bRefreshTileset);
+
+	/**
+	 * Show/hide every ACesium3DTileset in the world (the photogrammetry overlay), so a
+	 * client can watch just the CARLA actors against an empty background. Returns the
+	 * number of tilesets toggled (or -1 if there is no world).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
+	static int32 SetCesiumTilesetsVisible(UObject* WorldContextObject, bool bVisible);
+
+	/**
+	 * Enable/disable physics collision on every ACesium3DTileset in the world. When
+	 * bEnabled is false, vehicles pass through the photogrammetry surface (useful for
+	 * A/B comparisons). Calls SetCreatePhysicsMeshes then RefreshTileset so the change
+	 * takes effect immediately. Returns the number of tilesets changed (or -1 if there
+	 * is no world). Collision is ON by default — this toggle never changes spawn defaults.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
+	static int32 SetCesiumCollisionEnabled(UObject* WorldContextObject, bool bEnabled);
+
+	/**
+	 * Returns the default CesiumGeoreference's cartographic origin as
+	 * FVector(Longitude, Latitude, Height-in-metres), or (0,0,0) if there is no
+	 * georeference. Lets a client convert a local Unreal Z to a true elevation
+	 * (origin height + local z).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
+	static FVector GetCesiumOrigin(UObject* WorldContextObject);
 };

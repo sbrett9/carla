@@ -190,6 +190,7 @@ public sealed class CarlaClient : IAsyncDisposable
         OpendriveGenerationParameters parameters = default,
         double sampleStepMeters = 10.0,
         double? originHeightOverride = null,
+        double outlierThresholdMeters = 4.0,
         TimeSpan? cesiumSettle = null,
         CancellationToken ct = default)
     {
@@ -233,14 +234,20 @@ public sealed class CarlaClient : IAsyncDisposable
 
         // 5) Inject the sampled heights into the .xodr <elevationProfile>.
         var elevatedXodr = CarlaNet.Map.OpenDrive.ElevationInjector.InjectElevation(
-            flatXodr, samples, roadEllipsoidal, originHeight);
+            flatXodr, samples, roadEllipsoidal, originHeight,
+            CarlaNet.Map.OpenDrive.ElevationFitMode.PiecewiseLinear, outlierThresholdMeters);
 
         // 6) Generate the elevated OpenDRIVE world (builds road mesh + waypoints at correct Z).
         await GenerateOpenDriveWorldAsync(elevatedXodr, parameters).ConfigureAwait(false);
 
         // 7) The reload destroyed the runtime Cesium actors — re-establish them as the
-        //    visual overlay aligned to the same origin.
-        await ConfigureCesiumGeoreferenceAsync(origin, ionToken, ionAssetId, refresh: true)
+        //    visual overlay. CRITICAL: set the georeference OriginHeight to the sampled
+        //    ground height (NOT the .xodr's altitude=0), so ellipsoidal-height originHeight
+        //    maps to Unreal z=0 and the photogrammetry sits ON the roads (which were injected
+        //    as z = ellipsoidal - originHeight). Using 0 floats the globe ~originHeight metres
+        //    above the roads.
+        var alignedOrigin = new GeoLocation(origin.Latitude, origin.Longitude, originHeight);
+        await ConfigureCesiumGeoreferenceAsync(alignedOrigin, ionToken, ionAssetId, refresh: true)
             .ConfigureAwait(false);
 
         return elevatedXodr;
@@ -265,6 +272,26 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<bool> ConfigureCesiumGeoreferenceAsync(
         GeoLocation origin, string ionToken = "", long ionAssetId = 0, bool refresh = true)
         => _rpc.CallAsync<bool>("configure_cesium_georeference", origin, ionToken, ionAssetId, refresh);
+
+    /// Show/hide the Cesium photogrammetry overlay in the loaded world.
+    public Task<bool> SetCesiumVisibleAsync(bool visible)
+        => _rpc.CallAsync<bool>("set_cesium_visible", visible);
+
+    /// Enable/disable physics collision on the Cesium photogrammetry tilesets.
+    /// Collision is ON by default; this toggle never changes spawn defaults.
+    public Task<bool> SetCesiumCollisionAsync(bool enabled)
+        => _rpc.CallAsync<bool>("set_cesium_collision", enabled);
+
+    /// Show/hide the CARLA OpenDRIVE road-mesh RENDERING. Collision is unaffected —
+    /// vehicles still drive on the (invisible) roads. Stops the road mesh z-fighting
+    /// with the photoreal Cesium streets.
+    public Task<bool> SetRoadRenderedAsync(bool rendered)
+        => _rpc.CallAsync<bool>("set_road_rendered", rendered);
+
+    /// The Cesium georeference origin as GeoLocation(latitude, longitude, ellipsoidal height m).
+    /// True elevation of a local Unreal point = this height + the point's local Z.
+    public Task<GeoLocation> GetCesiumOriginAsync()
+        => _rpc.CallAsync<GeoLocation>("get_cesium_origin");
 
     public async Task<IReadOnlyList<GeoLocation>> SampleTerrainHeightsAsync(
         IReadOnlyList<GeoLocation> points,

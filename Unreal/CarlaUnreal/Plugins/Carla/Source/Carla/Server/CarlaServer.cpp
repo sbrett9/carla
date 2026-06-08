@@ -9,6 +9,7 @@
 #include "Carla/Server/CarlaServerResponse.h"
 #include "Carla/Traffic/TrafficLightGroup.h"
 #include "Carla/OpenDrive/OpenDrive.h"
+#include "Carla/OpenDrive/OpenDriveGenerator.h"
 #include "Carla/Util/DebugShapeDrawer.h"
 #include "Carla/Util/NavigationMesh.h"
 #include "Carla/Util/RayTracer.h"
@@ -479,6 +480,72 @@ void FCarlaServer::FPimpl::BindActions()
       RESPOND_ERROR("no CesiumGeoreference found in the loaded world");
     }
     return true;
+  };
+
+  // Show/hide the Cesium photogrammetry overlay (so a client can watch just the
+  // CARLA actors against an empty background).
+  BIND_SYNC(set_cesium_visible) << [this](bool visible) -> R<bool>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to toggle Cesium visibility in");
+    }
+    UCesiumHeightSampler::SetCesiumTilesetsVisible(World, visible);
+    return true;
+  };
+
+  // Enable/disable physics collision on the Cesium photogrammetry tilesets so the
+  // client can A/B whether vehicles get stuck on the photoreal surface. Collision is
+  // ON by default; this toggle never changes spawn defaults.
+  BIND_SYNC(set_cesium_collision) << [this](bool enabled) -> R<bool>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to toggle Cesium collision in");
+    }
+    UCesiumHeightSampler::SetCesiumCollisionEnabled(World, enabled);
+    return true;
+  };
+
+  // Show/hide the CARLA OpenDRIVE road mesh RENDERING (the AProceduralMeshActor's spawned
+  // by AOpenDriveGenerator). SetActorHiddenInGame affects rendering only — collision is
+  // untouched, so vehicles still drive on the (now invisible) roads. Used to stop the road
+  // mesh z-fighting with the photoreal Cesium streets.
+  BIND_SYNC(set_road_rendered) << [this](bool rendered) -> R<bool>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to toggle road rendering in");
+    }
+    int32 Count = 0;
+    for (TActorIterator<AProceduralMeshActor> It(World); It; ++It)
+    {
+      if (!IsValid(*It)) continue;
+      (*It)->SetActorHiddenInGame(!rendered);
+      ++Count;
+    }
+    UE_LOG(LogCarlaServer, Log, TEXT("set_road_rendered(%d): %d road mesh actor(s)"), rendered ? 1 : 0, Count);
+    return true;
+  };
+
+  // Returns the Cesium georeference origin (latitude, longitude, ellipsoidal height in m),
+  // so a client can turn a local Unreal Z into a true elevation (originHeight + localZ).
+  BIND_SYNC(get_cesium_origin) << [this]() -> R<cg::GeoLocation>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to read the Cesium origin from");
+    }
+    const FVector O = UCesiumHeightSampler::GetCesiumOrigin(World); // (lon, lat, height)
+    return cg::GeoLocation{ O.Y, O.X, O.Z };                        // (lat, lon, alt)
   };
 
   BIND_SYNC(apply_texture_to_actor) << [this](
