@@ -93,8 +93,8 @@ if ($existing -and -not $Force) {
 # --- Optional pre-build (avoids the stale-module modal at its source) ---
 if ($Build) {
     Write-Host "[1/3] Building CarlaUnrealEditor first..."
-    # BuildCarla.ps1 lives at the workspace root (this script was moved to carla/Scripts/Windows/).
-    & "G:\Projects\CarlaUE_5_7_4\BuildCarla.ps1"
+    # BuildCarla.ps1 is a sibling of this script in carla/Scripts/Windows/.
+    & (Join-Path $PSScriptRoot "BuildCarla.ps1")
     if ($LASTEXITCODE -ne 0) { Fail "Build failed (exit $LASTEXITCODE); not opening editor." }
 }
 
