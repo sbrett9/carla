@@ -87,23 +87,32 @@ if exist "%cd%\Unreal\CarlaUnreal\Content" (
 )
 
 rem Activate VS terminal development environment:
-set "vs_env_bat="
-if exist "%PROGRAMFILES%\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" (
-    set "vs_env_bat=%PROGRAMFILES%\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
-)
-if exist "%PROGRAMFILES%\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat" (
-    set "vs_env_bat=%PROGRAMFILES%\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat"
-)
-if exist "%PROGRAMFILES%\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat" (
-    set "vs_env_bat=%PROGRAMFILES%\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-)
-
-if not "%vs_env_bat%"=="" (
-    echo Activating "x64 Native Tools Command Prompt" terminal environment.
-    call "%vs_env_bat%" || exit /b
+rem Check if already in a VS developer command prompt
+if defined VSINSTALLDIR (
+    echo Already in Visual Studio developer command prompt, skipping vcvars64.bat activation.
+    echo Using: %VSINSTALLDIR%
 ) else (
-    echo Could not find vcvars64.bat for VS 2022, aborting setup...
-    exit 1
+    set "vs_env_bat="
+    if exist "%PROGRAMFILES%\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" (
+        set "vs_env_bat=%PROGRAMFILES%\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
+    )
+    if exist "%PROGRAMFILES%\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat" (
+        set "vs_env_bat=%PROGRAMFILES%\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat"
+    )
+    if exist "%PROGRAMFILES%\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat" (
+        set "vs_env_bat=%PROGRAMFILES%\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+    )
+
+    if not "%vs_env_bat%"=="" (
+        echo Activating "x64 Native Tools Command Prompt" terminal environment.
+        call "%vs_env_bat%" || exit /b
+    ) else (
+        echo Could not find vcvars64.bat for VS 2022, aborting setup...
+        echo.
+        echo TIP: You can run this script from a Visual Studio Developer Command Prompt instead.
+        echo      Open "x64 Native Tools Command Prompt for VS 2026" and run CarlaSetup.bat from there.
+        exit /b 1
+    )
 )
 
 rem -- DOWNLOAD + BUILD UNREAL ENGINE --
