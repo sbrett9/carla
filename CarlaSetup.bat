@@ -151,11 +151,25 @@ if exist "%sumo_install%\bin\netconvert.exe" (
     rem Pin the exact commit (the tag already points here; this is an explicit guard).
     git -C "%sumo_src%" checkout e238ea04b7150ba23a348a285d3048919fa4830b || exit /b
     rem Configure + build ONLY the netconvert target (Release) with the VS generator.
+    rem Detect Visual Studio version for CMake generator
+    set "cmake_generator=Visual Studio 17 2022"
+    if defined VSINSTALLDIR (
+        echo !VSINSTALLDIR! | findstr /C:"2026" >nul
+        if not errorlevel 1 (
+            set "cmake_generator=Visual Studio 18 2026"
+        )
+        echo !VSINSTALLDIR! | findstr /C:"2022" >nul
+        if not errorlevel 1 (
+            set "cmake_generator=Visual Studio 17 2022"
+        )
+    )
+    echo Using CMake generator: !cmake_generator!
     set "SUMO_LIBRARIES=%sumo_libs%"
     cmake ^
         -B "%sumo_build%" ^
         -S "%sumo_src%" ^
-        -G "Visual Studio 17 2022" ^
+        -G "!cmake_generator!" ^
+        -T v143,version=14.44 ^
         -A x64 ^
         -DCHECK_OPTIONAL_LIBS=false || exit /b
     cmake --build "%sumo_build%" --target netconvert --config Release -- -m || exit /b
