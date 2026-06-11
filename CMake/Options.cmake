@@ -427,7 +427,7 @@ carla_string_option (
 carla_string_option (
   CARLA_STREETMAP_VERSION
   "Target StreetMap version."
-  ue5-dev
+  ue5-dev-carla
 )
 
 carla_string_option (

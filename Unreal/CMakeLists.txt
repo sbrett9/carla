@@ -72,7 +72,6 @@ set (
   carla-server
   libsqlite3
   Boost::asio
-  Boost::python
   Boost::geometry
   Boost::gil
   Eigen3::Eigen
@@ -80,6 +79,12 @@ set (
   png_static
   rpc
 )
+
+# Boost::python only exists when the legacy PythonAPI is built (BUILD_PYTHON_API ON);
+# the UE editor plugin does not use it, so include it only when it is available.
+if (BUILD_PYTHON_API)
+  list (APPEND UE_DEPENDENCIES Boost::python)
+endif ()
 
 set (UE_DEPENDENCIES_ORDER_ONLY ${UE_DEPENDENCIES})
 
@@ -494,9 +499,12 @@ function (
 
   add_dependencies (
     ${TARGET_NAME}
-    carla-python-api
     carla-unreal-editor
   )
+  # The legacy PythonAPI is bundled into the package only when it is built.
+  if (BUILD_PYTHON_API)
+    add_dependencies (${TARGET_NAME} carla-python-api)
+  endif ()
 
   carla_add_custom_target (
     ${TARGET_NAME_SHORT}

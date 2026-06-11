@@ -358,7 +358,6 @@ if (BUILD_CARLA_CLIENT)
   target_link_libraries (
     carla-client PUBLIC
     Boost::asio
-    Boost::python
     Boost::algorithm
     Boost::geometry
     Boost::assert
@@ -370,6 +369,13 @@ if (BUILD_CARLA_CLIENT)
     zlibstatic
     rpc
   )
+
+  # Boost::python is only pulled in via PythonUtil.h when LIBCARLA_WITH_PYTHON_SUPPORT is
+  # defined, which only happens for the legacy PythonAPI build (BUILD_PYTHON_API). The
+  # target likewise only exists then, so link it conditionally.
+  if (BUILD_PYTHON_API)
+    target_link_libraries (carla-client PUBLIC Boost::python)
+  endif ()
   
   target_include_directories (
     carla-client PUBLIC
