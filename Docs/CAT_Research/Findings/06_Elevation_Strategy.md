@@ -241,6 +241,15 @@ where the server is already ticking and Cesium already configured (drop-in: just
 dependency, no latency, deterministic). Implement both behind `IElevationSource` and a
 `CesiumTerrainElevationSource` that wraps the RPC.
 
+> **Update 2026-06-11 — VALIDATED (Tier 1).** Ran the existing pipeline with `--ion-asset-id 1`
+> (Cesium World Terrain) instead of `2275207` (Google) on `Import/SF_LaurelHeights.osm`. Result:
+> **smooth, driveable roads, no spikes** (a few ~10 m DTM jaggies, harmless), full physics retained —
+> a decisive win over the Google-surface run. So **bare-earth (World Terrain) is adopted as the road-Z
+> + sample source.** Bringing the Google photoreal *visual* back alongside the hidden terrain (so we get
+> both) generalizes into an **N-layer toggleable architecture** — see
+> [08_Layer_Architecture.md](08_Layer_Architecture.md). Default collision policy chosen: **ground +
+> road** (per-layer, runtime-toggleable).
+
 ---
 
 ## 6. The datum trap (must get right for any orthometric DEM)
