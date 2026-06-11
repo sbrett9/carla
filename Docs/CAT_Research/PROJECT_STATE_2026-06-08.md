@@ -19,6 +19,38 @@ the real dataset must use open content (Cesium OSM Buildings / self-hosted).
 
 ---
 
+## 0.5 UPDATE 2026-06-11 — datum locked · strategy ordering · recent wins
+
+**DATUM LOCKED: ellipsoidal WGS84 (HAE) end-to-end** (geometry, sampling, telemetry). World Terrain +
+Google + CesiumGeoreference + `Geodesy` are all ellipsoidal → zero conversion; and ADS-B/GNSS geometric
+altitude is HAE, the natural truth datum for the telemetry deliverable. This **shelves the offline-SRTM
++ EGM96 geoid path (06 §6)** unless server-independent telemetry is later needed.
+
+**Recent wins (validated since the 06-08 snapshot):**
+- **World Terrain bare-earth road-Z** (ion asset 1) A/B'd vs Google surface (2275207) on SF Laurel
+  Heights → smooth, driveable roads, no spikes (06 §5 update). Bare-earth adopted as road-Z + sample source.
+- **eo_observer**: HUD black bar + **Ctrl+LMB world-pick** flyout (lat/lon/elev via a co-located depth
+  camera + `Geodesy.CarlaLocalToGeodetic`) with a close button. Committed, verified live.
+- **Overpass** analysis → bridge-offset plan (06 §10); **N-layer architecture** (08).
+
+**Strategy ordering (06 / 07 / 08):**
+1. **08 (layer architecture) FIRST** — keystone. Brings Google photoreal *visual* + hidden World Terrain
+   *ground* (sampled) + road, each per-layer toggleable (N-layer). It **is** the implementation of 06's
+   road-Z half, is on the critical path to the EO-video deliverable, and locks the datum. Default
+   collision = **ground + road**. *De-risk note:* road-Z sampling runs during world-gen where the `ground`
+   tileset can be spawned visible → the "does a HIDDEN tileset sample" question only matters for live
+   telemetry (06), not for 08.
+2. **06 telemetry NEXT** — the ≥5 Hz georef truth deliverable. With WGS84 + 08's `ground` source,
+   elevation = sample World Terrain (no geoid math). Transport/format (CoT vs ADS-B; emit vs serve —
+   undecided) is independent and can start in parallel.
+3. **07 (road filtering) ANYTIME / parallel** — orthogonal, already live via `ExtraArgs`; only the typed
+   `OsmConversionOptions` promotion remains. Non-blocking. (Overpass §10 shares the netconvert/.xodr stage.)
+
+Cross-cutting: **08 supersedes the single-tileset toggle API** (`set_cesium_*` / `set_road_rendered` →
+per-layer `set_layer_*`); don't over-invest in the old toggles. **Status: 08 implementation begun 2026-06-11.**
+
+---
+
 ## 1. WHAT WORKS TODAY (implemented + verified headless, no editor)
 
 The whole OSM→elevated-Cesium-aligned-world→traffic→EO-view loop runs against a **headless** CARLA
