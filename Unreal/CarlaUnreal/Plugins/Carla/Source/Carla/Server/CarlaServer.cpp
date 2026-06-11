@@ -403,7 +403,9 @@ void FCarlaServer::FPimpl::BindActions()
   // Coordinates are carla::geom::GeoLocation (doubles) — Vector3D's float32 would lose
   // ~1 m of longitude precision. See CesiumCarlaBridge / DYNAMIC_WORLD_PIPELINE_PLAN.md.
 
-  BIND_SYNC(request_terrain_heights) << [this](std::vector<cg::GeoLocation> points) -> R<bool>
+  BIND_SYNC(request_terrain_heights) << [this](
+      std::vector<cg::GeoLocation> points,
+      std::string tileset_selector) -> R<bool>
   {
     REQUIRE_CARLA_EPISODE();
     UWorld* World = Episode->GetWorld();
@@ -418,7 +420,9 @@ void FCarlaServer::FPimpl::BindActions()
       // FVector is (X = longitude, Y = latitude, Z = ignored) per SampleHeightMostDetailed.
       LonLatHeight.Add(FVector(P.longitude, P.latitude, 0.0));
     }
-    if (!UCesiumHeightSampler::RequestSample(World, LonLatHeight, FString()))
+    // tileset_selector picks the layer to sample (e.g. "ground" = bare-earth World Terrain);
+    // empty = first tileset found (back-compatible single-tileset behaviour).
+    if (!UCesiumHeightSampler::RequestSample(World, LonLatHeight, cr::ToFString(tileset_selector)))
     {
       RESPOND_ERROR_FSTRING(UCesiumHeightSampler::GetStatusMessage());
     }
@@ -464,6 +468,7 @@ void FCarlaServer::FPimpl::BindActions()
       cg::GeoLocation origin,
       std::string ion_token,
       int64_t ion_asset_id,
+      int64_t ground_ion_asset_id,
       bool refresh) -> R<bool>
   {
     REQUIRE_CARLA_EPISODE();
@@ -472,9 +477,12 @@ void FCarlaServer::FPimpl::BindActions()
     {
       RESPOND_ERROR("no world to configure Cesium georeference in");
     }
+    // ion_asset_id = visual "photoreal" layer; ground_ion_asset_id (>0) = hidden collidable
+    // bare-earth "ground" layer (the height-sample source). See 08_Layer_Architecture.
     const bool ok = UCesiumHeightSampler::ConfigureCesiumForOrigin(
         World, origin.latitude, origin.longitude, origin.altitude,
-        cr::ToFString(ion_token), static_cast<int64>(ion_asset_id), refresh);
+        cr::ToFString(ion_token), static_cast<int64>(ion_asset_id),
+        static_cast<int64>(ground_ion_asset_id), refresh);
     if (!ok)
     {
       RESPOND_ERROR("no CesiumGeoreference found in the loaded world");
@@ -531,6 +539,64 @@ void FCarlaServer::FPimpl::BindActions()
       ++Count;
     }
     UE_LOG(LogCarlaServer, Log, TEXT("set_road_rendered(%d): %d road mesh actor(s)"), rendered ? 1 : 0, Count);
+    return true;
+  };
+
+  // Per-layer visibility (08_Layer_Architecture). `layer` is "photoreal"/"ground" (a Cesium
+  // tileset tag) or "road" (the OpenDRIVE mesh). Rendering only — collision is independent.
+  BIND_SYNC(set_layer_visible) << [this](std::string layer, bool visible) -> R<bool>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to toggle layer visibility in");
+    }
+    const FString Layer = cr::ToFString(layer);
+    if (Layer == TEXT("road"))
+    {
+      int32 Count = 0;
+      for (TActorIterator<AProceduralMeshActor> It(World); It; ++It)
+      {
+        if (!IsValid(*It)) continue;
+        (*It)->SetActorHiddenInGame(!visible);
+        ++Count;
+      }
+      UE_LOG(LogCarlaServer, Log, TEXT("set_layer_visible(road,%d): %d road mesh actor(s)"), visible ? 1 : 0, Count);
+    }
+    else
+    {
+      UCesiumHeightSampler::SetLayerVisible(World, Layer, visible);
+    }
+    return true;
+  };
+
+  // Per-layer physics collision (08_Layer_Architecture). Tilesets: SetCreatePhysicsMeshes;
+  // "road": AProceduralMeshActor collision. Independent of visibility.
+  BIND_SYNC(set_layer_collision) << [this](std::string layer, bool enabled) -> R<bool>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to toggle layer collision in");
+    }
+    const FString Layer = cr::ToFString(layer);
+    if (Layer == TEXT("road"))
+    {
+      int32 Count = 0;
+      for (TActorIterator<AProceduralMeshActor> It(World); It; ++It)
+      {
+        if (!IsValid(*It)) continue;
+        (*It)->SetActorEnableCollision(enabled);
+        ++Count;
+      }
+      UE_LOG(LogCarlaServer, Log, TEXT("set_layer_collision(road,%d): %d road mesh actor(s)"), enabled ? 1 : 0, Count);
+    }
+    else
+    {
+      UCesiumHeightSampler::SetLayerCollision(World, Layer, enabled);
+    }
     return true;
   };
 

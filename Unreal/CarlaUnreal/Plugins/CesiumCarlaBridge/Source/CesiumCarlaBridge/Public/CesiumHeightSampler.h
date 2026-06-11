@@ -46,7 +46,8 @@ public:
 	 * to InProgress; poll IsReady()/GetState() while ticking, then read GetResults().
 	 *
 	 * Only one sample runs at a time (state is process-global). If TilesetActorName
-	 * is non-empty, only a tileset whose actor name contains it is used.
+	 * is non-empty, only a tileset whose actor NAME contains it OR whose actor TAGS
+	 * contain it is used (so "ground" selects the bare-earth layer for road-Z sampling).
 	 */
 	UFUNCTION(BlueprintCallable, Category = "CesiumCarla", meta = (WorldContext = "WorldContextObject"))
 	static bool RequestSample(UObject* WorldContextObject, const TArray<FVector>& LonLatHeight, const FString& TilesetActorName);
@@ -73,10 +74,16 @@ public:
 	/**
 	 * Configure the Cesium globe at runtime for a georeference origin, so a freshly
 	 * (re)loaded world — e.g. OpenDriveMap.umap after generate_opendrive_world — lines
-	 * up with the active .xodr. Sets the first ACesiumGeoreference's cartographic origin
-	 * to (OriginLatitude, OriginLongitude, OriginHeight). For every ACesium3DTileset:
-	 * sets the Ion access token if non-empty, the Ion asset id if &gt; 0, and refreshes if
-	 * bRefreshTileset. Returns true if a CesiumGeoreference was found and configured.
+	 * up with the active .xodr. Sets the default ACesiumGeoreference's cartographic origin
+	 * to (OriginLatitude, OriginLongitude, OriginHeight).
+	 *
+	 * Layer model (08_Layer_Architecture): ensures up to two tagged tilesets sharing the
+	 * georeference — a "photoreal" visual tileset (IonAssetId, visible, no collision) and,
+	 * when GroundIonAssetId &gt; 0, a "ground" bare-earth tileset (e.g. Cesium World Terrain
+	 * asset 1) that is HIDDEN with collision ON and is the height-sample source. Each is
+	 * found-by-tag-or-spawned (photoreal also adopts a pre-placed untagged tileset). The Ion
+	 * token is applied when non-empty; tilesets refresh if bRefreshTileset. Returns true if a
+	 * CesiumGeoreference was found/created.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
 	static bool ConfigureCesiumForOrigin(
@@ -86,7 +93,24 @@ public:
 		double OriginHeight,
 		const FString& IonAccessToken,
 		int64 IonAssetId,
+		int64 GroundIonAssetId,
 		bool bRefreshTileset);
+
+	/**
+	 * Per-layer visibility: show/hide every ACesium3DTileset tagged LayerTag (empty = all).
+	 * Tilesets are tagged by ConfigureCesiumForOrigin ("photoreal", "ground"). Rendering only;
+	 * collision is independent (see SetLayerCollision). Returns the number toggled (-1 no world).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
+	static int32 SetLayerVisible(UObject* WorldContextObject, const FString& LayerTag, bool bVisible);
+
+	/**
+	 * Per-layer physics: enable/disable collision on every ACesium3DTileset tagged LayerTag
+	 * (empty = all). Calls SetCreatePhysicsMeshes then RefreshTileset. Independent of
+	 * visibility. Returns the number changed (-1 no world).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
+	static int32 SetLayerCollision(UObject* WorldContextObject, const FString& LayerTag, bool bEnabled);
 
 	/**
 	 * Show/hide every ACesium3DTileset in the world (the photogrammetry overlay), so a

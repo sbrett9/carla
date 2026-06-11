@@ -1277,20 +1277,23 @@ class World:
     # in the loaded world and the server to be ticking (async mode).
 
     def configure_cesium_georeference(self, latitude, longitude, height=0.0,
-                                      ion_token="", ion_asset_id=0, refresh=True):
-        """Point the loaded world's CesiumGeoreference at (latitude, longitude, height)
-        and optionally set the Ion token / asset id on its tilesets. Returns True on
-        success (False/raises if no CesiumGeoreference is present)."""
+                                      ion_token="", ion_asset_id=0,
+                                      ground_ion_asset_id=0, refresh=True):
+        """Configure the layered Cesium globe at (latitude, longitude, height). `ion_asset_id`
+        is the visual "photoreal" layer; `ground_ion_asset_id` (>0) adds a hidden collidable
+        bare-earth "ground" layer (e.g. Cesium World Terrain asset 1), the height-sample source.
+        Returns True on success (False/raises if no CesiumGeoreference is present)."""
         origin = GeoLocation(float(latitude), float(longitude), float(height))
         return bool(_sync(self._client.ConfigureCesiumGeoreferenceAsync(
-            origin, str(ion_token), int(ion_asset_id), bool(refresh))))
+            origin, str(ion_token), int(ion_asset_id), int(ground_ion_asset_id), bool(refresh))))
 
     def set_cesium_visible(self, visible: bool):
-        """Show/hide the Cesium photogrammetry overlay (watch just the CARLA actors)."""
+        """Show/hide the Cesium photogrammetry overlay, ALL tilesets (watch just the CARLA
+        actors). For one layer use set_layer_visible('photoreal'|'ground', ...)."""
         return bool(_sync(self._client.SetCesiumVisibleAsync(bool(visible))))
 
     def set_cesium_collision(self, enabled: bool):
-        """Enable/disable physics collision on the Cesium photogrammetry tilesets.
+        """Enable/disable physics collision on the Cesium photogrammetry tilesets (ALL).
         Collision is ON by default; this toggle never changes spawn defaults."""
         return bool(_sync(self._client.SetCesiumCollisionAsync(bool(enabled))))
 
@@ -1298,6 +1301,17 @@ class World:
         """Show/hide the CARLA OpenDRIVE road-mesh RENDERING (collision unaffected — cars
         still drive). Stops the road mesh z-fighting with the photoreal Cesium streets."""
         return bool(_sync(self._client.SetRoadRenderedAsync(bool(rendered))))
+
+    def set_layer_visible(self, layer: str, visible: bool):
+        """Per-layer visibility (08_Layer_Architecture). `layer` is a Cesium tileset tag
+        ('photoreal'/'ground', '' = all tilesets) or 'road' (the OpenDRIVE mesh). Rendering
+        only — collision is independent (see set_layer_collision)."""
+        return bool(_sync(self._client.SetLayerVisibleAsync(str(layer), bool(visible))))
+
+    def set_layer_collision(self, layer: str, enabled: bool):
+        """Per-layer physics collision (08_Layer_Architecture). Same layer naming as
+        set_layer_visible; independent of visibility."""
+        return bool(_sync(self._client.SetLayerCollisionAsync(str(layer), bool(enabled))))
 
     def get_cesium_origin(self):
         """Cesium georeference origin as (latitude, longitude, height_m). The true elevation
@@ -1318,15 +1332,17 @@ class World:
             return None
         return float(pt.Location.Z)
 
-    def sample_terrain_heights(self, points, timeout=120.0):
+    def sample_terrain_heights(self, points, timeout=120.0, selector=""):
         """Sample Cesium terrain heights. `points` is an iterable of (lat, lon[, alt])
-        tuples / objects / GeoLocation. Returns a list of (latitude, longitude, height)
-        tuples; height is float('nan') where the tileset had no ground at that point."""
+        tuples / objects / GeoLocation. `selector` picks the layer to sample ('ground' =
+        bare-earth World Terrain; '' = first tileset). Returns a list of (latitude, longitude,
+        height) tuples; height is float('nan') where the tileset had no ground at that point."""
         from System import TimeSpan
         from System.Threading import CancellationToken
         cs_points = _cs_list([_to_cs_geo(p) for p in points], GeoLocation)
         results = _sync(self._client.SampleTerrainHeightsAsync(
             cs_points,
+            str(selector),
             TimeSpan.FromSeconds(float(timeout)),
             TimeSpan.FromMilliseconds(50),
             CancellationToken(False)))
@@ -1602,6 +1618,7 @@ class Client:
         return World(self._inner)
 
     def generate_world_from_osm_with_elevation(self, osm_path, ion_token, ion_asset_id,
+                                               ground_ion_asset_id=1,
                                                osm_options=None, parameters=None,
                                                sample_step_meters=10.0,
                                                origin_height=None,
@@ -1613,7 +1630,9 @@ class Client:
         elevated world, and re-establishes the Cesium visual overlay. Returns the elevated
         .xodr string; call client.get_world() afterwards for the World.
 
-        Requires ion_token + ion_asset_id (the Cesium tileset is spawned at runtime).
+        Requires ion_token + ion_asset_id (the photoreal tileset, spawned at runtime).
+        ground_ion_asset_id (>0, default 1 = Cesium World Terrain) is the hidden bare-earth
+        layer sampled for road-Z; pass 0 to sample the photoreal tileset instead (legacy).
         osm_options should pin the origin (OriginLatitude/OriginLongitude). If origin_height
         is None, the height sampled at the origin is used as the vertical datum.
         """
@@ -1623,7 +1642,7 @@ class Client:
         settle = TimeSpan.FromSeconds(float(cesium_settle_seconds)) if cesium_settle_seconds else TimeSpan(0)
         oh = None if origin_height is None else float(origin_height)
         xodr = _sync(self._inner.GenerateWorldFromOsmWithElevationAsync(
-            osm_path, str(ion_token), int(ion_asset_id),
+            osm_path, str(ion_token), int(ion_asset_id), int(ground_ion_asset_id),
             osm_options, params, float(sample_step_meters), oh,
             float(outlier_threshold), settle, CancellationToken(False)))
         return str(xodr)

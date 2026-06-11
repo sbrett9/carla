@@ -173,6 +173,28 @@ as a fallback.
 
 ---
 
+## 10. Phase 1 — built & verified (2026-06-11)
+
+Implemented and verified live on SF Laurel Heights: **photoreal** (Google 2275207) *visible* +
+**ground** (Cesium World Terrain, asset 1) *hidden + sampled* for road-Z + **road**, each per-layer
+toggleable in `eo_observer` (**C** photoreal / **G** ground / **V** ground-collision / **R** road).
+Engine: `EnsureTileset` tag-spawn, `RequestSample` tag selector (`"ground"`), `SetLayer{Visible,Collision}`.
+RPC: `configure_cesium_georeference(+ground_ion_asset_id)`, `request_terrain_heights(+tileset_selector)`,
+`set_layer_{visible,collision}`. Client/shim/`test_digital_twin` (`--ground-asset-id`, default 1). Road-Z
+sampling reveals the ground layer during the sample then hides it, so hidden-tileset streaming is never on
+the critical path. **Heights sample correctly (no zeros); roads markedly smoother; road ≈ ground, no z-fighting.**
+
+### Known follow-ups (not blocking — a later "height reconciliation" pass)
+- **Vehicle/road Z sits slightly ABOVE the photoreal surface up close.** Gap between the bare-earth ground
+  (road-Z source) and the Google photoreal *surface*. Negligible from nadir (≳800 ft); visible obliquely up close.
+- **Photoreal vs bare-earth visual interleave up close.** Where both render near the street, one surface's
+  polygons win over the other (not z-fighting since road≈ground — the two distinct surfaces just interleave).
+  Visual-only.
+- **Traffic occasionally leaves the road on a U-turn.** Possibly TrafficManager pathing
+  (`generate_traffic_carlanet`), unconfirmed; unrelated to the layer work.
+
+---
+
 ## Sources
 - Cesium ion asset ids: Google Photorealistic 3D Tiles (2275207), Cesium World Terrain (1),
   [Cesium OSM Buildings (96188)](https://cesium.com/platform/cesium-ion/content/cesium-osm-buildings/).

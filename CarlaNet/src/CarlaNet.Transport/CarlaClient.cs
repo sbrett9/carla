@@ -186,6 +186,7 @@ public sealed class CarlaClient : IAsyncDisposable
         string osmPath,
         string ionToken,
         long ionAssetId,
+        long groundIonAssetId = 1,
         CarlaNet.Map.OsmConversionOptions? osmOptions = null,
         OpendriveGenerationParameters parameters = default,
         double sampleStepMeters = 10.0,
@@ -207,10 +208,22 @@ public sealed class CarlaClient : IAsyncDisposable
             .ExtractCenterlineSamples(map, sampleStepMeters);
         var geo = CarlaNet.Map.OpenDrive.ElevationInjector.ToGeo(samples, origin);
 
-        // 3) Spawn / point the Cesium globe at the origin in the CURRENT episode (the server's
-        //    startup map) — no flat world build needed; sampling only needs the tileset.
-        await ConfigureCesiumGeoreferenceAsync(origin, ionToken, ionAssetId, refresh: true)
+        // 3) Configure the layered Cesium globe at the origin in the CURRENT episode (the server's
+        //    startup map): the visual "photoreal" tileset (ionAssetId) plus, when groundIonAssetId>0,
+        //    a hidden collidable bare-earth "ground" tileset (Cesium World Terrain) — the road-Z
+        //    sample source. No flat world build needed; sampling only needs the tileset present.
+        await ConfigureCesiumGeoreferenceAsync(origin, ionToken, ionAssetId, groundIonAssetId, refresh: true)
             .ConfigureAwait(false);
+
+        // De-risk: a VISIBLE World Terrain is proven to sample; whether a HIDDEN tileset samples is
+        // unverified. So reveal the ground layer while we sample it, then hide it again — road-Z
+        // sampling never depends on hidden-tileset streaming. (Falls back to "" = first tileset when
+        // no ground layer was requested.)
+        bool sampleGround = groundIonAssetId > 0;
+        string sampleSelector = sampleGround ? "ground" : "";
+        if (sampleGround)
+            await SetLayerVisibleAsync("ground", true).ConfigureAwait(false);
+
         if (cesiumSettle is { } settle)
             await Task.Delay(settle, ct).ConfigureAwait(false);
 
@@ -222,7 +235,9 @@ public sealed class CarlaClient : IAsyncDisposable
         foreach (var g in geo)
             points.Add(new GeoLocation(g.Latitude, g.Longitude, 0.0));
 
-        var heights = await SampleTerrainHeightsAsync(points, ct: ct).ConfigureAwait(false);
+        var heights = await SampleTerrainHeightsAsync(points, sampleSelector, ct: ct).ConfigureAwait(false);
+        if (sampleGround)
+            await SetLayerVisibleAsync("ground", false).ConfigureAwait(false);
         if (heights.Count != points.Count)
             throw new InvalidOperationException(
                 $"terrain-height result count {heights.Count} != requested {points.Count}");
@@ -247,7 +262,7 @@ public sealed class CarlaClient : IAsyncDisposable
         //    as z = ellipsoidal - originHeight). Using 0 floats the globe ~originHeight metres
         //    above the roads.
         var alignedOrigin = new GeoLocation(origin.Latitude, origin.Longitude, originHeight);
-        await ConfigureCesiumGeoreferenceAsync(alignedOrigin, ionToken, ionAssetId, refresh: true)
+        await ConfigureCesiumGeoreferenceAsync(alignedOrigin, ionToken, ionAssetId, groundIonAssetId, refresh: true)
             .ConfigureAwait(false);
 
         return elevatedXodr;
@@ -269,15 +284,21 @@ public sealed class CarlaClient : IAsyncDisposable
     /// (latitude, longitude, altitude=OriginHeight) and optionally set the ion token /
     /// asset id on its tilesets. Call after generate_opendrive_world so the reloaded
     /// OpenDriveMap lines up with the active .xodr before sampling terrain heights.
+    /// Configure the layered Cesium globe (08_Layer_Architecture). <paramref name="ionAssetId"/>
+    /// is the visual "photoreal" layer; <paramref name="groundIonAssetId"/> (&gt;0) adds a hidden,
+    /// collidable bare-earth "ground" layer (e.g. Cesium World Terrain asset 1) used as the
+    /// height-sample source.
     public Task<bool> ConfigureCesiumGeoreferenceAsync(
-        GeoLocation origin, string ionToken = "", long ionAssetId = 0, bool refresh = true)
-        => _rpc.CallAsync<bool>("configure_cesium_georeference", origin, ionToken, ionAssetId, refresh);
+        GeoLocation origin, string ionToken = "", long ionAssetId = 0,
+        long groundIonAssetId = 0, bool refresh = true)
+        => _rpc.CallAsync<bool>("configure_cesium_georeference",
+               origin, ionToken, ionAssetId, groundIonAssetId, refresh);
 
-    /// Show/hide the Cesium photogrammetry overlay in the loaded world.
+    /// Show/hide the Cesium photogrammetry overlay in the loaded world (all tilesets).
     public Task<bool> SetCesiumVisibleAsync(bool visible)
         => _rpc.CallAsync<bool>("set_cesium_visible", visible);
 
-    /// Enable/disable physics collision on the Cesium photogrammetry tilesets.
+    /// Enable/disable physics collision on the Cesium photogrammetry tilesets (all).
     /// Collision is ON by default; this toggle never changes spawn defaults.
     public Task<bool> SetCesiumCollisionAsync(bool enabled)
         => _rpc.CallAsync<bool>("set_cesium_collision", enabled);
@@ -288,6 +309,16 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<bool> SetRoadRenderedAsync(bool rendered)
         => _rpc.CallAsync<bool>("set_road_rendered", rendered);
 
+    /// Per-layer visibility (08_Layer_Architecture). <paramref name="layer"/> is a Cesium
+    /// tileset tag ("photoreal"/"ground", "" = all tilesets) or "road" (the OpenDRIVE mesh).
+    public Task<bool> SetLayerVisibleAsync(string layer, bool visible)
+        => _rpc.CallAsync<bool>("set_layer_visible", layer, visible);
+
+    /// Per-layer physics collision (08_Layer_Architecture). Same layer naming as
+    /// <see cref="SetLayerVisibleAsync"/>; independent of visibility.
+    public Task<bool> SetLayerCollisionAsync(string layer, bool enabled)
+        => _rpc.CallAsync<bool>("set_layer_collision", layer, enabled);
+
     /// The Cesium georeference origin as GeoLocation(latitude, longitude, ellipsoidal height m).
     /// True elevation of a local Unreal point = this height + the point's local Z.
     public Task<GeoLocation> GetCesiumOriginAsync()
@@ -295,6 +326,7 @@ public sealed class CarlaClient : IAsyncDisposable
 
     public async Task<IReadOnlyList<GeoLocation>> SampleTerrainHeightsAsync(
         IReadOnlyList<GeoLocation> points,
+        string tilesetSelector = "",
         TimeSpan? timeout = null,
         TimeSpan? pollInterval = null,
         CancellationToken ct = default)
@@ -303,7 +335,10 @@ public sealed class CarlaClient : IAsyncDisposable
         if (points.Count == 0)
             return [];
 
-        await _rpc.CallAsync<bool>("request_terrain_heights", points).ConfigureAwait(false);
+        // tilesetSelector picks the layer to sample (e.g. "ground" = bare-earth World Terrain);
+        // empty = the first tileset found (back-compatible single-tileset behaviour).
+        await _rpc.CallAsync<bool>("request_terrain_heights", points, tilesetSelector ?? "")
+            .ConfigureAwait(false);
 
         var poll = pollInterval ?? TimeSpan.FromMilliseconds(50);
         var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(120));

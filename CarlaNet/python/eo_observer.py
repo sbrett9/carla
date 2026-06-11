@@ -16,8 +16,9 @@ Controls (hold RIGHT MOUSE to fly, like the Unreal editor):
     E / Q         up / down (world)
     Mouse wheel   change move speed
     Shift         move faster (x3)
-    C             toggle the Cesium photogrammetry overlay on/off
-    V             toggle Cesium physics collision on/off (default ON)
+    C             toggle the Google photoreal tileset RENDERING on/off
+    G             toggle the World Terrain (bare-earth ground) tileset RENDERING on/off
+    V             toggle World Terrain (ground) physics COLLISION on/off (default ON)
     R             toggle CARLA road-mesh RENDERING on/off (collision unaffected — cars still drive)
     Space         reset to the start pose
     Esc           quit
@@ -123,9 +124,12 @@ def main() -> int:
     pose = {"x": args.x, "y": args.y, "z": args.z / FT_PER_M, "pitch": -90.0, "yaw": 0.0}
     start = dict(pose)
     speed = args.speed
-    cesium_visible = True
-    cesium_collision = True
-    road_rendered = True
+    # Layer toggle states (08_Layer_Architecture). After test_digital_twin builds the world:
+    # photoreal visible, ground hidden + collidable, road visible + collidable.
+    photoreal_visible = True    # C : Google photoreal tileset rendering
+    ground_visible = False      # G : World Terrain (bare-earth) tileset rendering (hidden by default)
+    ground_collision = True     # V : World Terrain physics (the drivable ground)
+    road_rendered = True        # R : OpenDRIVE road-mesh rendering
 
     bp = world.get_blueprint_library().find("sensor.camera.rgb")
     bp.set_attribute("image_size_x", str(args.width))
@@ -305,17 +309,23 @@ def main() -> int:
             elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_SPACE:
                 pose.update(start)
             elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_c:
-                cesium_visible = not cesium_visible
+                photoreal_visible = not photoreal_visible
                 try:
-                    world.set_cesium_visible(cesium_visible)
+                    world.set_layer_visible("photoreal", photoreal_visible)
                 except Exception as e:
-                    print(f"set_cesium_visible failed: {e!r}", file=sys.stderr)
+                    print(f"set_layer_visible(photoreal) failed: {e!r}", file=sys.stderr)
+            elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_g:
+                ground_visible = not ground_visible
+                try:
+                    world.set_layer_visible("ground", ground_visible)
+                except Exception as e:
+                    print(f"set_layer_visible(ground) failed: {e!r}", file=sys.stderr)
             elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_v:
-                cesium_collision = not cesium_collision
+                ground_collision = not ground_collision
                 try:
-                    world.set_cesium_collision(cesium_collision)
+                    world.set_layer_collision("ground", ground_collision)
                 except Exception as e:
-                    print(f"set_cesium_collision failed: {e!r}", file=sys.stderr)
+                    print(f"set_layer_collision(ground) failed: {e!r}", file=sys.stderr)
             elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_r:
                 # Hide/show the CARLA road MESH rendering only (z-fights with the photoreal
                 # streets). Collision is untouched — vehicles still drive on the roads.
@@ -379,11 +389,12 @@ def main() -> int:
         hud = [
             f"elev {elev_ft:6.0f} ft   AGL {agl_str} ft   x {pose['x']:7.1f}  N {-pose['y']:7.1f}   "
             f"yaw {pose['yaw']:6.1f} pitch {pose['pitch']:6.1f}",
-            f"speed {speed:5.0f} m/s   cesium(C) {'ON' if cesium_visible else 'OFF'}   "
-            f"collision(V) {'ON' if cesium_collision else 'OFF'}   "
+            f"speed {speed:4.0f}   photoreal(C) {'ON' if photoreal_visible else 'OFF'}   "
+            f"ground(G) {'ON' if ground_visible else 'OFF'}   "
+            f"gColl(V) {'ON' if ground_collision else 'OFF'}   "
             f"road(R) {'ON' if road_rendered else 'OFF'}   "
             f"fps {clock.get_fps():4.0f}  frames {_state['frames']}",
-            "RMB look | Ctrl+LMB measure | WASD fly | E/Q up/down | wheel speed | Shift fast | C cesium | V collision | R road | Space reset | Esc quit",
+            "RMB look | Ctrl+LMB measure | WASD/EQ fly | wheel speed | Shift fast | C photoreal | G ground | V gColl | R road | Space reset | Esc quit",
         ]
         # Feature 1: black (semi-transparent) bar behind the HUD so yellow text stays readable
         # over bright photogrammetry.

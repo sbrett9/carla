@@ -43,7 +43,10 @@ ap.add_argument("--step", type=float, default=10.0, help="reference-line sample 
 ap.add_argument("--origin-height", type=float, default=None,
                 help="vertical datum (m); default = sample the origin")
 ap.add_argument("--ion-token", default=os.environ.get("CESIUM_ION_TOKEN", ""))
-ap.add_argument("--ion-asset-id", type=int, default=2275207)  # Google Photorealistic 3D Tiles
+ap.add_argument("--ion-asset-id", type=int, default=2275207)  # Google Photorealistic 3D Tiles (visual)
+ap.add_argument("--ground-asset-id", type=int, default=1,     # Cesium World Terrain (bare-earth, sampled)
+                help="ion asset for the hidden bare-earth GROUND layer sampled for road-Z "
+                     "(default 1 = Cesium World Terrain; 0 = sample the photoreal tileset, legacy)")
 ap.add_argument("--settle", type=float, default=10.0)
 ap.add_argument("--traffic", type=int, default=0, help="spawn N autopilot vehicles after build")
 ap.add_argument("--no-road-filter", action="store_true",
@@ -119,7 +122,9 @@ def main() -> int:
     else:
         print(f"  origin     : {args.lat:.7f}, {args.lon:.7f}  (explicit)")
     print(f"  step       : {args.step} m   road-filter: {'OFF' if args.no_road_filter else 'ON (drivable only)'}")
-    print(f"  ion asset  : {args.ion_asset_id}  token: {'set' if args.ion_token else 'MISSING'}")
+    print(f"  ion asset  : {args.ion_asset_id} (photoreal)  ground: {args.ground_asset_id} "
+          f"({'World Terrain bare-earth' if args.ground_asset_id > 0 else 'photoreal (legacy)'})  "
+          f"token: {'set' if args.ion_token else 'MISSING'}")
     print()
 
     if not args.ion_token:
@@ -140,6 +145,7 @@ def main() -> int:
     t0 = time.time()
     elevated = client.generate_world_from_osm_with_elevation(
         args.osm, args.ion_token, args.ion_asset_id,
+        ground_ion_asset_id=args.ground_asset_id,
         osm_options=make_options(),
         sample_step_meters=args.step,
         origin_height=args.origin_height,

@@ -55,6 +55,53 @@ namespace
 			UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge]   warning: %s"), *W);
 		}
 	}
+
+	// Find-by-tag-or-spawn a tileset for a named layer (08_Layer_Architecture), then
+	// (re)configure it: georeference, ion token/asset, hidden, collision, tag, refresh.
+	// The "photoreal" layer additionally ADOPTS a pre-placed untagged tileset (preserving
+	// the old "use the first existing tileset" behaviour); "ground" is always its own.
+	ACesium3DTileset* EnsureTileset(
+		UWorld* World, ACesiumGeoreference* Georef, const FString& Tag,
+		int64 AssetId, const FString& Token, bool bHidden, bool bCollision, bool bRefresh)
+	{
+		const FName TagName(*Tag);
+		ACesium3DTileset* Found = nullptr;
+		ACesium3DTileset* Untagged = nullptr;
+		for (TActorIterator<ACesium3DTileset> It(World); It; ++It)
+		{
+			ACesium3DTileset* T = *It;
+			if (!IsValid(T)) continue;
+			if (T->ActorHasTag(TagName)) { Found = T; break; }
+			if (!Untagged && T->Tags.Num() == 0) Untagged = T;
+		}
+
+		ACesium3DTileset* Tileset = Found;
+		if (!Tileset && Tag == TEXT("photoreal")) Tileset = Untagged; // adopt a pre-placed tileset
+		if (!Tileset)
+		{
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			Tileset = World->SpawnActor<ACesium3DTileset>(SpawnParams);
+			if (!Tileset)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] EnsureTileset('%s'): spawn failed."), *Tag);
+				return nullptr;
+			}
+		}
+
+		if (!Tileset->ActorHasTag(TagName)) Tileset->Tags.Add(TagName);
+		Tileset->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Georef));
+		if (!Token.IsEmpty()) Tileset->SetIonAccessToken(Token);
+		if (AssetId > 0)
+		{
+			Tileset->SetTilesetSource(ETilesetSource::FromCesiumIon);
+			Tileset->SetIonAssetID(AssetId);
+		}
+		Tileset->SetActorHiddenInGame(bHidden);
+		Tileset->SetCreatePhysicsMeshes(bCollision);
+		if (bRefresh) Tileset->RefreshTileset();
+		return Tileset;
+	}
 }
 
 bool UCesiumHeightSampler::RequestSample(
@@ -92,9 +139,16 @@ bool UCesiumHeightSampler::RequestSample(
 		{
 			continue;
 		}
-		if (!TilesetActorName.IsEmpty() && !Candidate->GetName().Contains(TilesetActorName))
+		if (!TilesetActorName.IsEmpty())
 		{
-			continue;
+			// Match the selector against the actor NAME or its TAGS (so "ground" picks the
+			// bare-earth layer tagged by ConfigureCesiumForOrigin).
+			const bool bNameMatch = Candidate->GetName().Contains(TilesetActorName);
+			const bool bTagMatch  = Candidate->ActorHasTag(FName(*TilesetActorName));
+			if (!bNameMatch && !bTagMatch)
+			{
+				continue;
+			}
 		}
 		Tileset = Candidate;
 		break;
@@ -166,6 +220,7 @@ bool UCesiumHeightSampler::ConfigureCesiumForOrigin(
 	double OriginHeight,
 	const FString& IonAccessToken,
 	int64 IonAssetId,
+	int64 GroundIonAssetId,
 	bool bRefreshTileset)
 {
 	UWorld* World = GEngine
@@ -193,46 +248,25 @@ bool UCesiumHeightSampler::ConfigureCesiumForOrigin(
 	Georeference->SetOriginLongitudeLatitudeHeight(
 		FVector(OriginLongitude, OriginLatitude, OriginHeight));
 
-	TArray<ACesium3DTileset*> Tilesets;
+	// Ensure the layered tilesets (08_Layer_Architecture): a visual "photoreal" tileset and,
+	// when a ground asset is given, a HIDDEN collidable bare-earth "ground" tileset (the
+	// height-sample source). EnsureTileset find-by-tag-or-spawns and (re)configures each so
+	// this is idempotent across the world reload in generate_opendrive_world.
+	int32 NumTilesets = 0;
+	if (IonAssetId > 0)
+	{
+		if (EnsureTileset(World, Georeference, TEXT("photoreal"), IonAssetId, IonAccessToken,
+				/*bHidden*/ false, /*bCollision*/ false, bRefreshTileset)) ++NumTilesets;
+	}
+	if (GroundIonAssetId > 0)
+	{
+		if (EnsureTileset(World, Georeference, TEXT("ground"), GroundIonAssetId, IonAccessToken,
+				/*bHidden*/ true, /*bCollision*/ true, bRefreshTileset)) ++NumTilesets;
+	}
+	// Align any other pre-existing tilesets to the same georeference.
 	for (TActorIterator<ACesium3DTileset> It(World); It; ++It)
 	{
-		if (IsValid(*It)) Tilesets.Add(*It);
-	}
-
-	// Spawn a tileset if the world has none and we were given an Ion asset to point at.
-	bool bSpawnedTileset = false;
-	if (Tilesets.Num() == 0 && IonAssetId > 0)
-	{
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		ACesium3DTileset* NewTileset = World->SpawnActor<ACesium3DTileset>(SpawnParams);
-		if (NewTileset)
-		{
-			Tilesets.Add(NewTileset);
-			bSpawnedTileset = true;
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] ConfigureCesiumForOrigin: failed to spawn ACesium3DTileset."));
-		}
-	}
-
-	for (ACesium3DTileset* Tileset : Tilesets)
-	{
-		Tileset->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Georeference));
-		if (!IonAccessToken.IsEmpty())
-		{
-			Tileset->SetIonAccessToken(IonAccessToken);
-		}
-		if (IonAssetId > 0)
-		{
-			Tileset->SetTilesetSource(ETilesetSource::FromCesiumIon);
-			Tileset->SetIonAssetID(IonAssetId);
-		}
-		if (bRefreshTileset)
-		{
-			Tileset->RefreshTileset();
-		}
+		if (IsValid(*It)) (*It)->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Georeference));
 	}
 
 	// The generated OpenDriveMap has no weather/sun actor ("Missing weather class"), so the
@@ -262,11 +296,62 @@ bool UCesiumHeightSampler::ConfigureCesiumForOrigin(
 	}
 
 	UE_LOG(LogTemp, Display,
-		TEXT("[CesiumCarlaBridge] Configured georeference (lat=%.7f lon=%.7f h=%.3f) + %d tileset(s)%s%s."),
-		OriginLatitude, OriginLongitude, OriginHeight, Tilesets.Num(),
-		bSpawnedTileset ? TEXT(" (spawned tileset)") : TEXT(""),
+		TEXT("[CesiumCarlaBridge] Configured georeference (lat=%.7f lon=%.7f h=%.3f) + %d layer tileset(s) (photoreal asset=%lld, ground asset=%lld)%s."),
+		OriginLatitude, OriginLongitude, OriginHeight, NumTilesets,
+		static_cast<long long>(IonAssetId), static_cast<long long>(GroundIonAssetId),
 		bSpawnedSunSky ? TEXT(" (spawned sun)") : TEXT(""));
 	return true;
+}
+
+int32 UCesiumHeightSampler::SetLayerVisible(UObject* WorldContextObject, const FString& LayerTag, bool bVisible)
+{
+	UWorld* World = GEngine
+		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
+		: nullptr;
+	if (!World)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] SetLayerVisible: no world."));
+		return -1;
+	}
+	const FName TagName(*LayerTag);
+	int32 Count = 0;
+	for (TActorIterator<ACesium3DTileset> It(World); It; ++It)
+	{
+		ACesium3DTileset* Tileset = *It;
+		if (!IsValid(Tileset)) continue;
+		if (!LayerTag.IsEmpty() && !Tileset->ActorHasTag(TagName)) continue;
+		Tileset->SetActorHiddenInGame(!bVisible);
+		++Count;
+	}
+	UE_LOG(LogTemp, Display, TEXT("[CesiumCarlaBridge] SetLayerVisible('%s', %d): %d tileset(s)"),
+		*LayerTag, bVisible ? 1 : 0, Count);
+	return Count;
+}
+
+int32 UCesiumHeightSampler::SetLayerCollision(UObject* WorldContextObject, const FString& LayerTag, bool bEnabled)
+{
+	UWorld* World = GEngine
+		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
+		: nullptr;
+	if (!World)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] SetLayerCollision: no world."));
+		return -1;
+	}
+	const FName TagName(*LayerTag);
+	int32 Count = 0;
+	for (TActorIterator<ACesium3DTileset> It(World); It; ++It)
+	{
+		ACesium3DTileset* Tileset = *It;
+		if (!IsValid(Tileset)) continue;
+		if (!LayerTag.IsEmpty() && !Tileset->ActorHasTag(TagName)) continue;
+		Tileset->SetCreatePhysicsMeshes(bEnabled);
+		Tileset->RefreshTileset();
+		++Count;
+	}
+	UE_LOG(LogTemp, Display, TEXT("[CesiumCarlaBridge] SetLayerCollision('%s', %d): %d tileset(s)"),
+		*LayerTag, bEnabled ? 1 : 0, Count);
+	return Count;
 }
 
 int32 UCesiumHeightSampler::SetCesiumTilesetsVisible(UObject* WorldContextObject, bool bVisible)
