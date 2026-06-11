@@ -355,6 +355,71 @@ changes.
 
 ---
 
+## 10. Overpasses / grade separation — OSM topology + a bridge-offset pass
+
+*Added 2026-06-11. Triggered by the Bellevue Rd / I-580 overpass test (`Import/Bellvue_Overpass.osm`,
+center 39.247132, -119.813761) and an Overpass-turbo `way["bridge"]` / `way["highway"]` pull around it.*
+
+### The defect
+Sampling a surface and writing **one Z per road-centerline point** cannot represent two roads at the
+same plan position and different height. At the Bellevue Rd / I-580 crossing the deck and the freeway
+both drape to ~the same surface Z and **merge into a flat X** — cars route/drive through a phantom
+at-grade crossing.
+
+### Correction: OpenDRIVE already supports overpasses
+`<elevationProfile>` is **per-road, parameterized by `s`** (distance along that road) — **not** a shared
+(x,y) heightfield. Two roads crossing at the same plan position can carry independent `z(s)`. So the
+format is *not* the limit; **our sampling method is** (surface → one Z per planar point). A per-way
+elevation source that knows which ways are decks resolves it within stock OpenDRIVE.
+
+### What OSM / Overpass actually supplies (verified on the Bellevue pull)
+No `ele` on any road node — but the bridge is fully described *topologically*:
+
+| Need | OSM datum | Bellevue value |
+|---|---|---|
+| **Which** segment is a deck | `bridge=yes` | way `71498338` "Bellevue Road" |
+| **Direction** of offset | `layer=N` vs implicit `0` | `layer=1` → deck **over** freeway |
+| **Where** (span to lift) | bridge way's node list | nodes `4111142224 ↔ 850445020` (~92 m, E–W at lat 39.24714) |
+| **Transitions** | approach ways sharing the deck end-nodes | ways `71498350` (E end `850445020`), `409213510` (W end `4111142224`) |
+| **Road under** | motorway ways | I-580/US-395 "Carson City Freeway"; crosses at lon ≈ −119.8136, **between** the deck endpoints |
+
+**Two simplifications this confirms:**
+1. **Topology is already correct.** The bridge way and the freeway ways share **no node** → OSM models
+   them as separate (no junction). Nothing to fix in connectivity/routing; the defect is *purely* the
+   elevation profile.
+2. **Which / where / direction are fully specified by tags.** Only the **metric clearance** is missing.
+
+### Overpass-turbo's role — verdict
+- **On its own: cannot solve it.** It returns the *same* `bridge`/`layer` tags already in a plain `.osm`
+  export, with **no road `ele`**. It adds no vertical data.
+- **In tandem with the bridge-offset pass: yes — it is the enabling metadata harvester / validator.**
+  It cleanly extracts bridge structures + interchange topology + exact span node IDs around a point —
+  exactly what a general "lift decks" pass needs. For production you read the same tags straight from
+  the `.osm` during conversion; Overpass-turbo is the **inspection/validation** tool (and a way to
+  enrich a too-sparse export).
+
+### Proposed fix (records the bridge-offset idea)
+A bridge-aware elevation pass, at OSM level (pre-netconvert) or as a post-inject correction:
+1. For every `bridge=yes` way, offset its elevation profile by `layer × clearance`. Default
+   **clearance ≈ 5 m** (AASHTO min vertical clearance over an interstate ≈ 16′6″ ≈ 5.0 m); `layer`
+   generalizes stacked structures.
+2. **Ramp the approaches** on the ways sharing the deck's end-nodes so the deck is a smooth hump, not a
+   step.
+3. *Optional refinement* — **differential Cesium sampling**: densify the deck span and sample the Google
+   mesh (which *does* contain the physical deck) to recover the *real* clearance instead of the
+   constant. Noisier (deck thickness / mesh see-through) → gate behind a sanity range.
+4. Generalizes to **every layered crossing in OSM worldwide** — fits procedural-city generation, not a
+   Bellevue one-off.
+
+### Integration caveat (the main implementation cost)
+netconvert's OSM→`.xodr` almost certainly does **not** emit a "bridge" attribute, and `ElevationInjector`
+currently sees only the `.xodr`. To know which `.xodr` road is a deck, either **(a)** do the lift as
+**OSM preprocessing before netconvert** (raise deck nodes / split + tag), or **(b)** map `.xodr` road →
+OSM way id (netconvert can emit original IDs) so the injector can cross-reference the OSM CarlaNet
+already holds. Recorded, not built.
+
+---
+
 ## Sources
 - SRTM .hgt format & v3 void-filled: [OSM Wiki – SRTM](https://wiki.openstreetmap.org/wiki/SRTM) ·
   [USGS EROS SRTM 1 Arc-Second](https://www.usgs.gov/centers/eros/science/usgs-eros-archive-digital-elevation-shuttle-radar-topography-mission-srtm-1) ·
@@ -373,3 +438,7 @@ changes.
 - .NET GeoTIFF / DEM readers: [DEM.Net](https://github.com/dem-net/DEM.Net) ·
   [GeoTiffCOG](https://github.com/fabric-io-rodrigues/GeoTiffCOG) ·
   [GeoTIFF in .NET without GDAL](http://build-failed.blogspot.com/2014/12/processing-geotiff-files-in-net-without.html)
+- Overpasses / OSM bridge tagging (§10): [OSM Wiki – `bridge`](https://wiki.openstreetmap.org/wiki/Key:bridge) ·
+  [OSM Wiki – `layer`](https://wiki.openstreetmap.org/wiki/Key:layer) ·
+  [Overpass turbo](https://overpass-turbo.eu/) ·
+  AASHTO min vertical clearance over interstates ≈ 16 ft (16′6″ design) — [FHWA Bridges & Structures](https://www.fhwa.dot.gov/bridge/)
