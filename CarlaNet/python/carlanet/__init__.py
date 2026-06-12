@@ -1348,6 +1348,49 @@ class World:
             CancellationToken(False)))
         return [(r.Latitude, r.Longitude, r.Altitude) for r in results]
 
+    def get_vehicle_telemetry(self, origin=None):
+        """Pull per-vehicle TRUTH telemetry for every vehicle in the world as plain dicts (the
+        09_Telemetry_CoT_Contract field set). Cheap — positions/velocities are world-observer cache
+        reads; one get_actors() RPC per call refreshes the vehicle set. `origin` is an optional
+        (lat, lon, height_m) WGS84 tuple for the local->geodetic transform; if omitted it is fetched
+        once via get_cesium_origin() (pass it in from a 5 Hz loop to avoid the per-tick RPC).
+
+        Each dict: id, type_id, base_type, special_type, color, role_name, lat, lon, hae, speed_mps,
+        course_deg, vx, vy, vz, length_m, width_m, height_m. Heights are ELLIPSOIDAL WGS84 (HAE)."""
+        import math as _m
+        from CarlaNet.Types.Geom import Geodesy, GeoLocation
+        if origin is None:
+            origin = self.get_cesium_origin()                      # (lat, lon, height_m)
+        cs_origin = GeoLocation(float(origin[0]), float(origin[1]), float(origin[2]))
+        out = []
+        for v in self.get_actors().filter("vehicle.*"):
+            tf = v.get_transform()
+            vel = v.get_velocity()
+            loc = tf.location
+            geo = Geodesy.CarlaLocalToGeodetic(cs_origin, float(loc.x), float(loc.y), float(loc.z))
+            vx, vy, vz = float(vel.x), float(vel.y), float(vel.z)
+            speed = _m.hypot(vx, vy)
+            # Course over ground, degrees true north (CARLA +X=East, -Y=North); yaw fallback ~stopped.
+            if speed >= 0.5:
+                course = _m.degrees(_m.atan2(vx, -vy)) % 360.0
+            else:
+                yaw = _m.radians(tf.rotation.yaw)
+                course = _m.degrees(_m.atan2(_m.cos(yaw), -_m.sin(yaw))) % 360.0
+            attrs = v.attributes
+            ext = v.bounding_box.extent
+            base = attrs.get("base_type", "") or (
+                "motorcycle" if attrs.get("number_of_wheels", "4") == "2" else "car")
+            out.append({
+                "id": v.id, "type_id": v.type_id,
+                "base_type": base, "special_type": attrs.get("special_type", ""),
+                "color": attrs.get("color", ""), "role_name": attrs.get("role_name", ""),
+                "lat": geo.Latitude, "lon": geo.Longitude, "hae": geo.Altitude,
+                "speed_mps": speed, "course_deg": course,
+                "vx": vx, "vy": vy, "vz": vz,
+                "length_m": 2.0 * ext.x, "width_m": 2.0 * ext.y, "height_m": 2.0 * ext.z,
+            })
+        return out
+
     def get_actors(self, actor_ids=None):
         from System import UInt32
         if actor_ids is None:

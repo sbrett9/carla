@@ -233,6 +233,20 @@ class World(object):
         self._actor_generation = args.generation
         self._gamma = args.gamma
         self.restart()
+        # Digital-twin (Cesium) support: cache the spectator and hide the OpenDRIVE road mesh.
+        # tick() drives the spectator to the ego pose each frame so the photogrammetry STREAMS
+        # (an attached camera sensor's frustum does NOT pull Cesium tiles; the spectator does),
+        # and the road mesh is hidden because it z-fights the photoreal streets (collision intact —
+        # the car still drives on the roads). Both no-op on a plain (non-Cesium) town.
+        try:
+            self.spectator = self.world.get_spectator()
+        except Exception:
+            self.spectator = None
+        try:
+            self.world.set_road_rendered(False)
+        except Exception:
+            pass
+        self._spec_n = 0
         self.world.on_tick(hud.on_world_tick)
         self.recording_enabled = False
         self.recording_start = 0
@@ -358,6 +372,15 @@ class World(object):
 
     def tick(self, clock):
         self.hud.tick(self, clock)
+        # Stream Cesium photogrammetry around the ego by moving the spectator to the car every ~3rd
+        # frame (~20 Hz at 60 fps); the attached camera then captures the streamed tiles. See __init__.
+        self._spec_n = getattr(self, "_spec_n", 0) + 1
+        if (getattr(self, "spectator", None) is not None and self.player is not None
+                and self._spec_n % 3 == 0):
+            try:
+                self.spectator.set_transform(self.player.get_transform())
+            except Exception:
+                pass
 
     def render(self, display):
         self.camera_manager.render(display)
