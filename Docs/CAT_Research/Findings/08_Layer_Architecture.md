@@ -111,15 +111,13 @@ Keeps today's behavior, brings photoreal back as visual-only, adds the bare-eart
 | 3 | `road` | OpenDRIVE mesh | ON | **ON** | — |
 | 4 | `buildings` *(future)* | OSM Buildings `96188` | ON | optional | — |
 
-**Default collision policy: `ground + road` collidable** (decision 2026-06-11). The bare-earth `ground`
-and the OpenDRIVE `road` are ~coincident now (road follows terrain Z), so both collidable is a
-belt-and-suspenders drivable surface; `photoreal` is visual-only. **All flags remain runtime-toggleable**
-via the per-layer toggles, so any combination (ground-only, road-only, photoreal-collision-on for
-building obstacles, …) is an A/B at runtime, not a rebuild.
-
-This also **moves collision off the photoreal layer onto the dedicated `ground` layer** — which is what
-gives the clean "cars on real ground" physics, superseding the earlier "photogrammetry collision ON by
-default" stance (that was before a bare-earth layer existed).
+**Default collision policy: `ground + road` collidable, with `height_align = none`** (FINAL, 2026-06-12).
+With no road-Z offset (`none`), the bare-earth `ground` and the OpenDRIVE `road` are **coincident**, so
+both collidable gives off-road safety (vehicles don't fall off the world) **with no float** (the brief
+`ground + road` → `road`-only detour was only needed when an offset *separated* the two; see §10). The
+whole driveable surface sits ~sub-meter above the photoreal street — **invisible from nadir** (the EO
+deliverable). `photoreal` stays visual-only. `height_align` (area/origin) and per-layer collision remain
+**flags/`V`-toggles** for experiments, but the default is `none` + `ground + road`.
 
 ---
 
@@ -184,12 +182,32 @@ RPC: `configure_cesium_georeference(+ground_ion_asset_id)`, `request_terrain_hei
 sampling reveals the ground layer during the sample then hides it, so hidden-tileset streaming is never on
 the critical path. **Heights sample correctly (no zeros); roads markedly smoother; road ≈ ground, no z-fighting.**
 
-### Known follow-ups (not blocking — a later "height reconciliation" pass)
-- **Vehicle/road Z sits slightly ABOVE the photoreal surface up close.** Gap between the bare-earth ground
-  (road-Z source) and the Google photoreal *surface*. Negligible from nadir (≳800 ft); visible obliquely up close.
-- **Photoreal vs bare-earth visual interleave up close.** Where both render near the street, one surface's
-  polygons win over the other (not z-fighting since road≈ground — the two distinct surfaces just interleave).
-  Visual-only.
+### Height reconciliation — INVESTIGATED & CLOSED 2026-06-12 (default = `none`)
+The road/car-Z (bare-earth DTM) doesn't match the visible photoreal surface (DSM). Two findings settled it:
+
+1. **The gap is a *spatially-varying* DTM-vs-DSM divergence, not a constant offset.** Cesium World Terrain
+   is a coarse (~10 m) smoothed DTM; Google photoreal is a high-res DSM. On SF's **hills** the two diverge
+   by *several metres locally* even though the map-wide median is only **−0.75 m** (`area`; origin −0.82 m;
+   `min −1.22, max 21.82` = a building spike the median ignored). A **single constant offset cannot fix a
+   spatially-varying divergence** — confirmed: `area`/`origin`/`none` all looked ~the same on the slope.
+2. **The dramatic "building floating above its street" was Google's tileset, not us.** A *pure-Cesium*
+   editor view (no CARLA) at the same spot shows the identical melted/floating chunks; and a CARLA
+   photoreal-only view (`R` off, `G` off) is pixel-identical to it. So our pipeline renders the photoreal
+   faithfully — the melt is Google's data quality, amplified by grazing camera angles. Nothing to fix on
+   our side.
+
+**Decision — default `height_align = none` + `ground + road` collision.** No offset → road = ground
+coincide → vehicles ride them with **no float** and **ground collision for off-road safety**; the whole
+driveable surface sits ~sub-meter above the photoreal — **invisible from nadir** (the EO deliverable), and
+chasing street-level perfection isn't worth it given Google's up-close melt anyway. The `area`/`origin`
+offsets and `ground_collision=false` remain **flags** (the offset shifts road heights so the car sits on
+the photoreal *and* telemetry HAE tracks it — useful if a future map needs it). **Path A** (texture the
+DTM + OSM Buildings to make one surface) is **shelved** — it would dodge the divergence but Google's melt
+makes it less compelling.
+
+### Remaining minor follow-ups (not blocking)
+- **Street-level DTM-vs-DSM divergence on hills** is accepted (invisible from nadir). Revisit only if an
+  up-close/oblique product needs it → then Path A or photoreal-sampled road-Z (with spike rejection).
 - **Traffic occasionally leaves the road on a U-turn.** Possibly TrafficManager pathing
   (`generate_traffic_carlanet`), unconfirmed; unrelated to the layer work.
 

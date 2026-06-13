@@ -1666,6 +1666,8 @@ class Client:
                                                sample_step_meters=10.0,
                                                origin_height=None,
                                                outlier_threshold=4.0,
+                                               height_align="none",
+                                               ground_collision=True,
                                                cesium_settle_seconds=5.0):
         """Full headless digital-twin build (no editor): OSM -> elevated, Cesium-aligned
         OpenDRIVE world. Converts OSM->.xodr, samples Cesium terrain heights at the road
@@ -1676,8 +1678,14 @@ class Client:
         Requires ion_token + ion_asset_id (the photoreal tileset, spawned at runtime).
         ground_ion_asset_id (>0, default 1 = Cesium World Terrain) is the hidden bare-earth
         layer sampled for road-Z; pass 0 to sample the photoreal tileset instead (legacy).
-        osm_options should pin the origin (OriginLatitude/OriginLongitude). If origin_height
-        is None, the height sampled at the origin is used as the vertical datum.
+        height_align reconciles bare-earth road-Z to the photoreal by a single constant offset (no
+        per-point heuristics): "none" (default) = no offset, so road = ground = the bare-earth surface
+        (they coincide, vehicles never float, the whole driveable surface sits ~sub-meter above the
+        photoreal street — invisible from nadir); "area" = median photoreal-ground gap over the map;
+        "origin" = gap at the origin. (A constant offset can't fix the spatially-varying DTM-vs-DSM
+        divergence on hills, so "none" is the default.) ground_collision (default True) keeps the
+        bare-earth ground collidable for off-road safety; coincident with the road under "none" so no
+        float. osm_options should pin the origin; if origin_height is None the origin sample is the datum.
         """
         from System import TimeSpan
         from System.Threading import CancellationToken
@@ -1687,7 +1695,8 @@ class Client:
         xodr = _sync(self._inner.GenerateWorldFromOsmWithElevationAsync(
             osm_path, str(ion_token), int(ion_asset_id), int(ground_ion_asset_id),
             osm_options, params, float(sample_step_meters), oh,
-            float(outlier_threshold), settle, CancellationToken(False)))
+            float(outlier_threshold), str(height_align), bool(ground_collision), settle,
+            CancellationToken(False)))
         return str(xodr)
 
     def get_trafficmanager(self, port: int = 8000):

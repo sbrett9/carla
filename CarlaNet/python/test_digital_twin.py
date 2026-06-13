@@ -47,6 +47,15 @@ ap.add_argument("--ion-asset-id", type=int, default=2275207)  # Google Photoreal
 ap.add_argument("--ground-asset-id", type=int, default=1,     # Cesium World Terrain (bare-earth, sampled)
                 help="ion asset for the hidden bare-earth GROUND layer sampled for road-Z "
                      "(default 1 = Cesium World Terrain; 0 = sample the photoreal tileset, legacy)")
+ap.add_argument("--height-align", choices=["area", "origin", "none"], default="none",
+                help="reconcile bare-earth road-Z to the photoreal surface by a single constant offset: "
+                     "'none' = no correction (default; road=ground coincide, ~sub-meter above photoreal, "
+                     "invisible from nadir); 'area' = median gap over the map; 'origin' = gap at the origin. "
+                     "(A constant offset can't fix the spatially-varying DTM-vs-DSM divergence on hills.)")
+ap.add_argument("--no-ground-collision", dest="ground_collision", action="store_false", default=True,
+                help="disable bare-earth ground collision (default ON = vehicles ride the road/ground "
+                     "for off-road safety; only disable if you apply a height-align offset and don't want "
+                     "vehicles riding the un-offset terrain)")
 ap.add_argument("--settle", type=float, default=10.0)
 ap.add_argument("--traffic", type=int, default=0, help="spawn N autopilot vehicles after build")
 ap.add_argument("--no-road-filter", action="store_true",
@@ -121,7 +130,8 @@ def main() -> int:
         print(f"  origin     : {args.lat:.7f}, {args.lon:.7f}  (derived from OSM bounds center)")
     else:
         print(f"  origin     : {args.lat:.7f}, {args.lon:.7f}  (explicit)")
-    print(f"  step       : {args.step} m   road-filter: {'OFF' if args.no_road_filter else 'ON (drivable only)'}")
+    print(f"  step       : {args.step} m   road-filter: {'OFF' if args.no_road_filter else 'ON (drivable only)'}"
+          f"   height-align: {args.height_align}")
     print(f"  ion asset  : {args.ion_asset_id} (photoreal)  ground: {args.ground_asset_id} "
           f"({'World Terrain bare-earth' if args.ground_asset_id > 0 else 'photoreal (legacy)'})  "
           f"token: {'set' if args.ion_token else 'MISSING'}")
@@ -149,6 +159,8 @@ def main() -> int:
         osm_options=make_options(),
         sample_step_meters=args.step,
         origin_height=args.origin_height,
+        height_align=args.height_align,
+        ground_collision=args.ground_collision,
         cesium_settle_seconds=args.settle)
     dt = time.time() - t0
 

@@ -70,6 +70,32 @@ def _to_surface(image):
     return pygame.surfarray.make_surface(arr.swapaxes(0, 1))
 
 
+def _draw_compass(display, font, cx, cy, r, bearing_deg):
+    """Draw a north-up compass rose at (cx, cy). bearing_deg = the camera's heading (0=N, 90=E,
+    clockwise). The N marker rotates to where true north is relative to the current view."""
+    b = math.radians(bearing_deg)
+    bg = pygame.Surface((2 * r + 4, 2 * r + 4), pygame.SRCALPHA)
+    pygame.draw.circle(bg, (0, 0, 0, 150), (r + 2, r + 2), r)
+    pygame.draw.circle(bg, (0, 255, 255), (r + 2, r + 2), r, 1)
+    display.blit(bg, (cx - r - 2, cy - r - 2))
+    # cardinal letters at screen-angle (cardinal_bearing - camera_bearing); 0 => straight up
+    for label, cb, col in (("N", 0, (255, 80, 80)), ("E", 90, (220, 220, 220)),
+                           ("S", 180, (220, 220, 220)), ("W", 270, (220, 220, 220))):
+        a = math.radians(cb - bearing_deg)
+        lx = cx + math.sin(a) * (r - 10)
+        ly = cy - math.cos(a) * (r - 10)
+        s = font.render(label, True, col)
+        display.blit(s, (lx - s.get_width() / 2, ly - s.get_height() / 2))
+    # north needle (red) + south tail (grey)
+    pygame.draw.line(display, (255, 80, 80), (cx, cy),
+                     (cx - math.sin(b) * (r - 4), cy - math.cos(b) * (r - 4)), 2)
+    pygame.draw.line(display, (160, 160, 160), (cx, cy),
+                     (cx + math.sin(b) * (r - 4), cy + math.cos(b) * (r - 4)), 2)
+    pygame.draw.circle(display, (0, 255, 255), (cx, cy), 2)
+    hdg = font.render(f"{bearing_deg:03.0f}", True, (255, 255, 0))
+    display.blit(hdg, (cx - hdg.get_width() / 2, cy + r + 2))
+
+
 def _draw_flyout(display, font, pick, win_w, win_h):
     """Draw the persistent pick marker + a clamped-on-screen lat/lon/elev panel with a close
     (x) button. The button's rect is published to _state['pick_close'] so a plain LMB inside
@@ -128,7 +154,8 @@ def main() -> int:
     # photoreal visible, ground hidden + collidable, road visible + collidable.
     photoreal_visible = True    # C : Google photoreal tileset rendering
     ground_visible = False      # G : World Terrain (bare-earth) tileset rendering (hidden by default)
-    ground_collision = True     # V : World Terrain physics (the drivable ground)
+    ground_collision = True     # V : World Terrain physics — ON by default (road=ground coincide under
+                                #     height-align 'none', so vehicles never float; gives off-road collision)
     road_rendered = True        # R : OpenDRIVE road-mesh rendering
 
     bp = world.get_blueprint_library().find("sensor.camera.rgb")
@@ -405,6 +432,12 @@ def main() -> int:
         display.blit(bar, (0, 0))
         for i, line in enumerate(hud):
             display.blit(font.render(line, True, (255, 255, 0)), (8, 8 + i * 18))
+
+        # Compass rose (top-right, below the HUD bar). Camera heading: 0=N, 90=E (CARLA +X=East,
+        # -Y=North) — same convention as the CoT course-over-ground, so it doubles as a heading check.
+        yaw_r = math.radians(pose["yaw"])
+        bearing = math.degrees(math.atan2(math.cos(yaw_r), -math.sin(yaw_r))) % 360.0
+        _draw_compass(display, font, args.width - 52, bar_h + 48, 40, bearing)
 
         # Feature 2: persistent pick flyout (lat/lon/elev), plus a transient note for misses.
         pick = _state.get("pick")

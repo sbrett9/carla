@@ -192,6 +192,8 @@ public sealed class CarlaClient : IAsyncDisposable
         double sampleStepMeters = 10.0,
         double? originHeightOverride = null,
         double outlierThresholdMeters = 4.0,
+        string heightAlign = "none",
+        bool groundCollision = true,
         TimeSpan? cesiumSettle = null,
         CancellationToken ct = default)
     {
@@ -236,16 +238,66 @@ public sealed class CarlaClient : IAsyncDisposable
             points.Add(new GeoLocation(g.Latitude, g.Longitude, 0.0));
 
         var heights = await SampleTerrainHeightsAsync(points, sampleSelector, ct: ct).ConfigureAwait(false);
-        if (sampleGround)
-            await SetLayerVisibleAsync("ground", false).ConfigureAwait(false);
         if (heights.Count != points.Count)
             throw new InvalidOperationException(
                 $"terrain-height result count {heights.Count} != requested {points.Count}");
 
+        // 4b) Height reconciliation (09_Layer_Architecture follow-up). The bare-earth GROUND layer
+        //     (DTM) sits at a different height than the visible PHOTOREAL surface (DSM), so road-Z
+        //     taken from the DTM is offset from where the photogrammetry renders. Sample the photoreal
+        //     layer at the same points and shift ALL road heights by ONE constant offset so they sit on
+        //     the photoreal street. No per-point layer selection, no smoothing — a single scalar:
+        //       "origin" = the gap at the origin point;
+        //       "area"   = the median gap over the map's road points (calibrated over the whole tile);
+        //       "none"   = no correction.
+        //     Offset is computed from the data — no user correction factor.
+        double heightOffset = 0.0;
+        bool wantAlign = ionAssetId > 0 && (heightAlign == "origin" || heightAlign == "area");
+        if (wantAlign)
+        {
+            var photo = await SampleTerrainHeightsAsync(points, "photoreal", ct: ct).ConfigureAwait(false);
+            if (photo.Count == points.Count)
+            {
+                if (heightAlign == "origin")
+                {
+                    double pg = photo[0].Altitude, wt = heights[0].Altitude;
+                    if (double.IsFinite(pg) && double.IsFinite(wt)) heightOffset = pg - wt;
+                    Console.WriteLine($"[height-align origin] photoreal-ground gap at origin = {heightOffset:F2} m");
+                }
+                else // "area": median of (photoreal - ground) over the road points
+                {
+                    var diffs = new List<double>(samples.Count);
+                    for (int i = 1; i < points.Count; i++)
+                    {
+                        double pg = photo[i].Altitude, wt = heights[i].Altitude;
+                        if (double.IsFinite(pg) && double.IsFinite(wt)) diffs.Add(pg - wt);
+                    }
+                    if (diffs.Count > 0)
+                    {
+                        diffs.Sort();
+                        heightOffset = diffs[diffs.Count / 2]; // median
+                        Console.WriteLine($"[height-align area] photoreal-ground gap over {diffs.Count} road pts: "
+                            + $"median {heightOffset:F2} m  (min {diffs[0]:F2}, max {diffs[^1]:F2})");
+                    }
+                }
+            }
+            else
+            {
+                Console.WriteLine($"[height-align] photoreal sample count {photo.Count} != {points.Count}; no offset applied.");
+            }
+        }
+        Console.WriteLine($"[height-align {heightAlign}] road-Z offset applied = {heightOffset:F2} m");
+
+        if (sampleGround)
+            await SetLayerVisibleAsync("ground", false).ConfigureAwait(false);
+
+        // originHeight stays the GROUND (DTM) origin sample — the georeference datum is unchanged;
+        // only the road heights are shifted, so the car sits on the photoreal street and the reported
+        // telemetry HAE = originHeight + localZ tracks the photoreal surface.
         double originHeight = originHeightOverride ?? heights[0].Altitude;
         var roadEllipsoidal = new double[samples.Count];
         for (int i = 0; i < samples.Count; i++)
-            roadEllipsoidal[i] = heights[i + 1].Altitude;
+            roadEllipsoidal[i] = heights[i + 1].Altitude + heightOffset;
 
         // 5) Inject the sampled heights into the .xodr <elevationProfile>.
         var elevatedXodr = CarlaNet.Map.OpenDrive.ElevationInjector.InjectElevation(
@@ -264,6 +316,13 @@ public sealed class CarlaClient : IAsyncDisposable
         var alignedOrigin = new GeoLocation(origin.Latitude, origin.Longitude, originHeight);
         await ConfigureCesiumGeoreferenceAsync(alignedOrigin, ionToken, ionAssetId, groundIonAssetId, refresh: true)
             .ConfigureAwait(false);
+
+        // The bare-earth "ground" layer is the road-Z sample source; with a height-align offset the
+        // road mesh no longer coincides with the ground, so collidable ground would make vehicles ride
+        // the (higher) terrain and float above the lowered road. Default ground collision OFF so
+        // vehicles ride the photoreal-aligned ROAD mesh (eo_observer's V key can re-enable it).
+        if (groundIonAssetId > 0)
+            await SetLayerCollisionAsync("ground", groundCollision).ConfigureAwait(false);
 
         return elevatedXodr;
     }
