@@ -49,6 +49,17 @@
 .PARAMETER SkipPrerequisites
     Skip the InstallPrerequisites step.    (.bat equivalent: --skip-prerequisites / -p)
 
+.PARAMETER SkipCesium
+    Skip building Cesium for Unreal from source. By default the script clones cesium-unreal
+    at a pinned tag/commit and CMake-builds cesium-native into the plugin's Source\ThirdParty
+    (a long, multi-GB first run). Pass -SkipCesium to bypass the whole step -- e.g. when the
+    plugin + cesium-native are already staged, or you want to use the engine's Marketplace copy.
+
+.PARAMETER CleanCesium
+    Force a cesium-native rebuild: remove the plugin's extern\build and Source\ThirdParty
+    before configuring, so vcpkg + cesium-native are recompiled from scratch. The cesium-unreal
+    source checkout (and its submodules) are kept.
+
 .PARAMETER Launch
     Launch the CARLA Unreal Editor after a successful build.  (.bat: --launch / -l)
 
@@ -95,9 +106,12 @@ param(
     [switch]$Clean,
     [switch]$CleanAll,
     [switch]$CleanCarla,
+    [switch]$CleanCesium,
 
     [Alias('p')]
     [switch]$SkipPrerequisites,
+
+    [switch]$SkipCesium,
 
     [Alias('l')]
     [switch]$Launch,
@@ -137,6 +151,8 @@ OPTIONS (PowerShell-native | legacy .bat alias):
   -CleanCarla                --clean-carla           Clear the CARLA CMake cache (force compiler/toolset re-detect).
                                                      (Auto-triggered anyway if the cached compiler != active one.)
   -SkipPrerequisites  / -p   --skip-prerequisites    Skip the InstallPrerequisites step.
+  -SkipCesium                --skip-cesium           Skip building Cesium for Unreal from source.
+  -CleanCesium               --clean-cesium          Force a cesium-native rebuild (keeps the source checkout).
   -Launch             / -l   --launch                Launch the Unreal Editor after building.
   -WithPythonApi             --with-python-api       Build the legacy Boost.Python `carla` module.
                                                      (Off by default; CarlaNet-only builds don't need it.)
@@ -179,6 +195,8 @@ if ($Remaining) {
             '^(--help|/\?|help)$'        { $Help = $true }
             '^(--interactive)$'          { $Interactive = $true }
             '^(--skip-prerequisites)$'   { $SkipPrerequisites = $true }
+            '^(--skip-cesium)$'          { $SkipCesium = $true }
+            '^(--clean-cesium)$'         { $CleanCesium = $true }
             '^(--launch)$'               { $Launch = $true }
             '^(--with-python-api)$'      { $WithPythonApi = $true }
             '^(--with-tests)$'           { $WithTests = $true }
@@ -241,6 +259,30 @@ function Clear-CarlaCmakeCache {
         $p = Join-Path $RepoRoot $rel
         if (Test-Path $p) { Write-Host "  removing $p"; Remove-Item -Recurse -Force $p }
     }
+}
+
+# Ensure nasm is available for the cesium-native vcpkg build (one of its deps assembles
+# with nasm; cesium-unreal's own CI installs it explicitly). Detect it on PATH, else try a
+# winget install, then fall back to the default install dir (winget doesn't update THIS
+# session's PATH). Throw with guidance if it still can't be found.
+function Initialize-Nasm {
+    if (Get-Command nasm.exe -ErrorAction SilentlyContinue) { Write-Host 'nasm found on PATH.'; return }
+    Write-Host 'nasm not found; attempting "winget install -e --id NASM.NASM"...'
+    try { winget install -e --id NASM.NASM --accept-source-agreements --accept-package-agreements } catch {}
+    if (Get-Command nasm.exe -ErrorAction SilentlyContinue) { return }
+    # winget doesn't update THIS session's PATH, and the NASM installer lands in different
+    # places depending on per-user vs per-machine (commonly %LOCALAPPDATA%\bin\NASM).
+    $nasmDirs = @(
+        (Join-Path $env:LOCALAPPDATA 'bin\NASM'),
+        (Join-Path $env:LOCALAPPDATA 'NASM'),
+        'C:\Program Files\NASM',
+        'C:\Program Files (x86)\NASM'
+    ) | Where-Object { $_ -and (Test-Path $_) }
+    $nasmExe = if ($nasmDirs) {
+        Get-ChildItem $nasmDirs -Filter nasm.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    }
+    if ($nasmExe) { $env:PATH = "$($nasmExe.Directory.FullName);$env:PATH"; Write-Host "Using nasm at `"$($nasmExe.FullName)`"."; return }
+    throw "nasm is required to build cesium-native but was not found and could not be auto-installed. Install it (winget install -e --id NASM.NASM) and re-run, or pass -SkipCesium."
 }
 
 # Locate vswhere.exe (ships with the VS Installer since VS2017).
@@ -630,6 +672,127 @@ if (Test-Path (Join-Path $vibeueDir '.git')) {
     Write-Host 'VibeUE present as a non-git copy; leaving as-is (no SSH key to convert it to a pinned clone).'
 } else {
     Write-Host 'VibeUE skipped (optional MCP plugin). Pass -VibeUeSshKey <path> or set VIBEUE_SSH_KEY to fetch it.'
+}
+
+# ---------------------------------------------------------------------------
+# Cesium for Unreal (SOURCE, pinned) + cesium-native build
+# ---------------------------------------------------------------------------
+# Build Cesium for Unreal FROM SOURCE at a pinned tag/commit instead of using the
+# precompiled Marketplace plugin baked into the engine. cesium-unreal is NOT a
+# clone-and-compile plugin: its CesiumRuntime/CesiumEditor modules link against
+# cesium-native, a large C++ library that must be CMake-built and installed into the
+# plugin's Source\ThirdParty BEFORE Unreal compiles the plugin (that compile happens
+# later, in the editor build -- Scripts\Windows\BuildCarla.ps1).
+#
+# The recipe mirrors cesium-unreal's own Windows CI for tag v2.27.0 (its build.yml
+# "Windows57" job + buildWindows.yml "Build cesium-native" step):
+#   * Visual Studio generator + MSVC 14.44 -- the toolset UE 5.7's build farm uses.
+#     We reuse the exact -T v143,version=14.44 this script already pins for SUMO, so
+#     cesium-native and the UE-compiled plugin share one ABI ("same compiler" rule).
+#   * UNREAL_ENGINE_ROOT -> the engine (cesium-native borrows UE's bundled OpenSSL).
+#   * CESIUM_VCPKG_RELEASE_ONLY=TRUE -- skip debug vcpkg deps (release-only, faster).
+#   * nasm on PATH (a vcpkg dep assembles with it).
+#
+# CarlaUnreal.uproject enables plugin "CesiumForUnreal" and CesiumCarlaBridge depends
+# on the CesiumRuntime module; both names are unchanged across versions, so nothing
+# else in CARLA needs editing.
+
+$cesiumTag         = 'v2.27.0'
+$cesiumPin         = 'c1214cbe002ea0c5c4d6a9c9032da0c97fe89d2c'   # commit v2.27.0 points at
+$cesiumRepo        = 'https://github.com/CesiumGS/cesium-unreal.git'
+$cesiumDir         = Join-Path $RepoRoot 'Unreal\CarlaUnreal\Plugins\CesiumForUnreal'
+$cesiumExtern      = Join-Path $cesiumDir 'extern'
+$cesiumExternBuild = Join-Path $cesiumExtern 'build'
+$cesiumThirdParty  = Join-Path $cesiumDir 'Source\ThirdParty'
+
+if ($SkipCesium) {
+    Write-Host 'Skipping Cesium for Unreal source build (-SkipCesium).'
+} else {
+    # -- Fetch + pin the plugin source (with submodules) --------------------
+    # .gitmodules pulls cesium-native + MikkTSpace/tidy-html5/swl-variant; --recursive
+    # also gets cesium-native's own nested submodules.
+    if (Test-Path (Join-Path $cesiumDir '.git')) {
+        Write-Host "Pinning Cesium for Unreal to $cesiumTag ($cesiumPin)..."
+        Invoke-Checked 'git fetch cesium-unreal'      { git -C $cesiumDir fetch --tags origin }
+        Invoke-Checked 'git checkout cesium-unreal'   { git -C $cesiumDir checkout --force $cesiumPin }
+        Invoke-Checked 'git submodule cesium-unreal'  { git -C $cesiumDir submodule update --init --recursive }
+    } else {
+        Write-Host "Cloning Cesium for Unreal $cesiumTag (pinned $cesiumPin, with submodules)..."
+        if (Test-Path $cesiumDir) { Remove-Item -Recurse -Force $cesiumDir }
+        Invoke-Checked 'git clone cesium-unreal'      { git clone $cesiumRepo $cesiumDir }
+        Invoke-Checked 'git checkout cesium-unreal'   { git -C $cesiumDir checkout --force $cesiumPin }
+        Invoke-Checked 'git submodule cesium-unreal'  { git -C $cesiumDir submodule update --init --recursive }
+    }
+
+    # The source .uplugin targets UE 5.5 by default; stamp it to 5.7 (exactly as the CI
+    # does) so the editor doesn't flag an engine-version mismatch on this 5.7.4 build.
+    $upluginPath = Join-Path $cesiumDir 'CesiumForUnreal.uplugin'
+    if (Test-Path $upluginPath) {
+        (Get-Content -Raw $upluginPath) -replace '"EngineVersion":\s*"5\.5\.0"', '"EngineVersion": "5.7.0"' |
+            Set-Content -NoNewline $upluginPath
+    }
+
+    # -- Retire the precompiled Marketplace Cesium baked into the engine ----
+    # UE refuses to load two plugins named "CesiumForUnreal". Move the engine's Marketplace
+    # copy OUT of the plugin search path (reversible) so our source plugin is the only one
+    # discovered. DisabledPlugins sits at the engine ROOT (a sibling of Engine\), which UE
+    # does not scan; merely renaming the folder in place would NOT work, since UE discovers
+    # plugins by *.uplugin anywhere under Engine\Plugins regardless of folder name.
+    $mktRoot = Join-Path $env:CARLA_UNREAL_ENGINE_PATH 'Engine\Plugins\Marketplace'
+    if (Test-Path $mktRoot) {
+        $mktCesium = Get-ChildItem $mktRoot -Recurse -Filter 'CesiumForUnreal.uplugin' -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($mktCesium) {
+            $mktCesiumDir = $mktCesium.Directory.FullName
+            $disabledRoot = Join-Path $env:CARLA_UNREAL_ENGINE_PATH 'DisabledPlugins'
+            New-Item -ItemType Directory -Force -Path $disabledRoot | Out-Null
+            $dest = Join-Path $disabledRoot (Split-Path $mktCesiumDir -Leaf)
+            if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+            Write-Warning 'Disabling Marketplace Cesium to avoid a duplicate-plugin conflict:'
+            Write-Warning "  moving `"$mktCesiumDir`""
+            Write-Warning "      -> `"$dest`""
+            Write-Warning '  (restore by moving it back into Engine\Plugins\Marketplace)'
+            Move-Item -Force $mktCesiumDir $dest
+        } else {
+            Write-Host 'No Marketplace Cesium plugin found in the engine (already disabled or never installed).'
+        }
+    }
+
+    # -- Build cesium-native (CMake + vcpkg) into the plugin's Source\ThirdParty
+    # Treat a Windows-*-Release lib dir holding .lib files as the "already built" marker.
+    $cesiumBuilt = $false
+    $cesiumLibRoot = Join-Path $cesiumThirdParty 'lib'
+    if (Test-Path $cesiumLibRoot) {
+        $libDir = Get-ChildItem $cesiumLibRoot -Directory -Filter 'Windows-*' -ErrorAction SilentlyContinue |
+            Where-Object { Get-ChildItem $_.FullName -Filter '*.lib' -ErrorAction SilentlyContinue | Select-Object -First 1 }
+        if ($libDir) { $cesiumBuilt = $true }
+    }
+
+    if ($CleanCesium) {
+        foreach ($d in @($cesiumExternBuild, $cesiumThirdParty)) {
+            if (Test-Path $d) { Write-Host "Cleaning $d"; Remove-Item -Recurse -Force $d }
+        }
+        $cesiumBuilt = $false
+    }
+
+    if ($cesiumBuilt) {
+        Write-Host 'cesium-native already built (Source\ThirdParty present). Skipping (use -CleanCesium to rebuild).'
+    } else {
+        Initialize-Nasm
+        Write-Host 'Building cesium-native (CMake + vcpkg; the first run downloads/compiles many deps -- expect many minutes and several GB)...'
+        $env:UNREAL_ENGINE_ROOT        = $env:CARLA_UNREAL_ENGINE_PATH
+        $env:CESIUM_VCPKG_RELEASE_ONLY = 'TRUE'
+        # Built from extern\ (NOT extern\cesium-native\) so CMAKE_INSTALL_PREFIX lands in
+        # ..\Source\ThirdParty, where Cesium for Unreal expects to find cesium-native.
+        Invoke-Checked 'cmake configure cesium-native' {
+            cmake -B $cesiumExternBuild -S $cesiumExtern -G $cmakeGenerator `
+                -T v143,version=14.44 -A x64
+        }
+        Invoke-Checked 'cmake build cesium-native' {
+            cmake --build $cesiumExternBuild --config Release --target install -j8
+        }
+        Write-Host "cesium-native installed into `"$cesiumThirdParty`"."
+    }
 }
 
 # ---------------------------------------------------------------------------
