@@ -11,9 +11,9 @@
                    via CarlaNet/python/build_wheel.ps1.
     CarlaNet runs even if the Unreal build failed, so you still get full diagnostics.
 
-    Paths are resolved in priority order: explicit parameters, then environment
-    variables, then defaults derived from this script's location. This script lives at
-    carla/Scripts/Windows/, so the workspace root is three directories up.
+    The CARLA repo root is derived from this script's location (carla/Scripts/Windows/),
+    two directories up -- it never needs to be passed. The UE engine is found via
+    -UnrealEngineRoot, then $env:CARLA_UNREAL_ENGINE_PATH, then <repo-parent>\UE_5_7_4.
 
 .PARAMETER SkipUnreal
     Skip the CarlaUnrealEditor C++ build.
@@ -24,12 +24,9 @@
 .PARAMETER Vs
     Force a Visual Studio toolchain: '2022' or '2026'. If omitted, uses the
     newest installed VS that has MSVC 14.44 (or current VS dev prompt if active).
-.PARAMETER WorkspaceRoot
-    Repo workspace root (the folder that contains 'carla' and the UE engine).
-    Env: CARLA_WORKSPACE_ROOT. Default: three levels up from this script.
 .PARAMETER UnrealEngineRoot
     UE 5.7.4 source-build root. Env: CARLA_UNREAL_ENGINE_PATH.
-    Default: <WorkspaceRoot>\UE_5_7_4.
+    Default: <repo-parent>\UE_5_7_4.
 
 .EXAMPLE
     .\BuildCarla.ps1 -InstallWheel
@@ -49,7 +46,6 @@ param(
     [switch]$SkipUnreal,      # skip the CarlaUnrealEditor C++ build
     [switch]$SkipCarlaNet,    # skip the CarlaNet (.NET) build + wheel
     [switch]$InstallWheel,    # also pip-install the freshly built wheel (--force-reinstall)
-    [string]$WorkspaceRoot,   # repo root (contains 'carla' + engine); env CARLA_WORKSPACE_ROOT
     [string]$UnrealEngineRoot,# UE 5.7.4 root; env CARLA_UNREAL_ENGINE_PATH
 
     [Alias('h')]
@@ -75,7 +71,6 @@ OPTIONS (PowerShell-native | legacy alias):
   -SkipUnreal                --skip-unreal               Skip the CarlaUnrealEditor C++ build.
   -SkipCarlaNet              --skip-carlanet             Skip the CarlaNet (.NET) build + wheel.
   -InstallWheel              --install-wheel             pip-install the freshly built wheel.
-  -WorkspaceRoot <dir>       --workspace-root=<dir>      Repo workspace root (contains 'carla' + engine).
   -UnrealEngineRoot <dir>    --unreal-engine-root=<dir>  UE 5.7.4 source-build root.
   -Help               / -h   --help                      Show this help.
 
@@ -102,7 +97,6 @@ if ($Remaining) {
             '^(--skip-carlanet|--skip-carla-net)$' { $SkipCarlaNet = $true }
             '^(--install-wheel)$'                  { $InstallWheel = $true }
             '^(--vs)$'                             { if ($null -eq $next) { throw "Argument '$key' requires a value." } $Vs = $next;               if ($null -eq $val) { $idx++ } }
-            '^(--workspace-root)$'                 { if ($null -eq $next) { throw "Argument '$key' requires a value." } $WorkspaceRoot = $next;    if ($null -eq $val) { $idx++ } }
             '^(--unreal-engine-root|--ue-root)$'   { if ($null -eq $next) { throw "Argument '$key' requires a value." } $UnrealEngineRoot = $next; if ($null -eq $val) { $idx++ } }
             default { Show-Usage; throw "Unknown argument '$arg'." }
         }
@@ -271,11 +265,14 @@ Fix your -Vs argument or install the missing toolset before retrying.
     return $pick
 }
 
-# ── Path resolution: param > env var > default-from-script-location ──────────
-if (-not $WorkspaceRoot)    { $WorkspaceRoot    = $env:CARLA_WORKSPACE_ROOT }
-if (-not $WorkspaceRoot)    { $WorkspaceRoot    = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path }
+# ── Paths: the CARLA repo root is two dirs up from this script (carla/Scripts/Windows),
+# derived by LOCATION (not by folder name), so it survives a renamed/relocated checkout.
+# The UE engine is a sibling of the repo: -UnrealEngineRoot > $env:CARLA_UNREAL_ENGINE_PATH
+# > <repo-parent>\UE_5_7_4.
+$CarlaRoot  = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$RepoParent = Split-Path $CarlaRoot -Parent
 if (-not $UnrealEngineRoot) { $UnrealEngineRoot = $env:CARLA_UNREAL_ENGINE_PATH }
-if (-not $UnrealEngineRoot) { $UnrealEngineRoot = Join-Path $WorkspaceRoot "UE_5_7_4" }
+if (-not $UnrealEngineRoot) { $UnrealEngineRoot = Join-Path $RepoParent "UE_5_7_4" }
 
 # ── Activate Visual Studio toolchain (required for UE Build.bat) ─────────────
 $script:VsYear = $null
@@ -288,13 +285,12 @@ if (-not $SkipUnreal) {
     Write-Host "Ready: VS$($vsInfo.Year), MSVC $($vsInfo.Toolset)`n"
 }
 
-$CarlaRoot       = Join-Path $WorkspaceRoot "carla"
 $UE_ROOT         = $UnrealEngineRoot
 $CARLA_UPROJECT  = Join-Path $CarlaRoot "Unreal\CarlaUnreal\CarlaUnreal.uproject"
-$LOG_FILE        = Join-Path $WorkspaceRoot "Carla_build.log"
+$LOG_FILE        = Join-Path $RepoParent "Carla_build.log"
 $CARLANET_WHEEL  = Join-Path $CarlaRoot "CarlaNet\python\build_wheel.ps1"
 
-Write-Host "Workspace : $WorkspaceRoot"
+Write-Host "CARLA repo: $CarlaRoot"
 Write-Host "UE engine : $UE_ROOT"
 "Build started: $(Get-Date)" | Set-Content $LOG_FILE
 
@@ -312,7 +308,7 @@ if (-not $SkipUnreal) {
 
     $BuildBat = Join-Path $UE_ROOT "Engine\Build\BatchFiles\Build.bat"
     if (-not (Test-Path $BuildBat))       { throw "UE Build.bat not found: $BuildBat (set -UnrealEngineRoot or `$env:CARLA_UNREAL_ENGINE_PATH)" }
-    if (-not (Test-Path $CARLA_UPROJECT)) { throw "CarlaUnreal.uproject not found: $CARLA_UPROJECT (set -WorkspaceRoot or `$env:CARLA_WORKSPACE_ROOT)" }
+    if (-not (Test-Path $CARLA_UPROJECT)) { throw "CarlaUnreal.uproject not found: $CARLA_UPROJECT" }
 
     & $BuildBat `
         CarlaUnrealEditor Win64 Development `
