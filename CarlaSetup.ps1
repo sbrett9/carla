@@ -780,7 +780,12 @@ if ($SkipCesium) {
     } else {
         Initialize-Nasm
         Write-Host 'Building cesium-native (CMake + vcpkg; the first run downloads/compiles many deps -- expect many minutes and several GB)...'
-        $env:UNREAL_ENGINE_ROOT        = $env:CARLA_UNREAL_ENGINE_PATH
+        # Forward slashes: cesium-native's vcpkg overlays bake UNREAL_ENGINE_ROOT into
+        # generated *Config.cmake files as CMake STRINGS (e.g. tinyxml2Config.cmake, which
+        # points at UE's bundled tinyxml2). A backslash Windows path there makes CMake choke
+        # on invalid escapes like '\P' in '...\Projects\...'. Cesium's own CI sets this var
+        # with forward slashes for the same reason.
+        $env:UNREAL_ENGINE_ROOT        = $env:CARLA_UNREAL_ENGINE_PATH.Replace('\', '/')
         $env:CESIUM_VCPKG_RELEASE_ONLY = 'TRUE'
         # Built from extern\ (NOT extern\cesium-native\) so CMAKE_INSTALL_PREFIX lands in
         # ..\Source\ThirdParty, where Cesium for Unreal expects to find cesium-native.
