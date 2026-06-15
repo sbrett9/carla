@@ -34,22 +34,82 @@
 .EXAMPLE
     .\BuildCarla.ps1 -InstallWheel
 .EXAMPLE
+    .\BuildCarla.ps1 -Vs 2026               # build the editor with the VS2026 toolchain
+.EXAMPLE
     .\BuildCarla.ps1 -SkipUnreal            # just rebuild the CarlaNet wheel
 .EXAMPLE
     Get-Help .\BuildCarla.ps1 -Detailed     # full usage (PowerShell's -? / -Detailed)
 #>
-[CmdletBinding()]
+# PositionalBinding=$false so stray tokens (e.g. the legacy `--help`) can't silently bind
+# to a parameter; they land in $Remaining and are normalized below. This matches
+# CarlaSetup.ps1, so both PowerShell-native (-Vs 2026) and legacy (--vs=2026) styles work.
+[CmdletBinding(PositionalBinding = $false)]
 param(
     [string]$Vs,              # force VS toolchain: '2022' or '2026'; omit to auto-detect
     [switch]$SkipUnreal,      # skip the CarlaUnrealEditor C++ build
     [switch]$SkipCarlaNet,    # skip the CarlaNet (.NET) build + wheel
     [switch]$InstallWheel,    # also pip-install the freshly built wheel (--force-reinstall)
     [string]$WorkspaceRoot,   # repo root (contains 'carla' + engine); env CARLA_WORKSPACE_ROOT
-    [string]$UnrealEngineRoot # UE 5.7.4 root; env CARLA_UNREAL_ENGINE_PATH
+    [string]$UnrealEngineRoot,# UE 5.7.4 root; env CARLA_UNREAL_ENGINE_PATH
+
+    [Alias('h')]
+    [switch]$Help,
+
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$Remaining
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+function Show-Usage {
+    @'
+BuildCarla.ps1 - build CarlaUnrealEditor (C++) and/or CarlaNet (.NET) + the carlanet wheel.
+
+USAGE:
+  .\BuildCarla.ps1 [options]
+
+OPTIONS (PowerShell-native | legacy alias):
+  -Vs <2022|2026>            --vs=<2022|2026>            VS toolchain for the UE build (MSVC 14.44).
+                                                         Omit to use the newest installed VS.
+  -SkipUnreal                --skip-unreal               Skip the CarlaUnrealEditor C++ build.
+  -SkipCarlaNet              --skip-carlanet             Skip the CarlaNet (.NET) build + wheel.
+  -InstallWheel              --install-wheel             pip-install the freshly built wheel.
+  -WorkspaceRoot <dir>       --workspace-root=<dir>      Repo workspace root (contains 'carla' + engine).
+  -UnrealEngineRoot <dir>    --unreal-engine-root=<dir>  UE 5.7.4 source-build root.
+  -Help               / -h   --help                      Show this help.
+
+EXAMPLES:
+  .\BuildCarla.ps1 -Vs 2026
+  .\BuildCarla.ps1 -SkipUnreal
+'@ | Write-Host
+}
+
+# -- Normalize legacy "--flag" / "--flag=value" arguments (matches CarlaSetup.ps1) ----------
+# Tokens PowerShell couldn't bind natively arrive in $Remaining. Walk them (supporting both
+# "--key=value" and "--key value") and fold them onto the real parameters.
+if ($Remaining) {
+    for ($idx = 0; $idx -lt $Remaining.Count; $idx++) {
+        $arg = $Remaining[$idx]
+        if ($arg -match '^(--[^=]+)=(.*)$') { $key = $matches[1]; $val = $matches[2] }
+        else { $key = $arg; $val = $null }
+        if ($null -ne $val) { $next = $val }
+        elseif ($idx + 1 -lt $Remaining.Count) { $next = $Remaining[$idx + 1] }
+        else { $next = $null }
+        switch -Regex ($key) {
+            '^(--help|/\?|help)$'                  { $Help = $true }
+            '^(--skip-unreal)$'                    { $SkipUnreal = $true }
+            '^(--skip-carlanet|--skip-carla-net)$' { $SkipCarlaNet = $true }
+            '^(--install-wheel)$'                  { $InstallWheel = $true }
+            '^(--vs)$'                             { if ($null -eq $next) { throw "Argument '$key' requires a value." } $Vs = $next;               if ($null -eq $val) { $idx++ } }
+            '^(--workspace-root)$'                 { if ($null -eq $next) { throw "Argument '$key' requires a value." } $WorkspaceRoot = $next;    if ($null -eq $val) { $idx++ } }
+            '^(--unreal-engine-root|--ue-root)$'   { if ($null -eq $next) { throw "Argument '$key' requires a value." } $UnrealEngineRoot = $next; if ($null -eq $val) { $idx++ } }
+            default { Show-Usage; throw "Unknown argument '$arg'." }
+        }
+    }
+}
+
+if ($Help) { Show-Usage; return }
 
 # Validate -Vs parameter
 if ($Vs -and $Vs -notin @('2022', '2026')) {
