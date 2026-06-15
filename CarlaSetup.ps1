@@ -795,14 +795,29 @@ if ($SkipCesium) {
         # __std_find_first_not_of_trivial_pos_1) that don't exist in 14.44's msvcp140.lib, so
         # the UE link of UnrealEditor-CesiumRuntime.dll fails with LNK2019 unresolved externals.
         $env:VCPKG_PLATFORM_TOOLSET_VERSION = '14.44'
-        # Built from extern\ (NOT extern\cesium-native\) so CMAKE_INSTALL_PREFIX lands in
-        # ..\Source\ThirdParty, where Cesium for Unreal expects to find cesium-native.
-        Invoke-Checked 'cmake configure cesium-native' {
-            cmake -B $cesiumExternBuild -S $cesiumExtern -G $cmakeGenerator `
-                -T v143,version=14.44 -A x64
-        }
-        Invoke-Checked 'cmake build cesium-native' {
-            cmake --build $cesiumExternBuild --config Release --target install -j8
+        # vcpkg's post-build applocal.ps1 (tool-dependency copy, e.g. for draco) runs whichever
+        # PowerShell it finds FIRST on PATH. If that's a .NET *global tool* shim
+        # (%USERPROFILE%\.dotnet\tools\pwsh.exe), it must launch dotnet.exe to run -- but vcpkg
+        # builds ports in a filtered environment that drops C:\Program Files\dotnet from PATH
+        # (and doesn't pass DOTNET_ROOT through), so the shim can't find dotnet and the build
+        # dies (Win32Exception 2 / error -532462766). Drop any ".dotnet\tools" dir from PATH for
+        # the build so vcpkg falls back to the dependency-free Windows powershell.exe (System32)
+        # or a real pwsh elsewhere. Saved/restored so the rest of the script is unaffected.
+        $savedPath = $env:PATH
+        $env:PATH = (($env:PATH -split ';') |
+            Where-Object { $_ -and ($_ -notmatch '\.dotnet\\tools\\?$') }) -join ';'
+        try {
+            # Built from extern\ (NOT extern\cesium-native\) so CMAKE_INSTALL_PREFIX lands in
+            # ..\Source\ThirdParty, where Cesium for Unreal expects to find cesium-native.
+            Invoke-Checked 'cmake configure cesium-native' {
+                cmake -B $cesiumExternBuild -S $cesiumExtern -G $cmakeGenerator `
+                    -T v143,version=14.44 -A x64
+            }
+            Invoke-Checked 'cmake build cesium-native' {
+                cmake --build $cesiumExternBuild --config Release --target install -j8
+            }
+        } finally {
+            $env:PATH = $savedPath
         }
         Write-Host "cesium-native installed into `"$cesiumThirdParty`"."
     }

@@ -1,8 +1,9 @@
 # Cesium Build Failure: vcpkg pwsh.exe Shim Cannot Find dotnet
 
-**Status**: Open  
+**Status**: Resolved  
 **Date**: 2026-06-15  
 **Commit**: 891dc108a (Add Cesium for Unreal source build)  
+**Fixed in**: CarlaSetup.ps1 — strip `.dotnet\tools` from PATH during the cesium-native build  
 **Branch**: ue5-dev
 
 ## Problem
@@ -113,9 +114,33 @@ Cannot complete Cesium build via CarlaSetup.ps1 on Windows systems where:
 - Manually running the same pwsh command from the D:\ drive works fine when invoked from a shell
 - Current shell is Windows PowerShell 5.1, not PowerShell Core, but vcpkg discovers and prefers pwsh.exe
 
-## Potential Workarounds (Not Tested)
+## Resolution
 
-1. Temporarily remove `.dotnet\tools` from PATH during Cesium build
-2. Uninstall PowerShell as a .NET tool and install native PowerShell Core
-3. Force vcpkg to use Windows PowerShell instead of pwsh
-4. Modify vcpkg scripts to use `powershell.exe` instead of searching for `pwsh.exe`
+Implemented workaround #1, automated and scoped inside `CarlaSetup.ps1`. Immediately
+before the cesium-native CMake build, any directory ending in `.dotnet\tools` is removed
+from `$env:PATH`, then PATH is restored afterward (try/finally):
+
+```powershell
+$savedPath = $env:PATH
+$env:PATH = (($env:PATH -split ';') |
+    Where-Object { $_ -and ($_ -notmatch '\.dotnet\\tools\\?$') }) -join ';'
+try { <cesium-native configure + build> } finally { $env:PATH = $savedPath }
+```
+
+With the shim dir gone, vcpkg's `applocal.ps1` falls back to the dependency-free Windows
+`powershell.exe` (always present in System32), or to a real `pwsh` installed elsewhere
+(e.g. `C:\Program Files\PowerShell\7\`). Neither needs to launch `dotnet`, so the draco
+tool-dependency copy succeeds. The strip is scoped to the cesium build only, so the
+subsequent UE editor build (which legitimately uses dotnet/UBT) is unaffected.
+
+This is machine-agnostic: it requires no global PATH changes, no uninstalling the pwsh
+.NET tool, and no edits to vcpkg's own scripts.
+
+## Alternatives Considered
+
+2. Uninstall PowerShell as a .NET tool and install native PowerShell Core — requires a
+   per-machine manual change; rejected in favor of an automated in-script fix.
+3. Force vcpkg to use Windows PowerShell instead of pwsh — no clean vcpkg knob for this in
+   the port-build path.
+4. Modify vcpkg's own scripts — fragile; they live in the ezvcpkg-managed vcpkg clone and
+   would be overwritten.
