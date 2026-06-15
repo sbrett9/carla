@@ -60,6 +60,14 @@
     before configuring, so vcpkg + cesium-native are recompiled from scratch. The cesium-unreal
     source checkout (and its submodules) are kept.
 
+.PARAMETER ForceDepsRebuild
+    Force a full rebuild of the cesium-native vcpkg DEPENDENCIES (abseil, ktx, spz, draco, ...),
+    not just cesium-native itself. Clears the ezvcpkg cache (the installed\packages\buildtrees
+    under <drive>\.ezvcpkg\<commit>, keeping the vcpkg clone + downloads) so every package is
+    recompiled. Implies -CleanCesium. Use this after changing the MSVC toolset pin (a stale
+    cache otherwise reuses deps built with the wrong toolset -> LNK2019 __std_* unresolved
+    externals when UE links CesiumRuntime.dll).
+
 .PARAMETER Launch
     Launch the CARLA Unreal Editor after a successful build.  (.bat: --launch / -l)
 
@@ -107,6 +115,7 @@ param(
     [switch]$CleanAll,
     [switch]$CleanCarla,
     [switch]$CleanCesium,
+    [switch]$ForceDepsRebuild,
 
     [Alias('p')]
     [switch]$SkipPrerequisites,
@@ -153,6 +162,7 @@ OPTIONS (PowerShell-native | legacy .bat alias):
   -SkipPrerequisites  / -p   --skip-prerequisites    Skip the InstallPrerequisites step.
   -SkipCesium                --skip-cesium           Skip building Cesium for Unreal from source.
   -CleanCesium               --clean-cesium          Force a cesium-native rebuild (keeps the source checkout).
+  -ForceDepsRebuild          --force-deps-rebuild    Also clear the ezvcpkg cache so vcpkg deps recompile (implies -CleanCesium).
   -Launch             / -l   --launch                Launch the Unreal Editor after building.
   -WithPythonApi             --with-python-api       Build the legacy Boost.Python `carla` module.
                                                      (Off by default; CarlaNet-only builds don't need it.)
@@ -197,6 +207,7 @@ if ($Remaining) {
             '^(--skip-prerequisites)$'   { $SkipPrerequisites = $true }
             '^(--skip-cesium)$'          { $SkipCesium = $true }
             '^(--clean-cesium)$'         { $CleanCesium = $true }
+            '^(--force-deps-rebuild)$'   { $ForceDepsRebuild = $true }
             '^(--launch)$'               { $Launch = $true }
             '^(--with-python-api)$'      { $WithPythonApi = $true }
             '^(--with-tests)$'           { $WithTests = $true }
@@ -220,6 +231,10 @@ if ($Help) { Show-Usage; return }
 if ($Vs -and $Vs -notin @('2022', '2026')) {
     throw "Invalid -Vs value '$Vs'. Expected 2022 or 2026."
 }
+
+# -ForceDepsRebuild rebuilds the vcpkg deps from the ezvcpkg cache; that is only meaningful
+# alongside a cesium-native rebuild, so it implies -CleanCesium (wipe extern\build + ThirdParty).
+if ($ForceDepsRebuild) { $CleanCesium = $true }
 
 # Run everything relative to the repository root (this script's directory), the way
 # the .bat relied on %cd% being the repo root.
@@ -283,6 +298,17 @@ function Initialize-Nasm {
     }
     if ($nasmExe) { $env:PATH = "$($nasmExe.Directory.FullName);$env:PATH"; Write-Host "Using nasm at `"$($nasmExe.FullName)`"."; return }
     throw "nasm is required to build cesium-native but was not found and could not be auto-installed. Install it (winget install -e --id NASM.NASM) and re-run, or pass -SkipCesium."
+}
+
+# Resolve the ezvcpkg base dir the way cesium-native's ezvcpkg.cmake does (it calls
+# ezvcpkg_fetch with no BASEDIR): EZVCPKG_BASEDIR env, else $HOME\.ezvcpkg, else -- when
+# HOME is unset, the usual Windows case -- "\.ezvcpkg" on the current drive, which resolves
+# to <repo-drive>\.ezvcpkg since the build runs with the repo as CWD. Each vcpkg commit gets
+# its own <basedir>\<commit> subdir; we clear installed/packages/buildtrees under each.
+function Get-EzVcpkgBaseDir {
+    if ($env:EZVCPKG_BASEDIR) { return $env:EZVCPKG_BASEDIR }
+    if ($env:HOME)            { return (Join-Path $env:HOME '.ezvcpkg') }
+    return (Join-Path (Split-Path -Qualifier $RepoRoot) '\.ezvcpkg')
 }
 
 # Locate vswhere.exe (ships with the VS Installer since VS2017).
@@ -771,6 +797,26 @@ if ($SkipCesium) {
     if ($CleanCesium) {
         foreach ($d in @($cesiumExternBuild, $cesiumThirdParty)) {
             if (Test-Path $d) { Write-Host "Cleaning $d"; Remove-Item -Recurse -Force $d }
+        }
+        $cesiumBuilt = $false
+    }
+
+    # -ForceDepsRebuild: clear the ezvcpkg build outputs so vcpkg recompiles EVERY dependency
+    # (keeping the vcpkg clone + downloads, so nothing is re-fetched). Needed when the deps were
+    # built with the wrong MSVC toolset -- a plain -CleanCesium reuses the cached packages and
+    # the bad libs survive. Skipped here when -SkipCesium short-circuits the whole section.
+    if ($ForceDepsRebuild) {
+        $ezBase = Get-EzVcpkgBaseDir
+        if (Test-Path $ezBase) {
+            Write-Host "Forcing a full vcpkg dependency rebuild (-ForceDepsRebuild): clearing ezvcpkg cache under `"$ezBase`"..."
+            foreach ($commitDir in (Get-ChildItem $ezBase -Directory -ErrorAction SilentlyContinue)) {
+                foreach ($sub in @('installed', 'packages', 'buildtrees')) {
+                    $p = Join-Path $commitDir.FullName $sub
+                    if (Test-Path $p) { Write-Host "  removing $p"; Remove-Item -Recurse -Force $p }
+                }
+            }
+        } else {
+            Write-Host "ezvcpkg cache not found at `"$ezBase`"; nothing to clear (vcpkg will build fresh)."
         }
         $cesiumBuilt = $false
     }
