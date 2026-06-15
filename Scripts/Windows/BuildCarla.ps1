@@ -11,160 +11,230 @@
                    via CarlaNet/python/build_wheel.ps1.
     CarlaNet runs even if the Unreal build failed, so you still get full diagnostics.
 
-    The CARLA repo root is derived from this script's location (carla/Scripts/Windows/),
-    two directories up -- it never needs to be passed. The UE engine is found via
-    -UnrealEngineRoot, then $env:CARLA_UNREAL_ENGINE_PATH, then <repo-parent>\UE_5_7_4.
+    Paths are resolved in priority order: explicit parameters, then environment
+    variables, then defaults derived from this script's location. This script lives at
+    carla/Scripts/Windows/, so the workspace root is three directories up.
 
-.PARAMETER Vs
-    Visual Studio toolchain for the UE build: '2022' or '2026' (must have MSVC 14.44,
-    which is enforced). Omit to use the newest installed VS with MSVC 14.44. Discovered
-    via vswhere and passed to UnrealBuildTool as -2022/-2026 (matches CarlaSetup.ps1).
 .PARAMETER SkipUnreal
     Skip the CarlaUnrealEditor C++ build.
 .PARAMETER SkipCarlaNet
     Skip the CarlaNet (.NET) build + wheel.
 .PARAMETER InstallWheel
     Also pip-install the freshly built wheel (--force-reinstall).
+.PARAMETER Vs
+    Force a Visual Studio toolchain: '2022' or '2026'. If omitted, uses the
+    newest installed VS that has MSVC 14.44 (or current VS dev prompt if active).
+.PARAMETER WorkspaceRoot
+    Repo workspace root (the folder that contains 'carla' and the UE engine).
+    Env: CARLA_WORKSPACE_ROOT. Default: three levels up from this script.
 .PARAMETER UnrealEngineRoot
     UE 5.7.4 source-build root. Env: CARLA_UNREAL_ENGINE_PATH.
-    Default: <repo-parent>\UE_5_7_4.
+    Default: <WorkspaceRoot>\UE_5_7_4.
 
 .EXAMPLE
     .\BuildCarla.ps1 -InstallWheel
-.EXAMPLE
-    .\BuildCarla.ps1 -Vs 2026                # build the editor with the VS2026 toolchain
 .EXAMPLE
     .\BuildCarla.ps1 -SkipUnreal            # just rebuild the CarlaNet wheel
 .EXAMPLE
     Get-Help .\BuildCarla.ps1 -Detailed     # full usage (PowerShell's -? / -Detailed)
 #>
-# PositionalBinding=$false so stray tokens (e.g. the legacy `--help`) can't silently bind
-# to a parameter; they land in $Remaining and are normalized below. This matches
-# CarlaSetup.ps1, so both PowerShell-native (-Vs 2026) and legacy (--vs=2026) styles work.
-[CmdletBinding(PositionalBinding = $false)]
+[CmdletBinding()]
 param(
-    [string]$Vs,              # VS toolchain for the UE build; omit = newest with MSVC 14.44
+    [string]$Vs,              # force VS toolchain: '2022' or '2026'; omit to auto-detect
     [switch]$SkipUnreal,      # skip the CarlaUnrealEditor C++ build
     [switch]$SkipCarlaNet,    # skip the CarlaNet (.NET) build + wheel
     [switch]$InstallWheel,    # also pip-install the freshly built wheel (--force-reinstall)
-    [string]$UnrealEngineRoot,# UE 5.7.4 root; env CARLA_UNREAL_ENGINE_PATH
-
-    [Alias('h')]
-    [switch]$Help,
-
-    [Parameter(ValueFromRemainingArguments = $true)]
-    [string[]]$Remaining
+    [string]$WorkspaceRoot,   # repo root (contains 'carla' + engine); env CARLA_WORKSPACE_ROOT
+    [string]$UnrealEngineRoot # UE 5.7.4 root; env CARLA_UNREAL_ENGINE_PATH
 )
 
-function Show-Usage {
-    @'
-BuildCarla.ps1 - build CarlaUnrealEditor (C++) and/or CarlaNet (.NET) + the carlanet wheel.
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
 
-USAGE:
-  .\BuildCarla.ps1 [options]
-
-OPTIONS (PowerShell-native | legacy alias):
-  -Vs <2022|2026>            --vs=<2022|2026>            VS toolchain for the UE build (MSVC 14.44).
-                                                         Omit to use the newest installed VS.
-  -SkipUnreal                --skip-unreal               Skip the CarlaUnrealEditor C++ build.
-  -SkipCarlaNet              --skip-carlanet             Skip the CarlaNet (.NET) build + wheel.
-  -InstallWheel              --install-wheel             pip-install the freshly built wheel.
-  -UnrealEngineRoot <dir>    --unreal-engine-root=<dir>  UE 5.7.4 source-build root.
-  -Help               / -h   --help                      Show this help.
-
-EXAMPLES:
-  .\BuildCarla.ps1 -Vs 2026
-  .\BuildCarla.ps1 -SkipUnreal
-'@ | Write-Host
-}
-
-# -- Normalize legacy "--flag" / "--flag=value" arguments (matches CarlaSetup.ps1) ----------
-# Tokens PowerShell couldn't bind natively arrive in $Remaining. Walk them (supporting both
-# "--key=value" and "--key value") and fold them onto the real parameters.
-if ($Remaining) {
-    for ($idx = 0; $idx -lt $Remaining.Count; $idx++) {
-        $arg = $Remaining[$idx]
-        if ($arg -match '^(--[^=]+)=(.*)$') { $key = $matches[1]; $val = $matches[2] }
-        else { $key = $arg; $val = $null }
-        if ($null -ne $val) { $next = $val }
-        elseif ($idx + 1 -lt $Remaining.Count) { $next = $Remaining[$idx + 1] }
-        else { $next = $null }
-        switch -Regex ($key) {
-            '^(--help|/\?|help)$'                 { $Help = $true }
-            '^(--skip-unreal)$'                   { $SkipUnreal = $true }
-            '^(--skip-carlanet|--skip-carla-net)$' { $SkipCarlaNet = $true }
-            '^(--install-wheel)$'                 { $InstallWheel = $true }
-            '^(--vs)$'                            { if ($null -eq $next) { throw "Argument '$key' requires a value." } $Vs = $next;              if ($null -eq $val) { $idx++ } }
-            '^(--unreal-engine-root|--ue-root)$'  { if ($null -eq $next) { throw "Argument '$key' requires a value." } $UnrealEngineRoot = $next; if ($null -eq $val) { $idx++ } }
-            default { Show-Usage; throw "Unknown argument '$arg'." }
-        }
-    }
-}
-
-if ($Help) { Show-Usage; return }
-
-# Validate -Vs manually (so --vs=foo gives a clear message instead of a binder error).
+# Validate -Vs parameter
 if ($Vs -and $Vs -notin @('2022', '2026')) {
     throw "Invalid -Vs value '$Vs'. Expected 2022 or 2026."
 }
 
-# Locate vswhere.exe (ships with the VS Installer since VS2017).
+# ── Visual Studio Detection & Activation Helpers ────────────────────────────
+# Simplified from CarlaSetup.ps1 to auto-activate VS with MSVC 14.44 toolset.
+
 function Get-VsWhere {
-    $c = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-    if (Test-Path $c) { return $c }
+    $candidate = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+    if (Test-Path $candidate) { return $candidate }
     $cmd = Get-Command vswhere.exe -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
-    throw 'vswhere.exe not found. A Visual Studio 2022/2026 installation is required.'
+    throw "vswhere.exe not found. A Visual Studio 2022/2026 installation is required."
 }
 
-# Resolve the VS toolchain for UnrealBuildTool. Mirrors CarlaSetup.ps1's vswhere-based
-# selection (VS2022/2026, MSVC 14.44 enforced). Returns the UBT -20xx flag + toolset version.
-# UBT finds its own compiler from these flags, so no vcvars activation is needed here.
-function Resolve-VsForUbt {
-    param([string]$Wanted)   # '', '2022', or '2026'
-    $raw = & (Get-VsWhere) -all -prerelease -products * -format json | ConvertFrom-Json
-    $found = @()
+function ConvertTo-VsYear {
+    param([int]$Major)
+    switch ($Major) {
+        17 { @{ Year = '2022'; Generator = 'Visual Studio 17 2022' } }
+        18 { @{ Year = '2026'; Generator = 'Visual Studio 18 2026' } }
+        default { $null }
+    }
+}
+
+function Get-VsInstalls {
+    $vswhere = Get-VsWhere
+    $raw = & $vswhere -all -prerelease -products * -format json | ConvertFrom-Json
+    $result = @()
     foreach ($inst in $raw) {
-        $year = switch ([int]($inst.installationVersion.Split('.')[0])) { 17 { '2022' } 18 { '2026' } default { $null } }
-        if (-not $year) { continue }
+        $major = [int]($inst.installationVersion.Split('.')[0])
+        $map = ConvertTo-VsYear -Major $major
+        if (-not $map) { continue }
+
+        # Require MSVC 14.44.* under VC\Tools\MSVC.
         $msvcRoot = Join-Path $inst.installationPath 'VC\Tools\MSVC'
-        $toolset = if (Test-Path $msvcRoot) {
-            Get-ChildItem $msvcRoot -Directory -Filter '14.44*' | Sort-Object Name -Descending | Select-Object -First 1
-        } else { $null }
-        if (-not $toolset) { continue }   # require MSVC 14.44
-        $found += [pscustomobject]@{
-            Year = $year; UbtFlag = "-$year"; Toolset = $toolset.Name
-            Version = [version]$inst.installationVersion; Path = $inst.installationPath
+        $toolset = $null
+        if (Test-Path $msvcRoot) {
+            $toolset = Get-ChildItem $msvcRoot -Directory -Filter '14.44*' |
+                Sort-Object Name -Descending | Select-Object -First 1
+        }
+        $vcvars = Join-Path $inst.installationPath 'VC\Auxiliary\Build\vcvars64.bat'
+        $productId = if ($inst.PSObject.Properties.Name -contains 'productId') { $inst.productId } else { '' }
+
+        $result += [pscustomobject]@{
+            Year         = $map.Year
+            Version      = [version]$inst.installationVersion
+            Path         = $inst.installationPath
+            Vcvars       = $vcvars
+            HasToolset   = ($null -ne $toolset -and (Test-Path $vcvars))
+            Toolset      = if ($toolset) { $toolset.Name } else { $null }
+            IsBuildTools = ($productId -like '*BuildTools*')
         }
     }
-    $found = $found | Sort-Object Version -Descending
-    if ($Wanted) {
-        $pick = $found | Where-Object Year -EQ $Wanted | Select-Object -First 1
-        if (-not $pick) {
-            $have = (($found | ForEach-Object { "VS$($_.Year)" }) -join ', ')
-            throw "Requested Visual Studio $Wanted with MSVC 14.44 was not found. Detected: $have."
+    $result | Sort-Object @{ Expression = 'Version'; Descending = $true },
+                          @{ Expression = 'IsBuildTools' },
+                          @{ Expression = 'Path' }
+}
+
+function Import-VcVars {
+    param(
+        [Parameter(Mandatory)][string]$Vcvars,
+        [string]$ToolsetVersion
+    )
+    $vsWhereDir = Split-Path -Parent (Get-VsWhere)
+    $verArg     = if ($ToolsetVersion) { " -vcvars_ver=$ToolsetVersion" } else { '' }
+    $tmpCmd     = [System.IO.Path]::GetTempFileName()
+    $tmpEnv     = [System.IO.Path]::GetTempFileName()
+    $cmdFile    = [System.IO.Path]::ChangeExtension($tmpCmd, 'cmd')
+    $envFile    = [System.IO.Path]::ChangeExtension($tmpEnv, 'env.txt')
+    try {
+        Set-Content -LiteralPath $cmdFile -Encoding Ascii -Value @"
+@echo off
+set "PATH=$vsWhereDir;%PATH%"
+call "$Vcvars"$verArg
+set > "$envFile"
+"@
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = 'SilentlyContinue'
+        cmd.exe /c $cmdFile 2>&1 | Out-Null
+        $ErrorActionPreference = $prevEAP
+
+        if (-not (Test-Path -LiteralPath $envFile)) {
+            throw "Failed to activate VS environment via `"$Vcvars`" (no environment captured)."
         }
+        foreach ($line in (Get-Content -LiteralPath $envFile)) {
+            $eq = $line.IndexOf('=')
+            if ($eq -gt 0) {
+                [Environment]::SetEnvironmentVariable($line.Substring(0, $eq), $line.Substring($eq + 1), 'Process')
+            }
+        }
+        if (-not $env:VCINSTALLDIR) {
+            throw "vcvars activation did not set VCINSTALLDIR (`"$Vcvars`")."
+        }
+    } finally {
+        Remove-Item -LiteralPath $tmpCmd, $tmpEnv, $cmdFile, $envFile -ErrorAction SilentlyContinue
+    }
+}
+
+function Test-VsAlreadyActive {
+    param($Pick)
+    if (-not $env:VCINSTALLDIR -or -not $env:VCToolsVersion) { return $false }
+    if ($env:VCToolsVersion -ne $Pick.Toolset) { return $false }
+    $active = $env:VCINSTALLDIR.Replace('\', '/').TrimEnd('/').ToLowerInvariant()
+    $want   = $Pick.Path.Replace('\', '/').TrimEnd('/').ToLowerInvariant()
+    return $active.StartsWith($want)
+}
+
+function Initialize-VisualStudio {
+    param([string]$Wanted)   # '', '2022', or '2026'
+
+    $installs = Get-VsInstalls
+    $usable = @($installs | Where-Object HasToolset)
+
+    if ($Wanted) {
+        # Explicit request: must exist WITH 14.44, otherwise hard error.
+        $pick = $usable | Where-Object Year -EQ $Wanted | Select-Object -First 1
+        if (-not $pick) {
+            $have = ($installs | ForEach-Object { "VS$($_.Year) @ $($_.Path) (14.44: $($_.HasToolset))" }) -join "`n  "
+            throw @"
+Requested Visual Studio $Wanted with MSVC 14.44 was not found.
+Installations detected:
+  $have
+Fix your -Vs argument or install the missing toolset before retrying.
+"@
+        }
+        if (Test-VsAlreadyActive $pick) {
+            Write-Host "VS$($pick.Year) (MSVC $($pick.Toolset)) already active in this shell; skipping re-activation."
+            return $pick
+        }
+        Write-Host "Activating requested VS$($pick.Year) at `"$($pick.Path)`" (pinning MSVC $($pick.Toolset))..."
+        Import-VcVars -Vcvars $pick.Vcvars -ToolsetVersion $pick.Toolset
         return $pick
     }
-    $pick = $found | Select-Object -First 1
-    if (-not $pick) { throw 'No Visual Studio 2022/2026 with MSVC toolset 14.44 was found.' }
+
+    # Honor an already-active dev prompt if it has 14.44.
+    if ($env:VSINSTALLDIR) {
+        $current = $usable | Where-Object { $_.Path.TrimEnd('\') -eq $env:VSINSTALLDIR.TrimEnd('\') } |
+            Select-Object -First 1
+        if ($current) {
+            Write-Host "Using active VS dev environment: VS$($current.Year) (MSVC $($current.Toolset))."
+            return $current
+        }
+        Write-Warning "Active VSINSTALLDIR ($env:VSINSTALLDIR) lacks MSVC 14.44; selecting a different install."
+    }
+
+    # Default: newest install that has MSVC 14.44.
+    $pick = $usable | Select-Object -First 1
+    if (-not $pick) {
+        throw "No Visual Studio install with MSVC toolset 14.44 was found. Install VS2022 or VS2026 with component VC.14.44."
+    }
+    if (Test-VsAlreadyActive $pick) {
+        Write-Host "VS$($pick.Year) (MSVC $($pick.Toolset)) already active; skipping re-activation."
+        return $pick
+    }
+    Write-Host "Activating VS$($pick.Year) at `"$($pick.Path)`" (pinning MSVC $($pick.Toolset))..."
+    Import-VcVars -Vcvars $pick.Vcvars -ToolsetVersion $pick.Toolset
     return $pick
 }
 
-# ── Paths: the CARLA repo root is two dirs up from this script (carla/Scripts/Windows).
-# The UE engine is a sibling of the repo: -UnrealEngineRoot > $env:CARLA_UNREAL_ENGINE_PATH
-# > <repo-parent>\UE_5_7_4.
-$CarlaRoot   = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-$RepoParent  = Split-Path $CarlaRoot -Parent
+# ── Path resolution: param > env var > default-from-script-location ──────────
+if (-not $WorkspaceRoot)    { $WorkspaceRoot    = $env:CARLA_WORKSPACE_ROOT }
+if (-not $WorkspaceRoot)    { $WorkspaceRoot    = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path }
 if (-not $UnrealEngineRoot) { $UnrealEngineRoot = $env:CARLA_UNREAL_ENGINE_PATH }
-if (-not $UnrealEngineRoot) { $UnrealEngineRoot = Join-Path $RepoParent "UE_5_7_4" }
+if (-not $UnrealEngineRoot) { $UnrealEngineRoot = Join-Path $WorkspaceRoot "UE_5_7_4" }
 
+# ── Activate Visual Studio toolchain (required for UE Build.bat) ─────────────
+$script:VsYear = $null
+$script:VsToolset = $null
+if (-not $SkipUnreal) {
+    Write-Host "`nActivating Visual Studio toolchain..."
+    $vsInfo = Initialize-VisualStudio -Wanted $Vs
+    $script:VsYear = $vsInfo.Year
+    $script:VsToolset = $vsInfo.Toolset
+    Write-Host "Ready: VS$($vsInfo.Year), MSVC $($vsInfo.Toolset)`n"
+}
+
+$CarlaRoot       = Join-Path $WorkspaceRoot "carla"
 $UE_ROOT         = $UnrealEngineRoot
 $CARLA_UPROJECT  = Join-Path $CarlaRoot "Unreal\CarlaUnreal\CarlaUnreal.uproject"
-$LOG_FILE        = Join-Path $RepoParent "Carla_build.log"
+$LOG_FILE        = Join-Path $WorkspaceRoot "Carla_build.log"
 $CARLANET_WHEEL  = Join-Path $CarlaRoot "CarlaNet\python\build_wheel.ps1"
 
-Write-Host "CARLA repo: $CarlaRoot"
+Write-Host "Workspace : $WorkspaceRoot"
 Write-Host "UE engine : $UE_ROOT"
 "Build started: $(Get-Date)" | Set-Content $LOG_FILE
 
@@ -182,19 +252,14 @@ if (-not $SkipUnreal) {
 
     $BuildBat = Join-Path $UE_ROOT "Engine\Build\BatchFiles\Build.bat"
     if (-not (Test-Path $BuildBat))       { throw "UE Build.bat not found: $BuildBat (set -UnrealEngineRoot or `$env:CARLA_UNREAL_ENGINE_PATH)" }
-    if (-not (Test-Path $CARLA_UPROJECT)) { throw "CarlaUnreal.uproject not found: $CARLA_UPROJECT" }
-
-    # NB: not $vs -- PowerShell var names are case-insensitive, so $vs would alias the
-    # [string]-typed parameter $Vs and coerce this object to a string.
-    $vsInfo = Resolve-VsForUbt -Wanted $Vs
-    Write-Host " Toolchain: VS$($vsInfo.Year) (UBT $($vsInfo.UbtFlag)), MSVC $($vsInfo.Toolset)"
+    if (-not (Test-Path $CARLA_UPROJECT)) { throw "CarlaUnreal.uproject not found: $CARLA_UPROJECT (set -WorkspaceRoot or `$env:CARLA_WORKSPACE_ROOT)" }
 
     & $BuildBat `
         CarlaUnrealEditor Win64 Development `
         "$CARLA_UPROJECT" `
         -WaitMutex `
-        $vsInfo.UbtFlag `
-        "-CompilerVersion=$($vsInfo.Toolset)" `
+        "-$script:VsYear" `
+        "-CompilerVersion=$script:VsToolset" `
         -Unattended `
         -MaxParallelActions=4 `
         2>&1 | ForEach-Object { $_ -replace "`0", "" } | Tee-Object -FilePath $LOG_FILE -Append

@@ -267,7 +267,7 @@ endif ()
 
 if (BUILD_CARLA_UNREAL AND ENABLE_STREETMAP)
   # ==== STREETMAP ====
-  carla_dependency_add (
+  carla_git_dependency_add (
     StreetMap
     ${CARLA_STREETMAP_TAG}
     https://github.com/carla-simulator/StreetMap/archive/refs/heads/${CARLA_STREETMAP_TAG}.zip
