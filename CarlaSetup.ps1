@@ -787,6 +787,14 @@ if ($SkipCesium) {
         # with forward slashes for the same reason.
         $env:UNREAL_ENGINE_ROOT        = $env:CARLA_UNREAL_ENGINE_PATH.Replace('\', '/')
         $env:CESIUM_VCPKG_RELEASE_ONLY = 'TRUE'
+        # Pin vcpkg's MSVC to 14.44 so the cesium-native deps (ktx/spz/abseil/...) are built
+        # against the SAME STL that UE 5.7 links with. The x64-windows-unreal triplet honors
+        # this env var; the engine's editor build compiles with MSVC 14.44, but without this
+        # pin vcpkg defaults to the NEWEST installed toolset (e.g. 14.51). 14.51's STL emits
+        # references to newer __std_* vector-algorithm helpers (__std_unique_4, __std_rotate,
+        # __std_find_first_not_of_trivial_pos_1) that don't exist in 14.44's msvcp140.lib, so
+        # the UE link of UnrealEditor-CesiumRuntime.dll fails with LNK2019 unresolved externals.
+        $env:VCPKG_PLATFORM_TOOLSET_VERSION = '14.44'
         # Built from extern\ (NOT extern\cesium-native\) so CMAKE_INSTALL_PREFIX lands in
         # ..\Source\ThirdParty, where Cesium for Unreal expects to find cesium-native.
         Invoke-Checked 'cmake configure cesium-native' {
