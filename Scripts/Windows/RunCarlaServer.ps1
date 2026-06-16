@@ -20,20 +20,102 @@
     CARLA RPC port (default 2000).
 .PARAMETER WithWindow
     Show a window instead of -RenderOffScreen (useful to eyeball Cesium streaming).
+.PARAMETER ExtraArgs
+    Extra arguments appended verbatim to the UnrealEditor command line.
+.PARAMETER UnrealEngineRoot
+    UE 5.7.4 engine root. Resolution order: -UnrealEngineRoot > $env:CARLA_UNREAL_ENGINE_PATH
+    > <repo-parent>\UE_5_7_4. The CARLA project is found relative to this script's location.
+
+.EXAMPLE
+    .\RunCarlaServer.ps1
+.EXAMPLE
+    .\RunCarlaServer.ps1 -RpcPort 3000 -WithWindow
+.EXAMPLE
+    Get-Help .\RunCarlaServer.ps1 -Detailed
 #>
+# PositionalBinding=$false so stray tokens (e.g. legacy --flags) can't silently bind to a
+# parameter; they land in $Remaining and are normalized below. Matches CarlaSetup/BuildCarla,
+# so both PowerShell-native (-RpcPort 3000) and legacy (--rpc-port=3000) styles work.
+[CmdletBinding(PositionalBinding = $false)]
 param(
-    [string]$Map     = "/Game/Carla/Maps/Town10HD_Opt",
-    [int]$RpcPort    = 2000,
+    [string]$Map      = "/Game/Carla/Maps/Town10HD_Opt",
+    [int]$RpcPort     = 2000,
     [switch]$WithWindow,
-    [string]$ExtraArgs = ""
+    [string]$ExtraArgs = "",
+    [string]$UnrealEngineRoot,   # UE 5.7.4 root; env CARLA_UNREAL_ENGINE_PATH
+
+    [Alias('h')]
+    [switch]$Help,
+
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$Remaining
 )
+
+Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$UE       = "G:\Projects\CarlaUE_5_7_4\UE_5_7_4\Engine\Binaries\Win64\UnrealEditor.exe"
-$Uproject = "G:\Projects\CarlaUE_5_7_4\carla\Unreal\CarlaUnreal\CarlaUnreal.uproject"
+function Show-Usage {
+    @'
+RunCarlaServer.ps1 - launch a headless CARLA RPC server (editor binary in -game mode).
 
-if (-not (Test-Path $UE))       { throw "UnrealEditor.exe not found: $UE" }
-if (-not (Test-Path $Uproject)) { throw "uproject not found: $Uproject" }
+USAGE:
+  .\RunCarlaServer.ps1 [options]
+
+OPTIONS (PowerShell-native | legacy alias):
+  -Map <path>                --map=<path>                Startup map (default /Game/Carla/Maps/Town10HD_Opt).
+  -RpcPort <n>               --rpc-port=<n>              CARLA RPC port (default 2000).
+  -WithWindow                --with-window               Show a window instead of -RenderOffScreen.
+  -ExtraArgs <str>           --extra-args=<str>          Extra args appended to the UnrealEditor command line.
+  -UnrealEngineRoot <dir>    --unreal-engine-root=<dir>  UE 5.7.4 root (else CARLA_UNREAL_ENGINE_PATH, else <repo-parent>\UE_5_7_4).
+  -Help               / -h   --help                      Show this help.
+
+EXAMPLES:
+  .\RunCarlaServer.ps1
+  .\RunCarlaServer.ps1 -RpcPort 3000 -WithWindow
+'@ | Write-Host
+}
+
+# Normalize legacy "--flag" / "--flag=value" args (matches CarlaSetup/BuildCarla).
+if ($Remaining) {
+    for ($idx = 0; $idx -lt $Remaining.Count; $idx++) {
+        $arg = $Remaining[$idx]
+        if ($arg -match '^(--[^=]+)=(.*)$') { $key = $matches[1]; $val = $matches[2] }
+        else { $key = $arg; $val = $null }
+        if ($null -ne $val) { $next = $val }
+        elseif ($idx + 1 -lt $Remaining.Count) { $next = $Remaining[$idx + 1] }
+        else { $next = $null }
+        switch -Regex ($key) {
+            '^(--help|/\?|help)$'                { $Help = $true }
+            '^(--with-window)$'                  { $WithWindow = $true }
+            '^(--map)$'                          { if ($null -eq $next) { throw "Argument '$key' requires a value." } $Map = $next;             if ($null -eq $val) { $idx++ } }
+            '^(--rpc-port)$'                     { if ($null -eq $next) { throw "Argument '$key' requires a value." } $RpcPort = [int]$next;     if ($null -eq $val) { $idx++ } }
+            '^(--extra-args)$'                   { if ($null -eq $next) { throw "Argument '$key' requires a value." } $ExtraArgs = $next;       if ($null -eq $val) { $idx++ } }
+            '^(--unreal-engine-root|--ue-root)$' { if ($null -eq $next) { throw "Argument '$key' requires a value." } $UnrealEngineRoot = $next; if ($null -eq $val) { $idx++ } }
+            default { Show-Usage; throw "Unknown argument '$arg'." }
+        }
+    }
+}
+
+if ($Help) { Show-Usage; return }
+
+# Paths: the CARLA repo root is two dirs up from this script (carla/Scripts/Windows), derived by
+# LOCATION (not hard-coded). The UE engine: -UnrealEngineRoot > $env:CARLA_UNREAL_ENGINE_PATH >
+# <repo-parent>\UE_5_7_4.
+$CarlaRoot  = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$RepoParent = Split-Path $CarlaRoot -Parent
+if (-not $UnrealEngineRoot) { $UnrealEngineRoot = $env:CARLA_UNREAL_ENGINE_PATH }
+if (-not $UnrealEngineRoot) { $UnrealEngineRoot = Join-Path $RepoParent "UE_5_7_4" }
+
+# [IO.Path]::Combine (pure string join) instead of Join-Path: Join-Path resolves the drive
+# qualifier and would throw "Cannot find drive" for a bad -UnrealEngineRoot before we can
+# report it nicely. $CarlaRoot is always a real, resolved path so Join-Path is fine there.
+$UE       = [System.IO.Path]::Combine($UnrealEngineRoot, "Engine\Binaries\Win64\UnrealEditor.exe")
+$Uproject = Join-Path $CarlaRoot "Unreal\CarlaUnreal\CarlaUnreal.uproject"
+
+# [IO.File]::Exists returns $false for a missing path -- including a non-existent DRIVE -- without
+# throwing, so a bad -UnrealEngineRoot yields our message instead of "Cannot find drive".
+if (-not [System.IO.File]::Exists($UE))       { throw "UnrealEditor.exe not found: $UE`nSet -UnrealEngineRoot or `$env:CARLA_UNREAL_ENGINE_PATH to your UE 5.7.4 root." }
+if (-not [System.IO.File]::Exists($Uproject)) { throw "CarlaUnreal.uproject not found: $Uproject" }
 
 $ed = Get-Process -Name "UnrealEditor" -ErrorAction SilentlyContinue
 if ($ed) { throw "An UnrealEditor process is already running (PID $($ed.Id -join ', ')). Close it first — two instances on one project conflict." }
@@ -70,7 +152,7 @@ Write-Host ""
 # does not wait for GUI processes). Launch DETACHED (no -NoNewWindow) so Ctrl+C reaches THIS
 # script rather than being swallowed by Unreal, then poll in an interruptible loop. On Ctrl+C
 # the loop is interrupted and `finally` stops the child cleanly.
-$Log = "G:\Projects\CarlaUE_5_7_4\carla\Unreal\CarlaUnreal\Saved\Logs\CarlaUnreal.log"
+$Log = Join-Path $CarlaRoot "Unreal\CarlaUnreal\Saved\Logs\CarlaUnreal.log"
 $proc = Start-Process -FilePath $UE -ArgumentList $argList -PassThru
 Write-Host "[server] PID $($proc.Id) launched; Ctrl+C here to stop it.`n"
 
