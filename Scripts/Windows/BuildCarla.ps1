@@ -21,6 +21,10 @@
     Skip the CarlaNet (.NET) build + wheel.
 .PARAMETER InstallWheel
     Also pip-install the freshly built wheel (--force-reinstall).
+.PARAMETER CleanWheel
+    Wipe CarlaNet\python build artifacts (build/, dist/, carlanet\dlls, *.egg-info) before
+    building the wheel, by passing -Clean through to build_wheel.ps1. Use this when a stale or
+    corrupted python\build dir is producing a bad/failed wheel under -InstallWheel.
 .PARAMETER Vs
     Force a Visual Studio toolchain: '2022' or '2026'. If omitted, uses the
     newest installed VS that has MSVC 14.44 (or current VS dev prompt if active).
@@ -30,6 +34,8 @@
 
 .EXAMPLE
     .\BuildCarla.ps1 -InstallWheel
+.EXAMPLE
+    .\BuildCarla.ps1 -SkipUnreal -InstallWheel -CleanWheel   # clean-rebuild + install just the wheel
 .EXAMPLE
     .\BuildCarla.ps1 -Vs 2026               # build the editor with the VS2026 toolchain
 .EXAMPLE
@@ -46,6 +52,7 @@ param(
     [switch]$SkipUnreal,      # skip the CarlaUnrealEditor C++ build
     [switch]$SkipCarlaNet,    # skip the CarlaNet (.NET) build + wheel
     [switch]$InstallWheel,    # also pip-install the freshly built wheel (--force-reinstall)
+    [switch]$CleanWheel,      # wipe CarlaNet\python build artifacts (build/dist/dlls/egg-info) first
     [string]$UnrealEngineRoot,# UE 5.7.4 root; env CARLA_UNREAL_ENGINE_PATH
 
     [Alias('h')]
@@ -71,6 +78,7 @@ OPTIONS (PowerShell-native | legacy alias):
   -SkipUnreal                --skip-unreal               Skip the CarlaUnrealEditor C++ build.
   -SkipCarlaNet              --skip-carlanet             Skip the CarlaNet (.NET) build + wheel.
   -InstallWheel              --install-wheel             pip-install the freshly built wheel.
+  -CleanWheel                --clean-wheel               Wipe CarlaNet\python build/dist/dlls before building the wheel.
   -UnrealEngineRoot <dir>    --unreal-engine-root=<dir>  UE 5.7.4 source-build root.
   -Help               / -h   --help                      Show this help.
 
@@ -96,6 +104,7 @@ if ($Remaining) {
             '^(--skip-unreal)$'                    { $SkipUnreal = $true }
             '^(--skip-carlanet|--skip-carla-net)$' { $SkipCarlaNet = $true }
             '^(--install-wheel)$'                  { $InstallWheel = $true }
+            '^(--clean-wheel)$'                    { $CleanWheel = $true }
             '^(--vs)$'                             { if ($null -eq $next) { throw "Argument '$key' requires a value." } $Vs = $next;               if ($null -eq $val) { $idx++ } }
             '^(--unreal-engine-root|--ue-root)$'   { if ($null -eq $next) { throw "Argument '$key' requires a value." } $UnrealEngineRoot = $next; if ($null -eq $val) { $idx++ } }
             default { Show-Usage; throw "Unknown argument '$arg'." }
@@ -350,11 +359,12 @@ if (-not $SkipCarlaNet) {
         $netResult = 1
     } else {
         try {
-            if ($InstallWheel) {
-                & $CARLANET_WHEEL -Install 2>&1 | Tee-Object -FilePath $LOG_FILE -Append
-            } else {
-                & $CARLANET_WHEEL          2>&1 | Tee-Object -FilePath $LOG_FILE -Append
-            }
+            # Forward switches to build_wheel.ps1. -Clean wipes its build/dist/dlls/egg-info
+            # first, guarding against a corrupted CarlaNet\python\build dir producing a bad wheel.
+            $wheelArgs = @()
+            if ($InstallWheel) { $wheelArgs += '-Install' }
+            if ($CleanWheel)   { $wheelArgs += '-Clean' }
+            & $CARLANET_WHEEL @wheelArgs 2>&1 | Tee-Object -FilePath $LOG_FILE -Append
             # build_wheel.ps1 throws on any failure; reaching here means success.
             $netResult = 0
             "CARLANET BUILD SUCCEEDED - $(Get-Date)" | Add-Content $LOG_FILE
