@@ -319,17 +319,27 @@ if (-not $SkipUnreal) {
     if (-not (Test-Path $BuildBat))       { throw "UE Build.bat not found: $BuildBat (set -UnrealEngineRoot or `$env:CARLA_UNREAL_ENGINE_PATH)" }
     if (-not (Test-Path $CARLA_UPROJECT)) { throw "CarlaUnreal.uproject not found: $CARLA_UPROJECT" }
 
-    & $BuildBat `
-        CarlaUnrealEditor Win64 Development `
-        "$CARLA_UPROJECT" `
-        -WaitMutex `
-        "-$script:VsYear" `
-        "-CompilerVersion=$script:VsToolset" `
-        -Unattended `
-        -MaxParallelActions=4 `
-        2>&1 | ForEach-Object { $_ -replace "`0", "" } | Tee-Object -FilePath $LOG_FILE -Append
+    # Relax EAP around the native UE build: UBT/Build.bat can emit benign stderr that EAP='Stop'
+    # would promote to a terminating NativeCommandError (the 2>&1 surfaces it into the pipeline),
+    # which would abort the script before the exit-code check below. The build's real success or
+    # failure signal is its exit code; warnings stay warnings.
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & $BuildBat `
+            CarlaUnrealEditor Win64 Development `
+            "$CARLA_UPROJECT" `
+            -WaitMutex `
+            "-$script:VsYear" `
+            "-CompilerVersion=$script:VsToolset" `
+            -Unattended `
+            -MaxParallelActions=4 `
+            2>&1 | ForEach-Object { $_ -replace "`0", "" } | Tee-Object -FilePath $LOG_FILE -Append
 
-    $ueResult = $LASTEXITCODE
+        $ueResult = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prevEAP
+    }
 
     if ($ueResult -eq 0) {
         "UNREAL BUILD SUCCEEDED - $(Get-Date)" | Add-Content $LOG_FILE

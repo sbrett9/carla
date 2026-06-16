@@ -7,6 +7,25 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Run a native command with $ErrorActionPreference temporarily relaxed to 'Continue', then
+# gate on its exit code. Why: under 'Stop', a native tool writing ANY line to stderr -- even a
+# benign warning (a slow/unresponsive NuGet restore mirror, pip's "Ignoring invalid distribution",
+# "A new release of pip is available", dotnet NU#### notices) -- gets promoted to a terminating
+# NativeCommandError, especially once a caller merges streams with 2>&1. That turns a successful
+# build into a reported failure. 'Continue' lets the warning through as a warning (still printed/
+# logged) while the EXIT CODE remains the real success/failure signal. cmdlet errors elsewhere in
+# this script keep the stricter 'Stop' behavior.
+function Invoke-NativeChecked {
+    param(
+        [Parameter(Mandatory)][string]$What,
+        [Parameter(Mandatory)][scriptblock]$Action
+    )
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { & $Action } finally { $ErrorActionPreference = $prevEAP }
+    if ($LASTEXITCODE -ne 0) { throw "[build_wheel] $What failed with exit code $LASTEXITCODE" }
+}
+
 $scriptDir     = $PSScriptRoot
 $carlaNetRoot  = (Resolve-Path (Join-Path $scriptDir '..')).Path
 $pkgDir        = Join-Path $scriptDir 'carlanet'
@@ -34,34 +53,22 @@ if (-not (Test-Path $dllsDir)) {
 }
 
 Write-Host "[build_wheel] running dotnet publish -> $dllsDir"
-dotnet publish $csproj -c Release -o $dllsDir
-if ($LASTEXITCODE -ne 0) {
-    throw "[build_wheel] dotnet publish failed with exit code $LASTEXITCODE"
-}
+Invoke-NativeChecked 'dotnet publish' { dotnet publish $csproj -c Release -o $dllsDir }
 
 # Shim is python/carlanet/__init__.py (canonical); no stray carlanet.py is published.
 
 if ($Editable) {
     Write-Host "[build_wheel] performing editable install (pip install -e .)"
-    python -m pip install -e $scriptDir
-    if ($LASTEXITCODE -ne 0) {
-        throw "[build_wheel] editable pip install failed with exit code $LASTEXITCODE"
-    }
+    Invoke-NativeChecked 'editable pip install' { python -m pip install -e $scriptDir }
     Write-Host "[build_wheel] editable install complete"
     return
 }
 
 Write-Host "[build_wheel] ensuring 'build' package is available"
-python -m pip install --upgrade build
-if ($LASTEXITCODE -ne 0) {
-    throw "[build_wheel] failed to install/upgrade 'build' (exit $LASTEXITCODE)"
-}
+Invoke-NativeChecked "install/upgrade 'build'" { python -m pip install --upgrade build }
 
 Write-Host "[build_wheel] building wheel"
-python -m build --wheel $scriptDir
-if ($LASTEXITCODE -ne 0) {
-    throw "[build_wheel] python -m build failed with exit code $LASTEXITCODE"
-}
+Invoke-NativeChecked 'python -m build' { python -m build --wheel $scriptDir }
 
 $wheelPath = Get-ChildItem -Path (Join-Path $distDir '*.whl') -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending |
@@ -75,9 +82,6 @@ Write-Host "[build_wheel] wheel built: $($wheelPath.FullName)"
 
 if ($Install) {
     Write-Host "[build_wheel] installing wheel with --force-reinstall"
-    python -m pip install --force-reinstall $wheelPath.FullName
-    if ($LASTEXITCODE -ne 0) {
-        throw "[build_wheel] wheel install failed with exit code $LASTEXITCODE"
-    }
+    Invoke-NativeChecked 'wheel install' { python -m pip install --force-reinstall $wheelPath.FullName }
     Write-Host "[build_wheel] install complete"
 }
