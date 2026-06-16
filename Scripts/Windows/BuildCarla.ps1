@@ -17,6 +17,12 @@
 
 .PARAMETER SkipUnreal
     Skip the CarlaUnrealEditor C++ build.
+.PARAMETER CleanUnreal
+    Force a full from-scratch editor rebuild: delete the project's and every plugin's
+    Intermediate and Binaries (UBT outputs + UHT-generated headers) before building, so UBT
+    recompiles everything. Preserves Plugins\CesiumForUnreal\Source\ThirdParty, so the already-
+    built cesium-native (vcpkg) is NOT rebuilt -- only the C++ modules recompile. Close any
+    running editor first (locked binaries can't be deleted).
 .PARAMETER SkipCarlaNet
     Skip the CarlaNet (.NET) build + wheel.
 .PARAMETER InstallWheel
@@ -50,6 +56,7 @@
 param(
     [string]$Vs,              # force VS toolchain: '2022' or '2026'; omit to auto-detect
     [switch]$SkipUnreal,      # skip the CarlaUnrealEditor C++ build
+    [switch]$CleanUnreal,     # wipe editor Intermediate/Binaries first for a full from-scratch rebuild
     [switch]$SkipCarlaNet,    # skip the CarlaNet (.NET) build + wheel
     [switch]$InstallWheel,    # also pip-install the freshly built wheel (--force-reinstall)
     [switch]$CleanWheel,      # wipe CarlaNet\python build artifacts (build/dist/dlls/egg-info) first
@@ -76,6 +83,7 @@ OPTIONS (PowerShell-native | legacy alias):
   -Vs <2022|2026>            --vs=<2022|2026>            VS toolchain for the UE build (MSVC 14.44).
                                                          Omit to use the newest installed VS.
   -SkipUnreal                --skip-unreal               Skip the CarlaUnrealEditor C++ build.
+  -CleanUnreal               --clean-unreal / --rebuild  Wipe Intermediate/Binaries first (full editor rebuild; keeps cesium-native).
   -SkipCarlaNet              --skip-carlanet             Skip the CarlaNet (.NET) build + wheel.
   -InstallWheel              --install-wheel             pip-install the freshly built wheel.
   -CleanWheel                --clean-wheel               Wipe CarlaNet\python build/dist/dlls before building the wheel.
@@ -102,6 +110,7 @@ if ($Remaining) {
         switch -Regex ($key) {
             '^(--help|/\?|help)$'                  { $Help = $true }
             '^(--skip-unreal)$'                    { $SkipUnreal = $true }
+            '^(--clean-unreal|--rebuild)$'         { $CleanUnreal = $true }
             '^(--skip-carlanet|--skip-carla-net)$' { $SkipCarlaNet = $true }
             '^(--install-wheel)$'                  { $InstallWheel = $true }
             '^(--clean-wheel)$'                    { $CleanWheel = $true }
@@ -318,6 +327,26 @@ if (-not $SkipUnreal) {
     $BuildBat = Join-Path $UE_ROOT "Engine\Build\BatchFiles\Build.bat"
     if (-not (Test-Path $BuildBat))       { throw "UE Build.bat not found: $BuildBat (set -UnrealEngineRoot or `$env:CARLA_UNREAL_ENGINE_PATH)" }
     if (-not (Test-Path $CARLA_UPROJECT)) { throw "CarlaUnreal.uproject not found: $CARLA_UPROJECT" }
+
+    if ($CleanUnreal) {
+        Write-Host "[clean] Full rebuild: removing editor Intermediate/Binaries (close any running editor first)..."
+        # Project UBT outputs + UHT-generated headers, plus each plugin's. Source\ThirdParty is
+        # under Source\ (not touched), so the built cesium-native is preserved; only C++ recompiles.
+        $cleanRoots = @(
+            (Join-Path $CarlaRoot 'Unreal\CarlaUnreal\Intermediate'),
+            (Join-Path $CarlaRoot 'Unreal\CarlaUnreal\Binaries')
+        )
+        $pluginsDir = Join-Path $CarlaRoot 'Unreal\CarlaUnreal\Plugins'
+        if (Test-Path $pluginsDir) {
+            foreach ($pl in (Get-ChildItem $pluginsDir -Directory -ErrorAction SilentlyContinue)) {
+                $cleanRoots += (Join-Path $pl.FullName 'Intermediate')
+                $cleanRoots += (Join-Path $pl.FullName 'Binaries')
+            }
+        }
+        foreach ($d in $cleanRoots) {
+            if (Test-Path $d) { Write-Host "  removing $d"; Remove-Item -Recurse -Force $d }
+        }
+    }
 
     # Relax EAP around the native UE build: UBT/Build.bat can emit benign stderr that EAP='Stop'
     # would promote to a terminating NativeCommandError (the 2>&1 surfaces it into the pipeline),
