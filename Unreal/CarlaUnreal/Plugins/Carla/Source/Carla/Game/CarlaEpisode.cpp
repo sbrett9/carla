@@ -156,7 +156,7 @@ bool UCarlaEpisode::LoadNewOpendriveEpisode(
   const auto RecastOBJ = (RoadMesh + CrosswalksMesh).GenerateOBJForRecast();
 
   const FString AbsoluteOBJPath = FPaths::ConvertRelativePathToFull(
-      FPaths::ProjectSavedDir() + "Carla/Maps/Nav/OpenDriveMap.obj");
+      FPaths::ProjectContentDir() + "Carla/Maps/Nav/OpenDriveMap.obj");
 
   // Store the OBJ string to a file in order to that RecastBuilder can load it
   FFileHelper::SaveStringToFile(
@@ -166,7 +166,7 @@ bool UCarlaEpisode::LoadNewOpendriveEpisode(
       &IFileManager::Get());
 
   const FString AbsoluteXODRPath = FPaths::ConvertRelativePathToFull(
-      FPaths::ProjectSavedDir() + "Carla/Maps/OpenDrive/OpenDriveMap.xodr");
+      FPaths::ProjectContentDir() + "Carla/Maps/OpenDrive/OpenDriveMap.xodr");
 
   // Copy the OpenDrive as a file in the serverside
   FFileHelper::SaveStringToFile(
