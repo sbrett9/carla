@@ -371,9 +371,11 @@ if (-not $SkipCarlaNet) {
         try {
             # Forward switches to build_wheel.ps1. -Clean wipes its build/dist/dlls/egg-info
             # first, guarding against a corrupted CarlaNet\python\build dir producing a bad wheel.
-            $wheelArgs = @()
-            if ($InstallWheel) { $wheelArgs += '-Install' }
-            if ($CleanWheel)   { $wheelArgs += '-Clean' }
+            # NB: switches must be splatted via a HASHTABLE -- array splatting passes '-Install'
+            # as a positional VALUE, which errors ("positional parameter cannot be found").
+            $wheelArgs = @{}
+            if ($InstallWheel) { $wheelArgs['Install'] = $true }
+            if ($CleanWheel)   { $wheelArgs['Clean']   = $true }
             & $CARLANET_WHEEL @wheelArgs 2>&1 | Tee-Object -FilePath $LOG_FILE -Append
             # build_wheel.ps1 throws on any failure; reaching here means success.
             $netResult = 0
