@@ -44,6 +44,23 @@ public sealed class CarlaClient : IAsyncDisposable
     private readonly ConcurrentDictionary<ActorId, ActorSnapshot> _actorCache = new();
     private IDisposable? _worldObserver;
 
+    // ── Telemetry-truth decoupling state (set by GenerateWorldFromOsmWithElevationAsync) ──
+    // The digital-twin reports each vehicle's ELLIPSOIDAL-WGS84 altitude (hae) from the
+    // bare-earth DTM (Cesium World Terrain), NOT from where the vehicle physically sits. With
+    // --height-align area/origin the road mesh (and the cars on it) is shifted onto the photoreal
+    // DSM by a constant offset; these fields let the telemetry path recover the bare-earth truth
+    // without sampling Cesium live (see get_vehicle_telemetry in the Python shim).
+    //
+    // LastHeightAlignOffset = the constant road-Z offset applied (photoreal-ground gap; 0 for
+    //   "none"). hae_true(on-road) = physical_hae - LastHeightAlignOffset.
+    // LastGroundDtmSamples = the per-road-point bare-earth DTM samples as GeoLocation
+    //   (Latitude, Longitude, ellipsoidal Altitude), BEFORE the offset was added. Lat/lon are the
+    //   exact input sample coordinates (not server-echoed), so a nearest/IDW lookup at a vehicle's
+    //   lat/lon yields the bare-earth ground there — robust to a future spatially-varying drape and
+    //   to off-road vehicles (which ride un-offset DTM).
+    public double LastHeightAlignOffset { get; private set; }
+    public IReadOnlyList<GeoLocation> LastGroundDtmSamples { get; private set; } = [];
+
     public CarlaClient(string host, int port = 2000, TimeSpan? timeout = null, ILogger<CarlaClient>? logger = null)
     {
         _host = host;
@@ -291,9 +308,21 @@ public sealed class CarlaClient : IAsyncDisposable
         if (sampleGround)
             await SetLayerVisibleAsync("ground", false).ConfigureAwait(false);
 
-        // originHeight stays the GROUND (DTM) origin sample — the georeference datum is unchanged;
-        // only the road heights are shifted, so the car sits on the photoreal street and the reported
-        // telemetry HAE = originHeight + localZ tracks the photoreal surface.
+        // Persist the data the telemetry path needs to report bare-earth HAE truth decoupled from
+        // this visual shift (consumed by get_vehicle_telemetry in the Python shim; no live Cesium
+        // sampling in the 5 Hz loop). The constant offset recovers on-road truth exactly today;
+        // the per-point DTM table survives a future spatially-varying drape and off-road vehicles.
+        // Build the table from the INPUT sample lat/lon (points[1..]) so coordinates are exact
+        // regardless of whether the server echoes lat/lon back in the height results.
+        LastHeightAlignOffset = heightOffset;
+        var dtmSamples = new GeoLocation[samples.Count];
+        for (int i = 0; i < samples.Count; i++)
+            dtmSamples[i] = new GeoLocation(points[i + 1].Latitude, points[i + 1].Longitude, heights[i + 1].Altitude);
+        LastGroundDtmSamples = dtmSamples;
+
+        // originHeight stays the GROUND (DTM) origin sample — the georeference datum is unchanged.
+        // Only the road MESH is shifted by heightOffset (visual seating on the photoreal); the
+        // reported telemetry HAE is now decoupled from that shift and reports bare-earth DTM truth.
         double originHeight = originHeightOverride ?? heights[0].Altitude;
         var roadEllipsoidal = new double[samples.Count];
         for (int i = 0; i < samples.Count; i++)

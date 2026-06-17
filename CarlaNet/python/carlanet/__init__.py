@@ -1348,6 +1348,41 @@ class World:
             CancellationToken(False)))
         return [(r.Latitude, r.Longitude, r.Altitude) for r in results]
 
+    # Vehicles within this horizontal distance (m) of a sampled road point are treated as
+    # ON-ROAD (the height-align offset, which only shifts the road MESH, applies to them and
+    # is removed to recover bare-earth truth). Beyond it a vehicle rides the un-offset
+    # collidable bare-earth ground, so no correction is applied. Road samples are ~10 m apart,
+    # so anything genuinely on a road is well inside this; off-road spawns (lots, fields) fall
+    # outside. See get_vehicle_telemetry / project_height_align_mechanism.
+    _ONROAD_GATE_M = 40.0
+
+    def _bare_earth_dtm_table(self):
+        """Lazily build + cache the per-road-point bare-earth DTM table the last world build
+        persisted on the C# client (LastGroundDtmSamples). Returns (lats, lons, alts) — numpy
+        arrays when numpy is available, else parallel Python lists — or None when no elevated
+        world was built (legacy/plain worlds). Pure local data: no Cesium sampling, 5 Hz-safe."""
+        try:
+            cs = self._client.LastGroundDtmSamples
+            n = int(cs.Count)
+        except Exception:
+            return None
+        if n == 0:
+            return None
+        cache = getattr(self, "_dtm_table_cache", None)
+        if cache is not None and cache[0] == n:
+            return cache[1]
+        lats = [0.0] * n; lons = [0.0] * n; alts = [0.0] * n
+        for i in range(n):
+            s = cs[i]
+            lats[i] = float(s.Latitude); lons[i] = float(s.Longitude); alts[i] = float(s.Altitude)
+        try:
+            import numpy as _np
+            table = (_np.asarray(lats), _np.asarray(lons), _np.asarray(alts))
+        except Exception:
+            table = (lats, lons, alts)
+        self._dtm_table_cache = (n, table)
+        return table
+
     def get_vehicle_telemetry(self, origin=None):
         """Pull per-vehicle TRUTH telemetry for every vehicle in the world as plain dicts (the
         09_Telemetry_CoT_Contract field set). Cheap — positions/velocities are world-observer cache
@@ -1355,19 +1390,48 @@ class World:
         (lat, lon, height_m) WGS84 tuple for the local->geodetic transform; if omitted it is fetched
         once via get_cesium_origin() (pass it in from a 5 Hz loop to avoid the per-tick RPC).
 
-        Each dict: id, type_id, base_type, special_type, color, role_name, lat, lon, hae, speed_mps,
-        course_deg, vx, vy, vz, length_m, width_m, height_m. Heights are ELLIPSOIDAL WGS84 (HAE)."""
+        `hae` is the vehicle's BARE-EARTH ellipsoidal-WGS84 altitude (the locked HAE truth datum),
+        DECOUPLED from where the vehicle physically/visually sits. With --height-align area/origin
+        the road mesh (and the cars on it) is shifted onto the Google photoreal DSM by a constant
+        offset for visual seating; that visual offset is removed here so `hae` reports the
+        geodetically-true Cesium-World-Terrain (DTM) height, not the photoreal-aligned road Z. The
+        constant offset (LastHeightAlignOffset) is removed for on-road vehicles (exact today); the
+        persisted per-road-point DTM table gates on/off-road and is the hook for a future
+        spatially-varying drape. `hae` keeps the vehicle pivot (actor origin ~CG/base above the
+        road) — the decoupling removes the align bias, not the reference point; `hae_dtm` is the
+        bare-earth ground at the vehicle (no pivot), so hae - hae_dtm ≈ the pivot height. No live
+        Cesium sampling happens here (multi-tick latency); all data is the cached world-build table.
+        With --height-align none, offset is 0 and `hae` == the physical altitude (unchanged).
+        `lat`/`lon` are always exact and untouched.
+
+        Each dict: id, type_id, base_type, special_type, color, role_name, lat, lon, hae, hae_dtm,
+        speed_mps, course_deg, vx, vy, vz, length_m, width_m, height_m. Heights are ELLIPSOIDAL
+        WGS84 (HAE)."""
         import math as _m
         from CarlaNet.Types.Geom import Geodesy, GeoLocation
         if origin is None:
             origin = self.get_cesium_origin()                      # (lat, lon, height_m)
         cs_origin = GeoLocation(float(origin[0]), float(origin[1]), float(origin[2]))
+        try:
+            offset = float(self._client.LastHeightAlignOffset)
+        except Exception:
+            offset = 0.0
+        table = self._bare_earth_dtm_table()   # also feeds hae_dtm diagnostic when offset == 0
         out = []
         for v in self.get_actors().filter("vehicle.*"):
             tf = v.get_transform()
             vel = v.get_velocity()
             loc = tf.location
             geo = Geodesy.CarlaLocalToGeodetic(cs_origin, float(loc.x), float(loc.y), float(loc.z))
+            physical_hae = float(geo.Altitude)
+            # Decouple reported HAE from the visual height-align shift (bare-earth DTM truth).
+            dtm_at_veh, dist_m = self._nearest_dtm(table, geo.Latitude, geo.Longitude)
+            if offset != 0.0 and dist_m is not None and dist_m <= self._ONROAD_GATE_M:
+                hae = physical_hae - offset          # on-road: remove the constant road-mesh shift
+            elif offset != 0.0 and dist_m is None:
+                hae = physical_hae - offset          # no table to gate with: best-effort constant
+            else:
+                hae = physical_hae                   # off-road / height-align none: no correction
             vx, vy, vz = float(vel.x), float(vel.y), float(vel.z)
             speed = _m.hypot(vx, vy)
             # Course over ground, degrees true north (CARLA +X=East, -Y=North); yaw fallback ~stopped.
@@ -1384,12 +1448,41 @@ class World:
                 "id": v.id, "type_id": v.type_id,
                 "base_type": base, "special_type": attrs.get("special_type", ""),
                 "color": attrs.get("color", ""), "role_name": attrs.get("role_name", ""),
-                "lat": geo.Latitude, "lon": geo.Longitude, "hae": geo.Altitude,
+                "lat": geo.Latitude, "lon": geo.Longitude, "hae": hae, "hae_dtm": dtm_at_veh,
                 "speed_mps": speed, "course_deg": course,
                 "vx": vx, "vy": vy, "vz": vz,
                 "length_m": 2.0 * ext.x, "width_m": 2.0 * ext.y, "height_m": 2.0 * ext.z,
             })
         return out
+
+    @staticmethod
+    def _nearest_dtm(table, lat, lon):
+        """Nearest bare-earth DTM sample to (lat, lon). Returns (dtm_altitude_m, distance_m), or
+        (None, None) when there is no table. Distance is an equirectangular metres approximation
+        (samples are dense ~10 m, so nearest-sample is fine)."""
+        if table is None:
+            return None, None
+        import math as _m
+        lats, lons, alts = table
+        coslat = _m.cos(_m.radians(float(lat)))
+        try:
+            import numpy as _np
+            if isinstance(lats, _np.ndarray):
+                dx = (lons - float(lon)) * coslat
+                dy = (lats - float(lat))
+                i = int(_np.argmin(dx * dx + dy * dy))
+                d2 = float(dx[i] * dx[i] + dy[i] * dy[i])
+                return float(alts[i]), _m.sqrt(d2) * 111320.0
+        except Exception:
+            pass
+        best_i, best_d2 = 0, float("inf")
+        for i in range(len(lats)):
+            dx = (lons[i] - float(lon)) * coslat
+            dy = (lats[i] - float(lat))
+            d2 = dx * dx + dy * dy
+            if d2 < best_d2:
+                best_d2, best_i = d2, i
+        return float(alts[best_i]), _m.sqrt(best_d2) * 111320.0
 
     def get_actors(self, actor_ids=None):
         from System import UInt32
