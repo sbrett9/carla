@@ -54,8 +54,9 @@ ap.add_argument("--height-align", choices=["area", "origin", "none"], default="n
                      "(A constant offset can't fix the spatially-varying DTM-vs-DSM divergence on hills.)")
 ap.add_argument("--no-ground-collision", dest="ground_collision", action="store_false", default=True,
                 help="disable bare-earth ground collision (default ON = vehicles ride the road/ground "
-                     "for off-road safety; only disable if you apply a height-align offset and don't want "
-                     "vehicles riding the un-offset terrain)")
+                     "for off-road safety). Safe to leave ON with --height-align area/origin: the ground "
+                     "layer is dropped by the same offset (Option A) so it coincides with the road — no "
+                     "on-road float, off-road still supported.")
 ap.add_argument("--settle", type=float, default=10.0)
 ap.add_argument("--traffic", type=int, default=0, help="spawn N autopilot vehicles after build")
 ap.add_argument("--no-road-filter", action="store_true",

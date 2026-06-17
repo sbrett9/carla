@@ -52,12 +52,14 @@ public sealed class CarlaClient : IAsyncDisposable
     // without sampling Cesium live (see get_vehicle_telemetry in the Python shim).
     //
     // LastHeightAlignOffset = the constant road-Z offset applied (photoreal-ground gap; 0 for
-    //   "none"). hae_true(on-road) = physical_hae - LastHeightAlignOffset.
+    //   "none"). With Option A the collidable "ground" layer is shifted by this same constant
+    //   (SetLayerOffsetAsync) so BOTH on- and off-road vehicles sit at DTM + offset; telemetry
+    //   recovers bare-earth truth by subtracting it unconditionally: hae = physical_hae - offset.
     // LastGroundDtmSamples = the per-road-point bare-earth DTM samples as GeoLocation
     //   (Latitude, Longitude, ellipsoidal Altitude), BEFORE the offset was added. Lat/lon are the
-    //   exact input sample coordinates (not server-echoed), so a nearest/IDW lookup at a vehicle's
-    //   lat/lon yields the bare-earth ground there — robust to a future spatially-varying drape and
-    //   to off-road vehicles (which ride un-offset DTM).
+    //   exact input sample coordinates (not server-echoed); a nearest/IDW lookup at a vehicle's
+    //   lat/lon yields the bare-earth ground there (telemetry diagnostic hae_dtm, and the hook for a
+    //   future spatially-varying drape where the offset is no longer a single constant).
     public double LastHeightAlignOffset { get; private set; }
     public IReadOnlyList<GeoLocation> LastGroundDtmSamples { get; private set; } = [];
 
@@ -346,12 +348,22 @@ public sealed class CarlaClient : IAsyncDisposable
         await ConfigureCesiumGeoreferenceAsync(alignedOrigin, ionToken, ionAssetId, groundIonAssetId, refresh: true)
             .ConfigureAwait(false);
 
-        // The bare-earth "ground" layer is the road-Z sample source; with a height-align offset the
-        // road mesh no longer coincides with the ground, so collidable ground would make vehicles ride
-        // the (higher) terrain and float above the lowered road. Default ground collision OFF so
-        // vehicles ride the photoreal-aligned ROAD mesh (eo_observer's V key can re-enable it).
+        // Option A: drop the collidable bare-earth "ground" layer by the height-align offset so its
+        // collision mesh coincides with the offset road mesh. Because area/origin apply a single
+        // CONSTANT offset (road = DTM + heightOffset), a constant ground shift re-coincides them
+        // EXACTLY everywhere — on-road vehicles no longer float above the lowered road, and off-road
+        // vehicles still ride a (now offset) collidable surface instead of falling through. The truth
+        // georeference is untouched (GetCesiumOrigin and height sampling stay bare-earth). MUST run
+        // AFTER the ConfigureCesiumGeoreferenceAsync above (which reassigns tilesets to the default
+        // georeference). No-op when heightOffset == 0 (height-align none). Telemetry then subtracts
+        // the same constant everywhere (see get_vehicle_telemetry); LastHeightAlignOffset carries it.
         if (groundIonAssetId > 0)
+        {
+            await SetLayerOffsetAsync("ground", heightOffset).ConfigureAwait(false);
+            // Ground collision is now SAFE to leave ON under area/origin (it coincides with the road),
+            // giving on-road seating + off-road support. eo_observer's V key still toggles it.
             await SetLayerCollisionAsync("ground", groundCollision).ConfigureAwait(false);
+        }
 
         return elevatedXodr;
     }
@@ -406,6 +418,14 @@ public sealed class CarlaClient : IAsyncDisposable
     /// <see cref="SetLayerVisibleAsync"/>; independent of visibility.
     public Task<bool> SetLayerCollisionAsync(string layer, bool enabled)
         => _rpc.CallAsync<bool>("set_layer_collision", layer, enabled);
+
+    /// Per-layer VERTICAL OFFSET (digital-twin Option A). Moves the tagged Cesium tileset layer
+    /// up/down by <paramref name="offsetMeters"/> (signed, +up) via a dedicated georeference,
+    /// without moving the truth georeference (GetCesiumOrigin / sampling stay truthed). Used to
+    /// drop the collidable bare-earth "ground" layer by the height-align offset so its collision
+    /// coincides with the offset road mesh. 0 reassigns the layer to the default georeference.
+    public Task<bool> SetLayerOffsetAsync(string layer, double offsetMeters)
+        => _rpc.CallAsync<bool>("set_layer_offset", layer, offsetMeters);
 
     /// The Cesium georeference origin as GeoLocation(latitude, longitude, ellipsoidal height m).
     /// True elevation of a local Unreal point = this height + the point's local Z.

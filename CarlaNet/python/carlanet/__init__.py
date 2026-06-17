@@ -1313,6 +1313,15 @@ class World:
         set_layer_visible; independent of visibility."""
         return bool(_sync(self._client.SetLayerCollisionAsync(str(layer), bool(enabled))))
 
+    def set_layer_offset(self, layer: str, offset_meters: float):
+        """Per-layer VERTICAL OFFSET (digital-twin Option A). Move the tagged Cesium tileset layer
+        ('photoreal'/'ground') up/down by offset_meters (signed, +up) via a dedicated georeference,
+        WITHOUT moving the truth georeference (get_cesium_origin and height sampling stay truthed to
+        the OSM origin). Used by the elevation build to drop the collidable bare-earth 'ground' layer
+        by the height-align offset so its collision coincides with the offset road mesh (no on-road
+        float, off-road still supported). 0 reassigns the layer to the default georeference."""
+        return bool(_sync(self._client.SetLayerOffsetAsync(str(layer), float(offset_meters))))
+
     def get_cesium_origin(self):
         """Cesium georeference origin as (latitude, longitude, height_m). The true elevation
         of a local point at Unreal Z is height_m + Z."""
@@ -1347,14 +1356,6 @@ class World:
             TimeSpan.FromMilliseconds(50),
             CancellationToken(False)))
         return [(r.Latitude, r.Longitude, r.Altitude) for r in results]
-
-    # Vehicles within this horizontal distance (m) of a sampled road point are treated as
-    # ON-ROAD (the height-align offset, which only shifts the road MESH, applies to them and
-    # is removed to recover bare-earth truth). Beyond it a vehicle rides the un-offset
-    # collidable bare-earth ground, so no correction is applied. Road samples are ~10 m apart,
-    # so anything genuinely on a road is well inside this; off-road spawns (lots, fields) fall
-    # outside. See get_vehicle_telemetry / project_height_align_mechanism.
-    _ONROAD_GATE_M = 40.0
 
     def _bare_earth_dtm_table(self):
         """Lazily build + cache the per-road-point bare-earth DTM table the last world build
@@ -1392,17 +1393,17 @@ class World:
 
         `hae` is the vehicle's BARE-EARTH ellipsoidal-WGS84 altitude (the locked HAE truth datum),
         DECOUPLED from where the vehicle physically/visually sits. With --height-align area/origin
-        the road mesh (and the cars on it) is shifted onto the Google photoreal DSM by a constant
-        offset for visual seating; that visual offset is removed here so `hae` reports the
-        geodetically-true Cesium-World-Terrain (DTM) height, not the photoreal-aligned road Z. The
-        constant offset (LastHeightAlignOffset) is removed for on-road vehicles (exact today); the
-        persisted per-road-point DTM table gates on/off-road and is the hook for a future
-        spatially-varying drape. `hae` keeps the vehicle pivot (actor origin ~CG/base above the
-        road) — the decoupling removes the align bias, not the reference point; `hae_dtm` is the
-        bare-earth ground at the vehicle (no pivot), so hae - hae_dtm ≈ the pivot height. No live
-        Cesium sampling happens here (multi-tick latency); all data is the cached world-build table.
-        With --height-align none, offset is 0 and `hae` == the physical altitude (unchanged).
-        `lat`/`lon` are always exact and untouched.
+        the road mesh AND the collidable bare-earth ground are both shifted by one constant offset
+        (Option A: the ground layer is dropped by the same amount so it coincides with the road —
+        see SetLayerOffsetAsync), so EVERY vehicle, on-road or off-road, sits at DTM + offset. This
+        method recovers bare-earth truth by subtracting that one constant unconditionally:
+        hae = physical_hae - LastHeightAlignOffset. No on/off-road gate is needed (Option A makes the
+        whole collidable world offset by the same constant). `hae` keeps the vehicle pivot (actor
+        origin ~CG/base above the surface) — the decoupling removes the align bias, not the reference
+        point; `hae_dtm` is the cached bare-earth ground at the vehicle (no pivot), so
+        hae - hae_dtm ≈ the pivot height. No live Cesium sampling happens here (multi-tick latency);
+        all data is the cached world-build table. With --height-align none, offset is 0 and `hae` ==
+        the physical altitude (unchanged). `lat`/`lon` are always exact and untouched.
 
         Each dict: id, type_id, base_type, special_type, color, role_name, lat, lon, hae, hae_dtm,
         speed_mps, course_deg, vx, vy, vz, length_m, width_m, height_m. Heights are ELLIPSOIDAL
@@ -1416,7 +1417,7 @@ class World:
             offset = float(self._client.LastHeightAlignOffset)
         except Exception:
             offset = 0.0
-        table = self._bare_earth_dtm_table()   # also feeds hae_dtm diagnostic when offset == 0
+        table = self._bare_earth_dtm_table()   # feeds the hae_dtm diagnostic
         out = []
         for v in self.get_actors().filter("vehicle.*"):
             tf = v.get_transform()
@@ -1424,14 +1425,11 @@ class World:
             loc = tf.location
             geo = Geodesy.CarlaLocalToGeodetic(cs_origin, float(loc.x), float(loc.y), float(loc.z))
             physical_hae = float(geo.Altitude)
-            # Decouple reported HAE from the visual height-align shift (bare-earth DTM truth).
-            dtm_at_veh, dist_m = self._nearest_dtm(table, geo.Latitude, geo.Longitude)
-            if offset != 0.0 and dist_m is not None and dist_m <= self._ONROAD_GATE_M:
-                hae = physical_hae - offset          # on-road: remove the constant road-mesh shift
-            elif offset != 0.0 and dist_m is None:
-                hae = physical_hae - offset          # no table to gate with: best-effort constant
-            else:
-                hae = physical_hae                   # off-road / height-align none: no correction
+            # Option A: the whole collidable surface (road + ground) is shifted by the same constant
+            # offset, so subtract it unconditionally to recover bare-earth DTM truth (offset 0 under
+            # height-align none -> no change). hae_dtm is the cached bare-earth ground (diagnostic).
+            hae = physical_hae - offset
+            dtm_at_veh, _ = self._nearest_dtm(table, geo.Latitude, geo.Longitude)
             vx, vy, vz = float(vel.x), float(vel.y), float(vel.z)
             speed = _m.hypot(vx, vy)
             # Course over ground, degrees true north (CARLA +X=East, -Y=North); yaw fallback ~stopped.

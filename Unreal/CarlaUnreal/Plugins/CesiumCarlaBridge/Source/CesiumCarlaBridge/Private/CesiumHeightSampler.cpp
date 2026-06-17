@@ -354,6 +354,74 @@ int32 UCesiumHeightSampler::SetLayerCollision(UObject* WorldContextObject, const
 	return Count;
 }
 
+int32 UCesiumHeightSampler::SetLayerVerticalOffset(UObject* WorldContextObject, const FString& LayerTag, double OffsetMeters)
+{
+	UWorld* World = GEngine
+		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
+		: nullptr;
+	if (!World)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] SetLayerVerticalOffset: no world."));
+		return -1;
+	}
+
+	// The TRUTH georeference (tagged DEFAULT_GEOREFERENCE; safe — a plain SpawnActor below is NOT
+	// auto-tagged as default, so it can never be returned here). Read its origin so the offset
+	// georeference shares the same lat/lon and only differs in height.
+	ACesiumGeoreference* Default = ACesiumGeoreference::GetDefaultGeoreference(World);
+	if (!Default)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] SetLayerVerticalOffset: no default georeference."));
+		return -1;
+	}
+	const FVector O = Default->GetOriginLongitudeLatitudeHeight(); // (lon X, lat Y, height Z)
+
+	// Target georeference for the layer: the default (undo) when offset ~0, else a dedicated
+	// offset georeference. Raising a georeference's origin height renders its tiles LOWER, so to
+	// move tiles by +OffsetMeters (up) the origin height is (default height − OffsetMeters).
+	const FName OffsetGeorefTag(TEXT("carla_offset_georef"));
+	ACesiumGeoreference* Target = Default;
+	if (FMath::Abs(OffsetMeters) > KINDA_SMALL_NUMBER)
+	{
+		ACesiumGeoreference* OffsetGeoref = nullptr;
+		for (TActorIterator<ACesiumGeoreference> It(World); It; ++It)
+		{
+			if (IsValid(*It) && (*It)->ActorHasTag(OffsetGeorefTag)) { OffsetGeoref = *It; break; }
+		}
+		if (!OffsetGeoref)
+		{
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			OffsetGeoref = World->SpawnActor<ACesiumGeoreference>(SpawnParams);
+			if (!OffsetGeoref)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] SetLayerVerticalOffset: spawn of offset georeference failed."));
+				return -1;
+			}
+			OffsetGeoref->Tags.Add(OffsetGeorefTag);
+		}
+		OffsetGeoref->SetOriginPlacement(EOriginPlacement::CartographicOrigin);
+		OffsetGeoref->SetOriginLongitudeLatitudeHeight(FVector(O.X, O.Y, O.Z - OffsetMeters));
+		Target = OffsetGeoref;
+	}
+
+	const FName TagName(*LayerTag);
+	int32 Count = 0;
+	for (TActorIterator<ACesium3DTileset> It(World); It; ++It)
+	{
+		ACesium3DTileset* Tileset = *It;
+		if (!IsValid(Tileset)) continue;
+		if (!LayerTag.IsEmpty() && !Tileset->ActorHasTag(TagName)) continue;
+		Tileset->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Target));
+		Tileset->RefreshTileset();
+		++Count;
+	}
+	UE_LOG(LogTemp, Display, TEXT("[CesiumCarlaBridge] SetLayerVerticalOffset('%s', %.3f m): %d tileset(s) %s"),
+		*LayerTag, OffsetMeters, Count,
+		(Target == Default) ? TEXT("-> default georeference") : TEXT("-> offset georeference"));
+	return Count;
+}
+
 int32 UCesiumHeightSampler::SetCesiumTilesetsVisible(UObject* WorldContextObject, bool bVisible)
 {
 	UWorld* World = GEngine

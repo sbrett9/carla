@@ -113,6 +113,24 @@ public:
 	static int32 SetLayerCollision(UObject* WorldContextObject, const FString& LayerTag, bool bEnabled);
 
 	/**
+	 * Per-layer VERTICAL OFFSET (digital-twin Option A — decouple collision from the truth datum).
+	 * Shifts every ACesium3DTileset tagged LayerTag up/down by OffsetMeters (signed, +up) WITHOUT
+	 * moving the truth georeference: it assigns the tagged tileset(s) to a DEDICATED
+	 * CesiumGeoreference whose origin height = (default origin height − OffsetMeters), so the tiles
+	 * render/collide OffsetMeters from their true position while everything else (and the default
+	 * georeference / GetCesiumOrigin) stays truthed to the OSM origin. Used to drop the hidden,
+	 * collidable bare-earth "ground" layer by the height-align offset so its collision mesh
+	 * coincides with the offset road mesh (no on-road float, off-road still supported). Height
+	 * SAMPLING is geodetic and is unaffected by this. OffsetMeters == 0 reassigns the layer back to
+	 * the default georeference (undo). Returns the number of tilesets moved (-1 if no world).
+	 *
+	 * NOTE: apply this AFTER the final ConfigureCesiumForOrigin — that call reassigns tilesets to
+	 * the default georeference, which would undo the offset.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
+	static int32 SetLayerVerticalOffset(UObject* WorldContextObject, const FString& LayerTag, double OffsetMeters);
+
+	/**
 	 * Show/hide every ACesium3DTileset in the world (the photogrammetry overlay), so a
 	 * client can watch just the CARLA actors against an empty background. Returns the
 	 * number of tilesets toggled (or -1 if there is no world).

@@ -1,13 +1,12 @@
 """Validate that reported vehicle telemetry HAE is DECOUPLED from visual height-align.
 
 Background (TELEMETRY_DTM_DECOUPLING_HANDOFF.md, project_height_align_mechanism):
-  With --height-align area/origin the road MESH (and the cars on it) is shifted onto the
-  Google photoreal DSM by a single constant offset for visual seating. Telemetry, however,
-  must report each vehicle's BARE-EARTH ellipsoidal-WGS84 altitude (Cesium World Terrain DTM)
-  — the locked HAE truth datum — NOT the photoreal-aligned road Z. get_vehicle_telemetry now
-  removes that visual offset (cached on the C# client as LastHeightAlignOffset, gated on/off
-  road by the persisted per-road-point DTM table LastGroundDtmSamples). No live Cesium
-  sampling happens in the telemetry loop.
+  With --height-align area/origin the road mesh AND the collidable bare-earth ground are both
+  shifted by one constant offset (Option A: the ground layer is dropped by the same amount so it
+  coincides with the road), so every vehicle sits at DTM + offset. Telemetry must report each
+  vehicle's BARE-EARTH ellipsoidal-WGS84 altitude (Cesium World Terrain DTM) — the locked HAE truth
+  datum — NOT the photoreal-aligned road Z. get_vehicle_telemetry recovers it by subtracting that
+  one constant (LastHeightAlignOffset) unconditionally. No live Cesium sampling in the loop.
 
 This test must do the world build itself: LastHeightAlignOffset and the DTM table live on the
 SAME C# CarlaClient instance that built the world, so building in a separate process (e.g. a

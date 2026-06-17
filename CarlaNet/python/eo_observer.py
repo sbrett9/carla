@@ -154,8 +154,9 @@ def main() -> int:
     # photoreal visible, ground hidden + collidable, road visible + collidable.
     photoreal_visible = True    # C : Google photoreal tileset rendering
     ground_visible = False      # G : World Terrain (bare-earth) tileset rendering (hidden by default)
-    ground_collision = True     # V : World Terrain physics — ON by default (road=ground coincide under
-                                #     height-align 'none', so vehicles never float; gives off-road collision)
+    ground_collision = True     # V : World Terrain physics — ON by default. Ground coincides with the road
+                                #     (height-align 'none', or 'area'/'origin' via the Option A ground offset),
+                                #     so vehicles never float and off-road has collision.
     road_rendered = True        # R : OpenDRIVE road-mesh rendering
 
     bp = world.get_blueprint_library().find("sensor.camera.rgb")

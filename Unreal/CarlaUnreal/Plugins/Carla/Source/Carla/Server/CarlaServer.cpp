@@ -600,6 +600,23 @@ void FCarlaServer::FPimpl::BindActions()
     return true;
   };
 
+  // Per-layer VERTICAL OFFSET (digital-twin Option A). Moves a tagged Cesium tileset layer
+  // ("ground"/"photoreal") up/down by offset_meters via a dedicated georeference, WITHOUT moving
+  // the truth georeference. Used to drop the collidable bare-earth "ground" layer by the
+  // height-align offset so its collision coincides with the offset road mesh (no on-road float,
+  // off-road still supported). offset_meters == 0 reassigns back to the default georeference.
+  BIND_SYNC(set_layer_offset) << [this](std::string layer, double offset_meters) -> R<bool>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to offset a layer in");
+    }
+    UCesiumHeightSampler::SetLayerVerticalOffset(World, cr::ToFString(layer), offset_meters);
+    return true;
+  };
+
   // Returns the Cesium georeference origin (latitude, longitude, ellipsoidal height in m),
   // so a client can turn a local Unreal Z into a true elevation (originHeight + localZ).
   BIND_SYNC(get_cesium_origin) << [this]() -> R<cg::GeoLocation>
