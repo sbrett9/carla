@@ -474,6 +474,68 @@ public sealed class CarlaClient : IAsyncDisposable
         }
     }
 
+    // ── Phase 2b: draped-terrain grid sampling ────────────────────────────────
+    // Sample one Cesium layer over a regular grid (DrapeTerrain), CHUNKED so the "most-detailed"
+    // sampler doesn't stream the whole OSM tile's fine 3D Tiles at once. Returns row-major heights
+    // [row*NumCols+col] (NaN where the tileset had no surface). Requires the tilesets present +
+    // (for "ground") revealed, same as the road-Z sampling in GenerateWorldFromOsmWithElevationAsync.
+    public async Task<double[]> SampleDrapeGridAsync(
+        CarlaNet.Map.OpenDrive.DrapeGridSpec spec,
+        string selector,
+        int chunkCells = 64,
+        TimeSpan? timeout = null,
+        CancellationToken ct = default)
+    {
+        var heights = new double[spec.NodeCount];
+        for (int r0 = 0; r0 < spec.NumRows; r0 += chunkCells)
+        {
+            int nr = Math.Min(chunkCells, spec.NumRows - r0);
+            for (int c0 = 0; c0 < spec.NumCols; c0 += chunkCells)
+            {
+                ct.ThrowIfCancellationRequested();
+                int nc = Math.Min(chunkCells, spec.NumCols - c0);
+                var pts = CarlaNet.Map.OpenDrive.DrapeTerrain.BlockGeoPoints(spec, c0, r0, nc, nr);
+                var res = await SampleTerrainHeightsAsync(pts, selector, timeout, ct: ct).ConfigureAwait(false);
+                if (res.Count != pts.Count)
+                    throw new InvalidOperationException(
+                        $"drape sample chunk count {res.Count} != requested {pts.Count}");
+                int k = 0;
+                for (int r = r0; r < r0 + nr; ++r)
+                    for (int c = c0; c < c0 + nc; ++c)
+                        heights[r * spec.NumCols + c] = res[k++].Altitude;
+            }
+        }
+        return heights;
+    }
+
+    /// Sample DSM ("photoreal") + DTM ("ground") over the grid, reusing a binary disk cache keyed by
+    /// (grid geometry, asset ids) when <paramref name="cacheDir"/> is non-empty (so the minutes-long
+    /// sampling is paid once per area). Returns row-major (Dsm, Dtm) height arrays.
+    public async Task<(double[] Dsm, double[] Dtm)> SampleDrapeGridCachedAsync(
+        CarlaNet.Map.OpenDrive.DrapeGridSpec spec,
+        long photoAsset,
+        long groundAsset,
+        string? cacheDir = null,
+        int chunkCells = 64,
+        TimeSpan? timeout = null,
+        CancellationToken ct = default)
+    {
+        string? path = string.IsNullOrEmpty(cacheDir)
+            ? null
+            : System.IO.Path.Combine(cacheDir,
+                CarlaNet.Map.OpenDrive.DrapeTerrain.CacheFileName(spec, photoAsset, groundAsset));
+        if (path != null &&
+            CarlaNet.Map.OpenDrive.DrapeTerrain.TryReadCache(path, spec, photoAsset, groundAsset, out var cDsm, out var cDtm))
+        {
+            return (cDsm, cDtm);
+        }
+        var dsm = await SampleDrapeGridAsync(spec, "photoreal", chunkCells, timeout, ct).ConfigureAwait(false);
+        var dtm = await SampleDrapeGridAsync(spec, "ground", chunkCells, timeout, ct).ConfigureAwait(false);
+        if (path != null)
+            CarlaNet.Map.OpenDrive.DrapeTerrain.WriteCache(path, spec, photoAsset, groundAsset, dsm, dtm);
+        return (dsm, dtm);
+    }
+
     // ── §8.4 File Management ──────────────────────────────────────────────────
 
     public Task<IReadOnlyList<string>> GetRequiredFilesAsync(string folder = "", bool download = true)
