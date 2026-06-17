@@ -152,4 +152,124 @@ public static class DrapeTerrain
         foreach (double v in dsm) bw.Write(v);
         foreach (double v in dtm) bw.Write(v);
     }
+
+    // ── De-spike / clamp / smooth → draped grid + offset field ─────────────────
+
+    /// <summary>The draped collision/seating surface (row-major, ellipsoidal metres) plus the
+    /// per-cell telemetry offset = DrapedZ − bare-earth DTM (so reported HAE = physical − offset
+    /// recovers DTM truth everywhere, on- and off-road).</summary>
+    public readonly record struct DrapeResult(double[] DrapedZ, double[] Offset);
+
+    /// <summary>
+    /// Turn raw DSM (photoreal) + DTM (bare earth) grids into a driveable draped surface. Open
+    /// ground/road conforms to the photoreal; cells where |DSM−DTM| exceeds
+    /// <paramref name="maxDrapeMeters"/> (buildings, tree canopy, L-tracks, sustained DSM bias)
+    /// fall back to the bare-earth DTM — so the surface never climbs onto rooftops (the original
+    /// road-Z bug) yet still hugs the photoreal where it's plausible ground. A low-pass
+    /// (<paramref name="smoothRadius"/>, <paramref name="smoothPasses"/>) removes residual noise and
+    /// softens the DSM↔DTM switches so vehicles don't jitter. NaN samples are neighbour-filled first.
+    /// </summary>
+    public static DrapeResult Despike(double[] dsm, double[] dtm, DrapeGridSpec spec,
+        double maxDrapeMeters = 5.0, int smoothRadius = 1, int smoothPasses = 2)
+    {
+        int nc = spec.NumCols, nr = spec.NumRows, n = nc * nr;
+        if (dsm.Length != n || dtm.Length != n)
+            throw new ArgumentException($"dsm/dtm length must be {n} (got {dsm.Length}/{dtm.Length})");
+
+        var DTM = (double[])dtm.Clone(); FillNaN(DTM, nc, nr);
+        var DSM = (double[])dsm.Clone(); FillNaN(DSM, nc, nr);
+
+        // DTM-anchored selection.
+        var draped = new double[n];
+        for (int i = 0; i < n; ++i)
+        {
+            double gap = DSM[i] - DTM[i];
+            draped[i] = Math.Abs(gap) <= maxDrapeMeters ? DSM[i] : DTM[i];
+        }
+
+        for (int p = 0; p < smoothPasses && smoothRadius > 0; ++p)
+            draped = BoxBlur(draped, nc, nr, smoothRadius);
+
+        var offset = new double[n];
+        for (int i = 0; i < n; ++i) offset[i] = draped[i] - DTM[i];
+        return new DrapeResult(draped, offset);
+    }
+
+    /// <summary>Replace NaN cells with the mean of valid 4-neighbours, iterated until filled (bounded);
+    /// any cells still NaN (fully isolated / empty grid) are set to the global mean (0 if none).</summary>
+    private static void FillNaN(double[] a, int nc, int nr)
+    {
+        bool anyNaN = false;
+        double sum = 0; int cnt = 0;
+        for (int i = 0; i < a.Length; ++i)
+        {
+            if (double.IsNaN(a[i])) anyNaN = true;
+            else { sum += a[i]; ++cnt; }
+        }
+        if (!anyNaN) return;
+        double globalMean = cnt > 0 ? sum / cnt : 0.0;
+
+        var next = new double[a.Length];
+        int maxPasses = Math.Max(8, Math.Min(nc, nr));
+        for (int pass = 0; pass < maxPasses; ++pass)
+        {
+            bool stillNaN = false;
+            for (int r = 0; r < nr; ++r)
+            {
+                for (int c = 0; c < nc; ++c)
+                {
+                    int i = r * nc + c;
+                    if (!double.IsNaN(a[i])) { next[i] = a[i]; continue; }
+                    double s = 0; int k = 0;
+                    if (c > 0      && !double.IsNaN(a[i - 1]))  { s += a[i - 1];  ++k; }
+                    if (c < nc - 1 && !double.IsNaN(a[i + 1]))  { s += a[i + 1];  ++k; }
+                    if (r > 0      && !double.IsNaN(a[i - nc])) { s += a[i - nc]; ++k; }
+                    if (r < nr - 1 && !double.IsNaN(a[i + nc])) { s += a[i + nc]; ++k; }
+                    if (k > 0) next[i] = s / k;
+                    else { next[i] = double.NaN; stillNaN = true; }
+                }
+            }
+            Array.Copy(next, a, a.Length);
+            if (!stillNaN) break;
+        }
+        for (int i = 0; i < a.Length; ++i) if (double.IsNaN(a[i])) a[i] = globalMean;
+    }
+
+    /// <summary>Separable box blur of the given radius (edge-clamped). Cheap low-pass; repeat a few
+    /// passes to approximate a Gaussian.</summary>
+    private static double[] BoxBlur(double[] a, int nc, int nr, int radius)
+    {
+        var tmp = new double[a.Length];
+        var outp = new double[a.Length];
+        // horizontal
+        for (int r = 0; r < nr; ++r)
+        {
+            int row = r * nc;
+            for (int c = 0; c < nc; ++c)
+            {
+                double s = 0; int k = 0;
+                for (int d = -radius; d <= radius; ++d)
+                {
+                    int cc = Math.Clamp(c + d, 0, nc - 1);
+                    s += a[row + cc]; ++k;
+                }
+                tmp[row + c] = s / k;
+            }
+        }
+        // vertical
+        for (int c = 0; c < nc; ++c)
+        {
+            for (int r = 0; r < nr; ++r)
+            {
+                double s = 0; int k = 0;
+                for (int d = -radius; d <= radius; ++d)
+                {
+                    int rr = Math.Clamp(r + d, 0, nr - 1);
+                    s += tmp[rr * nc + c]; ++k;
+                }
+                outp[r * nc + c] = s / k;
+            }
+        }
+        return outp;
+    }
 }
