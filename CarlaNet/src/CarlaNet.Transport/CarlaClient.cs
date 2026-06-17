@@ -63,6 +63,20 @@ public sealed class CarlaClient : IAsyncDisposable
     public double LastHeightAlignOffset { get; private set; }
     public IReadOnlyList<GeoLocation> LastGroundDtmSamples { get; private set; } = [];
 
+    // ── Phase 2b drape state (set by GenerateWorldFromOsmWithElevationAsync in "drape" mode) ──
+    // When LastDrapeActive, telemetry recovers bare-earth HAE per-vehicle from a PER-CELL offset
+    // field (DrapedZ − DTM) over the OSM sandbox, instead of the single LastHeightAlignOffset.
+    // The offset grid is exposed as a bulk float32 LE byte[] so the shim bulk-copies it into numpy
+    // (np.frombuffer) and does an O(1) bilinear lookup by the vehicle's local X/Y — no per-element
+    // pythonnet marshalling, no live Cesium sampling.
+    public bool LastDrapeActive { get; private set; }
+    public int LastDrapeNumCols { get; private set; }
+    public int LastDrapeNumRows { get; private set; }
+    public double LastDrapeMinX { get; private set; }
+    public double LastDrapeMinY { get; private set; }
+    public double LastDrapeCellSize { get; private set; }
+    public byte[] LastDrapedOffsetBytes { get; private set; } = [];
+
     public CarlaClient(string host, int port = 2000, TimeSpan? timeout = null, ILogger<CarlaClient>? logger = null)
     {
         _host = host;
@@ -214,6 +228,11 @@ public sealed class CarlaClient : IAsyncDisposable
         string heightAlign = "none",
         bool groundCollision = true,
         TimeSpan? cesiumSettle = null,
+        double terrainResMeters = 2.0,
+        double terrainMarginMeters = 30.48,
+        int drapeChunkCells = 64,
+        double drapeMaxDrapeMeters = 5.0,
+        string? drapeCacheDir = null,
         CancellationToken ct = default)
     {
         // 1) OSM -> flat .xodr (offline, native netconvert).
@@ -260,6 +279,28 @@ public sealed class CarlaClient : IAsyncDisposable
         if (heights.Count != points.Count)
             throw new InvalidOperationException(
                 $"terrain-height result count {heights.Count} != requested {points.Count}");
+
+        // 4a-drape) Phase 2b: sample DSM+DTM over a regular grid covering the whole OSM rectangle
+        //   (the physics sandbox), then de-spike into a draped surface + per-cell offset field. The
+        //   ground layer is revealed here, so the grid samples in the same window as the road-Z.
+        bool drape = string.Equals(heightAlign, "drape", StringComparison.OrdinalIgnoreCase);
+        CarlaNet.Map.OpenDrive.DrapeGridSpec drapeSpec = default;
+        CarlaNet.Map.OpenDrive.DrapeTerrain.DrapeResult drapeRes = default;
+        if (drape)
+        {
+            var b = CarlaNet.Map.OpenDrive.DrapeTerrain.ReadOsmBounds(osmPath)
+                ?? throw new InvalidOperationException("height-align drape requires an OSM <bounds> element");
+            drapeSpec = CarlaNet.Map.OpenDrive.DrapeTerrain.MakeGridFromGeoBounds(
+                origin, b.MinLat, b.MinLon, b.MaxLat, b.MaxLon,
+                terrainResMeters, terrainMarginMeters);
+            Console.WriteLine($"[drape] grid {drapeSpec.NumCols}x{drapeSpec.NumRows} = {drapeSpec.NodeCount} nodes, "
+                + $"cell {terrainResMeters} m, margin {terrainMarginMeters:F1} m");
+            var (dsm, dtm) = await SampleDrapeGridCachedAsync(
+                drapeSpec, ionAssetId, groundIonAssetId, drapeCacheDir, drapeChunkCells, ct: ct)
+                .ConfigureAwait(false);
+            drapeRes = CarlaNet.Map.OpenDrive.DrapeTerrain.Despike(dsm, dtm, drapeSpec, drapeMaxDrapeMeters);
+            Console.WriteLine("[drape] de-spiked draped surface + offset field built.");
+        }
 
         // 4b) Height reconciliation (09_Layer_Architecture follow-up). The bare-earth GROUND layer
         //     (DTM) sits at a different height than the visible PHOTOREAL surface (DSM), so road-Z
@@ -327,8 +368,19 @@ public sealed class CarlaClient : IAsyncDisposable
         // reported telemetry HAE is now decoupled from that shift and reports bare-earth DTM truth.
         double originHeight = originHeightOverride ?? heights[0].Altitude;
         var roadEllipsoidal = new double[samples.Count];
-        for (int i = 0; i < samples.Count; i++)
-            roadEllipsoidal[i] = heights[i + 1].Altitude + heightOffset;
+        if (drape)
+        {
+            // Road conforms to the SAME draped surface as the terrain (bilinear at each centerline
+            // point), so the road mesh and the collision heightfield coincide — no seam.
+            for (int i = 0; i < samples.Count; i++)
+                roadEllipsoidal[i] = CarlaNet.Map.OpenDrive.DrapeTerrain.SampleBilinear(
+                    drapeRes.DrapedZ, drapeSpec, samples[i].X, samples[i].Y);
+        }
+        else
+        {
+            for (int i = 0; i < samples.Count; i++)
+                roadEllipsoidal[i] = heights[i + 1].Altitude + heightOffset;
+        }
 
         // 5) Inject the sampled heights into the .xodr <elevationProfile>.
         var elevatedXodr = CarlaNet.Map.OpenDrive.ElevationInjector.InjectElevation(
@@ -357,8 +409,47 @@ public sealed class CarlaClient : IAsyncDisposable
         // AFTER the ConfigureCesiumGeoreferenceAsync above (which reassigns tilesets to the default
         // georeference). No-op when heightOffset == 0 (height-align none). Telemetry then subtracts
         // the same constant everywhere (see get_vehicle_telemetry); LastHeightAlignOffset carries it.
-        if (groundIonAssetId > 0)
+        if (drape)
         {
+            // Phase 2b: the draped heightfield IS the collision/seating surface over the whole OSM
+            // sandbox (on- and off-road). Build it from the de-spiked grid (local Z = ellipsoidal -
+            // originHeight, metres) and turn the bare-earth "ground" tileset collision OFF (it stays
+            // hidden as the truth sample source; the heightfield owns physics). No Option A constant
+            // offset in drape mode.
+            int n = drapeRes.DrapedZ.Length;
+            var hf = new double[n];
+            for (int i = 0; i < n; i++) hf[i] = drapeRes.DrapedZ[i] - originHeight;
+            await BuildDrapedTerrainAsync(
+                drapeSpec.MinX, drapeSpec.MinY, drapeSpec.CellSize, drapeSpec.NumCols, drapeSpec.NumRows, hf)
+                .ConfigureAwait(false);
+            if (groundIonAssetId > 0)
+                await SetLayerCollisionAsync("ground", false).ConfigureAwait(false);
+
+            // Persist the per-cell offset field (DrapedZ - DTM) as a bulk float32 LE buffer for the
+            // telemetry path (shim bilinear lookup by vehicle local X/Y).
+            var offBytes = new byte[n * sizeof(float)];
+            System.Buffer.BlockCopy(System.Array.ConvertAll(drapeRes.Offset, v => (float)v), 0, offBytes, 0, offBytes.Length);
+            LastDrapeActive = true;
+            LastDrapeNumCols = drapeSpec.NumCols;
+            LastDrapeNumRows = drapeSpec.NumRows;
+            LastDrapeMinX = drapeSpec.MinX;
+            LastDrapeMinY = drapeSpec.MinY;
+            LastDrapeCellSize = drapeSpec.CellSize;
+            LastDrapedOffsetBytes = offBytes;
+            LastHeightAlignOffset = 0.0;   // drape uses the per-cell field, not the scalar
+        }
+        else if (groundIonAssetId > 0)
+        {
+            // Option A: drop the collidable bare-earth "ground" layer by the height-align offset so its
+            // collision mesh coincides with the offset road mesh. Because area/origin apply a single
+            // CONSTANT offset (road = DTM + heightOffset), a constant ground shift re-coincides them
+            // EXACTLY everywhere — on-road vehicles no longer float above the lowered road, and off-road
+            // vehicles still ride a (now offset) collidable surface instead of falling through. The truth
+            // georeference is untouched (GetCesiumOrigin and height sampling stay bare-earth). MUST run
+            // AFTER the ConfigureCesiumGeoreferenceAsync above (which reassigns tilesets to the default
+            // georeference). No-op when heightOffset == 0 (height-align none). Telemetry then subtracts
+            // the same constant everywhere (see get_vehicle_telemetry); LastHeightAlignOffset carries it.
+            LastDrapeActive = false;
             await SetLayerOffsetAsync("ground", heightOffset).ConfigureAwait(false);
             // Ground collision is now SAFE to leave ON under area/origin (it coincides with the road),
             // giving on-road seating + off-road support. eo_observer's V key still toggles it.

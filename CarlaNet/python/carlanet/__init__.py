@@ -1775,7 +1775,12 @@ class Client:
                                                outlier_threshold=4.0,
                                                height_align="none",
                                                ground_collision=True,
-                                               cesium_settle_seconds=5.0):
+                                               cesium_settle_seconds=5.0,
+                                               terrain_res=2.0,
+                                               terrain_margin=30.48,
+                                               drape_chunk_cells=64,
+                                               drape_max_drape=5.0,
+                                               drape_cache_dir=None):
         """Full headless digital-twin build (no editor): OSM -> elevated, Cesium-aligned
         OpenDRIVE world. Converts OSM->.xodr, samples Cesium terrain heights at the road
         reference line, injects them into the .xodr <elevationProfile>, generates the
@@ -1790,9 +1795,17 @@ class Client:
         (they coincide, vehicles never float, the whole driveable surface sits ~sub-meter above the
         photoreal street — invisible from nadir); "area" = median photoreal-ground gap over the map;
         "origin" = gap at the origin. (A constant offset can't fix the spatially-varying DTM-vs-DSM
-        divergence on hills, so "none" is the default.) ground_collision (default True) keeps the
-        bare-earth ground collidable for off-road safety; coincident with the road under "none" so no
-        float. osm_options should pin the origin; if origin_height is None the origin sample is the datum.
+        divergence on hills.) "drape" (Phase 2b) = PER-POINT: sample DSM+DTM over a grid covering the
+        whole OSM rectangle, de-spike (open ground follows the photoreal, buildings/canopy fall back
+        to bare earth), build a hidden Chaos heightfield as the universal collision/seating surface
+        (on- AND off-road), and conform the road to it — vehicles seat on the photoreal everywhere;
+        telemetry stays bare-earth via a per-cell offset field. ground_collision (default True) keeps
+        the bare-earth ground collidable for off-road safety (under "drape" the heightfield owns
+        collision and the ground tileset collision is turned off). terrain_res = heightfield cell
+        size m (the GSD-like knob); terrain_margin = how far past the OSM bounds to extend the
+        sandbox (m, default ~100 ft for long vehicles); drape_cache_dir caches the (slow) grid
+        sampling per area. osm_options should pin the origin; if origin_height is None the origin
+        sample is the datum.
         """
         from System import TimeSpan
         from System.Threading import CancellationToken
@@ -1803,6 +1816,8 @@ class Client:
             osm_path, str(ion_token), int(ion_asset_id), int(ground_ion_asset_id),
             osm_options, params, float(sample_step_meters), oh,
             float(outlier_threshold), str(height_align), bool(ground_collision), settle,
+            float(terrain_res), float(terrain_margin), int(drape_chunk_cells),
+            float(drape_max_drape), (None if drape_cache_dir is None else str(drape_cache_dir)),
             CancellationToken(False)))
         return str(xodr)
 

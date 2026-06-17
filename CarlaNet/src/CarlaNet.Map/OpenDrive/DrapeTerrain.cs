@@ -7,9 +7,11 @@
 // Cesium sampling live elsewhere (DrapeTerrain de-spike step; CarlaClient.SampleDrapeGridAsync).
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using CarlaNet.Types.Geom;
 
 namespace CarlaNet.Map.OpenDrive;
@@ -97,6 +99,42 @@ public static class DrapeTerrain
             }
         }
         return pts;
+    }
+
+    /// <summary>Bilinear-sample a row-major grid at CARLA world (x, y) metres (edge-clamped).
+    /// Used to read the draped surface Z at each road centerline point so the road coincides with
+    /// the terrain.</summary>
+    public static double SampleBilinear(double[] grid, DrapeGridSpec spec, double x, double y)
+    {
+        double fc = Math.Clamp((x - spec.MinX) / spec.CellSize, 0.0, spec.NumCols - 1.0);
+        double fr = Math.Clamp((y - spec.MinY) / spec.CellSize, 0.0, spec.NumRows - 1.0);
+        int c0 = (int)Math.Floor(fc), r0 = (int)Math.Floor(fr);
+        int c1 = Math.Min(c0 + 1, spec.NumCols - 1), r1 = Math.Min(r0 + 1, spec.NumRows - 1);
+        double tx = fc - c0, ty = fr - r0;
+        double v00 = grid[r0 * spec.NumCols + c0], v01 = grid[r0 * spec.NumCols + c1];
+        double v10 = grid[r1 * spec.NumCols + c0], v11 = grid[r1 * spec.NumCols + c1];
+        double a = v00 * (1 - tx) + v01 * tx;
+        double b = v10 * (1 - tx) + v11 * tx;
+        return a * (1 - ty) + b * ty;
+    }
+
+    /// <summary>Read the OSM &lt;bounds minlat minlon maxlat maxlon&gt; element (the physics-sandbox
+    /// rectangle). Returns null if absent.</summary>
+    public static (double MinLat, double MinLon, double MaxLat, double MaxLon)? ReadOsmBounds(string osmPath)
+    {
+        foreach (var line in File.ReadLines(osmPath))
+        {
+            if (line.IndexOf("<bounds", StringComparison.Ordinal) < 0) continue;
+            double? G(string k)
+            {
+                var m = Regex.Match(line, k + "=\"([-0-9.]+)\"");
+                return m.Success ? double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) : (double?)null;
+            }
+            var a = G("minlat"); var b = G("minlon"); var c = G("maxlat"); var d = G("maxlon");
+            if (a.HasValue && b.HasValue && c.HasValue && d.HasValue)
+                return (a.Value, b.Value, c.Value, d.Value);
+        }
+        return null;
     }
 
     // ── Disk cache ───────────────────────────────────────────────────────────

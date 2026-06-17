@@ -47,11 +47,18 @@ ap.add_argument("--ion-asset-id", type=int, default=2275207)  # Google Photoreal
 ap.add_argument("--ground-asset-id", type=int, default=1,     # Cesium World Terrain (bare-earth, sampled)
                 help="ion asset for the hidden bare-earth GROUND layer sampled for road-Z "
                      "(default 1 = Cesium World Terrain; 0 = sample the photoreal tileset, legacy)")
-ap.add_argument("--height-align", choices=["area", "origin", "none"], default="none",
-                help="reconcile bare-earth road-Z to the photoreal surface by a single constant offset: "
-                     "'none' = no correction (default; road=ground coincide, ~sub-meter above photoreal, "
-                     "invisible from nadir); 'area' = median gap over the map; 'origin' = gap at the origin. "
-                     "(A constant offset can't fix the spatially-varying DTM-vs-DSM divergence on hills.)")
+ap.add_argument("--height-align", choices=["area", "origin", "none", "drape"], default="none",
+                help="reconcile road-Z (and collision) to the photoreal: 'none' (default; road=ground "
+                     "coincide, ~sub-meter above photoreal); 'area'/'origin' = single constant offset "
+                     "(can't fix spatially-varying hills); 'drape' (Phase 2b) = PER-POINT draped Chaos "
+                     "heightfield over the whole OSM rectangle (vehicles seat on the photoreal on- AND "
+                     "off-road; telemetry stays bare-earth via a per-cell offset field).")
+ap.add_argument("--terrain-res", type=float, default=2.0,
+                help="drape: heightfield cell size in m (the GSD-like resolution knob; default 2.0)")
+ap.add_argument("--terrain-margin", type=float, default=30.48,
+                help="drape: extend the sandbox this far past the OSM bounds, m (default ~100 ft)")
+ap.add_argument("--drape-cache-dir", default=None,
+                help="drape: directory to cache the grid DSM/DTM sampling (skip re-sampling per area)")
 ap.add_argument("--no-ground-collision", dest="ground_collision", action="store_false", default=True,
                 help="disable bare-earth ground collision (default ON = vehicles ride the road/ground "
                      "for off-road safety). Safe to leave ON with --height-align area/origin: the ground "
@@ -162,7 +169,10 @@ def main() -> int:
         origin_height=args.origin_height,
         height_align=args.height_align,
         ground_collision=args.ground_collision,
-        cesium_settle_seconds=args.settle)
+        cesium_settle_seconds=args.settle,
+        terrain_res=args.terrain_res,
+        terrain_margin=args.terrain_margin,
+        drape_cache_dir=args.drape_cache_dir)
     dt = time.time() - t0
 
     roads = elevated.count("<road ")
