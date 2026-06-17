@@ -1,10 +1,12 @@
 name: UE5-PR
 
 on:
-  pull_request:
-    branches:
-      - ue5-dev
-    types: [opened, synchronize, reopened]
+  # Disabled automatic PR builds - uncomment to re-enable
+  # pull_request:
+  #   branches:
+  #     - ue5-dev
+  #   types: [opened, synchronize, reopened]
+  workflow_dispatch:  # Allow manual trigger
 
 concurrency:
   group: pr-${{ github.event.pull_request.number }}

@@ -1,9 +1,10 @@
 name: UE5-Dev
 
 on:
-  push:
-     branches:
-       - ue5-dev
+  # Disabled automatic builds - uncomment to re-enable
+  # push:
+  #    branches:
+  #      - ue5-dev
   workflow_dispatch:  # Allow manual trigger
 
 concurrency:
