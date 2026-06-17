@@ -427,6 +427,14 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<bool> SetLayerOffsetAsync(string layer, double offsetMeters)
         => _rpc.CallAsync<bool>("set_layer_offset", layer, offsetMeters);
 
+    /// Phase 2b: build/replace the draped collision heightfield over the OSM sandbox. Heights are
+    /// world Z in METRES, row-major [row*numCols + col], length numCols*numRows; grid corner
+    /// (col 0,row 0) at world (originX, originY) metres, +col=+X, +row=+Y, spacing cellSize m.
+    public Task<bool> BuildDrapedTerrainAsync(
+        double originX, double originY, double cellSize, int numCols, int numRows, double[] heights)
+        => _rpc.CallAsync<bool>("build_draped_terrain",
+               originX, originY, cellSize, numCols, numRows, heights);
+
     /// The Cesium georeference origin as GeoLocation(latitude, longitude, ellipsoidal height m).
     /// True elevation of a local Unreal point = this height + the point's local Z.
     public Task<GeoLocation> GetCesiumOriginAsync()

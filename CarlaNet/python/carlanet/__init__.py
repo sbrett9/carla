@@ -1322,6 +1322,22 @@ class World:
         float, off-road still supported). 0 reassigns the layer to the default georeference."""
         return bool(_sync(self._client.SetLayerOffsetAsync(str(layer), float(offset_meters))))
 
+    def build_draped_terrain(self, origin_x, origin_y, cell_size, num_cols, num_rows, heights):
+        """Phase 2b: build/replace the draped collision heightfield (a hidden, collision-only Chaos
+        heightfield) over the sandbox. `heights` is a row-major sequence (or numpy array) of world Z
+        in METRES, length num_cols*num_rows, indexed [row*num_cols + col]; grid corner (col 0,row 0)
+        sits at world (origin_x, origin_y) metres, +col=+X, +row=+Y, spacing cell_size m. Vehicles
+        seat/drive on it on- and off-road. Returns True on success."""
+        from System import Array, Double
+        try:
+            flat = heights.ravel().tolist() if hasattr(heights, "ravel") else list(heights)
+        except Exception:
+            flat = list(heights)
+        arr = Array[Double]([float(h) for h in flat])
+        return bool(_sync(self._client.BuildDrapedTerrainAsync(
+            float(origin_x), float(origin_y), float(cell_size),
+            int(num_cols), int(num_rows), arr)))
+
     def get_cesium_origin(self):
         """Cesium georeference origin as (latitude, longitude, height_m). The true elevation
         of a local point at Unreal Z is height_m + Z."""

@@ -73,6 +73,7 @@
 #include "Misc/FileHelper.h"
 #include "Animation/PoseSnapshot.h"
 #include "CesiumHeightSampler.h"
+#include "DrapedTerrain.h"
 #include <util/ue-header-guard-end.h>
 
 #include <vector>
@@ -614,6 +615,31 @@ void FCarlaServer::FPimpl::BindActions()
       RESPOND_ERROR("no world to offset a layer in");
     }
     UCesiumHeightSampler::SetLayerVerticalOffset(World, cr::ToFString(layer), offset_meters);
+    return true;
+  };
+
+  // Phase 2b: build/replace the draped collision heightfield over the OSM sandbox. Heights are
+  // world Z in METRES, row-major [row*num_cols + col], length num_cols*num_rows; grid corner
+  // (col 0,row 0) at world (origin_x, origin_y) metres, +col=+X, +row=+Y, spacing cell_size m.
+  BIND_SYNC(build_draped_terrain) << [this](
+      double origin_x, double origin_y, double cell_size,
+      int32_t num_cols, int32_t num_rows, std::vector<double> heights) -> R<bool>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to build draped terrain in");
+    }
+    TArray<double> Heights;
+    Heights.Reserve(static_cast<int32>(heights.size()));
+    for (double H : heights) { Heights.Add(H); }
+    ADrapedTerrainActor* Actor = UDrapedTerrain::Build(
+        World, origin_x, origin_y, cell_size, num_cols, num_rows, Heights);
+    if (!Actor)
+    {
+      RESPOND_ERROR("draped-terrain build failed (see log)");
+    }
     return true;
   };
 
