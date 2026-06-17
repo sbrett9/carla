@@ -75,7 +75,8 @@ public sealed class CarlaClient : IAsyncDisposable
     public double LastDrapeMinX { get; private set; }
     public double LastDrapeMinY { get; private set; }
     public double LastDrapeCellSize { get; private set; }
-    public byte[] LastDrapedOffsetBytes { get; private set; } = [];
+    public byte[] LastDrapedOffsetBytes { get; private set; } = [];   // row-major float32 LE, DrapedZ-DTM (m)
+    public byte[] LastDrapedDtmBytes { get; private set; } = [];      // row-major float32 LE, bare-earth DTM (ellipsoidal m)
 
     public CarlaClient(string host, int port = 2000, TimeSpan? timeout = null, ILogger<CarlaClient>? logger = null)
     {
@@ -425,10 +426,16 @@ public sealed class CarlaClient : IAsyncDisposable
             if (groundIonAssetId > 0)
                 await SetLayerCollisionAsync("ground", false).ConfigureAwait(false);
 
-            // Persist the per-cell offset field (DrapedZ - DTM) as a bulk float32 LE buffer for the
-            // telemetry path (shim bilinear lookup by vehicle local X/Y).
+            // Persist the per-cell offset field (DrapedZ - DTM) and the bare-earth DTM (= DrapedZ -
+            // Offset) as bulk float32 LE buffers for the telemetry path (shim bilinear lookup by
+            // vehicle local X/Y): hae = physical - offset = DTM + pivot; hae_dtm = DTM.
             var offBytes = new byte[n * sizeof(float)];
-            System.Buffer.BlockCopy(System.Array.ConvertAll(drapeRes.Offset, v => (float)v), 0, offBytes, 0, offBytes.Length);
+            var dtmBytes = new byte[n * sizeof(float)];
+            var offF = new float[n];
+            var dtmF = new float[n];
+            for (int i = 0; i < n; i++) { offF[i] = (float)drapeRes.Offset[i]; dtmF[i] = (float)(drapeRes.DrapedZ[i] - drapeRes.Offset[i]); }
+            System.Buffer.BlockCopy(offF, 0, offBytes, 0, offBytes.Length);
+            System.Buffer.BlockCopy(dtmF, 0, dtmBytes, 0, dtmBytes.Length);
             LastDrapeActive = true;
             LastDrapeNumCols = drapeSpec.NumCols;
             LastDrapeNumRows = drapeSpec.NumRows;
@@ -436,6 +443,7 @@ public sealed class CarlaClient : IAsyncDisposable
             LastDrapeMinY = drapeSpec.MinY;
             LastDrapeCellSize = drapeSpec.CellSize;
             LastDrapedOffsetBytes = offBytes;
+            LastDrapedDtmBytes = dtmBytes;
             LastHeightAlignOffset = 0.0;   // drape uses the per-cell field, not the scalar
         }
         else if (groundIonAssetId > 0)

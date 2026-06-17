@@ -1400,6 +1400,49 @@ class World:
         self._dtm_table_cache = (n, table)
         return table
 
+    def _drape_grid(self):
+        """Lazily build + cache the Phase-2b per-cell drape grids the last build persisted on the C#
+        client: the OFFSET field (DrapedZ-DTM) and the bare-earth DTM, as numpy 2-D arrays (row-major
+        [row,col], ellipsoidal m) plus metadata (minx, miny, cell, nc, nr). Bulk float32 buffers are
+        read via np.frombuffer (no per-element pythonnet marshalling). Returns None when the last
+        build wasn't drape mode (then the scalar/None path is used). Pure local data, 5 Hz-safe."""
+        try:
+            if not bool(self._client.LastDrapeActive):
+                return None
+            nc = int(self._client.LastDrapeNumCols); nr = int(self._client.LastDrapeNumRows)
+        except Exception:
+            return None
+        if nc < 2 or nr < 2:
+            return None
+        cache = getattr(self, "_drape_grid_cache", None)
+        if cache is not None and cache[0] == (nc, nr):
+            return cache[1]
+        try:
+            import numpy as _np
+            off = _np.frombuffer(bytes(self._client.LastDrapedOffsetBytes), dtype="<f4").reshape(nr, nc)
+            dtm = _np.frombuffer(bytes(self._client.LastDrapedDtmBytes), dtype="<f4").reshape(nr, nc)
+        except Exception:
+            return None
+        meta = {"minx": float(self._client.LastDrapeMinX), "miny": float(self._client.LastDrapeMinY),
+                "cell": float(self._client.LastDrapeCellSize), "nc": nc, "nr": nr, "off": off, "dtm": dtm}
+        self._drape_grid_cache = ((nc, nr), meta)
+        return meta
+
+    @staticmethod
+    def _drape_bilin(grid2d, meta, x, y):
+        """Bilinear-sample a cached drape grid (row-major [row,col]) at CARLA world (x, y) m,
+        edge-clamped. O(1)."""
+        nc = meta["nc"]; nr = meta["nr"]; cell = meta["cell"]
+        fc = min(max((x - meta["minx"]) / cell, 0.0), nc - 1.0)
+        fr = min(max((y - meta["miny"]) / cell, 0.0), nr - 1.0)
+        c0 = int(fc); r0 = int(fr); c1 = min(c0 + 1, nc - 1); r1 = min(r0 + 1, nr - 1)
+        tx = fc - c0; ty = fr - r0
+        v00 = float(grid2d[r0, c0]); v01 = float(grid2d[r0, c1])
+        v10 = float(grid2d[r1, c0]); v11 = float(grid2d[r1, c1])
+        a = v00 * (1.0 - tx) + v01 * tx
+        b = v10 * (1.0 - tx) + v11 * tx
+        return a * (1.0 - ty) + b * ty
+
     def get_vehicle_telemetry(self, origin=None):
         """Pull per-vehicle TRUTH telemetry for every vehicle in the world as plain dicts (the
         09_Telemetry_CoT_Contract field set). Cheap — positions/velocities are world-observer cache
@@ -1433,7 +1476,8 @@ class World:
             offset = float(self._client.LastHeightAlignOffset)
         except Exception:
             offset = 0.0
-        table = self._bare_earth_dtm_table()   # feeds the hae_dtm diagnostic
+        drape = self._drape_grid()                       # Phase 2b per-cell offset/DTM (or None)
+        table = None if drape is not None else self._bare_earth_dtm_table()
         out = []
         for v in self.get_actors().filter("vehicle.*"):
             tf = v.get_transform()
@@ -1441,11 +1485,17 @@ class World:
             loc = tf.location
             geo = Geodesy.CarlaLocalToGeodetic(cs_origin, float(loc.x), float(loc.y), float(loc.z))
             physical_hae = float(geo.Altitude)
-            # Option A: the whole collidable surface (road + ground) is shifted by the same constant
-            # offset, so subtract it unconditionally to recover bare-earth DTM truth (offset 0 under
-            # height-align none -> no change). hae_dtm is the cached bare-earth ground (diagnostic).
-            hae = physical_hae - offset
-            dtm_at_veh, _ = self._nearest_dtm(table, geo.Latitude, geo.Longitude)
+            if drape is not None:
+                # Phase 2b: the collidable surface is per-point draped. Subtract the bilinear-
+                # interpolated per-cell offset at the vehicle's local X/Y -> bare-earth DTM + pivot.
+                off_local = self._drape_bilin(drape["off"], drape, float(loc.x), float(loc.y))
+                hae = physical_hae - off_local
+                dtm_at_veh = self._drape_bilin(drape["dtm"], drape, float(loc.x), float(loc.y))
+            else:
+                # Option A: the whole collidable surface (road + ground) is shifted by the same
+                # constant offset, so subtract it unconditionally (offset 0 under height-align none).
+                hae = physical_hae - offset
+                dtm_at_veh, _ = self._nearest_dtm(table, geo.Latitude, geo.Longitude)
             vx, vy, vz = float(vel.x), float(vel.y), float(vel.z)
             speed = _m.hypot(vx, vy)
             # Course over ground, degrees true north (CARLA +X=East, -Y=North); yaw fallback ~stopped.

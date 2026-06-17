@@ -59,9 +59,14 @@ ap.add_argument("--step", type=float, default=10.0)
 ap.add_argument("--ion-token", default=os.environ.get("CESIUM_ION_TOKEN", ""))
 ap.add_argument("--ion-asset-id", type=int, default=2275207)   # Google photoreal (visual)
 ap.add_argument("--ground-asset-id", type=int, default=1)      # Cesium World Terrain (bare earth)
-ap.add_argument("--height-align", choices=["area", "origin", "none"], default="area",
+ap.add_argument("--height-align", choices=["area", "origin", "none", "drape"], default="area",
                 help="visual road-Z alignment under test (default 'area'). The decoupled hae must "
-                     "be bare-earth regardless; with 'none' the offset is 0 (hae == physical).")
+                     "be bare-earth regardless; 'none' -> offset 0; 'drape' -> per-cell offset field.")
+ap.add_argument("--terrain-res", type=float, default=8.0, help="drape: heightfield cell size (m)")
+ap.add_argument("--terrain-margin", type=float, default=30.48, help="drape: sandbox margin past OSM (m)")
+ap.add_argument("--drape-cache-dir", default=os.path.join(_REPO, "Build", "drape-cache"),
+                help="drape: grid sampling cache dir (speeds re-runs)")
+ap.add_argument("--offroad", type=int, default=3, help="drape: also spawn N off-road vehicles to check")
 ap.add_argument("--settle", type=float, default=10.0)
 ap.add_argument("--traffic", type=int, default=8)
 ap.add_argument("--samples", type=int, default=5, help="telemetry polls (1 Hz)")
@@ -149,24 +154,35 @@ def main() -> int:
         sample_step_meters=args.step,
         height_align=args.height_align,
         ground_collision=True,
-        cesium_settle_seconds=args.settle)
+        cesium_settle_seconds=args.settle,
+        terrain_res=args.terrain_res,
+        terrain_margin=args.terrain_margin,
+        drape_cache_dir=args.drape_cache_dir)
     print(f"    built in {time.time() - t0:.1f}s")
 
     client.set_timeout(30.0)
     world = client.get_world()
     origin = world.get_cesium_origin()
     offset = float(client._inner.LastHeightAlignOffset)
-    table_n = int(client._inner.LastGroundDtmSamples.Count)
-    print(f"    georef origin h = {origin[2]:.2f} m | LastHeightAlignOffset = {offset:.3f} m"
-          f" | DTM table = {table_n} pts")
-    if args.height_align == "none" and abs(offset) > 1e-9:
-        print(f"FAIL: height-align none but offset {offset:.3f} != 0", file=sys.stderr); return 1
-    if args.height_align != "none" and abs(offset) < 1e-6:
-        print("WARN: offset ~0 — photoreal and ground coincide here, so the decoupling is a no-op "
-              "(can't demonstrate the bias removal). Try a tile with a real DTM-DSM gap.",
-              file=sys.stderr)
-    if table_n == 0:
-        print("FAIL: DTM table empty — world build did not persist samples", file=sys.stderr); return 1
+    drape = bool(client._inner.LastDrapeActive)
+    if drape:
+        print(f"    georef origin h = {origin[2]:.2f} m | DRAPE per-cell grid "
+              f"{client._inner.LastDrapeNumCols}x{client._inner.LastDrapeNumRows} @ "
+              f"{client._inner.LastDrapeCellSize:.1f} m")
+    else:
+        table_n = int(client._inner.LastGroundDtmSamples.Count)
+        print(f"    georef origin h = {origin[2]:.2f} m | LastHeightAlignOffset = {offset:.3f} m"
+              f" | DTM table = {table_n} pts")
+        if args.height_align == "none" and abs(offset) > 1e-9:
+            print(f"FAIL: height-align none but offset {offset:.3f} != 0", file=sys.stderr); return 1
+        if args.height_align != "none" and abs(offset) < 1e-6:
+            print("WARN: offset ~0 — photoreal and ground coincide here, so the decoupling is a no-op "
+                  "(can't demonstrate the bias removal). Try a tile with a real DTM-DSM gap.",
+                  file=sys.stderr)
+        if table_n == 0:
+            print("FAIL: DTM table empty — world build did not persist samples", file=sys.stderr); return 1
+    if args.height_align == "drape" and not drape:
+        print("FAIL: height-align drape but LastDrapeActive is False", file=sys.stderr); return 1
 
     # ── spawn TM traffic on road spawn points ──────────────────────────────
     print(f"[2] spawning {args.traffic} autopilot vehicle(s)...")
@@ -189,6 +205,31 @@ def main() -> int:
         except Exception:
             continue
     print(f"    spawned {len(spawned)}/{args.traffic}")
+
+    # ── drape: also seat a few OFF-ROAD vehicles (the seamless on/off-road win) ──
+    if drape and args.offroad > 0:
+        nc = int(client._inner.LastDrapeNumCols); nr = int(client._inner.LastDrapeNumRows)
+        minx = float(client._inner.LastDrapeMinX); miny = float(client._inner.LastDrapeMinY)
+        cell = float(client._inner.LastDrapeCellSize)
+        cx = minx + 0.5 * (nc - 1) * cell; cy = miny + 0.5 * (nr - 1) * cell
+        placed = 0
+        for _ in range(args.offroad * 6):
+            if placed >= args.offroad:
+                break
+            x = random.uniform(cx - 0.3 * nc * cell, cx + 0.3 * nc * cell)
+            y = random.uniform(cy - 0.3 * nr * cell, cy + 0.3 * nr * cell)
+            sz = world.ground_z_below(x, y, 1000.0, search=5000.0)   # hits the draped heightfield
+            if sz is None:
+                continue
+            bp = random.choice(vehicle_bps); bp.set_attribute("role_name", "offroad")
+            try:
+                a = world.spawn_actor(bp, carla.Transform(carla.Location(x, y, sz + 0.5),
+                                                          carla.Rotation(0, 0, 0)))
+                spawned.append(a); placed += 1
+            except Exception:
+                continue
+        print(f"    + {placed}/{args.offroad} off-road vehicle(s)")
+
     if not spawned:
         print("FAIL: no vehicles spawned", file=sys.stderr); return 1
     time.sleep(1.0)   # let the TM discover them
@@ -207,7 +248,16 @@ def main() -> int:
     #       matches live Cesium World Terrain).
     # Vehicles whose |pivot| exceeds --glitch-pivot are CARLA physics artifacts
     # (airborne / fell through the world) and are excluded (reported, not failed).
-    print(f"[3] validating telemetry over {args.samples} poll(s)...")
+    # In drape mode the collision heightfield is TRIANGULATED per cell while telemetry reads a
+    # BILINEAR grid, so on steep non-planar cells (mostly off-road) the two differ by up to the
+    # within-cell relief, which scales with the cell size. Widen the lower pivot bound accordingly
+    # (sub-0.5 m at the 2 m production default; larger at coarse test resolutions). On-road cells are
+    # near-planar so this barely applies. hae_dtm-vs-live (the truth check) stays strict.
+    pivot_min_eff = args.pivot_min
+    if drape:
+        pivot_min_eff = min(args.pivot_min, -(0.5 + 0.45 * args.terrain_res))
+    print(f"[3] validating telemetry over {args.samples} poll(s)...  pivot range "
+          f"[{pivot_min_eff:.2f}, {args.pivot_max:.2f}] m")
     fails, checked, glitched = [], 0, 0
     pivots, dtm_errs = [], []
     for _ in range(args.samples):
@@ -229,9 +279,9 @@ def main() -> int:
             # (1) race-free decoupling invariant: pivot in a plausible vehicle range.
             if pivot is not None:
                 pivots.append(pivot)
-                if not (args.pivot_min <= pivot <= args.pivot_max):
+                if not (pivot_min_eff <= pivot <= args.pivot_max):
                     fails.append(f"veh {r['id']}: hae {r['hae']:.2f} - hae_dtm {hae_dtm:.2f} "
-                                 f"= pivot {pivot:.2f} m outside [{args.pivot_min}, {args.pivot_max}]")
+                                 f"= pivot {pivot:.2f} m outside [{pivot_min_eff:.2f}, {args.pivot_max}]")
             # (2) cached DTM table matches live bare-earth ground sampling.
             dtm_live = live.get(i)
             if dtm_live is not None and hae_dtm is not None:
