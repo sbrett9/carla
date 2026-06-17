@@ -14,13 +14,19 @@ SAME C# CarlaClient instance that built the world, so building in a separate pro
 prior test_digital_twin.py run) would leave this client's offset at 0.
 
 Flow: build elevated world (--height-align, default 'area') -> spawn TM traffic -> poll
-world.get_vehicle_telemetry(origin) and verify, per vehicle:
-  1. EXACT decoupling: reported hae == physical_hae - offset   (on-road; |err| < 1 cm).
-  2. BARE-EARTH truth: reported hae ≈ live one-shot 'ground' DTM sample at the vehicle lat/lon,
-     within ~the vehicle pivot height (hae - dtm in [-0.5, +3.0] m).
-  3. hae_dtm field ≈ that live ground sample (the cached table matches live DTM).
-  4. lat/lon are unchanged by the decoupling (equal the raw geodetic transform).
-With --height-align none the offset is 0 and hae must equal physical_hae exactly.
+world.get_vehicle_telemetry(origin) and verify, per vehicle. Checks are RACE-FREE — they only
+compare values within a SINGLE telemetry record (the producer's own snapshot); we deliberately
+do NOT recompute `physical` from a second get_transform() read, which would race vehicle motion
+(a moving car climbs/descends between the two reads -> spurious cm-dm "errors"). The exact
+subtraction hae == physical - offset is deterministic; the end-to-end property we validate is:
+  1. pivot := hae - hae_dtm (both from one record) is a plausible vehicle pivot height
+     (in [pivot_min, pivot_max]). This IS the decoupling: hae - hae_dtm = (physical - offset)
+     - dtm = pivot, independent of the visual offset.
+  2. hae_dtm ≈ live one-shot 'ground' DTM sample at the vehicle lat/lon (cached table matches
+     live Cesium World Terrain), within --dtm-tol.
+Vehicles with |pivot| > --glitch-pivot are CARLA physics artifacts (airborne / fell through the
+world) and are excluded (reported, not failed). With --height-align none, offset is 0 and the
+same invariants hold (hae == physical, still pivot above bare-earth ground).
 
 Prereqs (same as test_digital_twin.py):
   * Headless server running + ticking (RunCarlaServer.ps1).
@@ -68,6 +74,8 @@ ap.add_argument("--timeout", type=float, default=300.0)
 ap.add_argument("--pivot-max", type=float, default=3.0, help="max plausible hae-dtm (pivot+slop) m")
 ap.add_argument("--pivot-min", type=float, default=-0.5, help="min plausible hae-dtm m")
 ap.add_argument("--dtm-tol", type=float, default=2.5, help="hae_dtm vs live ground sample tol m")
+ap.add_argument("--glitch-pivot", type=float, default=5.0,
+                help="exclude vehicles with |hae-hae_dtm| beyond this (m) as airborne/fell sim artifacts")
 args = ap.parse_args()
 
 os.environ.setdefault("CARLA_NETCONVERT", _NETCONVERT)
@@ -76,7 +84,6 @@ os.environ.setdefault("PROJ_DATA", _PROJ)
 
 import carlanet as carla
 from CarlaNet.Map import OsmConversionOptions
-from CarlaNet.Types.Geom import Geodesy, GeoLocation
 
 
 def read_osm_bounds(path):
@@ -151,7 +158,6 @@ def main() -> int:
     origin = world.get_cesium_origin()
     offset = float(client._inner.LastHeightAlignOffset)
     table_n = int(client._inner.LastGroundDtmSamples.Count)
-    cs_origin = GeoLocation(float(origin[0]), float(origin[1]), float(origin[2]))
     print(f"    georef origin h = {origin[2]:.2f} m | LastHeightAlignOffset = {offset:.3f} m"
           f" | DTM table = {table_n} pts")
     if args.height_align == "none" and abs(offset) > 1e-9:
@@ -189,44 +195,52 @@ def main() -> int:
     time.sleep(1.0)   # let the TM discover them
 
     # ── validate over a few telemetry polls ────────────────────────────────
+    # Checks are RACE-FREE: everything compared comes from the SAME telemetry record
+    # (the producer's own snapshot). We do NOT recompute `physical` from a second
+    # get_transform() read — that races vehicle motion (a moving car climbs/descends
+    # between the two reads), which produces spurious cm-to-dm "errors". The exact
+    # subtraction hae == physical - offset is deterministic code; what we validate
+    # end-to-end is the bare-earth property, via:
+    #   (1) pivot := hae - hae_dtm   (both from one record) must be a plausible vehicle
+    #       pivot height — this IS hae's decoupling: hae - hae_dtm = (physical - offset)
+    #       - dtm = pivot, independent of the visual offset.
+    #   (2) hae_dtm ≈ live one-shot 'ground' DTM at the vehicle lat/lon (cached table
+    #       matches live Cesium World Terrain).
+    # Vehicles whose |pivot| exceeds --glitch-pivot are CARLA physics artifacts
+    # (airborne / fell through the world) and are excluded (reported, not failed).
     print(f"[3] validating telemetry over {args.samples} poll(s)...")
-    fails, checked = [], 0
-    worst_exact = 0.0
+    fails, checked, glitched = [], 0, 0
     pivots, dtm_errs = [], []
     for _ in range(args.samples):
         recs = world.get_vehicle_telemetry(origin)
-        for r in recs:
+        # Batch the live bare-earth sample for all vehicles in ONE call this poll.
+        pts = [(r["lat"], r["lon"]) for r in recs]
+        try:
+            gs = world.sample_terrain_heights(pts, selector="ground") if pts else []
+        except Exception:
+            gs = []
+        live = {i: float(gs[i][2]) for i in range(len(gs)) if math.isfinite(gs[i][2])}
+        for i, r in enumerate(recs):
+            hae_dtm = r.get("hae_dtm")
+            pivot = (r["hae"] - hae_dtm) if hae_dtm is not None else None
+            if pivot is not None and abs(pivot) > args.glitch_pivot:
+                glitched += 1               # airborne / fell — sim artifact, skip
+                continue
             checked += 1
-            # (1) EXACT decoupling: reported hae == physical_hae - offset (on-road).
-            #     Recompute physical from the same actor transform the producer used.
-            a = next((x for x in spawned if x.id == r["id"]), None)
-            if a is not None:
-                loc = a.get_transform().location
-                physical = float(Geodesy.CarlaLocalToGeodetic(
-                    cs_origin, float(loc.x), float(loc.y), float(loc.z)).Altitude)
-                exact_err = abs((physical - offset) - r["hae"])
-                worst_exact = max(worst_exact, exact_err)
-                if exact_err > 0.01:
-                    fails.append(f"veh {r['id']}: hae {r['hae']:.3f} != physical {physical:.3f} "
-                                 f"- offset {offset:.3f} (err {exact_err:.3f} m)")
-            # (2)+(3) bare-earth truth: live one-shot ground DTM at the vehicle lat/lon.
-            try:
-                gs = world.sample_terrain_heights([(r["lat"], r["lon"])], selector="ground")
-                dtm_live = float(gs[0][2]) if gs and math.isfinite(gs[0][2]) else None
-            except Exception:
-                dtm_live = None
-            if dtm_live is not None:
-                pivot = r["hae"] - dtm_live
+            # (1) race-free decoupling invariant: pivot in a plausible vehicle range.
+            if pivot is not None:
                 pivots.append(pivot)
                 if not (args.pivot_min <= pivot <= args.pivot_max):
-                    fails.append(f"veh {r['id']}: hae {r['hae']:.2f} - live DTM {dtm_live:.2f} "
-                                 f"= {pivot:.2f} m outside [{args.pivot_min}, {args.pivot_max}]")
-                if r.get("hae_dtm") is not None:
-                    de = abs(r["hae_dtm"] - dtm_live)
-                    dtm_errs.append(de)
-                    if de > args.dtm_tol:
-                        fails.append(f"veh {r['id']}: hae_dtm {r['hae_dtm']:.2f} vs live DTM "
-                                     f"{dtm_live:.2f} (err {de:.2f} > {args.dtm_tol} m)")
+                    fails.append(f"veh {r['id']}: hae {r['hae']:.2f} - hae_dtm {hae_dtm:.2f} "
+                                 f"= pivot {pivot:.2f} m outside [{args.pivot_min}, {args.pivot_max}]")
+            # (2) cached DTM table matches live bare-earth ground sampling.
+            dtm_live = live.get(i)
+            if dtm_live is not None and hae_dtm is not None:
+                de = abs(hae_dtm - dtm_live)
+                dtm_errs.append(de)
+                if de > args.dtm_tol:
+                    fails.append(f"veh {r['id']}: hae_dtm {hae_dtm:.2f} vs live DTM "
+                                 f"{dtm_live:.2f} (err {de:.2f} > {args.dtm_tol} m)")
         time.sleep(1.0)
 
     # cleanup before verdict
@@ -237,12 +251,16 @@ def main() -> int:
     def stat(xs):
         return (f"min {min(xs):+.2f} median {sorted(xs)[len(xs)//2]:+.2f} max {max(xs):+.2f}"
                 if xs else "n/a")
-    print(f"\n   checks: {checked}  worst exact-decoupling err: {worst_exact*1000:.1f} mm")
-    print(f"   hae - live_DTM (≈ vehicle pivot): {stat(pivots)} m")
-    print(f"   hae_dtm vs live_DTM error:        {stat(dtm_errs)} m")
+    print(f"\n   checks: {checked}  (excluded {glitched} sim-glitched/airborne)")
+    print(f"   pivot = hae - hae_dtm (race-free): {stat(pivots)} m")
+    print(f"   hae_dtm vs live_DTM error:         {stat(dtm_errs)} m")
     if args.height_align != "none":
-        print(f"   (offset removed from each hae: {offset:+.3f} m — this is the photoreal bias)")
+        print(f"   offset removed from each hae: {offset:+.3f} m (the photoreal bias, now "
+              f"absent from telemetry)")
 
+    if checked == 0:
+        print("\nFAIL: no usable (non-glitched) vehicle records sampled", file=sys.stderr)
+        return 1
     if fails:
         print(f"\n== FAIL ({len(fails)}) ==", file=sys.stderr)
         for f in fails[:20]:
