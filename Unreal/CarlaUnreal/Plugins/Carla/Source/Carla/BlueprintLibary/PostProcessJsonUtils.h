@@ -22,6 +22,7 @@ struct FPostProcessSettingsWrapper
 
 
 class UPostProcessComponent;
+class USceneCaptureComponent2D;
 
 UCLASS()
 class CARLA_API UPostProcessJsonUtils : public UBlueprintFunctionLibrary
