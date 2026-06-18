@@ -1429,9 +1429,12 @@ class World:
         return meta
 
     @staticmethod
-    def _drape_bilin(grid2d, meta, x, y):
-        """Bilinear-sample a cached drape grid (row-major [row,col]) at CARLA world (x, y) m,
-        edge-clamped. O(1)."""
+    def _drape_surf(grid2d, meta, x, y):
+        """Sample a cached drape grid (row-major [row,col]) at CARLA world (x, y) m using the SAME
+        per-cell TRIANGULATION as Chaos::FHeightField, so the telemetry lookup matches the physics
+        surface a vehicle actually rests on (bilinear would disagree on steep cells -> spurious
+        negative 'pivot' off-road). Edge-clamped, O(1). FHeightField splits each cell on the v00-v11
+        diagonal: triangle (v00,v01,v11) for ty<=tx, triangle (v00,v11,v10) for ty>tx."""
         nc = meta["nc"]; nr = meta["nr"]; cell = meta["cell"]
         fc = min(max((x - meta["minx"]) / cell, 0.0), nc - 1.0)
         fr = min(max((y - meta["miny"]) / cell, 0.0), nr - 1.0)
@@ -1439,9 +1442,10 @@ class World:
         tx = fc - c0; ty = fr - r0
         v00 = float(grid2d[r0, c0]); v01 = float(grid2d[r0, c1])
         v10 = float(grid2d[r1, c0]); v11 = float(grid2d[r1, c1])
-        a = v00 * (1.0 - tx) + v01 * tx
-        b = v10 * (1.0 - tx) + v11 * tx
-        return a * (1.0 - ty) + b * ty
+        if ty <= tx:   # lower-right triangle (v00, v01, v11)
+            return v00 + (v01 - v00) * tx + (v11 - v01) * ty
+        else:          # upper-left triangle (v00, v11, v10)
+            return v00 + (v11 - v10) * tx + (v10 - v00) * ty
 
     def get_vehicle_telemetry(self, origin=None):
         """Pull per-vehicle TRUTH telemetry for every vehicle in the world as plain dicts (the
@@ -1488,9 +1492,9 @@ class World:
             if drape is not None:
                 # Phase 2b: the collidable surface is per-point draped. Subtract the bilinear-
                 # interpolated per-cell offset at the vehicle's local X/Y -> bare-earth DTM + pivot.
-                off_local = self._drape_bilin(drape["off"], drape, float(loc.x), float(loc.y))
+                off_local = self._drape_surf(drape["off"], drape, float(loc.x), float(loc.y))
                 hae = physical_hae - off_local
-                dtm_at_veh = self._drape_bilin(drape["dtm"], drape, float(loc.x), float(loc.y))
+                dtm_at_veh = self._drape_surf(drape["dtm"], drape, float(loc.x), float(loc.y))
             else:
                 # Option A: the whole collidable surface (road + ground) is shifted by the same
                 # constant offset, so subtract it unconditionally (offset 0 under height-align none).

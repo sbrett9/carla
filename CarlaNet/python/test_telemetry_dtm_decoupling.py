@@ -248,14 +248,10 @@ def main() -> int:
     #       matches live Cesium World Terrain).
     # Vehicles whose |pivot| exceeds --glitch-pivot are CARLA physics artifacts
     # (airborne / fell through the world) and are excluded (reported, not failed).
-    # In drape mode the collision heightfield is TRIANGULATED per cell while telemetry reads a
-    # BILINEAR grid, so on steep non-planar cells (mostly off-road) the two differ by up to the
-    # within-cell relief, which scales with the cell size. Widen the lower pivot bound accordingly
-    # (sub-0.5 m at the 2 m production default; larger at coarse test resolutions). On-road cells are
-    # near-planar so this barely applies. hae_dtm-vs-live (the truth check) stays strict.
+    # Telemetry samples the drape grid with the SAME per-cell triangulation Chaos::FHeightField uses
+    # (shim _drape_surf), so the lookup matches the physics surface and the pivot is the true vehicle
+    # pivot (>= ~0) on- AND off-road, at any resolution. So the bound stays strict.
     pivot_min_eff = args.pivot_min
-    if drape:
-        pivot_min_eff = min(args.pivot_min, -(0.5 + 0.45 * args.terrain_res))
     print(f"[3] validating telemetry over {args.samples} poll(s)...  pivot range "
           f"[{pivot_min_eff:.2f}, {args.pivot_max:.2f}] m")
     fails, checked, glitched = [], 0, 0
