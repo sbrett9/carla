@@ -292,11 +292,14 @@ public sealed class CarlaClient : IAsyncDisposable
         {
             var b = CarlaNet.Map.OpenDrive.DrapeTerrain.ReadOsmBounds(osmPath)
                 ?? throw new InvalidOperationException("height-align drape requires an OSM <bounds> element");
+            // The drape terrain covers the OSM bounds exactly (no outward expansion). terrainMargin
+            // is the INWARD staging ring (reserved at the OSM edge for traffic entry/exit), not a
+            // terrain extension — it's recorded on the terrain actor and exposed via get_staging_bounds.
             drapeSpec = CarlaNet.Map.OpenDrive.DrapeTerrain.MakeGridFromGeoBounds(
                 origin, b.MinLat, b.MinLon, b.MaxLat, b.MaxLon,
-                terrainResMeters, terrainMarginMeters);
+                terrainResMeters, marginMeters: 0.0);
             Console.WriteLine($"[drape] grid {drapeSpec.NumCols}x{drapeSpec.NumRows} = {drapeSpec.NodeCount} nodes, "
-                + $"cell {terrainResMeters} m, margin {terrainMarginMeters:F1} m");
+                + $"cell {terrainResMeters} m, staging margin {terrainMarginMeters:F1} m (inward)");
             var (dsm, dtm) = await SampleDrapeGridCachedAsync(
                 drapeSpec, ionAssetId, groundIonAssetId, drapeCacheDir, drapeChunkCells, ct: ct)
                 .ConfigureAwait(false);
@@ -413,7 +416,8 @@ public sealed class CarlaClient : IAsyncDisposable
             var hf = new double[n];
             for (int i = 0; i < n; i++) hf[i] = drapeRes.DrapedZ[i] - originHeight;
             await BuildDrapedTerrainAsync(
-                drapeSpec.MinX, drapeSpec.MinY, drapeSpec.CellSize, drapeSpec.NumCols, drapeSpec.NumRows, hf)
+                drapeSpec.MinX, drapeSpec.MinY, drapeSpec.CellSize, drapeSpec.NumCols, drapeSpec.NumRows, hf,
+                terrainMarginMeters)
                 .ConfigureAwait(false);
             if (groundIonAssetId > 0)
                 await SetLayerCollisionAsync("ground", false).ConfigureAwait(false);
@@ -523,9 +527,16 @@ public sealed class CarlaClient : IAsyncDisposable
     /// are world Z in METRES, row-major [row*numCols + col], length numCols*numRows; grid corner
     /// (col 0,row 0) at world (originX, originY) metres, +col=+X, +row=+Y, spacing cellSize m.
     public Task<bool> BuildDrapedTerrainAsync(
-        double originX, double originY, double cellSize, int numCols, int numRows, double[] heights)
+        double originX, double originY, double cellSize, int numCols, int numRows, double[] heights,
+        double stagingMarginMeters)
         => _rpc.CallAsync<bool>("build_draped_terrain",
-               originX, originY, cellSize, numCols, numRows, heights);
+               originX, originY, cellSize, numCols, numRows, heights, stagingMarginMeters);
+
+    /// Staging bounds for boundary-aware traffic: the draped sandbox extent in CARLA-local metres
+    /// plus the inward staging-ring margin, as [minX, minY, maxX, maxY, margin]. Empty when no drape
+    /// terrain exists. The scene perimeter (region of interest) = these bounds inset by the margin.
+    public Task<IReadOnlyList<double>> GetStagingBoundsAsync()
+        => _rpc.CallAsync<IReadOnlyList<double>>("get_staging_bounds");
 
     /// The Cesium georeference origin as GeoLocation(latitude, longitude, ellipsoidal height m).
     /// True elevation of a local Unreal point = this height + the point's local Z.

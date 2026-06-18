@@ -1323,12 +1323,15 @@ class World:
         main georeference."""
         return bool(_sync(self._client.SetLayerOffsetAsync(str(layer), float(offset_meters))))
 
-    def build_draped_terrain(self, origin_x, origin_y, cell_size, num_cols, num_rows, heights):
+    def build_draped_terrain(self, origin_x, origin_y, cell_size, num_cols, num_rows, heights,
+                             staging_margin=0.0):
         """Build/replace the hidden, collision-only draped ground surface (a heightfield) vehicles
         drive on across the sandbox, on- and off-road. `heights` is a row-major sequence (or numpy
         array) of world Z in METRES, length num_cols*num_rows, indexed [row*num_cols + col]; grid
         corner (col 0,row 0) sits at world (origin_x, origin_y) metres, +col=+X, +row=+Y, spacing
-        cell_size m. Returns True on success."""
+        cell_size m. staging_margin (m) is the inward ring reserved at the sandbox edge for traffic
+        entry/exit (recorded for get_staging_bounds; does not change the terrain extent). Returns
+        True on success."""
         from System import Array, Double
         try:
             flat = heights.ravel().tolist() if hasattr(heights, "ravel") else list(heights)
@@ -1337,7 +1340,18 @@ class World:
         arr = Array[Double]([float(h) for h in flat])
         return bool(_sync(self._client.BuildDrapedTerrainAsync(
             float(origin_x), float(origin_y), float(cell_size),
-            int(num_cols), int(num_rows), arr)))
+            int(num_cols), int(num_rows), arr, float(staging_margin))))
+
+    def get_staging_bounds(self):
+        """Boundary-aware-traffic staging bounds, or None when the world has no draped terrain.
+        Returns a dict: {min_x, min_y, max_x, max_y, margin} in CARLA-local metres — the draped
+        sandbox extent plus the inward staging-ring width. The scene perimeter (region of interest)
+        is these bounds inset by `margin`; the staging ring is between the perimeter and the bounds."""
+        vals = _sync(self._client.GetStagingBoundsAsync())
+        if vals is None or vals.Count < 5:
+            return None
+        return {"min_x": float(vals[0]), "min_y": float(vals[1]),
+                "max_x": float(vals[2]), "max_y": float(vals[3]), "margin": float(vals[4])}
 
     def get_cesium_origin(self):
         """Cesium georeference origin as (latitude, longitude, height_m). The true elevation

@@ -191,7 +191,8 @@ ADrapedTerrainActor::ADrapedTerrainActor()
 ADrapedTerrainActor* UDrapedTerrain::Build(
 	UObject* WorldContextObject,
 	double OriginXMeters, double OriginYMeters, double CellSizeMeters,
-	int32 NumCols, int32 NumRows, const TArray<double>& HeightsMeters)
+	int32 NumCols, int32 NumRows, const TArray<double>& HeightsMeters,
+	double StagingMarginMeters)
 {
 	UWorld* World = GEngine
 		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
@@ -234,7 +235,34 @@ ADrapedTerrainActor* UDrapedTerrain::Build(
 	// The grid wasn't set when the component first registered, so (re)create the physics body now.
 	Actor->Terrain->RecreatePhysicsState();
 
-	UE_LOG(LogTemp, Display, TEXT("[DrapedTerrain] Build: %dx%d grid, cell %.2f m, origin (%.2f, %.2f) m."),
-		NumCols, NumRows, CellSizeMeters, OriginXMeters, OriginYMeters);
+	// Record the staging bounds (CARLA-local metres) + inward ring margin for GetStagingBounds.
+	Actor->MinXMeters = OriginXMeters;
+	Actor->MinYMeters = OriginYMeters;
+	Actor->MaxXMeters = OriginXMeters + (NumCols - 1) * CellSizeMeters;
+	Actor->MaxYMeters = OriginYMeters + (NumRows - 1) * CellSizeMeters;
+	Actor->MarginMeters = StagingMarginMeters;
+
+	UE_LOG(LogTemp, Display, TEXT("[DrapedTerrain] Build: %dx%d grid, cell %.2f m, origin (%.2f, %.2f) m, staging margin %.2f m."),
+		NumCols, NumRows, CellSizeMeters, OriginXMeters, OriginYMeters, StagingMarginMeters);
 	return Actor;
+}
+
+bool UDrapedTerrain::GetStagingBounds(
+	UObject* WorldContextObject,
+	double& OutMinXMeters, double& OutMinYMeters,
+	double& OutMaxXMeters, double& OutMaxYMeters, double& OutMarginMeters)
+{
+	UWorld* World = GEngine
+		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
+		: nullptr;
+	if (!World) return false;
+	for (TActorIterator<ADrapedTerrainActor> It(World); It; ++It)
+	{
+		if (!IsValid(*It)) continue;
+		OutMinXMeters = It->MinXMeters; OutMinYMeters = It->MinYMeters;
+		OutMaxXMeters = It->MaxXMeters; OutMaxYMeters = It->MaxYMeters;
+		OutMarginMeters = It->MarginMeters;
+		return true;
+	}
+	return false;
 }

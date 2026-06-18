@@ -623,7 +623,8 @@ void FCarlaServer::FPimpl::BindActions()
   // (col 0,row 0) at world (origin_x, origin_y) metres, +col=+X, +row=+Y, spacing cell_size m.
   BIND_SYNC(build_draped_terrain) << [this](
       double origin_x, double origin_y, double cell_size,
-      int32_t num_cols, int32_t num_rows, std::vector<double> heights) -> R<bool>
+      int32_t num_cols, int32_t num_rows, std::vector<double> heights,
+      double staging_margin) -> R<bool>
   {
     REQUIRE_CARLA_EPISODE();
     UWorld* World = Episode->GetWorld();
@@ -635,12 +636,31 @@ void FCarlaServer::FPimpl::BindActions()
     Heights.Reserve(static_cast<int32>(heights.size()));
     for (double H : heights) { Heights.Add(H); }
     ADrapedTerrainActor* Actor = UDrapedTerrain::Build(
-        World, origin_x, origin_y, cell_size, num_cols, num_rows, Heights);
+        World, origin_x, origin_y, cell_size, num_cols, num_rows, Heights, staging_margin);
     if (!Actor)
     {
       RESPOND_ERROR("draped-terrain build failed (see log)");
     }
     return true;
+  };
+
+  // Staging bounds for boundary-aware traffic: the draped sandbox extent (CARLA-local metres) plus
+  // the inward staging-ring margin, as [minX, minY, maxX, maxY, margin]. Empty when no draped
+  // terrain exists. Scene perimeter (region of interest) = these bounds inset by the margin.
+  BIND_SYNC(get_staging_bounds) << [this]() -> R<std::vector<double>>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to read staging bounds from");
+    }
+    double minX, minY, maxX, maxY, margin;
+    if (!UDrapedTerrain::GetStagingBounds(World, minX, minY, maxX, maxY, margin))
+    {
+      return std::vector<double>{};   // no draped terrain in this world
+    }
+    return std::vector<double>{ minX, minY, maxX, maxY, margin };
   };
 
   // Returns the Cesium georeference origin (latitude, longitude, ellipsoidal height in m),

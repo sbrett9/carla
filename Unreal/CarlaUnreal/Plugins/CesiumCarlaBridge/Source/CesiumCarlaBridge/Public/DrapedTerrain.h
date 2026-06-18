@@ -64,6 +64,15 @@ public:
 
 	UPROPERTY()
 	TObjectPtr<UDrapedTerrainComponent> Terrain;
+
+	// Staging bounds (CARLA-local metres) = the draped sandbox extent, plus the inward staging-ring
+	// margin reserved at the OSM edge for traffic entry/exit. Set by UDrapedTerrain::Build; read by
+	// GetStagingBounds. The scene perimeter (region of interest) = these bounds inset by MarginMeters.
+	UPROPERTY() double MinXMeters = 0.0;
+	UPROPERTY() double MinYMeters = 0.0;
+	UPROPERTY() double MaxXMeters = 0.0;
+	UPROPERTY() double MaxYMeters = 0.0;
+	UPROPERTY() double MarginMeters = 0.0;
 };
 
 UCLASS()
@@ -76,8 +85,10 @@ public:
 	 * Build (or replace) the draped-terrain heightfield in WorldContextObject's world. Heights are
 	 * world Z in METRES, row-major [row * NumCols + col], length NumCols*NumRows. The grid corner
 	 * (col 0, row 0) is at world (OriginXMeters, OriginYMeters); +col is +X, +row is +Y, spacing
-	 * CellSizeMeters. Any existing draped-terrain actor is destroyed first. Returns the actor (or
-	 * nullptr on failure). Tagged "draped_terrain"; hidden; collision-only (WorldStatic, blocks all).
+	 * CellSizeMeters. StagingMarginMeters is the inward ring reserved at the sandbox edge for traffic
+	 * entry/exit (recorded for GetStagingBounds; does not change the terrain extent). Any existing
+	 * draped-terrain actor is destroyed first. Returns the actor (or nullptr on failure). Tagged
+	 * "draped_terrain"; hidden; collision-only (WorldStatic, blocks all).
 	 */
 	UFUNCTION(BlueprintCallable, Category = "CesiumCarla", meta = (WorldContext = "WorldContextObject"))
 	static ADrapedTerrainActor* Build(
@@ -87,5 +98,16 @@ public:
 		double CellSizeMeters,
 		int32 NumCols,
 		int32 NumRows,
-		const TArray<double>& HeightsMeters);
+		const TArray<double>& HeightsMeters,
+		double StagingMarginMeters);
+
+	/**
+	 * Read the draped sandbox staging bounds (CARLA-local metres) + inward staging-ring margin from
+	 * the world's ADrapedTerrainActor. Returns false (outputs untouched) when there is none.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CesiumCarla", meta = (WorldContext = "WorldContextObject"))
+	static bool GetStagingBounds(
+		UObject* WorldContextObject,
+		double& OutMinXMeters, double& OutMinYMeters,
+		double& OutMaxXMeters, double& OutMaxYMeters, double& OutMarginMeters);
 };
