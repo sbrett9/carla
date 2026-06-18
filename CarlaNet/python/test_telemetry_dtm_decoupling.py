@@ -1,12 +1,13 @@
 """Validate that reported vehicle telemetry HAE is DECOUPLED from visual height-align.
 
-Background (TELEMETRY_DTM_DECOUPLING_HANDOFF.md, project_height_align_mechanism):
-  With --height-align area/origin the road mesh AND the collidable bare-earth ground are both
-  shifted by one constant offset (Option A: the ground layer is dropped by the same amount so it
-  coincides with the road), so every vehicle sits at DTM + offset. Telemetry must report each
-  vehicle's BARE-EARTH ellipsoidal-WGS84 altitude (Cesium World Terrain DTM) — the locked HAE truth
-  datum — NOT the photoreal-aligned road Z. get_vehicle_telemetry recovers it by subtracting that
-  one constant (LastHeightAlignOffset) unconditionally. No live Cesium sampling in the loop.
+Background:
+  The constant-offset height-align modes (--height-align area/origin) raise/lower BOTH the road and
+  the collidable bare-earth ground by one fixed amount so vehicles sit on the photoreal, so every
+  vehicle's physical altitude = bare-earth height + that offset. Telemetry must still report each
+  vehicle's true BARE-EARTH ellipsoidal-WGS84 altitude (from Cesium World Terrain) — NOT the
+  photoreal-matched height. get_vehicle_telemetry recovers it by subtracting that one offset. The
+  'drape' mode varies the shift per location, so telemetry subtracts a per-cell value instead. No
+  live Cesium sampling happens in the polling loop.
 
 This test must do the world build itself: LastHeightAlignOffset and the DTM table live on the
 SAME C# CarlaClient instance that built the world, so building in a separate process (e.g. a
@@ -60,8 +61,8 @@ ap.add_argument("--ion-token", default=os.environ.get("CESIUM_ION_TOKEN", ""))
 ap.add_argument("--ion-asset-id", type=int, default=2275207)   # Google photoreal (visual)
 ap.add_argument("--ground-asset-id", type=int, default=1)      # Cesium World Terrain (bare earth)
 ap.add_argument("--height-align", choices=["area", "origin", "none", "drape"], default="area",
-                help="visual road-Z alignment under test (default 'area'). The decoupled hae must "
-                     "be bare-earth regardless; 'none' -> offset 0; 'drape' -> per-cell offset field.")
+                help="photoreal-matching mode under test (default 'area'). Reported hae must be "
+                     "bare-earth in every mode; 'none' -> no shift; 'drape' -> per-cell shift.")
 ap.add_argument("--terrain-res", type=float, default=8.0, help="drape: heightfield cell size (m)")
 ap.add_argument("--terrain-margin", type=float, default=30.48, help="drape: sandbox margin past OSM (m)")
 ap.add_argument("--drape-cache-dir", default=os.path.join(_REPO, "Build", "drape-cache"),

@@ -1314,20 +1314,21 @@ class World:
         return bool(_sync(self._client.SetLayerCollisionAsync(str(layer), bool(enabled))))
 
     def set_layer_offset(self, layer: str, offset_meters: float):
-        """Per-layer VERTICAL OFFSET (digital-twin Option A). Move the tagged Cesium tileset layer
-        ('photoreal'/'ground') up/down by offset_meters (signed, +up) via a dedicated georeference,
-        WITHOUT moving the truth georeference (get_cesium_origin and height sampling stay truthed to
-        the OSM origin). Used by the elevation build to drop the collidable bare-earth 'ground' layer
-        by the height-align offset so its collision coincides with the offset road mesh (no on-road
-        float, off-road still supported). 0 reassigns the layer to the default georeference."""
+        """Move one Cesium tileset layer ('photoreal'/'ground') up/down by offset_meters (signed,
+        +up) by giving it its own georeference, WITHOUT moving the main (truth) georeference, so
+        get_cesium_origin and height sampling stay anchored to the real ground. Used by the
+        constant-offset height-align modes ('area'/'origin') to drop the hidden bare-earth 'ground'
+        layer by the same amount the roads were raised/lowered, so its collision lines up with the
+        road (vehicles don't float on-road or fall through off-road). 0 returns the layer to the
+        main georeference."""
         return bool(_sync(self._client.SetLayerOffsetAsync(str(layer), float(offset_meters))))
 
     def build_draped_terrain(self, origin_x, origin_y, cell_size, num_cols, num_rows, heights):
-        """Phase 2b: build/replace the draped collision heightfield (a hidden, collision-only Chaos
-        heightfield) over the sandbox. `heights` is a row-major sequence (or numpy array) of world Z
-        in METRES, length num_cols*num_rows, indexed [row*num_cols + col]; grid corner (col 0,row 0)
-        sits at world (origin_x, origin_y) metres, +col=+X, +row=+Y, spacing cell_size m. Vehicles
-        seat/drive on it on- and off-road. Returns True on success."""
+        """Build/replace the hidden, collision-only draped ground surface (a heightfield) vehicles
+        drive on across the sandbox, on- and off-road. `heights` is a row-major sequence (or numpy
+        array) of world Z in METRES, length num_cols*num_rows, indexed [row*num_cols + col]; grid
+        corner (col 0,row 0) sits at world (origin_x, origin_y) metres, +col=+X, +row=+Y, spacing
+        cell_size m. Returns True on success."""
         from System import Array, Double
         try:
             flat = heights.ravel().tolist() if hasattr(heights, "ravel") else list(heights)
@@ -1401,11 +1402,12 @@ class World:
         return table
 
     def _drape_grid(self):
-        """Lazily build + cache the Phase-2b per-cell drape grids the last build persisted on the C#
-        client: the OFFSET field (DrapedZ-DTM) and the bare-earth DTM, as numpy 2-D arrays (row-major
-        [row,col], ellipsoidal m) plus metadata (minx, miny, cell, nc, nr). Bulk float32 buffers are
-        read via np.frombuffer (no per-element pythonnet marshalling). Returns None when the last
-        build wasn't drape mode (then the scalar/None path is used). Pure local data, 5 Hz-safe."""
+        """Lazily build + cache the per-cell grids the last drape build stored on the C# client: the
+        OFFSET field (draped-surface height minus bare-earth height) and the bare-earth ground height,
+        as numpy 2-D arrays (row-major [row,col], ellipsoidal m) plus metadata (minx, miny, cell, nc,
+        nr). Bulk float32 buffers are read via np.frombuffer (no per-element pythonnet marshalling).
+        Returns None when the last build wasn't 'drape' mode (then the simpler path is used). Pure
+        local data, 5 Hz-safe."""
         try:
             if not bool(self._client.LastDrapeActive):
                 return None
@@ -1454,19 +1456,19 @@ class World:
         (lat, lon, height_m) WGS84 tuple for the local->geodetic transform; if omitted it is fetched
         once via get_cesium_origin() (pass it in from a 5 Hz loop to avoid the per-tick RPC).
 
-        `hae` is the vehicle's BARE-EARTH ellipsoidal-WGS84 altitude (the locked HAE truth datum),
-        DECOUPLED from where the vehicle physically/visually sits. With --height-align area/origin
-        the road mesh AND the collidable bare-earth ground are both shifted by one constant offset
-        (Option A: the ground layer is dropped by the same amount so it coincides with the road —
-        see SetLayerOffsetAsync), so EVERY vehicle, on-road or off-road, sits at DTM + offset. This
-        method recovers bare-earth truth by subtracting that one constant unconditionally:
-        hae = physical_hae - LastHeightAlignOffset. No on/off-road gate is needed (Option A makes the
-        whole collidable world offset by the same constant). `hae` keeps the vehicle pivot (actor
-        origin ~CG/base above the surface) — the decoupling removes the align bias, not the reference
-        point; `hae_dtm` is the cached bare-earth ground at the vehicle (no pivot), so
-        hae - hae_dtm ≈ the pivot height. No live Cesium sampling happens here (multi-tick latency);
-        all data is the cached world-build table. With --height-align none, offset is 0 and `hae` ==
-        the physical altitude (unchanged). `lat`/`lon` are always exact and untouched.
+        `hae` is the vehicle's BARE-EARTH ellipsoidal-WGS84 altitude (the true ground datum),
+        independent of how the vehicle was raised/lowered to sit on the photoreal imagery. The
+        height-align modes that seat vehicles on the photoreal shift the whole drivable surface, so
+        the vehicle's physical altitude is biased toward the photoreal; this method removes that bias
+        and reports the real ground height instead:
+          - constant-offset modes ('area'/'origin'): the surface is shifted by one fixed amount, so
+            subtract it: hae = physical_altitude - that_offset (0 for 'none', i.e. no change).
+          - point-by-point mode ('drape'): the shift varies across the map, so subtract the per-cell
+            value looked up at the vehicle's position from the cached offset grid.
+        Either way `hae` keeps the vehicle pivot (the actor origin sits ~CG/base above the surface),
+        and `hae_dtm` is the bare-earth ground height at the vehicle (no pivot), so hae - hae_dtm is
+        roughly the pivot. No live Cesium sampling happens here (it has multi-tick latency) — all data
+        is read from grids cached at world-build time. `lat`/`lon` are always exact and untouched.
 
         Each dict: id, type_id, base_type, special_type, color, role_name, lat, lon, hae, hae_dtm,
         speed_mps, course_deg, vx, vy, vz, length_m, width_m, height_m. Heights are ELLIPSOIDAL
@@ -1480,7 +1482,7 @@ class World:
             offset = float(self._client.LastHeightAlignOffset)
         except Exception:
             offset = 0.0
-        drape = self._drape_grid()                       # Phase 2b per-cell offset/DTM (or None)
+        drape = self._drape_grid()                       # per-cell offset/ground grids (or None)
         table = None if drape is not None else self._bare_earth_dtm_table()
         out = []
         for v in self.get_actors().filter("vehicle.*"):
@@ -1490,14 +1492,14 @@ class World:
             geo = Geodesy.CarlaLocalToGeodetic(cs_origin, float(loc.x), float(loc.y), float(loc.z))
             physical_hae = float(geo.Altitude)
             if drape is not None:
-                # Phase 2b: the collidable surface is per-point draped. Subtract the bilinear-
-                # interpolated per-cell offset at the vehicle's local X/Y -> bare-earth DTM + pivot.
+                # 'drape' mode: the surface shift varies per location. Subtract the per-cell offset
+                # looked up at the vehicle's position -> bare-earth ground height + vehicle pivot.
                 off_local = self._drape_surf(drape["off"], drape, float(loc.x), float(loc.y))
                 hae = physical_hae - off_local
                 dtm_at_veh = self._drape_surf(drape["dtm"], drape, float(loc.x), float(loc.y))
             else:
-                # Option A: the whole collidable surface (road + ground) is shifted by the same
-                # constant offset, so subtract it unconditionally (offset 0 under height-align none).
+                # constant-offset modes ('area'/'origin'): the whole surface is shifted by one fixed
+                # amount, so subtract it (offset is 0 for 'none' -> no change).
                 hae = physical_hae - offset
                 dtm_at_veh, _ = self._nearest_dtm(table, geo.Latitude, geo.Longitude)
             vx, vy, vz = float(vel.x), float(vel.y), float(vel.z)
@@ -1841,25 +1843,34 @@ class Client:
         elevated world, and re-establishes the Cesium visual overlay. Returns the elevated
         .xodr string; call client.get_world() afterwards for the World.
 
-        Requires ion_token + ion_asset_id (the photoreal tileset, spawned at runtime).
-        ground_ion_asset_id (>0, default 1 = Cesium World Terrain) is the hidden bare-earth
-        layer sampled for road-Z; pass 0 to sample the photoreal tileset instead (legacy).
-        height_align reconciles bare-earth road-Z to the photoreal by a single constant offset (no
-        per-point heuristics): "none" (default) = no offset, so road = ground = the bare-earth surface
-        (they coincide, vehicles never float, the whole driveable surface sits ~sub-meter above the
-        photoreal street — invisible from nadir); "area" = median photoreal-ground gap over the map;
-        "origin" = gap at the origin. (A constant offset can't fix the spatially-varying DTM-vs-DSM
-        divergence on hills.) "drape" (Phase 2b) = PER-POINT: sample DSM+DTM over a grid covering the
-        whole OSM rectangle, de-spike (open ground follows the photoreal, buildings/canopy fall back
-        to bare earth), build a hidden Chaos heightfield as the universal collision/seating surface
-        (on- AND off-road), and conform the road to it — vehicles seat on the photoreal everywhere;
-        telemetry stays bare-earth via a per-cell offset field. ground_collision (default True) keeps
-        the bare-earth ground collidable for off-road safety (under "drape" the heightfield owns
-        collision and the ground tileset collision is turned off). terrain_res = heightfield cell
-        size m (the GSD-like knob); terrain_margin = how far past the OSM bounds to extend the
-        sandbox (m, default ~100 ft for long vehicles); drape_cache_dir caches the (slow) grid
-        sampling per area. osm_options should pin the origin; if origin_height is None the origin
-        sample is the datum.
+        Requires ion_token + ion_asset_id (the photoreal imagery layer, spawned at runtime).
+        ground_ion_asset_id (>0, default 1 = Cesium World Terrain) is the hidden bare-earth terrain
+        (no buildings/trees) whose heights set the road elevations; pass 0 to take heights from the
+        photoreal surface instead (legacy).
+
+        height_align controls how the roads and drivable ground are matched to the photoreal imagery:
+          "none" (default): leave them on the bare-earth terrain. Road and ground coincide, vehicles
+            never float, and the whole drivable surface sits ~sub-meter above the photoreal (so it's
+            invisible from high/nadir views).
+          "area"/"origin": raise/lower the road AND the drivable ground by ONE constant height so
+            vehicles sit on the photoreal — "area" uses the median photoreal-vs-ground gap over the
+            map, "origin" uses the gap at the map origin. (Good on flat ground; a single height can't
+            track hills, where the gap varies.)
+          "drape": match the photoreal POINT-BY-POINT — sample the photoreal and bare-earth heights
+            on a grid over the whole map area, clean it up (open ground follows the photoreal;
+            buildings/tree-canopy fall back to bare earth so the surface never climbs onto rooftops),
+            build a hidden collision surface vehicles drive on everywhere (on- AND off-road), and
+            conform the roads to it. Vehicles seat on the photoreal across the whole map.
+        In every mode the reported telemetry altitude stays true bare-earth (the matching shift is
+        removed from what telemetry reports).
+
+        ground_collision (default True) keeps the bare-earth ground collidable for off-road safety
+        (under "drape" the draped surface owns collision, so the bare-earth tileset's collision is
+        turned off). terrain_res = drape grid spacing in metres (smaller hugs the photoreal more
+        closely but is slower; default 2.0); terrain_margin = how far past the map's edge to extend
+        the drivable ground (m, default ~100 ft, enough for long vehicles near the boundary);
+        drape_cache_dir caches the (slow) drape sampling per area so rebuilds are fast. osm_options
+        should pin the origin; if origin_height is None the height sampled at the origin is the datum.
         """
         from System import TimeSpan
         from System.Threading import CancellationToken
