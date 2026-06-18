@@ -45,25 +45,30 @@ ap.add_argument("--origin-height", type=float, default=None,
 ap.add_argument("--ion-token", default=os.environ.get("CESIUM_ION_TOKEN", ""))
 ap.add_argument("--ion-asset-id", type=int, default=2275207)  # Google Photorealistic 3D Tiles (visual)
 ap.add_argument("--ground-asset-id", type=int, default=1,     # Cesium World Terrain (bare-earth, sampled)
-                help="ion asset for the hidden bare-earth GROUND layer sampled for road-Z "
-                     "(default 1 = Cesium World Terrain; 0 = sample the photoreal tileset, legacy)")
+                help="Cesium ion asset for the hidden bare-earth (no buildings/trees) terrain layer "
+                     "whose heights set the road elevations (default 1 = Cesium World Terrain; "
+                     "0 = take heights from the photoreal surface instead, legacy)")
 ap.add_argument("--height-align", choices=["area", "origin", "none", "drape"], default="none",
-                help="reconcile road-Z (and collision) to the photoreal: 'none' (default; road=ground "
-                     "coincide, ~sub-meter above photoreal); 'area'/'origin' = single constant offset "
-                     "(can't fix spatially-varying hills); 'drape' (Phase 2b) = PER-POINT draped Chaos "
-                     "heightfield over the whole OSM rectangle (vehicles seat on the photoreal on- AND "
-                     "off-road; telemetry stays bare-earth via a per-cell offset field).")
+                help="how the roads and drivable ground are matched to the Google photoreal imagery: "
+                     "'none' (default) = leave them on the bare-earth terrain, which sits ~sub-meter "
+                     "above the photoreal (invisible from high altitude); 'area'/'origin' = raise/lower "
+                     "everything by ONE constant height so cars sit on the photoreal (good on flat "
+                     "ground, drifts on hills); 'drape' = match the photoreal point-by-point across the "
+                     "whole map area so cars sit on it everywhere, on roads AND off-road (best for "
+                     "low/oblique views). Reported telemetry altitude stays true bare-earth in every mode.")
 ap.add_argument("--terrain-res", type=float, default=2.0,
-                help="drape: heightfield cell size in m (the GSD-like resolution knob; default 2.0)")
+                help="'drape' only: spacing in metres between drivable-surface points - smaller hugs the "
+                     "photoreal more closely but is slower to build (default 2.0)")
 ap.add_argument("--terrain-margin", type=float, default=30.48,
-                help="drape: extend the sandbox this far past the OSM bounds, m (default ~100 ft)")
+                help="'drape' only: how far (m) the drivable ground extends past the map's edge so "
+                     "vehicles near the boundary still have ground under them (default ~100 ft)")
 ap.add_argument("--drape-cache-dir", default=None,
-                help="drape: directory to cache the grid DSM/DTM sampling (skip re-sampling per area)")
+                help="'drape' only: folder to cache this area's terrain-height samples so rebuilds skip "
+                     "the slow re-sampling")
 ap.add_argument("--no-ground-collision", dest="ground_collision", action="store_false", default=True,
-                help="disable bare-earth ground collision (default ON = vehicles ride the road/ground "
-                     "for off-road safety). Safe to leave ON with --height-align area/origin: the ground "
-                     "layer is dropped by the same offset (Option A) so it coincides with the road — no "
-                     "on-road float, off-road still supported.")
+                help="disable collision on the bare-earth ground (default ON = vehicles always have "
+                     "ground to drive on, on and off road). Safe to leave ON with any --height-align: "
+                     "the ground is matched to where the roads sit, so cars neither float nor fall through.")
 ap.add_argument("--settle", type=float, default=10.0)
 ap.add_argument("--traffic", type=int, default=0, help="spawn N autopilot vehicles after build")
 ap.add_argument("--no-road-filter", action="store_true",
