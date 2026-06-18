@@ -23,3 +23,17 @@ reword it before committing.
 
 Applies to user-facing text too (CLI `--help`, printed output): prefer plain language over internal
 shorthand (`DSM`/`DTM`/`GSD`/`hae` etc. — spell out or briefly gloss on first use in help text).
+
+## Commit messages: objective, self-contained
+
+A commit message must make sense to someone reading the history later with **no access to the
+conversation that produced it**. State *what changed and why*, factually.
+
+- **No conversational transients:** `as discussed`, `per our chat`, `as agreed`, `as requested`,
+  `like we talked about`, `finally`, `oops`.
+- **No live-plan labels:** `Option A/B`, `Phase 2b`, `step N`, `fork B`, `the new approach`. Name the
+  actual change instead (e.g. `Add per-point draped heightfield collision` not `Phase 2b step 4`).
+- Keep it concrete: imperative subject ≤ ~72 chars describing the change; body explains the reasoning,
+  trade-offs, and any validation. Domain terms and issue IDs are fine.
+
+(Forward-only — existing history is grandfathered, don't rewrite it.)
