@@ -51,10 +51,10 @@ public sealed class CarlaClient : IAsyncDisposable
     // DSM by a constant offset; these fields let the telemetry path recover the bare-earth truth
     // without sampling Cesium live (see get_vehicle_telemetry in the Python shim).
     //
-    // LastHeightAlignOffset = the constant road-Z offset applied (photoreal-ground gap; 0 for
-    //   "none"). With Option A the collidable "ground" layer is shifted by this same constant
-    //   (SetLayerOffsetAsync) so BOTH on- and off-road vehicles sit at DTM + offset; telemetry
-    //   recovers bare-earth truth by subtracting it unconditionally: hae = physical_hae - offset.
+    // LastHeightAlignOffset = the constant road-height offset applied (photoreal-ground gap; 0 for
+    //   "none"). The constant-offset modes also shift the collidable "ground" layer by this same
+    //   constant (SetLayerOffsetAsync) so BOTH on- and off-road vehicles sit at DTM + offset;
+    //   telemetry recovers bare-earth truth by subtracting it unconditionally: hae = physical - offset.
     // LastGroundDtmSamples = the per-road-point bare-earth DTM samples as GeoLocation
     //   (Latitude, Longitude, ellipsoidal Altitude), BEFORE the offset was added. Lat/lon are the
     //   exact input sample coordinates (not server-echoed); a nearest/IDW lookup at a vehicle's
@@ -63,7 +63,7 @@ public sealed class CarlaClient : IAsyncDisposable
     public double LastHeightAlignOffset { get; private set; }
     public IReadOnlyList<GeoLocation> LastGroundDtmSamples { get; private set; } = [];
 
-    // ── Phase 2b drape state (set by GenerateWorldFromOsmWithElevationAsync in "drape" mode) ──
+    // ── Per-point drape state (set by GenerateWorldFromOsmWithElevationAsync in "drape" mode) ──
     // When LastDrapeActive, telemetry recovers bare-earth HAE per-vehicle from a PER-CELL offset
     // field (DrapedZ − DTM) over the OSM sandbox, instead of the single LastHeightAlignOffset.
     // The offset grid is exposed as a bulk float32 LE byte[] so the shim bulk-copies it into numpy
@@ -281,9 +281,10 @@ public sealed class CarlaClient : IAsyncDisposable
             throw new InvalidOperationException(
                 $"terrain-height result count {heights.Count} != requested {points.Count}");
 
-        // 4a-drape) Phase 2b: sample DSM+DTM over a regular grid covering the whole OSM rectangle
-        //   (the physics sandbox), then de-spike into a draped surface + per-cell offset field. The
-        //   ground layer is revealed here, so the grid samples in the same window as the road-Z.
+        // 4a-drape) "drape" mode: sample photoreal + bare-earth heights over a regular grid covering
+        //   the whole OSM bounds (the physics sandbox), then de-spike into a draped surface + per-cell
+        //   offset field. The ground layer is revealed here, so the grid samples in the same window
+        //   as the road heights.
         bool drape = string.Equals(heightAlign, "drape", StringComparison.OrdinalIgnoreCase);
         CarlaNet.Map.OpenDrive.DrapeGridSpec drapeSpec = default;
         CarlaNet.Map.OpenDrive.DrapeTerrain.DrapeResult drapeRes = default;
@@ -401,22 +402,13 @@ public sealed class CarlaClient : IAsyncDisposable
         await ConfigureCesiumGeoreferenceAsync(alignedOrigin, ionToken, ionAssetId, groundIonAssetId, refresh: true)
             .ConfigureAwait(false);
 
-        // Option A: drop the collidable bare-earth "ground" layer by the height-align offset so its
-        // collision mesh coincides with the offset road mesh. Because area/origin apply a single
-        // CONSTANT offset (road = DTM + heightOffset), a constant ground shift re-coincides them
-        // EXACTLY everywhere — on-road vehicles no longer float above the lowered road, and off-road
-        // vehicles still ride a (now offset) collidable surface instead of falling through. The truth
-        // georeference is untouched (GetCesiumOrigin and height sampling stay bare-earth). MUST run
-        // AFTER the ConfigureCesiumGeoreferenceAsync above (which reassigns tilesets to the default
-        // georeference). No-op when heightOffset == 0 (height-align none). Telemetry then subtracts
-        // the same constant everywhere (see get_vehicle_telemetry); LastHeightAlignOffset carries it.
         if (drape)
         {
-            // Phase 2b: the draped heightfield IS the collision/seating surface over the whole OSM
-            // sandbox (on- and off-road). Build it from the de-spiked grid (local Z = ellipsoidal -
-            // originHeight, metres) and turn the bare-earth "ground" tileset collision OFF (it stays
-            // hidden as the truth sample source; the heightfield owns physics). No Option A constant
-            // offset in drape mode.
+            // "drape" mode: the draped heightfield IS the collision/seating surface over the whole
+            // OSM sandbox (on- and off-road). Build it from the de-spiked grid (local Z = ellipsoidal
+            // - originHeight, metres) and turn the bare-earth "ground" tileset collision OFF (it stays
+            // hidden as the truth sample source; the heightfield owns physics). No constant offset
+            // applies in drape mode.
             int n = drapeRes.DrapedZ.Length;
             var hf = new double[n];
             for (int i = 0; i < n; i++) hf[i] = drapeRes.DrapedZ[i] - originHeight;
@@ -448,15 +440,16 @@ public sealed class CarlaClient : IAsyncDisposable
         }
         else if (groundIonAssetId > 0)
         {
-            // Option A: drop the collidable bare-earth "ground" layer by the height-align offset so its
-            // collision mesh coincides with the offset road mesh. Because area/origin apply a single
-            // CONSTANT offset (road = DTM + heightOffset), a constant ground shift re-coincides them
-            // EXACTLY everywhere — on-road vehicles no longer float above the lowered road, and off-road
-            // vehicles still ride a (now offset) collidable surface instead of falling through. The truth
-            // georeference is untouched (GetCesiumOrigin and height sampling stay bare-earth). MUST run
-            // AFTER the ConfigureCesiumGeoreferenceAsync above (which reassigns tilesets to the default
-            // georeference). No-op when heightOffset == 0 (height-align none). Telemetry then subtracts
-            // the same constant everywhere (see get_vehicle_telemetry); LastHeightAlignOffset carries it.
+            // Constant-offset modes ('area'/'origin'): drop the collidable bare-earth "ground" layer
+            // by the height-align offset so its collision mesh coincides with the offset road mesh.
+            // Because those modes apply a single CONSTANT offset (road = DTM + heightOffset), a
+            // constant ground shift re-coincides them EXACTLY everywhere — on-road vehicles no longer
+            // float above the lowered road, and off-road vehicles still ride a (now offset) collidable
+            // surface instead of falling through. The truth georeference is untouched (GetCesiumOrigin
+            // and height sampling stay bare-earth). MUST run AFTER the ConfigureCesiumGeoreferenceAsync
+            // above (which reassigns tilesets to the default georeference). No-op when heightOffset == 0
+            // ('none'). Telemetry then subtracts the same constant everywhere (see
+            // get_vehicle_telemetry); LastHeightAlignOffset carries it.
             LastDrapeActive = false;
             await SetLayerOffsetAsync("ground", heightOffset).ConfigureAwait(false);
             // Ground collision is now SAFE to leave ON under area/origin (it coincides with the road),
@@ -518,7 +511,7 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<bool> SetLayerCollisionAsync(string layer, bool enabled)
         => _rpc.CallAsync<bool>("set_layer_collision", layer, enabled);
 
-    /// Per-layer VERTICAL OFFSET (digital-twin Option A). Moves the tagged Cesium tileset layer
+    /// Per-layer VERTICAL OFFSET. Moves the tagged Cesium tileset layer
     /// up/down by <paramref name="offsetMeters"/> (signed, +up) via a dedicated georeference,
     /// without moving the truth georeference (GetCesiumOrigin / sampling stay truthed). Used to
     /// drop the collidable bare-earth "ground" layer by the height-align offset so its collision
@@ -526,8 +519,8 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<bool> SetLayerOffsetAsync(string layer, double offsetMeters)
         => _rpc.CallAsync<bool>("set_layer_offset", layer, offsetMeters);
 
-    /// Phase 2b: build/replace the draped collision heightfield over the OSM sandbox. Heights are
-    /// world Z in METRES, row-major [row*numCols + col], length numCols*numRows; grid corner
+    /// Build/replace the draped collision heightfield over the OSM sandbox ("drape" mode). Heights
+    /// are world Z in METRES, row-major [row*numCols + col], length numCols*numRows; grid corner
     /// (col 0,row 0) at world (originX, originY) metres, +col=+X, +row=+Y, spacing cellSize m.
     public Task<bool> BuildDrapedTerrainAsync(
         double originX, double originY, double cellSize, int numCols, int numRows, double[] heights)
@@ -573,7 +566,7 @@ public sealed class CarlaClient : IAsyncDisposable
         }
     }
 
-    // ── Phase 2b: draped-terrain grid sampling ────────────────────────────────
+    // ── Draped-terrain grid sampling ("drape" mode) ───────────────────────────
     // Sample one Cesium layer over a regular grid (DrapeTerrain), CHUNKED so the "most-detailed"
     // sampler doesn't stream the whole OSM tile's fine 3D Tiles at once. Returns row-major heights
     // [row*NumCols+col] (NaN where the tileset had no surface). Requires the tilesets present +

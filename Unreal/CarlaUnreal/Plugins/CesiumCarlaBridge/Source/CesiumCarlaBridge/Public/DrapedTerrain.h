@@ -1,13 +1,13 @@
 // Copyright (c) 2026 CARLA-Cesium digital-twin project.
 //
-// Phase 2b — per-point draped collision terrain as a Chaos heightfield.
+// Per-point draped collision terrain as a Chaos heightfield ("drape" height-align mode).
 //
 // UDrapedTerrainComponent is a hidden, collision-only UPrimitiveComponent backed by a
-// Chaos::FHeightField (a regular grid storing only Z per cell — the AAA terrain-collision
+// Chaos::FHeightField (a regular grid storing only Z per cell — the standard terrain-collision
 // representation; ~bytes/cell, O(1) query). It is the universal physics/seating surface the
-// digital-twin drapes onto the de-spiked photoreal (DSM) over the OSM rectangle, so vehicles
-// seat on the photoreal on- AND off-road. The visual is still the Cesium photoreal; this mesh
-// never renders. Telemetry truth comes from a separate per-cell offset field (client-side).
+// digital-twin drapes onto the de-spiked photoreal over the OSM bounds, so vehicles seat on the
+// photoreal on- AND off-road. The visual is still the Cesium photoreal; this mesh never renders.
+// Telemetry truth comes from a separate per-cell offset field (client-side).
 //
 // The runtime physics-body creation mirrors ULandscapeHeightfieldCollisionComponent (the only
 // FHeightField collision site in the engine).

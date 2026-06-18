@@ -1,4 +1,4 @@
-"""Reference CoT telemetry emitter (Option B) — stream CARLA vehicle TRUTH as Cursor-on-Target
+"""Reference CoT telemetry emitter — stream CARLA vehicle TRUTH as Cursor-on-Target
 events to a TAK endpoint (e.g. WinTAK) over UDP. Implements Docs/CAT_Research/Findings/
 09_Telemetry_CoT_Contract.md (v0).
 

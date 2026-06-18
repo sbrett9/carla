@@ -1,10 +1,10 @@
-// Phase 2b — draped collision terrain over the OSM sandbox.
+// Draped collision terrain over the OSM sandbox ("drape" height-align mode).
 //
-// This file is the OFFLINE/pure half: build a regular sample grid over the OSM rectangle in the
-// CARLA world frame (+X=East, -Y=North), enumerate per-node lat/lon for Cesium sampling (the SAME
-// Geodesy projection the road samples use, so no datum drift), and a binary disk cache so the
-// (slow) DSM/DTM sampling is paid once per area. The de-spike/clamp/smooth pass and the actual
-// Cesium sampling live elsewhere (DrapeTerrain de-spike step; CarlaClient.SampleDrapeGridAsync).
+// This file is the OFFLINE/pure half: build a regular sample grid over the OSM bounds in the CARLA
+// world frame (+X=East, -Y=North), enumerate per-node lat/lon for Cesium sampling (the SAME Geodesy
+// projection the road samples use, so no datum drift), and a binary disk cache so the (slow)
+// photoreal+bare-earth sampling is paid once per area. The de-spike/clamp/smooth pass and the actual
+// Cesium sampling live elsewhere (DrapeTerrain.Despike; CarlaClient.SampleDrapeGridAsync).
 using System;
 using System.Collections.Generic;
 using System.Globalization;

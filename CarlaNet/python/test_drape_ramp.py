@@ -1,4 +1,4 @@
-"""Phase 2b step-1 proof: a Chaos heightfield built at runtime actually collides.
+"""Drape collision proof: a Chaos heightfield built at runtime actually collides.
 
 Builds a FLAT draped-terrain heightfield raised to TERRAIN_Z metres (above any existing map
 floor), drops a vehicle a few metres above it, and checks the vehicle comes to rest near

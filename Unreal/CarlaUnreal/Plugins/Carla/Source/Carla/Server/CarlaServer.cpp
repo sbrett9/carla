@@ -601,9 +601,9 @@ void FCarlaServer::FPimpl::BindActions()
     return true;
   };
 
-  // Per-layer VERTICAL OFFSET (digital-twin Option A). Moves a tagged Cesium tileset layer
-  // ("ground"/"photoreal") up/down by offset_meters via a dedicated georeference, WITHOUT moving
-  // the truth georeference. Used to drop the collidable bare-earth "ground" layer by the
+  // Per-layer VERTICAL OFFSET. Moves a tagged Cesium tileset layer ("ground"/"photoreal") up/down
+  // by offset_meters via a dedicated georeference, WITHOUT moving the truth georeference. Used by
+  // the constant-offset height-align modes to drop the collidable bare-earth "ground" layer by the
   // height-align offset so its collision coincides with the offset road mesh (no on-road float,
   // off-road still supported). offset_meters == 0 reassigns back to the default georeference.
   BIND_SYNC(set_layer_offset) << [this](std::string layer, double offset_meters) -> R<bool>
@@ -618,7 +618,7 @@ void FCarlaServer::FPimpl::BindActions()
     return true;
   };
 
-  // Phase 2b: build/replace the draped collision heightfield over the OSM sandbox. Heights are
+  // Build/replace the draped collision heightfield over the OSM sandbox ("drape" mode). Heights are
   // world Z in METRES, row-major [row*num_cols + col], length num_cols*num_rows; grid corner
   // (col 0,row 0) at world (origin_x, origin_y) metres, +col=+X, +row=+Y, spacing cell_size m.
   BIND_SYNC(build_draped_terrain) << [this](

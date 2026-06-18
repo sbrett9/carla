@@ -20,8 +20,8 @@ public class CesiumCarlaBridge : ModuleRules
 			"CesiumRuntime"
 		});
 
-		// Phase 2b: runtime Chaos heightfield collision (draped terrain). Same physics module
-		// set Cesium itself uses from a plugin, so this is a proven-accessible dependency set.
+		// Runtime Chaos heightfield collision (draped terrain). Same physics module set Cesium
+		// itself uses from a plugin, so this is a proven-accessible dependency set.
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
 			"Chaos",

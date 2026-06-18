@@ -113,7 +113,7 @@ public:
 	static int32 SetLayerCollision(UObject* WorldContextObject, const FString& LayerTag, bool bEnabled);
 
 	/**
-	 * Per-layer VERTICAL OFFSET (digital-twin Option A — decouple collision from the truth datum).
+	 * Per-layer VERTICAL OFFSET (decouple a layer's collision/render height from the truth datum).
 	 * Shifts every ACesium3DTileset tagged LayerTag up/down by OffsetMeters (signed, +up) WITHOUT
 	 * moving the truth georeference: it assigns the tagged tileset(s) to a DEDICATED
 	 * CesiumGeoreference whose origin height = (default origin height − OffsetMeters), so the tiles
