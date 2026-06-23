@@ -75,6 +75,11 @@ ap.add_argument("--settle", type=float, default=10.0)
 ap.add_argument("--traffic", type=int, default=0, help="spawn N autopilot vehicles after build")
 ap.add_argument("--no-road-filter", action="store_true",
                 help="don't restrict netconvert to car-drivable roads (keeps sidewalks/rail/parking)")
+ap.add_argument("--no-clip-bounds", action="store_true",
+                help="don't clip the road network to the OSM <bounds>. By default the roads are "
+                     "clipped to the selected area so they don't sprawl far beyond it (an OSM export "
+                     "includes whole ways that merely touch the box, trailing off for kilometres), "
+                     "keeping the roads aligned with the perimeter, drape terrain and staging ring.")
 ap.add_argument("--save", default=None, help="output elevated .xodr (default: Build/sumo-smoketest/<osm>_elevated.xodr)")
 ap.add_argument("--host", default="127.0.0.1")
 ap.add_argument("--port", type=int, default=2000)
@@ -156,6 +161,27 @@ def main() -> int:
         print("WARNING: no Ion token; the tileset can't be spawned and sampling will fail.",
               file=sys.stderr)
 
+    # Clip the road network to the selected area (the OSM <bounds>) BEFORE conversion. An OSM export
+    # keeps whole ways that merely touch the box, trailing far outside it, and netconvert can't cut
+    # mid-edge; osm_clip cuts each way exactly at the boundary so the generated roads stay inside the
+    # red perimeter / drape terrain / staging ring. The clipped file keeps the same <bounds>, so the
+    # origin and drape sizing are unchanged.
+    osm_for_build = args.osm
+    if not args.no_clip_bounds:
+        bb = read_osm_bounds(args.osm)
+        if bb is None:
+            print("  clip       : skipped (no <bounds> in the OSM)")
+        else:
+            import osm_clip
+            clipped = os.path.join(_REPO, "Build", "sumo-smoketest",
+                                   os.path.splitext(os.path.basename(args.osm))[0] + "_clipped.osm")
+            os.makedirs(os.path.dirname(clipped), exist_ok=True)
+            nways, nbnd = osm_clip.clip_osm_to_bounds(args.osm, clipped, bb)
+            osm_for_build = clipped
+            print(f"  clip       : roads cut to <bounds> -> {nways} ways (+{nbnd} edge nodes) -> {clipped}")
+    else:
+        print("  clip       : OFF (--no-clip-bounds) — roads may extend beyond the selected area")
+
     save_path = args.save or os.path.join(
         _REPO, "Build", "sumo-smoketest",
         os.path.splitext(os.path.basename(args.osm))[0] + "_elevated.xodr")
@@ -169,7 +195,7 @@ def main() -> int:
     client.set_timeout(args.timeout)
     t0 = time.time()
     elevated = client.generate_world_from_osm_with_elevation(
-        args.osm, args.ion_token, args.ion_asset_id,
+        osm_for_build, args.ion_token, args.ion_asset_id,
         ground_ion_asset_id=args.ground_asset_id,
         osm_options=make_options(),
         sample_step_meters=args.step,
