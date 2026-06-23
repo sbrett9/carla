@@ -128,6 +128,12 @@ if ($Vs -and $Vs -notin @('2022', '2026')) {
     throw "Invalid -Vs value '$Vs'. Expected 2022 or 2026."
 }
 
+# ── Console colour convention ───────────────────────────────────────────────
+# green = info/success, yellow = warning (use Write-Warning), red = error/failure.
+# (Native tools like pip/dotnet colour their own output; these only affect this script's messages.)
+function Write-Info { param([Parameter(ValueFromPipeline)][string]$Message) Write-Host $Message -ForegroundColor Green }
+function Write-Fail { param([Parameter(ValueFromPipeline)][string]$Message) Write-Host $Message -ForegroundColor Red }
+
 # ── Visual Studio Detection & Activation Helpers ────────────────────────────
 # Simplified from CarlaSetup.ps1 to auto-activate VS with MSVC 14.44 toolset.
 
@@ -250,10 +256,10 @@ Fix your -Vs argument or install the missing toolset before retrying.
 "@
         }
         if (Test-VsAlreadyActive $pick) {
-            Write-Host "VS$($pick.Year) (MSVC $($pick.Toolset)) already active in this shell; skipping re-activation."
+            Write-Info "VS$($pick.Year) (MSVC $($pick.Toolset)) already active in this shell; skipping re-activation."
             return $pick
         }
-        Write-Host "Activating requested VS$($pick.Year) at `"$($pick.Path)`" (pinning MSVC $($pick.Toolset))..."
+        Write-Info "Activating requested VS$($pick.Year) at `"$($pick.Path)`" (pinning MSVC $($pick.Toolset))..."
         Import-VcVars -Vcvars $pick.Vcvars -ToolsetVersion $pick.Toolset
         return $pick
     }
@@ -263,7 +269,7 @@ Fix your -Vs argument or install the missing toolset before retrying.
         $current = $usable | Where-Object { $_.Path.TrimEnd('\') -eq $env:VSINSTALLDIR.TrimEnd('\') } |
             Select-Object -First 1
         if ($current) {
-            Write-Host "Using active VS dev environment: VS$($current.Year) (MSVC $($current.Toolset))."
+            Write-Info "Using active VS dev environment: VS$($current.Year) (MSVC $($current.Toolset))."
             return $current
         }
         Write-Warning "Active VSINSTALLDIR ($env:VSINSTALLDIR) lacks MSVC 14.44; selecting a different install."
@@ -275,10 +281,10 @@ Fix your -Vs argument or install the missing toolset before retrying.
         throw "No Visual Studio install with MSVC toolset 14.44 was found. Install VS2022 or VS2026 with component VC.14.44."
     }
     if (Test-VsAlreadyActive $pick) {
-        Write-Host "VS$($pick.Year) (MSVC $($pick.Toolset)) already active; skipping re-activation."
+        Write-Info "VS$($pick.Year) (MSVC $($pick.Toolset)) already active; skipping re-activation."
         return $pick
     }
-    Write-Host "Activating VS$($pick.Year) at `"$($pick.Path)`" (pinning MSVC $($pick.Toolset))..."
+    Write-Info "Activating VS$($pick.Year) at `"$($pick.Path)`" (pinning MSVC $($pick.Toolset))..."
     Import-VcVars -Vcvars $pick.Vcvars -ToolsetVersion $pick.Toolset
     return $pick
 }
@@ -296,11 +302,11 @@ if (-not $UnrealEngineRoot) { $UnrealEngineRoot = Join-Path $RepoParent "UE_5_7_
 $script:VsYear = $null
 $script:VsToolset = $null
 if (-not $SkipUnreal) {
-    Write-Host "`nActivating Visual Studio toolchain..."
+    Write-Info "`nActivating Visual Studio toolchain..."
     $vsInfo = Initialize-VisualStudio -Wanted $Vs
     $script:VsYear = $vsInfo.Year
     $script:VsToolset = $vsInfo.Toolset
-    Write-Host "Ready: VS$($vsInfo.Year), MSVC $($vsInfo.Toolset)`n"
+    Write-Info "Ready: VS$($vsInfo.Year), MSVC $($vsInfo.Toolset)`n"
 }
 
 $UE_ROOT         = $UnrealEngineRoot
@@ -308,8 +314,8 @@ $CARLA_UPROJECT  = Join-Path $CarlaRoot "Unreal\CarlaUnreal\CarlaUnreal.uproject
 $LOG_FILE        = Join-Path $RepoParent "Carla_build.log"
 $CARLANET_WHEEL  = Join-Path $CarlaRoot "CarlaNet\python\build_wheel.ps1"
 
-Write-Host "CARLA repo: $CarlaRoot"
-Write-Host "UE engine : $UE_ROOT"
+Write-Info "CARLA repo: $CarlaRoot"
+Write-Info "UE engine : $UE_ROOT"
 "Build started: $(Get-Date)" | Set-Content $LOG_FILE
 
 $ueResult  = 0   # 0 = success/skipped
@@ -319,17 +325,17 @@ $netResult = 0
 #  1) Unreal — CarlaUnrealEditor (C++: Carla plugin, CesiumCarlaBridge, etc.)
 # ============================================================================
 if (-not $SkipUnreal) {
-    Write-Host "============================================================"
-    Write-Host " Building CarlaUnrealEditor - Development Win64"
-    Write-Host " Log: $LOG_FILE"
-    Write-Host "============================================================"
+    Write-Info "============================================================"
+    Write-Info " Building CarlaUnrealEditor - Development Win64"
+    Write-Info " Log: $LOG_FILE"
+    Write-Info "============================================================"
 
     $BuildBat = Join-Path $UE_ROOT "Engine\Build\BatchFiles\Build.bat"
     if (-not (Test-Path $BuildBat))       { throw "UE Build.bat not found: $BuildBat (set -UnrealEngineRoot or `$env:CARLA_UNREAL_ENGINE_PATH)" }
     if (-not (Test-Path $CARLA_UPROJECT)) { throw "CarlaUnreal.uproject not found: $CARLA_UPROJECT" }
 
     if ($CleanUnreal) {
-        Write-Host "[clean] Full rebuild: removing editor Intermediate/Binaries (close any running editor first)..."
+        Write-Info "[clean] Full rebuild: removing editor Intermediate/Binaries (close any running editor first)..."
         # Project UBT outputs + UHT-generated headers, plus each plugin's. Source\ThirdParty is
         # under Source\ (not touched), so the built cesium-native is preserved; only C++ recompiles.
         $cleanRoots = @(
@@ -372,13 +378,13 @@ if (-not $SkipUnreal) {
 
     if ($ueResult -eq 0) {
         "UNREAL BUILD SUCCEEDED - $(Get-Date)" | Add-Content $LOG_FILE
-        Write-Host "`nUNREAL BUILD SUCCEEDED"
+        Write-Info "`nUNREAL BUILD SUCCEEDED"
     } else {
         "UNREAL BUILD FAILED (exit code $ueResult) - $(Get-Date)" | Add-Content $LOG_FILE
-        Write-Host "`nUNREAL BUILD FAILED - exit code $ueResult"
+        Write-Fail "`nUNREAL BUILD FAILED - exit code $ueResult"
     }
 } else {
-    Write-Host "Skipping Unreal build (-SkipUnreal)."
+    Write-Info "Skipping Unreal build (-SkipUnreal)."
     "UNREAL BUILD SKIPPED - $(Get-Date)" | Add-Content $LOG_FILE
 }
 
@@ -388,12 +394,12 @@ if (-not $SkipUnreal) {
 #     runs even if the C++ build failed (you still get full diagnostics).
 # ============================================================================
 if (-not $SkipCarlaNet) {
-    Write-Host "`n============================================================"
-    Write-Host " Building CarlaNet (.NET) + Python wheel"
-    Write-Host "============================================================"
+    Write-Info "`n============================================================"
+    Write-Info " Building CarlaNet (.NET) + Python wheel"
+    Write-Info "============================================================"
 
     if (-not (Test-Path $CARLANET_WHEEL)) {
-        Write-Host "CarlaNet wheel script not found: $CARLANET_WHEEL"
+        Write-Fail "CarlaNet wheel script not found: $CARLANET_WHEEL"
         "CARLANET BUILD FAILED (build_wheel.ps1 missing) - $(Get-Date)" | Add-Content $LOG_FILE
         $netResult = 1
     } else {
@@ -409,27 +415,31 @@ if (-not $SkipCarlaNet) {
             # build_wheel.ps1 throws on any failure; reaching here means success.
             $netResult = 0
             "CARLANET BUILD SUCCEEDED - $(Get-Date)" | Add-Content $LOG_FILE
-            Write-Host "`nCARLANET BUILD SUCCEEDED"
+            Write-Info "`nCARLANET BUILD SUCCEEDED"
         } catch {
             $netResult = 1
             "CARLANET BUILD FAILED: $_ - $(Get-Date)" | Add-Content $LOG_FILE
-            Write-Host "`nCARLANET BUILD FAILED: $_"
+            Write-Fail "`nCARLANET BUILD FAILED: $_"
         }
     }
 } else {
-    Write-Host "Skipping CarlaNet build (-SkipCarlaNet)."
+    Write-Info "Skipping CarlaNet build (-SkipCarlaNet)."
     "CARLANET BUILD SKIPPED - $(Get-Date)" | Add-Content $LOG_FILE
 }
 
 # ============================================================================
 #  Summary
 # ============================================================================
-Write-Host "`n============================================================"
-Write-Host (" Unreal : {0}" -f $(if ($SkipUnreal)   { "skipped" } elseif ($ueResult  -eq 0) { "OK" } else { "FAILED ($ueResult)" }))
-Write-Host (" CarlaNet: {0}" -f $(if ($SkipCarlaNet){ "skipped" } elseif ($netResult -eq 0) { "OK" } else { "FAILED ($netResult)" }))
-Write-Host "============================================================"
-Write-Host "Log: $LOG_FILE"
-Write-Host "UBT detail: $UE_ROOT\Engine\Programs\UnrealBuildTool\Log.txt"
+Write-Info "`n============================================================"
+$ueFailed  = (-not $SkipUnreal)    -and ($ueResult  -ne 0)
+$netFailed = (-not $SkipCarlaNet)  -and ($netResult -ne 0)
+$ueLine  = " Unreal : {0}" -f $(if ($SkipUnreal)   { "skipped" } elseif ($ueResult  -eq 0) { "OK" } else { "FAILED ($ueResult)" })
+$netLine = " CarlaNet: {0}" -f $(if ($SkipCarlaNet){ "skipped" } elseif ($netResult -eq 0) { "OK" } else { "FAILED ($netResult)" })
+if ($ueFailed)  { Write-Fail $ueLine }  else { Write-Info $ueLine }
+if ($netFailed) { Write-Fail $netLine } else { Write-Info $netLine }
+Write-Info "============================================================"
+Write-Info "Log: $LOG_FILE"
+Write-Info "UBT detail: $UE_ROOT\Engine\Programs\UnrealBuildTool\Log.txt"
 
 $final = if (($ueResult -ne 0) -or ($netResult -ne 0)) { 1 } else { 0 }
 exit $final
