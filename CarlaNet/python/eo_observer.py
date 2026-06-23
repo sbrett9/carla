@@ -20,6 +20,8 @@ Controls (hold RIGHT MOUSE to fly, like the Unreal editor):
     G             toggle the World Terrain (bare-earth ground) tileset RENDERING on/off
     V             toggle World Terrain (ground) physics COLLISION on/off (default ON)
     R             toggle CARLA road-mesh RENDERING on/off (collision unaffected — cars still drive)
+    B             toggle the OSM PERIMETER overlay (red rectangle + corner posts)
+    M             toggle the MARGIN/interior-boundary overlay (blue rectangle)
     Space         reset to the start pose
     Esc           quit
 
@@ -141,6 +143,51 @@ def _draw_flyout(display, font, pick, win_w, win_h):
         y += s.get_height()
 
 
+def _project_pt(P, cam, fwd, right, up, f, cx, cy):
+    """World point -> screen pixel using the same orthonormal camera basis as the depth picker.
+    Returns (u, v) ints, or None if the point is behind the camera or far off-axis."""
+    dx = P[0] - cam[0]; dy = P[1] - cam[1]; dz = P[2] - cam[2]
+    depth = dx*fwd[0] + dy*fwd[1] + dz*fwd[2]
+    if depth <= 0.5:
+        return None
+    sr = (dx*right[0] + dy*right[1] + dz*right[2]) / depth
+    su = (dx*up[0] + dy*up[1] + dz*up[2]) / depth
+    if abs(sr) > 6.0 or abs(su) > 6.0:      # well outside the frustum; cull to avoid wild coords
+        return None
+    return (int(cx + sr*f), int(cy - su*f))
+
+
+def _draw_boundary(display, corners, color, cam, yaw, pitch, f, cx, cy, posts=False):
+    """Draw a ground rectangle (4 (x,y,z) corners) as a projected polyline over the sensor image.
+    Each edge is sampled so perspective curves render; with posts=True a vertical marker + base ring
+    is drawn at each corner (used for the OSM perimeter)."""
+    yr = math.radians(yaw); pr = math.radians(pitch)
+    fwd = (math.cos(yr)*math.cos(pr), math.sin(yr)*math.cos(pr), math.sin(pr))
+    right = (-math.sin(yr), math.cos(yr), 0.0)
+    up = (fwd[1]*right[2] - fwd[2]*right[1],
+          fwd[2]*right[0] - fwd[0]*right[2],
+          fwd[0]*right[1] - fwd[1]*right[0])
+    N = 24
+    for i in range(4):
+        a = corners[i]; b = corners[(i + 1) % 4]
+        prev = None
+        for t in range(N + 1):
+            s = t / N
+            P = (a[0] + (b[0]-a[0])*s, a[1] + (b[1]-a[1])*s, a[2] + (b[2]-a[2])*s)
+            scr = _project_pt(P, cam, fwd, right, up, f, cx, cy)
+            if scr is not None and prev is not None:
+                pygame.draw.line(display, color, prev, scr, 3)
+            prev = scr
+    if posts:
+        for c in corners:
+            base = _project_pt(c, cam, fwd, right, up, f, cx, cy)
+            top = _project_pt((c[0], c[1], c[2] + 25.0), cam, fwd, right, up, f, cx, cy)
+            if base is not None:
+                pygame.draw.circle(display, color, base, 6, 2)
+                if top is not None:
+                    pygame.draw.line(display, color, base, top, 3)
+
+
 def main() -> int:
     client = carla.Client(args.host, args.port)
     client.set_timeout(15.0)
@@ -158,6 +205,38 @@ def main() -> int:
                                 #     (height-align 'none', or matched to it under 'area'/'origin'/'drape'),
                                 #     so vehicles never float and off-road has collision.
     road_rendered = True        # R : OpenDRIVE road-mesh rendering
+
+    # Boundary overlay (drawn as a 2D projection over the sensor image, so it shows regardless of the
+    # photoreal/ground/road toggles). B = OSM perimeter (red, with corner posts); M = margin/interior
+    # boundary (blue). Corners come from the draped staging bounds; ground Z sampled once per corner.
+    show_perimeter = False
+    show_margin = False
+    perimeter_corners = None
+    margin_corners = None
+    proj_f = args.width / (2.0 * math.tan(math.radians(args.fov) / 2.0))
+    proj_cx, proj_cy = args.width / 2.0, args.height / 2.0
+    try:
+        _b = world.get_staging_bounds()
+    except Exception as e:
+        _b = None
+        print(f"get_staging_bounds failed: {e!r}", file=sys.stderr)
+    if _b:
+        def _gz(x, y):
+            try:
+                z = world.ground_z_below(x, y, 5000.0, search=10000.0)
+                return float(z) if z is not None else 0.0
+            except Exception:
+                return 0.0
+        _mnx, _mny, _mxx, _mxy, _mg = (_b["min_x"], _b["min_y"], _b["max_x"], _b["max_y"], _b["margin"])
+        _pc = [(_mnx, _mny), (_mxx, _mny), (_mxx, _mxy), (_mnx, _mxy)]
+        _mc = [(_mnx + _mg, _mny + _mg), (_mxx - _mg, _mny + _mg),
+               (_mxx - _mg, _mxy - _mg), (_mnx + _mg, _mxy - _mg)]
+        perimeter_corners = [(x, y, _gz(x, y)) for (x, y) in _pc]
+        margin_corners = [(x, y, _gz(x, y)) for (x, y) in _mc]
+        print(f"boundary overlay ready: perimeter {_mxx-_mnx:.0f}x{_mxy-_mny:.0f} m, "
+              f"margin {_mg:.0f} m  (B = OSM perimeter, M = margin boundary)")
+    else:
+        print("no staging bounds; boundary overlay unavailable (build a drape world first).")
 
     bp = world.get_blueprint_library().find("sensor.camera.rgb")
     bp.set_attribute("image_size_x", str(args.width))
@@ -362,6 +441,10 @@ def main() -> int:
                     world.set_road_rendered(road_rendered)
                 except Exception as e:
                     print(f"set_road_rendered failed: {e!r}", file=sys.stderr)
+            elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_b:
+                show_perimeter = not show_perimeter      # OSM perimeter overlay (red)
+            elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_m:
+                show_margin = not show_margin            # margin/interior boundary overlay (blue)
             elif (ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1
                   and (pygame.key.get_mods() & pygame.KMOD_CTRL)):  # Ctrl+LMB world pick
                 _do_pick(ev.pos[0], ev.pos[1])
@@ -410,6 +493,16 @@ def main() -> int:
 
         if _state["surface"] is not None:
             display.blit(_state["surface"], (0, 0))
+
+        # Boundary overlays (drawn over the sensor image; independent of photoreal/ground/road).
+        cam_xyz = (pose["x"], pose["y"], pose["z"])
+        if show_perimeter and perimeter_corners:
+            _draw_boundary(display, perimeter_corners, (255, 50, 50), cam_xyz,
+                           pose["yaw"], pose["pitch"], proj_f, proj_cx, proj_cy, posts=True)
+        if show_margin and margin_corners:
+            _draw_boundary(display, margin_corners, (40, 160, 255), cam_xyz,
+                           pose["yaw"], pose["pitch"], proj_f, proj_cx, proj_cy, posts=False)
+
         elev_ft = (origin_h + pose["z"]) * FT_PER_M
         gz = _state["ground_z"]
         agl_ft = (pose["z"] - gz) * FT_PER_M if gz is not None else None
@@ -421,8 +514,10 @@ def main() -> int:
             f"ground(G) {'ON' if ground_visible else 'OFF'}   "
             f"gColl(V) {'ON' if ground_collision else 'OFF'}   "
             f"road(R) {'ON' if road_rendered else 'OFF'}   "
+            f"perim(B) {'ON' if show_perimeter else 'OFF'}   "
+            f"margin(M) {'ON' if show_margin else 'OFF'}   "
             f"fps {clock.get_fps():4.0f}  frames {_state['frames']}",
-            "RMB look | Ctrl+LMB measure | WASD/EQ fly | wheel speed | Shift fast | C photoreal | G ground | V gColl | R road | Space reset | Esc quit",
+            "RMB look | Ctrl+LMB measure | WASD/EQ fly | wheel speed | Shift fast | C photoreal | G ground | V gColl | R road | B perimeter | M margin | Space reset | Esc quit",
         ]
         # Feature 1: black (semi-transparent) bar behind the HUD so yellow text stays readable
         # over bright photogrammetry.
