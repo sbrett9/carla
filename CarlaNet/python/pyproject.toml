@@ -16,6 +16,11 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["."]
+# Only ship the real package. Without these filters setuptools also discovers stale copies left
+# under build/ (e.g. build/lib/carlanet), then re-copies build/ into itself on the next run, nesting
+# build/lib/build/lib/.../carlanet deeper every build and polluting the wheel.
+include = ["carlanet*"]
+exclude = ["build*", "dist*"]
 
 [tool.setuptools.package-data]
 carlanet = [
