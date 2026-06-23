@@ -66,7 +66,12 @@ sudo apt-get -y install \
     libxkbcommon-dev \
     libgbm-dev \
     libpango1.0-dev \
-    libasound2-dev
+    libasound2-dev \
+    libxerces-c-dev \
+    libproj-dev \
+    proj-data \
+    nasm \
+    patchelf
 
 if [ "$python_path" == "python3" ]; then
     sudo apt-get -y install \

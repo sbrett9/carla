@@ -4,24 +4,27 @@
 #
 # Build CarlaUnrealEditor (C++) and/or CarlaNet (.NET) + the carlanet Python wheel.
 #   1) Unreal  — compiles CarlaUnrealEditor via the UE 5.7.4 Linux Build.sh.
-#   2) CarlaNet — `dotnet publish` the .NET libcarla replacement into the python shim,
-#                 then builds (and optionally installs) the carlanet wheel.
+#   2) CarlaNet — delegates to CarlaNet/python/build_wheel.sh, which `dotnet publish`es
+#                 the .NET libcarla replacement into the python shim, then builds (and
+#                 optionally installs) the carlanet wheel.
 # CarlaNet runs even if the Unreal build failed, so you still get full diagnostics.
 #
-# Paths resolve in priority order: CLI flag > environment variable > default derived
-# from this script's location (this script lives at carla/Scripts/Linux/, so the
-# workspace root is three directories up).
+# Paths are derived from this script's location (it lives at carla/Scripts/Linux/, so the
+# CARLA repo root is two directories up). The engine is found via --unreal-engine-root,
+# then $CARLA_UNREAL_ENGINE_PATH, then <repo-parent>/UE_5_7_4.
 
 set -uo pipefail
 
-# ── Defaults (derived from script location) ─────────────────────────────────
+# ── Paths derived from script location (carla/Scripts/Linux) ─────────────────
 script_dir="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")" && pwd)"
-default_workspace="$(cd "$script_dir/../../.." && pwd)"
+carla_root="$(cd "$script_dir/../.." && pwd)"
+repo_parent="$(cd "$carla_root/.." && pwd)"
 
 skip_unreal=0
 skip_carlanet=0
 install_wheel=0
-workspace_root="${CARLA_WORKSPACE_ROOT:-}"
+clean_unreal=0
+clean_wheel=0
 unreal_engine_root="${CARLA_UNREAL_ENGINE_PATH:-}"
 
 usage() {
@@ -32,18 +35,20 @@ Build CarlaUnrealEditor (C++) and/or CarlaNet (.NET) + the carlanet Python wheel
 
 Options:
   --skip-unreal              Skip the CarlaUnrealEditor C++ build.
+  --clean-unreal, --rebuild  Wipe editor + plugin Intermediate/Binaries first for a full
+                             from-scratch rebuild (keeps the built cesium-native ThirdParty).
   --skip-carlanet            Skip the CarlaNet (.NET) build + wheel.
   --install-wheel            Also pip-install the freshly built wheel (--force-reinstall).
-  --workspace-root <path>    Repo root (contains 'carla' + engine).
-                             Env: CARLA_WORKSPACE_ROOT. Default: three levels up from this script.
+  --clean-wheel              Wipe CarlaNet/python build/dist/dlls/egg-info before building the wheel.
   --unreal-engine-root <path>
                              UE 5.7.4 source-build root.
-                             Env: CARLA_UNREAL_ENGINE_PATH. Default: <workspace-root>/UE_5_7_4.
+                             Env: CARLA_UNREAL_ENGINE_PATH. Default: <repo-parent>/UE_5_7_4.
   -h, --help                 Show this help and exit.
 
 Examples:
   ./BuildCarla.sh --install-wheel
   ./BuildCarla.sh --skip-unreal          # just rebuild the CarlaNet wheel
+  ./BuildCarla.sh --clean-unreal         # full from-scratch editor rebuild
   CARLA_UNREAL_ENGINE_PATH=/opt/UE_5_7_4 ./BuildCarla.sh
 EOF
 }
@@ -51,29 +56,27 @@ EOF
 # ── Parse arguments ─────────────────────────────────────────────────────────
 while [ $# -gt 0 ]; do
     case "$1" in
-        --skip-unreal)        skip_unreal=1 ;;
-        --skip-carlanet)      skip_carlanet=1 ;;
-        --install-wheel)      install_wheel=1 ;;
-        --workspace-root)     workspace_root="$2"; shift ;;
-        --workspace-root=*)   workspace_root="${1#*=}" ;;
+        --skip-unreal)          skip_unreal=1 ;;
+        --clean-unreal|--rebuild) clean_unreal=1 ;;
+        --skip-carlanet)        skip_carlanet=1 ;;
+        --install-wheel)        install_wheel=1 ;;
+        --clean-wheel)          clean_wheel=1 ;;
         --unreal-engine-root)   unreal_engine_root="$2"; shift ;;
         --unreal-engine-root=*) unreal_engine_root="${1#*=}" ;;
-        -h|--help)            usage; exit 0 ;;
+        -h|--help)              usage; exit 0 ;;
         *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
     esac
     shift
 done
 
-# ── Resolve paths (flag > env > default) ────────────────────────────────────
-[ -n "$workspace_root" ]     || workspace_root="$default_workspace"
-[ -n "$unreal_engine_root" ] || unreal_engine_root="$workspace_root/UE_5_7_4"
+# ── Resolve engine path (flag > env > default) ──────────────────────────────
+[ -n "$unreal_engine_root" ] || unreal_engine_root="$repo_parent/UE_5_7_4"
 
-carla_root="$workspace_root/carla"
 carla_uproject="$carla_root/Unreal/CarlaUnreal/CarlaUnreal.uproject"
-log_file="$workspace_root/Carla_build.log"
+log_file="$repo_parent/Carla_build.log"
 python_dir="$carla_root/CarlaNet/python"
 
-echo "Workspace : $workspace_root"
+echo "CARLA repo: $carla_root"
 echo "UE engine : $unreal_engine_root"
 echo "Build started: $(date)" > "$log_file"
 
@@ -96,9 +99,22 @@ if [ "$skip_unreal" -eq 0 ]; then
         ue_result=1
     elif [ ! -f "$carla_uproject" ]; then
         echo "ERROR: CarlaUnreal.uproject not found: $carla_uproject" | tee -a "$log_file"
-        echo "       Set --workspace-root or \$CARLA_WORKSPACE_ROOT." | tee -a "$log_file"
+        echo "       This script must live under <repo>/carla/Scripts/Linux; the checkout looks incomplete." | tee -a "$log_file"
         ue_result=1
     else
+        if [ "$clean_unreal" -eq 1 ]; then
+            echo "[clean] Full rebuild: removing editor Intermediate/Binaries (close any running editor first)..." | tee -a "$log_file"
+            # Project UBT outputs + UHT-generated headers, plus each plugin's. Source/ThirdParty is
+            # under Source/ (not touched), so the built cesium-native is preserved; only C++ recompiles.
+            project_dir="$carla_root/Unreal/CarlaUnreal"
+            rm -rf "$project_dir/Intermediate" "$project_dir/Binaries"
+            if [ -d "$project_dir/Plugins" ]; then
+                for plugin in "$project_dir/Plugins"/*/; do
+                    rm -rf "${plugin}Intermediate" "${plugin}Binaries"
+                done
+            fi
+        fi
+
         "$build_sh" \
             CarlaUnrealEditor Linux Development \
             "$carla_uproject" \
@@ -120,7 +136,8 @@ fi
 
 # ============================================================================
 #  2) CarlaNet — .NET publish into the python shim, then build/install wheel.
-#     (Port of build_wheel.ps1; runs even if the Unreal build failed.)
+#     Delegates to CarlaNet/python/build_wheel.sh (the Linux peer of build_wheel.ps1),
+#     so the wheel logic stays in one place. Runs even if the Unreal build failed.
 # ============================================================================
 if [ "$skip_carlanet" -eq 0 ]; then
     echo ""
@@ -128,34 +145,15 @@ if [ "$skip_carlanet" -eq 0 ]; then
     echo " Building CarlaNet (.NET) + Python wheel"
     echo "============================================================"
 
-    csproj="$carla_root/CarlaNet/src/CarlaNet.Python/CarlaNet.Python.csproj"
-    dlls_dir="$python_dir/carlanet/dlls"
-    dist_dir="$python_dir/dist"
-    python_bin="${PYTHON:-python3}"
-
-    if [ ! -f "$csproj" ]; then
-        echo "CarlaNet csproj not found: $csproj" | tee -a "$log_file"
+    build_wheel_sh="$python_dir/build_wheel.sh"
+    if [ ! -f "$build_wheel_sh" ]; then
+        echo "CarlaNet wheel script not found: $build_wheel_sh" | tee -a "$log_file"
         net_result=1
     else
-        (
-            set -e
-            mkdir -p "$dlls_dir"
-            echo "[build_wheel] dotnet publish -> $dlls_dir"
-            dotnet publish "$csproj" -c Release -o "$dlls_dir"
-
-            echo "[build_wheel] ensuring 'build' package is available"
-            "$python_bin" -m pip install --upgrade build
-
-            echo "[build_wheel] building wheel"
-            "$python_bin" -m build --wheel "$python_dir"
-
-            if [ "$install_wheel" -eq 1 ]; then
-                wheel_path="$(ls -t "$dist_dir"/*.whl 2>/dev/null | head -n1)"
-                [ -n "$wheel_path" ] || { echo "[build_wheel] no wheel produced in $dist_dir" >&2; exit 1; }
-                echo "[build_wheel] installing wheel with --force-reinstall: $wheel_path"
-                "$python_bin" -m pip install --force-reinstall "$wheel_path"
-            fi
-        ) 2>&1 | tee -a "$log_file"
+        wheel_args=()
+        [ "$install_wheel" -eq 1 ] && wheel_args+=(--install)
+        [ "$clean_wheel" -eq 1 ]   && wheel_args+=(--clean)
+        bash "$build_wheel_sh" "${wheel_args[@]}" 2>&1 | tee -a "$log_file"
         net_result=${PIPESTATUS[0]}
     fi
 

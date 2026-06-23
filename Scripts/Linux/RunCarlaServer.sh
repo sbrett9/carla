@@ -13,21 +13,21 @@
 # configure_cesium_georeference. Async mode keeps the world ticking so Cesium streams
 # and height samples resolve.
 #
-# Paths resolve in priority order: CLI flag > environment variable > default derived
-# from this script's location (this script lives at carla/Scripts/Linux/, so the
-# workspace root is three directories up).
+# Paths are derived from this script's location (it lives at carla/Scripts/Linux/, so
+# the CARLA repo root is two directories up). The engine is found via --unreal-engine-root,
+# then $CARLA_UNREAL_ENGINE_PATH, then <repo-parent>/UE_5_7_4.
 
 set -uo pipefail
 
-# ── Defaults (derived from script location) ─────────────────────────────────
+# ── Paths derived from script location (carla/Scripts/Linux) ─────────────────
 script_dir="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")" && pwd)"
-default_workspace="$(cd "$script_dir/../../.." && pwd)"
+carla_root="$(cd "$script_dir/../.." && pwd)"
+repo_parent="$(cd "$carla_root/.." && pwd)"
 
 map="/Game/Carla/Maps/Town10HD_Opt"
 rpc_port=2000
 with_window=0
 extra_args=""
-workspace_root="${CARLA_WORKSPACE_ROOT:-}"
 unreal_engine_root="${CARLA_UNREAL_ENGINE_PATH:-}"
 ready_timeout=180
 
@@ -43,12 +43,9 @@ Options:
   --rpc-port <n>             CARLA RPC port. Default 2000.
   --with-window              Show a window instead of -RenderOffScreen (eyeball Cesium streaming).
   --extra-args "<args>"      Extra arguments appended to the UnrealEditor command line.
-  --workspace-root <path>    Repo root (contains 'carla' + engine).
-                             Env: CARLA_WORKSPACE_ROOT. Default: three levels up from this script.
   --unreal-engine-root <path>
                              UE 5.7.4 source-build root.
-                             Env: CARLA_UNREAL_ENGINE_PATH. Default: <workspace-root>/UE_5_7_4.
-  --ready-timeout <sec>      Seconds to wait for the RPC port to open. Default 180.
+                             Env: CARLA_UNREAL_ENGINE_PATH. Default: <repo-parent>/UE_5_7_4.
   -h, --help                 Show this help and exit.
 
 Examples:
@@ -68,23 +65,17 @@ while [ $# -gt 0 ]; do
         --with-window)          with_window=1 ;;
         --extra-args)           extra_args="$2"; shift ;;
         --extra-args=*)         extra_args="${1#*=}" ;;
-        --workspace-root)       workspace_root="$2"; shift ;;
-        --workspace-root=*)     workspace_root="${1#*=}" ;;
         --unreal-engine-root)   unreal_engine_root="$2"; shift ;;
         --unreal-engine-root=*) unreal_engine_root="${1#*=}" ;;
-        --ready-timeout)        ready_timeout="$2"; shift ;;
-        --ready-timeout=*)      ready_timeout="${1#*=}" ;;
         -h|--help)              usage; exit 0 ;;
         *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
     esac
     shift
 done
 
-# ── Resolve paths (flag > env > default) ────────────────────────────────────
-[ -n "$workspace_root" ]     || workspace_root="$default_workspace"
-[ -n "$unreal_engine_root" ] || unreal_engine_root="$workspace_root/UE_5_7_4"
+# ── Resolve engine path (flag > env > default) ──────────────────────────────
+[ -n "$unreal_engine_root" ] || unreal_engine_root="$repo_parent/UE_5_7_4"
 
-carla_root="$workspace_root/carla"
 ue_bin="$unreal_engine_root/Engine/Binaries/Linux/UnrealEditor"
 uproject="$carla_root/Unreal/CarlaUnreal/CarlaUnreal.uproject"
 log_file="$carla_root/Unreal/CarlaUnreal/Saved/Logs/CarlaUnreal.log"
@@ -96,7 +87,7 @@ if [ ! -x "$ue_bin" ] && [ ! -f "$ue_bin" ]; then
 fi
 if [ ! -f "$uproject" ]; then
     echo "ERROR: CarlaUnreal.uproject not found: $uproject" >&2
-    echo "       Set --workspace-root or \$CARLA_WORKSPACE_ROOT." >&2
+    echo "       This script must live under <repo>/carla/Scripts/Linux; the checkout looks incomplete." >&2
     exit 1
 fi
 
