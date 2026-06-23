@@ -24,6 +24,7 @@
 #include "Carla/Actor/ActorData.h"
 #include "CarlaServerResponse.h"
 #include "Carla/Util/BoundingBoxCalculator.h"
+#include "Components/PrimitiveComponent.h"
 
 #include <util/disable-ue4-macros.h>
 #include <carla/Functional.h>
@@ -1931,6 +1932,46 @@ BIND_SYNC(is_sensor_enabled_for_ros) << [this](carla::streaming::detail::stream_
           "set_actor_enable_gravity",
           Response,
           " Actor Id: " + FString::FromInt(ActorId));
+    }
+    return R<void>::Success();
+  };
+
+  // Staging fade: write 'hide' (0 = fully opaque .. 1 = fully dissolved away) to Custom Primitive
+  // Data float index 8 on every primitive component of the actor. Vehicle materials read this index
+  // (the StagingFadeHide parameter) to drive a dithered opacity dissolve, so boundary-aware traffic
+  // can fade in/out across the staging ring. Index 8 is CustomPrimitiveData float4 slot 2, clear of
+  // the segmentation pass which uses slot 1 (floats 4-7), so this does not disturb segmentation.
+  BIND_SYNC(set_actor_fade) << [this](
+      cr::ActorId ActorId,
+      double hide) -> R<void>
+  {
+    REQUIRE_CARLA_EPISODE();
+    FCarlaActor* CarlaActor = Episode->FindCarlaActor(ActorId);
+    if (!CarlaActor)
+    {
+      return RespondError(
+          "set_actor_fade",
+          ECarlaServerResponse::ActorNotFound,
+          " Actor Id: " + FString::FromInt(ActorId));
+    }
+    AActor* Actor = CarlaActor->GetActor();
+    if (!Actor)
+    {
+      return RespondError(
+          "set_actor_fade",
+          ECarlaServerResponse::ActorNotFound,
+          " Actor Id: " + FString::FromInt(ActorId));
+    }
+    const float FadeValue = static_cast<float>(FMath::Clamp(hide, 0.0, 1.0));
+    constexpr int32 StagingFadeDataIndex = 8;
+    TArray<UPrimitiveComponent*> Primitives;
+    Actor->GetComponents<UPrimitiveComponent>(Primitives);
+    for (UPrimitiveComponent* Primitive : Primitives)
+    {
+      if (Primitive)
+      {
+        Primitive->SetCustomPrimitiveDataFloat(StagingFadeDataIndex, FadeValue);
+      }
     }
     return R<void>::Success();
   };

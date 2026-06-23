@@ -769,6 +769,15 @@ class Actor:
     def set_simulate_physics(self, enabled: bool):
         _sync(self._client.SetActorSimulatePhysicsAsync(self._actor.Id, enabled))
 
+    def set_fade(self, hide: float):
+        """Set the staging fade for this actor: 0.0 = fully visible, 1.0 = fully dissolved away.
+
+        Drives a dithered opacity dissolve so boundary-aware traffic can fade in as it enters the
+        scene and out as it leaves (see generate_traffic_carlanet staging). Applies to the whole
+        vehicle (body, glass, lights, wheels) via Custom Primitive Data index 8.
+        """
+        _sync(self._client.SetActorFadeAsync(self._actor.Id, float(max(0.0, min(1.0, hide)))))
+
     def set_collisions(self, enabled: bool):
         """Toggle the actor's collision response. Used by
         WalkerAIController.start() to free the walker pose for Detour to drive
@@ -1149,6 +1158,19 @@ class TrafficManager:
 
     def set_desired_speed(self, actor: Actor, speed: float):
         self._tm.SetDesiredSpeed(actor._actor, float(speed))
+
+    def set_path(self, actor: Actor, path, empty_buffer: bool = True):
+        """Give an autopilot vehicle a custom route: a list of Locations to drive toward, in order.
+
+        Wraps the C# TrafficManager.SetCustomPath. The TM navigates the road graph junction by
+        junction toward each point (it does NOT teleport or go off-road), so a single far-away
+        destination makes the vehicle head there across the map. Call after set_autopilot(True).
+        """
+        from System.Collections.Generic import List as _List
+        cs_path = _List[_CSLocation]()
+        for p in path:
+            cs_path.Add(p._to_cs() if hasattr(p, "_to_cs") else p)
+        self._tm.SetCustomPath(actor._actor, cs_path, bool(empty_buffer))
 
     def set_global_percentage_speed_difference(self, pct: float):
         self._tm.SetGlobalPercentageSpeedDifference(float(pct))

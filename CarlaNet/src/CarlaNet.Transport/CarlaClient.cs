@@ -779,6 +779,14 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task SetActorEnableGravityAsync(ActorId id, bool enabled)
         => _rpc.CallVoidAsync("set_actor_enable_gravity", id, enabled);
 
+    /// <summary>
+    /// Set the actor's staging fade: 0 = fully opaque, 1 = fully dissolved away. Writes the value to
+    /// Custom Primitive Data index 8 on every primitive component server-side; vehicle materials read
+    /// it to drive a dithered opacity dissolve for boundary-aware traffic entering/leaving the scene.
+    /// </summary>
+    public Task SetActorFadeAsync(ActorId id, double hide)
+        => _rpc.CallVoidAsync("set_actor_fade", id, hide);
+
     // ── §8.9 Vehicle Control ──────────────────────────────────────────────────
 
     public Task ApplyControlToVehicleAsync(ActorId id, VehicleControl control)

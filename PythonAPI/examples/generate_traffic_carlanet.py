@@ -43,6 +43,19 @@ def _is_inward(tf, b):
     yaw = math.radians(tf.rotation.yaw)
     return math.cos(yaw) * (cx - tf.location.x) + math.sin(yaw) * (cy - tf.location.y) > 0.0
 
+def _fade_hide(x, y, b):
+    """Staging fade amount for a position: 1.0 (fully dissolved) at the sandbox edge, ramping to
+    0.0 (fully solid) at the scene perimeter (one margin inward) and throughout the scene. A point
+    outside the sandbox reads as fully hidden. Fed to actor.set_fade so traffic dissolves in as it
+    enters the ring and out as it leaves."""
+    if not (b["min_x"] <= x <= b["max_x"] and b["min_y"] <= y <= b["max_y"]):
+        return 1.0
+    margin = b["margin"]
+    if margin <= 0.0:
+        return 0.0
+    edge_dist = min(x - b["min_x"], b["max_x"] - x, y - b["min_y"], b["max_y"] - y)
+    return max(0.0, min(1.0, 1.0 - edge_dist / margin))
+
 def _random_scene_navpoint(world, b, tries=40):
     """A random navigation point inside the scene (so a walker heads inward), or any nav point if
     none found / no staging."""
@@ -419,6 +432,12 @@ def main():
                 if a is None:
                     continue
                 loc = a.get_location()
+                # Ramp the opacity across the staging ring: invisible at the edge -> solid at the
+                # scene perimeter, so entry/exit is a smooth dissolve rather than a pop.
+                try:
+                    a.set_fade(_fade_hide(loc.x, loc.y, staging))
+                except Exception:
+                    pass
                 if _in_scene(loc.x, loc.y, staging):
                     veh_entered[vid] = True
                 elif veh_entered.get(vid):
