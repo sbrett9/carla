@@ -21,7 +21,11 @@ public class CarlaUnrealTarget : TargetRules
         DefaultBuildSettings = BuildSettingsVersion.Latest;
         IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
         Type = TargetType.Game;
-        
+
+        // Don't let compiler warnings fail the build. Linux/clang is stricter than MSVC,
+        // so a build clean on Windows can otherwise hit warning-as-error failures on Linux.
+        bWarningsAsErrors = false;
+
         ExtraModuleNames.Add("CarlaUnreal");
 
         LogFlagStatus("Unity build", EnableUnityBuild);
