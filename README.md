@@ -98,16 +98,16 @@ cd CarlaUE5
 ./CarlaSetup.sh --interactive
 ```
 
-The setup script will prompt you for your sudo password, in order to install the prerequisites. It will then prompt you for your GitHub credentials in order to authorise the download of the Unreal Engine repository. 
+The setup script will prompt you for your sudo password, in order to install the prerequisites. The CARLA content is cloned from a private mirror over SSH, so it will use an SSH key with access to that mirror (a deploy key passed via `--content-ssh-key`/`CARLA_CONTENT_SSH_KEY`, or one loaded in your SSH agent for `github.com`).
 
 The setup script will install by default Python 3 using apt. If you want to target an existing Python installation, you should use the `--python-root=PATH_TO_PYTHON` argument with the relevant Python installation path. You can use whereis python3 in your chosen environment and strip the `/python3` suffix from the path.
 
 __Building in Linux unattended__:
 
-If you want to run the setup script unattended, your git credentials need to be stored in an environment variable. Add your github credentials to your `.bashrc` file:
+If you want to run the setup script unattended, point it at an SSH key with access to the private CARLA content mirror (or have one loaded in your SSH agent for `github.com`). Add it to your `.bashrc` file:
 
 ```sh
-export GIT_LOCAL_CREDENTIALS=username@github_token
+export CARLA_CONTENT_SSH_KEY=/path/to/your/content_deploy_key
 ```
 
 Then run the setup script using the following command:
@@ -117,13 +117,13 @@ cd CarlaUE5
 sudo -E ./CarlaSetup.sh
 ```
 
-This will download and install Unreal Engine 5.5, install the prerequisites and build CARLA. It may take some time to complete and use a significant amount of disk space.
+This will install the prerequisites and build CARLA. It may take some time to complete and use a significant amount of disk space.
 
-If you prefer to add the git credentials in the terminal, use the following command:
+If you prefer to pass the key on the command line, use the following command:
 
 ```sh
 cd CarlaUE5
-sudo -E env GIT_LOCAL_CREDENTIALS=github_username@github_token ./CarlaSetup.sh 
+sudo -E ./CarlaSetup.sh --content-ssh-key=/path/to/your/content_deploy_key
 ```
 
 __Building in Windows__:

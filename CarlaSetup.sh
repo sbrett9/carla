@@ -20,6 +20,7 @@ skip_prerequisites=0
 launch=0
 python_root=
 vibeue_ssh_key=
+content_ssh_key=
 
 clean_sumo=0
 clean_all=0
@@ -40,7 +41,7 @@ USAGE:
   ./CarlaSetup.sh [options]
 
 OPTIONS:
-  -i, --interactive          Allow interactive prompts (git credentials, sudo password).
+  -i, --interactive          Allow interactive prompts (sudo password).
   -p, --skip-prerequisites   Skip the InstallPrerequisites step.
   -l, --launch               Launch the Unreal Editor after building.
       --clean                Remove Build/sumo-build + Build/sumo-install (rebuild SUMO).
@@ -51,11 +52,15 @@ OPTIONS:
       --force-deps-rebuild   Also clear the ezvcpkg cache so vcpkg deps recompile (implies --clean-cesium).
       --with-python-api      Build the legacy Boost.Python `carla` module (off by default).
       --with-tests           Build LibCarla C++ tests (off by default; pulls in googletest).
+      --content-ssh-key <path> SSH key for the private carla-content mirror (else $CARLA_CONTENT_SSH_KEY;
+                             falls back to your default SSH agent/keys if neither is given).
       --python-root <dir>    Python install root for the API build.
       --vibeue-ssh-key <path> SSH key for the private VibeUE mirror (else $VIBEUE_SSH_KEY).
   -h, --help                 Show this help and exit.
 
 The engine is taken from $CARLA_UNREAL_ENGINE_PATH (must be set to your UE 5.7.4 root).
+The CARLA content is cloned over SSH from a private mirror; provide a deploy key via
+--content-ssh-key=<path> or $CARLA_CONTENT_SSH_KEY, or have a working SSH agent/key for github.com.
 
 EXAMPLES:
   ./CarlaSetup.sh --skip-prerequisites
@@ -79,6 +84,8 @@ while [ $# -gt 0 ]; do
         --with-tests)            with_tests=1 ;;
         -pyroot|--python-root)   python_root="$2"; shift ;;
         --python-root=*)         python_root="${1#*=}" ;;
+        --content-ssh-key)       content_ssh_key="$2"; shift ;;
+        --content-ssh-key=*)     content_ssh_key="${1#*=}" ;;
         --vibeue-ssh-key)        vibeue_ssh_key="$2"; shift ;;
         --vibeue-ssh-key=*)      vibeue_ssh_key="${1#*=}" ;;
         -h|--help)               usage; exit 0 ;;
@@ -107,18 +114,6 @@ if [ "$EUID" -ne 0 ] && [ $interactive -eq 0 ] && [ $skip_prerequisites -eq 0 ];
     fi
 fi
 
-# Check for Git credentials:
-if [ -z "${GIT_LOCAL_CREDENTIALS:-}" ]; then
-    if [ $interactive -eq 1 ]; then
-        echo "Warning: git credentials are not set. You may be required to manually enter them later."
-    else
-        echo "Git credentials are not set, can not continue setup in unattended mode."
-        exit 1
-    fi
-else
-    echo "Found git credentials."
-fi
-
 # ── PREREQUISITES INSTALL STEP ───────────────────────────────────────────────
 if [ $skip_prerequisites -eq 0 ]; then
     python_path=python3
@@ -132,21 +127,27 @@ else
 fi
 
 # ── CLONE CONTENT ────────────────────────────────────────────────────────────
-if [ -d "$workspace_path/Unreal/CarlaUnreal/Content" ]; then
+# Private snapshot mirror of carla-simulator/carla-content (ue5-dev). It carries the
+# vehicle staging-fade asset changes and is owned by this project. Cloned over SSH (same
+# mechanism as the VibeUE plugin): supply a deploy key with --content-ssh-key=<path> or
+# $CARLA_CONTENT_SSH_KEY; without one, the clone uses your default SSH agent/keys for
+# github.com. The upstream Bitbucket repo
+# (https://bitbucket.org/carla-simulator/carla-content.git, branch ue5-dev) is the original
+# public source if a pristine pull is ever needed.
+content_dir="$workspace_path/Unreal/CarlaUnreal/Content"
+content_repo="git@github.com:sbrett9/carla-content.git"
+content_key="${content_ssh_key:-${CARLA_CONTENT_SSH_KEY:-}}"
+if [ -d "$content_dir" ]; then
     echo "Found CARLA content."
 else
     echo "Could not find CARLA content. Downloading..."
-    mkdir -p "$workspace_path/Unreal/CarlaUnreal/Content"
-    # Private snapshot mirror of carla-simulator/carla-content (ue5-dev). It carries the
-    # vehicle staging-fade asset changes and is owned by this project. The upstream Bitbucket
-    # repo (https://bitbucket.org/carla-simulator/carla-content.git, branch ue5-dev) is the
-    # original source if a pristine pull is ever needed.
-    git \
-        -C "$workspace_path/Unreal/CarlaUnreal/Content" \
-        clone \
-        -b ue5-dev \
-        https://github.com/sbrett9/carla-content.git \
-        Carla
+    mkdir -p "$content_dir"
+    if [ -n "$content_key" ]; then
+        GIT_SSH_COMMAND="ssh -i $content_key -o IdentitiesOnly=yes" \
+            git -C "$content_dir" clone -b ue5-dev "$content_repo" Carla
+    else
+        git -C "$content_dir" clone -b ue5-dev "$content_repo" Carla
+    fi
 fi
 
 # ── VERIFY UNREAL ENGINE ─────────────────────────────────────────────────────

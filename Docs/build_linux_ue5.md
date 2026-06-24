@@ -29,18 +29,20 @@ cd CarlaUE5
 ./CarlaSetup.sh --interactive
 ```
 
-The setup script will prompt you for your sudo password, in order to install the prerequisites. It will then prompt you for your GitHub credentials in order to authorise the download of the Unreal Engine repository. 
+The setup script will prompt you for your sudo password in order to install the prerequisites. The CARLA content is cloned from a private mirror over SSH, so you also need an SSH key with access to it (a deploy key, or one loaded in your SSH agent for `github.com`).
 
 __Building in Linux unattended__:
 
-If you want to run the setup script unattended, store your sudo password and your git credentials in an environment variable.
+If you want to run the setup script unattended, cache your sudo password and point the script at an SSH key for the private content mirror (you can do the same for the optional VibeUE plugin):
 
 ```sh
 sudo -v   # Used to cache the password for 15 minutes
-export GIT_LOCAL_CREDENTIALS=github_username@github_token 
+export CARLA_CONTENT_SSH_KEY=/path/to/your/content_deploy_key   # or pass --content-ssh-key=<path>
+# Optional MCP plugin:
+# export VIBEUE_SSH_KEY=/path/to/your/vibeue_deploy_key
 ```
 
-Then run the setup script without the interactive flag:
+If you already have a working SSH agent/key for `github.com`, the `CARLA_CONTENT_SSH_KEY` export is not required. Then run the setup script without the interactive flag:
 
 ```sh
 cd CarlaUE5

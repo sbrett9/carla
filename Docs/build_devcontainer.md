@@ -95,13 +95,13 @@ cd /workspaces/carla
 
 ## Download CARLA content (first time only)
 
-Before compiling, you need to download the CARLA content assets (maps, meshes, textures, etc.). The `CarlaSetup.sh` script handles this automatically. Since the container already has all prerequisites installed, use `--skip-prerequisites` and `--interactive`:
+Before compiling, you need to download the CARLA content assets (maps, meshes, textures, etc.). The `CarlaSetup.sh` script handles this automatically. Since the container already has all prerequisites installed, use `--skip-prerequisites`. The content is cloned from a private mirror over SSH, so supply a deploy key (or have one loaded in your SSH agent for `github.com`):
 
 ```sh
-bash CarlaSetup.sh --skip-prerequisites --interactive
+bash CarlaSetup.sh --skip-prerequisites --content-ssh-key=/path/to/your/content_deploy_key
 ```
 
-The `--interactive` flag is needed because `CarlaSetup.sh` requires `GIT_LOCAL_CREDENTIALS` in unattended mode (used for cloning UE5 from Epic's private repo). Since UE5 is already mounted in the container, the credentials are not actually needed — `--interactive` makes the script warn instead of exiting.
+If you already have a working SSH agent/key for `github.com`, the `--content-ssh-key` flag is optional.
 
 The script will:
 
