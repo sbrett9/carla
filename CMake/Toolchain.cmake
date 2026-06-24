@@ -120,13 +120,17 @@ set (
 string (APPEND CMAKE_C_FLAGS_INIT   " -fms-extensions -fno-math-errno -fdiagnostics-absolute-paths")
 string (APPEND CMAKE_CXX_FLAGS_INIT " -fms-extensions -fno-math-errno -fdiagnostics-absolute-paths -stdlib=libc++")
 
-# Link flags. Search the bundle's lib dirs EXPLICITLY: with only --sysroot, ld's default search
-# does not necessarily include usr/lib64 (where the bundled libc++ and libm live), so -lm / -lc++
-# are not found and Eigen reports "Can't link to the standard math library". -L adds them to the
-# library search path; -B also lets ld locate crt objects and the libm/libc linker scripts within
-# the bundle. Applied to exe/shared/module so every link kind -- including the configure checks --
-# receives them.
-set (UE_LINK_FLAGS "-stdlib=libc++ -L${UE_LIBS} -L${UE_SYSROOT}/usr/lib64 -L${UE_SYSROOT}/usr/lib -B${UE_SYSROOT}/usr/lib64 -B${UE_SYSROOT}/usr/lib")
+# Link flags. --sysroot MUST be on the link command (not only the compile): the bundle's libm.so /
+# libm.a / libc.so are GNU ld linker SCRIPTS whose GROUP()/INPUT() entries are absolute paths
+# (e.g. /lib64/libm.so.6). ld only rewrites those relative to the sysroot when it receives
+# --sysroot itself; clang forwards --sysroot to ld, and ld then resolves them inside the bundle.
+# Without it, ld takes the script paths literally (outside the bundle) and Eigen reports
+# "Can't link to the standard math library". CMAKE_SYSROOT covers the compile but does not reliably
+# reach the link here, so set it explicitly. -L/-B add the bundle's lib dirs (usr/lib64 holds the
+# bundled libc++/libm; ld's default sysroot search may only cover usr/lib) and let ld find the crt
+# objects and the libm/libc scripts. Applied to exe/shared/module so every link kind -- including
+# the configure checks -- receives them.
+set (UE_LINK_FLAGS "-stdlib=libc++ --sysroot=${UE_SYSROOT} -L${UE_LIBS} -L${UE_SYSROOT}/usr/lib64 -L${UE_SYSROOT}/usr/lib -B${UE_SYSROOT}/usr/lib64 -B${UE_SYSROOT}/usr/lib")
 string (APPEND CMAKE_EXE_LINKER_FLAGS_INIT    " ${UE_LINK_FLAGS}")
 string (APPEND CMAKE_SHARED_LINKER_FLAGS_INIT " ${UE_LINK_FLAGS}")
 string (APPEND CMAKE_MODULE_LINKER_FLAGS_INIT " ${UE_LINK_FLAGS}")
