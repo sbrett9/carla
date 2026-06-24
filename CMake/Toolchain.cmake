@@ -205,8 +205,13 @@ set (
 )
 
 set (
+	# libc++'s c++/v1 headers MUST be searched BEFORE the C sysroot headers. libc++'s <cstdlib>
+	# includes its own <stdlib.h> wrapper (which then #include_next's the C <stdlib.h>); if the C
+	# include dir comes first, <cstdlib> resolves <stdlib.h> straight to the C header, never finds
+	# the libc++ wrapper, and clang aborts with "<cstdlib> tried including <stdlib.h> but didn't
+	# find libc++'s <stdlib.h> header" (and a cascade of the same for every C++ std header).
 	CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES
-	${UE_INCLUDE} ${UE_INCLUDE}/c++/v1
+	${UE_INCLUDE}/c++/v1 ${UE_INCLUDE}
 )
 
 endif ()
