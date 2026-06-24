@@ -70,13 +70,21 @@ set (
 # build no longer depends on host -devel packages for the C runtime.
 set (CMAKE_SYSROOT ${UE_SYSROOT})
 
-# Override Eigen's math library detection. The sysroot's libm.so is a linker script with
-# absolute paths (/lib64/libm.so.6) that can cause Eigen's CHECK_CXX_SOURCE_COMPILES test
-# to fail even with proper --sysroot flags. Since libm is available via the toolchain, we
-# pre-set the result variables to skip the test. These CACHE variables are inherited by
-# FetchContent subprojects.
-set (STANDARD_MATH_LIBRARY "" CACHE STRING "Standard math library (empty = automatic)")
-set (STANDARD_MATH_LIBRARY_FOUND TRUE CACHE BOOL "Whether standard math library was found")
+# Skip Eigen's standard-math-library probe deterministically. Eigen is used header-only here, so
+# its FindStandardMathLibrary detection only gates Eigen's own (unbuilt) tests/examples -- it is
+# irrelevant to anything CARLA links. The probe's -lm link cannot resolve the bundle's libm.so /
+# libm.a, which are GNU ld linker scripts whose GROUP() absolute paths (e.g. /lib64/libm.so.6) do
+# not exist at the sysroot-prefixed location, so it fails even with --sysroot and aborts configure
+# with "Can't link to the standard math library".
+#
+# FindStandardMathLibrary runs find_package unconditionally and RECOMPUTES STANDARD_MATH_LIBRARY_FOUND
+# with a plain set() each run, so pre-seeding that variable is not reliable (a plain set shadows the
+# cache). Instead seed the probe's OWN result cache variable: CHECK_CXX_SOURCE_COMPILES skips the
+# test when its result variable is already cached, which then drives the module to set
+# STANDARD_MATH_LIBRARY_FOUND=TRUE / STANDARD_MATH_LIBRARY="" itself. This is deterministic
+# regardless of prior cache state, and the CACHE INTERNAL value is inherited by FetchContent
+# subprojects.
+set (standard_math_library_linked_to_automatically TRUE CACHE INTERNAL "Eigen math-library probe: pre-seeded; libm is provided by the UE toolchain")
 
 set (
 	UE_THIRD_PARTY
