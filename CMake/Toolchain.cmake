@@ -61,6 +61,15 @@ set (
 	CACHE PATH ""
 )
 
+# Anchor the build to the engine's bundled toolchain sysroot. Without --sysroot, clang links
+# against whatever default sysroot it was built with, so the C runtime, libc and libm are
+# resolved inconsistently: a trivial executable links, but anything pulling in libm (Eigen's
+# "Can't link to the standard math library" check) or extra libc symbols (Boost.Filesystem's
+# statx / dirent / POSIX at-API probes) fails to link. Pointing --sysroot at the bundle makes
+# clang take its headers, crt objects, libc and libm all from one consistent place, so the
+# build no longer depends on host -devel packages for the C runtime.
+set (CMAKE_SYSROOT ${UE_SYSROOT})
+
 set (
 	UE_THIRD_PARTY
 	${UE_ROOT}/Engine/Source/ThirdParty CACHE PATH ""
