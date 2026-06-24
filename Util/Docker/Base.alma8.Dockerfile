@@ -35,7 +35,8 @@ ENV LC_ALL=en_US.UTF-8
 # Toolchain + libraries.
 #   - Development Tools group: gcc/g++/make/autoconf/automake/libtool/...
 #   - ninja-build, nasm, patchelf: CARLA + cesium-native (vcpkg) build helpers
-#   - xerces-c-devel, proj-devel, proj-data: SUMO netconvert (proj.db ships with proj-data)
+#   - xerces-c-devel, proj-devel: SUMO netconvert (proj-devel pulls proj, which provides proj.db
+#     at /usr/share/proj; there is no separate proj-data package on EL8, unlike Debian/Ubuntu)
 #   - openssl-devel: Fast-DDS (ROS2) build
 #   - the libpng/tiff/jpeg/nss/at-spi2/xkbcommon/gbm/pango/alsa/vulkan/SDL2 set: UE5 editor +
 #     CARLA Python API image libs
@@ -48,7 +49,7 @@ RUN dnf -y groupinstall "Development Tools" \
         git git-lfs rsync sed which \
         curl wget zip unzip tar \
         libtool autoconf automake pkgconf-pkg-config perl \
-        xerces-c-devel proj-devel proj-data \
+        xerces-c-devel proj-devel \
         openssl-devel libxml2-devel \
         libpng-devel libtiff-devel libjpeg-turbo-devel \
         nss-devel at-spi2-atk-devel libxkbcommon-devel \
@@ -70,11 +71,11 @@ RUN curl -L -O https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-
 ENV PATH=/opt/cmake-3.28.3-linux-x86_64/bin:$PATH
 
 # ---------------------------------------------------------------------------
-# .NET SDK 10 (CarlaNet targets .NET 10; build_wheel.sh runs `dotnet publish`). The AlmaLinux 8
-# AppStream may not carry 10.0 yet, so use Microsoft's package feed.
+# .NET SDK 10 (CarlaNet targets .NET 10; build_wheel.sh runs `dotnet publish`). AlmaLinux 8
+# AppStream carries dotnet-sdk-10.0 directly. If a future minor ever drops it, add Microsoft's
+# feed first: rpm -Uvh https://packages.microsoft.com/config/rhel/8/packages-microsoft-prod.rpm
 # ---------------------------------------------------------------------------
-RUN rpm -Uvh https://packages.microsoft.com/config/rhel/8/packages-microsoft-prod.rpm \
-    && dnf -y install dotnet-sdk-10.0 \
+RUN dnf -y install dotnet-sdk-10.0 \
     && dnf clean all
 
 # ---------------------------------------------------------------------------
