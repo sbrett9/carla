@@ -1,0 +1,96 @@
+# AlmaLinux 8 build environment for CARLA UE5 (RHEL8-compatible).
+#
+# AlmaLinux 8 is binary-compatible with RHEL 8 (glibc 2.28), so artifacts built here run on a
+# RHEL 8 deployment target. This matters for the parts of the build that use the SYSTEM compiler
+# rather than the engine's hermetic clang toolchain -- most importantly SUMO `netconvert`, which
+# CarlaSetup.sh builds with the container's gcc and which would otherwise pick up a newer glibc
+# (e.g. from an AlmaLinux 10 image) and fail to run on RHEL 8.
+#
+# The build context is tiny (no files are COPYed in), so it can be built from anywhere, e.g.:
+#   podman build -f Util/Docker/Base.alma8.Dockerfile -t carla-base:alma8 Util/Docker
+#
+# This image installs PREREQUISITES only. Unreal Engine and CARLA are built at container runtime
+# into a mounted/volume workspace (see Docs/build_container_rhel8.md), so the heavy build artifacts
+# are not baked into image layers.
+
+FROM almalinux:8
+
+# ---------------------------------------------------------------------------
+# Repositories: EPEL + PowerTools (CRB on EL8 is named "powertools").
+# Many -devel packages (xerces-c, proj, SDL2, alsa, pango, gbm, at-spi2-atk, ...) live in
+# EPEL/PowerTools rather than the default repos.
+# ---------------------------------------------------------------------------
+RUN dnf -y install dnf-plugins-core epel-release \
+    && dnf config-manager --set-enabled powertools \
+    && dnf -y makecache
+
+# ---------------------------------------------------------------------------
+# UTF-8 locale (CMake archive extraction of e.g. Boost needs it for non-ASCII filenames).
+# ---------------------------------------------------------------------------
+RUN dnf -y install glibc-langpack-en
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+# ---------------------------------------------------------------------------
+# Toolchain + libraries.
+#   - Development Tools group: gcc/g++/make/autoconf/automake/libtool/...
+#   - ninja-build, nasm, patchelf: CARLA + cesium-native (vcpkg) build helpers
+#   - xerces-c-devel, proj-devel, proj-data: SUMO netconvert (proj.db ships with proj-data)
+#   - openssl-devel: Fast-DDS (ROS2) build
+#   - the libpng/tiff/jpeg/nss/at-spi2/xkbcommon/gbm/pango/alsa/vulkan/SDL2 set: UE5 editor +
+#     CARLA Python API image libs
+#   - zip/unzip/tar/curl/wget/pkgconf/perl: vcpkg + general build plumbing
+# ---------------------------------------------------------------------------
+RUN dnf -y groupinstall "Development Tools" \
+    && dnf -y install \
+        gcc gcc-c++ make ninja-build \
+        nasm patchelf \
+        git git-lfs rsync sed which \
+        curl wget zip unzip tar \
+        libtool autoconf automake pkgconf-pkg-config perl \
+        xerces-c-devel proj-devel proj-data \
+        openssl-devel libxml2-devel \
+        libpng-devel libtiff-devel libjpeg-turbo-devel \
+        nss-devel at-spi2-atk-devel libxkbcommon-devel \
+        mesa-libgbm-devel pango-devel alsa-lib-devel \
+        vulkan-loader SDL2-devel \
+        tzdata \
+    && dnf clean all
+
+RUN git lfs install --system
+
+# ---------------------------------------------------------------------------
+# CMake >= 3.28 (CARLA's configure enforces it). AlmaLinux 8 ships an older CMake, so install the
+# Kitware binary, mirroring the Ubuntu base image.
+# ---------------------------------------------------------------------------
+RUN curl -L -O https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3-linux-x86_64.tar.gz \
+    && mkdir -p /opt \
+    && tar -xzf cmake-3.28.3-linux-x86_64.tar.gz -C /opt \
+    && rm -f cmake-3.28.3-linux-x86_64.tar.gz
+ENV PATH=/opt/cmake-3.28.3-linux-x86_64/bin:$PATH
+
+# ---------------------------------------------------------------------------
+# .NET SDK 10 (CarlaNet targets .NET 10; build_wheel.sh runs `dotnet publish`). The AlmaLinux 8
+# AppStream may not carry 10.0 yet, so use Microsoft's package feed.
+# ---------------------------------------------------------------------------
+RUN rpm -Uvh https://packages.microsoft.com/config/rhel/8/packages-microsoft-prod.rpm \
+    && dnf -y install dotnet-sdk-10.0 \
+    && dnf clean all
+
+# ---------------------------------------------------------------------------
+# Python 3.11 (AlmaLinux 8's default python3 is 3.6, too old for `python -m build`). Do NOT
+# repoint the system /usr/bin/python3 (dnf depends on it); instead expose 3.11 via /usr/local/bin,
+# which precedes /usr/bin on PATH, and tell build_wheel.sh to use it via $PYTHON.
+# ---------------------------------------------------------------------------
+RUN dnf -y install python3.11 python3.11-devel python3.11-pip \
+    && dnf clean all \
+    && ln -sf /usr/bin/python3.11 /usr/local/bin/python3 \
+    && ln -sf /usr/bin/python3.11 /usr/local/bin/python
+ENV PYTHON=python3.11
+
+# Wheel tooling for CarlaNet (the default CarlaNet-first build). The legacy PythonAPI is OFF by
+# default; if you enable it (--with-python-api), install the repo's requirements at runtime from
+# the mounted checkout: python3.11 -m pip install -r requirements.txt
+RUN python3.11 -m pip install --upgrade pip build
+
+WORKDIR /workspaces
