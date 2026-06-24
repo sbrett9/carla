@@ -70,6 +70,14 @@ set (
 # build no longer depends on host -devel packages for the C runtime.
 set (CMAKE_SYSROOT ${UE_SYSROOT})
 
+# Override Eigen's math library detection. The sysroot's libm.so is a linker script with
+# absolute paths (/lib64/libm.so.6) that can cause Eigen's CHECK_CXX_SOURCE_COMPILES test
+# to fail even with proper --sysroot flags. Since libm is available via the toolchain, we
+# pre-set the result variables to skip the test. These CACHE variables are inherited by
+# FetchContent subprojects.
+set (STANDARD_MATH_LIBRARY "" CACHE STRING "Standard math library (empty = automatic)")
+set (STANDARD_MATH_LIBRARY_FOUND TRUE CACHE BOOL "Whether standard math library was found")
+
 set (
 	UE_THIRD_PARTY
 	${UE_ROOT}/Engine/Source/ThirdParty CACHE PATH ""

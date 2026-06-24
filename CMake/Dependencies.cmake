@@ -188,6 +188,7 @@ carla_dependency_add (
   ${CARLA_EIGEN_TAG}
   https://gitlab.com/libeigen/eigen/-/archive/${CARLA_EIGEN_TAG}/eigen-${CARLA_EIGEN_TAG}.tar.gz
   https://gitlab.com/libeigen/eigen.git
+  PATCH_COMMAND sed -i "s/find_package(StandardMathLibrary)/#find_package(StandardMathLibrary)/" CMakeLists.txt
 )
 
 
