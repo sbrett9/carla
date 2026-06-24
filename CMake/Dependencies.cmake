@@ -188,7 +188,10 @@ carla_dependency_add (
   ${CARLA_EIGEN_TAG}
   https://gitlab.com/libeigen/eigen/-/archive/${CARLA_EIGEN_TAG}/eigen-${CARLA_EIGEN_TAG}.tar.gz
   https://gitlab.com/libeigen/eigen.git
-  PATCH_COMMAND sed -i "s/find_package(StandardMathLibrary)/#find_package(StandardMathLibrary)/" CMakeLists.txt
+  # Eigen's standard-math-library probe is skipped via CMake/Toolchain.cmake (it pre-seeds the
+  # probe's cached result so find_package(StandardMathLibrary) takes its success path). Do NOT
+  # patch out that find_package call here: removing it would leave STANDARD_MATH_LIBRARY_FOUND
+  # unset, and Eigen's "if (NOT STANDARD_MATH_LIBRARY_FOUND)" guard would then abort configure.
 )
 
 
