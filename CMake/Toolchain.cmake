@@ -66,17 +66,32 @@ set (
 	${UE_ROOT}/Engine/Source/ThirdParty CACHE PATH ""
 )
 
-# UE 5.7.4: ThirdParty/Unix/LibCxx no longer exists; LibCxx is now bundled
-# inside the clang sysroot under usr/include and usr/lib.
+# UE 5.7.4: ThirdParty/Unix/LibCxx no longer exists; LibCxx is now bundled inside the clang
+# sysroot. Headers live under usr/include (libc++ at usr/include/c++/v1); the static libs are
+# located separately below (their dir varies by bundle).
 set (
 	UE_INCLUDE
 	${UE_SYSROOT}/usr/include CACHE PATH ""
 )
 
-set (
-	UE_LIBS
-	${UE_SYSROOT}/usr/lib CACHE PATH ""
-)
+# Locate the static libc++ / libc++abi. The directory varies between bundled toolchains:
+# older clang bundles put them under usr/lib, the clang-20/rockylinux8 bundle uses usr/lib64,
+# and some use lib/lib64. Search the candidates and use the first that actually has libc++.a
+# instead of assuming usr/lib (which fails with "no such file or directory: .../libc++.a").
+set (UE_LIBS "")
+foreach (_ue_lib_candidate
+	${UE_SYSROOT}/usr/lib64
+	${UE_SYSROOT}/usr/lib
+	${UE_SYSROOT}/lib64
+	${UE_SYSROOT}/lib)
+	if (EXISTS ${_ue_lib_candidate}/libc++.a)
+		set (UE_LIBS ${_ue_lib_candidate})
+		break ()
+	endif ()
+endforeach ()
+if (NOT UE_LIBS)
+	message (FATAL_ERROR "Could not find libc++.a under the Unreal clang toolchain at \"${UE_SYSROOT}\" (checked usr/lib64, usr/lib, lib64, lib).")
+endif ()
 
 set (
 	UE_OPENSSL_INCLUDE
