@@ -46,23 +46,18 @@ libraries, `nasm`/`patchelf`, `xerces-c`/`proj` (for SUMO), CMake ≥ 3.28 (Kitw
 ## 2. Start a build container with a persistent workspace
 
 UE and CARLA are built into a **volume** so they survive container restarts and aren't baked into image
-layers. Private repos (the UE fork, carla-content, VibeUE) authenticate over SSH, so forward your SSH
-agent or mount a key read-only.
+layers. Private repos (the UE fork, carla-content, VibeUE) authenticate over SSH with a single key.
+
+Use the wrapper, which creates the volume, mounts the key read-only and installs it at 0600 inside the
+container (host-mounted keys come in world-readable and `ssh` refuses those), and seeds `known_hosts`:
 
 ```sh
-podman volume create carla-ws
-
-podman run -it --name carla-build \
-  -v carla-ws:/workspaces \
-  -v "$SSH_AUTH_SOCK:/ssh-agent" -e SSH_AUTH_SOCK=/ssh-agent \
-  carla-base:alma8 bash
+Util/Docker/run.alma8.sh --ssh-key /mnt/c/Users/sbret/.ssh/VibeUEKey
 ```
 
-If you don't use an agent, mount a key instead and point git at it:
-```sh
-  -v /path/to/id_ed25519:/root/.ssh/id_ed25519:ro
-```
-On Windows/WSL2, `$SSH_AUTH_SOCK` may be unset; mounting a key read-only is the simplest path there.
+Re-running attaches to the same `carla-build` container (so UE/CARLA work persists). The private key is
+never copied into the image — only mounted at runtime. A single account-wide GitHub SSH key covers all
+three repos; a per-repo *deploy* key would not authenticate the UE fork.
 
 ## 3. Build Unreal Engine 5.7.4 (first time only)
 
@@ -70,7 +65,7 @@ Inside the container. The engine fork is private — clone over SSH (`git@`) wit
 
 ```sh
 cd /workspaces
-git clone -b carla-port git@github.com:sbrett9/UnrealEngine-CarlaPort.git unreal-engine
+git clone -b carla-port git@github.com:sbrett9/UnrealEngine.git unreal-engine
 cd unreal-engine
 ./Setup.sh                  # downloads the bundled clang toolchain + commit dependencies (~tens of GB)
 ./GenerateProjectFiles.sh

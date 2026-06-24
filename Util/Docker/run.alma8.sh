@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+#
+# run.alma8.sh — start an interactive CARLA build container (carla-base:alma8) with a persistent
+# workspace volume and an SSH key for the private repos (UnrealEngine, carla-content, VibeUE).
+#
+# Run this inside the Podman host (e.g. the AlmaLinux WSL distro). The SSH key is mounted READ-ONLY
+# and copied to 0600 inside the container at start -- it is never baked into the image (a private key
+# in an image layer is permanently extractable). See Docs/build_container_rhel8.md.
+#
+# Usage:
+#   ./run.alma8.sh                              # defaults below
+#   ./run.alma8.sh --ssh-key /path/to/key      # different key
+#   SSH_KEY=/path/to/key ./run.alma8.sh        # same, via env
+
+set -euo pipefail
+
+ssh_key="${SSH_KEY:-/mnt/c/Users/sbret/.ssh/VibeUEKey}"
+volume="${CARLA_WS_VOLUME:-carla-ws}"
+image="${CARLA_IMAGE:-carla-base:alma8}"
+name="${CARLA_CONTAINER:-carla-build}"
+
+usage() {
+    cat <<EOF
+Usage: run.alma8.sh [options]
+
+Start an interactive carla-base:alma8 build container with a workspace volume and an SSH key.
+
+Options:
+  --ssh-key <path>     SSH private key for the private repos (default: $ssh_key, or \$SSH_KEY).
+  --volume <name>      Workspace podman volume (default: $volume, or \$CARLA_WS_VOLUME).
+  --image <ref>        Image to run (default: $image, or \$CARLA_IMAGE).
+  --name <name>        Container name (default: $name, or \$CARLA_CONTAINER).
+  -h, --help           Show this help and exit.
+
+The key is mounted read-only and installed to /root/.ssh/id_ed25519 (0600) inside the container;
+github.com is added to known_hosts. The workspace volume persists UE + CARLA across runs.
+EOF
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --ssh-key)   ssh_key="$2"; shift ;;
+        --ssh-key=*) ssh_key="${1#*=}" ;;
+        --volume)    volume="$2"; shift ;;
+        --volume=*)  volume="${1#*=}" ;;
+        --image)     image="$2"; shift ;;
+        --image=*)   image="${1#*=}" ;;
+        --name)      name="$2"; shift ;;
+        --name=*)    name="${1#*=}" ;;
+        -h|--help)   usage; exit 0 ;;
+        *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
+    esac
+    shift
+done
+
+if [ ! -f "$ssh_key" ]; then
+    echo "ERROR: SSH key not found: $ssh_key" >&2
+    echo "       Pass --ssh-key <path> or set \$SSH_KEY (path must be visible to the Podman host)." >&2
+    exit 1
+fi
+
+podman volume inspect "$volume" >/dev/null 2>&1 || podman volume create "$volume"
+
+# Reuse the named container across runs if it already exists.
+if podman container exists "$name"; then
+    echo "Container '$name' exists; starting/attaching. (Remove with: podman rm -f $name)"
+    exec podman start -ai "$name"
+fi
+
+# The key is mounted at /tmp/id_key:ro, then installed to ~/.ssh/id_ed25519 with 0600 because
+# host-mounted files (especially from a Windows filesystem) come in world-readable and ssh refuses
+# keys with loose permissions. known_hosts is seeded so the clones don't prompt.
+exec podman run -it --name "$name" \
+    -v "$volume:/workspaces" \
+    -v "$ssh_key:/tmp/id_key:ro" \
+    "$image" bash -lc '
+        mkdir -p ~/.ssh && chmod 700 ~/.ssh
+        install -m 600 /tmp/id_key ~/.ssh/id_ed25519
+        ssh-keyscan -t ed25519,rsa,ecdsa github.com >> ~/.ssh/known_hosts 2>/dev/null || true
+        echo "Workspace: /workspaces   SSH key installed for github.com"
+        echo "Next: see Docs/build_container_rhel8.md (clone UnrealEngine @ carla-port, then CARLA)."
+        exec bash'

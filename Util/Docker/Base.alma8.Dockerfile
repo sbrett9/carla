@@ -46,7 +46,7 @@ RUN dnf -y groupinstall "Development Tools" \
     && dnf -y install \
         gcc gcc-c++ make ninja-build \
         nasm patchelf \
-        git git-lfs rsync sed which \
+        git git-lfs openssh-clients rsync sed which \
         curl wget zip unzip tar \
         libtool autoconf automake pkgconf-pkg-config perl \
         xerces-c-devel proj-devel \
