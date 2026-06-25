@@ -18,6 +18,7 @@ ssh_key="${SSH_KEY:-/mnt/c/Users/sbret/.ssh/VibeUEKey}"
 volume="${CARLA_WS_VOLUME:-carla-ws}"
 image="${CARLA_IMAGE:-carla-base:alma8}"
 name="${CARLA_CONTAINER:-carla-build}"
+cpus="${CARLA_BUILD_CPUS:-}"   # number of logical CPUs the build may use (default: all)
 
 usage() {
     cat <<EOF
@@ -30,6 +31,11 @@ Options:
   --volume <name>      Workspace podman volume (default: $volume, or \$CARLA_WS_VOLUME).
   --image <ref>        Image to run (default: $image, or \$CARLA_IMAGE).
   --name <name>        Container name (default: $name, or \$CARLA_CONTAINER).
+  --cpus <N>           Limit the build to N logical CPUs (cpuset 0..N-1), leaving the rest free
+                       for other work (default: all, or \$CARLA_BUILD_CPUS). nproc inside the
+                       container reflects this, so -j\$(nproc)/Ninja/UBT all self-cap.
+                       NOTE: applies only when CREATING the container; for an already-running one
+                       use: podman update --cpuset-cpus=0-<N-1> $name
   -h, --help           Show this help and exit.
 
 The key is mounted read-only and installed to /root/.ssh/id_ed25519 (0600) inside the container;
@@ -47,6 +53,8 @@ while [ $# -gt 0 ]; do
         --image=*)   image="${1#*=}" ;;
         --name)      name="$2"; shift ;;
         --name=*)    name="${1#*=}" ;;
+        --cpus)      cpus="$2"; shift ;;
+        --cpus=*)    cpus="${1#*=}" ;;
         -h|--help)   usage; exit 0 ;;
         *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -61,9 +69,19 @@ fi
 
 podman volume inspect "$volume" >/dev/null 2>&1 || podman volume create "$volume"
 
+# Optional CPU cap: pin to logical CPUs 0..N-1 so the build leaves the rest free. nproc honors
+# the cpuset, so -j$(nproc)/Ninja/UBT all self-limit. (P/E cores are not distinguishable inside
+# WSL2, so this caps the COUNT, not which physical cores are used.)
+cpuset_arg=()
+if [ -n "$cpus" ]; then
+    if ! [ "$cpus" -ge 1 ] 2>/dev/null; then echo "ERROR: --cpus must be a positive integer" >&2; exit 2; fi
+    cpuset_arg=(--cpuset-cpus="0-$((cpus - 1))")
+fi
+
 # Reuse the named container across runs if it already exists.
 if podman container exists "$name"; then
     echo "Container '$name' exists; starting/attaching. (Remove with: podman rm -f $name)"
+    [ -n "$cpus" ] && echo "NOTE: --cpus only applies to a NEW container; for this one run: podman update --cpuset-cpus=0-$((cpus - 1)) $name"
     exec podman start -ai "$name"
 fi
 
@@ -71,6 +89,7 @@ fi
 # host-mounted files (especially from a Windows filesystem) come in world-readable and ssh refuses
 # keys with loose permissions. known_hosts is seeded so the clones don't prompt.
 exec podman run -it --name "$name" \
+    "${cpuset_arg[@]}" \
     -v "$volume:/workspaces" \
     -v "$ssh_key:/tmp/id_key:ro" \
     "$image" bash -lc '
