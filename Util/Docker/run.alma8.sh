@@ -88,7 +88,13 @@ fi
 # The key is mounted at /tmp/id_key:ro, then installed to ~/.ssh/id_ed25519 with 0600 because
 # host-mounted files (especially from a Windows filesystem) come in world-readable and ssh refuses
 # keys with loose permissions. known_hosts is seeded so the clones don't prompt.
+#
+# --security-opt label=disable: on SELinux-enforcing hosts (RHEL/Alma) the container is otherwise
+# denied access to bind-mounted host files ("install: cannot stat '/tmp/id_key': permission denied").
+# Disabling SELinux labelling for this build container avoids that without relabelling your real SSH
+# key (which a ':Z' mount option would do). It's a no-op on non-SELinux hosts.
 exec podman run -it --name "$name" \
+    --security-opt label=disable \
     "${cpuset_arg[@]}" \
     -v "$volume:/workspaces" \
     -v "$ssh_key:/tmp/id_key:ro" \
