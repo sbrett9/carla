@@ -369,8 +369,12 @@ def main() -> int:
                     if (loc.x < mnx - OOB_PAD or loc.x > mxx + OOB_PAD or
                             loc.y < mny - OOB_PAD or loc.y > mxy + OOB_PAD or loc.z < floor_z):
                         _despawn(vid, a); continue
-                    # Never let anything reach the red (map) edge: despawn while still in the margin.
-                    if _red_clearance(loc.x, loc.y, staging) <= RED_CLEAR:
+                    # Never let an entered vehicle reach the red (map) edge: despawn it while still in
+                    # the margin as it heads back out. This guards the EXIT only -- a freshly spawned
+                    # vehicle that has not yet entered the interior is exempt, because on a tightly
+                    # clipped map (roads cut exactly at the sandbox boundary) every edge spawn point sits
+                    # right on the red edge, and despawning on entry would kill every vehicle instantly.
+                    if rec["entered"] and _red_clearance(loc.x, loc.y, staging) <= RED_CLEAR:
                         _despawn(vid, a); continue
                     # Stuck (clipped dead-end stub / sunk spawn): never moves -> remove after 6 s. It is
                     # fully transparent in the margin, so this is unseen; a fresh one enters elsewhere.
