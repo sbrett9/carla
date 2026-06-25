@@ -25,6 +25,10 @@ public class CarlaUnrealTarget : TargetRules
         // Don't let compiler warnings fail the build. Linux/clang is stricter than MSVC,
         // so a build clean on Windows can otherwise hit warning-as-error failures on Linux.
         bWarningsAsErrors = false;
+        // UE escalates shadowed-variable warnings to errors by default, independent of
+        // bWarningsAsErrors. clang's -Wshadow is far stricter than MSVC's, so CARLA code that builds
+        // clean on Windows trips it on Linux (e.g. MeshToLandscape.cpp). Downgrade to a warning.
+        ShadowVariableWarningLevel = WarningLevel.Warning;
 
         ExtraModuleNames.Add("CarlaUnreal");
 
