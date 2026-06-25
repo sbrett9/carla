@@ -23,6 +23,14 @@ public class CarlaUnreal : ModuleRules
 		PrivatePCHHeaderFile = "CarlaUnreal.h";
         bEnableExceptions = true;
         bUseRTTI = true;
+        // Downgrade clang's -Wshadow (escalated to error by UE) to a warning for this first-party
+        // module so it builds on Linux/clang. Per-module, since the editor target can't change this
+        // shared build-environment property.
+#if UE_5_7_OR_LATER
+        CppCompileWarningSettings.ShadowVariableWarningLevel = WarningLevel.Warning;
+#else
+        ShadowVariableWarningLevel = WarningLevel.Warning;
+#endif
 
         PublicIncludePaths.Add(ModuleDirectory);
         PublicIncludePaths.Add(System.IO.Path.Combine(ModuleDirectory, "../../../../LibCarla/source"));

@@ -38,7 +38,16 @@ public class Carla :
     PrivatePCHHeaderFile = "Carla.h";
     bEnableExceptions = true;
     bUseRTTI = true;
-    
+    // clang's -Wshadow is stricter than MSVC's and UE escalates it to an error; downgrade it to a
+    // warning for this first-party module so CARLA code that builds on Windows also builds on
+    // Linux/clang. Set per-module (not on the target): it is a shared build-environment property and
+    // setting it on the editor target is rejected by UBT.
+#if UE_5_7_OR_LATER
+    CppCompileWarningSettings.ShadowVariableWarningLevel = WarningLevel.Warning;
+#else
+    ShadowVariableWarningLevel = WarningLevel.Warning;
+#endif
+
     void AddDynamicLibrary(string library)
     {
       PublicAdditionalLibraries.Add(library);

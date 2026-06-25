@@ -25,7 +25,15 @@ public class CarlaTools :
     PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
     bEnableExceptions = true;
     bUseRTTI = true;
-    
+    // Downgrade clang's -Wshadow (escalated to error by UE) to a warning for this first-party module
+    // so it builds on Linux/clang. Per-module, since the editor target can't change this shared
+    // build-environment property.
+#if UE_5_7_OR_LATER
+    CppCompileWarningSettings.ShadowVariableWarningLevel = WarningLevel.Warning;
+#else
+    ShadowVariableWarningLevel = WarningLevel.Warning;
+#endif
+
     PublicIncludePaths.Add(ModuleDirectory);
 
     foreach (var Definition in File.ReadAllText(Path.Combine(PluginDirectory, "Definitions.def")).Split(';'))
