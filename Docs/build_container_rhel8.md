@@ -55,6 +55,26 @@ container (host-mounted keys come in world-readable and `ssh` refuses those), an
 Util/Docker/run.alma8.sh --ssh-key /mnt/c/Users/sbret/.ssh/VibeUEKey
 ```
 
+### Already have the source checked out on the host?
+
+If UnrealEngine and carla are already on the host, don't re-clone — bind-mount them at the **same
+absolute path** with `--carla-dir` / `--engine-dir`. Same-path mounts mean a host-built engine's
+binaries resolve inside the container, and the CARLA artifacts built here get the host paths baked in,
+so you can run the result **natively on the host afterward with no extraction**:
+
+```sh
+Util/Docker/run.alma8.sh \
+  --carla-dir  /home/bsulprizio/Projects/Carla_UE/carla \
+  --engine-dir /home/bsulprizio/Projects/Carla_UE/UnrealEngine \
+  --ssh-key    /home/bsulprizio/.ssh/id_ed25519
+```
+This skips the volume, sets `CARLA_UNREAL_ENGINE_PATH` to the engine dir, and (on SELinux hosts) runs
+with `label=disable` so the mounts are readable. The SSH key is optional — omit it if the CARLA content
+is already present in the checkout. Then inside the container run steps 4 below (skip step 3, the
+engine is already built).
+
+### Volume-based (clone inside the container)
+
 Re-running attaches to the same `carla-build` container (so UE/CARLA work persists). The private key is
 never copied into the image — only mounted at runtime. A single account-wide GitHub SSH key covers all
 three repos; a per-repo *deploy* key would not authenticate the UE fork.
