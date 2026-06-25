@@ -354,6 +354,24 @@ if (-not $SkipUnreal) {
         }
     }
 
+    # Carla.Build.cs reads generated .def files (Definitions/Includes/Libraries/Options) from the
+    # plugin dir. CarlaSetup's CMake configure generates them under Build\Unreal and the
+    # carla-unreal-configure target links them into the plugin dir. We invoke Build.bat directly (not
+    # the cmake carla-unreal-editor target), so run that configure step first -- otherwise UBT aborts
+    # with "Could not find ... Definitions.def" on a checkout where the links don't exist yet. The
+    # target is idempotent (CMake skips it when the links are already present).
+    $carlaBuildDir = Join-Path $CarlaRoot 'Build'
+    if (Test-Path $carlaBuildDir) {
+        Write-Info "[unreal] ensuring Carla plugin .def files (carla-unreal-configure)..."
+        $prevEAPcfg = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try { cmake --build $carlaBuildDir --target carla-unreal-configure 2>&1 | Tee-Object -FilePath $LOG_FILE -Append }
+        finally { $ErrorActionPreference = $prevEAPcfg }
+        if ($LASTEXITCODE -ne 0) { Write-Warning "carla-unreal-configure failed (exit $LASTEXITCODE); the editor build may fail on missing .def files." }
+    } else {
+        Write-Warning "$carlaBuildDir not found - run CarlaSetup.ps1 first; the editor build will fail on missing .def files."
+    }
+
     # Relax EAP around the native UE build: UBT/Build.bat can emit benign stderr that EAP='Stop'
     # would promote to a terminating NativeCommandError (the 2>&1 surfaces it into the pipeline),
     # which would abort the script before the exit-code check below. The build's real success or

@@ -115,6 +115,18 @@ if [ "$skip_unreal" -eq 0 ]; then
             fi
         fi
 
+        # Carla.Build.cs reads generated .def files (Definitions/Includes/Libraries/Options) from the
+        # plugin dir. CarlaSetup's CMake configure generates them under Build/Unreal and the
+        # carla-unreal-configure target symlinks them into the plugin dir. We invoke Build.sh directly
+        # (not the cmake carla-unreal-editor target), so run that configure step first -- otherwise UBT
+        # aborts with "Could not find ... Definitions.def" before any compilation.
+        if [ -d "$carla_root/Build" ]; then
+            echo "[unreal] ensuring Carla plugin .def files (carla-unreal-configure)..." | tee -a "$log_file"
+            cmake --build "$carla_root/Build" --target carla-unreal-configure 2>&1 | tee -a "$log_file"
+        else
+            echo "WARNING: $carla_root/Build not found -- run CarlaSetup.sh first; the editor build will fail on missing .def files." | tee -a "$log_file"
+        fi
+
         "$build_sh" \
             CarlaUnrealEditor Linux Development \
             "$carla_uproject" \
