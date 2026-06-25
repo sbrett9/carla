@@ -127,6 +127,27 @@ if [ "$skip_unreal" -eq 0 ]; then
             echo "WARNING: $carla_root/Build not found -- run CarlaSetup.sh first; the editor build will fail on missing .def files." | tee -a "$log_file"
         fi
 
+        # When ROS2 is enabled, the Carla plugin links libcarla-ros2-native.so (+ Fast-DDS runtime
+        # .so's) from its Binaries/Linux dir. The carla-ros2-native cmake target builds them into
+        # Build/Ros2Native/install/lib, but it is a standalone target (not a dependency of anything)
+        # and its POST_BUILD copy doesn't run on this direct-Build.sh path -- so build it and stage
+        # the .so's into the plugin Binaries dir before the editor links, else UBT fails with
+        # "ld.lld: unable to find library -lcarla-ros2-native".
+        if [ -d "$carla_root/Build/Ros2Native" ]; then
+            echo "[unreal] building + staging ROS2 native libs (carla-ros2-native)..." | tee -a "$log_file"
+            cmake --build "$carla_root/Build" --target carla-ros2-native 2>&1 | tee -a "$log_file" \
+                || echo "WARNING: carla-ros2-native build returned nonzero; continuing to stage any existing libs." | tee -a "$log_file"
+            ros2_lib_dir="$carla_root/Build/Ros2Native/install/lib"
+            plugin_bin="$carla_root/Unreal/CarlaUnreal/Plugins/Carla/Binaries/Linux"
+            if [ -d "$ros2_lib_dir" ] && ls "$ros2_lib_dir"/*.so* >/dev/null 2>&1; then
+                mkdir -p "$plugin_bin"
+                cp -a "$ros2_lib_dir"/*.so* "$plugin_bin"/
+                echo "[unreal] staged ROS2 native libs into $plugin_bin" | tee -a "$log_file"
+            else
+                echo "WARNING: no ROS2 native libs under $ros2_lib_dir; the editor link may fail on -lcarla-ros2-native." | tee -a "$log_file"
+            fi
+        fi
+
         "$build_sh" \
             CarlaUnrealEditor Linux Development \
             "$carla_uproject" \
