@@ -39,7 +39,10 @@ public class CarlaTools :
     {
       var Trimmed = Path.Trim();
       if (Trimmed.Length != 0)
-        PublicIncludePaths.Add(Trimmed.Trim());
+        // Third-party include dirs added as SYSTEM includes so the compiler suppresses warnings in
+        // their headers (Linux/clang otherwise -Werrors on e.g. Boost.Multiprecision's deprecated
+        // `operator"" _suffix` spelling). See the matching note in Carla.Build.cs.
+        PublicSystemIncludePaths.Add(Trimmed.Trim());
     }
 
     foreach (var Path in File.ReadAllText(Path.Combine(PluginDirectory, "Libraries.def")).Split(';'))
