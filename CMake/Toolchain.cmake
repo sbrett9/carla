@@ -92,12 +92,29 @@ set (
 )
 
 # UE 5.7.4: ThirdParty/Unix/LibCxx no longer exists; LibCxx is now bundled inside the clang
-# sysroot. Headers live under usr/include (libc++ at usr/include/c++/v1); the static libs are
-# located separately below (their dir varies by bundle).
+# sysroot. The C headers are under usr/include; the libc++ headers (cmath, etc.) are in a
+# c++/v1 dir whose location VARIES by bundle -- the clang-20/rockylinux8 bundle puts them under
+# include/c++/v1 (a sibling of usr/), older bundles under usr/include/c++/v1. The static libs are
+# located separately below (also bundle-dependent).
 set (
 	UE_INCLUDE
 	${UE_SYSROOT}/usr/include CACHE PATH ""
 )
+
+# Detect the libc++ header dir (must be searched before the C headers; see the note on
+# CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES below). Probe for a known libc++ header (cmath).
+set (UE_CXX_INCLUDE "")
+foreach (_ue_cxx_candidate
+	${UE_SYSROOT}/include/c++/v1
+	${UE_SYSROOT}/usr/include/c++/v1)
+	if (EXISTS ${_ue_cxx_candidate}/cmath)
+		set (UE_CXX_INCLUDE ${_ue_cxx_candidate})
+		break ()
+	endif ()
+endforeach ()
+if (NOT UE_CXX_INCLUDE)
+	message (FATAL_ERROR "Could not find libc++ headers (cmath) under the Unreal clang toolchain at \"${UE_SYSROOT}\" (checked include/c++/v1, usr/include/c++/v1).")
+endif ()
 
 # Locate the static libc++ / libc++abi. The directory varies between bundled toolchains:
 # older clang bundles put them under usr/lib, the clang-20/rockylinux8 bundle uses usr/lib64,
@@ -265,7 +282,7 @@ set (
 	# the libc++ wrapper, and clang aborts with "<cstdlib> tried including <stdlib.h> but didn't
 	# find libc++'s <stdlib.h> header" (and a cascade of the same for every C++ std header).
 	CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES
-	${UE_INCLUDE}/c++/v1 ${UE_INCLUDE}
+	${UE_CXX_INCLUDE} ${UE_INCLUDE}
 )
 
 endif ()
