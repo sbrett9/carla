@@ -320,6 +320,17 @@ else
     uplugin="$cesium_dir/CesiumForUnreal.uplugin"
     [ -f "$uplugin" ] && sed -i 's/"EngineVersion": *"5\.5\.0"/"EngineVersion": "5.7.0"/' "$uplugin"
 
+    # Build cesium-native WITH RTTI. cesium's extern/CMakeLists.txt forces -fno-rtti on Linux, but
+    # the CARLA editor compiles with RTTI enabled (CarlaUnreal/Carla/CarlaTools set bUseRTTI=true for
+    # rpclib/boost), which propagates to CesiumRuntime. CesiumRuntime then emits RTTI typeinfo for its
+    # subclass of cesium-native's TileOcclusionRendererProxyPool and needs the base class typeinfo --
+    # which a -fno-rtti cesium-native never emits, so the editor link fails with
+    # "undefined symbol: typeinfo for Cesium3DTilesSelection::TileOcclusionRendererProxyPool".
+    # Strip -fno-rtti so cesium-native emits typeinfo, matching the RTTI-on editor. (Re-applied each
+    # run because the pinned checkout above resets extern/CMakeLists.txt; idempotent.)
+    cesium_extern_cmakelists="$cesium_extern/CMakeLists.txt"
+    [ -f "$cesium_extern_cmakelists" ] && sed -i 's/ -fno-rtti//g' "$cesium_extern_cmakelists"
+
     # -- Retire the precompiled Marketplace Cesium baked into the engine --
     # UE refuses to load two plugins named "CesiumForUnreal". Move the engine's Marketplace
     # copy OUT of the plugin search path (reversible) so our source plugin is the only one
