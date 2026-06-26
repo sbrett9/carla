@@ -4,6 +4,7 @@
     <ProjectReference Include="..\CarlaNet.Types\CarlaNet.Types.csproj" />
     <ProjectReference Include="..\CarlaNet.Transport\CarlaNet.Transport.csproj" />
     <ProjectReference Include="..\CarlaNet.Sensors\CarlaNet.Sensors.csproj" />
+    <ProjectReference Include="..\CarlaNet.Recording\CarlaNet.Recording.csproj" />
     <ProjectReference Include="..\CarlaNet.Map\CarlaNet.Map.csproj" />
     <ProjectReference Include="..\CarlaNet.TrafficManager\CarlaNet.TrafficManager.csproj" />
   </ItemGroup>

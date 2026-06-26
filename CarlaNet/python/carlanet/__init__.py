@@ -92,6 +92,15 @@ try:
 except FileNotFoundError:
     _CARLANET_NAV_AVAILABLE = False
 
+# Native recording (CarlaNet.Recording): encodes streamed camera frames to PNG + CoT-XML entirely in
+# .NET. Also provides VehicleTelemetryService, the single source of truth that get_vehicle_telemetry
+# delegates to. Optional — a missing assembly falls back to the in-Python telemetry path.
+try:
+    _ref("CarlaNet.Recording")
+    _CARLANET_RECORDING_AVAILABLE = True
+except FileNotFoundError:
+    _CARLANET_RECORDING_AVAILABLE = False
+
 # ── C# type imports ───────────────────────────────────────────────────────────
 from CarlaNet.Transport import CarlaClient as _CarlaClient
 from CarlaNet.Types.Geom import (Transform as _CSTransform,
@@ -1509,6 +1518,9 @@ class World:
         Each dict: id, type_id, base_type, special_type, color, role_name, lat, lon, hae, hae_dtm,
         speed_mps, course_deg, vx, vy, vz, length_m, width_m, height_m. Heights are ELLIPSOIDAL
         WGS84 (HAE)."""
+        if _CARLANET_RECORDING_AVAILABLE:
+            # Single source of truth: the C# VehicleTelemetryService (also used by the native recorder).
+            return self._vehicle_telemetry_native(origin)
         import math as _m
         from CarlaNet.Types.Geom import Geodesy, GeoLocation
         if origin is None:
@@ -1560,6 +1572,57 @@ class World:
                 "length_m": 2.0 * ext.x, "width_m": 2.0 * ext.y, "height_m": 2.0 * ext.z,
             })
         return out
+
+    def _vehicle_telemetry_native(self, origin=None):
+        """get_vehicle_telemetry via the C# VehicleTelemetryService — the single source of truth shared
+        with the native recorder. Returns the same dict shape as the in-Python path."""
+        from CarlaNet.Types.Geom import GeoLocation
+        from CarlaNet.Recording import VehicleTelemetryService
+        svc = getattr(self, "_telemetry_service", None)
+        if svc is None:
+            svc = VehicleTelemetryService(self._client)
+            self._telemetry_service = svc
+        if origin is None:
+            origin = self.get_cesium_origin()
+        cs_origin = GeoLocation(float(origin[0]), float(origin[1]), float(origin[2]))
+        out = []
+        for r in svc.Compute(cs_origin):
+            out.append({
+                "id": int(r.Id), "type_id": r.TypeId,
+                "base_type": r.BaseType, "special_type": r.SpecialType,
+                "color": r.Color, "role_name": r.RoleName,
+                "lat": float(r.Lat), "lon": float(r.Lon),
+                "hae": float(r.Hae), "hae_dtm": float(r.HaeDtm),
+                "speed_mps": float(r.SpeedMps), "course_deg": float(r.CourseDeg),
+                "vx": float(r.Vx), "vy": float(r.Vy), "vz": float(r.Vz),
+                "length_m": float(r.LengthM), "width_m": float(r.WidthM), "height_m": float(r.HeightM),
+            })
+        return out
+
+    def start_recording(self, camera, record_dir, hz=2.0, affiliation="n", stale=3.0):
+        """Start native (C#) recording of `camera`'s imagery to `record_dir`: every 1/hz seconds a
+        lossless PNG of the clean frame + a paired CoT-XML telemetry sidecar, encoded on the .NET thread
+        pool (no Python/GIL in the hot path). Returns the FrameRecorder, or None if unavailable."""
+        if not _CARLANET_RECORDING_AVAILABLE:
+            print("native recording unavailable: CarlaNet.Recording assembly not loaded "
+                  "(rebuild the wheel/DLLs).", file=sys.stderr)
+            return None
+        from CarlaNet.Recording import FrameRecorder
+        self.stop_recording()
+        token = camera._actor.StreamToken
+        self._recorder = FrameRecorder(self._client, token, str(record_dir), float(hz),
+                                       str(affiliation), float(stale))
+        return self._recorder
+
+    def stop_recording(self):
+        """Stop native recording (flushes pending captures)."""
+        r = getattr(self, "_recorder", None)
+        if r is not None:
+            try:
+                r.Dispose()
+            except Exception:
+                pass
+            self._recorder = None
 
     @staticmethod
     def _nearest_dtm(table, lat, lon):

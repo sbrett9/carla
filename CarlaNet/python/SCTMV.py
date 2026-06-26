@@ -48,6 +48,7 @@ Controls (hold RIGHT MOUSE to fly, like the Unreal editor):
     M             toggle the MARGIN/interior-boundary overlay (blue rectangle)
     T             toggle TRAFFIC on/off (staging fade traffic)
     Y             toggle TELEMETRY (CoT over UDP) on/off
+    F             toggle RECORDING (periodic PNG of the clean frame + matching CoT-XML sidecar)
     Space         reset to the start pose
     Esc           quit
 
@@ -199,6 +200,15 @@ def parse_args():
     tel.add_argument("--stale", type=float, default=3.0, help="CoT stale seconds")
     tel.add_argument("--ttl", type=int, default=1, help="multicast TTL")
     tel.add_argument("--print", action="store_true", dest="echo", help="also print each CoT event")
+
+    rec = ap.add_argument_group("recording (F hotkey)")
+    rec.add_argument("--record-dir", default=os.path.join(_REPO, "Build", "SCTMV_recordings"),
+                     help="folder for recordings (default Build/SCTMV_recordings). F toggles recording: "
+                          "each capture writes a lossless PNG of the clean streamed imagery (no HUD) plus "
+                          "a matching .xml of the vehicle CoT telemetry at that instant.")
+    rec.add_argument("--record-hz", type=float, default=2.0,
+                     help="capture rate in Hz (captures per second; may be fractional, e.g. 0.5). "
+                          "Default 2.0.")
 
     return ap.parse_args()
 
@@ -775,9 +785,11 @@ def _iso(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt.microsecond // 1000:03d}Z"
 
 
-def to_cot(rec, affiliation="n", stale_seconds=3.0, source="truth", uid_prefix="CARLA-TRUTH") -> str:
-    """Render one get_vehicle_telemetry() dict as a CoT <event> XML string."""
-    now = datetime.now(timezone.utc)
+def to_cot(rec, affiliation="n", stale_seconds=3.0, source="truth", uid_prefix="CARLA-TRUTH",
+           when=None) -> str:
+    """Render one get_vehicle_telemetry() dict as a CoT <event> XML string. `when` (a UTC datetime)
+    pins the event time to a specific instant — used so a recorded sidecar matches its PNG exactly."""
+    now = when or datetime.now(timezone.utc)
     stale = now + timedelta(seconds=stale_seconds)
     ev = ET.Element("event", {
         "version": "2.0", "uid": f"{uid_prefix}-{rec['id']}",
@@ -877,6 +889,174 @@ class TelemetryController:
     def close(self):
         if self.emit is not None:
             self.emit.close()
+
+
+class Recorder:
+    """Periodic capture-to-disk: while recording, every 1/hz seconds it writes a lossless PNG of the
+    clean streamed frame (no HUD) plus a matching .xml of every vehicle's CoT telemetry at that instant
+    (same UID/format as the live telemetry, time-stamped to the capture). PNG + XML share one filename
+    stem so each still is paired with its ground-truth labels. Disk work runs on a background thread so
+    the render loop never blocks on it."""
+
+    def __init__(self, world, origin, args):
+        self.world = world
+        self.origin = origin           # georef origin for telemetry; None -> XML has no vehicle truth
+        self.args = args
+        self.dir = args.record_dir
+        self.period = 1.0 / max(0.01, args.record_hz)
+        self.recording = False
+        self.want_enabled = False      # flipped by the hotkey on the main thread
+        self.last = 0.0
+        self.saved = 0
+        self.dropped = 0
+        self.q = None
+        self.thread = None
+
+    def apply_want(self):
+        if self.want_enabled and not self.recording:
+            self.start()
+        elif not self.want_enabled and self.recording:
+            self.stop()
+
+    def start(self):
+        try:
+            os.makedirs(self.dir, exist_ok=True)
+        except Exception as e:
+            print(f"recording: cannot create {self.dir}: {e!r}", file=sys.stderr)
+            self.want_enabled = False
+            return
+        self.q = queue.Queue(maxsize=16)
+        self.thread = threading.Thread(target=self._writer, daemon=True)
+        self.thread.start()
+        self.recording = True
+        self.last = 0.0
+        self.saved = self.dropped = 0
+        if self.origin is None:
+            print(f"recording -> {self.dir} @ {self.args.record_hz} Hz "
+                  "(PNG only; no georef origin, so XML will carry no vehicle truth)")
+        else:
+            print(f"recording -> {self.dir} @ {self.args.record_hz} Hz (PNG + CoT XML)")
+
+    def stop(self):
+        self.recording = False
+        if self.q is not None:
+            self.q.put(None)
+        if self.thread is not None:
+            self.thread.join(timeout=5.0)
+        self.thread = None
+        print(f"recording stopped: {self.saved} capture(s) saved"
+              + (f", {self.dropped} dropped" if self.dropped else ""))
+
+    def trigger(self, now, surface):
+        """Called every main-loop iteration. Captures at the configured cadence: grabs the current
+        frame + a telemetry snapshot together (so still and truth correspond), and hands the disk work
+        to the writer thread."""
+        if not self.recording or surface is None or (now - self.last) < self.period:
+            return
+        self.last = now
+        cap = datetime.now(timezone.utc)
+        recs = []
+        if self.origin is not None:
+            try:
+                recs = list(self.world.get_vehicle_telemetry(self.origin))
+            except Exception as e:
+                print(f"recording: telemetry fetch failed: {e!r}", file=sys.stderr)
+        try:
+            self.q.put_nowait((cap, surface, recs))
+        except queue.Full:
+            self.dropped += 1     # writer can't keep up; skip this capture rather than stall the sim
+
+    def _writer(self):
+        while True:
+            item = self.q.get()
+            if item is None:
+                break
+            cap, surface, recs = item
+            stem = cap.astimezone().strftime("%Y.%m.%d_%H.%M.%S.") + f"{cap.microsecond // 1000:03d}"
+            png = os.path.join(self.dir, f"SCTMV_{stem}.png")
+            xml = os.path.join(self.dir, f"SCTMV_{stem}.xml")
+            ok = True
+            try:
+                pygame.image.save(surface, png)     # lossless PNG of the clean sensor frame
+            except Exception as e:
+                ok = False
+                print(f"recording: PNG save failed ({stem}): {e!r}", file=sys.stderr)
+            try:
+                self._write_xml(xml, cap, recs)
+            except Exception as e:
+                print(f"recording: XML write failed ({stem}): {e!r}", file=sys.stderr)
+            if ok:
+                self.saved += 1
+
+    def _write_xml(self, path, cap, recs):
+        """One sidecar holding every vehicle's CoT <event> at the capture instant, under an <events>
+        root carrying the capture time and count."""
+        root = ET.Element("events", {"captured": _iso(cap), "count": str(len(recs)), "source": "truth"})
+        for r in recs:
+            root.append(ET.fromstring(
+                to_cot(r, affiliation=self.args.affiliation, stale_seconds=self.args.stale, when=cap)))
+        tree = ET.ElementTree(root)
+        ET.indent(tree, space="  ")          # human-readable (indented) XML
+        tree.write(path, encoding="utf-8", xml_declaration=True)
+
+
+class NativeRecorder:
+    """Drives the in-engine (C#) FrameRecorder: camera frames are tapped, encoded to PNG, and written
+    with their CoT-XML telemetry sidecar entirely on the .NET thread pool — no frame ever crosses to
+    Python and the GIL is never held, so the viewer stays smooth while recording. SCTMV only toggles it.
+    Exposes the same interface as the Python Recorder (want_enabled / apply_want / trigger / saved /
+    recording / stop) so the loop, hotkey, and HUD are backend-agnostic."""
+
+    def __init__(self, world, camera, args):
+        self.world = world
+        self.camera = camera
+        self.args = args
+        self.available = bool(getattr(carla, "_CARLANET_RECORDING_AVAILABLE", False))
+        self.recording = False
+        self.want_enabled = False
+        self._handle = None
+
+    def apply_want(self):
+        if self.want_enabled and not self.recording:
+            if not self.available:
+                print("recording unavailable: CarlaNet.Recording not built (rebuild the DLLs).",
+                      file=sys.stderr)
+                self.want_enabled = False
+                return
+            self._handle = self.world.start_recording(
+                self.camera, self.args.record_dir, self.args.record_hz,
+                self.args.affiliation, self.args.stale)
+            if self._handle is None:
+                self.want_enabled = False
+                return
+            self.recording = True
+            note = "" if self._handle.HaveTelemetryOrigin else " (PNG only; no georef origin for XML)"
+            print(f"recording (native) -> {self.args.record_dir} @ {self.args.record_hz} Hz{note}")
+        elif not self.want_enabled and self.recording:
+            n = self.saved
+            self.world.stop_recording()
+            self.recording = False
+            self._handle = None
+            print(f"recording stopped: {n} capture(s) saved")
+
+    def trigger(self, now, surface):
+        pass    # the native recorder taps the camera stream itself; nothing to feed from Python
+
+    @property
+    def saved(self):
+        try:
+            return int(self._handle.Saved) if self._handle is not None else 0
+        except Exception:
+            return 0
+
+    def stop(self):
+        if self.recording:
+            try:
+                self.world.stop_recording()
+            except Exception:
+                pass
+            self.recording = False
+            self._handle = None
 
 
 # ───────────────────────────── EO observer rendering helpers ─────────────────────────────
@@ -1073,6 +1253,7 @@ def main() -> int:
     telemetry = TelemetryController(world, cot_origin, args)
     if not telemetry.available:
         print(f"telemetry unavailable: {telemetry.reason}", file=sys.stderr)
+    # recorder is created after the EO camera is spawned (the native backend needs the camera handle).
 
     # Camera pose and layer toggle state.
     pose = {"x": args.x, "y": args.y, "z": args.z / FT_PER_M, "pitch": -90.0, "yaw": 0.0}
@@ -1138,6 +1319,16 @@ def main() -> int:
     spectator.set_transform(make_tf(pose))
     print(f"spawned EO camera id={camera.id}, depth camera id={depth_cam.id}")
 
+    # Recorder: native (C#) when the CarlaNet.Recording assembly is present (frames encoded in .NET,
+    # off the GIL); otherwise the in-Python fallback so recording still works before a rebuild.
+    if bool(getattr(carla, "_CARLANET_RECORDING_AVAILABLE", False)):
+        recorder = NativeRecorder(world, camera, args)
+        print(f"recording backend: native (C#) -> {args.record_dir}")
+    else:
+        recorder = Recorder(world, cot_origin, args)
+        print(f"recording backend: in-Python fallback (build CarlaNet.Recording for native) "
+              f"-> {args.record_dir}")
+
     def process_depth(img):
         """Decode a depth frame's capture pose into the picking record (raw bytes + dims + pose)."""
         if hasattr(img, "transform") and img.transform is not None:
@@ -1198,6 +1389,10 @@ def main() -> int:
                 telemetry.apply_want(); telemetry.update(now)
             except Exception as e:
                 print(f"telemetry worker: {e!r}", file=sys.stderr)
+            try:
+                recorder.apply_want(); recorder.trigger(now, state["surface"])
+            except Exception as e:
+                print(f"recorder worker: {e!r}", file=sys.stderr)
             time.sleep(0.05)
 
     mover_thread = worker_thread = None
@@ -1328,6 +1523,8 @@ def main() -> int:
                     traffic.want_enabled = not traffic.want_enabled    # applied off-thread (async) / inline (sync)
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_y:
                     telemetry.want_enabled = not telemetry.want_enabled
+                elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_f:
+                    recorder.want_enabled = not recorder.want_enabled    # PNG + CoT XML capture
                 elif (ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1
                       and (pygame.key.get_mods() & pygame.KMOD_CTRL)):
                     _do_pick(ev.pos[0], ev.pos[1])
@@ -1394,6 +1591,8 @@ def main() -> int:
                 except Exception as e: print(f"traffic.update failed: {e!r}", file=sys.stderr)
                 try: telemetry.apply_want(); telemetry.update(now)
                 except Exception as e: print(f"telemetry.update failed: {e!r}", file=sys.stderr)
+                try: recorder.apply_want(); recorder.trigger(now, state["surface"])
+                except Exception as e: print(f"recorder failed: {e!r}", file=sys.stderr)
             else:
                 if moved:
                     move["tf"] = make_tf(pose)   # background mover applies it
@@ -1419,6 +1618,7 @@ def main() -> int:
                         else ("OFF" if traffic.available else "n/a"))
             tel_str = ("ON" if telemetry.enabled
                        else ("OFF" if telemetry.available else "n/a"))
+            rec_str = (f"REC {recorder.saved}@{args.record_hz:g}Hz" if recorder.recording else "off")
             hud = [
                 f"elev {elev_ft:6.0f} ft   AGL {agl_str} ft   x {pose['x']:7.1f}  N {-pose['y']:7.1f}   "
                 f"yaw {pose['yaw']:6.1f} pitch {pose['pitch']:6.1f}   [{'SYNC' if sync else 'ASYNC'}]",
@@ -1426,10 +1626,10 @@ def main() -> int:
                 f"ground(G) {'ON' if ground_visible else 'OFF'}   gColl(V) {'ON' if ground_collision else 'OFF'}   "
                 f"road(R) {'ON' if road_rendered else 'OFF'}   perim(B) {'ON' if show_perimeter else 'OFF'}   "
                 f"margin(M) {'ON' if show_margin else 'OFF'}",
-                f"traffic(T) {traf_str}   telemetry(Y) {tel_str}   fps {clock.get_fps():4.0f}   "
-                f"frames {state['frames']}",
+                f"traffic(T) {traf_str}   telemetry(Y) {tel_str}   record(F) {rec_str}   "
+                f"fps {clock.get_fps():4.0f}   frames {state['frames']}",
                 "RMB look | Ctrl+LMB measure | WASD/EQ fly | wheel speed | Shift fast | C/G/V/R/B/M layers | "
-                "T traffic | Y telemetry | Space reset | Esc quit",
+                "T traffic | Y telemetry | F record | Space reset | Esc quit",
             ]
             bar_h = 8 + len(hud) * 18 + 2
             bar = pygame.Surface((args.width, bar_h)); bar.set_alpha(180); bar.fill((0, 0, 0))
@@ -1459,6 +1659,9 @@ def main() -> int:
         if worker_thread is not None:
             worker_thread.join(timeout=2.0)
         try: traffic.disable()        # despawn any remaining vehicles (now single-threaded)
+        except Exception: pass
+        try:
+            if recorder.recording: recorder.stop()
         except Exception: pass
         try: telemetry.close()
         except Exception: pass
