@@ -137,14 +137,23 @@ if [ "$skip_unreal" -eq 0 ]; then
             echo "[unreal] building + staging ROS2 native libs (carla-ros2-native)..." | tee -a "$log_file"
             cmake --build "$carla_root/Build" --target carla-ros2-native 2>&1 | tee -a "$log_file" \
                 || echo "WARNING: carla-ros2-native build returned nonzero; continuing to stage any existing libs." | tee -a "$log_file"
-            ros2_lib_dir="$carla_root/Build/Ros2Native/install/lib"
+            # Stage from both install/lib and install/lib64: Fast-DDS/Fast-CDR install to lib, but its
+            # transitive dependency foonathan_memory installs to lib64. libcarla-ros2-native.so loads
+            # all of them via its $ORIGIN rpath, so every .so must sit beside it in the plugin Binaries
+            # dir. Missing libfoonathan_memory-0.7.4.so makes the Carla module fail to load at cook and
+            # at packaged runtime ("dlopen failed: libfoonathan_memory-0.7.4.so").
             plugin_bin="$carla_root/Unreal/CarlaUnreal/Plugins/Carla/Binaries/Linux"
-            if [ -d "$ros2_lib_dir" ] && ls "$ros2_lib_dir"/*.so* >/dev/null 2>&1; then
-                mkdir -p "$plugin_bin"
-                cp -a "$ros2_lib_dir"/*.so* "$plugin_bin"/
-                echo "[unreal] staged ROS2 native libs into $plugin_bin" | tee -a "$log_file"
-            else
-                echo "WARNING: no ROS2 native libs under $ros2_lib_dir; the editor link may fail on -lcarla-ros2-native." | tee -a "$log_file"
+            staged_any=0
+            for ros2_lib_dir in "$carla_root/Build/Ros2Native/install/lib" "$carla_root/Build/Ros2Native/install/lib64"; do
+                if [ -d "$ros2_lib_dir" ] && ls "$ros2_lib_dir"/*.so* >/dev/null 2>&1; then
+                    mkdir -p "$plugin_bin"
+                    cp -a "$ros2_lib_dir"/*.so* "$plugin_bin"/
+                    echo "[unreal] staged ROS2 native libs from $ros2_lib_dir into $plugin_bin" | tee -a "$log_file"
+                    staged_any=1
+                fi
+            done
+            if [ "$staged_any" = "0" ]; then
+                echo "WARNING: no ROS2 native libs under Build/Ros2Native/install/{lib,lib64}; the editor link may fail on -lcarla-ros2-native." | tee -a "$log_file"
             fi
         fi
 
