@@ -12,6 +12,15 @@ public class CesiumCarlaBridge : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
+		// This module includes cesium-native headers (via CesiumRuntime), which use C++ exceptions
+		// and RTTI. Editor builds enable exceptions by default, but Game/Shipping configs (e.g. the
+		// packaged build) default to -fno-exceptions, so without this the package build fails with
+		// "cannot use 'throw' with exceptions disabled" in cesium headers (AccessorView.h). Match the
+		// sibling CARLA modules (Carla/CarlaTools/CarlaUnreal), which set both, and the RTTI-on
+		// cesium-native this links against.
+		bEnableExceptions = true;
+		bUseRTTI = true;
+
 		PublicDependencyModuleNames.AddRange(new string[]
 		{
 			"Core",
