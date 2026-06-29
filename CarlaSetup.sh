@@ -25,6 +25,7 @@ content_ssh_key=
 clean_sumo=0
 clean_all=0
 clean_carla=0
+clean_content=0
 skip_cesium=0
 clean_cesium=0
 force_deps_rebuild=0
@@ -47,6 +48,7 @@ OPTIONS:
       --clean                Remove Build/sumo-build + Build/sumo-install (rebuild SUMO).
       --clean-all            Also remove Build/sumo-src (full SUMO re-clone).
       --clean-carla          Clear the CARLA CMake cache (force a re-configure).
+      --clean-content        Remove and re-clone the CARLA content (fixes a broken/partial checkout).
       --skip-cesium          Skip building Cesium for Unreal from source.
       --clean-cesium         Force a cesium-native rebuild (keeps the source checkout).
       --force-deps-rebuild   Also clear the ezvcpkg cache so vcpkg deps recompile (implies --clean-cesium).
@@ -77,6 +79,7 @@ while [ $# -gt 0 ]; do
         --clean)                 clean_sumo=1 ;;
         --clean-all)             clean_all=1 ;;
         --clean-carla)           clean_carla=1 ;;
+        --clean-content)         clean_content=1 ;;
         --skip-cesium)           skip_cesium=1 ;;
         --clean-cesium)          clean_cesium=1 ;;
         --force-deps-rebuild)    force_deps_rebuild=1 ;;
@@ -137,17 +140,46 @@ fi
 content_dir="$workspace_path/Unreal/CarlaUnreal/Content"
 content_repo="git@github.com:sbrett9/carla-content.git"
 content_key="${content_ssh_key:-${CARLA_CONTENT_SSH_KEY:-}}"
-if [ -d "$content_dir" ]; then
-    echo "Found CARLA content."
+
+# git wrapper that uses the deploy key when one is provided (else default agent/keys).
+content_git() {
+    if [ -n "$content_key" ]; then
+        GIT_SSH_COMMAND="ssh -i $content_key -o IdentitiesOnly=yes" git "$@"
+    else
+        git "$@"
+    fi
+}
+
+# --clean-content forces a fresh re-clone (use when a previous clone left a broken/partial tree).
+if [ "$clean_content" -eq 1 ] && [ -d "$content_dir/Carla" ]; then
+    echo "Removing existing CARLA content (--clean-content)..."
+    rm -rf "$content_dir/Carla"
+fi
+
+# The content assets are Git-LFS objects. A plain clone usually smudges them, but an interrupted or
+# partial smudge silently leaves assets absent or zero-byte (which then crashes the cook). So always
+# run an explicit `git lfs pull` -- on a fresh clone AND when content already exists -- so re-running
+# this script repairs an incomplete checkout instead of skipping it.
+if [ -d "$content_dir/Carla/.git" ]; then
+    echo "Found CARLA content; ensuring LFS assets are present..."
+    content_git -C "$content_dir/Carla" lfs install --local || true
+    content_git -C "$content_dir/Carla" lfs pull \
+        || echo "WARNING: 'git lfs pull' failed; content may be incomplete (a key/agent for the private mirror is required)."
 else
     echo "Could not find CARLA content. Downloading..."
     mkdir -p "$content_dir"
-    if [ -n "$content_key" ]; then
-        GIT_SSH_COMMAND="ssh -i $content_key -o IdentitiesOnly=yes" \
-            git -C "$content_dir" clone -b ue5-dev "$content_repo" Carla
-    else
-        git -C "$content_dir" clone -b ue5-dev "$content_repo" Carla
-    fi
+    content_git -C "$content_dir" clone -b ue5-dev "$content_repo" Carla
+    content_git -C "$content_dir/Carla" lfs install --local || true
+    content_git -C "$content_dir/Carla" lfs pull \
+        || echo "WARNING: 'git lfs pull' failed; content may be incomplete."
+fi
+
+# Completeness sanity check: a known LFS asset that must exist and be non-empty. If it is missing the
+# cook will crash later (e.g. pedestrian animations with a null skeleton), so fail loudly here.
+content_sentinel="$content_dir/Carla/Static/Pedestrian/00_GenericComponents/Definitions/Skel_Pedestrian_G3.uasset"
+if [ -d "$content_dir/Carla" ] && [ ! -s "$content_sentinel" ]; then
+    echo "WARNING: CARLA content looks incomplete -- missing/empty Skel_Pedestrian_G3.uasset."
+    echo "         Re-run with --clean-content, or run 'git lfs pull' in $content_dir/Carla."
 fi
 
 # ── VERIFY UNREAL ENGINE ─────────────────────────────────────────────────────
