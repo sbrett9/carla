@@ -30,6 +30,7 @@ name="${CARLA_CONTAINER:-carla-build}"
 cpus="${CARLA_BUILD_CPUS:-}"     # number of logical CPUs the build may use (default: all)
 carla_dir="${CARLA_DIR:-}"       # existing host carla checkout to bind-mount at the same path
 engine_dir="${CARLA_ENGINE_DIR:-}" # existing host UnrealEngine checkout to bind-mount at the same path
+non_root="${CARLA_NON_ROOT:-0}"  # run as the host user (non-root) so the UE cook/package works
 
 usage() {
     cat <<EOF
@@ -42,6 +43,12 @@ Options:
                        (instead of the volume). Env: \$CARLA_DIR.
   --engine-dir <path>  Bind-mount an existing host UnrealEngine checkout at the same path and set
                        CARLA_UNREAL_ENGINE_PATH to it. Env: \$CARLA_ENGINE_DIR.
+  --non-root           Run the container as the host user (non-root) instead of root. REQUIRED for
+                       packaging: the UE cook (UnrealEditor-Cmd) refuses to run as root. Uses
+                       --userns=keep-id (rootless podman) or --user <owner> (rootful) so the
+                       in-container UID matches the mounted files' owner -- writable, no chown.
+                       Use together with --carla-dir/--engine-dir (the root-owned volume is not
+                       writable by a non-root user). Env: \$CARLA_NON_ROOT=1.
   --ssh-key <path>     SSH private key for the private repos (default: $ssh_key, or \$SSH_KEY).
                        Optional -- skipped if the file is absent (private clones then need the
                        content already present in the checkout).
@@ -76,6 +83,7 @@ while [ $# -gt 0 ]; do
         --name=*)    name="${1#*=}" ;;
         --cpus)      cpus="$2"; shift ;;
         --cpus=*)    cpus="${1#*=}" ;;
+        --non-root)  non_root=1 ;;
         -h|--help)   usage; exit 0 ;;
         *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -129,6 +137,30 @@ else
     echo "         (carla-content/VibeUE) will fail unless already present in the checkout."
 fi
 
+# Non-root mode: required for packaging because the UE cook (UnrealEditor-Cmd) refuses to run as root.
+# Make the in-container UID equal the host UID that OWNS the mounted source, so files stay writable
+# without chown:
+#   - rootless podman: --userns=keep-id maps the host user to the same UID inside (and runs as it).
+#   - rootful  podman: --user <uid>:<gid> of the mounted source's owner (the wrapper may itself be
+#     running under sudo as root, so use the dir's owner, not `id -u`).
+# UE writes to HOME (DDC cache, logs); the matched UID has no home in the image, so point HOME at a
+# writable container-private dir.
+userns_arg=()
+if [ "$non_root" = "1" ]; then
+    rootless=$(podman info --format '{{.Host.Security.Rootless}}' 2>/dev/null || echo "")
+    if [ "$rootless" = "true" ]; then
+        userns_arg=(--userns=keep-id)
+    else
+        if [ -n "$carla_dir" ]; then owner_spec="$(stat -c '%u:%g' "$carla_dir")"; else owner_spec="$(id -u):$(id -g)"; fi
+        userns_arg=(--user "$owner_spec")
+    fi
+    env_args+=(-e "HOME=/tmp/ue-home")
+    if [ -z "$carla_dir" ]; then
+        echo "WARNING: --non-root with the root-owned '$volume' volume will hit permission errors."
+        echo "         Use --carla-dir/--engine-dir (host dirs you own) for a non-root build/package."
+    fi
+fi
+
 # Reuse the named container across runs if it already exists.
 if podman container exists "$name"; then
     echo "Container '$name' exists; starting/attaching. (Remove with: podman rm -f $name)"
@@ -143,9 +175,11 @@ fi
 exec podman run -it --name "$name" \
     --security-opt label=disable \
     "${cpuset_arg[@]}" \
+    "${userns_arg[@]}" \
     "${mount_args[@]}" \
     "${env_args[@]}" \
     "$image" bash -lc '
+        mkdir -p "$HOME" 2>/dev/null || true
         if [ -f /tmp/id_key ]; then
             mkdir -p ~/.ssh && chmod 700 ~/.ssh
             install -m 600 /tmp/id_key ~/.ssh/id_ed25519

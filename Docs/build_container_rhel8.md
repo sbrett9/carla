@@ -123,7 +123,43 @@ editor/CarlaNet afterward:
 ./Scripts/Linux/BuildCarla.sh                 # editor (C++) + CarlaNet wheel
 ```
 
-## 5. Persisting / reusing
+## 5. Package for distribution (cook step needs a non-root user)
+
+Steps 3–4 build the **editor** and run it headless via `RunCarlaServer.sh`. A **distribution package**
+(a self-contained cooked build) is a separate step: the CARLA game target is compiled and the content
+is *cooked* by running the editor as a commandlet (`RunUAT BuildCookRun`):
+
+```sh
+cmake --build Build --target package-development      # or: package (shipping) / package-shipping / package-debug
+```
+
+The **cook runs `UnrealEditor-Cmd`, which refuses to run as root** ("Refusing to run with the root
+privileges"). The default container is root, so packaging fails there. Start the container as your
+**host (non-root) user** with `--non-root`, together with bind-mounted host checkouts you own:
+
+```sh
+Util/Docker/run.alma8.sh --non-root \
+  --carla-dir  /home/bsulprizio/Projects/Carla_UE/carla \
+  --engine-dir /home/bsulprizio/Projects/Carla_UE/UnrealEngine \
+  --ssh-key    /home/bsulprizio/.ssh/id_ed25519
+```
+
+`--non-root` makes the in-container UID equal the host user that owns the mounts — rootless podman uses
+`--userns=keep-id`, rootful uses `--user <owner>` — so the build *and* cook run non-root **and** can
+write the source without `chown`, and the packaged output lands on the host owned by you. The editor C++
+build works either way, so the **whole** pipeline can run under `--non-root`:
+
+```sh
+cd /home/bsulprizio/Projects/Carla_UE/carla
+./Scripts/Linux/BuildCarla.sh                       # editor + CarlaNet (non-root)
+cmake --build Build --target package-development     # compiles the game target + cooks + stages (non-root)
+```
+
+The cooked package is written to `Build/Package/Carla-<version>-Linux-Development/` (staging under
+`Build/Package/StagedBuilds/`). Use `--non-root` only with `--carla-dir`/`--engine-dir`: the root-owned
+`carla-ws` volume is not writable by a non-root user.
+
+## 6. Persisting / reusing
 
 - The `carla-ws` volume keeps the built engine and CARLA across runs. Re-enter with:
   ```sh
@@ -135,8 +171,9 @@ editor/CarlaNet afterward:
 
 - **Disk**: UE + CARLA together need well over 150 GB in the volume. Size `--disk-size` accordingly on
   Windows.
-- **Rootless Podman**: running as `root` *inside* the container is fine; rootless maps it to your host
-  user, and volume files are owned by you on the host.
+- **Rootless Podman**: running as `root` *inside* the container is fine for building the engine and
+  editor; rootless maps it to your host user, so files are owned by you on the host. **But the cook
+  (packaging) refuses to run as root** — use `--non-root` (step 5) for the package step.
 - **Don't run the built binaries on a different-glibc host.** They target RHEL 8 (glibc 2.28); they run
   on RHEL 8 and newer, not older.
 - **GPU/runtime**: do the actual `RunCarlaServer.sh` / simulator run on the RHEL 8 box. The container
