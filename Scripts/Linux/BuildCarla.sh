@@ -77,11 +77,15 @@ done
 [ -n "$unreal_engine_root" ] || unreal_engine_root="$repo_parent/UE_5_7_4"
 
 carla_uproject="$carla_root/Unreal/CarlaUnreal/CarlaUnreal.uproject"
-log_file="$repo_parent/Carla_build.log"
+# Log inside the repo's Build/ dir (always writable -- it is the bind-mounted checkout in a container
+# build). The repo PARENT is not mounted, and the mount-parent the container synthesizes is root-owned,
+# so writing the log there fails with "permission denied" under a non-root container build.
+log_file="$carla_root/Build/Carla_build.log"
 python_dir="$carla_root/CarlaNet/python"
 
 echo "CARLA repo: $carla_root"
 echo "UE engine : $unreal_engine_root"
+mkdir -p "$(dirname "$log_file")" 2>/dev/null || true
 echo "Build started: $(date)" > "$log_file"
 
 # Disable the Unreal Build Accelerator by default. UBA NREs under non-root Linux builds
