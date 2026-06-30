@@ -71,7 +71,8 @@ sudo apt-get -y install \
     libproj-dev \
     proj-data \
     nasm \
-    patchelf
+    patchelf \
+    xdg-user-dirs
 
 if [ "$python_path" == "python3" ]; then
     sudo apt-get -y install \
