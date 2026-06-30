@@ -104,12 +104,15 @@ if [ -x "$nc" ]; then
             *) cp -Lu "$l" "$dist/tools/sumo/lib/" 2>/dev/null || true ;;
         esac
     done
-    # PROJ coordinate database (netconvert geo-references via PROJ).
-    projdir="$root/Build/sumo-install/share/proj"
-    if [ ! -f "$projdir/proj.db" ]; then
-        found="$(find / -name proj.db 2>/dev/null | head -1 || true)"
-        [ -n "$found" ] && projdir="$(dirname "$found")"
-    fi
+    # PROJ coordinate database (netconvert geo-references via PROJ). Check known locations only --
+    # never scan the whole filesystem, which can crawl for many minutes on a host with large or
+    # networked mounts (e.g. a RAID array).
+    projdir=""
+    for cand in \
+        "$root/Build/sumo-install/share/proj" \
+        /usr/share/proj /usr/local/share/proj /usr/share/proj-data /usr/share/proj9 ; do
+        if [ -f "$cand/proj.db" ]; then projdir="$cand"; break; fi
+    done
     if [ -f "$projdir/proj.db" ]; then
         mkdir -p "$dist/tools/sumo/proj"; cp -a "$projdir/." "$dist/tools/sumo/proj/"
         echo "[dist] bundled PROJ data from $projdir"
@@ -187,7 +190,12 @@ demo, example OSM maps, and SUMO netconvert.
 \`run-sctmv.sh\` points carlanet at the bundled \`tools/sumo/netconvert\`; pass \`--help\` to SCTMV for options.
 README
 
-# 7. Tarball.
-echo "[dist] creating tarball"
-tar -C "$root/Build/Dist" -czf "$root/Build/Dist/${pkgname}.tar.gz" "$pkgname"
+# 7. Tarball. Compressing ~30 GB with single-threaded gzip is slow; use pigz (parallel gzip) when
+# it is available so this scales across cores.
+echo "[dist] creating tarball (this compresses the whole package; it can take several minutes)"
+if command -v pigz >/dev/null 2>&1; then
+    tar -C "$root/Build/Dist" -cf - "$pkgname" | pigz > "$root/Build/Dist/${pkgname}.tar.gz"
+else
+    tar -C "$root/Build/Dist" -czf "$root/Build/Dist/${pkgname}.tar.gz" "$pkgname"
+fi
 echo "[dist] DONE: Build/Dist/${pkgname}.tar.gz ($(du -h "$root/Build/Dist/${pkgname}.tar.gz" | cut -f1))"
