@@ -182,6 +182,18 @@ if [ -d "$content_dir/Carla" ] && [ ! -s "$content_sentinel" ]; then
     echo "         Re-run with --clean-content, or run 'git lfs pull' in $content_dir/Carla."
 fi
 
+# Remove known-broken upstream content assets that cannot be cooked. BP_Signs references a deleted
+# UserDefinedStruct ("SignsStructure"), so it fails to compile and makes the package cook abort with
+# 10 errors once the prop library is cooked. It is an editor-only sign-PLACEMENT tool (not spawned at
+# runtime, and no shipped map references it), so deleting it is safe and lets the cook succeed. Done
+# here (post-clone, before build) so every machine/setup self-heals without diverging the mirror.
+for broken in \
+    "Static/Static/BP_Signs.uasset" \
+    "Static/Static/Blueprints/BP_Signs.uasset"; do
+    bf="$content_dir/Carla/$broken"
+    [ -f "$bf" ] && { echo "Removing known-broken content asset (uncookable): $broken"; rm -f "$bf"; }
+done
+
 # ── VERIFY UNREAL ENGINE ─────────────────────────────────────────────────────
 if [ -n "${CARLA_UNREAL_ENGINE_PATH:-}" ] && [ -d "$CARLA_UNREAL_ENGINE_PATH" ]; then
     echo "Found Unreal Engine 5 at $CARLA_UNREAL_ENGINE_PATH"
