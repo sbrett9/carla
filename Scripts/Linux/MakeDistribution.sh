@@ -53,41 +53,15 @@ esac
 if [ "$do_build" -eq 1 ]; then
     echo "[dist] building editor + carlanet wheel (BuildCarla.sh)"
     ./Scripts/Linux/BuildCarla.sh
+    # Skip the cmake package target's own Compress.cmake step (CARLA_UNREAL_PACKAGE_NO_COMPRESSION):
+    # it single-threaded-gzips the whole ~30-40 GB package into Build/Package/<name>.tar.gz, which is
+    # both slow (it runs after "BUILD SUCCESSFUL" and looks like a hang) and redundant -- this script
+    # assembles the real, richer bundle (game + wheel + scripts + osm + netconvert) into
+    # Build/Dist/<name>.tar.gz below, so we only want to gzip once. The reconfigure is quick.
+    echo "[dist] configuring package target to skip its redundant compress"
+    cmake -DCARLA_UNREAL_PACKAGE_NO_COMPRESSION=ON -S "$root" -B "$root/Build"
     echo "[dist] cooking + staging the server (cmake --build Build --target $cmake_target)"
-    # UE-on-Linux cannot terminate its child subtree on shutdown (FUnixPlatformProcess::TerminateProc
-    # subtree-kill is stubbed), so after a SUCCESSFUL cook a helper process (the .NET MSBuild node, a
-    # UnrealTraceServer, etc.) lingers holding ninja's captured output pipe -- and `cmake --build`
-    # then never returns even though the package is fully built/archived. Run the cook in the
-    # background, wait for RunUAT's terminal status in the log, then reap the strays so the build
-    # returns. Disabling the MSBuild node server also reduces how many strays linger.
-    cook_log="$root/Build/cook-${config}.log"
-    mkdir -p "$root/Build"; : > "$cook_log"
-    MSBUILDDISABLENODEREUSE=1 DOTNET_CLI_USE_MSBUILD_SERVER=0 \
-        cmake --build Build --target "$cmake_target" > "$cook_log" 2>&1 &
-    cook_pid=$!
-    tail -f "$cook_log" 2>/dev/null & tail_pid=$!
-    cook_status="unknown"
-    while kill -0 "$cook_pid" 2>/dev/null; do
-        grep -qa "BUILD SUCCESSFUL" "$cook_log" 2>/dev/null && cook_status="ok"
-        grep -qaE "BUILD FAILED|Cook failed|RunUAT ERROR|AutomationTool exiting with ExitCode=[1-9]" "$cook_log" 2>/dev/null && cook_status="fail"
-        if [ "$cook_status" != "unknown" ]; then
-            sleep 15   # let RunUAT finish flushing the archive/log
-            pkill -f AutomationTool 2>/dev/null; pkill -f RunUAT 2>/dev/null
-            pkill -f "dotnet.*MSBuild" 2>/dev/null; pkill -f "UnrealEditor-Cmd" 2>/dev/null
-            pkill -f UnrealTraceServer 2>/dev/null
-            break
-        fi
-        sleep 10
-    done
-    wait "$cook_pid" 2>/dev/null
-    kill "$tail_pid" 2>/dev/null
-    # Success is judged from RunUAT's log message, not cmake's exit code (reaping the strays can make
-    # cmake report a nonzero code even though the package built fine).
-    if ! grep -qa "BUILD SUCCESSFUL" "$cook_log" 2>/dev/null; then
-        echo "[dist] ERROR: cook did not report BUILD SUCCESSFUL -- see $cook_log" >&2
-        exit 1
-    fi
-    echo "[dist] cook complete (reaped any lingering UE helpers)."
+    cmake --build Build --target "$cmake_target"
 fi
 
 # Locate the cooked package (prefer the archived copy; fall back to the staging dir if the archive
