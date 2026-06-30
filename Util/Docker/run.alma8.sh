@@ -165,6 +165,20 @@ fi
 if podman container exists "$name"; then
     echo "Container '$name' exists; starting/attaching. (Remove with: podman rm -f $name)"
     [ -n "$cpus" ] && echo "NOTE: --cpus only applies to a NEW container; for this one run: podman update --cpuset-cpus=0-$((cpus - 1)) $name"
+    # --non-root / --user / --userns / mounts are fixed when a container is CREATED; `podman start`
+    # cannot change them. Reusing a container that was created as root would silently run as root
+    # again, and the UE cook then fails with "Refusing to run with the root privileges". Refuse
+    # rather than mislead.
+    if [ "$non_root" = "1" ]; then
+        existing_user="$(podman inspect --format '{{.Config.User}}' "$name" 2>/dev/null)"
+        if [ -z "$existing_user" ] || [ "$existing_user" = "0" ] || [ "$existing_user" = "root" ]; then
+            echo "ERROR: --non-root requested, but the existing container '$name' was created as root;" >&2
+            echo "       'podman start' cannot change that. Recreate it to apply --non-root:" >&2
+            echo "           podman rm -f $name" >&2
+            echo "       then re-run this command." >&2
+            exit 1
+        fi
+    fi
     exec podman start -ai "$name"
 fi
 

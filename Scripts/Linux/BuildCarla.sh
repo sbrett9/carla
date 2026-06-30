@@ -25,6 +25,7 @@ skip_carlanet=0
 install_wheel=0
 clean_unreal=0
 clean_wheel=0
+allow_uba=0
 unreal_engine_root="${CARLA_UNREAL_ENGINE_PATH:-}"
 
 usage() {
@@ -40,6 +41,8 @@ Options:
   --skip-carlanet            Skip the CarlaNet (.NET) build + wheel.
   --install-wheel            Also pip-install the freshly built wheel (--force-reinstall).
   --clean-wheel              Wipe CarlaNet/python build/dist/dlls/egg-info before building the wheel.
+  --allow-uba                Keep the Unreal Build Accelerator enabled. UBA is disabled by default
+                             because it crashes (NullReferenceException) under non-root Linux builds.
   --unreal-engine-root <path>
                              UE 5.7.4 source-build root.
                              Env: CARLA_UNREAL_ENGINE_PATH. Default: <repo-parent>/UE_5_7_4.
@@ -61,6 +64,7 @@ while [ $# -gt 0 ]; do
         --skip-carlanet)        skip_carlanet=1 ;;
         --install-wheel)        install_wheel=1 ;;
         --clean-wheel)          clean_wheel=1 ;;
+        --allow-uba)            allow_uba=1 ;;
         --unreal-engine-root)   unreal_engine_root="$2"; shift ;;
         --unreal-engine-root=*) unreal_engine_root="${1#*=}" ;;
         -h|--help)              usage; exit 0 ;;
@@ -79,6 +83,32 @@ python_dir="$carla_root/CarlaNet/python"
 echo "CARLA repo: $carla_root"
 echo "UE engine : $unreal_engine_root"
 echo "Build started: $(date)" > "$log_file"
+
+# Disable the Unreal Build Accelerator by default. UBA NREs under non-root Linux builds
+# (EpicGames.Core.FileSystemReference.CombineStrings NullReferenceException via UBAExecutor), which
+# breaks both this editor build and the later package cook. Turning it off makes UBT fall back to its
+# standard local executor -- same compiler, same output, just no acceleration. Written to the engine's
+# user-level BuildConfiguration.xml so every UBT invocation against this engine (editor + cook) honors
+# it. Pass --allow-uba to keep UBA on. This only disables an accelerator; it never changes build output.
+if [ "$allow_uba" -eq 0 ] && [ -d "$unreal_engine_root/Engine" ]; then
+    ubt_cfg_dir="$unreal_engine_root/Engine/Saved/UnrealBuildTool"
+    ubt_cfg="$ubt_cfg_dir/BuildConfiguration.xml"
+    if [ ! -f "$ubt_cfg" ]; then
+        mkdir -p "$ubt_cfg_dir"
+        cat > "$ubt_cfg" <<'XML'
+<?xml version="1.0" encoding="utf-8" ?>
+<Configuration xmlns="https://www.unrealengine.com/BuildConfiguration">
+	<BuildConfiguration>
+		<bAllowUBAExecutor>false</bAllowUBAExecutor>
+	</BuildConfiguration>
+</Configuration>
+XML
+        echo "[unreal] disabled UBA via $ubt_cfg (pass --allow-uba to keep it on)"
+    elif ! grep -q "bAllowUBAExecutor" "$ubt_cfg" 2>/dev/null; then
+        echo "WARNING: $ubt_cfg exists without a UBA setting; if the build/cook hits a UBA"
+        echo "         NullReferenceException, add <bAllowUBAExecutor>false</bAllowUBAExecutor> to it."
+    fi
+fi
 
 ue_result=0    # 0 = success/skipped
 net_result=0
