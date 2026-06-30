@@ -86,9 +86,11 @@ import pygame
 _THIS = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.normpath(os.path.join(_THIS, "..", ".."))
 _INSTALL = os.path.join(_REPO, "Build", "sumo-install")
-_NETCONVERT = os.path.join(_INSTALL, "bin",
-                           "netconvert.exe" if os.name == "nt" else "netconvert")
-_PROJ = os.path.join(_INSTALL, "share", "proj")
+# Prefer an explicit path from the environment (set by a packaged distribution that bundles its own
+# netconvert/PROJ outside the source tree); fall back to the in-repo build location otherwise.
+_NETCONVERT = os.environ.get("CARLA_NETCONVERT") or os.path.join(
+    _INSTALL, "bin", "netconvert.exe" if os.name == "nt" else "netconvert")
+_PROJ = os.environ.get("PROJ_LIB") or os.environ.get("PROJ_DATA") or os.path.join(_INSTALL, "share", "proj")
 os.environ.setdefault("CARLA_NETCONVERT", _NETCONVERT)
 os.environ.setdefault("PROJ_LIB", _PROJ)
 os.environ.setdefault("PROJ_DATA", _PROJ)
