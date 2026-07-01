@@ -141,12 +141,17 @@ content_dir="$workspace_path/Unreal/CarlaUnreal/Content"
 content_repo="git@github.com:sbrett9/carla-content.git"
 content_key="${content_ssh_key:-${CARLA_CONTENT_SSH_KEY:-}}"
 
-# git wrapper that uses the deploy key when one is provided (else default agent/keys).
+# git wrapper for the content repo. Uses the deploy key when one is provided, and runs ssh
+# non-interactively so a fresh container/batch run never blocks on the github.com host-key prompt
+# ("Are you sure you want to continue connecting?"). StrictHostKeyChecking=no + UserKnownHostsFile=
+# /dev/null means it neither prompts nor depends on (or writes) a known_hosts file -- this also covers
+# the `git lfs pull` calls below, which spawn ssh for git-lfs-authenticate.
+content_ssh="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 content_git() {
     if [ -n "$content_key" ]; then
-        GIT_SSH_COMMAND="ssh -i $content_key -o IdentitiesOnly=yes" git "$@"
+        GIT_SSH_COMMAND="$content_ssh -i $content_key -o IdentitiesOnly=yes" git "$@"
     else
-        git "$@"
+        GIT_SSH_COMMAND="$content_ssh" git "$@"
     fi
 }
 

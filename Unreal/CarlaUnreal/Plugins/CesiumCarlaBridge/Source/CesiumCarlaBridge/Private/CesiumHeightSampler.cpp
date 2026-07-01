@@ -4,6 +4,7 @@
 
 #include "Cesium3DTileset.h"
 #include "CesiumGeoreference.h"
+#include "CesiumCreditSystem.h"
 #include "CesiumSunSky.h"
 #include "OriginPlacement.h"
 #include "Engine/Engine.h"
@@ -247,6 +248,16 @@ bool UCesiumHeightSampler::ConfigureCesiumForOrigin(
 	// SetOriginLongitudeLatitudeHeight takes (Longitude X, Latitude Y, Height Z).
 	Georeference->SetOriginLongitudeLatitudeHeight(
 		FVector(OriginLongitude, OriginLatitude, OriginHeight));
+
+	// Ensure the default credit system exists BEFORE any tileset loads. A tileset registers its
+	// attribution credits as it streams; the editor auto-creates an ACesiumCreditSystem, but a
+	// headless/packaged server building the world procedurally has none, and the missing credit
+	// system crashes inside CesiumUtility::CreditSystem::createCredit. Find-or-create it here, the
+	// same way the georeference is ensured above.
+	if (!ACesiumCreditSystem::GetDefaultCreditSystem(World))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] could not get/create a CesiumCreditSystem."));
+	}
 
 	// Ensure the layered tilesets (08_Layer_Architecture): a visual "photoreal" tileset and,
 	// when a ground asset is given, a HIDDEN collidable bare-earth "ground" tileset (the

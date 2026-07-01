@@ -53,6 +53,13 @@ esac
 if [ "$do_build" -eq 1 ]; then
     echo "[dist] building editor + carlanet wheel (BuildCarla.sh)"
     ./Scripts/Linux/BuildCarla.sh
+    # Skip the cmake package target's own Compress.cmake step (CARLA_UNREAL_PACKAGE_NO_COMPRESSION):
+    # it single-threaded-gzips the whole ~30-40 GB package into Build/Package/<name>.tar.gz, which is
+    # both slow (it runs after "BUILD SUCCESSFUL" and looks like a hang) and redundant -- this script
+    # assembles the real, richer bundle (game + wheel + scripts + osm + netconvert) into
+    # Build/Dist/<name>.tar.gz below, so we only want to gzip once. The reconfigure is quick.
+    echo "[dist] configuring package target to skip its redundant compress"
+    cmake -DCARLA_UNREAL_PACKAGE_NO_COMPRESSION=ON -S "$root" -B "$root/Build"
     echo "[dist] cooking + staging the server (cmake --build Build --target $cmake_target)"
     cmake --build Build --target "$cmake_target"
 fi
