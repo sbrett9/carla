@@ -1,4 +1,4 @@
-"""Persistent orbital drone camera using CarlaNet API.
+"""Persistent orbiting drone camera using CarlaNet API.
 
 Spawns an unparented RGB camera that orbits around a configurable center coordinate
 while maintaining continuous focus on that center point. The camera acts as a ghost-like 
@@ -16,10 +16,10 @@ Run order (separate terminals):
     1. RunCarlaServer.ps1
     2. test_digital_twin.py                                 # build the elevated world
     3. generate_traffic_carlanet.py --asynch -n 40 -w 0     # optional: moving traffic
-    4. python orbital_drone.py
+    4. python orbiting_drone.py
 
 Usage:
-    python orbital_drone.py [--x M --y M --z FEET] [--radius M] [--altitude FEET] [--period SEC]
+    python orbiting_drone.py [--x M --y M --z FEET] [--radius M] [--altitude FEET] [--period SEC]
         [--fov DEG] [--ev EV] [--width PX --height PX] [--host H --port P]
 """
 import argparse
@@ -105,6 +105,9 @@ def main() -> int:
     
     # Start at angle 0 (East of center in CARLA coords: +X direction)
     angle = 0.0
+    
+    # Set road rendering off
+    world.set_road_rendered(False)
 
     # Camera setup
     bp = world.get_blueprint_library().find("sensor.camera.rgb")
