@@ -40,6 +40,22 @@ namespace s11n {
       float delta_seconds;
       geom::Vector3DInt map_origin;
       SimulationState simulation_state = SimulationState::None;
+      // Solar / time-of-day state (CesiumSunSky), appended so each streamed world snapshot carries
+      // the sun in effect that tick — the recorder pairs frames with the sun straight from the
+      // observer cache (no polling). Populated by FWorldObserver from UCesiumHeightSampler::GetSolarState;
+      // left at these defaults (rate 1.0, rest 0) when the world has no CesiumSunSky. Stored as
+      // doubles for a uniform block mirrored by the CarlaNet reader.
+      double solar_time = 0.0;
+      double solar_year = 0.0;
+      double solar_month = 0.0;
+      double solar_day = 0.0;
+      double solar_time_zone = 0.0;
+      double solar_lat = 0.0;
+      double solar_lon = 0.0;
+      double solar_elevation = 0.0;
+      double solar_azimuth = 0.0;
+      double solar_advancing = 0.0;
+      double solar_rate = 1.0;
     };
 #pragma pack(pop)
 

@@ -12,7 +12,8 @@ namespace CarlaNet.Recording;
 public static class CotWriter
 {
     public static void WriteToFile(string path, DateTime capturedUtc,
-        IReadOnlyList<VehicleTelemetry> recs, string affiliation = "n", double staleSeconds = 3.0)
+        IReadOnlyList<VehicleTelemetry> recs, string affiliation = "n", double staleSeconds = 3.0,
+        IReadOnlyList<double>? solar = null)
     {
         var settings = new XmlWriterSettings
         {
@@ -30,6 +31,24 @@ public static class CotWriter
         w.WriteAttributeString("captured", time);
         w.WriteAttributeString("count", recs.Count.ToString(CultureInfo.InvariantCulture));
         w.WriteAttributeString("source", "truth");
+
+        // Scene-level solar state (unbreakably tied to the imagery too, via the PNG tEXt chunk). Written
+        // once here, before the per-vehicle events, so it is present even for a vehicle-free frame.
+        if (solar is { Count: >= 11 })
+        {
+            w.WriteStartElement("_solar");
+            w.WriteAttributeString("solar_time", F(solar[0], "0.####"));
+            w.WriteAttributeString("date",
+                $"{(int)solar[1]:D4}-{(int)solar[2]:D2}-{(int)solar[3]:D2}");
+            w.WriteAttributeString("time_zone", F(solar[4], "0.####"));
+            w.WriteAttributeString("lat", F(solar[5], "0.0000000"));
+            w.WriteAttributeString("lon", F(solar[6], "0.0000000"));
+            w.WriteAttributeString("sun_elevation_deg", F(solar[7], "0.###"));
+            w.WriteAttributeString("sun_azimuth_deg", F(solar[8], "0.###"));
+            w.WriteAttributeString("advancing", solar[9] != 0.0 ? "true" : "false");
+            w.WriteAttributeString("rate", F(solar[10], "0.####"));
+            w.WriteEndElement(); // _solar
+        }
 
         foreach (var r in recs)
         {

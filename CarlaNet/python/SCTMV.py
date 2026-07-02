@@ -66,6 +66,7 @@ Usage:
                     [--async] [--fixed-delta S] [--no-build] [--start-traffic]
 """
 import argparse
+import json
 import math
 import os
 import queue
@@ -166,6 +167,21 @@ def parse_args():
     view.add_argument("--fov", type=float, default=90.0)
     view.add_argument("--ev", type=float, default=0.0,
                       help="camera exposure_compensation (EV); >0 brightens")
+    view.add_argument("--time", default=None,
+                      help="start local solar time as HH:MM or decimal hours (default: 12:00, local "
+                           "solar noon). The sun's time zone is derived from the map longitude, so "
+                           "noon is high sun wherever the OSM origin is.")
+    view.add_argument("--date", default=None,
+                      help="scene date as YYYY-MM-DD (default: host system date). Sets the seasonal "
+                           "sun angle; not for historical/almanac accuracy.")
+    view.add_argument("--time-advance", action="store_true",
+                      help="advance the sun over time as the scene runs (toggle at runtime with K). "
+                           "It advances with the world tick: WALL-CLOCK time in --async, but "
+                           "SIMULATION time under synchronous ticking (so a paused/slow sim slows the "
+                           "sun). At rate 1.0 a noon start reaches midnight after ~12 h of runtime.")
+    view.add_argument("--time-rate", type=float, default=1.0,
+                      help="sun-clock seconds per real/sim second when advancing (1.0 = real time; "
+                           ">1 accelerates, e.g. 3600 = one hour of sun per second).")
     view.add_argument("--speed", type=float, default=60.0, help="initial move speed (m/s)")
     view.add_argument("--width", type=int, default=1280)
     view.add_argument("--height", type=int, default=720)
@@ -788,9 +804,11 @@ def _iso(dt: datetime) -> str:
 
 
 def to_cot(rec, affiliation="n", stale_seconds=3.0, source="truth", uid_prefix="CARLA-TRUTH",
-           when=None) -> str:
+           when=None, solar=None) -> str:
     """Render one get_vehicle_telemetry() dict as a CoT <event> XML string. `when` (a UTC datetime)
-    pins the event time to a specific instant — used so a recorded sidecar matches its PNG exactly."""
+    pins the event time to a specific instant — used so a recorded sidecar matches its PNG exactly.
+    `solar` (a get_solar_state() dict) adds a <_solar> element carrying the sun in effect; for recorded
+    imagery the PNG tEXt chunk / the sidecar's top-level <_solar> are the authoritative carriers."""
     now = when or datetime.now(timezone.utc)
     stale = now + timedelta(seconds=stale_seconds)
     ev = ET.Element("event", {
@@ -815,6 +833,16 @@ def to_cot(rec, affiliation="n", stale_seconds=3.0, source="truth", uid_prefix="
         "height_m": f"{rec['height_m']:.2f}", "color": rec["color"], "role_name": rec["role_name"],
         "vx": f"{rec['vx']:.2f}", "vy": f"{rec['vy']:.2f}", "vz": f"{rec['vz']:.2f}",
     })
+    if solar:
+        ET.SubElement(detail, "_solar", {
+            "solar_time": f"{solar['solar_time']:.4f}",
+            "date": f"{solar['year']:04d}-{solar['month']:02d}-{solar['day']:02d}",
+            "time_zone": f"{solar['time_zone']:.4f}",
+            "sun_elevation_deg": f"{solar['sun_elevation_deg']:.3f}",
+            "sun_azimuth_deg": f"{solar['sun_azimuth_deg']:.3f}",
+            "advancing": "true" if solar["advancing"] else "false",
+            "rate": f"{solar['rate']:g}",
+        })
     return ET.tostring(ev, encoding="unicode")
 
 
@@ -881,8 +909,12 @@ class TelemetryController:
             recs = self.world.get_vehicle_telemetry(self.origin)
         except Exception as e:
             print(f"get_vehicle_telemetry failed: {e!r}", file=sys.stderr); return
+        try:
+            solar = self.world.get_solar_state()   # cache read (paired to the latest tick)
+        except Exception:
+            solar = None
         for r in recs:
-            xml = to_cot(r, affiliation=self.args.affiliation, stale_seconds=self.args.stale)
+            xml = to_cot(r, affiliation=self.args.affiliation, stale_seconds=self.args.stale, solar=solar)
             self.emit.send(xml)
             if self.args.echo:
                 print(xml)
@@ -964,7 +996,11 @@ class Recorder:
             except Exception as e:
                 print(f"recording: telemetry fetch failed: {e!r}", file=sys.stderr)
         try:
-            self.q.put_nowait((cap, surface, recs))
+            solar = self.world.get_solar_state()   # cache read, paired to this capture
+        except Exception:
+            solar = None
+        try:
+            self.q.put_nowait((cap, surface, recs, solar))
         except queue.Full:
             self.dropped += 1     # writer can't keep up; skip this capture rather than stall the sim
 
@@ -973,7 +1009,7 @@ class Recorder:
             item = self.q.get()
             if item is None:
                 break
-            cap, surface, recs = item
+            cap, surface, recs, solar = item
             stem = cap.astimezone().strftime("%Y.%m.%d_%H.%M.%S.") + f"{cap.microsecond // 1000:03d}"
             png = os.path.join(self.dir, f"SCTMV_{stem}.png")
             xml = os.path.join(self.dir, f"SCTMV_{stem}.xml")
@@ -984,16 +1020,37 @@ class Recorder:
                 ok = False
                 print(f"recording: PNG save failed ({stem}): {e!r}", file=sys.stderr)
             try:
-                self._write_xml(xml, cap, recs)
+                self._write_xml(xml, cap, recs, solar)
             except Exception as e:
                 print(f"recording: XML write failed ({stem}): {e!r}", file=sys.stderr)
+            # This Python-fallback path can't embed a PNG tEXt chunk (pygame's save has no metadata
+            # API), so drop a JSON sidecar so the solar state is never lost. The native C# recorder
+            # embeds it directly in the PNG (carla:solar tEXt chunk), so this file appears only when
+            # recording before a CarlaNet rebuild.
+            if solar:
+                try:
+                    with open(os.path.join(self.dir, f"SCTMV_{stem}.solar.json"), "w") as f:
+                        json.dump(solar, f)
+                except Exception as e:
+                    print(f"recording: solar sidecar failed ({stem}): {e!r}", file=sys.stderr)
             if ok:
                 self.saved += 1
 
-    def _write_xml(self, path, cap, recs):
+    def _write_xml(self, path, cap, recs, solar=None):
         """One sidecar holding every vehicle's CoT <event> at the capture instant, under an <events>
-        root carrying the capture time and count."""
+        root carrying the capture time and count. A scene-level <_solar> records the sun in effect
+        (present even for a vehicle-free frame)."""
         root = ET.Element("events", {"captured": _iso(cap), "count": str(len(recs)), "source": "truth"})
+        if solar:
+            ET.SubElement(root, "_solar", {
+                "solar_time": f"{solar['solar_time']:.4f}",
+                "date": f"{solar['year']:04d}-{solar['month']:02d}-{solar['day']:02d}",
+                "time_zone": f"{solar['time_zone']:.4f}",
+                "sun_elevation_deg": f"{solar['sun_elevation_deg']:.3f}",
+                "sun_azimuth_deg": f"{solar['sun_azimuth_deg']:.3f}",
+                "advancing": "true" if solar["advancing"] else "false",
+                "rate": f"{solar['rate']:g}",
+            })
         for r in recs:
             root.append(ET.fromstring(
                 to_cot(r, affiliation=self.args.affiliation, stale_seconds=self.args.stale, when=cap)))
@@ -1202,6 +1259,36 @@ def main() -> int:
         print(f"get_cesium_origin failed (elevation reads AGL-only; telemetry disabled): {e!r}",
               file=sys.stderr)
 
+    # Time of day: CesiumSunSky is the sole sun/lighting authority (CARLA weather is inert here).
+    # The bridge already spawns the sun at local solar noon with a longitude-derived time zone; push
+    # the user's --time/--date (defaulting to noon and the host date) on top. Re-applied every run
+    # because the sun is respawned on each world (re)build.
+    try:
+        if args.date:
+            _y, _mo, _d = (int(v) for v in args.date.split("-"))
+        else:
+            _now = datetime.now()
+            _y, _mo, _d = _now.year, _now.month, _now.day
+        if args.time is None:
+            _hours = 12.0
+        elif ":" in str(args.time):
+            _hh, _mm = str(args.time).split(":")
+            _hours = int(_hh) + int(_mm) / 60.0
+        else:
+            _hours = float(args.time)
+        world.set_solar_date(_y, _mo, _d)
+        if world.set_solar_time(_hours):
+            print(f"solar time set: {int(_hours) % 24:02d}:{int(round((_hours % 1) * 60)) % 60:02d} "
+                  f"local, date {_y:04d}-{_mo:02d}-{_d:02d}")
+        else:
+            print("solar time not set (world has no CesiumSunSky)", file=sys.stderr)
+        if args.time_advance:
+            world.set_time_advance(True, args.time_rate)
+            print(f"solar time advancing at {args.time_rate:g}x "
+                  "(wall-clock in --async, sim-time under synchronous ticking)")
+    except Exception as e:
+        print(f"solar time-of-day setup failed: {e!r}", file=sys.stderr)
+
     # Traffic Manager — created once, shared. Mode set below.
     tm = client.get_trafficmanager(args.tm_port)
 
@@ -1267,6 +1354,9 @@ def main() -> int:
     road_rendered = True
     show_perimeter = False
     show_margin = False
+    time_advancing = bool(args.time_advance)
+    solar_hud = ""          # "HH:MM" refreshed from get_solar_state at low frequency
+    solar_poll_frame = 0
 
     state = {"surface": None, "frames": 0, "ground_z": None, "agl_pose": None,
              "depth": None, "pick": None, "pick_close": None, "note": None}
@@ -1521,6 +1611,10 @@ def main() -> int:
                     show_perimeter = not show_perimeter
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_m:
                     show_margin = not show_margin
+                elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_k:
+                    time_advancing = not time_advancing
+                    try: world.set_time_advance(time_advancing, args.time_rate)
+                    except Exception as e: print(f"set_time_advance failed: {e!r}", file=sys.stderr)
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_t:
                     traffic.want_enabled = not traffic.want_enabled    # applied off-thread (async) / inline (sync)
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_y:
@@ -1621,17 +1715,30 @@ def main() -> int:
             tel_str = ("ON" if telemetry.enabled
                        else ("OFF" if telemetry.available else "n/a"))
             rec_str = (f"REC {recorder.saved}@{args.record_hz:g}Hz" if recorder.recording else "off")
+            # Refresh the solar-clock readout at low frequency (get_solar_state is a blocking RPC).
+            solar_poll_frame += 1
+            if solar_poll_frame >= 30:
+                solar_poll_frame = 0
+                try:
+                    _ss = world.get_solar_state()
+                    if _ss:
+                        _h = _ss["solar_time"]
+                        solar_hud = f"{int(_h) % 24:02d}:{int((_h % 1) * 60) % 60:02d}"
+                except Exception:
+                    pass
+            time_str = (f"{solar_hud or '--:--'}"
+                        + (f" >{args.time_rate:g}x" if time_advancing else ""))
             hud = [
                 f"elev {elev_ft:6.0f} ft   AGL {agl_str} ft   x {pose['x']:7.1f}  N {-pose['y']:7.1f}   "
                 f"yaw {pose['yaw']:6.1f} pitch {pose['pitch']:6.1f}   [{'SYNC' if sync else 'ASYNC'}]",
                 f"speed {speed:4.0f}   photoreal(C) {'ON' if photoreal_visible else 'OFF'}   "
                 f"ground(G) {'ON' if ground_visible else 'OFF'}   gColl(V) {'ON' if ground_collision else 'OFF'}   "
                 f"road(R) {'ON' if road_rendered else 'OFF'}   perim(B) {'ON' if show_perimeter else 'OFF'}   "
-                f"margin(M) {'ON' if show_margin else 'OFF'}",
+                f"margin(M) {'ON' if show_margin else 'OFF'}   time(K) {time_str}",
                 f"traffic(T) {traf_str}   telemetry(Y) {tel_str}   record(F) {rec_str}   "
                 f"fps {clock.get_fps():4.0f}   frames {state['frames']}",
                 "RMB look | Ctrl+LMB measure | WASD/EQ fly | wheel speed | Shift fast | C/G/V/R/B/M layers | "
-                "T traffic | Y telemetry | F record | Space reset | Esc quit",
+                "K time | T traffic | Y telemetry | F record | Space reset | Esc quit",
             ]
             bar_h = 8 + len(hud) * 18 + 2
             bar = pygame.Surface((args.width, bar_h)); bar.set_alpha(180); bar.fill((0, 0, 0))

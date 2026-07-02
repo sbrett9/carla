@@ -521,6 +521,67 @@ void FCarlaServer::FPimpl::BindActions()
     return true;
   };
 
+  // Time-of-day control. CesiumSunSky is the single sun/lighting authority for the georeferenced
+  // world (CARLA weather is inert here); these set its solar clock and date. `hours` is local solar
+  // time in the map-longitude time zone (wrapped into [0,24)); the date drives seasonal sun angle.
+  BIND_SYNC(set_solar_time) << [this](double hours) -> R<bool>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to set solar time in");
+    }
+    return UCesiumHeightSampler::SetSolarTime(World, hours);
+  };
+
+  BIND_SYNC(set_solar_date) << [this](int64_t year, int64_t month, int64_t day) -> R<bool>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to set solar date in");
+    }
+    return UCesiumHeightSampler::SetSolarDate(
+        World, static_cast<int32>(year), static_cast<int32>(month), static_cast<int32>(day));
+  };
+
+  // Current solar clock/date/origin/angles, packed as
+  // [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate];
+  // empty if there is no sun.
+  BIND_SYNC(get_solar_state) << [this]() -> R<std::vector<double>>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to read solar state from");
+    }
+    const TArray<double> S = UCesiumHeightSampler::GetSolarState(World);
+    std::vector<double> Out;
+    Out.reserve(S.Num());
+    for (double V : S)
+    {
+      Out.push_back(V);
+    }
+    return Out;
+  };
+
+  // Enable/disable automatic advancement of the solar clock (the sun moves as the scene runs).
+  // `rate` is sun-clock seconds per real/sim second (1.0 = real time). Advances with the world tick,
+  // so it tracks wall-clock in asynchronous mode and sim time under synchronous ticking.
+  BIND_SYNC(set_time_advance) << [this](bool enabled, double rate) -> R<bool>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to set time advance in");
+    }
+    return UCesiumHeightSampler::SetTimeAdvance(World, enabled, rate);
+  };
+
   // Show/hide the CARLA OpenDRIVE road mesh RENDERING (the AProceduralMeshActor's spawned
   // by AOpenDriveGenerator). SetActorHiddenInGame affects rendering only — collision is
   // untouched, so vehicles still drive on the (now invisible) roads. Used to stop the road

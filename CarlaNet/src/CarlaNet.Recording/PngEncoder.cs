@@ -13,13 +13,15 @@ public static class PngEncoder
 {
     private static readonly byte[] Signature = { 137, 80, 78, 71, 13, 10, 26, 10 };
 
-    public static void WriteBgraToFile(ReadOnlyMemory<byte> bgra, int width, int height, string path)
+    public static void WriteBgraToFile(ReadOnlyMemory<byte> bgra, int width, int height, string path,
+        IEnumerable<(string Keyword, string Text)>? textChunks = null)
     {
         using var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16);
-        WriteBgra(bgra, width, height, fs);
+        WriteBgra(bgra, width, height, fs, textChunks);
     }
 
-    public static void WriteBgra(ReadOnlyMemory<byte> bgra, int width, int height, Stream output)
+    public static void WriteBgra(ReadOnlyMemory<byte> bgra, int width, int height, Stream output,
+        IEnumerable<(string Keyword, string Text)>? textChunks = null)
     {
         if (width <= 0 || height <= 0)
             throw new ArgumentException("invalid image dimensions");
@@ -38,6 +40,11 @@ public static class PngEncoder
         ihdr[11] = 0;   // filter method
         ihdr[12] = 0;   // interlace = none
         WriteChunk(output, "IHDR", ihdr);
+
+        // tEXt metadata (e.g. the solar state), written between IHDR and IDAT.
+        if (textChunks is not null)
+            foreach (var (keyword, text) in textChunks)
+                WriteTextChunk(output, keyword, text);
 
         // IDAT: per-scanline [filter=0][RGB...] bytes, zlib-compressed.
         byte[] compressed;
@@ -68,6 +75,28 @@ public static class PngEncoder
         WriteChunk(output, "IDAT", compressed);
 
         WriteChunk(output, "IEND", ReadOnlySpan<byte>.Empty);
+    }
+
+    // A PNG tEXt chunk: keyword (Latin-1, 1..79 bytes) + 0x00 separator + text (Latin-1). Non-Latin-1
+    // characters are replaced with '?'. Empty/oversized keywords are skipped/truncated per the spec.
+    private static void WriteTextChunk(Stream output, string keyword, string text)
+    {
+        byte[] kw = Latin1(keyword);
+        if (kw.Length == 0) return;
+        if (kw.Length > 79) Array.Resize(ref kw, 79);
+        byte[] tx = Latin1(text);
+        var payload = new byte[kw.Length + 1 + tx.Length];
+        Array.Copy(kw, 0, payload, 0, kw.Length);
+        payload[kw.Length] = 0; // null separator
+        Array.Copy(tx, 0, payload, kw.Length + 1, tx.Length);
+        WriteChunk(output, "tEXt", payload);
+    }
+
+    private static byte[] Latin1(string s)
+    {
+        var b = new byte[s.Length];
+        for (int i = 0; i < s.Length; i++) b[i] = s[i] <= 0xFF ? (byte)s[i] : (byte)'?';
+        return b;
     }
 
     private static void WriteChunk(Stream output, string type, ReadOnlySpan<byte> data)

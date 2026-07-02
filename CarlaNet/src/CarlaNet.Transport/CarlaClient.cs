@@ -44,6 +44,12 @@ public sealed class CarlaClient : IAsyncDisposable
     private readonly ConcurrentDictionary<ActorId, ActorSnapshot> _actorCache = new();
     private IDisposable? _worldObserver;
 
+    // Solar / time-of-day state from the latest world-observer snapshot (§10.14 extended header):
+    // [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate].
+    // Updated lock-free each tick in ParseEpisodeState so the recorder pairs frames with the sun with
+    // no RPC and no polling; empty until the first snapshot arrives.
+    private volatile double[] _solar = System.Array.Empty<double>();
+
     // ── Telemetry-truth decoupling state (set by GenerateWorldFromOsmWithElevationAsync) ──
     // The digital-twin reports each vehicle's ELLIPSOIDAL-WGS84 altitude (hae) from the
     // bare-earth DTM (Cesium World Terrain), NOT from where the vehicle physically sits. With
@@ -493,6 +499,26 @@ public sealed class CarlaClient : IAsyncDisposable
     /// Show/hide the Cesium photogrammetry overlay in the loaded world (all tilesets).
     public Task<bool> SetCesiumVisibleAsync(bool visible)
         => _rpc.CallAsync<bool>("set_cesium_visible", visible);
+
+    /// Set the CesiumSunSky solar clock (local hours in the map-longitude time zone, wrapped
+    /// into [0,24)) and refresh lighting. False if the world has no CesiumSunSky.
+    public Task<bool> SetSolarTimeAsync(double hours)
+        => _rpc.CallAsync<bool>("set_solar_time", hours);
+
+    /// Set the CesiumSunSky calendar date (seasonal sun angle) and refresh lighting.
+    /// False if the world has no CesiumSunSky.
+    public Task<bool> SetSolarDateAsync(long year, long month, long day)
+        => _rpc.CallAsync<bool>("set_solar_date", year, month, day);
+
+    /// Current solar clock/date/origin, packed as
+    /// [solar_time, year, month, day, time_zone, lat, lon, advancing, rate]; empty if no sun.
+    public Task<IReadOnlyList<double>> GetSolarStateAsync()
+        => _rpc.CallAsync<IReadOnlyList<double>>("get_solar_state");
+
+    /// Enable/disable automatic advancement of the solar clock (the sun moves as the scene runs).
+    /// `rate` is sun-clock seconds per real/sim second (1.0 = real time). False if no CesiumSunSky.
+    public Task<bool> SetTimeAdvanceAsync(bool enabled, double rate)
+        => _rpc.CallAsync<bool>("set_time_advance", enabled, rate);
 
     /// Enable/disable physics collision on the Cesium photogrammetry tilesets (all).
     /// Collision is ON by default; this toggle never changes spawn defaults.
@@ -1047,13 +1073,21 @@ public sealed class CarlaClient : IAsyncDisposable
     {
         platformTimestamp = 0;
         deltaSeconds = 0;
-        // Header layout (36 bytes): episode_id(8) platform_ts(8) delta_s(4) map_origin(12) state(1) pad(3)
+        // Header layout (124 bytes): episode_id(8) platform_ts(8) delta_s(4) map_origin(12) state(1)
+        // pad(3), then 11 appended solar doubles at offset 36 (§10.14 extended header).
         if (payload.Length < 36) return;
         platformTimestamp = BitConverter.Int64BitsToDouble(
             BinaryPrimitives.ReadInt64LittleEndian(payload[8..]));
         deltaSeconds = BitConverter.Int32BitsToSingle(
             BinaryPrimitives.ReadInt32LittleEndian(payload[16..]));
-        const int HeaderSize = 36;
+        const int HeaderSize = 124;
+        if (payload.Length < HeaderSize) return;   // extended (with-solar) header required
+        // Cache the solar block (11 doubles at offset 36) paired to this tick.
+        var solar = new double[11];
+        for (int k = 0; k < 11; k++)
+            solar[k] = BitConverter.Int64BitsToDouble(
+                BinaryPrimitives.ReadInt64LittleEndian(payload[(36 + k * 8)..]));
+        _solar = solar;
         const int ActorSize  = 119;
         var actors = payload[HeaderSize..];
         int count  = actors.Length / ActorSize;
@@ -1105,6 +1139,12 @@ public sealed class CarlaClient : IAsyncDisposable
     // collection-expression form) — that compiles to <>z__ReadOnlyArray<T> which
     // MessagePack-csharp has no formatter for and crashes RPC serialization.
     public IReadOnlyList<ActorId> GetCachedActorIds() => _actorCache.Keys.ToArray();
+
+    /// Solar / time-of-day state from the latest world-observer snapshot, paired to the current tick
+    /// (no RPC, no poll): [solar_time, year, month, day, time_zone, lat, lon, elevation_deg,
+    /// azimuth_deg, advancing, rate]. Empty until the first snapshot arrives. Requires the world
+    /// observer to be running (StartWorldObserverAsync).
+    public IReadOnlyList<double> GetCachedSolarState() => _solar;
 
     // Decode VehicleControl from the cached TypeDependentState union.
     // VehicleData layout (pack=1): throttle(f) steer(f) brake(f) hand_brake(bool)

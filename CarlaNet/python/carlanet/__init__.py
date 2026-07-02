@@ -1328,6 +1328,49 @@ class World:
         Collision is ON by default; this toggle never changes spawn defaults."""
         return bool(_sync(self._client.SetCesiumCollisionAsync(bool(enabled))))
 
+    def set_solar_time(self, hours: float):
+        """Set the sun's local solar clock and refresh lighting. `hours` is 0-24 (wraps) in the
+        time zone derived from the map longitude; noon (12.0) is local solar noon. Returns False
+        if the world has no CesiumSunSky. See also set_solar_date, get_solar_state."""
+        return bool(_sync(self._client.SetSolarTimeAsync(float(hours))))
+
+    def set_solar_date(self, year: int, month: int, day: int):
+        """Set the sun's calendar date (drives the seasonal sun angle) and refresh lighting.
+        Returns False if the world has no CesiumSunSky."""
+        return bool(_sync(self._client.SetSolarDateAsync(int(year), int(month), int(day))))
+
+    def get_solar_state(self):
+        """Current sun clock/date/origin/angles, or None if the world has no CesiumSunSky. Returns a
+        dict: {solar_time, year, month, day, time_zone, lat, lon, sun_elevation_deg, sun_azimuth_deg,
+        advancing, rate}. sun_elevation_deg is degrees above the horizon; sun_azimuth_deg is degrees
+        clockwise from North. Reads the world-observer cache (paired to the latest tick, no RPC); falls
+        back to an on-demand RPC if the observer cache isn't populated yet."""
+        vals = None
+        try:
+            cached = self._client.GetCachedSolarState()
+            if cached is not None and cached.Count >= 9:
+                vals = cached
+        except Exception:
+            vals = None
+        if vals is None:
+            vals = _sync(self._client.GetSolarStateAsync())
+        if vals is None or vals.Count < 9:
+            return None
+        return {"solar_time": float(vals[0]), "year": int(vals[1]), "month": int(vals[2]),
+                "day": int(vals[3]), "time_zone": float(vals[4]),
+                "lat": float(vals[5]), "lon": float(vals[6]),
+                "sun_elevation_deg": float(vals[7]), "sun_azimuth_deg": float(vals[8]),
+                "advancing": bool(vals[9]) if vals.Count > 9 else False,
+                "rate": float(vals[10]) if vals.Count > 10 else 1.0}
+
+    def set_time_advance(self, enabled: bool, rate: float = 1.0):
+        """Enable/disable automatic advancement of the sun's solar clock (the sun moves as the scene
+        runs). `rate` is sun-clock seconds per real second (1.0 = real time; >1 accelerates, e.g.
+        3600 = one hour per second). Advances with the world tick, so it tracks wall-clock in
+        asynchronous mode and simulation time under synchronous ticking. Returns False if the world
+        has no CesiumSunSky."""
+        return bool(_sync(self._client.SetTimeAdvanceAsync(bool(enabled), float(rate))))
+
     def set_road_rendered(self, rendered: bool):
         """Show/hide the CARLA OpenDRIVE road-mesh RENDERING (collision unaffected — cars
         still drive). Stops the road mesh z-fighting with the photoreal Cesium streets."""
