@@ -15,6 +15,7 @@
 #include "Components/LightComponent.h"
 #include "Components/SkyLightComponent.h"
 #include "EngineUtils.h" // TActorIterator
+#include "UObject/UnrealType.h" // FDoubleProperty (reflection read of CesiumSunSky angles)
 
 // Process-global sample state. One sample at a time, which is all the pipeline
 // (and the de-risk probe) needs. The Cesium callback fires on the game thread,
@@ -564,6 +565,25 @@ static ACesiumSunSky* FindCesiumSunSky(UWorld* World)
 	return nullptr;
 }
 
+// The sun's computed Elevation/Azimuth are protected BlueprintReadOnly properties on ACesiumSunSky.
+// Read them through the reflection system — the same public path Blueprints use for a BlueprintReadOnly
+// property — so we depend only on the vendored plugin's declared contract, not on editing it. The
+// FProperty lookup is cached (the class is fixed); returns 0 if a future Cesium build renames the
+// field. Degrees: elevation above the horizon, azimuth clockwise from North.
+static double GetSunElevationDeg(const ACesiumSunSky* SunSky)
+{
+	static const FDoubleProperty* Prop =
+		CastField<FDoubleProperty>(ACesiumSunSky::StaticClass()->FindPropertyByName(TEXT("Elevation")));
+	return (SunSky && Prop) ? Prop->GetPropertyValue_InContainer(SunSky) : 0.0;
+}
+
+static double GetSunAzimuthDeg(const ACesiumSunSky* SunSky)
+{
+	static const FDoubleProperty* Prop =
+		CastField<FDoubleProperty>(ACesiumSunSky::StaticClass()->FindPropertyByName(TEXT("Azimuth")));
+	return (SunSky && Prop) ? Prop->GetPropertyValue_InContainer(SunSky) : 0.0;
+}
+
 bool UCesiumHeightSampler::SetSolarTime(UObject* WorldContextObject, double SolarTimeHours)
 {
 	UWorld* World = GEngine
@@ -628,8 +648,8 @@ TArray<double> UCesiumHeightSampler::GetSolarState(UObject* WorldContextObject)
 	Out.Add(SunSky->TimeZone);
 	Out.Add(Lat);
 	Out.Add(Lon);
-	Out.Add(SunSky->GetSunElevation());
-	Out.Add(SunSky->GetSunAzimuth());
+	Out.Add(GetSunElevationDeg(SunSky));
+	Out.Add(GetSunAzimuthDeg(SunSky));
 	// advancing/rate come from the time-of-day controller if one exists (set_time_advance spawns it).
 	double Advancing = 0.0, Rate = 1.0;
 	for (TActorIterator<ACesiumTimeOfDayController> It(World); It; ++It)
