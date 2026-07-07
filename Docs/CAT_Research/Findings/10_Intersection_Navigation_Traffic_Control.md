@@ -4,19 +4,29 @@
 source inspection and the contents of generated `.xodr` files.
 **Date:** 2026-06-25
 **Scope:** Determine how real-world intersection behavior (stopping at traffic lights and stop signs,
-yielding, honoring speed limits) can be simulated for ambient traffic in the digital-twin pipeline
-produced by [`test_digital_twin.py`](../../../CarlaNet/python/test_digital_twin.py), what the existing
-system already supports, where the gaps are, and whether the OSM file alone is a sufficient data source
-or other sampled sources are required.
+yielding, honoring speed limits) can be simulated for ambient traffic in the digital-twin pipeline now
+driven by [`SCTMV.py`](../../../CarlaNet/python/SCTMV.py), what the existing system already supports,
+where the gaps are, and whether the OSM file alone is a sufficient data source or other sampled sources
+are required.
 **Related:** [07 — Road-Network Filtering](07_RoadNetwork_Filtering.md) (the conversion flags),
 [02 — CARLA OSM MapGen](02_CARLA_OSM_MapGen.md); the deferred grouping bug
 [sbrett9/carla#1](https://github.com/sbrett9/carla/issues/1); `adv_traffic_manager.md`.
+
+> **Revision (2026-07-06):** The world-build entry point moved from `test_digital_twin.py` (now retired —
+> last touched 2026-06-23) to [`SCTMV.py`](../../../CarlaNet/python/SCTMV.py), which owns the identical
+> pipeline: `make_options` (`SCTMV.py:252`) still sets `GenerateTrafficLights = False` (`:257`), and
+> `build_world` (`:273`) calls `generate_world_from_osm_with_elevation` (`:328`). The three-layer gap
+> below is unchanged — only the entry-point references and a few drifted line numbers are refreshed.
+> Two newer facts are folded in: the .NET TM produces no motion under *synchronous* world ticking, so
+> SCTMV runs a synchronous-world + asynchronous-TM hybrid (§3); and the CesiumSunSky time-of-day work
+> ([#5](https://github.com/sbrett9/carla/issues/5)) proved the `FWorldObserver` snapshot-extension
+> pattern that the §7/§8 ALSM un-stub would reuse.
 
 ---
 
 ## 1. The headline
 
-Ambient traffic in worlds built by `test_digital_twin.py` obeys **nothing** at intersections — no
+Ambient traffic in worlds built by `SCTMV.py` obeys **nothing** at intersections — no
 lights, no stop signs, no signalized priority — because control data is severed at **three independent
 layers**, any one of which alone would defeat intersection behavior:
 
@@ -50,8 +60,9 @@ dropped (measured: `SF_LaurelHeights.osm` 225 `traffic_signals` nodes → 107 af
 `OsmConverter.BuildArguments` ([`OsmConverter.cs`](../../../CarlaNet/src/CarlaNet.Map/OsmConverter.cs))
 shells out to bundled netconvert (SUMO 1.27.0). For the digital-twin path,
 `OsmConversionOptions.GenerateTrafficLights` is set **`False`** in
-[`test_digital_twin.py`](../../../CarlaNet/python/test_digital_twin.py) `make_options`, with the explicit
-comment that this *"avoids the ungrouped-TL log spam (known issue #1)."* That drives netconvert to:
+[`SCTMV.py`](../../../CarlaNet/python/SCTMV.py) `make_options` (`SCTMV.py:257`; the retired
+`test_digital_twin.py` set the same), with the explicit comment that this *"avoids the ungrouped-TL log
+spam (known issue #1)."* That drives netconvert to:
 
 ```
 --tls.guess false
@@ -95,7 +106,7 @@ to an in-engine TM. Its pipeline mirrors upstream (ALSM → Localization → Col
 Motion-Plan → Vehicle-Light; see `adv_traffic_manager.md`). The relevant facts:
 
 - **Traffic-light observation is stubbed.** `ALSM.cs` builds every per-frame kinematic snapshot with
-  `TlState = TLS.Green, AtTrafficLight = false` (≈`:426–430`, `:476`) and `speedLimit = 0f` (`:406`,
+  `TlState = TLS.Green, AtTrafficLight = false` (≈`:428–429`, `:476`) and `speedLimit = 0f` (`:404–406`,
   comment *"For now leave 0"*). The `TrafficLightStage` header claims it would read
   `actor.GetTrafficLightState()` into `SimulationState.GetTLS()`, but ALSM never calls it. So
   `set_percentage_running_light` and any speed-limit-relative target are dead in practice — the TM never
@@ -110,6 +121,11 @@ Motion-Plan → Vehicle-Light; see `adv_traffic_manager.md`). The relevant facts
   type 274) is likewise dead for the same reason.
 - **Vehicle lights** (turn indicators at junction `RoadOption` Left/Right, brake lights when
   `brake > 0.5`) work but are opt-in (`update_vehicle_lights`); no hazard/4-way logic exists.
+- **Ticking-mode caveat (SCTMV).** The .NET TM produces no motion under *synchronous* world ticking — its
+  ALSM reads a free-running world-observer cache whose clock is not advanced in lockstep with
+  `world.tick()` (the synchronous tick-timestamp is an unfinished TODO). SCTMV therefore runs a
+  **synchronous-world + asynchronous-TM hybrid**, so the geometric junction FIFO above does still run; but
+  any intersection-control work must account for the TM half being asynchronous even when the world is not.
 
 For reference, the **upstream native C++ TM** (`LibCarla/source/carla/trafficmanager/`) is more capable —
 it genuinely reads `vehicle->GetTrafficLightState()`/`IsAtTrafficLight()` via ALSM and honors type-274
@@ -254,7 +270,11 @@ grouping-bug dependency.
 A phased combination, ordered by value-per-effort:
 
 1. **Un-stub `ALSM.cs`** (§7.1 step 3) — until the TM can *see* a light/limit, nothing else matters.
-   Validate against a hand-authored `.xodr` that already has signals (the contrast files in §2.3).
+   Validate against a hand-authored `.xodr` that already has signals (the contrast files in §2.3). Note:
+   the per-vehicle `traffic_light_state`/`speed_limit` is *already serialized* into the world-observer
+   snapshot (`FWorldObserver`'s `TypeDependentState`) — ALSM just hardcodes green/0 instead of reading it.
+   The time-of-day work ([#5](https://github.com/sbrett9/carla/issues/5)) is a working precedent for
+   surfacing snapshot fields into the .NET side lock-free (there, an extended EpisodeState header).
 2. **Sign injection from OSM** (§7.1 step 1 / §7.3 step 2) — stop/yield/speed-limit signs, since the OSM
    data is sufficient and netconvert never emits them. Gives real stop-sign and speed-limit behavior
    without the grouping bug.
@@ -275,8 +295,9 @@ the client. Only signal *phase/timing* and *approach grouping* must be synthesiz
 
 ## 9. Key source references
 
-- World-gen & conversion: [`test_digital_twin.py`](../../../CarlaNet/python/test_digital_twin.py)
-  (`make_options`), [`OsmConverter.cs`](../../../CarlaNet/src/CarlaNet.Map/OsmConverter.cs)
+- World-gen & conversion: [`SCTMV.py`](../../../CarlaNet/python/SCTMV.py) (`make_options:252`,
+  `build_world:273`; supersedes the retired `test_digital_twin.py`),
+  [`OsmConverter.cs`](../../../CarlaNet/src/CarlaNet.Map/OsmConverter.cs)
   (`BuildArguments`), [`osm_clip.py`](../../../CarlaNet/python/osm_clip.py).
 - Traffic demo (commands no intersection behavior):
   [`test_generate_fade_traffic.py`](../../../CarlaNet/python/test_generate_fade_traffic.py).
@@ -284,8 +305,6 @@ the client. Only signal *phase/timing* and *approach grouping* must be synthesiz
   `…/Stages/TrafficLightStage.cs`, `…/Stages/MotionPlanStage.cs`; doc `Docs/adv_traffic_manager.md`.
 - Native signal model & spawning (reference): `LibCarla/source/carla/road/SignalType.{h,cpp}`,
   `…/road/MapBuilder.cpp`, `Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Traffic/TrafficLightManager.{h,cpp}`.
-- Client surface: `CarlaNet/src/CarlaNet.Transport/CarlaClient.cs` (TL RPCs ~`:876–906`,
-  `get_vehicle_speed_limit` ~`:856`), [`carlanet/__init__.py`](../../../CarlaNet/python/carlanet/__init__.py).
+- Client surface: `CarlaNet/src/CarlaNet.Transport/CarlaClient.cs` (TL RPCs ~`:905–932`,
+  `get_vehicle_speed_limit` `:883`), [`carlanet/__init__.py`](../../../CarlaNet/python/carlanet/__init__.py).
 - Grouping bug: [sbrett9/carla#1](https://github.com/sbrett9/carla/issues/1).
-</content>
-</invoke>
