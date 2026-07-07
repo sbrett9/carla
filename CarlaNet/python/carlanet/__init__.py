@@ -1446,6 +1446,15 @@ class World:
             return None
         return float(pt.Location.Z)
 
+    def drape_ground_elevation(self, x, y):
+        """Ground-surface elevation (ELLIPSOIDAL metres) under CARLA-local (x, y) from the drape
+        terrain, or None when there is no active drape or (x, y) is outside the drape grid (e.g.
+        beyond the OSM sandbox). A non-physics grid lookup — independent of Cesium streaming/LOD,
+        unlike ground_z_below's raycast — so it stays valid at any altitude. For AGL, compute
+        (origin_height + local_z) - drape_ground_elevation(x, y)."""
+        v = self._client.SampleDrapeGroundElevation(float(x), float(y))
+        return None if v is None else float(v)
+
     def sample_terrain_heights(self, points, timeout=120.0, selector=""):
         """Sample Cesium terrain heights. `points` is an iterable of (lat, lon[, alt])
         tuples / objects / GeoLocation. `selector` picks the layer to sample ('ground' =

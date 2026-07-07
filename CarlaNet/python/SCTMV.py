@@ -1445,6 +1445,23 @@ def main() -> int:
     # Async-only background mover: keeps RPCs off the render thread and raycasts ground Z for AGL.
     move = {"tf": None, "stop": False}
 
+    def _refresh_ground_z(px, py):
+        """Ground local-Z under (px, py) for the AGL readout. Prefer the drape terrain — a non-physics
+        grid lookup, valid across the whole OSM sandbox at any altitude — and fall back to a downward
+        raycast (started just above the camera) outside the sandbox or in non-drape worlds."""
+        try:
+            ge = world.drape_ground_elevation(px, py)
+        except Exception:
+            ge = None
+        if ge is not None:
+            state["ground_z"] = ge - origin_h   # ellipsoidal ground elevation -> local Z (camera frame)
+            return
+        try:
+            start = pose["z"] + 100.0
+            state["ground_z"] = world.ground_z_below(px, py, start, search=start + 6000.0)
+        except Exception:
+            pass
+
     def _mover():
         last = None; last_agl = 0.0
         while not move["stop"]:
@@ -1459,10 +1476,7 @@ def main() -> int:
             p = state.get("agl_pose")
             if p is not None and now - last_agl > 0.3:
                 last_agl = now
-                try:
-                    state["ground_z"] = world.ground_z_below(p[0], p[1], 5000.0, search=10000.0)
-                except Exception:
-                    pass
+                _refresh_ground_z(p[0], p[1])
             time.sleep(0.04)
 
     # Async worker: runs the traffic + telemetry RPCs OFF the render thread. With two camera streams
@@ -1678,10 +1692,7 @@ def main() -> int:
                     state["depth"] = process_depth(dimg)
                 if now - last_agl_sync > 0.3:
                     last_agl_sync = now
-                    try:
-                        state["ground_z"] = world.ground_z_below(pose["x"], pose["y"], 5000.0, search=10000.0)
-                    except Exception:
-                        pass
+                    _refresh_ground_z(pose["x"], pose["y"])
                 # Sync mode owns everything on the tick thread: step traffic + telemetry inline.
                 try: traffic.apply_want(); traffic.update(now)
                 except Exception as e: print(f"traffic.update failed: {e!r}", file=sys.stderr)

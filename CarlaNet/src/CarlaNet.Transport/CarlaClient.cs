@@ -84,6 +84,60 @@ public sealed class CarlaClient : IAsyncDisposable
     public byte[] LastDrapedOffsetBytes { get; private set; } = [];   // row-major float32 LE, DrapedZ-DTM (m)
     public byte[] LastDrapedDtmBytes { get; private set; } = [];      // row-major float32 LE, bare-earth DTM (ellipsoidal m)
 
+    // Cached parse of the drape grids for point sampling (re-parsed only when the underlying bytes change).
+    private float[]? _drapeDtmGrid, _drapeOffGrid;
+    private byte[]? _drapeDtmRef, _drapeOffRef;
+
+    /// <summary>
+    /// Ground-surface elevation (ellipsoidal metres, = draped DTM + offset) under CARLA-local (x, y),
+    /// sampled bilinearly from the drape terrain grid — a non-physics lookup, independent of Cesium
+    /// streaming/LOD, unlike a downward raycast. Returns null when there is no active drape or (x, y)
+    /// is outside the drape grid (e.g. beyond the OSM sandbox). For an AGL readout, subtract this from
+    /// the camera's absolute elevation (georeference origin height + local z).
+    /// </summary>
+    public double? SampleDrapeGroundElevation(double x, double y)
+    {
+        if (!LastDrapeActive) return null;
+        int nc = LastDrapeNumCols, nr = LastDrapeNumRows;
+        if (nc < 2 || nr < 2 || LastDrapeCellSize <= 0) return null;
+
+        // Fractional grid coordinates; outside the grid extent reads as unknown (no edge extension).
+        double fx = (x - LastDrapeMinX) / LastDrapeCellSize;
+        double fy = (y - LastDrapeMinY) / LastDrapeCellSize;
+        if (fx < 0 || fy < 0 || fx > nc - 1 || fy > nr - 1) return null;
+
+        if (!ReferenceEquals(LastDrapedDtmBytes, _drapeDtmRef))
+        { _drapeDtmGrid = ToFloatGrid(LastDrapedDtmBytes); _drapeDtmRef = LastDrapedDtmBytes; }
+        if (!ReferenceEquals(LastDrapedOffsetBytes, _drapeOffRef))
+        { _drapeOffGrid = ToFloatGrid(LastDrapedOffsetBytes); _drapeOffRef = LastDrapedOffsetBytes; }
+
+        int need = nc * nr;
+        if (_drapeDtmGrid is null || _drapeOffGrid is null ||
+            _drapeDtmGrid.Length < need || _drapeOffGrid.Length < need) return null;
+
+        // DrapedZ = DTM + (DrapedZ - DTM); both grids are row-major (row = Y index from MinY, col = X).
+        return Bilinear(_drapeDtmGrid, nc, nr, fx, fy) + Bilinear(_drapeOffGrid, nc, nr, fx, fy);
+    }
+
+    private static float[] ToFloatGrid(byte[] b)
+    {
+        var f = new float[b.Length / 4];
+        Buffer.BlockCopy(b, 0, f, 0, f.Length * 4);   // row-major float32, little-endian host
+        return f;
+    }
+
+    private static double Bilinear(float[] grid, int nc, int nr, double fx, double fy)
+    {
+        int c0 = Math.Clamp((int)Math.Floor(fx), 0, nc - 1);
+        int r0 = Math.Clamp((int)Math.Floor(fy), 0, nr - 1);
+        int c1 = Math.Min(c0 + 1, nc - 1);
+        int r1 = Math.Min(r0 + 1, nr - 1);
+        double tx = fx - c0, ty = fy - r0;
+        double top = grid[r0 * nc + c0] + (grid[r0 * nc + c1] - grid[r0 * nc + c0]) * tx;
+        double bot = grid[r1 * nc + c0] + (grid[r1 * nc + c1] - grid[r1 * nc + c0]) * tx;
+        return top + (bot - top) * ty;
+    }
+
     public CarlaClient(string host, int port = 2000, TimeSpan? timeout = null, ILogger<CarlaClient>? logger = null)
     {
         _host = host;
