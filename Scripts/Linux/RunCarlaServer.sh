@@ -29,6 +29,7 @@ rpc_port=2000
 with_window=0
 extra_args=""
 unreal_engine_root="${CARLA_UNREAL_ENGINE_PATH:-}"
+cesium_cache_items=0   # >0 overrides Cesium MaxCacheItems (tile request-cache size) for this run
 ready_timeout=180
 
 usage() {
@@ -43,6 +44,8 @@ Options:
   --rpc-port <n>             CARLA RPC port. Default 2000.
   --with-window              Show a window instead of -RenderOffScreen (eyeball Cesium streaming).
   --extra-args "<args>"      Extra arguments appended to the UnrealEditor command line.
+  --cesium-cache-items <n>   Override Cesium tile request-cache size (MaxCacheItems) for this run;
+                             0/omit = engine default (4096).
   --unreal-engine-root <path>
                              UE 5.7.4 source-build root.
                              Env: CARLA_UNREAL_ENGINE_PATH. Default: <repo-parent>/UE_5_7_4.
@@ -65,6 +68,8 @@ while [ $# -gt 0 ]; do
         --with-window)          with_window=1 ;;
         --extra-args)           extra_args="$2"; shift ;;
         --extra-args=*)         extra_args="${1#*=}" ;;
+        --cesium-cache-items|--max-cache-items)   cesium_cache_items="$2"; shift ;;
+        --cesium-cache-items=*|--max-cache-items=*) cesium_cache_items="${1#*=}" ;;
         --unreal-engine-root)   unreal_engine_root="$2"; shift ;;
         --unreal-engine-root=*) unreal_engine_root="${1#*=}" ;;
         -h|--help)              usage; exit 0 ;;
@@ -101,14 +106,23 @@ fi
 args=("$uproject" "$map" "-game")
 [ "$with_window" -eq 1 ] || args+=("-RenderOffScreen")
 args+=("-carla-rpc-port=$rpc_port" "-nosound" "-unattended" "-nopause")
+# Per-run override of the Cesium tile request-cache size. MaxCacheItems is a CesiumRuntimeSettings
+# value (Config = Engine), read once when the SQLite cache is first built at startup; the engine
+# default (4096) is small for a large draped OSM sandbox. The -ini: override is applied during config
+# load, before the cache is built, so a fresh server launch honors it. Quote the arg — the section's
+# [...] would otherwise be glob-expanded by bash. 0 = leave the engine default.
+[ "$cesium_cache_items" -gt 0 ] 2>/dev/null && \
+    args+=("-ini:Engine:[/Script/CesiumRuntime.CesiumRuntimeSettings]:MaxCacheItems=$cesium_cache_items")
 [ -n "$extra_args" ] && args+=($extra_args)
 
 render_desc=$([ "$with_window" -eq 1 ] && echo "windowed" || echo "-RenderOffScreen")
+cache_desc=$([ "$cesium_cache_items" -gt 0 ] 2>/dev/null && echo "$cesium_cache_items items" || echo "engine default (4096)")
 echo "============================================================"
 echo " Headless CARLA server"
 echo "   map      : $map"
 echo "   rpc port : $rpc_port"
 echo "   render   : $render_desc"
+echo "   cesium cache : $cache_desc"
 echo "------------------------------------------------------------"
 echo " Once the server is up, in ANOTHER terminal run e.g.:"
 echo "   python carla/CarlaNet/python/test_cesium_heights.py"
