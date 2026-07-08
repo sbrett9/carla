@@ -156,4 +156,39 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
 	static FVector GetCesiumOrigin(UObject* WorldContextObject);
+
+	/**
+	 * Set the CesiumSunSky solar clock (local hours in the sun's time zone; wrapped into [0,24))
+	 * and refresh the sun. CesiumSunSky is the single time-of-day / lighting authority for the
+	 * georeferenced world. Returns false if no ACesiumSunSky exists in the world.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
+	static bool SetSolarTime(UObject* WorldContextObject, double SolarTimeHours);
+
+	/**
+	 * Set the CesiumSunSky calendar date (drives the seasonal sun declination), clamped to valid
+	 * month/day, and refresh the sun. Returns false if no ACesiumSunSky exists in the world.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
+	static bool SetSolarDate(UObject* WorldContextObject, int32 Year, int32 Month, int32 Day);
+
+	/**
+	 * Read the current solar clock/date/origin/angles from the ACesiumSunSky, packed as
+	 * [solar_time, year, month, day, time_zone, origin_lat, origin_lon, elevation_deg, azimuth_deg,
+	 * advancing(0/1), rate]. Empty array if no ACesiumSunSky exists. elevation/azimuth are the sun
+	 * geometry from the last UpdateSun; advancing/rate come from the ACesiumTimeOfDayController
+	 * (0/1.0 if none).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
+	static TArray<double> GetSolarState(UObject* WorldContextObject);
+
+	/**
+	 * Enable/disable automatic advancement of the CesiumSunSky solar clock (the sun moves as the
+	 * scene runs). Finds-or-spawns an ACesiumTimeOfDayController that ticks with the world, so it
+	 * advances in wall-clock time under asynchronous mode and in sim time under synchronous ticking.
+	 * `Rate` is sun-clock seconds per real/sim second (1.0 = real time; >1 accelerates). Returns
+	 * false if no ACesiumSunSky exists in the world.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
+	static bool SetTimeAdvance(UObject* WorldContextObject, bool bEnabled, double Rate);
 };

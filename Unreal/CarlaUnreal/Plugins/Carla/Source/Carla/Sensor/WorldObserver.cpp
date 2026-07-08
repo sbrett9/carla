@@ -17,6 +17,7 @@
 #include "Carla/Traffic/TrafficSignBase.h"
 #include "Carla/Traffic/SignComponent.h"
 #include "Carla/Walker/WalkerController.h"
+#include "CesiumHeightSampler.h"
 
 #include <util/disable-ue4-macros.h>
 #include <carla/rpc/String.h>
@@ -317,6 +318,26 @@ static carla::Buffer FWorldObserver_Serialize(
   simulation_state |= (SimulationState::PendingLightUpdate * PendingLightUpdates);
 
   header.simulation_state = static_cast<SimulationState>(simulation_state);
+
+  // Solar / time-of-day state, so each streamed snapshot carries the sun in effect this tick and the
+  // recorder can pair frames with it straight from the observer cache (no polling). GetSolarState is
+  // [solar_time, year, month, day, time_zone, lat, lon, elevation, azimuth, advancing, rate], or empty
+  // when the world has no CesiumSunSky (then the header keeps its zero/rate-1.0 defaults).
+  const TArray<double> Solar = UCesiumHeightSampler::GetSolarState(Episode.GetWorld());
+  if (Solar.Num() >= 11)
+  {
+    header.solar_time      = Solar[0];
+    header.solar_year      = Solar[1];
+    header.solar_month     = Solar[2];
+    header.solar_day       = Solar[3];
+    header.solar_time_zone = Solar[4];
+    header.solar_lat       = Solar[5];
+    header.solar_lon       = Solar[6];
+    header.solar_elevation = Solar[7];
+    header.solar_azimuth   = Solar[8];
+    header.solar_advancing = Solar[9];
+    header.solar_rate      = Solar[10];
+  }
 
   write_data(header);
 

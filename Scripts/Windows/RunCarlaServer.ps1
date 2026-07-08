@@ -43,6 +43,7 @@ param(
     [switch]$WithWindow,
     [string]$ExtraArgs = "",
     [string]$UnrealEngineRoot,   # UE 5.7.4 root; env CARLA_UNREAL_ENGINE_PATH
+    [int]$CesiumCacheItems = 0,  # >0 overrides Cesium's tile request-cache size (MaxCacheItems) for this run; 0 = engine default (4096)
 
     [Alias('h')]
     [switch]$Help,
@@ -66,6 +67,7 @@ OPTIONS (PowerShell-native | legacy alias):
   -RpcPort <n>               --rpc-port=<n>              CARLA RPC port (default 2000).
   -WithWindow                --with-window               Show a window instead of -RenderOffScreen.
   -ExtraArgs <str>           --extra-args=<str>          Extra args appended to the UnrealEditor command line.
+  -CesiumCacheItems <n>      --cesium-cache-items=<n>    Override Cesium tile request-cache size (MaxCacheItems) for this run; 0/omit = engine default (4096).
   -UnrealEngineRoot <dir>    --unreal-engine-root=<dir>  UE 5.7.4 root (else CARLA_UNREAL_ENGINE_PATH, else <repo-parent>\UE_5_7_4).
   -Help               / -h   --help                      Show this help.
 
@@ -90,6 +92,7 @@ if ($Remaining) {
             '^(--map)$'                          { if ($null -eq $next) { throw "Argument '$key' requires a value." } $Map = $next;             if ($null -eq $val) { $idx++ } }
             '^(--rpc-port)$'                     { if ($null -eq $next) { throw "Argument '$key' requires a value." } $RpcPort = [int]$next;     if ($null -eq $val) { $idx++ } }
             '^(--extra-args)$'                   { if ($null -eq $next) { throw "Argument '$key' requires a value." } $ExtraArgs = $next;       if ($null -eq $val) { $idx++ } }
+            '^(--cesium-cache-items|--max-cache-items)$' { if ($null -eq $next) { throw "Argument '$key' requires a value." } $CesiumCacheItems = [int]$next; if ($null -eq $val) { $idx++ } }
             '^(--unreal-engine-root|--ue-root)$' { if ($null -eq $next) { throw "Argument '$key' requires a value." } $UnrealEngineRoot = $next; if ($null -eq $val) { $idx++ } }
             default { Show-Usage; throw "Unknown argument '$arg'." }
         }
@@ -133,6 +136,13 @@ $argList = @(
     "-unattended",
     "-nopause"
 ) | Where-Object { $_ -ne "" }
+# Per-run override of the Cesium tile request-cache size. MaxCacheItems is a CesiumRuntimeSettings
+# value (Config = Engine), read once when the SQLite cache is first built at startup; the engine
+# default (4096) is small for a large draped OSM sandbox. A command-line -ini: override is applied
+# during config load — before the cache is built — so a fresh server launch honors it. 0 = leave default.
+if ($CesiumCacheItems -gt 0) {
+    $argList += "-ini:Engine:[/Script/CesiumRuntime.CesiumRuntimeSettings]:MaxCacheItems=$CesiumCacheItems"
+}
 if ($ExtraArgs) { $argList += $ExtraArgs }
 
 Write-Host "============================================================"
@@ -140,6 +150,7 @@ Write-Host " Headless CARLA server"
 Write-Host "   map      : $Map"
 Write-Host "   rpc port : $RpcPort"
 Write-Host "   render   : $(if ($WithWindow) {'windowed'} else {'-RenderOffScreen'})"
+Write-Host "   cesium cache : $(if ($CesiumCacheItems -gt 0) {"$CesiumCacheItems items"} else {'engine default (4096)'})"
 Write-Host "------------------------------------------------------------"
 Write-Host " Once you see the server is up, in ANOTHER terminal run e.g.:"
 Write-Host "   python carla\CarlaNet\python\test_cesium_heights.py"

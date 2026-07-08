@@ -1,5 +1,6 @@
 // §10.14 — FWorldObserver / EpisodeState.
-// After 48-byte header: 36-byte EpisodeState header + N * 119-byte ActorDynamicState.
+// After 48-byte header: 124-byte EpisodeState header + N * 119-byte ActorDynamicState.
+// The EpisodeState header is the original 36 bytes plus 11 appended solar doubles (offset 36).
 // static_assert(sizeof(ActorDynamicState) == 119) — verified in source (§13.6).
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Enums;
@@ -17,6 +18,11 @@ public sealed class EpisodeStateHeader
     public float DeltaSeconds { get; init; }
     public Vector3DInt MapOrigin { get; init; }
     public SimulationState SimulationState { get; init; }
+
+    /// Solar / time-of-day state in effect this tick (appended to the header, offset 36):
+    /// [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate].
+    /// All-zero (rate 1.0) when the world has no CesiumSunSky.
+    public IReadOnlyList<double> Solar { get; init; } = System.Array.Empty<double>();
 }
 
 public sealed class ActorDynamicState
@@ -47,16 +53,21 @@ public sealed class EpisodeStateSensorData
         int my = BinaryPrimitives.ReadInt32LittleEndian(payload[24..]);
         int mz = BinaryPrimitives.ReadInt32LittleEndian(payload[28..]);
         var simState         = (SimulationState)payload[32];
-        // 3 bytes padding at [33..35]
+        // 3 bytes padding at [33..35], then 11 solar doubles at offset 36.
+
+        var solar = new double[11];
+        for (int k = 0; k < 11; k++)
+            solar[k] = BitConverter.Int64BitsToDouble(
+                BinaryPrimitives.ReadInt64LittleEndian(payload[(36 + k * 8)..]));
 
         var header = new EpisodeStateHeader
         {
             EpisodeId = episodeId, PlatformTimestamp = platformTs,
             DeltaSeconds = deltaSeconds, MapOrigin = new Vector3DInt(mx, my, mz),
-            SimulationState = simState
+            SimulationState = simState, Solar = solar
         };
 
-        const int StateHeaderSize = 36;
+        const int StateHeaderSize = 124;
         var actorData = payload[StateHeaderSize..];
         const int ActorSize = 119;
         int count = actorData.Length / ActorSize;

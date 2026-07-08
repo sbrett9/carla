@@ -37,6 +37,10 @@
 .PARAMETER UnrealEngineRoot
     UE 5.7.4 source-build root. Env: CARLA_UNREAL_ENGINE_PATH.
     Default: <repo-parent>\UE_5_7_4.
+.PARAMETER MaxParallelActions
+    Maximum compile/link actions UBT runs in parallel for the editor build (UBT's
+    -MaxParallelActions). Default 4 (conservative). Raise it to use more cores, e.g.
+    -MaxParallelActions 16, or pass 0 to omit the cap entirely and let UBT choose from CPU/RAM.
 
 .EXAMPLE
     .\BuildCarla.ps1 -InstallWheel
@@ -61,6 +65,7 @@ param(
     [switch]$InstallWheel,    # also pip-install the freshly built wheel (--force-reinstall)
     [switch]$CleanWheel,      # wipe CarlaNet\python build artifacts (build/dist/dlls/egg-info) first
     [string]$UnrealEngineRoot,# UE 5.7.4 root; env CARLA_UNREAL_ENGINE_PATH
+    [int]$MaxParallelActions = 4, # cap parallel UBT editor-build actions; 0 = uncapped (UBT decides)
 
     [Alias('h')]
     [switch]$Help,
@@ -88,6 +93,7 @@ OPTIONS (PowerShell-native | legacy alias):
   -InstallWheel              --install-wheel             pip-install the freshly built wheel.
   -CleanWheel                --clean-wheel               Wipe CarlaNet\python build/dist/dlls before building the wheel.
   -UnrealEngineRoot <dir>    --unreal-engine-root=<dir>  UE 5.7.4 source-build root.
+  -MaxParallelActions <n>    --max-parallel-actions=<n>  Cap parallel editor-build actions (default 4; 0 = uncapped).
   -Help               / -h   --help                      Show this help.
 
 EXAMPLES:
@@ -116,6 +122,7 @@ if ($Remaining) {
             '^(--clean-wheel)$'                    { $CleanWheel = $true }
             '^(--vs)$'                             { if ($null -eq $next) { throw "Argument '$key' requires a value." } $Vs = $next;               if ($null -eq $val) { $idx++ } }
             '^(--unreal-engine-root|--ue-root)$'   { if ($null -eq $next) { throw "Argument '$key' requires a value." } $UnrealEngineRoot = $next; if ($null -eq $val) { $idx++ } }
+            '^(--max-parallel-actions|--max-parallel)$' { if ($null -eq $next) { throw "Argument '$key' requires a value." } $MaxParallelActions = [int]$next; if ($null -eq $val) { $idx++ } }
             default { Show-Usage; throw "Unknown argument '$arg'." }
         }
     }
@@ -379,14 +386,22 @@ if (-not $SkipUnreal) {
     $prevEAP = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        & $BuildBat `
-            CarlaUnrealEditor Win64 Development `
-            "$CARLA_UPROJECT" `
-            -WaitMutex `
-            "-$script:VsYear" `
-            "-CompilerVersion=$script:VsToolset" `
-            -Unattended `
-            -MaxParallelActions=4 `
+        $buildArgs = @(
+            'CarlaUnrealEditor', 'Win64', 'Development',
+            "$CARLA_UPROJECT",
+            '-WaitMutex',
+            "-$script:VsYear",
+            "-CompilerVersion=$script:VsToolset",
+            '-Unattended'
+        )
+        # 0 => omit the flag so UBT auto-scales to the machine; >0 => cap the parallel actions.
+        if ($MaxParallelActions -gt 0) {
+            $buildArgs += "-MaxParallelActions=$MaxParallelActions"
+            Write-Info "Editor build parallelism capped at $MaxParallelActions actions (-MaxParallelActions 0 to uncap)."
+        } else {
+            Write-Info "Editor build parallelism uncapped (UBT auto-scales to CPU/RAM)."
+        }
+        & $BuildBat @buildArgs `
             2>&1 | ForEach-Object { $_ -replace "`0", "" } | Tee-Object -FilePath $LOG_FILE -Append
 
         $ueResult = $LASTEXITCODE

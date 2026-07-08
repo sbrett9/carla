@@ -18,8 +18,10 @@ namespace CarlaNet.Recording;
 public sealed class FrameRecorder : IDisposable
 {
     private sealed record Job(DateTime CapturedUtc, int Width, int Height,
-                              ReadOnlyMemory<byte> Bgra, IReadOnlyList<VehicleTelemetry> Telemetry);
+                              ReadOnlyMemory<byte> Bgra, IReadOnlyList<VehicleTelemetry> Telemetry,
+                              IReadOnlyList<double> Solar);
 
+    private readonly CarlaClient _client;
     private readonly string _dir;
     private readonly double _periodSeconds;
     private readonly string _affiliation;
@@ -48,6 +50,7 @@ public sealed class FrameRecorder : IDisposable
         if (streamToken is not { Length: 24 })
             throw new ArgumentException("streamToken must be a 24-byte sensor stream token", nameof(streamToken));
 
+        _client = client;
         _dir = dir;
         _periodSeconds = 1.0 / Math.Max(0.01, hz);
         _affiliation = affiliation;
@@ -94,9 +97,13 @@ public sealed class FrameRecorder : IDisposable
             try { recs = _telemetry.Compute(_origin); } catch { }
         }
 
+        // Solar state paired to this tick, read lock-free from the world-observer cache (no RPC, no
+        // poll) — the same snapshot the telemetry above came from.
+        IReadOnlyList<double> solar = _client.GetCachedSolarState();
+
         // RawBgra is already a private copy produced by Deserialize, so we can hand it to the worker
         // without copying again.
-        var job = new Job(captured, w, h, img.RawBgra, recs);
+        var job = new Job(captured, w, h, img.RawBgra, recs, solar);
         if (!_channel.Writer.TryWrite(job))
             Interlocked.Increment(ref _dropped);
     }
@@ -113,9 +120,10 @@ public sealed class FrameRecorder : IDisposable
                     string stem = "SCTMV_" + job.CapturedUtc.ToLocalTime()
                         .ToString("yyyy.MM.dd_HH.mm.ss.fff", CultureInfo.InvariantCulture);
                     PngEncoder.WriteBgraToFile(job.Bgra, job.Width, job.Height,
-                                               Path.Combine(_dir, stem + ".png"));
+                                               Path.Combine(_dir, stem + ".png"),
+                                               SolarMetadata.PngTextChunks(job.Solar));
                     CotWriter.WriteToFile(Path.Combine(_dir, stem + ".xml"),
-                                          job.CapturedUtc, job.Telemetry, _affiliation, _stale);
+                                          job.CapturedUtc, job.Telemetry, _affiliation, _stale, job.Solar);
                     Interlocked.Increment(ref _saved);
                 }
                 catch (Exception ex)

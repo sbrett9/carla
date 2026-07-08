@@ -527,6 +527,21 @@ if (Test-Path $contentDir) {
     }
 }
 
+# Remove known-broken content assets that cannot be cooked. BP_Signs references a deleted
+# UserDefinedStruct ("SignsStructure"), so it fails to compile and makes the package cook abort with
+# ~10 errors once /Game/Carla/Static/Static is cooked. It is an editor-only sign-PLACEMENT tool (not
+# spawned at runtime, and no shipped map references it), so deleting it is safe and lets the cook
+# succeed. Done post-content so every machine self-heals without diverging the content mirror.
+foreach ($broken in @(
+    'Carla\Static\Static\BP_Signs.uasset',
+    'Carla\Static\Static\Blueprints\BP_Signs.uasset')) {
+    $bf = Join-Path $contentDir $broken
+    if (Test-Path $bf) {
+        Write-Host "Removing known-broken content asset (uncookable): $broken"
+        Remove-Item -Force $bf
+    }
+}
+
 # ---------------------------------------------------------------------------
 # ACTIVATE VISUAL STUDIO TOOLCHAIN (VS2022 / VS2026, MSVC 14.44)
 # ---------------------------------------------------------------------------

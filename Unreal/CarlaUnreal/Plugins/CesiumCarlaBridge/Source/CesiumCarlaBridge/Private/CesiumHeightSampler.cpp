@@ -6,10 +6,16 @@
 #include "CesiumGeoreference.h"
 #include "CesiumCreditSystem.h"
 #include "CesiumSunSky.h"
+#include "CesiumTimeOfDayController.h"
 #include "OriginPlacement.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "Engine/DirectionalLight.h"
+#include "Engine/SkyLight.h"
+#include "Components/LightComponent.h"
+#include "Components/SkyLightComponent.h"
 #include "EngineUtils.h" // TActorIterator
+#include "UObject/UnrealType.h" // FDoubleProperty (reflection read of CesiumSunSky angles)
 
 // Process-global sample state. One sample at a time, which is all the pipeline
 // (and the de-risk probe) needs. The Cesium callback fires on the game thread,
@@ -280,10 +286,50 @@ bool UCesiumHeightSampler::ConfigureCesiumForOrigin(
 		if (IsValid(*It)) (*It)->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Georeference));
 	}
 
-	// The generated OpenDriveMap has no weather/sun actor ("Missing weather class"), so the
-	// scene is unlit. Spawn a CesiumSunSky for physically-based georeferenced lighting
-	// (defaults: SolarTime 13:00, TimeZone -5 = Chicago daytime). Also the correct EO basis
-	// later (real solar angle / shadows).
+	// The OpenDriveMap template ships a plain ADirectionalLight + ASkyLight for baseline lighting.
+	// They are not georeferenced and are driven by nothing, so alongside the CesiumSunSky below they
+	// show up as a SECOND, fixed sun disc (through the shared SkyAtmosphere) plus doubled ambient.
+	// CesiumSunSky is the single lighting authority, so disable the level's lights here. Its own
+	// sun/sky are COMPONENTS on that actor (not ADirectionalLight/ASkyLight actors, since
+	// UseLevelDirectionalLight defaults false), so iterating those actor types never touches them.
+	{
+		int32 NumLevelLightsDisabled = 0;
+		for (TActorIterator<ADirectionalLight> It(World); It; ++It)
+		{
+			if (!IsValid(*It)) continue;
+			if (ULightComponent* LightComp = (*It)->GetLightComponent())
+			{
+				LightComp->SetVisibility(false); // removes its lighting and its SkyAtmosphere sun disc
+				++NumLevelLightsDisabled;
+			}
+		}
+		for (TActorIterator<ASkyLight> It(World); It; ++It)
+		{
+			if (!IsValid(*It)) continue;
+			if (USkyLightComponent* SkyComp = (*It)->GetLightComponent())
+			{
+				SkyComp->SetVisibility(false);
+				++NumLevelLightsDisabled;
+			}
+		}
+		if (NumLevelLightsDisabled > 0)
+		{
+			UE_LOG(LogTemp, Display,
+				TEXT("[CesiumCarlaBridge] disabled %d pre-existing level light(s) so CesiumSunSky is the sole sun."),
+				NumLevelLightsDisabled);
+		}
+	}
+
+	// The generated OpenDriveMap has no CARLA weather actor ("Missing weather class"), so nothing
+	// drives lighting; spawn a CesiumSunSky for physically-based georeferenced lighting (and the
+	// correct EO basis later: real solar angle / shadows).
+	//
+	// ACesiumSunSky computes the sun from the georeference latitude/longitude plus its SolarTime
+	// and TimeZone. Its class defaults (SolarTime 13:00, TimeZone -5) assume a US-Eastern longitude;
+	// applied to any other map they place the sun far from local noon (e.g. at longitude +56 the
+	// -5 zone is ~8.75 h / ~131 deg off, pinning the sun near the horizon so the scene looks like
+	// dusk). Derive the time zone from the origin longitude and start at local solar noon so the
+	// world is correctly lit for wherever the OSM origin is. Disable DST for a deterministic clock.
 	bool bHasSunSky = false;
 	for (TActorIterator<ACesiumSunSky> It(World); It; ++It)
 	{
@@ -297,7 +343,10 @@ bool UCesiumHeightSampler::ConfigureCesiumForOrigin(
 		ACesiumSunSky* SunSky = World->SpawnActor<ACesiumSunSky>(SunParams);
 		if (SunSky)
 		{
-			SunSky->UpdateSun();
+			SunSky->SolarTime = 12.0;
+			SunSky->UseDaylightSavingTime = false;
+			// Sets TimeZone = longitude / 15 and calls UpdateSun() internally.
+			SunSky->EstimateTimeZoneForLongitude(OriginLongitude);
 			bSpawnedSunSky = true;
 		}
 		else
@@ -496,4 +545,166 @@ FVector UCesiumHeightSampler::GetCesiumOrigin(UObject* WorldContextObject)
 	}
 	// FVector(Longitude X, Latitude Y, Height Z).
 	return Georeference->GetOriginLongitudeLatitudeHeight();
+}
+
+// Find the first valid CesiumSunSky in the world (ConfigureCesiumForOrigin spawns exactly one),
+// or nullptr if none exists yet.
+static ACesiumSunSky* FindCesiumSunSky(UWorld* World)
+{
+	if (!World)
+	{
+		return nullptr;
+	}
+	for (TActorIterator<ACesiumSunSky> It(World); It; ++It)
+	{
+		if (IsValid(*It))
+		{
+			return *It;
+		}
+	}
+	return nullptr;
+}
+
+// The sun's computed Elevation/Azimuth are protected BlueprintReadOnly properties on ACesiumSunSky.
+// Read them through the reflection system — the same public path Blueprints use for a BlueprintReadOnly
+// property — so we depend only on the vendored plugin's declared contract, not on editing it. The
+// FProperty lookup is cached (the class is fixed); returns 0 if a future Cesium build renames the
+// field. Degrees: elevation above the horizon, azimuth clockwise from North.
+static double GetSunElevationDeg(const ACesiumSunSky* SunSky)
+{
+	static const FDoubleProperty* Prop =
+		CastField<FDoubleProperty>(ACesiumSunSky::StaticClass()->FindPropertyByName(TEXT("Elevation")));
+	return (SunSky && Prop) ? Prop->GetPropertyValue_InContainer(SunSky) : 0.0;
+}
+
+static double GetSunAzimuthDeg(const ACesiumSunSky* SunSky)
+{
+	static const FDoubleProperty* Prop =
+		CastField<FDoubleProperty>(ACesiumSunSky::StaticClass()->FindPropertyByName(TEXT("Azimuth")));
+	return (SunSky && Prop) ? Prop->GetPropertyValue_InContainer(SunSky) : 0.0;
+}
+
+bool UCesiumHeightSampler::SetSolarTime(UObject* WorldContextObject, double SolarTimeHours)
+{
+	UWorld* World = GEngine
+		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
+		: nullptr;
+	ACesiumSunSky* SunSky = FindCesiumSunSky(World);
+	if (!SunSky)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] SetSolarTime: no CesiumSunSky in the world."));
+		return false;
+	}
+	// Wrap into [0, 24) so callers can pass a freely-accumulating clock (e.g. an advancing time).
+	SunSky->SolarTime = FMath::Fmod(FMath::Fmod(SolarTimeHours, 24.0) + 24.0, 24.0);
+	SunSky->UpdateSun();
+	return true;
+}
+
+bool UCesiumHeightSampler::SetSolarDate(UObject* WorldContextObject, int32 Year, int32 Month, int32 Day)
+{
+	UWorld* World = GEngine
+		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
+		: nullptr;
+	ACesiumSunSky* SunSky = FindCesiumSunSky(World);
+	if (!SunSky)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] SetSolarDate: no CesiumSunSky in the world."));
+		return false;
+	}
+	SunSky->Year = Year;
+	SunSky->Month = FMath::Clamp(Month, 1, 12);
+	SunSky->Day = FMath::Clamp(Day, 1, 31);
+	SunSky->UpdateSun();
+	return true;
+}
+
+TArray<double> UCesiumHeightSampler::GetSolarState(UObject* WorldContextObject)
+{
+	TArray<double> Out;
+	UWorld* World = GEngine
+		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
+		: nullptr;
+	ACesiumSunSky* SunSky = FindCesiumSunSky(World);
+	if (!SunSky)
+	{
+		return Out;   // empty => caller reports "no sun"
+	}
+	// Origin latitude/longitude drive the solar geometry; reuse the default georeference (the sun
+	// resolves the same one). GetOriginLongitudeLatitudeHeight() is (lon X, lat Y, height Z).
+	double Lat = 0.0, Lon = 0.0;
+	if (ACesiumGeoreference* Georeference = ACesiumGeoreference::GetDefaultGeoreference(World))
+	{
+		const FVector O = Georeference->GetOriginLongitudeLatitudeHeight();
+		Lon = O.X;
+		Lat = O.Y;
+	}
+	// Layout mirrored by the Python shim's get_solar_state():
+	// [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate].
+	Out.Add(SunSky->SolarTime);
+	Out.Add(static_cast<double>(SunSky->Year));
+	Out.Add(static_cast<double>(SunSky->Month));
+	Out.Add(static_cast<double>(SunSky->Day));
+	Out.Add(SunSky->TimeZone);
+	Out.Add(Lat);
+	Out.Add(Lon);
+	Out.Add(GetSunElevationDeg(SunSky));
+	Out.Add(GetSunAzimuthDeg(SunSky));
+	// advancing/rate come from the time-of-day controller if one exists (set_time_advance spawns it).
+	double Advancing = 0.0, Rate = 1.0;
+	for (TActorIterator<ACesiumTimeOfDayController> It(World); It; ++It)
+	{
+		if (IsValid(*It))
+		{
+			Advancing = (*It)->bAdvancing ? 1.0 : 0.0;
+			Rate = (*It)->Rate;
+			break;
+		}
+	}
+	Out.Add(Advancing);
+	Out.Add(Rate);
+	return Out;
+}
+
+// Find the time-of-day controller, or spawn one if none exists.
+static ACesiumTimeOfDayController* FindOrSpawnTimeController(UWorld* World)
+{
+	if (!World)
+	{
+		return nullptr;
+	}
+	for (TActorIterator<ACesiumTimeOfDayController> It(World); It; ++It)
+	{
+		if (IsValid(*It))
+		{
+			return *It;
+		}
+	}
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	return World->SpawnActor<ACesiumTimeOfDayController>(Params);
+}
+
+bool UCesiumHeightSampler::SetTimeAdvance(UObject* WorldContextObject, bool bEnabled, double Rate)
+{
+	UWorld* World = GEngine
+		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
+		: nullptr;
+	if (!World)
+	{
+		return false;
+	}
+	if (!FindCesiumSunSky(World))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] SetTimeAdvance: no CesiumSunSky in the world."));
+		return false;
+	}
+	ACesiumTimeOfDayController* Controller = FindOrSpawnTimeController(World);
+	if (!Controller)
+	{
+		return false;
+	}
+	Controller->bAdvancing = bEnabled;
+	Controller->Rate = Rate;
+	return true;
 }
