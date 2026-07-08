@@ -95,6 +95,14 @@ public sealed class VehicleTelemetryService
                 speed, course, vx, vy, vz,
                 2.0 * ext.X, 2.0 * ext.Y, 2.0 * ext.Z));
         }
+        // Drop cached descriptions for actors no longer present so this cache tracks the live world too
+        // (ids come from the world-observer snapshot, which now evicts destroyed actors).
+        if (_meta.Count > ids.Count)
+        {
+            var live = new HashSet<ActorId>(ids);
+            foreach (var key in _meta.Keys.ToList())
+                if (!live.Contains(key)) _meta.Remove(key);
+        }
         return outp;
     }
 

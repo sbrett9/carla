@@ -42,6 +42,9 @@ public sealed class CarlaClient : IAsyncDisposable
     private readonly ILogger<CarlaClient>? _log;
     private readonly List<SensorStream> _streams = [];
     private readonly ConcurrentDictionary<ActorId, ActorSnapshot> _actorCache = new();
+    // Ids seen in the current world-observer snapshot; reused each frame to evict destroyed actors.
+    // Touched only on the single world-observer stream-reader thread (see OnWorldObserverFrame).
+    private readonly HashSet<ActorId> _observedIds = new();
     private IDisposable? _worldObserver;
 
     // Solar / time-of-day state from the latest world-observer snapshot (§10.14 extended header):
@@ -1145,11 +1148,17 @@ public sealed class CarlaClient : IAsyncDisposable
         const int ActorSize  = 119;
         var actors = payload[HeaderSize..];
         int count  = actors.Length / ActorSize;
+        _observedIds.Clear();
         for (int i = 0; i < count; i++)
         {
             var a  = actors.Slice(i * ActorSize, ActorSize);
             var id = BinaryPrimitives.ReadUInt32LittleEndian(a);
             var st = (ActorState)a[4];
+            // A destroyed actor may appear for a final tick tagged PendingKill/Invalid before it drops
+            // out of the snapshot; treat it as already gone so it is evicted below and stops emitting.
+            if (st == ActorState.PendingKill || st == ActorState.Invalid)
+                continue;
+            _observedIds.Add(id);
             // Transform: Location(12) + Rotation(12) starting at offset 5
             float lx  = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(a[5..]));
             float ly  = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(a[9..]));
@@ -1176,6 +1185,14 @@ public sealed class CarlaClient : IAsyncDisposable
                 TypeDependentState = a[65..119].ToArray()
             };
         }
+        // The episode state is a full snapshot of every live actor each tick, so evict any cached actor
+        // absent from it (destroyed since the last tick). Without this the cache — and every telemetry
+        // consumer reading GetCachedActorIds — grows without bound as traffic spawns and despawns, keeping
+        // destroyed vehicles emitting and raising the per-frame cost over a long run. Removing during a
+        // ConcurrentDictionary enumeration is safe.
+        foreach (var kv in _actorCache)
+            if (!_observedIds.Contains(kv.Key))
+                _actorCache.TryRemove(kv.Key, out _);
     }
 
     // ── Actor state queries (sourced from world observer cache) ───────────────
