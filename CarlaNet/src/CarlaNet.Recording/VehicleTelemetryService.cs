@@ -49,7 +49,6 @@ public sealed class VehicleTelemetryService
 
         bool drape = _client.LastDrapeActive;
         if (drape) EnsureDrapeGrids();
-        double scalarOffset = _client.LastHeightAlignOffset;
         var dtmSamples = _client.LastGroundDtmSamples;
 
         var outp = new List<VehicleTelemetry>(ids.Count);
@@ -67,17 +66,10 @@ public sealed class VehicleTelemetryService
             var geo = Geodesy.CarlaLocalToGeodetic(origin, loc.X, loc.Y, loc.Z);
             double physicalHae = geo.Altitude;
 
-            double hae, haeDtm;
-            if (drape && _offGrid is not null && _dtmGrid is not null)
-            {
-                hae = physicalHae - Sample(_offGrid, loc.X, loc.Y);
-                haeDtm = Sample(_dtmGrid, loc.X, loc.Y);
-            }
-            else
-            {
-                hae = physicalHae - scalarOffset;
-                haeDtm = NearestDtm(dtmSamples, geo.Latitude, geo.Longitude);
-            }
+            double hae = physicalHae - OffsetAt(loc.X, loc.Y);
+            double haeDtm = (drape && _dtmGrid is not null)
+                ? Sample(_dtmGrid, loc.X, loc.Y)
+                : NearestDtm(dtmSamples, geo.Latitude, geo.Longitude);
 
             double vx = vel.X, vy = vel.Y, vz = vel.Z;
             double speed = Math.Sqrt(vx * vx + vy * vy);
@@ -104,6 +96,67 @@ public sealed class VehicleTelemetryService
                 2.0 * ext.X, 2.0 * ext.Y, 2.0 * ext.Z));
         }
         return outp;
+    }
+
+    /// <summary>
+    /// The height-align offset (metres) applied at a horizontal position — the amount added to bare-earth
+    /// terrain to seat road/ground on the photoreal imagery. A function of (x, y) only, independent of
+    /// altitude, so it is well-defined for an airborne camera as well as a ground vehicle: 0 in 'none'
+    /// mode, the scalar offset in 'area'/'origin', and the per-cell drape sample (edge-clamped) in 'drape'.
+    /// Subtract it from a physical HAE to get the bare-earth HAE.
+    /// </summary>
+    public double OffsetAt(double x, double y)
+    {
+        if (_client.LastDrapeActive)
+        {
+            EnsureDrapeGrids();
+            if (_offGrid is not null) return Sample(_offGrid, x, y);
+        }
+        return _client.LastHeightAlignOffset;
+    }
+
+    /// <summary>
+    /// Derive the collection platform's per-frame state from the sensor-header world transform and the
+    /// client-supplied platform options. <paramref name="prevTf"/> and <paramref name="dtSeconds"/> (the
+    /// previous processed frame's transform and the sim-time gap to it) yield course/speed over ground;
+    /// pass null/0 for the first frame. Pinhole intrinsics are derived from the horizontal FOV and the
+    /// frame size (centered principal point, square pixels).
+    /// </summary>
+    public SensorPose ComputeSensorPose(GeoLocation origin, Transform tf, Transform? prevTf,
+                                        double dtSeconds, SensorPlatformOptions opt, int width, int height)
+    {
+        var loc = tf.Location;
+        var geo = Geodesy.CarlaLocalToGeodetic(origin, loc.X, loc.Y, loc.Z);
+        double offset = OffsetAt(loc.X, loc.Y);
+        double hae = geo.Altitude - offset;
+
+        // Boresight pointing. CARLA yaw: +X=East, -Y=North; pitch is +up (so -90 = nadir).
+        double yaw = DegToRad(tf.Rotation.Yaw);
+        double az = Mod360(RadToDeg(Math.Atan2(Math.Cos(yaw), -Math.Sin(yaw))));
+        double el = tf.Rotation.Pitch;
+        double roll = tf.Rotation.Roll;
+
+        // Platform course/speed over ground from the pose delta (the sensor header carries no velocity).
+        double course = az, speed = 0.0;
+        if (prevTf is Transform p && dtSeconds > 1e-6)
+        {
+            double dx = loc.X - p.Location.X, dy = loc.Y - p.Location.Y;
+            speed = Math.Sqrt(dx * dx + dy * dy) / dtSeconds;
+            if (speed >= 0.5) course = Mod360(RadToDeg(Math.Atan2(dx, -dy)));  // over ground, true north
+        }
+
+        // Pinhole intrinsics from horizontal FOV + frame size. hfov/2 in radians = HFovDeg * PI/360.
+        double fx = width / (2.0 * Math.Tan(opt.HFovDeg * Math.PI / 360.0));
+        double fy = fx;                                   // square pixels
+        double cx = width / 2.0, cy = height / 2.0;       // centered principal point
+        double vfov = RadToDeg(2.0 * Math.Atan(height / (2.0 * fx)));
+
+        return new SensorPose(
+            opt.CotType, opt.Callsign, opt.Uid,
+            geo.Latitude, geo.Longitude, hae, offset,
+            az, el, roll, course, speed,
+            width, height, fx, fy, cx, cy, opt.HFovDeg, vfov,
+            opt.SensorModel, "pinhole", opt.Distortion);
     }
 
     private static string Attr(IReadOnlyList<ActorAttributeValue> attrs, string id, string dflt)

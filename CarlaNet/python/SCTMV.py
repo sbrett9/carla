@@ -66,7 +66,6 @@ Usage:
                     [--async] [--fixed-delta S] [--no-build] [--start-traffic]
 """
 import argparse
-import json
 import math
 import os
 import queue
@@ -223,10 +222,22 @@ def parse_args():
     rec.add_argument("--record-dir", default=os.path.join(_REPO, "Build", "SCTMV_recordings"),
                      help="folder for recordings (default Build/SCTMV_recordings). F toggles recording: "
                           "each capture writes a lossless PNG of the clean streamed imagery (no HUD) plus "
-                          "a matching .xml of the vehicle CoT telemetry at that instant.")
+                          "a matching .xml Cursor-on-Target sidecar at that instant — the vehicle tracks "
+                          "and the collection platform (the camera itself) as an air track.")
     rec.add_argument("--record-hz", type=float, default=2.0,
                      help="capture rate in Hz (captures per second; may be fractional, e.g. 0.5). "
                           "Default 2.0.")
+    rec.add_argument("--platform-type", default="uas-fixed",
+                     help="collection-platform airframe class for the recorded sensor's CoT air track: "
+                          "uas-fixed (default), uas-rotary, manned-fixed, manned-rotary, or a raw CoT "
+                          "type string (e.g. a-f-A-M-F-Q).")
+    rec.add_argument("--platform-affiliation", default="f",
+                     help="CoT standard identity of the collection platform: f friend (default; it is our "
+                          "own asset) / n neutral / u unknown / h hostile.")
+    rec.add_argument("--platform-callsign", default="OVERWATCH",
+                     help="callsign for the recorded platform track (default OVERWATCH).")
+    rec.add_argument("--platform-uid", default=None,
+                     help="CoT track uid for the platform (default: CARLA-SENSOR-<camera id>).")
 
     return ap.parse_args()
 
@@ -925,146 +936,12 @@ class TelemetryController:
             self.emit.close()
 
 
-class Recorder:
-    """Periodic capture-to-disk: while recording, every 1/hz seconds it writes a lossless PNG of the
-    clean streamed frame (no HUD) plus a matching .xml of every vehicle's CoT telemetry at that instant
-    (same UID/format as the live telemetry, time-stamped to the capture). PNG + XML share one filename
-    stem so each still is paired with its ground-truth labels. Disk work runs on a background thread so
-    the render loop never blocks on it."""
-
-    def __init__(self, world, origin, args):
-        self.world = world
-        self.origin = origin           # georef origin for telemetry; None -> XML has no vehicle truth
-        self.args = args
-        self.dir = args.record_dir
-        self.period = 1.0 / max(0.01, args.record_hz)
-        self.recording = False
-        self.want_enabled = False      # flipped by the hotkey on the main thread
-        self.last = 0.0
-        self.saved = 0
-        self.dropped = 0
-        self.q = None
-        self.thread = None
-
-    def apply_want(self):
-        if self.want_enabled and not self.recording:
-            self.start()
-        elif not self.want_enabled and self.recording:
-            self.stop()
-
-    def start(self):
-        try:
-            os.makedirs(self.dir, exist_ok=True)
-        except Exception as e:
-            print(f"recording: cannot create {self.dir}: {e!r}", file=sys.stderr)
-            self.want_enabled = False
-            return
-        self.q = queue.Queue(maxsize=16)
-        self.thread = threading.Thread(target=self._writer, daemon=True)
-        self.thread.start()
-        self.recording = True
-        self.last = 0.0
-        self.saved = self.dropped = 0
-        if self.origin is None:
-            print(f"recording -> {self.dir} @ {self.args.record_hz} Hz "
-                  "(PNG only; no georef origin, so XML will carry no vehicle truth)")
-        else:
-            print(f"recording -> {self.dir} @ {self.args.record_hz} Hz (PNG + CoT XML)")
-
-    def stop(self):
-        self.recording = False
-        if self.q is not None:
-            self.q.put(None)
-        if self.thread is not None:
-            self.thread.join(timeout=5.0)
-        self.thread = None
-        print(f"recording stopped: {self.saved} capture(s) saved"
-              + (f", {self.dropped} dropped" if self.dropped else ""))
-
-    def trigger(self, now, surface):
-        """Called every main-loop iteration. Captures at the configured cadence: grabs the current
-        frame + a telemetry snapshot together (so still and truth correspond), and hands the disk work
-        to the writer thread."""
-        if not self.recording or surface is None or (now - self.last) < self.period:
-            return
-        self.last = now
-        cap = datetime.now(timezone.utc)
-        recs = []
-        if self.origin is not None:
-            try:
-                recs = list(self.world.get_vehicle_telemetry(self.origin))
-            except Exception as e:
-                print(f"recording: telemetry fetch failed: {e!r}", file=sys.stderr)
-        try:
-            solar = self.world.get_solar_state()   # cache read, paired to this capture
-        except Exception:
-            solar = None
-        try:
-            self.q.put_nowait((cap, surface, recs, solar))
-        except queue.Full:
-            self.dropped += 1     # writer can't keep up; skip this capture rather than stall the sim
-
-    def _writer(self):
-        while True:
-            item = self.q.get()
-            if item is None:
-                break
-            cap, surface, recs, solar = item
-            stem = cap.astimezone().strftime("%Y.%m.%d_%H.%M.%S.") + f"{cap.microsecond // 1000:03d}"
-            png = os.path.join(self.dir, f"SCTMV_{stem}.png")
-            xml = os.path.join(self.dir, f"SCTMV_{stem}.xml")
-            ok = True
-            try:
-                pygame.image.save(surface, png)     # lossless PNG of the clean sensor frame
-            except Exception as e:
-                ok = False
-                print(f"recording: PNG save failed ({stem}): {e!r}", file=sys.stderr)
-            try:
-                self._write_xml(xml, cap, recs, solar)
-            except Exception as e:
-                print(f"recording: XML write failed ({stem}): {e!r}", file=sys.stderr)
-            # This Python-fallback path can't embed a PNG tEXt chunk (pygame's save has no metadata
-            # API), so drop a JSON sidecar so the solar state is never lost. The native C# recorder
-            # embeds it directly in the PNG (carla:solar tEXt chunk), so this file appears only when
-            # recording before a CarlaNet rebuild.
-            if solar:
-                try:
-                    with open(os.path.join(self.dir, f"SCTMV_{stem}.solar.json"), "w") as f:
-                        json.dump(solar, f)
-                except Exception as e:
-                    print(f"recording: solar sidecar failed ({stem}): {e!r}", file=sys.stderr)
-            if ok:
-                self.saved += 1
-
-    def _write_xml(self, path, cap, recs, solar=None):
-        """One sidecar holding every vehicle's CoT <event> at the capture instant, under an <events>
-        root carrying the capture time and count. A scene-level <_solar> records the sun in effect
-        (present even for a vehicle-free frame)."""
-        root = ET.Element("events", {"captured": _iso(cap), "count": str(len(recs)), "source": "truth"})
-        if solar:
-            ET.SubElement(root, "_solar", {
-                "solar_time": f"{solar['solar_time']:.4f}",
-                "date": f"{solar['year']:04d}-{solar['month']:02d}-{solar['day']:02d}",
-                "time_zone": f"{solar['time_zone']:.4f}",
-                "sun_elevation_deg": f"{solar['sun_elevation_deg']:.3f}",
-                "sun_azimuth_deg": f"{solar['sun_azimuth_deg']:.3f}",
-                "advancing": "true" if solar["advancing"] else "false",
-                "rate": f"{solar['rate']:g}",
-            })
-        for r in recs:
-            root.append(ET.fromstring(
-                to_cot(r, affiliation=self.args.affiliation, stale_seconds=self.args.stale, when=cap)))
-        tree = ET.ElementTree(root)
-        ET.indent(tree, space="  ")          # human-readable (indented) XML
-        tree.write(path, encoding="utf-8", xml_declaration=True)
-
-
 class NativeRecorder:
     """Drives the in-engine (C#) FrameRecorder: camera frames are tapped, encoded to PNG, and written
-    with their CoT-XML telemetry sidecar entirely on the .NET thread pool — no frame ever crosses to
-    Python and the GIL is never held, so the viewer stays smooth while recording. SCTMV only toggles it.
-    Exposes the same interface as the Python Recorder (want_enabled / apply_want / trigger / saved /
-    recording / stop) so the loop, hotkey, and HUD are backend-agnostic."""
+    with their CoT-XML telemetry sidecar (vehicle tracks + the collection platform as a CoT air track)
+    entirely on the .NET thread pool — no frame ever crosses to Python and the GIL is never held, so the
+    viewer stays smooth while recording. SCTMV only toggles it (want_enabled / apply_want / trigger /
+    saved / recording / stop), so the loop, hotkey, and HUD stay decoupled from the recorder."""
 
     def __init__(self, world, camera, args):
         self.world = world
@@ -1084,7 +961,11 @@ class NativeRecorder:
                 return
             self._handle = self.world.start_recording(
                 self.camera, self.args.record_dir, self.args.record_hz,
-                self.args.affiliation, self.args.stale)
+                self.args.affiliation, self.args.stale, fov=self.args.fov,
+                platform_type=self.args.platform_type,
+                platform_affiliation=self.args.platform_affiliation,
+                platform_callsign=self.args.platform_callsign,
+                platform_uid=self.args.platform_uid)
             if self._handle is None:
                 self.want_enabled = False
                 return
@@ -1411,15 +1292,11 @@ def main() -> int:
     spectator.set_transform(make_tf(pose))
     print(f"spawned EO camera id={camera.id}, depth camera id={depth_cam.id}")
 
-    # Recorder: native (C#) when the CarlaNet.Recording assembly is present (frames encoded in .NET,
-    # off the GIL); otherwise the in-Python fallback so recording still works before a rebuild.
-    if bool(getattr(carla, "_CARLANET_RECORDING_AVAILABLE", False)):
-        recorder = NativeRecorder(world, camera, args)
-        print(f"recording backend: native (C#) -> {args.record_dir}")
-    else:
-        recorder = Recorder(world, cot_origin, args)
-        print(f"recording backend: in-Python fallback (build CarlaNet.Recording for native) "
-              f"-> {args.record_dir}")
+    # Recorder: the native (C#) FrameRecorder encodes frames in .NET off the GIL. If the
+    # CarlaNet.Recording assembly is absent the recorder reports itself unavailable when toggled (the
+    # whole client is CarlaNet, so a missing recording assembly means the build itself is incomplete).
+    recorder = NativeRecorder(world, camera, args)
+    print(f"recording backend: native (C#) -> {args.record_dir}")
 
     def process_depth(img):
         """Decode a depth frame's capture pose into the picking record (raw bytes + dims + pose)."""
