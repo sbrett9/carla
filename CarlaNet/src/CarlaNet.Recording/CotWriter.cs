@@ -13,7 +13,7 @@ public static class CotWriter
 {
     public static void WriteToFile(string path, DateTime capturedUtc,
         IReadOnlyList<VehicleTelemetry> recs, string affiliation = "n", double staleSeconds = 3.0,
-        IReadOnlyList<double>? solar = null)
+        IReadOnlyList<double>? solar = null, SensorPose? sensor = null)
     {
         var settings = new XmlWriterSettings
         {
@@ -48,6 +48,68 @@ public static class CotWriter
             w.WriteAttributeString("advancing", solar[9] != 0.0 ? "true" : "false");
             w.WriteAttributeString("rate", F(solar[10], "0.####"));
             w.WriteEndElement(); // _solar
+        }
+
+        // Collection platform (the airborne EO camera) as a CoT air-track event: standard <sensor> element
+        // for boresight/FOV (TAK can render the field-of-view cone) + a <_carla_intrinsics> child for the
+        // full pinhole intrinsics. Written before the vehicle tracks so it is present for a vehicle-free frame.
+        if (sensor is not null)
+        {
+            w.WriteStartElement("event");
+            w.WriteAttributeString("version", "2.0");
+            w.WriteAttributeString("uid", sensor.Uid);
+            w.WriteAttributeString("type", sensor.CotType);
+            w.WriteAttributeString("how", "m-g");
+            w.WriteAttributeString("time", time);
+            w.WriteAttributeString("start", time);
+            w.WriteAttributeString("stale", stale);
+
+            w.WriteStartElement("point");
+            w.WriteAttributeString("lat", F(sensor.Lat, "0.0000000"));
+            w.WriteAttributeString("lon", F(sensor.Lon, "0.0000000"));
+            w.WriteAttributeString("hae", F(sensor.Hae, "0.00"));
+            w.WriteAttributeString("ce", "0.0");
+            w.WriteAttributeString("le", "0.0");
+            w.WriteEndElement(); // point
+
+            w.WriteStartElement("detail");
+
+            w.WriteStartElement("contact");
+            w.WriteAttributeString("callsign", sensor.Callsign);
+            w.WriteEndElement(); // contact
+
+            w.WriteStartElement("track");
+            w.WriteAttributeString("course", F(sensor.CourseDeg, "0.0"));
+            w.WriteAttributeString("speed", F(sensor.SpeedMps, "0.00"));
+            w.WriteEndElement(); // track
+
+            w.WriteStartElement("sensor");
+            w.WriteAttributeString("azimuth", F(sensor.AzimuthDeg, "0.###"));
+            w.WriteAttributeString("elevation", F(sensor.ElevationDeg, "0.###"));
+            w.WriteAttributeString("roll", F(sensor.RollDeg, "0.###"));
+            w.WriteAttributeString("fov", F(sensor.HFovDeg, "0.###"));
+            w.WriteAttributeString("vfov", F(sensor.VFovDeg, "0.###"));
+            w.WriteAttributeString("range", "0");
+            w.WriteAttributeString("type", "EO");
+            w.WriteAttributeString("model", sensor.SensorModel);
+            w.WriteEndElement(); // sensor
+
+            w.WriteStartElement("_carla_intrinsics");
+            w.WriteAttributeString("width", sensor.Width.ToString(CultureInfo.InvariantCulture));
+            w.WriteAttributeString("height", sensor.Height.ToString(CultureInfo.InvariantCulture));
+            w.WriteAttributeString("fx", F(sensor.Fx, "0.##"));
+            w.WriteAttributeString("fy", F(sensor.Fy, "0.##"));
+            w.WriteAttributeString("cx", F(sensor.Cx, "0.##"));
+            w.WriteAttributeString("cy", F(sensor.Cy, "0.##"));
+            w.WriteAttributeString("hfov_deg", F(sensor.HFovDeg, "0.###"));
+            w.WriteAttributeString("vfov_deg", F(sensor.VFovDeg, "0.###"));
+            w.WriteAttributeString("model", sensor.ProjectionModel);
+            w.WriteAttributeString("distortion", sensor.Distortion);
+            w.WriteAttributeString("align_offset_m", F(sensor.AlignOffsetM, "0.00"));
+            w.WriteEndElement(); // _carla_intrinsics
+
+            w.WriteEndElement(); // detail
+            w.WriteEndElement(); // event
         }
 
         foreach (var r in recs)
@@ -108,5 +170,6 @@ public static class CotWriter
     private static string Iso(DateTime dt) =>
         dt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture) + "Z";
 
-    private static string F(double v, string fmt) => v.ToString(fmt, CultureInfo.InvariantCulture);
+    // Normalize IEEE negative zero (-0.0) to 0.0 so an exactly-zero field never serializes as "-0".
+    private static string F(double v, string fmt) => (v == 0.0 ? 0.0 : v).ToString(fmt, CultureInfo.InvariantCulture);
 }
