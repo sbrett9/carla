@@ -104,6 +104,33 @@ def latlon_to_carla(lat, lon, lat0, lon0):
     return x, y
 
 
+def carla_to_latlon(x, y, lat0, lon0):
+    """Convert CARLA X/Y coordinates to lat/lon using the georeference origin.
+    Inverse of latlon_to_carla.
+    
+    Args:
+        x, y: CARLA coordinates in meters
+        lat0, lon0: Georeference origin latitude/longitude in decimal degrees
+    
+    Returns:
+        (lat, lon): Latitude/longitude in decimal degrees
+    """
+    # Earth radius in meters
+    R = 6378137.0
+    
+    lat0_rad = math.radians(lat0)
+    lon0_rad = math.radians(lon0)
+    
+    # Inverse local tangent plane projection
+    lon_rad = lon0_rad + (x / (R * math.cos(lat0_rad)))
+    lat_rad = lat0_rad - (y / R)  # Negative because CARLA -Y is North
+    
+    lat = math.degrees(lat_rad)
+    lon = math.degrees(lon_rad)
+    
+    return lat, lon
+
+
 class NativeRecorder:
     """Drives the in-engine (C#) FrameRecorder: camera frames are tapped, encoded to PNG, and written
     entirely on the .NET thread pool — no frame ever crosses to Python and the GIL is never held, so
@@ -317,6 +344,7 @@ def main() -> int:
             print(f"georeference origin: lat {lat0:.7f}  lon {lon0:.7f}  height {origin_h:.1f} m")
         except Exception as e:
             print(f"get_cesium_origin failed: {e!r}", file=sys.stderr)
+            lat0 = lon0 = origin_h = 0.0
 
     pygame.init()
     pygame.font.init()
@@ -415,9 +443,16 @@ def main() -> int:
             rec_str = (f"REC {recorder.saved}@{args.record_hz:g}Hz" if recorder.recording else "off")
             
             # HUD
+            if have_origin:
+                display_lat, display_lon = carla_to_latlon(center_x, center_y, lat0, lon0)
+                latlon_str = f"lat/lon ({display_lat:.6f}, {display_lon:.6f})"
+            else:
+                latlon_str = "lat/lon unavailable (no georeference)"
+            
             hud = [
-                f"center ({center_x:7.1f}, {center_y:7.1f})   "
+                f"CARLA center ({center_x:7.1f}, {center_y:7.1f})   "
                 f"radius {radius * FT_PER_M:6.0f} ft   altitude {cam_altitude * FT_PER_M:6.0f} ft   elev {elev_ft:6.0f} ft",
+                latlon_str,
                 f"orbit {orbit_progress:5.1f}%   speed {orbit_speed:5.1f} s   "
                 f"{'PAUSED' if _state['paused'] else 'ACTIVE'}   "
                 f"record(F) {rec_str}   "
