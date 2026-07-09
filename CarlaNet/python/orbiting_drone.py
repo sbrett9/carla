@@ -10,7 +10,7 @@ Controls:
     Up/Down       adjust altitude
     Space         reset to start position
     P             pause/resume orbit
-    F             toggle recording (PNG)
+    F             toggle recording (PNG + CoT XML)
     Esc           quit
 
 Run order (separate terminals):
@@ -25,8 +25,8 @@ Usage:
         [--fov DEG] [--ev EV] [--width PX --height PX] [--host H --port P]
         [--record-dir DIR] [--record-hz HZ]
     
-    # Using lat/long (requires georeferenced world):
-    python orbiting_drone.py [--lat LAT --long LONG --z FEET] [--radius M] [--orbit-speed SEC]
+    # Using lat/lon (requires georeferenced world):
+    python orbiting_drone.py [--lat LAT --lon LON --z FEET] [--radius M] [--orbit-speed SEC]
         [--fov DEG] [--ev EV] [--width PX --height PX] [--host H --port P]
         [--record-dir DIR] [--record-hz HZ]
 """
@@ -51,9 +51,9 @@ _REPO = os.path.normpath(os.path.join(_THIS, "..", ".."))
 ap = argparse.ArgumentParser()
 ap.add_argument("--x", type=float, default=None, help="orbit center X (CARLA metres)")
 ap.add_argument("--y", type=float, default=None, help="orbit center Y (CARLA metres, -Y is North)")
-ap.add_argument("--lat", type=float, default=None, help="orbit center latitude (alternative to --x/--y)")
-ap.add_argument("--long", type=float, default=None, help="orbit center longitude (alternative to --x/--y)")
 ap.add_argument("--z", type=float, default=1700.0, help="camera altitude in FEET (default 1700)")
+ap.add_argument("--lat", type=float, default=None, help="orbit center latitude (alternative to --x/--y)")
+ap.add_argument("--lon", type=float, default=None, help="orbit center longitude (alternative to --x/--y)")
 ap.add_argument("--radius", type=float, default=656.0, help="orbit radius in FEET (default 656 = 200m)")
 ap.add_argument("--orbit-speed", type=float, default=240.0, help="orbit speed in seconds (default 240 = 4 min)")
 ap.add_argument("--fov", type=float, default=90.0)
@@ -66,7 +66,8 @@ ap.add_argument("--port", type=int, default=2000)
 rec = ap.add_argument_group("recording (F hotkey)")
 rec.add_argument("--record-dir", default=os.path.join(_REPO, "Build", "drone_recordings"),
                  help="folder for recordings (default Build/drone_recordings). F toggles recording: "
-                      "each capture writes a lossless PNG of the clean streamed imagery (no HUD).")
+                      "each capture writes a lossless PNG of the clean streamed imagery (no HUD) "
+                      "and a matching CoT XML sidecar with vehicle telemetry.")
 rec.add_argument("--record-hz", type=float, default=2.0,
                  help="capture rate in Hz (captures per second; may be fractional, e.g. 0.5). "
                       "Default 2.0.")
@@ -76,13 +77,13 @@ args = ap.parse_args()
 _state = {"surface": None, "frames": 0, "paused": False}
 
 
-def latlong_to_carla(lat, long, lat0, long0):
-    """Convert lat/long to CARLA X/Y coordinates using the georeference origin.
+def latlon_to_carla(lat, lon, lat0, lon0):
+    """Convert lat/lon to CARLA X/Y coordinates using the georeference origin.
     Uses local tangent plane projection (accurate for distances up to ~100km from origin).
     
     Args:
-        lat, long: Target latitude/longitude in decimal degrees
-        lat0, long0: Georeference origin latitude/longitude in decimal degrees
+        lat, lon: Target latitude/longitude in decimal degrees
+        lat0, lon0: Georeference origin latitude/longitude in decimal degrees
     
     Returns:
         (x, y): CARLA coordinates in meters
@@ -92,91 +93,15 @@ def latlong_to_carla(lat, long, lat0, long0):
     
     # Convert to radians
     lat_rad = math.radians(lat)
-    long_rad = math.radians(long)
+    lon_rad = math.radians(lon)
     lat0_rad = math.radians(lat0)
-    long0_rad = math.radians(long0)
+    lon0_rad = math.radians(lon0)
     
     # Local tangent plane projection
-    x = R * (long_rad - long0_rad) * math.cos(lat0_rad)
+    x = R * (lon_rad - lon0_rad) * math.cos(lat0_rad)
     y = -R * (lat_rad - lat0_rad)  # Negative because CARLA -Y is North
     
     return x, y
-
-
-class Recorder:
-    """Periodic capture-to-disk: while recording, every 1/hz seconds it writes a lossless PNG of the
-    clean streamed frame (no HUD). Disk work runs on a background thread so the render loop never
-    blocks on it."""
-
-    def __init__(self, world, args):
-        self.world = world
-        self.args = args
-        self.dir = args.record_dir
-        self.period = 1.0 / max(0.01, args.record_hz)
-        self.recording = False
-        self.want_enabled = False      # flipped by the hotkey on the main thread
-        self.last = 0.0
-        self.saved = 0
-        self.dropped = 0
-        self.q = None
-        self.thread = None
-
-    def apply_want(self):
-        if self.want_enabled and not self.recording:
-            self.start()
-        elif not self.want_enabled and self.recording:
-            self.stop()
-
-    def start(self):
-        try:
-            os.makedirs(self.dir, exist_ok=True)
-        except Exception as e:
-            print(f"recording: cannot create {self.dir}: {e!r}", file=sys.stderr)
-            self.want_enabled = False
-            return
-        self.q = queue.Queue(maxsize=16)
-        self.thread = threading.Thread(target=self._writer, daemon=True)
-        self.thread.start()
-        self.recording = True
-        self.last = 0.0
-        self.saved = self.dropped = 0
-        print(f"recording -> {self.dir} @ {self.args.record_hz} Hz (PNG only)")
-
-    def stop(self):
-        self.recording = False
-        if self.q is not None:
-            self.q.put(None)
-        if self.thread is not None:
-            self.thread.join(timeout=5.0)
-        self.thread = None
-        print(f"recording stopped: {self.saved} capture(s) saved"
-              + (f", {self.dropped} dropped" if self.dropped else ""))
-
-    def trigger(self, now, surface):
-        """Called every main-loop iteration. Captures at the configured cadence and hands the disk work
-        to the writer thread."""
-        if not self.recording or surface is None or (now - self.last) < self.period:
-            return
-        self.last = now
-        cap = datetime.now(timezone.utc)
-        try:
-            self.q.put_nowait((cap, surface))
-        except queue.Full:
-            self.dropped += 1     # writer can't keep up; skip this capture rather than stall the sim
-
-    def _writer(self):
-        while True:
-            item = self.q.get()
-            if item is None:
-                break
-            cap, surface = item
-            stem = cap.astimezone().strftime("%Y.%m.%d_%H.%M.%S.") + f"{cap.microsecond // 1000:03d}"
-            png = os.path.join(self.dir, f"drone_{stem}.png")
-            try:
-                pygame.image.save(surface, png)     # lossless PNG of the clean sensor frame
-                self.saved += 1
-            except Exception as e:
-                print(f"recording: PNG save failed ({stem}): {e!r}", file=sys.stderr)
 
 
 class NativeRecorder:
@@ -275,25 +200,25 @@ def main() -> int:
     print(f"server version: {client.get_server_version()}")
     world = client.get_world()
     
-    # Get georeference origin early if we need it for lat/long conversion
-    lat0 = long0 = origin_h = 0.0
+    # Get georeference origin early if we need it for lat/lon conversion
+    lat0 = lon0 = origin_h = 0.0
     have_origin = False
-    if args.lat is not None and args.long is not None:
+    if args.lat is not None and args.lon is not None:
         try:
-            lat0, long0, origin_h = world.get_cesium_origin()
+            lat0, lon0, origin_h = world.get_cesium_origin()
             have_origin = True
-            print(f"georeference origin: lat {lat0:.7f}  long {long0:.7f}  height {origin_h:.1f} m")
+            print(f"georeference origin: lat {lat0:.7f}  lon {lon0:.7f}  height {origin_h:.1f} m")
         except Exception as e:
-            print(f"ERROR: --lat/--long requires georeference origin, but get_cesium_origin failed: {e!r}",
+            print(f"ERROR: --lat/--lon requires georeference origin, but get_cesium_origin failed: {e!r}",
                   file=sys.stderr)
             return 1
 
     # Orbit parameters (x, y define horizontal center, z is camera altitude)
-    # Determine orbit center from either lat/long or CARLA coordinates
-    if args.lat is not None and args.long is not None:
-        # User provided lat/long
-        center_x, center_y = latlong_to_carla(args.lat, args.long, lat0, long0)
-        print(f"orbit center: lat {args.lat:.7f}, lon {args.long:.7f} "
+    # Determine orbit center from either lat/lon or CARLA coordinates
+    if args.lat is not None and args.lon is not None:
+        # User provided lat/lon
+        center_x, center_y = latlon_to_carla(args.lat, args.lon, lat0, lon0)
+        print(f"orbit center: lat {args.lat:.7f}, lon {args.lon:.7f} "
               f"→ CARLA ({center_x:.1f}, {center_y:.1f})")
     elif args.x is not None and args.y is not None:
         # User provided CARLA coordinates
@@ -351,15 +276,13 @@ def main() -> int:
     print(f"orbit center: ({center_x:.1f}, {center_y:.1f}) at altitude {cam_altitude * FT_PER_M:.0f} ft")
     print(f"orbit radius: {radius * FT_PER_M:.0f} ft ({radius:.1f} m), orbit_speed: {orbit_speed:.1f} s")
     
-    # Recorder: native (C#) when the CarlaNet.Recording assembly is present (frames encoded in .NET,
-    # off the GIL); otherwise the in-Python fallback so recording still works before a rebuild.
-    if bool(getattr(carla, "_CARLANET_RECORDING_AVAILABLE", False)):
-        recorder = NativeRecorder(world, camera, args)
-        print(f"recording backend: native (C#) -> {args.record_dir}")
-    else:
-        recorder = Recorder(world, args)
-        print(f"recording backend: in-Python fallback (build CarlaNet.Recording for native) "
-              f"-> {args.record_dir}")
+    # Recorder: native (C#) backend only
+    recorder = NativeRecorder(world, camera, args)
+    if not recorder.available:
+        print("ERROR: recording unavailable - CarlaNet.Recording not built. Rebuild the DLLs.",
+              file=sys.stderr)
+        return 1
+    print(f"recording backend: native (C#) -> {args.record_dir}")
     
     spectator = world.get_spectator()
     spectator.set_transform(make_tf(cam_x, cam_y, cam_z, pitch, yaw))
@@ -386,12 +309,12 @@ def main() -> int:
     mover_thread = threading.Thread(target=_mover, daemon=True)
     mover_thread.start()
 
-    # Georeference origin for display (fetch if not already fetched for lat/long conversion)
+    # Georeference origin for display (fetch if not already fetched for lat/lon conversion)
     if not have_origin:
         try:
-            lat0, long0, origin_h = world.get_cesium_origin()
+            lat0, lon0, origin_h = world.get_cesium_origin()
             have_origin = True
-            print(f"georeference origin: lat {lat0:.7f}  long {long0:.7f}  height {origin_h:.1f} m")
+            print(f"georeference origin: lat {lat0:.7f}  lon {lon0:.7f}  height {origin_h:.1f} m")
         except Exception as e:
             print(f"get_cesium_origin failed: {e!r}", file=sys.stderr)
 
