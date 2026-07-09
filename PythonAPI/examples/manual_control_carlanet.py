@@ -5,6 +5,14 @@
 # differing only in the `carla` import lines (and an optional set_timeout value) so that it
 # runs against the CarlaNet pythonnet shim instead of the boost.python `carla` egg.
 # See CarlaNet/MANUAL_CONTROL_PORT_SPEC.md §10 for the exact edits applied.
+#
+# Running alongside SCTMV.py (drive a keyboard-controlled ego inside SCTMV's aerial EO scene):
+# only one client may be the synchronous tick-master, so start SCTMV first (it builds the world
+# and owns world.tick()), then start this client with --co-run. --co-run keeps this client
+# asynchronous and hands the shared spectator camera and road-mesh rendering to SCTMV:
+#     python SCTMV.py --height-align drape --start-traffic          # terminal 1 (tick-master)
+#     python manual_control_carlanet.py --co-run                    # terminal 2 (participant)
+# The ego (role_name "hero") is streamed by SCTMV's telemetry and appears in its EO view.
 
 # Copyright (c) 2026 Computer Vision Center (CVC) at the Universitat Autonoma de
 # Barcelona (UAB).
@@ -210,6 +218,7 @@ class World(object):
     def __init__(self, carla_world, hud, traffic_manager, args):
         self.world = carla_world
         self.sync = args.sync
+        self.co_run = args.co_run
         self.traffic_manager = traffic_manager
         self.actor_role_name = args.rolename
         try:
@@ -238,15 +247,21 @@ class World(object):
         # (an attached camera sensor's frustum does NOT pull Cesium tiles; the spectator does),
         # and the road mesh is hidden because it z-fights the photoreal streets (collision intact —
         # the car still drives on the roads). Both no-op on a plain (non-Cesium) town.
-        try:
-            self.spectator = self.world.get_spectator()
-        except Exception:
-            self.spectator = None
-        try:
-            self.world.set_road_rendered(False)
-        except Exception:
-            pass
+        #
+        # When running as a secondary client alongside SCTMV (--co-run), SCTMV owns the shared
+        # spectator (it flies the aerial EO camera) and the road-mesh rendering state; this client
+        # leaves both untouched so the two don't fight over them frame-by-frame.
+        self.spectator = None
         self._spec_n = 0
+        if not self.co_run:
+            try:
+                self.spectator = self.world.get_spectator()
+            except Exception:
+                self.spectator = None
+            try:
+                self.world.set_road_rendered(False)
+            except Exception:
+                pass
         self.world.on_tick(hud.on_world_tick)
         self.recording_enabled = False
         self.recording_start = 0
@@ -1400,7 +1415,18 @@ def main():
     argparser.add_argument(
         '--sync', action='store_true',
         help='Activate synchronous mode execution')
+    argparser.add_argument(
+        '--co-run', action='store_true',
+        help='run as a secondary client alongside SCTMV.py: stay asynchronous (never become the '
+             'synchronous tick-master, since only one client may own the world clock) and leave '
+             'the shared spectator camera and OpenDRIVE road-mesh rendering to SCTMV. Use this '
+             'when SCTMV owns the world clock and the aerial EO view.')
     args = argparser.parse_args()
+
+    if args.co_run and args.sync:
+        print('WARNING: --co-run forces asynchronous mode (only one client may be the synchronous '
+              'tick-master, and SCTMV is). Ignoring --sync.')
+        args.sync = False
 
     args.width, args.height = [int(x) for x in args.res.split('x')]
 
