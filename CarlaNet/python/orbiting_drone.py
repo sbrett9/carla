@@ -5,10 +5,6 @@ while maintaining continuous focus on that center point. The camera acts as a gh
 entity with no physics, smoothly circling while always keeping the center in view.
 
 Controls:
-    Mouse wheel   change orbit radius
-    +/-           increase/decrease orbit speed
-    Up/Down       adjust altitude
-    Space         reset to start position
     P             pause/resume orbit
     F             toggle recording (PNG + CoT XML)
     Esc           quit
@@ -368,41 +364,11 @@ def main() -> int:
                 elif ev.type == pygame.KEYDOWN:
                     if ev.key == pygame.K_ESCAPE:
                         running = False
-                    elif ev.key == pygame.K_SPACE:
-                        # Reset to start configuration
-                        center_x = start_center_x
-                        center_y = start_center_y
-                        radius = start_radius
-                        cam_altitude = start_altitude
-                        orbit_speed = start_orbit_speed
-                        angular_velocity = (2.0 * math.pi) / orbit_speed
-                        angle = 0.0
-                        print("reset to start position")
                     elif ev.key == pygame.K_p:
                         _state["paused"] = not _state["paused"]
                         print(f"orbit {'paused' if _state['paused'] else 'resumed'}")
                     elif ev.key == pygame.K_f:
                         recorder.want_enabled = not recorder.want_enabled
-                    elif ev.key == pygame.K_EQUALS or ev.key == pygame.K_PLUS:
-                        # Increase speed (shorter orbit time)
-                        orbit_speed = max(30.0, orbit_speed * 0.8)
-                        angular_velocity = (2.0 * math.pi) / orbit_speed
-                        print(f"orbit speed: {orbit_speed:.1f} s")
-                    elif ev.key == pygame.K_MINUS:
-                        # Decrease speed (longer orbit time)
-                        orbit_speed = min(600.0, orbit_speed * 1.25)
-                        angular_velocity = (2.0 * math.pi) / orbit_speed
-                        print(f"orbit speed: {orbit_speed:.1f} s")
-                    elif ev.key == pygame.K_UP:
-                        cam_altitude += 10.0
-                        print(f"altitude: {cam_altitude:.1f} m ({cam_altitude * FT_PER_M:.0f} ft)")
-                    elif ev.key == pygame.K_DOWN:
-                        cam_altitude = max(10.0, cam_altitude - 10.0)
-                        print(f"altitude: {cam_altitude:.1f} m ({cam_altitude * FT_PER_M:.0f} ft)")
-                elif ev.type == pygame.MOUSEWHEEL:
-                    # Adjust orbit radius
-                    radius = max(50.0 / FT_PER_M, radius * (1.1 ** ev.y))
-                    print(f"orbit radius: {radius * FT_PER_M:.0f} ft ({radius:.1f} m)")
 
             # Update orbit angle if not paused
             if not _state["paused"]:
@@ -452,12 +418,12 @@ def main() -> int:
             hud = [
                 f"CARLA center ({center_x:7.1f}, {center_y:7.1f})   "
                 f"radius {radius * FT_PER_M:6.0f} ft   altitude {cam_altitude * FT_PER_M:6.0f} ft   elev {elev_ft:6.0f} ft",
-                latlon_str,
+                f"{latlon_str}   "
                 f"orbit {orbit_progress:5.1f}%   speed {orbit_speed:5.1f} s   "
                 f"{'PAUSED' if _state['paused'] else 'ACTIVE'}   "
                 f"record(F) {rec_str}   "
                 f"fps {clock.get_fps():4.0f}   frames {_state['frames']}",
-                "wheel radius | +/- speed | up/down altitude | P pause | F record | Space reset | Esc quit",
+                "P pause | F record | Esc quit",
             ]
             
             bar_h = 8 + len(hud) * 18 + 2
