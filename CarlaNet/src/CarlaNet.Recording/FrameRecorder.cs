@@ -19,7 +19,7 @@ public sealed class FrameRecorder : IDisposable
 {
     private sealed record Job(DateTime CapturedUtc, int Width, int Height,
                               ReadOnlyMemory<byte> Bgra, IReadOnlyList<VehicleTelemetry> Telemetry,
-                              IReadOnlyList<double> Solar);
+                              IReadOnlyList<double> Solar, SensorPose? Sensor);
 
     private readonly CarlaClient _client;
     private readonly string _dir;
@@ -29,12 +29,15 @@ public sealed class FrameRecorder : IDisposable
     private readonly VehicleTelemetryService _telemetry;
     private readonly bool _haveOrigin;
     private readonly GeoLocation _origin;
+    private readonly SensorPlatformOptions? _platform;
 
     private readonly Channel<Job> _channel;
     private readonly Task[] _workers;
     private readonly IDisposable _subscription;
 
     private double _lastCaptureSimTime = double.NegativeInfinity;
+    private Transform? _prevSensorTf;
+    private double _prevSensorSimTime = double.NegativeInfinity;
     private long _saved, _dropped;
 
     public long Saved => Interlocked.Read(ref _saved);
@@ -44,8 +47,11 @@ public sealed class FrameRecorder : IDisposable
 
     /// <param name="streamToken">The camera actor's StreamToken (24-byte sensor stream token).</param>
     /// <param name="hz">Captures per second (may be fractional). Decimated against sim time.</param>
+    /// <param name="platform">Collection-platform options; when supplied (and a georeference origin is
+    /// available) each capture records the camera as a CoT air track. Null disables the platform track.</param>
     public FrameRecorder(CarlaClient client, byte[] streamToken, string dir, double hz,
-                         string affiliation = "n", double staleSeconds = 3.0, int workers = 0)
+                         string affiliation = "n", double staleSeconds = 3.0,
+                         SensorPlatformOptions? platform = null, int workers = 0)
     {
         if (streamToken is not { Length: 24 })
             throw new ArgumentException("streamToken must be a 24-byte sensor stream token", nameof(streamToken));
@@ -55,6 +61,7 @@ public sealed class FrameRecorder : IDisposable
         _periodSeconds = 1.0 / Math.Max(0.01, hz);
         _affiliation = affiliation;
         _stale = staleSeconds;
+        _platform = platform;
         System.IO.Directory.CreateDirectory(dir);
 
         _telemetry = new VehicleTelemetryService(client);
@@ -101,9 +108,21 @@ public sealed class FrameRecorder : IDisposable
         // poll) — the same snapshot the telemetry above came from.
         IReadOnlyList<double> solar = _client.GetCachedSolarState();
 
+        // The collection platform, derived from THIS frame's header transform — same pixels, same tick.
+        // Course/speed come from the delta to the previous captured frame's pose.
+        SensorPose? sensor = null;
+        if (_haveOrigin && _platform is not null)
+        {
+            double dt = _prevSensorTf is null ? 0.0 : (t - _prevSensorSimTime);
+            try { sensor = _telemetry.ComputeSensorPose(_origin, frame.SensorTransform, _prevSensorTf, dt, _platform, w, h); }
+            catch { }
+            _prevSensorTf = frame.SensorTransform;
+            _prevSensorSimTime = t;
+        }
+
         // RawBgra is already a private copy produced by Deserialize, so we can hand it to the worker
         // without copying again.
-        var job = new Job(captured, w, h, img.RawBgra, recs, solar);
+        var job = new Job(captured, w, h, img.RawBgra, recs, solar, sensor);
         if (!_channel.Writer.TryWrite(job))
             Interlocked.Increment(ref _dropped);
     }
@@ -121,9 +140,11 @@ public sealed class FrameRecorder : IDisposable
                         .ToString("yyyy.MM.dd_HH.mm.ss.fff", CultureInfo.InvariantCulture);
                     PngEncoder.WriteBgraToFile(job.Bgra, job.Width, job.Height,
                                                Path.Combine(_dir, stem + ".png"),
-                                               SolarMetadata.PngTextChunks(job.Solar));
+                                               SolarMetadata.PngTextChunks(job.Solar)
+                                                   .Concat(SensorMetadata.PngTextChunks(job.Sensor)));
                     CotWriter.WriteToFile(Path.Combine(_dir, stem + ".xml"),
-                                          job.CapturedUtc, job.Telemetry, _affiliation, _stale, job.Solar);
+                                          job.CapturedUtc, job.Telemetry, _affiliation, _stale,
+                                          job.Solar, job.Sensor);
                     Interlocked.Increment(ref _saved);
                 }
                 catch (Exception ex)

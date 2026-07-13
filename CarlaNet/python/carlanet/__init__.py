@@ -1651,19 +1651,33 @@ class World:
             })
         return out
 
-    def start_recording(self, camera, record_dir, hz=2.0, affiliation="n", stale=3.0):
+    def start_recording(self, camera, record_dir, hz=2.0, affiliation="n", stale=3.0,
+                        fov=90.0, platform_type="uas-fixed", platform_affiliation="f",
+                        platform_callsign="OVERWATCH", platform_uid=None, distortion="none"):
         """Start native (C#) recording of `camera`'s imagery to `record_dir`: every 1/hz seconds a
         lossless PNG of the clean frame + a paired CoT-XML telemetry sidecar, encoded on the .NET thread
-        pool (no Python/GIL in the hot path). Returns the FrameRecorder, or None if unavailable."""
+        pool (no Python/GIL in the hot path). Returns the FrameRecorder, or None if unavailable.
+
+        The collection platform (the airborne camera) is recorded as a CoT air track: `fov` is the camera
+        horizontal field of view (degrees, for the sensor field-of-view and pinhole intrinsics);
+        `platform_type` is an airframe class ('uas-fixed', 'uas-rotary', 'manned-fixed', 'manned-rotary')
+        or a raw CoT type string; `platform_affiliation` is the CoT standard identity (default 'f' friend,
+        as the platform is our own collection asset); `platform_callsign`/`platform_uid` name the track
+        (uid defaults to CARLA-SENSOR-<camera id>); `distortion` describes the lens model ('none' at CARLA
+        defaults)."""
         if not _CARLANET_RECORDING_AVAILABLE:
             print("native recording unavailable: CarlaNet.Recording assembly not loaded "
                   "(rebuild the wheel/DLLs).", file=sys.stderr)
             return None
-        from CarlaNet.Recording import FrameRecorder
+        from CarlaNet.Recording import FrameRecorder, SensorPlatformOptions
         self.stop_recording()
         token = camera._actor.StreamToken
+        uid = platform_uid or f"CARLA-SENSOR-{camera.id}"
+        cot_type = SensorPlatformOptions.ResolveCotType(str(platform_type), str(platform_affiliation))
+        opts = SensorPlatformOptions(float(fov), cot_type, str(platform_callsign), str(uid),
+                                     "sensor.camera.rgb", str(distortion))
         self._recorder = FrameRecorder(self._client, token, str(record_dir), float(hz),
-                                       str(affiliation), float(stale))
+                                       str(affiliation), float(stale), opts)
         return self._recorder
 
     def stop_recording(self):
