@@ -35,7 +35,6 @@ class Aerial_Camera():
                     roll = 0,
                     follow_vehicle = False,
                     record_dir = "/home/cdavies/runs/",
-                    enable_record = True,
                     record_hz = 2.0,
                     affiliation = "n",
                     stale = 3.0,
@@ -50,20 +49,12 @@ class Aerial_Camera():
         self.frame_height = frame_height
         self.fov = fov
 
-        # other params used for recording and testing
-        self.enable_record = enable_record
-        
         # other params used for testing
         self.follow_vehicle = follow_vehicle
         
-        # Native recording parameters
+        # Recording parameters
         self.record_dir = record_dir
         self.record_hz = record_hz
-        self.affiliation = affiliation
-        self.stale = stale
-        self._recording_handle = None
-        self._recording_active = False
-        self._recording_available = bool(getattr(carla, "_CARLANET_RECORDING_AVAILABLE", False))
 
         # Create Initial position of the camera, then create camera and set up FOV, image size, and exposure compensation 
         print(f"Creating camera")
@@ -76,137 +67,42 @@ class Aerial_Camera():
             bp.set_attribute("fov", str(fov))
         if ev and bp.has_attribute("exposure_compensation"):
             bp.set_attribute("exposure_compensation", str(ev))
+
         # setting this makes sure the camera ticks at the same rate as the recording for telemetry
         if record_hz and bp.has_attribute("sensor_tick"):
             bp.set_attribute("sensor_tick", str(1.0 / record_hz))
 
         self.camera = carla_client.get_world().spawn_actor(bp, self.initial_tf)
 
-        
-        # link camera listen function to this objects callback
-        if self.enable_record:
-            self.camera.listen(self.listen)
-            self.start_recording()
-
         print(f"Created RGB camera id={self.camera.id}")
 
 
 
-    def start_recording(self):
-        """
-        Start native recording using CarlaNet's built-in frame recorder.
-        Frames are captured, encoded to PNG, and written with CoT-XML telemetry
-        entirely on the .NET thread pool without crossing to Python.
-        
-        Returns:
-            True if recording started successfully, False otherwise
-        """
-        if self._recording_active:
-            print("Recording already active")
-            return True
+        # This is kept as reference, but is not currently used due to timing mismatch for the telemetry captured this way. The Native capture captures the vehicle telem correctly, which is then post processed.
+        # self.camera.listen(self.listen)
+
+    # def listen(self, image):
+        # now = datetime.now()
+        # timestamp_str = now.strftime("%Y.%m.%d_%H.%M.%S.") + f"{now.microsecond // 1000:03d}"
+        # print(f"received image from camera id={self.camera.id} at timestamp {timestamp_str}, frame={image.frame}, sim_time={image.timestamp}")
+
+        # frame_number = timestamp_str
+        # img_filename = f"SCTMV_{frame_number}.png"
+        # label_filename = f"SCTMV_{frame_number}.txt"
+
+        # # Capture telemetry immediately when image arrives to minimize delay
+        # telem = self.capture_telemetry(frame_number, image)
+        # print(telem)
+        # # if enabled, snap to vehicle
+        # if self.follow_vehicle:
+        #     self.snap_to_vehicle(telem)
             
-        if not self._recording_available:
-            print("Native recording unavailable: CarlaNet.Recording not built (rebuild the DLLs).", file=sys.stderr)
-            return False
-        
-        try:
-            self._recording_handle = self.carla_client.get_world().start_recording(
-                self.camera, self.record_dir, self.record_hz,
-                self.affiliation, self.stale)
-            
-            if self._recording_handle is None:
-                print("Failed to start recording: start_recording returned None", file=sys.stderr)
-                return False
-            
-            self._recording_active = True
-            note = "" if self._recording_handle.HaveTelemetryOrigin else " (PNG only; no georef origin for XML)"
-            print(f"Recording started (native) -> {self.record_dir} @ {self.record_hz} Hz{note}")
-            return True
-            
-        except Exception as e:
-            print(f"Failed to start recording: {e}", file=sys.stderr)
-            return False
-    
-    def stop_recording(self):
-        """
-        Stop native recording and report the number of captures saved.
-        
-        Returns:
-            Number of captures saved
-        """
-        if not self._recording_active:
-            print("Recording not active")
-            return 0
-        
-        try:
-            saved_count = self.get_recording_count()
-            self.carla_client.get_world().stop_recording()
-            self._recording_active = False
-            self._recording_handle = None
-            print(f"Recording stopped: {saved_count} capture(s) saved")
-            return saved_count
-            
-        except Exception as e:
-            print(f"Error stopping recording: {e}", file=sys.stderr)
-            self._recording_active = False
-            self._recording_handle = None
-            return 0
-    
-    def get_recording_count(self):
-        """
-        Get the number of frames saved by the native recorder.
-        
-        Returns:
-            Number of saved frames, or 0 if not recording
-        """
-        try:
-            return int(self._recording_handle.Saved) if self._recording_handle is not None else 0
-        except Exception:
-            return 0
-    
-    def is_recording(self):
-        """
-        Check if native recording is currently active.
-        
-        Returns:
-            True if recording, False otherwise
-        """
-        return self._recording_active
-    
-    def is_recording_available(self):
-        """
-        Check if native recording functionality is available.
-        
-        Returns:
-            True if CarlaNet.Recording is built and available, False otherwise
-        """
-        return self._recording_available
+        # labels = self.convert_telem_to_labels(telem)
+        # print(f"{len(labels)} labels")
+        # print(labels)
 
-
-
-
-    def listen(self, image):
-        now = datetime.now()
-        timestamp_str = now.strftime("%Y.%m.%d_%H.%M.%S.") + f"{now.microsecond // 1000:03d}"
-        print(f"received image from camera id={self.camera.id} at timestamp {timestamp_str}, frame={image.frame}, sim_time={image.timestamp}")
-
-        frame_number = timestamp_str
-        img_filename = f"SCTMV_{frame_number}.png"
-        label_filename = f"SCTMV_{frame_number}.txt"
-
-        # Capture telemetry immediately when image arrives to minimize delay
-        telem = self.capture_telemetry(frame_number, image)
-        print(telem)
-        # if enabled, snap to vehicle
-        if self.follow_vehicle:
-            self.snap_to_vehicle(telem)
-            
-        labels = self.convert_telem_to_labels(telem)
-        print(f"{len(labels)} labels")
-        print(labels)
-
-        with open(self.record_dir + label_filename, 'a') as f:
-            f.write('\n'.join(labels))
+        # with open(self.record_dir + label_filename, 'a') as f:
+        #     f.write('\n'.join(labels))
 
         # Convert the image to cv2 RGB and write it
         # write_start = time.time()
@@ -312,48 +208,6 @@ class Aerial_Camera():
             telemetry['vehicles'].append(vehicle_data)
 
         return telemetry
-
-    def _world_to_camera(self, world_point, camera_transform):
-        """Convert a 3D world point to camera coordinate system"""
-        # Translate to camera origin
-        dx = world_point.x - camera_transform.location.x
-        dy = world_point.y - camera_transform.location.y
-        dz = world_point.z - camera_transform.location.z
-        
-        # Rotate to camera frame (inverse of camera rotation)
-        # CARLA uses left-handed coordinate system
-        pitch = math.radians(camera_transform.rotation.pitch)
-        yaw = math.radians(camera_transform.rotation.yaw)
-        roll = math.radians(camera_transform.rotation.roll)
-        
-        # Build rotation matrix (inverse = transpose for rotation matrices)
-        # Camera looks along +X axis in camera space
-        cos_p, sin_p = math.cos(pitch), math.sin(pitch)
-        cos_y, sin_y = math.cos(yaw), math.sin(yaw)
-        cos_r, sin_r = math.cos(roll), math.sin(roll)
-        
-        # Apply inverse rotation: yaw -> pitch -> roll (in reverse order)
-        # Simplified for camera coordinate system
-        x_cam = dx * cos_y + dy * sin_y
-        y_cam = -dx * sin_y * cos_p + dy * cos_y * cos_p + dz * sin_p
-        z_cam = dx * sin_y * sin_p - dy * cos_y * sin_p + dz * cos_p
-        
-        return np.array([x_cam, y_cam, z_cam])
-    
-    def _camera_to_image(self, point_camera, calibration):
-        """Project a 3D camera-space point to 2D image coordinates"""
-        # Perspective projection: [x/z, y/z, 1]
-        point_2d_homogeneous = np.array([
-            point_camera[0] / point_camera[2],
-            point_camera[1] / point_camera[2],
-            1.0
-        ])
-        
-        # Apply calibration matrix
-        point_image = calibration @ point_2d_homogeneous
-        
-        return point_image[:2]
-
 
     @staticmethod
     def validate_coordinate_system():
@@ -842,8 +696,6 @@ class Aerial_Camera():
     def destroy(self):
         print(f"Destroying carla camera id={self.camera.id}")
         # Stop recording if active
-        if self._recording_active:
-            self.stop_recording()
         self.camera.destroy()
 
     def move(self, x, y, z_ft, r, p, yaw):
@@ -870,9 +722,10 @@ class Aerial_Camera():
 
 
 def main():
-    print(f"kicking off test")
-    # make carla stuff
+    print(f"kicking off Aerial Camera")
 
+
+    # build Aerial Camera with carla Client
     client = carla.Client(args.host, args.port)
     client.set_timeout(15.0)
     print(f"server version: {client.get_server_version()}")
@@ -884,6 +737,7 @@ def main():
 
     cam = Aerial_Camera(client)
 
+    # Run for 120s to record data, then destroy cleanly.
     running = True
     count_seconds = 0
     run_seconds = 120
