@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "carlacontrol"
+version = "0.1.0"
+description = "High-level control and automation tools for CARLA simulator"
+requires-python = ">=3.11"
+license = {text = "Proprietary - Sierra Nevada Corporation"}
+authors = [{ name = "SNC Team" }]
+dependencies = [
+    "carlanet>=0.1.0",
+    "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.1.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["carlacontrol*"]
+exclude = ["test*", "docs*"]
+
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "W", "I", "N", "UP"]
+ignore = ["E501"]  # Line too long (handled by formatter)
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
