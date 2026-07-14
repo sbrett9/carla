@@ -50,17 +50,19 @@
 import carlacontrol
 
 
-def test_version_exists():
-    """Check that version attribute exists."""
-    assert hasattr(carlacontrol, "__version__")
-    assert isinstance(carlacontrol.__version__, str)
-    assert len(carlacontrol.__version__) > 0
+class TestVersion:
+    """Test version information."""
 
+    def test_version_exists(self):
+        """Check that version attribute exists."""
+        assert hasattr(carlacontrol, "__version__")
+        assert isinstance(carlacontrol.__version__, str)
+        assert len(carlacontrol.__version__) > 0
 
-def test_version_format():
-    """Check that version follows semantic versioning."""
-    version = carlacontrol.__version__
-    parts = version.split(".")
-    assert len(parts) >= 2
-    assert parts[0].isdigit()
-    assert parts[1].isdigit()
+    def test_version_format(self):
+        """Check that version follows semantic versioning."""
+        version = carlacontrol.__version__
+        parts = version.split(".")
+        assert len(parts) >= 2
+        assert parts[0].isdigit()
+        assert parts[1].isdigit()

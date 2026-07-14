@@ -9,17 +9,35 @@ This document defines the Python coding standards and formatting conventions for
 1. [File Header](#file-header)
 2. [Import Organization](#import-organization)
 3. [Naming Conventions](#naming-conventions)
-4. [Type Hints](#type-hints)
-5. [Docstrings](#docstrings)
-6. [Code Formatting](#code-formatting)
-7. [Error Handling](#error-handling)
-8. [Logging](#logging)
-9. [Constants and Configuration](#constants-and-configuration)
-10. [Performance](#performance)
+4. [Code Organization](#code-organization)
+5. [Type Hints](#type-hints)
+6. [Docstrings](#docstrings)
+7. [Code Formatting](#code-formatting)
+8. [Error Handling](#error-handling)
+9. [Logging](#logging)
+10. [Constants and Configuration](#constants-and-configuration)
+11. [Performance](#performance)
 
 ---
 
 ## File Header
+
+### Executable Scripts
+
+**Scripts in the `scripts/` directory must be executable and include a shebang line:**
+
+```python
+#!/usr/bin/env python3
+############################# INTELLECTUAL PROPERTY RIGHTS #############################
+# ... (IP header continues)
+```
+
+After creating a script, make it executable:
+```bash
+chmod +x scripts/script_name.py
+```
+
+### Standard Header
 
 Every Python file must begin with the standard intellectual property header followed by file metadata:
 
@@ -145,6 +163,74 @@ class Actor:
     def _to_cs(self):  # Private method
         pass
 ```
+
+---
+
+## Code Organization
+
+### One Class Per File
+
+**Each Python file should contain exactly one class.** This promotes:
+- Clear module boundaries and responsibilities
+- Easier navigation and maintenance
+- Better testability and reusability
+
+```python
+# Good: actor.py
+class Actor:
+    """Represents a CARLA actor."""
+    pass
+
+# Bad: actors.py with multiple classes
+class Actor:
+    pass
+
+class Vehicle:
+    pass
+
+class Walker:
+    pass
+```
+
+**Exception:** Small helper classes or enums that are tightly coupled to the main class may be included in the same file.
+
+### Avoid Unencapsulated Functions
+
+**Strongly prefer encapsulating functions within classes rather than having module-level functions.** If you have utility functions, wrap them in a static class:
+
+```python
+# Good: Use a static wrapper class
+class GeometryUtils:
+    """Utility functions for geometric calculations."""
+    
+    @staticmethod
+    def distance_2d(p1: Vector2D, p2: Vector2D) -> float:
+        """Calculate 2D distance between two points."""
+        return ((p2.x - p1.x)**2 + (p2.y - p1.y)**2)**0.5
+    
+    @staticmethod
+    def normalize_angle(angle: float) -> float:
+        """Normalize angle to [-π, π]."""
+        return (angle + 180) % 360 - 180
+
+# Avoid: Dangling module-level functions
+def distance_2d(p1: Vector2D, p2: Vector2D) -> float:
+    """Calculate 2D distance between two points."""
+    return ((p2.x - p1.x)**2 + (p2.y - p1.y)**2)**0.5
+
+def normalize_angle(angle: float) -> float:
+    """Normalize angle to [-π, π]."""
+    return (angle + 180) % 360 - 180
+```
+
+**Benefits of static wrapper classes:**
+- Clear namespace organization
+- Easier to discover related functionality
+- Better IDE support and autocomplete
+- Simpler to mock in tests
+- Consistent with object-oriented design principles
+
+**Exception:** Module initialization code, and logger setup are acceptable at module level.
 
 ---
 
@@ -321,10 +407,13 @@ class Vector3D:
 
 When writing Python code for CarlaControl:
 - [ ] Include standard file header with IP notice and metadata
+- [ ] Scripts in `scripts/` directory: add shebang `#!/usr/bin/env python3` and make executable
 - [ ] Organize imports into three sections (stdlib, third-party, CarlaControl)
 - [ ] Use PascalCase for classes
 - [ ] Use snake_case for functions, methods, and variables
 - [ ] Use single underscore prefix `_` for private attributes/methods
+- [ ] One class per file (with exceptions for tightly coupled helpers)
+- [ ] Prefer static wrapper classes over unencapsulated module-level functions
 - [ ] Use `X | None` instead of `Optional[X]` for type hints
 - [ ] Write Google-style docstrings for public APIs
 - [ ] Initialize logger with `logger = logging.getLogger(__name__)`

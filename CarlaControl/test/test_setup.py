@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 ############################# INTELLECTUAL PROPERTY RIGHTS #############################
 ##                                                                                    ##
 ##                   Copyright (c) 2026 Sierra Nevada Corporation                     ##
@@ -39,54 +38,64 @@
 ##                                                                                    ##
 ############################# INTELLECTUAL PROPERTY RIGHTS #############################
 #
-#    File:    verify_setup.py
+#    File:    test_setup.py
 #    Author:  SNC Team
 #    Date:    2026-07-14
 #
-#    Purpose:  Verify CarlaControl package setup
+#    Purpose:  Test CarlaControl package setup and structure
 #
 
-"""Verify CarlaControl package setup and structure.
+"""Test CarlaControl package setup and structure."""
 
-This script runs the setup verification tests using pytest.
-"""
-
-import subprocess
-import sys
 from pathlib import Path
 
 
-class SetupVerifier:
-    """Wrapper to run setup verification tests using pytest."""
+class TestPackageStructure:
+    """Test package directory structure and required files."""
 
     @staticmethod
-    def run() -> int:
-        """Run setup verification tests.
-        
-        Returns:
-            Exit code (0 for success, non-zero for failure)
-        """
-        base_dir = Path(__file__).parent.parent
-        test_file = base_dir / "test" / "test_setup.py"
-        
-        print("Verifying CarlaControl package setup...")
-        print(f"Base directory: {base_dir}\n")
-        
-        result = subprocess.run(
-            [sys.executable, "-m", "pytest", str(test_file), "-v"],
-            cwd=base_dir,
-        )
-        
-        if result.returncode == 0:
-            print("\n" + "=" * 60)
-            print("✓ Package structure verification PASSED")
-        else:
-            print("\n" + "=" * 60)
-            print("✗ Package structure verification FAILED")
-            print("Please fix the issues above.")
-        
-        return result.returncode
+    def _get_base_dir() -> Path:
+        """Get the base directory of the package."""
+        return Path(__file__).parent.parent
 
+    def test_required_files_exist(self):
+        """Check that all required files exist."""
+        base_dir = self._get_base_dir()
+        
+        required_files = [
+            "pyproject.toml",
+            "README.md",
+            "docs/python-rules.md",
+            ".gitignore",
+            "MANIFEST.in",
+            "src/carlacontrol/__init__.py",
+            "src/carlacontrol/version.py",
+            "test/test_version.py",
+        ]
+        
+        for file_path in required_files:
+            full_path = base_dir / file_path
+            assert full_path.exists(), f"Required file missing: {file_path}"
 
-if __name__ == "__main__":
-    sys.exit(SetupVerifier.run())
+    def test_required_directories_exist(self):
+        """Check that all required directories exist."""
+        base_dir = self._get_base_dir()
+        
+        required_dirs = [
+            "src/carlacontrol",
+            "test",
+            "docs",
+            "scripts",
+        ]
+        
+        for dir_path in required_dirs:
+            full_path = base_dir / dir_path
+            assert full_path.is_dir(), f"Required directory missing: {dir_path}/"
+
+    def test_package_can_be_imported(self):
+        """Check that the package can be imported."""
+        import carlacontrol
+        
+        assert hasattr(carlacontrol, "__version__")
+        assert isinstance(carlacontrol.__version__, str)
+        assert len(carlacontrol.__version__) > 0

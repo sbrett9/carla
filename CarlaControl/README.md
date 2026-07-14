@@ -57,9 +57,9 @@ CarlaControl/
 │       └── __init__.py
 ├── test/                   # Unit tests
 ├── docs/                   # Documentation
+│   └── python-rules.md     # Python coding standards
 ├── scripts/                # Utility scripts
 ├── pyproject.toml          # Package configuration
-├── python-rules.md         # Python coding standards
 └── README.md               # This file
 ```
 
@@ -67,7 +67,7 @@ CarlaControl/
 
 ### Code Style
 
-This project follows the SNC Python Style Guide defined in `python-rules.md`. Key points:
+This project follows the SNC Python Style Guide defined in `docs/python-rules.md`. Key points:
 
 - **Python Version:** 3.11+ (target: 3.12)
 - **Formatting:** Black (line length: 100)
@@ -98,9 +98,9 @@ ruff check --fix src/ test/
 
 ### Required
 - **numpy** (>=1.24.0): Numerical computing
+- **carlanet**: .NET client for CARLA simulator (installed from `../CarlaNet/python`)
 
 ### Optional
-- **carlanet**: .NET client for CARLA simulator (installed from `../CarlaNet/python`)
 - **pytest** (>=7.0): Testing framework (dev)
 - **ruff** (>=0.1.0): Linting (dev)
 
@@ -114,7 +114,7 @@ This software is proprietary and confidential. Unauthorized copying, distributio
 
 This is an internal SNC project. All contributors must:
 
-1. Follow the coding standards in `python-rules.md`
+1. Follow the coding standards in `docs/python-rules.md`
 2. Include proper file headers with IP notice
 3. Write tests for new functionality
 4. Run Black and Ruff before committing
