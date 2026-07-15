@@ -90,6 +90,13 @@ public:
 
   void AddTimeToRecorder();
 
+  // How many signal heads this pole hangs from its mast arm: one per driving lane of the approach it
+  // faces, as a real mast arm carries a head over each lane. ATrafficLightManager sets this from the
+  // OpenDRIVE lane section before the Blueprint construction script runs, so the script can build that
+  // many heads. Defaults to a single head for hand-placed lights that no manager configures.
+  UPROPERTY(Category = "Traffic Light", EditAnywhere, BlueprintReadOnly)
+  int32 NumSignalHeads = 1;
+
 protected:
 
   UFUNCTION(Category = "Traffic Light", BlueprintImplementableEvent)

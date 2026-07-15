@@ -83,7 +83,8 @@ public static class TrafficLightInjector
         // per traffic-light head, its (road, station, lateral offset, element) so we can collapse an
         // approach's several heads down to one pole below.
         var signalIds = new HashSet<string>();
-        var tlHeads = new Dictionary<string, (string RoadId, double S, double T, XElement El)>();
+        var tlHeads = new Dictionary<string,
+            (string RoadId, double S, double T, XElement El, int LaneMin, int LaneMax)>();
         foreach (var road in root.Elements("road"))
         {
             string roadId = road.Attribute("id")?.Value ?? "";
@@ -106,8 +107,14 @@ public static class TrafficLightInjector
                     // hOffset), which points its face the way traffic travels — its back to the
                     // drivers who must obey it. Rotate 180 deg so it faces the oncoming approach.
                     s.SetAttributeValue("hOffset", "3.14159265");
+                    // netconvert gives each head a single-lane <validity>; keep its lane span so the
+                    // approach's surviving pole can inherit the coverage of the heads we drop below.
+                    var val = s.Element("validity");
+                    int laneA = (int)ParseNum(val?.Attribute("fromLane")?.Value);
+                    int laneB = (int)ParseNum(val?.Attribute("toLane")?.Value);
                     tlHeads[sid] = (roadId, ParseNum(s.Attribute("s")?.Value),
-                        ParseNum(s.Attribute("t")?.Value), s);
+                        ParseNum(s.Attribute("t")?.Value), s,
+                        Math.Min(laneA, laneB), Math.Max(laneA, laneB));
                 }
                 signalIds.Add(sid);
             }
@@ -117,15 +124,43 @@ public static class TrafficLightInjector
         // mast-arm assembly per signal, so an approach's several heads stack as several poles across
         // the road. Group heads by approach (road + stop-line station) and keep only the roadside-most
         // (largest |t|) as the representative pole — its mast arm then reaches back over the lanes.
-        var approachRep = new Dictionary<string, (string Head, double AbsT)>();
+        var approachRep = new Dictionary<string, (string Head, double AbsT, int LaneMin, int LaneMax)>();
         foreach (var (head, pos) in tlHeads)
         {
             string key = pos.RoadId + ":" + Math.Round(pos.S).ToString(CultureInfo.InvariantCulture);
             double absT = Math.Abs(pos.T);
-            if (!approachRep.TryGetValue(key, out var cur) || absT > cur.AbsT)
-                approachRep[key] = (head, absT);
+            if (!approachRep.TryGetValue(key, out var cur))
+            {
+                approachRep[key] = (head, absT, pos.LaneMin, pos.LaneMax);
+                continue;
+            }
+            // Keep the roadside-most head as the pole, but accumulate every head's lane coverage.
+            int laneMin = Math.Min(cur.LaneMin, pos.LaneMin);
+            int laneMax = Math.Max(cur.LaneMax, pos.LaneMax);
+            approachRep[key] = absT > cur.AbsT
+                ? (head, absT, laneMin, laneMax)
+                : (cur.Head, cur.AbsT, laneMin, laneMax);
         }
         var keptHeads = new HashSet<string>(approachRep.Values.Select(v => v.Head));
+
+        // The surviving pole must govern EVERY lane of its approach. CARLA builds one stop-line
+        // trigger box per lane listed in a signal's <validity> (TrafficLightComponent::InitializeSign),
+        // and netconvert scopes each head's validity to the single lane that head hangs over. Dropping
+        // the other heads without merging their validity would leave their lanes with no trigger box,
+        // so vehicles in them would never register the light and would drive straight through it.
+        foreach (var rep in approachRep.Values)
+        {
+            if (!tlHeads.TryGetValue(rep.Head, out var pos))
+                continue;
+            var validity = pos.El.Element("validity");
+            if (validity == null)
+            {
+                validity = new XElement("validity");
+                pos.El.Add(validity);
+            }
+            validity.SetAttributeValue("fromLane", rep.LaneMin.ToString(CultureInfo.InvariantCulture));
+            validity.SetAttributeValue("toLane", rep.LaneMax.ToString(CultureInfo.InvariantCulture));
+        }
 
         // Move each surviving pole to the FAR side of its junction, at the roadside, facing back toward
         // the approach. A real signal is across the intersection from the driver who obeys it; netconvert

@@ -58,6 +58,9 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
     private readonly Dictionary<ActorId, JuncId> _vehicleLastJunction = new();
     // Timestamp at which the vehicle first stopped at the stop sign.
     private readonly Dictionary<ActorId, double> _vehicleStopTime = new();
+    // Vehicles that entered a signalised junction while permitted to proceed, and so must clear it
+    // rather than stop part-way across if the light changes behind them. See Update().
+    private readonly HashSet<ActorId> _committedToJunction = new();
 
     // Per-tick output.
     private readonly Dictionary<ActorId, TrafficLightFrame> _output = new();
@@ -119,6 +122,28 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             TLS trafficLightState = tlState.TlState;
             bool isAtTrafficLight = tlState.AtTrafficLight;
 
+            // Is the vehicle's path about to enter, or already on, a junction road?
+            bool headingIntoJunction =
+                _bufferMap.TryGetValue(egoActorId, out var egoBuffer)
+                && egoBuffer.Count > 0
+                && egoBuffer[0].CheckJunction();
+
+            // A vehicle that entered the junction while permitted to proceed has committed to its
+            // manoeuvre and must clear the intersection, even if the light changes behind it. This is
+            // needed because a vehicle keeps reporting "at traffic light" for as long as it overlaps
+            // the signal's stop-line trigger box, and that box (~3 m) is far shorter than a long
+            // vehicle, so the flag stays set well after the nose is into the junction. Without it, a
+            // light changing mid-manoeuvre halts the vehicle across the intersection — worst for a
+            // permissive left turn, which waits inside the junction for a gap and clears on
+            // yellow/red, and would otherwise block cross traffic until its own light cycles green.
+            //
+            // Commitment is tracked rather than inferred from position: the waypoint buffer looks
+            // AHEAD of the vehicle, so a vehicle still stopped at the stop line already has a junction
+            // waypoint in front of it and cannot be distinguished geometrically from one that is
+            // genuinely across the line. Entering on a permitting light is the distinction that
+            // matters, and a vehicle arriving against a red never commits, so it still stops.
+            bool committedToJunction = _committedToJunction.Contains(egoActorId);
+
             // Case 1: at a signalised junction with a red/yellow light.
             if (isAtTrafficLight
                 && trafficLightState != TLS.Green
@@ -127,7 +152,7 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             {
                 if (currentJunctionId != -1)
                     RemoveActor(egoActorId);
-                trafficLightHazard = true;
+                trafficLightHazard = !committedToJunction;
             }
             // Case 2: currently arbitrating a non-signalised junction.
             else if (currentJunctionId != -1)
@@ -152,6 +177,15 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
                 AddActorToNonSignalisedJunction(egoActorId, affectedJunctionId);
                 trafficLightHazard = true;
             }
+
+            // Update the commitment: a vehicle proceeding into the junction (nothing holding it back
+            // this tick) has committed to crossing; one that has left the junction behind releases it.
+            // Re-asserted every tick, so a committed vehicle stays committed for as long as it is
+            // still crossing.
+            if (!headingIntoJunction)
+                _committedToJunction.Remove(egoActorId);
+            else if (!trafficLightHazard)
+                _committedToJunction.Add(egoActorId);
         }
 
         _output[egoActorId] = new TrafficLightFrame(trafficLightHazard);
@@ -183,6 +217,7 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             _vehicleStopTime.Remove(actorId);
             _vehicleLastJunction.Remove(actorId);
         }
+        _committedToJunction.Remove(actorId);
         _output.Remove(actorId);
     }
 

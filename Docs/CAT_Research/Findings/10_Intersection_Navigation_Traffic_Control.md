@@ -84,15 +84,34 @@ log at `Unreal/CarlaUnreal/Saved/Logs/CarlaUnreal.log`).
 
 **Open issues (quality/realism, not function):**
 
-- **Traffic-light pole placement + mesh (active).** netconvert emits one `<signal>` per head
-  (`t = -1.7 … -8.4 m`, all `orientation="+"`, no `hOffset`), and `BP_TLOpenDrive` renders one full
-  pole+arm per signal, so a junction shows several poles *across the road* rather than one mast-arm pole
-  at the corner holding several heads facing the approach. The project already contains mast-arm
-  blueprints (`BP_TrafficLightNew_T10_master_largeBIG/mediumBIG/noArmsBIG`), a head component
-  (`ST_TrafficLightHead`), and separable pole/head static meshes (`SM_Pole_TrafficLight0N`,
-  `SM_TrafficLightPole0N`) — inspecting these in the editor (VibeUE) to compose corner-pole + arm +
-  per-approach heads is the current next step.
-- **Facing** set to a uniform `hOffset=π`; pending visual confirmation (else `-π`).
+- **Traffic-light pole placement + mesh — resolved.** netconvert emits one `<signal>` per head
+  (`t = -1.7 … -8.4 m`, all `orientation="+"`, no `hOffset`) and `BP_TLOpenDrive` renders one full
+  pole+arm per signal, so a junction showed several poles *across the road*. Now: the injector collapses
+  each approach's heads to one pole, places it on the far side of the junction at the roadside, and
+  faces it at the oncoming approach; the blueprint hangs one signal head per approach lane from its mast
+  arm. Runtime-validated. See [12 — Traffic-Light Placement & Turn Signals](12_Traffic_Light_Placement_and_Turn_Signals.md)
+  for the full design, the geometry, and the deferred items (backplates on added heads, the left-hand-traffic
+  blueprint, turn arrows).
+- **Collapsing heads must merge `<validity>` — a trap worth stating plainly.** CARLA builds one
+  stop-line trigger box *per lane listed in a signal's `<validity>`*
+  (`TrafficLightComponent::InitializeSign`), and netconvert scopes each head's validity to the single
+  lane it hangs over. Dropping the redundant heads without merging their validity onto the survivor
+  therefore leaves every other lane of the approach with **no trigger box at all**, and traffic in those
+  lanes drives straight through the light — while traffic in the one surviving lane still stops, which
+  makes the failure look like a timing bug rather than a coverage bug. The survivor now inherits the
+  union of its approach's lanes. Note that `MapBuilder::AddSignalPositionInertial` only sets the signal's
+  `_transform`: it does **not** move `s`/road, so the far-side *visual* placement does not move the
+  trigger boxes.
+- **Vehicles must clear a junction they have entered.** A vehicle keeps reporting *at traffic light*
+  while it overlaps the stop-line trigger box (~3 m), which is far shorter than a bus or truck, so the
+  flag persists after its nose is into the junction. `TrafficLightStage` therefore tracked vehicles that
+  entered while permitted to proceed and exempts them from braking, so a light changing mid-manoeuvre no
+  longer halts them across the intersection — worst case a permissive left, which waits inside the
+  junction for a gap and would otherwise block cross traffic until its own light cycled green. The
+  commitment is *stateful, not geometric*: the waypoint buffer looks ahead, so a vehicle stopped at the
+  stop line already has a junction waypoint in front of it and cannot be told apart from one genuinely
+  across the line — inferring entry from position instead makes vehicles run reds.
+- **Facing** confirmed: the tangent-toward-junction heading renders as facing the stopped driver.
 - **Signal timing** uses CARLA defaults ({10 s green, 3 s yellow, 2 s red} per controller) — phases
   alternate correctly but do not reproduce netconvert's per-phase durations from the `.net.xml`.
 - **Speed-limit signs (type 274)** not yet injected (per-way `maxspeed`, value-bucket snapping,

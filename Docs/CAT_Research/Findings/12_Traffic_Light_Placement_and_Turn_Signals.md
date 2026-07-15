@@ -17,17 +17,31 @@ one light each**, rather than one mast-arm pole at the corner with several heads
 heads faced the wrong way.
 
 The spawned blueprint `BP_TLOpenDrive_RHT` is a mast-arm assembly — a vertical pole
-(`SM_TrafficLight__VPole_Main`, base at Z=0), a horizontal arm (`SM_TrafficLight__HPole01_Long1`) — but
-it carries **one signal head per boom**: the ~12 `SM_BackPlate_*` components are the modular *segments of
-that single head's backplate*, not separate heads. (Town10HD's `BP_TrafficLightNew_T10` clearly mounts
-several distinct heads on one arm; adopting or spawning a multi-head boom is a future mesh option — it is
-hardcoded in `ATrafficLightManager::SpawnTrafficLights`, so it would need an engine change.)
+(`SM_TrafficLight__VPole_Main`, base at Z=0) and a horizontal arm (`SM_TrafficLight__HPole01_Long1`) —
+and it shipped carrying **one signal head per boom**. The ~12 `SM_BackPlate_*` components are the modular
+*segments of that single head's backplate*, not separate heads.
 
 The primary cause of the "several poles in the road" look: `ATrafficLightManager::SpawnTrafficLights`
 spawns **one entire `BP_TLOpenDrive` per `<signal>`**, and netconvert emits **one `<signal>` per
 head/movement** (verified on SF: all heads `orientation="+"`, no `hOffset`, `t` from −1.7 to −8.4 m
 spread across the road, `zOffset="5"`). So an approach with N heads produced N full mast-arm assemblies
-stacked across the road.
+stacked across the road. §2 collapses that to one pole per approach; §2.1 puts the heads back on its arm.
+
+## 1.1 The blueprint is data-driven — the head count is just an array length
+
+`BP_TLOpenDrive_RHT` builds its heads procedurally, which is what makes a multi-head boom a *data*
+change rather than new geometry. Its `Heads` array (of `ST_TrafficLightHead`: `Description`, `Position`
+transform, `Lights[]` of mesh + relative transform + colour enum, and an optional `Support` mesh) is
+walked by the Construction Script, which for each entry adds the head, builds its three lamp modules,
+creates their dynamic material instances, and registers them into the `RedLights`/`YellowLights`/
+`GreenLights` arrays that the EventGraph's `LightChanged` drives. **Any head added to the array is
+therefore automatically state-driven** — no wiring required. It simply shipped with a single entry.
+
+Town10HD's `BP_TrafficLightNew_T10_master_largeBIG_rsc` is the proof and the reference: five entries
+(two vehicle heads on one arm at X=−930 and −550, a pedestrian head, two street signs), and only eight
+components. Note its lamps (`SM_TrafficLight_Signal01_A`) are self-contained housings, whereas
+`BP_TLOpenDrive`'s are bare lens modules (`SM_TrafficLights_Black_Module_01`, 27×30×26) whose backplate
+is a separate assembly of 1-unit-thick panels — see the deferred item in §2.
 
 ## 2. Pole placement — implemented (`TrafficLightInjector`)
 
@@ -35,9 +49,20 @@ The fix is a data transform in the injector (no engine change), applied to the t
 
 1. **One pole per approach.** Group heads by approach (parent road + rounded stop-line station) and keep
    only the **roadside-most head** (largest `|t|`) as the representative pole; drop the rest and prune
-   the controller references. The surviving pole's own mast arm and backplates then provide the
-   multiple-heads-over-the-lanes look. Trade-off: per-head protected-turn arrows are lost (see §3); the
-   pole shows the approach's through phase (the head is assigned to the first phase it is green in).
+   the controller references. Trade-off: per-head protected-turn arrows are lost (see §3); the pole shows
+   the approach's through phase (the head is assigned to the first phase it is green in).
+
+   **The survivor must inherit the dropped heads' `<validity>`.** CARLA builds one stop-line trigger box
+   *per lane listed in a signal's validity* (`TrafficLightComponent::InitializeSign` walks
+   `GetValidities()` → `Map.GetWaypoint(RoadId, lane, GetS())`, placing the box at
+   `s − (BoxLength + AdditionalDistance)`, ~3 m before the line). netconvert scopes each head's validity
+   to the single lane it hangs over (`<validity fromLane="-2" toLane="-2"/>`), so collapsing the heads
+   without merging validity leaves every other lane of the approach **with no trigger box at all** — that
+   traffic never registers the light and drives straight through it, while the one surviving lane still
+   stops. The symptom reads like a timing bug and is actually lane coverage; the diagnostic that settles
+   it is *which lane* a misbehaving vehicle is in. The survivor's validity is therefore set to the union
+   (min/max) of its approach's heads' lanes; `Math::GenerateRange(a, b)` accepts either direction.
+   Regression-tested by `Inject_CollapsingHeads_KeepsValidityOverEveryLaneOfTheApproach`.
 2. **Far-side, roadside placement.** A real signal sits across the intersection from the driver who
    obeys it, at the curb. Using the parsed road geometry, the pole is placed in two components:
    - *forward* — the approach's road tangent (`GetDirectedPointInNoLaneOffset(...).Tangent`) is oriented
@@ -61,6 +86,35 @@ The fix is a data transform in the injector (no engine change), applied to the t
    confirmed empirically). Falls back to near-side road-relative placement when geometry is unavailable.
 3. **Height.** `zOffset` is zeroed (netconvert's 5 m floated the pole, since the BP models the mast from
    its base); near-side fallbacks get `hOffset=π` to face oncoming.
+
+## 2.1 One head per lane on the arm — implemented
+
+With one pole per approach, the arm carries one head per **driving lane of that approach**, as a real
+mast arm does. Because the blueprint is data-driven (§1.1), this needed only a head count plus array
+entries:
+
+- **C++** — `ATrafficLightBase::NumSignalHeads` (a `BlueprintReadOnly` UPROPERTY) is set by
+  `ATrafficLightManager::SpawnTrafficLights` from `CountDrivingLanesOnSide()`, which counts the driving
+  lanes on the same side of the road as the signal's lane. It is applied with
+  `FActorSpawnParameters::bDeferConstruction` + `FinishSpawning`, so the value is in place **before** the
+  Construction Script runs. It defaults to 1, so hand-placed lights that no manager configures are
+  unaffected.
+- **Blueprint** — `Heads` holds three entries at X = −640, −305, −975 (one lane, 335 units, apart). The
+  Construction Script gates each on `Array Index < NumSignalHeads`, so a pole builds only the heads its
+  approach has lanes for. Head [0] keeps its original X=−640, so a one-head pole is identical to the
+  pre-existing asset — including its backplate.
+- **Arm length** — the arm mesh spans 504.4 local units at X=−235.7, rotated 180°, so its reach is
+  `−235.7 − 504.4·scale` (−622.8 at the shipped 0.7675 scale, matching the end cap at −628.9). Two heads
+  fit that arm; three do not, so a second gate (`2 < NumSignalHeads`) scales the arm to 1.4437 and moves
+  the end cap to −963.9 for three-head poles only.
+
+Verified by spawning actors at each count: N = 1/2/3 → 3/6/9 lamp modules, with the arm extending only at
+N = 3. SF_LaurelHeights yields 34 one-head, 24 two-head, and 13 three-head poles.
+
+**Deferred (cosmetic):** added heads carry no backplate — the 11 `SM_BackPlate_Black_*` panels (1 unit
+thick, purely the visibility panel behind the head) are static components at head [0] only, and the lamps
+are self-contained, so extra heads render as proper 3-lamp heads without them. The boom-to-head junction
+also reads awkwardly. `BP_TLOpenDrive_LHT` (left-hand traffic) is untouched and still single-head.
 
 **Known refinements (visual-tuning, not correctness):**
 - The **lateral side** uses the head's own `t` sign, which puts the pole at the approach's own curb; if a

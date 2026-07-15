@@ -30,10 +30,10 @@ public class TrafficLightInjectorTests
       </laneSection>
     </lanes>
     <signals>
-      <signal id=""J1_0"" s=""90"" t=""-5"" type=""1000001"" dynamic=""yes""/>
-      <signal id=""J1_1"" s=""90"" t=""-2"" type=""1000001"" dynamic=""yes""/>
-      <signal id=""J1_2"" s=""95"" t=""-5"" type=""1000001"" dynamic=""yes""/>
-      <signal id=""J1_3"" s=""95"" t=""-2"" type=""1000001"" dynamic=""yes""/>
+      <signal id=""J1_0"" s=""90"" t=""-5"" type=""1000001"" dynamic=""yes""><validity fromLane=""-2"" toLane=""-2""/></signal>
+      <signal id=""J1_1"" s=""90"" t=""-2"" type=""1000001"" dynamic=""yes""><validity fromLane=""-1"" toLane=""-1""/></signal>
+      <signal id=""J1_2"" s=""95"" t=""-5"" type=""1000001"" dynamic=""yes""><validity fromLane=""-2"" toLane=""-2""/></signal>
+      <signal id=""J1_3"" s=""95"" t=""-2"" type=""1000001"" dynamic=""yes""><validity fromLane=""-1"" toLane=""-1""/></signal>
     </signals>
   </road>
   <controller id=""J1"">
@@ -84,6 +84,31 @@ public class TrafficLightInjectorTests
         var junction = root.Elements("junction").Single(j => j.Attribute("name")!.Value == "J1");
         var links = junction.Elements("controller").Select(c => c.Attribute("id")!.Value).ToList();
         Assert.Equal(new[] { "J1_p0", "J1_p1" }, links);
+    }
+
+    // Collapsing an approach's heads to one pole must not shrink the lanes the light governs: CARLA
+    // builds a stop-line trigger box per lane in <validity>, so a lane whose head was dropped without
+    // its validity being merged onto the survivor gets no trigger box, and traffic in that lane drives
+    // through the light.
+    [Fact]
+    public void Inject_CollapsingHeads_KeepsValidityOverEveryLaneOfTheApproach()
+    {
+        var root = XDocument.Parse(TrafficLightInjector.InjectTrafficLights(Xodr, NetXml)).Root!;
+
+        var signals = root.Elements("road").Elements("signals").Elements("signal")
+            .ToDictionary(s => s.Attribute("id")!.Value);
+        Assert.Equal(new HashSet<string> { "J1_0", "J1_2" }, signals.Keys.ToHashSet());
+
+        // Each approach had heads over lanes -1 and -2; the surviving pole must cover both.
+        foreach (var (id, signal) in signals)
+        {
+            var validity = signal.Element("validity");
+            Assert.NotNull(validity);
+            var lanes = new[] { int.Parse(validity!.Attribute("fromLane")!.Value),
+                                int.Parse(validity.Attribute("toLane")!.Value) };
+            Assert.Equal(-2, lanes.Min());
+            Assert.Equal(-1, lanes.Max());
+        }
     }
 
     [Fact]
