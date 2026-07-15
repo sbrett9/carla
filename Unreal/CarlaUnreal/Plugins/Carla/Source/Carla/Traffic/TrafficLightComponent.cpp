@@ -116,9 +116,16 @@ void UTrafficLightComponent::SetLightState(ETrafficLightState NewState)
     OldTrafficLight->LightChangedCompatibility(NewState);
   }
 
+  // Only push our state to vehicles this light actually governs. A controller can
+  // linger in more than one trigger box's Vehicles list (overlapping junction
+  // boxes, repeated begin-overlaps, or an end-overlap that never fired), so the
+  // controller's TrafficLight pointer is the single source of truth for which
+  // light owns it. Without this guard a green light overwrites the Red state of a
+  // car stopped at a different light, sending it through the red.
+  ATrafficLightBase* Self = Cast<ATrafficLightBase>(GetOwner());
   for (auto Controller : Vehicles)
   {
-    if (Controller != nullptr)
+    if (Controller != nullptr && Controller->GetTrafficLight() == Self)
     {
       Controller->SetTrafficLightState(LightState);
     }
@@ -178,9 +185,13 @@ void UTrafficLightComponent::OnBeginOverlapTriggerBox(UPrimitiveComponent *Overl
         Cast<AWheeledVehicleAIController>(Vehicle->GetController());
     if (VehicleController)
     {
-      VehicleController->SetTrafficLightState(LightState);
-      Vehicles.Add(VehicleController);
+      // Set the pointer first (it is the authority for which light owns this
+      // vehicle), then the state. AddUnique because overlap-begin can fire
+      // repeatedly for the same vehicle (physics re-entry, TM nudges) and
+      // duplicates otherwise bloat the broadcast list without bound.
       VehicleController->SetTrafficLight(Cast<ATrafficLightBase>(GetOwner()));
+      VehicleController->SetTrafficLightState(LightState);
+      Vehicles.AddUnique(VehicleController);
     }
   }
 }
@@ -197,8 +208,14 @@ void UTrafficLightComponent::OnEndOverlapTriggerBox(UPrimitiveComponent *Overlap
         Cast<AWheeledVehicleAIController>(Vehicle->GetController());
     if (VehicleController)
     {
-      VehicleController->SetTrafficLightState(ETrafficLightState::Green);
-      VehicleController->SetTrafficLight(nullptr);
+      // Only release the vehicle if WE are still the light it points at. If it
+      // has since entered another light's box (which set its pointer to that
+      // light), leaving our box must not wipe the newer assignment back to Green.
+      if (VehicleController->GetTrafficLight() == Cast<ATrafficLightBase>(GetOwner()))
+      {
+        VehicleController->SetTrafficLightState(ETrafficLightState::Green);
+        VehicleController->SetTrafficLight(nullptr);
+      }
       Vehicles.Remove(VehicleController);
     }
   }

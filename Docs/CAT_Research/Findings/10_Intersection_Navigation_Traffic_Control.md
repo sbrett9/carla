@@ -1,7 +1,9 @@
 # 10 — Intersection Navigation & Traffic Control: stops, lights, signs, priority
 
-**Status:** Research / gap analysis. No code changed; CARLA server not launched. Findings grounded in
-source inspection and the contents of generated `.xodr` files.
+**Status:** Gap analysis (2026-06-25) → **IMPLEMENTATION largely complete (2026-07-14)**. The three-layer
+gap is now closed for the core protocol: ambient traffic **obeys traffic lights and stop signs** in
+generated digital-twin worlds. Sections §1–§8 are the original analysis (kept for the reasoning);
+the **Implementation status** note immediately below records what has been built and runtime-validated.
 **Date:** 2026-06-25
 **Scope:** Determine how real-world intersection behavior (stopping at traffic lights and stop signs,
 yielding, honoring speed limits) can be simulated for ambient traffic in the digital-twin pipeline now
@@ -21,6 +23,84 @@ are required.
 > SCTMV runs a synchronous-world + asynchronous-TM hybrid (§3); and the CesiumSunSky time-of-day work
 > ([#5](https://github.com/sbrett9/carla/issues/5)) proved the `FWorldObserver` snapshot-extension
 > pattern that the §7/§8 ALSM un-stub would reuse.
+
+---
+
+## Implementation status (2026-07-14)
+
+The three-layer gap of §1 is now largely closed. Ambient traffic **stops at red lights and at stop
+signs** in worlds built by `SCTMV.py`. What follows §1–§8 is the original gap analysis, kept for its
+reasoning; this note records what was built and validated.
+
+**Layer B (runtime TM) — DONE + runtime-validated.** `CarlaNet.TrafficManager/Stages/ALSM.cs` no longer
+hardcodes `Green`/`0`. It reads each vehicle's real `traffic_light_state`, `at_traffic_light`, and
+`speed_limit` from the `FWorldObserver` snapshot's per-vehicle `VehicleData` union — the server already
+serialized these (`WorldObserver.cpp`); ALSM just ignored them. Added `ActorSnapshot.ParseVehicleState`
+(byte offsets: `speed_limit` f32 @ union+19, `traffic_light_state` u8 @ +23, `has_traffic_light` bool @
++24) and `CarlaClient.GetActorVehicleState`. A **separate runtime defect** was found while validating on
+stock Town10HD: `UTrafficLightComponent`/`ATrafficLightBase` held an unbounded, duplicate-ridden
+`Vehicles` broadcast list and pushed light state to it unconditionally, so a green light overwrote the
+red state of cars stopped at a *different* light and they ran the red. Fixed by making the controller's
+`TrafficLight` pointer authoritative (guard the `SetLightState` broadcast and the overlap-exit on
+`GetTrafficLight()==GetOwner()`) plus `AddUnique`. The dormant `ATrafficLightBase::Vehicles` twin got the
+same fix.
+
+**Layer A (conversion) — DONE for stop/yield signs and traffic lights.** Two new post-netconvert passes
+in `CarlaNet.Map/OpenDrive/`, both `string→string` `.xodr` rewrites modeled on `ElevationInjector`,
+called inside `CarlaClient.GenerateWorldFromOsmWithElevationAsync` after the elevation injection:
+
+- **`SignInjector`** — reads OSM `highway=stop`/`give_way` (and `traffic_sign=stop`) nodes from the
+  clipped `.osm`, projects each via `Geodesy.GeodeticToCarlaLocal(map.GeoReference, ·)`, snaps to the
+  nearest road-centerline sample (`ElevationInjector.ExtractCenterlineSamples`) → `(road, s)`, and writes
+  `<signal type="206">`/`"205"` at a shoulder offset (side from the tangent×offset cross product). The
+  native `ATrafficLightManager::SpawnSignals` spawns real `BP_Stop01`/`BP_Yield01` actors that drive
+  behavior through `UStopSignComponent`/`UYieldSignComponent` + the TM junction FIFO. Runtime-validated:
+  stop-sign actors spawn, are registered (telemetry-visible), and sit on the road.
+
+- **`TrafficLightInjector`** — re-enables netconvert traffic-light generation (`GenerateTrafficLights=True`
+  in `SCTMV.make_options`, which adds `--junctions.join`; `OsmConverter.ConvertFileWithNetworkAsync` also
+  emits the SUMO `.net.xml` via `--output-file`), then **fixes grouping-bug #1 in data**. Root cause
+  reconfirmed empirically: netconvert emits the light `<signal>`s and one all-heads `<controller>` per
+  junction but **zero `<junction><controller>` links** and no phase split, so CARLA orphans every light
+  (issue #1) and would flash whole junctions green. The injector harvests each `<tlLogic>`'s phase
+  program from the `.net.xml`, emits **one `<controller>` per green phase**, and adds the
+  `<junction><controller>` links — so CARLA's *existing* grouping path builds one `ATrafficLightGroup`
+  per junction / one `UTrafficLightController` per phase, with **no engine change**. Correspondence used:
+  xodr signal `{tlLogicId}_{k}` = tlLogic linkIndex k; xodr controller id = tlLogic id = junction `name`.
+  It also (a) aliases netconvert's over-long clustered signal ids — `cluster_…_#Nmore_k` exceed CARLA's
+  32-char `SignId` limit and spammed the log to ~16 GB — to short `t{n}` stand-ins with all refs
+  rewritten, (b) zeroes netconvert's `zOffset="5"` (poles floated ~5 m), and (c) sets `hOffset=π` to face
+  oncoming traffic. Runtime-validated on SF_LaurelHeights: lights spawn, are grouped, cycle, and
+  **ambient traffic stops on red**; server log clean (`NO CONTROLLERS!` = 0, no 32-char spam).
+
+**Layer C (client API) — deferred.** The traffic-light + speed-limit RPCs remain unbound in the Python
+shim (§4). Not required for ambient traffic to obey controls, so deferred.
+
+**Validation substrate.** Behavior confirmed via: (a) stock **Town10HD** (real pre-grouped lights) for
+the ALSM un-stub and the runtime clobbering fix; (b) **SF_LaurelHeights** via `SCTMV.py` for the injected
+signs and lights (headless `RunCarlaServer.ps1` = `UnrealEditor.exe -game -RenderOffScreen`, so VibeUE
+cannot attach — verify via a `carlanet` client script polling the world-observer cache, or the server
+log at `Unreal/CarlaUnreal/Saved/Logs/CarlaUnreal.log`).
+
+**Open issues (quality/realism, not function):**
+
+- **Traffic-light pole placement + mesh (active).** netconvert emits one `<signal>` per head
+  (`t = -1.7 … -8.4 m`, all `orientation="+"`, no `hOffset`), and `BP_TLOpenDrive` renders one full
+  pole+arm per signal, so a junction shows several poles *across the road* rather than one mast-arm pole
+  at the corner holding several heads facing the approach. The project already contains mast-arm
+  blueprints (`BP_TrafficLightNew_T10_master_largeBIG/mediumBIG/noArmsBIG`), a head component
+  (`ST_TrafficLightHead`), and separable pole/head static meshes (`SM_Pole_TrafficLight0N`,
+  `SM_TrafficLightPole0N`) — inspecting these in the editor (VibeUE) to compose corner-pole + arm +
+  per-approach heads is the current next step.
+- **Facing** set to a uniform `hOffset=π`; pending visual confirmation (else `-π`).
+- **Signal timing** uses CARLA defaults ({10 s green, 3 s yellow, 2 s red} per controller) — phases
+  alternate correctly but do not reproduce netconvert's per-phase durations from the `.net.xml`.
+- **Speed-limit signs (type 274)** not yet injected (per-way `maxspeed`, value-bucket snapping,
+  way→road mapping — deferred; the vehicle speed limit comes from sign trigger volumes, not the lane
+  `<speed>` data that already survives).
+- **Sign coverage is map-dependent.** SF_LaurelHeights' interior is *signalized* (26 signals) with stop
+  signs only near the edges, so stop injection there is inherently sparse; stop injection matters on
+  residential/rural grids (e.g. Gardnerville), while signalized cities need the traffic-light path above.
 
 ---
 

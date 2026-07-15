@@ -398,12 +398,15 @@ internal sealed class ALSM
         }
 
         // Build the kinematic snapshot.
-        // Speed limit + TL state — pull from the world observer's typed
-        // payload if available. Speed limit is on the upstream Vehicle
-        // wrapper; we use the observer-cached VehicleControl gear sign or
-        // a future GetVehicleSpeedLimit RPC. For now leave 0; downstream
-        // stages clamp by Parameters override anyway.
-        float speedLimit = 0f;
+        // Speed limit + traffic-light state come from the world-observer
+        // snapshot's per-vehicle VehicleData payload, which the server fills
+        // each tick from the vehicle's AI controller (WorldObserver.cpp).
+        // Reading them here is what lets the TM see a red light / a real speed
+        // limit; previously these were hardcoded to Green / 0, so
+        // set_percentage_running_light and any speed-limit-relative target were
+        // inert. speed_limit is km/h, matching upstream SimulationState.
+        VehicleObservedState observed = _client.GetActorVehicleState(actorId);
+        float speedLimit = observed.SpeedLimit;
 
         // Dormant flag — comes from upstream's actor->IsDormant(). The
         // .NET observer doesn't expose this directly (the type-dependent
@@ -425,8 +428,8 @@ internal sealed class ALSM
 
         var tlStateData = new TrafficLightStateData
         {
-            TlState = TLS.Green,
-            AtTrafficLight = false,
+            TlState = observed.TrafficLightState,
+            AtTrafficLight = observed.AtTrafficLight,
         };
 
         if (stateEntryPresent)
@@ -481,9 +484,14 @@ internal sealed class ALSM
 
             if (typeId.Length > 0 && typeId[0] == 'v')
             {
-                // No per-frame speed-limit RPC — leave at -1 to signal
-                // "unknown" downstream (matches upstream's vehicle wrapper
-                // behaviour for unregistered vehicles).
+                // Unregistered vehicles (non-TM traffic) still carry real
+                // VehicleData in the snapshot, so read their traffic-light state
+                // and speed limit too — collision/motion stages consult these.
+                VehicleObservedState observed = _client.GetActorVehicleState(actorId);
+                kinematicState.SpeedLimit = observed.SpeedLimit;
+                tlStateData.TlState = observed.TrafficLightState;
+                tlStateData.AtTrafficLight = observed.AtTrafficLight;
+
                 if (stateEntryNotPresent)
                 {
                     Vector3D dimensions = actorPtr.BoundingBox.Extent;

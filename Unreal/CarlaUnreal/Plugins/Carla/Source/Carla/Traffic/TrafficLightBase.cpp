@@ -77,9 +77,12 @@ void ATrafficLightBase::NotifyWheeledVehicle(ACarlaWheeledVehicle *Vehicle)
     auto Controller = Cast<AWheeledVehicleAIController>(Vehicle->GetController());
     if (Controller != nullptr)
     {
-      Controller->SetTrafficLightState(GetTrafficLightState());
-      Vehicles.Add(Controller);
+      // Mirror the fix in UTrafficLightComponent: set the pointer first (it is the
+      // authority for which light owns the vehicle), then the state, and AddUnique
+      // so repeated notifications cannot grow this list without bound.
       Controller->SetTrafficLight(this);
+      Controller->SetTrafficLightState(GetTrafficLightState());
+      Vehicles.AddUnique(Controller);
     }
   }
 }
@@ -91,8 +94,14 @@ void ATrafficLightBase::UnNotifyWheeledVehicle(ACarlaWheeledVehicle *Vehicle)
     auto Controller = Cast<AWheeledVehicleAIController>(Vehicle->GetController());
     if (Controller != nullptr)
     {
-      Controller->SetTrafficLight(nullptr);
-      Controller->SetTrafficLightState(ETrafficLightState::Green);
+      // Only release the vehicle if we are still the light it points at, and
+      // prune it from our list — the missing Remove here was an unbounded leak.
+      if (Controller->GetTrafficLight() == this)
+      {
+        Controller->SetTrafficLight(nullptr);
+        Controller->SetTrafficLightState(ETrafficLightState::Green);
+      }
+      Vehicles.Remove(Controller);
     }
   }
 }

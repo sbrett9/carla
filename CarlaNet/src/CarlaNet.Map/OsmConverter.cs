@@ -103,6 +103,40 @@ public sealed class OsmConverter
     }
 
     /// <summary>
+    /// Convert an .osm file to OpenDRIVE and, when <see cref="OsmConversionOptions.GenerateTrafficLights"/>
+    /// is set, also return the SUMO network (<c>.net.xml</c>) netconvert produced. The network carries
+    /// the guessed traffic-light <c>&lt;tlLogic&gt;</c> phase programs that <c>TrafficLightInjector</c>
+    /// needs to build per-phase controllers; it is <c>null</c> when traffic-light generation is off.
+    /// </summary>
+    public async Task<(string OpenDrive, string? Network)> ConvertFileWithNetworkAsync(
+        string osmPath, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(osmPath))
+            throw new ArgumentException("OSM path must be provided.", nameof(osmPath));
+        if (!File.Exists(osmPath))
+            throw new FileNotFoundException("OSM file not found.", osmPath);
+
+        var xodrPath = Path.Combine(Path.GetTempPath(), $"carlanet_osm_{Guid.NewGuid():N}.xodr");
+        var netPath = _options.GenerateTrafficLights
+            ? Path.Combine(Path.GetTempPath(), $"carlanet_osm_{Guid.NewGuid():N}.net.xml")
+            : null;
+        try
+        {
+            await RunNetconvertAsync(osmPath, xodrPath, ct, netPath).ConfigureAwait(false);
+            var xodr = await File.ReadAllTextAsync(xodrPath, ct).ConfigureAwait(false);
+            string? net = netPath != null && File.Exists(netPath)
+                ? await File.ReadAllTextAsync(netPath, ct).ConfigureAwait(false)
+                : null;
+            return (xodr, net);
+        }
+        finally
+        {
+            TryDelete(xodrPath);
+            if (netPath != null) TryDelete(netPath);
+        }
+    }
+
+    /// <summary>
     /// Convert raw OSM XML text to OpenDRIVE and return the .xodr text. The OSM is first
     /// written to a temporary file (netconvert only reads files).
     /// </summary>
@@ -126,7 +160,7 @@ public sealed class OsmConverter
 
     // ── netconvert invocation ────────────────────────────────────────────────
 
-    private async Task RunNetconvertAsync(string osmPath, string xodrPath, CancellationToken ct)
+    private async Task RunNetconvertAsync(string osmPath, string xodrPath, CancellationToken ct, string? netPath = null)
     {
         var exe = ResolveNetconvertPath();
         var psi = new ProcessStartInfo
@@ -137,7 +171,7 @@ public sealed class OsmConverter
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        foreach (var arg in BuildArguments(osmPath, xodrPath))
+        foreach (var arg in BuildArguments(osmPath, xodrPath, netPath))
             psi.ArgumentList.Add(arg);
 
         // PROJ data discovery: libproj needs proj.db to reproject.
@@ -185,7 +219,7 @@ public sealed class OsmConverter
     /// Mirrors CARLA osm2odr defaults; <see cref="OsmConversionOptions.ExtraArgs"/> appends
     /// extra raw flags for experimentation without touching this method.
     /// </summary>
-    internal IReadOnlyList<string> BuildArguments(string osmPath, string xodrPath)
+    internal IReadOnlyList<string> BuildArguments(string osmPath, string xodrPath, string? netPath = null)
     {
         var inv = System.Globalization.CultureInfo.InvariantCulture;
 
@@ -239,6 +273,14 @@ public sealed class OsmConverter
             // --junctions.join, which re-creates TL-controlled junctions even after
             // discard (verified on WrigleyVille: join -> 19 TLs, no-join -> 0).
             args.Add("--tls.discard-loaded");
+        }
+
+        // When a SUMO network path is requested, also emit it — TrafficLightInjector reads the
+        // <tlLogic> phase programs from it to build per-phase traffic-light controllers.
+        if (netPath != null)
+        {
+            args.Add("--output-file");
+            args.Add(netPath);
         }
 
         args.AddRange(_options.ExtraArgs);

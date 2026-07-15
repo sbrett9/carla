@@ -25,6 +25,7 @@
 #include "CarlaServerResponse.h"
 #include "Carla/Util/BoundingBoxCalculator.h"
 #include "Components/PrimitiveComponent.h"
+#include "Components/StaticMeshComponent.h"
 
 #include <util/disable-ue4-macros.h>
 #include <carla/Functional.h>
@@ -838,16 +839,21 @@ void FCarlaServer::FPimpl::BindActions()
   BIND_SYNC(get_names_of_all_objects) << [this]() -> R<std::vector<std::string>>
   {
     REQUIRE_CARLA_EPISODE();
-    ACarlaGameModeBase* GameMode = UCarlaStatics::GetGameMode(Episode->GetWorld());
-    if (!GameMode)
-    {
-      RESPOND_ERROR("unable to find CARLA game mode");
-    }
-    TArray<FString> NamesFString = GameMode->GetNamesOfAllActors();
+    // Return the name of every actor carrying a static mesh (i.e. a paintable
+    // object). This was delegated to ACarlaGameModeBase::GetNamesOfAllActors,
+    // which upstream deprecated once the texture API became ID-based; inlined
+    // here as its sole caller so no deprecated helper remains.
+    TArray<AActor*> Actors;
+    UGameplayStatics::GetAllActorsOfClass(Episode->GetWorld(), AActor::StaticClass(), Actors);
     std::vector<std::string> NamesStd;
-    for (const FString &Name : NamesFString)
+    for (AActor* Actor : Actors)
     {
-      NamesStd.emplace_back(cr::FromFString(Name));
+      TArray<UStaticMeshComponent*> StaticMeshes;
+      Actor->GetComponents(StaticMeshes);
+      if (StaticMeshes.Num())
+      {
+        NamesStd.emplace_back(cr::FromFString(Actor->GetName()));
+      }
     }
     return NamesStd;
   };
