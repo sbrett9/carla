@@ -2,6 +2,10 @@
 #include "Components/SplineComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "KismetProceduralMeshLibrary.h"
+// KismetProceduralMeshLibrary.h only forward-declares FProcMeshTangent. The
+// complete definition is required to construct and destruct the local
+// TArray<FProcMeshTangent> passed to GetSectionFromStaticMesh below.
+#include "ProceduralMeshComponent.h"
 
 
 // ========================= Actor boilerplate =========================
