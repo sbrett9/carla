@@ -141,17 +141,19 @@ content_dir="$workspace_path/Unreal/CarlaUnreal/Content"
 content_repo="git@github.com:sbrett9/carla-content.git"
 content_key="${content_ssh_key:-${CARLA_CONTENT_SSH_KEY:-}}"
 
-# git wrapper for the content repo. Uses the deploy key when one is provided, and runs ssh
-# non-interactively so a fresh container/batch run never blocks on the github.com host-key prompt
-# ("Are you sure you want to continue connecting?"). StrictHostKeyChecking=no + UserKnownHostsFile=
-# /dev/null means it neither prompts nor depends on (or writes) a known_hosts file -- this also covers
-# the `git lfs pull` calls below, which spawn ssh for git-lfs-authenticate.
-content_ssh="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+# Shared non-interactive ssh base for the private-repo clones (the content repo below and the VibeUE
+# plugin later). Runs ssh non-interactively so a fresh container/batch run never blocks on the
+# github.com host-key prompt ("Are you sure you want to continue connecting?"). StrictHostKeyChecking=no
+# + UserKnownHostsFile=/dev/null means it neither prompts nor depends on (or writes) a known_hosts file
+# -- this also covers the `git lfs pull` calls below, which spawn ssh for git-lfs-authenticate.
+ssh_noninteractive="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+
+# git wrapper for the content repo. Uses the deploy key when one is provided.
 content_git() {
     if [ -n "$content_key" ]; then
-        GIT_SSH_COMMAND="$content_ssh -i $content_key -o IdentitiesOnly=yes" git "$@"
+        GIT_SSH_COMMAND="$ssh_noninteractive -i $content_key -o IdentitiesOnly=yes" git "$@"
     else
-        GIT_SSH_COMMAND="$content_ssh" git "$@"
+        GIT_SSH_COMMAND="$ssh_noninteractive" git "$@"
     fi
 }
 
@@ -268,7 +270,13 @@ vibeue_repo="git@github.com:sbrett9/VibeUE.git"
 vibeue_pin="379373709e68ce7f2c4e3a26ff931f703d87b817"
 vibeue_key="${vibeue_ssh_key:-${VIBEUE_SSH_KEY:-}}"
 if [ -d "$vibeue_dir/.git" ]; then
-    [ -n "$vibeue_key" ] && export GIT_SSH_COMMAND="ssh -i $vibeue_key -o IdentitiesOnly=yes"
+    # Non-interactive ssh (with the deploy key when present) so a fresh container/batch run never
+    # blocks on the github.com host-key prompt; without a key it still uses any ssh agent keys.
+    if [ -n "$vibeue_key" ]; then
+        export GIT_SSH_COMMAND="$ssh_noninteractive -i $vibeue_key -o IdentitiesOnly=yes"
+    else
+        export GIT_SSH_COMMAND="$ssh_noninteractive"
+    fi
     if git -C "$vibeue_dir" fetch origin && git -C "$vibeue_dir" checkout "$vibeue_pin"; then
         echo "VibeUE pinned to $vibeue_pin."
     else
@@ -277,7 +285,7 @@ if [ -d "$vibeue_dir/.git" ]; then
 elif [ -n "$vibeue_key" ]; then
     echo "Cloning VibeUE private mirror (pinned $vibeue_pin)..."
     vibeue_tmp="$vibeue_dir.tmp.$$"
-    if GIT_SSH_COMMAND="ssh -i $vibeue_key -o IdentitiesOnly=yes" git clone "$vibeue_repo" "$vibeue_tmp" \
+    if GIT_SSH_COMMAND="$ssh_noninteractive -i $vibeue_key -o IdentitiesOnly=yes" git clone "$vibeue_repo" "$vibeue_tmp" \
         && git -C "$vibeue_tmp" checkout "$vibeue_pin"; then
         rm -rf "$vibeue_dir" && mv "$vibeue_tmp" "$vibeue_dir"
         echo "VibeUE installed at $vibeue_pin."

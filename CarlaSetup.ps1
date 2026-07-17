@@ -701,16 +701,22 @@ Write-Host "  `$env:PROJ_LIB = '$(Join-Path $sumoInstall 'share\proj')'"
 $vibeueDir  = Join-Path $RepoRoot 'Unreal\CarlaUnreal\Plugins\VibeUE'
 $vibeueRepo = 'git@github.com:sbrett9/VibeUE.git'
 $vibeuePin  = '379373709e68ce7f2c4e3a26ff931f703d87b817'
+# Non-interactive ssh so a fresh/batch run never blocks on the github.com host-key prompt
+# ("Are you sure you want to continue connecting?"). StrictHostKeyChecking=no auto-accepts the key
+# without prompting; UserKnownHostsFile=/dev/null is omitted here because it is not reliable across
+# Windows' system OpenSSH vs. the Git-bundled ssh (the fetched key just lands in the default known_hosts).
+$sshNonInteractive = 'ssh -o StrictHostKeyChecking=no'
 
 if (Test-Path (Join-Path $vibeueDir '.git')) {
-    if ($vibeueKey) { $env:GIT_SSH_COMMAND = "ssh -i $vibeueKey -o IdentitiesOnly=yes" }
+    if ($vibeueKey) { $env:GIT_SSH_COMMAND = "$sshNonInteractive -i $vibeueKey -o IdentitiesOnly=yes" }
+    else { $env:GIT_SSH_COMMAND = $sshNonInteractive }
     Write-Host "Pinning VibeUE to $vibeuePin..."
     git -C $vibeueDir fetch origin
     git -C $vibeueDir checkout $vibeuePin
 } elseif ($vibeueKey) {
     Write-Host "Cloning VibeUE private mirror (pinned $vibeuePin)..."
     if (Test-Path $vibeueDir) { Remove-Item -Recurse -Force $vibeueDir }
-    $env:GIT_SSH_COMMAND = "ssh -i $vibeueKey -o IdentitiesOnly=yes"
+    $env:GIT_SSH_COMMAND = "$sshNonInteractive -i $vibeueKey -o IdentitiesOnly=yes"
     git clone $vibeueRepo $vibeueDir
     git -C $vibeueDir checkout $vibeuePin
 } elseif (Test-Path $vibeueDir) {
