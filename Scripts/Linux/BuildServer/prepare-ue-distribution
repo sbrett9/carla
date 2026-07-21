@@ -1,0 +1,157 @@
+#!/bin/bash
+#
+# prepare-ue-distribution - Smart caching for Unreal Engine distributions
+#
+# Usage: prepare-ue-distribution <artifactory-path> <cache-dir>
+#
+# Example:
+#   prepare-ue-distribution \
+#     cat-local-generic-dev/unreal/UnrealEngine-5.7.4-carla-port-049f42955-Linux.tar.zst \
+#     /home/catgithubrunner/ue-cache
+#
+# This script:
+# 1. Downloads UE distribution from Artifactory (cached, with SHA verification)
+# 2. Extracts it (cached, reuses existing extraction if SHA matches)
+# 3. Outputs the path to the extracted UE distribution
+#
+
+set -euo pipefail
+
+if [ $# -ne 2 ]; then
+    echo "Usage: $0 <artifactory-path> <cache-dir>" >&2
+    echo "Example: $0 cat-local-generic-dev/unreal/UE.tar.zst /home/user/ue-cache" >&2
+    exit 1
+fi
+
+artifactory_path="$1"
+cache_dir="$2"
+
+# Read API key
+credentials_file="/home/catgithubrunner/.artifactory/credentials"
+if [ ! -f "$credentials_file" ]; then
+    echo "ERROR: Credentials file not found: $credentials_file" >&2
+    exit 1
+fi
+api_key=$(cat "$credentials_file" | tr -d '\n\r')
+
+# Artifactory base URL
+base_url="https://iasartifact.sncorp.com:8443/artifactory"
+
+# Extract basename from path
+basename=$(basename "$artifactory_path")
+if [ -z "$basename" ]; then
+    echo "ERROR: Could not determine basename from path: $artifactory_path" >&2
+    exit 1
+fi
+
+# Set up cache directories
+archives_dir="$cache_dir/archives"
+checksums_dir="$cache_dir/checksums"
+extracted_dir="$cache_dir/extracted"
+
+mkdir -p "$archives_dir" "$checksums_dir" "$extracted_dir"
+
+echo "=== Preparing UE Distribution ==="
+echo "Artifact: $basename"
+echo "Cache: $cache_dir"
+echo
+
+# Step 1: Download and verify SHA256 checksum from Artifactory
+echo "[1/4] Checking remote checksum..."
+remote_sha256_url="${base_url}/${artifactory_path}.sha256"
+remote_sha256_file="${checksums_dir}/${basename}.sha256.remote"
+
+curl --fail --silent --show-error \
+    -H "X-JFrog-Art-Api: ${api_key}" \
+    -o "$remote_sha256_file" \
+    "$remote_sha256_url"
+
+# Parse the SHA from the checksum file (format: "SHA  filename")
+remote_sha=$(awk '{print $1}' "$remote_sha256_file")
+echo "Remote SHA256: $remote_sha"
+
+# Step 2: Check local archive cache
+local_archive="${archives_dir}/${basename}"
+local_sha256_file="${checksums_dir}/${basename}.sha256"
+needs_download=false
+
+if [ -f "$local_archive" ] && [ -f "$local_sha256_file" ]; then
+    local_sha=$(awk '{print $1}' "$local_sha256_file")
+    echo "Local SHA256:  $local_sha"
+    
+    if [ "$local_sha" != "$remote_sha" ]; then
+        echo "SHA mismatch - download required"
+        needs_download=true
+    else
+        echo "SHA match - using cached archive"
+    fi
+else
+    echo "Archive not cached - download required"
+    needs_download=true
+fi
+
+# Step 3: Download archive if needed
+if [ "$needs_download" = true ]; then
+    echo
+    echo "[2/4] Downloading archive from Artifactory..."
+    archive_url="${base_url}/${artifactory_path}"
+    
+    # Show progress if interactive terminal
+    if [ -t 1 ]; then
+        curl --fail --show-error --progress-bar \
+            -H "X-JFrog-Art-Api: ${api_key}" \
+            -o "$local_archive" \
+            "$archive_url" | cat
+    else
+        curl --fail --show-error --silent \
+            -H "X-JFrog-Art-Api: ${api_key}" \
+            -o "$local_archive" \
+            "$archive_url"
+    fi
+    
+    # Save the checksum
+    cp "$remote_sha256_file" "$local_sha256_file"
+    echo "Download complete"
+else
+    echo
+    echo "[2/4] Using cached archive (skipping download)"
+fi
+
+# Step 4: Check if extraction exists
+# Use a directory name based on the basename without extension and the SHA prefix
+extraction_name="${basename%.tar.zst}-${remote_sha:0:8}"
+extraction_path="${extracted_dir}/${extraction_name}"
+
+if [ -d "$extraction_path" ]; then
+    echo
+    echo "[3/4] Using cached extraction"
+    echo "Path: $extraction_path"
+else
+    echo
+    echo "[3/4] Extracting archive (this may take several minutes)..."
+    echo "Target: $extraction_path"
+    
+    # Create temp directory for extraction
+    temp_extract="${extracted_dir}/.tmp-${extraction_name}-$$"
+    mkdir -p "$temp_extract"
+    
+    # Extract with parallel zstd decompression (-T0 = use all cores)
+    if command -v pv >/dev/null 2>&1; then
+        pv "$local_archive" | tar -I "zstd -d -T0" -xf - -C "$temp_extract"
+    else
+        tar -I "zstd -d -T0" -xf "$local_archive" -C "$temp_extract"
+    fi
+    
+    # Move to final location atomically
+    mv "$temp_extract" "$extraction_path"
+    echo "Extraction complete"
+fi
+
+# Step 5: Output the path
+echo
+echo "[4/4] UE distribution ready"
+echo "CARLA_UNREAL_ENGINE_PATH=$extraction_path"
+echo
+
+# Output for consumption by CI scripts
+echo "$extraction_path"

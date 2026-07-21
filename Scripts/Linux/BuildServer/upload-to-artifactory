@@ -1,0 +1,66 @@
+#!/bin/bash
+#
+# upload-to-artifactory - Helper script for GitHub Actions runner
+#
+# Usage: upload-to-artifactory <local-file> <repo-name/target/path>
+#
+# Example:
+#   upload-to-artifactory Build/Dist/carla.tar.gz cat-local-generic-dev/releases/carla-ue5-dev-abc123.tar.gz
+#
+
+set -euo pipefail
+
+if [ $# -ne 2 ]; then
+    echo "Usage: $0 <local-file> <repo-name/target/path>" >&2
+    echo "Example: $0 dist.tar.gz cat-local-generic-dev/path/dist.tar.gz" >&2
+    exit 1
+fi
+
+local_file="$1"
+target_path="$2"
+
+if [ ! -f "$local_file" ]; then
+    echo "ERROR: Local file not found: $local_file" >&2
+    exit 1
+fi
+
+# Read the API key from the protected credentials file
+credentials_file="/home/catgithubrunner/.artifactory/credentials"
+if [ ! -f "$credentials_file" ]; then
+    echo "ERROR: Credentials file not found: $credentials_file" >&2
+    exit 1
+fi
+
+# Read the API key (trim any trailing whitespace)
+api_key=$(cat "$credentials_file" | tr -d '\n\r')
+
+if [ -z "$api_key" ]; then
+    echo "ERROR: API key is empty in $credentials_file" >&2
+    exit 1
+fi
+
+# Construct the full Artifactory URL
+base_url="https://iasartifact.sncorp.com:8443/artifactory"
+target_url="${base_url}/${target_path}"
+
+echo "Uploading: $local_file"
+echo "Target:    $target_url"
+
+# Upload the file
+curl --fail --show-error --silent \
+    -H "X-JFrog-Art-Api: ${api_key}" \
+    -T "$local_file" \
+    "$target_url"
+
+echo
+echo "Upload completed successfully"
+
+# Verify with HEAD request
+echo "Verifying artifact..."
+if curl --fail --silent --head \
+    -H "X-JFrog-Art-Api: ${api_key}" \
+    "$target_url" >/dev/null; then
+    echo "Verification successful: $target_url"
+else
+    echo "WARNING: Verification failed (artifact may still be uploaded)" >&2
+fi
