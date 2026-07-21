@@ -13,22 +13,19 @@
 # into a mounted/volume workspace (see Docs/build_container_rhel8.md), so the heavy build artifacts
 # are not baked into image layers.
 #
-# On a locked-down network (internal CA / MITM TLS proxy) where certificate verification fails, build
-# with TLS verification disabled for every package download (dnf, curl, pip):
-#   podman build --build-arg INSECURE_SSL=1 -f Util/Docker/Base.alma8.Dockerfile -t carla-base:alma8 Util/Docker
+# On a corporate network with internal CA/TLS interception, the build automatically bootstraps
+# trust by retrieving the certificate chain from the Artifactory server.
 
 FROM almalinux:8
 
-# Optional: disable TLS certificate verification for ALL package fetches during the image build.
-# Off by default. Set --build-arg INSECURE_SSL=1 only for trusted but TLS-intercepted networks.
-ARG INSECURE_SSL=0
-
-# Disable dnf's TLS verification globally (every repo: BaseOS/AppStream/EPEL/PowerTools) before any
-# dnf runs. Done here so the very first `dnf install` below already uses it.
-RUN if [ "$INSECURE_SSL" = "1" ]; then \
-        echo "sslverify=False" >> /etc/dnf/dnf.conf; \
-        echo "[INSECURE_SSL] dnf TLS verification DISABLED for this build"; \
-    fi
+# Bootstrap corporate CA trust for Artifactory and other internal services.
+# Uses openssl s_client to retrieve the certificate chain presented during TLS handshake,
+# avoiding chicken-and-egg problems (no need to already trust the CA to download its certificate).
+RUN echo | openssl s_client -showcerts -servername iasartifact.sncorp.com \
+        -connect iasartifact.sncorp.com:8443 2>/dev/null | \
+        awk '/BEGIN CERTIFICATE/,/END CERTIFICATE/ {print}' > /etc/pki/ca-trust/source/anchors/artifactory-chain.pem && \
+    update-ca-trust extract && \
+    echo "[CA Trust] Installed certificate chain from iasartifact.sncorp.com:8443"
 
 # ---------------------------------------------------------------------------
 # Repositories: EPEL + PowerTools (CRB on EL8 is named "powertools").
@@ -80,8 +77,7 @@ RUN git lfs install --system
 # CMake >= 3.28 (CARLA's configure enforces it). AlmaLinux 8 ships an older CMake, so install the
 # Kitware binary, mirroring the Ubuntu base image.
 # ---------------------------------------------------------------------------
-RUN CURL_K=""; [ "$INSECURE_SSL" = "1" ] && CURL_K="-k"; \
-    curl $CURL_K -L -O https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3-linux-x86_64.tar.gz \
+RUN curl -L -O https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3-linux-x86_64.tar.gz \
     && mkdir -p /opt \
     && tar -xzf cmake-3.28.3-linux-x86_64.tar.gz -C /opt \
     && rm -f cmake-3.28.3-linux-x86_64.tar.gz
@@ -109,7 +105,6 @@ ENV PYTHON=python3.11
 # Wheel tooling for CarlaNet (the default CarlaNet-first build). The legacy PythonAPI is OFF by
 # default; if you enable it (--with-python-api), install the repo's requirements at runtime from
 # the mounted checkout: python3.11 -m pip install -r requirements.txt
-RUN PIP_TRUST=""; [ "$INSECURE_SSL" = "1" ] && PIP_TRUST="--trusted-host pypi.org --trusted-host files.pythonhosted.org"; \
-    python3.11 -m pip install $PIP_TRUST --upgrade pip build
+RUN python3.11 -m pip install --upgrade pip build
 
 WORKDIR /workspaces
