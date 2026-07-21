@@ -114,6 +114,7 @@ param(
     [switch]$Clean,
     [switch]$CleanAll,
     [switch]$CleanCarla,
+    [switch]$CleanContent,
     [switch]$CleanCesium,
     [switch]$ForceDepsRebuild,
 
@@ -159,6 +160,7 @@ OPTIONS (PowerShell-native | legacy .bat alias):
   -CleanAll                  --clean-all             Also remove Build\sumo-src + Build\SUMOLibraries.
   -CleanCarla                --clean-carla           Clear the CARLA CMake cache (force compiler/toolset re-detect).
                                                      (Auto-triggered anyway if the cached compiler != active one.)
+  -CleanContent              --clean-content         Remove and re-clone the CARLA content (fixes a broken/partial checkout).
   -SkipPrerequisites  / -p   --skip-prerequisites    Skip the InstallPrerequisites step.
   -SkipCesium                --skip-cesium           Skip building Cesium for Unreal from source.
   -CleanCesium               --clean-cesium          Force a cesium-native rebuild (keeps the source checkout).
@@ -214,6 +216,7 @@ if ($Remaining) {
             '^(--clean)$'                { $Clean = $true }
             '^(--clean-all)$'            { $CleanAll = $true }
             '^(--clean-carla)$'          { $CleanCarla = $true }
+            '^(--clean-content)$'        { $CleanContent = $true }
             '^(--vs)$'                   { if ($null -eq $next) { throw "Argument '$key' requires a value." } $Vs = $next;          if ($null -eq $val) { $idx++ } }
             '^(--python-root|-pyroot)$'  { if ($null -eq $next) { throw "Argument '$key' requires a value." } $PythonRoot = $next;  if ($null -eq $val) { $idx++ } }
             '^(--vibeue-ssh-key)$'       { if ($null -eq $next) { throw "Argument '$key' requires a value." } $VibeUeSshKey = $next; if ($null -eq $val) { $idx++ } }
@@ -513,7 +516,16 @@ if (-not $SkipPrerequisites) {
 # ---------------------------------------------------------------------------
 
 $contentDir = Join-Path $RepoRoot 'Unreal\CarlaUnreal\Content'
-if (Test-Path $contentDir) {
+$contentCarlaDir = Join-Path $contentDir 'Carla'
+
+# -CleanContent forces a fresh re-clone (use when a previous clone left a broken or
+# partial tree, or when the remote URL changed and needs updating).
+if ($CleanContent -and (Test-Path $contentCarlaDir)) {
+    Write-Host 'Removing existing CARLA content (-CleanContent)...'
+    Remove-Item -Recurse -Force $contentCarlaDir
+}
+
+if (Test-Path (Join-Path $contentCarlaDir '.git')) {
     Write-Host 'Found CARLA content.'
 } else {
     Write-Host 'Could not find CARLA content. Downloading...'
