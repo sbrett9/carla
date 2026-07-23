@@ -11,11 +11,9 @@ on:
   push:
     branches:
       - ue5-dev
-      - main
   pull_request:
     branches:
       - ue5-dev
-      - main
   workflow_dispatch:
     inputs:
       ue_distribution:
