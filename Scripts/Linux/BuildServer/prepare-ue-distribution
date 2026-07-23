@@ -51,13 +51,13 @@ extracted_dir="$cache_dir/extracted"
 
 mkdir -p "$archives_dir" "$checksums_dir" "$extracted_dir"
 
-echo "=== Preparing UE Distribution ==="
-echo "Artifact: $basename"
-echo "Cache: $cache_dir"
-echo
+echo "=== Preparing UE Distribution ===" >&2
+echo "Artifact: $basename" >&2
+echo "Cache: $cache_dir" >&2
+echo >&2
 
 # Step 1: Download and verify SHA256 checksum from Artifactory
-echo "[1/4] Checking remote checksum..."
+echo "[1/4] Checking remote checksum..." >&2
 remote_sha256_url="${base_url}/${artifactory_path}.sha256"
 remote_sha256_file="${checksums_dir}/${basename}.sha256.remote"
 
@@ -68,7 +68,7 @@ curl --fail --silent --show-error \
 
 # Parse the SHA from the checksum file (format: "SHA  filename")
 remote_sha=$(awk '{print $1}' "$remote_sha256_file")
-echo "Remote SHA256: $remote_sha"
+echo "Remote SHA256: $remote_sha" >&2
 
 # Step 2: Check local archive cache
 local_archive="${archives_dir}/${basename}"
@@ -77,23 +77,23 @@ needs_download=false
 
 if [ -f "$local_archive" ] && [ -f "$local_sha256_file" ]; then
     local_sha=$(awk '{print $1}' "$local_sha256_file")
-    echo "Local SHA256:  $local_sha"
+    echo "Local SHA256:  $local_sha" >&2
     
     if [ "$local_sha" != "$remote_sha" ]; then
-        echo "SHA mismatch - download required"
+        echo "SHA mismatch - download required" >&2
         needs_download=true
     else
-        echo "SHA match - using cached archive"
+        echo "SHA match - using cached archive" >&2
     fi
 else
-    echo "Archive not cached - download required"
+    echo "Archive not cached - download required" >&2
     needs_download=true
 fi
 
 # Step 3: Download archive if needed
 if [ "$needs_download" = true ]; then
-    echo
-    echo "[2/4] Downloading archive from Artifactory..."
+    echo >&2
+    echo "[2/4] Downloading archive from Artifactory..." >&2
     archive_url="${base_url}/${artifactory_path}"
     
     # Show progress if interactive terminal
@@ -111,10 +111,10 @@ if [ "$needs_download" = true ]; then
     
     # Save the checksum
     cp "$remote_sha256_file" "$local_sha256_file"
-    echo "Download complete"
+    echo "Download complete" >&2
 else
-    echo
-    echo "[2/4] Using cached archive (skipping download)"
+    echo >&2
+    echo "[2/4] Using cached archive (skipping download)" >&2
 fi
 
 # Step 4: Check if extraction exists
@@ -123,13 +123,13 @@ extraction_name="${basename%.tar.zst}-${remote_sha:0:8}"
 extraction_path="${extracted_dir}/${extraction_name}"
 
 if [ -d "$extraction_path" ]; then
-    echo
-    echo "[3/4] Using cached extraction"
-    echo "Path: $extraction_path"
+    echo >&2
+    echo "[3/4] Using cached extraction" >&2
+    echo "Path: $extraction_path" >&2
 else
-    echo
-    echo "[3/4] Extracting archive (this may take several minutes)..."
-    echo "Target: $extraction_path"
+    echo >&2
+    echo "[3/4] Extracting archive (this may take several minutes)..." >&2
+    echo "Target: $extraction_path" >&2
     
     # Create temp directory for extraction
     temp_extract="${extracted_dir}/.tmp-${extraction_name}-$$"
@@ -144,14 +144,14 @@ else
     
     # Move to final location atomically
     mv "$temp_extract" "$extraction_path"
-    echo "Extraction complete"
+    echo "Extraction complete" >&2
 fi
 
 # Step 5: Output the path
-echo
-echo "[4/4] UE distribution ready"
-echo "CARLA_UNREAL_ENGINE_PATH=$extraction_path"
-echo
+echo >&2
+echo "[4/4] UE distribution ready" >&2
+echo "CARLA_UNREAL_ENGINE_PATH=$extraction_path" >&2
+echo >&2
 
 # Output for consumption by CI scripts
 echo "$extraction_path"
