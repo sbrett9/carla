@@ -38,8 +38,9 @@ env:
   UE_CACHE_DIR: '/home/catgithubrunner/ue-cache'
   CONTENT_DIR: '/home/catgithubrunner/carla-content'
   
-  # Container image
-  CONTAINER_IMAGE: 'carla-base:alma8'
+  # Container image from Artifactory
+  ARTIFACTORY_DOCKER_REGISTRY: 'iasartifact.sncorp.com:8443/cat-docker-dev'
+  CONTAINER_IMAGE: 'iasartifact.sncorp.com:8443/cat-docker-dev/carla-base:alma8'
 
 jobs:
   build:
@@ -57,6 +58,21 @@ jobs:
           fetch-depth: 0
           # LFS not needed here - CARLA repo itself has no LFS objects
           lfs: false
+      
+      # ────────────────────────────────────────────────────────────────────
+      # Pull container image from Artifactory
+      # ────────────────────────────────────────────────────────────────────
+      - name: Pull container image
+        run: |
+          # Login to Artifactory Docker registry
+          API_KEY=$(cat /home/catgithubrunner/.artifactory/credentials | tr -d '\n\r')
+          echo "$API_KEY" | podman login \
+            --username catgithubrunner \
+            --password-stdin \
+            "$ARTIFACTORY_DOCKER_REGISTRY"
+          
+          # Pull the build container image
+          podman pull "$CONTAINER_IMAGE"
       
       # ────────────────────────────────────────────────────────────────────
       # Prepare build dependencies (cached on runner host)
@@ -102,7 +118,6 @@ jobs:
           UE_PATH="${{ steps.prepare-ue.outputs.ue_path }}"
           
           podman run --rm \
-            --userns=keep-id \
             --security-opt label=disable \
             -v "$WORKSPACE_PATH:$WORKSPACE_PATH" \
             -v "$CONTENT_DIR:$WORKSPACE_PATH/Unreal/CarlaUnreal/Content/Carla:ro" \
