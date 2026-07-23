@@ -1,0 +1,192 @@
+name: Build CARLA UE5
+
+# Automated build and distribution pipeline for CARLA on Linux.
+# Runs on self-hosted runner with containerized build environment.
+#
+# Build artifacts:
+#   - CARLA Linux distribution tarball (server + Python API)
+#   - Uploaded to Artifactory: cat-local-generic-dev/carla/
+
+on:
+  push:
+    branches:
+      - ue5-dev
+  pull_request:
+    branches:
+      - ue5-dev
+  workflow_dispatch:
+    inputs:
+      ue_distribution:
+        description: 'UE distribution filename in Artifactory (e.g., UnrealEngine-5.7.4-carla-port-049f42955-Linux.tar.zst)'
+        required: false
+        default: 'UnrealEngine-5.7.4-carla-port-049f42955-Linux.tar.zst'
+      skip_upload:
+        description: 'Skip uploading artifacts to Artifactory'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  # Unreal Engine distribution to use (can be overridden via workflow_dispatch)
+  UE_DISTRIBUTION: ${{ github.event.inputs.ue_distribution || 'UnrealEngine-5.7.4-carla-port-049f42955-Linux.tar.zst' }}
+  
+  # Artifactory paths
+  ARTIFACTORY_UE_REPO: 'cat-local-generic-dev/unreal'
+  ARTIFACTORY_CARLA_REPO: 'cat-local-generic-dev/carla'
+  
+  # Runner cache directories (persistent across workflow runs)
+  UE_CACHE_DIR: '/home/catgithubrunner/ue-cache'
+  CONTENT_DIR: '/home/catgithubrunner/carla-content'
+  
+  # Container image
+  CONTAINER_IMAGE: 'carla-base:alma8'
+
+jobs:
+  build:
+    name: Build CARLA Distribution
+    runs-on: self-hosted
+    
+    steps:
+      # ────────────────────────────────────────────────────────────────────
+      # Checkout CARLA source
+      # ────────────────────────────────────────────────────────────────────
+      - name: Checkout CARLA repository
+        uses: actions/checkout@v4
+        with:
+          # Fetch full history for accurate version tagging
+          fetch-depth: 0
+          # LFS not needed here - CARLA repo itself has no LFS objects
+          lfs: false
+      
+      # ────────────────────────────────────────────────────────────────────
+      # Prepare build dependencies (cached on runner host)
+      # ────────────────────────────────────────────────────────────────────
+      
+      - name: Sync CARLA content repository
+        run: |
+          # Verify content exists and is up-to-date, update if needed.
+          # The sync-carla-content helper manages a persistent Git-LFS clone
+          # in $CONTENT_DIR, avoiding 43 GB re-downloads on every run.
+          sync-carla-content --verify-only || \
+            sync-carla-content --ref ue5-dev --target "$CONTENT_DIR"
+      
+      - name: Prepare Unreal Engine distribution
+        id: prepare-ue
+        run: |
+          # Download and extract UE distribution from Artifactory with caching.
+          # The prepare-ue-distribution helper manages downloads, SHA256 verification,
+          # and extraction to $UE_CACHE_DIR. Subsequent runs reuse cached extractions.
+          UE_PATH=$(prepare-ue-distribution \
+            "$ARTIFACTORY_UE_REPO/$UE_DISTRIBUTION" \
+            "$UE_CACHE_DIR")
+          
+          echo "ue_path=$UE_PATH" >> $GITHUB_OUTPUT
+          echo "Unreal Engine ready at: $UE_PATH"
+      
+      # ────────────────────────────────────────────────────────────────────
+      # Build CARLA in container
+      # ────────────────────────────────────────────────────────────────────
+      
+      - name: Build CARLA
+        run: |
+          # Run the build in a containerized environment with volume mounts:
+          #   - CARLA source: bind-mount at same path (required for UE asset references)
+          #   - carla-content: read-only mount (43 GB LFS repo)
+          #   - UE distribution: read-only mount
+          #
+          # The container uses the Base.alma8.Dockerfile image with all build
+          # prerequisites installed. Build artifacts are written to the host's
+          # $GITHUB_WORKSPACE/Build/ directory.
+          
+          WORKSPACE_PATH="${GITHUB_WORKSPACE}"
+          UE_PATH="${{ steps.prepare-ue.outputs.ue_path }}"
+          
+          podman run --rm \
+            --userns=keep-id \
+            --security-opt label=disable \
+            -v "$WORKSPACE_PATH:$WORKSPACE_PATH" \
+            -v "$CONTENT_DIR:$WORKSPACE_PATH/Unreal/CarlaUnreal/Content/Carla:ro" \
+            -v "$UE_PATH:/opt/unreal-engine:ro" \
+            -w "$WORKSPACE_PATH" \
+            -e CARLA_UNREAL_ENGINE_PATH=/opt/unreal-engine \
+            "$CONTAINER_IMAGE" \
+            bash -c '
+              set -euo pipefail
+              
+              echo "=== Running CarlaSetup.sh ==="
+              ./CarlaSetup.sh --skip-prerequisites
+              
+              echo "=== Running BuildCarla.sh ==="
+              ./Scripts/Linux/BuildCarla.sh \
+                --unreal-engine-root /opt/unreal-engine
+              
+              echo "=== Creating distribution package ==="
+              ./Scripts/Linux/MakeDistribution.sh
+              
+              echo "=== Build complete ==="
+              ls -lh Build/Dist/
+            '
+      
+      # ────────────────────────────────────────────────────────────────────
+      # Upload artifacts
+      # ────────────────────────────────────────────────────────────────────
+      
+      - name: Upload to Artifactory
+        if: ${{ !inputs.skip_upload }}
+        run: |
+          # Upload the CARLA distribution tarball to Artifactory.
+          # The upload-to-artifactory helper reads credentials from a protected
+          # file on the runner host, keeping secrets out of workflow logs.
+          
+          DIST_FILE=$(ls Build/Dist/CARLA_*.tar.gz | head -1)
+          
+          if [ -z "$DIST_FILE" ]; then
+            echo "ERROR: No distribution file found in Build/Dist/" >&2
+            exit 1
+          fi
+          
+          BASENAME=$(basename "$DIST_FILE")
+          
+          # Extract version/commit info for artifact path
+          # Example: CARLA_0.9.15-123-g1a2b3c4.tar.gz -> 0.9.15-123-g1a2b3c4
+          VERSION=$(echo "$BASENAME" | sed 's/CARLA_\(.*\)\.tar\.gz/\1/')
+          
+          TARGET_PATH="$ARTIFACTORY_CARLA_REPO/releases/$VERSION/$BASENAME"
+          
+          echo "Uploading: $DIST_FILE"
+          echo "Target: $TARGET_PATH"
+          
+          upload-to-artifactory "$DIST_FILE" "$TARGET_PATH"
+          
+          echo "Upload complete!"
+          echo "Artifact URL: https://iasartifact.sncorp.com:8443/artifactory/$TARGET_PATH"
+      
+      - name: Archive build artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: carla-distribution
+          path: |
+            Build/Dist/CARLA_*.tar.gz
+          retention-days: 30
+      
+      # ────────────────────────────────────────────────────────────────────
+      # Summary
+      # ────────────────────────────────────────────────────────────────────
+      
+      - name: Build summary
+        if: always()
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**UE Distribution:** $UE_DISTRIBUTION" >> $GITHUB_STEP_SUMMARY
+          echo "**Content Ref:** ue5-dev" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f Build/Dist/CARLA_*.tar.gz ]; then
+            DIST_FILE=$(ls Build/Dist/CARLA_*.tar.gz | head -1)
+            SIZE=$(du -h "$DIST_FILE" | cut -f1)
+            echo "**Distribution:** $(basename $DIST_FILE) ($SIZE)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Distribution:** Build failed" >> $GITHUB_STEP_SUMMARY
+          fi
