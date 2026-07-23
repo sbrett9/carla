@@ -66,6 +66,7 @@ sudo chmod 755 /usr/local/bin/{upload-to-artifactory,prepare-ue-distribution,syn
 - `zstd` installed for UE distribution extraction
 - `curl` for Artifactory communication
 - `git` and `git-lfs` for content repository management
+- Rootless Podman properly configured (see Rootless Podman Configuration below)
 
 ## How It Works
 
@@ -122,6 +123,103 @@ podman run \
 - Unreal Engine stores absolute paths to assets in cooked data
 - Mounting CARLA source at the same path ensures asset references work
 - Content must be at `Unreal/CarlaUnreal/Content/Carla` relative to CARLA root
+
+## Rootless Podman Configuration
+
+The GitHub Actions runner uses **rootless Podman** for container builds and execution. This requires specific system configuration that differs from interactive user sessions.
+
+### Required System Configuration
+
+**1. User Namespace Mappings**
+
+Add subuid/subgid ranges in `/etc/subuid` and `/etc/subgid`:
+```
+catgithubrunner:951968:65536
+```
+
+**2. Setuid Binaries**
+
+The `newuidmap` and `newgidmap` binaries must have the setuid bit:
+```bash
+sudo chmod u+s /usr/bin/newuidmap /usr/bin/newgidmap
+```
+
+Verify with:
+```bash
+ls -la /usr/bin/new{u,g}idmap
+# Should show: -rwsr-xr-x (note the 's')
+```
+
+**3. SELinux Context for Container Storage**
+
+When Podman storage is on a non-standard filesystem (e.g., `/mnt/raid5`), set proper SELinux context:
+```bash
+# Add persistent SELinux policy
+sudo semanage fcontext -a -t container_file_t "/mnt/raid5/home/catgithubrunner/.local/share/containers(/.*)?"
+
+# Apply the context
+sudo restorecon -R -v /mnt/raid5/home/catgithubrunner/.local/share/containers
+```
+
+**4. XDG_RUNTIME_DIR**
+
+Rootless Podman requires `/run/user/<uid>` to exist. The GitHub runner systemd service creates this automatically (see service configuration below).
+
+**5. Systemd Service Configuration**
+
+The runner service **must** have `Delegate=yes` to allow cgroup management for rootless containers:
+
+```ini
+[Service]
+Type=simple
+User=catgithubrunner
+Group=SNC
+WorkingDirectory=/mnt/raid5/home/catgithubrunner/actions-runner
+
+# Create XDG_RUNTIME_DIR for rootless Podman
+ExecStartPre=/bin/bash -c 'mkdir -p /run/user/2028 && chown catgithubrunner:SNC /run/user/2028 && chmod 700 /run/user/2028'
+ExecStart=/bin/bash -c 'cd /mnt/raid5/home/catgithubrunner/actions-runner && ./run.sh'
+
+Restart=always
+RestartSec=10
+
+# CRITICAL: Enable cgroup delegation for rootless containers
+Delegate=yes
+```
+
+**Why `Delegate=yes` is required:**
+- Interactive user sessions get automatic cgroup delegation from `pam_systemd`
+- Systemd services run in `system.slice` without delegation by default
+- Rootless Podman needs cgroup control to create container sub-cgroups
+- Without delegation, `newuidmap` fails with "Operation not permitted"
+
+### Workflow Environment Variables
+
+GitHub Actions overrides `HOME` to a temporary directory, breaking rootless Podman. Workflows must explicitly set:
+
+```yaml
+- name: Build container
+  run: |
+    export HOME=/home/catgithubrunner
+    export XDG_RUNTIME_DIR=/run/user/$(id -u)
+    podman build ...
+```
+
+### Troubleshooting
+
+**Error: `newuidmap: write to uid_map failed: Operation not permitted`**
+- Check setuid bit on `/usr/bin/newuidmap` and `/usr/bin/newgidmap`
+- Verify `Delegate=yes` in systemd service
+- Confirm subuid/subgid entries exist
+
+**Error: `lstat /run/user/2028: no such file or directory`**
+- Verify `ExecStartPre` creates the directory in systemd service
+- Check directory permissions: `drwx------ catgithubrunner`
+
+**Error: SELinux denials on `/mnt/raid5`**
+- Run `sudo ausearch -m avc -ts recent` to check for denials
+- Apply `container_file_t` context as shown above
+- Verify with `ls -Zd /mnt/raid5/home/catgithubrunner/.local/share/containers`
 
 ## Security
 
