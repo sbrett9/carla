@@ -66,8 +66,8 @@ jobs:
         run: |
           # Setup Artifactory authentication
           API_KEY=$(cat /home/catgithubrunner/.artifactory/credentials | tr -d '\n\r')
-          mkdir -p ~/.config/containers
-          cat > ~/.config/containers/auth.json << EOF
+          mkdir -p /home/catgithubrunner/.config/containers
+          cat > /home/catgithubrunner/.config/containers/auth.json << EOF
           {
             "auths": {
               "$ARTIFACTORY_DOCKER_REGISTRY": {
@@ -76,9 +76,11 @@ jobs:
             }
           }
           EOF
-          chmod 600 ~/.config/containers/auth.json
+          chmod 600 /home/catgithubrunner/.config/containers/auth.json
           
-          # Pull the build container image
+          # Pull the build container image with rootless Podman
+          export HOME=/home/catgithubrunner
+          export XDG_RUNTIME_DIR=/run/user/$(id -u)
           podman pull "$CONTAINER_IMAGE"
       
       # ────────────────────────────────────────────────────────────────────
@@ -123,6 +125,10 @@ jobs:
           
           WORKSPACE_PATH="${GITHUB_WORKSPACE}"
           UE_PATH="${{ steps.prepare-ue.outputs.ue_path }}"
+          
+          # Set environment for rootless Podman
+          export HOME=/home/catgithubrunner
+          export XDG_RUNTIME_DIR=/run/user/$(id -u)
           
           podman run --rm \
             --security-opt label=disable \

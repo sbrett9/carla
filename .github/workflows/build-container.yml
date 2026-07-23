@@ -39,9 +39,9 @@ jobs:
           API_KEY=$(cat /home/catgithubrunner/.artifactory/credentials | tr -d '\n\r')
           
           # Create Podman auth file with API key
-          # Artifactory Docker registries accept the API key as the password
-          mkdir -p ~/.config/containers
-          cat > ~/.config/containers/auth.json << EOF
+          # Use the actual home directory, not GitHub Actions temp HOME
+          mkdir -p /home/catgithubrunner/.config/containers
+          cat > /home/catgithubrunner/.config/containers/auth.json << EOF
           {
             "auths": {
               "$ARTIFACTORY_PUSH_REGISTRY": {
@@ -50,11 +50,15 @@ jobs:
             }
           }
           EOF
-          chmod 600 ~/.config/containers/auth.json
+          chmod 600 /home/catgithubrunner/.config/containers/auth.json
       
       - name: Build container image
         run: |
-          # Build with corporate proxy CA trust bootstrap
+          # Build with rootless Podman
+          # Set HOME to actual home directory so Podman finds its config
+          export HOME=/home/catgithubrunner
+          export XDG_RUNTIME_DIR=/run/user/$(id -u)
+          
           podman build \
             -t "${ARTIFACTORY_PUSH_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}" \
             -f Util/Docker/Base.alma8.Dockerfile \
@@ -64,7 +68,10 @@ jobs:
       
       - name: Push to Artifactory
         run: |
-          # Push to cat-local-docker-dev (push registry)
+          # Push with rootless Podman
+          export HOME=/home/catgithubrunner
+          export XDG_RUNTIME_DIR=/run/user/$(id -u)
+          
           podman push "${ARTIFACTORY_PUSH_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
           
           echo "Image pushed to: ${ARTIFACTORY_PUSH_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
