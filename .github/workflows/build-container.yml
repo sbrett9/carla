@@ -19,6 +19,7 @@ env:
   # Artifactory Docker registries
   ARTIFACTORY_PUSH_REGISTRY: 'iasartifact.sncorp.com:8443/cat-local-docker-dev'
   ARTIFACTORY_PULL_REGISTRY: 'iasartifact.sncorp.com:8443/cat-docker-dev'
+  CATGITHUBRUNNER_HOME: '/mnt/raid5/home/catgithubrunner'
   
   # Image name and tag
   IMAGE_NAME: 'carla-base'
@@ -36,12 +37,19 @@ jobs:
       - name: Setup Artifactory authentication
         run: |
           # Read API key from protected file
-          API_KEY=$(cat /home/catgithubrunner/.artifactory/credentials | tr -d '\n\r')
+          API_KEY=$(cat "$CATGITHUBRUNNER_HOME/.artifactory/credentials" | tr -d '\n\r')
           
-          # Create Podman auth file with API key
-          # Use the actual home directory, not GitHub Actions temp HOME
-          mkdir -p /home/catgithubrunner/.config/containers
-          cat > /home/catgithubrunner/.config/containers/auth.json << EOF
+          # Mirror the working bsulprizio layout: real HOME plus a dedicated graphroot on /mnt/raid5
+          export HOME="$CATGITHUBRUNNER_HOME"
+          export GRAPHROOT_BASE="$CATGITHUBRUNNER_HOME/containers/storage"
+          export GRAPHROOT_LINK="$HOME/.local/share/containers/storage"
+          mkdir -p "$HOME/.config/containers" "$HOME/.local/share/containers" "$CATGITHUBRUNNER_HOME/containers" "$GRAPHROOT_BASE"
+          if [ -d "$GRAPHROOT_LINK" ] && [ ! -L "$GRAPHROOT_LINK" ]; then
+            mv "$GRAPHROOT_LINK" "$GRAPHROOT_LINK.pre-carla-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          fi
+          ln -sfn "$GRAPHROOT_BASE" "$GRAPHROOT_LINK"
+
+          cat > "$HOME/.config/containers/auth.json" << EOF
           {
             "auths": {
               "$ARTIFACTORY_PUSH_REGISTRY": {
@@ -50,13 +58,12 @@ jobs:
             }
           }
           EOF
-          chmod 600 /home/catgithubrunner/.config/containers/auth.json
+          chmod 600 "$HOME/.config/containers/auth.json"
       
       - name: Build container image
         run: |
           # Build with rootless Podman
-          # Set HOME to actual home directory so Podman finds its config
-          export HOME=/home/catgithubrunner
+          export HOME="$CATGITHUBRUNNER_HOME"
           export XDG_RUNTIME_DIR=/run/user/$(id -u)
           
           podman build \
@@ -69,7 +76,7 @@ jobs:
       - name: Push to Artifactory
         run: |
           # Push with rootless Podman
-          export HOME=/home/catgithubrunner
+          export HOME="$CATGITHUBRUNNER_HOME"
           export XDG_RUNTIME_DIR=/run/user/$(id -u)
           
           podman push "${ARTIFACTORY_PUSH_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
