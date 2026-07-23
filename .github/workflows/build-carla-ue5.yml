@@ -38,8 +38,9 @@ env:
   UE_CACHE_DIR: '/home/catgithubrunner/ue-cache'
   CONTENT_DIR: '/home/catgithubrunner/carla-content'
   
-  # Container image
-  CONTAINER_IMAGE: 'carla-base:alma8'
+  # Container image from Artifactory
+  ARTIFACTORY_DOCKER_REGISTRY: 'iasartifact.sncorp.com:8443/cat-docker-dev'
+  CONTAINER_IMAGE: 'iasartifact.sncorp.com:8443/cat-docker-dev/carla-base:alma8'
 
 jobs:
   build:
@@ -57,6 +58,30 @@ jobs:
           fetch-depth: 0
           # LFS not needed here - CARLA repo itself has no LFS objects
           lfs: false
+      
+      # ────────────────────────────────────────────────────────────────────
+      # Pull container image from Artifactory
+      # ────────────────────────────────────────────────────────────────────
+      - name: Pull container image
+        run: |
+          # Setup Artifactory authentication
+          API_KEY=$(cat /home/catgithubrunner/.artifactory/credentials | tr -d '\n\r')
+          mkdir -p /home/catgithubrunner/.config/containers
+          cat > /home/catgithubrunner/.config/containers/auth.json << EOF
+          {
+            "auths": {
+              "$ARTIFACTORY_DOCKER_REGISTRY": {
+                "auth": "$(echo -n "admin:$API_KEY" | base64 -w0)"
+              }
+            }
+          }
+          EOF
+          chmod 600 /home/catgithubrunner/.config/containers/auth.json
+          
+          # Pull the build container image with rootless Podman
+          export HOME=/home/catgithubrunner
+          export XDG_RUNTIME_DIR=/run/user/$(id -u)
+          podman pull "$CONTAINER_IMAGE"
       
       # ────────────────────────────────────────────────────────────────────
       # Prepare build dependencies (cached on runner host)
@@ -101,8 +126,11 @@ jobs:
           WORKSPACE_PATH="${GITHUB_WORKSPACE}"
           UE_PATH="${{ steps.prepare-ue.outputs.ue_path }}"
           
+          # Set environment for rootless Podman
+          export HOME=/home/catgithubrunner
+          export XDG_RUNTIME_DIR=/run/user/$(id -u)
+          
           podman run --rm \
-            --userns=keep-id \
             --security-opt label=disable \
             -v "$WORKSPACE_PATH:$WORKSPACE_PATH" \
             -v "$CONTENT_DIR:$WORKSPACE_PATH/Unreal/CarlaUnreal/Content/Carla:ro" \

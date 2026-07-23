@@ -1,0 +1,98 @@
+name: Build Container Image
+
+# Builds the carla-base:alma8 container image and pushes it to Artifactory.
+# This image is used by the CARLA build workflow and UE distribution builds.
+#
+# Push location: cat-local-docker-dev/carla-base:alma8
+# Pull location: cat-docker-dev/carla-base:alma8
+
+on:
+  push:
+    branches:
+      - ue5-dev
+    paths:
+      - 'Util/Docker/Base.alma8.Dockerfile'
+      - '.github/workflows/build-container.yml'
+  workflow_dispatch:
+
+env:
+  # Artifactory Docker registries
+  ARTIFACTORY_PUSH_REGISTRY: 'iasartifact.sncorp.com:8443/cat-local-docker-dev'
+  ARTIFACTORY_PULL_REGISTRY: 'iasartifact.sncorp.com:8443/cat-docker-dev'
+  CATGITHUBRUNNER_HOME: '/mnt/raid5/home/catgithubrunner'
+  
+  # Image name and tag
+  IMAGE_NAME: 'carla-base'
+  IMAGE_TAG: 'alma8'
+
+jobs:
+  build:
+    name: Build and Push Container Image
+    runs-on: self-hosted
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Artifactory authentication
+        run: |
+          # Read API key from protected file
+          API_KEY=$(cat "$CATGITHUBRUNNER_HOME/.artifactory/credentials" | tr -d '\n\r')
+          
+          # Mirror the working bsulprizio layout: real HOME plus a dedicated graphroot on /mnt/raid5
+          export HOME="$CATGITHUBRUNNER_HOME"
+          export GRAPHROOT_BASE="$CATGITHUBRUNNER_HOME/containers/storage"
+          export GRAPHROOT_LINK="$HOME/.local/share/containers/storage"
+          mkdir -p "$HOME/.config/containers" "$HOME/.local/share/containers" "$CATGITHUBRUNNER_HOME/containers" "$GRAPHROOT_BASE"
+          if [ -d "$GRAPHROOT_LINK" ] && [ ! -L "$GRAPHROOT_LINK" ]; then
+            mv "$GRAPHROOT_LINK" "$GRAPHROOT_LINK.pre-carla-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          fi
+          ln -sfn "$GRAPHROOT_BASE" "$GRAPHROOT_LINK"
+
+          cat > "$HOME/.config/containers/auth.json" << EOF
+          {
+            "auths": {
+              "$ARTIFACTORY_PUSH_REGISTRY": {
+                "auth": "$(echo -n "admin:$API_KEY" | base64 -w0)"
+              }
+            }
+          }
+          EOF
+          chmod 600 "$HOME/.config/containers/auth.json"
+      
+      - name: Build container image
+        run: |
+          # Build with rootless Podman
+          export HOME="$CATGITHUBRUNNER_HOME"
+          export XDG_RUNTIME_DIR=/run/user/$(id -u)
+          
+          podman build \
+            -t "${ARTIFACTORY_PUSH_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}" \
+            -f Util/Docker/Base.alma8.Dockerfile \
+            Util/Docker/
+          
+          echo "Image built: ${ARTIFACTORY_PUSH_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+      
+      - name: Push to Artifactory
+        run: |
+          # Push with rootless Podman
+          export HOME="$CATGITHUBRUNNER_HOME"
+          export XDG_RUNTIME_DIR=/run/user/$(id -u)
+          
+          podman push "${ARTIFACTORY_PUSH_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+          
+          echo "Image pushed to: ${ARTIFACTORY_PUSH_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+          echo "Pull from: ${ARTIFACTORY_PULL_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+      
+      - name: Build summary
+        run: |
+          echo "## Container Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${IMAGE_NAME}:${IMAGE_TAG}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Push Registry:** \`${ARTIFACTORY_PUSH_REGISTRY}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Pull Registry:** \`${ARTIFACTORY_PULL_REGISTRY}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Usage" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "podman pull ${ARTIFACTORY_PULL_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
