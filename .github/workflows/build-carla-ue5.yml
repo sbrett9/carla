@@ -64,12 +64,19 @@ jobs:
       # ────────────────────────────────────────────────────────────────────
       - name: Pull container image
         run: |
-          # Login to Artifactory Docker registry
+          # Setup Artifactory authentication
           API_KEY=$(cat /home/catgithubrunner/.artifactory/credentials | tr -d '\n\r')
-          echo "$API_KEY" | podman login \
-            --username catgithubrunner \
-            --password-stdin \
-            "$ARTIFACTORY_DOCKER_REGISTRY"
+          mkdir -p ~/.config/containers
+          cat > ~/.config/containers/auth.json << EOF
+          {
+            "auths": {
+              "$ARTIFACTORY_DOCKER_REGISTRY": {
+                "auth": "$(echo -n "admin:$API_KEY" | base64 -w0)"
+              }
+            }
+          }
+          EOF
+          chmod 600 ~/.config/containers/auth.json
           
           # Pull the build container image
           podman pull "$CONTAINER_IMAGE"

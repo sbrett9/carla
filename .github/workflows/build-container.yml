@@ -33,16 +33,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Login to Artifactory Docker registry
+      - name: Setup Artifactory authentication
         run: |
           # Read API key from protected file
           API_KEY=$(cat /home/catgithubrunner/.artifactory/credentials | tr -d '\n\r')
           
-          # Login to push registry
-          echo "$API_KEY" | podman login \
-            --username catgithubrunner \
-            --password-stdin \
-            "$ARTIFACTORY_PUSH_REGISTRY"
+          # Create Podman auth file with API key
+          # Artifactory Docker registries accept the API key as the password
+          mkdir -p ~/.config/containers
+          cat > ~/.config/containers/auth.json << EOF
+          {
+            "auths": {
+              "$ARTIFACTORY_PUSH_REGISTRY": {
+                "auth": "$(echo -n "admin:$API_KEY" | base64 -w0)"
+              }
+            }
+          }
+          EOF
+          chmod 600 ~/.config/containers/auth.json
       
       - name: Build container image
         run: |
