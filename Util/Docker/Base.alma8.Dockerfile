@@ -26,30 +26,25 @@ FROM almalinux:8
 # where the automatic CA bootstrap fails.
 ARG INSECURE_SSL=0
 
-# Bootstrap corporate CA trust for Artifactory and other internal services (default behavior).
-# Uses openssl s_client to retrieve the certificate chain presented during TLS handshake,
-# avoiding chicken-and-egg problems (no need to already trust the CA to download its certificate).
-# Skipped when INSECURE_SSL=1.
+# Bootstrap corporate CA trust and configure repositories.
+# For TLS-intercepting corporate networks (default): installs openssl with TLS verification
+# temporarily disabled, uses it to retrieve the proxy's certificate chain, then re-enables
+# verification for all subsequent operations.
+# For INSECURE_SSL=1 (fallback): disables TLS verification globally.
 RUN if [ "$INSECURE_SSL" != "1" ]; then \
-        echo | openssl s_client -showcerts -servername iasartifact.sncorp.com \
-            -connect iasartifact.sncorp.com:8443 2>/dev/null | \
-            awk '/BEGIN CERTIFICATE/,/END CERTIFICATE/ {print}' > /etc/pki/ca-trust/source/anchors/artifactory-chain.pem && \
+        echo "sslverify=False" >> /etc/dnf/dnf.conf && \
+        dnf -y install openssl && \
+        echo | openssl s_client -showcerts -servername mirrors.almalinux.org \
+            -connect mirrors.almalinux.org:443 2>/dev/null | \
+            awk '/BEGIN CERTIFICATE/,/END CERTIFICATE/ {print}' > /etc/pki/ca-trust/source/anchors/corporate-proxy-chain.pem && \
         update-ca-trust extract && \
-        echo "[CA Trust] Installed certificate chain from iasartifact.sncorp.com:8443"; \
-    fi
-
-# Disable dnf's TLS verification globally if INSECURE_SSL=1.
-RUN if [ "$INSECURE_SSL" = "1" ]; then \
-        echo "sslverify=False" >> /etc/dnf/dnf.conf; \
-        echo "[INSECURE_SSL] dnf TLS verification DISABLED for this build"; \
-    fi
-
-# ---------------------------------------------------------------------------
-# Repositories: EPEL + PowerTools (CRB on EL8 is named "powertools").
-# Many -devel packages (xerces-c, proj, SDL2, alsa, pango, gbm, at-spi2-atk, ...) live in
-# EPEL/PowerTools rather than the default repos.
-# ---------------------------------------------------------------------------
-RUN dnf -y install dnf-plugins-core epel-release \
+        sed -i '/sslverify=False/d' /etc/dnf/dnf.conf && \
+        echo "[CA Trust] Installed corporate proxy certificate chain"; \
+    else \
+        echo "sslverify=False" >> /etc/dnf/dnf.conf && \
+        echo "[INSECURE_SSL] dnf TLS verification DISABLED"; \
+    fi \
+    && dnf -y install dnf-plugins-core epel-release \
     && dnf config-manager --set-enabled powertools \
     && dnf -y makecache
 
