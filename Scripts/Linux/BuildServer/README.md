@@ -150,7 +150,12 @@ ls -la /usr/bin/new{u,g}idmap
 # Should show: -rwsr-xr-x (note the 's')
 ```
 
-**3. SELinux Context for Container Storage**
+**3. SELinux Configuration**
+
+Enable container cgroup management:
+```bash
+sudo setsebool -P container_manage_cgroup on
+```
 
 When Podman storage is on a non-standard filesystem (e.g., `/mnt/raid5`), set proper SELinux context:
 ```bash
@@ -161,9 +166,18 @@ sudo semanage fcontext -a -t container_file_t "/mnt/raid5/home/catgithubrunner/.
 sudo restorecon -R -v /mnt/raid5/home/catgithubrunner/.local/share/containers
 ```
 
-**4. XDG_RUNTIME_DIR**
+**4. Enable Lingering User Session**
 
-Rootless Podman requires `/run/user/<uid>` to exist. The GitHub runner systemd service creates this automatically (see service configuration below).
+Rootless Podman requires a persistent systemd user session. Enable lingering for the runner user:
+```bash
+sudo loginctl enable-linger catgithubrunner
+```
+
+This creates `/run/user/<uid>` and sets up proper cgroup delegation automatically. Verify with:
+```bash
+loginctl list-users  # Should show catgithubrunner
+ls -la /run/user/2028  # Should exist with proper permissions
+```
 
 **5. Systemd Service Configuration**
 
@@ -175,9 +189,6 @@ Type=simple
 User=catgithubrunner
 Group=SNC
 WorkingDirectory=/mnt/raid5/home/catgithubrunner/actions-runner
-
-# Create XDG_RUNTIME_DIR for rootless Podman
-ExecStartPre=/bin/bash -c 'mkdir -p /run/user/2028 && chown catgithubrunner:SNC /run/user/2028 && chmod 700 /run/user/2028'
 ExecStart=/bin/bash -c 'cd /mnt/raid5/home/catgithubrunner/actions-runner && ./run.sh'
 
 Restart=always
