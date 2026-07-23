@@ -133,7 +133,7 @@ if [ "$verify_only" = "1" ]; then
     
     # Verify sentinel file exists (basic content completeness check)
     # This file is part of the pedestrian skeleton assets and should always be present
-    sentinel="$target/Pedestrian/Skel_Pedestrian_G3.uasset"
+    sentinel="$target/Static/Pedestrian/00_GenericComponents/Definitions/Skel_Pedestrian_G3.uasset"
     if [ ! -f "$sentinel" ]; then
         echo "ERROR: Content appears incomplete (sentinel file missing: $sentinel)" >&2
         exit 4
@@ -185,9 +185,9 @@ if [ ! -d "$target/.git" ]; then
     )
     
     # Verify a sentinel file exists to confirm LFS pull succeeded
-    sentinel="$temp_clone/Pedestrian/Skel_Pedestrian_G3.uasset"
+    sentinel="$temp_clone/Static/Pedestrian/00_GenericComponents/Definitions/Skel_Pedestrian_G3.uasset"
     if [ ! -f "$sentinel" ]; then
-        echo "ERROR: LFS pull appears incomplete (sentinel file missing)" >&2
+        echo "ERROR: LFS pull appears incomplete (sentinel file missing: $sentinel)" >&2
         exit 4
     fi
     
