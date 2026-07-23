@@ -32,21 +32,40 @@ UE_PATH=$(prepare-ue-distribution \
   /home/catgithubrunner/ue-cache)
 ```
 
+### `sync-carla-content`
+Clones or updates the private carla-content Git-LFS repository to a persistent location on the runner host. Content is cached across workflow runs and volume-mounted into build containers.
+
+**Usage:**
+```bash
+sync-carla-content [--ref <branch>] [--target <path>] [--ssh-key <path>]
+```
+
+**Example:**
+```bash
+# Initial setup (run once)
+sync-carla-content --ref ue5-dev --target /home/catgithubrunner/carla-content
+
+# Update in workflow
+sync-carla-content --verify-only || sync-carla-content --ref ue5-dev
+```
+
 ## Installation
 
-Both scripts must be installed to `/usr/local/bin/` on the GitHub Actions runner host:
+All scripts must be installed to `/usr/local/bin/` on the GitHub Actions runner host:
 
 ```bash
-sudo cp upload-to-artifactory prepare-ue-distribution /usr/local/bin/
-sudo chown root:root /usr/local/bin/upload-to-artifactory /usr/local/bin/prepare-ue-distribution
-sudo chmod 755 /usr/local/bin/upload-to-artifactory /usr/local/bin/prepare-ue-distribution
+sudo cp upload-to-artifactory prepare-ue-distribution sync-carla-content /usr/local/bin/
+sudo chown root:root /usr/local/bin/{upload-to-artifactory,prepare-ue-distribution,sync-carla-content}
+sudo chmod 755 /usr/local/bin/{upload-to-artifactory,prepare-ue-distribution,sync-carla-content}
 ```
 
 ## Prerequisites
 
 - Artifactory API key stored in `/home/catgithubrunner/.artifactory/credentials`
+- CARLA content deploy key stored in `/home/catgithubrunner/.ssh/carla-content-deploy-key`
 - `zstd` installed for UE distribution extraction
 - `curl` for Artifactory communication
+- `git` and `git-lfs` for content repository management
 
 ## Security
 

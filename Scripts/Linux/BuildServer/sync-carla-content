@@ -1,0 +1,249 @@
+#!/bin/bash
+#
+# sync-carla-content - Manage CARLA content repository for GitHub Actions runner
+#
+# PURPOSE:
+#   Clones or updates the private carla-content Git-LFS repository to a persistent
+#   location on the runner host. The content is cached across workflow runs and
+#   volume-mounted into build containers (avoiding 43 GB re-downloads).
+#
+# USAGE:
+#   sync-carla-content [--ref <branch>] [--target <path>] [--ssh-key <path>]
+#
+# OPTIONS:
+#   --ref <branch>       Git ref to checkout (default: ue5-dev)
+#   --target <path>      Target directory for content (default: ~/carla-content)
+#   --ssh-key <path>     SSH deploy key (default: ~/.ssh/carla-content-deploy-key)
+#   --repo <url>         Repository URL (default: git@github.sncorp.com:CAT/carla-content.git)
+#   --force-reclone      Remove existing clone and start fresh
+#   --verify-only        Check if content is present and valid, exit without updating
+#
+# ENVIRONMENT:
+#   CARLA_CONTENT_REPO   Override repository URL
+#   CARLA_CONTENT_REF    Override git ref
+#   CARLA_CONTENT_KEY    Override SSH key path
+#
+# EXIT CODES:
+#   0 - Success (content is ready)
+#   1 - General error
+#   2 - Invalid arguments
+#   3 - SSH key not found
+#   4 - Content verification failed
+#
+# EXAMPLES:
+#   # Initial clone (run once on runner setup)
+#   sync-carla-content
+#
+#   # Update to latest ue5-dev (run in workflow)
+#   sync-carla-content --ref ue5-dev
+#
+#   # Verify content is ready without updating
+#   sync-carla-content --verify-only
+#
+# DESIGN RATIONALE:
+#   - Persistent clone: Avoids re-downloading 43 GB on every workflow run
+#   - SSH key isolation: Credentials stored in runner home, not in workflow YAML
+#   - Atomic operations: Clone to temp, verify, then move (prevents partial states)
+#   - LFS caching: Git LFS objects are cached in .git/lfs, reused across checkouts
+#   - Volume mounting: Content directory is bind-mounted into containers at the
+#     same path, so Unreal Engine asset references work correctly
+#
+
+set -euo pipefail
+
+# ── Defaults ────────────────────────────────────────────────────────────────
+ref="ue5-dev"
+target="${HOME}/carla-content"
+ssh_key="${HOME}/.ssh/carla-content-deploy-key"
+repo="git@github.sncorp.com:CAT/carla-content.git"
+force_reclone=0
+verify_only=0
+
+# ── Parse arguments ─────────────────────────────────────────────────────────
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --ref)           ref="$2"; shift ;;
+        --ref=*)         ref="${1#*=}" ;;
+        --target)        target="$2"; shift ;;
+        --target=*)      target="${1#*=}" ;;
+        --ssh-key)       ssh_key="$2"; shift ;;
+        --ssh-key=*)     ssh_key="${1#*=}" ;;
+        --repo)          repo="$2"; shift ;;
+        --repo=*)        repo="${1#*=}" ;;
+        --force-reclone) force_reclone=1 ;;
+        --verify-only)   verify_only=1 ;;
+        -h|--help)
+            grep '^#' "$0" | grep -v '^#!/' | sed 's/^# \?//'
+            exit 0
+            ;;
+        *) echo "Unknown argument: $1" >&2; exit 2 ;;
+    esac
+    shift
+done
+
+# Environment variable overrides
+repo="${CARLA_CONTENT_REPO:-$repo}"
+ref="${CARLA_CONTENT_REF:-$ref}"
+ssh_key="${CARLA_CONTENT_KEY:-$ssh_key}"
+
+# ── Validation ──────────────────────────────────────────────────────────────
+# Verify SSH key exists and is readable. The deploy key must be installed on the
+# runner host before this script runs (typically during runner setup). The key
+# should have read-only access to the carla-content repository.
+if [ ! -f "$ssh_key" ]; then
+    echo "ERROR: SSH key not found: $ssh_key" >&2
+    echo "Install the carla-content deploy key before running this script." >&2
+    exit 3
+fi
+
+if [ ! -r "$ssh_key" ]; then
+    echo "ERROR: SSH key not readable: $ssh_key" >&2
+    exit 3
+fi
+
+# Ensure target parent directory exists
+target_parent="$(dirname "$target")"
+mkdir -p "$target_parent"
+
+# ── Git wrapper with SSH key ────────────────────────────────────────────────
+# Configures git to use the deploy key for authentication. Uses non-interactive
+# SSH to avoid host-key prompts in CI (StrictHostKeyChecking=no). This is safe
+# because we're only cloning from a known corporate GitHub Enterprise instance.
+git_with_key() {
+    GIT_SSH_COMMAND="ssh -i $ssh_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes" \
+        git "$@"
+}
+
+# ── Verify-only mode ────────────────────────────────────────────────────────
+# Check if content exists and is valid without performing any updates. Used by
+# workflows to fail fast if content is missing before starting expensive builds.
+if [ "$verify_only" = "1" ]; then
+    echo "Verifying content at: $target"
+    
+    if [ ! -d "$target/.git" ]; then
+        echo "ERROR: Content directory does not exist or is not a git repository" >&2
+        exit 4
+    fi
+    
+    # Check if we're on the expected ref
+    current_ref=$(cd "$target" && git rev-parse --abbrev-ref HEAD)
+    if [ "$current_ref" != "$ref" ]; then
+        echo "WARNING: Content is on ref '$current_ref', expected '$ref'" >&2
+    fi
+    
+    # Verify sentinel file exists (basic content completeness check)
+    # This file is part of the pedestrian skeleton assets and should always be present
+    sentinel="$target/Pedestrian/Skel_Pedestrian_G3.uasset"
+    if [ ! -f "$sentinel" ]; then
+        echo "ERROR: Content appears incomplete (sentinel file missing: $sentinel)" >&2
+        exit 4
+    fi
+    
+    echo "Content verification passed"
+    echo "Location: $target"
+    echo "Ref: $current_ref"
+    exit 0
+fi
+
+# ── Force reclone ───────────────────────────────────────────────────────────
+# Remove existing clone if requested. Useful for recovering from corruption or
+# switching to a different repository URL.
+if [ "$force_reclone" = "1" ] && [ -d "$target" ]; then
+    echo "Removing existing clone: $target"
+    rm -rf "$target"
+fi
+
+# ── Clone or update ─────────────────────────────────────────────────────────
+if [ ! -d "$target/.git" ]; then
+    # INITIAL CLONE: Repository doesn't exist yet. Clone to a temporary location
+    # first, then move atomically to prevent partial clones from being used.
+    # Git LFS objects are NOT downloaded during clone (GIT_LFS_SKIP_SMUDGE=1),
+    # we'll fetch them separately after the clone succeeds.
+    
+    echo "Cloning carla-content repository..."
+    echo "  Repository: $repo"
+    echo "  Target: $target"
+    echo "  Ref: $ref"
+    
+    temp_clone="${target}.tmp.$$"
+    trap "rm -rf '$temp_clone'" EXIT
+    
+    # Clone without LFS objects (pointer files only). This is much faster and
+    # allows us to verify the clone succeeded before downloading 43 GB of LFS data.
+    echo "Cloning repository structure (LFS objects will be fetched separately)..."
+    GIT_LFS_SKIP_SMUDGE=1 git_with_key clone --branch "$ref" "$repo" "$temp_clone"
+    
+    # Fetch LFS objects. This downloads the actual binary files (vehicles, maps, etc.)
+    # from the LFS server. The objects are cached in .git/lfs/objects and reused
+    # across checkouts, so subsequent ref changes don't re-download everything.
+    echo "Fetching LFS objects (this may take several minutes on first run)..."
+    (
+        cd "$temp_clone"
+        # Use the same SSH key for LFS authentication
+        GIT_SSH_COMMAND="ssh -i $ssh_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes" \
+            git lfs pull
+    )
+    
+    # Verify a sentinel file exists to confirm LFS pull succeeded
+    sentinel="$temp_clone/Pedestrian/Skel_Pedestrian_G3.uasset"
+    if [ ! -f "$sentinel" ]; then
+        echo "ERROR: LFS pull appears incomplete (sentinel file missing)" >&2
+        exit 4
+    fi
+    
+    # Atomic move: only make the clone visible if everything succeeded
+    mv "$temp_clone" "$target"
+    trap - EXIT
+    
+    echo "Clone complete: $target"
+    
+else
+    # UPDATE EXISTING CLONE: Repository already exists. Fetch latest changes and
+    # checkout the requested ref. Git LFS objects for the new ref are pulled
+    # automatically if they're not already cached.
+    
+    echo "Updating existing carla-content repository..."
+    echo "  Location: $target"
+    echo "  Ref: $ref"
+    
+    cd "$target"
+    
+    # Fetch all refs from remote (doesn't modify working tree)
+    echo "Fetching updates from remote..."
+    git_with_key fetch --all --prune
+    
+    # Checkout the requested ref. If it's a branch, this will move to the latest
+    # commit we just fetched. If it's a tag or commit SHA, it will checkout that
+    # specific version.
+    echo "Checking out ref: $ref"
+    git_with_key checkout "$ref"
+    
+    # If we're on a branch, pull to fast-forward to the latest commit
+    if git rev-parse --abbrev-ref HEAD | grep -qv '^HEAD$'; then
+        echo "Pulling latest changes..."
+        git_with_key pull --ff-only
+    fi
+    
+    # Pull any new LFS objects needed for this ref. Git LFS is smart about this:
+    # it only downloads objects that aren't already in .git/lfs/objects.
+    echo "Updating LFS objects..."
+    GIT_SSH_COMMAND="ssh -i $ssh_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes" \
+        git lfs pull
+    
+    echo "Update complete"
+fi
+
+# ── Summary ─────────────────────────────────────────────────────────────────
+current_commit=$(cd "$target" && git rev-parse HEAD)
+current_ref=$(cd "$target" && git rev-parse --abbrev-ref HEAD)
+lfs_count=$(cd "$target" && git lfs ls-files | wc -l)
+
+echo ""
+echo "Content ready:"
+echo "  Location: $target"
+echo "  Ref: $current_ref"
+echo "  Commit: $current_commit"
+echo "  LFS objects: $lfs_count"
+echo ""
+echo "To use in a container, volume-mount this directory:"
+echo "  podman run -v $target:/path/in/container:ro ..."
