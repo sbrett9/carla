@@ -170,12 +170,8 @@ jobs:
               echo "=== Running CarlaSetup.sh ==="
               ./CarlaSetup.sh --skip-prerequisites
               
-              echo "=== Running BuildCarla.sh ==="
-              ./Scripts/Linux/BuildCarla.sh \
-                --unreal-engine-root /opt/unreal-engine
-              
               echo "=== Creating distribution package ==="
-              ./Scripts/Linux/MakeDistribution.sh
+              ./Scripts/Linux/MakeDistribution.sh --build
               
               echo "=== Build complete ==="
               ls -lh Build/Dist/
