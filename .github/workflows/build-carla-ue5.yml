@@ -115,6 +115,20 @@ jobs:
           UE_PATH=$(prepare-ue-distribution \
             "$ARTIFACTORY_UE_REPO/$UE_DISTRIBUTION" \
             "$UE_CACHE_DIR")
+
+          if [ ! -d "$UE_PATH/Engine" ]; then
+            for candidate in "$UE_PATH"/*; do
+              if [ -d "$candidate/Engine" ]; then
+                UE_PATH="$candidate"
+                break
+              fi
+            done
+          fi
+
+          if [ ! -d "$UE_PATH/Engine" ]; then
+            echo "ERROR: Could not locate Unreal Engine root under prepared path: $UE_PATH" >&2
+            exit 1
+          fi
           
           echo "ue_path=$UE_PATH" >> $GITHUB_OUTPUT
           echo "Unreal Engine ready at: $UE_PATH"
