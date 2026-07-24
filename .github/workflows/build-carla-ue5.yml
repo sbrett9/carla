@@ -51,20 +51,6 @@ jobs:
       # ────────────────────────────────────────────────────────────────────
       # Checkout CARLA source
       # ────────────────────────────────────────────────────────────────────
-      - name: Reset workspace
-        run: |
-          case "$GITHUB_WORKSPACE" in
-            /mnt/raid5/home/catgithubrunner/actions-runner/_work/*/*) ;;
-            *)
-              echo "Unexpected GITHUB_WORKSPACE: $GITHUB_WORKSPACE" >&2
-              exit 1
-              ;;
-          esac
-
-          if [ -d "$GITHUB_WORKSPACE" ]; then
-            sudo find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
-          fi
-
       - name: Checkout CARLA repository
         uses: actions/checkout@v4
         with:
@@ -72,7 +58,6 @@ jobs:
           fetch-depth: 0
           # LFS not needed here - CARLA repo itself has no LFS objects
           lfs: false
-          clean: false
       
       # ────────────────────────────────────────────────────────────────────
       # Pull container image from Artifactory
