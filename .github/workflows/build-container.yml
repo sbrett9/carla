@@ -57,26 +57,17 @@ jobs:
           fi
           ln -sfn "$GRAPHROOT_BASE" "$GRAPHROOT_LINK"
 
-          if [ ! -f "$HOME/.artifactory/credentials" ]; then
-            echo "Missing Artifactory token for $HOME" >&2
+          if [ -f "$HOME/.docker/config.json" ]; then
+            AUTH_SOURCE="$HOME/.docker/config.json"
+          elif [ -f "$HOME/.config/containers/auth.json" ]; then
+            AUTH_SOURCE="$HOME/.config/containers/auth.json"
+          else
+            echo "Missing OCI registry auth for $HOME" >&2
             exit 1
           fi
 
-          API_KEY=$(tr -d '\n\r' < "$HOME/.artifactory/credentials")
-          AUTH_B64=$(printf '%s' "${ARTIFACTORY_REGISTRY_USERNAME}:$API_KEY" | base64 -w0)
           AUTH_COPY="${RUNNER_TEMP:-$PWD}/podman-auth-${GITHUB_RUN_ID}-${GITHUB_JOB}.json"
-          cat > "$AUTH_COPY" <<EOF
-          {
-            "auths": {
-              "${ARTIFACTORY_REGISTRY_HOST}": {
-                "auth": "${AUTH_B64}"
-              },
-              "https://${ARTIFACTORY_REGISTRY_HOST}": {
-                "auth": "${AUTH_B64}"
-              }
-            }
-          }
-          EOF
+          cp "$AUTH_SOURCE" "$AUTH_COPY"
           chmod 600 "$AUTH_COPY"
           echo "REGISTRY_AUTH_FILE=$AUTH_COPY" >> "$GITHUB_ENV"
 
