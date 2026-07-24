@@ -1,261 +1,142 @@
-# AI Agent Instructions for CARLA Project
+# Python conventions — carla
 
-**Project:** CARLA Simulator with CarlaControl Package  
-**Organization:** Sierra Nevada Corporation (SNC)  
-**Last Updated:** 2026-07-14
+Rules for authoring Python under `carla/`. These apply to
+**new** code; retroactive migration of existing files is a separate effort.
 
----
+Mechanical rules (line length, imports ordering, naming, unused args, etc.) are
+enforced by `ruff.toml` in this directory. This document covers the conventions
+ruff cannot check. Run `ruff check .` and `ruff format .` before committing.
 
-## Project Overview
-
-This is a **proprietary SNC project** for CARLA autonomous driving simulation. The repository contains:
-
-1. **CARLA Simulator** - Modified Unreal Engine fork (C++)
-2. **CarlaNet** - .NET/C# client library with Python bindings at `CarlaNet/`
-3. **CarlaControl** - High-level Python control package at `CarlaControl/`
-
-Each component has its own coding standards and documentation.
+Scope: applies to all `*.py` files in this tree.
 
 ---
 
-## Critical Rules
+## Type hints — union syntax
 
-### 1. Code Conventions (MUST FOLLOW - ALL LANGUAGES)
+Use the modern union operator, not `typing.Optional` / `typing.Union`:
 
-**Read `CLAUDE.md` immediately** - it defines mandatory conventions for all code:
-- **No conversational jargon** in committed code (no "Option A", "Phase 2b", "as discussed")
-- **Self-explanatory identifiers** - code must make sense without conversation context
-- **Objective commit messages** - no transient labels or chat references
-
-These rules apply to **C++, C#, Python, and all other code** in this repository.
-
-### 2. Language-Specific Style Guides
-
-**For Python work (CarlaControl):**
-- Read `CarlaControl/docs/python-rules.md` for complete Python standards
-- Python 3.11+, Black formatting, Ruff linting, type hints required
-
-**For C++ work (CARLA core):**
-- Follow Unreal Engine coding standards
-- Check CARLA documentation for project-specific conventions
-
-**For C#/.NET work (CarlaNet):**
-- Follow .NET coding conventions
-- Check `CarlaNet/` documentation for project-specific standards
-
----
-
-## Project Architecture
-
-### Directory Structure
-
-```
-carla/                              # Repository root (CARLA simulator fork)
-├── CarlaNet/                       # .NET client library
-│   └── python/                     # Python bindings
-├── CarlaControl/                   # High-level Python package
-│   ├── src/carlacontrol/           # Package source
-│   ├── test/                       # Unit tests
-│   ├── docs/                       # Documentation
-│   │   └── python-rules.md         # Style guide
-│   └── pyproject.toml              # Package config
-├── CLAUDE.md                       # Code conventions (READ THIS)
-├── AGENTS.md                       # This file (AI agent instructions)
-└── Docs/                           # CARLA documentation
+```python
+def load(path: Path) -> Config | None: ...      # yes
+def merge(a: int | str) -> list[int]: ...        # yes
 ```
 
----
-
-## Development Workflow
-
-### Before Making Changes
-
-1. **Read relevant documentation:**
-   - `CLAUDE.md` - Code conventions (mandatory for all code)
-   - **For Python:** `CarlaControl/docs/python-rules.md`
-   - **For C++:** CARLA documentation and Unreal Engine standards
-   - **For C#/.NET:** CarlaNet documentation
-
-2. **Understand the component:**
-   - **CARLA core:** C++ Unreal Engine project
-   - **CarlaNet:** .NET library, requires .NET SDK
-   - **CarlaControl:** Python package, requires CarlaNet installed
-
-3. **Check existing code:**
-   - Look for existing implementations before creating new code
-   - Review related modules and tests
-   - Follow existing patterns in that component
-
-### Making Changes
-
-1. **Preserve existing functionality** - don't break working code
-2. **Write tests** for new code (TDD approach preferred)
-3. **Follow language conventions:**
-   - **Python:** Type hints, Google-style docstrings, Black/Ruff formatting
-   - **C++:** Unreal Engine conventions, appropriate comments
-   - **C#:** .NET conventions, XML documentation comments
-4. **Run appropriate formatters/linters** before committing
-
-### Testing
-
-- **Unit tests:** High coverage for core functionality
-- **Integration tests:** Cover component integration points
-- **Run tests:** Use appropriate test framework for the language
-  - Python: `pytest`
-  - C++: Check CARLA test documentation
-  - C#: `dotnet test`
-
-### Commit Messages
-
-Follow `CLAUDE.md` guidelines:
-- Imperative subject ≤72 chars
-- Describe **what changed and why**
-- No conversational transients ("as discussed", "per chat", "finally")
-- No live-plan labels ("Option A", "Phase 2b", "step N")
-
-
----
-
-## Component Dependencies
-
-### CARLA Simulator (C++)
-- Unreal Engine 4/5
-- See CARLA documentation for build requirements
-
-### CarlaNet (C#/.NET)
-- .NET SDK
-- See `CarlaNet/` for specific requirements
-
-### CarlaControl (Python)
-- Python 3.11+
-- CarlaNet (must be built first)
-- See `CarlaControl/pyproject.toml` for full dependency list
-
----
-## Known Issues & Solutions
-
-### CarlaNet Issues
-**Problem:** `ModuleNotFoundError: No module named 'carlanet'`  
-**Solution:** Build and install CarlaNet first:
-```bash
-cd CarlaNet/python
-./build_wheel.sh --editable
----
-
-## Security & IP Considerations
-
-- **All code is SNC proprietary** - include IP header in every new file
-- **No external code without approval** - check licenses before adding dependencies
-- **Cesium Ion tokens** - use environment variables, never hardcode
-- **TAK integration** - consider network security for CoT telemetry
-- **No secrets in commits** - use `.env` files (gitignored)
-
----
-
-## Quality Standards
-
-### Code Quality (All Languages)
-- ✅ Follow `CLAUDE.md` conventions (no conversational jargon)
-- ✅ Pass language-specific linters/formatters
-- ✅ Include appropriate documentation
-- ✅ Add SNC IP headers to all files
-
-### Python-Specific
-- ✅ Black formatting, Ruff linting
-- ✅ Type hints on public APIs
-- ✅ Google-style docstrings
-
-### Testing
-- ✅ High test coverage on core modules
-- ✅ All tests passing
-
-### Documentation
-- ✅ Clear documentation for public APIs
-- ✅ Usage examples where appropriate
-- ✅ Inline documentation for complex logic
-
----
-
-## AI Agent Behavior Guidelines
-
-### DO:
-- ✅ Read `CLAUDE.md` before making any changes (mandatory)
-- ✅ Check component-specific documentation:
-  - Python: `CarlaControl/docs/python-rules.md`
-  - C++: CARLA documentation
-  - C#: CarlaNet documentation
-- ✅ Preserve existing functionality
-- ✅ Write tests for new code
-- ✅ Follow language-specific conventions
-- ✅ Run appropriate formatters/linters
-- ✅ Ask for clarification if requirements are unclear
-- ✅ Reference specific files/lines when discussing code
-- ✅ Propose minimal, focused changes
-
-### DON'T:
-- ❌ Use conversational jargon in code (see `CLAUDE.md`)
-- ❌ Skip the SNC IP header in new files
-- ❌ Commit code without running formatters/linters
-- ❌ Add dependencies without checking component requirements
-- ❌ Break existing functionality
-- ❌ Delete or weaken existing tests
-- ❌ Hardcode paths, tokens, or secrets
-
----
-
-## Quick Reference Commands
-
-### CARLA Simulator
-```bash
-# Start server
-./CarlaUE4.sh -RenderOffScreen
+```python
+from typing import Optional, Union
+def load(path: Path) -> Optional[Config]: ...    # no
+def merge(a: Union[int, str]) -> List[int]: ...  # no
 ```
 
-### CarlaNet (C#/.NET)
-```bash
-cd CarlaNet/python
-./build_wheel.sh --editable
+Also prefer built-in generics (`list`, `dict`, `tuple`, `set`) over the
+`typing` aliases (`List`, `Dict`, ...). `ruff` (UP rules) will flag these.
+
+Only reach for `Optional[X]` if a file must run on Python < 3.10, and say so in
+a comment explaining the constraint. Default target is 3.12.
+
+## Imports
+
+- **All imports at the top of the file.** No imports inside functions or
+  methods — the only exceptions are breaking a genuine circular import or
+  guarding a truly optional dependency, and each such case gets a one-line
+  comment saying which.
+- Use **absolute imports** for anything outside the current package. Reserve
+  relative imports (`from .foo import Bar`) for intra-package references inside
+  `carlanet/` or `carlacontrol/`.
+- **One symbol concern per import line group.** Let `ruff format` / isort order
+  and split them; don't hand-order.
+
+Ordering (isort enforces this; shown so you can read a diff at a glance):
+
+```python
+from __future__ import annotations   # only if needed
+
+import os                            # standard library
+from pathlib import Path
+
+import numpy as np                   # third-party
+import carla
+
+from carlanet.geodesy import Coordinate   # first-party (the carlanet package)
+
+from .terrain_source import TerrainSource  # local-folder (relative)
 ```
 
-### CarlaControl (Python)
-```bash
-# Setup
-cd CarlaControl
-python3.11 -m venv venv
-source venv/bin/activate
-pip install -e ".[dev]"
+Module-level constants go directly after the imports, before any class.
 
-# Format & lint
-black src/ test/
-ruff check --fix src/ test/
 
-# Run tests
-pytest -v
+
+## Logging
+
+- Always prefer using the python logging module over print statements
+- **Levels:** `debug` (diagnostic) → `info` (milestones) → `warning` (unexpected) → `error` (failure) → `critical` (fatal)
+
+
+## Object-oriented design
+
+The architecture is **class-based**. All functionality beyond the CLI `main`
+entry point lives in a class. Standalone module-level functions are reserved for
+small, stateless utilities (a one-off `clamp`, a formatter) — not core logic.
+
+### One class per file
+
+- One public class per file. Small private helper classes tightly bound to it
+  may share the file; unrelated classes may not.
+- **File name matches the class name in PascalCase**: `class TerrainManager`
+  lives in `TerrainManager.py`.
+- Tie functional concerns to the object that owns them, not merely to the file.
+
+### Two class shapes
+
+**1. Instantiable objects** — the default, for anything that holds state:
+
+```python
+class TerrainManager:
+    """Owns the set of terrain sources and resolves elevations against them."""
+
+    def __init__(self, dted_root: Path) -> None:
+        self.dted_root = dted_root
+        self.sources: list[TerrainSource] = []
+
+    def add_source(self, source: TerrainSource) -> None:
+        """Register a source, highest priority last."""
+        self.sources.append(source)
 ```
 
----
+**2. Static / class-method utilities** — stateless helpers grouped under a name:
 
-## Contact & Support
+```python
+class CoordinateParser:
+    """Parses coordinate strings into Coordinate value objects."""
 
-**Maintainer:** SNC Team  
-**Documentation:**
-- CARLA: `Docs/`
-- CarlaNet: `CarlaNet/`
-- CarlaControl: `CarlaControl/docs/`
+    @staticmethod
+    def parse_utm(zone: int, is_north: bool, easting: float, northing: float) -> Coordinate_UTM:
+        """Build a UTM coordinate from raw components."""
+        return Coordinate_UTM(zone, is_north, easting, northing)
 
-**Issues:** Track in project management system (not in code comments)
+    @classmethod
+    def from_string(cls, coord_str: str) -> Coordinate:
+        """Parse a coordinate from its string form."""
+        ...
+```
 
----
+### Design guidelines
 
-## Document Version
+- **Encapsulation** — related data and the methods over it stay together.
+- **Single responsibility** — one clear purpose per class.
+- **Composition over inheritance** — compose objects; avoid deep hierarchies.
+- **Explicit over implicit** — pass dependencies in; make relationships visible.
 
-**Version:** 1.0  
-**Created:** 2026-07-14  
-**Last Updated:** 2026-07-14
+### Anti-patterns to avoid
 
----
+- Multiple unrelated classes in one file.
+- Standalone functions carrying core business logic.
+- CLI/argument-parsing logic mixed into business-logic classes.
+- God classes that do everything.
 
-**For component-specific documentation:**
-- **CARLA:** See `Docs/`
-- **CarlaNet:** See `CarlaNet/` directory
-- **CarlaControl:** See `CarlaControl/docs/`
+### CLI entry points
+
+The `main` function and argument parsing are the sanctioned exception to the
+"everything in a class" rule. Keep `main` thin: parse args, construct the
+objects, call them. Business logic belongs in the classes it invokes, not in
+`main`.
+
+
