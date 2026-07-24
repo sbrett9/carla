@@ -148,10 +148,25 @@ else
 fi
 
 # Step 5: Output the path
+ue_root="$extraction_path"
+if [ ! -d "$ue_root/Engine" ]; then
+    for candidate in "$extraction_path"/*; do
+        if [ -d "$candidate/Engine" ]; then
+            ue_root="$candidate"
+            break
+        fi
+    done
+fi
+
+if [ ! -d "$ue_root/Engine" ]; then
+    echo "ERROR: Could not locate Unreal Engine root under: $extraction_path" >&2
+    exit 1
+fi
+
 echo >&2
 echo "[4/4] UE distribution ready" >&2
-echo "CARLA_UNREAL_ENGINE_PATH=$extraction_path" >&2
+echo "CARLA_UNREAL_ENGINE_PATH=$ue_root" >&2
 echo >&2
 
 # Output for consumption by CI scripts
-echo "$extraction_path"
+echo "$ue_root"

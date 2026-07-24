@@ -213,7 +213,7 @@ for broken in \
 done
 
 # ── VERIFY UNREAL ENGINE ─────────────────────────────────────────────────────
-if [ -n "${CARLA_UNREAL_ENGINE_PATH:-}" ] && [ -d "$CARLA_UNREAL_ENGINE_PATH" ]; then
+if [ -n "${CARLA_UNREAL_ENGINE_PATH:-}" ] && [ -d "$CARLA_UNREAL_ENGINE_PATH/Engine" ]; then
     echo "Found Unreal Engine 5 at $CARLA_UNREAL_ENGINE_PATH"
 else
     echo "ERROR: CARLA_UNREAL_ENGINE_PATH is not set or does not exist."
