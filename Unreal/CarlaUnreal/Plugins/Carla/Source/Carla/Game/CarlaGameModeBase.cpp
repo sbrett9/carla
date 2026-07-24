@@ -243,23 +243,6 @@ void ACarlaGameModeBase::BeginPlay()
   EnableOverlapEvents();
 }
 
-TArray<FString> ACarlaGameModeBase::GetNamesOfAllActors()
-{
-  TArray<FString> Names;
-  TArray<AActor*> Actors;
-  UGameplayStatics::GetAllActorsOfClass(GetWorld(), AActor::StaticClass(), Actors);
-  for (AActor* Actor : Actors)
-  {
-    TArray<UStaticMeshComponent*> StaticMeshes;
-    Actor->GetComponents(StaticMeshes);
-    if (StaticMeshes.Num())
-    {
-      Names.Add(Actor->GetName());
-    }
-  }
-  return Names;
-}
-
 AActor* ACarlaGameModeBase::FindActorByName(const FString& ActorName)
 {
   TArray<AActor*> Actors;

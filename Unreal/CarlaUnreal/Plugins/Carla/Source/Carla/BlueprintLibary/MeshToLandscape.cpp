@@ -9,6 +9,12 @@
 #include "Components/StaticMeshComponent.h"
 #include "StaticMeshLODResourcesAdapter.h"
 #include "PhysicsEngine/PhysicsObjectExternalInterface.h"
+// UWorld::GetPhysicsScene() returns FPhysScene* (FPhysScene_Chaos*), which is
+// only forward-declared by the engine headers included here. Resolving the
+// FPhysicsObjectExternalInterface::LockRead(FChaosScene*) overload requires the
+// derived-to-base pointer conversion, which needs the complete FPhysScene_Chaos
+// definition proving it inherits from FChaosScene.
+#include "Physics/Experimental/PhysScene_Chaos.h"
 #include "Async/ParallelFor.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Engine/CollisionProfile.h"

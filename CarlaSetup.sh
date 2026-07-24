@@ -21,6 +21,7 @@ launch=0
 python_root=
 vibeue_ssh_key=
 content_ssh_key=
+content_repo=
 
 clean_sumo=0
 clean_all=0
@@ -54,6 +55,8 @@ OPTIONS:
       --force-deps-rebuild   Also clear the ezvcpkg cache so vcpkg deps recompile (implies --clean-cesium).
       --with-python-api      Build the legacy Boost.Python `carla` module (off by default).
       --with-tests           Build LibCarla C++ tests (off by default; pulls in googletest).
+      --content-repo <url>   Content repository URL (else $CARLA_CONTENT_REPO;
+                             defaults to git@github.sncorp.com:CAT/carla-content.git).
       --content-ssh-key <path> SSH key for the private carla-content mirror (else $CARLA_CONTENT_SSH_KEY;
                              falls back to your default SSH agent/keys if neither is given).
       --python-root <dir>    Python install root for the API build.
@@ -61,8 +64,9 @@ OPTIONS:
   -h, --help                 Show this help and exit.
 
 The engine is taken from $CARLA_UNREAL_ENGINE_PATH (must be set to your UE 5.7.4 root).
-The CARLA content is cloned over SSH from a private mirror; provide a deploy key via
---content-ssh-key=<path> or $CARLA_CONTENT_SSH_KEY, or have a working SSH agent/key for github.com.
+The CARLA content is cloned over SSH from the configured repository (defaults to the CAT
+organization mirror on github.sncorp.com). Provide a deploy key via --content-ssh-key=<path>
+or $CARLA_CONTENT_SSH_KEY, or have a working SSH agent/key for the target host.
 
 EXAMPLES:
   ./CarlaSetup.sh --skip-prerequisites
@@ -87,6 +91,8 @@ while [ $# -gt 0 ]; do
         --with-tests)            with_tests=1 ;;
         -pyroot|--python-root)   python_root="$2"; shift ;;
         --python-root=*)         python_root="${1#*=}" ;;
+        --content-repo)          content_repo="$2"; shift ;;
+        --content-repo=*)        content_repo="${1#*=}" ;;
         --content-ssh-key)       content_ssh_key="$2"; shift ;;
         --content-ssh-key=*)     content_ssh_key="${1#*=}" ;;
         --vibeue-ssh-key)        vibeue_ssh_key="$2"; shift ;;
@@ -130,28 +136,31 @@ else
 fi
 
 # ── CLONE CONTENT ────────────────────────────────────────────────────────────
-# Private snapshot mirror of carla-simulator/carla-content (ue5-dev). It carries the
-# vehicle staging-fade asset changes and is owned by this project. Cloned over SSH (same
-# mechanism as the VibeUE plugin): supply a deploy key with --content-ssh-key=<path> or
-# $CARLA_CONTENT_SSH_KEY; without one, the clone uses your default SSH agent/keys for
-# github.com. The upstream Bitbucket repo
+# Private mirror of carla-simulator/carla-content (ue5-dev). The default mirror is hosted
+# in the CAT organization on github.sncorp.com and carries vehicle staging-fade asset changes.
+# Cloned over SSH (same mechanism as the VibeUE plugin): supply a deploy key with
+# --content-ssh-key=<path> or $CARLA_CONTENT_SSH_KEY; without one, the clone uses your default
+# SSH agent/keys for the target host. The content repository URL can be overridden via
+# --content-repo or $CARLA_CONTENT_REPO. The upstream Bitbucket repo
 # (https://bitbucket.org/carla-simulator/carla-content.git, branch ue5-dev) is the original
 # public source if a pristine pull is ever needed.
 content_dir="$workspace_path/Unreal/CarlaUnreal/Content"
-content_repo="git@github.com:sbrett9/carla-content.git"
+content_repo="${content_repo:-${CARLA_CONTENT_REPO:-git@github.sncorp.com:CAT/carla-content.git}}"
 content_key="${content_ssh_key:-${CARLA_CONTENT_SSH_KEY:-}}"
 
-# git wrapper for the content repo. Uses the deploy key when one is provided, and runs ssh
-# non-interactively so a fresh container/batch run never blocks on the github.com host-key prompt
-# ("Are you sure you want to continue connecting?"). StrictHostKeyChecking=no + UserKnownHostsFile=
-# /dev/null means it neither prompts nor depends on (or writes) a known_hosts file -- this also covers
-# the `git lfs pull` calls below, which spawn ssh for git-lfs-authenticate.
-content_ssh="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+# Shared non-interactive ssh base for the private-repo clones (the content repo below and the VibeUE
+# plugin later). Runs ssh non-interactively so a fresh container/batch run never blocks on the
+# github.com host-key prompt ("Are you sure you want to continue connecting?"). StrictHostKeyChecking=no
+# + UserKnownHostsFile=/dev/null means it neither prompts nor depends on (or writes) a known_hosts file
+# -- this also covers the `git lfs pull` calls below, which spawn ssh for git-lfs-authenticate.
+ssh_noninteractive="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+
+# git wrapper for the content repo. Uses the deploy key when one is provided.
 content_git() {
     if [ -n "$content_key" ]; then
-        GIT_SSH_COMMAND="$content_ssh -i $content_key -o IdentitiesOnly=yes" git "$@"
+        GIT_SSH_COMMAND="$ssh_noninteractive -i $content_key -o IdentitiesOnly=yes" git "$@"
     else
-        GIT_SSH_COMMAND="$content_ssh" git "$@"
+        GIT_SSH_COMMAND="$ssh_noninteractive" git "$@"
     fi
 }
 
@@ -268,7 +277,13 @@ vibeue_repo="git@github.com:sbrett9/VibeUE.git"
 vibeue_pin="379373709e68ce7f2c4e3a26ff931f703d87b817"
 vibeue_key="${vibeue_ssh_key:-${VIBEUE_SSH_KEY:-}}"
 if [ -d "$vibeue_dir/.git" ]; then
-    [ -n "$vibeue_key" ] && export GIT_SSH_COMMAND="ssh -i $vibeue_key -o IdentitiesOnly=yes"
+    # Non-interactive ssh (with the deploy key when present) so a fresh container/batch run never
+    # blocks on the github.com host-key prompt; without a key it still uses any ssh agent keys.
+    if [ -n "$vibeue_key" ]; then
+        export GIT_SSH_COMMAND="$ssh_noninteractive -i $vibeue_key -o IdentitiesOnly=yes"
+    else
+        export GIT_SSH_COMMAND="$ssh_noninteractive"
+    fi
     if git -C "$vibeue_dir" fetch origin && git -C "$vibeue_dir" checkout "$vibeue_pin"; then
         echo "VibeUE pinned to $vibeue_pin."
     else
@@ -277,7 +292,7 @@ if [ -d "$vibeue_dir/.git" ]; then
 elif [ -n "$vibeue_key" ]; then
     echo "Cloning VibeUE private mirror (pinned $vibeue_pin)..."
     vibeue_tmp="$vibeue_dir.tmp.$$"
-    if GIT_SSH_COMMAND="ssh -i $vibeue_key -o IdentitiesOnly=yes" git clone "$vibeue_repo" "$vibeue_tmp" \
+    if GIT_SSH_COMMAND="$ssh_noninteractive -i $vibeue_key -o IdentitiesOnly=yes" git clone "$vibeue_repo" "$vibeue_tmp" \
         && git -C "$vibeue_tmp" checkout "$vibeue_pin"; then
         rm -rf "$vibeue_dir" && mv "$vibeue_tmp" "$vibeue_dir"
         echo "VibeUE installed at $vibeue_pin."

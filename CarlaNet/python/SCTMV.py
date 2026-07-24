@@ -265,7 +265,11 @@ def make_options(args):
     opts = OsmConversionOptions()
     opts.NetconvertPath = _NETCONVERT
     opts.ProjDataDirectory = _PROJ
-    opts.GenerateTrafficLights = False   # avoids the ungrouped-TL log spam (known issue)
+    # netconvert emits the traffic-light signals + guessed phase program; TrafficLightInjector then
+    # adds the per-phase controllers and <junction><controller> links netconvert omits, so CARLA
+    # groups them correctly (one group per junction, one controller per phase) instead of orphaning
+    # every light (the previous ungrouped-TL log spam, issue #1).
+    opts.GenerateTrafficLights = True
     opts.OriginLatitude = args.lat
     opts.OriginLongitude = args.lon
     if not args.no_road_filter:

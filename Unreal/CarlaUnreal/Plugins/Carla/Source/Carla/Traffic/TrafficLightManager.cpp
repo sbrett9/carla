@@ -19,6 +19,8 @@
 #include <util/disable-ue4-macros.h>
 #include <carla/rpc/String.h>
 #include <carla/road/SignalType.h>
+#include <carla/road/Lane.h>
+#include <carla/road/LaneSection.h>
 #include <carla/opendrive/OpenDriveParser.h>
 #include <util/enable-ue4-macros.h>
 
@@ -512,6 +514,33 @@ T * GetClosestTrafficSignActor(const carla::road::Signal &Signal, UWorld* World)
   return ClosestTrafficSign;
 }
 
+// Number of driving lanes on the same side of the road as the given lane. That is the span an
+// approach's mast arm reaches over, and so the number of signal heads to hang from it (a real mast
+// arm carries a head over each lane). Never returns less than one.
+static int32 CountDrivingLanesOnSide(const carla::road::Lane &Lane)
+{
+  const carla::road::LaneSection *Section = Lane.GetLaneSection();
+  if (Section == nullptr)
+  {
+    return 1;
+  }
+  const bool bRightSide = Lane.GetId() < 0; // OpenDRIVE: negative ids right of the reference line
+  int32 Count = 0;
+  for (const auto &Pair : Section->GetLanes())
+  {
+    const carla::road::Lane &Other = Pair.second;
+    if (Other.GetId() == 0 || Other.GetType() != carla::road::Lane::LaneType::Driving)
+    {
+      continue;
+    }
+    if ((Other.GetId() < 0) == bRightSide)
+    {
+      ++Count;
+    }
+  }
+  return FMath::Max(Count, 1);
+}
+
 void ATrafficLightManager::SpawnTrafficLights()
 {
   namespace cr = carla::road;
@@ -582,7 +611,9 @@ void ATrafficLightManager::SpawnTrafficLights()
     auto ClosestWaypointToSignal =
         GetMap()->GetClosestWaypointOnRoad(CarlaTransform.location);
 
-    const bool IsRHT = GetMap()->GetLane(ClosestWaypointToSignal.value()).GetRoad()->IsRHT();
+    const auto &SignalLane = GetMap()->GetLane(ClosestWaypointToSignal.value());
+    const bool IsRHT = SignalLane.GetRoad()->IsRHT();
+    const int32 NumSignalHeads = CountDrivingLanesOnSide(SignalLane);
 
     FTransform SpawnTransform(CarlaTransform);
 
@@ -599,6 +630,9 @@ void ATrafficLightManager::SpawnTrafficLights()
     SpawnParams.SpawnCollisionHandlingOverride =
         ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
     SpawnParams.OverrideLevel = GM->GetULevelFromName("TrafficLights");
+    // Hold the construction script until the per-approach head count is set, so the Blueprint builds
+    // the mast arm with one head per lane rather than with its default.
+    SpawnParams.bDeferConstruction = true;
 
     auto TrafficLightModel = IsRHT ? TrafficLightModel_RHT : TrafficLightModel_LHT;
     ATrafficLightBase * TrafficLight = GetWorld()->SpawnActor<ATrafficLightBase>(
@@ -606,6 +640,9 @@ void ATrafficLightManager::SpawnTrafficLights()
         SpawnLocation,
         SpawnRotation,
         SpawnParams);
+
+    TrafficLight->NumSignalHeads = NumSignalHeads;
+    TrafficLight->FinishSpawning(FTransform(SpawnRotation, SpawnLocation));
 
     TrafficSigns.Add(TrafficLight);
 

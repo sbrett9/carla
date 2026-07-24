@@ -31,9 +31,46 @@ public sealed class ActorSnapshot
     public Vector3D Velocity { get; init; }
     public Vector3D AngularVelocity { get; init; }
     public Vector3D Acceleration { get; init; }
-    // Raw 54-byte TypeDependentState union — parse with GetVehicleData() etc.
+    // Raw 54-byte TypeDependentState union — parse with ParseVehicleState() etc.
     internal byte[] TypeDependentState { get; init; } = [];
+
+    /// <summary>
+    /// Decode the <c>VehicleData</c> branch of the type-dependent union
+    /// (carla/sensor/data/ActorDynamicState.h, <c>#pragma pack(1)</c>). Only meaningful
+    /// when this snapshot is a vehicle actor. Byte offsets within <see cref="TypeDependentState"/>:
+    /// <list type="bullet">
+    ///   <item><c>control</c> (PackedVehicleControl, 19 B): throttle/steer/brake f32 ×3 (12) +
+    ///         hand_brake/reverse/manual_gear_shift bool ×3 (3) + gear i32 (4)</item>
+    ///   <item><c>speed_limit</c> f32 @ 19</item>
+    ///   <item><c>traffic_light_state</c> u8 @ 23</item>
+    ///   <item><c>has_traffic_light</c> bool @ 24</item>
+    /// </list>
+    /// Returns Green / 0 / false when the union is too short (not-yet-populated snapshot).
+    /// </summary>
+    internal VehicleObservedState ParseVehicleState()
+    {
+        ReadOnlySpan<byte> s = TypeDependentState;
+        if (s.Length < 25)
+            return new VehicleObservedState(0f, TrafficLightState.Green, false);
+        float speedLimit = BitConverter.Int32BitsToSingle(
+            BinaryPrimitives.ReadInt32LittleEndian(s[19..]));
+        var tlState = (TrafficLightState)s[23];
+        bool atTrafficLight = s[24] != 0;
+        return new VehicleObservedState(speedLimit, tlState, atTrafficLight);
+    }
 }
+
+/// <summary>
+/// Per-vehicle dynamic state decoded from the world-observer snapshot's type-dependent
+/// union: the server-reported speed limit (km/h, as CARLA's <c>Vehicle::GetSpeedLimit</c>
+/// returns it), the current traffic-light state affecting the vehicle, and whether it is
+/// currently at a traffic light. The server fills these each tick from the vehicle's AI
+/// controller (WorldObserver.cpp); a dormant vehicle reports Green / its stored limit / false.
+/// </summary>
+public readonly record struct VehicleObservedState(
+    float SpeedLimit,
+    TrafficLightState TrafficLightState,
+    bool AtTrafficLight);
 
 public sealed class CarlaClient : IAsyncDisposable
 {
@@ -263,6 +300,12 @@ public sealed class CarlaClient : IAsyncDisposable
     {
         var xodr = await new CarlaNet.Map.OsmConverter(osmOptions)
             .ConvertFileAsync(osmPath, ct).ConfigureAwait(false);
+        // Inject stop/give-way signs from the OSM (netconvert never emits them) so the native
+        // spawner renders real, sensor-detectable signs. The parsed map's geoReference is the
+        // projection origin; a no-op when the OSM carries no such nodes.
+        var signMap = CarlaNet.Map.OpenDrive.OpenDriveParser.Load(xodr);
+        if (signMap != null)
+            xodr = CarlaNet.Map.OpenDrive.SignInjector.InjectSigns(xodr, osmPath, signMap);
         await GenerateOpenDriveWorldAsync(xodr, parameters, resetSettings).ConfigureAwait(false);
     }
 
@@ -299,9 +342,10 @@ public sealed class CarlaClient : IAsyncDisposable
         string? drapeCacheDir = null,
         CancellationToken ct = default)
     {
-        // 1) OSM -> flat .xodr (offline, native netconvert).
-        var flatXodr = await new CarlaNet.Map.OsmConverter(osmOptions)
-            .ConvertFileAsync(osmPath, ct).ConfigureAwait(false);
+        // 1) OSM -> flat .xodr (offline, native netconvert). Also capture the SUMO network when
+        //    traffic-light generation is on — its <tlLogic> phase programs drive TrafficLightInjector.
+        var (flatXodr, sumoNet) = await new CarlaNet.Map.OsmConverter(osmOptions)
+            .ConvertFileWithNetworkAsync(osmPath, ct).ConfigureAwait(false);
 
         // 2) Parse + extract reference-line samples + reproject (all offline). The origin
         //    is the .xodr geoReference (pinned by osmOptions).
@@ -454,6 +498,20 @@ public sealed class CarlaClient : IAsyncDisposable
         var elevatedXodr = CarlaNet.Map.OpenDrive.ElevationInjector.InjectElevation(
             flatXodr, samples, roadEllipsoidal, originHeight,
             CarlaNet.Map.OpenDrive.ElevationFitMode.PiecewiseLinear, outlierThresholdMeters);
+
+        // 5b) Inject stop/give-way signs from the OSM (netconvert never emits them). Placement is
+        //     by road/s + a shoulder offset, unaffected by the elevation just added, and uses the
+        //     same geoReference origin; a no-op when the OSM carries no such nodes.
+        elevatedXodr = CarlaNet.Map.OpenDrive.SignInjector.InjectSigns(elevatedXodr, osmPath, map);
+
+        // 5c) Group the netconvert traffic lights per phase and link them to their junctions.
+        //     netconvert emits the light <signal>s and one all-heads <controller> per junction but
+        //     no <junction><controller> link and no phase split, so CARLA orphans every light
+        //     (issue #1) and would flash whole junctions green. TrafficLightInjector rebuilds the
+        //     controllers per phase from the SUMO <tlLogic> and adds the links; a no-op when
+        //     traffic-light generation is off (sumoNet null).
+        if (sumoNet != null)
+            elevatedXodr = CarlaNet.Map.OpenDrive.TrafficLightInjector.InjectTrafficLights(elevatedXodr, sumoNet);
 
         // 6) Generate the elevated OpenDRIVE world (builds road mesh + waypoints at correct Z).
         await GenerateOpenDriveWorldAsync(elevatedXodr, parameters).ConfigureAwait(false);
@@ -1204,6 +1262,17 @@ public sealed class CarlaClient : IAsyncDisposable
     public Vector3D        GetActorAngularVelocity(ActorId id) => _actorCache.TryGetValue(id, out var s) ? s.AngularVelocity : default;
     public Vector3D        GetActorAcceleration   (ActorId id) => _actorCache.TryGetValue(id, out var s) ? s.Acceleration    : default;
     public ActorSnapshot?  GetActorSnapshot       (ActorId id) => _actorCache.TryGetValue(id, out var s) ? s : null;
+
+    /// <summary>
+    /// Per-vehicle traffic-light state, speed limit, and at-traffic-light flag, decoded from the
+    /// cached world-observer snapshot (no RPC). Valid only for vehicle actors — the type-dependent
+    /// union carries different data for walkers/traffic-lights. Returns Green / 0 / false when the
+    /// actor is not yet in the cache, so a caller defaults to "unimpeded" rather than "stop".
+    /// </summary>
+    public VehicleObservedState GetActorVehicleState(ActorId id)
+        => _actorCache.TryGetValue(id, out var s)
+            ? s.ParseVehicleState()
+            : new VehicleObservedState(0f, TrafficLightState.Green, false);
 
     /// All actor IDs currently in the world observer cache.
     // NOTE: must materialize as a concrete array (not the `[.. _actorCache.Keys]`

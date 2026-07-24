@@ -20,6 +20,11 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "PhysicsEngine/PhysicsObjectExternalInterface.h"
 #include "Async/ParallelFor.h"
+// UWorld::GetPhysicsScene() returns FPhysScene* (FPhysScene_Chaos*), which the
+// headers above only forward-declare. Resolving the
+// FPhysicsObjectExternalInterface::LockRead(FChaosScene*) overload needs the
+// complete FPhysScene_Chaos definition proving it derives from FChaosScene.
+#include "Physics/Experimental/PhysScene_Chaos.h"
 #include <util/ue-header-guard-end.h>
 #include "Landscape.h"
 

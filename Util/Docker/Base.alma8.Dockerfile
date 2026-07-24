@@ -13,29 +13,38 @@
 # into a mounted/volume workspace (see Docs/build_container_rhel8.md), so the heavy build artifacts
 # are not baked into image layers.
 #
-# On a locked-down network (internal CA / MITM TLS proxy) where certificate verification fails, build
-# with TLS verification disabled for every package download (dnf, curl, pip):
+# On a corporate network with internal CA/TLS interception, the build automatically bootstraps
+# trust by retrieving the certificate chain from the Artifactory server (recommended).
+#
+# Alternatively, build with TLS verification disabled (not recommended):
 #   podman build --build-arg INSECURE_SSL=1 -f Util/Docker/Base.alma8.Dockerfile -t carla-base:alma8 Util/Docker
 
 FROM almalinux:8
 
 # Optional: disable TLS certificate verification for ALL package fetches during the image build.
-# Off by default. Set --build-arg INSECURE_SSL=1 only for trusted but TLS-intercepted networks.
+# Off by default. Set --build-arg INSECURE_SSL=1 only for trusted but TLS-intercepted networks
+# where the automatic CA bootstrap fails.
 ARG INSECURE_SSL=0
 
-# Disable dnf's TLS verification globally (every repo: BaseOS/AppStream/EPEL/PowerTools) before any
-# dnf runs. Done here so the very first `dnf install` below already uses it.
-RUN if [ "$INSECURE_SSL" = "1" ]; then \
-        echo "sslverify=False" >> /etc/dnf/dnf.conf; \
-        echo "[INSECURE_SSL] dnf TLS verification DISABLED for this build"; \
-    fi
-
-# ---------------------------------------------------------------------------
-# Repositories: EPEL + PowerTools (CRB on EL8 is named "powertools").
-# Many -devel packages (xerces-c, proj, SDL2, alsa, pango, gbm, at-spi2-atk, ...) live in
-# EPEL/PowerTools rather than the default repos.
-# ---------------------------------------------------------------------------
-RUN dnf -y install dnf-plugins-core epel-release \
+# Bootstrap corporate CA trust and configure repositories.
+# For TLS-intercepting corporate networks (default): installs openssl with TLS verification
+# temporarily disabled, uses it to retrieve the proxy's certificate chain, then re-enables
+# verification for all subsequent operations.
+# For INSECURE_SSL=1 (fallback): disables TLS verification globally.
+RUN if [ "$INSECURE_SSL" != "1" ]; then \
+        echo "sslverify=False" >> /etc/dnf/dnf.conf && \
+        dnf -y install openssl && \
+        echo | openssl s_client -showcerts -servername mirrors.almalinux.org \
+            -connect mirrors.almalinux.org:443 2>/dev/null | \
+            awk '/BEGIN CERTIFICATE/,/END CERTIFICATE/ {print}' > /etc/pki/ca-trust/source/anchors/corporate-proxy-chain.pem && \
+        update-ca-trust extract && \
+        sed -i '/sslverify=False/d' /etc/dnf/dnf.conf && \
+        echo "[CA Trust] Installed corporate proxy certificate chain"; \
+    else \
+        echo "sslverify=False" >> /etc/dnf/dnf.conf && \
+        echo "[INSECURE_SSL] dnf TLS verification DISABLED"; \
+    fi \
+    && dnf -y install dnf-plugins-core epel-release \
     && dnf config-manager --set-enabled powertools \
     && dnf -y makecache
 
