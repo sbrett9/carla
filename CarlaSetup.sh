@@ -175,10 +175,14 @@ fi
 # run an explicit `git lfs pull` -- on a fresh clone AND when content already exists -- so re-running
 # this script repairs an incomplete checkout instead of skipping it.
 if [ -d "$content_dir/Carla/.git" ]; then
-    echo "Found CARLA content; ensuring LFS assets are present..."
-    content_git -C "$content_dir/Carla" lfs install --local || true
-    content_git -C "$content_dir/Carla" lfs pull \
-        || echo "WARNING: 'git lfs pull' failed; content may be incomplete (a key/agent for the private mirror is required)."
+    if [ "${CARLA_CONTENT_READONLY:-0}" = "1" ]; then
+        echo "Found CARLA content; using existing read-only cache."
+    else
+        echo "Found CARLA content; ensuring LFS assets are present..."
+        content_git -C "$content_dir/Carla" lfs install --local || true
+        content_git -C "$content_dir/Carla" lfs pull \
+            || echo "WARNING: 'git lfs pull' failed; content may be incomplete (a key/agent for the private mirror is required)."
+    fi
 else
     echo "Could not find CARLA content. Downloading..."
     mkdir -p "$content_dir"

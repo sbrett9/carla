@@ -94,6 +94,17 @@ jobs:
           # in $CONTENT_DIR, avoiding 43 GB re-downloads on every run.
           sync-carla-content --verify-only || \
             sync-carla-content --ref ue5-dev --target "$CONTENT_DIR"
+
+      - name: Prepare cached content for read-only mount
+        run: |
+          for broken in \
+            "$CONTENT_DIR/Static/Static/BP_Signs.uasset" \
+            "$CONTENT_DIR/Static/Static/Blueprints/BP_Signs.uasset"; do
+            if [ -f "$broken" ]; then
+              echo "Removing known-broken content asset from cache: ${broken#$CONTENT_DIR/}"
+              rm -f "$broken"
+            fi
+          done
       
       - name: Prepare Unreal Engine distribution
         id: prepare-ue
@@ -136,6 +147,7 @@ jobs:
             -v "$CONTENT_DIR:$WORKSPACE_PATH/Unreal/CarlaUnreal/Content/Carla:ro" \
             -v "$UE_PATH:/opt/unreal-engine:ro" \
             -w "$WORKSPACE_PATH" \
+            -e CARLA_CONTENT_READONLY=1 \
             -e CARLA_UNREAL_ENGINE_PATH=/opt/unreal-engine \
             "$CONTAINER_IMAGE" \
             bash -c '
