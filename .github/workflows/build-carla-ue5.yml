@@ -141,7 +141,7 @@ jobs:
         run: |
           # Run the build in a containerized environment with volume mounts:
           #   - CARLA source: bind-mount at same path (required for UE asset references)
-          #   - carla-content: read-only mount (43 GB LFS repo)
+          #   - carla-content: host-managed mount (43 GB LFS repo)
           #   - UE distribution: read-only mount
           #
           # The container uses the Base.alma8.Dockerfile image with all build
@@ -158,10 +158,10 @@ jobs:
           podman run --rm \
             --security-opt label=disable \
             -v "$WORKSPACE_PATH:$WORKSPACE_PATH" \
-            -v "$CONTENT_DIR:$WORKSPACE_PATH/Unreal/CarlaUnreal/Content/Carla:ro" \
+            -v "$CONTENT_DIR:$WORKSPACE_PATH/Unreal/CarlaUnreal/Content/Carla" \
             -v "$UE_PATH:/opt/unreal-engine:ro" \
             -w "$WORKSPACE_PATH" \
-            -e CARLA_CONTENT_READONLY=1 \
+            -e CARLA_CONTENT_CACHE_MANAGED=1 \
             -e CARLA_UNREAL_ENGINE_PATH=/opt/unreal-engine \
             "$CONTAINER_IMAGE" \
             bash -c '
