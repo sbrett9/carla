@@ -142,7 +142,7 @@ jobs:
           # Run the build in a containerized environment with volume mounts:
           #   - CARLA source: bind-mount at same path (required for UE asset references)
           #   - carla-content: host-managed mount (43 GB LFS repo)
-          #   - UE distribution: read-only mount
+          #   - UE distribution: host-managed mount
           #
           # The container uses the Base.alma8.Dockerfile image with all build
           # prerequisites installed. Build artifacts are written to the host's
@@ -159,7 +159,7 @@ jobs:
             --security-opt label=disable \
             -v "$WORKSPACE_PATH:$WORKSPACE_PATH" \
             -v "$CONTENT_DIR:$WORKSPACE_PATH/Unreal/CarlaUnreal/Content/Carla" \
-            -v "$UE_PATH:/opt/unreal-engine:ro" \
+            -v "$UE_PATH:/opt/unreal-engine" \
             -w "$WORKSPACE_PATH" \
             -e CARLA_CONTENT_CACHE_MANAGED=1 \
             -e CARLA_UNREAL_ENGINE_PATH=/opt/unreal-engine \
