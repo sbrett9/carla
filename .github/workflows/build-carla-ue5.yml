@@ -154,18 +154,29 @@ jobs:
           # Set environment for rootless Podman
           export HOME=/home/catgithubrunner
           export XDG_RUNTIME_DIR=/run/user/$(id -u)
+          RUNNER_UID=$(id -u)
+          RUNNER_GID=$(id -g)
+          USER_ARGS=(--userns=keep-id)
+          ROOTLESS=$(podman info --format '{{.Host.Security.Rootless}}' 2>/dev/null || echo "")
+          if [ "$ROOTLESS" != "true" ]; then
+            USER_ARGS=(--user "${RUNNER_UID}:${RUNNER_GID}")
+          fi
           
           podman run --rm \
             --security-opt label=disable \
+            "${USER_ARGS[@]}" \
             -v "$WORKSPACE_PATH:$WORKSPACE_PATH" \
             -v "$CONTENT_DIR:$WORKSPACE_PATH/Unreal/CarlaUnreal/Content/Carla" \
             -v "$UE_PATH:/opt/unreal-engine" \
             -w "$WORKSPACE_PATH" \
+            -e HOME=/tmp/ue-home \
             -e CARLA_CONTENT_CACHE_MANAGED=1 \
             -e CARLA_UNREAL_ENGINE_PATH=/opt/unreal-engine \
             "$CONTAINER_IMAGE" \
-            bash -c '
+            bash -lc '
               set -euo pipefail
+              
+              mkdir -p "$HOME" 2>/dev/null || true
               
               echo "=== Running CarlaSetup.sh ==="
               ./CarlaSetup.sh --skip-prerequisites
@@ -188,7 +199,7 @@ jobs:
           # The upload-to-artifactory helper reads credentials from a protected
           # file on the runner host, keeping secrets out of workflow logs.
           
-          DIST_FILE=$(ls Build/Dist/CARLA_*.tar.gz | head -1)
+          DIST_FILE=$(find Build/Dist -maxdepth 1 -type f -name 'Carla-*.tar.gz' | sort | head -1)
           
           if [ -z "$DIST_FILE" ]; then
             echo "ERROR: No distribution file found in Build/Dist/" >&2
@@ -199,7 +210,8 @@ jobs:
           
           # Extract version/commit info for artifact path
           # Example: CARLA_0.9.15-123-g1a2b3c4.tar.gz -> 0.9.15-123-g1a2b3c4
-          VERSION=$(echo "$BASENAME" | sed 's/CARLA_\(.*\)\.tar\.gz/\1/')
+          VERSION="${BASENAME#Carla-}"
+          VERSION="${VERSION%.tar.gz}"
           
           TARGET_PATH="$ARTIFACTORY_CARLA_REPO/releases/$VERSION/$BASENAME"
           
@@ -217,7 +229,7 @@ jobs:
         with:
           name: carla-distribution
           path: |
-            Build/Dist/CARLA_*.tar.gz
+            Build/Dist/Carla-*.tar.gz
           retention-days: 30
       
       # ────────────────────────────────────────────────────────────────────
@@ -233,8 +245,8 @@ jobs:
           echo "**Content Ref:** ue5-dev" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          if [ -f Build/Dist/CARLA_*.tar.gz ]; then
-            DIST_FILE=$(ls Build/Dist/CARLA_*.tar.gz | head -1)
+          DIST_FILE=$(find Build/Dist -maxdepth 1 -type f -name 'Carla-*.tar.gz' | sort | head -1)
+          if [ -n "$DIST_FILE" ]; then
             SIZE=$(du -h "$DIST_FILE" | cut -f1)
             echo "**Distribution:** $(basename $DIST_FILE) ($SIZE)" >> $GITHUB_STEP_SUMMARY
           else
