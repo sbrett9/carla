@@ -64,19 +64,19 @@ jobs:
       # ────────────────────────────────────────────────────────────────────
       - name: Pull container image
         run: |
-          # Setup Artifactory authentication
-          API_KEY=$(cat /home/catgithubrunner/.artifactory/credentials | tr -d '\n\r')
-          mkdir -p /home/catgithubrunner/.config/containers
-          cat > /home/catgithubrunner/.config/containers/auth.json << EOF
-          {
-            "auths": {
-              "$ARTIFACTORY_DOCKER_REGISTRY": {
-                "auth": "$(echo -n "admin:$API_KEY" | base64 -w0)"
-              }
-            }
-          }
-          EOF
-          chmod 600 /home/catgithubrunner/.config/containers/auth.json
+          if [ -f /home/catgithubrunner/.docker/config.json ]; then
+            AUTH_SOURCE=/home/catgithubrunner/.docker/config.json
+          elif [ -f /home/catgithubrunner/.config/containers/auth.json ]; then
+            AUTH_SOURCE=/home/catgithubrunner/.config/containers/auth.json
+          else
+            echo "Missing OCI registry auth for /home/catgithubrunner" >&2
+            exit 1
+          fi
+
+          AUTH_COPY="${RUNNER_TEMP:-$PWD}/podman-auth-${GITHUB_RUN_ID}-${GITHUB_JOB}.json"
+          cp "$AUTH_SOURCE" "$AUTH_COPY"
+          chmod 600 "$AUTH_COPY"
+          export REGISTRY_AUTH_FILE="$AUTH_COPY"
           
           # Pull the build container image with rootless Podman
           export HOME=/home/catgithubrunner
