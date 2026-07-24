@@ -92,10 +92,9 @@ jobs:
           # Verify content exists and is up-to-date, update if needed.
           # The sync-carla-content helper manages a persistent Git-LFS clone
           # in $CONTENT_DIR, avoiding 43 GB re-downloads on every run.
-          sync-carla-content --verify-only || \
-            sync-carla-content --ref ue5-dev --target "$CONTENT_DIR"
+          sync-carla-content --ref ue5-dev --target "$CONTENT_DIR"
 
-      - name: Prepare cached content for read-only mount
+      - name: Prepare cached content
         run: |
           for broken in \
             "$CONTENT_DIR/Static/Static/BP_Signs.uasset" \

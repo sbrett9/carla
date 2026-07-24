@@ -114,6 +114,19 @@ git_with_key() {
         git "$@"
 }
 
+is_lfs_pointer_file() {
+    local file="$1"
+    [ -f "$file" ] || return 1
+    python3 - "$file" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+data = path.read_bytes()[:256]
+sys.exit(0 if data.startswith(b"version https://git-lfs.github.com/spec/v1\n") else 1)
+PY
+}
+
 # ── Verify-only mode ────────────────────────────────────────────────────────
 # Check if content exists and is valid without performing any updates. Used by
 # workflows to fail fast if content is missing before starting expensive builds.
@@ -134,8 +147,13 @@ if [ "$verify_only" = "1" ]; then
     # Verify sentinel file exists (basic content completeness check)
     # This file is part of the pedestrian skeleton assets and should always be present
     sentinel="$target/Static/Pedestrian/00_GenericComponents/Definitions/Skel_Pedestrian_G3.uasset"
-    if [ ! -f "$sentinel" ]; then
+    if [ ! -s "$sentinel" ]; then
         echo "ERROR: Content appears incomplete (sentinel file missing: $sentinel)" >&2
+        exit 4
+    fi
+
+    if is_lfs_pointer_file "$sentinel"; then
+        echo "ERROR: Content sentinel is still a Git LFS pointer file: $sentinel" >&2
         exit 4
     fi
     
@@ -216,6 +234,8 @@ else
     # commit we just fetched. If it's a tag or commit SHA, it will checkout that
     # specific version.
     echo "Checking out ref: $ref"
+    git reset --hard HEAD
+    git clean -ffd
     git_with_key checkout "$ref"
     
     # If we're on a branch, pull to fast-forward to the latest commit
@@ -229,6 +249,17 @@ else
     echo "Updating LFS objects..."
     GIT_SSH_COMMAND="ssh -i $ssh_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes" \
         git lfs pull
+
+    sentinel="$target/Static/Pedestrian/00_GenericComponents/Definitions/Skel_Pedestrian_G3.uasset"
+    if [ ! -s "$sentinel" ]; then
+        echo "ERROR: LFS pull appears incomplete (sentinel file missing/empty: $sentinel)" >&2
+        exit 4
+    fi
+
+    if is_lfs_pointer_file "$sentinel"; then
+        echo "ERROR: LFS pull left sentinel as a Git LFS pointer file: $sentinel" >&2
+        exit 4
+    fi
     
     echo "Update complete"
 fi
