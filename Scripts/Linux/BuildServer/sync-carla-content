@@ -114,6 +114,22 @@ git_with_key() {
         git "$@"
 }
 
+clear_stale_git_lock() {
+    local repo_dir="$1"
+    local lock_file="$repo_dir/.git/index.lock"
+
+    [ -e "$lock_file" ] || return 0
+
+    if command -v lsof >/dev/null 2>&1 && lsof "$lock_file" >/dev/null 2>&1; then
+        echo "ERROR: Active git lock detected: $lock_file" >&2
+        lsof "$lock_file" >&2 || true
+        exit 1
+    fi
+
+    echo "Removing stale git lock: $lock_file"
+    rm -f "$lock_file"
+}
+
 is_lfs_pointer_file() {
     local file="$1"
     [ -f "$file" ] || return 1
@@ -225,6 +241,7 @@ else
     echo "  Ref: $ref"
     
     cd "$target"
+    clear_stale_git_lock "$target"
     
     # Fetch all refs from remote (doesn't modify working tree)
     echo "Fetching updates from remote..."

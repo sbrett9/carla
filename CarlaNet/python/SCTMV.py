@@ -239,6 +239,16 @@ def parse_args():
     rec.add_argument("--platform-uid", default=None,
                      help="CoT track uid for the platform (default: CARLA-SENSOR-<camera id>).")
 
+    orbit = ap.add_argument_group("orbit")
+    orbit.add_argument("--orbit", action="store_true", help="enable orbit at startup")
+    orbit.add_argument("--orbit-x", type=float, default=None, help="orbit center X (CARLA metres)")
+    orbit.add_argument("--orbit-y", type=float, default=None, help="orbit center Y (CARLA metres, -Y is North)")
+    orbit.add_argument("--orbit-lat", type=float, default=None, help="orbit center latitude (alternative to --orbit-x/--orbit-y)")
+    orbit.add_argument("--orbit-lon", type=float, default=None, help="orbit center longitude (alternative to --orbit-x/--orbit-y)")
+    orbit.add_argument("--orbit-radius", type=float, default=656.0, help="orbit radius in FEET (default 656 = 200m)")
+    orbit.add_argument("--orbit-altitude", type=float, default=1700, help="camera altitude in FEET (default: use spawn altitude)")
+    orbit.add_argument("--orbit-speed", type=float, default=240.0, help="orbit speed in seconds (default 240 = 4 min)")
+
     return ap.parse_args()
 
 
@@ -1035,6 +1045,27 @@ def _draw_compass(display, font, cx, cy, r, bearing_deg):
     display.blit(hdg, (cx - hdg.get_width() / 2, cy + r + 2))
 
 
+def _draw_orbit_viz(display, cx, cy, r, angle):
+    """Orbit visualization showing camera position on circular path.
+    
+    Args:
+        display: pygame display surface
+        cx, cy: center position for the visualization
+        r: radius of the visualization circle
+        angle: current orbit angle in radians (0 = East, π/2 = North in CARLA coords)
+    """
+    # Draw orbit circle
+    pygame.draw.circle(display, (100, 100, 100), (cx, cy), r, 1)
+    # Draw center point
+    pygame.draw.circle(display, (255, 80, 80), (cx, cy), 3)
+    # Draw camera position on orbit
+    viz_cam_x = cx + int(r * math.cos(angle))
+    viz_cam_y = cy + int(r * math.sin(angle))
+    pygame.draw.circle(display, (0, 255, 255), (viz_cam_x, viz_cam_y), 4)
+    # Draw look-at line from camera to center
+    pygame.draw.line(display, (0, 255, 255, 100), (viz_cam_x, viz_cam_y), (cx, cy), 1)
+
+
 def _draw_flyout(display, font, pick, win_w, win_h, state):
     """Persistent pick marker + a clamped lat/lon/elev panel with a close (x) button. Publishes the
     button rect to state['pick_close'] so a plain LMB inside it dismisses the flyout."""
@@ -1107,6 +1138,267 @@ def _draw_boundary(display, corners, color, cam, yaw, pitch, f, cx, cy, posts=Fa
                 pygame.draw.circle(display, color, base, 6, 2)
                 if top is not None:
                     pygame.draw.line(display, color, base, top, 3)
+
+
+class CameraController():
+    def __init__(self, controlled_object, world=None, depth_cam=None, spectator=None):
+        self.controlled_object = controlled_object
+        self.world = world
+        self.depth_cam = depth_cam
+        self.spectator = spectator
+        self.orbit_enabled = False
+        self.orbit_paused = False
+        
+        # Orbit parameters (CARLA coordinates)
+        self.center_x = 0.0
+        self.center_y = 0.0
+        self.center_z = 0.0
+        self.radius = 200.0  # meters
+        self.cam_altitude = 0.0  # meters above center
+        self.orbit_speed = 240.0  # seconds for one complete orbit
+        self.angle = 0.0  # current angle in radians
+        self.angular_velocity = (2.0 * math.pi) / self.orbit_speed
+        self.last_time = None
+        
+        # Geodetic parameters (optional, for lat/lon support)
+        self.center_lat = None
+        self.center_lon = None
+        self.georeference_origin = None  # (lat0, lon0, height) tuple
+        
+        # Try to get georeference origin if world is provided
+        if self.world is not None:
+            try:
+                lat0, lon0, origin_h = self.world.get_cesium_origin()
+                self.georeference_origin = (lat0, lon0, origin_h)
+            except Exception:
+                pass
+ 
+ 
+    def move_object_to_position(self, position):
+        self.pose = carla.Transform(carla.Location(x=x, y=y, z=z_ft / FT_PER_M), carla.Rotation(pitch=p, yaw=yaw, roll=r))
+        self.controlled_object.set_transform(self.pose)
+ 
+    def set_object_transform(self, tf):
+        self.controlled_object.set_transform(tf)
+ 
+ 
+    def toggle_orbit(self, enabled : bool = None):
+        # if no param is passed, switch the state
+        if enabled is None:
+            self.orbit_enabled = not self.orbit_enabled
+        # if a param is passed, set the state to that value
+        else:
+            self.orbit_enabled = enabled
+        
+        # Reset time tracking when toggling
+        if self.orbit_enabled:
+            self.last_time = time.time()
+ 
+ 
+    def toggle_orbit_pause(self):
+        """Pause/resume the orbit motion while keeping orbit mode enabled."""
+        self.orbit_paused = not self.orbit_paused
+ 
+ 
+    def latlon_to_carla(self, lat, lon):
+        """Convert lat/lon to CARLA X/Y coordinates using the georeference origin.
+        Uses local tangent plane projection (accurate for distances up to ~100km from origin).
+        
+        Args:
+            lat, lon: Target latitude/longitude in decimal degrees
+        
+        Returns:
+            (x, y): CARLA coordinates in meters, or None if no georeference available
+        """
+        if self.georeference_origin is None:
+            return None
+        
+        lat0, lon0, _ = self.georeference_origin
+        # Earth radius in meters
+        R = 6378137.0
+
+        # Convert to radians
+        lat_rad = math.radians(lat)
+        lon_rad = math.radians(lon)
+        lat0_rad = math.radians(lat0)
+        lon0_rad = math.radians(lon0)
+        
+        # Local tangent plane projection
+        x = R * (lon_rad - lon0_rad) * math.cos(lat0_rad)
+        y = -R * (lat_rad - lat0_rad)  # Negative because CARLA -Y is North
+        
+        return x, y
+ 
+ 
+    def carla_to_latlon(self, x, y):
+        """Convert CARLA X/Y coordinates to lat/lon using the georeference origin.
+        
+        Args:
+            x, y: CARLA coordinates in meters
+        
+        Returns:
+            (lat, lon): Latitude/longitude in decimal degrees, or None if no georeference available
+        """
+        if self.georeference_origin is None:
+            return None
+        
+        lat0, lon0, _ = self.georeference_origin
+        # Earth radius in meters
+        R = 6378137.0
+        
+        lat0_rad = math.radians(lat0)
+        lon0_rad = math.radians(lon0)
+        
+        # Inverse local tangent plane projection
+        lon_rad = lon0_rad + (x / (R * math.cos(lat0_rad)))
+        lat_rad = lat0_rad - (y / R)  # Negative because CARLA -Y is North
+        
+        lat = math.degrees(lat_rad)
+        lon = math.degrees(lon_rad)
+        
+        return lat, lon
+ 
+ 
+    def set_orbit_params(self, center_x=None, center_y=None, center_z=None, 
+                        center_lat=None, center_lon=None,
+                        radius=None, radius_feet=None, 
+                        altitude=None, altitude_feet=None,
+                        speed=None, angle=None):
+        """Configure orbit parameters. All parameters are optional.
+        
+        Args:
+            center_x, center_y, center_z: Orbit center point in CARLA coordinates (meters)
+            center_lat, center_lon: Orbit center in geodetic coordinates (decimal degrees)
+            radius: Orbit radius in meters
+            radius_feet: Orbit radius in feet (alternative to radius)
+            altitude: Camera altitude above center in meters
+            altitude_feet: Camera altitude above center in feet (alternative to altitude)
+            speed: Orbit speed in seconds for one complete orbit
+            angle: Starting angle in radians (0 = East, π/2 = North)
+        """
+        # Handle lat/lon center (converts to CARLA coordinates)
+        if center_lat is not None and center_lon is not None:
+            result = self.latlon_to_carla(center_lat, center_lon)
+            if result is not None:
+                center_x, center_y = result
+                self.center_lat = center_lat
+                self.center_lon = center_lon
+        
+        # Handle CARLA coordinates
+        if center_x is not None:
+            self.center_x = center_x
+        if center_y is not None:
+            self.center_y = center_y
+        if center_z is not None:
+            self.center_z = center_z
+        
+        # Handle radius (feet or meters)
+        if radius_feet is not None:
+            self.radius = radius_feet / FT_PER_M
+        elif radius is not None:
+            self.radius = radius
+        
+        # Handle altitude (feet or meters)
+        if altitude_feet is not None:
+            self.cam_altitude = altitude_feet / FT_PER_M
+        elif altitude is not None:
+            self.cam_altitude = altitude
+        
+        # Handle speed and angle
+        if speed is not None:
+            self.orbit_speed = speed
+            self.angular_velocity = (2.0 * math.pi) / self.orbit_speed
+        if angle is not None:
+            self.angle = angle
+ 
+ 
+    def update_orbit(self, dt=None):
+        """Update orbit position. Call this each frame when orbit is enabled.
+        
+        Args:
+            dt: Delta time in seconds. If None, calculates from last_time.
+        """
+        if not self.orbit_enabled or self.orbit_paused:
+            return
+        
+        # Calculate delta time
+        if dt is None:
+            current_time = time.time()
+            if self.last_time is None:
+                self.last_time = current_time
+                return
+            dt = current_time - self.last_time
+            self.last_time = current_time
+        
+        # Update angle
+        self.angle += self.angular_velocity * dt
+        self.angle = self.angle % (2.0 * math.pi)
+        
+        # Calculate camera position on orbit
+        cam_x = self.center_x + self.radius * math.cos(self.angle)
+        cam_y = self.center_y + self.radius * math.sin(self.angle)
+        cam_z = self.center_z + self.cam_altitude
+        
+        # Calculate look-at direction (always pointing to center)
+        dx = self.center_x - cam_x
+        dy = self.center_y - cam_y
+        dz = self.center_z - cam_z
+        horizontal_dist = math.sqrt(dx * dx + dy * dy)
+        pitch = math.degrees(math.atan2(dz, horizontal_dist))
+        yaw = math.degrees(math.atan2(dy, dx))
+        
+        # Update transform
+        tf = carla.Transform(
+            carla.Location(x=cam_x, y=cam_y, z=cam_z),
+            carla.Rotation(pitch=pitch, yaw=yaw, roll=0.0)
+        )
+        self.controlled_object.set_transform(tf)
+        
+        # Update depth camera and spectator for proper tile streaming
+        if self.depth_cam is not None:
+            try:
+                self.depth_cam.set_transform(tf)
+            except Exception:
+                pass
+        if self.spectator is not None:
+            try:
+                self.spectator.set_transform(tf)
+            except Exception:
+                pass
+ 
+ 
+    def get_hud_info(self):
+        """Return orbit status information for HUD display."""
+        info = {
+            "orbit_enabled": self.orbit_enabled,
+            "orbit_paused": self.orbit_paused,
+        }
+        
+        if self.orbit_enabled:
+            orbit_progress = (self.angle / (2.0 * math.pi)) * 100.0
+            
+            # Convert lat/lon if available
+            latlon = None
+            if self.center_lat is not None and self.center_lon is not None:
+                latlon = (self.center_lat, self.center_lon)
+            elif self.georeference_origin is not None:
+                result = self.carla_to_latlon(self.center_x, self.center_y)
+                if result is not None:
+                    latlon = result
+            
+            info.update({
+                "orbit_center": (self.center_x, self.center_y, self.center_z),
+                "center_latlon": latlon,
+                "radius": self.radius,
+                "radius_feet": self.radius * FT_PER_M,
+                "cam_altitude": self.cam_altitude,
+                "cam_altitude_feet": self.cam_altitude * FT_PER_M,
+                "orbit_speed": self.orbit_speed,
+                "angle": self.angle,
+                "orbit_progress": orbit_progress,
+            })
+        
+        return info
 
 
 # ───────────────────────────── main ─────────────────────────────
@@ -1295,6 +1587,69 @@ def main() -> int:
     spectator = world.get_spectator()
     spectator.set_transform(make_tf(pose))
     print(f"spawned EO camera id={camera.id}, depth camera id={depth_cam.id}")
+
+    camera_controller = CameraController(camera, world, depth_cam, spectator)
+
+    # Background orbit thread control
+    orbit_thread_stop = {"stop": False}
+
+    # Enable orbit if requested via command line
+    if args.orbit:
+        # Determine orbit center
+        if args.orbit_lat is not None and args.orbit_lon is not None:
+            # Use lat/lon
+            camera_controller.set_orbit_params(
+                center_lat=args.orbit_lat,
+                center_lon=args.orbit_lon,
+                center_z=0.0,
+                radius_feet=args.orbit_radius,
+                altitude_feet=args.orbit_altitude if args.orbit_altitude else pose["z"] * FT_PER_M,
+                speed=args.orbit_speed
+            )
+            print(f"orbit enabled: center lat {args.orbit_lat:.7f}, lon {args.orbit_lon:.7f}, "
+                  f"radius {args.orbit_radius:.0f} ft, altitude {args.orbit_altitude or (pose['z'] * FT_PER_M):.0f} ft")
+        elif args.orbit_x is not None and args.orbit_y is not None:
+            # Use CARLA coordinates
+            camera_controller.set_orbit_params(
+                center_x=args.orbit_x,
+                center_y=args.orbit_y,
+                center_z=0.0,
+                radius_feet=args.orbit_radius,
+                altitude_feet=args.orbit_altitude if args.orbit_altitude else pose["z"] * FT_PER_M,
+                speed=args.orbit_speed
+            )
+            print(f"orbit enabled: center ({args.orbit_x:.1f}, {args.orbit_y:.1f}), "
+                  f"radius {args.orbit_radius:.0f} ft, altitude {args.orbit_altitude or (pose['z'] * FT_PER_M):.0f} ft")
+        else:
+            # Default: use current camera position as center
+            camera_controller.set_orbit_params(
+                center_x=pose["x"],
+                center_y=pose["y"],
+                center_z=0.0,
+                radius_feet=args.orbit_radius,
+                altitude_feet=args.orbit_altitude if args.orbit_altitude else pose["z"] * FT_PER_M,
+                speed=args.orbit_speed
+            )
+            print(f"orbit enabled: center ({pose['x']:.1f}, {pose['y']:.1f}), "
+                  f"radius {args.orbit_radius:.0f} ft, altitude {args.orbit_altitude or (pose['z'] * FT_PER_M):.0f} ft")
+        
+        # Warn about sync mode
+        if sync:
+            print("NOTE: --orbit works best with --async for optimal tile streaming")
+            print("      Consider using: python SCTMV.py --orbit --async")
+        
+        # Start background orbit thread for smooth updates (decoupled from main loop)
+        def orbit_updater():
+            """Background thread that updates orbit at 50 Hz, independent of main loop."""
+            while not orbit_thread_stop["stop"]:
+                if camera_controller.orbit_enabled and not camera_controller.orbit_paused:
+                    camera_controller.update_orbit()
+                time.sleep(0.02)  # 50 Hz update rate
+        
+        orbit_thread = threading.Thread(target=orbit_updater, daemon=True)
+        orbit_thread.start()
+        
+        camera_controller.toggle_orbit(True)
 
     # Recorder: the native (C#) FrameRecorder encodes frames in .NET off the GIL. If the
     # CarlaNet.Recording assembly is absent the recorder reports itself unavailable when toggled (the
@@ -1516,6 +1871,10 @@ def main() -> int:
                     telemetry.want_enabled = not telemetry.want_enabled
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_f:
                     recorder.want_enabled = not recorder.want_enabled    # PNG + CoT XML capture
+                elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_p:
+                    if camera_controller.orbit_enabled:
+                        camera_controller.toggle_orbit_pause()
+                        print(f"orbit {'paused' if camera_controller.orbit_paused else 'resumed'}")
                 elif (ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1
                       and (pygame.key.get_mods() & pygame.KMOD_CTRL)):
                     _do_pick(ev.pos[0], ev.pos[1])
@@ -1554,13 +1913,24 @@ def main() -> int:
             state["agl_pose"] = (pose["x"], pose["y"], pose["z"])
             now = time.time()
 
+            # Sync pose dict with orbit position for HUD display (orbit update happens in background thread)
+            if camera_controller.orbit_enabled:
+                cam_tf = camera_controller.controlled_object.get_transform()
+                pose["x"] = cam_tf.location.x
+                pose["y"] = cam_tf.location.y
+                pose["z"] = cam_tf.location.z
+                pose["pitch"] = cam_tf.rotation.pitch
+                pose["yaw"] = cam_tf.rotation.yaw
+
             if sync:
                 # Set transforms, advance one step, then pull this frame's sensor data.
-                tf = make_tf(pose)
-                try:
-                    camera.set_transform(tf); depth_cam.set_transform(tf); spectator.set_transform(tf)
-                except Exception:
-                    pass
+                # Skip camera updates if orbit is enabled (background thread handles it)
+                if not camera_controller.orbit_enabled:
+                    tf = make_tf(pose)
+                    try:
+                        camera.set_transform(tf); depth_cam.set_transform(tf); spectator.set_transform(tf)
+                    except Exception:
+                        pass
                 world.tick()
                 # The Traffic Manager is free-running (async) even though the world is synchronous, so
                 # there is no synchronous_tick() handshake here — the TM drives the vehicles on its own
@@ -1582,7 +1952,8 @@ def main() -> int:
                 try: recorder.apply_want(); recorder.trigger(now, state["surface"])
                 except Exception as e: print(f"recorder failed: {e!r}", file=sys.stderr)
             else:
-                if moved:
+                # Skip camera updates if orbit is enabled (background thread handles it)
+                if moved and not camera_controller.orbit_enabled:
                     move["tf"] = make_tf(pose)   # background mover applies it
                 # Async: traffic + telemetry RPCs run on the background worker thread, never here, so
                 # the render loop stays smooth regardless of RPC latency.
@@ -1620,6 +1991,10 @@ def main() -> int:
                     pass
             time_str = (f"{solar_hud or '--:--'}"
                         + (f" >{args.time_rate:g}x" if time_advancing else ""))
+            
+            # Get orbit information
+            orbit_info = camera_controller.get_hud_info()
+            
             hud = [
                 f"elev {elev_ft:6.0f} ft   AGL {agl_str} ft   x {pose['x']:7.1f}  N {-pose['y']:7.1f}   "
                 f"yaw {pose['yaw']:6.1f} pitch {pose['pitch']:6.1f}   [{'SYNC' if sync else 'ASYNC'}]",
@@ -1630,8 +2005,32 @@ def main() -> int:
                 f"traffic(T) {traf_str}   telemetry(Y) {tel_str}   record(F) {rec_str}   "
                 f"fps {clock.get_fps():4.0f}   frames {state['frames']}",
                 "RMB look | Ctrl+LMB measure | WASD/EQ fly | wheel speed | Shift fast | C/G/V/R/B/M layers | "
-                "K time | T traffic | Y telemetry | F record | Space reset | Esc quit",
+                "K time | T traffic | Y telemetry | F record |",
+                "Space reset | P Pause | Esc quit",
             ]
+            
+            # Add orbit line only if orbit is enabled
+            if orbit_info["orbit_enabled"]:
+                # Format lat/lon string
+                center_lat, center_lon = orbit_info.get("center_latlon", (None, None))
+                if center_lat is not None and center_lon is not None:
+                    latlon_str = f"lat {center_lat:.7f}, lon {center_lon:.7f}"
+                else:
+                    latlon_str = "lat/lon unavailable"
+                
+                # Format orbit status
+                orbit_status = "PAUSED" if orbit_info["orbit_paused"] else "ACTIVE"
+                
+                # Create orbit HUD line
+                orbit_line = (
+                    f"ORBIT: center ({orbit_info['orbit_center'][0]:7.1f}, {orbit_info['orbit_center'][1]:7.1f})   "
+                    f"radius {orbit_info['radius_feet']:6.0f} ft   altitude {orbit_info['cam_altitude_feet']:6.0f} ft   "
+                    f"{latlon_str}   progress {orbit_info['orbit_progress']:5.1f}%   "
+                    f"speed {orbit_info['orbit_speed']:5.1f} s   {orbit_status}"
+                )
+                
+                # Insert orbit line before the controls line (second to last line)
+                hud.insert(-2, orbit_line)
             bar_h = 8 + len(hud) * 18 + 2
             bar = pygame.Surface((args.width, bar_h)); bar.set_alpha(180); bar.fill((0, 0, 0))
             display.blit(bar, (0, 0))
@@ -1641,6 +2040,10 @@ def main() -> int:
             yaw_r = math.radians(pose["yaw"])
             bearing = math.degrees(math.atan2(math.cos(yaw_r), -math.sin(yaw_r))) % 360.0
             _draw_compass(display, font, args.width - 52, bar_h + 48, 40, bearing)
+            
+            # Draw orbit visualization on left side if orbit is enabled
+            if orbit_info["orbit_enabled"]:
+                _draw_orbit_viz(display, 60, bar_h + 48, 40, orbit_info["angle"])
 
             pick = state.get("pick")
             if pick is not None:
@@ -1666,6 +2069,8 @@ def main() -> int:
         except Exception: pass
         try: telemetry.close()
         except Exception: pass
+        # Stop orbit background thread if running
+        orbit_thread_stop["stop"] = True
         # Restore asynchronous mode so the headless server is never left waiting for a tick.
         try:
             tm.set_synchronous_mode(False)
