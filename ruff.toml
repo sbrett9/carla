@@ -41,6 +41,7 @@ ignore = [
     "SIM108",  # use a ternary instead of if-else (an explicit block is often clearer)
     "N801",    # class name should use CapWords (allows domain names like Coordinate_UTM)
     "N806",    # variable in function should be lowercase (allows local names like Coordinate_UTM)
+    "N999",    # invalid module name: AGENTS.md requires PascalCase filenames to match class names
     "C408",    # unnecessary dict()/list()/tuple() call (the call form is sometimes more readable)
     "SIM105",  # use contextlib.suppress() instead of try/except/pass
 ]

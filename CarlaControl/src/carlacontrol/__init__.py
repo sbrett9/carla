@@ -1,58 +1,35 @@
-############################# INTELLECTUAL PROPERTY RIGHTS #############################
-##                                                                                    ##
-##                   Copyright (c) 2026 Sierra Nevada Corporation                     ##
-##                                All Rights Reserved.                                ##
-##                                                                                    ##
-##          Sierra Nevada Corporation (SNC) ("COMPANY") CONFIDENTIAL                  ##
-##                                                                                    ##
-##   Unpublished Copyright (c) 2026 Sierra Nevada Corporation, All Rights Reserved.   ##
-##                                                                                    ##
-##   NOTICE: All information contained herein is, and remains the property of         ##
-##   Sierra Nevada Corporation.                                                       ##
-##                                                                                    ##
-##   The intellectual and technical concepts contained herein are proprietary to      ##
-##   Sierra Nevada Corporation and may be covered by U.S. and Foreign Patents,        ##
-##   patents in process, and are protected by trade secret or copyright law.          ##
-##                                                                                    ##
-##   Dissemination of this information or reproduction of this material is strictly   ##
-##   forbidden unless prior written permission is obtained from Sierra Nevada         ##
-##   Corporation.                                                                     ##
-##                                                                                    ##
-##   Access to the source code contained herein is hereby forbidden to anyone         ##
-##   except current Sierra Nevada Corporation employees, managers or contractors      ##
-##   who have executed Confidentiality and Non-disclosure agreements explicitly       ##
-##   covering such access.                                                            ##
-##                                                                                    ##
-##   The copyright notice above does not evidence any actual or intended              ##
-##   publication or disclosure of this source code, which includes information        ##
-##   that is confidential and/or proprietary, and is a trade secret, of Sierra        ##
-##   Nevada Corporation.                                                              ##
-##                                                                                    ##
-##   ANY REPRODUCTION, MODIFICATION, DISTRIBUTION, PUBLIC PERFORMANCE, OR PUBLIC      ##
-##   DISPLAY OF OR THROUGH USE OF THIS SOURCE CODE WITHOUT THE EXPRESS WRITTEN        ##
-##   CONSENT OF Sierra Nevada Corporation IS STRICTLY PROHIBITED, AND IN VIOLATION    ##
-##   OF APPLICABLE LAWS AND INTERNATIONAL TREATIES. THE RECEIPT OR POSSESSION OF      ##
-##   THIS SOURCE CODE AND/OR RELATED INFORMATION DOES NOT CONVEY OR IMPLY ANY         ##
-##   RIGHTS TO REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE,     ##
-##   USE, OR SELL ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.                 ##
-##                                                                                    ##
-############################# INTELLECTUAL PROPERTY RIGHTS #############################
-#
-#    File:    __init__.py
-#    Author:  SNC Team
-#    Date:    2026-07-14
-#
-#    Purpose:  CarlaControl package initialization
-#
-
 """CarlaControl - High-level control and automation tools for CARLA simulator.
 
 This package provides advanced control systems, automation utilities, and
 high-level interfaces for working with the CARLA simulator through CarlaNet.
 """
 
+from carlacontrol.CotUdpEmitter import CotUdpEmitter
+from carlacontrol.NativeRecorder import NativeRecorder
+from carlacontrol.Pose import Pose
+from carlacontrol.PyGameSensorController import PyGameSensorController
+from carlacontrol.PygameInterface import PygameInterface
+from carlacontrol.CarlaControlArgumentParser import CarlaControlArgumentParser
+from carlacontrol.SensorController import SensorController
+from carlacontrol.SensorRig import SensorRig
+from carlacontrol.TelemetryController import TelemetryController
+from carlacontrol.TrafficController import TrafficController
+from carlacontrol.WorldBuilder import WorldBuilder
 from carlacontrol.version import __version__
 
 __author__ = "SNC Team"
 
-__all__ = ["__version__"]
+__all__ = [
+    "__version__",
+    "CarlaControlArgumentParser",
+    "CotUdpEmitter",
+    "NativeRecorder",
+    "Pose",
+    "PyGameSensorController",
+    "PygameInterface",
+    "SensorController",
+    "SensorRig",
+    "TelemetryController",
+    "TrafficController",
+    "WorldBuilder",
+]
