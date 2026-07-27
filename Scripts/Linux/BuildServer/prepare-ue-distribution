@@ -32,6 +32,11 @@
 
 set -euo pipefail
 
+# The only return value is the engine root, which callers capture with $(...). Stdout is
+# redirected to stderr for the whole script and the real stdout kept as file descriptor 3,
+# so nothing a subcommand happens to print can be captured as part of the path.
+exec 3>&1 1>&2
+
 script_dir="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # shellcheck source=artifactory-common.sh
 . "$script_dir/artifactory-common.sh"
@@ -236,4 +241,7 @@ if [ "$keep" -gt 0 ]; then
 fi
 
 log "[4/4] Unreal Engine ready at: $ue_root"
-echo "$ue_root"
+
+# The engine root is the script's return value and goes to the caller on descriptor 3;
+# plain stdout is diagnostics (see the redirect at the top of this script).
+printf '%s\n' "$ue_root" >&3

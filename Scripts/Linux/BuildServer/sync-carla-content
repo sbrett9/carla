@@ -60,6 +60,14 @@
 
 set -euo pipefail
 
+# This script's only return value is the snapshot path, and callers capture it with
+# $(...). Subcommands print to stdout whether or not they were asked to -- `git reset`
+# reports the new HEAD, `git clean` names every file it removes -- and any of that would
+# be captured as part of the path. So stdout is redirected to stderr for the whole script
+# and the real stdout is kept as file descriptor 3; the path is written there and nowhere
+# else. Everything a subcommand prints is diagnostics by construction.
+exec 3>&1 1>&2
+
 ref="${CARLA_CONTENT_REF:-ue5-dev}"
 cache_root="${CONTENT_CACHE_ROOT:-$HOME/carla-content}"
 ssh_key="${CONTENT_SSH_KEY:-$HOME/.ssh/carla-content-deploy-key}"
@@ -131,6 +139,13 @@ mkdir -p "$cache_root" "$snapshots_dir"
 # Everything below mutates shared state. The runner is configured for a single
 # concurrent job, but a manual invocation during a build would otherwise be free to
 # checkout over a tree a build is reading. Fail fast rather than wait forever.
+if ! command -v flock >/dev/null 2>&1; then
+    # Checked separately so a missing util-linux is not reported as lock contention.
+    log "ERROR: flock is not installed; cannot serialise access to $cache_root"
+    log "       Install util-linux on the build host."
+    exit 1
+fi
+
 exec 9>"$cache_root/.lock"
 if ! flock -w 300 9; then
     log "ERROR: another sync-carla-content holds the cache lock ($cache_root/.lock)"
@@ -179,7 +194,7 @@ publish() {
     log "Content ready:"
     log "  Snapshot: $snapshot"
     log "  Ref:      $ref"
-    echo "$snapshot"
+    printf '%s\n' "$snapshot" >&3
 }
 
 # ── Adopt a clone from an earlier cache layout ──────────────────────────────
@@ -211,7 +226,7 @@ if [ "$verify_only" = "1" ]; then
     fi
     verify_tree "$snapshot" || exit 4
     log "Content verification passed"
-    echo "$snapshot"
+    printf '%s\n' "$snapshot" >&3
     exit 0
 fi
 

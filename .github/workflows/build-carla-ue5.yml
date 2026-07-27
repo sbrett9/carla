@@ -183,6 +183,17 @@ jobs:
           SNAPSHOT=$("$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/sync-carla-content" \
             --ref "$CONTENT_REF" --keep 3)
 
+          # Only a single directory path may come back. A step output has to be one
+          # key=value line, so anything extra on the helper's stdout would otherwise reach
+          # $GITHUB_OUTPUT as a stray line and fail the run with an unhelpful parse error
+          # rather than naming the real problem.
+          if [ "$(printf '%s' "$SNAPSHOT" | wc -l)" -ne 0 ] || [ ! -d "$SNAPSHOT" ]; then
+            echo "ERROR: sync-carla-content did not return a single snapshot directory." >&2
+            echo "Returned:" >&2
+            printf '%s\n' "$SNAPSHOT" | sed 's/^/  /' >&2
+            exit 1
+          fi
+
           echo "snapshot=$SNAPSHOT" >> "$GITHUB_OUTPUT"
           echo "commit=$(basename "$SNAPSHOT")" >> "$GITHUB_OUTPUT"
 
@@ -193,6 +204,13 @@ jobs:
 
           UE_PATH=$("$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/prepare-ue-distribution" \
             "$ARTIFACTORY_UE_REPO/$UE_DISTRIBUTION" --keep 2)
+
+          if [ "$(printf '%s' "$UE_PATH" | wc -l)" -ne 0 ] || [ ! -d "$UE_PATH/Engine" ]; then
+            echo "ERROR: prepare-ue-distribution did not return a single engine root." >&2
+            echo "Returned:" >&2
+            printf '%s\n' "$UE_PATH" | sed 's/^/  /' >&2
+            exit 1
+          fi
 
           echo "ue_path=$UE_PATH" >> "$GITHUB_OUTPUT"
 
