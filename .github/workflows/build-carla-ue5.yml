@@ -297,7 +297,7 @@ jobs:
           # Old tarballs must not survive into this run. Build/ is now preserved between
           # builds, so a failed cook would otherwise leave yesterday's distribution in
           # Build/Dist for the upload step to find and publish as if it were fresh.
-          rm -f "$GITHUB_WORKSPACE"/Build/Dist/*.tar.gz
+          rm -f "$GITHUB_WORKSPACE"/Build/Dist/*.tar.gz "$GITHUB_WORKSPACE"/Build/Dist/*.sha256
 
           # Rootless Podman maps the runner's uid straight through, so everything the
           # build writes into the workspace is owned by this account and needs no
@@ -412,22 +412,11 @@ jobs:
           "$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/prune-artifactory-releases" \
             "$ARTIFACTORY_CARLA_REPO/releases" --keep "$RELEASES_TO_KEEP"
 
-      # The distribution itself is not uploaded to GitHub artifact storage: it is tens of
-      # gigabytes and Artifactory is already its system of record. The checksum is kept so
-      # a run can be tied to the exact bytes it published.
-      - name: Archive distribution checksum
-        if: ${{ always() && steps.dist.outputs.file != '' }}
-        run: |
-          sha256sum "${{ steps.dist.outputs.file }}" > "${RUNNER_TEMP}/distribution.sha256"
-          cat "${RUNNER_TEMP}/distribution.sha256"
-
-      - name: Upload checksum artifact
-        if: ${{ always() && steps.dist.outputs.file != '' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: carla-distribution-checksum
-          path: ${{ runner.temp }}/distribution.sha256
-          retention-days: 30
+      # Nothing is published to GitHub artifact storage. Artifactory is the system of
+      # record for the distribution, and GitHub Enterprise Server does not support
+      # actions/upload-artifact v4 at all. The checksum reaches the reader two other ways:
+      # upload-to-artifactory publishes a .sha256 sidecar next to the artifact, and the
+      # build summary below repeats it.
 
       # ────────────────────────────────────────────────────────────────────
       # Cleanup and summary
@@ -453,6 +442,13 @@ jobs:
               echo "| Distribution | \`${{ steps.dist.outputs.name }}\` (${{ steps.dist.outputs.size }}) |"
             else
               echo "| Distribution | build failed |"
+            fi
+            # Written by upload-to-artifactory alongside the artifact, and published to
+            # Artifactory as a sidecar. Repeated here so a run can be tied to the exact
+            # bytes it produced without fetching anything.
+            SIDECAR="${{ steps.dist.outputs.file }}.sha256"
+            if [ -f "$SIDECAR" ]; then
+              echo "| SHA256 | \`$(awk '{print $1}' "$SIDECAR")\` |"
             fi
             if [ -n "${ARTIFACT_URL:-}" ]; then
               echo

@@ -59,8 +59,10 @@ echo "SHA256:    $sha256"
 art_curl -H "X-Checksum-Sha256: ${sha256}" -T "$local_file" "$target_url" >/dev/null
 
 if [ "$upload_checksum" = "1" ]; then
-    sidecar="$(mktemp)"
-    trap 'rm -f "$sidecar"' EXIT
+    # Written next to the artifact rather than to a temporary file, so the caller can read
+    # the checksum without hashing a multi-gigabyte file a second time, and so the local
+    # copy matches what was published.
+    sidecar="${local_file}.sha256"
     printf '%s  %s\n' "$sha256" "$(basename "$local_file")" > "$sidecar"
     art_curl -T "$sidecar" "${target_url}.sha256" >/dev/null
     echo "Uploaded checksum sidecar: ${target_url}.sha256"
