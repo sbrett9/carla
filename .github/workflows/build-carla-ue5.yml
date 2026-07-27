@@ -117,6 +117,25 @@ jobs:
           echo "Removing the third-party dependency cache under $BUILD_HOME_DIR"
           rm -rf "$BUILD_HOME_DIR/.ezvcpkg"
 
+      - name: Reset generated Cesium settings
+        run: |
+          # The Cesium plugin creates /Game/CesiumSettings/CesiumIonServers/CesiumIonSaaS on
+          # demand and saves it into the project's Content directory. That asset holds a
+          # Cesium ion access token, so a copy left on the build host by an interactive
+          # editor session would be inherited by -- and cooked into -- every later
+          # distribution. Content/ is gitignored, so nothing here restores a known-good
+          # state on its own, and Build/ now persists between runs.
+          #
+          # Deleting it each run makes the build deterministic and token-free: the plugin
+          # recreates it with empty defaults, and CARLA supplies the real token per request
+          # at runtime (CesiumHeightSampler applies it with SetIonAccessToken), so nothing
+          # in the distribution needs a token baked in.
+          CESIUM_SETTINGS="$GITHUB_WORKSPACE/Unreal/CarlaUnreal/Content/CesiumSettings"
+          if [ -d "$CESIUM_SETTINGS" ]; then
+            echo "Removing generated Cesium settings from the workspace"
+            rm -rf "$CESIUM_SETTINGS"
+          fi
+
       - name: Make build server scripts executable
         run: |
           # The scripts are executed from the checkout rather than installed into
