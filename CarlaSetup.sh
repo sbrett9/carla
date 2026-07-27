@@ -209,7 +209,14 @@ for broken in \
     "Static/Static/BP_Signs.uasset" \
     "Static/Static/Blueprints/BP_Signs.uasset"; do
     bf="$content_dir/Carla/$broken"
-    [ -f "$bf" ] && { echo "Removing known-broken content asset (uncookable): $broken"; rm -f "$bf"; }
+    if [ -f "$bf" ]; then
+        echo "Removing known-broken content asset (uncookable): $broken"
+        # On a build host the content is a shared, read-only cache snapshot. Report the
+        # failure instead of aborting the setup: the cook will fail later with a clear
+        # error, and the host-side fix is to make the mount writable (an overlay mount
+        # keeps the shared cache pristine while letting this removal succeed).
+        rm -f "$bf" || echo "WARNING: could not remove $broken (content is read-only); the cook will fail on it."
+    fi
 done
 
 # ── VERIFY UNREAL ENGINE ─────────────────────────────────────────────────────

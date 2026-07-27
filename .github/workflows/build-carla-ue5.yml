@@ -1,253 +1,378 @@
 name: Build CARLA UE5
 
-# Automated build and distribution pipeline for CARLA on Linux.
-# Runs on self-hosted runner with containerized build environment.
+# Builds the CARLA Linux distribution on the self-hosted runner and publishes it to
+# Artifactory (cat-local-generic-dev/carla/releases/).
 #
-# Build artifacts:
-#   - CARLA Linux distribution tarball (server + Python API)
-#   - Uploaded to Artifactory: cat-local-generic-dev/carla/
+# Triggered manually only. The job runs the checked-out revision's own build scripts on
+# the build host with access to the runner account's Artifactory token and content deploy
+# key, so it must not fire automatically on a push or a pull request until the branch and
+# author rules for that are settled.
 
 on:
-  push:
-    branches:
-      - ue5-dev
-  pull_request:
-    branches:
-      - ue5-dev
   workflow_dispatch:
     inputs:
       ue_distribution:
-        description: 'UE distribution filename in Artifactory (e.g., UnrealEngine-5.7.4-carla-port-049f42955-Linux.tar.zst)'
+        description: 'UE distribution filename in Artifactory'
         required: false
         default: 'UnrealEngine-5.7.4-carla-port-049f42955-Linux.tar.zst'
+      content_ref:
+        description: 'carla-content ref to build against'
+        required: false
+        default: 'ue5-dev'
+      content_mount_mode:
+        description: 'How to mount the content snapshot into the build container'
+        required: false
+        type: choice
+        default: 'auto'
+        options: ['auto', 'overlay', 'readonly', 'readwrite']
+      clean_build:
+        description: 'Discard the cached Build/ tree and third-party dependency cache'
+        required: false
+        type: boolean
+        default: false
       skip_upload:
-        description: 'Skip uploading artifacts to Artifactory'
+        description: 'Skip publishing to Artifactory'
         required: false
         type: boolean
         default: false
 
+# The build host has one runner and the caches below are shared mutable state, so two
+# distribution builds must never overlap. Queue instead of cancelling: a cancelled build
+# leaves a half-written Build/ tree that the next run would have to sort out.
+concurrency:
+  group: carla-distribution-build
+  cancel-in-progress: false
+
 env:
-  # Unreal Engine distribution to use (can be overridden via workflow_dispatch)
-  UE_DISTRIBUTION: ${{ github.event.inputs.ue_distribution || 'UnrealEngine-5.7.4-carla-port-049f42955-Linux.tar.zst' }}
-  
-  # Artifactory paths
+  UE_DISTRIBUTION: ${{ inputs.ue_distribution }}
+  CONTENT_REF: ${{ inputs.content_ref }}
   ARTIFACTORY_UE_REPO: 'cat-local-generic-dev/unreal'
   ARTIFACTORY_CARLA_REPO: 'cat-local-generic-dev/carla'
-  
-  # Runner cache directories (persistent across workflow runs)
-  UE_CACHE_DIR: '/home/catgithubrunner/ue-cache'
-  CONTENT_DIR: '/home/catgithubrunner/carla-content'
-  
-  # Container image from Artifactory
-  ARTIFACTORY_DOCKER_REGISTRY: 'iasartifact.sncorp.com:8443/cat-docker-dev'
+  RELEASES_TO_KEEP: '3'
   CONTAINER_IMAGE: 'iasartifact.sncorp.com:8443/cat-docker-dev/carla-base:alma8'
+  # Relative to the workspace; the content snapshot is mounted here inside the container.
+  CONTENT_MOUNT_REL: 'Unreal/CarlaUnreal/Content/Carla'
 
 jobs:
   build:
     name: Build CARLA Distribution
     runs-on: self-hosted
-    
+
     steps:
       # ────────────────────────────────────────────────────────────────────
-      # Checkout CARLA source
+      # Pre-checkout safety
+      # ────────────────────────────────────────────────────────────────────
+      - name: Check for a leaked content bind mount
+        run: |
+          # If a previous container was killed and left its bind mount behind, the content
+          # snapshot is still visible inside the workspace. Anything that then cleans the
+          # workspace would delete straight through the mount into the cache. Refuse to run
+          # rather than risk it; the fix is to unmount the stale path by hand.
+          MOUNT_PATH="${GITHUB_WORKSPACE}/${CONTENT_MOUNT_REL}"
+          if awk -v p="$MOUNT_PATH" '$5 == p { found = 1 } END { exit !found }' /proc/self/mountinfo; then
+            echo "ERROR: a stale bind mount is still active at $MOUNT_PATH" >&2
+            echo "       Unmount it before re-running: fusermount -u '$MOUNT_PATH' || umount '$MOUNT_PATH'" >&2
+            exit 1
+          fi
+          echo "No stale bind mount at $MOUNT_PATH"
+
+      # ────────────────────────────────────────────────────────────────────
+      # Checkout
       # ────────────────────────────────────────────────────────────────────
       - name: Checkout CARLA repository
         uses: actions/checkout@v4
         with:
-          # Fetch full history for accurate version tagging
+          # Full history so the build can describe the revision it produced.
           fetch-depth: 0
-          # LFS not needed here - CARLA repo itself has no LFS objects
           lfs: false
-      
+          # actions/checkout's default cleanup is `git clean -ffdx`, which deletes ignored
+          # paths -- including Build/. That discards the vcpkg dependencies, the Cesium
+          # source build and every compiled object, turning every run into a cold build.
+          # The workspace is cleaned explicitly below instead.
+          clean: false
+
+      - name: Clean tracked workspace
+        run: |
+          # Remove untracked files that are not ignored, so a rename or deletion in the
+          # repository cannot leave a stale source file behind. Ignored paths (Build/ and
+          # Unreal/CarlaUnreal/Content/) are deliberately left alone: -x is not passed.
+          # Nothing here needs elevated privileges -- the container runs with the runner's
+          # own uid, so every file it creates is already owned by this account.
+          git clean -ffd
+          git status --short | head -20
+
+      - name: Discard cached build tree
+        if: ${{ inputs.clean_build }}
+        run: |
+          case "$GITHUB_WORKSPACE" in
+            */actions-runner/_work/*/*) ;;
+            *)
+              echo "ERROR: refusing to clean an unexpected workspace: $GITHUB_WORKSPACE" >&2
+              exit 1
+              ;;
+          esac
+          . "$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/runner-env.sh"
+          echo "Removing $GITHUB_WORKSPACE/Build"
+          rm -rf "$GITHUB_WORKSPACE/Build"
+          echo "Removing the third-party dependency cache under $BUILD_HOME_DIR"
+          rm -rf "$BUILD_HOME_DIR/.ezvcpkg"
+
+      - name: Make build server scripts executable
+        run: |
+          # The scripts are executed from the checkout rather than installed into
+          # /usr/local/bin, so they version with the workflow that calls them and are not
+          # exposed to unrelated users of the build host. chmod guards against a checkout
+          # that lost the executable bit.
+          chmod +x "$GITHUB_WORKSPACE"/Scripts/Linux/BuildServer/*
+
       # ────────────────────────────────────────────────────────────────────
-      # Pull container image from Artifactory
+      # Container image
       # ────────────────────────────────────────────────────────────────────
       - name: Pull container image
         run: |
-          if [ -f /home/catgithubrunner/.docker/config.json ]; then
-            AUTH_SOURCE=/home/catgithubrunner/.docker/config.json
-          elif [ -f /home/catgithubrunner/.config/containers/auth.json ]; then
-            AUTH_SOURCE=/home/catgithubrunner/.config/containers/auth.json
+          . "$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/runner-env.sh"
+
+          if [ -f "$HOME/.docker/config.json" ]; then
+            AUTH_SOURCE="$HOME/.docker/config.json"
+          elif [ -f "$HOME/.config/containers/auth.json" ]; then
+            AUTH_SOURCE="$HOME/.config/containers/auth.json"
           else
-            echo "Missing OCI registry auth for /home/catgithubrunner" >&2
+            echo "ERROR: no OCI registry credentials under $HOME" >&2
+            echo "       See Docs/build_runner_setup.md for the podman login step." >&2
             exit 1
           fi
 
-          AUTH_COPY="${RUNNER_TEMP:-$PWD}/podman-auth-${GITHUB_RUN_ID}-${GITHUB_JOB}.json"
-          cp "$AUTH_SOURCE" "$AUTH_COPY"
-          chmod 600 "$AUTH_COPY"
-          export REGISTRY_AUTH_FILE="$AUTH_COPY"
-          
-          # Pull the build container image with rootless Podman
-          export HOME=/home/catgithubrunner
-          export XDG_RUNTIME_DIR=/run/user/$(id -u)
-          podman pull "$CONTAINER_IMAGE"
-      
-      # ────────────────────────────────────────────────────────────────────
-      # Prepare build dependencies (cached on runner host)
-      # ────────────────────────────────────────────────────────────────────
-      
-      - name: Sync CARLA content repository
-        run: |
-          # Verify content exists and is up-to-date, update if needed.
-          # The sync-carla-content helper manages a persistent Git-LFS clone
-          # in $CONTENT_DIR, avoiding 43 GB re-downloads on every run.
-          sync-carla-content --ref ue5-dev --target "$CONTENT_DIR"
+          # Copy the credentials per job so concurrent or interrupted runs cannot corrupt
+          # the account-level auth file. Removed again by the cleanup step below.
+          AUTH_COPY="${RUNNER_TEMP}/podman-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
+          install -m 600 "$AUTH_SOURCE" "$AUTH_COPY"
+          echo "REGISTRY_AUTH_FILE=$AUTH_COPY" >> "$GITHUB_ENV"
 
-      - name: Prepare cached content
+          REGISTRY_AUTH_FILE="$AUTH_COPY" podman pull "$CONTAINER_IMAGE"
+
+      # ────────────────────────────────────────────────────────────────────
+      # Build inputs
+      # ────────────────────────────────────────────────────────────────────
+      - name: Sync CARLA content snapshot
+        id: content
         run: |
-          for broken in \
-            "$CONTENT_DIR/Static/Static/BP_Signs.uasset" \
-            "$CONTENT_DIR/Static/Static/Blueprints/BP_Signs.uasset"; do
-            if [ -f "$broken" ]; then
-              echo "Removing known-broken content asset from cache: ${broken#$CONTENT_DIR/}"
-              rm -f "$broken"
-            fi
-          done
-      
+          . "$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/runner-env.sh"
+
+          # Publishes an immutable, per-commit snapshot of the content tree and prints its
+          # path. When the content commit is unchanged -- the usual case, since the
+          # repository changes rarely -- this costs one ls-remote and no transfer at all.
+          SNAPSHOT=$("$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/sync-carla-content" \
+            --ref "$CONTENT_REF" --keep 3)
+
+          echo "snapshot=$SNAPSHOT" >> "$GITHUB_OUTPUT"
+          echo "commit=$(basename "$SNAPSHOT")" >> "$GITHUB_OUTPUT"
+
       - name: Prepare Unreal Engine distribution
-        id: prepare-ue
+        id: engine
         run: |
-          # Download and extract UE distribution from Artifactory with caching.
-          # The prepare-ue-distribution helper manages downloads, SHA256 verification,
-          # and extraction to $UE_CACHE_DIR. Subsequent runs reuse cached extractions.
-          UE_PATH=$(prepare-ue-distribution \
-            "$ARTIFACTORY_UE_REPO/$UE_DISTRIBUTION" \
-            "$UE_CACHE_DIR")
+          . "$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/runner-env.sh"
 
-          if [ ! -d "$UE_PATH/Engine" ]; then
-            for candidate in "$UE_PATH"/*; do
-              if [ -d "$candidate/Engine" ]; then
-                UE_PATH="$candidate"
-                break
-              fi
-            done
+          UE_PATH=$("$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/prepare-ue-distribution" \
+            "$ARTIFACTORY_UE_REPO/$UE_DISTRIBUTION" --keep 2)
+
+          echo "ue_path=$UE_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Select content mount mode
+        id: mount
+        run: |
+          . "$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/runner-env.sh"
+          MODE="${{ inputs.content_mount_mode }}"
+
+          # The build must be able to write inside the content directory -- CarlaSetup.sh
+          # deletes an uncookable asset there -- without those writes reaching the shared
+          # 43 GB cache. Podman's :O overlay mount gives the container a throwaway writable
+          # layer over a read-only lower directory, which is exactly that. Probe for it
+          # rather than assume, because overlay-on-overlay is not supported everywhere.
+          if [ "$MODE" = "auto" ]; then
+            PROBE="${RUNNER_TEMP}/overlay-probe-${GITHUB_RUN_ID}"
+            mkdir -p "$PROBE"
+            if podman run --rm --security-opt label=disable --userns=keep-id \
+                 -v "$PROBE:/probe:O" "$CONTAINER_IMAGE" \
+                 sh -c 'touch /probe/write-test' >/dev/null 2>&1; then
+              MODE="overlay"
+            else
+              MODE="readonly"
+              echo "Overlay mounts are unavailable on this host; falling back to read-only."
+            fi
+            rm -rf "$PROBE"
           fi
 
-          if [ ! -d "$UE_PATH/Engine" ]; then
-            echo "ERROR: Could not locate Unreal Engine root under prepared path: $UE_PATH" >&2
-            exit 1
-          fi
-          
-          echo "ue_path=$UE_PATH" >> $GITHUB_OUTPUT
-          echo "Unreal Engine ready at: $UE_PATH"
-      
+          case "$MODE" in
+            overlay)   SUFFIX=':O' ;;
+            readonly)  SUFFIX=':ro' ;;
+            readwrite) SUFFIX='' ;;
+            *) echo "ERROR: unknown content mount mode: $MODE" >&2; exit 1 ;;
+          esac
+
+          echo "Content mount mode: $MODE"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "suffix=$SUFFIX" >> "$GITHUB_OUTPUT"
+
       # ────────────────────────────────────────────────────────────────────
-      # Build CARLA in container
+      # Build
       # ────────────────────────────────────────────────────────────────────
-      
-      - name: Build CARLA
+      - name: Build CARLA distribution
         run: |
-          # Run the build in a containerized environment with volume mounts:
-          #   - CARLA source: bind-mount at same path (required for UE asset references)
-          #   - carla-content: host-managed mount (43 GB LFS repo)
-          #   - UE distribution: host-managed mount
-          #
-          # The container uses the Base.alma8.Dockerfile image with all build
-          # prerequisites installed. Build artifacts are written to the host's
-          # $GITHUB_WORKSPACE/Build/ directory.
-          
-          WORKSPACE_PATH="${GITHUB_WORKSPACE}"
-          UE_PATH="${{ steps.prepare-ue.outputs.ue_path }}"
-          
-          # Set environment for rootless Podman
-          export HOME=/home/catgithubrunner
-          export XDG_RUNTIME_DIR=/run/user/$(id -u)
-          RUNNER_UID=$(id -u)
-          RUNNER_GID=$(id -g)
+          . "$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/runner-env.sh"
+
+          UE_PATH="${{ steps.engine.outputs.ue_path }}"
+          CONTENT_SNAPSHOT="${{ steps.content.outputs.snapshot }}"
+          CONTENT_SUFFIX="${{ steps.mount.outputs.suffix }}"
+
+          # Old tarballs must not survive into this run. Build/ is now preserved between
+          # builds, so a failed cook would otherwise leave yesterday's distribution in
+          # Build/Dist for the upload step to find and publish as if it were fresh.
+          rm -f "$GITHUB_WORKSPACE"/Build/Dist/*.tar.gz
+
+          # Rootless Podman maps the runner's uid straight through, so everything the
+          # build writes into the workspace is owned by this account and needs no
+          # privileged cleanup afterwards. Fall back to an explicit uid/gid if this host
+          # is ever reconfigured to run Podman as root.
           USER_ARGS=(--userns=keep-id)
-          ROOTLESS=$(podman info --format '{{.Host.Security.Rootless}}' 2>/dev/null || echo "")
-          if [ "$ROOTLESS" != "true" ]; then
-            USER_ARGS=(--user "${RUNNER_UID}:${RUNNER_GID}")
+          if [ "$(podman info --format '{{.Host.Security.Rootless}}' 2>/dev/null || echo)" != "true" ]; then
+            USER_ARGS=(--user "$(id -u):$(id -g)")
           fi
-          
+
+          # SELinux: the caches are labelled container_file_t / container_ro_file_t once
+          # during host setup (Docs/build_runner_setup.md), so no per-run relabelling is
+          # needed. Never add :z or :Z to these mounts -- relabelling a 43 GB tree on every
+          # build is ruinous, and :Z would also privatise it from every other consumer.
           podman run --rm \
             --security-opt label=disable \
             "${USER_ARGS[@]}" \
-            -v "$WORKSPACE_PATH:$WORKSPACE_PATH" \
-            -v "$CONTENT_DIR:$WORKSPACE_PATH/Unreal/CarlaUnreal/Content/Carla" \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" \
+            -v "$CONTENT_SNAPSHOT:$GITHUB_WORKSPACE/$CONTENT_MOUNT_REL$CONTENT_SUFFIX" \
             -v "$UE_PATH:/opt/unreal-engine" \
-            -w "$WORKSPACE_PATH" \
-            -e HOME=/tmp/ue-home \
+            -v "$BUILD_HOME_DIR:/home/builder" \
+            -v "$DDC_DIR:/ddc" \
+            -w "$GITHUB_WORKSPACE" \
+            -e HOME=/home/builder \
+            -e "UE-LocalDataCachePath=/ddc" \
+            -e "UE-SharedDataCachePath=None" \
             -e CARLA_CONTENT_CACHE_MANAGED=1 \
             -e CARLA_UNREAL_ENGINE_PATH=/opt/unreal-engine \
             "$CONTAINER_IMAGE" \
             bash -lc '
               set -euo pipefail
-              
-              mkdir -p "$HOME" 2>/dev/null || true
-              
-              echo "=== Running CarlaSetup.sh ==="
+
+              echo "=== CarlaSetup.sh ==="
               ./CarlaSetup.sh --skip-prerequisites
-              
-              echo "=== Creating distribution package ==="
+
+              echo "=== Build, cook and package ==="
               ./Scripts/Linux/MakeDistribution.sh --build
-              
-              echo "=== Build complete ==="
+
+              echo "=== Artifacts ==="
               ls -lh Build/Dist/
             '
-      
+
+      - name: Locate distribution
+        id: dist
+        run: |
+          # Exactly one tarball is expected: the directory was emptied before the build.
+          mapfile -t FOUND < <(find Build/Dist -maxdepth 1 -type f -name 'Carla-*.tar.gz' 2>/dev/null)
+
+          if [ "${#FOUND[@]}" -eq 0 ]; then
+            echo "ERROR: no distribution tarball in Build/Dist/" >&2
+            exit 1
+          fi
+          if [ "${#FOUND[@]}" -gt 1 ]; then
+            echo "ERROR: more than one distribution tarball in Build/Dist/:" >&2
+            printf '  %s\n' "${FOUND[@]}" >&2
+            exit 1
+          fi
+
+          BUILT="${FOUND[0]}"
+          SHORT_SHA="$(git rev-parse --short=8 HEAD)"
+
+          # Tag the artifact with the source revision. Without it every build of the same
+          # CARLA version resolves to one filename and silently overwrites its predecessor
+          # in Artifactory, leaving no way to tell which commit produced a given tarball.
+          BASE="$(basename "$BUILT" .tar.gz)"
+          PUBLISH_NAME="${BASE}-g${SHORT_SHA}.tar.gz"
+          PUBLISH_PATH="$(dirname "$BUILT")/$PUBLISH_NAME"
+
+          if [ "$BUILT" != "$PUBLISH_PATH" ]; then
+            mv -f "$BUILT" "$PUBLISH_PATH"
+          fi
+
+          echo "file=$PUBLISH_PATH" >> "$GITHUB_OUTPUT"
+          echo "name=$PUBLISH_NAME" >> "$GITHUB_OUTPUT"
+          echo "size=$(du -h "$PUBLISH_PATH" | cut -f1)" >> "$GITHUB_OUTPUT"
+          echo "Distribution: $PUBLISH_NAME ($(du -h "$PUBLISH_PATH" | cut -f1))"
+
       # ────────────────────────────────────────────────────────────────────
-      # Upload artifacts
+      # Publish
       # ────────────────────────────────────────────────────────────────────
-      
       - name: Upload to Artifactory
         if: ${{ !inputs.skip_upload }}
         run: |
-          # Upload the CARLA distribution tarball to Artifactory.
-          # The upload-to-artifactory helper reads credentials from a protected
-          # file on the runner host, keeping secrets out of workflow logs.
-          
-          DIST_FILE=$(find Build/Dist -maxdepth 1 -type f -name 'Carla-*.tar.gz' | sort | head -1)
-          
-          if [ -z "$DIST_FILE" ]; then
-            echo "ERROR: No distribution file found in Build/Dist/" >&2
-            exit 1
-          fi
-          
-          BASENAME=$(basename "$DIST_FILE")
-          
-          # Extract version/commit info for artifact path
-          # Example: CARLA_0.9.15-123-g1a2b3c4.tar.gz -> 0.9.15-123-g1a2b3c4
-          VERSION="${BASENAME#Carla-}"
-          VERSION="${VERSION%.tar.gz}"
-          
-          TARGET_PATH="$ARTIFACTORY_CARLA_REPO/releases/$VERSION/$BASENAME"
-          
-          echo "Uploading: $DIST_FILE"
-          echo "Target: $TARGET_PATH"
-          
-          upload-to-artifactory "$DIST_FILE" "$TARGET_PATH"
-          
-          echo "Upload complete!"
-          echo "Artifact URL: https://iasartifact.sncorp.com:8443/artifactory/$TARGET_PATH"
-      
-      - name: Archive build artifacts
+          . "$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/runner-env.sh"
+
+          TARGET="$ARTIFACTORY_CARLA_REPO/releases/${{ steps.dist.outputs.name }}"
+          "$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/upload-to-artifactory" \
+            "${{ steps.dist.outputs.file }}" "$TARGET"
+
+          echo "ARTIFACT_URL=https://iasartifact.sncorp.com:8443/artifactory/$TARGET" >> "$GITHUB_ENV"
+
+      - name: Prune old releases
+        if: ${{ !inputs.skip_upload }}
+        run: |
+          . "$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/runner-env.sh"
+
+          # A distribution is tens of gigabytes; the release folder is capped rather than
+          # left to grow against the repository quota.
+          "$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/prune-artifactory-releases" \
+            "$ARTIFACTORY_CARLA_REPO/releases" --keep "$RELEASES_TO_KEEP"
+
+      # The distribution itself is not uploaded to GitHub artifact storage: it is tens of
+      # gigabytes and Artifactory is already its system of record. The checksum is kept so
+      # a run can be tied to the exact bytes it published.
+      - name: Archive distribution checksum
+        if: ${{ always() && steps.dist.outputs.file != '' }}
+        run: |
+          sha256sum "${{ steps.dist.outputs.file }}" > "${RUNNER_TEMP}/distribution.sha256"
+          cat "${RUNNER_TEMP}/distribution.sha256"
+
+      - name: Upload checksum artifact
+        if: ${{ always() && steps.dist.outputs.file != '' }}
         uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: carla-distribution
-          path: |
-            Build/Dist/Carla-*.tar.gz
+          name: carla-distribution-checksum
+          path: ${{ runner.temp }}/distribution.sha256
           retention-days: 30
-      
+
       # ────────────────────────────────────────────────────────────────────
-      # Summary
+      # Cleanup and summary
       # ────────────────────────────────────────────────────────────────────
-      
+      - name: Remove per-job registry credentials
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/podman-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
+
       - name: Build summary
         if: always()
         run: |
-          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**UE Distribution:** $UE_DISTRIBUTION" >> $GITHUB_STEP_SUMMARY
-          echo "**Content Ref:** ue5-dev" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          DIST_FILE=$(find Build/Dist -maxdepth 1 -type f -name 'Carla-*.tar.gz' | sort | head -1)
-          if [ -n "$DIST_FILE" ]; then
-            SIZE=$(du -h "$DIST_FILE" | cut -f1)
-            echo "**Distribution:** $(basename $DIST_FILE) ($SIZE)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**Distribution:** Build failed" >> $GITHUB_STEP_SUMMARY
-          fi
+          {
+            echo "## CARLA Distribution Build"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Source commit | \`$(git rev-parse --short=8 HEAD)\` |"
+            echo "| UE distribution | \`$UE_DISTRIBUTION\` |"
+            echo "| Content ref | \`$CONTENT_REF\` |"
+            echo "| Content commit | \`${{ steps.content.outputs.commit }}\` |"
+            echo "| Content mount | \`${{ steps.mount.outputs.mode }}\` |"
+            if [ -n "${{ steps.dist.outputs.name }}" ]; then
+              echo "| Distribution | \`${{ steps.dist.outputs.name }}\` (${{ steps.dist.outputs.size }}) |"
+            else
+              echo "| Distribution | build failed |"
+            fi
+            if [ -n "${ARTIFACT_URL:-}" ]; then
+              echo
+              echo "[Download from Artifactory]($ARTIFACT_URL)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

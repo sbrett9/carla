@@ -1,172 +1,239 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
-# prepare-ue-distribution - Smart caching for Unreal Engine distributions
+# prepare-ue-distribution - download, verify and extract an Unreal Engine distribution.
 #
-# Usage: prepare-ue-distribution <artifactory-path> <cache-dir>
+# Usage: prepare-ue-distribution <artifactory-path> [cache-dir]
 #
 # Example:
-#   prepare-ue-distribution \
-#     cat-local-generic-dev/unreal/UnrealEngine-5.7.4-carla-port-049f42955-Linux.tar.zst \
-#     /home/catgithubrunner/ue-cache
+#   UE_PATH=$(prepare-ue-distribution \
+#       cat-local-generic-dev/unreal/UnrealEngine-5.7.4-carla-port-049f42955-Linux.tar.zst)
 #
-# This script:
-# 1. Downloads UE distribution from Artifactory (cached, with SHA verification)
-# 2. Extracts it (cached, reuses existing extraction if SHA matches)
-# 3. Outputs the path to the extracted UE distribution
+# Prints the engine root (the directory containing Engine/) on stdout; all progress goes
+# to stderr so the caller can capture the path directly.
+#
+# CACHING:
+#   <cache-dir>/archives/     downloaded .tar.zst archives
+#   <cache-dir>/extracted/    extracted trees, one per archive checksum
+#   <cache-dir>/.lock         advisory lock serialising mutation of the cache
+#
+#   An extraction is keyed on the archive's SHA256, so a rebuilt engine with the same
+#   filename still produces a distinct cache entry. Each entry is marked complete only
+#   after extraction succeeds, so an interrupted run is never mistaken for a usable cache.
+#
+# OPTIONS (after the positional arguments):
+#   --keep <n>          extractions to retain, newest first (default: 2)
+#   --force-download    ignore the cached archive
+#   --force-extract     re-extract even if a complete extraction exists
+#
+# EXIT CODES:
+#   0 success   1 general error   2 bad arguments   4 checksum verification failed
+#   5 cache is locked by another process
 #
 
 set -euo pipefail
 
-if [ $# -ne 2 ]; then
-    echo "Usage: $0 <artifactory-path> <cache-dir>" >&2
-    echo "Example: $0 cat-local-generic-dev/unreal/UE.tar.zst /home/user/ue-cache" >&2
-    exit 1
+script_dir="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+# shellcheck source=artifactory-common.sh
+. "$script_dir/artifactory-common.sh"
+
+if [ $# -lt 1 ]; then
+    echo "Usage: $0 <artifactory-path> [cache-dir] [--keep n] [--force-download] [--force-extract]" >&2
+    exit 2
 fi
 
-artifactory_path="$1"
-cache_dir="$2"
-
-# Read API key
-credentials_file="/home/catgithubrunner/.artifactory/credentials"
-if [ ! -f "$credentials_file" ]; then
-    echo "ERROR: Credentials file not found: $credentials_file" >&2
-    exit 1
-fi
-api_key=$(cat "$credentials_file" | tr -d '\n\r')
-
-# Artifactory base URL
-base_url="https://iasartifact.sncorp.com:8443/artifactory"
-
-# Extract basename from path
-basename=$(basename "$artifactory_path")
-if [ -z "$basename" ]; then
-    echo "ERROR: Could not determine basename from path: $artifactory_path" >&2
-    exit 1
+artifactory_path="$1"; shift
+cache_dir="${UE_CACHE_DIR:-$HOME/ue-cache}"
+if [ $# -gt 0 ] && [ "${1#--}" = "$1" ]; then
+    cache_dir="$1"; shift
 fi
 
-# Set up cache directories
+keep=2
+force_download=0
+force_extract=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --keep)           keep="$2"; shift ;;
+        --keep=*)         keep="${1#*=}" ;;
+        --force-download) force_download=1 ;;
+        --force-extract)  force_extract=1 ;;
+        *) echo "Unknown argument: $1" >&2; exit 2 ;;
+    esac
+    shift
+done
+
+log() { echo "$@" >&2; }
+
+archive_name="$(basename "$artifactory_path")"
+if [ -z "$archive_name" ]; then
+    echo "ERROR: could not determine an archive name from: $artifactory_path" >&2
+    exit 2
+fi
+
 archives_dir="$cache_dir/archives"
-checksums_dir="$cache_dir/checksums"
 extracted_dir="$cache_dir/extracted"
 
-mkdir -p "$archives_dir" "$checksums_dir" "$extracted_dir"
-
-echo "=== Preparing UE Distribution ===" >&2
-echo "Artifact: $basename" >&2
-echo "Cache: $cache_dir" >&2
-echo >&2
-
-# Step 1: Download and verify SHA256 checksum from Artifactory
-echo "[1/4] Checking remote checksum..." >&2
-remote_sha256_url="${base_url}/${artifactory_path}.sha256"
-remote_sha256_file="${checksums_dir}/${basename}.sha256.remote"
-
-curl --fail --silent --show-error \
-    -H "X-JFrog-Art-Api: ${api_key}" \
-    -o "$remote_sha256_file" \
-    "$remote_sha256_url"
-
-# Parse the SHA from the checksum file (format: "SHA  filename")
-remote_sha=$(awk '{print $1}' "$remote_sha256_file")
-echo "Remote SHA256: $remote_sha" >&2
-
-# Step 2: Check local archive cache
-local_archive="${archives_dir}/${basename}"
-local_sha256_file="${checksums_dir}/${basename}.sha256"
-needs_download=false
-
-if [ -f "$local_archive" ] && [ -f "$local_sha256_file" ]; then
-    local_sha=$(awk '{print $1}' "$local_sha256_file")
-    echo "Local SHA256:  $local_sha" >&2
-    
-    if [ "$local_sha" != "$remote_sha" ]; then
-        echo "SHA mismatch - download required" >&2
-        needs_download=true
-    else
-        echo "SHA match - using cached archive" >&2
-    fi
-else
-    echo "Archive not cached - download required" >&2
-    needs_download=true
-fi
-
-# Step 3: Download archive if needed
-if [ "$needs_download" = true ]; then
-    echo >&2
-    echo "[2/4] Downloading archive from Artifactory..." >&2
-    archive_url="${base_url}/${artifactory_path}"
-    
-    # Show progress if interactive terminal
-    if [ -t 1 ]; then
-        curl --fail --show-error --progress-bar \
-            -H "X-JFrog-Art-Api: ${api_key}" \
-            -o "$local_archive" \
-            "$archive_url" | cat
-    else
-        curl --fail --show-error --silent \
-            -H "X-JFrog-Art-Api: ${api_key}" \
-            -o "$local_archive" \
-            "$archive_url"
-    fi
-    
-    # Save the checksum
-    cp "$remote_sha256_file" "$local_sha256_file"
-    echo "Download complete" >&2
-else
-    echo >&2
-    echo "[2/4] Using cached archive (skipping download)" >&2
-fi
-
-# Step 4: Check if extraction exists
-# Use a directory name based on the basename without extension and the SHA prefix
-extraction_name="${basename%.tar.zst}-${remote_sha:0:8}"
-extraction_path="${extracted_dir}/${extraction_name}"
-
-if [ -d "$extraction_path" ]; then
-    echo >&2
-    echo "[3/4] Using cached extraction" >&2
-    echo "Path: $extraction_path" >&2
-else
-    echo >&2
-    echo "[3/4] Extracting archive (this may take several minutes)..." >&2
-    echo "Target: $extraction_path" >&2
-    
-    # Create temp directory for extraction
-    temp_extract="${extracted_dir}/.tmp-${extraction_name}-$$"
-    mkdir -p "$temp_extract"
-    
-    # Extract with parallel zstd decompression (-T0 = use all cores)
-    if command -v pv >/dev/null 2>&1; then
-        pv "$local_archive" | tar -I "zstd -d -T0" -xf - -C "$temp_extract"
-    else
-        tar -I "zstd -d -T0" -xf "$local_archive" -C "$temp_extract"
-    fi
-    
-    # Move to final location atomically
-    mv "$temp_extract" "$extraction_path"
-    echo "Extraction complete" >&2
-fi
-
-# Step 5: Output the path
-ue_root="$extraction_path"
-if [ ! -d "$ue_root/Engine" ]; then
-    for candidate in "$extraction_path"/*; do
-        if [ -d "$candidate/Engine" ]; then
-            ue_root="$candidate"
+# Adopt a cache from the earlier layout, before the build caches were gathered under one
+# root, rather than re-downloading and re-extracting ~25 GB. Same filesystem, so a rename.
+if [ ! -d "$archives_dir" ]; then
+    for legacy in "$HOME/ue-cache" "/home/$(id -un)/ue-cache"; do
+        if [ -d "$legacy/archives" ] && [ "$legacy" != "$cache_dir" ]; then
+            echo "Adopting the Unreal Engine cache at $legacy as $cache_dir" >&2
+            mkdir -p "$(dirname "$cache_dir")"
+            rmdir "$cache_dir" 2>/dev/null || true
+            mv "$legacy" "$cache_dir"
             break
         fi
     done
 fi
 
-if [ ! -d "$ue_root/Engine" ]; then
-    echo "ERROR: Could not locate Unreal Engine root under: $extraction_path" >&2
-    exit 1
+mkdir -p "$archives_dir" "$extracted_dir"
+
+# Written into an extraction only once it is complete and the engine root has been found.
+EXTRACTION_MARKER=".extraction-complete"
+
+exec 9>"$cache_dir/.lock"
+if ! flock -w 300 9; then
+    log "ERROR: another prepare-ue-distribution holds the cache lock ($cache_dir/.lock)"
+    exit 5
 fi
 
-echo >&2
-echo "[4/4] UE distribution ready" >&2
-echo "CARLA_UNREAL_ENGINE_PATH=$ue_root" >&2
-echo >&2
+log "=== Preparing Unreal Engine distribution ==="
+log "Artifact: $archive_name"
+log "Cache:    $cache_dir"
 
-# Output for consumption by CI scripts
+# ── Expected checksum ───────────────────────────────────────────────────────
+# The publisher stores a .sha256 sidecar next to each archive. It is the expected value
+# only -- the archive itself is hashed locally below and compared against it.
+log "[1/4] Fetching expected checksum ..."
+expected_sha="$(art_curl "$(art_url "${artifactory_path}.sha256")" | awk 'NR==1{print $1}')"
+
+if ! printf '%s' "$expected_sha" | grep -qE '^[0-9a-fA-F]{64}$'; then
+    log "ERROR: no usable SHA256 sidecar at ${artifactory_path}.sha256"
+    exit 4
+fi
+log "       expected: $expected_sha"
+
+archive_path="$archives_dir/$archive_name"
+
+# Hash of the cached archive, remembered so a multi-gigabyte file is not re-hashed on
+# every build. The stamp is keyed on size and mtime; any change invalidates it.
+stamp_path="$archive_path.sha256-stamp"
+archive_fingerprint() {
+    stat -c '%s:%Y' "$archive_path" 2>/dev/null || echo "missing"
+}
+
+cached_sha=""
+if [ "$force_download" = "0" ] && [ -f "$archive_path" ] && [ -f "$stamp_path" ]; then
+    stamp_fp="$(awk 'NR==1{print $1}' "$stamp_path")"
+    if [ "$stamp_fp" = "$(archive_fingerprint)" ]; then
+        cached_sha="$(awk 'NR==1{print $2}' "$stamp_path")"
+    fi
+fi
+
+# ── Download ────────────────────────────────────────────────────────────────
+if [ "$cached_sha" = "$expected_sha" ]; then
+    log "[2/4] Cached archive matches the expected checksum; skipping download."
+else
+    if [ -n "$cached_sha" ]; then
+        log "[2/4] Cached archive checksum differs from the remote; re-downloading."
+    else
+        log "[2/4] Downloading archive ..."
+    fi
+
+    # Download to a partial file and rename only after verification, so an interrupted
+    # transfer can never be mistaken for a complete archive. --continue-at resumes an
+    # earlier partial transfer instead of restarting a ~25 GB download from zero.
+    partial="$archive_path.part"
+    art_curl --continue-at - -o "$partial" "$(art_url "$artifactory_path")" \
+        || art_curl -o "$partial" "$(art_url "$artifactory_path")"
+
+    log "       verifying checksum ..."
+    actual_sha="$(sha256sum "$partial" | awk '{print $1}')"
+    if [ "$actual_sha" != "$expected_sha" ]; then
+        log "ERROR: checksum mismatch for $archive_name"
+        log "       expected: $expected_sha"
+        log "       actual:   $actual_sha"
+        rm -f "$partial"
+        exit 4
+    fi
+
+    mv -f "$partial" "$archive_path"
+    printf '%s %s\n' "$(archive_fingerprint)" "$expected_sha" > "$stamp_path"
+    log "       download verified."
+fi
+
+# ── Extract ─────────────────────────────────────────────────────────────────
+extraction_path="$extracted_dir/${archive_name%%.tar.*}-${expected_sha:0:12}"
+
+find_engine_root() {
+    # The archive may hold Engine/ at the top level or one directory down.
+    local base="$1"
+    if [ -d "$base/Engine" ]; then printf '%s' "$base"; return 0; fi
+    local candidate
+    for candidate in "$base"/*; do
+        if [ -d "$candidate/Engine" ]; then printf '%s' "$candidate"; return 0; fi
+    done
+    return 1
+}
+
+if [ -f "$extraction_path/$EXTRACTION_MARKER" ] && [ "$force_extract" = "0" ]; then
+    log "[3/4] Using cached extraction."
+else
+    log "[3/4] Extracting (this takes several minutes) ..."
+    rm -rf "$extraction_path" "$extraction_path.tmp"
+    mkdir -p "$extraction_path.tmp"
+
+    tar -I 'zstd -d -T0' -xf "$archive_path" -C "$extraction_path.tmp"
+
+    if ! find_engine_root "$extraction_path.tmp" >/dev/null; then
+        log "ERROR: no Engine/ directory found in the extracted archive."
+        rm -rf "$extraction_path.tmp"
+        exit 1
+    fi
+
+    printf 'archive %s\nsha256 %s\n' "$archive_name" "$expected_sha" \
+        > "$extraction_path.tmp/$EXTRACTION_MARKER"
+    mv "$extraction_path.tmp" "$extraction_path"
+    log "       extraction complete."
+fi
+
+ue_root="$(find_engine_root "$extraction_path")" || {
+    log "ERROR: cached extraction is missing its Engine/ directory: $extraction_path"
+    log "       Re-run with --force-extract to rebuild it."
+    exit 1
+}
+
+# ── Prune ───────────────────────────────────────────────────────────────────
+# Each engine costs ~25 GB compressed plus ~80 GB extracted, so unbounded caching fills
+# the array. Keep the newest few and sweep interrupted extractions.
+if [ "$keep" -gt 0 ]; then
+    mapfile -t entries < <(find "$extracted_dir" -mindepth 1 -maxdepth 1 -type d ! -name '*.tmp' \
+        -printf '%T@ %p\n' | sort -rn | awk '{print $2}')
+    index=0
+    for candidate in "${entries[@]}"; do
+        index=$((index + 1))
+        [ "$index" -le "$keep" ] && continue
+        [ "$candidate" = "$extraction_path" ] && continue
+        log "Pruning old extraction: $(basename "$candidate")"
+        rm -rf "$candidate"
+    done
+
+    # Archives are pruned on the same policy but tracked separately: an archive is only
+    # needed to rebuild its extraction, and the current one must always survive.
+    mapfile -t archives < <(find "$archives_dir" -maxdepth 1 -type f ! -name '*.part' \
+        ! -name '*.sha256-stamp' -printf '%T@ %p\n' | sort -rn | awk '{print $2}')
+    index=0
+    for candidate in "${archives[@]}"; do
+        index=$((index + 1))
+        [ "$index" -le "$keep" ] && continue
+        [ "$candidate" = "$archive_path" ] && continue
+        log "Pruning old archive: $(basename "$candidate")"
+        rm -f "$candidate" "$candidate.sha256-stamp"
+    done
+
+    find "$extracted_dir" -mindepth 1 -maxdepth 1 -name '*.tmp' -type d -exec rm -rf {} + 2>/dev/null || true
+    find "$archives_dir" -maxdepth 1 -name '*.part' -mtime +7 -delete 2>/dev/null || true
+fi
+
+log "[4/4] Unreal Engine ready at: $ue_root"
 echo "$ue_root"
