@@ -174,15 +174,24 @@ fi
 # partial smudge silently leaves assets absent or zero-byte (which then crashes the cook). So always
 # run an explicit `git lfs pull` -- on a fresh clone AND when content already exists -- so re-running
 # this script repairs an incomplete checkout instead of skipping it.
-if [ -d "$content_dir/Carla/.git" ]; then
-    if [ "${CARLA_CONTENT_CACHE_MANAGED:-0}" = "1" ]; then
-        echo "Found CARLA content; using existing host-managed cache."
-    else
-        echo "Found CARLA content; ensuring LFS assets are present..."
-        content_git -C "$content_dir/Carla" lfs install --local || true
-        content_git -C "$content_dir/Carla" lfs pull \
-            || echo "WARNING: 'git lfs pull' failed; content may be incomplete (a key/agent for the private mirror is required)."
+#
+# CARLA_CONTENT_CACHE_MANAGED=1 says the content was placed here by something outside this script
+# (the build server mounts a prepared snapshot). That is checked before anything else, because such
+# a snapshot is a plain directory of assets with no .git of its own: the repository stays on the
+# host and only its working tree is exposed. Testing for .git first would classify a perfectly good
+# checkout as missing and try to clone over it.
+if [ "${CARLA_CONTENT_CACHE_MANAGED:-0}" = "1" ]; then
+    if [ ! -d "$content_dir/Carla" ]; then
+        echo "ERROR: CARLA_CONTENT_CACHE_MANAGED=1 but there is no content at $content_dir/Carla."
+        echo "       The caller is responsible for providing it; this script will not clone it."
+        exit 1
     fi
+    echo "Found CARLA content; using the externally managed copy at $content_dir/Carla."
+elif [ -d "$content_dir/Carla/.git" ]; then
+    echo "Found CARLA content; ensuring LFS assets are present..."
+    content_git -C "$content_dir/Carla" lfs install --local || true
+    content_git -C "$content_dir/Carla" lfs pull \
+        || echo "WARNING: 'git lfs pull' failed; content may be incomplete (a key/agent for the private mirror is required)."
 else
     echo "Could not find CARLA content. Downloading..."
     mkdir -p "$content_dir"
