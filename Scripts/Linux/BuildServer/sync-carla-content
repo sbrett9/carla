@@ -162,7 +162,10 @@ is_lfs_pointer() {
     # report the pipeline as failed when grep exits early and head takes SIGPIPE.
     [ -f "$1" ] || return 1
     local prefix
-    prefix="$(head -c 45 "$1" 2>/dev/null || true)"
+    # Null bytes are stripped before the value reaches the shell: a real asset is binary,
+    # and bash warns "ignored null byte in input" on every command substitution that
+    # carries one. The pointer header is plain ASCII, so removing nulls cannot hide it.
+    prefix="$(head -c 45 "$1" 2>/dev/null | tr -d '\0' || true)"
     case "$prefix" in
         'version https://git-lfs.github.com/spec/v1'*) return 0 ;;
         *) return 1 ;;

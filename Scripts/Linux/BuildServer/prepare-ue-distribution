@@ -128,16 +128,35 @@ archive_fingerprint() {
 }
 
 cached_sha=""
-if [ "$force_download" = "0" ] && [ -f "$archive_path" ] && [ -f "$stamp_path" ]; then
-    stamp_fp="$(awk 'NR==1{print $1}' "$stamp_path")"
-    if [ "$stamp_fp" = "$(archive_fingerprint)" ]; then
-        cached_sha="$(awk 'NR==1{print $2}' "$stamp_path")"
+if [ "$force_download" = "0" ] && [ -f "$archive_path" ]; then
+    if [ -f "$stamp_path" ]; then
+        stamp_fp="$(awk 'NR==1{print $1}' "$stamp_path")"
+        if [ "$stamp_fp" = "$(archive_fingerprint)" ]; then
+            cached_sha="$(awk 'NR==1{print $2}' "$stamp_path")"
+        fi
+    fi
+
+    if [ -z "$cached_sha" ]; then
+        # There is an archive but no checksum we can trust for it -- either it was cached
+        # by an earlier version of this script, or the stamp is stale. Hash it rather than
+        # re-fetch it: reading it locally costs a couple of minutes, downloading it again
+        # costs tens of gigabytes over the network for a file we probably already have.
+        log "       cached archive has no verified checksum; hashing $(du -h "$archive_path" | cut -f1) locally"
+        log "       (this reads the whole archive and produces no output until it finishes)"
+        cached_sha="$(sha256sum "$archive_path" | awk '{print $1}')"
+        log "       cached:   $cached_sha"
+        if [ "$cached_sha" = "$expected_sha" ]; then
+            printf '%s %s\n' "$(archive_fingerprint)" "$cached_sha" > "$stamp_path"
+        fi
     fi
 fi
 
 # ── Download ────────────────────────────────────────────────────────────────
 if [ "$cached_sha" = "$expected_sha" ]; then
     log "[2/4] Cached archive matches the expected checksum; skipping download."
+    # A partial transfer left by an interrupted run is worthless now that the full archive
+    # has verified, and it holds tens of gigabytes.
+    rm -f "$archive_path.part"
 else
     if [ -n "$cached_sha" ]; then
         log "[2/4] Cached archive checksum differs from the remote; re-downloading."

@@ -80,6 +80,10 @@ art_url() {
 }
 
 # curl with authentication and retry policy applied.
+#
+# --speed-limit/--speed-time abort a transfer that has effectively stalled (under 1 KB/s
+# for five minutes) so it is retried rather than hanging indefinitely. Without them a
+# half-open connection to a multi-gigabyte artifact looks exactly like a wedged build step.
 art_curl() {
     art_load_credentials || return 1
     curl --fail --show-error --silent \
@@ -87,5 +91,7 @@ art_curl() {
         --retry-delay 5 \
         --retry-connrefused \
         --connect-timeout 30 \
+        --speed-limit 1024 \
+        --speed-time 300 \
         -H "@${_art_header_file}" "$@"
 }
