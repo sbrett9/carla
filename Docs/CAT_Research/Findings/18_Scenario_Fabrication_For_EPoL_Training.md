@@ -154,7 +154,7 @@ ScenarioRunner's actor-control layer exists to solve a problem CarlaNet has alre
 Adopting ScenarioRunner would also require the client-side waypoint API it depends on pervasively — 42
 `get_waypoint()` calls in `carla_data_provider.py`, `atomic_behaviors.py`, `atomic_criteria.py` and
 `scenario_manager.py` alone, plus `agents.navigation.{global_route_planner,basic_agent,local_planner}`.
-That API does not exist in the shim (§4.3). Executing storyboards on CarlaNet's own primitives avoids
+That API does not exist in the shim (§4.5). Executing storyboards on CarlaNet's own primitives avoids
 that dependency entirely.
 
 **Conclusion:** use OpenSCENARIO as the authoring/interchange format; implement the executor on
@@ -207,13 +207,144 @@ entities:
     params: { dwell_s: 2700, standoff_m: 400 }               # swept
 ```
 
-### 4.3 Work ledger
+### 4.3 Dwell is not free: the Traffic Manager destroys stationary vehicles
+
+Dwell — remaining stopped at a chosen place for a long period — is the elementary primitive of a
+pattern of life, and the Traffic Manager actively works against it. `ALSM.Update` culls the most-idle
+registered vehicle (`Stages/ALSM.cs:186-196`):
+
+- `IsVehicleStuck` reports true once idle duration reaches `BLOCKED_TIME_THRESHOLD`, **90 seconds**, or
+  `RED_TL_BLOCKED_TIME_THRESHOLD`, 180 seconds, when the vehicle is held at a red light
+  (`Constants.cs:37-43`).
+- The idle timer resets only while speed exceeds `STOPPED_VELOCITY_THRESHOLD`, 0.8 m/s
+  (`Stages/ALSM.cs:551-559`). A deliberately parked vehicle never resets it.
+- On firing, the vehicle is destroyed over RPC and deregistered. Destruction is throttled to one per
+  `DELTA_TIME_BETWEEN_DESTRUCTIONS`, 10 seconds, and only the single most-idle vehicle is taken per
+  pass — but a parked vehicle is by definition the most idle, so it is always first in line.
+
+**A long dwell is therefore impossible for a Traffic-Manager-registered vehicle without intervention.**
+Two exemptions exist in the same code path:
+
+- **Hero actors are skipped** — the cull tests `!_heroActors.ContainsKey(...)`, and hero status is read
+  from the `role_name` attribute. Marking a loitering vehicle as hero exempts it with no code change,
+  at the cost of also making it an anchor for the hybrid-physics active radius.
+- **Unregistered vehicles are never tracked** — idle bookkeeping covers registered vehicles only, so a
+  vehicle taken off autopilot and held on its brakes falls outside the mechanism entirely.
+
+The threshold is measured against ALSM's wall-clock timestamp (`Stages/ALSM.cs:218-225`), not
+simulation time. At the 84% clock ratio measured in §5.4 the cull lands after roughly 76 seconds of
+simulated time, and the ratio moves with load — so the removal point is not reproducible between runs.
+This is an additional argument for the simulation clock of §7.
+
+**Neither existing exemption is the right mechanism.** Hero status carries unrelated meaning — it
+anchors the hybrid-physics active radius and marks the vehicle as the subject of the simulation — so
+using it to mean "stationary on purpose" overloads a flag whose other effects are unwanted.
+Deregistering the vehicle surrenders Traffic Manager control entirely, which then has to be
+re-established on departure. What the scenario executor needs is a discrete per-vehicle exemption:
+a flag saying this vehicle is stopped deliberately and must not be treated as stuck. It belongs beside
+the other per-vehicle knobs in `Parameters.cs`, is set when an entity enters a dwell and cleared when it
+leaves, and leaves the stuck-vehicle protection intact for ordinary traffic. The addition is purely
+additive to the Traffic Manager's interface.
+
+One implementation hazard: the exemption cannot be applied only at the cull site. `UpdateIdleTime`
+(`Stages/ALSM.cs:545-563`) nominates a single most-idle vehicle per pass, and a deliberately parked
+vehicle will always hold that slot. Skipping it at the point of destruction would leave it nominated,
+shielding every genuinely stuck vehicle behind it and silently disabling stuck-vehicle removal for the
+whole population. Exempt vehicles must be excluded from nomination, not from destruction.
+
+**Commanding the stop is not what it appears either.** `SetDesiredSpeed(actor, 0)` is stored and
+honoured literally — it is not treated as "unset" — but a zero target is special-cased so the
+longitudinal controller sees no velocity error and emits **neither throttle nor brake**
+(`Stages/MotionPlanStage.cs:303-305`; `PIDController.cs:52-68`). The vehicle coasts, and on any grade it
+keeps rolling. `SetPercentageSpeedDifference(actor, 100)` reaches the same zero target by a different
+route and behaves identically. Small non-zero targets are worse: the error is normalised by the target
+(`MotionPlanStage.cs:305`), so a target near 0.5 m/s drives the controller into throttle-brake
+oscillation. A genuine standstill requires taking the vehicle out of Traffic Manager control, because a
+registered vehicle is issued a fresh control command every tick that overwrites anything the client
+applies (`MotionPlanStage.cs:338-346`).
+
+The workable sequence is therefore: ramp the target down while it remains above zero, so the controller
+brakes for real; then unregister and hold the vehicle on brake and handbrake. Unregistering also removes
+it from the idle-cull population, which is why the exemption flag matters most for dwells that keep the
+vehicle registered.
+
+Three further behaviours constrain the executor:
+
+- **Reaching the end of an itinerary is silent.** When the path buffer empties, `LocalizationStage`
+  clears the stored path and route (`LocalizationStage.cs:713-716`, `:778-781`) and the vehicle reverts
+  to choosing random successors at junctions — it never halts, and there is no arrival event to
+  subscribe to. Consumption happens a full horizon ahead of the vehicle, so the parameter clears before
+  physical arrival. The client must detect arrival by position. Worse, a route that ends at a graph
+  dead-end marks the actor for removal and ALSM destroys it, and the OSM mode that enables this is on by
+  default (`Parameters.cs:77`; `ALSM.cs:197-208`).
+- **Per-vehicle settings are never purged.** Unregistering clears stage state, buffers and controller
+  state but leaves `Parameters` untouched, so a stale desired speed, custom path or imported route
+  re-arms the moment the vehicle is re-registered. Clearing a path takes *two* calls, because the path
+  and the empty-buffer flag are independent (`Parameters.cs:260-266`), and neither is exposed on the
+  Python shim.
+- **A stopped vehicle blocks followers indefinitely.** Collision negotiation is purely geometric and
+  exempts nothing (`CollisionStage.cs:279-311`); followers creep and brake in a stable queue, and the
+  lane-change escape needs the obstacle to be seen between 20 m and 50 m out with free adjacent lanes
+  (`LocalizationStage.cs:544-586`). **The only mechanism that ever clears such a queue is the 90-second
+  idle cull** — the very thing the exemption disables. Exempting a vehicle parked in a travel lane
+  therefore creates a permanent jam. The exemption is only safe in combination with off-lane placement,
+  which is what §4.4 provides.
+
+Two client-facing defects surfaced here: `SetDesiredSpeed` is documented as metres per second
+(`Parameters.cs:110`) but the value is divided by 3.6 before use (`MotionPlanStage.cs:254`), so it is
+actually km/h; and the path-clearing calls are absent from the Python shim.
+
+### 4.4 Where a vehicle can legitimately stop
+
+A vehicle stopped in a travel lane blocks following traffic and, viewed from altitude, reads as an
+anomaly in itself. Roads generated from OSM extracts offer nowhere else to stop, and the reason is not
+the road-class filter: **netconvert has no representation of a shoulder or a parking bay at all.** The
+key `shoulder` appears nowhere in its sources; shoulders are way *tags*, present on roughly 0.14% of
+`highway=*` ways, discarded before their value is read. Its OpenDRIVE writer emits only `sidewalk`,
+`biking`, `none`, `rail`, `tram`, `driving` and `restricted` — never `parking`, never `shoulder`.
+
+Relaxing `--keep-edges.by-vclass passenger` cannot create a pull-over lane; it can only admit
+parking-lot aisles, and that route is obstructed twice over. The `service=*` subtype is erased during
+type resolution, so `service=parking_aisle`, `service=driveway` and `service=alley` all become the
+identical edge type `highway.service` and no filter can separate them — only a custom type file can.
+And admitting aisles alone orphans each parking lot into its own weak component, which
+`--keep-edges.components 1` then deletes; the lots reach the street through driveways, which are 62% of
+all service ways and would split parent streets into new junctions, perturbing the junction-joining and
+traffic-light guessing that the traffic-light grouping work depends on.
+
+Two viable placements remain, and they are complementary rather than exclusive:
+
+| Placement | Mechanism | Properties |
+|---|---|---|
+| **Off-network, on the draped terrain** | Position the vehicle on the drape's collidable surface, outside the road network | Available immediately with no pipeline change; works where OSM has no parking data at all; independent of any scenario-format decision. No semantic guarantee the spot is legal — it may fall in a garden or intersect a building baked into the photoreal tiles — and it is invisible to waypoint queries, so siting is explicit per scenario |
+| **An injected `type="parking"` lane** | Append a parking lane outboard of the rightmost driving lane in the generated OpenDRIVE, in the manner of the existing elevation, sign and traffic-light injectors | Works on every generated map regardless of OSM coverage; **ambient traffic cannot route onto it by construction**, since CARLA's waypoint graph filters on `LaneType::Driving` (`LibCarla/source/carla/road/Map.cpp:88`) and spawn points default to the same (`LibCarla/source/carla/road/Map.h:136`), while the mesh factory builds all lane types, giving solid collidable ground; queryable from Python as `carla.LaneType.Parking`. Requires no netconvert change. Inherits the sidewalk mesh profile, so its elevation must be reconciled with the drape |
+
+Admitting driveways is deferred. They are private infrastructure, altered without public record, whereas
+changes to the public road network are documented — so a scenario bound to a map that includes driveways
+would decay in a way the rest of the network does not.
+
+Two defects in the conversion pipeline surfaced during this investigation, neither specific to
+scenarios and both worth tracking separately:
+
+- **`osm_clip.py` discards every relation.** It rebuilds the clipped document from `<bounds>`, way-member
+  nodes and ways only (`CarlaNet/python/osm_clip.py:131-146`). Multipolygon parking areas are lost, and
+  so are **OSM turn-restriction relations**, which netconvert does import — meaning every clipped map is
+  built without them. This bears directly on intersection behaviour, see
+  [10 — Intersection Navigation & Traffic Control](10_Intersection_Navigation_Traffic_Control.md).
+- **`--default.sidewalk-width 2.80`** (`CarlaNet/src/CarlaNet.Map/OsmConverter.cs:252`) has no effect,
+  because no sidewalk-import option is enabled.
+
+### 4.5 Work ledger
 
 | Tier | Work | Where |
 |---|---|---|
 | 1 | Pattern-spec schema + loader; seeded generator; permutation sweep | Tooling (language open) |
 | 1 | Scenario-executor service: trigger evaluation, entity state machine (transit → dwell → depart), commands to TM | C# — new project beside `CarlaNet.TrafficManager` |
 | 1 | Geographic-to-lane resolution (lat/lon → world → nearest drivable lane) | C# — `CarlaNet.TrafficManager/InMemoryMap.cs:69` `GetWaypoint(Location)` already does this and is already loaded; needs exposure |
+| 1 | Per-vehicle exemption from idle removal (§4.3), set on entering a dwell and cleared on leaving | C# — `Parameters.cs` for the flag, `Stages/ALSM.cs` at the nomination site, plumbed through `TrafficManagerLocal.cs` / `TrafficManager.cs` / `ITrafficManagerCallback.cs` and the Python shim |
+| 2 | Off-network placement: project a geographic position onto the draped terrain surface (§4.4) | C# — drape query, already present |
+| 2 | Expose the path-clearing calls and correct the `SetDesiredSpeed` unit documentation (§4.3) | C# — `Parameters.cs:110`; Python shim `TrafficManager` |
+| 3 | Injected `type="parking"` lane in the generated OpenDRIVE (§4.4) | C# — new injector beside `CarlaNet.Map/OpenDrive/{Elevation,Sign,TrafficLight}Injector` |
 | 2 | **Synchronous-tick fix** (scoped in §7) | C# — `Stages/ALSM.cs` |
 | 2 | Tick/simulation-time stamping into telemetry and recordings | C# — `CarlaNet.Recording`, `CarlaNet.Transport` |
 | 3 | Client-side waypoint API — `GetWaypoint`, `Next`/`Previous`, `GetLeft/RightLane`, `GetTopology`, lane types, junctions, landmarks, crosswalks | C# — `CarlaNet.Map/Road/Map.cs` has the road graph and `ComputeTransform` but exposes none of these; Python `Map` is name + spawn points only (`carlanet/__init__.py:657`) |
@@ -413,6 +544,8 @@ path already parameterizes this; the native path does not.
 | D3 | **Tick is the time base.** Wall clock is insufficient; time is counted in ticks from a defined starting event at a known step. `tick` is acceptable as a CoT root attribute and is also to be recorded in PNG `tEXt`. |
 | D4 | **Behavior is independent of appearance.** A scenario expresses the same behavior whether run at 09:00 or 23:00, in any weather. Time of day, weather and cinematography are render-time parameters, never encoded in the scenario spec. |
 | D5 | **Image-space labeling stays in the post-process.** The CoT sidecar carries truth; it does not carry derived bounding boxes. |
+| D6 | **Dwell exemption is a discrete per-vehicle flag**, not a reuse of hero status and not deregistration — both carry unrelated consequences (§4.3). |
+| D7 | **Off-network placement on the draped terrain is adopted now**; an injected parking lane is accepted in principle and can follow. Driveways stay excluded from the road network, being private infrastructure that changes without public record (§4.4). This is not merely aesthetic: a dwell in a travel lane combined with the D6 exemption produces a permanent traffic queue, because the idle cull is the only thing that ever clears one (§4.3). |
 
 On D3, the recommended scope of the Traffic-Manager clocking change is minimal:
 
@@ -498,6 +631,35 @@ The sequencing that preserves the most optionality: pattern spec first, esmini f
 generation via an existing library, and a graphical front-end only once the spec has stabilized against
 real training runs.
 
+### 8.5 The authoring workflow, end to end
+
+Where a human sits in the pipeline, and what is machine work:
+
+| Step | Who | What happens |
+|---|---|---|
+| 1. Choose the area | Trainer | Select an OSM extract for the region of interest |
+| 2. Build the world | Machine | The existing conversion produces the elevated, Cesium-aligned OpenDRIVE, its draped terrain, and the build recipe of §5.5 |
+| 3. Author the pattern | Trainer | Place sites and routes in geographic coordinates, declare entities, itineraries, dwell periods and schedules, and mark which parameters vary |
+| 4. Compile | Machine | Resolve every geographic position against *this* world into a concrete pose, bind the result to the world digest, and optionally emit `.xosc` for interchange and for visual review in esmini |
+| 5. Sweep | Trainer sets bounds, machine expands | Cross the behaviour parameters with the appearance parameters — time of day, weather, camera track — into a run list |
+| 6. Execute | Machine | The scenario executor drives the entities; the behaviour log and the imagery-plus-truth recordings are captured together over a shared tick range |
+| 7. Post-process | Machine | The detector labels the imagery; the resulting tracks feed the pattern-of-life model |
+
+The trainer's work is confined to steps 1, 3 and 5. Everything else is derived.
+
+**Step 4 is where placement is decided, and it is why the storyboard model needs no extension to support
+off-network stops.** OpenSCENARIO positions are not required to be lane-relative: `WorldPosition`
+carries an absolute pose, while `LanePosition` and `RoadPosition` are road-referenced. A dwell on the
+draped terrain is therefore an ordinary `WorldPosition`, and a dwell in an injected parking lane is a
+`LanePosition` — the same grammar covers both placements described in §4.4.
+
+What the pattern spec adds is the *intent*, so the choice survives a rebuild. A `park` step records a
+geographic position and a placement mode — snap to the nearest driving lane, snap to a parking lane, or
+project onto the terrain surface — and the compiler resolves that against the world actually loaded.
+Authoring in geographic coordinates with a declared placement mode is what makes a pattern portable
+across map rebuilds; resolving to a fixed `WorldPosition` at authoring time would weld it to one build,
+which is precisely the failure mode §5.5 exists to prevent.
+
 ## 9. Open questions
 
 Resolved on 2026-07-29: record and replay work end to end (§5.4), and the replayer's map guard offers
@@ -514,5 +676,9 @@ Still open:
 4. How much does a rebuild from an identical recipe perturb the generated `.xodr`? This sets the
    tolerance policy for the two-tier world-binding gate of §5.5, and is measured by rebuilding the same
    OSM extract twice and diffing the elevation profiles.
+5. How does an injected parking lane (§4.4) reconcile with the draped terrain? It inherits the sidewalk
+   mesh profile — a flat top with a downward skirt — so its elevation and the widened cross-section both
+   interact with the drape, and whether it reads as a usable surface or a raised curb strip is
+   unestablished.
 </content>
 </invoke>
