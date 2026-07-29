@@ -1,7 +1,7 @@
 # 18 — Scenario Fabrication for Pattern-of-Life Model Training
 
 **Status:** Research / design note. No code changed. The recorder and replayer findings were validated
-against a running server on 2026-07-29; results and the corrected risk analysis are in §5.3–§5.5.
+against a running server on 2026-07-29 (§5.4).
 **Date:** 2026-07-28, amended 2026-07-29
 **Scope:** Whether `carla-simulator/scenario_runner` (and the ASAM OpenSCENARIO storyboard model it
 parses) is the right foundation for a scenario-fabrication suite whose purpose is to train an
@@ -214,7 +214,7 @@ entities:
 | 1 | Pattern-spec schema + loader; seeded generator; permutation sweep | Tooling (language open) |
 | 1 | Scenario-executor service: trigger evaluation, entity state machine (transit → dwell → depart), commands to TM | C# — new project beside `CarlaNet.TrafficManager` |
 | 1 | Geographic-to-lane resolution (lat/lon → world → nearest drivable lane) | C# — `CarlaNet.TrafficManager/InMemoryMap.cs:69` `GetWaypoint(Location)` already does this and is already loaded; needs exposure |
-| 2 | **Synchronous-tick fix** (§5.3) | C# — `Stages/ALSM.cs` |
+| 2 | **Synchronous-tick fix** (scoped in §7) | C# — `Stages/ALSM.cs` |
 | 2 | Tick/simulation-time stamping into telemetry and recordings | C# — `CarlaNet.Recording`, `CarlaNet.Transport` |
 | 3 | Client-side waypoint API — `GetWaypoint`, `Next`/`Previous`, `GetLeft/RightLane`, `GetTopology`, lane types, junctions, landmarks, crosswalks | C# — `CarlaNet.Map/Road/Map.cs` has the road graph and `ComputeTransform` but exposes none of these; Python `Map` is name + spawn points only (`carlanet/__init__.py:657`) |
 | 3 | OpenSCENARIO 1.x front-end compiling to the pattern spec, including `GeoPosition` | Tooling |
@@ -223,9 +223,8 @@ entities:
 ## 5. Recorder / replayer audit
 
 Motivation: if server-side record-and-replay works, "same behavior, many appearances" (time of day,
-weather, camera track) is available without re-running the scenario. §5.1 and §5.2 are a static source
-audit; §5.3 and §5.4 record what a live test showed, which corrected the risk this audit originally
-identified.
+weather, camera track) is available without re-running the scenario. §5.1–§5.3 are a source audit;
+§5.4 records a live test against a running server.
 
 ### 5.1 Intact
 
@@ -253,31 +252,28 @@ identified.
 
 ### 5.3 The map-name guard is inert for generated worlds
 
-An earlier reading of `Recorder/CarlaReplayer.cpp:136-144` treated the level reload as a hazard: if the
-live episode's map name differs from the recorded `Mapfile`, the replayer calls
-`LoadNewEpisode(RecInfo.Mapfile)`, which would drop the Cesium tilesets, draped terrain and ground layer
-that the world build spawns. Tracing the two strings to their sources shows the opposite is true, and
-the real defect is the reverse of the one first identified.
+`Recorder/CarlaReplayer.cpp:136-144` reads as a safety check: if the live episode's map name differs
+from the recorded `Mapfile`, the replayer calls `LoadNewEpisode(RecInfo.Mapfile)` — which, in a
+runtime-generated world, would drop the Cesium tilesets, draped terrain and ground layer that the build
+spawns. It provides no safety at all, for two compounding reasons.
 
-Both sides of that comparison are the same value:
+**The comparison is between a value and itself.** The recorder stores `UCarlaEpisode::MapName` verbatim
+(`Game/CarlaEpisode.cpp:408` passes it to `ACarlaRecorder::Start`; `Recorder/CarlaRecorderQuery.cpp:121`
+prints it unchanged), and the replayer tests it against `Episode->GetMapName()`, which returns that same
+member (`Game/CarlaEpisode.h:97`). The two cannot differ for a given loaded level, so the reload branch
+is unreachable and the overlay is never at risk.
 
-- The recorder stores `UCarlaEpisode::MapName` verbatim — `Game/CarlaEpisode.cpp:408` passes it to
-  `ACarlaRecorder::Start`, and `Recorder/CarlaRecorderQuery.cpp:121` prints it unchanged.
-- The replayer compares `Episode->GetMapName()` against that stored name, and `GetMapName()` returns the
-  same `MapName` member (`Game/CarlaEpisode.h:97`).
+**Every generated world shares one level name.** `LoadNewOpendriveEpisode` stages a fixed path
+(`Game/CarlaEpisode.cpp:159,169`) whatever geography it was built from, so all OSM-derived worlds load
+as `OpenDriveMap`. Even if the comparison drew its two sides from independent sources, it would still
+pass unconditionally here. A log recorded over one city will replay into a world built from a different
+city without complaint, placing vehicles on roads that do not exist there.
 
-The two therefore cannot differ for a given loaded level, and **no reload can occur**. (A live probe
-appeared to show a mismatch — recorded `OpenDriveMap` against a client-reported
-`Carla/Maps/OpenDriveMap` — but that is an artifact of comparing against the wrong source: the
-`get_map_info` RPC returns the content-relative directory joined to the level name,
-`Server/CarlaServer.cpp:869-880`, not the name the replayer tests. Only the trailing segment is
-comparable.)
-
-**The actual defect:** every world produced by the OSM pipeline loads under the same level name,
-`OpenDriveMap`, because `LoadNewOpendriveEpisode` stages a fixed path
-(`Game/CarlaEpisode.cpp:159,169`) whatever geography it was built from. The guard therefore passes
-unconditionally for generated worlds. A log recorded over one city will replay into a world built from
-a different city without complaint, placing vehicles on roads that do not exist there.
+A practical note for anyone implementing an external check: the level name is not the string a client
+sees. The `get_map_info` RPC returns the content-relative directory joined to the level name
+(`Server/CarlaServer.cpp:869-880`), so `world.get_map().name` yields `Carla/Maps/OpenDriveMap` where the
+recorder holds `OpenDriveMap`. Only the trailing segment is comparable, and comparing the full strings
+reports a mismatch that does not exist.
 
 There is no engine-side protection and none is expected upstream, where map names identify hand-authored
 towns. Binding a recording to the world it was made in is therefore the calling tooling's
@@ -504,8 +500,8 @@ real training runs.
 
 ## 9. Open questions
 
-Resolved on 2026-07-29: record and replay work end to end, and the map-reload path does not fire —
-though for a reason that exposes a worse problem (§5.3, §5.4).
+Resolved on 2026-07-29: record and replay work end to end (§5.4), and the replayer's map guard offers
+no protection for generated worlds (§5.3), which §5.5 addresses.
 
 Still open:
 
