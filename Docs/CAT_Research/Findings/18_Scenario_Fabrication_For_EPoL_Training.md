@@ -1,7 +1,8 @@
 # 18 — Scenario Fabrication for Pattern-of-Life Model Training
 
-**Status:** Research / design note. No code changed.
-**Date:** 2026-07-28
+**Status:** Research / design note. No code changed. The recorder and replayer findings were validated
+against a running server on 2026-07-29; results and the corrected risk analysis are in §5.3–§5.5.
+**Date:** 2026-07-28, amended 2026-07-29
 **Scope:** Whether `carla-simulator/scenario_runner` (and the ASAM OpenSCENARIO storyboard model it
 parses) is the right foundation for a scenario-fabrication suite whose purpose is to train an
 **estimated pattern-of-life (EPoL)** model for vehicles; the code changes such a suite would need in
@@ -222,8 +223,9 @@ entities:
 ## 5. Recorder / replayer audit
 
 Motivation: if server-side record-and-replay works, "same behavior, many appearances" (time of day,
-weather, camera track) is available without re-running the scenario. **This is a static source audit; no
-server was run.**
+weather, camera track) is available without re-running the scenario. §5.1 and §5.2 are a static source
+audit; §5.3 and §5.4 record what a live test showed, which corrected the risk this audit originally
+identified.
 
 ### 5.1 Intact
 
@@ -249,23 +251,106 @@ server was run.**
    CarlaNet or by this fork. Effect: replayed vehicles translate correctly with static, unsteered
    wheels. Sub-pixel at EO collection altitudes; relevant only for ground-level replay.
 
-### 5.3 Risk: replay triggers a map reload
+### 5.3 The map-name guard is inert for generated worlds
 
-`Recorder/CarlaReplayer.cpp:136-144` — if the live episode's map name differs from the recorded
-`Mapfile`, the replayer calls `LoadNewEpisode(RecInfo.Mapfile)`. Worlds here are generated at runtime;
-`Game/CarlaEpisode.cpp:159,169` stages `Content/Carla/Maps/Nav/OpenDriveMap.obj` and
-`Content/Carla/Maps/OpenDrive/OpenDriveMap.xodr`. Same-session replay should not reload. Cross-session
-replay likely will, and a level reload drops the Cesium tilesets, draped terrain and ground layer that
-the build RPC spawns — traffic would replay into a bare world.
+An earlier reading of `Recorder/CarlaReplayer.cpp:136-144` treated the level reload as a hazard: if the
+live episode's map name differs from the recorded `Mapfile`, the replayer calls
+`LoadNewEpisode(RecInfo.Mapfile)`, which would drop the Cesium tilesets, draped terrain and ground layer
+that the world build spawns. Tracing the two strings to their sources shows the opposite is true, and
+the real defect is the reverse of the one first identified.
 
-Given that a scenario is inseparable from its map (§7, D1), the mitigation is procedural: rebuild the
-world from the scenario's `.osm` before replaying, so names match and the overlay exists.
+Both sides of that comparison are the same value:
 
-### 5.4 Verification test to run
+- The recorder stores `UCarlaEpisode::MapName` verbatim — `Game/CarlaEpisode.cpp:408` passes it to
+  `ACarlaRecorder::Start`, and `Recorder/CarlaRecorderQuery.cpp:121` prints it unchanged.
+- The replayer compares `Episode->GetMapName()` against that stored name, and `GetMapName()` returns the
+  same `MapName` member (`Game/CarlaEpisode.h:97`).
 
-Build a world, enable traffic, `start_recorder` for 60 s, `stop_recorder`, then `replay_file` in the same
-session with telemetry enabled. Diff the two CoT position time-series per vehicle. This answers "does
-replay work here" and simultaneously establishes the reproducibility harness of §6.1.
+The two therefore cannot differ for a given loaded level, and **no reload can occur**. (A live probe
+appeared to show a mismatch — recorded `OpenDriveMap` against a client-reported
+`Carla/Maps/OpenDriveMap` — but that is an artifact of comparing against the wrong source: the
+`get_map_info` RPC returns the content-relative directory joined to the level name,
+`Server/CarlaServer.cpp:869-880`, not the name the replayer tests. Only the trailing segment is
+comparable.)
+
+**The actual defect:** every world produced by the OSM pipeline loads under the same level name,
+`OpenDriveMap`, because `LoadNewOpendriveEpisode` stages a fixed path
+(`Game/CarlaEpisode.cpp:159,169`) whatever geography it was built from. The guard therefore passes
+unconditionally for generated worlds. A log recorded over one city will replay into a world built from
+a different city without complaint, placing vehicles on roads that do not exist there.
+
+There is no engine-side protection and none is expected upstream, where map names identify hand-authored
+towns. Binding a recording to the world it was made in is therefore the calling tooling's
+responsibility — see §5.5.
+
+### 5.4 Live test result (2026-07-29)
+
+Procedure: world built and driven by SCTMV (synchronous world clock, 0.05 s step); a second client
+attached without touching world settings or ticking; traffic enabled; `start_recorder` for 60 s of wall
+clock; `stop_recorder`; traffic disabled; `show_recorder_file_info`; `replay_file`; `stop_replayer`.
+
+| Check | Result |
+|---|---|
+| Recorder produces a log | Yes — header, actor creation events and per-frame data all present |
+| Actors captured | Vehicles, spectator, RGB camera, and injected `traffic.stop` signs |
+| Replay spawns and drives vehicles | **Yes** — motion matched the live run |
+| Level reload during replay | None, as §5.3 predicts |
+| Spectator hijacked by playback | No — the server reports "Ignoring Spectator camera" by default |
+
+**Record and replay work end to end in this fork.** The appearance-permutation axis — one recorded
+behavior replayed under many times of day, weather states and camera tracks — is viable.
+
+Incidental measurement of value to §6.1: 1014 ticks elapsed during 60 s of wall clock (≈16.9 Hz against
+a 20 Hz target), and 1014 × 0.05 s = 50.7 s, matching the server's reported recording length of 50.6 s.
+The world clock ran at roughly 84% of real time. Tick count and recorded duration agree with each other;
+only wall clock disagrees with both, which is direct evidence for the tick-based time base of D3.
+
+Still outstanding: whether replayed motion tracks the original closely enough to substitute for
+re-execution. That requires the two-run diff harness of §6.1 and is not answerable by observation.
+
+### 5.5 Binding a recording to the world it was made in
+
+Since the engine's guard is inert (§5.3), fidelity has to be guaranteed by the tooling. The binding must
+identify **the world**, not its inputs: the same OSM extract built with a different height-align mode,
+sample step, clip boundary, ground elevation asset or road filter produces different road geometry and
+different elevations, and a recorded vehicle would sit underground or float. Hashing the source OSM
+alone would pass in every one of those cases.
+
+The artifact that *is* the world is the generated `.xodr`; every upstream choice is baked into it. Two
+distinct questions, two identifiers:
+
+| Question | Identifier |
+|---|---|
+| Is the loaded world the exact one this log was recorded in? | SHA-256 of the generated `.xodr`, which the server already holds at `Content/Carla/Maps/OpenDrive/OpenDriveMap.xodr` and already serves to clients through `GetXODR` — no new RPC needed |
+| Can an equivalent world be rebuilt from scratch? | The build recipe: source OSM digest, clip bounds, netconvert arguments, origin latitude/longitude, sample step, height-align mode and its parameters, ground and imagery asset ids, origin height |
+
+The recipe must record **resolved** values, captured at build time, not the arguments the operator
+typed. Several parameters are derived when omitted: the origin defaults to the centre of the OSM
+`<bounds>`, the vertical datum defaults to a sampled height at that origin, and clipping produces a
+derived OSM distinct from the file named on the command line. A recipe reconstructed from a command
+line would therefore record blanks where the values that shaped the world actually lived, and would
+silently drift as defaults change between releases. The digests of the converter and of the build
+tooling belong in the recipe for the same reason — identical arguments to a different `netconvert`
+build need not yield an identical network.
+
+Recommended mechanics:
+
+1. **At build time**, write the recipe into the generated `.xodr` under `<header><userData>`. OpenDRIVE
+   sanctions the extension, the world then carries its own provenance, and hashing the file covers the
+   recipe automatically. No recorder file-format change, so `show_recorder_file_info` and any upstream
+   tooling keep working.
+2. **At record time**, fetch the live `.xodr`, hash it, and write a manifest beside the `.log` holding
+   that digest plus the parsed recipe. Refuse to treat a log without a manifest as replayable.
+3. **At replay time**, fetch the live `.xodr` again, hash, and compare.
+
+Because elevation sampling draws on streamed Cesium tiles, a rebuild from identical inputs is not
+guaranteed to be byte-identical, so the gate should be two-tier rather than pass/fail: an exact digest
+match proceeds silently; a recipe match with a digest mismatch warns and requires an explicit override;
+a recipe mismatch is refused.
+
+This also satisfies the stronger form of D1 — the scenario, its map and its recordings travel together,
+and the tie is content-addressed rather than name-based, so it cannot be defeated by a coincidental or
+forged level name.
 
 ## 6. Cursor-on-Target telemetry additions
 
@@ -289,7 +374,9 @@ post-process, and the EPoL trainer, everything they cannot re-derive.
   `fixed_delta` is a run parameter and a future run may change it.
 - Current timestamps are **wall-clock UTC** in both emitters (`CotWriter.cs:170`; `datetime.now()` in
   `SCTMV.to_cot`). Two runs of the same scenario therefore carry unrelated times and cannot be diffed
-  without re-alignment. This is the single highest-value addition and a precondition for §5.4.
+  without re-alignment — and wall clock does not track the world in any case: the measurement in §5.4
+  recorded 50.6 s of simulation during 60 s of wall clock. This is the single highest-value addition
+  and a precondition for the reproducibility harness.
 - **`run_id`, `scenario_id`, `seed`, `spec_version`** — grouping and reproduction.
 
 ### 6.2 The training label
@@ -325,7 +412,7 @@ path already parameterizes this; the native path does not.
 
 | # | Decision |
 |---|---|
-| D1 | A scenario is **bound to its map**. The `.osm` extract is a dependency of the scenario; roads define where waypoints can exist, and even off-road behavior is tied to terrain. Scenario and map are never separated. |
+| D1 | A scenario is **bound to its map**. The `.osm` extract is a dependency of the scenario; roads define where waypoints can exist, and even off-road behavior is tied to terrain. Scenario and map are never separated. Enforcement is content-addressed and belongs to the tooling, because the engine's own map check is inert here — §5.3, §5.5. |
 | D2 | **No live Python control of traffic.** The scenario is delivered as data and interpreted natively (see the layering clarification in §4.1). |
 | D3 | **Tick is the time base.** Wall clock is insufficient; time is counted in ticks from a defined starting event at a known step. `tick` is acceptable as a CoT root attribute and is also to be recorded in PNG `tEXt`. |
 | D4 | **Behavior is independent of appearance.** A scenario expresses the same behavior whether run at 09:00 or 23:00, in any weather. Time of day, weather and cinematography are render-time parameters, never encoded in the scenario spec. |
@@ -417,13 +504,19 @@ real training runs.
 
 ## 9. Open questions
 
-1. Does `replay_file` work end-to-end here, and does the map-reload path (§5.3) fire in practice? The
-   test in §5.4 answers both.
-2. Does replay reproduce vehicle motion closely enough to serve as the appearance-permutation mechanism,
-   or is re-execution of the scenario required?
-3. Is `.xosc` adopted as the authored artifact, or as an import/export format over a native spec?
-4. What acceptance threshold defines "reproducible" — proposed starting bar: maximum per-vehicle
+Resolved on 2026-07-29: record and replay work end to end, and the map-reload path does not fire —
+though for a reason that exposes a worse problem (§5.3, §5.4).
+
+Still open:
+
+1. Does replay reproduce vehicle motion closely enough to serve as the appearance-permutation
+   mechanism, or is re-execution of the scenario required? Needs the two-run diff harness.
+2. Is `.xosc` adopted as the authored artifact, or as an import/export format over a native spec?
+3. What acceptance threshold defines "reproducible" — proposed starting bar: maximum per-vehicle
    positional deviation under half a vehicle length over ten minutes of simulated time, measured from
    CoT truth across two runs of the same seed.
+4. How much does a rebuild from an identical recipe perturb the generated `.xodr`? This sets the
+   tolerance policy for the two-tier world-binding gate of §5.5, and is measured by rebuilding the same
+   OSM extract twice and diffing the elevation profiles.
 </content>
 </invoke>
