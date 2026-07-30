@@ -1,8 +1,9 @@
 # 18 — Scenario Fabrication for Pattern-of-Life Model Training
 
-**Status:** Research / design note. No code changed. The recorder and replayer findings were validated
-against a running server on 2026-07-29 (§5.4).
-**Date:** 2026-07-28, amended 2026-07-29
+**Status:** Research / design note. No code changed. Three findings were validated against a running
+server rather than inferred: the recorder and replayer (§5.4), the dwell mechanisms and the idle cull
+(§4.4), and the authoring tool against a generated world (§8.3).
+**Date:** 2026-07-28, amended 2026-07-30
 **Scope:** Whether `carla-simulator/scenario_runner` (and the ASAM OpenSCENARIO storyboard model it
 parses) is the right foundation for a scenario-fabrication suite whose purpose is to train an
 **estimated pattern-of-life (EPoL)** model for vehicles; the code changes such a suite would need in
@@ -154,7 +155,7 @@ ScenarioRunner's actor-control layer exists to solve a problem CarlaNet has alre
 Adopting ScenarioRunner would also require the client-side waypoint API it depends on pervasively — 42
 `get_waypoint()` calls in `carla_data_provider.py`, `atomic_behaviors.py`, `atomic_criteria.py` and
 `scenario_manager.py` alone, plus `agents.navigation.{global_route_planner,basic_agent,local_planner}`.
-That API does not exist in the shim (§4.5). Executing storyboards on CarlaNet's own primitives avoids
+That API does not exist in the shim (§4.6). Executing storyboards on CarlaNet's own primitives avoids
 that dependency entirely.
 
 **Conclusion:** use OpenSCENARIO as the authoring/interchange format; implement the executor on
@@ -288,13 +289,50 @@ Three further behaviours constrain the executor:
   (`LocalizationStage.cs:544-586`). **The only mechanism that ever clears such a queue is the 90-second
   idle cull** — the very thing the exemption disables. Exempting a vehicle parked in a travel lane
   therefore creates a permanent jam. The exemption is only safe in combination with off-lane placement,
-  which is what §4.4 provides.
+  which is what §4.5 provides.
 
 Two client-facing defects surfaced here: `SetDesiredSpeed` is documented as metres per second
 (`Parameters.cs:110`) but the value is divided by 3.6 before use (`MotionPlanStage.cs:254`), so it is
 actually km/h; and the path-clearing calls are absent from the Python shim.
 
-### 4.4 Where a vehicle can legitimately stop
+### 4.4 Measured dwell behaviour (2026-07-30)
+
+Each candidate mechanism was exercised against a running world: spawn an ordinary sedan, drive under
+Traffic Manager control for 20 s, command the stop, hold 120 s while sampling speed and displacement,
+then release and observe. One vehicle at a time on a dedicated Traffic Manager port, with no ambient
+traffic, so the only registered vehicle was the subject.
+
+| Mechanism | Time to stop | Mean speed held | Drift | Survived | Resumed |
+|---|---|---|---|---|---|
+| Ramp target down, then unregister and brake | 5.1 s | 0.00 m/s | **0.00 m** | **yes** | 8.37 m/s |
+| Unregister and brake immediately | 1.1 s | 0.00 m/s | 0.00 m | **yes** | 8.45 m/s |
+| Desired speed 0 | 22.5 s | 0.00 m/s | 0.00 m | no — destroyed | — |
+| Speed difference 100% | 22.5 s | 0.00 m/s | 0.01 m | no — destroyed | — |
+| Constant velocity 0 | 0.5 s | 0.05 m/s | **2.94 m** | no — destroyed | — |
+
+**The idle cull is confirmed at its documented threshold.** The three mechanisms that leave the vehicle
+registered were all destroyed mid-hold; the two that unregister survived. Timing corroborates the
+90-second figure directly: the constant-velocity vehicle stopped 0.5 s after the command, was still
+present at 61 s, and was gone by 91 s.
+
+**A zero speed target coasts rather than brakes, as §4.3 predicts, but still reaches rest on level
+ground.** The evidence is the stopping time — 22.5 s from 8.4 m/s, against 1.1 s when the brake is
+actually applied. That is deceleration by rolling resistance alone. It stops, but the stopping point
+cannot be placed and a gradient would carry the vehicle onward, so it is unusable for sited dwell even
+though it appears to work on flat terrain.
+
+**Constant velocity does not pin the vehicle**: it creeps at 5 cm/s and accumulated 2.94 m over the
+hold.
+
+**Ramping the target down before unregistering is the recommended mechanism.** Both surviving
+mechanisms hold at exactly zero and resume cleanly — confirming the handbrake releases itself on the
+first control frame after re-registration — but the immediate brake is a 1.1 s emergency stop from
+8.4 m/s, which reads as a slam when observed from altitude. The 5.1 s ramp is the one to build on.
+
+The run also **confirms the speed-unit defect by measurement rather than by reading**: a commanded
+value of 30.0 produced a steady 8.35–8.44 m/s across all five runs, and 30 ÷ 3.6 = 8.33.
+
+### 4.5 Where a vehicle can legitimately stop
 
 A vehicle stopped in a travel lane blocks following traffic and, viewed from altitude, reads as an
 anomaly in itself. Roads generated from OSM extracts offer nowhere else to stop, and the reason is not
@@ -334,17 +372,18 @@ scenarios and both worth tracking separately:
 - **`--default.sidewalk-width 2.80`** (`CarlaNet/src/CarlaNet.Map/OsmConverter.cs:252`) has no effect,
   because no sidewalk-import option is enabled.
 
-### 4.5 Work ledger
+### 4.6 Work ledger
 
 | Tier | Work | Where |
 |---|---|---|
 | 1 | Pattern-spec schema + loader; seeded generator; permutation sweep | Tooling (language open) |
 | 1 | Scenario-executor service: trigger evaluation, entity state machine (transit → dwell → depart), commands to TM | C# — new project beside `CarlaNet.TrafficManager` |
 | 1 | Geographic-to-lane resolution (lat/lon → world → nearest drivable lane) | C# — `CarlaNet.TrafficManager/InMemoryMap.cs:69` `GetWaypoint(Location)` already does this and is already loaded; needs exposure |
-| 1 | Per-vehicle exemption from idle removal (§4.3), set on entering a dwell and cleared on leaving | C# — `Parameters.cs` for the flag, `Stages/ALSM.cs` at the nomination site, plumbed through `TrafficManagerLocal.cs` / `TrafficManager.cs` / `ITrafficManagerCallback.cs` and the Python shim |
-| 2 | Off-network placement: project a geographic position onto the draped terrain surface (§4.4) | C# — drape query, already present |
+| 1 | Dwell as a controlled stop: ramp the speed target down, unregister, hold on brake and handbrake, and restore the target before re-registering (§4.4) | Scenario executor |
+| — | Per-vehicle exemption from idle removal (§4.3), applied at the nomination site — optional, only for dwells that must stay registered | C# — `Parameters.cs`, `Stages/ALSM.cs`, plumbed through `TrafficManagerLocal.cs` / `TrafficManager.cs` / `ITrafficManagerCallback.cs` and the Python shim |
+| 2 | Off-network placement: project a geographic position onto the draped terrain surface (§4.5) | C# — drape query, already present |
 | 2 | Expose the path-clearing calls and correct the `SetDesiredSpeed` unit documentation (§4.3) | C# — `Parameters.cs:110`; Python shim `TrafficManager` |
-| 3 | Injected `type="parking"` lane in the generated OpenDRIVE (§4.4) | C# — new injector beside `CarlaNet.Map/OpenDrive/{Elevation,Sign,TrafficLight}Injector` |
+| 3 | Injected `type="parking"` lane in the generated OpenDRIVE (§4.5) | C# — new injector beside `CarlaNet.Map/OpenDrive/{Elevation,Sign,TrafficLight}Injector` |
 | 2 | **Synchronous-tick fix** (scoped in §7) | C# — `Stages/ALSM.cs` |
 | 2 | Tick/simulation-time stamping into telemetry and recordings | C# — `CarlaNet.Recording`, `CarlaNet.Transport` |
 | 3 | Client-side waypoint API — `GetWaypoint`, `Next`/`Previous`, `GetLeft/RightLane`, `GetTopology`, lane types, junctions, landmarks, crosswalks | C# — `CarlaNet.Map/Road/Map.cs` has the road graph and `ComputeTransform` but exposes none of these; Python `Map` is name + spawn points only (`carlanet/__init__.py:657`) |
@@ -475,6 +514,14 @@ guaranteed to be byte-identical, so the gate should be two-tier rather than pass
 match proceeds silently; a recipe match with a digest mismatch warns and requires an explicit override;
 a recipe mismatch is refused.
 
+**The digest must be defined on a canonical byte source.** The same world already exists on disk in two
+byte-different forms: the copy the server stages carries a UTF-8 byte-order mark, while the copy SCTMV
+saves has doubled carriage returns, because it writes with `open(..., "w")` and no `newline=""` so
+Python's text mode appends a second `\r` to line endings that already have one. The two differ by
+10,977 bytes for an identical document. Hashing whichever file is to hand would report a mismatch for
+the same world, so the digest is taken from the bytes the server holds — those returned by `GetXODR` —
+and never from a client-written copy. The `newline=""` omission is worth fixing regardless.
+
 This also satisfies the stronger form of D1 — the scenario, its map and its recordings travel together,
 and the tie is content-addressed rather than name-based, so it cannot be defeated by a coincidental or
 forged level name.
@@ -544,8 +591,8 @@ path already parameterizes this; the native path does not.
 | D3 | **Tick is the time base.** Wall clock is insufficient; time is counted in ticks from a defined starting event at a known step. `tick` is acceptable as a CoT root attribute and is also to be recorded in PNG `tEXt`. |
 | D4 | **Behavior is independent of appearance.** A scenario expresses the same behavior whether run at 09:00 or 23:00, in any weather. Time of day, weather and cinematography are render-time parameters, never encoded in the scenario spec. |
 | D5 | **Image-space labeling stays in the post-process.** The CoT sidecar carries truth; it does not carry derived bounding boxes. |
-| D6 | **Dwell exemption is a discrete per-vehicle flag**, not a reuse of hero status and not deregistration — both carry unrelated consequences (§4.3). |
-| D7 | **Off-network placement on the draped terrain is adopted now**; an injected parking lane is accepted in principle and can follow. Driveways stay excluded from the road network, being private infrastructure that changes without public record (§4.4). This is not merely aesthetic: a dwell in a travel lane combined with the D6 exemption produces a permanent traffic queue, because the idle cull is the only thing that ever clears one (§4.3). |
+| D6 | **Dwell is achieved by unregistering the vehicle**, after ramping its speed target down so the stop is controlled — measured in §4.4. A per-vehicle exemption from idle removal remains desirable for dwells that must stay under Traffic Manager control, but is no longer a precondition; if built it must exempt at the nomination site, not the destruction site (§4.3). |
+| D7 | **Off-network placement on the draped terrain is adopted now**; an injected parking lane is accepted in principle and can follow. Driveways stay excluded from the road network, being private infrastructure that changes without public record (§4.5). This is not merely aesthetic: a dwell in a travel lane combined with the D6 exemption produces a permanent traffic queue, because the idle cull is the only thing that ever clears one (§4.3). |
 
 On D3, the recommended scope of the Traffic-Manager clocking change is minimal:
 
@@ -590,46 +637,93 @@ Separately confirmed: upstream removed SUMO co-simulation on the `ue5-dev` branc
 | [Scenic](https://github.com/BerkeleyLearnVerify/Scenic) | BSD-style | 376★, active | Probabilistic scenario description language; a program defines a *distribution* over scenes, sampled to concrete scenarios; supports dynamic agent policies; an official CARLA scenario modeling language | **High conceptually** — this is the seeded statistical generator, already built; but it drives CARLA through the upstream Python API, so it inherits the waypoint dependency of §3.3 |
 | [OpenScenarioEditor](https://github.com/ebadi/OpenScenarioEditor) | BSD-3 | 171★, moderate | Simple graphical `.xosc` editor built on esmini | Medium — starting point, not a finished product |
 | [Scenario Studio](https://github.com/mljack/scenariostudio) | MPL-2.0 | 3★, last push 2025-12 | esmini-based `.xosc` authoring environment, Windows-only | Low — effectively single-author, minimal adoption |
-| [drawtonomy](https://docs.drawtonomy.com/use-cases/openscenario-simulator/) | Hosted service | active | Browser-based `.xosc` simulation and recording via esmini-WASM | Reference only — hosted, not embeddable |
+| [drawtonomy](https://github.com/kosuke55/drawtonomy) | Apache-2.0 (ecosystem); application itself not published | 92★, active | Browser canvas for road and scenario authoring, with OSM-to-lane generation, OpenDRIVE import/export, OpenSCENARIO export and in-browser esmini-WASM playback | **Selected** — see §8.3 |
 
 Commercial options exist (MathWorks RoadRunner Scenario, MSC VTD, IPG CarMaker) and are not evaluated
 here.
 
-### 8.3 Assessment
+### 8.3 drawtonomy, validated against a generated world (2026-07-29)
 
-There is **no mature open-source WYSIWYG OpenSCENARIO editor**. The strong open-source assets are
-*programmatic generation* (scenariogeneration, Scenic) and *playback/visualization* (esmini). That
-matches §2.2's practical observation: real scenarios of this size are generated, not hand-drawn, so the
-generator is the higher-value component and the graphical surface is a convenience over it.
+An initial reading of this survey concluded that no mature open-source graphical OpenSCENARIO editor
+existed and that one would have to be built. That conclusion was wrong: drawtonomy is a browser canvas
+that authors road networks and scenarios directly, and it was tested against a world produced by this
+fork's own pipeline.
 
-An adopt-first path that avoids most of the build:
+**What was verified.** The Gardnerville extract's generated `.xodr` was imported and rendered correctly
+at full extent. With the satellite background enabled, the imported lane geometry lay on the real road
+surfaces, and the junction structure matched the actual intersection. Comparing the exported
+`geoReference` against the original confirms this at the data level — same projection, same origin, same
+false eastings:
 
-1. **Generation** — scenariogeneration for `.xosc` emission with parameter sweeps, or Scenic if a
-   probabilistic scene distribution is wanted. Either produces the artifact; neither needs to execute it.
-2. **Visualization and sanity-check** — esmini, which plays `.xosc` against `.xodr` with no CARLA
-   involvement. This addresses the "author cannot see the scenario without running the full simulation"
-   gap directly and cheaply, since this fork already produces the `.xodr`.
-3. **Execution** — the native scenario executor of §4.1, reading the pattern spec compiled from `.xosc`.
+```
+generated:  +proj=tmerc +lat_0=38.91108 +lon_0=-119.76459650000001 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs
+round-trip: +proj=tmerc +lat_0=38.91108000 +lon_0=-119.76459650    +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m
+```
 
-### 8.4 If a purpose-built trainer interface is still wanted
+The only change, `+ellps=WGS84 +no_defs` to `+datum=WGS84`, is functionally equivalent for WGS84.
+**Coordinates round-trip without displacement.** This is also the first independent confirmation that
+the origin-pinning of the OSM conversion produces a conformant georeference — every previous check was
+this fork's own code reading back what it had written.
 
-Only the authoring front-end would be built; generation, playback and execution are covered above. Of the
-implementation options considered:
+**The road network does not round-trip, and must not be brought back.** Comparing the exported `.xodr`
+against the input:
 
-- **.NET 10 + Blazor + Radzen, MVVM** — consistent with the existing CarlaNet stack, can reference the
-  scenario-spec and map assemblies directly (no cross-language marshalling for lane resolution), and
-  browser-hosted map rendering makes OSM-extract selection and route drawing straightforward. Lowest
-  risk given existing expertise.
-- **Unreal Slate/UMG** — puts the editor inside the renderer, so authoring happens against the actual
-  photoreal world. Highest fidelity preview, but a new toolchain to learn and it couples authoring to a
-  running editor session.
-- **Agent-generated scenarios** — viable for producing spec or `.xosc` text from natural-language intent,
-  and complementary rather than competing: it fills the authoring box, leaving the visualization gap that
-  esmini closes.
+| | generated | round-tripped |
+|---|---|---|
+| OpenDRIVE version | 1.4 | 1.8 |
+| roads | 213 | 509 |
+| lanes | 426 | 1018 |
+| junctions | 24 | 1 |
+| **elevation records** | **1675** | **0** |
+| signals | 4 | 4 |
 
-The sequencing that preserves the most optionality: pattern spec first, esmini for visualization,
-generation via an existing library, and a graphical front-end only once the spec has stabilized against
-real training runs.
+Every elevation profile is lost, so the exported map is flat, and the road and junction decomposition
+differs substantially. This is a 2D canvas behaving as a 2D canvas, not a defect. **The integration is
+therefore asymmetric: import the generated `.xodr` as an authoring backdrop, keep it authoritative on
+this side, and take only the scenario out.** The Lanelet2 `.osm` export is a different lane model again
+and equally not a return path.
+
+**Scenario export supports this directly.** The scenario editing mode offers an OpenSCENARIO export with
+an *include* choice of `xosc` alone or `xosc + xodr`, a version selector for 1.0, 1.1 or 1.2, and a
+target-simulator choice of esmini or Generic. Exporting `xosc` alone, Generic, at 1.1 or later, gives
+exactly the artifact wanted — and versions from 1.1 define `GeoPosition`, which may close the
+map-portability gap identified in §2.3 without any extension work.
+
+**Dependency profile.** The published repository contains the extension SDK, a development server, an
+MCP server, extensions, templates and documentation. The canvas application itself is not in it: the
+workspace declares only `packages/*` and `docs-site`, the sole CI workflow tests the SDK, and the
+development server downloads a prebuilt bundle from the vendor's site. The application therefore cannot
+be built from source or forked. What *is* open, and Apache-2.0, is the part most likely to need
+changing: the OpenDRIVE and OpenSCENARIO **exporters live in `@drawtonomy/sdk`**, which is also the
+documented extension point for new target formats.
+
+Three consequences follow, of which the first two are already mitigated:
+
+1. *No independent deployment* — resolved by snapshotting the bundle and serving it locally; tooling for
+   this is staged in `drawtonomy-offline-build/`, with a standard-library-only server that makes no
+   network requests.
+2. *No version pinning* — the same snapshot pins it, which matters because an authoring tool that
+   changes between training runs undermines reproducibility.
+3. *A hosted product from a single maintainer* sits in the authoring path. This is acceptable because it
+   is **not** in the execution path, and because the artifact crossing the boundary is a standard
+   `.xosc` file rather than a proprietary format. The authoring tool is replaceable without disturbing
+   anything downstream — which is the practical payoff of keeping the interchange format standard.
+
+### 8.4 The remaining build
+
+With authoring, visualization and preview covered, what remains to be built is the execution side:
+
+1. **Generation and sweeps** — scenariogeneration for programmatic `.xosc` emission with parameter
+   variation, or Scenic where a probabilistic scene distribution is wanted. Complements hand-authoring
+   rather than replacing it.
+2. **Compilation** — resolve the authored scenario against the loaded world, bind it to the world digest
+   of §5.5, and attach the training metadata `.xosc` cannot carry (§4.2).
+3. **Execution** — the native scenario executor of §4.1.
+
+A purpose-built editor is no longer on the critical path. If one is ever needed — because the dependency
+in §8.3 becomes unacceptable, or because the canvas cannot express something — the .NET and Blazor
+option remains the lowest-risk route, since it can reference the existing map assemblies directly and
+the geometry work would not have to cross a language boundary.
 
 ### 8.5 The authoring workflow, end to end
 
@@ -639,8 +733,8 @@ Where a human sits in the pipeline, and what is machine work:
 |---|---|---|
 | 1. Choose the area | Trainer | Select an OSM extract for the region of interest |
 | 2. Build the world | Machine | The existing conversion produces the elevated, Cesium-aligned OpenDRIVE, its draped terrain, and the build recipe of §5.5 |
-| 3. Author the pattern | Trainer | Place sites and routes in geographic coordinates, declare entities, itineraries, dwell periods and schedules, and mark which parameters vary |
-| 4. Compile | Machine | Resolve every geographic position against *this* world into a concrete pose, bind the result to the world digest, and optionally emit `.xosc` for interchange and for visual review in esmini |
+| 3. Author the pattern | Trainer | Import the generated `.xodr` into the canvas (§8.3) and place entities, routes, dwell sites and schedules directly on it, against a satellite backdrop; export the scenario alone |
+| 4. Compile | Machine | Resolve positions against *this* world, bind the result to the world digest, and attach the training metadata the scenario file cannot carry |
 | 5. Sweep | Trainer sets bounds, machine expands | Cross the behaviour parameters with the appearance parameters — time of day, weather, camera track — into a run list |
 | 6. Execute | Machine | The scenario executor drives the entities; the behaviour log and the imagery-plus-truth recordings are captured together over a shared tick range |
 | 7. Post-process | Machine | The detector labels the imagery; the resulting tracks feed the pattern-of-life model |
@@ -651,7 +745,7 @@ The trainer's work is confined to steps 1, 3 and 5. Everything else is derived.
 off-network stops.** OpenSCENARIO positions are not required to be lane-relative: `WorldPosition`
 carries an absolute pose, while `LanePosition` and `RoadPosition` are road-referenced. A dwell on the
 draped terrain is therefore an ordinary `WorldPosition`, and a dwell in an injected parking lane is a
-`LanePosition` — the same grammar covers both placements described in §4.4.
+`LanePosition` — the same grammar covers both placements described in §4.5.
 
 What the pattern spec adds is the *intent*, so the choice survives a rebuild. A `park` step records a
 geographic position and a placement mode — snap to the nearest driving lane, snap to a parking lane, or
@@ -665,20 +759,27 @@ which is precisely the failure mode §5.5 exists to prevent.
 Resolved on 2026-07-29: record and replay work end to end (§5.4), and the replayer's map guard offers
 no protection for generated worlds (§5.3), which §5.5 addresses.
 
+Also resolved: the dwell mechanism and the idle-cull threshold are measured (§4.4), and a graphical
+authoring tool exists and works against a generated world (§8.3), which settles question 2 below in
+favour of `.xosc` as the authored artifact with the pattern spec reduced to a wrapper for the training
+metadata it cannot carry.
+
 Still open:
 
 1. Does replay reproduce vehicle motion closely enough to serve as the appearance-permutation
    mechanism, or is re-execution of the scenario required? Needs the two-run diff harness.
-2. Is `.xosc` adopted as the authored artifact, or as an import/export format over a native spec?
-3. What acceptance threshold defines "reproducible" — proposed starting bar: maximum per-vehicle
+2. Does the canvas's OpenSCENARIO export emit the trigger vocabulary a long dwell needs — `StandStill`
+   and `SimulationTime` conditions — or only trajectory following? If not, the exporter in
+   `@drawtonomy/sdk` is the documented place to add it (§8.3).
+3. Does a stationary vehicle survive indefinitely once unregistered, or does a threshold beyond the
+   90-second idle cull exist? §4.4 proves survival past 120 s only.
+4. What acceptance threshold defines "reproducible" — proposed starting bar: maximum per-vehicle
    positional deviation under half a vehicle length over ten minutes of simulated time, measured from
    CoT truth across two runs of the same seed.
-4. How much does a rebuild from an identical recipe perturb the generated `.xodr`? This sets the
+5. How much does a rebuild from an identical recipe perturb the generated `.xodr`? This sets the
    tolerance policy for the two-tier world-binding gate of §5.5, and is measured by rebuilding the same
    OSM extract twice and diffing the elevation profiles.
-5. How does an injected parking lane (§4.4) reconcile with the draped terrain? It inherits the sidewalk
+6. How does an injected parking lane (§4.5) reconcile with the draped terrain? It inherits the sidewalk
    mesh profile — a flat top with a downward skirt — so its elevation and the widened cross-section both
    interact with the drape, and whether it reads as a usable surface or a raised curb strip is
    unestablished.
-</content>
-</invoke>
