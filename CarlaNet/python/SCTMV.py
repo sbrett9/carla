@@ -859,9 +859,9 @@ def to_cot(rec, affiliation="n", stale_seconds=3.0, source="truth", uid_prefix="
         "vx": f"{rec['vx']:.2f}", "vy": f"{rec['vy']:.2f}", "vz": f"{rec['vz']:.2f}",
     })
     if capture is not None:
-        # The recorded sidecars carry the capture identity on their <events> root, but the live feed is
-        # one event per datagram and has no such container, so each event carries it here instead.
-        # <detail> is the sanctioned extension point, which keeps the event itself standard.
+        # Diagnostic only. This feed drives a live map display and is not a truth source — the recorded
+        # sidecar is the sole truth for a frame. The tick rides along so that a disagreement between the
+        # live view and a sidecar can be settled by checking whether they describe the same instant.
         ET.SubElement(detail, "_capture", capture.attributes())
     if solar:
         ET.SubElement(detail, "_solar", {
@@ -879,17 +879,13 @@ def to_cot(rec, affiliation="n", stale_seconds=3.0, source="truth", uid_prefix="
 class SimClock:
     """Latest world tick and simulation time, cached from the world-observer stream.
 
-    Wall-clock time does not track the simulation clock — a world ticking at a fixed step falls behind
-    under load — so an emitted track is stamped with the tick that produced it. The recorder reads the
-    tick from each sensor frame's own header; the live feed has no frame to read, so it subscribes here.
+    The recorder reads the tick from each sensor frame's own header. The live telemetry feed has no
+    frame to read, so it subscribes here instead.
     """
 
-    def __init__(self, world, run_id=None, scenario_id=None, seed=None):
+    def __init__(self, world):
         self.frame = 0
         self.sim_time = 0.0
-        self.run_id = run_id
-        self.scenario_id = scenario_id
-        self.seed = seed
         try:
             world.on_tick(self._on_tick)
         except Exception as e:
@@ -901,15 +897,10 @@ class SimClock:
         self.sim_time = float(ts.elapsed_seconds)
 
     def attributes(self):
-        """Capture identity as CoT attribute strings, matching the recorded sidecar's root attributes."""
-        a = {"tick": str(self.frame), "sim_time_s": f"{self.sim_time:.6f}"}
-        if self.run_id is not None:
-            a["run_id"] = str(self.run_id)
-        if self.scenario_id is not None:
-            a["scenario_id"] = str(self.scenario_id)
-        if self.seed is not None:
-            a["seed"] = str(int(self.seed))
-        return a
+        """The tick, as a CoT attribute. Deliberately just the tick: the run identity belongs with the
+        recorded artifacts that constitute truth, not on a presentation feed that no consumer reads it
+        from."""
+        return {"tick": str(self.frame)}
 
 
 class CotUdpEmitter:
@@ -1562,7 +1553,7 @@ def main() -> int:
     if not traffic.available:
         print(f"traffic unavailable: {traffic.reason}", file=sys.stderr)
     run_id = f"run-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
-    sim_clock = SimClock(world, run_id=run_id, seed=args.seed)
+    sim_clock = SimClock(world)
     print(f"run id: {run_id}")
     telemetry = TelemetryController(world, cot_origin, args, clock=sim_clock)
     if not telemetry.available:
