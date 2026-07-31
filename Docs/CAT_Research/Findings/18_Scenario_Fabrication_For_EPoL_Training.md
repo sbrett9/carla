@@ -332,6 +332,17 @@ first control frame after re-registration — but the immediate brake is a 1.1 s
 The run also **confirms the speed-unit defect by measurement rather than by reading**: a commanded
 value of 30.0 produced a steady 8.35–8.44 m/s across all five runs, and 30 ÷ 3.6 = 8.33.
 
+**A full 45-minute dwell was then held.** The same mechanism was run with a 2,700-second hold: it
+stopped in 5.1 s and reported 0.00 m/s on every one of the 89 samples taken across the period — mean and
+maximum both zero — with 0.00 m of accumulated drift. The vehicle survived and resumed to 8.39 m/s. No
+threshold beyond the 90-second idle cull exists, and the hold is genuinely static rather than a slow
+creep; for contrast, the constant-velocity mechanism's 2.94 m of drift in 90 s would have accumulated to
+roughly 90 m over the same period.
+
+The clean resume is evidence that the restoration sequence works, **not** that stale state is harmless:
+the speed target was explicitly re-applied before re-registering, which is precisely the mitigation §4.3
+requires because per-vehicle settings survive deregistration. A scenario executor must do the same.
+
 ### 4.5 Where a vehicle can legitimately stop
 
 A vehicle stopped in a travel lane blocks following traffic and, viewed from altitude, reads as an
@@ -759,7 +770,8 @@ which is precisely the failure mode §5.5 exists to prevent.
 Resolved on 2026-07-29: record and replay work end to end (§5.4), and the replayer's map guard offers
 no protection for generated worlds (§5.3), which §5.5 addresses.
 
-Also resolved: the dwell mechanism and the idle-cull threshold are measured (§4.4), and a graphical
+Also resolved: the dwell mechanism and the idle-cull threshold are measured and a full 45-minute
+dwell demonstrated (§4.4), and a graphical
 authoring tool exists and works against a generated world (§8.3), which settles question 2 below in
 favour of `.xosc` as the authored artifact with the pattern spec reduced to a wrapper for the training
 metadata it cannot carry.
@@ -771,15 +783,13 @@ Still open:
 2. Does the canvas's OpenSCENARIO export emit the trigger vocabulary a long dwell needs — `StandStill`
    and `SimulationTime` conditions — or only trajectory following? If not, the exporter in
    `@drawtonomy/sdk` is the documented place to add it (§8.3).
-3. Does a stationary vehicle survive indefinitely once unregistered, or does a threshold beyond the
-   90-second idle cull exist? §4.4 proves survival past 120 s only.
-4. What acceptance threshold defines "reproducible" — proposed starting bar: maximum per-vehicle
+3. What acceptance threshold defines "reproducible" — proposed starting bar: maximum per-vehicle
    positional deviation under half a vehicle length over ten minutes of simulated time, measured from
    CoT truth across two runs of the same seed.
-5. How much does a rebuild from an identical recipe perturb the generated `.xodr`? This sets the
+4. How much does a rebuild from an identical recipe perturb the generated `.xodr`? This sets the
    tolerance policy for the two-tier world-binding gate of §5.5, and is measured by rebuilding the same
    OSM extract twice and diffing the elevation profiles.
-6. How does an injected parking lane (§4.5) reconcile with the draped terrain? It inherits the sidewalk
+5. How does an injected parking lane (§4.5) reconcile with the draped terrain? It inherits the sidewalk
    mesh profile — a flat top with a downward skirt — so its elevation and the widened cross-section both
    interact with the drape, and whether it reads as a usable surface or a raised curb strip is
    unestablished.
