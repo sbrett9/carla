@@ -704,9 +704,14 @@ map-portability gap identified in §2.3 without any extension work.
 MCP server, extensions, templates and documentation. The canvas application itself is not in it: the
 workspace declares only `packages/*` and `docs-site`, the sole CI workflow tests the SDK, and the
 development server downloads a prebuilt bundle from the vendor's site. The application therefore cannot
-be built from source or forked. What *is* open, and Apache-2.0, is the part most likely to need
-changing: the OpenDRIVE and OpenSCENARIO **exporters live in `@drawtonomy/sdk`**, which is also the
-documented extension point for new target formats.
+be built from source or forked.
+
+There are **two OpenSCENARIO exporters**, and the distinction matters. The SDK carries one, in
+`packages/drawtonomy-sdk/src/exporter/openscenario.ts`, which turns drawn paths into
+`FollowTrajectoryAction` stories — that one is open, Apache-2.0, and is the documented extension point
+for new target formats. The scenario editing mode uses a different, richer exporter that lives in the
+closed application and emits phase-sequenced `SpeedAction`s with act chaining. Anything needing changes
+to *scenario* output is therefore not a local change. As §8.4 records, nothing does.
 
 Three consequences follow, of which the first two are already mitigated:
 
@@ -720,7 +725,50 @@ Three consequences follow, of which the first two are already mitigated:
    `.xosc` file rather than a proprietary format. The authoring tool is replaceable without disturbing
    anything downstream — which is the practical payoff of keeping the interchange format standard.
 
-### 8.4 The remaining build
+### 8.4 The authorable scenario vocabulary
+
+Read from the application bundle rather than inferred from samples. Twenty trigger types are offered to
+the author, **each valid as a phase-start trigger** as well as on an event and as a scenario end
+condition:
+
+| Group | Triggers |
+|---|---|
+| Timing | `immediately`, `afterTime` (simulation time), **`standStill` (with a duration)**, `elementState` (phase or event state) |
+| Spatial | `reachPosition`, `distanceToPosition`, `distanceToActor`, `traveledDistance`, `endOfRoad` |
+| Kinematic | `speed`, `relativeSpeed`, `acceleration`, `timeHeadway`, `timeToCollision` |
+| Environment | `trafficSignal`, `collision`, `offroad` |
+| Parametric | `parameter`, `variable`, `advanced` |
+
+**This closes the question of whether a long dwell is expressible: it is, with no exporter work.** The
+`standStill` trigger carries a duration and serialises to `<StandStillCondition duration="..."/>`. A
+dwell is authored as three phases — decelerate to zero, then a phase whose start trigger is *stand
+still* for the dwell length, then a phase returning to speed — with the scenario end condition raised
+past the total.
+
+Two sample exports informed this. A two-phase file confirmed the emitted shape: OpenSCENARIO 1.1, each
+authored phase becoming its own `Story` and `Act`, the act's `StartTrigger` carrying the real timing
+while the inner event fires immediately, and a stop emitted as a `SpeedAction` with
+`dynamicsShape="linear"` over two seconds to `AbsoluteTargetSpeed value="0"` — which is precisely the
+ramped stop measured as correct in §4.4. A three-phase file showed that the *default* phase-start
+trigger is `elementState` on the preceding act, which completes as soon as its speed ramp finishes, so
+a resume authored that way follows immediately and no dwell occurs. That is an authoring choice, not a
+tool limitation.
+
+**Road and lane identifiers survive the round trip.** The samples emit
+`LanePosition roadId="243" laneId="-1" s="70"`, and road 243 in the generating world is Centerville
+Lane, 191.998 m long, carrying exactly one driving lane at id −1. Every field resolves against the
+original network, so an exported scenario runs against the generated `.xodr` with no translation step.
+Identifiers are stable within a build but not guaranteed across rebuilds, which is what the world
+binding of §5.5 and decision D1 exist to police.
+
+Two smaller observations: no `ObjectController` is emitted, so nothing vendor-specific has to be
+stripped and the executor owns how actions are realised; and vendor properties such as
+`drawtonomy:template="sedan"` survive, giving a hook for blueprint selection. `ParameterDeclarations`
+came out empty in both samples, but `parameter` and `variable` triggers exist in the vocabulary, so
+the permutation layer may have a native hook rather than needing to be supplied entirely from this
+side.
+
+### 8.5 The remaining build
 
 With authoring, visualization and preview covered, what remains to be built is the execution side:
 
@@ -736,7 +784,7 @@ in §8.3 becomes unacceptable, or because the canvas cannot express something �
 option remains the lowest-risk route, since it can reference the existing map assemblies directly and
 the geometry work would not have to cross a language boundary.
 
-### 8.5 The authoring workflow, end to end
+### 8.6 The authoring workflow, end to end
 
 Where a human sits in the pipeline, and what is machine work:
 
@@ -774,22 +822,20 @@ Also resolved: the dwell mechanism and the idle-cull threshold are measured and 
 dwell demonstrated (§4.4), and a graphical
 authoring tool exists and works against a generated world (§8.3), which settles question 2 below in
 favour of `.xosc` as the authored artifact with the pattern spec reduced to a wrapper for the training
-metadata it cannot carry.
+metadata it cannot carry. The authorable trigger vocabulary is now read from the application itself
+(§8.4) and covers a long dwell without exporter work.
 
 Still open:
 
 1. Does replay reproduce vehicle motion closely enough to serve as the appearance-permutation
    mechanism, or is re-execution of the scenario required? Needs the two-run diff harness.
-2. Does the canvas's OpenSCENARIO export emit the trigger vocabulary a long dwell needs — `StandStill`
-   and `SimulationTime` conditions — or only trajectory following? If not, the exporter in
-   `@drawtonomy/sdk` is the documented place to add it (§8.3).
-3. What acceptance threshold defines "reproducible" — proposed starting bar: maximum per-vehicle
+2. What acceptance threshold defines "reproducible" — proposed starting bar: maximum per-vehicle
    positional deviation under half a vehicle length over ten minutes of simulated time, measured from
    CoT truth across two runs of the same seed.
-4. How much does a rebuild from an identical recipe perturb the generated `.xodr`? This sets the
+3. How much does a rebuild from an identical recipe perturb the generated `.xodr`? This sets the
    tolerance policy for the two-tier world-binding gate of §5.5, and is measured by rebuilding the same
    OSM extract twice and diffing the elevation profiles.
-5. How does an injected parking lane (§4.5) reconcile with the draped terrain? It inherits the sidewalk
+4. How does an injected parking lane (§4.5) reconcile with the draped terrain? It inherits the sidewalk
    mesh profile — a flat top with a downward skirt — so its elevation and the widened cross-section both
    interact with the drape, and whether it reads as a usable surface or a raised curb strip is
    unestablished.
