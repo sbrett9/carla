@@ -1653,7 +1653,8 @@ class World:
 
     def start_recording(self, camera, record_dir, hz=2.0, affiliation="n", stale=3.0,
                         fov=90.0, platform_type="uas-fixed", platform_affiliation="f",
-                        platform_callsign="OVERWATCH", platform_uid=None, distortion="none"):
+                        platform_callsign="OVERWATCH", platform_uid=None, distortion="none",
+                        run_id=None, scenario_id=None, seed=None):
         """Start native (C#) recording of `camera`'s imagery to `record_dir`: every 1/hz seconds a
         lossless PNG of the clean frame + a paired CoT-XML telemetry sidecar, encoded on the .NET thread
         pool (no Python/GIL in the hot path). Returns the FrameRecorder, or None if unavailable.
@@ -1664,7 +1665,13 @@ class World:
         or a raw CoT type string; `platform_affiliation` is the CoT standard identity (default 'f' friend,
         as the platform is our own collection asset); `platform_callsign`/`platform_uid` name the track
         (uid defaults to CARLA-SENSOR-<camera id>); `distortion` describes the lens model ('none' at CARLA
-        defaults)."""
+        defaults).
+
+        Every capture records the simulation tick that produced it, so a still and its sidecar are bound
+        to a simulation instant rather than to wall-clock time, which does not track the simulation
+        clock. `run_id` groups the captures of one execution (generated from the start time when not
+        given), `scenario_id` names the scenario driving the run, and `seed` records the integer the run
+        was started with so it can be reproduced."""
         if not _CARLANET_RECORDING_AVAILABLE:
             print("native recording unavailable: CarlaNet.Recording assembly not loaded "
                   "(rebuild the wheel/DLLs).", file=sys.stderr)
@@ -1676,8 +1683,13 @@ class World:
         cot_type = SensorPlatformOptions.ResolveCotType(str(platform_type), str(platform_affiliation))
         opts = SensorPlatformOptions(float(fov), cot_type, str(platform_callsign), str(uid),
                                      "sensor.camera.rgb", str(distortion))
+        # Positional through `workers` (0 = default worker count), since the run-identity arguments
+        # follow it in the C# signature.
         self._recorder = FrameRecorder(self._client, token, str(record_dir), float(hz),
-                                       str(affiliation), float(stale), opts)
+                                       str(affiliation), float(stale), opts, 0,
+                                       None if run_id is None else str(run_id),
+                                       None if scenario_id is None else str(scenario_id),
+                                       None if seed is None else int(seed))
         return self._recorder
 
     def stop_recording(self):

@@ -829,7 +829,7 @@ def _iso(dt: datetime) -> str:
 
 
 def to_cot(rec, affiliation="n", stale_seconds=3.0, source="truth", uid_prefix="CARLA-TRUTH",
-           when=None, solar=None) -> str:
+           when=None, solar=None, capture=None) -> str:
     """Render one get_vehicle_telemetry() dict as a CoT <event> XML string. `when` (a UTC datetime)
     pins the event time to a specific instant — used so a recorded sidecar matches its PNG exactly.
     `solar` (a get_solar_state() dict) adds a <_solar> element carrying the sun in effect; for recorded
@@ -858,6 +858,11 @@ def to_cot(rec, affiliation="n", stale_seconds=3.0, source="truth", uid_prefix="
         "height_m": f"{rec['height_m']:.2f}", "color": rec["color"], "role_name": rec["role_name"],
         "vx": f"{rec['vx']:.2f}", "vy": f"{rec['vy']:.2f}", "vz": f"{rec['vz']:.2f}",
     })
+    if capture is not None:
+        # The recorded sidecars carry the capture identity on their <events> root, but the live feed is
+        # one event per datagram and has no such container, so each event carries it here instead.
+        # <detail> is the sanctioned extension point, which keeps the event itself standard.
+        ET.SubElement(detail, "_capture", capture.attributes())
     if solar:
         ET.SubElement(detail, "_solar", {
             "solar_time": f"{solar['solar_time']:.4f}",
@@ -869,6 +874,42 @@ def to_cot(rec, affiliation="n", stale_seconds=3.0, source="truth", uid_prefix="
             "rate": f"{solar['rate']:g}",
         })
     return ET.tostring(ev, encoding="unicode")
+
+
+class SimClock:
+    """Latest world tick and simulation time, cached from the world-observer stream.
+
+    Wall-clock time does not track the simulation clock — a world ticking at a fixed step falls behind
+    under load — so an emitted track is stamped with the tick that produced it. The recorder reads the
+    tick from each sensor frame's own header; the live feed has no frame to read, so it subscribes here.
+    """
+
+    def __init__(self, world, run_id=None, scenario_id=None, seed=None):
+        self.frame = 0
+        self.sim_time = 0.0
+        self.run_id = run_id
+        self.scenario_id = scenario_id
+        self.seed = seed
+        try:
+            world.on_tick(self._on_tick)
+        except Exception as e:
+            print(f"tick subscription failed; emitted telemetry will report tick 0: {e!r}",
+                  file=sys.stderr)
+
+    def _on_tick(self, ts):
+        self.frame = int(ts.frame)
+        self.sim_time = float(ts.elapsed_seconds)
+
+    def attributes(self):
+        """Capture identity as CoT attribute strings, matching the recorded sidecar's root attributes."""
+        a = {"tick": str(self.frame), "sim_time_s": f"{self.sim_time:.6f}"}
+        if self.run_id is not None:
+            a["run_id"] = str(self.run_id)
+        if self.scenario_id is not None:
+            a["scenario_id"] = str(self.scenario_id)
+        if self.seed is not None:
+            a["seed"] = str(int(self.seed))
+        return a
 
 
 class CotUdpEmitter:
@@ -890,10 +931,11 @@ class TelemetryController:
     """CoT-over-UDP emitter as a steppable subsystem. Needs the georeference origin; if it is
     missing the toggle is disabled. Off by default."""
 
-    def __init__(self, world, origin, args):
+    def __init__(self, world, origin, args, clock=None):
         self.world = world
         self.origin = origin
         self.args = args
+        self.clock = clock
         self.available = origin is not None
         self.reason = "" if self.available else "no georeference origin (get_cesium_origin failed)"
         self.enabled = False
@@ -939,7 +981,8 @@ class TelemetryController:
         except Exception:
             solar = None
         for r in recs:
-            xml = to_cot(r, affiliation=self.args.affiliation, stale_seconds=self.args.stale, solar=solar)
+            xml = to_cot(r, affiliation=self.args.affiliation, stale_seconds=self.args.stale,
+                         solar=solar, capture=self.clock)
             self.emit.send(xml)
             if self.args.echo:
                 print(xml)
@@ -957,10 +1000,11 @@ class NativeRecorder:
     viewer stays smooth while recording. SCTMV only toggles it (want_enabled / apply_want / trigger /
     saved / recording / stop), so the loop, hotkey, and HUD stay decoupled from the recorder."""
 
-    def __init__(self, world, camera, args):
+    def __init__(self, world, camera, args, run_id=None):
         self.world = world
         self.camera = camera
         self.args = args
+        self.run_id = run_id
         self.available = bool(getattr(carla, "_CARLANET_RECORDING_AVAILABLE", False))
         self.recording = False
         self.want_enabled = False
@@ -979,7 +1023,8 @@ class NativeRecorder:
                 platform_type=self.args.platform_type,
                 platform_affiliation=self.args.platform_affiliation,
                 platform_callsign=self.args.platform_callsign,
-                platform_uid=self.args.platform_uid)
+                platform_uid=self.args.platform_uid,
+                run_id=self.run_id, seed=self.args.seed)
             if self._handle is None:
                 self.want_enabled = False
                 return
@@ -1516,7 +1561,10 @@ def main() -> int:
     traffic = TrafficController.create(world, client, tm, args)
     if not traffic.available:
         print(f"traffic unavailable: {traffic.reason}", file=sys.stderr)
-    telemetry = TelemetryController(world, cot_origin, args)
+    run_id = f"run-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
+    sim_clock = SimClock(world, run_id=run_id, seed=args.seed)
+    print(f"run id: {run_id}")
+    telemetry = TelemetryController(world, cot_origin, args, clock=sim_clock)
     if not telemetry.available:
         print(f"telemetry unavailable: {telemetry.reason}", file=sys.stderr)
     # recorder is created after the EO camera is spawned (the native backend needs the camera handle).
@@ -1654,7 +1702,7 @@ def main() -> int:
     # Recorder: the native (C#) FrameRecorder encodes frames in .NET off the GIL. If the
     # CarlaNet.Recording assembly is absent the recorder reports itself unavailable when toggled (the
     # whole client is CarlaNet, so a missing recording assembly means the build itself is incomplete).
-    recorder = NativeRecorder(world, camera, args)
+    recorder = NativeRecorder(world, camera, args, run_id=run_id)
     print(f"recording backend: native (C#) -> {args.record_dir}")
 
     def process_depth(img):
