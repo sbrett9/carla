@@ -47,6 +47,7 @@ Controls (hold RIGHT MOUSE to fly, like the Unreal editor):
     B             toggle the OSM PERIMETER overlay (red rectangle + corner posts)
     M             toggle the MARGIN/interior-boundary overlay (blue rectangle)
     T             toggle TRAFFIC on/off (staging fade traffic)
+    X             run/stop the OpenSCENARIO storyboard given by --scenario
     Y             toggle TELEMETRY (CoT over UDP) on/off
     F             toggle RECORDING (periodic PNG of the clean frame + matching CoT-XML sidecar)
     Space         reset to the start pose
@@ -205,6 +206,13 @@ def parse_args():
                       help="use the Traffic Manager's custom-path routing to send each vehicle toward "
                            "a far edge. OFF by default because routing can occasionally push a vehicle "
                            "off the road or off a clipped dead-end.")
+
+    scen = ap.add_argument_group("scenario")
+    scen.add_argument("--scenario", default=None,
+                      help="an ASAM OpenSCENARIO storyboard (.xosc) to run against the built world; "
+                           "loaded at startup so problems surface immediately, and started with X. "
+                           "Positions are resolved against the road network the server has loaded, so "
+                           "the storyboard must have been authored against this same world.")
 
     tel = ap.add_argument_group("CoT telemetry (phase 4)")
     tel.add_argument("--tak-host", default="239.2.3.1",
@@ -984,6 +992,64 @@ class TelemetryController:
             self.emit.close()
 
 
+class ScenarioController:
+    """Runs an OpenSCENARIO storyboard as a steppable subsystem.
+
+    Only toggling happens here. Parsing, entity placement, trigger evaluation and vehicle commands all
+    run in .NET off the world tick, so nothing about scenario timing depends on this loop or on the
+    interpreter — update() does no work at all.
+    """
+
+    def __init__(self, world, path, traffic_manager):
+        self.world = world
+        self.path = path
+        self.tm = traffic_manager
+        self.available = path is not None
+        self.reason = "" if self.available else "no scenario given (--scenario)"
+        self.running = False
+        self.want_enabled = False
+        self._executor = None
+
+    def apply_want(self):
+        if self.want_enabled and not self.running:
+            if not self.available:
+                print(f"scenario toggle ignored: {self.reason}", file=sys.stderr)
+                self.want_enabled = False
+                return
+            try:
+                self._executor = self.world.start_scenario(self.path, self.tm, report=self._report)
+            except Exception as e:
+                print(f"scenario failed to start: {e}", file=sys.stderr)
+                self._executor = None
+            if self._executor is None:
+                self.want_enabled = False
+                return
+            self.running = True
+            print(f"scenario ON -> {os.path.basename(self.path)}")
+        elif not self.want_enabled and self.running:
+            self.world.stop_scenario()
+            self._executor = None
+            self.running = False
+            print("scenario OFF")
+
+    @staticmethod
+    def _report(line):
+        print(f"  scenario: {line}")
+
+    def update(self, now):
+        # The executor advances itself from the world tick; if it finished on its own, reflect that.
+        if self.running and self._executor is not None and not self._executor.Running:
+            self._executor = None
+            self.running = False
+            self.want_enabled = False
+            print("scenario finished")
+
+    def status(self):
+        if self._executor is None:
+            return "off"
+        return f"{self._executor.ElapsedSeconds:.0f}s {self._executor.ActsComplete}/{self._executor.ActCount}"
+
+
 class NativeRecorder:
     """Drives the in-engine (C#) FrameRecorder: camera frames are tapped, encoded to PNG, and written
     with their CoT-XML telemetry sidecar (vehicle tracks + the collection platform as a CoT air track)
@@ -1694,6 +1760,9 @@ def main() -> int:
     # CarlaNet.Recording assembly is absent the recorder reports itself unavailable when toggled (the
     # whole client is CarlaNet, so a missing recording assembly means the build itself is incomplete).
     recorder = NativeRecorder(world, camera, args, run_id=run_id)
+    scenario = ScenarioController(world, args.scenario, tm)
+    if args.scenario:
+        print(f"scenario armed: {os.path.basename(args.scenario)} (X to run)")
     print(f"recording backend: native (C#) -> {args.record_dir}")
 
     def process_depth(img):
@@ -1770,6 +1839,10 @@ def main() -> int:
                 telemetry.apply_want(); telemetry.update(now)
             except Exception as e:
                 print(f"telemetry worker: {e!r}", file=sys.stderr)
+            try:
+                scenario.apply_want(); scenario.update(now)
+            except Exception as e:
+                print(f"scenario worker: {e!r}", file=sys.stderr)
             try:
                 recorder.apply_want(); recorder.trigger(now, state["surface"])
             except Exception as e:
@@ -1910,6 +1983,8 @@ def main() -> int:
                     telemetry.want_enabled = not telemetry.want_enabled
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_f:
                     recorder.want_enabled = not recorder.want_enabled    # PNG + CoT XML capture
+                elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_x:
+                    scenario.want_enabled = not scenario.want_enabled
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_p:
                     if camera_controller.orbit_enabled:
                         camera_controller.toggle_orbit_pause()
@@ -1988,6 +2063,8 @@ def main() -> int:
                 except Exception as e: print(f"traffic.update failed: {e!r}", file=sys.stderr)
                 try: telemetry.apply_want(); telemetry.update(now)
                 except Exception as e: print(f"telemetry.update failed: {e!r}", file=sys.stderr)
+                try: scenario.apply_want(); scenario.update(now)
+                except Exception as e: print(f"scenario.update failed: {e!r}", file=sys.stderr)
                 try: recorder.apply_want(); recorder.trigger(now, state["surface"])
                 except Exception as e: print(f"recorder failed: {e!r}", file=sys.stderr)
             else:

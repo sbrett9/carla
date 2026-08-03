@@ -101,6 +101,15 @@ try:
 except FileNotFoundError:
     _CARLANET_RECORDING_AVAILABLE = False
 
+# Scenario execution (CarlaNet.Scenario): parses an ASAM OpenSCENARIO storyboard and drives it from
+# the world tick entirely in .NET, so scenario timing never depends on interpreter scheduling. Optional
+# — a missing assembly simply leaves start_scenario unavailable.
+try:
+    _ref("CarlaNet.Scenario")
+    _CARLANET_SCENARIO_AVAILABLE = True
+except FileNotFoundError:
+    _CARLANET_SCENARIO_AVAILABLE = False
+
 # ── C# type imports ───────────────────────────────────────────────────────────
 from CarlaNet.Transport import CarlaClient as _CarlaClient
 from CarlaNet.Types.Geom import (Transform as _CSTransform,
@@ -1691,6 +1700,52 @@ class World:
                                        None if scenario_id is None else str(scenario_id),
                                        None if seed is None else int(seed))
         return self._recorder
+
+    def start_scenario(self, path, traffic_manager, report=None):
+        """Run an ASAM OpenSCENARIO storyboard against the loaded world. Returns the executor, or None
+        if unavailable.
+
+        Parsing, entity placement, trigger evaluation and vehicle commands all happen in .NET, driven by
+        the world tick. Python starts and stops a scenario and does not participate in its execution, so
+        scenario timing does not depend on interpreter scheduling or on round trips through this client.
+
+        `traffic_manager` is the TrafficManager the scenario's vehicles are driven by, as returned by
+        `Client.get_trafficmanager()`. `report` receives one line per state change — an act starting, a
+        vehicle stopping — and is called from the tick thread, so it must not block."""
+        if not _CARLANET_SCENARIO_AVAILABLE:
+            print("scenario execution unavailable: CarlaNet.Scenario assembly not loaded "
+                  "(rebuild the wheel/DLLs).", file=sys.stderr)
+            return None
+        from CarlaNet.Scenario import OpenScenarioParser, RoadNetwork, ScenarioExecutor
+        from System import Action, String
+
+        self.stop_scenario()
+        definition = OpenScenarioParser.LoadFile(str(path))
+
+        # Resolve the storyboard's road-referenced positions against the network the server actually
+        # has loaded, rather than against the file the scenario names.
+        network = RoadNetwork.FromOpenDrive(_sync(self._client.GetMapDataAsync()))
+
+        native_tm = getattr(traffic_manager, "_tm", None)
+        if native_tm is None:
+            raise RuntimeError(
+                "a working TrafficManager is required to run a scenario; get_trafficmanager() "
+                "returned a fallback, so the CarlaNet.Map / CarlaNet.TrafficManager assemblies are "
+                "probably missing")
+
+        callback = Action[String](report) if report is not None else None
+        self._scenario = ScenarioExecutor(self._client, native_tm, definition, network, callback)
+        return self._scenario
+
+    def stop_scenario(self):
+        """Stop a running scenario and remove the vehicles it placed."""
+        s = getattr(self, "_scenario", None)
+        if s is not None:
+            try:
+                s.Dispose()
+            except Exception:
+                pass
+            self._scenario = None
 
     def stop_recording(self):
         """Stop native recording (flushes pending captures)."""
