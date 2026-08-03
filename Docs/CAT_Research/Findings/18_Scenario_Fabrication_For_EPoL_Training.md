@@ -557,11 +557,27 @@ post-process, and the EPoL trainer, everything they cannot re-derive.
   fields so an image and its truth are joinable without filename matching.
 - **`sim_time_s`** — `tick × fixed_delta`. Emitted alongside `tick` rather than derived, because
   `fixed_delta` is a run parameter and a future run may change it.
-- Current timestamps are **wall-clock UTC** in both emitters (`CotWriter.cs:170`; `datetime.now()` in
-  `SCTMV.to_cot`). Two runs of the same scenario therefore carry unrelated times and cannot be diffed
-  without re-alignment — and wall clock does not track the world in any case: the measurement in §5.4
-  recorded 50.6 s of simulation during 60 s of wall clock. This is the single highest-value addition
-  and a precondition for the reproducibility harness.
+- Timestamps were **wall-clock UTC** in both emitters. Two runs of the same scenario therefore carried
+  unrelated times and could not be diffed without re-alignment — and wall clock does not track the world
+  in any case. **Implemented and verified 2026-07-31**: every recorded capture and every emitted track
+  now carries the simulation tick that produced it. Three properties of the implementation are worth
+  recording, each measured rather than assumed:
+
+  - **The clock ratio is not a constant.** One session ran at 16.9 ticks per second against a 20 Hz
+    target (84% of real time); another ran at 19.8 (99%). Had the offset been fixed it could have been
+    calibrated away and timestamps kept; it is not, so it cannot.
+  - **The tick is episode-scoped, not run-scoped.** It belongs to the server's episode and keeps
+    advancing between sessions — the world free-runs once an interactive session hands it back, observed
+    at roughly 171 ticks per second with no client driving it, so consecutive runs began 190,000 ticks
+    apart. The absolute value pairs artifacts within a run; **comparing runs requires normalising against
+    each run's first tick.** This is what D3's "from a defined starting event" means in practice.
+  - **The two emission paths agree.** The recorder takes the tick from the C# sensor frame header; the
+    live feed takes it from a world-observer tick subscription in Python. A live event and a sidecar
+    written at the same moment reported ticks 9761 and 9760 — one tick, 50 ms apart — so both track the
+    world clock rather than drifting independently.
+
+  Consecutive captures advance by exactly the expected number of ticks (ten, at a 0.05 s step recording
+  at 2 Hz), across every session measured.
 - **`run_id`, `scenario_id`, `seed`, `spec_version`** — grouping and reproduction.
 
 ### 6.2 The training label
@@ -586,6 +602,11 @@ report (distinct from *heading*, which is where the vehicle is pointed and remai
 defined at rest). Since the headline pattern class involves parked and loitering vehicles, the case
 where `course` is undefined is exactly the case of interest, and an oriented bounding box needs true
 yaw. Vehicle attitude is available in engine state and is currently discarded.
+
+Observed on the live feed rather than argued from the standard: two stationary vehicles in a single emit
+cycle broadcast `course="271.8"` at 0.01 m/s and `course="299.3"` at 0.00 m/s. Both bearings are noise
+from a near-zero velocity vector, and this is the ordinary case for every loitering vehicle a pattern
+contains.
 
 ### 6.4 Note for detector-derived tracks
 
