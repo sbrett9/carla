@@ -909,10 +909,17 @@ synchronous clock (§4.7).
 
 Still open:
 
-1. **Does a dwell hold and release in a running scenario?** Everything it depends on is in place — the
-   trigger is read, the stopping mechanism is measured, a 45-minute hold is demonstrated — but no
-   storyboard has yet combined them. This is the nearest thing to a critical path, since a dwell is the
-   elementary pattern the training case is built on.
+1. **Does the simulator hold up at the scale a useful capture needs?** Execution is demonstrated with
+   six vehicles over a hundred seconds. What is unestablished is behaviour at the vehicle counts,
+   scenario lengths and map sizes a training capture actually calls for, and whether replay of a
+   capture at that size stays faithful. This is the priority among the questions below.
+
+   A dwell — a vehicle holding station beside a road and releasing — is one storyboard worth running
+   as part of that, and everything it needs is in place: the trigger is read, the stopping mechanism
+   is measured, a 45-minute hold is demonstrated. But it is **one exemplar of a pattern a model might
+   flag, not the pattern the model is built around**. The estimated pattern of life is the
+   distribution of ordinary behaviour; a dwell is simply one departure from it that is easy to
+   describe. Treating it as the critical path would narrow the capture to a single anomaly class.
 2. **How should a storyboard say which vehicle it wants?** A category maps every car in a scenario onto
    one blueprint, and a template hint names something this simulator does not have (§8.4). Mapping to a
    set and choosing per entity from the run seed would give appearance variety without touching
