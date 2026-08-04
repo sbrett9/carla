@@ -1,9 +1,10 @@
 # 18 — Scenario Fabrication for Pattern-of-Life Model Training
 
-**Status:** Research / design note. No code changed. Three findings were validated against a running
-server rather than inferred: the recorder and replayer (§5.4), the dwell mechanisms and the idle cull
-(§4.4), and the authoring tool against a generated world (§8.3).
-**Date:** 2026-07-28, amended 2026-07-30
+**Status:** Research and design note, now with an implementation behind it. Storyboards authored in the
+canvas execute against generated worlds (§4.7). Findings validated against a running server rather than
+inferred: the recorder and replayer (§5.4), the dwell mechanisms and the idle cull (§4.4), the authoring
+tool against a generated world (§8.3), and scenario execution (§4.7).
+**Date:** 2026-07-28, amended 2026-08-04
 **Scope:** Whether `carla-simulator/scenario_runner` (and the ASAM OpenSCENARIO storyboard model it
 parses) is the right foundation for a scenario-fabrication suite whose purpose is to train an
 **estimated pattern-of-life (EPoL)** model for vehicles; the code changes such a suite would need in
@@ -401,6 +402,48 @@ scenarios and both worth tracking separately:
 | 3 | OpenSCENARIO 1.x front-end compiling to the pattern spec, including `GeoPosition` | Tooling |
 | — | Engine (C++) | **No changes required** for any tier |
 
+### 4.7 Executing storyboards (2026-08-04)
+
+Implemented in `CarlaNet.Scenario` and driven from the viewer with `--scenario` and a hotkey. Parsing,
+position resolution, trigger evaluation and vehicle commands all run in .NET off the world tick; the
+Python client starts and stops a scenario and takes no part in running it, so scenario timing does not
+depend on interpreter scheduling.
+
+Supported: entities placed by lane position, routes assigned at initialisation or by an action, speed
+actions with an absolute target and a transition time, entity removal, and triggers on simulation time,
+a preceding act completing, an entity standing still for a duration, and an entity reaching a position.
+Parameter declarations are read and can be overridden by the caller. Constructs outside that set are
+refused by name at load rather than ignored, so a scenario never runs as something other than what it
+says.
+
+**Verified against a running world under a synchronous clock.** A six-vehicle routed convoy exported
+from the authoring tool ran twice consecutively: both completed, speeds agreed exactly at five-second
+intervals, removals landed within 0.7 s of each other across a hundred seconds of driving, and the
+scenario ended within 0.2 s of the same time. Reproducibility of this order was not expected before the
+synchronous-tick work of §7, and its absence is therefore not the obstacle it was assumed to be for
+scenario execution — though it remains one for the controlled-deviation experiments of §1.
+
+Three defects surfaced only in a running world, each of which presented as unpredictable behaviour:
+
+- **A route's first waypoint is customarily the start of the road the vehicle already stands on**, which
+  lies behind it. Followed literally the convoy turned at the first junction and collided. Leading
+  waypoints behind the vehicle are dropped; later ones are kept, since a waypoint behind the vehicle
+  further along a route is a loop.
+- **Placing a vehicle above the road and letting it fall makes the outcome depend on timing.** Vehicles
+  are now set down at the resting height computed from their own bounding box, and are registered and
+  commanded on the first tick after the world reports them rather than at the moment they are created.
+- **Removal issued without waiting for it** left a scenario started straight after another placed into a
+  world still holding the previous run's vehicles; one left across the carriageway holds stationary
+  whatever is placed behind it. Removal now waits, and placement reports any vehicle close enough to
+  obstruct.
+
+The common thread is worth recording: each presented as intermittency, and each was found by measuring
+rather than reasoning. Two systemic explanations were advanced from weak evidence and both were wrong.
+
+**Not yet exercised at runtime: the dwell.** The stand-still trigger is read and unit-tested, and the
+stopping mechanism it depends on is measured in §4.4, but no scenario has yet held a vehicle stationary
+for a duration and released it. That is the mechanism the pattern-of-life case rests on.
+
 ## 5. Recorder / replayer audit
 
 Motivation: if server-side record-and-replay works, "same behavior, many appearances" (time of day,
@@ -782,12 +825,27 @@ original network, so an exported scenario runs against the generated `.xodr` wit
 Identifiers are stable within a build but not guaranteed across rebuilds, which is what the world
 binding of §5.5 and decision D1 exist to police.
 
-Two smaller observations: no `ObjectController` is emitted, so nothing vendor-specific has to be
-stripped and the executor owns how actions are realised; and vendor properties such as
-`drawtonomy:template="sedan"` survive, giving a hook for blueprint selection. `ParameterDeclarations`
-came out empty in both samples, but `parameter` and `variable` triggers exist in the vocabulary, so
-the permutation layer may have a native hook rather than needing to be supplied entirely from this
-side.
+No `ObjectController` is emitted, so nothing vendor-specific has to be stripped and the executor owns
+how actions are realised. `ParameterDeclarations` was empty in the first two samples but is used by
+later ones, and `parameter` and `variable` triggers exist in the vocabulary, so parameterisation is
+authorable rather than something to be supplied entirely from this side.
+
+**A storyboard cannot say which vehicle it wants in terms this simulator understands.** An earlier
+reading of the vendor property `drawtonomy:template="sedan"` recorded it as a hook for blueprint
+selection. It is not one, in either of the two forms a storyboard takes:
+
+- **A template hint names a template in the authoring tool**, not a blueprint here. No blueprint
+  identifier in this fork's worlds contains "sedan", so the hint matches nothing and is discarded.
+- **Category alone is coarser still.** A storyboard that carries only `vehicleCategory` — as the
+  six-vehicle sample does — gives one word for every car in the scenario, so all of them resolve to the
+  same blueprint. Five identical vehicles in one convoy is worse than arbitrary for imagery meant to
+  train a detector, which would be learning to recognise one car.
+
+Selection currently falls back to category with a preference for ordinary vehicles over emergency and
+goods ones, which is correct but yields no variety. The fix is to map a category, and any template
+hint, to a **set** of blueprints and choose per entity from the run seed: variety in appearance without
+any change in behaviour, and reproducible because the seed drives it. That is the appearance axis of
+§1 varying independently of the behaviour axis, which is what the training set needs.
 
 ### 8.5 The remaining build
 
@@ -846,17 +904,28 @@ favour of `.xosc` as the authored artifact with the pattern spec reduced to a wr
 metadata it cannot carry. The authorable trigger vocabulary is now read from the application itself
 (§8.4) and covers a long dwell without exporter work.
 
+Also resolved on 2026-08-04: storyboards execute against generated worlds, reproducibly, under a
+synchronous clock (§4.7).
+
 Still open:
 
-1. Does replay reproduce vehicle motion closely enough to serve as the appearance-permutation
+1. **Does a dwell hold and release in a running scenario?** Everything it depends on is in place — the
+   trigger is read, the stopping mechanism is measured, a 45-minute hold is demonstrated — but no
+   storyboard has yet combined them. This is the nearest thing to a critical path, since a dwell is the
+   elementary pattern the training case is built on.
+2. **How should a storyboard say which vehicle it wants?** A category maps every car in a scenario onto
+   one blueprint, and a template hint names something this simulator does not have (§8.4). Mapping to a
+   set and choosing per entity from the run seed would give appearance variety without touching
+   behaviour, and is the appearance axis of §1.
+3. Does replay reproduce vehicle motion closely enough to serve as the appearance-permutation
    mechanism, or is re-execution of the scenario required? Needs the two-run diff harness.
-2. What acceptance threshold defines "reproducible" — proposed starting bar: maximum per-vehicle
+4. What acceptance threshold defines "reproducible" — proposed starting bar: maximum per-vehicle
    positional deviation under half a vehicle length over ten minutes of simulated time, measured from
    CoT truth across two runs of the same seed.
-3. How much does a rebuild from an identical recipe perturb the generated `.xodr`? This sets the
+5. How much does a rebuild from an identical recipe perturb the generated `.xodr`? This sets the
    tolerance policy for the two-tier world-binding gate of §5.5, and is measured by rebuilding the same
    OSM extract twice and diffing the elevation profiles.
-4. How does an injected parking lane (§4.5) reconcile with the draped terrain? It inherits the sidewalk
+6. How does an injected parking lane (§4.5) reconcile with the draped terrain? It inherits the sidewalk
    mesh profile — a flat top with a downward skirt — so its elevation and the widened cross-section both
    interact with the drape, and whether it reads as a usable surface or a raised curb strip is
    unestablished.
