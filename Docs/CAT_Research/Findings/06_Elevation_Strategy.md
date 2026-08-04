@@ -369,6 +369,10 @@ changes.
 *Added 2026-06-11. Triggered by the Bellevue Rd / I-580 overpass test (`Import/Bellvue_Overpass.osm`,
 center 39.247132, -119.813761) and an Overpass-turbo `way["bridge"]` / `way["highway"]` pull around it.*
 
+*Amended 2026-08-04 after measuring the Arapahoe Ave / I-25 interchange (`Import/Arapahoe_I25.osm`).
+The measurements replace the constant-offset-first proposal with per-layer surface routing, and record
+why tuning the de-spike threshold cannot work.*
+
 ### The defect
 Sampling a surface and writing **one Z per road-centerline point** cannot represent two roads at the
 same plan position and different height. At the Bellevue Rd / I-580 crossing the deck and the freeway
@@ -407,25 +411,96 @@ No `ele` on any road node — but the bridge is fully described *topologically*:
   the `.osm` during conversion; Overpass-turbo is the **inspection/validation** tool (and a way to
   enrich a too-sparse export).
 
-### Proposed fix (records the bridge-offset idea)
-A bridge-aware elevation pass, at OSM level (pre-netconvert) or as a post-inject correction:
-1. For every `bridge=yes` way, offset its elevation profile by `layer × clearance`. Default
-   **clearance ≈ 5 m** (AASHTO min vertical clearance over an interstate ≈ 16′6″ ≈ 5.0 m); `layer`
-   generalizes stacked structures.
-2. **Ramp the approaches** on the ways sharing the deck's end-nodes so the deck is a smooth hump, not a
-   step.
-3. *Optional refinement* — **differential Cesium sampling**: densify the deck span and sample the Google
-   mesh (which *does* contain the physical deck) to recover the *real* clearance instead of the
-   constant. Noisier (deck thickness / mesh see-through) → gate behind a sanity range.
-4. Generalizes to **every layered crossing in OSM worldwide** — fits procedural-city generation, not a
-   Bellevue one-off.
+### Measured at Arapahoe Ave / I-25 (2026-08-04)
+*Reproduce with `CarlaNet/python/probe_overpass.py --osm Import/Arapahoe_I25.osm`. It reads the drape
+cache written during the build (the exact DSM/DTM grids the pipeline consumed) plus the source `.osm`;
+it makes no server calls, so it is safe to run against a live session. Measured over the 478×971 grid
+at 2 m spacing built from `Import/Arapahoe_I25.osm` (11 323 nodes, 688 road ways).*
 
-### Integration caveat (the main implementation cost)
-netconvert's OSM→`.xodr` almost certainly does **not** emit a "bridge" attribute, and `ElevationInjector`
-currently sees only the `.xodr`. To know which `.xodr` road is a deck, either **(a)** do the lift as
-**OSM preprocessing before netconvert** (raise deck nodes / split + tag), or **(b)** map `.xodr` road →
-OSM way id (netconvert can emit original IDs) so the injector can cross-reference the OSM CarlaNet
-already holds. Recorded, not built.
+`DrapeTerrain.Despike` decides per grid cell:
+
+```csharp
+double gap = DSM[i] - DTM[i];
+draped[i] = Math.Abs(gap) <= maxDrapeMeters ? DSM[i] : DTM[i];   // build default 5.0, no CLI flag
+```
+
+followed by two unconditional passes of a 3×3 box blur, which smears whatever it selected across the
+DSM↔DTM boundary. **The 5 m threshold falls inside the clearance distribution it is meant to
+discriminate against**, so a single interchange exhibits both failure modes at once. Of 16 plan
+crossings:
+
+| Outcome | Crossings | Gap at the crossing | Despike selects |
+|---|---|---|---|
+| Road **below** lifted onto the deck | **10** | 2.96 – 4.93 m | DSM |
+| Deck **collapsed** to bare earth | **4** | 5.87 – 6.69 m | DTM |
+| No elevated structure in the mesh | 2 | ≈ −0.88 m | — |
+
+Under a metre of real-world clearance flips the decision. This is the visible artefact: ways passing
+under Arapahoe climb a blurred ramp into the deck, while decks 300 m away sink into the ground.
+
+**Two further measurements that shape the fix:**
+
+1. **The photoreal does contain the decks.** 14 of 16 crossings show a distinct elevated surface
+   2.9 – 6.7 m above bare earth — genuine AASHTO-range clearances. The differential-sampling idea is
+   therefore viable *as the primary mechanism*, not a refinement: sampling the DSM on a deck recovers
+   that structure's real clearance with no constant. The 2 crossings with nothing elevated are the
+   case a constant must still cover.
+2. **The photoreal-vs-bare-earth offset is systematic and tight.** Over 4 218 open-road samples:
+   median **−0.82 m**, p10 −0.92, p90 −0.68 — a 0.24 m spread, and **negative** (Google's photoreal
+   sits below Cesium World Terrain at this site). The same population's maximum of 29.74 m is a
+   building, confirming the threshold does real work against non-bridge clutter.
+
+### Why no gap threshold can fix this
+Structural, not statistical: **a deck and the road beneath it occupy the same grid cell.** One cell
+holds one gap value, so no per-cell rule — raw threshold, offset-corrected residual, percentile —
+can hand two roads different Z from one number. Tuning `maxDrapeMeters` moves which of the two
+artefacts you get; it cannot remove both.
+
+A **residual** threshold (gap minus the systematic median, which the `area` height-align path already
+computes) is still worth adopting for the *heightfield*, where the job is rejecting buildings and
+canopy: a −0.82 ± 0.12 m baseline supports a ~2 m residual test far more crisply than a raw 5 m one.
+That is terrain quality, and it does not address grade separation.
+
+### The fix: route each road to the surface its layer selects
+Elevation comes from the surface appropriate to the road, chosen from OSM topology:
+
+| Road | Elevation source | Rationale |
+|---|---|---|
+| `layer > 0` (deck) | **DSM** (photoreal) | The deck is the topmost surface, so a vertical sample returns it — with its true clearance. |
+| `layer = 0` | **DTM** (bare earth) + systematic offset | Bare earth is uncontaminated by whatever is overhead. |
+| `layer < 0` / `tunnel` | DTM, less depth | Same argument inverted. |
+
+Both surfaces are already sampled on the same grid — the drape offset field is `DrapedZ − DTM`, so
+the DTM is recoverable everywhere. **Only the per-road layer classification is missing.**
+
+Fallback for structures the photogrammetry did not reconstruct (2 of 16 here): the original constant,
+`layer × clearance` with clearance ≈ 5 m, applied when the DSM shows no elevation over the span.
+Approaches still need ramping on the ways sharing the deck's end-nodes so the deck is a hump, not a
+step.
+
+**Detecting the crossings needs no tags.** OSM creates a junction only where ways share a node, so
+"crosses in plan, shares no node" *is* grade separation. On this file that test found all 16 crossings
+while only 6 ways carry `bridge=*` — it carries to under-tagged areas, with `layer` supplying
+direction where present.
+
+### The collision heightfield cannot represent a grade separation
+One Z per cell is a hard limit of the Chaos heightfield, so even a perfect `.xodr` leaves physical
+seating under an overpass unrepresentable by the drape. **Anchor the heightfield to the lower surface**
+(bare earth plus the systematic offset under a deck — the DTM readings under these crossings are
+consistent at 1731–1744 m) and let decks carry their own road-mesh collision. Settle this before
+building the elevation side; it decides what the drape pass is allowed to write over a deck footprint.
+
+### Integration cost, revised
+§10 originally flagged the `.xodr` road → OSM way correlation as the main cost, on the grounds that
+`ElevationInjector` sees only the `.xodr`. That is cheaper than it was:
+- `SignInjector` already reads the raw `.osm` for node tags and snaps geometrically — working
+  precedent for exactly this correlation.
+- `OsmConverter` already emits the `.net.xml` beside the `.xodr` (`--output-file`), and
+  `TrafficLightInjector` already consumes it, so a second cross-reference path exists and is plumbed.
+- netconvert's `--output.original-names` records OSM way ids as `origId` params, if the geometric
+  route proves fragile.
+
+Still unbuilt; the design above supersedes the constant-offset-first framing.
 
 ---
 
