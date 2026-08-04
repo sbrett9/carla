@@ -101,6 +101,15 @@ try:
 except FileNotFoundError:
     _CARLANET_RECORDING_AVAILABLE = False
 
+# Scenario execution (CarlaNet.Scenario): parses an ASAM OpenSCENARIO storyboard and drives it from
+# the world tick entirely in .NET, so scenario timing never depends on interpreter scheduling. Optional
+# — a missing assembly simply leaves start_scenario unavailable.
+try:
+    _ref("CarlaNet.Scenario")
+    _CARLANET_SCENARIO_AVAILABLE = True
+except FileNotFoundError:
+    _CARLANET_SCENARIO_AVAILABLE = False
+
 # ── C# type imports ───────────────────────────────────────────────────────────
 from CarlaNet.Transport import CarlaClient as _CarlaClient
 from CarlaNet.Types.Geom import (Transform as _CSTransform,
@@ -1397,15 +1406,13 @@ class World:
         main georeference."""
         return bool(_sync(self._client.SetLayerOffsetAsync(str(layer), float(offset_meters))))
 
-    def build_draped_terrain(self, origin_x, origin_y, cell_size, num_cols, num_rows, heights,
-                             staging_margin=0.0):
+    def build_draped_terrain(self, origin_x, origin_y, cell_size, num_cols, num_rows, heights):
         """Build/replace the hidden, collision-only draped ground surface (a heightfield) vehicles
         drive on across the sandbox, on- and off-road. `heights` is a row-major sequence (or numpy
         array) of world Z in METRES, length num_cols*num_rows, indexed [row*num_cols + col]; grid
         corner (col 0,row 0) sits at world (origin_x, origin_y) metres, +col=+X, +row=+Y, spacing
-        cell_size m. staging_margin (m) is the inward ring reserved at the sandbox edge for traffic
-        entry/exit (recorded for get_staging_bounds; does not change the terrain extent). Returns
-        True on success."""
+        cell_size m. Returns True on success. The staging rectangle traffic uses is recorded
+        separately — see set_staging_bounds."""
         from System import Array, Double
         try:
             flat = heights.ravel().tolist() if hasattr(heights, "ravel") else list(heights)
@@ -1414,13 +1421,21 @@ class World:
         arr = Array[Double]([float(h) for h in flat])
         return bool(_sync(self._client.BuildDrapedTerrainAsync(
             float(origin_x), float(origin_y), float(cell_size),
-            int(num_cols), int(num_rows), arr, float(staging_margin))))
+            int(num_cols), int(num_rows), arr)))
+
+    def set_staging_bounds(self, min_x, min_y, max_x, max_y, margin):
+        """Record the sandbox extent (CARLA-local metres) and the inward staging-ring width reserved
+        at its edge for traffic entry/exit. Written by the digital-twin build for every height-align
+        mode; read back by get_staging_bounds. Returns True on success."""
+        return bool(_sync(self._client.SetStagingBoundsAsync(
+            float(min_x), float(min_y), float(max_x), float(max_y), float(margin))))
 
     def get_staging_bounds(self):
-        """Boundary-aware-traffic staging bounds, or None when the world has no draped terrain.
-        Returns a dict: {min_x, min_y, max_x, max_y, margin} in CARLA-local metres — the draped
-        sandbox extent plus the inward staging-ring width. The scene perimeter (region of interest)
-        is these bounds inset by `margin`; the staging ring is between the perimeter and the bounds."""
+        """Boundary-aware-traffic staging bounds, or None for a world that was loaded rather than
+        built from an OSM area. Returns a dict: {min_x, min_y, max_x, max_y, margin} in CARLA-local
+        metres — the sandbox extent plus the inward staging-ring width. The scene perimeter (region
+        of interest) is these bounds inset by `margin`; the staging ring is between the perimeter
+        and the bounds."""
         vals = _sync(self._client.GetStagingBoundsAsync())
         if vals is None or vals.Count < 5:
             return None
@@ -1653,7 +1668,8 @@ class World:
 
     def start_recording(self, camera, record_dir, hz=2.0, affiliation="n", stale=3.0,
                         fov=90.0, platform_type="uas-fixed", platform_affiliation="f",
-                        platform_callsign="OVERWATCH", platform_uid=None, distortion="none"):
+                        platform_callsign="OVERWATCH", platform_uid=None, distortion="none",
+                        run_id=None, scenario_id=None, seed=None):
         """Start native (C#) recording of `camera`'s imagery to `record_dir`: every 1/hz seconds a
         lossless PNG of the clean frame + a paired CoT-XML telemetry sidecar, encoded on the .NET thread
         pool (no Python/GIL in the hot path). Returns the FrameRecorder, or None if unavailable.
@@ -1664,7 +1680,13 @@ class World:
         or a raw CoT type string; `platform_affiliation` is the CoT standard identity (default 'f' friend,
         as the platform is our own collection asset); `platform_callsign`/`platform_uid` name the track
         (uid defaults to CARLA-SENSOR-<camera id>); `distortion` describes the lens model ('none' at CARLA
-        defaults)."""
+        defaults).
+
+        Every capture records the simulation tick that produced it, so a still and its sidecar are bound
+        to a simulation instant rather than to wall-clock time, which does not track the simulation
+        clock. `run_id` groups the captures of one execution (generated from the start time when not
+        given), `scenario_id` names the scenario driving the run, and `seed` records the integer the run
+        was started with so it can be reproduced."""
         if not _CARLANET_RECORDING_AVAILABLE:
             print("native recording unavailable: CarlaNet.Recording assembly not loaded "
                   "(rebuild the wheel/DLLs).", file=sys.stderr)
@@ -1676,9 +1698,60 @@ class World:
         cot_type = SensorPlatformOptions.ResolveCotType(str(platform_type), str(platform_affiliation))
         opts = SensorPlatformOptions(float(fov), cot_type, str(platform_callsign), str(uid),
                                      "sensor.camera.rgb", str(distortion))
+        # Positional through `workers` (0 = default worker count), since the run-identity arguments
+        # follow it in the C# signature.
         self._recorder = FrameRecorder(self._client, token, str(record_dir), float(hz),
-                                       str(affiliation), float(stale), opts)
+                                       str(affiliation), float(stale), opts, 0,
+                                       None if run_id is None else str(run_id),
+                                       None if scenario_id is None else str(scenario_id),
+                                       None if seed is None else int(seed))
         return self._recorder
+
+    def start_scenario(self, path, traffic_manager, report=None):
+        """Run an ASAM OpenSCENARIO storyboard against the loaded world. Returns the executor, or None
+        if unavailable.
+
+        Parsing, entity placement, trigger evaluation and vehicle commands all happen in .NET, driven by
+        the world tick. Python starts and stops a scenario and does not participate in its execution, so
+        scenario timing does not depend on interpreter scheduling or on round trips through this client.
+
+        `traffic_manager` is the TrafficManager the scenario's vehicles are driven by, as returned by
+        `Client.get_trafficmanager()`. `report` receives one line per state change — an act starting, a
+        vehicle stopping — and is called from the tick thread, so it must not block."""
+        if not _CARLANET_SCENARIO_AVAILABLE:
+            print("scenario execution unavailable: CarlaNet.Scenario assembly not loaded "
+                  "(rebuild the wheel/DLLs).", file=sys.stderr)
+            return None
+        from CarlaNet.Scenario import OpenScenarioParser, RoadNetwork, ScenarioExecutor
+        from System import Action, String
+
+        self.stop_scenario()
+        definition = OpenScenarioParser.LoadFile(str(path))
+
+        # Resolve the storyboard's road-referenced positions against the network the server actually
+        # has loaded, rather than against the file the scenario names.
+        network = RoadNetwork.FromOpenDrive(_sync(self._client.GetMapDataAsync()))
+
+        native_tm = getattr(traffic_manager, "_tm", None)
+        if native_tm is None:
+            raise RuntimeError(
+                "a working TrafficManager is required to run a scenario; get_trafficmanager() "
+                "returned a fallback, so the CarlaNet.Map / CarlaNet.TrafficManager assemblies are "
+                "probably missing")
+
+        callback = Action[String](report) if report is not None else None
+        self._scenario = ScenarioExecutor(self._client, native_tm, definition, network, callback)
+        return self._scenario
+
+    def stop_scenario(self):
+        """Stop a running scenario and remove the vehicles it placed."""
+        s = getattr(self, "_scenario", None)
+        if s is not None:
+            try:
+                s.Dispose()
+            except Exception:
+                pass
+            self._scenario = None
 
     def stop_recording(self):
         """Stop native recording (flushes pending captures)."""

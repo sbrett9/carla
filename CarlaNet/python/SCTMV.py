@@ -47,6 +47,7 @@ Controls (hold RIGHT MOUSE to fly, like the Unreal editor):
     B             toggle the OSM PERIMETER overlay (red rectangle + corner posts)
     M             toggle the MARGIN/interior-boundary overlay (blue rectangle)
     T             toggle TRAFFIC on/off (staging fade traffic)
+    X             run/stop the OpenSCENARIO storyboard given by --scenario
     Y             toggle TELEMETRY (CoT over UDP) on/off
     F             toggle RECORDING (periodic PNG of the clean frame + matching CoT-XML sidecar)
     Space         reset to the start pose
@@ -56,8 +57,9 @@ Prereqs:
   * Headless server running (RunCarlaServer.ps1).
   * SUMO netconvert staged under Build/sumo-install (for the build phase).
   * CESIUM_ION_TOKEN env var (or --ion-token) for the spawned tileset.
-  * A draped build (--height-align drape) is required for the staging traffic margin; without
-    one the traffic toggle is disabled (viewing still works).
+  * A world built from an OSM area (any --height-align mode) is required for the staging traffic
+    margin; on a world that was loaded rather than built the traffic toggle is disabled (viewing
+    still works).
   * A server + carlanet wheel that include set_actor_fade (otherwise the traffic toggle is
     disabled — it would be a silent no-op).
 
@@ -143,8 +145,8 @@ def parse_args():
     build.add_argument("--terrain-res", type=float, default=2.0,
                        help="'drape' only: spacing (m) between drivable-surface points (default 2.0)")
     build.add_argument("--terrain-margin", type=float, default=30.48,
-                       help="'drape' only: width (m) of the staging ring just inside the map edge "
-                            "where boundary-aware traffic enters/exits (default ~100 ft)")
+                       help="width (m) of the staging ring just inside the map edge where "
+                            "boundary-aware traffic enters/exits (default ~100 ft)")
     build.add_argument("--drape-cache-dir", default=None,
                        help="'drape' only: folder to cache terrain-height samples so rebuilds skip "
                             "the slow re-sampling")
@@ -202,9 +204,17 @@ def parse_args():
                            "Diagnostic: makes it obvious whether vehicles are actually driving (rather "
                            "than being hidden by the fade while they sit at the margin).")
     traf.add_argument("--route", action="store_true",
-                      help="use the Traffic Manager's custom-path routing to send each vehicle toward "
-                           "a far edge. OFF by default because routing can occasionally push a vehicle "
-                           "off the road or off a clipped dead-end.")
+                      help="give each vehicle a far-edge destination and let the Traffic Manager "
+                           "steer toward it. This is a bearing, not a planned route: the Traffic "
+                           "Manager picks each next waypoint greedily, so a vehicle can be led onto "
+                           "a dead end or around a loop ramp it never leaves. OFF by default.")
+
+    scen = ap.add_argument_group("scenario")
+    scen.add_argument("--scenario", default=None,
+                      help="an ASAM OpenSCENARIO storyboard (.xosc) to run against the built world; "
+                           "loaded at startup so problems surface immediately, and started with X. "
+                           "Positions are resolved against the road network the server has loaded, so "
+                           "the storyboard must have been authored against this same world.")
 
     tel = ap.add_argument_group("CoT telemetry (phase 4)")
     tel.add_argument("--tak-host", default="239.2.3.1",
@@ -495,7 +505,7 @@ class TrafficController:
             stub.available = False; stub.reason = f"get_staging_bounds failed: {e!r}"; return stub
         if not staging:
             stub.available = False
-            stub.reason = "no staging bounds (build a draped world: --height-align drape)"
+            stub.reason = "no staging bounds (this world was loaded, not built from an OSM area)"
             return stub
 
         bp_lib = world.get_blueprint_library()
@@ -829,7 +839,7 @@ def _iso(dt: datetime) -> str:
 
 
 def to_cot(rec, affiliation="n", stale_seconds=3.0, source="truth", uid_prefix="CARLA-TRUTH",
-           when=None, solar=None) -> str:
+           when=None, solar=None, capture=None) -> str:
     """Render one get_vehicle_telemetry() dict as a CoT <event> XML string. `when` (a UTC datetime)
     pins the event time to a specific instant — used so a recorded sidecar matches its PNG exactly.
     `solar` (a get_solar_state() dict) adds a <_solar> element carrying the sun in effect; for recorded
@@ -858,6 +868,11 @@ def to_cot(rec, affiliation="n", stale_seconds=3.0, source="truth", uid_prefix="
         "height_m": f"{rec['height_m']:.2f}", "color": rec["color"], "role_name": rec["role_name"],
         "vx": f"{rec['vx']:.2f}", "vy": f"{rec['vy']:.2f}", "vz": f"{rec['vz']:.2f}",
     })
+    if capture is not None:
+        # Diagnostic only. This feed drives a live map display and is not a truth source — the recorded
+        # sidecar is the sole truth for a frame. The tick rides along so that a disagreement between the
+        # live view and a sidecar can be settled by checking whether they describe the same instant.
+        ET.SubElement(detail, "_capture", capture.attributes())
     if solar:
         ET.SubElement(detail, "_solar", {
             "solar_time": f"{solar['solar_time']:.4f}",
@@ -869,6 +884,33 @@ def to_cot(rec, affiliation="n", stale_seconds=3.0, source="truth", uid_prefix="
             "rate": f"{solar['rate']:g}",
         })
     return ET.tostring(ev, encoding="unicode")
+
+
+class SimClock:
+    """Latest world tick and simulation time, cached from the world-observer stream.
+
+    The recorder reads the tick from each sensor frame's own header. The live telemetry feed has no
+    frame to read, so it subscribes here instead.
+    """
+
+    def __init__(self, world):
+        self.frame = 0
+        self.sim_time = 0.0
+        try:
+            world.on_tick(self._on_tick)
+        except Exception as e:
+            print(f"tick subscription failed; emitted telemetry will report tick 0: {e!r}",
+                  file=sys.stderr)
+
+    def _on_tick(self, ts):
+        self.frame = int(ts.frame)
+        self.sim_time = float(ts.elapsed_seconds)
+
+    def attributes(self):
+        """The tick, as a CoT attribute. Deliberately just the tick: the run identity belongs with the
+        recorded artifacts that constitute truth, not on a presentation feed that no consumer reads it
+        from."""
+        return {"tick": str(self.frame)}
 
 
 class CotUdpEmitter:
@@ -890,10 +932,11 @@ class TelemetryController:
     """CoT-over-UDP emitter as a steppable subsystem. Needs the georeference origin; if it is
     missing the toggle is disabled. Off by default."""
 
-    def __init__(self, world, origin, args):
+    def __init__(self, world, origin, args, clock=None):
         self.world = world
         self.origin = origin
         self.args = args
+        self.clock = clock
         self.available = origin is not None
         self.reason = "" if self.available else "no georeference origin (get_cesium_origin failed)"
         self.enabled = False
@@ -939,7 +982,8 @@ class TelemetryController:
         except Exception:
             solar = None
         for r in recs:
-            xml = to_cot(r, affiliation=self.args.affiliation, stale_seconds=self.args.stale, solar=solar)
+            xml = to_cot(r, affiliation=self.args.affiliation, stale_seconds=self.args.stale,
+                         solar=solar, capture=self.clock)
             self.emit.send(xml)
             if self.args.echo:
                 print(xml)
@@ -950,6 +994,64 @@ class TelemetryController:
             self.emit.close()
 
 
+class ScenarioController:
+    """Runs an OpenSCENARIO storyboard as a steppable subsystem.
+
+    Only toggling happens here. Parsing, entity placement, trigger evaluation and vehicle commands all
+    run in .NET off the world tick, so nothing about scenario timing depends on this loop or on the
+    interpreter — update() does no work at all.
+    """
+
+    def __init__(self, world, path, traffic_manager):
+        self.world = world
+        self.path = path
+        self.tm = traffic_manager
+        self.available = path is not None
+        self.reason = "" if self.available else "no scenario given (--scenario)"
+        self.running = False
+        self.want_enabled = False
+        self._executor = None
+
+    def apply_want(self):
+        if self.want_enabled and not self.running:
+            if not self.available:
+                print(f"scenario toggle ignored: {self.reason}", file=sys.stderr)
+                self.want_enabled = False
+                return
+            try:
+                self._executor = self.world.start_scenario(self.path, self.tm, report=self._report)
+            except Exception as e:
+                print(f"scenario failed to start: {e}", file=sys.stderr)
+                self._executor = None
+            if self._executor is None:
+                self.want_enabled = False
+                return
+            self.running = True
+            print(f"scenario ON -> {os.path.basename(self.path)}")
+        elif not self.want_enabled and self.running:
+            self.world.stop_scenario()
+            self._executor = None
+            self.running = False
+            print("scenario OFF")
+
+    @staticmethod
+    def _report(line):
+        print(f"  scenario: {line}")
+
+    def update(self, now):
+        # The executor advances itself from the world tick; if it finished on its own, reflect that.
+        if self.running and self._executor is not None and not self._executor.Running:
+            self._executor = None
+            self.running = False
+            self.want_enabled = False
+            print("scenario finished")
+
+    def status(self):
+        if self._executor is None:
+            return "off"
+        return f"{self._executor.ElapsedSeconds:.0f}s {self._executor.ActsComplete}/{self._executor.ActCount}"
+
+
 class NativeRecorder:
     """Drives the in-engine (C#) FrameRecorder: camera frames are tapped, encoded to PNG, and written
     with their CoT-XML telemetry sidecar (vehicle tracks + the collection platform as a CoT air track)
@@ -957,10 +1059,11 @@ class NativeRecorder:
     viewer stays smooth while recording. SCTMV only toggles it (want_enabled / apply_want / trigger /
     saved / recording / stop), so the loop, hotkey, and HUD stay decoupled from the recorder."""
 
-    def __init__(self, world, camera, args):
+    def __init__(self, world, camera, args, run_id=None):
         self.world = world
         self.camera = camera
         self.args = args
+        self.run_id = run_id
         self.available = bool(getattr(carla, "_CARLANET_RECORDING_AVAILABLE", False))
         self.recording = False
         self.want_enabled = False
@@ -979,7 +1082,8 @@ class NativeRecorder:
                 platform_type=self.args.platform_type,
                 platform_affiliation=self.args.platform_affiliation,
                 platform_callsign=self.args.platform_callsign,
-                platform_uid=self.args.platform_uid)
+                platform_uid=self.args.platform_uid,
+                run_id=self.run_id, seed=self.args.seed)
             if self._handle is None:
                 self.want_enabled = False
                 return
@@ -1516,7 +1620,10 @@ def main() -> int:
     traffic = TrafficController.create(world, client, tm, args)
     if not traffic.available:
         print(f"traffic unavailable: {traffic.reason}", file=sys.stderr)
-    telemetry = TelemetryController(world, cot_origin, args)
+    run_id = f"run-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
+    sim_clock = SimClock(world)
+    print(f"run id: {run_id}")
+    telemetry = TelemetryController(world, cot_origin, args, clock=sim_clock)
     if not telemetry.available:
         print(f"telemetry unavailable: {telemetry.reason}", file=sys.stderr)
     # recorder is created after the EO camera is spawned (the native backend needs the camera handle).
@@ -1654,7 +1761,10 @@ def main() -> int:
     # Recorder: the native (C#) FrameRecorder encodes frames in .NET off the GIL. If the
     # CarlaNet.Recording assembly is absent the recorder reports itself unavailable when toggled (the
     # whole client is CarlaNet, so a missing recording assembly means the build itself is incomplete).
-    recorder = NativeRecorder(world, camera, args)
+    recorder = NativeRecorder(world, camera, args, run_id=run_id)
+    scenario = ScenarioController(world, args.scenario, tm)
+    if args.scenario:
+        print(f"scenario armed: {os.path.basename(args.scenario)} (X to run)")
     print(f"recording backend: native (C#) -> {args.record_dir}")
 
     def process_depth(img):
@@ -1731,6 +1841,10 @@ def main() -> int:
                 telemetry.apply_want(); telemetry.update(now)
             except Exception as e:
                 print(f"telemetry worker: {e!r}", file=sys.stderr)
+            try:
+                scenario.apply_want(); scenario.update(now)
+            except Exception as e:
+                print(f"scenario worker: {e!r}", file=sys.stderr)
             try:
                 recorder.apply_want(); recorder.trigger(now, state["surface"])
             except Exception as e:
@@ -1871,6 +1985,8 @@ def main() -> int:
                     telemetry.want_enabled = not telemetry.want_enabled
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_f:
                     recorder.want_enabled = not recorder.want_enabled    # PNG + CoT XML capture
+                elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_x:
+                    scenario.want_enabled = not scenario.want_enabled
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_p:
                     if camera_controller.orbit_enabled:
                         camera_controller.toggle_orbit_pause()
@@ -1949,6 +2065,8 @@ def main() -> int:
                 except Exception as e: print(f"traffic.update failed: {e!r}", file=sys.stderr)
                 try: telemetry.apply_want(); telemetry.update(now)
                 except Exception as e: print(f"telemetry.update failed: {e!r}", file=sys.stderr)
+                try: scenario.apply_want(); scenario.update(now)
+                except Exception as e: print(f"scenario.update failed: {e!r}", file=sys.stderr)
                 try: recorder.apply_want(); recorder.trigger(now, state["surface"])
                 except Exception as e: print(f"recorder failed: {e!r}", file=sys.stderr)
             else:

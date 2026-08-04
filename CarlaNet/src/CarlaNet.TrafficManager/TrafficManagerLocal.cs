@@ -590,17 +590,39 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
     //                  ITrafficManagerCallback impl
     // ─────────────────────────────────────────────────────────────────
 
+    // RunOneTick holds _registrationGate for a whole tick, so registering a vehicle waits for the
+    // current tick to finish. Callers reach this from the thread that owns world.tick(), where an
+    // unbounded wait stops the simulation and — under a client that pumps a UI on that thread —
+    // freezes the window with no output at all. A slow tick is a defect somewhere else, but it must
+    // not be silent: warn once the wait becomes implausible, then keep waiting so behaviour is
+    // unchanged.
+    private static readonly TimeSpan RegistrationWaitWarning = TimeSpan.FromSeconds(5);
+
+    private void EnterRegistrationGate(string operation)
+    {
+        if (Monitor.TryEnter(_registrationGate, RegistrationWaitWarning)) return;
+
+        _logger?.LogWarning(
+            "{Operation} has waited {Seconds:F0}s for the traffic-manager tick to release the "
+            + "registration lock; the tick is running long and the calling thread is blocked.",
+            operation, RegistrationWaitWarning.TotalSeconds);
+        Monitor.Enter(_registrationGate);
+    }
+
     public void RegisterVehicles(IReadOnlyList<Actor> actors)
     {
-        lock (_registrationGate)
+        EnterRegistrationGate(nameof(RegisterVehicles));
+        try
         {
             _registeredVehicles.Insert(actors);
         }
+        finally { Monitor.Exit(_registrationGate); }
     }
 
     public void UnregisterVehicles(IReadOnlyList<Actor> actors)
     {
-        lock (_registrationGate)
+        EnterRegistrationGate(nameof(UnregisterVehicles));
+        try
         {
             for (int i = 0; i < actors.Count; i++)
             {
@@ -608,6 +630,7 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
                 _alsm.RemoveActor(id, registeredActor: true);
             }
         }
+        finally { Monitor.Exit(_registrationGate); }
     }
 
     public void SetPercentageSpeedDifference(Actor actor, float percentage)

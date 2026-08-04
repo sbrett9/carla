@@ -1,0 +1,874 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OpenSCENARIO>
+  <FileHeader revMajor="1" revMinor="1" date="2026-08-03T18:21:01Z"
+              description="Gardnerville - eastbound convoy on Centerville Lane, with one vehicle looping via Cobblestone Drive and Rock Terrace Drive and returning west"
+              author="Claude Code"/>
+  <ParameterDeclarations>
+    <ParameterDeclaration name="InitSpeed" parameterType="double" value="17.8816"/>
+  </ParameterDeclarations>
+  <CatalogLocations/>
+  <RoadNetwork>
+    <LogicFile filepath="Gardnerville.xodr"/>
+  </RoadNetwork>
+  <Entities>
+    <ScenarioObject name="Car_Lead">
+      <Vehicle name="Car_Lead" vehicleCategory="car">
+        <BoundingBox>
+          <Center x="1.35" y="0" z="0.73"/>
+          <Dimensions width="1.9" length="4.6" height="1.45"/>
+        </BoundingBox>
+        <Performance maxSpeed="69.44" maxAcceleration="5.0" maxDeceleration="9.0"/>
+        <Axles>
+          <FrontAxle maxSteering="0.5" wheelDiameter="0.7" trackWidth="1.9" positionX="3.91" positionZ="0.35"/>
+          <RearAxle maxSteering="0" wheelDiameter="0.7" trackWidth="1.9" positionX="0" positionZ="0.35"/>
+        </Axles>
+        <Properties/>
+      </Vehicle>
+    </ScenarioObject>
+    <ScenarioObject name="Car_Second">
+      <Vehicle name="Car_Second" vehicleCategory="car">
+        <BoundingBox>
+          <Center x="1.35" y="0" z="0.73"/>
+          <Dimensions width="1.9" length="4.6" height="1.45"/>
+        </BoundingBox>
+        <Performance maxSpeed="69.44" maxAcceleration="5.0" maxDeceleration="9.0"/>
+        <Axles>
+          <FrontAxle maxSteering="0.5" wheelDiameter="0.7" trackWidth="1.9" positionX="3.91" positionZ="0.35"/>
+          <RearAxle maxSteering="0" wheelDiameter="0.7" trackWidth="1.9" positionX="0" positionZ="0.35"/>
+        </Axles>
+        <Properties/>
+      </Vehicle>
+    </ScenarioObject>
+    <ScenarioObject name="BoxTruck">
+      <Vehicle name="BoxTruck" vehicleCategory="truck">
+        <BoundingBox>
+          <Center x="3.0" y="0" z="1.65"/>
+          <Dimensions width="2.5" length="7.6" height="3.3"/>
+        </BoundingBox>
+        <Performance maxSpeed="41.67" maxAcceleration="3.0" maxDeceleration="7.0"/>
+        <Axles>
+          <FrontAxle maxSteering="0.5" wheelDiameter="0.7" trackWidth="2.5" positionX="6.46" positionZ="0.35"/>
+          <RearAxle maxSteering="0" wheelDiameter="0.7" trackWidth="2.5" positionX="0" positionZ="0.35"/>
+        </Axles>
+        <Properties/>
+      </Vehicle>
+    </ScenarioObject>
+    <ScenarioObject name="Car_Fourth">
+      <Vehicle name="Car_Fourth" vehicleCategory="car">
+        <BoundingBox>
+          <Center x="1.35" y="0" z="0.73"/>
+          <Dimensions width="1.9" length="4.6" height="1.45"/>
+        </BoundingBox>
+        <Performance maxSpeed="69.44" maxAcceleration="5.0" maxDeceleration="9.0"/>
+        <Axles>
+          <FrontAxle maxSteering="0.5" wheelDiameter="0.7" trackWidth="1.9" positionX="3.91" positionZ="0.35"/>
+          <RearAxle maxSteering="0" wheelDiameter="0.7" trackWidth="1.9" positionX="0" positionZ="0.35"/>
+        </Axles>
+        <Properties/>
+      </Vehicle>
+    </ScenarioObject>
+    <ScenarioObject name="Car_Tail">
+      <Vehicle name="Car_Tail" vehicleCategory="car">
+        <BoundingBox>
+          <Center x="1.35" y="0" z="0.73"/>
+          <Dimensions width="1.9" length="4.6" height="1.45"/>
+        </BoundingBox>
+        <Performance maxSpeed="69.44" maxAcceleration="5.0" maxDeceleration="9.0"/>
+        <Axles>
+          <FrontAxle maxSteering="0.5" wheelDiameter="0.7" trackWidth="1.9" positionX="3.91" positionZ="0.35"/>
+          <RearAxle maxSteering="0" wheelDiameter="0.7" trackWidth="1.9" positionX="0" positionZ="0.35"/>
+        </Axles>
+        <Properties/>
+      </Vehicle>
+    </ScenarioObject>
+    <ScenarioObject name="Loop_Car">
+      <Vehicle name="Loop_Car" vehicleCategory="car">
+        <BoundingBox>
+          <Center x="1.35" y="0" z="0.73"/>
+          <Dimensions width="1.9" length="4.6" height="1.45"/>
+        </BoundingBox>
+        <Performance maxSpeed="69.44" maxAcceleration="5.0" maxDeceleration="9.0"/>
+        <Axles>
+          <FrontAxle maxSteering="0.5" wheelDiameter="0.7" trackWidth="1.9" positionX="3.91" positionZ="0.35"/>
+          <RearAxle maxSteering="0" wheelDiameter="0.7" trackWidth="1.9" positionX="0" positionZ="0.35"/>
+        </Axles>
+        <Properties/>
+      </Vehicle>
+    </ScenarioObject>
+  </Entities>
+  <Storyboard>
+    <Init>
+      <Actions>
+        <Private entityRef="Car_Lead">
+          <PrivateAction>
+            <TeleportAction>
+              <Position>
+                <LanePosition roadId="267" laneId="-1" offset="0" s="160.0"/>
+              </Position>
+            </TeleportAction>
+          </PrivateAction>
+          <PrivateAction>
+            <LongitudinalAction>
+              <SpeedAction>
+                <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
+                <SpeedActionTarget>
+                  <AbsoluteTargetSpeed value="$InitSpeed"/>
+                </SpeedActionTarget>
+              </SpeedAction>
+            </LongitudinalAction>
+          </PrivateAction>
+          <PrivateAction>
+            <RoutingAction>
+              <AssignRouteAction>
+                <Route name="Route_Car_Lead" closed="false">
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="267" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="268" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="269" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="270" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="271" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="272" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="276" laneId="-1" offset="0" s="82.0"/>
+                </Position>
+              </Waypoint>
+                </Route>
+              </AssignRouteAction>
+            </RoutingAction>
+          </PrivateAction>
+        </Private>
+        <Private entityRef="Car_Second">
+          <PrivateAction>
+            <TeleportAction>
+              <Position>
+                <LanePosition roadId="267" laneId="-1" offset="0" s="125.0"/>
+              </Position>
+            </TeleportAction>
+          </PrivateAction>
+          <PrivateAction>
+            <LongitudinalAction>
+              <SpeedAction>
+                <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
+                <SpeedActionTarget>
+                  <AbsoluteTargetSpeed value="$InitSpeed"/>
+                </SpeedActionTarget>
+              </SpeedAction>
+            </LongitudinalAction>
+          </PrivateAction>
+          <PrivateAction>
+            <RoutingAction>
+              <AssignRouteAction>
+                <Route name="Route_Car_Second" closed="false">
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="267" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="268" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="269" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="270" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="271" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="272" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="276" laneId="-1" offset="0" s="82.0"/>
+                </Position>
+              </Waypoint>
+                </Route>
+              </AssignRouteAction>
+            </RoutingAction>
+          </PrivateAction>
+        </Private>
+        <Private entityRef="BoxTruck">
+          <PrivateAction>
+            <TeleportAction>
+              <Position>
+                <LanePosition roadId="267" laneId="-1" offset="0" s="90.0"/>
+              </Position>
+            </TeleportAction>
+          </PrivateAction>
+          <PrivateAction>
+            <LongitudinalAction>
+              <SpeedAction>
+                <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
+                <SpeedActionTarget>
+                  <AbsoluteTargetSpeed value="$InitSpeed"/>
+                </SpeedActionTarget>
+              </SpeedAction>
+            </LongitudinalAction>
+          </PrivateAction>
+          <PrivateAction>
+            <RoutingAction>
+              <AssignRouteAction>
+                <Route name="Route_BoxTruck" closed="false">
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="267" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="268" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="269" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="270" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="271" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="272" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="276" laneId="-1" offset="0" s="82.0"/>
+                </Position>
+              </Waypoint>
+                </Route>
+              </AssignRouteAction>
+            </RoutingAction>
+          </PrivateAction>
+        </Private>
+        <Private entityRef="Car_Fourth">
+          <PrivateAction>
+            <TeleportAction>
+              <Position>
+                <LanePosition roadId="267" laneId="-1" offset="0" s="55.0"/>
+              </Position>
+            </TeleportAction>
+          </PrivateAction>
+          <PrivateAction>
+            <LongitudinalAction>
+              <SpeedAction>
+                <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
+                <SpeedActionTarget>
+                  <AbsoluteTargetSpeed value="$InitSpeed"/>
+                </SpeedActionTarget>
+              </SpeedAction>
+            </LongitudinalAction>
+          </PrivateAction>
+          <PrivateAction>
+            <RoutingAction>
+              <AssignRouteAction>
+                <Route name="Route_Car_Fourth" closed="false">
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="267" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="268" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="269" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="270" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="271" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="272" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="276" laneId="-1" offset="0" s="82.0"/>
+                </Position>
+              </Waypoint>
+                </Route>
+              </AssignRouteAction>
+            </RoutingAction>
+          </PrivateAction>
+        </Private>
+        <Private entityRef="Car_Tail">
+          <PrivateAction>
+            <TeleportAction>
+              <Position>
+                <LanePosition roadId="267" laneId="-1" offset="0" s="20.0"/>
+              </Position>
+            </TeleportAction>
+          </PrivateAction>
+          <PrivateAction>
+            <LongitudinalAction>
+              <SpeedAction>
+                <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
+                <SpeedActionTarget>
+                  <AbsoluteTargetSpeed value="$InitSpeed"/>
+                </SpeedActionTarget>
+              </SpeedAction>
+            </LongitudinalAction>
+          </PrivateAction>
+          <PrivateAction>
+            <RoutingAction>
+              <AssignRouteAction>
+                <Route name="Route_Car_Tail" closed="false">
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="267" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="268" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="269" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="270" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="271" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="272" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="276" laneId="-1" offset="0" s="82.0"/>
+                </Position>
+              </Waypoint>
+                </Route>
+              </AssignRouteAction>
+            </RoutingAction>
+          </PrivateAction>
+        </Private>
+        <Private entityRef="Loop_Car">
+          <PrivateAction>
+            <TeleportAction>
+              <Position>
+                <LanePosition roadId="267" laneId="-1" offset="0" s="195.0"/>
+              </Position>
+            </TeleportAction>
+          </PrivateAction>
+          <PrivateAction>
+            <LongitudinalAction>
+              <SpeedAction>
+                <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
+                <SpeedActionTarget>
+                  <AbsoluteTargetSpeed value="$InitSpeed"/>
+                </SpeedActionTarget>
+              </SpeedAction>
+            </LongitudinalAction>
+          </PrivateAction>
+          <PrivateAction>
+            <RoutingAction>
+              <AssignRouteAction>
+                <Route name="Route_Loop_Car" closed="false">
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="267" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="268" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="269" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="270" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="263" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="259" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="258" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="257" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="256" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="242" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="241" laneId="-1" offset="0" s="0.0"/>
+                </Position>
+              </Waypoint>
+              <Waypoint routeStrategy="fastest">
+                <Position>
+                  <LanePosition roadId="240" laneId="-1" offset="0" s="555.0"/>
+                </Position>
+              </Waypoint>
+                </Route>
+              </AssignRouteAction>
+            </RoutingAction>
+          </PrivateAction>
+        </Private>
+      </Actions>
+    </Init>
+    <Story name="GardnervilleStory">
+      <Act name="Cruise">
+        <ManeuverGroup maximumExecutionCount="1" name="CruiseGroup">
+          <Actors selectTriggeringEntities="false">
+            <EntityRef entityRef="Car_Lead"/>
+            <EntityRef entityRef="Car_Second"/>
+            <EntityRef entityRef="BoxTruck"/>
+            <EntityRef entityRef="Car_Fourth"/>
+            <EntityRef entityRef="Car_Tail"/>
+            <EntityRef entityRef="Loop_Car"/>
+          </Actors>
+          <Maneuver name="Cruise_Car_Lead">
+            <Event name="HoldSpeed_Car_Lead" priority="parallel" maximumExecutionCount="1">
+              <Action name="HoldSpeedAction_Car_Lead">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="$InitSpeed"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="CruiseStart_Car_Lead" delay="0" conditionEdge="none">
+                    <ByValueCondition>
+                      <SimulationTimeCondition value="0" rule="greaterOrEqual"/>
+                    </ByValueCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+          <Maneuver name="Cruise_Car_Second">
+            <Event name="HoldSpeed_Car_Second" priority="parallel" maximumExecutionCount="1">
+              <Action name="HoldSpeedAction_Car_Second">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="$InitSpeed"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="CruiseStart_Car_Second" delay="0" conditionEdge="none">
+                    <ByValueCondition>
+                      <SimulationTimeCondition value="0" rule="greaterOrEqual"/>
+                    </ByValueCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+          <Maneuver name="Cruise_BoxTruck">
+            <Event name="HoldSpeed_BoxTruck" priority="parallel" maximumExecutionCount="1">
+              <Action name="HoldSpeedAction_BoxTruck">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="$InitSpeed"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="CruiseStart_BoxTruck" delay="0" conditionEdge="none">
+                    <ByValueCondition>
+                      <SimulationTimeCondition value="0" rule="greaterOrEqual"/>
+                    </ByValueCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+          <Maneuver name="Cruise_Car_Fourth">
+            <Event name="HoldSpeed_Car_Fourth" priority="parallel" maximumExecutionCount="1">
+              <Action name="HoldSpeedAction_Car_Fourth">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="$InitSpeed"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="CruiseStart_Car_Fourth" delay="0" conditionEdge="none">
+                    <ByValueCondition>
+                      <SimulationTimeCondition value="0" rule="greaterOrEqual"/>
+                    </ByValueCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+          <Maneuver name="Cruise_Car_Tail">
+            <Event name="HoldSpeed_Car_Tail" priority="parallel" maximumExecutionCount="1">
+              <Action name="HoldSpeedAction_Car_Tail">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="$InitSpeed"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="CruiseStart_Car_Tail" delay="0" conditionEdge="none">
+                    <ByValueCondition>
+                      <SimulationTimeCondition value="0" rule="greaterOrEqual"/>
+                    </ByValueCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+          <Maneuver name="Cruise_Loop_Car">
+            <Event name="HoldSpeed_Loop_Car" priority="parallel" maximumExecutionCount="1">
+              <Action name="HoldSpeedAction_Loop_Car">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="$InitSpeed"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="CruiseStart_Loop_Car" delay="0" conditionEdge="none">
+                    <ByValueCondition>
+                      <SimulationTimeCondition value="0" rule="greaterOrEqual"/>
+                    </ByValueCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+        </ManeuverGroup>
+        <StartTrigger>
+          <ConditionGroup>
+            <Condition name="CruiseStart" delay="0" conditionEdge="none">
+              <ByValueCondition>
+                <SimulationTimeCondition value="0" rule="greaterOrEqual"/>
+              </ByValueCondition>
+            </Condition>
+          </ConditionGroup>
+        </StartTrigger>
+      </Act>
+      <Act name="Despawn">
+        <ManeuverGroup maximumExecutionCount="1" name="DespawnGroup_Car_Lead">
+          <Actors selectTriggeringEntities="false">
+            <EntityRef entityRef="Car_Lead"/>
+          </Actors>
+          <Maneuver name="Despawn_Car_Lead">
+            <Event name="DespawnEvent_Car_Lead" priority="parallel" maximumExecutionCount="1">
+              <Action name="DespawnAction_Car_Lead">
+                <GlobalAction>
+                  <EntityAction entityRef="Car_Lead">
+                    <DeleteEntityAction/>
+                  </EntityAction>
+                </GlobalAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="Arrived_Car_Lead" delay="0" conditionEdge="none">
+                    <ByEntityCondition>
+                      <TriggeringEntities triggeringEntitiesRule="any">
+                        <EntityRef entityRef="Car_Lead"/>
+                      </TriggeringEntities>
+                      <EntityCondition>
+                        <ReachPositionCondition tolerance="8.0">
+                          <Position>
+                            <LanePosition roadId="276" laneId="-1" offset="0" s="82.0"/>
+                          </Position>
+                        </ReachPositionCondition>
+                      </EntityCondition>
+                    </ByEntityCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+        </ManeuverGroup>
+        <ManeuverGroup maximumExecutionCount="1" name="DespawnGroup_Car_Second">
+          <Actors selectTriggeringEntities="false">
+            <EntityRef entityRef="Car_Second"/>
+          </Actors>
+          <Maneuver name="Despawn_Car_Second">
+            <Event name="DespawnEvent_Car_Second" priority="parallel" maximumExecutionCount="1">
+              <Action name="DespawnAction_Car_Second">
+                <GlobalAction>
+                  <EntityAction entityRef="Car_Second">
+                    <DeleteEntityAction/>
+                  </EntityAction>
+                </GlobalAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="Arrived_Car_Second" delay="0" conditionEdge="none">
+                    <ByEntityCondition>
+                      <TriggeringEntities triggeringEntitiesRule="any">
+                        <EntityRef entityRef="Car_Second"/>
+                      </TriggeringEntities>
+                      <EntityCondition>
+                        <ReachPositionCondition tolerance="8.0">
+                          <Position>
+                            <LanePosition roadId="276" laneId="-1" offset="0" s="82.0"/>
+                          </Position>
+                        </ReachPositionCondition>
+                      </EntityCondition>
+                    </ByEntityCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+        </ManeuverGroup>
+        <ManeuverGroup maximumExecutionCount="1" name="DespawnGroup_BoxTruck">
+          <Actors selectTriggeringEntities="false">
+            <EntityRef entityRef="BoxTruck"/>
+          </Actors>
+          <Maneuver name="Despawn_BoxTruck">
+            <Event name="DespawnEvent_BoxTruck" priority="parallel" maximumExecutionCount="1">
+              <Action name="DespawnAction_BoxTruck">
+                <GlobalAction>
+                  <EntityAction entityRef="BoxTruck">
+                    <DeleteEntityAction/>
+                  </EntityAction>
+                </GlobalAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="Arrived_BoxTruck" delay="0" conditionEdge="none">
+                    <ByEntityCondition>
+                      <TriggeringEntities triggeringEntitiesRule="any">
+                        <EntityRef entityRef="BoxTruck"/>
+                      </TriggeringEntities>
+                      <EntityCondition>
+                        <ReachPositionCondition tolerance="8.0">
+                          <Position>
+                            <LanePosition roadId="276" laneId="-1" offset="0" s="82.0"/>
+                          </Position>
+                        </ReachPositionCondition>
+                      </EntityCondition>
+                    </ByEntityCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+        </ManeuverGroup>
+        <ManeuverGroup maximumExecutionCount="1" name="DespawnGroup_Car_Fourth">
+          <Actors selectTriggeringEntities="false">
+            <EntityRef entityRef="Car_Fourth"/>
+          </Actors>
+          <Maneuver name="Despawn_Car_Fourth">
+            <Event name="DespawnEvent_Car_Fourth" priority="parallel" maximumExecutionCount="1">
+              <Action name="DespawnAction_Car_Fourth">
+                <GlobalAction>
+                  <EntityAction entityRef="Car_Fourth">
+                    <DeleteEntityAction/>
+                  </EntityAction>
+                </GlobalAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="Arrived_Car_Fourth" delay="0" conditionEdge="none">
+                    <ByEntityCondition>
+                      <TriggeringEntities triggeringEntitiesRule="any">
+                        <EntityRef entityRef="Car_Fourth"/>
+                      </TriggeringEntities>
+                      <EntityCondition>
+                        <ReachPositionCondition tolerance="8.0">
+                          <Position>
+                            <LanePosition roadId="276" laneId="-1" offset="0" s="82.0"/>
+                          </Position>
+                        </ReachPositionCondition>
+                      </EntityCondition>
+                    </ByEntityCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+        </ManeuverGroup>
+        <ManeuverGroup maximumExecutionCount="1" name="DespawnGroup_Car_Tail">
+          <Actors selectTriggeringEntities="false">
+            <EntityRef entityRef="Car_Tail"/>
+          </Actors>
+          <Maneuver name="Despawn_Car_Tail">
+            <Event name="DespawnEvent_Car_Tail" priority="parallel" maximumExecutionCount="1">
+              <Action name="DespawnAction_Car_Tail">
+                <GlobalAction>
+                  <EntityAction entityRef="Car_Tail">
+                    <DeleteEntityAction/>
+                  </EntityAction>
+                </GlobalAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="Arrived_Car_Tail" delay="0" conditionEdge="none">
+                    <ByEntityCondition>
+                      <TriggeringEntities triggeringEntitiesRule="any">
+                        <EntityRef entityRef="Car_Tail"/>
+                      </TriggeringEntities>
+                      <EntityCondition>
+                        <ReachPositionCondition tolerance="8.0">
+                          <Position>
+                            <LanePosition roadId="276" laneId="-1" offset="0" s="82.0"/>
+                          </Position>
+                        </ReachPositionCondition>
+                      </EntityCondition>
+                    </ByEntityCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+        </ManeuverGroup>
+        <StartTrigger>
+          <ConditionGroup>
+            <Condition name="DespawnStart" delay="0" conditionEdge="none">
+              <ByValueCondition>
+                <SimulationTimeCondition value="0" rule="greaterOrEqual"/>
+              </ByValueCondition>
+            </Condition>
+          </ConditionGroup>
+        </StartTrigger>
+      </Act>
+    </Story>
+    <StopTrigger>
+      <ConditionGroup>
+        <Condition name="LoopCarBackAtWestEndOfCenterville" delay="0" conditionEdge="none">
+          <ByEntityCondition>
+            <TriggeringEntities triggeringEntitiesRule="any">
+              <EntityRef entityRef="Loop_Car"/>
+            </TriggeringEntities>
+            <EntityCondition>
+              <ReachPositionCondition tolerance="5.0">
+                <Position>
+                  <LanePosition roadId="240" laneId="-1" offset="0" s="555.0"/>
+                </Position>
+              </ReachPositionCondition>
+            </EntityCondition>
+          </ByEntityCondition>
+        </Condition>
+      </ConditionGroup>
+    </StopTrigger>
+  </Storyboard>
+</OpenSCENARIO>

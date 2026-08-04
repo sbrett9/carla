@@ -393,24 +393,40 @@ public sealed class CarlaClient : IAsyncDisposable
         //   offset field. The ground layer is revealed here, so the grid samples in the same window
         //   as the road heights.
         bool drape = string.Equals(heightAlign, "drape", StringComparison.OrdinalIgnoreCase);
-        CarlaNet.Map.OpenDrive.DrapeGridSpec drapeSpec = default;
+
+        // The sandbox rectangle covers the OSM bounds exactly (no outward expansion), gridded at the
+        // terrain resolution. It is computed for EVERY height-align mode: "drape" samples this grid
+        // to build the collision heightfield, and boundary-aware traffic uses the same rectangle as
+        // its staging extent whether or not a heightfield was built. Gridding it identically in all
+        // modes keeps the staging ring the same for a given area however the road was seated.
+        // terrainMargin is the INWARD staging ring reserved at the OSM edge for traffic entry/exit,
+        // not a terrain extension — it is recorded with the bounds and read by get_staging_bounds.
+        var osmBounds = CarlaNet.Map.OpenDrive.DrapeTerrain.ReadOsmBounds(osmPath);
+        if (drape && osmBounds is null)
+            throw new InvalidOperationException("height-align drape requires an OSM <bounds> element");
+        CarlaNet.Map.OpenDrive.DrapeGridSpec sandboxSpec = default;
+        bool haveSandbox = osmBounds is not null;
+        if (osmBounds is { } bounds)
+        {
+            sandboxSpec = CarlaNet.Map.OpenDrive.DrapeTerrain.MakeGridFromGeoBounds(
+                origin, bounds.MinLat, bounds.MinLon, bounds.MaxLat, bounds.MaxLon,
+                terrainResMeters, marginMeters: 0.0);
+        }
+        else
+        {
+            Console.WriteLine("[staging] the OSM has no <bounds> element; "
+                + "boundary-aware traffic will have no staging rectangle.");
+        }
+
         CarlaNet.Map.OpenDrive.DrapeTerrain.DrapeResult drapeRes = default;
         if (drape)
         {
-            var b = CarlaNet.Map.OpenDrive.DrapeTerrain.ReadOsmBounds(osmPath)
-                ?? throw new InvalidOperationException("height-align drape requires an OSM <bounds> element");
-            // The drape terrain covers the OSM bounds exactly (no outward expansion). terrainMargin
-            // is the INWARD staging ring (reserved at the OSM edge for traffic entry/exit), not a
-            // terrain extension — it's recorded on the terrain actor and exposed via get_staging_bounds.
-            drapeSpec = CarlaNet.Map.OpenDrive.DrapeTerrain.MakeGridFromGeoBounds(
-                origin, b.MinLat, b.MinLon, b.MaxLat, b.MaxLon,
-                terrainResMeters, marginMeters: 0.0);
-            Console.WriteLine($"[drape] grid {drapeSpec.NumCols}x{drapeSpec.NumRows} = {drapeSpec.NodeCount} nodes, "
-                + $"cell {terrainResMeters} m, staging margin {terrainMarginMeters:F1} m (inward)");
+            Console.WriteLine($"[drape] grid {sandboxSpec.NumCols}x{sandboxSpec.NumRows} = {sandboxSpec.NodeCount} nodes, "
+                + $"cell {terrainResMeters} m");
             var (dsm, dtm) = await SampleDrapeGridCachedAsync(
-                drapeSpec, ionAssetId, groundIonAssetId, drapeCacheDir, drapeChunkCells, ct: ct)
+                sandboxSpec, ionAssetId, groundIonAssetId, drapeCacheDir, drapeChunkCells, ct: ct)
                 .ConfigureAwait(false);
-            drapeRes = CarlaNet.Map.OpenDrive.DrapeTerrain.Despike(dsm, dtm, drapeSpec, drapeMaxDrapeMeters);
+            drapeRes = CarlaNet.Map.OpenDrive.DrapeTerrain.Despike(dsm, dtm, sandboxSpec, drapeMaxDrapeMeters);
             Console.WriteLine("[drape] de-spiked draped surface + offset field built.");
         }
 
@@ -486,7 +502,7 @@ public sealed class CarlaClient : IAsyncDisposable
             // point), so the road mesh and the collision heightfield coincide — no seam.
             for (int i = 0; i < samples.Count; i++)
                 roadEllipsoidal[i] = CarlaNet.Map.OpenDrive.DrapeTerrain.SampleBilinear(
-                    drapeRes.DrapedZ, drapeSpec, samples[i].X, samples[i].Y);
+                    drapeRes.DrapedZ, sandboxSpec, samples[i].X, samples[i].Y);
         }
         else
         {
@@ -537,8 +553,7 @@ public sealed class CarlaClient : IAsyncDisposable
             var hf = new double[n];
             for (int i = 0; i < n; i++) hf[i] = drapeRes.DrapedZ[i] - originHeight;
             await BuildDrapedTerrainAsync(
-                drapeSpec.MinX, drapeSpec.MinY, drapeSpec.CellSize, drapeSpec.NumCols, drapeSpec.NumRows, hf,
-                terrainMarginMeters)
+                sandboxSpec.MinX, sandboxSpec.MinY, sandboxSpec.CellSize, sandboxSpec.NumCols, sandboxSpec.NumRows, hf)
                 .ConfigureAwait(false);
             if (groundIonAssetId > 0)
                 await SetLayerCollisionAsync("ground", false).ConfigureAwait(false);
@@ -554,11 +569,11 @@ public sealed class CarlaClient : IAsyncDisposable
             System.Buffer.BlockCopy(offF, 0, offBytes, 0, offBytes.Length);
             System.Buffer.BlockCopy(dtmF, 0, dtmBytes, 0, dtmBytes.Length);
             LastDrapeActive = true;
-            LastDrapeNumCols = drapeSpec.NumCols;
-            LastDrapeNumRows = drapeSpec.NumRows;
-            LastDrapeMinX = drapeSpec.MinX;
-            LastDrapeMinY = drapeSpec.MinY;
-            LastDrapeCellSize = drapeSpec.CellSize;
+            LastDrapeNumCols = sandboxSpec.NumCols;
+            LastDrapeNumRows = sandboxSpec.NumRows;
+            LastDrapeMinX = sandboxSpec.MinX;
+            LastDrapeMinY = sandboxSpec.MinY;
+            LastDrapeCellSize = sandboxSpec.CellSize;
             LastDrapedOffsetBytes = offBytes;
             LastDrapedDtmBytes = dtmBytes;
             LastHeightAlignOffset = 0.0;   // drape uses the per-cell field, not the scalar
@@ -580,6 +595,19 @@ public sealed class CarlaClient : IAsyncDisposable
             // Ground collision is now SAFE to leave ON under area/origin (it coincides with the road),
             // giving on-road seating + off-road support. eo_observer's V key still toggles it.
             await SetLayerCollisionAsync("ground", groundCollision).ConfigureAwait(false);
+        }
+
+        // Record the sandbox extent + inward staging ring for boundary-aware traffic. Deliberately
+        // outside the height-align branches: the ring is a property of the OSM area, and every mode
+        // leaves a collidable surface under it (the draped heightfield, or the ground layer shifted
+        // to meet the road).
+        if (haveSandbox)
+        {
+            await SetStagingBoundsAsync(
+                sandboxSpec.MinX, sandboxSpec.MinY, sandboxSpec.MaxX, sandboxSpec.MaxY, terrainMarginMeters)
+                .ConfigureAwait(false);
+            Console.WriteLine($"[staging] sandbox ({sandboxSpec.MinX:F1}, {sandboxSpec.MinY:F1}) .. "
+                + $"({sandboxSpec.MaxX:F1}, {sandboxSpec.MaxY:F1}) m, staging margin {terrainMarginMeters:F1} m (inward)");
         }
 
         return elevatedXodr;
@@ -668,14 +696,20 @@ public sealed class CarlaClient : IAsyncDisposable
     /// are world Z in METRES, row-major [row*numCols + col], length numCols*numRows; grid corner
     /// (col 0,row 0) at world (originX, originY) metres, +col=+X, +row=+Y, spacing cellSize m.
     public Task<bool> BuildDrapedTerrainAsync(
-        double originX, double originY, double cellSize, int numCols, int numRows, double[] heights,
-        double stagingMarginMeters)
+        double originX, double originY, double cellSize, int numCols, int numRows, double[] heights)
         => _rpc.CallAsync<bool>("build_draped_terrain",
-               originX, originY, cellSize, numCols, numRows, heights, stagingMarginMeters);
+               originX, originY, cellSize, numCols, numRows, heights);
 
-    /// Staging bounds for boundary-aware traffic: the draped sandbox extent in CARLA-local metres
-    /// plus the inward staging-ring margin, as [minX, minY, maxX, maxY, margin]. Empty when no drape
-    /// terrain exists. The scene perimeter (region of interest) = these bounds inset by the margin.
+    /// Record the sandbox extent (CARLA-local metres) and the inward staging-ring margin reserved at
+    /// its edge for traffic entry/exit. Written by the digital-twin build in every height-align mode.
+    public Task<bool> SetStagingBoundsAsync(
+        double minX, double minY, double maxX, double maxY, double marginMeters)
+        => _rpc.CallAsync<bool>("set_staging_bounds", minX, minY, maxX, maxY, marginMeters);
+
+    /// Staging bounds for boundary-aware traffic: the sandbox extent in CARLA-local metres plus the
+    /// inward staging-ring margin, as [minX, minY, maxX, maxY, margin]. Empty for a world that was
+    /// loaded rather than generated. The scene perimeter (region of interest) = these bounds inset
+    /// by the margin.
     public Task<IReadOnlyList<double>> GetStagingBoundsAsync()
         => _rpc.CallAsync<IReadOnlyList<double>>("get_staging_bounds");
 

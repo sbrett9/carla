@@ -76,6 +76,7 @@
 #include "Animation/PoseSnapshot.h"
 #include "CesiumHeightSampler.h"
 #include "DrapedTerrain.h"
+#include "StagingBounds.h"
 #include <util/ue-header-guard-end.h>
 
 #include <vector>
@@ -686,8 +687,7 @@ void FCarlaServer::FPimpl::BindActions()
   // (col 0,row 0) at world (origin_x, origin_y) metres, +col=+X, +row=+Y, spacing cell_size m.
   BIND_SYNC(build_draped_terrain) << [this](
       double origin_x, double origin_y, double cell_size,
-      int32_t num_cols, int32_t num_rows, std::vector<double> heights,
-      double staging_margin) -> R<bool>
+      int32_t num_cols, int32_t num_rows, std::vector<double> heights) -> R<bool>
   {
     REQUIRE_CARLA_EPISODE();
     UWorld* World = Episode->GetWorld();
@@ -699,7 +699,7 @@ void FCarlaServer::FPimpl::BindActions()
     Heights.Reserve(static_cast<int32>(heights.size()));
     for (double H : heights) { Heights.Add(H); }
     ADrapedTerrainActor* Actor = UDrapedTerrain::Build(
-        World, origin_x, origin_y, cell_size, num_cols, num_rows, Heights, staging_margin);
+        World, origin_x, origin_y, cell_size, num_cols, num_rows, Heights);
     if (!Actor)
     {
       RESPOND_ERROR("draped-terrain build failed (see log)");
@@ -707,9 +707,28 @@ void FCarlaServer::FPimpl::BindActions()
     return true;
   };
 
-  // Staging bounds for boundary-aware traffic: the draped sandbox extent (CARLA-local metres) plus
-  // the inward staging-ring margin, as [minX, minY, maxX, maxY, margin]. Empty when no draped
-  // terrain exists. Scene perimeter (region of interest) = these bounds inset by the margin.
+  // Record the sandbox extent (CARLA-local metres) and the inward staging-ring margin reserved at
+  // its edge for traffic entry/exit. Written by the digital-twin build for every height-align mode.
+  BIND_SYNC(set_staging_bounds) << [this](
+      double min_x, double min_y, double max_x, double max_y, double margin) -> R<bool>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to record staging bounds in");
+    }
+    if (!UStagingBounds::Set(World, min_x, min_y, max_x, max_y, margin))
+    {
+      RESPOND_ERROR("staging-bounds record failed (see log)");
+    }
+    return true;
+  };
+
+  // Staging bounds for boundary-aware traffic: the sandbox extent (CARLA-local metres) plus the
+  // inward staging-ring margin, as [minX, minY, maxX, maxY, margin]. Empty for a world that was
+  // loaded rather than generated. Scene perimeter (region of interest) = these bounds inset by the
+  // margin.
   BIND_SYNC(get_staging_bounds) << [this]() -> R<std::vector<double>>
   {
     REQUIRE_CARLA_EPISODE();
@@ -719,9 +738,9 @@ void FCarlaServer::FPimpl::BindActions()
       RESPOND_ERROR("no world to read staging bounds from");
     }
     double minX, minY, maxX, maxY, margin;
-    if (!UDrapedTerrain::GetStagingBounds(World, minX, minY, maxX, maxY, margin))
+    if (!UStagingBounds::Get(World, minX, minY, maxX, maxY, margin))
     {
-      return std::vector<double>{};   // no draped terrain in this world
+      return std::vector<double>{};   // this world has no recorded sandbox
     }
     return std::vector<double>{ minX, minY, maxX, maxY, margin };
   };

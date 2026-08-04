@@ -1,13 +1,10 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\CarlaNet.Types\CarlaNet.Types.csproj" />
     <ProjectReference Include="..\CarlaNet.Transport\CarlaNet.Transport.csproj" />
-    <ProjectReference Include="..\CarlaNet.Sensors\CarlaNet.Sensors.csproj" />
-    <ProjectReference Include="..\CarlaNet.Recording\CarlaNet.Recording.csproj" />
     <ProjectReference Include="..\CarlaNet.Map\CarlaNet.Map.csproj" />
     <ProjectReference Include="..\CarlaNet.TrafficManager\CarlaNet.TrafficManager.csproj" />
-    <ProjectReference Include="..\CarlaNet.Scenario\CarlaNet.Scenario.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -16,7 +13,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <!-- The Python shim is python/carlanet/__init__.py (canonical). This project
-       builds only the managed assemblies it wraps; no .py is bundled here. -->
+  <!-- Executes ASAM OpenSCENARIO storyboards against a running world. Parsing, position resolution,
+       trigger evaluation and command dispatch all happen in .NET, driven by the world tick: the Python
+       client only starts and stops a scenario, and never participates in per-tick control, so scenario
+       timing does not depend on interpreter scheduling or on round trips through the client. -->
 
 </Project>

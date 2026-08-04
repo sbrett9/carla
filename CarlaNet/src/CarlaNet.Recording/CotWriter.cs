@@ -13,7 +13,8 @@ public static class CotWriter
 {
     public static void WriteToFile(string path, DateTime capturedUtc,
         IReadOnlyList<VehicleTelemetry> recs, string affiliation = "n", double staleSeconds = 3.0,
-        IReadOnlyList<double>? solar = null, SensorPose? sensor = null)
+        IReadOnlyList<double>? solar = null, SensorPose? sensor = null,
+        CaptureIdentity? capture = null)
     {
         var settings = new XmlWriterSettings
         {
@@ -31,6 +32,20 @@ public static class CotWriter
         w.WriteAttributeString("captured", time);
         w.WriteAttributeString("count", recs.Count.ToString(CultureInfo.InvariantCulture));
         w.WriteAttributeString("source", "truth");
+
+        // Capture identity belongs on this container rather than on the individual events: <events> is
+        // this file's own wrapper, whereas each <event> is standard Cursor-on-Target and is also emitted
+        // verbatim over the live feed, where a strict client may reject unknown attributes. Every event
+        // in a sidecar shares one tick, so recording it once here loses nothing.
+        if (capture is not null)
+        {
+            w.WriteAttributeString("tick", capture.Tick.ToString(CultureInfo.InvariantCulture));
+            w.WriteAttributeString("sim_time_s", F(capture.SimTimeSeconds, "0.######"));
+            if (!string.IsNullOrEmpty(capture.RunId)) w.WriteAttributeString("run_id", capture.RunId);
+            if (!string.IsNullOrEmpty(capture.ScenarioId)) w.WriteAttributeString("scenario_id", capture.ScenarioId);
+            if (capture.Seed.HasValue)
+                w.WriteAttributeString("seed", capture.Seed.Value.ToString(CultureInfo.InvariantCulture));
+        }
 
         // Scene-level solar state (unbreakably tied to the imagery too, via the PNG tEXt chunk). Written
         // once here, before the per-vehicle events, so it is present even for a vehicle-free frame.
