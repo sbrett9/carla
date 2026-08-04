@@ -501,6 +501,14 @@ are. The span is replaced by the chord between them. This uses only what the OSM
 that something crosses overhead — and invents no elevation. Restoring it lifts the measured
 deck-over-road separation at this interchange from a median 5.54 m to **6.97 m**.
 
+The chord must be a function of position along the OSM way, **not** of the `.xodr` road. netconvert
+cuts one way into several roads, and a short connecting road inside a junction can lie wholly within
+a footprint with no end outside it to anchor a chord to; computed per road, that road is left
+uncorrected while its long neighbour is corrected and the mesh tears at the joint between them. A
+scan of all 2714 coincident road endpoints in the generated map measures this directly: per road it
+left 2 joints torn by 2.47 m and 1.47 m, per way the worst joint over the whole map is 0.166 m and
+every joint above 0.10 m carries no lift on either side, i.e. predates this work.
+
 Both surfaces are already sampled on the same grid — the drape offset field is `DrapedZ − DTM`, so
 the DTM is recoverable everywhere. **Only the per-road layer classification is missing.**
 

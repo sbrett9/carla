@@ -283,8 +283,8 @@ public static class GradeSeparation
         //    surface for them, but no terrain model can see the ground under a deck, so inside the
         //    footprint it reports the structure instead of the roadway.
         int spanned = SpanStructureFootprints(
-            samples, matchedWay, underIndices, elevated, surfaceHeights, groundHeights,
-            atGradeHeights, atGradeOffsetMeters, opt, lift);
+            samples, matchedWay, matchedStation, underIndices, elevated, surfaceHeights,
+            groundHeights, atGradeHeights, atGradeOffsetMeters, opt, lift);
 
         int lifted = 0;
         double maxLift = 0.0;
@@ -581,6 +581,7 @@ public static class GradeSeparation
     private static int SpanStructureFootprints(
         IReadOnlyList<CenterlineSample> samples,
         int[] matchedWay,
+        double[] matchedStation,
         HashSet<int> waysPassingUnder,
         IReadOnlyList<OsmRoadWay> elevatedWays,
         IReadOnlyList<double> surfaceHeights,
@@ -632,21 +633,27 @@ public static class GradeSeparation
         }
         if (roadsAffected.Count == 0) return 0;
 
-        // Work along each .xodr road rather than along the OSM way: a road's stations are monotone
-        // and belong to one carriageway, whereas several roads can match a single way and interleave.
-        var perRoad = new Dictionary<RoadId, List<int>>();
+        // Walk each OSM way, not each .xodr road. The corrected height has to be a function of
+        // POSITION: two roads meeting at a junction must be given the same elevation there or the
+        // mesh tears at the joint. netconvert cuts one way into several roads — including short
+        // connecting roads inside a junction that can lie wholly within a footprint, with no end
+        // outside it to anchor a chord to — so anything computed per road is discontinuous across
+        // them by construction.
+        var perWay = new Dictionary<int, List<int>>();
         for (int i = 0; i < samples.Count; ++i)
         {
+            int w = matchedWay[i];
+            if (w < 0 || !waysPassingUnder.Contains(w)) continue;
             if (!roadsAffected.Contains(samples[i].RoadId)) continue;
-            if (!perRoad.TryGetValue(samples[i].RoadId, out var list))
-                perRoad[samples[i].RoadId] = list = new List<int>();
+            if (!perWay.TryGetValue(w, out var list))
+                perWay[w] = list = new List<int>();
             list.Add(i);
         }
 
         int corrected = 0;
-        foreach (var list in perRoad.Values)
+        foreach (var list in perWay.Values)
         {
-            list.Sort((a, b) => samples[a].S.CompareTo(samples[b].S));
+            list.Sort((a, b) => matchedStation[a].CompareTo(matchedStation[b]));
 
             for (int start = 0; start < list.Count;)
             {
@@ -663,9 +670,9 @@ public static class GradeSeparation
                 bool haveBefore = before >= 0, haveAfter = after < list.Count;
                 if (haveBefore || haveAfter)
                 {
-                    double s0 = haveBefore ? samples[list[before]].S : 0.0;
+                    double s0 = haveBefore ? matchedStation[list[before]] : 0.0;
                     double g0 = haveBefore ? AtGrade(list[before]) : 0.0;
-                    double s1 = haveAfter ? samples[list[after]].S : 0.0;
+                    double s1 = haveAfter ? matchedStation[list[after]] : 0.0;
                     double g1 = haveAfter ? AtGrade(list[after]) : 0.0;
 
                     for (int k = start; k <= end; ++k)
@@ -677,7 +684,7 @@ public static class GradeSeparation
                         if (haveBefore && haveAfter)
                         {
                             double span = s1 - s0;
-                            double t = span > 1e-9 ? (samples[i].S - s0) / span : 0.0;
+                            double t = span > 1e-9 ? (matchedStation[i] - s0) / span : 0.0;
                             chord = g0 + (g1 - g0) * Math.Clamp(t, 0.0, 1.0);
                         }
                         else

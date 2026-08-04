@@ -48,6 +48,40 @@ public class GradeSeparationTests
   </road>
 </OpenDRIVE>";
 
+    // The same crossing, but the road running under the deck is cut into three, as netconvert does
+    // around a junction: road 3 lies WHOLLY inside the deck footprint, with no end outside it.
+    private const string SplitUnderRoadXodr =
+@"<?xml version=""1.0"" standalone=""yes""?>
+<OpenDRIVE>
+  <header revMajor=""1"" revMinor=""4"" name="""" version=""1.00"" date="""" north=""0"" south=""0"" east=""0"" west=""0"" vendor=""test"">
+    <geoReference><![CDATA[+proj=tmerc +lat_0=41.94813 +lon_0=-87.65593 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs]]></geoReference>
+  </header>
+  <road name=""deck"" length=""100.0"" id=""1"" junction=""-1"">
+    <planView><geometry s=""0.0"" x=""-50.0"" y=""0.0"" hdg=""0.0"" length=""100.0""><line/></geometry></planView>
+    <lanes><laneSection s=""0.0""><center><lane id=""0"" type=""driving"" level=""false""/></center>
+      <right><lane id=""-1"" type=""driving"" level=""false""><width sOffset=""0.0"" a=""3.5"" b=""0.0"" c=""0.0"" d=""0.0""/></lane></right>
+    </laneSection></lanes>
+  </road>
+  <road name=""approach"" length=""40.0"" id=""2"" junction=""-1"">
+    <planView><geometry s=""0.0"" x=""0.0"" y=""-50.0"" hdg=""1.5707963267948966"" length=""40.0""><line/></geometry></planView>
+    <lanes><laneSection s=""0.0""><center><lane id=""0"" type=""driving"" level=""false""/></center>
+      <right><lane id=""-1"" type=""driving"" level=""false""><width sOffset=""0.0"" a=""3.5"" b=""0.0"" c=""0.0"" d=""0.0""/></lane></right>
+    </laneSection></lanes>
+  </road>
+  <road name=""beneath"" length=""20.0"" id=""3"" junction=""7"">
+    <planView><geometry s=""0.0"" x=""0.0"" y=""-10.0"" hdg=""1.5707963267948966"" length=""20.0""><line/></geometry></planView>
+    <lanes><laneSection s=""0.0""><center><lane id=""0"" type=""driving"" level=""false""/></center>
+      <right><lane id=""-1"" type=""driving"" level=""false""><width sOffset=""0.0"" a=""3.5"" b=""0.0"" c=""0.0"" d=""0.0""/></lane></right>
+    </laneSection></lanes>
+  </road>
+  <road name=""departure"" length=""40.0"" id=""4"" junction=""-1"">
+    <planView><geometry s=""0.0"" x=""0.0"" y=""10.0"" hdg=""1.5707963267948966"" length=""40.0""><line/></geometry></planView>
+    <lanes><laneSection s=""0.0""><center><lane id=""0"" type=""driving"" level=""false""/></center>
+      <right><lane id=""-1"" type=""driving"" level=""false""><width sOffset=""0.0"" a=""3.5"" b=""0.0"" c=""0.0"" d=""0.0""/></lane></right>
+    </laneSection></lanes>
+  </road>
+</OpenDRIVE>";
+
     private const double GroundHeight = 100.0;
 
     // The photoreal sits slightly BELOW bare earth on open ground — measured at -0.82 m over 4218
@@ -488,6 +522,68 @@ public class GradeSeparationTests
         for (int i = 0; i < samples.Count; ++i)
             if (samples[i].RoadId == 2u && Math.Abs(samples[i].Y) > 20.0)
                 Assert.Equal(0.0, result.Lift[i], 6);
+    }
+
+    [Fact]
+    public void SpanningAFootprint_LeavesNoStepWhereRoadsMeet()
+    {
+        // netconvert cuts one OSM way into several .xodr roads, and a short connecting road inside a
+        // junction can lie wholly within a deck footprint — with no end outside it to anchor a chord
+        // to. Anything computed per road therefore leaves that road uncorrected while its long
+        // neighbour is corrected, and the mesh tears at the joint between them. The corrected height
+        // has to be a function of position along the way, so that every road meeting at a point is
+        // given the same elevation there.
+        var map = OpenDriveParser.Load(SplitUnderRoadXodr)
+            ?? throw new Exception("split .xodr failed to parse");
+        var origin = map.GeoReference;
+        var samples = ElevationInjector.ExtractCenterlineSamples(map, 10.0);
+
+        var surface = new double[samples.Count];
+        var ground = new double[samples.Count];
+        for (int i = 0; i < samples.Count; ++i)
+        {
+            ground[i] = GroundHeight + 4.0 * Math.Max(0.0, 1.0 - Math.Abs(samples[i].Y) / 20.0);
+            bool overStructure = Math.Abs(samples[i].X) <= 30.0 && Math.Abs(samples[i].Y) <= 30.0;
+            surface[i] = overStructure ? GroundHeight + 9.0 : GroundHeight + SystematicOffset;
+        }
+
+        var underRoad = new WaySpec[]
+        {
+            new("100", [(-60.0, 0.0), (60.0, 0.0)], ("highway", "motorway"), ("bridge", "yes")),
+            new("200", [(0.0, -60.0), (0.0, 60.0)], ("highway", "primary")),
+        };
+
+        var result = WithOsm(origin, underRoad,
+            p => GradeSeparation.Compute(map, samples, OsmRoadLayers.Read(p, origin),
+                surface, ground, SystematicOffset));
+
+        // The road lying entirely under the deck must be corrected like the rest of the way.
+        var beneathRoad = Enumerable.Range(0, samples.Count).Where(i => samples[i].RoadId == 3u).ToList();
+        Assert.NotEmpty(beneathRoad);
+        Assert.All(beneathRoad, i => Assert.NotEqual(0.0, result.Lift[i]));
+
+        // A joint is where two roads END at the same place. Where they merely cross — the deck over
+        // the road beneath it — they are supposed to differ, which is the whole point.
+        var endpoints = samples
+            .Select((s, i) => (s, i))
+            .GroupBy(p => p.s.RoadId)
+            .SelectMany(g => new[] { g.MinBy(p => p.s.S).i, g.MaxBy(p => p.s.S).i })
+            .ToList();
+
+        double Elevation(int i) => ground[i] + result.Lift[i];
+        int joints = 0;
+        foreach (int i in endpoints)
+        {
+            foreach (int j in endpoints)
+            {
+                if (samples[i].RoadId >= samples[j].RoadId) continue;
+                if (Math.Abs(samples[i].X - samples[j].X) > 0.5) continue;
+                if (Math.Abs(samples[i].Y - samples[j].Y) > 0.5) continue;
+                Assert.Equal(Elevation(i), Elevation(j), 6);
+                ++joints;
+            }
+        }
+        Assert.Equal(2, joints);   // the road under the deck is joined at both of its ends
     }
 
     [Fact]
