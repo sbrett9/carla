@@ -61,6 +61,13 @@ public sealed record GradeSeparationOptions
     /// fraction. It bounds how far a lift reaches into the connected at-grade network: a 1 m deck
     /// end fades out within 1/grade metres.</summary>
     public double ApproachRampGrade { get; init; } = 0.06;
+
+    /// <summary>How close a centreline sample must be to a structure's end node for that node to
+    /// seed an approach ramp. A node further than this from every sample of its own way is not
+    /// covered by the road network there, and the nearest sample is then somewhere out along the
+    /// span — seeding from it would start the approach at the height of the middle of the deck
+    /// instead of at its end. Must comfortably exceed the centreline sampling step.</summary>
+    public double MaxRampSourceDistanceMeters { get; init; } = 20.0;
 }
 
 /// <summary>Per-sample elevation lift plus the structures it came from.</summary>
@@ -78,6 +85,11 @@ public sealed class GradeSeparationResult
     /// <summary>Ways that pass beneath a higher-layer way at a crossing. Their elevation is pinned
     /// to bare earth and no approach ramp may reach them.</summary>
     public required IReadOnlyList<OsmRoadWay> WaysPassingUnder { get; init; }
+
+    /// <summary>Index into the way list of the OSM way each sample was matched to, or -1 where none
+    /// was close enough and compatible in bearing. Diagnostic: it is what
+    /// <c>probe_grade_separation.py</c> reads to explain why a given road got the height it did.</summary>
+    public required int[] MatchedWayIndex { get; init; }
 
     public required int SamplesMatched { get; init; }
     public required int SamplesLifted { get; init; }
@@ -145,9 +157,12 @@ public static class GradeSeparation
         foreach (var w in ways) if (w.Layer != 0) { anyLayered = true; break; }
         if (!anyLayered || samples.Count == 0)
         {
+            var unmatched = new int[samples.Count];
+            Array.Fill(unmatched, -1);
             return new GradeSeparationResult
             {
                 Lift = lift, ElevatedWays = elevated, WaysPassingUnder = underWays,
+                MatchedWayIndex = unmatched,
                 SamplesMatched = 0, SamplesLifted = 0,
                 StructuresFromSurface = 0, StructuresFromFallback = 0, MaxLiftMeters = 0.0,
             };
@@ -267,6 +282,7 @@ public static class GradeSeparation
             Lift = lift,
             ElevatedWays = elevated,
             WaysPassingUnder = underWays,
+            MatchedWayIndex = matchedWay,
             SamplesMatched = matchedCount,
             SamplesLifted = lifted,
             StructuresFromSurface = fromSurface,
@@ -404,28 +420,52 @@ public static class GradeSeparation
     {
         if (opt.ApproachRampGrade <= 0.0) return;
 
-        // Per layered way, the lift at each of its vertices, interpolated from its own samples.
-        var nodeLift = new Dictionary<string, double>(StringComparer.Ordinal);
-        var perWaySamples = new Dictionary<int, List<(double Station, double Lift)>>();
+        // Seed each vertex of a layered way with that way's lift there, read from the sample
+        // physically nearest the vertex among those matched to that same way. Nearest-in-space, not
+        // interpolated along the way: several .xodr roads can match one OSM way (the two
+        // carriageways of a divided road), and their stations interleave into a profile that is not
+        // a function of distance along the way.
+        var nodeLift = new Dictionary<string, (double Lift, double Distance)>(StringComparer.Ordinal);
+        var perWaySamples = new Dictionary<int, List<int>>();
         for (int i = 0; i < samples.Count; ++i)
         {
             int w = matchedWay[i];
             if (w < 0 || wayLiftSource[w] == LiftSource.AtGrade) continue;
             if (!perWaySamples.TryGetValue(w, out var list))
-                perWaySamples[w] = list = new List<(double, double)>();
-            list.Add((matchedStation[i], lift[i]));
+                perWaySamples[w] = list = new List<int>();
+            list.Add(i);
         }
 
-        foreach (var (w, list) in perWaySamples)
+        foreach (var (w, indices) in perWaySamples)
         {
-            list.Sort((a, b) => a.Station.CompareTo(b.Station));
             var way = ways[w];
             for (int v = 0; v < way.VertexCount; ++v)
             {
-                double value = InterpolateByStation(list, way.NodeStation[v]);
-                if (Math.Abs(value) <= Math.Abs(nodeLift.GetValueOrDefault(way.NodeIds[v])))
+                double bestSq = double.MaxValue, value = 0.0;
+                foreach (int i in indices)
+                {
+                    double dx = samples[i].X - way.X[v], dy = samples[i].Y - way.Y[v];
+                    double distanceSq = dx * dx + dy * dy;
+                    if (distanceSq >= bestSq) continue;
+                    bestSq = distanceSq;
+                    value = lift[i];
+                }
+
+                // A vertex the road network does not reach seeds nothing at all. Borrowing the
+                // nearest sample regardless of range is what let a deck whose end node is 39 m from
+                // any sample start its approach ramp at mid-span height.
+                double distance = Math.Sqrt(bestSq);
+                if (distance > opt.MaxRampSourceDistanceMeters) continue;
+
+                // Where two structures meet at one node, the better-supported reading wins — the
+                // closest sample, not the largest lift.
+                if (nodeLift.TryGetValue(way.NodeIds[v], out var current)
+                    && (current.Distance < distance
+                        || (current.Distance <= distance && Math.Abs(current.Lift) >= Math.Abs(value))))
+                {
                     continue;
-                nodeLift[way.NodeIds[v]] = value;
+                }
+                nodeLift[way.NodeIds[v]] = (value, distance);
             }
         }
         if (nodeLift.Count == 0) return;
@@ -452,10 +492,13 @@ public static class GradeSeparation
             list.Add((to, length));
         }
 
-        var best = new Dictionary<string, double>(nodeLift, StringComparer.Ordinal);
+        var best = new Dictionary<string, double>(StringComparer.Ordinal);
         var queue = new PriorityQueue<string, double>();
-        foreach (var (node, value) in nodeLift)
-            queue.Enqueue(node, -Math.Abs(value));
+        foreach (var (node, seed) in nodeLift)
+        {
+            best[node] = seed.Lift;
+            queue.Enqueue(node, -Math.Abs(seed.Lift));
+        }
 
         while (queue.TryDequeue(out var node, out double negMagnitude))
         {
@@ -474,7 +517,12 @@ public static class GradeSeparation
             }
         }
 
-        // Read the ramp back onto the at-grade samples.
+        // Read the ramp back onto the at-grade samples. A sample lies between two vertices, so its
+        // lift is whichever bracketing vertex can still deliver more after paying the gradient over
+        // the distance to it — the same cone the relaxation above propagated. Interpolating between
+        // the two vertices instead would stretch the ramp across the whole gap between them, which
+        // on an OSM way described by two distant nodes smears a metre of lift over its entire length
+        // rather than fading it out within lift/grade metres.
         for (int i = 0; i < samples.Count; ++i)
         {
             int w = matchedWay[i];
@@ -482,12 +530,19 @@ public static class GradeSeparation
                 continue;
             var way = ways[w];
             int v = UpperVertex(way.NodeStation, matchedStation[i]);
-            double a = best.GetValueOrDefault(way.NodeIds[v - 1]);
-            double b = best.GetValueOrDefault(way.NodeIds[v]);
-            double span = way.NodeStation[v] - way.NodeStation[v - 1];
-            double t = span > 1e-9 ? (matchedStation[i] - way.NodeStation[v - 1]) / span : 0.0;
-            lift[i] = a + (b - a) * Math.Clamp(t, 0.0, 1.0);
+            double fromBelow = Reach(best.GetValueOrDefault(way.NodeIds[v - 1]),
+                matchedStation[i] - way.NodeStation[v - 1], opt.ApproachRampGrade);
+            double fromAbove = Reach(best.GetValueOrDefault(way.NodeIds[v]),
+                way.NodeStation[v] - matchedStation[i], opt.ApproachRampGrade);
+            lift[i] = Math.Abs(fromBelow) >= Math.Abs(fromAbove) ? fromBelow : fromAbove;
         }
+    }
+
+    // What is left of a lift after travelling `distance` at `grade`, keeping its sign; 0 once spent.
+    private static double Reach(double lift, double distance, double grade)
+    {
+        double remaining = Math.Abs(lift) - grade * Math.Max(0.0, distance);
+        return remaining <= 0.0 ? 0.0 : Math.Sign(lift) * remaining;
     }
 
     // Index of the first vertex at or beyond `station` (never 0, so [v-1, v] always brackets it).
@@ -496,21 +551,6 @@ public static class GradeSeparation
         for (int v = 1; v < stations.Length; ++v)
             if (stations[v] >= station) return v;
         return stations.Length - 1;
-    }
-
-    private static double InterpolateByStation(List<(double Station, double Lift)> ordered, double station)
-    {
-        if (ordered.Count == 0) return 0.0;
-        if (station <= ordered[0].Station) return ordered[0].Lift;
-        if (station >= ordered[^1].Station) return ordered[^1].Lift;
-        for (int i = 1; i < ordered.Count; ++i)
-        {
-            if (ordered[i].Station < station) continue;
-            double span = ordered[i].Station - ordered[i - 1].Station;
-            double t = span > 1e-9 ? (station - ordered[i - 1].Station) / span : 0.0;
-            return ordered[i - 1].Lift + (ordered[i].Lift - ordered[i - 1].Lift) * t;
-        }
-        return ordered[^1].Lift;
     }
 
     // ── segment lookup ───────────────────────────────────────────────────────

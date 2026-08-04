@@ -360,6 +360,89 @@ public class GradeSeparationTests
     }
 
     [Fact]
+    public void ApproachRamp_SeedsFromTheDeckEnd_NotFromMidSpan()
+    {
+        // A deck way whose end node the road network does not reach must not seed an approach ramp:
+        // the nearest sample to that node is then somewhere out along the span, and starting the
+        // approach at mid-span height drives the road connected there several metres into the air.
+        // Here the deck way runs far past the sampled road, so its far node has no support.
+        var map = LoadCrossing();
+        var origin = map.GeoReference;
+        var samples = ElevationInjector.ExtractCenterlineSamples(map, 10.0);
+        BuildSurfaces(samples, out var surface, out var ground);
+
+        var overshootingDeck = new WaySpec[]
+        {
+            // The deck is sampled only over x in [-50, 50]; its east node sits 150 m beyond that.
+            new("100", [(-60.0, 0.0), (200.0, 0.0)], ("highway", "motorway"), ("bridge", "yes")),
+            new("200", [(0.0, -60.0), (0.0, 60.0)], ("highway", "primary")),
+            // Shares the deck's unsupported east node, so a ramp seeded there would land on it.
+            new("300", [(200.0, 0.0), (200.0, 200.0)], ("highway", "primary")),
+        };
+
+        var result = WithOsm(origin, overshootingDeck,
+            p => GradeSeparation.Compute(map, samples, OsmRoadLayers.Read(p, origin),
+                surface, ground, SystematicOffset));
+
+        // The deck itself still gets its measured clearance where the surface shows the structure.
+        Assert.Equal(1, result.StructuresFromSurface);
+        Assert.Contains(result.Lift, v => v > 5.0);
+
+        // Nothing on the crossing road may be lifted, and the ramp must not have reached out to the
+        // unsupported node: no sample may carry a lift that is neither 0 nor the measured clearance.
+        for (int i = 0; i < samples.Count; ++i)
+            if (samples[i].RoadId == 2u)
+                Assert.Equal(0.0, result.Lift[i], 6);
+    }
+
+    [Fact]
+    public void ApproachRamp_FadesOutAtTheRampGradient()
+    {
+        // The ramp must decay at ApproachRampGrade from the deck end, not stretch itself across the
+        // whole distance between two OSM nodes.
+        var map = LoadCrossing();
+        var origin = map.GeoReference;
+        var samples = ElevationInjector.ExtractCenterlineSamples(map, 10.0);
+
+        // The structure covers the deck right up to its east end, so that end carries a real lift.
+        var surface = new double[samples.Count];
+        var ground = new double[samples.Count];
+        for (int i = 0; i < samples.Count; ++i)
+        {
+            ground[i] = GroundHeight;
+            bool onDeck = samples[i].RoadId == 1u && samples[i].X >= -30.0;
+            surface[i] = onDeck ? GroundHeight + 5.0 : GroundHeight + SystematicOffset;
+        }
+
+        // A long at-grade way sharing the deck's east node; with only two nodes 200 m apart, an
+        // interpolating read-back would spread the lift over all 200 m.
+        var ways = new WaySpec[]
+        {
+            new("100", [(-60.0, 0.0), (55.0, 0.0)], ("highway", "motorway"), ("bridge", "yes")),
+            new("200", [(0.0, -60.0), (0.0, 60.0)], ("highway", "primary")),
+            new("300", [(55.0, 0.0), (255.0, 0.0)], ("highway", "primary")),
+        };
+
+        var opt = new GradeSeparationOptions { ApproachRampGrade = 0.10 };
+        var result = WithOsm(origin, ways,
+            p => GradeSeparation.Compute(map, samples, OsmRoadLayers.Read(p, origin),
+                surface, ground, SystematicOffset, opt));
+
+        // The deck end is lifted by the measured clearance, so at 0.10 the ramp is spent within
+        // 58 m of it. Road 1 ends at x = 50, five metres short of the shared node at x = 55.
+        const double deckEndLift = 5.0 - SystematicOffset;
+        int deckEast = samples.Select((s, i) => (s, i))
+            .Where(p => p.s.RoadId == 1u).MaxBy(p => p.s.X).i;
+        Assert.Equal(50.0, samples[deckEast].X, 3);
+        Assert.Equal(deckEndLift, result.Lift[deckEast], 3);
+
+        // Every sample of the crossing road is far beyond the ramp's reach and must be untouched.
+        for (int i = 0; i < samples.Count; ++i)
+            if (samples[i].RoadId == 2u)
+                Assert.Equal(0.0, result.Lift[i], 6);
+    }
+
+    [Fact]
     public void Tunnel_IsSunkBelowGrade()
     {
         var map = LoadCrossing();
