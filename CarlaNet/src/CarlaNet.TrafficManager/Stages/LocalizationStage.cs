@@ -20,10 +20,12 @@
 //      actor's new buffer.
 //
 // PERF: Buffer is a plain <c>List&lt;SimpleWaypoint&gt;</c>. Upstream uses
-// std::deque but on the ~50-entry buffer sizes TM works with, the O(n)
-// RemoveAt(0) cost is negligible (and saves the LinkedList allocation
-// overhead). Per-tick allocations are limited to a handful of HashSet
-// snapshots in lane-change resolution — none on the steady-state hot path.
+// std::deque but at the buffer sizes TM works with, the O(n) RemoveAt(0)
+// cost is negligible (and saves the LinkedList allocation overhead). That
+// holds only because every walk that fills the buffer is bounded — see
+// MaxHorizonWalkSteps. Per-tick allocations are limited to a handful of
+// HashSet snapshots in lane-change and cycle detection — none on the
+// steady-state hot path.
 //
 // Hot path: Update(actorId) is called once per registered vehicle per tick
 // (≈ 50× per tick at the design target). Output dictionary is cleared and
@@ -90,6 +92,20 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
     // bound to the client::Waypoint which we don't replicate here — Wave 3G
     // can wire a real lookup through SimpleWaypoint if needed.
     private const bool ASSUME_RHT = true;
+
+    // Upper bound on how many waypoints a single horizon walk may visit.
+    //
+    // Every walk in this stage follows the road graph forward until it is "far enough" — either the
+    // buffer spans the horizon, or a probe reaches a junction or a distance threshold. Those tests
+    // all measure STRAIGHT-LINE distance, so a cyclic road graph satisfies none of them: a loop ramp
+    // or roundabout returns the walk to where it began without it ever getting far from the start.
+    // Unbounded, the horizon buffer then grows until the process runs out of memory.
+    //
+    // The horizon is at most a few hundred metres and waypoints are MAP_RESOLUTION apart, so a
+    // legitimate walk uses well under a hundred steps even on a curved road, where path length far
+    // exceeds endpoint separation. This bound is an order of magnitude above that: it never truncates
+    // a real horizon, and it caps the pathological case at a harmless buffer instead of the heap.
+    private const int MaxHorizonWalkSteps = 512;
 
     public LocalizationStage(
         SimulationState simulationState,
@@ -318,8 +334,13 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
         }
         else
         {
-            // Random forward extension along the road graph.
-            while (waypointBuffer[^1].DistanceSquared(waypointBuffer[0]) <= horizonSquare)
+            // Random forward extension along the road graph. Bounded for the same reason as the
+            // imported-path walks: the horizon test measures straight-line distance, which a cycle
+            // never satisfies. The id check below catches only cycles that pass through the front
+            // waypoint, so it is not sufficient on its own.
+            int walkSteps = 0;
+            while (waypointBuffer[^1].DistanceSquared(waypointBuffer[0]) <= horizonSquare
+                   && walkSteps++ < MaxHorizonWalkSteps)
             {
                 SimpleWaypoint furthest = waypointBuffer[^1];
                 IReadOnlyList<SimpleWaypoint> nexts = furthest.GetNextWaypoint();
@@ -609,7 +630,9 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
         return changeOverPoint;
     }
 
-    private void ImportPath(IReadOnlyList<Location> importedPath, WaypointBuffer waypointBuffer,
+    // Exposed to the test assembly (not private) so the cycle-termination regression test can
+    // drive the walk directly against a cyclic road graph without standing up a server.
+    internal void ImportPath(IReadOnlyList<Location> importedPath, WaypointBuffer waypointBuffer,
                              ActorId actorId, float horizonSquare)
     {
         // Snapshot to a mutable list so we can pop off the front.
@@ -628,8 +651,18 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
         Location latestImported = workingPath[0];
         SimpleWaypoint imported = _localMap.GetWaypoint(latestImported);
 
+        // The destination steers the walk but never terminates it: this is a greedy step-by-step
+        // descent toward a bearing, not a solved route. On a cyclic road graph the walk can circle
+        // indefinitely — never reaching the destination, never leaving the horizon — so track which
+        // waypoints this call has already appended and stop when it revisits one. `visited` starts
+        // empty rather than seeded from the buffer, so a cycle entered on an earlier tick costs at
+        // most one extra lap before it is caught, and the common case allocates nothing.
+        var visited = new HashSet<ulong>();
+        int walkSteps = 0;
+
         while (workingPath.Count > 0
-               && waypointBuffer[^1].DistanceSquared(waypointBuffer[0]) <= horizonSquare)
+               && waypointBuffer[^1].DistanceSquared(waypointBuffer[0]) <= horizonSquare
+               && walkSteps++ < MaxHorizonWalkSteps)
         {
             SimpleWaypoint latestWp = waypointBuffer[^1];
             IReadOnlyList<SimpleWaypoint> nexts = latestWp.GetNextWaypoint();
@@ -642,20 +675,27 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
                 for (int k = 0; k < nexts.Count; ++k)
                 {
                     SimpleWaypoint junctionEnd = nexts[k];
+                    // Each of these three probes follows a single successor chain and stops on a
+                    // predicate that a cycle satisfies forever, so each is bounded (see
+                    // MaxHorizonWalkSteps). Walking past the bound only degrades the junction-choice
+                    // heuristic for this candidate; it cannot hang the tick.
+                    int steps = 0;
                     // Walk to the next non-junction segment.
-                    while (!junctionEnd.CheckJunction())
+                    while (!junctionEnd.CheckJunction() && steps++ < MaxHorizonWalkSteps)
                     {
                         var nx = junctionEnd.GetNextWaypoint();
                         if (nx.Count == 0) break;
                         junctionEnd = nx[0];
                     }
-                    while (junctionEnd.CheckJunction())
+                    steps = 0;
+                    while (junctionEnd.CheckJunction() && steps++ < MaxHorizonWalkSteps)
                     {
                         var nx = junctionEnd.GetNextWaypoint();
                         if (nx.Count == 0) break;
                         junctionEnd = nx[0];
                     }
-                    while (nexts[k].DistanceSquared(junctionEnd) < 50.0f)
+                    steps = 0;
+                    while (nexts[k].DistanceSquared(junctionEnd) < 50.0f && steps++ < MaxHorizonWalkSteps)
                     {
                         var nx = junctionEnd.GetNextWaypoint();
                         if (nx.Count == 0) break;
@@ -706,6 +746,9 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
             }
             else
             {
+                // Revisiting a waypoint means the road graph looped back; extending further would
+                // retrace the same cycle forever.
+                if (!visited.Add(nextSel.GetId())) break;
                 PushWaypoint(actorId, _trackTraffic, waypointBuffer, nextSel);
             }
         }
@@ -720,7 +763,9 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
         }
     }
 
-    private void ImportRoute(IReadOnlyList<byte> importedActions, WaypointBuffer waypointBuffer,
+    // Exposed to the test assembly (not private) so the cycle-termination regression test can
+    // drive the walk directly against a cyclic road graph without standing up a server.
+    internal void ImportRoute(IReadOnlyList<byte> importedActions, WaypointBuffer waypointBuffer,
                               ActorId actorId, float horizonSquare)
     {
         var workingActions = new List<byte>(importedActions);
@@ -736,8 +781,15 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
         }
 
         RoadOption nextRoadOption = (RoadOption)workingActions[0];
+
+        // Same unbounded-walk hazard as ImportPath: the loop ends only when the buffer spans the
+        // horizon in a straight line, which circling a loop ramp never achieves.
+        var visited = new HashSet<ulong>();
+        int walkSteps = 0;
+
         while (workingActions.Count > 0
-               && waypointBuffer[^1].DistanceSquared(waypointBuffer[0]) <= horizonSquare)
+               && waypointBuffer[^1].DistanceSquared(waypointBuffer[0]) <= horizonSquare
+               && walkSteps++ < MaxHorizonWalkSteps)
         {
             SimpleWaypoint latestWp = waypointBuffer[^1];
             RoadOption latestRoadOption = latestWp.GetRoadOption();
@@ -762,6 +814,8 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
             }
 
             SimpleWaypoint nextSel = nexts[selection];
+            // Revisiting a waypoint means the road graph looped back on itself.
+            if (!visited.Add(nextSel.GetId())) break;
             PushWaypoint(actorId, _trackTraffic, waypointBuffer, nextSel);
 
             if (latestRoadOption != nextSel.GetRoadOption()

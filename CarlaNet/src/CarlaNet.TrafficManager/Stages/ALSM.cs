@@ -33,9 +33,15 @@ namespace CarlaNet.TrafficManager.Stages;
 
 /// <summary>
 /// Per-actor planning horizon buffer. Mirrors upstream's
-/// <c>std::deque&lt;SimpleWaypointPtr&gt;</c>. We use <see cref="List{T}"/>
-/// because the buffer is &lt;= ~50 entries and the front-pop cost (O(n)) is
-/// trivial vs. a LinkedList's per-node allocations.
+/// <c>std::deque&lt;SimpleWaypointPtr&gt;</c>. We use <see cref="List{T}"/> because the buffer holds
+/// tens of entries, where the front-pop cost (O(n)) is trivial next to a LinkedList's per-node
+/// allocations.
+/// <para>
+/// That trade depends on the buffer staying small, which is not automatic: the walks that fill it
+/// stop on straight-line distance tests that a cyclic road graph never satisfies. They are bounded
+/// for exactly this reason (see <c>LocalizationStage.MaxHorizonWalkSteps</c>). Removing that bound
+/// makes the front-pop quadratic as well as unbounded.
+/// </para>
 /// </summary>
 internal sealed class WaypointBuffer : List<SimpleWaypoint>
 {

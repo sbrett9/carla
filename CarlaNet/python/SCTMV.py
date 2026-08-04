@@ -204,9 +204,10 @@ def parse_args():
                            "Diagnostic: makes it obvious whether vehicles are actually driving (rather "
                            "than being hidden by the fade while they sit at the margin).")
     traf.add_argument("--route", action="store_true",
-                      help="use the Traffic Manager's custom-path routing to send each vehicle toward "
-                           "a far edge. OFF by default because routing can occasionally push a vehicle "
-                           "off the road or off a clipped dead-end.")
+                      help="give each vehicle a far-edge destination and let the Traffic Manager "
+                           "steer toward it. This is a bearing, not a planned route: the Traffic "
+                           "Manager picks each next waypoint greedily, so a vehicle can be led onto "
+                           "a dead end or around a loop ramp it never leaves. OFF by default.")
 
     scen = ap.add_argument_group("scenario")
     scen.add_argument("--scenario", default=None,
