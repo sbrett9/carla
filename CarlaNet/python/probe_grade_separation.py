@@ -10,10 +10,17 @@ map and the drape cache the build sampled, and reports the lift it assigns to th
 
 The two numbers that decide whether the defect is fixed:
 
-  * under-road lift must be 0. Anything else means a road passing beneath a structure has taken
-    height from it, which is the artefact that makes roads climb into an overpass.
-  * deck lift must match the clearance measurable in the photoreal at the same point. That is the
-    structure's real height above the road it crosses, recovered without any constant.
+  * every deck must sit above the road it crosses, by the clearance measurable in the photoreal at
+    that point — the structure's real height, recovered without any constant. Had a road beneath
+    taken height from the deck the two would have converged instead.
+  * a road passing under a structure may be moved OFF the terrain there, because no elevation model
+    sees the ground beneath a bridge, but never up toward the deck.
+
+It then scans every joint in the map — each place two roads end at the same plan position — for a
+step between them. That is a whole-map tear detector rather than a check of one location: a road
+elevation is only well formed if the roads meeting at a point are given the same height there, and a
+step shows up in the viewer as two road surfaces that fail to meet. Steps are reported with the lift
+each side was given, so a tear can be attributed to the layer routing or shown to predate it.
 
 Nothing here talks to the server, so it is safe to run against a live session:
 
@@ -91,6 +98,83 @@ def elevation_at(profiles, road_id, s):
     return rec[1] + rec[2] * ds + rec[3] * ds * ds + rec[4] * ds * ds * ds
 
 
+def report_mesh_joints(samples, profiles, lift, radius, worst_to_show=10):
+    """Every place two roads end at the same plan position, and the step between them.
+
+    Returns the number of joints whose step is attributable to a difference in assigned lift.
+    """
+    n = samples.Count
+    per_road = {}
+    for i in range(n):
+        per_road.setdefault(int(samples[i].RoadId), []).append(i)
+
+    ends = []
+    for road_id, idxs in per_road.items():
+        idxs.sort(key=lambda i: samples[i].S)
+        for i in (idxs[0], idxs[-1]):
+            z = elevation_at(profiles, road_id, samples[i].S)
+            if not math.isnan(z):
+                ends.append((road_id, samples[i].S, samples[i].X, samples[i].Y, z, lift[i]))
+
+    buckets = {}
+    for p in ends:
+        buckets.setdefault((int(p[2] // radius), int(p[3] // radius)), []).append(p)
+
+    seen, joints = set(), []
+    for p in ends:
+        cx, cy = int(p[2] // radius), int(p[3] // radius)
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for q in buckets.get((cx + dx, cy + dy), ()):
+                    if q[0] == p[0] or math.hypot(p[2] - q[2], p[3] - q[3]) > radius:
+                        continue
+                    key = tuple(sorted(((p[0], p[1]), (q[0], q[1]))))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    joints.append((abs(p[4] - q[4]), p, q))
+    joints.sort(key=lambda j: -j[0])
+
+    print()
+    print(f"road-mesh joints: {len(ends)} road endpoints, {len(joints)} pairs meeting within "
+          f"{radius} m")
+    if not joints:
+        return 0
+    steps = sorted(j[0] for j in joints)
+    m = len(steps)
+    print(f"  vertical step: median {steps[m // 2]:.3f}  p90 {steps[9 * m // 10]:.3f}  "
+          f"max {steps[-1]:.3f} m")
+    for threshold in (0.1, 0.25, 0.5, 1.0):
+        print(f"    over {threshold:4.2f} m: {sum(1 for s in steps if s > threshold):4d}")
+
+    notable = [j for j in joints if j[0] > 0.1][:worst_to_show]
+    if notable:
+        print(f"  {'step':>6} {'roadA':>6} {'roadB':>6} {'x':>9} {'y':>9} "
+              f"{'liftA':>7} {'liftB':>7}")
+        for step, p, q in notable:
+            print(f"  {step:6.2f} {p[0]:6d} {q[0]:6d} {p[2]:9.1f} {p[3]:9.1f} "
+                  f"{p[5]:7.2f} {q[5]:7.2f}")
+    else:
+        print("  every joint closes to within 0.10 m")
+
+    # A step where both sides carry the same lift cannot have come from the layer routing: the two
+    # roads were given identical treatment and still differ, so they are reading the terrain at
+    # slightly different points.
+    if all(math.isnan(v) for v in lift):
+        print("  (no drape cache: steps cannot be attributed to the layer routing)")
+        return 0
+    from_lift = [j for j in joints
+                 if j[0] > 0.1 and not math.isnan(j[1][5] - j[2][5])
+                 and abs(j[1][5] - j[2][5]) > 0.01]
+    if from_lift:
+        print(f"  {len(from_lift)} step(s) over 0.10 m come from a difference in assigned lift — "
+              f"the layer routing tore the mesh there.")
+    else:
+        print("  no step over 0.10 m comes from a difference in assigned lift; any that remain "
+              "predate the layer routing.")
+    return len(from_lift)
+
+
 def describe(label, values, unit="m"):
     st = stats(values)
     if st is None:
@@ -120,6 +204,8 @@ def main():
                     help="de-spike threshold, for the systematic-offset estimate (build default 5.0)")
     ap.add_argument("--near-crossing", type=float, default=12.0,
                     help="how close to a crossing a sample must be to count as under the structure (m)")
+    ap.add_argument("--joint-radius", type=float, default=1.0,
+                    help="how close two road ends must be in plan to count as the same joint (m)")
     ap.add_argument("--publish-dir", default=None,
                     help="CarlaNet DLL directory (default: the installed carlanet package)")
     args = ap.parse_args()
@@ -341,7 +427,7 @@ def main():
 
     if result is None:
         print("  (no drape cache: the lift the classifier assigned could not be checked)")
-        return 0
+        return 1 if report_mesh_joints(samples, profiles, lift, args.joint_radius) else 0
 
     # Whether a road under a structure took height from it is already settled by the separation
     # above: had it climbed onto the deck the two would have converged. What remains to report is how
@@ -370,7 +456,8 @@ def main():
     if result.StructuresFromFallback:
         print(f"        {result.StructuresFromFallback} way(s) the photogrammetry did not reconstruct "
               f"were lifted by the fixed separation instead.")
-    return 0
+
+    return 1 if report_mesh_joints(samples, profiles, lift, args.joint_radius) else 0
 
 
 if __name__ == "__main__":
