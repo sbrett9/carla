@@ -11,12 +11,25 @@ namespace CarlaNet.Scenario;
 /// much later as unexplained behaviour in training data. Failing at load, by contrast, is immediate and
 /// names what is missing.
 /// </summary>
-public static class OpenScenarioParser
+public sealed class OpenScenarioParser
 {
-    public static ScenarioDefinition LoadFile(string path)
-        => Load(File.ReadAllText(path), System.IO.Path.GetFileNameWithoutExtension(path));
+    private readonly Dictionary<string, string> _parameters = new();
 
-    public static ScenarioDefinition Load(string xml, string name = "scenario")
+    private OpenScenarioParser() { }
+
+    public static ScenarioDefinition LoadFile(string path)
+        => LoadFile(path, null);
+
+    /// <param name="overrides">Values replacing the storyboard's own parameter declarations. This is
+    /// what turns one authored storyboard into a family of runs.</param>
+    public static ScenarioDefinition LoadFile(string path, IReadOnlyDictionary<string, string>? overrides)
+        => Load(File.ReadAllText(path), System.IO.Path.GetFileNameWithoutExtension(path), overrides);
+
+    public static ScenarioDefinition Load(string xml, string name = "scenario",
+                                          IReadOnlyDictionary<string, string>? overrides = null)
+        => new OpenScenarioParser().Parse(xml, name, overrides);
+
+    private ScenarioDefinition Parse(string xml, string name, IReadOnlyDictionary<string, string>? overrides)
     {
         XDocument doc;
         try { doc = XDocument.Parse(xml); }
@@ -25,6 +38,8 @@ public static class OpenScenarioParser
         XElement root = doc.Root ?? throw new ScenarioParseException("empty document");
         if (root.Name.LocalName != "OpenSCENARIO")
             throw new ScenarioParseException($"root element is <{root.Name.LocalName}>, expected <OpenSCENARIO>");
+
+        ReadParameters(root, overrides);
 
         XElement? header = root.Element("FileHeader");
         string version = header is null
@@ -40,14 +55,52 @@ public static class OpenScenarioParser
         {
             Name = name,
             Version = version,
-            RoadNetworkFile = root.Element("RoadNetwork")?.Element("LogicFile")?.Attribute("filepath")?.Value,
+            RoadNetworkFile = Attr(root.Element("RoadNetwork")?.Element("LogicFile"), "filepath"),
+            Parameters = _parameters,
             Entities = entities,
             Acts = acts,
             StopTrigger = stop is null ? null : ParseTrigger(stop, "storyboard stop trigger"),
         };
     }
 
-    private static IReadOnlyList<ScenarioEntity> ParseEntities(XElement root)
+    // ── parameters ────────────────────────────────────────────────────────────
+
+    private void ReadParameters(XElement root, IReadOnlyDictionary<string, string>? overrides)
+    {
+        foreach (XElement d in root.Element("ParameterDeclarations")?.Elements("ParameterDeclaration")
+                               ?? Enumerable.Empty<XElement>())
+        {
+            string? key = d.Attribute("name")?.Value;
+            string? value = d.Attribute("value")?.Value;
+            if (key is not null && value is not null) _parameters[key] = value;
+        }
+
+        if (overrides is null) return;
+        foreach (var (key, value) in overrides)
+        {
+            if (!_parameters.ContainsKey(key))
+                throw new ScenarioParseException(
+                    $"cannot override '{key}': the storyboard declares no such parameter");
+            _parameters[key] = value;
+        }
+    }
+
+    /// <summary>
+    /// Substitutes a parameter reference. An undeclared reference is refused rather than passed through:
+    /// a literal "$Speed" reaching a numeric field would fail confusingly far from its cause, and one
+    /// reaching a name field would silently mismatch.
+    /// </summary>
+    private string Resolve(string raw, string where)
+    {
+        if (raw.Length < 2 || raw[0] != '$') return raw;
+        string key = raw[1..];
+        if (_parameters.TryGetValue(key, out string? value)) return value;
+        throw new ScenarioParseException($"'{where}': parameter {raw} is used but never declared");
+    }
+
+    // ── entities ──────────────────────────────────────────────────────────────
+
+    private IReadOnlyList<ScenarioEntity> ParseEntities(XElement root)
     {
         var init = root.Element("Storyboard")?.Element("Init")?.Element("Actions");
         var entities = new List<ScenarioEntity>();
@@ -61,7 +114,6 @@ public static class OpenScenarioParser
                 ?? throw new ScenarioParseException(
                     $"entity '{entityName}' is not a <Vehicle>; only vehicles are supported");
 
-            // Private init actions carry where the entity starts and how fast.
             XElement? priv = init?.Elements("Private")
                 .FirstOrDefault(p => Attr(p, "entityRef") == entityName);
             if (priv is null)
@@ -78,8 +130,14 @@ public static class OpenScenarioParser
             }
 
             double? initialSpeed = null;
-            XElement? target = priv.Descendants("AbsoluteTargetSpeed").FirstOrDefault();
-            if (target is not null) initialSpeed = Number(target, "value", entityName);
+            if (priv.Descendants("AbsoluteTargetSpeed").FirstOrDefault() is { } target)
+                initialSpeed = Number(target, "value", entityName);
+
+            IReadOnlyList<LanePosition>? initialRoute = null;
+            if (priv.Descendants("AssignRouteAction").FirstOrDefault() is { } route)
+                initialRoute = ParseRouteAction(route, entityName).Waypoints;
+
+            RefuseUnknownInitActions(priv, entityName);
 
             entities.Add(new ScenarioEntity
             {
@@ -88,11 +146,8 @@ public static class OpenScenarioParser
                 TemplateHint = Property(vehicle, "drawtonomy:template"),
                 Colour = Property(vehicle, "drawtonomy:color"),
                 InitialSpeedMps = initialSpeed,
-                InitialPosition = new LanePosition(
-                    (int)Number(lane, "roadId", entityName),
-                    (int)Number(lane, "laneId", entityName),
-                    Number(lane, "s", entityName),
-                    lane.Attribute("offset") is null ? 0.0 : Number(lane, "offset", entityName)),
+                InitialRoute = initialRoute,
+                InitialPosition = ReadLanePosition(lane, entityName),
             });
         }
 
@@ -100,7 +155,30 @@ public static class OpenScenarioParser
         return entities;
     }
 
-    private static IReadOnlyList<ScenarioAct> ParseActs(XElement root)
+    /// Initialisation actions this reader understands. Anything else is refused: an entity placed
+    /// without an instruction the storyboard gave would behave differently from the one authored, and
+    /// silently dropping a route is exactly that.
+    private static readonly string[] KnownInitActions = ["TeleportAction", "LongitudinalAction", "RoutingAction"];
+
+    private static void RefuseUnknownInitActions(XElement priv, string entityName)
+    {
+        foreach (XElement action in priv.Elements("PrivateAction"))
+            foreach (XElement kind in action.Elements())
+                if (!KnownInitActions.Contains(kind.Name.LocalName))
+                    throw new ScenarioParseException(
+                        $"entity '{entityName}' is initialised with {kind.Name.LocalName}, " +
+                        "which is not supported");
+    }
+
+    private LanePosition ReadLanePosition(XElement lane, string where) => new(
+        (int)Number(lane, "roadId", where),
+        (int)Number(lane, "laneId", where),
+        Number(lane, "s", where),
+        lane.Attribute("offset") is null ? 0.0 : Number(lane, "offset", where));
+
+    // ── acts, events, actions ─────────────────────────────────────────────────
+
+    private IReadOnlyList<ScenarioAct> ParseActs(XElement root)
     {
         var acts = new List<ScenarioAct>();
         foreach (XElement act in root.Element("Storyboard")?.Elements("Story").Elements("Act")
@@ -108,7 +186,6 @@ public static class OpenScenarioParser
         {
             string actName = Attr(act, "name") ?? $"act{acts.Count + 1}";
 
-            XElement? start = act.Element("StartTrigger");
             var actors = new List<string>();
             var events = new List<ScenarioEvent>();
 
@@ -126,7 +203,7 @@ public static class OpenScenarioParser
                         StartTrigger = ev.Element("StartTrigger") is { } t
                             ? ParseTrigger(t, evName)
                             : ScenarioTrigger.Immediate(),
-                        Action = ParseAction(ev, evName),
+                        Actions = ParseActions(ev, evName),
                     });
                 }
             }
@@ -134,7 +211,9 @@ public static class OpenScenarioParser
             acts.Add(new ScenarioAct
             {
                 Name = actName,
-                StartTrigger = start is null ? ScenarioTrigger.Immediate() : ParseTrigger(start, actName),
+                StartTrigger = act.Element("StartTrigger") is { } s
+                    ? ParseTrigger(s, actName)
+                    : ScenarioTrigger.Immediate(),
                 ActorNames = actors,
                 Events = events,
             });
@@ -144,29 +223,54 @@ public static class OpenScenarioParser
         return acts;
     }
 
-    private static ScenarioAction ParseAction(XElement ev, string where)
+    private IReadOnlyList<ScenarioAction> ParseActions(XElement ev, string where)
     {
-        XElement? speed = ev.Descendants("SpeedAction").FirstOrDefault();
-        if (speed is null)
+        var actions = new List<ScenarioAction>();
+
+        foreach (XElement speed in ev.Descendants("SpeedAction"))
+            actions.Add(ParseSpeedAction(speed, where));
+
+        foreach (XElement route in ev.Descendants("AssignRouteAction"))
+            actions.Add(ParseRouteAction(route, where));
+
+        foreach (XElement entityAction in ev.Descendants("EntityAction"))
         {
-            string kind = ev.Descendants()
-                .FirstOrDefault(e => e.Name.LocalName.EndsWith("Action") && e.Name.LocalName != "Action")
-                ?.Name.LocalName ?? "none";
-            throw new ScenarioParseException(
-                $"event '{where}' applies {kind}; only SpeedAction is supported");
+            if (entityAction.Element("DeleteEntityAction") is null)
+            {
+                string kind = entityAction.Elements().FirstOrDefault()?.Name.LocalName ?? "none";
+                throw new ScenarioParseException(
+                    $"event '{where}' applies {kind} to an entity; only DeleteEntityAction is supported");
+            }
+            actions.Add(new DeleteEntityAction
+            {
+                TargetEntity = Attr(entityAction, "entityRef")
+                    ?? throw new ScenarioParseException($"event '{where}': a delete names no entity"),
+            });
         }
 
-        XElement? absolute = speed.Descendants("AbsoluteTargetSpeed").FirstOrDefault();
-        if (absolute is null)
+        if (actions.Count == 0)
+        {
+            string kind = ev.Descendants()
+                .FirstOrDefault(e => e.Name.LocalName.EndsWith("Action") && !IsActionWrapper(e.Name.LocalName))
+                ?.Name.LocalName ?? "none";
             throw new ScenarioParseException(
+                $"event '{where}' applies {kind}, which is not supported");
+        }
+
+        return actions;
+    }
+
+    private SpeedAction ParseSpeedAction(XElement speed, string where)
+    {
+        XElement absolute = speed.Descendants("AbsoluteTargetSpeed").FirstOrDefault()
+            ?? throw new ScenarioParseException(
                 $"event '{where}' uses a relative speed target; only AbsoluteTargetSpeed is supported");
 
         double seconds = 0.0;
         if (speed.Element("SpeedActionDynamics") is { } dyn)
         {
-            // "time" gives the transition duration directly. Other dimensions describe the same
-            // transition in distance or rate and would need converting against the current speed, which
-            // is not known at parse time.
+            // "time" gives the transition duration directly. The other dimensions describe the same
+            // transition in distance or rate and would need converting against a speed not known here.
             string dimension = Attr(dyn, "dynamicsDimension") ?? "time";
             if (dimension != "time")
                 throw new ScenarioParseException(
@@ -181,7 +285,27 @@ public static class OpenScenarioParser
         };
     }
 
-    private static ScenarioTrigger ParseTrigger(XElement trigger, string where)
+    private AssignRouteAction ParseRouteAction(XElement route, string where)
+    {
+        var waypoints = new List<LanePosition>();
+        foreach (XElement wp in route.Descendants("Waypoint"))
+        {
+            XElement lane = wp.Descendants("LanePosition").FirstOrDefault()
+                ?? throw new ScenarioParseException(
+                    $"event '{where}': a route waypoint is not a LanePosition, which is the only " +
+                    "supported form");
+            waypoints.Add(ReadLanePosition(lane, where));
+        }
+
+        if (waypoints.Count == 0)
+            throw new ScenarioParseException($"event '{where}': the route has no waypoints");
+
+        return new AssignRouteAction { Waypoints = waypoints };
+    }
+
+    // ── triggers ──────────────────────────────────────────────────────────────
+
+    private ScenarioTrigger ParseTrigger(XElement trigger, string where)
     {
         XElement? condition = trigger.Descendants("Condition").FirstOrDefault();
         if (condition is null) return ScenarioTrigger.Immediate();
@@ -211,12 +335,25 @@ public static class OpenScenarioParser
         }
 
         if (condition.Descendants("StandStillCondition").FirstOrDefault() is { } still)
-        {
             return new ScenarioTrigger
             {
                 Kind = TriggerKind.StandStill,
                 Value = Number(still, "duration", where),
-                EntityRef = condition.Descendants("EntityRef").FirstOrDefault()?.Attribute("entityRef")?.Value,
+                EntityRef = TriggeringEntity(condition),
+            };
+
+        if (condition.Descendants("ReachPositionCondition").FirstOrDefault() is { } reach)
+        {
+            XElement lane = reach.Descendants("LanePosition").FirstOrDefault()
+                ?? throw new ScenarioParseException(
+                    $"trigger on '{where}' waits on a position that is not a LanePosition, which is " +
+                    "the only supported form");
+            return new ScenarioTrigger
+            {
+                Kind = TriggerKind.ReachPosition,
+                Value = reach.Attribute("tolerance") is null ? 1.0 : Number(reach, "tolerance", where),
+                Position = ReadLanePosition(lane, where),
+                EntityRef = TriggeringEntity(condition),
             };
         }
 
@@ -226,22 +363,40 @@ public static class OpenScenarioParser
         throw new ScenarioParseException($"trigger on '{where}' uses {found}, which is not supported");
     }
 
+    private static string? TriggeringEntity(XElement condition)
+        => condition.Descendants("EntityRef").FirstOrDefault()?.Attribute("entityRef")?.Value;
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+
     /// Elements that group a condition rather than being one; naming these in an error would point the
     /// reader at the wrapper instead of at the construct that is unsupported.
     private static bool IsConditionWrapper(string name)
         => name is "ByValueCondition" or "ByEntityCondition" or "EntityCondition";
 
-    private static string? Attr(XElement e, string name) => e.Attribute(name)?.Value;
+    /// Likewise for the elements that group an action.
+    private static bool IsActionWrapper(string name)
+        => name is "Action" or "PrivateAction" or "GlobalAction" or "UserDefinedAction"
+                or "LongitudinalAction" or "LateralAction" or "RoutingAction" or "EntityAction";
 
-    private static string? Property(XElement vehicle, string name)
-        => vehicle.Element("Properties")?.Elements("Property")
+    private string? Attr(XElement? e, string name)
+    {
+        string? raw = e?.Attribute(name)?.Value;
+        return raw is null ? null : Resolve(raw, e!.Name.LocalName);
+    }
+
+    private string? Property(XElement vehicle, string name)
+    {
+        string? raw = vehicle.Element("Properties")?.Elements("Property")
             .FirstOrDefault(p => p.Attribute("name")?.Value == name)?.Attribute("value")?.Value;
+        return raw is null ? null : Resolve(raw, name);
+    }
 
-    private static double Number(XElement e, string attribute, string where)
+    private double Number(XElement e, string attribute, string where)
     {
         string? raw = e.Attribute(attribute)?.Value;
         if (raw is null)
             throw new ScenarioParseException($"'{where}': <{e.Name.LocalName}> has no {attribute}");
+        raw = Resolve(raw, where);
         if (!double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out double v))
             throw new ScenarioParseException($"'{where}': {attribute}='{raw}' is not a number");
         return v;

@@ -31,10 +31,16 @@ public sealed class RoadNetwork
     }
 
     /// <summary>
-    /// World pose for a lane position, raised clear of the surface so a spawn is not rejected for
-    /// intersecting the road it is being placed on.
+    /// World pose for a lane position, raised clear of the surface so a vehicle is not placed
+    /// intersecting the road it stands on.
+    ///
+    /// The default matches the height CARLA itself uses for the spawn points it generates from a road
+    /// network (SpawnersHeight, three metres). The margin has to exceed the vehicle's own half-height,
+    /// which is around 0.7 m for a saloon: a smaller offset places the underside below the surface, and
+    /// physics then resolves the intersection unpredictably — the vehicle may settle, or be pinned, or
+    /// be thrown clear — which makes placement a race rather than a placement.
     /// </summary>
-    public Transform Resolve(LanePosition position, double heightAboveSurface = 0.5)
+    public Transform Resolve(LanePosition position, double heightAboveSurface = 3.0)
     {
         RoadId roadId = checked((RoadId)position.RoadId);
         if (!_map.Data.Roads.TryGetValue(roadId, out var road))

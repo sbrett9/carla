@@ -31,12 +31,18 @@ public sealed class ScenarioExecutor : IDisposable
     /// described elsewhere as metres per second.
     private const double MpsToTrafficManagerUnits = 3.6;
 
+    /// Clearance used for the placing call itself, before the vehicle is set down precisely. It only
+    /// has to exceed any vehicle's half-height so the placement does not intersect the road.
+    private const double SpawnClearanceMetres = 3.0;
+
     private readonly CarlaClient _client;
     private readonly TrafficManager.TrafficManager _traffic;
     private readonly ScenarioDefinition _definition;
     private readonly Action<string>? _report;
 
+    private readonly RoadNetwork _network;
     private readonly Dictionary<string, EntityRuntime> _entities = new();
+    private readonly Dictionary<LanePosition, Location> _resolvedPositions = new();
     private readonly Dictionary<string, ActRuntime> _acts = new();
 
     private readonly Action<TickTimestamp> _tickHandler;
@@ -61,6 +67,7 @@ public sealed class ScenarioExecutor : IDisposable
         _client = client;
         _traffic = traffic;
         _definition = definition;
+        _network = network;
         _report = report;
 
         foreach (var act in definition.Acts)
@@ -81,13 +88,18 @@ public sealed class ScenarioExecutor : IDisposable
 
         foreach (ScenarioEntity entity in _definition.Entities)
         {
-            Transform pose = network.Resolve(entity.InitialPosition);
+            Transform surface = network.Resolve(entity.InitialPosition, heightAboveSurface: 0.0);
+            var clearance = new Transform(
+                new Location(surface.Location.X, surface.Location.Y,
+                             (float)(surface.Location.Z + SpawnClearanceMetres)),
+                surface.Rotation);
+
             ActorDescription description = BlueprintChooser.Describe(catalogue, entity);
 
             Actor actor;
             try
             {
-                actor = _client.SpawnActorAsync(description, pose).GetAwaiter().GetResult();
+                actor = _client.SpawnActorAsync(description, clearance).GetAwaiter().GetResult();
             }
             catch (Exception ex)
             {
@@ -99,18 +111,74 @@ public sealed class ScenarioExecutor : IDisposable
                     $"at s={entity.InitialPosition.S:0.##}: {ex.Message}");
             }
 
-            var runtime = new EntityRuntime { Definition = entity, Actor = actor };
-            _entities[entity.Name] = runtime;
-
-            if (entity.InitialSpeedMps is { } initial && initial > 0.0)
-            {
-                Register(runtime);
-                Command(runtime, initial);
-            }
+            WarnIfOccupied(entity.Name, surface, actor.Id);
+            Transform resting = SetDown(actor, surface);
+            _entities[entity.Name] = new EntityRuntime { Definition = entity, Actor = actor, Pose = resting };
 
             _report?.Invoke($"placed {entity.Name} as {description.Id} on road " +
                             $"{entity.InitialPosition.RoadId} lane {entity.InitialPosition.LaneId}");
         }
+    }
+
+    /// Distance within which another vehicle will obstruct one being placed. A stationary vehicle this
+    /// close ahead is enough for the Traffic Manager to hold the new one at a standstill.
+    private const double ObstructionRadiusMetres = 8.0;
+
+    /// <summary>
+    /// Reports any vehicle already standing where an entity is being placed.
+    ///
+    /// The usual cause is a previous run whose vehicles have not gone yet, or wreckage left by one that
+    /// went wrong. Either way the entity will sit motionless behind it, and saying so here turns a
+    /// puzzling stall into a stated fact.
+    /// </summary>
+    private void WarnIfOccupied(string name, Transform where, ActorId self)
+    {
+        var ids = _client.GetCachedActorIds();
+        if (ids.Count == 0) return;
+
+        // Only vehicles are reported. The spectator and the roadside furniture sit near the carriageway
+        // by their nature and obstruct nothing, so naming them would bury the one case that matters.
+        var records = _client.GetActorsByIdAsync(ids).GetAwaiter().GetResult();
+        foreach (Actor other in records)
+        {
+            if (other.Id == self) continue;
+            if (other.Description.Id is not { } typeId
+                || !typeId.StartsWith("vehicle.", StringComparison.Ordinal)) continue;
+
+            var snapshot = _client.GetActorSnapshot(other.Id);
+            if (snapshot is null) continue;
+            Location p = snapshot.Transform.Location;
+            double dx = p.X - where.Location.X, dy = p.Y - where.Location.Y;
+            double distance = Math.Sqrt(dx * dx + dy * dy);
+            if (distance <= ObstructionRadiusMetres)
+                _report?.Invoke(
+                    $"{name} is placed {distance:0.0} m from vehicle {other.Id} ({typeId}), " +
+                    "which will hold it stationary");
+        }
+    }
+
+    /// <summary>
+    /// Sets a vehicle down so it rests on the road rather than falling onto it.
+    ///
+    /// Placing a vehicle above the surface and letting physics settle it makes the outcome depend on
+    /// timing: it may settle, or be pinned, or be pushed aside, and several vehicles placed together
+    /// resolve differently from one placed alone. Computing the resting height from the vehicle's own
+    /// bounding box removes the fall, and with it the variability.
+    /// </summary>
+    private Transform SetDown(Actor actor, Transform surface)
+    {
+        BoundingBox box = actor.BoundingBox;
+
+        // The box centre is offset from the actor's origin, so the lowest point is the origin plus that
+        // offset less the half-height. Placing that on the surface is what "resting" means.
+        double restingZ = surface.Location.Z - box.Location.Z + box.Extent.Z;
+        var resting = new Transform(
+            new Location(surface.Location.X, surface.Location.Y, (float)restingZ),
+            surface.Rotation);
+
+        _client.SetActorTransformAsync(actor.Id, resting).GetAwaiter().GetResult();
+        Detached(_client.SetActorTargetVelocityAsync(actor.Id, new Vector3D(0f, 0f, 0f)));
+        return resting;
     }
 
     // ── per-tick ──────────────────────────────────────────────────────────────
@@ -125,8 +193,10 @@ public sealed class ScenarioExecutor : IDisposable
 
         try
         {
+            InitialisePending();
             AdvanceEntities(now, tick.DeltaSeconds);
             AdvanceActs(now);
+            ReportProgress(now);
 
             if (_definition.StopTrigger is { } stop && Fired(stop, now, actorNames: null))
             {
@@ -138,6 +208,31 @@ public sealed class ScenarioExecutor : IDisposable
         {
             _report?.Invoke($"scenario aborted: {ex.Message}");
             Stop();
+        }
+    }
+
+    /// <summary>
+    /// Registers each placed vehicle and gives it its route and speed, on the first tick after it was
+    /// placed rather than during placement.
+    ///
+    /// A vehicle is not visible to the Traffic Manager until the world has reported it, so commanding
+    /// one at the moment it is created leaves it registered but unattended until something else
+    /// disturbs it.
+    /// </summary>
+    private void InitialisePending()
+    {
+        foreach (EntityRuntime e in _entities.Values)
+        {
+            if (e.Initialised || e.Actor is null) continue;
+            if (_client.GetActorSnapshot(e.Actor.Value.Id) is null) continue;   // not reported yet
+
+            Register(e);
+            if (e.Definition.InitialRoute is { Count: > 0 } waypoints)
+                _traffic.SetCustomPath(e.Actor.Value, ForwardPath(e.Pose, waypoints, e.Definition.Name), true);
+            if (e.Definition.InitialSpeedMps is { } initial && initial > 0.0)
+                Command(e, initial);
+
+            e.Initialised = true;
         }
     }
 
@@ -181,6 +276,26 @@ public sealed class ScenarioExecutor : IDisposable
         }
     }
 
+    private const double ProgressIntervalSeconds = 5.0;
+    private double _nextProgressAt = ProgressIntervalSeconds;
+
+    private void ReportProgress(double now)
+    {
+        if (_report is null || now < _nextProgressAt) return;
+        _nextProgressAt = now + ProgressIntervalSeconds;
+
+        var parts = new List<string>();
+        foreach (var (name, e) in _entities)
+        {
+            if (e.Actor is null) continue;
+            var snapshot = _client.GetActorSnapshot(e.Actor.Value.Id);
+            if (snapshot is null) { parts.Add($"{name} unseen"); continue; }
+            Vector3D v = snapshot.Velocity;
+            parts.Add($"{name} {Math.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z):0.0}");
+        }
+        if (parts.Count > 0) _report($"{now:0.0}s speeds m/s: {string.Join("  ", parts)}");
+    }
+
     private void AdvanceActs(double now)
     {
         foreach (ScenarioAct act in _definition.Acts)
@@ -201,7 +316,8 @@ public sealed class ScenarioExecutor : IDisposable
                 if (state.Fired.Contains(ev.Name)) continue;
                 if (!Fired(ev.StartTrigger, now, act.ActorNames)) continue;
                 state.Fired.Add(ev.Name);
-                state.FinishesAt = Math.Max(state.FinishesAt, Apply(ev.Action, act.ActorNames, now));
+                foreach (ScenarioAction action in ev.Actions)
+                    state.FinishesAt = Math.Max(state.FinishesAt, Apply(action, act.ActorNames, now));
             }
 
             // An act is finished once every event it holds has fired and the last of their transitions
@@ -219,8 +335,20 @@ public sealed class ScenarioExecutor : IDisposable
     /// <summary>Applies an action, returning the scenario time at which it will have finished.</summary>
     private double Apply(ScenarioAction action, IReadOnlyList<string> actorNames, double now)
     {
-        if (action is not SpeedAction speed) return now;
+        // A private action follows the actors of the act that owns it; a global action names its own.
+        IReadOnlyList<string> targets = action.TargetEntity is { } named ? [named] : actorNames;
 
+        return action switch
+        {
+            SpeedAction speed => ApplySpeed(speed, targets, now),
+            AssignRouteAction route => ApplyRoute(route, targets, now),
+            DeleteEntityAction => ApplyDelete(targets, now),
+            _ => now,
+        };
+    }
+
+    private double ApplySpeed(SpeedAction speed, IReadOnlyList<string> actorNames, double now)
+    {
         foreach (string name in actorNames)
         {
             if (!_entities.TryGetValue(name, out EntityRuntime? e) || e.Actor is null) continue;
@@ -244,6 +372,89 @@ public sealed class ScenarioExecutor : IDisposable
         return now + Math.Max(0.0, speed.TransitionSeconds);
     }
 
+    /// Hands the route to the Traffic Manager as a path to follow. The waypoints say where to go rather
+    /// than when to be there, so the vehicle drives the network between them at whatever speed is set.
+    private double ApplyRoute(AssignRouteAction route, IReadOnlyList<string> actorNames, double now)
+    {
+        foreach (string name in actorNames)
+        {
+            if (!_entities.TryGetValue(name, out EntityRuntime? e) || e.Actor is null) continue;
+            var snapshot = _client.GetActorSnapshot(e.Actor.Value.Id);
+            if (snapshot is null) continue;
+            Register(e);
+            _traffic.SetCustomPath(e.Actor.Value, ForwardPath(snapshot.Transform, route.Waypoints, name), true);
+        }
+        return now;
+    }
+
+    private double ApplyDelete(IReadOnlyList<string> actorNames, double now)
+    {
+        foreach (string name in actorNames)
+        {
+            if (!_entities.TryGetValue(name, out EntityRuntime? e) || e.Actor is null) continue;
+            if (e.Registered)
+            {
+                try { _traffic.UnregisterVehicles([e.Actor.Value]); } catch { }
+                e.Registered = false;
+            }
+            Detached(_client.DestroyActorAsync(e.Actor.Value.Id));
+            e.Actor = null;
+            _report?.Invoke($"{name} removed at {now:0.0}s");
+        }
+        return now;
+    }
+
+    /// <summary>
+    /// Route waypoints as world points, dropping any leading ones that lie behind the vehicle.
+    ///
+    /// A route names the roads to traverse, and its first waypoint is customarily the start of the road
+    /// the vehicle is already standing on — which is behind it. Followed literally the vehicle turns
+    /// around to reach that point, and a convoy does so at the first junction it meets. Only the leading
+    /// run is dropped: a waypoint behind the vehicle later in the route is a loop, and legitimate.
+    /// </summary>
+    private List<Location> ForwardPath(Transform pose, IReadOnlyList<LanePosition> waypoints, string name)
+    {
+        double yaw = pose.Rotation.Yaw * Math.PI / 180.0;
+        double fx = Math.Cos(yaw), fy = Math.Sin(yaw);
+
+        var path = new List<Location>(waypoints.Count);
+        int dropped = 0;
+        foreach (LanePosition waypoint in waypoints)
+        {
+            Location point = WorldPoint(waypoint);
+            if (path.Count == 0)
+            {
+                double dx = point.X - pose.Location.X, dy = point.Y - pose.Location.Y;
+                if (dx * fx + dy * fy <= 0.0) { dropped++; continue; }
+            }
+            path.Add(point);
+        }
+
+        if (path.Count == 0)
+        {
+            // Every waypoint is behind: following the route as given would reverse the vehicle, so the
+            // route is used unchanged and the reason is reported rather than silently corrected.
+            _report?.Invoke($"{name}: every route waypoint lies behind it; using the route as authored");
+            foreach (LanePosition waypoint in waypoints) path.Add(WorldPoint(waypoint));
+            return path;
+        }
+
+        _report?.Invoke(dropped == 0
+            ? $"{name} routed via {path.Count} waypoints"
+            : $"{name} routed via {path.Count} waypoints ({dropped} behind it, dropped)");
+        return path;
+    }
+
+    /// World point for a lane position, resolved once and remembered: a route waypoint or an arrival
+    /// position is fixed for the life of the scenario, and arrival is tested every tick.
+    private Location WorldPoint(LanePosition position)
+    {
+        if (_resolvedPositions.TryGetValue(position, out Location cached)) return cached;
+        Location point = _network.Resolve(position, heightAboveSurface: 0.0).Location;
+        _resolvedPositions[position] = point;
+        return point;
+    }
+
     private double CurrentSpeed(EntityRuntime e)
     {
         if (e.Actor is null) return 0.0;
@@ -265,6 +476,7 @@ public sealed class ScenarioExecutor : IDisposable
                 && _acts.TryGetValue(reference, out ActRuntime? other)
                 && other.Phase == ActPhase.Complete,
             TriggerKind.StandStill => StationaryLongEnough(trigger, actorNames),
+            TriggerKind.ReachPosition => Arrived(trigger, actorNames),
             _ => false,
         };
 
@@ -274,6 +486,21 @@ public sealed class ScenarioExecutor : IDisposable
         return who is not null
             && _entities.TryGetValue(who, out EntityRuntime? e)
             && e.StationarySeconds >= trigger.Value;
+    }
+
+    private bool Arrived(ScenarioTrigger trigger, IReadOnlyList<string>? actorNames)
+    {
+        if (trigger.Position is not { } destination) return false;
+        string? who = trigger.EntityRef ?? (actorNames is { Count: > 0 } ? actorNames[0] : null);
+        if (who is null || !_entities.TryGetValue(who, out EntityRuntime? e) || e.Actor is null) return false;
+
+        var snapshot = _client.GetActorSnapshot(e.Actor.Value.Id);
+        if (snapshot is null) return false;
+
+        Location here = snapshot.Transform.Location;
+        Location target = WorldPoint(destination);
+        double dx = here.X - target.X, dy = here.Y - target.Y;
+        return Math.Sqrt(dx * dx + dy * dy) <= trigger.Value;
     }
 
     // ── vehicle commands ──────────────────────────────────────────────────────
@@ -335,17 +562,39 @@ public sealed class ScenarioExecutor : IDisposable
         DestroyPlacedEntities();
     }
 
+    /// <summary>
+    /// Removes every vehicle this scenario placed, and waits for the removals to take effect.
+    ///
+    /// Waiting matters: a scenario started immediately after another would otherwise be placed into a
+    /// world still holding the previous run's vehicles, and a vehicle left across the carriageway blocks
+    /// the one placed behind it. That presents as a scenario which runs correctly sometimes and stalls
+    /// other times, with the difference being what the last run left behind.
+    /// </summary>
     private void DestroyPlacedEntities()
     {
+        var removals = new List<Task>();
         foreach (EntityRuntime e in _entities.Values)
         {
             if (e.Actor is null) continue;
             if (e.Registered)
             {
                 try { _traffic.UnregisterVehicles([e.Actor.Value]); } catch { }
+                e.Registered = false;
             }
-            Detached(_client.DestroyActorAsync(e.Actor.Value.Id));
+            removals.Add(_client.DestroyActorAsync(e.Actor.Value.Id));
             e.Actor = null;
+        }
+
+        if (removals.Count == 0) return;
+        try
+        {
+            // Bounded: a scenario ending must not hang on an unresponsive server, and this runs on the
+            // tick thread when a scenario reaches its own stop condition.
+            Task.WaitAll([.. removals], TimeSpan.FromSeconds(5));
+        }
+        catch (Exception ex)
+        {
+            _report?.Invoke($"not every vehicle could be removed: {ex.Message}");
         }
     }
 
@@ -369,7 +618,9 @@ public sealed class ScenarioExecutor : IDisposable
     private sealed class EntityRuntime
     {
         public required ScenarioEntity Definition { get; init; }
+        public required Transform Pose { get; init; }
         public Actor? Actor;
+        public bool Initialised;
         public bool Registered;
         public bool Held;
         public double CommandedMps;

@@ -136,11 +136,11 @@ public class OpenScenarioParserTests
     {
         var s = OpenScenarioParser.Load(DriveStopResume);
 
-        var drive = Assert.IsType<SpeedAction>(s.Acts[0].Events[0].Action);
+        var drive = Assert.IsType<SpeedAction>(Assert.Single(s.Acts[0].Events[0].Actions));
         Assert.Equal(8.333333, drive.TargetSpeedMps, 6);
         Assert.Equal(2.0, drive.TransitionSeconds);
 
-        var stop = Assert.IsType<SpeedAction>(s.Acts[1].Events[0].Action);
+        var stop = Assert.IsType<SpeedAction>(Assert.Single(s.Acts[1].Events[0].Actions));
         Assert.Equal(0.0, stop.TargetSpeedMps);
     }
 
