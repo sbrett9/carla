@@ -343,12 +343,19 @@ def main():
         print("  (no drape cache: the lift the classifier assigned could not be checked)")
         return 0
 
-    bad_under = [r for r in crossing_report
-                 if not math.isnan(r["under_lift"]) and abs(r["under_lift"]) > 0.01]
-    if bad_under:
-        print(f"  FAIL: {len(bad_under)} road(s) passing under a structure were lifted off grade.")
-    else:
-        print("  PASS: no road passing under a structure took any height from it.")
+    # Whether a road under a structure took height from it is already settled by the separation
+    # above: had it climbed onto the deck the two would have converged. What remains to report is how
+    # far the footprint span moved it, since no terrain model sees the ground under a deck and the
+    # span is what replaces that blind reading.
+    moved = [r for r in crossing_report
+             if not math.isnan(r["under_lift"]) and abs(r["under_lift"]) > 0.01]
+    if moved:
+        drops = sorted(-r["under_lift"] for r in moved)
+        print(f"        {len(moved)} under-road sample(s) spanned the structure footprint rather "
+              f"than following the terrain over it:")
+        print(f"        lowered by a median {drops[len(drops)//2]:+.2f} m "
+              f"(range {drops[0]:+.2f} to {drops[-1]:+.2f}); a negative value is the span holding a "
+              f"grade across a dip.")
 
     measured = [r for r in crossing_report
                 if not math.isnan(r["deck_lift"]) and r["clearance"] > 1.5]

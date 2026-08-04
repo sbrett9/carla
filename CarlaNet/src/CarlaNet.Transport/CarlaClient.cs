@@ -514,10 +514,29 @@ public sealed class CarlaClient : IAsyncDisposable
         var gradeLift = new double[samples.Count];
         var raisedSamples = new bool[samples.Count];
         IReadOnlyList<CarlaNet.Map.OpenDrive.OsmRoadWay> elevatedStructures = [];
+        // One description of a deck's footprint, shared by the road elevation (which spans it on the
+        // roads underneath) and the collision heightfield (which anchors it to the ground).
+        var separationOptions = new CarlaNet.Map.OpenDrive.GradeSeparationOptions();
         if (anyLayeredWays && (drape || photo.Count == points.Count))
         {
             var surfaceAtSample = new double[samples.Count];
             var groundAtSample = new double[samples.Count];
+            double[]? atGradeAtSample = null;
+            if (drape)
+            {
+                // The at-grade draped surface as it stands before any deck footprint is anchored to
+                // the ground. Away from a footprint it is the final surface, so it is what a road
+                // spanning a footprint must join up to at either end. (Anchoring only lowers cells
+                // inside footprints, which is where the span replaces the elevation anyway.)
+                var openDrape = CarlaNet.Map.OpenDrive.DrapeTerrain.Despike(
+                    drapeSurface, drapeGround, sandboxSpec, drapeMaxDrapeMeters,
+                    atGradeOffsetMeters: drapeSystematicOffset);
+                atGradeAtSample = new double[samples.Count];
+                for (int i = 0; i < samples.Count; i++)
+                    atGradeAtSample[i] = CarlaNet.Map.OpenDrive.DrapeTerrain.SampleBilinear(
+                        openDrape.DrapedZ, sandboxSpec, samples[i].X, samples[i].Y);
+            }
+
             for (int i = 0; i < samples.Count; i++)
             {
                 if (drape)
@@ -535,7 +554,8 @@ public sealed class CarlaClient : IAsyncDisposable
             }
 
             var separation = CarlaNet.Map.OpenDrive.GradeSeparation.Compute(
-                map, samples, osmLayers, surfaceAtSample, groundAtSample, atGradeOffset);
+                map, samples, osmLayers, surfaceAtSample, groundAtSample, atGradeOffset,
+                separationOptions, atGradeAtSample);
             gradeLift = separation.Lift;
             elevatedStructures = separation.ElevatedWays;
             for (int i = 0; i < samples.Count; i++) raisedSamples[i] = gradeLift[i] != 0.0;
@@ -554,7 +574,8 @@ public sealed class CarlaClient : IAsyncDisposable
             // road-mesh collision.
             drapeRes = CarlaNet.Map.OpenDrive.DrapeTerrain.Despike(
                 drapeSurface, drapeGround, sandboxSpec, drapeMaxDrapeMeters,
-                elevatedStructures: elevatedStructures, atGradeOffsetMeters: drapeSystematicOffset);
+                elevatedStructures: elevatedStructures, atGradeOffsetMeters: drapeSystematicOffset,
+                structureHalfWidthMeters: separationOptions.StructureFootprintHalfWidthMeters);
             Console.WriteLine("[drape] de-spiked draped surface + offset field built"
                 + (elevatedStructures.Count > 0
                     ? $"; {elevatedStructures.Count} elevated structures anchored to the ground beneath them."

@@ -62,6 +62,12 @@ public sealed record GradeSeparationOptions
     /// end fades out within 1/grade metres.</summary>
     public double ApproachRampGrade { get; init; } = 0.06;
 
+    /// <summary>Half-width of the corridor a structure sweeps over the ground. Inside it, a terrain
+    /// model has no sight of the roadway below, so a road known to pass under the structure spans it
+    /// rather than following the terrain. Should match the footprint the drape masks
+    /// (<see cref="DrapeTerrain.Despike"/>), since both describe the same deck.</summary>
+    public double StructureFootprintHalfWidthMeters { get; init; } = 15.0;
+
     /// <summary>How close a centreline sample must be to a structure's end node for that node to
     /// seed an approach ramp. A node further than this from every sample of its own way is not
     /// covered by the road network there, and the nearest sample is then somewhere out along the
@@ -93,6 +99,10 @@ public sealed class GradeSeparationResult
 
     public required int SamplesMatched { get; init; }
     public required int SamplesLifted { get; init; }
+
+    /// <summary>Samples on a road passing under a structure whose elevation was spanned across the
+    /// footprint instead of taken from the terrain, because no terrain model sees under a deck.</summary>
+    public required int SamplesSpannedUnderStructures { get; init; }
     public required int StructuresFromSurface { get; init; }
     public required int StructuresFromFallback { get; init; }
     public required double MaxLiftMeters { get; init; }
@@ -126,6 +136,11 @@ public static class GradeSeparation
     /// in the caller's height-align mode — the systematic photoreal-vs-bare-earth offset. Removing it
     /// makes a lift the height above the road's own at-grade surface, so a deck ends up at exactly
     /// the photoreal height whichever mode is in use.</param>
+    /// <param name="atGradeHeights">The at-grade surface the caller will actually add the lift to,
+    /// per sample. Only the footprint span needs it, to join a road to its own neighbours rather
+    /// than to bare earth: the draped surface follows the photoreal on open ground, which sits a
+    /// little off bare earth. Null means the at-grade surface IS bare earth plus
+    /// <paramref name="atGradeOffsetMeters"/>, which is exactly true of the constant-offset modes.</param>
     public static GradeSeparationResult Compute(
         Road.Map map,
         IReadOnlyList<CenterlineSample> samples,
@@ -133,7 +148,8 @@ public static class GradeSeparation
         IReadOnlyList<double> surfaceHeights,
         IReadOnlyList<double> groundHeights,
         double atGradeOffsetMeters,
-        GradeSeparationOptions? options = null)
+        GradeSeparationOptions? options = null,
+        IReadOnlyList<double>? atGradeHeights = null)
     {
         ArgumentNullException.ThrowIfNull(map);
         ArgumentNullException.ThrowIfNull(samples);
@@ -163,7 +179,7 @@ public static class GradeSeparation
             {
                 Lift = lift, ElevatedWays = elevated, WaysPassingUnder = underWays,
                 MatchedWayIndex = unmatched,
-                SamplesMatched = 0, SamplesLifted = 0,
+                SamplesMatched = 0, SamplesLifted = 0, SamplesSpannedUnderStructures = 0,
                 StructuresFromSurface = 0, StructuresFromFallback = 0, MaxLiftMeters = 0.0,
             };
         }
@@ -263,6 +279,13 @@ public static class GradeSeparation
         //    under a deck are excluded outright — they must stay at grade whatever adjoins them.
         ApplyApproachRamps(samples, ways, matchedWay, matchedStation, wayLiftSource, underIndices, opt, lift);
 
+        // 5) Span each structure's footprint on the roads running beneath it. Bare earth is the right
+        //    surface for them, but no terrain model can see the ground under a deck, so inside the
+        //    footprint it reports the structure instead of the roadway.
+        int spanned = SpanStructureFootprints(
+            samples, matchedWay, underIndices, elevated, surfaceHeights, groundHeights,
+            atGradeHeights, atGradeOffsetMeters, opt, lift);
+
         int lifted = 0;
         double maxLift = 0.0;
         for (int i = 0; i < lift.Length; ++i)
@@ -275,10 +298,12 @@ public static class GradeSeparation
             $"[GradeSeparation] OSM drivable ways={ways.Count} elevated={elevated.Count} " +
             $"grade crossings={layers.Crossings.Count} ways passing under={underWays.Count} | " +
             $"structures from photoreal={fromSurface} from fixed separation={fromFallback} | " +
-            $"samples matched={matchedCount}/{samples.Count} lifted={lifted} max lift={maxLift:F2} m");
+            $"samples matched={matchedCount}/{samples.Count} lifted={lifted} max lift={maxLift:F2} m | " +
+            $"spanned under structures={spanned}");
 
         return new GradeSeparationResult
         {
+            SamplesSpannedUnderStructures = spanned,
             Lift = lift,
             ElevatedWays = elevated,
             WaysPassingUnder = underWays,
@@ -536,6 +561,162 @@ public static class GradeSeparation
                 way.NodeStation[v] - matchedStation[i], opt.ApproachRampGrade);
             lift[i] = Math.Abs(fromBelow) >= Math.Abs(fromAbove) ? fromBelow : fromAbove;
         }
+    }
+
+    // ── spanning a structure's footprint ─────────────────────────────────────
+
+    // A terrain model has no sight of the ground beneath a bridge, so inside a deck's footprint it
+    // reports the structure and its embankment rather than the roadway threading under them. Measured
+    // at Arapahoe Ave / I-25: on 5 of the 7 ways crossing under a deck the bare-earth tileset domes up
+    // inside the footprint — by 3.6 m on the ways carrying Arapahoe itself — where the real road runs
+    // level underneath. Following it faithfully is what makes a road rise and fall under an overpass,
+    // and it also swallows the clearance, reading ~4.4 m where the structure really stands ~8.4 m
+    // above the roadway.
+    //
+    // Where a way is KNOWN to cross beneath a structure, the terrain inside the footprint is therefore
+    // not evidence of that road's height. The road's own grades on either side are, so the span is
+    // replaced by the chord between them. The correction is expressed as a lift so the caller's
+    // at-grade surface remains the single source of the base elevation. This uses only what the OSM
+    // already told us — that there is a structure overhead — and invents no elevation data.
+    private static int SpanStructureFootprints(
+        IReadOnlyList<CenterlineSample> samples,
+        int[] matchedWay,
+        HashSet<int> waysPassingUnder,
+        IReadOnlyList<OsmRoadWay> elevatedWays,
+        IReadOnlyList<double> surfaceHeights,
+        IReadOnlyList<double> groundHeights,
+        IReadOnlyList<double>? atGradeHeights,
+        double atGradeOffsetMeters,
+        GradeSeparationOptions opt,
+        double[] lift)
+    {
+        if (elevatedWays.Count == 0 || waysPassingUnder.Count == 0) return 0;
+
+        // The chord joins ROAD elevations, so it is measured on the at-grade surface the caller will
+        // add the lift to. Inside the footprint that surface is bare earth plus the systematic
+        // offset, because the drape anchors the whole footprint there; outside it the draped surface
+        // is free to follow the photoreal, and joining to bare earth instead would leave a step at
+        // the footprint edge the size of the photoreal-vs-bare-earth gap.
+        double AtGrade(int i) =>
+            atGradeHeights is not null && double.IsFinite(atGradeHeights[i])
+                ? atGradeHeights[i]
+                : groundHeights[i] + atGradeOffsetMeters;
+        double Anchored(int i) => groundHeights[i] + atGradeOffsetMeters;
+
+        double halfWidth = opt.StructureFootprintHalfWidthMeters;
+        var footprint = new SegmentIndex(elevatedWays, halfWidth);
+        double halfWidthSq = halfWidth * halfWidth;
+
+        // Samples on a road that crosses under a structure, where that structure stands over them.
+        // The nominal footprint is a corridor about the deck's centreline, but OSM does not record
+        // how wide a deck is, so a reading that still shows the structure overhead just outside the
+        // corridor is taken as under it too — bounded to twice the corridor so this cannot run away
+        // along a road that merely passes a building somewhere else.
+        double reachSq = 4.0 * halfWidthSq;
+        var beneath = new bool[samples.Count];
+        var roadsAffected = new HashSet<RoadId>();
+        for (int i = 0; i < samples.Count; ++i)
+        {
+            int w = matchedWay[i];
+            if (w < 0 || !waysPassingUnder.Contains(w)) continue;
+            double distanceSq = NearestWayDistanceSquared(
+                footprint, elevatedWays, samples[i].X, samples[i].Y);
+            if (distanceSq > halfWidthSq)
+            {
+                if (distanceSq > reachSq) continue;
+                double overhead = surfaceHeights[i] - groundHeights[i] - atGradeOffsetMeters;
+                if (!double.IsFinite(overhead) || overhead <= opt.MinStructureMeters) continue;
+            }
+            beneath[i] = true;
+            roadsAffected.Add(samples[i].RoadId);
+        }
+        if (roadsAffected.Count == 0) return 0;
+
+        // Work along each .xodr road rather than along the OSM way: a road's stations are monotone
+        // and belong to one carriageway, whereas several roads can match a single way and interleave.
+        var perRoad = new Dictionary<RoadId, List<int>>();
+        for (int i = 0; i < samples.Count; ++i)
+        {
+            if (!roadsAffected.Contains(samples[i].RoadId)) continue;
+            if (!perRoad.TryGetValue(samples[i].RoadId, out var list))
+                perRoad[samples[i].RoadId] = list = new List<int>();
+            list.Add(i);
+        }
+
+        int corrected = 0;
+        foreach (var list in perRoad.Values)
+        {
+            list.Sort((a, b) => samples[a].S.CompareTo(samples[b].S));
+
+            for (int start = 0; start < list.Count;)
+            {
+                if (!beneath[list[start]]) { ++start; continue; }
+                int end = start;
+                while (end + 1 < list.Count && beneath[list[end + 1]]) ++end;
+
+                // The nearest usable terrain reading clear of the footprint on each side.
+                int before = start - 1;
+                while (before >= 0 && !double.IsFinite(groundHeights[list[before]])) --before;
+                int after = end + 1;
+                while (after < list.Count && !double.IsFinite(groundHeights[list[after]])) ++after;
+
+                bool haveBefore = before >= 0, haveAfter = after < list.Count;
+                if (haveBefore || haveAfter)
+                {
+                    double s0 = haveBefore ? samples[list[before]].S : 0.0;
+                    double g0 = haveBefore ? AtGrade(list[before]) : 0.0;
+                    double s1 = haveAfter ? samples[list[after]].S : 0.0;
+                    double g1 = haveAfter ? AtGrade(list[after]) : 0.0;
+
+                    for (int k = start; k <= end; ++k)
+                    {
+                        int i = list[k];
+                        if (!double.IsFinite(groundHeights[i])) continue;
+
+                        double chord;
+                        if (haveBefore && haveAfter)
+                        {
+                            double span = s1 - s0;
+                            double t = span > 1e-9 ? (samples[i].S - s0) / span : 0.0;
+                            chord = g0 + (g1 - g0) * Math.Clamp(t, 0.0, 1.0);
+                        }
+                        else
+                        {
+                            // The road enters or leaves the map inside the footprint; the one grade
+                            // in hand is still better evidence than the structure overhead.
+                            chord = haveBefore ? g0 : g1;
+                        }
+
+                        double correction = Math.Clamp(chord - Anchored(i),
+                            -opt.MaxStructureMeters, opt.MaxStructureMeters);
+                        if (correction == 0.0) continue;
+                        lift[i] += correction;
+                        ++corrected;
+                    }
+                }
+                start = end + 1;
+            }
+        }
+        return corrected;
+    }
+
+    private static double NearestWayDistanceSquared(
+        SegmentIndex index, IReadOnlyList<OsmRoadWay> ways, double x, double y)
+    {
+        double best = double.MaxValue;
+        foreach (var (w, seg) in index.Near(x, y))
+        {
+            var way = ways[w];
+            double x0 = way.X[seg], y0 = way.Y[seg];
+            double dx = way.X[seg + 1] - x0, dy = way.Y[seg + 1] - y0;
+            double segLenSq = dx * dx + dy * dy;
+            if (segLenSq <= 1e-12) continue;
+            double t = Math.Clamp(((x - x0) * dx + (y - y0) * dy) / segLenSq, 0.0, 1.0);
+            double px = x0 + dx * t, py = y0 + dy * t;
+            double d = (x - px) * (x - px) + (y - py) * (y - py);
+            if (d < best) best = d;
+        }
+        return best;
     }
 
     // What is left of a lift after travelling `distance` at `grade`, keeping its sign; 0 once spent.

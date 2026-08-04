@@ -443,6 +443,80 @@ public class GradeSeparationTests
     }
 
     [Fact]
+    public void RoadUnderAStructure_SpansTheFootprint_InsteadOfFollowingTheTerrainOverIt()
+    {
+        // No terrain model sees the ground beneath a bridge: inside the footprint it returns the
+        // structure and its embankment. Bare earth here therefore domes 4 m over the road passing
+        // under the deck, exactly as Cesium World Terrain does at Arapahoe Ave / I-25. The road must
+        // span that, not climb it.
+        var map = LoadCrossing();
+        var origin = map.GeoReference;
+        var samples = ElevationInjector.ExtractCenterlineSamples(map, 10.0);
+
+        var surface = new double[samples.Count];
+        var ground = new double[samples.Count];
+        for (int i = 0; i < samples.Count; ++i)
+        {
+            // Bare earth is flat except for a dome centred on the crossing, tapering out by 20 m.
+            double dome = 4.0 * Math.Max(0.0, 1.0 - Math.Abs(samples[i].Y) / 20.0);
+            ground[i] = GroundHeight + dome;
+            bool overStructure = Math.Abs(samples[i].X) <= 30.0 && Math.Abs(samples[i].Y) <= 30.0;
+            surface[i] = overStructure ? GroundHeight + 9.0 : GroundHeight + SystematicOffset;
+        }
+
+        var result = WithOsm(origin, CrossingWays(("highway", "motorway"), ("bridge", "yes")),
+            p => GradeSeparation.Compute(map, samples, OsmRoadLayers.Read(p, origin),
+                surface, ground, SystematicOffset));
+
+        // The footprint is 15 m either side of the deck centreline, which runs along y = 0.
+        var inside = new List<int>();
+        for (int i = 0; i < samples.Count; ++i)
+            if (samples[i].RoadId == 2u && Math.Abs(samples[i].Y) <= 15.0)
+                inside.Add(i);
+        Assert.Equal(3, inside.Count);
+        Assert.Equal(inside.Count, result.SamplesSpannedUnderStructures);
+
+        // Across the footprint the road holds the level of the terrain either side of it — flat,
+        // not domed — even though the terrain beneath it reads up to 4 m higher.
+        foreach (int i in inside)
+        {
+            Assert.True(ground[i] > GroundHeight + 1.0, "the fixture must dome under the deck");
+            Assert.Equal(GroundHeight, ground[i] + result.Lift[i], 3);
+        }
+
+        // Clear of the footprint the road still follows the terrain it was given.
+        for (int i = 0; i < samples.Count; ++i)
+            if (samples[i].RoadId == 2u && Math.Abs(samples[i].Y) > 20.0)
+                Assert.Equal(0.0, result.Lift[i], 6);
+    }
+
+    [Fact]
+    public void RoadNotUnderAnything_KeepsItsTerrain()
+    {
+        // The span is driven by a known crossing, not by proximity: without a structure overhead the
+        // same domed terrain must be followed, because then it is the ground.
+        var map = LoadCrossing();
+        var origin = map.GeoReference;
+        var samples = ElevationInjector.ExtractCenterlineSamples(map, 10.0);
+
+        var surface = new double[samples.Count];
+        var ground = new double[samples.Count];
+        for (int i = 0; i < samples.Count; ++i)
+        {
+            ground[i] = GroundHeight + 4.0 * Math.Max(0.0, 1.0 - Math.Abs(samples[i].Y) / 20.0);
+            surface[i] = ground[i] + SystematicOffset;
+        }
+
+        // Same two ways, but neither is tagged, so nothing is recorded as passing under anything.
+        var result = WithOsm(origin, CrossingWays(("highway", "motorway")),
+            p => GradeSeparation.Compute(map, samples, OsmRoadLayers.Read(p, origin),
+                surface, ground, SystematicOffset));
+
+        Assert.Equal(0, result.SamplesSpannedUnderStructures);
+        Assert.All(result.Lift, v => Assert.Equal(0.0, v, 9));
+    }
+
+    [Fact]
     public void Tunnel_IsSunkBelowGrade()
     {
         var map = LoadCrossing();

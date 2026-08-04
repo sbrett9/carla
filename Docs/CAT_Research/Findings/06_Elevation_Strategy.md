@@ -470,6 +470,37 @@ Elevation comes from the surface appropriate to the road, chosen from OSM topolo
 | `layer = 0` | **DTM** (bare earth) + systematic offset | Bare earth is uncontaminated by whatever is overhead. |
 | `layer < 0` / `tunnel` | DTM, less depth | Same argument inverted. |
 
+**Amended 2026-08-04 — "bare earth is uncontaminated" is false under a structure.** Measured along
+every way crossing under a deck at this interchange, comparing the DTM inside the deck footprint
+against the DTM either side of it:
+
+| way | rise inside the footprint | | way | rise inside the footprint |
+|---|---|---|---|---|
+| `223306870` | **+3.62 m** | | `218965860` | +1.53 m |
+| `16999193` | **+3.56 m** | | `106308386` | −0.58 m |
+| `629675735` | +2.28 m | | `1307143930` | −0.40 m |
+| `223207869` | +0.95 m | | | |
+
+On 5 of 7 ways Cesium World Terrain carries the overpass embankment, doming over the roadway that
+passes beneath. Way `223306870` reads a clean 5 m dome bracketed exactly by the footprint:
+
+```
+1739.4 1739.5 1739.5 1739.5 1739.5 1740.6 [1742.7][1743.8][1744.3][1744.5][1744.2][1742.3] 1740.5 1740.7
+```
+
+No digital elevation model sees the ground beneath a bridge, so this is a property of the instrument
+rather than of this asset — it is accurate where nothing is built over the ground (§10 measures its
+agreement with the photoreal on open road at −0.82 m ± 0.12 over 4218 samples) and blind where
+something is. Following it faithfully makes a road rise and fall under an overpass, and it also eats
+the clearance: the deck-to-terrain gap reads ~4.4 m where the structure really stands ~7 m above the
+roadway. Confirmed against local knowledge of the site — no such hump exists.
+
+**Therefore:** where a way is *known* from the crossing test to pass beneath a structure, the terrain
+inside that footprint is not evidence of that road's height, and the road's own grades either side
+are. The span is replaced by the chord between them. This uses only what the OSM already stated —
+that something crosses overhead — and invents no elevation. Restoring it lifts the measured
+deck-over-road separation at this interchange from a median 5.54 m to **6.97 m**.
+
 Both surfaces are already sampled on the same grid — the drape offset field is `DrapedZ − DTM`, so
 the DTM is recoverable everywhere. **Only the per-road layer classification is missing.**
 
@@ -522,7 +553,7 @@ The geometric route was taken; the `.net.xml` and `origId` routes were not neede
 | Concern | Location |
 |---|---|
 | OSM layer tags + tag-free crossing test, projected to the CARLA frame | `CarlaNet.Map/OpenDrive/OsmRoadLayers.cs` |
-| Sample→way correlation, per-sample lift, approach ramps | `CarlaNet.Map/OpenDrive/GradeSeparation.cs` |
+| Sample→way correlation, per-sample lift, approach ramps, footprint span | `CarlaNet.Map/OpenDrive/GradeSeparation.cs` |
 | Heightfield anchored to the lower surface under a deck | `DrapeTerrain.Despike` (`elevatedStructures`) |
 | Deck samples exempted from outlier rejection | `ElevationInjector.InjectElevation` |
 | Offline check against a generated map | `CarlaNet/python/probe_grade_separation.py` |
@@ -536,19 +567,20 @@ fixed separation, and which ways are barred from the approach ramp.
 
 Measured on the regenerated Arapahoe map (`probe_grade_separation.py`, all three height-align modes):
 
-| | drape | area | origin |
-|---|---|---|---|
-| Decks above the road they cross | 14/14 | 14/14 | 14/14 |
-| Deck-over-road separation, median | 5.54 m | 5.62 m | 3.16 m |
-| Roads under a structure taking deck height | 0/16 | 0/16 | 0/16 |
-| Clearance recovered from the photoreal (±0.75 m) | 12/14 | 12/14 | 12/14 |
-| Structures needing the fixed separation | 0 | 0 | 0 |
+| | drape | area |
+|---|---|---|
+| Decks above the road they cross | 14/14 | 14/14 |
+| Deck-over-road separation, median | 6.97 m | 7.12 m |
+| Deck-over-road separation, range | 4.88 – 7.42 m | 4.89 – 8.16 m |
+| Clearance recovered from the photoreal (±0.75 m) | 12/14 | 12/14 |
+| Structures needing the fixed separation | 0 | 0 |
 
-`origin` shows less separation because its single-point constant is +1.64 m here, which raises the
-at-grade road under the deck; the deck itself still lands on the photoreal surface. `Bellvue_Overpass`
-puts its one deck 4.98–5.51 m over the three carriageways it crosses. A map with no layered ways
-(`GalleyRoad`) produces elevations **bit-identical** to the pre-change pipeline across all 2248
-records, since the whole path is skipped when the extract records nothing off grade.
+`origin` reaches the same 14/14 but with less separation, because its constant is a single-point
+sample (+1.64 m here) that raises the road under the deck along with everything else.
+
+`Bellvue_Overpass` puts its one deck 4.98–5.51 m over the three carriageways it crosses. A map with
+no layered ways (`GalleyRoad`) produces elevations **bit-identical** to the pre-change pipeline
+across all 2248 records, since the whole path is skipped when the extract records nothing off grade.
 
 Known limitation, measured not theorised: way `45806432` continues the `427819557` structure but
 carries neither `bridge` nor `layer`. The photoreal shows it elevated for ~100 m; the OSM does not,

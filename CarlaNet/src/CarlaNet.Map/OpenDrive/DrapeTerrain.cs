@@ -242,17 +242,20 @@ public static class DrapeTerrain
     ///
     /// One height per cell cannot describe a deck and the road beneath it, so where
     /// <paramref name="elevatedStructures"/> names ways carrying a deck the surface is anchored to
-    /// the LOWER of the two: cells within <paramref name="structureHalfWidthMeters"/> of such a way
-    /// that read more than <paramref name="minStructureMeters"/> above bare earth take bare earth
-    /// plus the systematic offset instead of the deck. The road under the structure then has ground
-    /// to sit on, and the deck carries its own road-mesh collision.
+    /// the LOWER of the two: every cell within <paramref name="structureHalfWidthMeters"/> of such a
+    /// way takes bare earth plus the systematic offset instead of whatever is overhead. The road
+    /// under the structure then has ground to sit on, and the deck carries its own road-mesh
+    /// collision. The whole footprint is anchored, not only the cells that read as structure, so
+    /// that the surface under a deck is one predictable thing — the road elevation spanning that
+    /// footprint (<see cref="GradeSeparation"/>) relies on it. On the at-grade parts of a bridge way
+    /// this costs nothing: bare earth plus the systematic offset is what the photoreal reads there
+    /// by the definition of that offset.
     /// </summary>
     public static DrapeResult Despike(double[] dsm, double[] dtm, DrapeGridSpec spec,
         double maxDrapeMeters = 5.0, int smoothRadius = 1, int smoothPasses = 2,
         IReadOnlyList<OsmRoadWay>? elevatedStructures = null,
         double? atGradeOffsetMeters = null,
-        double structureHalfWidthMeters = 15.0,
-        double minStructureMeters = 1.5)
+        double structureHalfWidthMeters = 15.0)
     {
         int nc = spec.NumCols, nr = spec.NumRows, n = nc * nr;
         if (dsm.Length != n || dtm.Length != n)
@@ -272,8 +275,8 @@ public static class DrapeTerrain
         }
 
         if (elevatedStructures is { Count: > 0 })
-            AnchorStructuresToGround(draped, DSM, DTM, spec, elevatedStructures,
-                systematic, structureHalfWidthMeters, minStructureMeters);
+            AnchorStructuresToGround(draped, DTM, spec, elevatedStructures,
+                systematic, structureHalfWidthMeters);
 
         for (int p = 0; p < smoothPasses && smoothRadius > 0; ++p)
             draped = BoxBlur(draped, nc, nr, smoothRadius);
@@ -283,13 +286,12 @@ public static class DrapeTerrain
         return new DrapeResult(draped, offset, systematic);
     }
 
-    // Replace the deck with the ground it spans, over the corridor each elevated way sweeps. Only
-    // cells that actually read as a structure are touched, so the parts of a bridge way that are
-    // already at grade — its approaches — keep the photoreal detail they had.
+    // Replace whatever a deck put on the surface with the ground it spans, over the corridor each
+    // elevated way sweeps.
     private static void AnchorStructuresToGround(
-        double[] draped, double[] dsm, double[] dtm, DrapeGridSpec spec,
+        double[] draped, double[] dtm, DrapeGridSpec spec,
         IReadOnlyList<OsmRoadWay> elevatedStructures,
-        double systematicOffset, double halfWidth, double minStructureMeters)
+        double systematicOffset, double halfWidth)
     {
         int nc = spec.NumCols, nr = spec.NumRows;
         double halfWidthSq = halfWidth * halfWidth;
@@ -319,7 +321,6 @@ public static class DrapeTerrain
                         if ((x - px) * (x - px) + (y - py) * (y - py) > halfWidthSq) continue;
 
                         int i = r * nc + c;
-                        if (dsm[i] - dtm[i] - systematicOffset <= minStructureMeters) continue;
                         draped[i] = dtm[i] + systematicOffset;
                     }
                 }
