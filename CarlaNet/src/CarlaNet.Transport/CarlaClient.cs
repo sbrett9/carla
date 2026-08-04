@@ -356,6 +356,14 @@ public sealed class CarlaClient : IAsyncDisposable
             .ExtractCenterlineSamples(map, sampleStepMeters);
         var geo = CarlaNet.Map.OpenDrive.ElevationInjector.ToGeo(samples, origin);
 
+        // 2a) Read the vertical structure out of the OSM. netconvert discards `layer`/`bridge`, so
+        //     without this the .xodr has no record of which road passes over which and a sampled
+        //     surface gives a deck and the road beneath it the same height. Projected against the
+        //     same origin as the centreline samples, so the two are directly comparable.
+        var osmLayers = CarlaNet.Map.OpenDrive.OsmRoadLayers.Read(osmPath, origin);
+        bool anyLayeredWays = false;
+        foreach (var w in osmLayers.Ways) if (w.Layer != 0) { anyLayeredWays = true; break; }
+
         // 3) Configure the layered Cesium globe at the origin in the CURRENT episode (the server's
         //    startup map): the visual "photoreal" tileset (ionAssetId) plus, when groundIonAssetId>0,
         //    a hidden collidable bare-earth "ground" tileset (Cesium World Terrain) — the road-Z
@@ -418,6 +426,11 @@ public sealed class CarlaClient : IAsyncDisposable
                 + "boundary-aware traffic will have no staging rectangle.");
         }
 
+        // The photoreal (DSM) and bare-earth (DTM) grids over the sandbox, NaN-filled so both the
+        // drape and the grade-separation lift read the same surfaces. Sampled here, while the ground
+        // layer is revealed; the surface is not de-spiked until the deck footprints are known.
+        double[] drapeSurface = [], drapeGround = [];
+        double drapeSystematicOffset = 0.0;
         CarlaNet.Map.OpenDrive.DrapeTerrain.DrapeResult drapeRes = default;
         if (drape)
         {
@@ -426,8 +439,12 @@ public sealed class CarlaClient : IAsyncDisposable
             var (dsm, dtm) = await SampleDrapeGridCachedAsync(
                 sandboxSpec, ionAssetId, groundIonAssetId, drapeCacheDir, drapeChunkCells, ct: ct)
                 .ConfigureAwait(false);
-            drapeRes = CarlaNet.Map.OpenDrive.DrapeTerrain.Despike(dsm, dtm, sandboxSpec, drapeMaxDrapeMeters);
-            Console.WriteLine("[drape] de-spiked draped surface + offset field built.");
+            drapeSurface = CarlaNet.Map.OpenDrive.DrapeTerrain.FillMissing(dsm, sandboxSpec);
+            drapeGround = CarlaNet.Map.OpenDrive.DrapeTerrain.FillMissing(dtm, sandboxSpec);
+            drapeSystematicOffset = CarlaNet.Map.OpenDrive.DrapeTerrain.SystematicOffset(
+                drapeSurface, drapeGround, drapeMaxDrapeMeters);
+            Console.WriteLine("[drape] photoreal-vs-bare-earth offset over open ground = "
+                + $"{drapeSystematicOffset:F2} m");
         }
 
         // 4b) Height reconciliation (09_Layer_Architecture follow-up). The bare-earth GROUND layer
@@ -441,9 +458,15 @@ public sealed class CarlaClient : IAsyncDisposable
         //     Offset is computed from the data — no user correction factor.
         double heightOffset = 0.0;
         bool wantAlign = ionAssetId > 0 && (heightAlign == "origin" || heightAlign == "area");
+        // The photoreal surface is also where a bridge deck's real clearance is read, so sample it at
+        // the road points whenever the OSM records anything off grade. The drape mode already has
+        // both surfaces on its grid and needs no second pass.
+        bool needPhotorealAtRoadPoints = ionAssetId > 0 && (wantAlign || (anyLayeredWays && !drape));
+        IReadOnlyList<GeoLocation> photo = [];
+        if (needPhotorealAtRoadPoints)
+            photo = await SampleTerrainHeightsAsync(points, "photoreal", ct: ct).ConfigureAwait(false);
         if (wantAlign)
         {
-            var photo = await SampleTerrainHeightsAsync(points, "photoreal", ct: ct).ConfigureAwait(false);
             if (photo.Count == points.Count)
             {
                 if (heightAlign == "origin")
@@ -479,6 +502,65 @@ public sealed class CarlaClient : IAsyncDisposable
         if (sampleGround)
             await SetLayerVisibleAsync("ground", false).ConfigureAwait(false);
 
+        // 4c) Route each road to the surface its OSM layer selects. A vertical sample returns one
+        //     height per plan position, so a deck and the road beneath it come back identical and no
+        //     threshold on that one number can separate them; the OSM layer tags are the only record
+        //     of which is which. A deck reads the photoreal, where it is the topmost surface and so
+        //     carries its own measured clearance; everything at grade reads bare earth, which nothing
+        //     overhead can contaminate. What comes back is a lift above the at-grade surface the
+        //     chosen height-align mode already produces, so an extract with nothing off grade
+        //     reproduces the previous behaviour exactly.
+        double atGradeOffset = drape ? drapeSystematicOffset : heightOffset;
+        var gradeLift = new double[samples.Count];
+        var raisedSamples = new bool[samples.Count];
+        IReadOnlyList<CarlaNet.Map.OpenDrive.OsmRoadWay> elevatedStructures = [];
+        if (anyLayeredWays && (drape || photo.Count == points.Count))
+        {
+            var surfaceAtSample = new double[samples.Count];
+            var groundAtSample = new double[samples.Count];
+            for (int i = 0; i < samples.Count; i++)
+            {
+                if (drape)
+                {
+                    surfaceAtSample[i] = CarlaNet.Map.OpenDrive.DrapeTerrain.SampleBilinear(
+                        drapeSurface, sandboxSpec, samples[i].X, samples[i].Y);
+                    groundAtSample[i] = CarlaNet.Map.OpenDrive.DrapeTerrain.SampleBilinear(
+                        drapeGround, sandboxSpec, samples[i].X, samples[i].Y);
+                }
+                else
+                {
+                    surfaceAtSample[i] = photo[i + 1].Altitude;
+                    groundAtSample[i] = heights[i + 1].Altitude;
+                }
+            }
+
+            var separation = CarlaNet.Map.OpenDrive.GradeSeparation.Compute(
+                map, samples, osmLayers, surfaceAtSample, groundAtSample, atGradeOffset);
+            gradeLift = separation.Lift;
+            elevatedStructures = separation.ElevatedWays;
+            for (int i = 0; i < samples.Count; i++) raisedSamples[i] = gradeLift[i] != 0.0;
+        }
+        else if (anyLayeredWays)
+        {
+            Console.WriteLine("[GradeSeparation] the OSM records layered ways but no photoreal surface "
+                + "was sampled at the road points; every road stays at grade.");
+        }
+
+        if (drape)
+        {
+            // De-spike only now: the draped surface has to know the deck footprints, because one
+            // height per cell cannot hold both a deck and the road under it. Anchoring those cells to
+            // the ground leaves the lower road something to sit on and lets the deck carry its own
+            // road-mesh collision.
+            drapeRes = CarlaNet.Map.OpenDrive.DrapeTerrain.Despike(
+                drapeSurface, drapeGround, sandboxSpec, drapeMaxDrapeMeters,
+                elevatedStructures: elevatedStructures, atGradeOffsetMeters: drapeSystematicOffset);
+            Console.WriteLine("[drape] de-spiked draped surface + offset field built"
+                + (elevatedStructures.Count > 0
+                    ? $"; {elevatedStructures.Count} elevated structures anchored to the ground beneath them."
+                    : "."));
+        }
+
         // Persist the data the telemetry path needs to report bare-earth HAE truth decoupled from
         // this visual shift (consumed by get_vehicle_telemetry in the Python shim; no live Cesium
         // sampling in the 5 Hz loop). The constant offset recovers on-road truth exactly today;
@@ -496,24 +578,27 @@ public sealed class CarlaClient : IAsyncDisposable
         // reported telemetry HAE is now decoupled from that shift and reports bare-earth DTM truth.
         double originHeight = originHeightOverride ?? heights[0].Altitude;
         var roadEllipsoidal = new double[samples.Count];
+        // At-grade roads conform to the SAME draped surface as the terrain (bilinear at each
+        // centerline point), so the road mesh and the collision heightfield coincide — no seam. A
+        // road the OSM places off grade adds its lift on top, which puts a deck back on the photoreal
+        // surface it was measured from and leaves the heightfield below it as the road it crosses.
         if (drape)
         {
-            // Road conforms to the SAME draped surface as the terrain (bilinear at each centerline
-            // point), so the road mesh and the collision heightfield coincide — no seam.
             for (int i = 0; i < samples.Count; i++)
                 roadEllipsoidal[i] = CarlaNet.Map.OpenDrive.DrapeTerrain.SampleBilinear(
-                    drapeRes.DrapedZ, sandboxSpec, samples[i].X, samples[i].Y);
+                    drapeRes.DrapedZ, sandboxSpec, samples[i].X, samples[i].Y) + gradeLift[i];
         }
         else
         {
             for (int i = 0; i < samples.Count; i++)
-                roadEllipsoidal[i] = heights[i + 1].Altitude + heightOffset;
+                roadEllipsoidal[i] = heights[i + 1].Altitude + heightOffset + gradeLift[i];
         }
 
         // 5) Inject the sampled heights into the .xodr <elevationProfile>.
         var elevatedXodr = CarlaNet.Map.OpenDrive.ElevationInjector.InjectElevation(
             flatXodr, samples, roadEllipsoidal, originHeight,
-            CarlaNet.Map.OpenDrive.ElevationFitMode.PiecewiseLinear, outlierThresholdMeters);
+            CarlaNet.Map.OpenDrive.ElevationFitMode.PiecewiseLinear, outlierThresholdMeters,
+            raisedSamples);
 
         // 5b) Inject stop/give-way signs from the OSM (netconvert never emits them). Placement is
         //     by road/s + a shoulder offset, unaffected by the elevation just added, and uses the

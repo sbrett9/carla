@@ -473,10 +473,25 @@ Elevation comes from the surface appropriate to the road, chosen from OSM topolo
 Both surfaces are already sampled on the same grid — the drape offset field is `DrapedZ − DTM`, so
 the DTM is recoverable everywhere. **Only the per-road layer classification is missing.**
 
-Fallback for structures the photogrammetry did not reconstruct (2 of 16 here): the original constant,
+Fallback for structures the photogrammetry did not reconstruct: the original constant,
 `layer × clearance` with clearance ≈ 5 m, applied when the DSM shows no elevation over the span.
-Approaches still need ramping on the ways sharing the deck's end-nodes so the deck is a hump, not a
-step.
+
+**Amended 2026-08-04 by measurement — the approach ramp is a small correction, not the mechanism.**
+Walking the DSM and DTM along each bridge way and along the ways sharing its end-nodes shows the
+photoreal profile along a deck way is *already* a hump that returns to grade at both ends. Way
+`37722915` reads, in DSM−DTM at 5 m steps:
+
+```
++0.2 +0.7 +1.9 +2.8 +3.3 +3.8 +4.0 +4.2 +4.0 +3.8 +3.4 +2.8 +2.0 +0.8 +0.4 +0.4 +0.4
+```
+
+The reason is that the DTM contains the approach embankment: walking away from that deck's end node
+along way `106308389`, the DTM descends 4.7 m over 164 m while the gap stays within 0.5 m of the
+systematic offset throughout. So bare earth already climbs to meet the abutment, and the deck ends
+where the two surfaces meet. A ramp is still required — two deck ends here carry 1–3.5 m of residual
+lift — but it is a metre-scale correction over tens of metres, not the 5 m step the earlier framing
+assumed. The 2 crossings with no elevated structure are likewise not reconstruction failures: they
+fall on the at-grade portion of a long bridge way whose structure is elsewhere on its span.
 
 **Detecting the crossings needs no tags.** OSM creates a junction only where ways share a node, so
 "crosses in plan, shares no node" *is* grade separation. On this file that test found all 16 crossings
@@ -500,7 +515,47 @@ building the elevation side; it decides what the drape pass is allowed to write 
 - netconvert's `--output.original-names` records OSM way ids as `origId` params, if the geometric
   route proves fragile.
 
-Still unbuilt; the design above supersedes the constant-offset-first framing.
+### Built 2026-08-04
+
+The geometric route was taken; the `.net.xml` and `origId` routes were not needed. Code:
+
+| Concern | Location |
+|---|---|
+| OSM layer tags + tag-free crossing test, projected to the CARLA frame | `CarlaNet.Map/OpenDrive/OsmRoadLayers.cs` |
+| Sample→way correlation, per-sample lift, approach ramps | `CarlaNet.Map/OpenDrive/GradeSeparation.cs` |
+| Heightfield anchored to the lower surface under a deck | `DrapeTerrain.Despike` (`elevatedStructures`) |
+| Deck samples exempted from outlier rejection | `ElevationInjector.InjectElevation` |
+| Offline check against a generated map | `CarlaNet/python/probe_grade_separation.py` |
+
+Two properties make the geometric correlation safe at a crossing, which is the only place it can go
+wrong: a candidate way must run roughly **parallel** to the road sample's tangent, and a `.xodr` road
+may only draw its layer from OSM ways **node-connected** to the one it mostly follows — and the way
+underneath shares no node, which is the definition of the grade separation. The `layer` classification
+is the whole mechanism; the crossing test decides only whether an unreconstructed structure gets the
+fixed separation, and which ways are barred from the approach ramp.
+
+Measured on the regenerated Arapahoe map (`probe_grade_separation.py`, all three height-align modes):
+
+| | drape | area | origin |
+|---|---|---|---|
+| Decks above the road they cross | 14/14 | 14/14 | 14/14 |
+| Deck-over-road separation, median | 5.54 m | 5.62 m | 3.16 m |
+| Roads under a structure taking deck height | 0/16 | 0/16 | 0/16 |
+| Clearance recovered from the photoreal (±0.75 m) | 12/14 | 12/14 | 12/14 |
+| Structures needing the fixed separation | 0 | 0 | 0 |
+
+`origin` shows less separation because its single-point constant is +1.64 m here, which raises the
+at-grade road under the deck; the deck itself still lands on the photoreal surface. `Bellvue_Overpass`
+puts its one deck 4.98–5.51 m over the three carriageways it crosses. A map with no layered ways
+(`GalleyRoad`) produces elevations **bit-identical** to the pre-change pipeline across all 2248
+records, since the whole path is skipped when the extract records nothing off grade.
+
+Known limitation, measured not theorised: way `45806432` continues the `427819557` structure but
+carries neither `bridge` nor `layer`. The photoreal shows it elevated for ~100 m; the OSM does not,
+so it is routed to bare earth and the approach ramp only carries the deck-end lift ~58 m. Extending
+"elevated" along node-connected ways while the photoreal keeps showing a structure would close this,
+and is safe from the original defect because the way underneath shares no node — but it derives
+vertical position from the surface rather than from OSM, so it is deliberately not done here.
 
 ---
 

@@ -123,6 +123,12 @@ public static class ElevationInjector
     /// at z=0 and matches <c>CesiumGeoreference.OriginHeight</c>. Failed samples (NaN height)
     /// are filled by linear interpolation / nearest-hold within their road. Existing
     /// &lt;elevationProfile&gt; elements on touched roads are replaced. Other roads are untouched.
+    ///
+    /// <paramref name="deliberatelyRaisedSamples"/> marks samples whose height came from a known
+    /// vertical structure (a bridge deck routed to the photoreal surface by
+    /// <see cref="GradeSeparation"/>) rather than from a raw terrain sample. Those are exempt from
+    /// outlier rejection, which would otherwise flatten a short deck back into the road under it —
+    /// the very defect the layer routing exists to fix.
     /// </summary>
     public static string InjectElevation(
         string openDriveXml,
@@ -130,7 +136,8 @@ public static class ElevationInjector
         IReadOnlyList<double> ellipsoidalHeights,
         double originHeight,
         ElevationFitMode mode = ElevationFitMode.PiecewiseLinear,
-        double outlierThresholdMeters = 4.0)
+        double outlierThresholdMeters = 4.0,
+        IReadOnlyList<bool>? deliberatelyRaisedSamples = null)
     {
         ArgumentNullException.ThrowIfNull(openDriveXml);
         ArgumentNullException.ThrowIfNull(samples);
@@ -138,16 +145,19 @@ public static class ElevationInjector
         if (samples.Count != ellipsoidalHeights.Count)
             throw new ArgumentException(
                 $"samples ({samples.Count}) and heights ({ellipsoidalHeights.Count}) must be the same length");
+        if (deliberatelyRaisedSamples is not null && deliberatelyRaisedSamples.Count != samples.Count)
+            throw new ArgumentException(
+                $"raised-sample flags ({deliberatelyRaisedSamples.Count}) must match samples ({samples.Count})");
 
         // Group (s, z) by road, preserving ascending-s order, z relative to origin.
-        var perRoad = new Dictionary<RoadId, List<(double S, double Z)>>();
+        var perRoad = new Dictionary<RoadId, List<(double S, double Z, bool Raised)>>();
         for (int i = 0; i < samples.Count; ++i)
         {
             double rawZ = ellipsoidalHeights[i] - originHeight;
             var list = perRoad.TryGetValue(samples[i].RoadId, out var existing)
                 ? existing
-                : (perRoad[samples[i].RoadId] = new List<(double, double)>());
-            list.Add((samples[i].S, rawZ));
+                : (perRoad[samples[i].RoadId] = new List<(double, double, bool)>());
+            list.Add((samples[i].S, rawZ, deliberatelyRaisedSamples?[i] ?? false));
         }
 
         foreach (var list in perRoad.Values)
@@ -178,7 +188,7 @@ public static class ElevationInjector
     }
 
     /// <summary>Convenience: extract → (caller samples heights) is external, so this is for tests/symmetry.</summary>
-    private static XElement BuildElevationProfile(List<(double S, double Z)> profile, ElevationFitMode mode)
+    private static XElement BuildElevationProfile(List<(double S, double Z, bool Raised)> profile, ElevationFitMode mode)
     {
         var elevationProfile = new XElement("elevationProfile");
         for (int i = 0; i < profile.Count; ++i)
@@ -221,13 +231,13 @@ public static class ElevationInjector
 
     // Replace NaN z-values (failed height samples) by linear interpolation between the
     // nearest valid neighbours; hold the nearest valid value at the ends; all-NaN -> 0.
-    private static void FillGaps(List<(double S, double Z)> list)
+    private static void FillGaps(List<(double S, double Z, bool Raised)> list)
     {
         int n = list.Count;
         bool anyValid = list.Any(p => !double.IsNaN(p.Z));
         if (!anyValid)
         {
-            for (int i = 0; i < n; ++i) list[i] = (list[i].S, 0.0);
+            for (int i = 0; i < n; ++i) list[i] = (list[i].S, 0.0, list[i].Raised);
             return;
         }
 
@@ -254,7 +264,7 @@ public static class ElevationInjector
             {
                 z = list[next].Z;
             }
-            list[i] = (list[i].S, z);
+            list[i] = (list[i].S, z, list[i].Raised);
         }
     }
 
@@ -264,8 +274,11 @@ public static class ElevationInjector
     // canopies, awnings, building overhangs) so the sampled height is that structure, not the
     // street. This is slope-robust: on a real grade a point lies BETWEEN its neighbours, so it
     // is never beyond both. Rejected points become NaN; FillGaps then interpolates the street
-    // level back in. Disabled when thresholdMeters <= 0.
-    private static void RejectOutliers(List<(double S, double Z)> list, double thresholdMeters)
+    // level back in. Points flagged as deliberately raised — a deck whose height was routed to the
+    // photoreal surface on purpose — are never rejected, since flattening one back into the road
+    // beneath it is the defect the layer routing exists to remove. Disabled when
+    // thresholdMeters <= 0.
+    private static void RejectOutliers(List<(double S, double Z, bool Raised)> list, double thresholdMeters)
     {
         int n = list.Count;
         if (thresholdMeters <= 0.0 || n < 3) return;
@@ -276,7 +289,7 @@ public static class ElevationInjector
         var reject = new bool[n];
         for (int i = 0; i < n; ++i)
         {
-            if (double.IsNaN(z[i])) continue;
+            if (double.IsNaN(z[i]) || list[i].Raised) continue;
             int p = i - 1; while (p >= 0 && (double.IsNaN(z[p]) || reject[p])) --p;
             int q = i + 1; while (q < n && double.IsNaN(z[q])) ++q;
             if (p < 0 || q >= n) continue; // road ends — nothing to bracket against
@@ -288,7 +301,7 @@ public static class ElevationInjector
         }
 
         for (int i = 0; i < n; ++i)
-            if (reject[i]) list[i] = (list[i].S, double.NaN);
+            if (reject[i]) list[i] = (list[i].S, double.NaN, list[i].Raised);
     }
 
     private static string F(double v) => v.ToString("R", CultureInfo.InvariantCulture);
