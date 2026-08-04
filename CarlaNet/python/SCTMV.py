@@ -57,8 +57,9 @@ Prereqs:
   * Headless server running (RunCarlaServer.ps1).
   * SUMO netconvert staged under Build/sumo-install (for the build phase).
   * CESIUM_ION_TOKEN env var (or --ion-token) for the spawned tileset.
-  * A draped build (--height-align drape) is required for the staging traffic margin; without
-    one the traffic toggle is disabled (viewing still works).
+  * A world built from an OSM area (any --height-align mode) is required for the staging traffic
+    margin; on a world that was loaded rather than built the traffic toggle is disabled (viewing
+    still works).
   * A server + carlanet wheel that include set_actor_fade (otherwise the traffic toggle is
     disabled — it would be a silent no-op).
 
@@ -144,8 +145,8 @@ def parse_args():
     build.add_argument("--terrain-res", type=float, default=2.0,
                        help="'drape' only: spacing (m) between drivable-surface points (default 2.0)")
     build.add_argument("--terrain-margin", type=float, default=30.48,
-                       help="'drape' only: width (m) of the staging ring just inside the map edge "
-                            "where boundary-aware traffic enters/exits (default ~100 ft)")
+                       help="width (m) of the staging ring just inside the map edge where "
+                            "boundary-aware traffic enters/exits (default ~100 ft)")
     build.add_argument("--drape-cache-dir", default=None,
                        help="'drape' only: folder to cache terrain-height samples so rebuilds skip "
                             "the slow re-sampling")
@@ -503,7 +504,7 @@ class TrafficController:
             stub.available = False; stub.reason = f"get_staging_bounds failed: {e!r}"; return stub
         if not staging:
             stub.available = False
-            stub.reason = "no staging bounds (build a draped world: --height-align drape)"
+            stub.reason = "no staging bounds (this world was loaded, not built from an OSM area)"
             return stub
 
         bp_lib = world.get_blueprint_library()

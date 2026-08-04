@@ -1406,15 +1406,13 @@ class World:
         main georeference."""
         return bool(_sync(self._client.SetLayerOffsetAsync(str(layer), float(offset_meters))))
 
-    def build_draped_terrain(self, origin_x, origin_y, cell_size, num_cols, num_rows, heights,
-                             staging_margin=0.0):
+    def build_draped_terrain(self, origin_x, origin_y, cell_size, num_cols, num_rows, heights):
         """Build/replace the hidden, collision-only draped ground surface (a heightfield) vehicles
         drive on across the sandbox, on- and off-road. `heights` is a row-major sequence (or numpy
         array) of world Z in METRES, length num_cols*num_rows, indexed [row*num_cols + col]; grid
         corner (col 0,row 0) sits at world (origin_x, origin_y) metres, +col=+X, +row=+Y, spacing
-        cell_size m. staging_margin (m) is the inward ring reserved at the sandbox edge for traffic
-        entry/exit (recorded for get_staging_bounds; does not change the terrain extent). Returns
-        True on success."""
+        cell_size m. Returns True on success. The staging rectangle traffic uses is recorded
+        separately — see set_staging_bounds."""
         from System import Array, Double
         try:
             flat = heights.ravel().tolist() if hasattr(heights, "ravel") else list(heights)
@@ -1423,13 +1421,21 @@ class World:
         arr = Array[Double]([float(h) for h in flat])
         return bool(_sync(self._client.BuildDrapedTerrainAsync(
             float(origin_x), float(origin_y), float(cell_size),
-            int(num_cols), int(num_rows), arr, float(staging_margin))))
+            int(num_cols), int(num_rows), arr)))
+
+    def set_staging_bounds(self, min_x, min_y, max_x, max_y, margin):
+        """Record the sandbox extent (CARLA-local metres) and the inward staging-ring width reserved
+        at its edge for traffic entry/exit. Written by the digital-twin build for every height-align
+        mode; read back by get_staging_bounds. Returns True on success."""
+        return bool(_sync(self._client.SetStagingBoundsAsync(
+            float(min_x), float(min_y), float(max_x), float(max_y), float(margin))))
 
     def get_staging_bounds(self):
-        """Boundary-aware-traffic staging bounds, or None when the world has no draped terrain.
-        Returns a dict: {min_x, min_y, max_x, max_y, margin} in CARLA-local metres — the draped
-        sandbox extent plus the inward staging-ring width. The scene perimeter (region of interest)
-        is these bounds inset by `margin`; the staging ring is between the perimeter and the bounds."""
+        """Boundary-aware-traffic staging bounds, or None for a world that was loaded rather than
+        built from an OSM area. Returns a dict: {min_x, min_y, max_x, max_y, margin} in CARLA-local
+        metres — the sandbox extent plus the inward staging-ring width. The scene perimeter (region
+        of interest) is these bounds inset by `margin`; the staging ring is between the perimeter
+        and the bounds."""
         vals = _sync(self._client.GetStagingBoundsAsync())
         if vals is None or vals.Count < 5:
             return None
