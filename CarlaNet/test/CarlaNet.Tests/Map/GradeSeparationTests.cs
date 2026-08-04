@@ -383,6 +383,71 @@ public class GradeSeparationTests
                 Assert.Equal(-5.0, result.Lift[i], 3);
     }
 
+    // ── the real extracts ────────────────────────────────────────────────────
+    //
+    // The tests above are synthetic, which proves the rules but not that they fire on the data the
+    // defect was found in. These two read the tracked .osm files straight from Import/ — no server,
+    // no terrain, no generated map — so the OSM half of the pipeline is pinned to the interchange it
+    // was designed against. The counts are the ones the elevation strategy records for these files.
+
+    private static string RepoFile(string relative)
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+        {
+            string candidate = Path.Combine(dir.FullName, relative);
+            if (File.Exists(candidate)) return candidate;
+        }
+        throw new FileNotFoundException(
+            $"tracked test extract '{relative}' was not found above {AppContext.BaseDirectory}");
+    }
+
+    [Fact]
+    public void Arapahoe_HasTheSixDecksAndSixteenCrossingsTheStrategyRecords()
+    {
+        var origin = new GeoLocation(39.59431, -104.88449, 0.0);
+        var layers = OsmRoadLayers.Read(RepoFile(Path.Combine("Import", "Arapahoe_I25.osm")), origin);
+
+        Assert.Equal(688, layers.Ways.Count);
+
+        // Every deck here is tagged bridge=yes AND layer=1; the classification must agree with both.
+        var elevated = layers.ElevatedWayIndices().Select(i => layers.Ways[i]).ToList();
+        Assert.Equal(
+            new[] { "218679738", "37722915", "38872436", "39451755", "427819544", "427819557" },
+            elevated.Select(w => w.Id).OrderBy(id => id, StringComparer.Ordinal));
+        Assert.All(elevated, w =>
+        {
+            Assert.Equal(1, w.Layer);
+            Assert.True(w.IsBridge);
+        });
+
+        // The tag-free test: 16 plan crossings that share no node. Only 6 ways carry bridge=*, so
+        // this finds separations the tags alone would not enumerate.
+        Assert.Equal(16, layers.Crossings.Count);
+
+        var under = layers.WaysPassingUnder();
+        Assert.Equal(
+            new[] { "106308386", "1307143930", "16999193", "218965860", "223207869", "223306870", "629675735" },
+            under.Select(i => layers.Ways[i].Id).OrderBy(id => id, StringComparer.Ordinal));
+
+        // Nothing may be both a deck and a road passing under one.
+        Assert.Empty(under.Intersect(layers.ElevatedWayIndices()));
+    }
+
+    [Fact]
+    public void BellvueOverpass_HasOneDeckOverThreeCarriageways()
+    {
+        var origin = new GeoLocation(39.247132, -119.813761, 0.0);
+        var layers = OsmRoadLayers.Read(RepoFile(Path.Combine("Import", "Bellvue_Overpass.osm")), origin);
+
+        var elevated = layers.ElevatedWayIndices();
+        Assert.Single(elevated);
+        Assert.Equal("71498338", layers.Ways[elevated[0]].Id);   // Bellevue Road, the deck
+
+        // It crosses the three freeway carriageways, sharing a node with none of them.
+        Assert.Equal(3, layers.Crossings.Count);
+        Assert.Equal(3, layers.WaysPassingUnder().Count);
+    }
+
     // ── collision heightfield ────────────────────────────────────────────────
 
     [Fact]
