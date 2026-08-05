@@ -344,7 +344,17 @@ internal sealed class RouteSupervisor : IDisposable
     /// announced once, not once per tick — and repeated failures are spaced out by the backoff, so
     /// the output stays readable with a large fleet.
     /// </summary>
-    private void Report(string message) => _report.WriteLine("[route] " + message);
+    /// <remarks>
+    /// Timestamped in the same local wall-clock format the viewer prefixes its own output with, so
+    /// the two interleave readably in one console and the rate of a repeating event can be read
+    /// straight off the log. These lines are written to .NET's standard error and never pass
+    /// through the host's Python streams, so the prefix has to be applied here.
+    /// </remarks>
+    private void Report(string message)
+    {
+        DateTime now = DateTime.Now;
+        _report.WriteLine($"{now:HH:mm:ss.fff} [route] {message}");
+    }
 
     private static string Format(Location location)
         => $"({location.X:F1}, {location.Y:F1})";

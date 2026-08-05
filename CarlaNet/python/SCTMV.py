@@ -102,6 +102,73 @@ import carlanet as carla
 FT_PER_M = 3.28084
 
 
+# ───────────────────────────── timestamped console output ─────────────────────────────
+
+def _log_time() -> str:
+    """Wall-clock time of an event, to the millisecond. Local time rather than UTC: this is read
+    live against what is happening on screen, not correlated with recorded telemetry (which carries
+    its own UTC timestamps)."""
+    now = datetime.now()
+    return f"{now:%H:%M:%S}.{now.microsecond // 1000:03d} "
+
+
+class _TimestampedStream:
+    """Wraps a text stream so every line written through it is prefixed with the time it was
+    written.
+
+    Applied to stdout and stderr, so every message this viewer prints — and every traceback — says
+    when it happened. Without that, a message that repeats tells you nothing about how often, which
+    is usually the first thing worth knowing about a repeating message.
+
+    Text arrives a fragment at a time (print emits the message and the newline as separate writes),
+    so the prefix goes on the first fragment of each line rather than on each write. Traffic is
+    reported from a background thread as well as the main one, hence the lock: without it two
+    threads can interleave halfway through a line.
+    """
+
+    def __init__(self, stream):
+        self._stream = stream
+        self._at_line_start = True
+        self._lock = threading.Lock()
+
+    def write(self, text):
+        if not text:
+            return 0
+        stamp = _log_time()
+        with self._lock:
+            pieces = []
+            for line in text.splitlines(keepends=True):
+                if self._at_line_start:
+                    pieces.append(stamp)
+                pieces.append(line)
+                self._at_line_start = line.endswith("\n")
+            self._stream.write("".join(pieces))
+        return len(text)
+
+    def __getattr__(self, name):
+        # Everything this class does not override — flush, fileno, isatty, encoding, close — belongs
+        # to the stream underneath. Guarded so an attribute lookup before __init__ finishes raises
+        # AttributeError rather than recursing.
+        stream = self.__dict__.get("_stream")
+        if stream is None:
+            raise AttributeError(name)
+        return getattr(stream, name)
+
+
+def _timestamp_console():
+    """Prefix this process's Python output with the time. Idempotent, so re-entering main() (or
+    importing this module twice) does not stack prefixes.
+
+    The Traffic Manager writes its own '[route]' lines straight to .NET's stderr, which never passes
+    through these objects; it timestamps them itself in the same format so the two interleave
+    readably.
+    """
+    if not isinstance(sys.stdout, _TimestampedStream):
+        sys.stdout = _TimestampedStream(sys.stdout)
+    if not isinstance(sys.stderr, _TimestampedStream):
+        sys.stderr = _TimestampedStream(sys.stderr)
+
+
 # ───────────────────────────── argument parsing ─────────────────────────────
 
 def parse_args():
@@ -1593,6 +1660,7 @@ class CameraController():
 # ───────────────────────────── main ─────────────────────────────
 
 def main() -> int:
+    _timestamp_console()
     args = parse_args()
     sync = not args.asynchronous
     if args.seed is not None:
