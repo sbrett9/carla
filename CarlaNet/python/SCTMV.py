@@ -638,6 +638,8 @@ class TrafficController:
         # number. Both run on whichever thread owns the RPCs, so both are taken out of the frame.
         self.spawn_ms = 0.0        # choosing a site, searching for a route, spawning, configuring
         self.reconcile_ms = 0.0    # per-vehicle pose read, fade, and the boundary/stuck guards
+        # (distance from spawn, was routed) for each vehicle culled for not moving, per summary.
+        self.stuck_travel = []
 
     def apply_want(self):
         """Reconcile actual on/off with the hotkey's desired state. Called on whichever thread owns
@@ -844,13 +846,17 @@ class TrafficController:
     def _spawn_one(self, now):
         pool = list(self.spawn_pool); random.shuffle(pool)
         for sp in pool:
-            # Skip a site whose final (forward-nudged) pose is still occupied by a vehicle that hasn't
-            # driven off yet — otherwise the new one spawns on top of it and they collide. Estimated
-            # with a default extent (real extent isn't known until after spawn); the pad absorbs the
-            # small difference. This is what makes the spawn cadence wait for the lane to clear.
+            # Skip a site still occupied by a vehicle that hasn't driven off yet, so the new one is
+            # not created on top of it. A vehicle materialises AT the site and is then nudged
+            # forward, so both poses have to be clear — testing only where it ends up left it being
+            # created on top of whatever was still sitting where it starts. Estimated with a default
+            # extent, since the real one is not known until the vehicle exists; the pad absorbs the
+            # difference. This is what makes the spawn cadence wait for a lane to clear.
             ex, ey = _clear_shift(sp.location.x, sp.location.y, sp.rotation.yaw,
                                   self._ASSUMED_EXTENT, self.b)
-            if self._occupied(sp.location.x + ex, sp.location.y + ey):
+            if self._occupied(sp.location.x, sp.location.y):
+                continue
+            if (ex or ey) and self._occupied(sp.location.x + ex, sp.location.y + ey):
                 continue
             # Plan BEFORE spawning, so a spawn point that cannot reach any destination is passed
             # over rather than populated with a vehicle that has nowhere to go. This is what makes
@@ -906,12 +912,22 @@ class TrafficController:
             # Seed xy with the actual spawn pose (not None) so the very next spawn's occupancy test
             # already accounts for this vehicle before its first reconcile.
             self.actors[v.id] = {"actor": v, "ext": ext, "entered": False, "born": now,
-                                 "xy": (sx, sy), "stuck": 0.0, "misses": 0, "speed": 0.0}
+                                 "xy": (sx, sy), "spawn_xy": (sx, sy), "routed": route is not None,
+                                 "stuck": 0.0, "misses": 0, "speed": 0.0}
             return True
         return False
 
     def _despawn(self, vid, actor, reason="other"):
         self.despawns[reason] = self.despawns.get(reason, 0) + 1
+        if reason == "stuck":
+            # A vehicle culled for not moving has two very different explanations, and the distance
+            # it covered before giving up separates them: essentially zero means it was never driven
+            # at all, while several metres means it drove and then something stopped it.
+            rec = self.actors.get(vid)
+            if rec and rec.get("spawn_xy") and rec.get("xy"):
+                sx, sy = rec["spawn_xy"]
+                cx, cy = rec["xy"]
+                self.stuck_travel.append((math.hypot(cx - sx, cy - sy), rec.get("routed", False)))
         if self.args.fade:
             try: actor.set_fade(1.0)        # force transparent so a lagging destroy is never seen
             except Exception: pass
@@ -1047,6 +1063,13 @@ class TrafficController:
                     f"(spawn+reconcile)")
             self.spawn_ms = 0.0
             self.reconcile_ms = 0.0
+            if self.stuck_travel:
+                travelled = [d for d, _ in self.stuck_travel]
+                never = sum(1 for d in travelled if d < 1.0)
+                routed = sum(1 for _, r in self.stuck_travel if r)
+                cost += (f" | stuck: {never}/{len(travelled)} never moved at all, "
+                         f"furthest got {max(travelled):.1f} m, {routed} had a route")
+                self.stuck_travel.clear()
             print(f"traffic: {len(self.actors)} alive ({entered} entered, "
                   f"speed avg {avg:.1f} max {mx:.1f} m/s) | despawns/{self.SUMMARY_S:.0f}s: "
                   f"{reasons}{routes}{cost}")
