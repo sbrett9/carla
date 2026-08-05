@@ -331,6 +331,62 @@ public class RoutePlannerTests
         Assert.Contains(route, step => outer.Contains(step.Waypoint));
     }
 
+    /// <summary>
+    /// A wide carriageway — five lanes — where the slip road leaves the outermost lane only, so a
+    /// vehicle starting on the inside has to cross all five to reach it. This is the shape of a
+    /// motorway exit, and the shape that produced routes no vehicle could follow.
+    /// </summary>
+    private static (List<List<SimpleWaypoint>> Lanes, List<SimpleWaypoint> Slip) BuildWideCarriageway()
+    {
+        var lanes = new List<List<SimpleWaypoint>>();
+        for (int lane = 0; lane < 5; ++lane)
+            lanes.Add(Chain(roadId: 1u, count: 40, startX: 0.0f, y: lane * 3.5f, laneId: -(lane + 1)));
+        for (int lane = 0; lane + 1 < lanes.Count; ++lane)
+            for (int i = 0; i < lanes[lane].Count; ++i)
+                LinkLanes(lanes[lane][i], lanes[lane + 1][i]);
+
+        List<SimpleWaypoint> slip = Chain(roadId: 2u, count: 10, startX: 160.0f, y: 40.0f);
+        Link(lanes[4][31], lanes[4][32], slip[0]);
+        return (lanes, slip);
+    }
+
+    [Fact]
+    public void Never_asks_for_two_lane_changes_without_driving_between_them()
+    {
+        // Two lane changes in a row land at the same point along the road: several metres sideways,
+        // none forward. The vehicle is steered by consuming route waypoints that come within about
+        // 5.5 m of where it is heading, so a waypoint straight out to the side is never reached —
+        // the vehicle carries on down the lane the route abandoned and is off it for good. Measured
+        // on a generated interchange, a five-lane crossing was planned entirely at one s.
+        var (lanes, slip) = BuildWideCarriageway();
+
+        List<RouteStep>? route = RoutePlanner.Search(lanes[0][0], slip[^1], Budget);
+
+        Assert.NotNull(route);
+        Assert.Same(slip[^1], route![^1].Waypoint);
+        // It really does cross the whole carriageway, or the test proves nothing.
+        Assert.Equal(4, route.Count(step => step.ReachedByLaneChange));
+
+        for (int i = 1; i < route.Count; ++i)
+        {
+            Assert.False(route[i].ReachedByLaneChange && route[i - 1].ReachedByLaneChange,
+                $"route steps {i - 1} and {i} both change lane, so they sit at the same point along "
+                + "the road and the vehicle is asked to move sideways without moving forward.");
+        }
+
+        // Every consecutive pair of breadcrumbs must be reachable by driving: near enough to be
+        // consumed, and never a pure sideways step.
+        PlannedRoute planned = RoutePlanner.Materialize(route, slip[^1].Location);
+        for (int i = 1; i < planned.Path.Count; ++i)
+        {
+            float dx = planned.Path[i].X - planned.Path[i - 1].X;
+            float dy = planned.Path[i].Y - planned.Path[i - 1].Y;
+            Assert.True(MathF.Abs(dx) > 0.1f,
+                $"breadcrumbs {i - 1} and {i} are {MathF.Sqrt(dx * dx + dy * dy):F1} m apart but make "
+                + "no progress along the road.");
+        }
+    }
+
     [Fact]
     public void Stays_in_lane_when_changing_would_not_shorten_the_route()
     {

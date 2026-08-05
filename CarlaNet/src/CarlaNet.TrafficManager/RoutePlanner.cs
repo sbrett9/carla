@@ -165,6 +165,15 @@ internal sealed class RoutePlanner
     /// own straight-line length, so the heuristic never overestimates and A* returns a true shortest
     /// route. Ties are broken on the waypoint's road coordinates so the expansion order does not
     /// depend on the order of the successor lists.
+    ///
+    /// The search state is a waypoint AND whether it was reached by changing lane, because a lane
+    /// change is only offered from a node the route drove to. Without that, crossing a wide
+    /// carriageway is planned as a run of lane changes at one point along the road — five lanes of a
+    /// motorway traversed at the same s, no distance travelled — and a vehicle cannot follow it: the
+    /// waypoints either side of that run are metres apart sideways and not at all forward, so the
+    /// breadcrumb never comes within the radius at which the horizon walk consumes one. The vehicle
+    /// carries on down the lane the route abandoned and is off its route for good. Requiring a
+    /// driven step between changes turns the same crossing into a staircase the vehicle can follow.
     /// </remarks>
     internal static List<RouteStep>? Search(
         SimpleWaypoint origin, SimpleWaypoint destination, int maxExpansions)
@@ -173,49 +182,63 @@ internal sealed class RoutePlanner
             return new List<RouteStep> { new(origin, ReachedByLaneChange: false) };
 
         Location goal = destination.Location;
-        var bestCost = new Dictionary<SimpleWaypoint, float> { [origin] = 0.0f };
-        var cameFrom = new Dictionary<SimpleWaypoint, RouteStep>();
-        var settled = new HashSet<SimpleWaypoint>();
-        var frontier = new PriorityQueue<SimpleWaypoint, RouteSearchKey>();
-        frontier.Enqueue(origin, KeyFor(origin, Distance(origin.Location, goal)));
+        var start = new SearchState(origin, ReachedByLaneChange: false);
+        var bestCost = new Dictionary<SearchState, float> { [start] = 0.0f };
+        var cameFrom = new Dictionary<SearchState, SearchState>();
+        var settled = new HashSet<SearchState>();
+        var frontier = new PriorityQueue<SearchState, RouteSearchKey>();
+        frontier.Enqueue(start, KeyFor(start, Distance(origin.Location, goal)));
 
         int expansions = 0;
-        while (frontier.TryDequeue(out SimpleWaypoint? current, out _))
+        while (frontier.TryDequeue(out SearchState current, out _))
         {
-            // A stale queue entry left behind when a cheaper route to this node was found later.
+            // A stale queue entry left behind when a cheaper route to this state was found later.
             if (!settled.Add(current)) continue;
 
-            if (ReferenceEquals(current, destination))
-                return Reconstruct(origin, current, cameFrom);
+            if (ReferenceEquals(current.Waypoint, destination))
+                return Reconstruct(start, current, cameFrom);
 
             if (++expansions > maxExpansions) return null;
 
             float costHere = bestCost[current];
 
-            IReadOnlyList<SimpleWaypoint> nexts = current.GetNextWaypoint();
+            IReadOnlyList<SimpleWaypoint> nexts = current.Waypoint.GetNextWaypoint();
             for (int i = 0; i < nexts.Count; ++i)
-                Relax(current, nexts[i], costHere, extraCost: 0.0f, byLaneChange: false);
+                Relax(current, new SearchState(nexts[i], false), costHere, extraCost: 0.0f);
 
-            // Lane-change neighbours are only linked between lanes running the same way (InMemoryMap
-            // requires a matching lane-id sign), so following one can never plan a wrong-way route.
-            SimpleWaypoint? left = current.GetLeftWaypoint();
-            if (left != null) Relax(current, left, costHere, LaneChangeCostMetres, byLaneChange: true);
-            SimpleWaypoint? right = current.GetRightWaypoint();
-            if (right != null) Relax(current, right, costHere, LaneChangeCostMetres, byLaneChange: true);
+            // Only from a node the route drove to, so two lane changes can never land at the same
+            // point along the road. Lane-change neighbours are linked only between lanes running the
+            // same way (InMemoryMap requires a matching lane-id sign), so following one can never
+            // plan a wrong-way route.
+            if (current.ReachedByLaneChange) continue;
+
+            SimpleWaypoint? left = current.Waypoint.GetLeftWaypoint();
+            if (left != null) Relax(current, new SearchState(left, true), costHere, LaneChangeCostMetres);
+            SimpleWaypoint? right = current.Waypoint.GetRightWaypoint();
+            if (right != null) Relax(current, new SearchState(right, true), costHere, LaneChangeCostMetres);
         }
 
         return null;
 
-        void Relax(SimpleWaypoint from, SimpleWaypoint to, float costAtFrom, float extraCost, bool byLaneChange)
+        void Relax(SearchState from, SearchState to, float costAtFrom, float extraCost)
         {
             if (settled.Contains(to)) return;
-            float candidate = costAtFrom + Distance(from.Location, to.Location) + extraCost;
+            float candidate = costAtFrom
+                            + Distance(from.Waypoint.Location, to.Waypoint.Location)
+                            + extraCost;
             if (bestCost.TryGetValue(to, out float known) && known <= candidate) return;
             bestCost[to] = candidate;
-            cameFrom[to] = new RouteStep(from, byLaneChange);
-            frontier.Enqueue(to, KeyFor(to, candidate + Distance(to.Location, goal)));
+            cameFrom[to] = from;
+            frontier.Enqueue(to, KeyFor(to, candidate + Distance(to.Waypoint.Location, goal)));
         }
     }
+
+    /// <summary>
+    /// A node of the search: a waypoint together with how the route arrived at it. The same waypoint
+    /// reached by driving and reached by changing lane are different states, because only the former
+    /// may change lane again.
+    /// </summary>
+    private readonly record struct SearchState(SimpleWaypoint Waypoint, bool ReachedByLaneChange);
 
     /// <summary>
     /// Priority-queue ordering: cheapest estimated total cost first, ties broken on the waypoint's
@@ -224,7 +247,7 @@ internal sealed class RoutePlanner
     /// would not be reproducible.
     /// </summary>
     private readonly record struct RouteSearchKey(
-        float Estimate, RoadId RoadId, SectionId SectionId, LaneId LaneId, double S)
+        float Estimate, RoadId RoadId, SectionId SectionId, LaneId LaneId, double S, bool ByLaneChange)
         : IComparable<RouteSearchKey>
     {
         public int CompareTo(RouteSearchKey other)
@@ -237,36 +260,34 @@ internal sealed class RoutePlanner
             if (bySection != 0) return bySection;
             int byLane = LaneId.CompareTo(other.LaneId);
             if (byLane != 0) return byLane;
-            return S.CompareTo(other.S);
+            int byS = S.CompareTo(other.S);
+            if (byS != 0) return byS;
+            return ByLaneChange.CompareTo(other.ByLaneChange);
         }
     }
 
-    private static RouteSearchKey KeyFor(SimpleWaypoint waypoint, float estimate)
+    private static RouteSearchKey KeyFor(SearchState state, float estimate)
     {
-        var pod = waypoint.Waypoint;
-        return new RouteSearchKey(estimate, pod.RoadId, pod.SectionId, pod.LaneId, pod.S);
+        var pod = state.Waypoint.Waypoint;
+        return new RouteSearchKey(
+            estimate, pod.RoadId, pod.SectionId, pod.LaneId, pod.S, state.ReachedByLaneChange);
     }
 
     /// <summary>
-    /// Walk the predecessor links back from the destination and reverse them. The
-    /// <see cref="RouteStep.ReachedByLaneChange"/> flag recorded against a node describes the edge
-    /// that reached it, so on the way back it moves to the node the edge arrived at rather than the
-    /// one it left.
+    /// Walk the predecessor links back from the destination and reverse them. Each state already
+    /// carries how the route arrived at it, so nothing has to be shifted along the way.
     /// </summary>
     private static List<RouteStep> Reconstruct(
-        SimpleWaypoint origin, SimpleWaypoint destination, Dictionary<SimpleWaypoint, RouteStep> cameFrom)
+        SearchState origin, SearchState destination, Dictionary<SearchState, SearchState> cameFrom)
     {
         var reversed = new List<RouteStep>();
-        SimpleWaypoint current = destination;
-        bool arrivedByLaneChange = false;
-        while (!ReferenceEquals(current, origin))
+        SearchState current = destination;
+        while (current != origin)
         {
-            reversed.Add(new RouteStep(current, arrivedByLaneChange));
-            RouteStep predecessor = cameFrom[current];
-            current = predecessor.Waypoint;
-            arrivedByLaneChange = predecessor.ReachedByLaneChange;
+            reversed.Add(new RouteStep(current.Waypoint, current.ReachedByLaneChange));
+            current = cameFrom[current];
         }
-        reversed.Add(new RouteStep(origin, ReachedByLaneChange: false));
+        reversed.Add(new RouteStep(origin.Waypoint, ReachedByLaneChange: false));
         reversed.Reverse();
         return reversed;
     }
