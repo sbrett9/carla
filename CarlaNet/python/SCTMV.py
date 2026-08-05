@@ -270,6 +270,12 @@ def parse_args():
                       help="don't apply the opacity fade — spawn and despawn vehicles at FULL opacity. "
                            "Diagnostic: makes it obvious whether vehicles are actually driving (rather "
                            "than being hidden by the fade while they sit at the margin).")
+    traf.add_argument("--speed-spread", type=float, default=20.0, metavar="PCT",
+                      help="how much drivers differ from the posted speed limit, as a percentage "
+                           "either side of it (default 20, so each vehicle drives between 80%% and "
+                           "120%% of the limit on whatever road it is on). The limit itself comes "
+                           "from the map: OpenDRIVE carries one per lane, derived from the OSM "
+                           "maxspeed tags. 0 makes every vehicle drive exactly the limit.")
     traf.add_argument("--route", action="store_true",
                       help="give each vehicle a far-edge destination and a route to it, searched "
                            "over the road network before the vehicle is spawned. The same seed and "
@@ -628,6 +634,10 @@ class TrafficController:
         self.route_plan_ms_max = 0.0
         self.route_plan_ms_total = 0.0
         self.route_searches = 0
+        # Where this subsystem's time goes, so "traffic is making it slow" can be answered with a
+        # number. Both run on whichever thread owns the RPCs, so both are taken out of the frame.
+        self.spawn_ms = 0.0        # choosing a site, searching for a route, spawning, configuring
+        self.reconcile_ms = 0.0    # per-vehicle pose read, fade, and the boundary/stuck guards
 
     def apply_want(self):
         """Reconcile actual on/off with the hotkey's desired state. Called on whichever thread owns
@@ -878,6 +888,13 @@ class TrafficController:
                 if self.args.fade:
                     self._safe_fade(v, 1.0 - op)
                 v.set_autopilot(True, self.args.tm_port)
+                # Give this driver its own relationship with the speed limit. The knob is a
+                # percentage OFF the limit, so a negative value means driving over it; drawing
+                # symmetrically about zero puts the fleet either side of the posted speed rather
+                # than all at it.
+                if self.args.speed_spread > 0:
+                    spread = float(self.args.speed_spread)
+                    self.tm.set_percentage_speed_difference(v, random.uniform(-spread, spread))
                 if route is not None:
                     self.tm.apply_route(v, route)
                     self.routes_planned += 1
@@ -928,10 +945,13 @@ class TrafficController:
         b = self.b
         if len(self.actors) < self.args.max and (now - self.last_spawn) >= self.args.spawn_interval:
             self.last_spawn = now
+            t0 = time.perf_counter()
             self._spawn_one(now)
+            self.spawn_ms += (time.perf_counter() - t0) * 1000.0
         if now - self.last_check < self.CHECK_S:
             return
         self.last_check = now
+        reconcile_t0 = time.perf_counter()
 
         mnx, mny, mxx, mxy = b["min_x"], b["min_y"], b["max_x"], b["max_y"]
         ids = list(self.actors.keys())
@@ -997,10 +1017,13 @@ class TrafficController:
                     if rec["stuck"] >= 6.0:
                         self._despawn(vid, a, "stuck"); continue
 
+        self.reconcile_ms += (time.perf_counter() - reconcile_t0) * 1000.0
+
         # Periodic diagnostics: how many are alive and why any despawned since the last summary. This
         # is what tells us whether the churn is 'stuck' (Traffic Manager not driving in sync mode),
         # 'oob' (sloped-edge floor), or 'exited' (healthy margin-to-margin turnover).
         if now - self.last_summary >= self.SUMMARY_S:
+            window = max(self.CHECK_S, now - self.last_summary)
             self.last_summary = now
             entered = sum(1 for r in self.actors.values() if r["entered"])
             speeds = [r["speed"] for r in self.actors.values()]
@@ -1018,9 +1041,15 @@ class TrafficController:
                 self.route_plan_ms_max = 0.0
                 self.route_plan_ms_total = 0.0
                 self.route_searches = 0
+            # Milliseconds of every wall-clock second this subsystem takes off the thread that owns
+            # the tick. At 20 fps a frame is 50 ms, so 1000 ms/s here would be the whole budget.
+            cost = (f" | cost {self.spawn_ms / window:.0f}+{self.reconcile_ms / window:.0f} ms/s "
+                    f"(spawn+reconcile)")
+            self.spawn_ms = 0.0
+            self.reconcile_ms = 0.0
             print(f"traffic: {len(self.actors)} alive ({entered} entered, "
                   f"speed avg {avg:.1f} max {mx:.1f} m/s) | despawns/{self.SUMMARY_S:.0f}s: "
-                  f"{reasons}{routes}")
+                  f"{reasons}{routes}{cost}")
             self.despawns.clear()
 
     def count(self):

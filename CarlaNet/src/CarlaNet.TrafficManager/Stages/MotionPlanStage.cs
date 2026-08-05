@@ -168,15 +168,20 @@ internal sealed class MotionPlanStage : IStageWithRemoveActor
         float vehicleSpeed = Length(vehicleVelocity);
         Vector3D vehicleHeading = _simulationState.GetHeading(actorId);
         bool physicsEnabled = _simulationState.IsPhysicsEnabled(actorId);
-        float speedLimit = _simulationState.GetSpeedLimit(actorId);
-        // ALSM doesn't yet query Vehicle.GetSpeedLimit per tick (one-RPC-per-vehicle
-        // hot path), so SpeedLimit stays at 0 until LocalizationStage wires it from
-        // road info. Fall back to a sensible 30 km/h urban default so vehicles
-        // actually move when Parameters.SpeedDifference is the only governor.
-        if (speedLimit <= 0f) speedLimit = 30f;
-
         if (!_bufferMap.TryGetValue(actorId, out var waypointBuffer) || waypointBuffer.Count == 0)
             return;
+
+        // What speed is this vehicle allowed to do here? ALSM does not query Vehicle.GetSpeedLimit
+        // per tick — that would be one RPC per vehicle on the hot path — so the simulation state's
+        // value stays 0. Take the posted limit off the lane the vehicle is on instead: it is cached
+        // on the waypoint when the road graph is built, so reading it costs a field access.
+        //
+        // Without this every vehicle on the map drove at the 30 km/h fallback, motorways included.
+        float speedLimit = _simulationState.GetSpeedLimit(actorId);
+        if (speedLimit <= 0f) speedLimit = waypointBuffer[0].SpeedLimitKph;
+        // Neither the server nor the road declares one: an urban default, so a vehicle on a road
+        // with no posted limit still moves.
+        if (speedLimit <= 0f) speedLimit = 30f;
 
         // Sibling stage outputs — gracefully default if a sibling stage
         // hasn't filled an entry this tick (e.g. before the very first tick
