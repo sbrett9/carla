@@ -219,6 +219,57 @@ public sealed class TrafficManager : IAsyncDisposable
     public void UpdateImportedRoute(ActorId actorId, IReadOnlyList<byte> route)
         => _local.UpdateImportedRoute(actorId, route);
 
+    // ─────────────────────────────────────────────────────────────────
+    //                        Planned routes
+    // ─────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Search the road graph for a route from <paramref name="origin"/> to
+    /// <paramref name="destination"/>. Returns null when no sequence of lanes connects them.
+    /// </summary>
+    /// <remarks>
+    /// Runs the search on the calling thread, not on the traffic-manager tick — call it before
+    /// spawning the vehicle, both to keep the tick free and so a spawn point with no route to the
+    /// destination can be rejected before a vehicle exists at it.
+    ///
+    /// The result depends only on the two endpoints and the map, so the same scenario replayed with
+    /// the same seed produces the same routes. Speed, collision avoidance and traffic-signal
+    /// response remain emergent; only the route is decided in advance.
+    /// </remarks>
+    public PlannedRoute? PlanRoute(Location origin, Location destination)
+        => _local.RoutePlanner.Plan(origin, destination);
+
+    /// <summary>
+    /// Put a vehicle on a route returned by <see cref="PlanRoute"/>. The route's waypoints are
+    /// installed as the vehicle's path, and the vehicle is watched from then on: if it leaves the
+    /// route it is replanned from wherever it now is to the same destination.
+    /// </summary>
+    public void ApplyRoute(Actor actor, PlannedRoute route)
+    {
+        ArgumentNullException.ThrowIfNull(route);
+        _local.RouteSupervisor.Assign(actor.Id, route);
+    }
+
+    /// <summary>Stop supervising a vehicle's route. Its current path is left in place.</summary>
+    public void ClearRoute(Actor actor) => _local.RouteSupervisor.RemoveActor(actor.Id);
+
+    /// <summary>Number of vehicles currently following a planned route.</summary>
+    public int RoutedVehicleCount => _local.RouteSupervisor.RoutedVehicleCount;
+
+    /// <summary>
+    /// How many consecutive failed replans a vehicle may accumulate before
+    /// <see cref="SetRouteGreedyFallbackEnabled">the greedy fallback</see> takes over. Zero means
+    /// the fallback is never reached however often replanning fails. Default 3.
+    /// </summary>
+    public void SetRouteReplanAttemptLimit(int limit) => _local.SetRouteReplanAttemptLimit(limit);
+
+    /// <summary>
+    /// Whether a vehicle that cannot be replanned is eventually handed back to greedy steering
+    /// toward its destination, rather than going on trying to find a real route. Off by default.
+    /// </summary>
+    public void SetRouteGreedyFallbackEnabled(bool enabled)
+        => _local.SetRouteGreedyFallbackEnabled(enabled);
+
     public void SetRespawnDormantVehicles(bool modeSwitch) => _local.SetRespawnDormantVehicles(modeSwitch);
 
     public void SetBoundariesRespawnDormantVehicles(float lowerBound, float upperBound)

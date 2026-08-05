@@ -55,6 +55,8 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
     private readonly BufferMap _bufferMap = new();
     private readonly List<ActorId> _markedForRemoval = new();
     private readonly List<Command> _controlFrame = new(capacity: 128);
+    private readonly RoutePlanner _routePlanner;
+    private readonly RouteSupervisor _routeSupervisor;
 
     // ── Stages (constructed in the ctor) ─────────────────────────────────
     private readonly LocalizationStage _localizationStage;
@@ -85,6 +87,12 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
     /// <summary>Direct accessor for the underlying parameter store (for the facade's getters).</summary>
     internal Parameters Parameters => _parameters;
 
+    /// <summary>Shortest-path search over the road graph, for the facade's route-planning surface.</summary>
+    internal RoutePlanner RoutePlanner => _routePlanner;
+
+    /// <summary>Route bookkeeping and recovery, for the facade's route-assignment surface.</summary>
+    internal RouteSupervisor RouteSupervisor => _routeSupervisor;
+
     /// <summary>True after <see cref="Start"/> succeeded and the worker is running.</summary>
     public bool IsRunning => _running;
 
@@ -102,6 +110,9 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
         _seed = unchecked((ulong)Environment.TickCount64);
         _randomDevice = new RandomGenerator(_seed);
 
+        _routePlanner = new RoutePlanner(_localMap);
+        _routeSupervisor = new RouteSupervisor(_routePlanner, _parameters);
+
         // Construct stages. Order matters only for the cross-references
         // (MotionPlanStage reads the other stages' output dictionaries).
         _localizationStage = new LocalizationStage(
@@ -111,7 +122,8 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
             parameters: _parameters,
             localMap: _localMap,
             rng: _randomDevice,
-            markedForRemoval: _markedForRemoval);
+            markedForRemoval: _markedForRemoval,
+            routeSupervisor: _routeSupervisor);
 
         _collisionStage = new CollisionStage(
             simulationState: _simulationState,
@@ -259,6 +271,7 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
     public async ValueTask DisposeAsync()
     {
         Stop();
+        _routeSupervisor.Dispose();
         if (_server is not null)
         {
             try { await _server.DisposeAsync().ConfigureAwait(false); }
@@ -695,6 +708,12 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
 
     public void SetOSMMode(bool modeSwitch)
         => _parameters.SetOSMMode(modeSwitch);
+
+    public void SetRouteReplanAttemptLimit(int limit)
+        => _parameters.SetRouteReplanAttemptLimit(limit);
+
+    public void SetRouteGreedyFallbackEnabled(bool enabled)
+        => _parameters.SetRouteGreedyFallbackEnabled(enabled);
 
     public void SetCustomPath(Actor actor, IReadOnlyList<Location> path, bool emptyBuffer)
         => _parameters.SetCustomPath(actor.Id, path, emptyBuffer);

@@ -1149,6 +1149,47 @@ def _cmds_to_cs(cmds):
 
 # ── Traffic Manager ───────────────────────────────────────────────────────────
 
+class PlannedRoute:
+    """A route the Traffic Manager searched the road graph for, ready to be given to a vehicle.
+
+    Returned by TrafficManager.plan_route() and consumed by TrafficManager.apply_route(). Treat it
+    as opaque: it carries both the waypoints the vehicle will follow and the identity of every
+    waypoint on the route, which is what lets the Traffic Manager tell whether the vehicle is still
+    on it.
+    """
+    __slots__ = ("_route", "_locations")
+
+    def __init__(self, cs_route):
+        self._route = cs_route
+        self._locations = None
+
+    @property
+    def destination(self) -> Location:
+        d = self._route.Destination
+        return Location(d.X, d.Y, d.Z)
+
+    @property
+    def length_m(self) -> float:
+        """Distance along the route in metres."""
+        return float(self._route.LengthMetres)
+
+    @property
+    def locations(self):
+        """The route's waypoints as Locations, in travel order. Built on first access — a long route
+        holds hundreds of points and most callers only need the length."""
+        if self._locations is None:
+            self._locations = [Location(p.X, p.Y, p.Z) for p in self._route.Path]
+        return self._locations
+
+    def __len__(self) -> int:
+        return int(self._route.Path.Count)
+
+    def __repr__(self):
+        d = self.destination
+        return (f"PlannedRoute({len(self)} waypoints, {self.length_m:.0f} m, "
+                f"to ({d.x:.1f}, {d.y:.1f}))")
+
+
 class TrafficManager:
     """Wrapper around the in-process C# CarlaNet.TrafficManager.TrafficManager
     facade. Mirrors the upstream `carla.TrafficManager` Python API (snake_case
@@ -1183,12 +1224,62 @@ class TrafficManager:
         Wraps the C# TrafficManager.SetCustomPath. The TM navigates the road graph junction by
         junction toward each point (it does NOT teleport or go off-road), so a single far-away
         destination makes the vehicle head there across the map. Call after set_autopilot(True).
+
+        A single far-away destination is a bearing, not a route: each junction is chosen greedily
+        from the point the vehicle is at, with no way to see past it. Use plan_route() +
+        apply_route() to have the road graph searched first and the whole route handed over.
         """
         from System.Collections.Generic import List as _List
         cs_path = _List[_CSLocation]()
         for p in path:
             cs_path.Add(p._to_cs() if hasattr(p, "_to_cs") else p)
         self._tm.SetCustomPath(actor._actor, cs_path, bool(empty_buffer))
+
+    def plan_route(self, origin, destination):
+        """Search the road graph for a route from `origin` to `destination`. Returns a PlannedRoute,
+        or None when no sequence of lanes connects them.
+
+        The search runs on the calling thread and never on the Traffic Manager's tick, so call this
+        BEFORE spawning the vehicle: it keeps the tick free, and it lets a spawn point with no route
+        to the destination be rejected before a vehicle exists there. The result depends only on the
+        two endpoints and the map, so a scenario replayed with the same seed produces the same
+        routes. Speed, collision avoidance and traffic-signal response stay emergent.
+
+        Hand the result to apply_route() to put a spawned vehicle on it.
+        """
+        o = origin._to_cs() if hasattr(origin, "_to_cs") else origin
+        d = destination._to_cs() if hasattr(destination, "_to_cs") else destination
+        cs_route = self._tm.PlanRoute(o, d)
+        return None if cs_route is None else PlannedRoute(cs_route)
+
+    def apply_route(self, actor: Actor, route):
+        """Put a vehicle on a route returned by plan_route().
+
+        The route's waypoints become the vehicle's path, and the vehicle is watched from then on: if
+        it leaves the route — an automatic lane change past an obstacle, a shove from a collision, a
+        junction taken differently from the plan — it is replanned from wherever it now is to the
+        same destination. Every such event prints a '[route]' line naming the vehicle.
+        """
+        self._tm.ApplyRoute(actor._actor, route._route if isinstance(route, PlannedRoute) else route)
+
+    def clear_route(self, actor: Actor):
+        """Stop watching a vehicle's route. Its current path is left in place."""
+        self._tm.ClearRoute(actor._actor)
+
+    def get_routed_vehicle_count(self) -> int:
+        """How many vehicles are currently following a planned route."""
+        return int(self._tm.RoutedVehicleCount)
+
+    def set_route_replan_attempt_limit(self, limit: int):
+        """How many consecutive failed replans a vehicle may accumulate before the greedy fallback
+        takes over. 0 means the fallback is never reached however often replanning fails. Default 3.
+        Inert unless set_route_greedy_fallback_enabled(True) is also set."""
+        self._tm.SetRouteReplanAttemptLimit(int(limit))
+
+    def set_route_greedy_fallback_enabled(self, enabled: bool):
+        """Whether a vehicle that cannot be replanned is eventually handed back to greedy steering
+        toward its destination, rather than going on trying to find a real route. Off by default."""
+        self._tm.SetRouteGreedyFallbackEnabled(bool(enabled))
 
     def set_global_percentage_speed_difference(self, pct: float):
         self._tm.SetGlobalPercentageSpeedDifference(float(pct))

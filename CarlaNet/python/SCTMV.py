@@ -204,10 +204,22 @@ def parse_args():
                            "Diagnostic: makes it obvious whether vehicles are actually driving (rather "
                            "than being hidden by the fade while they sit at the margin).")
     traf.add_argument("--route", action="store_true",
-                      help="give each vehicle a far-edge destination and let the Traffic Manager "
-                           "steer toward it. This is a bearing, not a planned route: the Traffic "
-                           "Manager picks each next waypoint greedily, so a vehicle can be led onto "
-                           "a dead end or around a loop ramp it never leaves. OFF by default.")
+                      help="give each vehicle a far-edge destination and a route to it, searched "
+                           "over the road network before the vehicle is spawned. The same seed and "
+                           "the same spawn points yield the same routes; speed, braking and "
+                           "traffic-signal response stay emergent. A spawn point with no route to "
+                           "any destination is skipped, so spawning is slower. OFF by default.")
+    traf.add_argument("--route-replan-limit", type=int, default=3, metavar="N",
+                      help="a vehicle knocked off its route is replanned from where it now is. "
+                           "After N consecutive failures the greedy fallback takes over, if it is "
+                           "enabled. 0 means the fallback is never reached however often "
+                           "replanning fails (default 3).")
+    traf.add_argument("--route-greedy-fallback", action="store_true",
+                      help="after --route-replan-limit failures, hand the vehicle back to greedy "
+                           "steering toward its destination instead of going on trying to plan a "
+                           "route. OFF by default: a routed vehicle either follows a route that "
+                           "was actually searched for, or says on the console that it cannot find "
+                           "one.")
 
     scen = ap.add_argument_group("scenario")
     scen.add_argument("--scenario", default=None,
@@ -483,6 +495,14 @@ class TrafficController:
         self.last_check = 0.0
         self.last_summary = 0.0
         self.despawns = {}   # reason -> count, accumulated between summaries (diagnostics)
+        self.routes_planned = 0        # vehicles spawned onto a searched route
+        self.unroutable_spawns = 0     # spawn points skipped because nothing was reachable from them
+        # Route searches run on this thread, between world ticks. How long one takes depends on the
+        # size of the road network, so it is reported rather than assumed: a search that grows into
+        # tens of milliseconds shows up here before it shows up as a stutter.
+        self.route_plan_ms_max = 0.0
+        self.route_plan_ms_total = 0.0
+        self.route_searches = 0
 
     def apply_want(self):
         """Reconcile actual on/off with the hotkey's desired state. Called on whichever thread owns
@@ -563,6 +583,19 @@ class TrafficController:
               f"inward {min(im):.0f}..{max(im):.0f} m (negative inward = inside the margin, as intended)")
         print(f"traffic: {len(ring_sps)} inward edge-ring spawn points; "
               f"{len(spawn_pool)} usable in-margin spawn points (set_actor_fade OK)")
+        if args.route:
+            try:
+                tm.set_route_replan_attempt_limit(args.route_replan_limit)
+                tm.set_route_greedy_fallback_enabled(args.route_greedy_fallback)
+            except Exception as e:
+                print(f"traffic: route recovery knobs unavailable ({e!r}); using defaults",
+                      file=sys.stderr)
+            if args.route_greedy_fallback:
+                recovery = (f"after {args.route_replan_limit} failed replans, steer greedily"
+                            if args.route_replan_limit > 0 else "keep replanning (limit 0)")
+            else:
+                recovery = "keep replanning indefinitely"
+            print(f"traffic: routes are planned before spawn; off-route recovery = {recovery}")
         return ctl
 
     @classmethod
@@ -605,6 +638,36 @@ class TrafficController:
                  if _edge_of(sp.location.x, sp.location.y, self.b) != s_edge] or self.ring_sps
         cands.sort(key=lambda sp: -spawn_tf.location.distance(sp.location))
         return random.choice(cands[:max(1, len(cands) // 2)])
+
+    # Destinations to try from one spawn point before giving up on it. On a tightly clipped map an
+    # edge spawn point can sit on a stub that reaches almost nothing, and a routed vehicle is only
+    # worth spawning if it has somewhere to go.
+    _ROUTE_DESTINATION_TRIES = 4
+
+    def _plan_route_from(self, spawn_tf):
+        """Search the road network for a route from a spawn point to a far-edge destination, before
+        anything has been spawned there. Returns the route, or None if none of the destinations
+        tried is reachable from this spawn point.
+
+        Planning from the spawn point rather than the final pose is deliberate: the vehicle is later
+        nudged a few metres forward along the same lane so its body clears the sandbox edge, which
+        at most changes which waypoint the route starts on. The Traffic Manager discards route
+        waypoints the vehicle is already past."""
+        for _ in range(self._ROUTE_DESTINATION_TRIES):
+            destination = self._pick_destination(spawn_tf).location
+            t0 = time.perf_counter()
+            try:
+                route = self.tm.plan_route(spawn_tf.location, destination)
+            except Exception as e:
+                print(f"  route planning unavailable: {e!r}", file=sys.stderr)
+                return None
+            elapsed_ms = (time.perf_counter() - t0) * 1000.0
+            self.route_searches += 1
+            self.route_plan_ms_total += elapsed_ms
+            self.route_plan_ms_max = max(self.route_plan_ms_max, elapsed_ms)
+            if route is not None:
+                return route
+        return None
 
     @staticmethod
     def _safe_fade(v, hide):
@@ -668,6 +731,15 @@ class TrafficController:
             ex, ey = self._clear_shift(sp.location, sp.rotation.yaw, (3.5, 1.1))
             if self._occupied(sp.location.x + ex, sp.location.y + ey):
                 continue
+            # Plan BEFORE spawning, so a spawn point that cannot reach any destination is passed
+            # over rather than populated with a vehicle that has nowhere to go. This is what makes
+            # spawning slower with --route on, which is the intended trade.
+            route = None
+            if self.args.route:
+                route = self._plan_route_from(sp)
+                if route is None:
+                    self.unroutable_spawns += 1
+                    continue
             try:
                 v = self.world.spawn_actor(self._spawn_bp(), sp)
             except Exception:
@@ -695,8 +767,9 @@ class TrafficController:
                 if self.args.fade:
                     self._safe_fade(v, 1.0 - op)
                 v.set_autopilot(True, self.args.tm_port)
-                if self.args.route:
-                    self.tm.set_path(v, [self._pick_destination(sp).location])
+                if route is not None:
+                    self.tm.apply_route(v, route)
+                    self.routes_planned += 1
             except Exception as e:
                 print(f"  setup failed for {v.id}: {e!r}", file=sys.stderr)
                 try: v.destroy()
@@ -823,8 +896,20 @@ class TrafficController:
             avg = sum(speeds) / len(speeds) if speeds else 0.0
             mx = max(speeds) if speeds else 0.0
             reasons = " ".join(f"{k}={v}" for k, v in sorted(self.despawns.items())) or "none"
+            routes = ""
+            if self.args.route:
+                timing = ""
+                if self.route_searches:
+                    timing = (f", search {self.route_plan_ms_total / self.route_searches:.0f} ms avg "
+                              f"{self.route_plan_ms_max:.0f} ms worst")
+                routes = (f" | routes: {self.routes_planned} planned, "
+                          f"{self.unroutable_spawns} spawn points skipped as unreachable{timing}")
+                self.route_plan_ms_max = 0.0
+                self.route_plan_ms_total = 0.0
+                self.route_searches = 0
             print(f"traffic: {len(self.actors)} alive ({entered} entered, "
-                  f"speed avg {avg:.1f} max {mx:.1f} m/s) | despawns/{self.SUMMARY_S:.0f}s: {reasons}")
+                  f"speed avg {avg:.1f} max {mx:.1f} m/s) | despawns/{self.SUMMARY_S:.0f}s: "
+                  f"{reasons}{routes}")
             self.despawns.clear()
 
     def count(self):
