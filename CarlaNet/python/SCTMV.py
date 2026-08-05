@@ -507,6 +507,64 @@ def _is_inward(tf, b):
     return math.cos(yaw) * (cx - tf.location.x) + math.sin(yaw) * (cy - tf.location.y) > 0.0
 
 
+def _red_edge_deficit(x, y, yaw_deg, ext, b, pad=0.6):
+    """How far (m) a vehicle's footprint at this pose pokes past the nearest red (sandbox) edge,
+    together with that edge's inward normal. <= 0 means the whole footprint is already inside."""
+    edges = (("W", x - b["min_x"], (1.0, 0.0)),
+             ("E", b["max_x"] - x, (-1.0, 0.0)),
+             ("S", y - b["min_y"], (0.0, 1.0)),
+             ("N", b["max_y"] - y, (0.0, -1.0)))
+    _, c, n = min(edges, key=lambda e: e[1])     # c = clearance to nearest red edge, n = inward normal
+    yaw = math.radians(yaw_deg)
+    # AABB half-extent along that edge's axis (same projection as _interior_opacity).
+    he = (abs(ext[0] * math.cos(yaw)) + abs(ext[1] * math.sin(yaw))) if n[0] != 0.0 \
+        else (abs(ext[0] * math.sin(yaw)) + abs(ext[1] * math.cos(yaw)))
+    return (he + pad) - c, n
+
+
+def _clear_shift(x, y, yaw_deg, ext, b, pad=0.6):
+    """Offset (dx, dy) to move a vehicle FORWARD along its lane just far enough that its whole
+    footprint clears the nearest red (sandbox) edge. On a tightly-clipped map the spawn point sits
+    right on the edge, so the vehicle's centre is 0-3 m in while its body pokes outside; the spawn
+    faces inward, so a small forward nudge along the lane pulls the body fully inside. Returns
+    (0, 0) if already clear or if the lane runs ~parallel to the edge (forward wouldn't help)."""
+    deficit, n = _red_edge_deficit(x, y, yaw_deg, ext, b, pad)
+    if deficit <= 0:
+        return (0.0, 0.0)
+    yaw = math.radians(yaw_deg)
+    ux, uy = math.cos(yaw), math.sin(yaw)
+    dot = ux * n[0] + uy * n[1]                   # how much 'forward' points inward
+    if dot < 0.2:                                 # lane ~parallel to the edge: forward won't clear
+        return (0.0, 0.0)
+    d = min(deficit / dot, b["margin"])           # don't push past one margin
+    return (ux * d, uy * d)
+
+
+def _fits_inside_red_edge(x, y, yaw_deg, ext, b, pad=0.6):
+    """True if a vehicle of this footprint spawned here ends up wholly inside the red (sandbox) edge
+    once nudged forward along its lane.
+
+    This is the question a spawn site actually has to answer, and it is not the same as being some
+    fixed distance from the edge. A motorway crossing the boundary at a shallow angle presents lanes
+    only a metre or two clear of it, every one of which a vehicle can occupy perfectly well after the
+    forward nudge, because the nudge is measured against the vehicle's own footprint and the
+    direction its lane runs. A plain distance test rejects them all and so keeps traffic off the
+    fastest roads on the map entirely.
+
+    Asks whether the nudge can clear the edge rather than applying it and re-measuring: the nudge is
+    sized to land the footprint exactly on the boundary, so re-measuring leaves a residual of zero
+    give or take rounding, and a site that fits perfectly would be rejected on a floating-point
+    crumb."""
+    deficit, n = _red_edge_deficit(x, y, yaw_deg, ext, b, pad)
+    if deficit <= 0:
+        return True                                   # already wholly inside
+    yaw = math.radians(yaw_deg)
+    dot = math.cos(yaw) * n[0] + math.sin(yaw) * n[1]
+    if dot < 0.2:
+        return False                                  # lane runs along the edge; forward never clears it
+    return deficit / dot <= b["margin"]               # clears within one margin of forward travel
+
+
 def _interior_opacity(cx, cy, yaw_deg, ext_x, ext_y, b):
     """Opacity [0,1] = the fraction of the vehicle's footprint that lies INSIDE the interior (past
     the blue line, one margin in from the red edge). 0 = wholly within the margin (transparent); 1 =
@@ -620,9 +678,17 @@ class TrafficController:
             stub.reason = (f"only {len(ring_sps)} inward edge-ring spawn points; need >=2 "
                            "(select a larger OSM area or a smaller --terrain-margin)")
             return stub
+        # A spawn site must sit inside the margin (so the vehicle fades in rather than popping in)
+        # and must be able to hold a vehicle wholly inside the red edge once nudged forward along
+        # its lane. The second test used to be a flat "at least 5 m from the edge", which asks the
+        # wrong question: CARLA puts a spawn point at the upstream end of each lane and nowhere else,
+        # so a motorway clipped by the sandbox boundary offers only its entry, whose lanes fan across
+        # that boundary a metre or two apart. Every one of them was rejected, which is why no traffic
+        # ever appeared on the freeway.
         spawn_pool = [sp for sp in ring_sps
                       if _inward_min(sp.location.x, sp.location.y, staging) <= -2.0
-                      and _red_clearance(sp.location.x, sp.location.y, staging) >= 5.0]
+                      and _fits_inside_red_edge(sp.location.x, sp.location.y, sp.rotation.yaw,
+                                                cls._ASSUMED_EXTENT, staging)]
         if len(spawn_pool) < 8:
             spawn_pool = ring_sps
 
@@ -743,36 +809,13 @@ class TrafficController:
         except Exception:
             pass
 
-    def _clear_shift(self, loc, yaw_deg, ext, pad=0.6):
-        """Offset (dx, dy) to move a vehicle FORWARD along its lane just far enough that its whole
-        footprint clears the nearest red (sandbox) edge. On a tightly-clipped map the spawn point sits
-        right on the edge, so the vehicle's centre is 0-3 m in while its body pokes outside; the spawn
-        faces inward, so a small forward nudge along the lane pulls the body fully inside. Returns
-        (0, 0) if already clear or if the lane runs ~parallel to the edge (forward wouldn't help)."""
-        b = self.b
-        edges = (("W", loc.x - b["min_x"], (1.0, 0.0)),
-                 ("E", b["max_x"] - loc.x, (-1.0, 0.0)),
-                 ("S", loc.y - b["min_y"], (0.0, 1.0)),
-                 ("N", b["max_y"] - loc.y, (0.0, -1.0)))
-        _, c, n = min(edges, key=lambda e: e[1])     # c = clearance to nearest red edge, n = inward normal
-        yaw = math.radians(yaw_deg)
-        # AABB half-extent along that edge's axis (same projection as _interior_opacity).
-        he = (abs(ext[0] * math.cos(yaw)) + abs(ext[1] * math.sin(yaw))) if n[0] != 0.0 \
-            else (abs(ext[0] * math.sin(yaw)) + abs(ext[1] * math.cos(yaw)))
-        deficit = (he + pad) - c
-        if deficit <= 0:
-            return (0.0, 0.0)
-        ux, uy = math.cos(yaw), math.sin(yaw)
-        dot = ux * n[0] + uy * n[1]                   # how much 'forward' points inward
-        if dot < 0.2:                                 # lane ~parallel to the edge: forward won't clear
-            return (0.0, 0.0)
-        d = min(deficit / dot, b["margin"])           # don't push past one margin
-        return (ux * d, uy * d)
-
     # Conservative bounding radius (half-diagonal, m) assumed for a not-yet-spawned vehicle when
     # testing whether a spawn site is clear — sized to cover long vehicles (e.g. the Carla Cola truck).
     _NEW_VEHICLE_RADIUS = 3.7
     _SPAWN_CLEAR_PAD = 1.0
+    # Half-extent (m) stood in for a vehicle that has not been spawned yet, so a spawn site can be
+    # judged before anything exists at it. Generous enough to cover the long vehicles in the library.
+    _ASSUMED_EXTENT = (3.5, 1.1)
 
     def _occupied(self, x, y):
         """True if any tracked vehicle's footprint is close enough to (x, y) that spawning there would
@@ -795,7 +838,8 @@ class TrafficController:
             # driven off yet — otherwise the new one spawns on top of it and they collide. Estimated
             # with a default extent (real extent isn't known until after spawn); the pad absorbs the
             # small difference. This is what makes the spawn cadence wait for the lane to clear.
-            ex, ey = self._clear_shift(sp.location, sp.rotation.yaw, (3.5, 1.1))
+            ex, ey = _clear_shift(sp.location.x, sp.location.y, sp.rotation.yaw,
+                                  self._ASSUMED_EXTENT, self.b)
             if self._occupied(sp.location.x + ex, sp.location.y + ey):
                 continue
             # Plan BEFORE spawning, so a spawn point that cannot reach any destination is passed
@@ -820,7 +864,7 @@ class TrafficController:
             # (the spawn point itself sits on the edge on a tightly-clipped map). Uses the real extent,
             # so it scales to long vehicles (e.g. the Carla Cola truck).
             sx, sy, syaw = sp.location.x, sp.location.y, sp.rotation.yaw
-            dx, dy = self._clear_shift(sp.location, syaw, ext)
+            dx, dy = _clear_shift(sp.location.x, sp.location.y, syaw, ext, self.b)
             if dx or dy:
                 sx += dx; sy += dy
                 try:
