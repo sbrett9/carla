@@ -771,9 +771,12 @@ class Actor:
 
     def set_autopilot(self, enabled: bool, tm_port: int = 8000):
         _sync(self._client.SetActorAutopilotAsync(self._actor.Id, enabled))
-        # Register/unregister with the in-process TM so its worker picks
-        # up the vehicle. Server-side autopilot flag alone won't drive it.
-        Client._tm_register_ids([int(self._actor.Id)], int(tm_port), bool(enabled))
+        # Register/unregister with the in-process TM so its worker picks up the vehicle. The
+        # server-side autopilot flag alone won't drive it. Hand over the actor record rather than
+        # its id: registering by id makes the TM fetch the record back from the simulator, which
+        # returns nothing for a vehicle spawned in this same frame, and the registration is lost
+        # with the vehicle left sitting where it spawned.
+        Client._tm_register_actors([self._actor], int(tm_port), bool(enabled))
 
     def set_light_state(self, state):
         # Accept Python int / VehicleLightState wrapper / C# VehicleLightStateFlags
@@ -2327,8 +2330,44 @@ class Client:
 
     # ── TM registration helpers ───────────────────────────────────────────────
     @staticmethod
+    def _tm_register_actors(actors, tm_port: int, enabled: bool):
+        """Register/unregister actors with the cached TM on tm_port (no-op if none).
+
+        Takes the actor records themselves, so the TM does not have to ask the simulator for them
+        again. That round trip returns nothing for a vehicle spawned in the same frame — the
+        simulator has not published it yet — and the registration is then dropped, leaving a vehicle
+        that is never driven and never says so.
+        """
+        cs_tm = Client._tm_for_port(tm_port)
+        if cs_tm is None:
+            return
+        from System.Collections.Generic import List as _List
+        cs_actors = _List[_Actor]()
+        for a in actors:
+            cs_actors.Add(a)
+        try:
+            if enabled:
+                cs_tm.RegisterVehicles(cs_actors)
+            else:
+                cs_tm.UnregisterVehicles(cs_actors)
+        except Exception as ex:
+            import sys
+            print(f"traffic-manager registration failed: {ex!r}", file=sys.stderr)
+
+    @staticmethod
+    def _tm_for_port(tm_port: int):
+        """The C# TrafficManager cached for this port, or None if nothing is using it."""
+        cache = getattr(Client, "_tm_cache", None)
+        if not cache:
+            return None
+        tm = cache.get(int(tm_port))
+        return None if tm is None else getattr(tm, "_tm", None)
+
+    @staticmethod
     def _tm_register_ids(actor_ids, tm_port: int, enabled: bool):
-        """Register/unregister actor IDs with the cached TM on tm_port (no-op if none)."""
+        """Register/unregister actor IDs with the cached TM on tm_port (no-op if none).
+
+        Only for callers that have an id and nothing else; prefer _tm_register_actors."""
         cache = getattr(Client, "_tm_cache", None)
         if not cache:
             return

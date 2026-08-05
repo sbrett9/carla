@@ -171,16 +171,18 @@ internal sealed class MotionPlanStage : IStageWithRemoveActor
         if (!_bufferMap.TryGetValue(actorId, out var waypointBuffer) || waypointBuffer.Count == 0)
             return;
 
-        // What speed is this vehicle allowed to do here? ALSM does not query Vehicle.GetSpeedLimit
-        // per tick — that would be one RPC per vehicle on the hot path — so the simulation state's
-        // value stays 0. Take the posted limit off the lane the vehicle is on instead: it is cached
-        // on the waypoint when the road graph is built, so reading it costs a field access.
+        // What speed is this vehicle allowed to do here? Prefer what the road itself declares: the
+        // OpenDRIVE <speed> record on the lane the vehicle is on, cached at graph-build time so
+        // reading it costs a field access rather than an RPC.
         //
-        // Without this every vehicle on the map drove at the 30 km/h fallback, motorways included.
-        float speedLimit = _simulationState.GetSpeedLimit(actorId);
-        if (speedLimit <= 0f) speedLimit = waypointBuffer[0].SpeedLimitKph;
-        // Neither the server nor the road declares one: an urban default, so a vehicle on a road
-        // with no posted limit still moves.
+        // The simulator's own per-actor speed limit is only a fallback, because it is derived from
+        // speed-limit SIGN actors that the vehicle has driven past. A world generated from OSM has
+        // no such signs, so that value never leaves its 30 km/h default and every vehicle on the map
+        // crawled at 8.3 m/s, motorways included, while the map itself declared 29 m/s for them.
+        float speedLimit = waypointBuffer[0].SpeedLimitKph;
+        if (speedLimit <= 0f) speedLimit = _simulationState.GetSpeedLimit(actorId);
+        // Neither the road nor the simulator declares one: an urban default, so a vehicle on an
+        // unposted road still moves.
         if (speedLimit <= 0f) speedLimit = 30f;
 
         // Sibling stage outputs — gracefully default if a sibling stage

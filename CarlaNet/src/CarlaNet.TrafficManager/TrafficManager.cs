@@ -123,11 +123,31 @@ public sealed class TrafficManager : IAsyncDisposable
 
     // ID-based overloads: fetch the Actor records from the server and forward.
     // Used by Python's apply_batch path where only the spawned ActorId is known.
+    /// <remarks>
+    /// Prefer <see cref="RegisterVehicles"/> where the caller already holds the actor records. This
+    /// overload has to fetch them back from the simulator, which returns nothing for an actor the
+    /// simulator has not published yet — a vehicle spawned in the same frame, before a tick. The
+    /// registration is then impossible to complete, and a vehicle that is never registered is never
+    /// driven: it sits where it spawned, with its autopilot flag set and a route assigned, until
+    /// something else gives up on it.
+    /// </remarks>
     public void RegisterVehicleIds(IReadOnlyList<uint> ids)
     {
         if (ids is null || ids.Count == 0) return;
         var actors = _client.GetActorsByIdAsync(ids).GetAwaiter().GetResult();
         if (actors is { Count: > 0 }) _local.RegisterVehicles(actors);
+
+        int found = actors?.Count ?? 0;
+        if (found < ids.Count)
+        {
+            // Never silently: the vehicles this drops are exactly the ones that will sit still and
+            // be culled for it, with nothing anywhere saying why.
+            Console.Error.WriteLine(
+                $"{DateTime.Now:HH:mm:ss.fff} [traffic] {ids.Count - found} of {ids.Count} vehicles "
+                + "could not be registered with the traffic manager: the simulator does not yet "
+                + "report them. They will not be driven. Register with the actor record instead of "
+                + "the id where the caller has one.");
+        }
     }
 
     public void UnregisterVehicleIds(IReadOnlyList<uint> ids)
