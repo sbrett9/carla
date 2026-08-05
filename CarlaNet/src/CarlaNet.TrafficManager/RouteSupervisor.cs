@@ -87,6 +87,10 @@ internal sealed class RouteSupervisor : IDisposable
         public required PlannedRoute Route;
         public required Location Destination;
         public Location LastSeenLocation;
+        // Where the traffic manager last had this vehicle on the road graph, which is both what
+        // adherence is judged against and what a replan is anchored to. Null until the vehicle has
+        // been observed once.
+        public SimpleWaypoint? GraphPosition;
         public int FailedReplans;
         public long NextReplanAllowedAtMs;
         public bool HasLeftRoute;
@@ -143,6 +147,7 @@ internal sealed class RouteSupervisor : IDisposable
         {
             if (vehicle.Retired) return;
             vehicle.LastSeenLocation = vehicleLocation;
+            if (graphPosition is not null) vehicle.GraphPosition = graphPosition;
 
             if (routeConsumed)
             {
@@ -282,15 +287,22 @@ internal sealed class RouteSupervisor : IDisposable
 
         Location origin;
         Location destination;
+        SimpleWaypoint? anchor;
         lock (vehicle)
         {
             if (vehicle.Retired) return;
             origin = vehicle.LastSeenLocation;
             destination = vehicle.Destination;
+            anchor = vehicle.GraphPosition;
         }
 
-        // The search — the whole reason this runs off the tick.
-        PlannedRoute? replanned = _planner.Plan(origin, destination);
+        // The search — the whole reason this runs off the tick. Anchored to the waypoint adherence
+        // is judged against, not to the vehicle's position: those are different waypoints, and a
+        // route planned from the position routinely does not contain the head it will be judged by,
+        // which puts the vehicle back off its route on the very next tick.
+        PlannedRoute? replanned = anchor is not null
+            ? _planner.Plan(anchor, destination)
+            : _planner.Plan(origin, destination);
 
         lock (vehicle)
         {

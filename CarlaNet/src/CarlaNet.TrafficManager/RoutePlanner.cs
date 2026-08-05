@@ -123,12 +123,27 @@ internal sealed class RoutePlanner
     /// safe to call concurrently with the traffic-manager tick.
     /// </remarks>
     public PlannedRoute? Plan(Location origin, Location destination)
+        => Plan(_localMap.GetWaypoint(origin), destination);
+
+    /// <summary>
+    /// Plan from a waypoint the caller has already resolved, rather than from a position to be
+    /// snapped to one.
+    /// </summary>
+    /// <remarks>
+    /// Replanning uses this. A vehicle's position and the head of its horizon buffer are two
+    /// different waypoints — the buffer head is wherever the traffic manager last had the vehicle on
+    /// the graph, which it tolerates being up to <c>MAX_START_DISTANCE</c> away before re-seeding
+    /// it. Planning from the position while judging adherence against the head means the route
+    /// routinely fails to contain the very node it is judged by, and the vehicle is declared off its
+    /// route on the tick after it was put on one. Anchoring the route to the head makes the two
+    /// agree by construction.
+    /// </remarks>
+    public PlannedRoute? Plan(SimpleWaypoint origin, Location destination)
     {
-        SimpleWaypoint originWaypoint = _localMap.GetWaypoint(origin);
         SimpleWaypoint destinationWaypoint = _localMap.GetWaypoint(destination);
         int maxExpansions = _localMap.GetDenseTopology().Count + ExpansionHeadroom;
 
-        List<RouteStep>? steps = Search(originWaypoint, destinationWaypoint, maxExpansions);
+        List<RouteStep>? steps = Search(origin, destinationWaypoint, maxExpansions);
         if (steps is null) return null;
 
         return Materialize(steps, destinationWaypoint.Location);

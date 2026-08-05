@@ -73,6 +73,18 @@ public class RouteSupervisorTests
 
         public bool Saw(string fragment) => Text.Contains(fragment, StringComparison.Ordinal);
 
+        public int Count(string fragment)
+        {
+            string text = Text;
+            int found = 0, at = 0;
+            while ((at = text.IndexOf(fragment, at, StringComparison.Ordinal)) >= 0)
+            {
+                found++;
+                at += fragment.Length;
+            }
+            return found;
+        }
+
         /// <summary>Wait for <paramref name="fragment"/> to be reported, or fail the test.</summary>
         public void Await(string fragment)
         {
@@ -120,7 +132,12 @@ public class RouteSupervisorTests
         };
     }
 
-    /// <summary>A waypoint that belongs to no route, standing in for a vehicle somewhere else.</summary>
+    /// <summary>
+    /// A waypoint belonging to no road graph at all. Only for vehicles the supervisor is not
+    /// tracking, where nothing is ever planned from it. Anywhere a replan is expected, use a real
+    /// waypoint from the map: in the running system the graph position is always the head of the
+    /// vehicle's horizon buffer, which is by definition a node of the graph with edges to follow.
+    /// </summary>
     private static SimpleWaypoint SomewhereElse()
         => new(new CarlaNet.Map.Road.Element.Waypoint(999u, 0u, -1, 0.0),
                new Location(9_000.0f, 9_000.0f, 0.0f), new Vector3D(1.0f, 0.0f, 0.0f));
@@ -169,37 +186,74 @@ public class RouteSupervisorTests
     public void Leaving_the_route_is_reported_and_replanned()
     {
         using Fixture f = Build();
-        PlannedRoute original = Plan(f, from: 0, to: ^1);
+        // A route that begins well ahead of where the vehicle actually sits on the graph, so the
+        // waypoint it is judged by is not one the route names.
+        PlannedRoute original = Plan(f, from: 20, to: ^1);
         f.Supervisor.Assign(Vehicle, original);
+        SimpleWaypoint head = f.Topology[5];
 
-        // The vehicle is a third of the way along the road but on a waypoint the route never named.
-        int here = f.Topology.Count / 3;
-        f.Supervisor.Observe(Vehicle, f.Topology[here].Location, SomewhereElse());
+        f.Supervisor.Observe(Vehicle, head.Location, head);
 
         f.Reported.Await("left its planned route");
         f.Reported.Await("replanned to");
 
         Assert.Contains($"vehicle {Vehicle}", f.Reported.Text, StringComparison.Ordinal);
-        // The replan is from where the vehicle actually is, so it is shorter than the original.
+        // The replan starts from the waypoint the vehicle was judged by, so it is longer than the
+        // route it replaced — which began 15 waypoints further on.
         IReadOnlyList<Location> installed = f.Parameters.GetCustomPath(Vehicle);
-        Assert.True(installed.Count < original.Path.Count,
+        Assert.True(installed.Count > original.Path.Count,
             $"replanned path has {installed.Count} waypoints; the original had {original.Path.Count}, "
-            + "so the vehicle was not replanned from its current position.");
-        Assert.Equal(f.Topology[here].Location.X, installed[0].X, 1);
+            + "so the replan did not start from the vehicle's position on the graph.");
+        Assert.Equal(head.Location.X, installed[0].X, 1);
     }
 
     [Fact]
-    public void Rejoining_the_route_is_reported()
+    public void Rejoining_the_route_under_its_own_power_is_reported()
     {
         using Fixture f = Build();
-        f.Supervisor.Assign(Vehicle, Plan(f, from: 0, to: ^1));
+        // Destination near the start of a one-way road: from the far end there is no route back, so
+        // the replan fails and the vehicle stays marked as having left. It then rejoins by driving.
+        f.Supervisor.Assign(Vehicle, Plan(f, from: 0, to: 5));
 
-        f.Supervisor.Observe(Vehicle, f.Topology[2].Location, SomewhereElse());
-        f.Reported.Await("left its planned route");
+        f.Supervisor.Observe(Vehicle, f.Topology[^1].Location, f.Topology[^1]);
+        f.Reported.Await("has no route from");
 
         f.Supervisor.Observe(Vehicle, f.Topology[3].Location, f.Topology[3]);
 
         Assert.Contains("back on its planned route", f.Reported.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_replan_puts_the_vehicle_back_on_route_without_departing_again()
+    {
+        // The route is judged against the head of the vehicle's horizon buffer, which is NOT the
+        // waypoint nearest the vehicle — the localization stage tolerates the two being up to
+        // MAX_START_DISTANCE apart. Planning from the position while judging by the head produced a
+        // route that did not contain the node it was about to be judged by, so the vehicle was
+        // declared off its route on the tick after it was put on one, forever: measured against a
+        // real map, a route planned from the vehicle's position covered as few as 10% of the
+        // waypoints the head could legitimately be. A replan must be anchored to the head.
+        using Fixture f = Build();
+
+        // A route that starts well ahead of where the vehicle actually is on the graph.
+        f.Supervisor.Assign(Vehicle, Plan(f, from: 20, to: ^1));
+        SimpleWaypoint head = f.Topology[5];
+
+        f.Supervisor.Observe(Vehicle, head.Location, head);
+        f.Reported.Await("left its planned route");
+        f.Reported.Await("replanned to");
+
+        // The same head, unchanged — as it would be for a vehicle held at a light or in traffic.
+        f.Supervisor.Observe(Vehicle, head.Location, head);
+
+        Assert.Equal(1, f.Reported.Count("left its planned route"));
+        Assert.Equal(1, f.Reported.Count("replanned to"));
+
+        // Observing it repeatedly must stay quiet rather than replanning every tick.
+        for (int tick = 0; tick < 50; ++tick)
+            f.Supervisor.Observe(Vehicle, head.Location, head);
+        Assert.Equal(1, f.Reported.Count("left its planned route"));
+        Assert.Equal(1, f.Reported.Count("replanned to"));
     }
 
     [Fact]
@@ -210,7 +264,7 @@ public class RouteSupervisorTests
         PlannedRoute route = Plan(f, from: 0, to: 5);
         f.Supervisor.Assign(Vehicle, route);
 
-        f.Supervisor.Observe(Vehicle, f.Topology[^1].Location, SomewhereElse());
+        f.Supervisor.Observe(Vehicle, f.Topology[^1].Location, f.Topology[^1]);
 
         f.Reported.Await("has no route from");
         f.Reported.Await("retrying in");
@@ -231,7 +285,7 @@ public class RouteSupervisorTests
         PlannedRoute route = Plan(f, from: 0, to: 5);
         f.Supervisor.Assign(Vehicle, route);
 
-        f.Supervisor.Observe(Vehicle, f.Topology[^1].Location, SomewhereElse());
+        f.Supervisor.Observe(Vehicle, f.Topology[^1].Location, f.Topology[^1]);
 
         f.Reported.Await("steering greedily toward it instead");
 
@@ -253,7 +307,7 @@ public class RouteSupervisorTests
         PlannedRoute route = Plan(f, from: 0, to: 5);
         f.Supervisor.Assign(Vehicle, route);
 
-        f.Supervisor.Observe(Vehicle, f.Topology[^1].Location, SomewhereElse());
+        f.Supervisor.Observe(Vehicle, f.Topology[^1].Location, f.Topology[^1]);
 
         f.Reported.Await("has no route from");
         Assert.False(f.Reported.Saw("steering greedily"),
