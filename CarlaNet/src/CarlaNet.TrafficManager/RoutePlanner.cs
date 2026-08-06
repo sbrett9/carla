@@ -223,16 +223,16 @@ internal sealed class RoutePlanner
         // can perform and not a step the horizon walk can follow: the waypoints either side of it
         // are metres apart across the road and not at all along it.
         //
-        // Declined where the adjacent lane is inside a junction or forks, because which way it
-        // forks is not yet decided and the junction machinery downstream reads the horizon buffer
-        // expecting an unbroken run of road.
+        // Declined where the adjacent lane forks, because which way it forks is not yet decided, and
+        // on the approach to a junction, because a vehicle should already be in the lane it intends
+        // to leave by — see LaneChangeClearanceFromJunction.
         void RelaxLaneChange(SearchState from, SimpleWaypoint? neighbour, float costAtFrom)
         {
             if (neighbour is null || neighbour.CheckJunction()) return;
             IReadOnlyList<SimpleWaypoint> onward = neighbour.GetNextWaypoint();
             if (onward.Count != 1) return;
             SimpleWaypoint target = onward[0];
-            if (target.CheckJunction()) return;
+            if (ApproachesJunction(target)) return;
             Relax(from, new SearchState(target, true), costAtFrom, LaneChangeCostMetres);
         }
 
@@ -255,6 +255,41 @@ internal sealed class RoutePlanner
     /// may change lane again.
     /// </summary>
     private readonly record struct SearchState(SimpleWaypoint Waypoint, bool ReachedByLaneChange);
+
+    /// <summary>
+    /// How much clear road a planned lane change needs ahead of it before the next junction.
+    /// </summary>
+    /// <remarks>
+    /// A vehicle should be in the lane it intends to leave the junction by well before it arrives,
+    /// which is how a driver behaves and what the signal expects. It also avoids a specific failure:
+    /// the traffic manager answers a lane change by replacing the vehicle's whole horizon buffer
+    /// with a change-over point walked up to <c>MAX_WPT_DISTANCE</c> down the new lane, and that
+    /// walk stops when it reaches a junction. Changing lanes on the immediate approach therefore
+    /// puts a junction waypoint at the head of the buffer while the vehicle is still tens of metres
+    /// short of the stop line — and the traffic-light stage reads exactly that to decide a vehicle
+    /// has committed to crossing, which stops it obeying the signal it has not reached yet.
+    /// </remarks>
+    private const float LaneChangeClearanceFromJunction = 30.0f;
+
+    /// <summary>
+    /// True if a junction lies within <see cref="LaneChangeClearanceFromJunction"/> of
+    /// <paramref name="from"/>, following the road ahead. Stops at a fork, where the route has not
+    /// chosen a branch yet and every branch leads to the junction anyway.
+    /// </summary>
+    private static bool ApproachesJunction(SimpleWaypoint from)
+    {
+        SimpleWaypoint at = from;
+        float travelled = 0.0f;
+        while (travelled < LaneChangeClearanceFromJunction)
+        {
+            if (at.CheckJunction()) return true;
+            IReadOnlyList<SimpleWaypoint> onward = at.GetNextWaypoint();
+            if (onward.Count != 1) return true;
+            travelled += Distance(at.Location, onward[0].Location);
+            at = onward[0];
+        }
+        return at.CheckJunction();
+    }
 
     /// <summary>
     /// Priority-queue ordering: cheapest estimated total cost first, ties broken on the waypoint's

@@ -388,6 +388,43 @@ public class RoutePlannerTests
     }
 
     [Fact]
+    public void Does_not_change_lane_on_the_approach_to_a_junction()
+    {
+        // A vehicle should already be in the lane it intends to leave a junction by. It also avoids
+        // a specific failure: the traffic manager answers a lane change by replacing the whole
+        // horizon buffer with a change-over point walked down the new lane until it reaches a
+        // junction, and the traffic-light stage reads the head of that buffer to decide a vehicle
+        // has committed to crossing. Change lanes on the immediate approach and the vehicle is
+        // judged committed while still tens of metres short of the stop line, and stops obeying a
+        // signal it has not reached.
+        List<SimpleWaypoint> inner = Chain(roadId: 1u, count: 30, startX: 0.0f, y: 0.0f, laneId: -1);
+        List<SimpleWaypoint> outer = Chain(roadId: 1u, count: 30, startX: 0.0f, y: 3.5f, laneId: -2);
+        for (int i = 0; i < inner.Count; ++i) LinkLanes(inner[i], outer[i]);
+
+        // A junction at the end of the approach, and the destination beyond it.
+        var junction = Node(9u, 0.0, 150.0f, 3.5f);
+        junction.SetIsJunction(true);
+        var beyond = Node(8u, 0.0, 160.0f, 3.5f);
+        Link(inner[^1], junction);
+        Link(outer[^1], junction);
+        Link(junction, beyond);
+
+        List<RouteStep>? route = RoutePlanner.Search(inner[0], beyond, Budget);
+        Assert.NotNull(route);
+        Assert.Same(beyond, route![^1].Waypoint);
+
+        // Any lane change the route does plan must leave clear road before the junction.
+        foreach (var (step, i) in route.Select((s, i) => (s, i)))
+        {
+            if (!step.ReachedByLaneChange) continue;
+            float toJunction = MathF.Abs(junction.Location.X - step.Waypoint.Location.X);
+            Assert.True(toJunction >= 30.0f,
+                $"step {i} changes lane {toJunction:F0} m short of the junction; a vehicle should "
+                + "already be in its lane by then.");
+        }
+    }
+
+    [Fact]
     public void Stays_in_lane_when_changing_would_not_shorten_the_route()
     {
         // Both lanes run to the same place, so the lane-change penalty should keep the search in
