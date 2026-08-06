@@ -142,7 +142,7 @@ public sealed class TrafficManager : IAsyncDisposable
         {
             // Never silently: the vehicles this drops are exactly the ones that will sit still and
             // be culled for it, with nothing anywhere saying why.
-            Console.Error.WriteLine(
+            TrafficReport.Writer.WriteLine(
                 $"{DateTime.Now:HH:mm:ss.fff} [traffic] {ids.Count - found} of {ids.Count} vehicles "
                 + "could not be registered with the traffic manager: the simulator does not yet "
                 + "report them. They will not be driven. Register with the actor record instead of "
@@ -281,6 +281,17 @@ public sealed class TrafficManager : IAsyncDisposable
     /// </summary>
     public float GetSpeedLimitKphAt(Location location)
         => _local.LocalMap.GetWaypoint(location).SpeedLimitKph;
+
+    /// <summary>
+    /// Also append the traffic manager's event lines — removals, route departures, junction
+    /// commitments — to <paramref name="path"/>, or stop doing so when it is null.
+    /// </summary>
+    /// <remarks>
+    /// A host that captures its own console cannot capture these by wrapping its own streams: this
+    /// process holds its own handle on the same descriptor and never writes through them. The lines
+    /// still go to standard error either way.
+    /// </remarks>
+    public void SetEventLogPath(string? path) => TrafficReport.SetLogFile(path);
 
     /// <summary>Number of vehicles currently following a planned route.</summary>
     public int RoutedVehicleCount => _local.RouteSupervisor.RoutedVehicleCount;

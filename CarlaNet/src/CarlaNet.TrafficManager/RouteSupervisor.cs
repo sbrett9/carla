@@ -73,7 +73,7 @@ internal sealed class RouteSupervisor : IDisposable
     {
         _planner = planner ?? throw new ArgumentNullException(nameof(planner));
         _parameters = parameters ?? throw new ArgumentNullException(nameof(parameters));
-        _report = report ?? Console.Error;
+        _report = report ?? TrafficReport.Writer;
     }
 
     /// <summary>

@@ -1278,6 +1278,14 @@ class TrafficManager:
         """Stop watching a vehicle's route. Its current path is left in place."""
         self._tm.ClearRoute(actor._actor)
 
+    def set_event_log_path(self, path):
+        """Also append the Traffic Manager's event lines to `path` (None to stop).
+
+        Its '[route]' and '[traffic]' lines go to .NET's own handle on the console, so wrapping
+        Python's streams cannot capture them; this asks the Traffic Manager itself to write them to
+        the file as well. They still appear on the console either way."""
+        self._tm.SetEventLogPath(path)
+
     def get_speed_limit_kph_at(self, location) -> float:
         """The speed limit posted on the lane nearest `location`, in km/h; 0 where the road declares
         none. The same figure the Traffic Manager governs a vehicle by, so a caller placing a

@@ -583,7 +583,7 @@ internal sealed class ALSM
     /// </remarks>
     private static void ReportRemoval(ActorId actorId, string why)
     {
-        Console.Error.WriteLine(
+        TrafficReport.Writer.WriteLine(
             $"{DateTime.Now:HH:mm:ss.fff} [traffic] removed vehicle {actorId}: {why}.");
     }
 

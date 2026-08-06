@@ -196,7 +196,7 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
                 {
                     float ahead = MathF.Sqrt(
                         egoBuffer[0].DistanceSquared(_simulationState.GetLocation(egoActorId)));
-                    Console.Error.WriteLine(
+                    TrafficReport.Writer.WriteLine(
                         $"{DateTime.Now:HH:mm:ss.fff} [traffic] vehicle {egoActorId} committed to a "
                         + $"junction {ahead:F1} m ahead (light {trafficLightState}, "
                         + $"atLight={isAtTrafficLight}); it will not stop for that light.");

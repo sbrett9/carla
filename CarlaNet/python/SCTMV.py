@@ -351,8 +351,8 @@ def parse_args():
     ap.add_argument("--log", default=None, metavar="FILE",
                     help="also write this run's console output to FILE, with the same timestamps. "
                          "Flushed line by line, so a run that ends badly still leaves its log. Note "
-                         "the Traffic Manager's own '[route]' and '[traffic]' lines go straight to "
-                         "the console and are not captured here.")
+                         "the Traffic Manager's own '[route]' and '[traffic]' lines are written "
+                         "to it too.")
 
     rec = ap.add_argument_group("recording (F hotkey)")
     rec.add_argument("--record-dir", default=os.path.join(_REPO, "Build", "SCTMV_recordings"),
@@ -773,6 +773,14 @@ class TrafficController:
               f"inward {min(im):.0f}..{max(im):.0f} m (negative inward = inside the margin, as intended)")
         print(f"traffic: {len(ring_sps)} inward edge-ring spawn points; "
               f"{len(spawn_pool)} usable in-margin spawn points (set_actor_fade OK)")
+        if args.log:
+            # The traffic manager writes to its own console handle, so it has to be asked
+            # separately or its lines are the ones missing from the log when they are needed.
+            try:
+                tm.set_event_log_path(os.path.abspath(args.log))
+            except Exception as e:
+                print(f"traffic: traffic-manager lines will not reach the log ({e!r})",
+                      file=sys.stderr)
         if args.speed_scale != 100.0:
             # The knob is a percentage BELOW the limit, so a scale of 40% is a 60% difference.
             try:
