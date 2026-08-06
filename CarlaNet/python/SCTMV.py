@@ -292,6 +292,12 @@ def parse_args():
                            "for this long (default 45). Set well above any traffic-light phase, so "
                            "waiting at a light is not mistaken for a stall. 0 keeps them forever, "
                            "which leaves a stalled vehicle blocking its lane for the rest of the run.")
+    traf.add_argument("--spawn-at-speed", action="store_true",
+                      help="give each vehicle its road speed the instant it is created, instead of "
+                           "letting it accelerate from rest. OFF by default: this sets the body's "
+                           "velocity while its wheels are still stationary, so the tyre model sees "
+                           "full slip and the vehicle briefly has no grip — which can carry it off "
+                           "the road before the traffic manager has any say.")
     traf.add_argument("--speed-scale", type=float, default=100.0, metavar="PCT",
                       help="drive this percentage of each road's posted speed limit (default 100). "
                            "Lower it to run the whole fleet slower without flattening the "
@@ -963,10 +969,11 @@ class TrafficController:
                 # whatever is behind it at the same spawn point. The knob is a percentage OFF the
                 # limit, so the speed the Traffic Manager will hold it at is the limit scaled by it.
                 limit_kph = 0.0
-                try:
-                    limit_kph = self.tm.get_speed_limit_kph_at(sp.location)
-                except Exception:
-                    pass
+                if self.args.spawn_at_speed:
+                    try:
+                        limit_kph = self.tm.get_speed_limit_kph_at(sp.location)
+                    except Exception:
+                        pass
                 if limit_kph > 0.0:
                     target = ((limit_kph / 3.6)
                               * (self.args.speed_scale / 100.0)
