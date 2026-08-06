@@ -273,6 +273,15 @@ public sealed class TrafficManager : IAsyncDisposable
     /// <summary>Stop supervising a vehicle's route. Its current path is left in place.</summary>
     public void ClearRoute(Actor actor) => _local.RouteSupervisor.RemoveActor(actor.Id);
 
+    /// <summary>
+    /// The speed limit posted on the lane nearest <paramref name="location"/>, in km/h; 0 where the
+    /// road declares none. This is the same figure the traffic manager governs a vehicle by, so a
+    /// caller placing a vehicle can start it at the speed it is about to be driven at rather than
+    /// from rest.
+    /// </summary>
+    public float GetSpeedLimitKphAt(Location location)
+        => _local.LocalMap.GetWaypoint(location).SpeedLimitKph;
+
     /// <summary>Number of vehicles currently following a planned route.</summary>
     public int RoutedVehicleCount => _local.RouteSupervisor.RoutedVehicleCount;
 

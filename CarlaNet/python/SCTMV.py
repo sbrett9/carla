@@ -828,6 +828,13 @@ class TrafficController:
     # Half-extent (m) stood in for a vehicle that has not been spawned yet, so a spawn site can be
     # judged before anything exists at it. Generous enough to cover the long vehicles in the library.
     _ASSUMED_EXTENT = (3.5, 1.1)
+    # A world generated from OpenDRIVE places every recommended spawn point this far ABOVE the road
+    # (AOpenDriveGenerator::GenerateSpawnPoints, SpawnersHeight = 300 UE cm). A vehicle created
+    # there falls onto the carriageway and has to settle before it can be driven, which is several
+    # seconds of a vehicle doing nothing and reporting nonsense speeds while it drops. Take it back
+    # off and leave only enough clearance not to start interpenetrating the road surface.
+    _SPAWN_POINT_HEIGHT_ABOVE_ROAD = 3.0
+    _SPAWN_CLEARANCE = 0.15
 
     def _occupied(self, x, y):
         """True if any tracked vehicle's footprint is close enough to (x, y) that spawning there would
@@ -876,19 +883,21 @@ class TrafficController:
                 ext = (float(bb.extent.x), float(bb.extent.y))
             except Exception:
                 ext = (2.4, 1.0)
-            # Nudge the vehicle forward along its lane so the whole footprint is inside the red edge
-            # (the spawn point itself sits on the edge on a tightly-clipped map). Uses the real extent,
-            # so it scales to long vehicles (e.g. the Carla Cola truck).
+            # Place the vehicle: down onto the carriageway from the spawn point's 3 m hover, and
+            # nudged forward along its lane so the whole footprint is inside the red edge (the spawn
+            # point sits on the edge on a tightly-clipped map). Uses the real extent, so it scales to
+            # long vehicles (e.g. the Carla Cola truck).
             sx, sy, syaw = sp.location.x, sp.location.y, sp.rotation.yaw
+            sz = sp.location.z - self._SPAWN_POINT_HEIGHT_ABOVE_ROAD + self._SPAWN_CLEARANCE
             dx, dy = _clear_shift(sp.location.x, sp.location.y, syaw, ext, self.b)
-            if dx or dy:
-                sx += dx; sy += dy
-                try:
-                    v.set_transform(carla.Transform(
-                        carla.Location(x=sx, y=sy, z=sp.location.z),
-                        carla.Rotation(pitch=sp.rotation.pitch, yaw=syaw, roll=sp.rotation.roll)))
-                except Exception:
-                    sx, sy = sp.location.x, sp.location.y   # shift failed; fall back to the raw spawn
+            sx += dx; sy += dy
+            try:
+                v.set_transform(carla.Transform(
+                    carla.Location(x=sx, y=sy, z=sz),
+                    carla.Rotation(pitch=sp.rotation.pitch, yaw=syaw, roll=sp.rotation.roll)))
+            except Exception:
+                # Placement failed; the vehicle is still where it was created, 3 m up.
+                sx, sy = sp.location.x, sp.location.y
             try:
                 op = _interior_opacity(sx, sy, syaw, ext[0], ext[1], self.b)
                 if self.args.fade:
@@ -898,9 +907,28 @@ class TrafficController:
                 # percentage OFF the limit, so a negative value means driving over it; drawing
                 # symmetrically about zero puts the fleet either side of the posted speed rather
                 # than all at it.
+                difference = 0.0
                 if self.args.speed_spread > 0:
                     spread = float(self.args.speed_spread)
-                    self.tm.set_percentage_speed_difference(v, random.uniform(-spread, spread))
+                    difference = random.uniform(-spread, spread)
+                    self.tm.set_percentage_speed_difference(v, difference)
+                # Join the traffic at its speed rather than from rest. A vehicle entering a motorway
+                # at 0 m/s spends its first seconds being overtaken by everything on it, and holds up
+                # whatever is behind it at the same spawn point. The knob is a percentage OFF the
+                # limit, so the speed the Traffic Manager will hold it at is the limit scaled by it.
+                limit_kph = 0.0
+                try:
+                    limit_kph = self.tm.get_speed_limit_kph_at(sp.location)
+                except Exception:
+                    pass
+                if limit_kph > 0.0:
+                    target = (limit_kph / 3.6) * (1.0 - difference / 100.0)
+                    yaw = math.radians(syaw)
+                    try:
+                        v.set_target_velocity(carla.Vector3D(
+                            x=target * math.cos(yaw), y=target * math.sin(yaw), z=0.0))
+                    except Exception:
+                        pass
                 if route is not None:
                     self.tm.apply_route(v, route)
                     self.routes_planned += 1

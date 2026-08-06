@@ -90,6 +90,9 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
     /// <summary>Shortest-path search over the road graph, for the facade's route-planning surface.</summary>
     internal RoutePlanner RoutePlanner => _routePlanner;
 
+    /// <summary>The dense road graph, for facade queries about a place on the map.</summary>
+    internal InMemoryMap LocalMap => _localMap;
+
     /// <summary>Route bookkeeping and recovery, for the facade's route-assignment surface.</summary>
     internal RouteSupervisor RouteSupervisor => _routeSupervisor;
 

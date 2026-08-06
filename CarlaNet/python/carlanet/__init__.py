@@ -790,6 +790,15 @@ class Actor:
     def set_simulate_physics(self, enabled: bool):
         _sync(self._client.SetActorSimulatePhysicsAsync(self._actor.Id, enabled))
 
+    def set_target_velocity(self, velocity):
+        """Set the actor's linear velocity directly (m/s, world axes).
+
+        Used at spawn to start a vehicle at the speed of the traffic it is joining. Without it a
+        vehicle is created at rest and has to accelerate from zero, which on a motorway means it
+        spends its first seconds being overtaken by everything around it."""
+        v = velocity._to_cs() if hasattr(velocity, "_to_cs") else velocity
+        _sync(self._client.SetActorTargetVelocityAsync(self._actor.Id, v))
+
     def set_fade(self, hide: float):
         """Set the staging fade for this actor: 0.0 = fully visible, 1.0 = fully dissolved away.
 
@@ -1268,6 +1277,13 @@ class TrafficManager:
     def clear_route(self, actor: Actor):
         """Stop watching a vehicle's route. Its current path is left in place."""
         self._tm.ClearRoute(actor._actor)
+
+    def get_speed_limit_kph_at(self, location) -> float:
+        """The speed limit posted on the lane nearest `location`, in km/h; 0 where the road declares
+        none. The same figure the Traffic Manager governs a vehicle by, so a caller placing a
+        vehicle can start it at the speed it is about to be driven at."""
+        loc = location._to_cs() if hasattr(location, "_to_cs") else location
+        return float(self._tm.GetSpeedLimitKphAt(loc))
 
     def get_routed_vehicle_count(self) -> int:
         """How many vehicles are currently following a planned route."""

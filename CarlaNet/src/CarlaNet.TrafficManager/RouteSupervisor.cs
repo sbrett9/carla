@@ -177,7 +177,13 @@ internal sealed class RouteSupervisor : IDisposable
             if (!vehicle.HasLeftRoute)
             {
                 vehicle.HasLeftRoute = true;
-                Report($"vehicle {actorId} left its planned route at {Format(vehicleLocation)}; "
+                // Name the lane it is judged to be on. A departure where only the lane id differs
+                // from one report to the next is a vehicle changing lanes; one where the road id
+                // changes is a vehicle that took a junction differently from the plan. The counts
+                // alone cannot tell those apart, and they are not the same problem.
+                var on = graphPosition.Waypoint;
+                Report($"vehicle {actorId} left its planned route at {Format(vehicleLocation)} "
+                       + $"(on road {on.RoadId} lane {on.LaneId} s {on.S:F0}); "
                        + $"replanning to {Format(vehicle.Destination)}.");
             }
 
