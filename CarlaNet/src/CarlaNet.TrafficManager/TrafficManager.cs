@@ -123,11 +123,31 @@ public sealed class TrafficManager : IAsyncDisposable
 
     // ID-based overloads: fetch the Actor records from the server and forward.
     // Used by Python's apply_batch path where only the spawned ActorId is known.
+    /// <remarks>
+    /// Prefer <see cref="RegisterVehicles"/> where the caller already holds the actor records. This
+    /// overload has to fetch them back from the simulator, which returns nothing for an actor the
+    /// simulator has not published yet — a vehicle spawned in the same frame, before a tick. The
+    /// registration is then impossible to complete, and a vehicle that is never registered is never
+    /// driven: it sits where it spawned, with its autopilot flag set and a route assigned, until
+    /// something else gives up on it.
+    /// </remarks>
     public void RegisterVehicleIds(IReadOnlyList<uint> ids)
     {
         if (ids is null || ids.Count == 0) return;
         var actors = _client.GetActorsByIdAsync(ids).GetAwaiter().GetResult();
         if (actors is { Count: > 0 }) _local.RegisterVehicles(actors);
+
+        int found = actors?.Count ?? 0;
+        if (found < ids.Count)
+        {
+            // Never silently: the vehicles this drops are exactly the ones that will sit still and
+            // be culled for it, with nothing anywhere saying why.
+            TrafficReport.Writer.WriteLine(
+                $"{DateTime.Now:HH:mm:ss.fff} [traffic] {ids.Count - found} of {ids.Count} vehicles "
+                + "could not be registered with the traffic manager: the simulator does not yet "
+                + "report them. They will not be driven. Register with the actor record instead of "
+                + "the id where the caller has one.");
+        }
     }
 
     public void UnregisterVehicleIds(IReadOnlyList<uint> ids)
@@ -218,6 +238,77 @@ public sealed class TrafficManager : IAsyncDisposable
 
     public void UpdateImportedRoute(ActorId actorId, IReadOnlyList<byte> route)
         => _local.UpdateImportedRoute(actorId, route);
+
+    // ─────────────────────────────────────────────────────────────────
+    //                        Planned routes
+    // ─────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Search the road graph for a route from <paramref name="origin"/> to
+    /// <paramref name="destination"/>. Returns null when no sequence of lanes connects them.
+    /// </summary>
+    /// <remarks>
+    /// Runs the search on the calling thread, not on the traffic-manager tick — call it before
+    /// spawning the vehicle, both to keep the tick free and so a spawn point with no route to the
+    /// destination can be rejected before a vehicle exists at it.
+    ///
+    /// The result depends only on the two endpoints and the map, so the same scenario replayed with
+    /// the same seed produces the same routes. Speed, collision avoidance and traffic-signal
+    /// response remain emergent; only the route is decided in advance.
+    /// </remarks>
+    public PlannedRoute? PlanRoute(Location origin, Location destination)
+        => _local.RoutePlanner.Plan(origin, destination);
+
+    /// <summary>
+    /// Put a vehicle on a route returned by <see cref="PlanRoute"/>. The route's waypoints are
+    /// installed as the vehicle's path, and the vehicle is watched from then on: if it leaves the
+    /// route it is replanned from wherever it now is to the same destination.
+    /// </summary>
+    public void ApplyRoute(Actor actor, PlannedRoute route)
+    {
+        ArgumentNullException.ThrowIfNull(route);
+        _local.RouteSupervisor.Assign(actor.Id, route);
+    }
+
+    /// <summary>Stop supervising a vehicle's route. Its current path is left in place.</summary>
+    public void ClearRoute(Actor actor) => _local.RouteSupervisor.RemoveActor(actor.Id);
+
+    /// <summary>
+    /// The speed limit posted on the lane nearest <paramref name="location"/>, in km/h; 0 where the
+    /// road declares none. This is the same figure the traffic manager governs a vehicle by, so a
+    /// caller placing a vehicle can start it at the speed it is about to be driven at rather than
+    /// from rest.
+    /// </summary>
+    public float GetSpeedLimitKphAt(Location location)
+        => _local.LocalMap.GetWaypoint(location).SpeedLimitKph;
+
+    /// <summary>
+    /// Also append the traffic manager's event lines — removals, route departures, junction
+    /// commitments — to <paramref name="path"/>, or stop doing so when it is null.
+    /// </summary>
+    /// <remarks>
+    /// A host that captures its own console cannot capture these by wrapping its own streams: this
+    /// process holds its own handle on the same descriptor and never writes through them. The lines
+    /// still go to standard error either way.
+    /// </remarks>
+    public void SetEventLogPath(string? path) => TrafficReport.SetLogFile(path);
+
+    /// <summary>Number of vehicles currently following a planned route.</summary>
+    public int RoutedVehicleCount => _local.RouteSupervisor.RoutedVehicleCount;
+
+    /// <summary>
+    /// How many consecutive failed replans a vehicle may accumulate before
+    /// <see cref="SetRouteGreedyFallbackEnabled">the greedy fallback</see> takes over. Zero means
+    /// the fallback is never reached however often replanning fails. Default 3.
+    /// </summary>
+    public void SetRouteReplanAttemptLimit(int limit) => _local.SetRouteReplanAttemptLimit(limit);
+
+    /// <summary>
+    /// Whether a vehicle that cannot be replanned is eventually handed back to greedy steering
+    /// toward its destination, rather than going on trying to find a real route. Off by default.
+    /// </summary>
+    public void SetRouteGreedyFallbackEnabled(bool enabled)
+        => _local.SetRouteGreedyFallbackEnabled(enabled);
 
     public void SetRespawnDormantVehicles(bool modeSwitch) => _local.SetRespawnDormantVehicles(modeSwitch);
 

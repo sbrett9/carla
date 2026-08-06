@@ -168,15 +168,22 @@ internal sealed class MotionPlanStage : IStageWithRemoveActor
         float vehicleSpeed = Length(vehicleVelocity);
         Vector3D vehicleHeading = _simulationState.GetHeading(actorId);
         bool physicsEnabled = _simulationState.IsPhysicsEnabled(actorId);
-        float speedLimit = _simulationState.GetSpeedLimit(actorId);
-        // ALSM doesn't yet query Vehicle.GetSpeedLimit per tick (one-RPC-per-vehicle
-        // hot path), so SpeedLimit stays at 0 until LocalizationStage wires it from
-        // road info. Fall back to a sensible 30 km/h urban default so vehicles
-        // actually move when Parameters.SpeedDifference is the only governor.
-        if (speedLimit <= 0f) speedLimit = 30f;
-
         if (!_bufferMap.TryGetValue(actorId, out var waypointBuffer) || waypointBuffer.Count == 0)
             return;
+
+        // What speed is this vehicle allowed to do here? Prefer what the road itself declares: the
+        // OpenDRIVE <speed> record on the lane the vehicle is on, cached at graph-build time so
+        // reading it costs a field access rather than an RPC.
+        //
+        // The simulator's own per-actor speed limit is only a fallback, because it is derived from
+        // speed-limit SIGN actors that the vehicle has driven past. A world generated from OSM has
+        // no such signs, so that value never leaves its 30 km/h default and every vehicle on the map
+        // crawled at 8.3 m/s, motorways included, while the map itself declared 29 m/s for them.
+        float speedLimit = waypointBuffer[0].SpeedLimitKph;
+        if (speedLimit <= 0f) speedLimit = _simulationState.GetSpeedLimit(actorId);
+        // Neither the road nor the simulator declares one: an urban default, so a vehicle on an
+        // unposted road still moves.
+        if (speedLimit <= 0f) speedLimit = 30f;
 
         // Sibling stage outputs — gracefully default if a sibling stage
         // hasn't filled an entry this tick (e.g. before the very first tick

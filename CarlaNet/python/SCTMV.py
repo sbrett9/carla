@@ -102,6 +102,90 @@ import carlanet as carla
 FT_PER_M = 3.28084
 
 
+# ───────────────────────────── timestamped console output ─────────────────────────────
+
+def _log_time() -> str:
+    """Wall-clock time of an event, to the millisecond. Local time rather than UTC: this is read
+    live against what is happening on screen, not correlated with recorded telemetry (which carries
+    its own UTC timestamps)."""
+    now = datetime.now()
+    return f"{now:%H:%M:%S}.{now.microsecond // 1000:03d} "
+
+
+class _TimestampedStream:
+    """Wraps a text stream so every line written through it is prefixed with the time it was
+    written.
+
+    Applied to stdout and stderr, so every message this viewer prints — and every traceback — says
+    when it happened. Without that, a message that repeats tells you nothing about how often, which
+    is usually the first thing worth knowing about a repeating message.
+
+    Text arrives a fragment at a time (print emits the message and the newline as separate writes),
+    so the prefix goes on the first fragment of each line rather than on each write. Traffic is
+    reported from a background thread as well as the main one, hence the lock: without it two
+    threads can interleave halfway through a line.
+    """
+
+    def __init__(self, stream, sink=None):
+        self._stream = stream
+        self._sink = sink          # optional log file, written with the same timestamps
+        self._at_line_start = True
+        self._lock = threading.Lock()
+
+    def write(self, text):
+        if not text:
+            return 0
+        stamp = _log_time()
+        with self._lock:
+            pieces = []
+            for line in text.splitlines(keepends=True):
+                if self._at_line_start:
+                    pieces.append(stamp)
+                pieces.append(line)
+                self._at_line_start = line.endswith("\n")
+            stamped = "".join(pieces)
+            self._stream.write(stamped)
+            if self._sink is not None:
+                try:
+                    self._sink.write(stamped)
+                    self._sink.flush()      # a run that ends badly must still leave its log behind
+                except Exception:
+                    pass
+        return len(text)
+
+    def __getattr__(self, name):
+        # Everything this class does not override — flush, fileno, isatty, encoding, close — belongs
+        # to the stream underneath. Guarded so an attribute lookup before __init__ finishes raises
+        # AttributeError rather than recursing.
+        stream = self.__dict__.get("_stream")
+        if stream is None:
+            raise AttributeError(name)
+        return getattr(stream, name)
+
+
+def _timestamp_console(log_path=None):
+    """Prefix this process's Python output with the time, and optionally copy it to a file.
+    Idempotent, so re-entering main() (or importing this module twice) does not stack prefixes.
+
+    The Traffic Manager writes its own '[route]' and '[traffic]' lines straight to .NET's stderr,
+    which never passes through these objects; it timestamps them itself in the same format so the
+    two interleave readably. Those lines reach the console but NOT the log file, because .NET holds
+    its own handle to the same descriptor — the log captures everything this process prints.
+    """
+    sink = None
+    if log_path:
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(log_path)), exist_ok=True)
+            sink = open(log_path, "w", encoding="utf-8")
+        except Exception as e:
+            print(f"could not open log file {log_path!r}: {e!r}", file=sys.stderr)
+    if not isinstance(sys.stdout, _TimestampedStream):
+        sys.stdout = _TimestampedStream(sys.stdout, sink)
+    if not isinstance(sys.stderr, _TimestampedStream):
+        sys.stderr = _TimestampedStream(sys.stderr, sink)
+    return sink
+
+
 # ───────────────────────────── argument parsing ─────────────────────────────
 
 def parse_args():
@@ -203,11 +287,47 @@ def parse_args():
                       help="don't apply the opacity fade — spawn and despawn vehicles at FULL opacity. "
                            "Diagnostic: makes it obvious whether vehicles are actually driving (rather "
                            "than being hidden by the fade while they sit at the margin).")
+    traf.add_argument("--stall-timeout", type=float, default=45.0, metavar="SECONDS",
+                      help="despawn a vehicle that has driven into the scene and then stopped dead "
+                           "for this long (default 45). Set well above any traffic-light phase, so "
+                           "waiting at a light is not mistaken for a stall. 0 keeps them forever, "
+                           "which leaves a stalled vehicle blocking its lane for the rest of the run.")
+    traf.add_argument("--spawn-at-speed", action="store_true",
+                      help="give each vehicle its road speed the instant it is created, instead of "
+                           "letting it accelerate from rest. OFF by default: this sets the body's "
+                           "velocity while its wheels are still stationary, so the tyre model sees "
+                           "full slip and the vehicle briefly has no grip — which can carry it off "
+                           "the road before the traffic manager has any say.")
+    traf.add_argument("--speed-scale", type=float, default=100.0, metavar="PCT",
+                      help="drive this percentage of each road's posted speed limit (default 100). "
+                           "Lower it to run the whole fleet slower without flattening the "
+                           "differences between roads: 40 gives 40%% of the limit everywhere, so a "
+                           "65 mph freeway becomes 26 mph and a 25 mph street becomes 10. Useful "
+                           "for telling apart behaviour that degrades with speed from behaviour "
+                           "that is wrong at any speed.")
+    traf.add_argument("--speed-spread", type=float, default=20.0, metavar="PCT",
+                      help="how much drivers differ from the posted speed limit, as a percentage "
+                           "either side of it (default 20, so each vehicle drives between 80%% and "
+                           "120%% of the limit on whatever road it is on). The limit itself comes "
+                           "from the map: OpenDRIVE carries one per lane, derived from the OSM "
+                           "maxspeed tags. 0 makes every vehicle drive exactly the limit.")
     traf.add_argument("--route", action="store_true",
-                      help="give each vehicle a far-edge destination and let the Traffic Manager "
-                           "steer toward it. This is a bearing, not a planned route: the Traffic "
-                           "Manager picks each next waypoint greedily, so a vehicle can be led onto "
-                           "a dead end or around a loop ramp it never leaves. OFF by default.")
+                      help="give each vehicle a far-edge destination and a route to it, searched "
+                           "over the road network before the vehicle is spawned. The same seed and "
+                           "the same spawn points yield the same routes; speed, braking and "
+                           "traffic-signal response stay emergent. A spawn point with no route to "
+                           "any destination is skipped, so spawning is slower. OFF by default.")
+    traf.add_argument("--route-replan-limit", type=int, default=3, metavar="N",
+                      help="a vehicle knocked off its route is replanned from where it now is. "
+                           "After N consecutive failures the greedy fallback takes over, if it is "
+                           "enabled. 0 means the fallback is never reached however often "
+                           "replanning fails (default 3).")
+    traf.add_argument("--route-greedy-fallback", action="store_true",
+                      help="after --route-replan-limit failures, hand the vehicle back to greedy "
+                           "steering toward its destination instead of going on trying to plan a "
+                           "route. OFF by default: a routed vehicle either follows a route that "
+                           "was actually searched for, or says on the console that it cannot find "
+                           "one.")
 
     scen = ap.add_argument_group("scenario")
     scen.add_argument("--scenario", default=None,
@@ -227,6 +347,12 @@ def parse_args():
     tel.add_argument("--stale", type=float, default=3.0, help="CoT stale seconds")
     tel.add_argument("--ttl", type=int, default=1, help="multicast TTL")
     tel.add_argument("--print", action="store_true", dest="echo", help="also print each CoT event")
+
+    ap.add_argument("--log", default=None, metavar="FILE",
+                    help="also write this run's console output to FILE, with the same timestamps. "
+                         "Flushed line by line, so a run that ends badly still leaves its log. Note "
+                         "the Traffic Manager's own '[route]' and '[traffic]' lines are written "
+                         "to it too.")
 
     rec = ap.add_argument_group("recording (F hotkey)")
     rec.add_argument("--record-dir", default=os.path.join(_REPO, "Build", "SCTMV_recordings"),
@@ -428,6 +554,64 @@ def _is_inward(tf, b):
     return math.cos(yaw) * (cx - tf.location.x) + math.sin(yaw) * (cy - tf.location.y) > 0.0
 
 
+def _red_edge_deficit(x, y, yaw_deg, ext, b, pad=0.6):
+    """How far (m) a vehicle's footprint at this pose pokes past the nearest red (sandbox) edge,
+    together with that edge's inward normal. <= 0 means the whole footprint is already inside."""
+    edges = (("W", x - b["min_x"], (1.0, 0.0)),
+             ("E", b["max_x"] - x, (-1.0, 0.0)),
+             ("S", y - b["min_y"], (0.0, 1.0)),
+             ("N", b["max_y"] - y, (0.0, -1.0)))
+    _, c, n = min(edges, key=lambda e: e[1])     # c = clearance to nearest red edge, n = inward normal
+    yaw = math.radians(yaw_deg)
+    # AABB half-extent along that edge's axis (same projection as _interior_opacity).
+    he = (abs(ext[0] * math.cos(yaw)) + abs(ext[1] * math.sin(yaw))) if n[0] != 0.0 \
+        else (abs(ext[0] * math.sin(yaw)) + abs(ext[1] * math.cos(yaw)))
+    return (he + pad) - c, n
+
+
+def _clear_shift(x, y, yaw_deg, ext, b, pad=0.6):
+    """Offset (dx, dy) to move a vehicle FORWARD along its lane just far enough that its whole
+    footprint clears the nearest red (sandbox) edge. On a tightly-clipped map the spawn point sits
+    right on the edge, so the vehicle's centre is 0-3 m in while its body pokes outside; the spawn
+    faces inward, so a small forward nudge along the lane pulls the body fully inside. Returns
+    (0, 0) if already clear or if the lane runs ~parallel to the edge (forward wouldn't help)."""
+    deficit, n = _red_edge_deficit(x, y, yaw_deg, ext, b, pad)
+    if deficit <= 0:
+        return (0.0, 0.0)
+    yaw = math.radians(yaw_deg)
+    ux, uy = math.cos(yaw), math.sin(yaw)
+    dot = ux * n[0] + uy * n[1]                   # how much 'forward' points inward
+    if dot < 0.2:                                 # lane ~parallel to the edge: forward won't clear
+        return (0.0, 0.0)
+    d = min(deficit / dot, b["margin"])           # don't push past one margin
+    return (ux * d, uy * d)
+
+
+def _fits_inside_red_edge(x, y, yaw_deg, ext, b, pad=0.6):
+    """True if a vehicle of this footprint spawned here ends up wholly inside the red (sandbox) edge
+    once nudged forward along its lane.
+
+    This is the question a spawn site actually has to answer, and it is not the same as being some
+    fixed distance from the edge. A motorway crossing the boundary at a shallow angle presents lanes
+    only a metre or two clear of it, every one of which a vehicle can occupy perfectly well after the
+    forward nudge, because the nudge is measured against the vehicle's own footprint and the
+    direction its lane runs. A plain distance test rejects them all and so keeps traffic off the
+    fastest roads on the map entirely.
+
+    Asks whether the nudge can clear the edge rather than applying it and re-measuring: the nudge is
+    sized to land the footprint exactly on the boundary, so re-measuring leaves a residual of zero
+    give or take rounding, and a site that fits perfectly would be rejected on a floating-point
+    crumb."""
+    deficit, n = _red_edge_deficit(x, y, yaw_deg, ext, b, pad)
+    if deficit <= 0:
+        return True                                   # already wholly inside
+    yaw = math.radians(yaw_deg)
+    dot = math.cos(yaw) * n[0] + math.sin(yaw) * n[1]
+    if dot < 0.2:
+        return False                                  # lane runs along the edge; forward never clears it
+    return deficit / dot <= b["margin"]               # clears within one margin of forward travel
+
+
 def _interior_opacity(cx, cy, yaw_deg, ext_x, ext_y, b):
     """Opacity [0,1] = the fraction of the vehicle's footprint that lies INSIDE the interior (past
     the blue line, one margin in from the red edge). 0 = wholly within the margin (transparent); 1 =
@@ -483,6 +667,24 @@ class TrafficController:
         self.last_check = 0.0
         self.last_summary = 0.0
         self.despawns = {}   # reason -> count, accumulated between summaries (diagnostics)
+        self.routes_planned = 0        # vehicles spawned onto a searched route
+        self.unroutable_spawns = 0     # spawn points skipped because nothing was reachable from them
+        # Route searches run on this thread, between world ticks. How long one takes depends on the
+        # size of the road network, so it is reported rather than assumed: a search that grows into
+        # tens of milliseconds shows up here before it shows up as a stutter.
+        self.route_plan_ms_max = 0.0
+        self.route_plan_ms_total = 0.0
+        self.route_searches = 0
+        # Where this subsystem's time goes, so "traffic is making it slow" can be answered with a
+        # number. Both run on whichever thread owns the RPCs, so both are taken out of the frame.
+        self.spawn_ms = 0.0        # choosing a site, searching for a route, spawning, configuring
+        self.reconcile_ms = 0.0    # per-vehicle pose read, fade, and the boundary/stuck guards
+        # (distance from spawn, was routed) for each vehicle culled for not moving, per summary.
+        self.stuck_travel = []
+        # blueprint -> count, for vehicles that drove into the scene and then stopped dead. Which
+        # models stall is the whole question: measured on a generated interchange, vehicles 6 m and
+        # longer stalled at 67% against 12% for shorter ones.
+        self.stalled_models = {}
 
     def apply_want(self):
         """Reconcile actual on/off with the hotkey's desired state. Called on whichever thread owns
@@ -533,9 +735,17 @@ class TrafficController:
             stub.reason = (f"only {len(ring_sps)} inward edge-ring spawn points; need >=2 "
                            "(select a larger OSM area or a smaller --terrain-margin)")
             return stub
+        # A spawn site must sit inside the margin (so the vehicle fades in rather than popping in)
+        # and must be able to hold a vehicle wholly inside the red edge once nudged forward along
+        # its lane. The second test used to be a flat "at least 5 m from the edge", which asks the
+        # wrong question: CARLA puts a spawn point at the upstream end of each lane and nowhere else,
+        # so a motorway clipped by the sandbox boundary offers only its entry, whose lanes fan across
+        # that boundary a metre or two apart. Every one of them was rejected, which is why no traffic
+        # ever appeared on the freeway.
         spawn_pool = [sp for sp in ring_sps
                       if _inward_min(sp.location.x, sp.location.y, staging) <= -2.0
-                      and _red_clearance(sp.location.x, sp.location.y, staging) >= 5.0]
+                      and _fits_inside_red_edge(sp.location.x, sp.location.y, sp.rotation.yaw,
+                                                cls._ASSUMED_EXTENT, staging)]
         if len(spawn_pool) < 8:
             spawn_pool = ring_sps
 
@@ -563,6 +773,34 @@ class TrafficController:
               f"inward {min(im):.0f}..{max(im):.0f} m (negative inward = inside the margin, as intended)")
         print(f"traffic: {len(ring_sps)} inward edge-ring spawn points; "
               f"{len(spawn_pool)} usable in-margin spawn points (set_actor_fade OK)")
+        if args.log:
+            # The traffic manager writes to its own console handle, so it has to be asked
+            # separately or its lines are the ones missing from the log when they are needed.
+            try:
+                tm.set_event_log_path(os.path.abspath(args.log))
+            except Exception as e:
+                print(f"traffic: traffic-manager lines will not reach the log ({e!r})",
+                      file=sys.stderr)
+        if args.speed_scale != 100.0:
+            # The knob is a percentage BELOW the limit, so a scale of 40% is a 60% difference.
+            try:
+                tm.set_global_percentage_speed_difference(100.0 - args.speed_scale)
+                print(f"traffic: driving {args.speed_scale:.0f}% of each road's posted speed limit")
+            except Exception as e:
+                print(f"traffic: speed scale unavailable ({e!r})", file=sys.stderr)
+        if args.route:
+            try:
+                tm.set_route_replan_attempt_limit(args.route_replan_limit)
+                tm.set_route_greedy_fallback_enabled(args.route_greedy_fallback)
+            except Exception as e:
+                print(f"traffic: route recovery knobs unavailable ({e!r}); using defaults",
+                      file=sys.stderr)
+            if args.route_greedy_fallback:
+                recovery = (f"after {args.route_replan_limit} failed replans, steer greedily"
+                            if args.route_replan_limit > 0 else "keep replanning (limit 0)")
+            else:
+                recovery = "keep replanning indefinitely"
+            print(f"traffic: routes are planned before spawn; off-route recovery = {recovery}")
         return ctl
 
     @classmethod
@@ -606,6 +844,36 @@ class TrafficController:
         cands.sort(key=lambda sp: -spawn_tf.location.distance(sp.location))
         return random.choice(cands[:max(1, len(cands) // 2)])
 
+    # Destinations to try from one spawn point before giving up on it. On a tightly clipped map an
+    # edge spawn point can sit on a stub that reaches almost nothing, and a routed vehicle is only
+    # worth spawning if it has somewhere to go.
+    _ROUTE_DESTINATION_TRIES = 4
+
+    def _plan_route_from(self, spawn_tf):
+        """Search the road network for a route from a spawn point to a far-edge destination, before
+        anything has been spawned there. Returns the route, or None if none of the destinations
+        tried is reachable from this spawn point.
+
+        Planning from the spawn point rather than the final pose is deliberate: the vehicle is later
+        nudged a few metres forward along the same lane so its body clears the sandbox edge, which
+        at most changes which waypoint the route starts on. The Traffic Manager discards route
+        waypoints the vehicle is already past."""
+        for _ in range(self._ROUTE_DESTINATION_TRIES):
+            destination = self._pick_destination(spawn_tf).location
+            t0 = time.perf_counter()
+            try:
+                route = self.tm.plan_route(spawn_tf.location, destination)
+            except Exception as e:
+                print(f"  route planning unavailable: {e!r}", file=sys.stderr)
+                return None
+            elapsed_ms = (time.perf_counter() - t0) * 1000.0
+            self.route_searches += 1
+            self.route_plan_ms_total += elapsed_ms
+            self.route_plan_ms_max = max(self.route_plan_ms_max, elapsed_ms)
+            if route is not None:
+                return route
+        return None
+
     @staticmethod
     def _safe_fade(v, hide):
         try:
@@ -613,36 +881,19 @@ class TrafficController:
         except Exception:
             pass
 
-    def _clear_shift(self, loc, yaw_deg, ext, pad=0.6):
-        """Offset (dx, dy) to move a vehicle FORWARD along its lane just far enough that its whole
-        footprint clears the nearest red (sandbox) edge. On a tightly-clipped map the spawn point sits
-        right on the edge, so the vehicle's centre is 0-3 m in while its body pokes outside; the spawn
-        faces inward, so a small forward nudge along the lane pulls the body fully inside. Returns
-        (0, 0) if already clear or if the lane runs ~parallel to the edge (forward wouldn't help)."""
-        b = self.b
-        edges = (("W", loc.x - b["min_x"], (1.0, 0.0)),
-                 ("E", b["max_x"] - loc.x, (-1.0, 0.0)),
-                 ("S", loc.y - b["min_y"], (0.0, 1.0)),
-                 ("N", b["max_y"] - loc.y, (0.0, -1.0)))
-        _, c, n = min(edges, key=lambda e: e[1])     # c = clearance to nearest red edge, n = inward normal
-        yaw = math.radians(yaw_deg)
-        # AABB half-extent along that edge's axis (same projection as _interior_opacity).
-        he = (abs(ext[0] * math.cos(yaw)) + abs(ext[1] * math.sin(yaw))) if n[0] != 0.0 \
-            else (abs(ext[0] * math.sin(yaw)) + abs(ext[1] * math.cos(yaw)))
-        deficit = (he + pad) - c
-        if deficit <= 0:
-            return (0.0, 0.0)
-        ux, uy = math.cos(yaw), math.sin(yaw)
-        dot = ux * n[0] + uy * n[1]                   # how much 'forward' points inward
-        if dot < 0.2:                                 # lane ~parallel to the edge: forward won't clear
-            return (0.0, 0.0)
-        d = min(deficit / dot, b["margin"])           # don't push past one margin
-        return (ux * d, uy * d)
-
     # Conservative bounding radius (half-diagonal, m) assumed for a not-yet-spawned vehicle when
     # testing whether a spawn site is clear — sized to cover long vehicles (e.g. the Carla Cola truck).
     _NEW_VEHICLE_RADIUS = 3.7
     _SPAWN_CLEAR_PAD = 1.0
+    # Half-extent (m) stood in for a vehicle that has not been spawned yet, so a spawn site can be
+    # judged before anything exists at it. Generous enough to cover the long vehicles in the library.
+    _ASSUMED_EXTENT = (3.5, 1.1)
+    # Spawn points on a generated world already sit a sane 0.5 m above the carriageway
+    # (ACarlaGameModeBase::GenerateSpawnPoints adds FVector(0, 0, 50) in UE centimetres), so a
+    # vehicle created at one settles onto the road immediately. Do not adjust the height: an earlier
+    # attempt to, based on the 3 m offset a DIFFERENT class applies to a different spawn-point list,
+    # placed every vehicle 2.35 m UNDER the road, where it fell out of the world and was culled for
+    # dropping below the floor exactly as the spawn grace expired.
 
     def _occupied(self, x, y):
         """True if any tracked vehicle's footprint is close enough to (x, y) that spawning there would
@@ -661,15 +912,30 @@ class TrafficController:
     def _spawn_one(self, now):
         pool = list(self.spawn_pool); random.shuffle(pool)
         for sp in pool:
-            # Skip a site whose final (forward-nudged) pose is still occupied by a vehicle that hasn't
-            # driven off yet — otherwise the new one spawns on top of it and they collide. Estimated
-            # with a default extent (real extent isn't known until after spawn); the pad absorbs the
-            # small difference. This is what makes the spawn cadence wait for the lane to clear.
-            ex, ey = self._clear_shift(sp.location, sp.rotation.yaw, (3.5, 1.1))
-            if self._occupied(sp.location.x + ex, sp.location.y + ey):
+            # Skip a site still occupied by a vehicle that hasn't driven off yet, so the new one is
+            # not created on top of it. A vehicle materialises AT the site and is then nudged
+            # forward, so both poses have to be clear — testing only where it ends up left it being
+            # created on top of whatever was still sitting where it starts. Estimated with a default
+            # extent, since the real one is not known until the vehicle exists; the pad absorbs the
+            # difference. This is what makes the spawn cadence wait for a lane to clear.
+            ex, ey = _clear_shift(sp.location.x, sp.location.y, sp.rotation.yaw,
+                                  self._ASSUMED_EXTENT, self.b)
+            if self._occupied(sp.location.x, sp.location.y):
                 continue
+            if (ex or ey) and self._occupied(sp.location.x + ex, sp.location.y + ey):
+                continue
+            # Plan BEFORE spawning, so a spawn point that cannot reach any destination is passed
+            # over rather than populated with a vehicle that has nowhere to go. This is what makes
+            # spawning slower with --route on, which is the intended trade.
+            route = None
+            if self.args.route:
+                route = self._plan_route_from(sp)
+                if route is None:
+                    self.unroutable_spawns += 1
+                    continue
+            bp = self._spawn_bp()
             try:
-                v = self.world.spawn_actor(self._spawn_bp(), sp)
+                v = self.world.spawn_actor(bp, sp)
             except Exception:
                 continue
             try:
@@ -677,26 +943,58 @@ class TrafficController:
                 ext = (float(bb.extent.x), float(bb.extent.y))
             except Exception:
                 ext = (2.4, 1.0)
-            # Nudge the vehicle forward along its lane so the whole footprint is inside the red edge
-            # (the spawn point itself sits on the edge on a tightly-clipped map). Uses the real extent,
-            # so it scales to long vehicles (e.g. the Carla Cola truck).
+            # Place the vehicle: down onto the carriageway from the spawn point's 3 m hover, and
+            # nudged forward along its lane so the whole footprint is inside the red edge (the spawn
+            # point sits on the edge on a tightly-clipped map). Uses the real extent, so it scales to
+            # long vehicles (e.g. the Carla Cola truck).
             sx, sy, syaw = sp.location.x, sp.location.y, sp.rotation.yaw
-            dx, dy = self._clear_shift(sp.location, syaw, ext)
-            if dx or dy:
-                sx += dx; sy += dy
-                try:
-                    v.set_transform(carla.Transform(
-                        carla.Location(x=sx, y=sy, z=sp.location.z),
-                        carla.Rotation(pitch=sp.rotation.pitch, yaw=syaw, roll=sp.rotation.roll)))
-                except Exception:
-                    sx, sy = sp.location.x, sp.location.y   # shift failed; fall back to the raw spawn
+            sz = sp.location.z
+            dx, dy = _clear_shift(sp.location.x, sp.location.y, syaw, ext, self.b)
+            sx += dx; sy += dy
+            try:
+                v.set_transform(carla.Transform(
+                    carla.Location(x=sx, y=sy, z=sz),
+                    carla.Rotation(pitch=sp.rotation.pitch, yaw=syaw, roll=sp.rotation.roll)))
+            except Exception:
+                # Placement failed; the vehicle is still where it was created, 3 m up.
+                sx, sy = sp.location.x, sp.location.y
             try:
                 op = _interior_opacity(sx, sy, syaw, ext[0], ext[1], self.b)
                 if self.args.fade:
                     self._safe_fade(v, 1.0 - op)
                 v.set_autopilot(True, self.args.tm_port)
-                if self.args.route:
-                    self.tm.set_path(v, [self._pick_destination(sp).location])
+                # Give this driver its own relationship with the speed limit. The knob is a
+                # percentage OFF the limit, so a negative value means driving over it; drawing
+                # symmetrically about zero puts the fleet either side of the posted speed rather
+                # than all at it.
+                difference = 0.0
+                if self.args.speed_spread > 0:
+                    spread = float(self.args.speed_spread)
+                    difference = random.uniform(-spread, spread)
+                    self.tm.set_percentage_speed_difference(v, difference)
+                # Join the traffic at its speed rather than from rest. A vehicle entering a motorway
+                # at 0 m/s spends its first seconds being overtaken by everything on it, and holds up
+                # whatever is behind it at the same spawn point. The knob is a percentage OFF the
+                # limit, so the speed the Traffic Manager will hold it at is the limit scaled by it.
+                limit_kph = 0.0
+                if self.args.spawn_at_speed:
+                    try:
+                        limit_kph = self.tm.get_speed_limit_kph_at(sp.location)
+                    except Exception:
+                        pass
+                if limit_kph > 0.0:
+                    target = ((limit_kph / 3.6)
+                              * (self.args.speed_scale / 100.0)
+                              * (1.0 - difference / 100.0))
+                    yaw = math.radians(syaw)
+                    try:
+                        v.set_target_velocity(carla.Vector3D(
+                            x=target * math.cos(yaw), y=target * math.sin(yaw), z=0.0))
+                    except Exception:
+                        pass
+                if route is not None:
+                    self.tm.apply_route(v, route)
+                    self.routes_planned += 1
             except Exception as e:
                 print(f"  setup failed for {v.id}: {e!r}", file=sys.stderr)
                 try: v.destroy()
@@ -705,12 +1003,28 @@ class TrafficController:
             # Seed xy with the actual spawn pose (not None) so the very next spawn's occupancy test
             # already accounts for this vehicle before its first reconcile.
             self.actors[v.id] = {"actor": v, "ext": ext, "entered": False, "born": now,
-                                 "xy": (sx, sy), "stuck": 0.0, "misses": 0, "speed": 0.0}
+                                 "xy": (sx, sy), "spawn_xy": (sx, sy), "routed": route is not None,
+                                 "bp": str(getattr(bp, "id", "?")),
+                                 "stuck": 0.0, "stalled": 0.0, "misses": 0, "speed": 0.0}
             return True
         return False
 
     def _despawn(self, vid, actor, reason="other"):
         self.despawns[reason] = self.despawns.get(reason, 0) + 1
+        if reason == "stalled":
+            rec = self.actors.get(vid)
+            if rec:
+                model = rec.get("bp", "?").split(".", 1)[-1]
+                self.stalled_models[model] = self.stalled_models.get(model, 0) + 1
+        if reason == "stuck":
+            # A vehicle culled for not moving has two very different explanations, and the distance
+            # it covered before giving up separates them: essentially zero means it was never driven
+            # at all, while several metres means it drove and then something stopped it.
+            rec = self.actors.get(vid)
+            if rec and rec.get("spawn_xy") and rec.get("xy"):
+                sx, sy = rec["spawn_xy"]
+                cx, cy = rec["xy"]
+                self.stuck_travel.append((math.hypot(cx - sx, cy - sy), rec.get("routed", False)))
         if self.args.fade:
             try: actor.set_fade(1.0)        # force transparent so a lagging destroy is never seen
             except Exception: pass
@@ -744,10 +1058,13 @@ class TrafficController:
         b = self.b
         if len(self.actors) < self.args.max and (now - self.last_spawn) >= self.args.spawn_interval:
             self.last_spawn = now
+            t0 = time.perf_counter()
             self._spawn_one(now)
+            self.spawn_ms += (time.perf_counter() - t0) * 1000.0
         if now - self.last_check < self.CHECK_S:
             return
         self.last_check = now
+        reconcile_t0 = time.perf_counter()
 
         mnx, mny, mxx, mxy = b["min_x"], b["min_y"], b["max_x"], b["max_y"]
         ids = list(self.actors.keys())
@@ -805,26 +1122,67 @@ class TrafficController:
                     self._despawn(vid, a, "exited"); continue
                 if rec["entered"] and _red_clearance(loc.x, loc.y, b) <= self.RED_CLEAR:
                     self._despawn(vid, a, "red-edge"); continue
-                # Stuck (clipped dead-end stub / sunk spawn / Traffic Manager not driving).
-                if rec["entered"] or xy is None or dist > 0.05:
+                # Not moving. Two different failures, kept apart because they mean different things:
+                # a vehicle that never got going after spawn (never driven, sunk, or on a dead-end
+                # stub) and one that drove into the scene and then stopped dead. The second used to
+                # be untracked entirely — reaching the interior reset the timer every tick — so a
+                # vehicle that died mid-scene sat there blocking its lane for the rest of the run.
+                if xy is None or dist > 0.05:
                     rec["stuck"] = 0.0
-                else:
+                    rec["stalled"] = 0.0
+                elif not rec["entered"]:
                     rec["stuck"] += self.CHECK_S
                     if rec["stuck"] >= 6.0:
                         self._despawn(vid, a, "stuck"); continue
+                else:
+                    rec["stalled"] += self.CHECK_S
+                    if self.args.stall_timeout > 0 and rec["stalled"] >= self.args.stall_timeout:
+                        self._despawn(vid, a, "stalled"); continue
+
+        self.reconcile_ms += (time.perf_counter() - reconcile_t0) * 1000.0
 
         # Periodic diagnostics: how many are alive and why any despawned since the last summary. This
         # is what tells us whether the churn is 'stuck' (Traffic Manager not driving in sync mode),
         # 'oob' (sloped-edge floor), or 'exited' (healthy margin-to-margin turnover).
         if now - self.last_summary >= self.SUMMARY_S:
+            window = max(self.CHECK_S, now - self.last_summary)
             self.last_summary = now
             entered = sum(1 for r in self.actors.values() if r["entered"])
             speeds = [r["speed"] for r in self.actors.values()]
             avg = sum(speeds) / len(speeds) if speeds else 0.0
             mx = max(speeds) if speeds else 0.0
             reasons = " ".join(f"{k}={v}" for k, v in sorted(self.despawns.items())) or "none"
+            routes = ""
+            if self.args.route:
+                timing = ""
+                if self.route_searches:
+                    timing = (f", search {self.route_plan_ms_total / self.route_searches:.0f} ms avg "
+                              f"{self.route_plan_ms_max:.0f} ms worst")
+                routes = (f" | routes: {self.routes_planned} planned, "
+                          f"{self.unroutable_spawns} spawn points skipped as unreachable{timing}")
+                self.route_plan_ms_max = 0.0
+                self.route_plan_ms_total = 0.0
+                self.route_searches = 0
+            # Milliseconds of every wall-clock second this subsystem takes off the thread that owns
+            # the tick. At 20 fps a frame is 50 ms, so 1000 ms/s here would be the whole budget.
+            cost = (f" | cost {self.spawn_ms / window:.0f}+{self.reconcile_ms / window:.0f} ms/s "
+                    f"(spawn+reconcile)")
+            self.spawn_ms = 0.0
+            self.reconcile_ms = 0.0
+            if self.stuck_travel:
+                travelled = [d for d, _ in self.stuck_travel]
+                never = sum(1 for d in travelled if d < 1.0)
+                routed = sum(1 for _, r in self.stuck_travel if r)
+                cost += (f" | stuck: {never}/{len(travelled)} never moved at all, "
+                         f"furthest got {max(travelled):.1f} m, {routed} had a route")
+                self.stuck_travel.clear()
+            if self.stalled_models:
+                worst = sorted(self.stalled_models.items(), key=lambda kv: -kv[1])[:3]
+                cost += " | stalled: " + ", ".join(f"{m}x{n}" for m, n in worst)
+                self.stalled_models.clear()
             print(f"traffic: {len(self.actors)} alive ({entered} entered, "
-                  f"speed avg {avg:.1f} max {mx:.1f} m/s) | despawns/{self.SUMMARY_S:.0f}s: {reasons}")
+                  f"speed avg {avg:.1f} max {mx:.1f} m/s) | despawns/{self.SUMMARY_S:.0f}s: "
+                  f"{reasons}{routes}{cost}")
             self.despawns.clear()
 
     def count(self):
@@ -1509,6 +1867,9 @@ class CameraController():
 
 def main() -> int:
     args = parse_args()
+    _timestamp_console(args.log)
+    if args.log:
+        print(f"logging this run to {os.path.abspath(args.log)}")
     sync = not args.asynchronous
     if args.seed is not None:
         random.seed(args.seed)

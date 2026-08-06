@@ -59,6 +59,10 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
     // and need to be unregistered by the TM facade. Upstream's analog is
     // the `marked_for_removal` vector reference passed by the TM.
     private readonly List<ActorId>? _markedForRemoval;
+    // Watches whether vehicles given a precomputed route are still on it. Optional so a test can
+    // drive this stage without one; the orchestrator always supplies it. A vehicle that was never
+    // given a route costs one dictionary miss per tick and nothing else.
+    private readonly RouteSupervisor? _routeSupervisor;
 
     // ── Per-actor state carried across ticks ─────────────────────────────
     private readonly Dictionary<ActorId, SimpleWaypoint> _lastLaneChangeSwpt = new();
@@ -107,6 +111,16 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
     // a real horizon, and it caps the pathological case at a harmless buffer instead of the heap.
     private const int MaxHorizonWalkSteps = 512;
 
+    // How little road may remain ahead of a vehicle before it counts as having run out of it.
+    //
+    // The horizon runs speed x HORIZON_RATE ahead of the vehicle, so a walk that finds a waypoint
+    // with no successors has discovered where the road graph ENDS, not where the vehicle is. Acting
+    // on that directly destroys a vehicle that is still a hundred metres short of the end and
+    // driving perfectly well, and the faster the vehicle the further ahead it looks, so raising
+    // traffic to motorway speeds made it destroy nearly everything it spawned. Only a vehicle whose
+    // remaining buffer is this short has actually arrived at the end of the drivable network.
+    private const int MinBufferAtRoadEnd = 3;
+
     public LocalizationStage(
         SimulationState simulationState,
         BufferMap bufferMap,
@@ -114,7 +128,8 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
         Parameters parameters,
         InMemoryMap localMap,
         RandomGenerator rng,
-        List<ActorId>? markedForRemoval = null)
+        List<ActorId>? markedForRemoval = null,
+        RouteSupervisor? routeSupervisor = null)
     {
         _simulationState = simulationState;
         _bufferMap = bufferMap;
@@ -123,10 +138,21 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
         _localMap = localMap;
         _rng = rng;
         _markedForRemoval = markedForRemoval;
+        _routeSupervisor = routeSupervisor;
     }
 
     /// <summary>Snapshot of the per-tick localization output indexed by actor.</summary>
     public IReadOnlyDictionary<ActorId, LocalizationData> GetOutput() => _output;
+
+    /// <summary>
+    /// Flag a vehicle for removal only if it has genuinely reached the end of the road network,
+    /// rather than merely looked far enough ahead to see one. See <see cref="MinBufferAtRoadEnd"/>.
+    /// </summary>
+    private void MarkIfOutOfRoad(ActorId actorId, WaypointBuffer waypointBuffer)
+    {
+        if (waypointBuffer.Count > MinBufferAtRoadEnd) return;
+        _markedForRemoval?.Add(actorId);
+    }
 
     /// <summary>Drop per-actor state. Called by the TM facade on vehicle destroy.</summary>
     public void RemoveActor(ActorId actorId)
@@ -135,6 +161,8 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
         _vehiclesAtJunction.Remove(actorId);
         _vehiclesAtJunctionEntrance.Remove(actorId);
         _output.Remove(actorId);
+        // A destroyed vehicle is gone for good — there is no route left to follow or resume.
+        _routeSupervisor?.RemoveActor(actorId);
     }
 
     /// <summary>Wipe every per-actor cache. Called on TM shutdown / reset.</summary>
@@ -144,6 +172,7 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
         _vehiclesAtJunction.Clear();
         _vehiclesAtJunctionEntrance.Clear();
         _output.Clear();
+        _routeSupervisor?.Reset();
     }
 
     /// <summary>
@@ -356,7 +385,7 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
                 }
                 else if (nexts.Count == 0)
                 {
-                    _markedForRemoval?.Add(actorId);
+                    MarkIfOutOfRoad(actorId, waypointBuffer);
                     break;
                 }
                 SimpleWaypoint nextSel = nexts[selection];
@@ -388,6 +417,13 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
 
         // ─── Refresh the geodesic-grid index for this actor ──────────────
         _trackTraffic.UpdateGridPosition(actorId, waypointBuffer);
+
+        // ─── Is a routed vehicle still on its route? ─────────────────────
+        // The buffer head is where the vehicle sits on the road graph, after any lane change this
+        // tick made (a change-over replaces the whole buffer with its own start point). The check
+        // is a set lookup; anything that follows from it happens on another thread.
+        _routeSupervisor?.Observe(
+            actorId, vehicleLocation, waypointBuffer.Count > 0 ? waypointBuffer[0] : null);
     }
 
     // ═════════════════════════════════════════════════════════════════════
@@ -717,7 +753,7 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
             }
             else if (nexts.Count == 0)
             {
-                _markedForRemoval?.Add(actorId);
+                MarkIfOutOfRoad(actorId, waypointBuffer);
                 break;
             }
 
@@ -809,7 +845,7 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
             }
             else if (nexts.Count == 0)
             {
-                _markedForRemoval?.Add(actorId);
+                MarkIfOutOfRoad(actorId, waypointBuffer);
                 break;
             }
 

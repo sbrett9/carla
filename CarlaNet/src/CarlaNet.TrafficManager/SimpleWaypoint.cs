@@ -105,6 +105,13 @@ internal sealed class SimpleWaypoint
     /// <summary>High-level <see cref="RoadOption"/> attached at this waypoint.</summary>
     public RoadOption RoadOption { get; internal set; } = RoadOption.Void;
 
+    /// <summary>
+    /// Posted speed limit for this lane in km/h, from the OpenDRIVE <c>&lt;speed&gt;</c> record;
+    /// 0 when the lane declares none. Cached here at graph-build time because the alternative is a
+    /// road-graph lookup, or an RPC, for every vehicle on every tick.
+    /// </summary>
+    public float SpeedLimitKph { get; internal set; }
+
     // ── Graph back-references (Wave 3 wires these up) ──────────────────────
 
     /// <summary>Successor waypoints (next-along-the-lane-graph).</summary>
