@@ -185,7 +185,23 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             if (!headingIntoJunction)
                 _committedToJunction.Remove(egoActorId);
             else if (!trafficLightHazard)
-                _committedToJunction.Add(egoActorId);
+            {
+                // Report the moment a vehicle commits, and how far ahead the junction waypoint that
+                // granted it actually was. Commitment is what suppresses the red-light stop, so a
+                // vehicle that commits while the junction is still tens of metres away will drive
+                // through the light — and the buffer head can be well ahead of the vehicle, because
+                // a lane change replaces the whole buffer with a change-over point walked up to
+                // MAX_WPT_DISTANCE down the new lane.
+                if (_committedToJunction.Add(egoActorId) && egoBuffer is { Count: > 0 })
+                {
+                    float ahead = MathF.Sqrt(
+                        egoBuffer[0].DistanceSquared(_simulationState.GetLocation(egoActorId)));
+                    Console.Error.WriteLine(
+                        $"{DateTime.Now:HH:mm:ss.fff} [traffic] vehicle {egoActorId} committed to a "
+                        + $"junction {ahead:F1} m ahead (light {trafficLightState}, "
+                        + $"atLight={isAtTrafficLight}); it will not stop for that light.");
+                }
+            }
         }
 
         _output[egoActorId] = new TrafficLightFrame(trafficLightHazard);
