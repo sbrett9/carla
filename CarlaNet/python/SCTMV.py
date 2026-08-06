@@ -126,8 +126,9 @@ class _TimestampedStream:
     threads can interleave halfway through a line.
     """
 
-    def __init__(self, stream):
+    def __init__(self, stream, sink=None):
         self._stream = stream
+        self._sink = sink          # optional log file, written with the same timestamps
         self._at_line_start = True
         self._lock = threading.Lock()
 
@@ -142,7 +143,14 @@ class _TimestampedStream:
                     pieces.append(stamp)
                 pieces.append(line)
                 self._at_line_start = line.endswith("\n")
-            self._stream.write("".join(pieces))
+            stamped = "".join(pieces)
+            self._stream.write(stamped)
+            if self._sink is not None:
+                try:
+                    self._sink.write(stamped)
+                    self._sink.flush()      # a run that ends badly must still leave its log behind
+                except Exception:
+                    pass
         return len(text)
 
     def __getattr__(self, name):
@@ -155,18 +163,27 @@ class _TimestampedStream:
         return getattr(stream, name)
 
 
-def _timestamp_console():
-    """Prefix this process's Python output with the time. Idempotent, so re-entering main() (or
-    importing this module twice) does not stack prefixes.
+def _timestamp_console(log_path=None):
+    """Prefix this process's Python output with the time, and optionally copy it to a file.
+    Idempotent, so re-entering main() (or importing this module twice) does not stack prefixes.
 
-    The Traffic Manager writes its own '[route]' lines straight to .NET's stderr, which never passes
-    through these objects; it timestamps them itself in the same format so the two interleave
-    readably.
+    The Traffic Manager writes its own '[route]' and '[traffic]' lines straight to .NET's stderr,
+    which never passes through these objects; it timestamps them itself in the same format so the
+    two interleave readably. Those lines reach the console but NOT the log file, because .NET holds
+    its own handle to the same descriptor — the log captures everything this process prints.
     """
+    sink = None
+    if log_path:
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(log_path)), exist_ok=True)
+            sink = open(log_path, "w", encoding="utf-8")
+        except Exception as e:
+            print(f"could not open log file {log_path!r}: {e!r}", file=sys.stderr)
     if not isinstance(sys.stdout, _TimestampedStream):
-        sys.stdout = _TimestampedStream(sys.stdout)
+        sys.stdout = _TimestampedStream(sys.stdout, sink)
     if not isinstance(sys.stderr, _TimestampedStream):
-        sys.stderr = _TimestampedStream(sys.stderr)
+        sys.stderr = _TimestampedStream(sys.stderr, sink)
+    return sink
 
 
 # ───────────────────────────── argument parsing ─────────────────────────────
@@ -317,6 +334,12 @@ def parse_args():
     tel.add_argument("--stale", type=float, default=3.0, help="CoT stale seconds")
     tel.add_argument("--ttl", type=int, default=1, help="multicast TTL")
     tel.add_argument("--print", action="store_true", dest="echo", help="also print each CoT event")
+
+    ap.add_argument("--log", default=None, metavar="FILE",
+                    help="also write this run's console output to FILE, with the same timestamps. "
+                         "Flushed line by line, so a run that ends badly still leaves its log. Note "
+                         "the Traffic Manager's own '[route]' and '[traffic]' lines go straight to "
+                         "the console and are not captured here.")
 
     rec = ap.add_argument_group("recording (F hotkey)")
     rec.add_argument("--record-dir", default=os.path.join(_REPO, "Build", "SCTMV_recordings"),
@@ -837,13 +860,12 @@ class TrafficController:
     # Half-extent (m) stood in for a vehicle that has not been spawned yet, so a spawn site can be
     # judged before anything exists at it. Generous enough to cover the long vehicles in the library.
     _ASSUMED_EXTENT = (3.5, 1.1)
-    # A world generated from OpenDRIVE places every recommended spawn point this far ABOVE the road
-    # (AOpenDriveGenerator::GenerateSpawnPoints, SpawnersHeight = 300 UE cm). A vehicle created
-    # there falls onto the carriageway and has to settle before it can be driven, which is several
-    # seconds of a vehicle doing nothing and reporting nonsense speeds while it drops. Take it back
-    # off and leave only enough clearance not to start interpenetrating the road surface.
-    _SPAWN_POINT_HEIGHT_ABOVE_ROAD = 3.0
-    _SPAWN_CLEARANCE = 0.15
+    # Spawn points on a generated world already sit a sane 0.5 m above the carriageway
+    # (ACarlaGameModeBase::GenerateSpawnPoints adds FVector(0, 0, 50) in UE centimetres), so a
+    # vehicle created at one settles onto the road immediately. Do not adjust the height: an earlier
+    # attempt to, based on the 3 m offset a DIFFERENT class applies to a different spawn-point list,
+    # placed every vehicle 2.35 m UNDER the road, where it fell out of the world and was culled for
+    # dropping below the floor exactly as the spawn grace expired.
 
     def _occupied(self, x, y):
         """True if any tracked vehicle's footprint is close enough to (x, y) that spawning there would
@@ -898,7 +920,7 @@ class TrafficController:
             # point sits on the edge on a tightly-clipped map). Uses the real extent, so it scales to
             # long vehicles (e.g. the Carla Cola truck).
             sx, sy, syaw = sp.location.x, sp.location.y, sp.rotation.yaw
-            sz = sp.location.z - self._SPAWN_POINT_HEIGHT_ABOVE_ROAD + self._SPAWN_CLEARANCE
+            sz = sp.location.z
             dx, dy = _clear_shift(sp.location.x, sp.location.y, syaw, ext, self.b)
             sx += dx; sy += dy
             try:
@@ -1813,8 +1835,10 @@ class CameraController():
 # ───────────────────────────── main ─────────────────────────────
 
 def main() -> int:
-    _timestamp_console()
     args = parse_args()
+    _timestamp_console(args.log)
+    if args.log:
+        print(f"logging this run to {os.path.abspath(args.log)}")
     sync = not args.asynchronous
     if args.seed is not None:
         random.seed(args.seed)
