@@ -292,6 +292,13 @@ def parse_args():
                            "for this long (default 45). Set well above any traffic-light phase, so "
                            "waiting at a light is not mistaken for a stall. 0 keeps them forever, "
                            "which leaves a stalled vehicle blocking its lane for the rest of the run.")
+    traf.add_argument("--speed-scale", type=float, default=100.0, metavar="PCT",
+                      help="drive this percentage of each road's posted speed limit (default 100). "
+                           "Lower it to run the whole fleet slower without flattening the "
+                           "differences between roads: 40 gives 40%% of the limit everywhere, so a "
+                           "65 mph freeway becomes 26 mph and a 25 mph street becomes 10. Useful "
+                           "for telling apart behaviour that degrades with speed from behaviour "
+                           "that is wrong at any speed.")
     traf.add_argument("--speed-spread", type=float, default=20.0, metavar="PCT",
                       help="how much drivers differ from the posted speed limit, as a percentage "
                            "either side of it (default 20, so each vehicle drives between 80%% and "
@@ -760,6 +767,13 @@ class TrafficController:
               f"inward {min(im):.0f}..{max(im):.0f} m (negative inward = inside the margin, as intended)")
         print(f"traffic: {len(ring_sps)} inward edge-ring spawn points; "
               f"{len(spawn_pool)} usable in-margin spawn points (set_actor_fade OK)")
+        if args.speed_scale != 100.0:
+            # The knob is a percentage BELOW the limit, so a scale of 40% is a 60% difference.
+            try:
+                tm.set_global_percentage_speed_difference(100.0 - args.speed_scale)
+                print(f"traffic: driving {args.speed_scale:.0f}% of each road's posted speed limit")
+            except Exception as e:
+                print(f"traffic: speed scale unavailable ({e!r})", file=sys.stderr)
         if args.route:
             try:
                 tm.set_route_replan_attempt_limit(args.route_replan_limit)
@@ -954,7 +968,9 @@ class TrafficController:
                 except Exception:
                     pass
                 if limit_kph > 0.0:
-                    target = (limit_kph / 3.6) * (1.0 - difference / 100.0)
+                    target = ((limit_kph / 3.6)
+                              * (self.args.speed_scale / 100.0)
+                              * (1.0 - difference / 100.0))
                     yaw = math.radians(syaw)
                     try:
                         v.set_target_velocity(carla.Vector3D(
