@@ -270,6 +270,11 @@ def parse_args():
                       help="don't apply the opacity fade — spawn and despawn vehicles at FULL opacity. "
                            "Diagnostic: makes it obvious whether vehicles are actually driving (rather "
                            "than being hidden by the fade while they sit at the margin).")
+    traf.add_argument("--stall-timeout", type=float, default=45.0, metavar="SECONDS",
+                      help="despawn a vehicle that has driven into the scene and then stopped dead "
+                           "for this long (default 45). Set well above any traffic-light phase, so "
+                           "waiting at a light is not mistaken for a stall. 0 keeps them forever, "
+                           "which leaves a stalled vehicle blocking its lane for the rest of the run.")
     traf.add_argument("--speed-spread", type=float, default=20.0, metavar="PCT",
                       help="how much drivers differ from the posted speed limit, as a percentage "
                            "either side of it (default 20, so each vehicle drives between 80%% and "
@@ -640,6 +645,10 @@ class TrafficController:
         self.reconcile_ms = 0.0    # per-vehicle pose read, fade, and the boundary/stuck guards
         # (distance from spawn, was routed) for each vehicle culled for not moving, per summary.
         self.stuck_travel = []
+        # blueprint -> count, for vehicles that drove into the scene and then stopped dead. Which
+        # models stall is the whole question: measured on a generated interchange, vehicles 6 m and
+        # longer stalled at 67% against 12% for shorter ones.
+        self.stalled_models = {}
 
     def apply_want(self):
         """Reconcile actual on/off with the hotkey's desired state. Called on whichever thread owns
@@ -874,8 +883,9 @@ class TrafficController:
                 if route is None:
                     self.unroutable_spawns += 1
                     continue
+            bp = self._spawn_bp()
             try:
-                v = self.world.spawn_actor(self._spawn_bp(), sp)
+                v = self.world.spawn_actor(bp, sp)
             except Exception:
                 continue
             try:
@@ -941,12 +951,18 @@ class TrafficController:
             # already accounts for this vehicle before its first reconcile.
             self.actors[v.id] = {"actor": v, "ext": ext, "entered": False, "born": now,
                                  "xy": (sx, sy), "spawn_xy": (sx, sy), "routed": route is not None,
-                                 "stuck": 0.0, "misses": 0, "speed": 0.0}
+                                 "bp": str(getattr(bp, "id", "?")),
+                                 "stuck": 0.0, "stalled": 0.0, "misses": 0, "speed": 0.0}
             return True
         return False
 
     def _despawn(self, vid, actor, reason="other"):
         self.despawns[reason] = self.despawns.get(reason, 0) + 1
+        if reason == "stalled":
+            rec = self.actors.get(vid)
+            if rec:
+                model = rec.get("bp", "?").split(".", 1)[-1]
+                self.stalled_models[model] = self.stalled_models.get(model, 0) + 1
         if reason == "stuck":
             # A vehicle culled for not moving has two very different explanations, and the distance
             # it covered before giving up separates them: essentially zero means it was never driven
@@ -1053,13 +1069,22 @@ class TrafficController:
                     self._despawn(vid, a, "exited"); continue
                 if rec["entered"] and _red_clearance(loc.x, loc.y, b) <= self.RED_CLEAR:
                     self._despawn(vid, a, "red-edge"); continue
-                # Stuck (clipped dead-end stub / sunk spawn / Traffic Manager not driving).
-                if rec["entered"] or xy is None or dist > 0.05:
+                # Not moving. Two different failures, kept apart because they mean different things:
+                # a vehicle that never got going after spawn (never driven, sunk, or on a dead-end
+                # stub) and one that drove into the scene and then stopped dead. The second used to
+                # be untracked entirely — reaching the interior reset the timer every tick — so a
+                # vehicle that died mid-scene sat there blocking its lane for the rest of the run.
+                if xy is None or dist > 0.05:
                     rec["stuck"] = 0.0
-                else:
+                    rec["stalled"] = 0.0
+                elif not rec["entered"]:
                     rec["stuck"] += self.CHECK_S
                     if rec["stuck"] >= 6.0:
                         self._despawn(vid, a, "stuck"); continue
+                else:
+                    rec["stalled"] += self.CHECK_S
+                    if self.args.stall_timeout > 0 and rec["stalled"] >= self.args.stall_timeout:
+                        self._despawn(vid, a, "stalled"); continue
 
         self.reconcile_ms += (time.perf_counter() - reconcile_t0) * 1000.0
 
@@ -1098,6 +1123,10 @@ class TrafficController:
                 cost += (f" | stuck: {never}/{len(travelled)} never moved at all, "
                          f"furthest got {max(travelled):.1f} m, {routed} had a route")
                 self.stuck_travel.clear()
+            if self.stalled_models:
+                worst = sorted(self.stalled_models.items(), key=lambda kv: -kv[1])[:3]
+                cost += " | stalled: " + ", ".join(f"{m}x{n}" for m, n in worst)
+                self.stalled_models.clear()
             print(f"traffic: {len(self.actors)} alive ({entered} entered, "
                   f"speed avg {avg:.1f} max {mx:.1f} m/s) | despawns/{self.SUMMARY_S:.0f}s: "
                   f"{reasons}{routes}{cost}")
