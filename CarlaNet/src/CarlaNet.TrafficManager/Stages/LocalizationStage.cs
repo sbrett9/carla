@@ -111,6 +111,16 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
     // a real horizon, and it caps the pathological case at a harmless buffer instead of the heap.
     private const int MaxHorizonWalkSteps = 512;
 
+    // How little road may remain ahead of a vehicle before it counts as having run out of it.
+    //
+    // The horizon runs speed x HORIZON_RATE ahead of the vehicle, so a walk that finds a waypoint
+    // with no successors has discovered where the road graph ENDS, not where the vehicle is. Acting
+    // on that directly destroys a vehicle that is still a hundred metres short of the end and
+    // driving perfectly well, and the faster the vehicle the further ahead it looks, so raising
+    // traffic to motorway speeds made it destroy nearly everything it spawned. Only a vehicle whose
+    // remaining buffer is this short has actually arrived at the end of the drivable network.
+    private const int MinBufferAtRoadEnd = 3;
+
     public LocalizationStage(
         SimulationState simulationState,
         BufferMap bufferMap,
@@ -133,6 +143,16 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
 
     /// <summary>Snapshot of the per-tick localization output indexed by actor.</summary>
     public IReadOnlyDictionary<ActorId, LocalizationData> GetOutput() => _output;
+
+    /// <summary>
+    /// Flag a vehicle for removal only if it has genuinely reached the end of the road network,
+    /// rather than merely looked far enough ahead to see one. See <see cref="MinBufferAtRoadEnd"/>.
+    /// </summary>
+    private void MarkIfOutOfRoad(ActorId actorId, WaypointBuffer waypointBuffer)
+    {
+        if (waypointBuffer.Count > MinBufferAtRoadEnd) return;
+        _markedForRemoval?.Add(actorId);
+    }
 
     /// <summary>Drop per-actor state. Called by the TM facade on vehicle destroy.</summary>
     public void RemoveActor(ActorId actorId)
@@ -365,7 +385,7 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
                 }
                 else if (nexts.Count == 0)
                 {
-                    _markedForRemoval?.Add(actorId);
+                    MarkIfOutOfRoad(actorId, waypointBuffer);
                     break;
                 }
                 SimpleWaypoint nextSel = nexts[selection];
@@ -733,7 +753,7 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
             }
             else if (nexts.Count == 0)
             {
-                _markedForRemoval?.Add(actorId);
+                MarkIfOutOfRoad(actorId, waypointBuffer);
                 break;
             }
 
@@ -825,7 +845,7 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
             }
             else if (nexts.Count == 0)
             {
-                _markedForRemoval?.Add(actorId);
+                MarkIfOutOfRoad(actorId, waypointBuffer);
                 break;
             }
 
