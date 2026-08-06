@@ -206,19 +206,35 @@ internal sealed class RoutePlanner
             for (int i = 0; i < nexts.Count; ++i)
                 Relax(current, new SearchState(nexts[i], false), costHere, extraCost: 0.0f);
 
-            // Only from a node the route drove to, so two lane changes can never land at the same
-            // point along the road. Lane-change neighbours are linked only between lanes running the
-            // same way (InMemoryMap requires a matching lane-id sign), so following one can never
-            // plan a wrong-way route.
+            // Only from a node the route drove to, so changes cannot stack up over a few metres.
+            // Lane-change neighbours are linked only between lanes running the same way (InMemoryMap
+            // requires a matching lane-id sign), so following one can never plan a wrong-way route.
             if (current.ReachedByLaneChange) continue;
 
-            SimpleWaypoint? left = current.Waypoint.GetLeftWaypoint();
-            if (left != null) Relax(current, new SearchState(left, true), costHere, LaneChangeCostMetres);
-            SimpleWaypoint? right = current.Waypoint.GetRightWaypoint();
-            if (right != null) Relax(current, new SearchState(right, true), costHere, LaneChangeCostMetres);
+            RelaxLaneChange(current, current.Waypoint.GetLeftWaypoint(), costHere);
+            RelaxLaneChange(current, current.Waypoint.GetRightWaypoint(), costHere);
         }
 
         return null;
+
+        // A lane change carries the vehicle FORWARD as it carries it across, so the edge lands one
+        // waypoint along the adjacent lane rather than directly abeam. An edge to the waypoint
+        // abeam describes moving sideways without moving at all, which is not a manoeuvre a vehicle
+        // can perform and not a step the horizon walk can follow: the waypoints either side of it
+        // are metres apart across the road and not at all along it.
+        //
+        // Declined where the adjacent lane is inside a junction or forks, because which way it
+        // forks is not yet decided and the junction machinery downstream reads the horizon buffer
+        // expecting an unbroken run of road.
+        void RelaxLaneChange(SearchState from, SimpleWaypoint? neighbour, float costAtFrom)
+        {
+            if (neighbour is null || neighbour.CheckJunction()) return;
+            IReadOnlyList<SimpleWaypoint> onward = neighbour.GetNextWaypoint();
+            if (onward.Count != 1) return;
+            SimpleWaypoint target = onward[0];
+            if (target.CheckJunction()) return;
+            Relax(from, new SearchState(target, true), costAtFrom, LaneChangeCostMetres);
+        }
 
         void Relax(SearchState from, SearchState to, float costAtFrom, float extraCost)
         {
@@ -296,13 +312,16 @@ internal sealed class RoutePlanner
     /// Turn a route into the breadcrumb list a vehicle is given.
     /// </summary>
     /// <remarks>
-    /// Every waypoint the route passes through is recorded as covered, but the waypoint a lane
-    /// change lands on is left out of the breadcrumbs. It sits directly abeam the one before it —
-    /// no distance forward, a lane width across — and asking a vehicle to drive between two such
-    /// points demands an instantaneous sideways step. Dropping it folds the lane change into the
-    /// following breadcrumb, which is one map resolution further down the new lane, so the vehicle
-    /// crosses over while still moving forward. The destination is always kept, however it was
-    /// reached.
+    /// Every waypoint the route passes through is emitted, in order. Nothing is left out: each step
+    /// — including a lane change, which lands one waypoint along the adjacent lane — is somewhere
+    /// the vehicle actually goes, so the breadcrumbs stay a continuous run down the road.
+    ///
+    /// This matters more than it looks. The horizon walk appends a breadcrumb to the vehicle's
+    /// buffer as it consumes it, and everything downstream of that buffer — junction entry and exit
+    /// detection, the look-ahead that picks a steering target by index, the collision look-ahead
+    /// that reuses that index — reads it as an unbroken run of road at one map resolution per step.
+    /// Emitting a route that skips a waypoint puts a gap in that run, and those readers have no way
+    /// to notice.
     /// </remarks>
     internal static PlannedRoute Materialize(IReadOnlyList<RouteStep> steps, Location destination)
     {
@@ -315,8 +334,6 @@ internal sealed class RoutePlanner
             RouteStep step = steps[i];
             waypoints.Add(step.Waypoint);
             if (i > 0) length += Distance(steps[i - 1].Waypoint.Location, step.Waypoint.Location);
-            bool isDestination = i == steps.Count - 1;
-            if (step.ReachedByLaneChange && !isDestination) continue;
             path.Add(step.Waypoint.Location);
         }
 

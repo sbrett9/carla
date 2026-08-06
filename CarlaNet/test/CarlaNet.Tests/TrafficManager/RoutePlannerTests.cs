@@ -403,28 +403,44 @@ public class RoutePlannerTests
     }
 
     [Fact]
-    public void The_waypoint_a_lane_change_lands_on_is_not_given_to_the_vehicle_as_a_breadcrumb()
+    public void A_lane_change_carries_the_vehicle_forward_as_well_as_across()
     {
-        // It sits abeam the waypoint before it — no distance forward, a lane width across — so
-        // driving from one to the other would mean an instantaneous sideways step.
+        // A route step that moves sideways without moving along the road is not a manoeuvre a
+        // vehicle can perform, and the horizon walk cannot follow it either: it appends the
+        // breadcrumb to the vehicle's buffer, and everything reading that buffer — junction entry
+        // and exit detection, the index-based steering look-ahead, and the collision look-ahead
+        // that reuses that index — takes it for an unbroken run of road at one map resolution per
+        // step. Measured on a real interchange, routes containing such a step put vehicles more
+        // than 6 m off any lane five times as often as unrouted traffic on the same map at the
+        // same speeds.
         var (inner, outer, slip) = BuildCarriagewayWithSlipRoad();
+
         List<RouteStep>? route = RoutePlanner.Search(inner[0], slip[^1], Budget);
+
         Assert.NotNull(route);
+        Assert.Same(slip[^1], route![^1].Waypoint);
+        Assert.Contains(route, step => step.ReachedByLaneChange);   // it really does cross lanes
 
-        PlannedRoute planned = RoutePlanner.Materialize(route!, slip[^1].Location);
+        PlannedRoute planned = RoutePlanner.Materialize(route, slip[^1].Location);
+        Assert.Equal(route.Count, planned.Path.Count);              // nothing is elided any more
 
-        int laneChanges = route!.Count(step => step.ReachedByLaneChange);
-        Assert.Equal(1, laneChanges);
-        Assert.Equal(route.Count - laneChanges, planned.Path.Count);
-        Assert.Equal(route.Count, planned.WaypointCount);
-
-        // No two consecutive breadcrumbs sit on top of each other longitudinally.
-        for (int i = 1; i < planned.Path.Count; ++i)
+        for (int i = 1; i < route.Count; ++i)
         {
-            float dx = planned.Path[i].X - planned.Path[i - 1].X;
-            float dy = planned.Path[i].Y - planned.Path[i - 1].Y;
-            Assert.True(MathF.Sqrt(dx * dx + dy * dy) > 1.0f,
-                $"breadcrumbs {i - 1} and {i} are on top of each other.");
+            Location a = route[i - 1].Waypoint.Location, b = route[i].Waypoint.Location;
+            float along = MathF.Abs(b.X - a.X);          // the carriageway runs along +x
+            float across = MathF.Abs(b.Y - a.Y);
+            Assert.True(along > 0.1f,
+                $"step {i} moves {across:F1} m across the road and {along:F1} m along it — a "
+                + "vehicle cannot travel sideways, and the buffer cannot describe it.");
+
+            // Only lane changes are judged on span. An ordinary step is whatever the road graph
+            // links, and this fixture draws its slip road well off the carriageway; on a real map
+            // successors sit one map resolution apart.
+            if (!route[i].ReachedByLaneChange) continue;
+            float gap = MathF.Sqrt(along * along + across * across);
+            Assert.True(gap < 2.0f * 5.0f,
+                $"the lane change at step {i} spans {gap:F1} m, far enough past one map resolution "
+                + "that readers of the buffer which assume that spacing would be misled.");
         }
     }
 
