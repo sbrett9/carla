@@ -193,10 +193,43 @@ public static class DrapeTerrain
 
     // ── De-spike / clamp / smooth → draped grid + offset field ─────────────────
 
-    /// <summary>The draped collision/seating surface (row-major, ellipsoidal metres) plus the
-    /// per-cell telemetry offset = DrapedZ − bare-earth DTM (so reported HAE = physical − offset
-    /// recovers DTM truth everywhere, on- and off-road).</summary>
-    public readonly record struct DrapeResult(double[] DrapedZ, double[] Offset);
+    /// <summary>The draped collision/seating surface (row-major, ellipsoidal metres), the per-cell
+    /// telemetry offset = DrapedZ − bare-earth DTM (so reported HAE = physical − offset recovers DTM
+    /// truth everywhere, on- and off-road), and the systematic photoreal-vs-bare-earth offset the
+    /// surface was anchored with.</summary>
+    public readonly record struct DrapeResult(double[] DrapedZ, double[] Offset, double SystematicOffsetMeters);
+
+    /// <summary>NaN-filled copy of a sampled grid (points the tileset had no height for), so the
+    /// same filled surface can be read both by the drape and by the road-elevation path.</summary>
+    public static double[] FillMissing(double[] grid, DrapeGridSpec spec)
+    {
+        ArgumentNullException.ThrowIfNull(grid);
+        var filled = (double[])grid.Clone();
+        FillNaN(filled, spec.NumCols, spec.NumRows);
+        return filled;
+    }
+
+    /// <summary>
+    /// The systematic height difference between the photoreal surface and bare earth over open
+    /// ground, as the median of DSM−DTM across cells whose gap is small enough not to be a building,
+    /// canopy or elevated structure. It is a property of how the two tilesets were produced, not of
+    /// the terrain, so it is tight (0.24 m between the 10th and 90th percentile at Arapahoe Ave /
+    /// I-25) and it is what an elevated structure's clearance must be measured against.
+    /// </summary>
+    public static double SystematicOffset(double[] dsm, double[] dtm, double maxDrapeMeters = 5.0)
+    {
+        ArgumentNullException.ThrowIfNull(dsm);
+        ArgumentNullException.ThrowIfNull(dtm);
+        var gaps = new List<double>(Math.Min(dsm.Length, dtm.Length));
+        for (int i = 0; i < dsm.Length && i < dtm.Length; ++i)
+        {
+            double gap = dsm[i] - dtm[i];
+            if (double.IsFinite(gap) && Math.Abs(gap) <= maxDrapeMeters) gaps.Add(gap);
+        }
+        if (gaps.Count == 0) return 0.0;
+        gaps.Sort();
+        return gaps[gaps.Count / 2];
+    }
 
     /// <summary>
     /// Turn raw DSM (photoreal) + DTM (bare earth) grids into a driveable draped surface. Open
@@ -206,9 +239,23 @@ public static class DrapeTerrain
     /// road-Z bug) yet still hugs the photoreal where it's plausible ground. A low-pass
     /// (<paramref name="smoothRadius"/>, <paramref name="smoothPasses"/>) removes residual noise and
     /// softens the DSM↔DTM switches so vehicles don't jitter. NaN samples are neighbour-filled first.
+    ///
+    /// One height per cell cannot describe a deck and the road beneath it, so where
+    /// <paramref name="elevatedStructures"/> names ways carrying a deck the surface is anchored to
+    /// the LOWER of the two: every cell within <paramref name="structureHalfWidthMeters"/> of such a
+    /// way takes bare earth plus the systematic offset instead of whatever is overhead. The road
+    /// under the structure then has ground to sit on, and the deck carries its own road-mesh
+    /// collision. The whole footprint is anchored, not only the cells that read as structure, so
+    /// that the surface under a deck is one predictable thing — the road elevation spanning that
+    /// footprint (<see cref="GradeSeparation"/>) relies on it. On the at-grade parts of a bridge way
+    /// this costs nothing: bare earth plus the systematic offset is what the photoreal reads there
+    /// by the definition of that offset.
     /// </summary>
     public static DrapeResult Despike(double[] dsm, double[] dtm, DrapeGridSpec spec,
-        double maxDrapeMeters = 5.0, int smoothRadius = 1, int smoothPasses = 2)
+        double maxDrapeMeters = 5.0, int smoothRadius = 1, int smoothPasses = 2,
+        IReadOnlyList<OsmRoadWay>? elevatedStructures = null,
+        double? atGradeOffsetMeters = null,
+        double structureHalfWidthMeters = 15.0)
     {
         int nc = spec.NumCols, nr = spec.NumRows, n = nc * nr;
         if (dsm.Length != n || dtm.Length != n)
@@ -216,6 +263,8 @@ public static class DrapeTerrain
 
         var DTM = (double[])dtm.Clone(); FillNaN(DTM, nc, nr);
         var DSM = (double[])dsm.Clone(); FillNaN(DSM, nc, nr);
+
+        double systematic = atGradeOffsetMeters ?? SystematicOffset(DSM, DTM, maxDrapeMeters);
 
         // DTM-anchored selection.
         var draped = new double[n];
@@ -225,13 +274,62 @@ public static class DrapeTerrain
             draped[i] = Math.Abs(gap) <= maxDrapeMeters ? DSM[i] : DTM[i];
         }
 
+        if (elevatedStructures is { Count: > 0 })
+            AnchorStructuresToGround(draped, DTM, spec, elevatedStructures,
+                systematic, structureHalfWidthMeters);
+
         for (int p = 0; p < smoothPasses && smoothRadius > 0; ++p)
             draped = BoxBlur(draped, nc, nr, smoothRadius);
 
         var offset = new double[n];
         for (int i = 0; i < n; ++i) offset[i] = draped[i] - DTM[i];
-        return new DrapeResult(draped, offset);
+        return new DrapeResult(draped, offset, systematic);
     }
+
+    // Replace whatever a deck put on the surface with the ground it spans, over the corridor each
+    // elevated way sweeps.
+    private static void AnchorStructuresToGround(
+        double[] draped, double[] dtm, DrapeGridSpec spec,
+        IReadOnlyList<OsmRoadWay> elevatedStructures,
+        double systematicOffset, double halfWidth)
+    {
+        int nc = spec.NumCols, nr = spec.NumRows;
+        double halfWidthSq = halfWidth * halfWidth;
+
+        foreach (var way in elevatedStructures)
+        {
+            for (int v = 0; v + 1 < way.VertexCount; ++v)
+            {
+                double x0 = way.X[v], y0 = way.Y[v];
+                double dx = way.X[v + 1] - x0, dy = way.Y[v + 1] - y0;
+                double segLenSq = dx * dx + dy * dy;
+                if (segLenSq <= 1e-12) continue;
+
+                int c0 = GridIndex(Math.Min(x0, x0 + dx) - halfWidth, spec.MinX, spec.CellSize, nc);
+                int c1 = GridIndex(Math.Max(x0, x0 + dx) + halfWidth, spec.MinX, spec.CellSize, nc);
+                int r0 = GridIndex(Math.Min(y0, y0 + dy) - halfWidth, spec.MinY, spec.CellSize, nr);
+                int r1 = GridIndex(Math.Max(y0, y0 + dy) + halfWidth, spec.MinY, spec.CellSize, nr);
+
+                for (int r = r0; r <= r1; ++r)
+                {
+                    double y = spec.MinY + r * spec.CellSize;
+                    for (int c = c0; c <= c1; ++c)
+                    {
+                        double x = spec.MinX + c * spec.CellSize;
+                        double t = Math.Clamp(((x - x0) * dx + (y - y0) * dy) / segLenSq, 0.0, 1.0);
+                        double px = x0 + dx * t, py = y0 + dy * t;
+                        if ((x - px) * (x - px) + (y - py) * (y - py) > halfWidthSq) continue;
+
+                        int i = r * nc + c;
+                        draped[i] = dtm[i] + systematicOffset;
+                    }
+                }
+            }
+        }
+    }
+
+    private static int GridIndex(double world, double min, double cellSize, int count)
+        => Math.Clamp((int)Math.Round((world - min) / cellSize), 0, count - 1);
 
     /// <summary>Replace NaN cells with the mean of valid 4-neighbours, iterated until filled (bounded);
     /// any cells still NaN (fully isolated / empty grid) are set to the global mean (0 if none).</summary>

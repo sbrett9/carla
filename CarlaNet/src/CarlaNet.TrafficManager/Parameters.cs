@@ -76,6 +76,14 @@ internal sealed class Parameters
     private int _hybridPhysicsRadiusBits = SingleToInt32Bits(70.0f);
     private int _osmMode = 1;  // C++ default: true
 
+    // ── Recovery policy for a vehicle that has left its planned route ──
+    // A vehicle knocked off its route is replanned from where it now is to the destination it was
+    // given. These decide what happens when that keeps failing. The default is to go on replanning
+    // indefinitely: a routed vehicle is then either on a route that was actually searched for, or
+    // visibly failing to find one on the console — it never quietly reverts to guessing.
+    private int _routeReplanAttemptLimit = 3;
+    private int _routeGreedyFallbackEnabled;   // 0 = false
+
     // Synchronous-mode timeout (milliseconds). Stored as bits of double for
     // Interlocked.Exchange64 semantics; default 10 ms.
     private long _synchronousTimeOutMsBits = BitConverter.DoubleToInt64Bits(10.0);
@@ -296,6 +304,21 @@ internal sealed class Parameters
         _customRoute.AddEntry(actorId, route);
     }
 
+    /// <summary>
+    /// How many consecutive failed replans a vehicle may accumulate before the greedy fallback is
+    /// allowed to take over. Zero means the fallback is never reached however often replanning
+    /// fails. Inert unless <see cref="SetRouteGreedyFallbackEnabled"/> is also on.
+    /// </summary>
+    public void SetRouteReplanAttemptLimit(int limit)
+        => Interlocked.Exchange(ref _routeReplanAttemptLimit, Math.Max(0, limit));
+
+    /// <summary>
+    /// Whether a vehicle that cannot be replanned is eventually handed back to greedy steering
+    /// toward its destination. Off by default: the vehicle keeps trying to find a real route.
+    /// </summary>
+    public void SetRouteGreedyFallbackEnabled(bool enabled)
+        => Interlocked.Exchange(ref _routeGreedyFallbackEnabled, enabled ? 1 : 0);
+
     // ═════════════════════════════════════════════════════════════════
     //                            GETTERS
     // ═════════════════════════════════════════════════════════════════
@@ -432,6 +455,13 @@ internal sealed class Parameters
     /// <summary>Returns an empty list if no route is currently uploaded.</summary>
     public IReadOnlyList<byte> GetImportedRoute(ActorId actorId)
         => _customRoute.TryGetValue(actorId, out var v) ? v : Array.Empty<byte>();
+
+    /// <inheritdoc cref="SetRouteReplanAttemptLimit" />
+    public int GetRouteReplanAttemptLimit() => Volatile.Read(ref _routeReplanAttemptLimit);
+
+    /// <inheritdoc cref="SetRouteGreedyFallbackEnabled" />
+    public bool GetRouteGreedyFallbackEnabled()
+        => Volatile.Read(ref _routeGreedyFallbackEnabled) != 0;
 
     // ═════════════════════════════════════════════════════════════════
     //                  Float ↔ Int32 bitcast helpers
