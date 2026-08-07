@@ -39,6 +39,15 @@ public static class TrafficLightInjector
     // in a driving lane, so placing the pole at its own t leaves it in the roadway / crosswalk box.
     private const double SidewalkMarginMeters = 2.0;
 
+    // Reference-line sampling step used to find the road surface under a relocated pole. The roads
+    // searched are a junction's internal ones, which are short.
+    private const double ElevationSampleStepMeters = 2.0;
+
+    // A pole farther than this from every road of its junction keeps the elevation of its own stop
+    // line rather than adopting a distant road's. A curbside pole is a lane or two off the nearest
+    // centreline, plus the crosswalk clearance, so this is generous.
+    private const double ElevationSearchRadiusMeters = 25.0;
+
 
     /// <summary>
     /// Rewrites <paramref name="openDriveXml"/> so every netconvert traffic-light junction is
@@ -178,14 +187,21 @@ public static class TrafficLightInjector
         // Falls back to the near-side road-relative placement when the geometry isn't available.
         if (geoMap != null)
         {
+            var elevatedRoads = ElevatedRoadIds(root);
             var centreByAlias = new Dictionary<string, (double X, double Y)>();
             // alias -> (incoming road id -> its connecting-road ids), for the per-approach far-side measure.
             var connByAlias = new Dictionary<string, Dictionary<string, List<uint>>>();
+            // alias -> every connecting-road id of the junction, in document order. A relocated pole
+            // stands at a corner the whole junction shares, so the ground under it is resampled
+            // against all of them, not only its own approach's.
+            var junctionRoadsByAlias = new Dictionary<string, List<uint>>();
             foreach (var (tlId, alias) in shortByTl)
             {
                 if (!junctionByName.TryGetValue(tlId, out var jn)) continue;
                 if (TryJunctionCentre(jn, geoMap, out var centre)) centreByAlias[alias] = centre;
                 var byIncoming = new Dictionary<string, List<uint>>();
+                var allConnecting = new List<uint>();
+                var seenConnecting = new HashSet<uint>();
                 foreach (var conn in jn.Elements("connection"))
                 {
                     string inc = conn.Attribute("incomingRoad")?.Value ?? "";
@@ -193,8 +209,10 @@ public static class TrafficLightInjector
                         continue;
                     if (!byIncoming.TryGetValue(inc, out var lst)) byIncoming[inc] = lst = new List<uint>();
                     lst.Add(crid);
+                    if (seenConnecting.Add(crid)) allConnecting.Add(crid);
                 }
                 connByAlias[alias] = byIncoming;
+                junctionRoadsByAlias[alias] = allConnecting;
             }
 
             foreach (var head in keptHeads)
@@ -229,6 +247,16 @@ public static class TrafficLightInjector
                 double lateral = pos.T == 0 ? 0 : Math.Sign(-pos.T) * edge;
                 double fx = cx0 + tanX * cross + lateral * nX; // far side + roadside curb offset
                 double fy = cy0 + tanY * cross + lateral * nY;
+
+                // The pole has moved metres across the junction, so the ground beneath it is no longer
+                // the ground at the stop line whose elevation z was read from. On a graded approach
+                // keeping that elevation buries the mast — taking with it the clearance a tall vehicle
+                // needs under its arm — or leaves it floating. Resample against the junction's own
+                // roads; they are the surface the pole now stands beside.
+                if (junctionRoadsByAlias.TryGetValue(head[..u], out var junctionRoads)
+                    && NearestCentrelineElevation(geoMap, junctionRoads, elevatedRoads, fx, fy) is { } farZ)
+                    z = farZ;
+
                 double hdg = Math.Atan2(tanY, tanX);            // face back toward the oncoming approach
                 pos.El.SetAttributeValue("hOffset", null);      // positionInertial carries the full yaw
                 pos.El.Add(new XElement("positionInertial",
@@ -368,6 +396,45 @@ public static class TrafficLightInjector
             }
         }
         return double.IsNegativeInfinity(maxProj) ? null : maxProj;
+    }
+
+    // Road ids that carry an actual &lt;elevationProfile&gt;. The parser hands every road a default zero
+    // elevation record when the .xodr gives it none, so the parsed model cannot tell "at the datum"
+    // from "no data" — and on an elevated map that zero sits tens of metres under the road.
+    private static HashSet<uint> ElevatedRoadIds(XElement root)
+    {
+        var ids = new HashSet<uint>();
+        foreach (var roadEl in root.Elements("road"))
+            if (uint.TryParse(roadEl.Attribute("id")?.Value, out var rid)
+                && roadEl.Element("elevationProfile")?.Elements("elevation").Any() == true)
+                ids.Add(rid);
+        return ids;
+    }
+
+    // Reference-line elevation of <paramref name="roadIds"/> at the sample nearest (x, y), or null when
+    // none of them has elevation data within ElevationSearchRadiusMeters of it. Roads outside
+    // <paramref name="elevatedRoads"/> are skipped rather than read as zero, which would bury the pole.
+    private static double? NearestCentrelineElevation(
+        Road.Map map, IReadOnlyList<uint> roadIds, IReadOnlySet<uint> elevatedRoads, double x, double y)
+    {
+        double nearestSq = ElevationSearchRadiusMeters * ElevationSearchRadiusMeters;
+        double? nearestZ = null;
+        foreach (var rid in roadIds)
+        {
+            if (!elevatedRoads.Contains(rid))
+                continue;
+            if (!map.Roads.TryGetValue(rid, out var road) || road.Length <= 0.0)
+                continue;
+            int steps = Math.Max(1, (int)Math.Ceiling(road.Length / ElevationSampleStepMeters));
+            for (int i = 0; i <= steps; i++)
+            {
+                var loc = Road.Map.GetDirectedPointInNoLaneOffset(road, road.Length * i / steps).Location;
+                double dx = loc.X - x, dy = loc.Y - y;
+                double distSq = dx * dx + dy * dy;
+                if (distSq < nearestSq) { nearestSq = distSq; nearestZ = loc.Z; }
+            }
+        }
+        return nearestZ;
     }
 
     // Junction centre = the average of its connecting (internal) roads' midpoints, in the planView

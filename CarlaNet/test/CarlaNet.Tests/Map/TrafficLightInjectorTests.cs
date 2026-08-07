@@ -6,6 +6,7 @@
 // and drop the all-heads controller. This is the shape netconvert actually emits, so it catches
 // both the grouping logic and the XML-surgery pitfalls (e.g. inserting relative to a removed node).
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Xml.Linq;
 using CarlaNet.Map.OpenDrive;
@@ -115,6 +116,93 @@ public class TrafficLightInjectorTests
     public void Inject_NoTlLogic_ReturnsInputUnchanged()
     {
         Assert.Equal(Xodr, TrafficLightInjector.InjectTrafficLights(Xodr, "<net/>"));
+    }
+
+    // A graded junction: the approach (road 1) sits at 10 m, the connecting road it crosses to reach
+    // the far side (road 2) at 25 m. The pole is relocated ~27 m forward, so it stands on road 2's
+    // ground, not road 1's.
+    private const string GradedXodr =
+@"<?xml version=""1.0"" standalone=""yes""?>
+<OpenDRIVE>
+  <header revMajor=""1"" revMinor=""4"" name="""" version=""1.00"" vendor=""test""/>
+  <road name=""approach"" length=""100.0"" id=""1"" junction=""-1"">
+    <planView>
+      <geometry s=""0.0"" x=""0.0"" y=""0.0"" hdg=""0.0"" length=""100.0""><line/></geometry>
+    </planView>
+    <elevationProfile><elevation s=""0.0"" a=""10.0"" b=""0.0"" c=""0.0"" d=""0.0""/></elevationProfile>
+    <lanes>
+      <laneSection s=""0.0"">
+        <center><lane id=""0"" type=""driving"" level=""false""/></center>
+      </laneSection>
+    </lanes>
+    <signals>
+      <signal id=""J1_0"" s=""95"" t=""-5"" type=""1000001"" dynamic=""yes""><validity fromLane=""-2"" toLane=""-2""/></signal>
+      <signal id=""J1_1"" s=""95"" t=""-2"" type=""1000001"" dynamic=""yes""><validity fromLane=""-1"" toLane=""-1""/></signal>
+    </signals>
+  </road>
+  <road name=""crossing"" length=""20.0"" id=""2"" junction=""5"">
+    <planView>
+      <geometry s=""0.0"" x=""100.0"" y=""0.0"" hdg=""0.0"" length=""20.0""><line/></geometry>
+    </planView>
+    <elevationProfile><elevation s=""0.0"" a=""25.0"" b=""0.0"" c=""0.0"" d=""0.0""/></elevationProfile>
+    <lanes>
+      <laneSection s=""0.0"">
+        <center><lane id=""0"" type=""driving"" level=""false""/></center>
+      </laneSection>
+    </lanes>
+  </road>
+  <controller id=""J1"">
+    <control signalId=""J1_0""/>
+    <control signalId=""J1_1""/>
+  </controller>
+  <junction name=""J1"" id=""5"">
+    <connection id=""0"" incomingRoad=""1"" connectingRoad=""2"" contactPoint=""start""/>
+  </junction>
+</OpenDRIVE>";
+
+    private const string GradedNetXml =
+@"<net>
+  <tlLogic id=""J1"" type=""static"" programID=""0"">
+    <phase duration=""30"" state=""GG""/>
+    <phase duration=""3""  state=""yy""/>
+  </tlLogic>
+</net>";
+
+    private static double PoleZ(string xodr, string netXml)
+    {
+        var root = XDocument.Parse(TrafficLightInjector.InjectTrafficLights(xodr, netXml)).Root!;
+        var inertial = root.Elements("road").Elements("signals").Elements("signal")
+            .Elements("positionInertial").Single();
+        return double.Parse(inertial.Attribute("z")!.Value, CultureInfo.InvariantCulture);
+    }
+
+    // The pole is moved metres across the junction, so it must take the elevation of the ground it
+    // ends up on. Carrying the stop line's elevation sinks the mast into a rising far side, and with
+    // it the clearance a tall vehicle needs to pass under the arm.
+    [Fact]
+    public void Inject_FarSidePole_TakesTheElevationWhereItLands()
+    {
+        Assert.Equal(25.0, PoleZ(GradedXodr, GradedNetXml), precision: 3);
+    }
+
+    // The parser gives a road with no <elevationProfile> a default zero elevation record, so a
+    // resample that trusted the parsed model would read "no data" as "at the datum" and drop the pole
+    // tens of metres below an elevated map. Such a road must be left out of the search entirely.
+    [Fact]
+    public void Inject_FarSideRoadWithoutElevation_KeepsTheStopLineElevation()
+    {
+        string xodr = XDocument.Parse(GradedXodr) is var doc && doc.Root != null
+            ? RemoveElevationOfRoad(doc, "2")
+            : GradedXodr;
+
+        Assert.Equal(10.0, PoleZ(xodr, GradedNetXml), precision: 3);
+    }
+
+    private static string RemoveElevationOfRoad(XDocument doc, string roadId)
+    {
+        doc.Root!.Elements("road").Single(r => r.Attribute("id")!.Value == roadId)
+            .Elements("elevationProfile").Remove();
+        return doc.ToString();
     }
 
     // netconvert's clustered junction ids ("cluster_<id>_<id>..._#Nmore") produce signal ids that

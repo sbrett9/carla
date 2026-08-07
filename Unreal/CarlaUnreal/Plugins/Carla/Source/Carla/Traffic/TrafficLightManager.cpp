@@ -10,6 +10,7 @@
 #include "YieldSignComponent.h"
 #include "SpeedLimitComponent.h"
 #include "Components/BoxComponent.h"
+#include "Components/ShapeComponent.h"
 #include "Runtime/CoreUObject/Public/UObject/ConstructorHelpers.h"
 #include "OpenDrive/OpenDrive.h"
 #include "OpenDrive/MapLogicParser.h"
@@ -541,6 +542,31 @@ static int32 CountDrivingLanesOnSide(const carla::road::Lane &Lane)
   return FMath::Max(Count, 1);
 }
 
+// Lets traffic drive through a signal actor spawned from OpenDRIVE without letting it disappear from
+// the raycast sensors.
+//
+// These poles are placed from map geometry, so a mast arm can end up hanging low enough over the
+// carriageway that a tall vehicle does not clear its heads, and blocking physics then wedges that
+// vehicle against a prop whose only jobs are to be seen and to trigger its stop line. Query-only
+// collision removes the rigid-body contact (Chaos generates none unless both bodies simulate) while
+// leaving the meshes' response container untouched, so lidar and radar - which trace the SensorTrace
+// channel that the meshes' BlockAll profile answers - still return points on them, and pedestrian
+// capsule sweeps still path around the pole.
+static void MakeSignalMeshesPassThrough(AActor *SignalActor)
+{
+  TArray<UPrimitiveComponent *> Primitives;
+  SignalActor->GetComponents(Primitives);
+  for (auto *Primitive : Primitives)
+  {
+    // Shape components are the sign's detection volumes: overlap-only already, and the sign stops
+    // working without them.
+    if (!Primitive->IsA<UShapeComponent>())
+    {
+      Primitive->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+    }
+  }
+}
+
 void ATrafficLightManager::SpawnTrafficLights()
 {
   namespace cr = carla::road;
@@ -649,6 +675,8 @@ void ATrafficLightManager::SpawnTrafficLights()
     UTrafficLightComponent *TrafficLightComponent = TrafficLight->GetTrafficLightComponent();
     TrafficLightComponent->SetSignId(SignalId.c_str());
 
+    MakeSignalMeshesPassThrough(TrafficLight);
+
     if (ClosestWaypointToSignal)
     {
       auto SignalDistanceToRoad =
@@ -659,14 +687,7 @@ void ATrafficLightManager::SpawnTrafficLights()
       {
         carla::log_warning("Traffic light",
             TCHAR_TO_UTF8(*TrafficLightComponent->GetSignId()),
-            "overlaps a driving lane. Disabling collision...");
-
-        TArray<UPrimitiveComponent*> Primitives;
-        TrafficLight->GetComponents(Primitives);
-        for (auto* Primitive : Primitives)
-        {
-          Primitive->SetCollisionProfileName(TEXT("NoCollision"));
-        }
+            "overlaps a driving lane.");
       }
     }
 
@@ -746,6 +767,8 @@ void ATrafficLightManager::SpawnSignals()
           FAttachmentTransformRules::KeepRelativeTransform);
       SignComponent->InitializeSign(GetMap().value());
 
+      MakeSignalMeshesPassThrough(TrafficSign);
+
       auto ClosestWaypointToSignal =
           GetMap()->GetClosestWaypointOnRoad(CarlaTransform.location);
       if (ClosestWaypointToSignal)
@@ -758,14 +781,7 @@ void ATrafficLightManager::SpawnSignals()
         {
           carla::log_warning("Traffic sign",
               TCHAR_TO_UTF8(*SignComponent->GetSignId()),
-              "overlaps a driving lane. Disabling collision...");
-
-          TArray<UPrimitiveComponent*> Primitives;
-          TrafficSign->GetComponents(Primitives);
-          for (auto* Primitive : Primitives)
-          {
-            Primitive->SetCollisionProfileName(TEXT("NoCollision"));
-          }
+              "overlaps a driving lane.");
         }
       }
       TrafficSignComponents.Add(SignComponent->GetSignId(), SignComponent);
@@ -804,6 +820,8 @@ void ATrafficLightManager::SpawnSignals()
       SignComponent->InitializeSign(GetMap().value());
       SignComponent->SetSpeedLimit(Signal->GetValue());
 
+      MakeSignalMeshesPassThrough(TrafficSign);
+
       auto ClosestWaypointToSignal =
           GetMap()->GetClosestWaypointOnRoad(CarlaTransform.location);
       if (ClosestWaypointToSignal)
@@ -816,14 +834,7 @@ void ATrafficLightManager::SpawnSignals()
         {
           carla::log_warning("Traffic sign",
               TCHAR_TO_UTF8(*SignComponent->GetSignId()),
-              "overlaps a driving lane. Disabling collision...");
-
-          TArray<UPrimitiveComponent*> Primitives;
-          TrafficSign->GetComponents(Primitives);
-          for (auto* Primitive : Primitives)
-          {
-            Primitive->SetCollisionProfileName(TEXT("NoCollision"));
-          }
+              "overlaps a driving lane.");
         }
       }
       TrafficSignComponents.Add(SignComponent->GetSignId(), SignComponent);
