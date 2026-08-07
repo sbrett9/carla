@@ -2288,6 +2288,15 @@ def main() -> int:
     if args.start_traffic:
         traffic.want_enabled = True
 
+    # Windows stretches the windows of processes that never declare DPI awareness, and SDL leaves the
+    # awareness alone by default. On a desktop at 150% scale that turns a 3440x1440 window into
+    # 5160x2160 physical pixels with the frame bitmap-upscaled to fit, so the camera image is blurred
+    # and no longer 1:1 with the pixels it was rendered at. Declaring per-monitor awareness makes the
+    # window exactly --width x --height physical pixels. Must be set before the video subsystem starts;
+    # set SDL_WINDOWS_DPI_AWARENESS=unaware in the environment to opt back out.
+    if os.name == "nt":
+        os.environ.setdefault("SDL_WINDOWS_DPI_AWARENESS", "permonitorv2")
+
     pygame.init(); pygame.font.init()
     font = pygame.font.SysFont("consolas", 16)
     display = pygame.display.set_mode((args.width, args.height))
