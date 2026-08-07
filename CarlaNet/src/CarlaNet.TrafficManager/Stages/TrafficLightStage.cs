@@ -66,15 +66,18 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
     // refer to. Refreshed once per tick; empty when the simulator connection is absent, in which
     // case approach control does nothing and the box-based decision is the only one in play.
     private IReadOnlyDictionary<string, TLS> _signalStates = new Dictionary<string, TLS>();
-    // Vehicles currently braking for a signal they can see but are not yet standing at, so the
-    // hold and the release are each reported once rather than every tick.
-    private readonly HashSet<ActorId> _heldOnApproach = new();
+    // Which signal each vehicle is currently braking for, or absent if it is not braking for one.
+    // Held rather than recomputed so a vehicle that has begun stopping for a signal keeps stopping
+    // until that signal permits it, instead of re-deciding on a threshold its own braking moves.
+    private readonly Dictionary<ActorId, string> _heldOnApproach = new();
 
-    // Deceleration assumed available for a planned stop at a signal, in m/s². Below what the tyres
-    // could deliver, because the point is to stop short of the line rather than as late as possible.
-    private const float ComfortableDecelerationMetresPerSecondSquared = 3.5f;
+    // Deceleration assumed available when stopping for a signal, in m/s². The motion planner answers
+    // a signal hazard with full brake rather than a controlled deceleration, so this is set near what
+    // that delivers: assuming much less means braking from far enough back to stop well short of the
+    // line, which with a hold that lasts until the signal permits is where the vehicle then waits.
+    private const float AssumedBrakingDecelerationMetresPerSecondSquared = 6.0f;
     // Applied to the computed stopping distance, so braking begins before the stop becomes marginal.
-    private const float ApproachBrakingMargin = 1.6f;
+    private const float ApproachBrakingMargin = 1.25f;
     // Vehicles close to a red hold for it whatever their speed, so one that has crept forward or is
     // already stopped at the line stays there instead of easing over it.
     private const float MinimumSignalApproachMetres = 8.0f;
@@ -264,48 +267,63 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             // how far ahead the stop line is; the state comes from the light itself rather than from
             // whichever box the vehicle happens to be standing in. A vehicle already committed to its
             // manoeuvre is exempt, as it is for the box-based decision below.
-            bool heldByApproachingSignal = false;
-            if (!committedToJunction
-                && egoBuffer is { Count: > 0 }
-                && egoBuffer[0].GoverningSignalId is { } approachingSignalId
-                && _signalStates.TryGetValue(approachingSignalId, out TLS approachingState)
+            string? governingSignalId =
+                egoBuffer is { Count: > 0 } ? egoBuffer[0].GoverningSignalId : null;
+            bool signalAheadIsStopping =
+                governingSignalId is not null
+                && _signalStates.TryGetValue(governingSignalId, out TLS approachingState)
                 && approachingState != TLS.Green
-                && approachingState != TLS.Off
-                && _parameters.GetPercentageRunningLight(egoActorId) <= _random.Next())
+                && approachingState != TLS.Off;
+
+            bool heldByApproachingSignal = false;
+            _heldOnApproach.TryGetValue(egoActorId, out string? alreadyHeldFor);
+
+            if (committedToJunction || !signalAheadIsStopping)
             {
+                // Nothing ahead to stop for: either the signal has changed to permit this vehicle, it
+                // is no longer the signal governing the lane, or the vehicle is already crossing.
+                heldByApproachingSignal = false;
+            }
+            else if (alreadyHeldFor == governingSignalId)
+            {
+                // Already stopping for this signal, so keep stopping until it permits. The release
+                // must not depend on distance or speed: braking reduces the speed, which reduces the
+                // distance the vehicle needs, which would drop it back below the threshold and let it
+                // accelerate — then brake, then accelerate, all the way to the line. Measured before
+                // this held: 940 braking events across 129 approaches, one vehicle re-braking for the
+                // same signal 37 times. Releasing only when the signal itself permits makes it one.
+                heldByApproachingSignal = true;
+            }
+            else if (_parameters.GetPercentageRunningLight(egoActorId) <= _random.Next())
+            {
+                // Decide once, on the way in. A vehicle configured to run lights rolls for it here
+                // rather than every tick, so it does not change its mind mid-approach.
                 Vector3D velocity = _simulationState.GetVelocity(egoActorId);
                 float speed = MathF.Sqrt(
                     velocity.X * velocity.X + velocity.Y * velocity.Y + velocity.Z * velocity.Z);
-                // Room to stop, plus a margin so the decision is made before it is marginal. Braking
-                // is the emergency stop the motion planner already applies for a light, so this is
-                // the distance at which that stop still lands short of the line.
-                float roomToStop =
-                    speed * speed / (2f * ComfortableDecelerationMetresPerSecondSquared);
+                float roomToStop = speed * speed / (2f * AssumedBrakingDecelerationMetresPerSecondSquared);
                 float startBrakingAt =
                     MathF.Max(roomToStop * ApproachBrakingMargin, MinimumSignalApproachMetres);
-                heldByApproachingSignal = egoBuffer[0].DistanceToGoverningSignal <= startBrakingAt;
+                heldByApproachingSignal = egoBuffer![0].DistanceToGoverningSignal <= startBrakingAt;
             }
 
             // Report the transition either way. Being held for a signal the vehicle cannot yet be
             // standing at is the behaviour this is here to produce, and being released is what
             // distinguishes a working signal from one that has stopped traffic permanently.
-            if (_heldOnApproach.Contains(egoActorId) != heldByApproachingSignal)
+            if (heldByApproachingSignal && alreadyHeldFor != governingSignalId)
             {
-                if (heldByApproachingSignal)
-                {
-                    _heldOnApproach.Add(egoActorId);
-                    TrafficReport.Writer.WriteLine(
-                        $"{DateTime.Now:HH:mm:ss.fff} [traffic] vehicle {egoActorId} braking for "
-                        + $"signal {egoBuffer![0].GoverningSignalId} "
-                        + $"{egoBuffer[0].DistanceToGoverningSignal:F1} m ahead.");
-                }
-                else
-                {
-                    _heldOnApproach.Remove(egoActorId);
-                    TrafficReport.Writer.WriteLine(
-                        $"{DateTime.Now:HH:mm:ss.fff} [traffic] vehicle {egoActorId} released by its "
-                        + "signal.");
-                }
+                _heldOnApproach[egoActorId] = governingSignalId!;
+                TrafficReport.Writer.WriteLine(
+                    $"{DateTime.Now:HH:mm:ss.fff} [traffic] vehicle {egoActorId} braking for "
+                    + $"signal {governingSignalId} "
+                    + $"{egoBuffer![0].DistanceToGoverningSignal:F1} m ahead.");
+            }
+            else if (!heldByApproachingSignal && alreadyHeldFor is not null)
+            {
+                _heldOnApproach.Remove(egoActorId);
+                TrafficReport.Writer.WriteLine(
+                    $"{DateTime.Now:HH:mm:ss.fff} [traffic] vehicle {egoActorId} released by signal "
+                    + $"{alreadyHeldFor}.");
             }
 
             // Case 1: at a signalised junction with a red/yellow light.
