@@ -50,6 +50,9 @@ Controls (hold RIGHT MOUSE to fly, like the Unreal editor):
     X             run/stop the OpenSCENARIO storyboard given by --scenario
     Y             toggle TELEMETRY (CoT over UDP) on/off
     F             toggle RECORDING (periodic PNG of the clean frame + matching CoT-XML sidecar)
+    O             toggle the ORBIT camera on/off (circles the --orbit-* centre; switching it on is a
+                  hard jump onto the circle, switching it off resumes free flight where it left you)
+    P             pause/resume the orbit motion while staying in orbit mode
     Space         reset to the start pose
     Esc           quit
 
@@ -376,13 +379,18 @@ def parse_args():
                      help="CoT track uid for the platform (default: CARLA-SENSOR-<camera id>).")
 
     orbit = ap.add_argument_group("orbit")
-    orbit.add_argument("--orbit", action="store_true", help="enable orbit at startup")
+    orbit.add_argument("--orbit", action="store_true",
+                       help="start with the orbit camera running instead of free flight; O toggles "
+                            "between the two at any time either way")
     orbit.add_argument("--orbit-x", type=float, default=None, help="orbit center X (CARLA metres)")
     orbit.add_argument("--orbit-y", type=float, default=None, help="orbit center Y (CARLA metres, -Y is North)")
     orbit.add_argument("--orbit-lat", type=float, default=None, help="orbit center latitude (alternative to --orbit-x/--orbit-y)")
     orbit.add_argument("--orbit-lon", type=float, default=None, help="orbit center longitude (alternative to --orbit-x/--orbit-y)")
     orbit.add_argument("--orbit-radius", type=float, default=656.0, help="orbit radius in FEET (default 656 = 200m)")
-    orbit.add_argument("--orbit-altitude", type=float, default=1700, help="camera altitude in FEET (default: use spawn altitude)")
+    orbit.add_argument("--orbit-altitude", type=float, default=1700,
+                       help="camera altitude above the orbit centre, in FEET (default 1700). Orbit "
+                            "always flies at this altitude, so engaging it from free flight climbs "
+                            "or descends to it rather than holding the altitude you were at.")
     orbit.add_argument("--orbit-speed", type=float, default=240.0, help="orbit speed in seconds (default 240 = 4 min)")
 
     return ap.parse_args()
@@ -1655,6 +1663,9 @@ class CameraController():
         # Reset time tracking when toggling
         if self.orbit_enabled:
             self.last_time = time.time()
+            # A pause left over from the previous orbit would leave the camera frozen on re-entry,
+            # looking like the toggle failed, so every switch-on starts moving.
+            self.orbit_paused = False
  
  
     def toggle_orbit_pause(self):
@@ -2061,63 +2072,86 @@ def main() -> int:
     # Background orbit thread control
     orbit_thread_stop = {"stop": False}
 
-    # Enable orbit if requested via command line
-    if args.orbit:
-        # Determine orbit center
-        if args.orbit_lat is not None and args.orbit_lon is not None:
-            # Use lat/lon
-            camera_controller.set_orbit_params(
-                center_lat=args.orbit_lat,
-                center_lon=args.orbit_lon,
-                center_z=0.0,
-                radius_feet=args.orbit_radius,
-                altitude_feet=args.orbit_altitude if args.orbit_altitude else pose["z"] * FT_PER_M,
-                speed=args.orbit_speed
-            )
-            print(f"orbit enabled: center lat {args.orbit_lat:.7f}, lon {args.orbit_lon:.7f}, "
-                  f"radius {args.orbit_radius:.0f} ft, altitude {args.orbit_altitude or (pose['z'] * FT_PER_M):.0f} ft")
-        elif args.orbit_x is not None and args.orbit_y is not None:
-            # Use CARLA coordinates
-            camera_controller.set_orbit_params(
-                center_x=args.orbit_x,
-                center_y=args.orbit_y,
-                center_z=0.0,
-                radius_feet=args.orbit_radius,
-                altitude_feet=args.orbit_altitude if args.orbit_altitude else pose["z"] * FT_PER_M,
-                speed=args.orbit_speed
-            )
-            print(f"orbit enabled: center ({args.orbit_x:.1f}, {args.orbit_y:.1f}), "
-                  f"radius {args.orbit_radius:.0f} ft, altitude {args.orbit_altitude or (pose['z'] * FT_PER_M):.0f} ft")
+    # Resolve the orbit geometry once, from the command line, whether or not orbit starts enabled: O
+    # switches between orbit and free flight at any time and reuses these values on every switch-on,
+    # so an orbit engaged mid-flight is the same repeatable circle --orbit would have launched into.
+    # The centre falls back to the camera's START pose (--x/--y, i.e. the scene origin by default)
+    # rather than wherever the free camera has been flown to, so engaging orbit translates the view
+    # back to the map origin.
+    orbit_altitude_ft = args.orbit_altitude if args.orbit_altitude else pose["z"] * FT_PER_M
+    if args.orbit_lat is not None and args.orbit_lon is not None:
+        camera_controller.set_orbit_params(
+            center_lat=args.orbit_lat,
+            center_lon=args.orbit_lon,
+            center_z=0.0,
+            radius_feet=args.orbit_radius,
+            altitude_feet=orbit_altitude_ft,
+            speed=args.orbit_speed
+        )
+        orbit_center_desc = f"center lat {args.orbit_lat:.7f}, lon {args.orbit_lon:.7f}"
+    elif args.orbit_x is not None and args.orbit_y is not None:
+        camera_controller.set_orbit_params(
+            center_x=args.orbit_x,
+            center_y=args.orbit_y,
+            center_z=0.0,
+            radius_feet=args.orbit_radius,
+            altitude_feet=orbit_altitude_ft,
+            speed=args.orbit_speed
+        )
+        orbit_center_desc = f"center ({args.orbit_x:.1f}, {args.orbit_y:.1f})"
+    else:
+        camera_controller.set_orbit_params(
+            center_x=pose["x"],
+            center_y=pose["y"],
+            center_z=0.0,
+            radius_feet=args.orbit_radius,
+            altitude_feet=orbit_altitude_ft,
+            speed=args.orbit_speed
+        )
+        orbit_center_desc = f"center ({pose['x']:.1f}, {pose['y']:.1f})"
+    orbit_desc = (f"{orbit_center_desc}, radius {args.orbit_radius:.0f} ft, "
+                  f"altitude {orbit_altitude_ft:.0f} ft, {args.orbit_speed:.0f} s per revolution")
+
+    # The orbit thread runs for the whole session and idles while orbit is off, so O can engage the
+    # camera immediately without having to start (and later join) a thread from the event handler.
+    def orbit_updater():
+        """Background thread that updates orbit at 50 Hz, independent of main loop."""
+        while not orbit_thread_stop["stop"]:
+            if camera_controller.orbit_enabled and not camera_controller.orbit_paused:
+                camera_controller.update_orbit()
+            time.sleep(0.02)  # 50 Hz update rate
+
+    orbit_thread = threading.Thread(target=orbit_updater, daemon=True)
+    orbit_thread.start()
+
+    def set_orbit(enabled):
+        """Switch the camera between the orbit path and free flight.
+
+        Engaging orbit snaps the camera onto the circle resolved above, which is a hard jump in both
+        position and orientation from wherever free flight left it. Disengaging keeps the camera
+        exactly where the orbit left it: the free-flight pose is reloaded from the live camera
+        transform, so WASD/mouse-look pick up from that position and heading with no jump back.
+        """
+        camera_controller.toggle_orbit(enabled)
+        if enabled:
+            print(f"orbit ON: {orbit_desc}")
+            if sync:
+                print("      orbit streams photoreal tiles best under --async; with a synchronous "
+                      "world the camera still moves between ticks, on its own thread")
         else:
-            # Default: use current camera position as center
-            camera_controller.set_orbit_params(
-                center_x=pose["x"],
-                center_y=pose["y"],
-                center_z=0.0,
-                radius_feet=args.orbit_radius,
-                altitude_feet=args.orbit_altitude if args.orbit_altitude else pose["z"] * FT_PER_M,
-                speed=args.orbit_speed
-            )
-            print(f"orbit enabled: center ({pose['x']:.1f}, {pose['y']:.1f}), "
-                  f"radius {args.orbit_radius:.0f} ft, altitude {args.orbit_altitude or (pose['z'] * FT_PER_M):.0f} ft")
-        
-        # Warn about sync mode
-        if sync:
-            print("NOTE: --orbit works best with --async for optimal tile streaming")
-            print("      Consider using: python SCTMV.py --orbit --async")
-        
-        # Start background orbit thread for smooth updates (decoupled from main loop)
-        def orbit_updater():
-            """Background thread that updates orbit at 50 Hz, independent of main loop."""
-            while not orbit_thread_stop["stop"]:
-                if camera_controller.orbit_enabled and not camera_controller.orbit_paused:
-                    camera_controller.update_orbit()
-                time.sleep(0.02)  # 50 Hz update rate
-        
-        orbit_thread = threading.Thread(target=orbit_updater, daemon=True)
-        orbit_thread.start()
-        
-        camera_controller.toggle_orbit(True)
+            try:
+                tf = camera_controller.controlled_object.get_transform()
+                pose["x"], pose["y"], pose["z"] = tf.location.x, tf.location.y, tf.location.z
+                pose["pitch"], pose["yaw"] = tf.rotation.pitch, tf.rotation.yaw
+            except Exception as e:
+                print(f"orbit handoff: could not read camera transform: {e!r}", file=sys.stderr)
+            print(f"orbit OFF: free flight resumed at ({pose['x']:.1f}, {pose['y']:.1f}), "
+                  f"{pose['z'] * FT_PER_M:.0f} ft, yaw {pose['yaw']:.1f} pitch {pose['pitch']:.1f}")
+
+    if args.orbit:
+        set_orbit(True)
+    else:
+        print(f"orbit ready (press O): {orbit_desc}")
 
     # Recorder: the native (C#) FrameRecorder encodes frames in .NET off the GIL. If the
     # CarlaNet.Recording assembly is absent the recorder reports itself unavailable when toggled (the
@@ -2357,6 +2391,8 @@ def main() -> int:
                     recorder.want_enabled = not recorder.want_enabled    # PNG + CoT XML capture
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_x:
                     scenario.want_enabled = not scenario.want_enabled
+                elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_o:
+                    set_orbit(not camera_controller.orbit_enabled)
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_p:
                     if camera_controller.orbit_enabled:
                         camera_controller.toggle_orbit_pause()
@@ -2491,10 +2527,11 @@ def main() -> int:
                 f"road(R) {'ON' if road_rendered else 'OFF'}   perim(B) {'ON' if show_perimeter else 'OFF'}   "
                 f"margin(M) {'ON' if show_margin else 'OFF'}   time(K) {time_str}",
                 f"traffic(T) {traf_str}   telemetry(Y) {tel_str}   record(F) {rec_str}   "
+                f"orbit(O) {'ON' if orbit_info['orbit_enabled'] else 'OFF'}   "
                 f"fps {clock.get_fps():4.0f}   frames {state['frames']}",
                 "RMB look | Ctrl+LMB measure | WASD/EQ fly | wheel speed | Shift fast | C/G/V/R/B/M layers | "
                 "K time | T traffic | Y telemetry | F record |",
-                "Space reset | P Pause | Esc quit",
+                "O orbit | P pause orbit | Space reset | Esc quit",
             ]
             
             # Add orbit line only if orbit is enabled
