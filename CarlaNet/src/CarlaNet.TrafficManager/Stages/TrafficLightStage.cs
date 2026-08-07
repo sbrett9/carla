@@ -58,6 +58,9 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
     private readonly Dictionary<ActorId, JuncId> _vehicleLastJunction = new();
     // Timestamp at which the vehicle first stopped at the stop sign.
     private readonly Dictionary<ActorId, double> _vehicleStopTime = new();
+    // Last (atTrafficLight, state) pair reported for each vehicle, so the signal it is being shown
+    // is reported on change rather than every tick.
+    private readonly Dictionary<ActorId, (bool AtLight, TLS State)> _lastReportedLight = new();
     // Vehicles that entered a signalised junction while permitted to proceed, and so must clear it
     // rather than stop part-way across if the light changes behind them. See Update().
     private readonly HashSet<ActorId> _committedToJunction = new();
@@ -121,6 +124,24 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             TrafficLightStateData tlState = _simulationState.GetTLS(egoActorId);
             TLS trafficLightState = tlState.TlState;
             bool isAtTrafficLight = tlState.AtTrafficLight;
+
+            // Report every change in what a vehicle is being told about its light, with where it was
+            // standing at the time. A vehicle that drives through a red does so either because it was
+            // never associated with the signal — the simulator answers "not at a light, green" for a
+            // vehicle outside every stop-line trigger box, which is indistinguishable downstream from
+            // a real green — or because it was told green while the signal was red. Those two have
+            // different causes and different fixes, and nothing else emitted here separates them:
+            // a red suppresses commitment, so it can never appear on a commitment line.
+            var seen = (isAtTrafficLight, trafficLightState);
+            if (!_lastReportedLight.TryGetValue(egoActorId, out var previouslySeen) || previouslySeen != seen)
+            {
+                _lastReportedLight[egoActorId] = seen;
+                Location where = _simulationState.GetLocation(egoActorId);
+                TrafficReport.Writer.WriteLine(
+                    $"{DateTime.Now:HH:mm:ss.fff} [traffic] vehicle {egoActorId} sees light "
+                    + $"{trafficLightState} (atLight={isAtTrafficLight}) at "
+                    + $"({where.X:F1}, {where.Y:F1})");
+            }
 
             // Is the vehicle's path about to enter, or already on, a junction road?
             bool headingIntoJunction =
@@ -242,6 +263,8 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
         _enteringVehiclesMap.Clear();
         _vehicleLastJunction.Clear();
         _vehicleStopTime.Clear();
+        _committedToJunction.Clear();
+        _lastReportedLight.Clear();
         _output.Clear();
     }
 
