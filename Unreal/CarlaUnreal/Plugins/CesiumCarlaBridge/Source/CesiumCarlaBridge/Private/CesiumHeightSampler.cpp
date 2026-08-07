@@ -6,6 +6,7 @@
 #include "CesiumGeoreference.h"
 #include "CesiumCreditSystem.h"
 #include "CesiumSunSky.h"
+#include "CesiumSensorViewPublisher.h"
 #include "CesiumTimeOfDayController.h"
 #include "OriginPlacement.h"
 #include "Engine/Engine.h"
@@ -355,11 +356,26 @@ bool UCesiumHeightSampler::ConfigureCesiumForOrigin(
 		}
 	}
 
+	// Make the camera sensors themselves drive tile selection. Without this the tiles are chosen from
+	// the spectator's pose and the game viewport's size, so a sensor whose aspect ratio is taller than
+	// the viewport's renders bands of never-requested tiles, and tile detail is picked for the
+	// viewport's pixel count rather than the sensor's. The publisher lives as long as this world, so a
+	// client that later attaches without rebuilding inherits it.
+	const bool bSpawnedPublisher = (ACesiumSensorViewPublisher::FindOrSpawn(World) != nullptr);
+	if (!bSpawnedPublisher)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[CesiumCarlaBridge] failed to spawn ACesiumSensorViewPublisher; tiles will be selected "
+				 "from the spectator view only and sensor resolutions other than the viewport's aspect "
+				 "ratio may show gaps."));
+	}
+
 	UE_LOG(LogTemp, Display,
-		TEXT("[CesiumCarlaBridge] Configured georeference (lat=%.7f lon=%.7f h=%.3f) + %d layer tileset(s) (photoreal asset=%lld, ground asset=%lld)%s."),
+		TEXT("[CesiumCarlaBridge] Configured georeference (lat=%.7f lon=%.7f h=%.3f) + %d layer tileset(s) (photoreal asset=%lld, ground asset=%lld)%s%s."),
 		OriginLatitude, OriginLongitude, OriginHeight, NumTilesets,
 		static_cast<long long>(IonAssetId), static_cast<long long>(GroundIonAssetId),
-		bSpawnedSunSky ? TEXT(" (spawned sun)") : TEXT(""));
+		bSpawnedSunSky ? TEXT(" (spawned sun)") : TEXT(""),
+		bSpawnedPublisher ? TEXT(" (sensor views published)") : TEXT(""));
 	return true;
 }
 
