@@ -55,6 +55,8 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
     private readonly BufferMap _bufferMap = new();
     private readonly List<ActorId> _markedForRemoval = new();
     private readonly List<Command> _controlFrame = new(capacity: 128);
+    private readonly RoutePlanner _routePlanner;
+    private readonly RouteSupervisor _routeSupervisor;
 
     // ── Stages (constructed in the ctor) ─────────────────────────────────
     private readonly LocalizationStage _localizationStage;
@@ -85,6 +87,15 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
     /// <summary>Direct accessor for the underlying parameter store (for the facade's getters).</summary>
     internal Parameters Parameters => _parameters;
 
+    /// <summary>Shortest-path search over the road graph, for the facade's route-planning surface.</summary>
+    internal RoutePlanner RoutePlanner => _routePlanner;
+
+    /// <summary>The dense road graph, for facade queries about a place on the map.</summary>
+    internal InMemoryMap LocalMap => _localMap;
+
+    /// <summary>Route bookkeeping and recovery, for the facade's route-assignment surface.</summary>
+    internal RouteSupervisor RouteSupervisor => _routeSupervisor;
+
     /// <summary>True after <see cref="Start"/> succeeded and the worker is running.</summary>
     public bool IsRunning => _running;
 
@@ -102,6 +113,9 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
         _seed = unchecked((ulong)Environment.TickCount64);
         _randomDevice = new RandomGenerator(_seed);
 
+        _routePlanner = new RoutePlanner(_localMap);
+        _routeSupervisor = new RouteSupervisor(_routePlanner, _parameters);
+
         // Construct stages. Order matters only for the cross-references
         // (MotionPlanStage reads the other stages' output dictionaries).
         _localizationStage = new LocalizationStage(
@@ -111,7 +125,8 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
             parameters: _parameters,
             localMap: _localMap,
             rng: _randomDevice,
-            markedForRemoval: _markedForRemoval);
+            markedForRemoval: _markedForRemoval,
+            routeSupervisor: _routeSupervisor);
 
         _collisionStage = new CollisionStage(
             simulationState: _simulationState,
@@ -259,6 +274,7 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
     public async ValueTask DisposeAsync()
     {
         Stop();
+        _routeSupervisor.Dispose();
         if (_server is not null)
         {
             try { await _server.DisposeAsync().ConfigureAwait(false); }
@@ -590,17 +606,39 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
     //                  ITrafficManagerCallback impl
     // ─────────────────────────────────────────────────────────────────
 
+    // RunOneTick holds _registrationGate for a whole tick, so registering a vehicle waits for the
+    // current tick to finish. Callers reach this from the thread that owns world.tick(), where an
+    // unbounded wait stops the simulation and — under a client that pumps a UI on that thread —
+    // freezes the window with no output at all. A slow tick is a defect somewhere else, but it must
+    // not be silent: warn once the wait becomes implausible, then keep waiting so behaviour is
+    // unchanged.
+    private static readonly TimeSpan RegistrationWaitWarning = TimeSpan.FromSeconds(5);
+
+    private void EnterRegistrationGate(string operation)
+    {
+        if (Monitor.TryEnter(_registrationGate, RegistrationWaitWarning)) return;
+
+        _logger?.LogWarning(
+            "{Operation} has waited {Seconds:F0}s for the traffic-manager tick to release the "
+            + "registration lock; the tick is running long and the calling thread is blocked.",
+            operation, RegistrationWaitWarning.TotalSeconds);
+        Monitor.Enter(_registrationGate);
+    }
+
     public void RegisterVehicles(IReadOnlyList<Actor> actors)
     {
-        lock (_registrationGate)
+        EnterRegistrationGate(nameof(RegisterVehicles));
+        try
         {
             _registeredVehicles.Insert(actors);
         }
+        finally { Monitor.Exit(_registrationGate); }
     }
 
     public void UnregisterVehicles(IReadOnlyList<Actor> actors)
     {
-        lock (_registrationGate)
+        EnterRegistrationGate(nameof(UnregisterVehicles));
+        try
         {
             for (int i = 0; i < actors.Count; i++)
             {
@@ -608,6 +646,7 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
                 _alsm.RemoveActor(id, registeredActor: true);
             }
         }
+        finally { Monitor.Exit(_registrationGate); }
     }
 
     public void SetPercentageSpeedDifference(Actor actor, float percentage)
@@ -672,6 +711,12 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
 
     public void SetOSMMode(bool modeSwitch)
         => _parameters.SetOSMMode(modeSwitch);
+
+    public void SetRouteReplanAttemptLimit(int limit)
+        => _parameters.SetRouteReplanAttemptLimit(limit);
+
+    public void SetRouteGreedyFallbackEnabled(bool enabled)
+        => _parameters.SetRouteGreedyFallbackEnabled(enabled);
 
     public void SetCustomPath(Actor actor, IReadOnlyList<Location> path, bool emptyBuffer)
         => _parameters.SetCustomPath(actor.Id, path, emptyBuffer);

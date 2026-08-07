@@ -6,17 +6,20 @@
 # CarlaSetup.sh builds with the container's gcc and which would otherwise pick up a newer glibc
 # (e.g. from an AlmaLinux 10 image) and fail to run on RHEL 8.
 #
-# The build context is tiny (no files are COPYed in), so it can be built from anywhere, e.g.:
+# The build context is tiny (only the optional ca-certs/ trust anchors are COPYed in), so it can be
+# built from anywhere, e.g.:
 #   podman build -f Util/Docker/Base.alma8.Dockerfile -t carla-base:alma8 Util/Docker
 #
 # This image installs PREREQUISITES only. Unreal Engine and CARLA are built at container runtime
 # into a mounted/volume workspace (see Docs/build_container_rhel8.md), so the heavy build artifacts
 # are not baked into image layers.
 #
-# On a corporate network with internal CA/TLS interception, the build automatically bootstraps
-# trust by retrieving the certificate chain from the Artifactory server (recommended).
+# On a corporate network that intercepts TLS, the image bootstraps trust by retrieving the
+# interception certificate chain from well-known public hosts and installing the issuing CAs as
+# trust anchors. See the CA TRUST section below for what that does and does not guarantee.
 #
-# Alternatively, build with TLS verification disabled (not recommended):
+# As a last resort, build with TLS verification disabled entirely (leaves the whole image
+# untrusting, so avoid it unless the bootstrap cannot be made to work):
 #   podman build --build-arg INSECURE_SSL=1 -f Util/Docker/Base.alma8.Dockerfile -t carla-base:alma8 Util/Docker
 
 FROM almalinux:8
@@ -26,27 +29,79 @@ FROM almalinux:8
 # where the automatic CA bootstrap fails.
 ARG INSECURE_SSL=0
 
-# Bootstrap corporate CA trust and configure repositories.
-# For TLS-intercepting corporate networks (default): installs openssl with TLS verification
-# temporarily disabled, uses it to retrieve the proxy's certificate chain, then re-enables
-# verification for all subsequent operations.
-# For INSECURE_SSL=1 (fallback): disables TLS verification globally.
-RUN if [ "$INSECURE_SSL" != "1" ]; then \
-        echo "sslverify=False" >> /etc/dnf/dnf.conf && \
-        dnf -y install openssl && \
-        echo | openssl s_client -showcerts -servername mirrors.almalinux.org \
-            -connect mirrors.almalinux.org:443 2>/dev/null | \
-            awk '/BEGIN CERTIFICATE/,/END CERTIFICATE/ {print}' > /etc/pki/ca-trust/source/anchors/corporate-proxy-chain.pem && \
-        update-ca-trust extract && \
-        sed -i '/sslverify=False/d' /etc/dnf/dnf.conf && \
-        echo "[CA Trust] Installed corporate proxy certificate chain"; \
+# Hosts probed for the interception certificate. One is an operating-system mirror (covers dnf),
+# one is the Python package index (covers pip); a proxy may present different chains for each, and
+# installing both means neither path has to fall back to disabled verification.
+ARG CA_PROBE_HOSTS="mirrors.almalinux.org pypi.org"
+
+# ---------------------------------------------------------------------------
+# CA TRUST
+#
+# What this does: opens a TLS connection with verification disabled, reads back the certificate
+# chain the network presents, discards the leaf, and installs the remaining issuer certificates as
+# system trust anchors. On an intercepted network those issuers are the corporate CA.
+#
+# What it does not do: authenticate that CA. Whatever the network offers on the first connection is
+# what gets trusted, so this is only sound on a network already trusted by other means -- which is
+# the case for this build host. The verification step at the end of the block is the real safeguard:
+# it re-runs the fetch with verification switched back on and fails the build if trust was not
+# actually established, so the image can never be published in a silently untrusting state.
+#
+# The leaf certificate is dropped deliberately. Proxies reissue leaves every few months; anchoring
+# one would make the image start failing on a schedule that has nothing to do with this repository.
+# Issuer CAs are valid for years.
+#
+# To skip the network probe entirely, drop PEM files into Util/Docker/ca-certs/ and they are
+# installed as anchors first. That is the more auditable option if the CA is ever published to
+# configuration management.
+# ---------------------------------------------------------------------------
+COPY ca-certs/ /tmp/ca-certs/
+
+RUN set -eux; \
+    ANCHORS=/etc/pki/ca-trust/source/anchors; \
+    if [ "$INSECURE_SSL" = "1" ]; then \
+        echo "sslverify=False" >> /etc/dnf/dnf.conf; \
+        echo "[CA Trust] INSECURE_SSL=1 -- TLS verification DISABLED for this image"; \
     else \
-        echo "sslverify=False" >> /etc/dnf/dnf.conf && \
-        echo "[INSECURE_SSL] dnf TLS verification DISABLED"; \
-    fi \
-    && dnf -y install dnf-plugins-core epel-release \
-    && dnf config-manager --set-enabled powertools \
-    && dnf -y makecache
+        for pem in /tmp/ca-certs/*.pem /tmp/ca-certs/*.crt; do \
+            [ -f "$pem" ] || continue; \
+            echo "[CA Trust] Installing supplied anchor: $(basename "$pem")"; \
+            cp "$pem" "$ANCHORS/"; \
+        done; \
+        update-ca-trust extract; \
+        echo "sslverify=False" >> /etc/dnf/dnf.conf; \
+        dnf -y install openssl ca-certificates; \
+        for host in $CA_PROBE_HOSTS; do \
+            echo "[CA Trust] Probing $host for an interception certificate chain"; \
+            echo | openssl s_client -showcerts -servername "$host" -connect "$host":443 2>/dev/null \
+                | awk '/BEGIN CERTIFICATE/ { n++ } n > 1' \
+                > "$ANCHORS/network-issuers-$host.pem"; \
+            if [ ! -s "$ANCHORS/network-issuers-$host.pem" ]; then \
+                echo "[CA Trust] No issuer certificates returned by $host"; \
+                rm -f "$ANCHORS/network-issuers-$host.pem"; \
+            fi; \
+        done; \
+        update-ca-trust extract; \
+        sed -i '/sslverify=False/d' /etc/dnf/dnf.conf; \
+        for host in $CA_PROBE_HOSTS; do \
+            echo "[CA Trust] Verifying https://$host with verification enabled"; \
+            curl --fail --silent --show-error --head "https://$host/" -o /dev/null; \
+        done; \
+        echo "[CA Trust] Trust established for: $CA_PROBE_HOSTS"; \
+    fi; \
+    rm -rf /tmp/ca-certs; \
+    dnf -y install dnf-plugins-core epel-release; \
+    dnf config-manager --set-enabled powertools; \
+    dnf -y makecache
+
+# update-ca-trust only reaches consumers that read the system bundle. Python (requests/pip), Node
+# and git each ship or prefer their own store, so point them at the system bundle explicitly --
+# otherwise pip fails against an intercepted package index even though dnf and curl work.
+ENV SSL_CERT_FILE=/etc/pki/tls/certs/ca-bundle.crt \
+    REQUESTS_CA_BUNDLE=/etc/pki/tls/certs/ca-bundle.crt \
+    PIP_CERT=/etc/pki/tls/certs/ca-bundle.crt \
+    GIT_SSL_CAINFO=/etc/pki/tls/certs/ca-bundle.crt \
+    NODE_EXTRA_CA_CERTS=/etc/pki/tls/certs/ca-bundle.crt
 
 # ---------------------------------------------------------------------------
 # UTF-8 locale (CMake archive extraction of e.g. Boost needs it for non-ASCII filenames).

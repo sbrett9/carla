@@ -1,79 +1,112 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
-# sync-carla-content - Manage CARLA content repository for GitHub Actions runner
+# sync-carla-content - maintain the carla-content cache on the build host.
 #
 # PURPOSE:
-#   Clones or updates the private carla-content Git-LFS repository to a persistent
-#   location on the runner host. The content is cached across workflow runs and
-#   volume-mounted into build containers (avoiding 43 GB re-downloads).
+#   The carla-content repository is ~43 GB of Git-LFS assets that changes rarely. Cloning
+#   it per build is not viable, so the build host keeps one persistent clone and publishes
+#   immutable, per-commit snapshots of the working tree for builds to consume.
+#
+# LAYOUT (all under --cache-root):
+#   repo/                 the working clone; the only mutable copy
+#   snapshots/<commit>/   materialised, never-modified copy of the tree at that commit
+#   current               symlink to the snapshot for the ref that was last synced
+#   .lock                 advisory lock serialising all mutation of this cache
+#
+#   Snapshots are built with hardlinks (cp -al), so a snapshot costs inodes rather than
+#   43 GB of disk. Keeping several snapshots therefore costs roughly one full copy plus the
+#   deltas between them.
+#
+#   THE INVARIANT THAT MAKES THIS SAFE: git replaces a changed working-tree file by
+#   unlinking it and creating a new one, which breaks the hardlink and leaves the older
+#   snapshot pointing at the old inode. `git lfs pull` likewise skips any file already at
+#   its expected size, so it never rewrites content a snapshot shares. Anything that
+#   truncates a tracked file in place instead would write straight through into every
+#   snapshot sharing that inode -- so do not add `git lfs checkout --force`, `git
+#   restore --worktree` on individual paths, or any in-place asset fixup to this script.
+#   Repairs belong in the container, on top of the overlay mount, not in the clone.
+#
+# WHY SNAPSHOTS:
+#   Builds must never write to the cache. A build that mutates the clone leaves it dirty,
+#   which forces the next sync to re-checkout (and possibly re-smudge) files, and a build
+#   killed mid-cook can leave the clone in a state no later run detects. A snapshot is
+#   written once, verified, marked complete, and then only ever read.
 #
 # USAGE:
-#   sync-carla-content [--ref <branch>] [--target <path>] [--ssh-key <path>]
+#   sync-carla-content [options]
+#
+#   Prints the absolute path of the ready-to-mount snapshot on stdout. All progress goes
+#   to stderr, so the caller can capture the path directly:
+#
+#       CONTENT=$(sync-carla-content --ref ue5-dev)
 #
 # OPTIONS:
-#   --ref <branch>       Git ref to checkout (default: ue5-dev)
-#   --target <path>      Target directory for content (default: ~/carla-content)
-#   --ssh-key <path>     SSH deploy key (default: ~/.ssh/carla-content-deploy-key)
-#   --repo <url>         Repository URL (default: git@github.sncorp.com:CAT/carla-content.git)
-#   --force-reclone      Remove existing clone and start fresh
-#   --verify-only        Check if content is present and valid, exit without updating
+#   --ref <ref>            Git ref to materialise (default: ue5-dev)
+#   --cache-root <path>    Cache root (default: $CONTENT_CACHE_ROOT, else ~/carla-content)
+#   --ssh-key <path>       Deploy key (default: $CONTENT_SSH_KEY)
+#   --repo <url>           Repository URL (default: $CARLA_CONTENT_REPO)
+#   --keep <n>             Snapshots to retain, newest first (default: 3)
+#   --force-reclone        Discard the clone and start over (snapshots are kept)
+#   --force-resnapshot     Rebuild the snapshot for the target commit even if complete
+#   --verify-only          Report the current snapshot without contacting the remote
 #
 # ENVIRONMENT:
-#   CARLA_CONTENT_REPO   Override repository URL
-#   CARLA_CONTENT_REF    Override git ref
-#   CARLA_CONTENT_KEY    Override SSH key path
+#   CARLA_CONTENT_REPO, CARLA_CONTENT_REF, CONTENT_SSH_KEY, CONTENT_CACHE_ROOT
 #
 # EXIT CODES:
-#   0 - Success (content is ready)
-#   1 - General error
-#   2 - Invalid arguments
-#   3 - SSH key not found
-#   4 - Content verification failed
-#
-# EXAMPLES:
-#   # Initial clone (run once on runner setup)
-#   sync-carla-content
-#
-#   # Update to latest ue5-dev (run in workflow)
-#   sync-carla-content --ref ue5-dev
-#
-#   # Verify content is ready without updating
-#   sync-carla-content --verify-only
-#
-# DESIGN RATIONALE:
-#   - Persistent clone: Avoids re-downloading 43 GB on every workflow run
-#   - SSH key isolation: Credentials stored in runner home, not in workflow YAML
-#   - Atomic operations: Clone to temp, verify, then move (prevents partial states)
-#   - LFS caching: Git LFS objects are cached in .git/lfs, reused across checkouts
-#   - Volume mounting: Content directory is bind-mounted into containers at the
-#     same path, so Unreal Engine asset references work correctly
+#   0 success   1 general error   2 bad arguments   3 deploy key missing
+#   4 content verification failed   5 cache is locked by another process
 #
 
 set -euo pipefail
 
-# ── Defaults ────────────────────────────────────────────────────────────────
-ref="ue5-dev"
-target="${HOME}/carla-content"
-ssh_key="${HOME}/.ssh/carla-content-deploy-key"
-repo="git@github.sncorp.com:CAT/carla-content.git"
+# This script's only return value is the snapshot path, and callers capture it with
+# $(...). Subcommands print to stdout whether or not they were asked to -- `git reset`
+# reports the new HEAD, `git clean` names every file it removes -- and any of that would
+# be captured as part of the path. So stdout is redirected to stderr for the whole script
+# and the real stdout is kept as file descriptor 3; the path is written there and nowhere
+# else. Everything a subcommand prints is diagnostics by construction.
+exec 3>&1 1>&2
+
+ref="${CARLA_CONTENT_REF:-ue5-dev}"
+cache_root="${CONTENT_CACHE_ROOT:-$HOME/carla-content}"
+ssh_key="${CONTENT_SSH_KEY:-$HOME/.ssh/carla-content-deploy-key}"
+repo="${CARLA_CONTENT_REPO:-git@github.sncorp.com:CAT/carla-content.git}"
+keep=3
 force_reclone=0
+force_resnapshot=0
 verify_only=0
 
-# ── Parse arguments ─────────────────────────────────────────────────────────
+# A file that must exist and hold real content (not an LFS pointer) for a checkout to be
+# considered complete. It is part of the pedestrian skeleton assets; if it is missing the
+# cook fails much later with a null-skeleton crash, so it is worth checking up front.
+SENTINEL_REL="Static/Pedestrian/00_GenericComponents/Definitions/Skel_Pedestrian_G3.uasset"
+
+# Written into a snapshot only after it has been fully materialised and verified. Its
+# absence marks a snapshot as incomplete, so an interrupted run can never be reused.
+SNAPSHOT_MARKER=".content-complete"
+
 while [ $# -gt 0 ]; do
     case "$1" in
-        --ref)           ref="$2"; shift ;;
-        --ref=*)         ref="${1#*=}" ;;
-        --target)        target="$2"; shift ;;
-        --target=*)      target="${1#*=}" ;;
-        --ssh-key)       ssh_key="$2"; shift ;;
-        --ssh-key=*)     ssh_key="${1#*=}" ;;
-        --repo)          repo="$2"; shift ;;
-        --repo=*)        repo="${1#*=}" ;;
-        --force-reclone) force_reclone=1 ;;
-        --verify-only)   verify_only=1 ;;
+        --ref)               ref="$2"; shift ;;
+        --ref=*)             ref="${1#*=}" ;;
+        --cache-root)        cache_root="$2"; shift ;;
+        --cache-root=*)      cache_root="${1#*=}" ;;
+        --ssh-key)           ssh_key="$2"; shift ;;
+        --ssh-key=*)         ssh_key="${1#*=}" ;;
+        --repo)              repo="$2"; shift ;;
+        --repo=*)            repo="${1#*=}" ;;
+        --keep)              keep="$2"; shift ;;
+        --keep=*)            keep="${1#*=}" ;;
+        --force-reclone)     force_reclone=1 ;;
+        --force-resnapshot)  force_resnapshot=1 ;;
+        --verify-only)       verify_only=1 ;;
+        # Accepted for compatibility with the previous flat-clone interface, where the
+        # mounted directory and the clone were the same path.
+        --target)            cache_root="$2"; shift ;;
+        --target=*)          cache_root="${1#*=}" ;;
         -h|--help)
-            grep '^#' "$0" | grep -v '^#!/' | sed 's/^# \?//'
+            sed -n '2,60p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *) echo "Unknown argument: $1" >&2; exit 2 ;;
@@ -81,169 +114,249 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-# Environment variable overrides
-repo="${CARLA_CONTENT_REPO:-$repo}"
-ref="${CARLA_CONTENT_REF:-$ref}"
-ssh_key="${CARLA_CONTENT_KEY:-$ssh_key}"
+log() { echo "$@" >&2; }
 
-# ── Validation ──────────────────────────────────────────────────────────────
-# Verify SSH key exists and is readable. The deploy key must be installed on the
-# runner host before this script runs (typically during runner setup). The key
-# should have read-only access to the carla-content repository.
-if [ ! -f "$ssh_key" ]; then
-    echo "ERROR: SSH key not found: $ssh_key" >&2
-    echo "Install the carla-content deploy key before running this script." >&2
-    exit 3
+clone_dir="$cache_root/repo"
+snapshots_dir="$cache_root/snapshots"
+current_link="$cache_root/current"
+
+# A cache root that is itself a git clone is the old flat layout, which mounted the clone
+# straight into the build. Relocate it to repo/ so the snapshot layout applies instead of
+# re-downloading 43 GB. Done before the lock is taken, because the lock file lives inside
+# the directory being moved.
+if [ -d "$cache_root/.git" ] && [ ! -d "$clone_dir/.git" ]; then
+    log "Relocating the flat clone at $cache_root to $clone_dir ..."
+    staging="${cache_root}.relocating.$$"
+    mv "$cache_root" "$staging"
+    mkdir -p "$cache_root"
+    mv "$staging" "$clone_dir"
+    log "Relocation complete."
 fi
 
-if [ ! -r "$ssh_key" ]; then
-    echo "ERROR: SSH key not readable: $ssh_key" >&2
-    exit 3
+mkdir -p "$cache_root" "$snapshots_dir"
+
+# ── Serialise access ────────────────────────────────────────────────────────
+# Everything below mutates shared state. The runner is configured for a single
+# concurrent job, but a manual invocation during a build would otherwise be free to
+# checkout over a tree a build is reading. Fail fast rather than wait forever.
+if ! command -v flock >/dev/null 2>&1; then
+    # Checked separately so a missing util-linux is not reported as lock contention.
+    log "ERROR: flock is not installed; cannot serialise access to $cache_root"
+    log "       Install util-linux on the build host."
+    exit 1
 fi
 
-# Ensure target parent directory exists
-target_parent="$(dirname "$target")"
-mkdir -p "$target_parent"
+exec 9>"$cache_root/.lock"
+if ! flock -w 300 9; then
+    log "ERROR: another sync-carla-content holds the cache lock ($cache_root/.lock)"
+    exit 5
+fi
 
-# ── Git wrapper with SSH key ────────────────────────────────────────────────
-# Configures git to use the deploy key for authentication. Uses non-interactive
-# SSH to avoid host-key prompts in CI (StrictHostKeyChecking=no). This is safe
-# because we're only cloning from a known corporate GitHub Enterprise instance.
-git_with_key() {
-    GIT_SSH_COMMAND="ssh -i $ssh_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes" \
-        git "$@"
+git_ssh="ssh -i $ssh_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes"
+content_git() { GIT_SSH_COMMAND="$git_ssh" git "$@"; }
+
+is_lfs_pointer() {
+    # An LFS pointer is a small text file beginning with the spec URL. Reading the first
+    # bytes is enough and avoids loading a multi-megabyte asset. The prefix is captured
+    # into a variable rather than piped into grep: `set -o pipefail` would otherwise
+    # report the pipeline as failed when grep exits early and head takes SIGPIPE.
+    [ -f "$1" ] || return 1
+    local prefix
+    # Null bytes are stripped before the value reaches the shell: a real asset is binary,
+    # and bash warns "ignored null byte in input" on every command substitution that
+    # carries one. The pointer header is plain ASCII, so removing nulls cannot hide it.
+    prefix="$(head -c 45 "$1" 2>/dev/null | tr -d '\0' || true)"
+    case "$prefix" in
+        'version https://git-lfs.github.com/spec/v1'*) return 0 ;;
+        *) return 1 ;;
+    esac
 }
 
-# ── Verify-only mode ────────────────────────────────────────────────────────
-# Check if content exists and is valid without performing any updates. Used by
-# workflows to fail fast if content is missing before starting expensive builds.
+verify_tree() {
+    # A tree is usable when the sentinel exists, is non-empty, and has been smudged
+    # from its LFS pointer into the real asset.
+    local dir="$1" sentinel="$1/$SENTINEL_REL"
+    if [ ! -s "$sentinel" ]; then
+        log "ERROR: content incomplete -- missing or empty: ${sentinel#$cache_root/}"
+        return 1
+    fi
+    if is_lfs_pointer "$sentinel"; then
+        log "ERROR: content incomplete -- sentinel is still a Git LFS pointer: ${sentinel#$cache_root/}"
+        return 1
+    fi
+    return 0
+}
+
+publish() {
+    # Repoint `current` atomically: create the new symlink under a temporary name and
+    # rename it over the old one, so a reader never observes a missing link.
+    local snapshot="$1"
+    ln -sfn "$snapshot" "$current_link.new"
+    mv -Tf "$current_link.new" "$current_link"
+    log ""
+    log "Content ready:"
+    log "  Snapshot: $snapshot"
+    log "  Ref:      $ref"
+    printf '%s\n' "$snapshot" >&3
+}
+
+# ── Adopt a clone from an earlier cache layout ──────────────────────────────
+# Earlier revisions kept a single flat clone -- at the cache root itself, or at
+# ~/carla-content before the caches were gathered under one root -- and mounted it
+# directly into the build. Adopt it as the working clone rather than re-downloading 43 GB.
+# Every candidate is under the same home directory, so these are renames, not copies.
+if [ ! -d "$clone_dir/.git" ]; then
+    for legacy in "$HOME/carla-content" "/home/$(id -un)/carla-content"; do
+        if [ -d "$legacy/.git" ] && [ "$legacy" != "$clone_dir" ] && [ "$legacy" != "$cache_root" ]; then
+            log "Adopting the clone at $legacy as $clone_dir ..."
+            mv "$legacy" "$clone_dir"
+            log "Migration complete."
+            break
+        fi
+    done
+fi
+
+# ── Verify-only ─────────────────────────────────────────────────────────────
 if [ "$verify_only" = "1" ]; then
-    echo "Verifying content at: $target"
-    
-    if [ ! -d "$target/.git" ]; then
-        echo "ERROR: Content directory does not exist or is not a git repository" >&2
+    if [ ! -L "$current_link" ]; then
+        log "ERROR: no published snapshot at $current_link"
         exit 4
     fi
-    
-    # Check if we're on the expected ref
-    current_ref=$(cd "$target" && git rev-parse --abbrev-ref HEAD)
-    if [ "$current_ref" != "$ref" ]; then
-        echo "WARNING: Content is on ref '$current_ref', expected '$ref'" >&2
-    fi
-    
-    # Verify sentinel file exists (basic content completeness check)
-    # This file is part of the pedestrian skeleton assets and should always be present
-    sentinel="$target/Static/Pedestrian/00_GenericComponents/Definitions/Skel_Pedestrian_G3.uasset"
-    if [ ! -f "$sentinel" ]; then
-        echo "ERROR: Content appears incomplete (sentinel file missing: $sentinel)" >&2
+    snapshot="$(readlink -f "$current_link")"
+    if [ ! -f "$snapshot/$SNAPSHOT_MARKER" ]; then
+        log "ERROR: published snapshot is not marked complete: $snapshot"
         exit 4
     fi
-    
-    echo "Content verification passed"
-    echo "Location: $target"
-    echo "Ref: $current_ref"
+    verify_tree "$snapshot" || exit 4
+    log "Content verification passed"
+    printf '%s\n' "$snapshot" >&3
     exit 0
 fi
 
-# ── Force reclone ───────────────────────────────────────────────────────────
-# Remove existing clone if requested. Useful for recovering from corruption or
-# switching to a different repository URL.
-if [ "$force_reclone" = "1" ] && [ -d "$target" ]; then
-    echo "Removing existing clone: $target"
-    rm -rf "$target"
+# ── Deploy key ──────────────────────────────────────────────────────────────
+if [ ! -r "$ssh_key" ]; then
+    log "ERROR: carla-content deploy key not found or not readable: $ssh_key"
+    log "       Install the read-only deploy key before running this script."
+    exit 3
 fi
 
-# ── Clone or update ─────────────────────────────────────────────────────────
-if [ ! -d "$target/.git" ]; then
-    # INITIAL CLONE: Repository doesn't exist yet. Clone to a temporary location
-    # first, then move atomically to prevent partial clones from being used.
-    # Git LFS objects are NOT downloaded during clone (GIT_LFS_SKIP_SMUDGE=1),
-    # we'll fetch them separately after the clone succeeds.
-    
-    echo "Cloning carla-content repository..."
-    echo "  Repository: $repo"
-    echo "  Target: $target"
-    echo "  Ref: $ref"
-    
-    temp_clone="${target}.tmp.$$"
-    trap "rm -rf '$temp_clone'" EXIT
-    
-    # Clone without LFS objects (pointer files only). This is much faster and
-    # allows us to verify the clone succeeded before downloading 43 GB of LFS data.
-    echo "Cloning repository structure (LFS objects will be fetched separately)..."
-    GIT_LFS_SKIP_SMUDGE=1 git_with_key clone --branch "$ref" "$repo" "$temp_clone"
-    
-    # Fetch LFS objects. This downloads the actual binary files (vehicles, maps, etc.)
-    # from the LFS server. The objects are cached in .git/lfs/objects and reused
-    # across checkouts, so subsequent ref changes don't re-download everything.
-    echo "Fetching LFS objects (this may take several minutes on first run)..."
-    (
-        cd "$temp_clone"
-        # Use the same SSH key for LFS authentication
-        GIT_SSH_COMMAND="ssh -i $ssh_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes" \
-            git lfs pull
-    )
-    
-    # Verify a sentinel file exists to confirm LFS pull succeeded
-    sentinel="$temp_clone/Static/Pedestrian/00_GenericComponents/Definitions/Skel_Pedestrian_G3.uasset"
-    if [ ! -f "$sentinel" ]; then
-        echo "ERROR: LFS pull appears incomplete (sentinel file missing: $sentinel)" >&2
-        exit 4
+if [ "$force_reclone" = "1" ] && [ -d "$clone_dir" ]; then
+    log "Discarding existing clone (--force-reclone): $clone_dir"
+    rm -rf "$clone_dir"
+fi
+
+# ── Fast path: is the wanted commit already snapshotted? ────────────────────
+# The repository changes rarely, so on almost every build the answer is yes. Resolving
+# the ref with ls-remote costs one round trip and lets us skip the fetch, the checkout
+# and the full LFS scan entirely.
+target_commit=""
+if [ -d "$clone_dir/.git" ]; then
+    log "Resolving $ref on the remote ..."
+    remote_line="$(content_git ls-remote "$repo" "refs/heads/$ref" || true)"
+    target_commit="$(printf '%s' "$remote_line" | awk 'NR==1{print $1}')"
+
+    if [ -n "$target_commit" ] && [ "$force_resnapshot" = "0" ]; then
+        snapshot="$snapshots_dir/$target_commit"
+        # Re-verify rather than trusting the marker alone. The check costs one stat and a
+        # 45-byte read, and it is the only thing standing between a snapshot damaged out of
+        # band and a cook that fails hours later with an unrelated-looking error.
+        if [ -f "$snapshot/$SNAPSHOT_MARKER" ] && verify_tree "$snapshot"; then
+            log "Snapshot for $target_commit is already materialised; nothing to do."
+            publish "$snapshot"
+            exit 0
+        fi
     fi
-    
-    # Atomic move: only make the clone visible if everything succeeded
-    mv "$temp_clone" "$target"
+fi
+
+# ── Clone or update the working clone ───────────────────────────────────────
+if [ ! -d "$clone_dir/.git" ]; then
+    log "Cloning carla-content ..."
+    log "  Repository: $repo"
+    log "  Ref:        $ref"
+
+    # Clone pointers first so a failure is cheap, then pull the LFS payload separately.
+    staging="$clone_dir.tmp.$$"
+    trap 'rm -rf "$staging"' EXIT
+    GIT_LFS_SKIP_SMUDGE=1 content_git clone --branch "$ref" "$repo" "$staging"
+
+    log "Fetching LFS objects (first run downloads the full ~43 GB) ..."
+    ( cd "$staging" && GIT_SSH_COMMAND="$git_ssh" git lfs pull )
+
+    verify_tree "$staging" || exit 4
+    mv "$staging" "$clone_dir"
     trap - EXIT
-    
-    echo "Clone complete: $target"
-    
+    log "Clone complete."
 else
-    # UPDATE EXISTING CLONE: Repository already exists. Fetch latest changes and
-    # checkout the requested ref. Git LFS objects for the new ref are pulled
-    # automatically if they're not already cached.
-    
-    echo "Updating existing carla-content repository..."
-    echo "  Location: $target"
-    echo "  Ref: $ref"
-    
-    cd "$target"
-    
-    # Fetch all refs from remote (doesn't modify working tree)
-    echo "Fetching updates from remote..."
-    git_with_key fetch --all --prune
-    
-    # Checkout the requested ref. If it's a branch, this will move to the latest
-    # commit we just fetched. If it's a tag or commit SHA, it will checkout that
-    # specific version.
-    echo "Checking out ref: $ref"
-    git_with_key checkout "$ref"
-    
-    # If we're on a branch, pull to fast-forward to the latest commit
-    if git rev-parse --abbrev-ref HEAD | grep -qv '^HEAD$'; then
-        echo "Pulling latest changes..."
-        git_with_key pull --ff-only
-    fi
-    
-    # Pull any new LFS objects needed for this ref. Git LFS is smart about this:
-    # it only downloads objects that aren't already in .git/lfs/objects.
-    echo "Updating LFS objects..."
-    GIT_SSH_COMMAND="ssh -i $ssh_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes" \
-        git lfs pull
-    
-    echo "Update complete"
+    # A job killed mid-sync leaves git lock files behind, which make every later run fail.
+    # Removing them is only safe because the cache lock above proves no other git process
+    # is working in this clone -- never remove a git lock without that guarantee.
+    for stale in index.lock HEAD.lock config.lock packed-refs.lock shallow.lock; do
+        if [ -e "$clone_dir/.git/$stale" ]; then
+            log "Removing stale git lock left by an interrupted run: .git/$stale"
+            rm -f "$clone_dir/.git/$stale"
+        fi
+    done
+
+    log "Updating clone at $clone_dir ..."
+    content_git -C "$clone_dir" fetch --prune origin "$ref"
+
+    # The clone is only ever written by this script, so any local modification is
+    # leftover damage rather than intentional work; discard it. Ignored files are left
+    # alone deliberately (-x is omitted) so the LFS object store under .git survives.
+    content_git -C "$clone_dir" reset --hard "FETCH_HEAD"
+    content_git -C "$clone_dir" clean -ffd
+
+    log "Updating LFS objects ..."
+    ( cd "$clone_dir" && GIT_SSH_COMMAND="$git_ssh" git lfs pull )
+
+    verify_tree "$clone_dir" || exit 4
+    log "Update complete."
 fi
 
-# ── Summary ─────────────────────────────────────────────────────────────────
-current_commit=$(cd "$target" && git rev-parse HEAD)
-current_ref=$(cd "$target" && git rev-parse --abbrev-ref HEAD)
-lfs_count=$(cd "$target" && git lfs ls-files | wc -l)
+target_commit="$(git -C "$clone_dir" rev-parse HEAD)"
 
-echo ""
-echo "Content ready:"
-echo "  Location: $target"
-echo "  Ref: $current_ref"
-echo "  Commit: $current_commit"
-echo "  LFS objects: $lfs_count"
-echo ""
-echo "To use in a container, volume-mount this directory:"
-echo "  podman run -v $target:/path/in/container:ro ..."
+# ── Materialise the snapshot ────────────────────────────────────────────────
+snapshot="$snapshots_dir/$target_commit"
+
+if [ -f "$snapshot/$SNAPSHOT_MARKER" ] && [ "$force_resnapshot" = "0" ]; then
+    log "Snapshot already materialised: $snapshot"
+else
+    log "Materialising snapshot for $target_commit ..."
+    rm -rf "$snapshot" "$snapshot.tmp"
+    mkdir -p "$snapshot.tmp"
+
+    # Hardlink rather than copy. The snapshot shares inodes with the clone until git
+    # replaces a file, at which point the snapshot keeps the old inode. Disk cost is
+    # therefore the delta between snapshots, not a full 43 GB per snapshot.
+    find "$clone_dir" -mindepth 1 -maxdepth 1 ! -name '.git' -exec cp -al -t "$snapshot.tmp" {} +
+
+    verify_tree "$snapshot.tmp" || { rm -rf "$snapshot.tmp"; exit 4; }
+
+    printf 'commit %s\nref %s\n' "$target_commit" "$ref" > "$snapshot.tmp/$SNAPSHOT_MARKER"
+    mv "$snapshot.tmp" "$snapshot"
+    log "Snapshot ready: $snapshot"
+fi
+
+# ── Prune old snapshots ─────────────────────────────────────────────────────
+# Keep the newest few so a build can be reproduced against recent content, and so a bad
+# content commit can be rolled back by repointing `current` by hand.
+if [ "$keep" -gt 0 ]; then
+    # Sweep interrupted materialisations first. They are otherwise invisible, hold disk,
+    # and -- because they are the newest directories present -- would each consume one of
+    # the retention slots meant for a complete snapshot.
+    find "$snapshots_dir" -mindepth 1 -maxdepth 1 -name '*.tmp' -type d -exec rm -rf {} + 2>/dev/null || true
+
+    mapfile -t all_snapshots < <(find "$snapshots_dir" -mindepth 1 -maxdepth 1 -type d ! -name '*.tmp' \
+        -printf '%T@ %p\n' | sort -rn | awk '{print $2}')
+
+    index=0
+    for candidate in "${all_snapshots[@]}"; do
+        index=$((index + 1))
+        [ "$index" -le "$keep" ] && continue
+        [ "$candidate" = "$snapshot" ] && continue
+        log "Pruning old snapshot: $(basename "$candidate")"
+        rm -rf "$candidate"
+    done
+fi
+
+publish "$snapshot"

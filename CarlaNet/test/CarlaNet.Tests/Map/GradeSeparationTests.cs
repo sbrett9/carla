@@ -1,0 +1,796 @@
+// Offline tests for the grade-separation elevation routing — CarlaNet.Map.OpenDrive.OsmRoadLayers
+// and GradeSeparation.
+//
+// The defect they pin down: a vertical sample of a photogrammetric surface returns the SAME height
+// for a bridge deck and for the road passing beneath it, so a single-surface pipeline either lifts
+// the lower road onto the deck or drops the deck onto the ground. The fixture below is the smallest
+// map that reproduces it — one road crossing another with no shared node, and a surface that reads
+// high over BOTH of them — so a test that passes cannot be passing by accident.
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Text;
+using CarlaNet.Map.OpenDrive;
+using CarlaNet.Types.Geom;
+using RoadMap = CarlaNet.Map.Road.Map;
+
+namespace CarlaNet.Tests.Map;
+
+public class GradeSeparationTests
+{
+    // Two straight roads crossing at the origin: road 1 runs East over 100 m, road 2 runs North over
+    // 100 m. planView is +Y=North, so road 2's heading is pi/2 and its CARLA Y is negated.
+    private const string CrossingXodr =
+@"<?xml version=""1.0"" standalone=""yes""?>
+<OpenDRIVE>
+  <header revMajor=""1"" revMinor=""4"" name="""" version=""1.00"" date="""" north=""0"" south=""0"" east=""0"" west=""0"" vendor=""test"">
+    <geoReference><![CDATA[+proj=tmerc +lat_0=41.94813 +lon_0=-87.65593 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs]]></geoReference>
+  </header>
+  <road name=""deck"" length=""100.0"" id=""1"" junction=""-1"">
+    <planView>
+      <geometry s=""0.0"" x=""-50.0"" y=""0.0"" hdg=""0.0"" length=""100.0""><line/></geometry>
+    </planView>
+    <lanes><laneSection s=""0.0"">
+      <center><lane id=""0"" type=""driving"" level=""false""/></center>
+      <right><lane id=""-1"" type=""driving"" level=""false""><width sOffset=""0.0"" a=""3.5"" b=""0.0"" c=""0.0"" d=""0.0""/></lane></right>
+    </laneSection></lanes>
+  </road>
+  <road name=""under"" length=""100.0"" id=""2"" junction=""-1"">
+    <planView>
+      <geometry s=""0.0"" x=""0.0"" y=""-50.0"" hdg=""1.5707963267948966"" length=""100.0""><line/></geometry>
+    </planView>
+    <lanes><laneSection s=""0.0"">
+      <center><lane id=""0"" type=""driving"" level=""false""/></center>
+      <right><lane id=""-1"" type=""driving"" level=""false""><width sOffset=""0.0"" a=""3.5"" b=""0.0"" c=""0.0"" d=""0.0""/></lane></right>
+    </laneSection></lanes>
+  </road>
+</OpenDRIVE>";
+
+    // The same crossing, but the road running under the deck is cut into three, as netconvert does
+    // around a junction: road 3 lies WHOLLY inside the deck footprint, with no end outside it.
+    private const string SplitUnderRoadXodr =
+@"<?xml version=""1.0"" standalone=""yes""?>
+<OpenDRIVE>
+  <header revMajor=""1"" revMinor=""4"" name="""" version=""1.00"" date="""" north=""0"" south=""0"" east=""0"" west=""0"" vendor=""test"">
+    <geoReference><![CDATA[+proj=tmerc +lat_0=41.94813 +lon_0=-87.65593 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs]]></geoReference>
+  </header>
+  <road name=""deck"" length=""100.0"" id=""1"" junction=""-1"">
+    <planView><geometry s=""0.0"" x=""-50.0"" y=""0.0"" hdg=""0.0"" length=""100.0""><line/></geometry></planView>
+    <lanes><laneSection s=""0.0""><center><lane id=""0"" type=""driving"" level=""false""/></center>
+      <right><lane id=""-1"" type=""driving"" level=""false""><width sOffset=""0.0"" a=""3.5"" b=""0.0"" c=""0.0"" d=""0.0""/></lane></right>
+    </laneSection></lanes>
+  </road>
+  <road name=""approach"" length=""40.0"" id=""2"" junction=""-1"">
+    <planView><geometry s=""0.0"" x=""0.0"" y=""-50.0"" hdg=""1.5707963267948966"" length=""40.0""><line/></geometry></planView>
+    <lanes><laneSection s=""0.0""><center><lane id=""0"" type=""driving"" level=""false""/></center>
+      <right><lane id=""-1"" type=""driving"" level=""false""><width sOffset=""0.0"" a=""3.5"" b=""0.0"" c=""0.0"" d=""0.0""/></lane></right>
+    </laneSection></lanes>
+  </road>
+  <road name=""beneath"" length=""20.0"" id=""3"" junction=""7"">
+    <planView><geometry s=""0.0"" x=""0.0"" y=""-10.0"" hdg=""1.5707963267948966"" length=""20.0""><line/></geometry></planView>
+    <lanes><laneSection s=""0.0""><center><lane id=""0"" type=""driving"" level=""false""/></center>
+      <right><lane id=""-1"" type=""driving"" level=""false""><width sOffset=""0.0"" a=""3.5"" b=""0.0"" c=""0.0"" d=""0.0""/></lane></right>
+    </laneSection></lanes>
+  </road>
+  <road name=""departure"" length=""40.0"" id=""4"" junction=""-1"">
+    <planView><geometry s=""0.0"" x=""0.0"" y=""10.0"" hdg=""1.5707963267948966"" length=""40.0""><line/></geometry></planView>
+    <lanes><laneSection s=""0.0""><center><lane id=""0"" type=""driving"" level=""false""/></center>
+      <right><lane id=""-1"" type=""driving"" level=""false""><width sOffset=""0.0"" a=""3.5"" b=""0.0"" c=""0.0"" d=""0.0""/></lane></right>
+    </laneSection></lanes>
+  </road>
+</OpenDRIVE>";
+
+    private const double GroundHeight = 100.0;
+
+    // The photoreal sits slightly BELOW bare earth on open ground — measured at -0.82 m over 4218
+    // road samples at Arapahoe Ave / I-25. Using the real sign here keeps the tests honest about
+    // clearance being measured against that baseline rather than against zero.
+    private const double SystematicOffset = -0.8;
+
+    private static RoadMap LoadCrossing()
+        => OpenDriveParser.Load(CrossingXodr) ?? throw new Exception(".xodr failed to parse");
+
+    // ── OSM fixture ──────────────────────────────────────────────────────────
+
+    private sealed record WaySpec(string Id, (double X, double Y)[] Points, params (string K, string V)[] Tags);
+
+    // Writes a temporary .osm whose way vertices land on the given CARLA world coordinates.
+    private static string WriteOsm(GeoLocation origin, params WaySpec[] ways)
+    {
+        var xml = new StringBuilder();
+        xml.AppendLine(@"<?xml version=""1.0"" encoding=""UTF-8""?>");
+        xml.AppendLine(@"<osm version=""0.6"">");
+        xml.AppendLine(@"  <bounds minlat=""41.9"" minlon=""-87.7"" maxlat=""42.0"" maxlon=""-87.6""/>");
+
+        int nodeId = 1000;
+        var nodeIdsPerWay = new List<List<int>>();
+        foreach (var way in ways)
+        {
+            var ids = new List<int>();
+            foreach (var (x, y) in way.Points)
+            {
+                var g = Geodesy.CarlaLocalToGeodetic(origin, x, y, 0.0);
+                xml.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                    @"  <node id=""{0}"" lat=""{1:R}"" lon=""{2:R}"" version=""1""/>",
+                    nodeId, g.Latitude, g.Longitude));
+                ids.Add(nodeId++);
+            }
+            nodeIdsPerWay.Add(ids);
+        }
+
+        for (int i = 0; i < ways.Length; ++i)
+        {
+            xml.AppendLine($@"  <way id=""{ways[i].Id}"" version=""1"">");
+            foreach (int id in nodeIdsPerWay[i])
+                xml.AppendLine($@"    <nd ref=""{id}""/>");
+            foreach (var (k, v) in ways[i].Tags)
+                xml.AppendLine($@"    <tag k=""{k}"" v=""{v}""/>");
+            xml.AppendLine(@"  </way>");
+        }
+        xml.AppendLine("</osm>");
+
+        var path = Path.Combine(Path.GetTempPath(), $"carlanet_layers_{Guid.NewGuid():N}.osm");
+        File.WriteAllText(path, xml.ToString());
+        return path;
+    }
+
+    private static T WithOsm<T>(GeoLocation origin, WaySpec[] ways, Func<string, T> body)
+    {
+        string path = WriteOsm(origin, ways);
+        try { return body(path); }
+        finally { try { File.Delete(path); } catch { /* temp cleanup is best effort */ } }
+    }
+
+    // Way A runs East through the origin (the deck); way B runs North through it (the road under).
+    // They share no node, which is exactly how OSM records a grade separation.
+    private static WaySpec[] CrossingWays(params (string K, string V)[] deckTags) =>
+    [
+        new WaySpec("100", [(-60.0, 0.0), (60.0, 0.0)], deckTags),
+        new WaySpec("200", [(0.0, -60.0), (0.0, 60.0)], ("highway", "primary")),
+    ];
+
+    // ── layer classification ─────────────────────────────────────────────────
+
+    [Fact]
+    public void Layer_ComesFromTags_WithBridgeAndTunnelSupplyingDirection()
+    {
+        var origin = new GeoLocation(41.94813, -87.65593, 0.0);
+        var ways = new[]
+        {
+            new WaySpec("1", [(0.0, 0.0), (50.0, 0.0)], ("highway", "primary"), ("bridge", "yes")),
+            new WaySpec("2", [(0.0, 20.0), (50.0, 20.0)], ("highway", "primary"), ("layer", "2")),
+            new WaySpec("3", [(0.0, 40.0), (50.0, 40.0)], ("highway", "primary"), ("tunnel", "yes")),
+            new WaySpec("4", [(0.0, 60.0), (50.0, 60.0)], ("highway", "primary"), ("bridge", "no")),
+            new WaySpec("5", [(0.0, 80.0), (50.0, 80.0)], ("highway", "primary")),
+            // An explicit layer outranks the bridge tag: that is the only tag that can order more
+            // than two levels, which is what a stacked interchange needs.
+            new WaySpec("6", [(0.0, 100.0), (50.0, 100.0)], ("highway", "primary"), ("bridge", "yes"), ("layer", "3")),
+        };
+
+        var parsed = WithOsm(origin, ways, p => OsmRoadLayers.ParseRoadWays(p, origin));
+        var byId = parsed.ToDictionary(w => w.Id, w => w);
+
+        Assert.Equal(1, byId["1"].Layer);
+        Assert.True(byId["1"].IsBridge);
+        Assert.Equal(2, byId["2"].Layer);
+        Assert.Equal(-1, byId["3"].Layer);
+        Assert.True(byId["3"].IsTunnel);
+        Assert.Equal(0, byId["4"].Layer);
+        Assert.False(byId["4"].IsBridge);
+        Assert.Equal(0, byId["5"].Layer);
+        Assert.Equal(3, byId["6"].Layer);
+    }
+
+    [Fact]
+    public void Layer_BuildingPassageIsNotATunnel()
+    {
+        // A way threading under a building is still on the ground, so sinking it by a tunnel depth
+        // would be wrong.
+        var origin = new GeoLocation(41.94813, -87.65593, 0.0);
+        var ways = new[]
+        {
+            new WaySpec("1", [(0.0, 0.0), (50.0, 0.0)],
+                ("highway", "service"), ("tunnel", "building_passage")),
+        };
+
+        var parsed = WithOsm(origin, ways, p => OsmRoadLayers.ParseRoadWays(p, origin));
+        Assert.Equal(0, parsed[0].Layer);
+        Assert.False(parsed[0].IsTunnel);
+    }
+
+    [Fact]
+    public void ParseRoadWays_KeepsOnlyDrivableWays_AndProjectsThem()
+    {
+        var origin = new GeoLocation(41.94813, -87.65593, 0.0);
+        var ways = new[]
+        {
+            new WaySpec("1", [(0.0, 0.0), (100.0, 0.0)], ("highway", "residential")),
+            new WaySpec("2", [(0.0, 10.0), (100.0, 10.0)], ("highway", "footway")),
+            new WaySpec("3", [(0.0, 20.0), (100.0, 20.0)], ("railway", "rail")),
+        };
+
+        var parsed = WithOsm(origin, ways, p => OsmRoadLayers.ParseRoadWays(p, origin));
+
+        Assert.Single(parsed);
+        Assert.Equal("1", parsed[0].Id);
+        // Round-tripping through WGS84 and back must land on the coordinates the way was written at.
+        Assert.Equal(0.0, parsed[0].X[0], 2);
+        Assert.Equal(100.0, parsed[0].X[1], 2);
+        Assert.Equal(0.0, parsed[0].Y[0], 2);
+        Assert.Equal(100.0, parsed[0].Length, 2);
+    }
+
+    // ── crossing detection ───────────────────────────────────────────────────
+
+    [Fact]
+    public void Crossing_IsFound_WhenWaysIntersectWithNoSharedNode()
+    {
+        var origin = new GeoLocation(41.94813, -87.65593, 0.0);
+        var layers = WithOsm(origin, CrossingWays(("highway", "motorway"), ("bridge", "yes")),
+            p => OsmRoadLayers.Read(p, origin));
+
+        Assert.Single(layers.Crossings);
+        var crossing = layers.Crossings[0];
+        Assert.Equal(0.0, crossing.X, 2);
+        Assert.Equal(0.0, crossing.Y, 2);
+
+        // The lower-layer way is the one that must stay on bare earth.
+        var under = layers.WaysPassingUnder();
+        Assert.Single(under);
+        Assert.Equal("200", layers.Ways[under.Single()].Id);
+    }
+
+    [Fact]
+    public void Crossing_IsNotReported_WhenTheWaysShareANode()
+    {
+        // A shared node is a junction: the two roads meet at grade, so this must not be read as a
+        // grade separation however the ways are tagged.
+        var origin = new GeoLocation(41.94813, -87.65593, 0.0);
+        string path = Path.Combine(Path.GetTempPath(), $"carlanet_layers_{Guid.NewGuid():N}.osm");
+        var mid = Geodesy.CarlaLocalToGeodetic(origin, 0.0, 0.0, 0.0);
+        var west = Geodesy.CarlaLocalToGeodetic(origin, -60.0, 0.0, 0.0);
+        var east = Geodesy.CarlaLocalToGeodetic(origin, 60.0, 0.0, 0.0);
+        var south = Geodesy.CarlaLocalToGeodetic(origin, 0.0, 60.0, 0.0);
+        var north = Geodesy.CarlaLocalToGeodetic(origin, 0.0, -60.0, 0.0);
+
+        string N(int id, GeoLocation g) => string.Format(CultureInfo.InvariantCulture,
+            @"<node id=""{0}"" lat=""{1:R}"" lon=""{2:R}"" version=""1""/>", id, g.Latitude, g.Longitude);
+        File.WriteAllText(path,
+            $@"<?xml version=""1.0""?><osm version=""0.6"">
+              <bounds minlat=""41.9"" minlon=""-87.7"" maxlat=""42.0"" maxlon=""-87.6""/>
+              {N(1, west)}{N(2, mid)}{N(3, east)}{N(4, south)}{N(5, north)}
+              <way id=""100"" version=""1""><nd ref=""1""/><nd ref=""2""/><nd ref=""3""/>
+                <tag k=""highway"" v=""primary""/></way>
+              <way id=""200"" version=""1""><nd ref=""4""/><nd ref=""2""/><nd ref=""5""/>
+                <tag k=""highway"" v=""primary""/></way>
+            </osm>");
+        try
+        {
+            var layers = OsmRoadLayers.Read(path, origin);
+            Assert.Equal(2, layers.Ways.Count);
+            Assert.Empty(layers.Crossings);
+        }
+        finally { try { File.Delete(path); } catch { /* temp cleanup is best effort */ } }
+    }
+
+    [Fact]
+    public void Crossing_IsNotReported_WhenBoundsOverlapButTheWaysDoNotMeet()
+    {
+        var origin = new GeoLocation(41.94813, -87.65593, 0.0);
+        var ways = new[]
+        {
+            new WaySpec("100", [(-60.0, 0.0), (-10.0, 0.0)], ("highway", "primary")),
+            new WaySpec("200", [(-30.0, -60.0), (-30.0, -5.0)], ("highway", "primary")),
+        };
+
+        var layers = WithOsm(origin, ways, p => OsmRoadLayers.Read(p, origin));
+        Assert.Empty(layers.Crossings);
+    }
+
+    // ── elevation routing ────────────────────────────────────────────────────
+
+    // Bare earth is flat; the photoreal reads 5 m higher over a 60 m square centred on the crossing,
+    // which is what a deck does to a top-down sample — it raises the reading for the road passing
+    // underneath just as much as for the deck itself.
+    private static void BuildSurfaces(
+        IReadOnlyList<CenterlineSample> samples, out double[] surface, out double[] ground)
+    {
+        surface = new double[samples.Count];
+        ground = new double[samples.Count];
+        for (int i = 0; i < samples.Count; ++i)
+        {
+            ground[i] = GroundHeight;
+            bool overStructure = Math.Abs(samples[i].X) <= 30.0 && Math.Abs(samples[i].Y) <= 30.0;
+            surface[i] = overStructure ? GroundHeight + 5.0 : GroundHeight + SystematicOffset;
+        }
+    }
+
+    [Fact]
+    public void Deck_TakesItsClearanceFromTheSurface_AndTheRoadUnderneathStaysAtGrade()
+    {
+        var map = LoadCrossing();
+        var origin = map.GeoReference;
+        var samples = ElevationInjector.ExtractCenterlineSamples(map, 10.0);
+        BuildSurfaces(samples, out var surface, out var ground);
+
+        var result = WithOsm(origin, CrossingWays(("highway", "motorway"), ("bridge", "yes")),
+            p => GradeSeparation.Compute(map, samples, OsmRoadLayers.Read(p, origin),
+                surface, ground, SystematicOffset));
+
+        Assert.Single(result.ElevatedWays);
+        Assert.Equal(1, result.StructuresFromSurface);
+        Assert.Equal(0, result.StructuresFromFallback);
+
+        // Clearance = surface - bare earth - the systematic offset = 5.0 + 0.8.
+        const double expectedLift = 5.0 - SystematicOffset;
+        for (int i = 0; i < samples.Count; ++i)
+        {
+            bool nearCrossing = Math.Abs(samples[i].X) <= 30.0 && Math.Abs(samples[i].Y) <= 30.0;
+            if (samples[i].RoadId == 1u && nearCrossing)
+                Assert.Equal(expectedLift, result.Lift[i], 3);   // the deck rides the structure
+            else if (samples[i].RoadId == 2u)
+                Assert.Equal(0.0, result.Lift[i], 6);            // the road under it does not
+        }
+    }
+
+    [Fact]
+    public void NoLayeredWays_LeavesEveryRoadAtGrade()
+    {
+        // Without a layer tag the extract records no vertical structure, so the surface reading over
+        // the crossing must be ignored rather than guessed at. This is what keeps every existing
+        // generated map byte-for-byte unchanged.
+        var map = LoadCrossing();
+        var origin = map.GeoReference;
+        var samples = ElevationInjector.ExtractCenterlineSamples(map, 10.0);
+        BuildSurfaces(samples, out var surface, out var ground);
+
+        var result = WithOsm(origin, CrossingWays(("highway", "motorway")),
+            p => GradeSeparation.Compute(map, samples, OsmRoadLayers.Read(p, origin),
+                surface, ground, SystematicOffset));
+
+        Assert.True(result.IsEmpty);
+        Assert.All(result.Lift, v => Assert.Equal(0.0, v, 9));
+    }
+
+    [Fact]
+    public void UnreconstructedStructure_FallsBackToTheFixedSeparation_OnlyWhereSomethingCrosses()
+    {
+        // The photoreal is flat everywhere, so there is nothing to measure. A deck over a crossing
+        // still has to clear the road beneath it; a deck with nothing under it is left alone rather
+        // than lifted on faith.
+        var map = LoadCrossing();
+        var origin = map.GeoReference;
+        var samples = ElevationInjector.ExtractCenterlineSamples(map, 10.0);
+        var flatSurface = new double[samples.Count];
+        var ground = new double[samples.Count];
+        for (int i = 0; i < samples.Count; ++i)
+        {
+            ground[i] = GroundHeight;
+            flatSurface[i] = GroundHeight + SystematicOffset;
+        }
+
+        var crossed = WithOsm(origin, CrossingWays(("highway", "motorway"), ("bridge", "yes")),
+            p => GradeSeparation.Compute(map, samples, OsmRoadLayers.Read(p, origin),
+                flatSurface, ground, SystematicOffset));
+
+        Assert.Equal(1, crossed.StructuresFromFallback);
+        Assert.Equal(0, crossed.StructuresFromSurface);
+        Assert.Equal(5.0, crossed.MaxLiftMeters, 3);
+
+        // Same deck, but the way it used to cross is moved clear of it.
+        var isolated = new WaySpec[]
+        {
+            new("100", [(-60.0, 0.0), (60.0, 0.0)], ("highway", "motorway"), ("bridge", "yes")),
+            new("200", [(-200.0, -60.0), (-200.0, 60.0)], ("highway", "primary")),
+        };
+        var alone = WithOsm(origin, isolated,
+            p => GradeSeparation.Compute(map, samples, OsmRoadLayers.Read(p, origin),
+                flatSurface, ground, SystematicOffset));
+
+        Assert.Equal(0, alone.StructuresFromFallback);
+        Assert.All(alone.Lift, v => Assert.Equal(0.0, v, 9));
+    }
+
+    [Fact]
+    public void ApproachRamp_SeedsFromTheDeckEnd_NotFromMidSpan()
+    {
+        // A deck way whose end node the road network does not reach must not seed an approach ramp:
+        // the nearest sample to that node is then somewhere out along the span, and starting the
+        // approach at mid-span height drives the road connected there several metres into the air.
+        // Here the deck way runs far past the sampled road, so its far node has no support.
+        var map = LoadCrossing();
+        var origin = map.GeoReference;
+        var samples = ElevationInjector.ExtractCenterlineSamples(map, 10.0);
+        BuildSurfaces(samples, out var surface, out var ground);
+
+        var overshootingDeck = new WaySpec[]
+        {
+            // The deck is sampled only over x in [-50, 50]; its east node sits 150 m beyond that.
+            new("100", [(-60.0, 0.0), (200.0, 0.0)], ("highway", "motorway"), ("bridge", "yes")),
+            new("200", [(0.0, -60.0), (0.0, 60.0)], ("highway", "primary")),
+            // Shares the deck's unsupported east node, so a ramp seeded there would land on it.
+            new("300", [(200.0, 0.0), (200.0, 200.0)], ("highway", "primary")),
+        };
+
+        var result = WithOsm(origin, overshootingDeck,
+            p => GradeSeparation.Compute(map, samples, OsmRoadLayers.Read(p, origin),
+                surface, ground, SystematicOffset));
+
+        // The deck itself still gets its measured clearance where the surface shows the structure.
+        Assert.Equal(1, result.StructuresFromSurface);
+        Assert.Contains(result.Lift, v => v > 5.0);
+
+        // Nothing on the crossing road may be lifted, and the ramp must not have reached out to the
+        // unsupported node: no sample may carry a lift that is neither 0 nor the measured clearance.
+        for (int i = 0; i < samples.Count; ++i)
+            if (samples[i].RoadId == 2u)
+                Assert.Equal(0.0, result.Lift[i], 6);
+    }
+
+    [Fact]
+    public void ApproachRamp_FadesOutAtTheRampGradient()
+    {
+        // The ramp must decay at ApproachRampGrade from the deck end, not stretch itself across the
+        // whole distance between two OSM nodes.
+        var map = LoadCrossing();
+        var origin = map.GeoReference;
+        var samples = ElevationInjector.ExtractCenterlineSamples(map, 10.0);
+
+        // The structure covers the deck right up to its east end, so that end carries a real lift.
+        var surface = new double[samples.Count];
+        var ground = new double[samples.Count];
+        for (int i = 0; i < samples.Count; ++i)
+        {
+            ground[i] = GroundHeight;
+            bool onDeck = samples[i].RoadId == 1u && samples[i].X >= -30.0;
+            surface[i] = onDeck ? GroundHeight + 5.0 : GroundHeight + SystematicOffset;
+        }
+
+        // A long at-grade way sharing the deck's east node; with only two nodes 200 m apart, an
+        // interpolating read-back would spread the lift over all 200 m.
+        var ways = new WaySpec[]
+        {
+            new("100", [(-60.0, 0.0), (55.0, 0.0)], ("highway", "motorway"), ("bridge", "yes")),
+            new("200", [(0.0, -60.0), (0.0, 60.0)], ("highway", "primary")),
+            new("300", [(55.0, 0.0), (255.0, 0.0)], ("highway", "primary")),
+        };
+
+        var opt = new GradeSeparationOptions { ApproachRampGrade = 0.10 };
+        var result = WithOsm(origin, ways,
+            p => GradeSeparation.Compute(map, samples, OsmRoadLayers.Read(p, origin),
+                surface, ground, SystematicOffset, opt));
+
+        // The deck end is lifted by the measured clearance, so at 0.10 the ramp is spent within
+        // 58 m of it. Road 1 ends at x = 50, five metres short of the shared node at x = 55.
+        const double deckEndLift = 5.0 - SystematicOffset;
+        int deckEast = samples.Select((s, i) => (s, i))
+            .Where(p => p.s.RoadId == 1u).MaxBy(p => p.s.X).i;
+        Assert.Equal(50.0, samples[deckEast].X, 3);
+        Assert.Equal(deckEndLift, result.Lift[deckEast], 3);
+
+        // Every sample of the crossing road is far beyond the ramp's reach and must be untouched.
+        for (int i = 0; i < samples.Count; ++i)
+            if (samples[i].RoadId == 2u)
+                Assert.Equal(0.0, result.Lift[i], 6);
+    }
+
+    [Fact]
+    public void RoadUnderAStructure_SpansTheFootprint_InsteadOfFollowingTheTerrainOverIt()
+    {
+        // No terrain model sees the ground beneath a bridge: inside the footprint it returns the
+        // structure and its embankment. Bare earth here therefore domes 4 m over the road passing
+        // under the deck, exactly as Cesium World Terrain does at Arapahoe Ave / I-25. The road must
+        // span that, not climb it.
+        var map = LoadCrossing();
+        var origin = map.GeoReference;
+        var samples = ElevationInjector.ExtractCenterlineSamples(map, 10.0);
+
+        var surface = new double[samples.Count];
+        var ground = new double[samples.Count];
+        for (int i = 0; i < samples.Count; ++i)
+        {
+            // Bare earth is flat except for a dome centred on the crossing, tapering out by 20 m.
+            double dome = 4.0 * Math.Max(0.0, 1.0 - Math.Abs(samples[i].Y) / 20.0);
+            ground[i] = GroundHeight + dome;
+            bool overStructure = Math.Abs(samples[i].X) <= 30.0 && Math.Abs(samples[i].Y) <= 30.0;
+            surface[i] = overStructure ? GroundHeight + 9.0 : GroundHeight + SystematicOffset;
+        }
+
+        var result = WithOsm(origin, CrossingWays(("highway", "motorway"), ("bridge", "yes")),
+            p => GradeSeparation.Compute(map, samples, OsmRoadLayers.Read(p, origin),
+                surface, ground, SystematicOffset));
+
+        // The footprint is 15 m either side of the deck centreline, which runs along y = 0.
+        var inside = new List<int>();
+        for (int i = 0; i < samples.Count; ++i)
+            if (samples[i].RoadId == 2u && Math.Abs(samples[i].Y) <= 15.0)
+                inside.Add(i);
+        Assert.Equal(3, inside.Count);
+        Assert.Equal(inside.Count, result.SamplesSpannedUnderStructures);
+
+        // Across the footprint the road holds the level of the terrain either side of it — flat,
+        // not domed — even though the terrain beneath it reads up to 4 m higher.
+        foreach (int i in inside)
+        {
+            Assert.True(ground[i] > GroundHeight + 1.0, "the fixture must dome under the deck");
+            Assert.Equal(GroundHeight, ground[i] + result.Lift[i], 3);
+        }
+
+        // Clear of the footprint the road still follows the terrain it was given.
+        for (int i = 0; i < samples.Count; ++i)
+            if (samples[i].RoadId == 2u && Math.Abs(samples[i].Y) > 20.0)
+                Assert.Equal(0.0, result.Lift[i], 6);
+    }
+
+    [Fact]
+    public void SpanningAFootprint_LeavesNoStepWhereRoadsMeet()
+    {
+        // netconvert cuts one OSM way into several .xodr roads, and a short connecting road inside a
+        // junction can lie wholly within a deck footprint — with no end outside it to anchor a chord
+        // to. Anything computed per road therefore leaves that road uncorrected while its long
+        // neighbour is corrected, and the mesh tears at the joint between them. The corrected height
+        // has to be a function of position along the way, so that every road meeting at a point is
+        // given the same elevation there.
+        var map = OpenDriveParser.Load(SplitUnderRoadXodr)
+            ?? throw new Exception("split .xodr failed to parse");
+        var origin = map.GeoReference;
+        var samples = ElevationInjector.ExtractCenterlineSamples(map, 10.0);
+
+        var surface = new double[samples.Count];
+        var ground = new double[samples.Count];
+        for (int i = 0; i < samples.Count; ++i)
+        {
+            ground[i] = GroundHeight + 4.0 * Math.Max(0.0, 1.0 - Math.Abs(samples[i].Y) / 20.0);
+            bool overStructure = Math.Abs(samples[i].X) <= 30.0 && Math.Abs(samples[i].Y) <= 30.0;
+            surface[i] = overStructure ? GroundHeight + 9.0 : GroundHeight + SystematicOffset;
+        }
+
+        var underRoad = new WaySpec[]
+        {
+            new("100", [(-60.0, 0.0), (60.0, 0.0)], ("highway", "motorway"), ("bridge", "yes")),
+            new("200", [(0.0, -60.0), (0.0, 60.0)], ("highway", "primary")),
+        };
+
+        var result = WithOsm(origin, underRoad,
+            p => GradeSeparation.Compute(map, samples, OsmRoadLayers.Read(p, origin),
+                surface, ground, SystematicOffset));
+
+        // The road lying entirely under the deck must be corrected like the rest of the way.
+        var beneathRoad = Enumerable.Range(0, samples.Count).Where(i => samples[i].RoadId == 3u).ToList();
+        Assert.NotEmpty(beneathRoad);
+        Assert.All(beneathRoad, i => Assert.NotEqual(0.0, result.Lift[i]));
+
+        // A joint is where two roads END at the same place. Where they merely cross — the deck over
+        // the road beneath it — they are supposed to differ, which is the whole point.
+        var endpoints = samples
+            .Select((s, i) => (s, i))
+            .GroupBy(p => p.s.RoadId)
+            .SelectMany(g => new[] { g.MinBy(p => p.s.S).i, g.MaxBy(p => p.s.S).i })
+            .ToList();
+
+        double Elevation(int i) => ground[i] + result.Lift[i];
+        int joints = 0;
+        foreach (int i in endpoints)
+        {
+            foreach (int j in endpoints)
+            {
+                if (samples[i].RoadId >= samples[j].RoadId) continue;
+                if (Math.Abs(samples[i].X - samples[j].X) > 0.5) continue;
+                if (Math.Abs(samples[i].Y - samples[j].Y) > 0.5) continue;
+                Assert.Equal(Elevation(i), Elevation(j), 6);
+                ++joints;
+            }
+        }
+        Assert.Equal(2, joints);   // the road under the deck is joined at both of its ends
+    }
+
+    [Fact]
+    public void RoadNotUnderAnything_KeepsItsTerrain()
+    {
+        // The span is driven by a known crossing, not by proximity: without a structure overhead the
+        // same domed terrain must be followed, because then it is the ground.
+        var map = LoadCrossing();
+        var origin = map.GeoReference;
+        var samples = ElevationInjector.ExtractCenterlineSamples(map, 10.0);
+
+        var surface = new double[samples.Count];
+        var ground = new double[samples.Count];
+        for (int i = 0; i < samples.Count; ++i)
+        {
+            ground[i] = GroundHeight + 4.0 * Math.Max(0.0, 1.0 - Math.Abs(samples[i].Y) / 20.0);
+            surface[i] = ground[i] + SystematicOffset;
+        }
+
+        // Same two ways, but neither is tagged, so nothing is recorded as passing under anything.
+        var result = WithOsm(origin, CrossingWays(("highway", "motorway")),
+            p => GradeSeparation.Compute(map, samples, OsmRoadLayers.Read(p, origin),
+                surface, ground, SystematicOffset));
+
+        Assert.Equal(0, result.SamplesSpannedUnderStructures);
+        Assert.All(result.Lift, v => Assert.Equal(0.0, v, 9));
+    }
+
+    [Fact]
+    public void Tunnel_IsSunkBelowGrade()
+    {
+        var map = LoadCrossing();
+        var origin = map.GeoReference;
+        var samples = ElevationInjector.ExtractCenterlineSamples(map, 10.0);
+        BuildSurfaces(samples, out var surface, out var ground);
+
+        // Road 2 runs through a bore under road 1.
+        var ways = new WaySpec[]
+        {
+            new("100", [(-60.0, 0.0), (60.0, 0.0)], ("highway", "motorway")),
+            new("200", [(0.0, -60.0), (0.0, 60.0)], ("highway", "primary"), ("tunnel", "yes")),
+        };
+
+        var result = WithOsm(origin, ways,
+            p => GradeSeparation.Compute(map, samples, OsmRoadLayers.Read(p, origin),
+                surface, ground, SystematicOffset));
+
+        for (int i = 0; i < samples.Count; ++i)
+            if (samples[i].RoadId == 2u)
+                Assert.Equal(-5.0, result.Lift[i], 3);
+    }
+
+    // ── the real extracts ────────────────────────────────────────────────────
+    //
+    // The tests above are synthetic, which proves the rules but not that they fire on the data the
+    // defect was found in. These two read the tracked .osm files straight from Import/ — no server,
+    // no terrain, no generated map — so the OSM half of the pipeline is pinned to the interchange it
+    // was designed against. The counts are the ones the elevation strategy records for these files.
+
+    private static string RepoFile(string relative)
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+        {
+            string candidate = Path.Combine(dir.FullName, relative);
+            if (File.Exists(candidate)) return candidate;
+        }
+        throw new FileNotFoundException(
+            $"tracked test extract '{relative}' was not found above {AppContext.BaseDirectory}");
+    }
+
+    [Fact]
+    public void Arapahoe_HasTheSixDecksAndSixteenCrossingsTheStrategyRecords()
+    {
+        var origin = new GeoLocation(39.59431, -104.88449, 0.0);
+        var layers = OsmRoadLayers.Read(RepoFile(Path.Combine("Import", "Arapahoe_I25.osm")), origin);
+
+        Assert.Equal(688, layers.Ways.Count);
+
+        // Every deck here is tagged bridge=yes AND layer=1; the classification must agree with both.
+        var elevated = layers.ElevatedWayIndices().Select(i => layers.Ways[i]).ToList();
+        Assert.Equal(
+            new[] { "218679738", "37722915", "38872436", "39451755", "427819544", "427819557" },
+            elevated.Select(w => w.Id).OrderBy(id => id, StringComparer.Ordinal));
+        Assert.All(elevated, w =>
+        {
+            Assert.Equal(1, w.Layer);
+            Assert.True(w.IsBridge);
+        });
+
+        // The tag-free test: 16 plan crossings that share no node. Only 6 ways carry bridge=*, so
+        // this finds separations the tags alone would not enumerate.
+        Assert.Equal(16, layers.Crossings.Count);
+
+        var under = layers.WaysPassingUnder();
+        Assert.Equal(
+            new[] { "106308386", "1307143930", "16999193", "218965860", "223207869", "223306870", "629675735" },
+            under.Select(i => layers.Ways[i].Id).OrderBy(id => id, StringComparer.Ordinal));
+
+        // Nothing may be both a deck and a road passing under one.
+        Assert.Empty(under.Intersect(layers.ElevatedWayIndices()));
+    }
+
+    [Fact]
+    public void BellvueOverpass_HasOneDeckOverThreeCarriageways()
+    {
+        var origin = new GeoLocation(39.247132, -119.813761, 0.0);
+        var layers = OsmRoadLayers.Read(RepoFile(Path.Combine("Import", "Bellvue_Overpass.osm")), origin);
+
+        var elevated = layers.ElevatedWayIndices();
+        Assert.Single(elevated);
+        Assert.Equal("71498338", layers.Ways[elevated[0]].Id);   // Bellevue Road, the deck
+
+        // It crosses the three freeway carriageways, sharing a node with none of them.
+        Assert.Equal(3, layers.Crossings.Count);
+        Assert.Equal(3, layers.WaysPassingUnder().Count);
+    }
+
+    // ── collision heightfield ────────────────────────────────────────────────
+
+    [Fact]
+    public void SystematicOffset_IsTheMedianGapIgnoringStructures()
+    {
+        // Two cells hold a building; the median must not move because of them.
+        var dsm = new[] { 99.2, 99.3, 99.1, 99.2, 130.0, 128.0 };
+        var dtm = new[] { 100.0, 100.0, 100.0, 100.0, 100.0, 100.0 };
+        Assert.Equal(-0.8, DrapeTerrain.SystematicOffset(dsm, dtm, 5.0), 2);
+    }
+
+    [Fact]
+    public void DrapedSurface_UnderADeck_IsTheGroundNotTheDeck()
+    {
+        // 41x41 cells at 2 m spanning [-40, 40] in both axes. Bare earth is flat; the photoreal
+        // carries a deck 5 m up along the line y = 0 for |x| <= 20.
+        var spec = new DrapeGridSpec(default, -40.0, -40.0, 2.0, 41, 41);
+        int n = spec.NodeCount;
+        var dtm = new double[n];
+        var dsm = new double[n];
+        for (int r = 0; r < spec.NumRows; ++r)
+        {
+            for (int c = 0; c < spec.NumCols; ++c)
+            {
+                double x = spec.MinX + c * spec.CellSize, y = spec.MinY + r * spec.CellSize;
+                int i = r * spec.NumCols + c;
+                dtm[i] = GroundHeight;
+                bool onDeck = Math.Abs(y) <= 4.0 && Math.Abs(x) <= 20.0;
+                dsm[i] = onDeck ? GroundHeight + 5.0 : GroundHeight + SystematicOffset;
+            }
+        }
+
+        var deck = new OsmRoadWay
+        {
+            Id = "100", Layer = 1, IsBridge = true, IsTunnel = false,
+            NodeIds = ["1", "2"],
+            X = [-20.0, 20.0], Y = [0.0, 0.0], NodeStation = [0.0, 40.0],
+            MinX = -20.0, MinY = 0.0, MaxX = 20.0, MaxY = 0.0,
+        };
+
+        int centre = (spec.NumRows / 2) * spec.NumCols + spec.NumCols / 2;
+
+        // Without the structure the deck is inside the de-spike threshold, so the surface climbs
+        // onto it and the road passing underneath has nowhere at grade to sit — the defect.
+        var unmasked = DrapeTerrain.Despike(dsm, dtm, spec, maxDrapeMeters: 5.0, smoothPasses: 0);
+        Assert.Equal(GroundHeight + 5.0, unmasked.DrapedZ[centre], 3);
+
+        var masked = DrapeTerrain.Despike(dsm, dtm, spec, maxDrapeMeters: 5.0, smoothPasses: 0,
+            elevatedStructures: [deck], atGradeOffsetMeters: SystematicOffset);
+        Assert.Equal(GroundHeight + SystematicOffset, masked.DrapedZ[centre], 3);
+        Assert.Equal(SystematicOffset, masked.SystematicOffsetMeters, 6);
+
+        // Open ground well away from the deck keeps the photoreal detail it had.
+        int corner = 2 * spec.NumCols + 2;
+        Assert.Equal(unmasked.DrapedZ[corner], masked.DrapedZ[corner], 6);
+    }
+
+    // ── outlier rejection ────────────────────────────────────────────────────
+
+    [Fact]
+    public void OutlierRejection_SpareTheDeliberatelyRaisedSamples()
+    {
+        var map = LoadCrossing();
+        var samples = ElevationInjector.ExtractCenterlineSamples(map, 10.0);
+        var heights = new double[samples.Count];
+        for (int i = 0; i < samples.Count; ++i) heights[i] = 100.0;
+
+        // One short deck: a single sample of road 1 raised well beyond the rejection threshold.
+        int spike = samples.Select((s, i) => (s, i)).First(p => p.s.RoadId == 1u && p.s.S == 50.0).i;
+        heights[spike] = 106.0;
+
+        string Inject(bool raised)
+        {
+            var flags = new bool[samples.Count];
+            flags[spike] = raised;
+            return ElevationInjector.InjectElevation(CrossingXodr, samples, heights, 100.0,
+                ElevationFitMode.PiecewiseLinear, 4.0, flags);
+        }
+
+        Assert.Equal(0.0, ElevationAt(Inject(false), roadId: "1", s: 50.0), 3);
+        Assert.Equal(6.0, ElevationAt(Inject(true), roadId: "1", s: 50.0), 3);
+    }
+
+    private static double ElevationAt(string xodr, string roadId, double s)
+    {
+        var road = System.Xml.Linq.XDocument.Parse(xodr).Root!
+            .Elements("road").Single(r => r.Attribute("id")?.Value == roadId);
+        var record = road.Element("elevationProfile")!.Elements("elevation")
+            .Single(e => Math.Abs(double.Parse(e.Attribute("s")!.Value,
+                CultureInfo.InvariantCulture) - s) < 1e-6);
+        return double.Parse(record.Attribute("a")!.Value, CultureInfo.InvariantCulture);
+    }
+}

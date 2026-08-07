@@ -33,9 +33,15 @@ namespace CarlaNet.TrafficManager.Stages;
 
 /// <summary>
 /// Per-actor planning horizon buffer. Mirrors upstream's
-/// <c>std::deque&lt;SimpleWaypointPtr&gt;</c>. We use <see cref="List{T}"/>
-/// because the buffer is &lt;= ~50 entries and the front-pop cost (O(n)) is
-/// trivial vs. a LinkedList's per-node allocations.
+/// <c>std::deque&lt;SimpleWaypointPtr&gt;</c>. We use <see cref="List{T}"/> because the buffer holds
+/// tens of entries, where the front-pop cost (O(n)) is trivial next to a LinkedList's per-node
+/// allocations.
+/// <para>
+/// That trade depends on the buffer staying small, which is not automatic: the walks that fill it
+/// stop on straight-line distance tests that a cyclic road graph never satisfies. They are bounded
+/// for exactly this reason (see <c>LocalizationStage.MaxHorizonWalkSteps</c>). Removing that bound
+/// makes the front-pop quadratic as well as unbounded.
+/// </para>
 /// </summary>
 internal sealed class WaypointBuffer : List<SimpleWaypoint>
 {
@@ -188,6 +194,8 @@ internal sealed class ALSM
             && (_currentTimestamp - _elapsedLastActorDestruction) > Constants.VehicleRemoval.DELTA_TIME_BETWEEN_DESTRUCTIONS
             && !_heroActors.ContainsKey(maxIdleTime.ActorId))
         {
+            ReportRemoval(maxIdleTime.ActorId,
+                          $"stationary for {_currentTimestamp - maxIdleTime.Time:F0}s");
             DestroyActorViaRpc(maxIdleTime.ActorId);
             _registeredVehicles.Destroy(maxIdleTime.ActorId);
             RemoveActor(maxIdleTime.ActorId, registeredActor: true);
@@ -200,6 +208,7 @@ internal sealed class ALSM
             for (int i = 0; i < _markedForRemoval.Count; i++)
             {
                 ActorId actorId = _markedForRemoval[i];
+                ReportRemoval(actorId, "reached the end of the drivable road network");
                 DestroyActorViaRpc(actorId);
                 _registeredVehicles.Destroy(actorId);
                 RemoveActor(actorId, registeredActor: true);
@@ -560,6 +569,22 @@ internal sealed class ALSM
         // Track the "most idle" vehicle (smallest last-moved timestamp).
         if (maxIdleTime.ActorId == 0u || maxIdleTime.Time > idleDuration)
             maxIdleTime = new IdleInfo(actorId, idleDuration);
+    }
+
+    /// <summary>
+    /// Say when the traffic manager destroys a vehicle, and why.
+    /// </summary>
+    /// <remarks>
+    /// Both removal paths were silent. A caller watching its own traffic saw vehicles disappear a
+    /// few seconds after spawning with nothing to attribute it to — not in its own despawn tallies,
+    /// because it was not the one doing it. Written unconditionally rather than behind a diagnostic
+    /// flag, for the same reason the route reporting is: a vehicle vanishing is exactly the event
+    /// somebody will need to explain.
+    /// </remarks>
+    private static void ReportRemoval(ActorId actorId, string why)
+    {
+        TrafficReport.Writer.WriteLine(
+            $"{DateTime.Now:HH:mm:ss.fff} [traffic] removed vehicle {actorId}: {why}.");
     }
 
     private bool IsVehicleStuck(ActorId actorId)

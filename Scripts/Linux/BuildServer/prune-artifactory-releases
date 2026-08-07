@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+#
+# prune-artifactory-releases - keep only the newest N distribution artifacts.
+#
+# Usage: prune-artifactory-releases <repo/folder/path> [--keep n] [--pattern glob] [--dry-run]
+#
+# Example:
+#   prune-artifactory-releases cat-local-generic-dev/carla/releases --keep 3
+#
+# A CARLA distribution is tens of gigabytes, so the release folder is capped rather than
+# left to grow. Artifacts are ranked by their Artifactory creation time (not by name, which
+# carries a commit hash and does not sort chronologically); everything past the newest N is
+# deleted along with its .sha256 sidecar.
+#
+# OPTIONS:
+#   --keep <n>        artifacts to retain, newest first (default: 3)
+#   --pattern <glob>  shell glob selecting artifacts to consider (default: *.tar.gz)
+#   --dry-run         report what would be deleted without deleting it
+#
+
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+# shellcheck source=artifactory-common.sh
+. "$script_dir/artifactory-common.sh"
+
+if [ $# -lt 1 ]; then
+    echo "Usage: $0 <repo/folder/path> [--keep n] [--pattern glob] [--dry-run]" >&2
+    exit 2
+fi
+
+folder_path="${1%/}"; shift
+keep=3
+pattern='*.tar.gz'
+dry_run=0
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --keep)      keep="$2"; shift ;;
+        --keep=*)    keep="${1#*=}" ;;
+        --pattern)   pattern="$2"; shift ;;
+        --pattern=*) pattern="${1#*=}" ;;
+        --dry-run)   dry_run=1 ;;
+        *) echo "Unknown argument: $1" >&2; exit 2 ;;
+    esac
+    shift
+done
+
+# Artifactory's storage API lists a folder's children but does not report their creation
+# times in the same response, so each candidate is queried individually. The release
+# folder holds a handful of entries, so the extra round trips are negligible.
+listing="$(art_curl "$(art_url "api/storage/${folder_path}")")"
+
+mapfile -t names < <(printf '%s' "$listing" | python3 -c '
+import json, sys, fnmatch
+
+pattern = sys.argv[1]
+data = json.load(sys.stdin)
+for child in data.get("children", []):
+    if child.get("folder"):
+        continue
+    name = child["uri"].lstrip("/")
+    if fnmatch.fnmatch(name, pattern):
+        print(name)
+' "$pattern")
+
+if [ "${#names[@]}" -eq 0 ]; then
+    echo "No artifacts matching '$pattern' under $folder_path; nothing to prune."
+    exit 0
+fi
+
+echo "Found ${#names[@]} artifact(s) under $folder_path (keeping newest $keep)."
+
+created_list=""
+for name in "${names[@]}"; do
+    info="$(art_curl "$(art_url "api/storage/${folder_path}/${name}")")"
+    created="$(printf '%s' "$info" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+print(data.get("created") or data.get("lastModified") or "")
+')"
+    created_list+="${created}|${name}"$'\n'
+done
+
+# ISO-8601 timestamps sort correctly as plain strings, so a lexical reverse sort puts the
+# newest artifact first without any date parsing.
+mapfile -t ordered < <(printf '%s' "$created_list" | sort -r | awk -F'|' 'NF{print $2}')
+
+index=0
+for name in "${ordered[@]}"; do
+    index=$((index + 1))
+    if [ "$index" -le "$keep" ]; then
+        echo "  keep   $name"
+        continue
+    fi
+    if [ "$dry_run" = "1" ]; then
+        echo "  DELETE $name (dry run)"
+        continue
+    fi
+    echo "  delete $name"
+    art_curl -X DELETE "$(art_url "${folder_path}/${name}")" >/dev/null || \
+        echo "         WARNING: could not delete $name" >&2
+    # The sidecar may legitimately be absent for artifacts published before checksums
+    # were uploaded, so its removal is best-effort.
+    art_curl -X DELETE "$(art_url "${folder_path}/${name}.sha256")" >/dev/null 2>&1 || true
+done
+
+echo "Prune complete."

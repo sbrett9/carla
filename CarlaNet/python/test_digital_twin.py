@@ -60,7 +60,7 @@ ap.add_argument("--terrain-res", type=float, default=2.0,
                 help="'drape' only: spacing in metres between drivable-surface points - smaller hugs the "
                      "photoreal more closely but is slower to build (default 2.0)")
 ap.add_argument("--terrain-margin", type=float, default=30.48,
-                help="'drape' only: width (m) of the staging ring reserved just INSIDE the map edge, "
+                help="width (m) of the staging ring reserved just INSIDE the map edge, "
                      "where boundary-aware traffic enters/exits (the scene/region-of-interest is the "
                      "map inset by this much; select a slightly larger OSM area to compensate). "
                      "Default ~100 ft.")

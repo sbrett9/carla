@@ -20,10 +20,12 @@
 //      actor's new buffer.
 //
 // PERF: Buffer is a plain <c>List&lt;SimpleWaypoint&gt;</c>. Upstream uses
-// std::deque but on the ~50-entry buffer sizes TM works with, the O(n)
-// RemoveAt(0) cost is negligible (and saves the LinkedList allocation
-// overhead). Per-tick allocations are limited to a handful of HashSet
-// snapshots in lane-change resolution — none on the steady-state hot path.
+// std::deque but at the buffer sizes TM works with, the O(n) RemoveAt(0)
+// cost is negligible (and saves the LinkedList allocation overhead). That
+// holds only because every walk that fills the buffer is bounded — see
+// MaxHorizonWalkSteps. Per-tick allocations are limited to a handful of
+// HashSet snapshots in lane-change and cycle detection — none on the
+// steady-state hot path.
 //
 // Hot path: Update(actorId) is called once per registered vehicle per tick
 // (≈ 50× per tick at the design target). Output dictionary is cleared and
@@ -57,6 +59,10 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
     // and need to be unregistered by the TM facade. Upstream's analog is
     // the `marked_for_removal` vector reference passed by the TM.
     private readonly List<ActorId>? _markedForRemoval;
+    // Watches whether vehicles given a precomputed route are still on it. Optional so a test can
+    // drive this stage without one; the orchestrator always supplies it. A vehicle that was never
+    // given a route costs one dictionary miss per tick and nothing else.
+    private readonly RouteSupervisor? _routeSupervisor;
 
     // ── Per-actor state carried across ticks ─────────────────────────────
     private readonly Dictionary<ActorId, SimpleWaypoint> _lastLaneChangeSwpt = new();
@@ -91,6 +97,30 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
     // can wire a real lookup through SimpleWaypoint if needed.
     private const bool ASSUME_RHT = true;
 
+    // Upper bound on how many waypoints a single horizon walk may visit.
+    //
+    // Every walk in this stage follows the road graph forward until it is "far enough" — either the
+    // buffer spans the horizon, or a probe reaches a junction or a distance threshold. Those tests
+    // all measure STRAIGHT-LINE distance, so a cyclic road graph satisfies none of them: a loop ramp
+    // or roundabout returns the walk to where it began without it ever getting far from the start.
+    // Unbounded, the horizon buffer then grows until the process runs out of memory.
+    //
+    // The horizon is at most a few hundred metres and waypoints are MAP_RESOLUTION apart, so a
+    // legitimate walk uses well under a hundred steps even on a curved road, where path length far
+    // exceeds endpoint separation. This bound is an order of magnitude above that: it never truncates
+    // a real horizon, and it caps the pathological case at a harmless buffer instead of the heap.
+    private const int MaxHorizonWalkSteps = 512;
+
+    // How little road may remain ahead of a vehicle before it counts as having run out of it.
+    //
+    // The horizon runs speed x HORIZON_RATE ahead of the vehicle, so a walk that finds a waypoint
+    // with no successors has discovered where the road graph ENDS, not where the vehicle is. Acting
+    // on that directly destroys a vehicle that is still a hundred metres short of the end and
+    // driving perfectly well, and the faster the vehicle the further ahead it looks, so raising
+    // traffic to motorway speeds made it destroy nearly everything it spawned. Only a vehicle whose
+    // remaining buffer is this short has actually arrived at the end of the drivable network.
+    private const int MinBufferAtRoadEnd = 3;
+
     public LocalizationStage(
         SimulationState simulationState,
         BufferMap bufferMap,
@@ -98,7 +128,8 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
         Parameters parameters,
         InMemoryMap localMap,
         RandomGenerator rng,
-        List<ActorId>? markedForRemoval = null)
+        List<ActorId>? markedForRemoval = null,
+        RouteSupervisor? routeSupervisor = null)
     {
         _simulationState = simulationState;
         _bufferMap = bufferMap;
@@ -107,10 +138,21 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
         _localMap = localMap;
         _rng = rng;
         _markedForRemoval = markedForRemoval;
+        _routeSupervisor = routeSupervisor;
     }
 
     /// <summary>Snapshot of the per-tick localization output indexed by actor.</summary>
     public IReadOnlyDictionary<ActorId, LocalizationData> GetOutput() => _output;
+
+    /// <summary>
+    /// Flag a vehicle for removal only if it has genuinely reached the end of the road network,
+    /// rather than merely looked far enough ahead to see one. See <see cref="MinBufferAtRoadEnd"/>.
+    /// </summary>
+    private void MarkIfOutOfRoad(ActorId actorId, WaypointBuffer waypointBuffer)
+    {
+        if (waypointBuffer.Count > MinBufferAtRoadEnd) return;
+        _markedForRemoval?.Add(actorId);
+    }
 
     /// <summary>Drop per-actor state. Called by the TM facade on vehicle destroy.</summary>
     public void RemoveActor(ActorId actorId)
@@ -119,6 +161,8 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
         _vehiclesAtJunction.Remove(actorId);
         _vehiclesAtJunctionEntrance.Remove(actorId);
         _output.Remove(actorId);
+        // A destroyed vehicle is gone for good — there is no route left to follow or resume.
+        _routeSupervisor?.RemoveActor(actorId);
     }
 
     /// <summary>Wipe every per-actor cache. Called on TM shutdown / reset.</summary>
@@ -128,6 +172,7 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
         _vehiclesAtJunction.Clear();
         _vehiclesAtJunctionEntrance.Clear();
         _output.Clear();
+        _routeSupervisor?.Reset();
     }
 
     /// <summary>
@@ -318,8 +363,13 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
         }
         else
         {
-            // Random forward extension along the road graph.
-            while (waypointBuffer[^1].DistanceSquared(waypointBuffer[0]) <= horizonSquare)
+            // Random forward extension along the road graph. Bounded for the same reason as the
+            // imported-path walks: the horizon test measures straight-line distance, which a cycle
+            // never satisfies. The id check below catches only cycles that pass through the front
+            // waypoint, so it is not sufficient on its own.
+            int walkSteps = 0;
+            while (waypointBuffer[^1].DistanceSquared(waypointBuffer[0]) <= horizonSquare
+                   && walkSteps++ < MaxHorizonWalkSteps)
             {
                 SimpleWaypoint furthest = waypointBuffer[^1];
                 IReadOnlyList<SimpleWaypoint> nexts = furthest.GetNextWaypoint();
@@ -335,7 +385,7 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
                 }
                 else if (nexts.Count == 0)
                 {
-                    _markedForRemoval?.Add(actorId);
+                    MarkIfOutOfRoad(actorId, waypointBuffer);
                     break;
                 }
                 SimpleWaypoint nextSel = nexts[selection];
@@ -367,6 +417,13 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
 
         // ─── Refresh the geodesic-grid index for this actor ──────────────
         _trackTraffic.UpdateGridPosition(actorId, waypointBuffer);
+
+        // ─── Is a routed vehicle still on its route? ─────────────────────
+        // The buffer head is where the vehicle sits on the road graph, after any lane change this
+        // tick made (a change-over replaces the whole buffer with its own start point). The check
+        // is a set lookup; anything that follows from it happens on another thread.
+        _routeSupervisor?.Observe(
+            actorId, vehicleLocation, waypointBuffer.Count > 0 ? waypointBuffer[0] : null);
     }
 
     // ═════════════════════════════════════════════════════════════════════
@@ -609,7 +666,9 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
         return changeOverPoint;
     }
 
-    private void ImportPath(IReadOnlyList<Location> importedPath, WaypointBuffer waypointBuffer,
+    // Exposed to the test assembly (not private) so the cycle-termination regression test can
+    // drive the walk directly against a cyclic road graph without standing up a server.
+    internal void ImportPath(IReadOnlyList<Location> importedPath, WaypointBuffer waypointBuffer,
                              ActorId actorId, float horizonSquare)
     {
         // Snapshot to a mutable list so we can pop off the front.
@@ -628,8 +687,18 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
         Location latestImported = workingPath[0];
         SimpleWaypoint imported = _localMap.GetWaypoint(latestImported);
 
+        // The destination steers the walk but never terminates it: this is a greedy step-by-step
+        // descent toward a bearing, not a solved route. On a cyclic road graph the walk can circle
+        // indefinitely — never reaching the destination, never leaving the horizon — so track which
+        // waypoints this call has already appended and stop when it revisits one. `visited` starts
+        // empty rather than seeded from the buffer, so a cycle entered on an earlier tick costs at
+        // most one extra lap before it is caught, and the common case allocates nothing.
+        var visited = new HashSet<ulong>();
+        int walkSteps = 0;
+
         while (workingPath.Count > 0
-               && waypointBuffer[^1].DistanceSquared(waypointBuffer[0]) <= horizonSquare)
+               && waypointBuffer[^1].DistanceSquared(waypointBuffer[0]) <= horizonSquare
+               && walkSteps++ < MaxHorizonWalkSteps)
         {
             SimpleWaypoint latestWp = waypointBuffer[^1];
             IReadOnlyList<SimpleWaypoint> nexts = latestWp.GetNextWaypoint();
@@ -642,20 +711,27 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
                 for (int k = 0; k < nexts.Count; ++k)
                 {
                     SimpleWaypoint junctionEnd = nexts[k];
+                    // Each of these three probes follows a single successor chain and stops on a
+                    // predicate that a cycle satisfies forever, so each is bounded (see
+                    // MaxHorizonWalkSteps). Walking past the bound only degrades the junction-choice
+                    // heuristic for this candidate; it cannot hang the tick.
+                    int steps = 0;
                     // Walk to the next non-junction segment.
-                    while (!junctionEnd.CheckJunction())
+                    while (!junctionEnd.CheckJunction() && steps++ < MaxHorizonWalkSteps)
                     {
                         var nx = junctionEnd.GetNextWaypoint();
                         if (nx.Count == 0) break;
                         junctionEnd = nx[0];
                     }
-                    while (junctionEnd.CheckJunction())
+                    steps = 0;
+                    while (junctionEnd.CheckJunction() && steps++ < MaxHorizonWalkSteps)
                     {
                         var nx = junctionEnd.GetNextWaypoint();
                         if (nx.Count == 0) break;
                         junctionEnd = nx[0];
                     }
-                    while (nexts[k].DistanceSquared(junctionEnd) < 50.0f)
+                    steps = 0;
+                    while (nexts[k].DistanceSquared(junctionEnd) < 50.0f && steps++ < MaxHorizonWalkSteps)
                     {
                         var nx = junctionEnd.GetNextWaypoint();
                         if (nx.Count == 0) break;
@@ -677,7 +753,7 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
             }
             else if (nexts.Count == 0)
             {
-                _markedForRemoval?.Add(actorId);
+                MarkIfOutOfRoad(actorId, waypointBuffer);
                 break;
             }
 
@@ -706,6 +782,9 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
             }
             else
             {
+                // Revisiting a waypoint means the road graph looped back; extending further would
+                // retrace the same cycle forever.
+                if (!visited.Add(nextSel.GetId())) break;
                 PushWaypoint(actorId, _trackTraffic, waypointBuffer, nextSel);
             }
         }
@@ -720,7 +799,9 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
         }
     }
 
-    private void ImportRoute(IReadOnlyList<byte> importedActions, WaypointBuffer waypointBuffer,
+    // Exposed to the test assembly (not private) so the cycle-termination regression test can
+    // drive the walk directly against a cyclic road graph without standing up a server.
+    internal void ImportRoute(IReadOnlyList<byte> importedActions, WaypointBuffer waypointBuffer,
                               ActorId actorId, float horizonSquare)
     {
         var workingActions = new List<byte>(importedActions);
@@ -736,8 +817,15 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
         }
 
         RoadOption nextRoadOption = (RoadOption)workingActions[0];
+
+        // Same unbounded-walk hazard as ImportPath: the loop ends only when the buffer spans the
+        // horizon in a straight line, which circling a loop ramp never achieves.
+        var visited = new HashSet<ulong>();
+        int walkSteps = 0;
+
         while (workingActions.Count > 0
-               && waypointBuffer[^1].DistanceSquared(waypointBuffer[0]) <= horizonSquare)
+               && waypointBuffer[^1].DistanceSquared(waypointBuffer[0]) <= horizonSquare
+               && walkSteps++ < MaxHorizonWalkSteps)
         {
             SimpleWaypoint latestWp = waypointBuffer[^1];
             RoadOption latestRoadOption = latestWp.GetRoadOption();
@@ -757,11 +845,13 @@ internal sealed class LocalizationStage : IStageWithRemoveActor
             }
             else if (nexts.Count == 0)
             {
-                _markedForRemoval?.Add(actorId);
+                MarkIfOutOfRoad(actorId, waypointBuffer);
                 break;
             }
 
             SimpleWaypoint nextSel = nexts[selection];
+            // Revisiting a waypoint means the road graph looped back on itself.
+            if (!visited.Add(nextSel.GetId())) break;
             PushWaypoint(actorId, _trackTraffic, waypointBuffer, nextSel);
 
             if (latestRoadOption != nextSel.GetRoadOption()

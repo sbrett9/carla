@@ -5,22 +5,37 @@ name: Build Container Image
 #
 # Push location: cat-local-docker-dev/carla-base:alma8
 # Pull location: cat-docker-dev/carla-base:alma8
+#
+# Triggered manually only, on the same reasoning as the distribution build: this job runs a
+# Dockerfile from the checked-out branch on the build host and pushes the result to the shared
+# registry, so it must not fire automatically until the branch and author rules for that are
+# settled. Re-add a `push:` trigger filtered on Util/Docker/Base.alma8.Dockerfile once they are.
 
 on:
-  push:
-    branches:
-      - ue5-dev
-    paths:
-      - 'Util/Docker/Base.alma8.Dockerfile'
-      - '.github/workflows/build-container.yml'
   workflow_dispatch:
+    inputs:
+      no_cache:
+        description: 'Build without using cached layers'
+        required: false
+        type: boolean
+        default: false
+      prune_before_build:
+        description: 'Prune unused Podman images before the build'
+        required: false
+        type: boolean
+        default: false
+
+# The image and the distribution build share the runner's Podman storage, so they must
+# not run at the same time.
+concurrency:
+  group: carla-container-image
+  cancel-in-progress: false
 
 env:
   # Artifactory Docker registries
   ARTIFACTORY_PUSH_REGISTRY: 'iasartifact.sncorp.com:8443/cat-local-docker-dev'
   ARTIFACTORY_PULL_REGISTRY: 'iasartifact.sncorp.com:8443/cat-docker-dev'
-  CATGITHUBRUNNER_HOME: '/mnt/raid5/home/catgithubrunner'
-  
+
   # Image name and tag
   IMAGE_NAME: 'carla-base'
   IMAGE_TAG: 'alma8'
@@ -36,32 +51,54 @@ jobs:
       
       - name: Setup Artifactory authentication
         run: |
-          # Mirror the working bsulprizio layout: real HOME plus a dedicated graphroot on /mnt/raid5
-          export HOME="$CATGITHUBRUNNER_HOME"
-          export GRAPHROOT_BASE="$CATGITHUBRUNNER_HOME/containers/storage"
+          # runner-env.sh resolves the runner account's real home from the passwd database
+          # and restores HOME and XDG_RUNTIME_DIR, which GitHub Actions overrides per step
+          # and rootless Podman needs. Container storage is redirected to a graphroot on
+          # the RAID array, where there is room for the image layers.
+          . "$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/runner-env.sh"
+          export GRAPHROOT_BASE="$HOME/containers/storage"
           export GRAPHROOT_LINK="$HOME/.local/share/containers/storage"
-          mkdir -p "$HOME/.config/containers" "$HOME/.local/share/containers" "$CATGITHUBRUNNER_HOME/containers" "$GRAPHROOT_BASE"
+          mkdir -p "$HOME/.config/containers" "$HOME/.local/share/containers" "$HOME/containers" "$GRAPHROOT_BASE"
           if [ -d "$GRAPHROOT_LINK" ] && [ ! -L "$GRAPHROOT_LINK" ]; then
             mv "$GRAPHROOT_LINK" "$GRAPHROOT_LINK.pre-carla-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           fi
           ln -sfn "$GRAPHROOT_BASE" "$GRAPHROOT_LINK"
 
-          if [ -f "$HOME/.config/containers/auth.json" ]; then
-            echo "REGISTRY_AUTH_FILE=$HOME/.config/containers/auth.json" >> "$GITHUB_ENV"
-          elif [ -f "$HOME/.docker/config.json" ]; then
-            echo "REGISTRY_AUTH_FILE=$HOME/.docker/config.json" >> "$GITHUB_ENV"
+          if [ -f "$HOME/.docker/config.json" ]; then
+            AUTH_SOURCE="$HOME/.docker/config.json"
+          elif [ -f "$HOME/.config/containers/auth.json" ]; then
+            AUTH_SOURCE="$HOME/.config/containers/auth.json"
           else
             echo "Missing OCI registry auth for $HOME" >&2
             exit 1
           fi
+
+          AUTH_COPY="${RUNNER_TEMP:-$PWD}/podman-auth-${GITHUB_RUN_ID}-${GITHUB_JOB}.json"
+          cp "$AUTH_SOURCE" "$AUTH_COPY"
+          chmod 600 "$AUTH_COPY"
+          echo "REGISTRY_AUTH_FILE=$AUTH_COPY" >> "$GITHUB_ENV"
+
+      - name: Prune unused Podman images
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.prune_before_build == 'true' }}
+        run: |
+          . "$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/runner-env.sh"
+
+          podman image prune -a -f
       
       - name: Build container image
+        env:
+          NO_CACHE: ${{ github.event.inputs.no_cache == 'true' && 'true' || 'false' }}
         run: |
           # Build with rootless Podman
-          export HOME="$CATGITHUBRUNNER_HOME"
-          export XDG_RUNTIME_DIR=/run/user/$(id -u)
+          . "$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/runner-env.sh"
+
+          BUILD_ARGS=()
+          if [ "$NO_CACHE" = "true" ]; then
+            BUILD_ARGS+=(--no-cache --pull=always)
+          fi
           
           podman build \
+            "${BUILD_ARGS[@]}" \
             -t "${ARTIFACTORY_PUSH_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}" \
             -f Util/Docker/Base.alma8.Dockerfile \
             Util/Docker/
@@ -71,13 +108,21 @@ jobs:
       - name: Push to Artifactory
         run: |
           # Push with rootless Podman
-          export HOME="$CATGITHUBRUNNER_HOME"
-          export XDG_RUNTIME_DIR=/run/user/$(id -u)
+          . "$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/runner-env.sh"
           
           podman push "${ARTIFACTORY_PUSH_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
           
           echo "Image pushed to: ${ARTIFACTORY_PUSH_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
           echo "Pull from: ${ARTIFACTORY_PULL_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+      - name: Podman storage usage
+        run: |
+          . "$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/runner-env.sh"
+
+          echo "### Podman storage usage" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          podman system df | tee -a $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
       
       - name: Build summary
         run: |

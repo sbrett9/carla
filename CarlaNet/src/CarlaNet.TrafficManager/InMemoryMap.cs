@@ -242,7 +242,15 @@ internal sealed class InMemoryMap
                             continue;
                         }
                         var forward = ForwardFromRotation(transform.Rotation);
-                        var sw = new SimpleWaypoint(wp, transform.Location, forward);
+                        var sw = new SimpleWaypoint(wp, transform.Location, forward)
+                        {
+                            // OpenDRIVE states the limit in m/s; the motion planner works in km/h.
+                            // Stays 0 where the lane declares none, which the planner reads as
+                            // "unknown" and substitutes its own default for.
+                            SpeedLimitKph = lane.GetInfoAt<RoadInfoSpeed>(s) is { } speed
+                                ? (float)(speed.Speed * 3.6)
+                                : 0f,
+                        };
 
                         var sid = new SegmentId(road.Id, lane.Id, section.Id);
                         if (!map.TryGetValue(sid, out var list))

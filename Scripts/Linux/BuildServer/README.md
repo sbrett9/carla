@@ -1,247 +1,117 @@
-# Build Server Scripts
+# Build server scripts
 
-Helper scripts for automated CARLA builds on self-hosted GitHub Actions runners.
+Helper scripts used by the CARLA distribution workflow on the self-hosted GitHub Actions
+runner.
+
+They are executed **from the repository checkout**, not installed to the host:
+
+```yaml
+- run: |
+    . "$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/runner-env.sh"
+    "$GITHUB_WORKSPACE/Scripts/Linux/BuildServer/sync-carla-content" --ref ue5-dev
+```
+
+There is no bootstrap problem in doing so — every step that needs them runs after
+`actions/checkout` — and it means the scripts version with the workflow that calls them
+instead of drifting as a separate copy in `/usr/local/bin` that unrelated users of the build
+host can also see and run.
+
+Host provisioning (accounts, rootless Podman, SELinux labels, credentials) is documented
+separately in [`Docs/build_runner_setup.md`](../../../Docs/build_runner_setup.md).
 
 ## Scripts
 
-### `upload-to-artifactory`
-Uploads files to JFrog Artifactory generic repositories with authentication.
+### `runner-env.sh` — sourced, not executed
 
-**Usage:**
-```bash
-upload-to-artifactory <local-file> <repo-name/target/path>
-```
+Resolves the runner account's real home from the passwd database and restores `HOME` and
+`XDG_RUNTIME_DIR`, which GitHub Actions overrides per step and rootless Podman requires.
+Derives every cache path from that home, so no workflow hardcodes a directory.
 
-**Example:**
-```bash
-upload-to-artifactory Build/Dist/carla.tar.gz cat-local-generic-dev/carla/releases/carla.tar.gz
-```
+Exports `CARLA_CACHE_ROOT`, `UE_CACHE_DIR`, `CONTENT_CACHE_ROOT`, `BUILD_HOME_DIR`, `DDC_DIR`,
+`ARTIFACTORY_CREDENTIALS` and `CONTENT_SSH_KEY`. All are overridable from the environment.
 
-### `prepare-ue-distribution`
-Downloads, verifies, and extracts Unreal Engine distributions from Artifactory with smart caching.
+### `artifactory-common.sh` — sourced, not executed
 
-**Usage:**
-```bash
-prepare-ue-distribution <artifactory-path> <cache-dir>
-```
-
-**Example:**
-```bash
-UE_PATH=$(prepare-ue-distribution \
-  cat-local-generic-dev/unreal/UnrealEngine-5.7.4-carla-port-049f42955-Linux.tar.zst \
-  /home/catgithubrunner/ue-cache)
-```
+Shared Artifactory access: `art_curl` (authenticated, retrying) and `art_url`. Reads the token
+from a mode-600 file and passes it through a header file rather than the command line, where
+other users could read it out of `/proc`. Detects whether the credential is a legacy API key or
+an identity token and selects the matching header, so rotating to an identity token — required
+from Artifactory 7.77 — needs no code change.
 
 ### `sync-carla-content`
-Clones or updates the private carla-content Git-LFS repository to a persistent location on the runner host. Content is cached across workflow runs and volume-mounted into build containers.
 
-**Usage:**
-```bash
-sync-carla-content [--ref <branch>] [--target <path>] [--ssh-key <path>]
+Maintains the ~43 GB Git-LFS content cache and publishes an immutable per-commit snapshot for
+builds to mount. Prints the snapshot path on stdout.
+
+```sh
+CONTENT=$(sync-carla-content --ref ue5-dev --keep 3)
 ```
 
-**Example:**
-```bash
-# Initial setup (run once)
-sync-carla-content --ref ue5-dev --target /home/catgithubrunner/carla-content
+- One clone at `<cache>/repo`; builds never touch it.
+- Snapshots at `<cache>/snapshots/<commit>`, materialised with hardlinks, so a snapshot costs
+  inodes rather than a second 43 GB copy. Git replaces files rather than editing them in place,
+  so updating the clone leaves older snapshots intact.
+- A snapshot is marked complete only after its sentinel asset verifies as real content and not
+  an unsmudged LFS pointer, so an interrupted run is never reused.
+- Fast path: resolves the ref with `ls-remote` first and exits immediately when that commit is
+  already snapshotted, which is the usual case for a repository that changes rarely.
+- All mutation is serialised behind a `flock`, which is also what makes removing a leftover git
+  lock file safe — the lock proves no other git process is working in the clone.
 
-# Update in workflow
-sync-carla-content --verify-only || sync-carla-content --ref ue5-dev
+### `prepare-ue-distribution`
+
+Downloads, verifies and extracts an Unreal Engine distribution. Prints the engine root.
+
+```sh
+UE_PATH=$(prepare-ue-distribution cat-local-generic-dev/unreal/UnrealEngine-5.7.4-...-Linux.tar.zst)
 ```
 
-## Installation
+- The archive is hashed locally with `sha256sum` and compared against the published sidecar.
+  A truncated download fails the build instead of being cached as authoritative.
+- Downloads resume where they stopped and retry on transient failures; a dropped connection
+  must not restart a 25 GB transfer or fail an hours-long build.
+- Extractions are keyed on the archive checksum and marked complete only on success.
+- Retains the newest two archives and extractions and sweeps interrupted ones.
 
-All scripts must be installed to `/usr/local/bin/` on the GitHub Actions runner host:
+### `upload-to-artifactory`
 
-```bash
-sudo cp upload-to-artifactory prepare-ue-distribution sync-carla-content /usr/local/bin/
-sudo chown root:root /usr/local/bin/{upload-to-artifactory,prepare-ue-distribution,sync-carla-content}
-sudo chmod 755 /usr/local/bin/{upload-to-artifactory,prepare-ue-distribution,sync-carla-content}
+Publishes an artifact plus a `.sha256` sidecar, and sends the checksum with the upload so
+Artifactory rejects a truncated transfer server-side.
+
+```sh
+upload-to-artifactory Build/Dist/Carla-...-g1a2b3c4.tar.gz \
+  cat-local-generic-dev/carla/releases/Carla-...-g1a2b3c4.tar.gz
 ```
 
-## Prerequisites
+### `prune-artifactory-releases`
 
-- Artifactory API key stored in `/home/catgithubrunner/.artifactory/credentials`
-- CARLA content deploy key stored in `/home/catgithubrunner/.ssh/carla-content-deploy-key`
-- `zstd` installed for UE distribution extraction
-- `curl` for Artifactory communication
-- `git` and `git-lfs` for content repository management
-- Rootless Podman properly configured (see Rootless Podman Configuration below)
+Caps the release folder, since each distribution is tens of gigabytes. Ranks artifacts by
+Artifactory creation time — filenames carry a commit hash and do not sort chronologically — and
+deletes everything past the newest N along with its sidecar.
 
-## How It Works
+```sh
+prune-artifactory-releases cat-local-generic-dev/carla/releases --keep 3 --dry-run
+```
 
-### Build Pipeline Overview
+## Volume mount strategy
 
-The GitHub Actions workflow (`.github/workflows/build-carla-ue5.yml`) orchestrates the build:
-
-1. **Checkout** - Clone CARLA source to runner workspace
-2. **Sync Content** - Update carla-content repo (43 GB Git-LFS, cached)
-3. **Prepare UE** - Download/extract UE distribution (25 GB, cached)
-4. **Build** - Run containerized build with volume mounts:
-   - CARLA source at same path (for UE asset references)
-   - carla-content mounted read-only
-   - UE distribution mounted read-only
-5. **Upload** - Push distribution tarball to Artifactory
-6. **Archive** - Store artifacts in GitHub Actions (30 day retention)
-
-### Script Mechanics
-
-**`upload-to-artifactory`**
-- Reads API key from `/home/catgithubrunner/.artifactory/credentials` (mode 600)
-- Uses `curl` with `X-JFrog-Art-Api` header authentication
-- Verifies upload with HEAD request
-- Keeps credentials out of workflow YAML and logs
-
-**`prepare-ue-distribution`**
-- Downloads UE archive from Artifactory with SHA256 verification
-- Caches both archives and extracted content in `<cache-dir>/`
-- Uses parallel zstd decompression (`-T0` for all CPU cores)
-- Atomic extraction (temp dir → verify → rename)
-- Returns path to extracted UE distribution for `CARLA_UNREAL_ENGINE_PATH`
-
-**`sync-carla-content`**
-- Manages persistent Git-LFS clone in `<target-dir>/`
-- SSH deploy key authentication (non-interactive, no host-key prompts)
-- Smart LFS caching (only downloads new/changed objects)
-- Atomic clone (temp → verify sentinel file → move)
-- Verify-only mode for fast workflow validation
-- Content directory is volume-mounted into containers at same path
-
-### Volume Mount Strategy
-
-The build uses bind-mounts to share data between host and container:
-
-```bash
+```sh
 podman run \
-  -v "$WORKSPACE:$WORKSPACE" \              # CARLA source (read-write)
-  -v "$CONTENT_DIR:$WORKSPACE/Unreal/CarlaUnreal/Content/Carla:ro" \  # Content (read-only)
-  -v "$UE_PATH:/opt/unreal-engine:ro" \     # UE distribution (read-only)
-  ...
+  -v "$WORKSPACE:$WORKSPACE" \                       # CARLA source, read-write
+  -v "$SNAPSHOT:$WORKSPACE/Unreal/CarlaUnreal/Content/Carla:O" \   # content, overlay
+  -v "$UE_PATH:/opt/unreal-engine" \                 # engine, read-write (UBT writes here)
+  -v "$BUILD_HOME_DIR:/home/builder" \               # persistent dependency cache
+  -v "$DDC_DIR:/ddc"                                 # persistent Derived Data Cache
 ```
 
-**Why same-path mounting?**
-- Unreal Engine stores absolute paths to assets in cooked data
-- Mounting CARLA source at the same path ensures asset references work
-- Content must be at `Unreal/CarlaUnreal/Content/Carla` relative to CARLA root
+**Same-path workspace mount.** Unreal records absolute paths in cooked data, so the source has
+to appear at the same path inside the container as outside it.
 
-## Rootless Podman Configuration
+**Overlay content mount (`:O`).** The build must be able to write inside the content directory
+— `CarlaSetup.sh` deletes an uncookable asset there — without those writes reaching the shared
+cache. An overlay mount gives the container a throwaway writable layer over a read-only lower
+directory, which is exactly that. The workflow probes for overlay support and falls back to a
+plain read-only mount, where the deletion warns instead of aborting.
 
-The GitHub Actions runner uses **rootless Podman** for container builds and execution. This requires specific system configuration that differs from interactive user sessions.
-
-### Required System Configuration
-
-**1. User Namespace Mappings**
-
-Add subuid/subgid ranges in `/etc/subuid` and `/etc/subgid`:
-```
-catgithubrunner:951968:65536
-```
-
-**2. Setuid Binaries**
-
-The `newuidmap` and `newgidmap` binaries must have the setuid bit:
-```bash
-sudo chmod u+s /usr/bin/newuidmap /usr/bin/newgidmap
-```
-
-Verify with:
-```bash
-ls -la /usr/bin/new{u,g}idmap
-# Should show: -rwsr-xr-x (note the 's')
-```
-
-**3. SELinux Configuration**
-
-Enable container cgroup management:
-```bash
-sudo setsebool -P container_manage_cgroup on
-```
-
-When Podman storage is on a non-standard filesystem (e.g., `/mnt/raid5`), set proper SELinux context:
-```bash
-# Add persistent SELinux policy
-sudo semanage fcontext -a -t container_file_t "/mnt/raid5/home/catgithubrunner/.local/share/containers(/.*)?"
-
-# Apply the context
-sudo restorecon -R -v /mnt/raid5/home/catgithubrunner/.local/share/containers
-```
-
-**4. Enable Lingering User Session**
-
-Rootless Podman requires a persistent systemd user session. Enable lingering for the runner user:
-```bash
-sudo loginctl enable-linger catgithubrunner
-```
-
-This creates `/run/user/<uid>` and sets up proper cgroup delegation automatically. Verify with:
-```bash
-loginctl list-users  # Should show catgithubrunner
-ls -la /run/user/2028  # Should exist with proper permissions
-```
-
-**5. Systemd Service Configuration**
-
-The runner service **must** have `Delegate=yes` to allow cgroup management for rootless containers:
-
-```ini
-[Service]
-Type=simple
-User=catgithubrunner
-Group=SNC
-WorkingDirectory=/mnt/raid5/home/catgithubrunner/actions-runner
-ExecStart=/bin/bash -c 'cd /mnt/raid5/home/catgithubrunner/actions-runner && ./run.sh'
-
-Restart=always
-RestartSec=10
-
-# CRITICAL: Enable cgroup delegation for rootless containers
-Delegate=yes
-```
-
-**Why `Delegate=yes` is required:**
-- Interactive user sessions get automatic cgroup delegation from `pam_systemd`
-- Systemd services run in `system.slice` without delegation by default
-- Rootless Podman needs cgroup control to create container sub-cgroups
-- Without delegation, `newuidmap` fails with "Operation not permitted"
-
-### Workflow Environment Variables
-
-GitHub Actions overrides `HOME` to a temporary directory, breaking rootless Podman. Workflows must explicitly set:
-
-```yaml
-- name: Build container
-  run: |
-    export HOME=/home/catgithubrunner
-    export XDG_RUNTIME_DIR=/run/user/$(id -u)
-    podman build ...
-```
-
-### Troubleshooting
-
-**Error: `newuidmap: write to uid_map failed: Operation not permitted`**
-- Check setuid bit on `/usr/bin/newuidmap` and `/usr/bin/newgidmap`
-- Verify `Delegate=yes` in systemd service
-- Confirm subuid/subgid entries exist
-
-**Error: `lstat /run/user/2028: no such file or directory`**
-- Verify `ExecStartPre` creates the directory in systemd service
-- Check directory permissions: `drwx------ catgithubrunner`
-
-**Error: SELinux denials on `/mnt/raid5`**
-- Run `sudo ausearch -m avc -ts recent` to check for denials
-- Apply `container_file_t` context as shown above
-- Verify with `ls -Zd /mnt/raid5/home/catgithubrunner/.local/share/containers`
-
-## Security
-
-**Credential Isolation:**
-- Artifactory API key: `/home/catgithubrunner/.artifactory/credentials` (mode 600)
-- Content deploy key: `/home/catgithubrunner/.ssh/carla-content-deploy-key` (mode 600)
-- Both owned by `catgithubrunner` user
-- Scripts read credentials, workflows never see them
-- No secrets in workflow YAML or logs
-
-**Deploy Key Permissions:**
-- Content deploy key has read-only access to `CAT/carla-content`
-- Cannot push or modify repository
-- Scoped to single repository
+**Persistent container `HOME`.** Pointing `HOME` at a real directory instead of a throwaway
+path inside the container is what makes the vcpkg dependency cache survive between builds.

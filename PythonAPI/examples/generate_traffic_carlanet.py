@@ -18,8 +18,8 @@ import logging
 from numpy import random
 
 # ── Boundary-aware "staging" traffic ─────────────────────────────────────────
-# When the world was built with a draped sandbox (height-align=drape), get_staging_bounds()
-# returns the sandbox extent + an inward "staging ring" reserved at the OSM edge. Traffic enters
+# When the world was built from an OSM area, get_staging_bounds() returns the sandbox extent
+# plus an inward "staging ring" reserved at the OSM edge. Traffic enters
 # from that ring driving inward, and despawns once it has been into the scene and returned to the
 # ring — so vehicles/walkers are never seen popping into existence or vanishing mid-scene.
 
@@ -152,8 +152,8 @@ def main():
     argparser.add_argument(
         '--no-staging', action='store_true', default=False,
         help='Disable boundary-aware staging (spawn anywhere on the map). By default, when the world '
-             'has a draped sandbox (height-align=drape), traffic enters from the edge staging ring '
-             'and despawns when it returns there, so nothing pops in/out mid-scene.')
+             'was built from an OSM area, traffic enters from the edge staging ring and despawns '
+             'when it returns there, so nothing pops in/out mid-scene.')
 
     args = argparser.parse_args()
 
@@ -208,7 +208,7 @@ def main():
 
         blueprints = sorted(blueprints, key=lambda bp: bp.id)
 
-        # Boundary-aware staging: if the world has a draped sandbox, restrict vehicle entry to the
+        # Boundary-aware staging: if the world has a recorded sandbox, restrict vehicle entry to the
         # edge ring, facing inward. staging stays None (upstream behaviour) when there's no sandbox
         # or --no-staging is set.
         staging = None

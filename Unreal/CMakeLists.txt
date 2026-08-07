@@ -49,8 +49,26 @@ set (
   ${CARLA_UE_PATH}/Content/Carla
 )
 
-if (NOT EXISTS ${CARLA_UE_CONTENT_PATH}/.git)
-  carla_error ("Missing CARLA content.")
+# Validate the content by looking for an asset, not for a .git directory. A checkout is not
+# evidence of usable content: the assets are Git LFS objects, so a clone whose pointers were
+# never smudged has a .git directory and no assets, and passes a .git test while failing the
+# cook much later. A build server may also mount a prepared snapshot of the content working
+# tree, which has no .git at all because the repository stays on the host.
+#
+# This file is part of the pedestrian skeleton assets and is always present in a complete
+# checkout; the same file is used as the completeness sentinel by CarlaSetup.sh and by the
+# build server's content sync.
+set (
+  CARLA_UE_CONTENT_SENTINEL
+  ${CARLA_UE_CONTENT_PATH}/Static/Pedestrian/00_GenericComponents/Definitions/Skel_Pedestrian_G3.uasset
+)
+
+if (NOT EXISTS ${CARLA_UE_CONTENT_SENTINEL})
+  carla_error (
+    "Missing CARLA content: expected asset not found at "
+    "${CARLA_UE_CONTENT_SENTINEL}. Run CarlaSetup.sh to fetch the content, or provide it at "
+    "${CARLA_UE_CONTENT_PATH}."
+  )
 endif ()
 
 set (

@@ -101,6 +101,15 @@ try:
 except FileNotFoundError:
     _CARLANET_RECORDING_AVAILABLE = False
 
+# Scenario execution (CarlaNet.Scenario): parses an ASAM OpenSCENARIO storyboard and drives it from
+# the world tick entirely in .NET, so scenario timing never depends on interpreter scheduling. Optional
+# — a missing assembly simply leaves start_scenario unavailable.
+try:
+    _ref("CarlaNet.Scenario")
+    _CARLANET_SCENARIO_AVAILABLE = True
+except FileNotFoundError:
+    _CARLANET_SCENARIO_AVAILABLE = False
+
 # ── C# type imports ───────────────────────────────────────────────────────────
 from CarlaNet.Transport import CarlaClient as _CarlaClient
 from CarlaNet.Types.Geom import (Transform as _CSTransform,
@@ -762,9 +771,12 @@ class Actor:
 
     def set_autopilot(self, enabled: bool, tm_port: int = 8000):
         _sync(self._client.SetActorAutopilotAsync(self._actor.Id, enabled))
-        # Register/unregister with the in-process TM so its worker picks
-        # up the vehicle. Server-side autopilot flag alone won't drive it.
-        Client._tm_register_ids([int(self._actor.Id)], int(tm_port), bool(enabled))
+        # Register/unregister with the in-process TM so its worker picks up the vehicle. The
+        # server-side autopilot flag alone won't drive it. Hand over the actor record rather than
+        # its id: registering by id makes the TM fetch the record back from the simulator, which
+        # returns nothing for a vehicle spawned in this same frame, and the registration is lost
+        # with the vehicle left sitting where it spawned.
+        Client._tm_register_actors([self._actor], int(tm_port), bool(enabled))
 
     def set_light_state(self, state):
         # Accept Python int / VehicleLightState wrapper / C# VehicleLightStateFlags
@@ -777,6 +789,15 @@ class Actor:
 
     def set_simulate_physics(self, enabled: bool):
         _sync(self._client.SetActorSimulatePhysicsAsync(self._actor.Id, enabled))
+
+    def set_target_velocity(self, velocity):
+        """Set the actor's linear velocity directly (m/s, world axes).
+
+        Used at spawn to start a vehicle at the speed of the traffic it is joining. Without it a
+        vehicle is created at rest and has to accelerate from zero, which on a motorway means it
+        spends its first seconds being overtaken by everything around it."""
+        v = velocity._to_cs() if hasattr(velocity, "_to_cs") else velocity
+        _sync(self._client.SetActorTargetVelocityAsync(self._actor.Id, v))
 
     def set_fade(self, hide: float):
         """Set the staging fade for this actor: 0.0 = fully visible, 1.0 = fully dissolved away.
@@ -1140,6 +1161,47 @@ def _cmds_to_cs(cmds):
 
 # ── Traffic Manager ───────────────────────────────────────────────────────────
 
+class PlannedRoute:
+    """A route the Traffic Manager searched the road graph for, ready to be given to a vehicle.
+
+    Returned by TrafficManager.plan_route() and consumed by TrafficManager.apply_route(). Treat it
+    as opaque: it carries both the waypoints the vehicle will follow and the identity of every
+    waypoint on the route, which is what lets the Traffic Manager tell whether the vehicle is still
+    on it.
+    """
+    __slots__ = ("_route", "_locations")
+
+    def __init__(self, cs_route):
+        self._route = cs_route
+        self._locations = None
+
+    @property
+    def destination(self) -> Location:
+        d = self._route.Destination
+        return Location(d.X, d.Y, d.Z)
+
+    @property
+    def length_m(self) -> float:
+        """Distance along the route in metres."""
+        return float(self._route.LengthMetres)
+
+    @property
+    def locations(self):
+        """The route's waypoints as Locations, in travel order. Built on first access — a long route
+        holds hundreds of points and most callers only need the length."""
+        if self._locations is None:
+            self._locations = [Location(p.X, p.Y, p.Z) for p in self._route.Path]
+        return self._locations
+
+    def __len__(self) -> int:
+        return int(self._route.Path.Count)
+
+    def __repr__(self):
+        d = self.destination
+        return (f"PlannedRoute({len(self)} waypoints, {self.length_m:.0f} m, "
+                f"to ({d.x:.1f}, {d.y:.1f}))")
+
+
 class TrafficManager:
     """Wrapper around the in-process C# CarlaNet.TrafficManager.TrafficManager
     facade. Mirrors the upstream `carla.TrafficManager` Python API (snake_case
@@ -1174,12 +1236,77 @@ class TrafficManager:
         Wraps the C# TrafficManager.SetCustomPath. The TM navigates the road graph junction by
         junction toward each point (it does NOT teleport or go off-road), so a single far-away
         destination makes the vehicle head there across the map. Call after set_autopilot(True).
+
+        A single far-away destination is a bearing, not a route: each junction is chosen greedily
+        from the point the vehicle is at, with no way to see past it. Use plan_route() +
+        apply_route() to have the road graph searched first and the whole route handed over.
         """
         from System.Collections.Generic import List as _List
         cs_path = _List[_CSLocation]()
         for p in path:
             cs_path.Add(p._to_cs() if hasattr(p, "_to_cs") else p)
         self._tm.SetCustomPath(actor._actor, cs_path, bool(empty_buffer))
+
+    def plan_route(self, origin, destination):
+        """Search the road graph for a route from `origin` to `destination`. Returns a PlannedRoute,
+        or None when no sequence of lanes connects them.
+
+        The search runs on the calling thread and never on the Traffic Manager's tick, so call this
+        BEFORE spawning the vehicle: it keeps the tick free, and it lets a spawn point with no route
+        to the destination be rejected before a vehicle exists there. The result depends only on the
+        two endpoints and the map, so a scenario replayed with the same seed produces the same
+        routes. Speed, collision avoidance and traffic-signal response stay emergent.
+
+        Hand the result to apply_route() to put a spawned vehicle on it.
+        """
+        o = origin._to_cs() if hasattr(origin, "_to_cs") else origin
+        d = destination._to_cs() if hasattr(destination, "_to_cs") else destination
+        cs_route = self._tm.PlanRoute(o, d)
+        return None if cs_route is None else PlannedRoute(cs_route)
+
+    def apply_route(self, actor: Actor, route):
+        """Put a vehicle on a route returned by plan_route().
+
+        The route's waypoints become the vehicle's path, and the vehicle is watched from then on: if
+        it leaves the route — an automatic lane change past an obstacle, a shove from a collision, a
+        junction taken differently from the plan — it is replanned from wherever it now is to the
+        same destination. Every such event prints a '[route]' line naming the vehicle.
+        """
+        self._tm.ApplyRoute(actor._actor, route._route if isinstance(route, PlannedRoute) else route)
+
+    def clear_route(self, actor: Actor):
+        """Stop watching a vehicle's route. Its current path is left in place."""
+        self._tm.ClearRoute(actor._actor)
+
+    def set_event_log_path(self, path):
+        """Also append the Traffic Manager's event lines to `path` (None to stop).
+
+        Its '[route]' and '[traffic]' lines go to .NET's own handle on the console, so wrapping
+        Python's streams cannot capture them; this asks the Traffic Manager itself to write them to
+        the file as well. They still appear on the console either way."""
+        self._tm.SetEventLogPath(path)
+
+    def get_speed_limit_kph_at(self, location) -> float:
+        """The speed limit posted on the lane nearest `location`, in km/h; 0 where the road declares
+        none. The same figure the Traffic Manager governs a vehicle by, so a caller placing a
+        vehicle can start it at the speed it is about to be driven at."""
+        loc = location._to_cs() if hasattr(location, "_to_cs") else location
+        return float(self._tm.GetSpeedLimitKphAt(loc))
+
+    def get_routed_vehicle_count(self) -> int:
+        """How many vehicles are currently following a planned route."""
+        return int(self._tm.RoutedVehicleCount)
+
+    def set_route_replan_attempt_limit(self, limit: int):
+        """How many consecutive failed replans a vehicle may accumulate before the greedy fallback
+        takes over. 0 means the fallback is never reached however often replanning fails. Default 3.
+        Inert unless set_route_greedy_fallback_enabled(True) is also set."""
+        self._tm.SetRouteReplanAttemptLimit(int(limit))
+
+    def set_route_greedy_fallback_enabled(self, enabled: bool):
+        """Whether a vehicle that cannot be replanned is eventually handed back to greedy steering
+        toward its destination, rather than going on trying to find a real route. Off by default."""
+        self._tm.SetRouteGreedyFallbackEnabled(bool(enabled))
 
     def set_global_percentage_speed_difference(self, pct: float):
         self._tm.SetGlobalPercentageSpeedDifference(float(pct))
@@ -1397,15 +1524,13 @@ class World:
         main georeference."""
         return bool(_sync(self._client.SetLayerOffsetAsync(str(layer), float(offset_meters))))
 
-    def build_draped_terrain(self, origin_x, origin_y, cell_size, num_cols, num_rows, heights,
-                             staging_margin=0.0):
+    def build_draped_terrain(self, origin_x, origin_y, cell_size, num_cols, num_rows, heights):
         """Build/replace the hidden, collision-only draped ground surface (a heightfield) vehicles
         drive on across the sandbox, on- and off-road. `heights` is a row-major sequence (or numpy
         array) of world Z in METRES, length num_cols*num_rows, indexed [row*num_cols + col]; grid
         corner (col 0,row 0) sits at world (origin_x, origin_y) metres, +col=+X, +row=+Y, spacing
-        cell_size m. staging_margin (m) is the inward ring reserved at the sandbox edge for traffic
-        entry/exit (recorded for get_staging_bounds; does not change the terrain extent). Returns
-        True on success."""
+        cell_size m. Returns True on success. The staging rectangle traffic uses is recorded
+        separately — see set_staging_bounds."""
         from System import Array, Double
         try:
             flat = heights.ravel().tolist() if hasattr(heights, "ravel") else list(heights)
@@ -1414,13 +1539,21 @@ class World:
         arr = Array[Double]([float(h) for h in flat])
         return bool(_sync(self._client.BuildDrapedTerrainAsync(
             float(origin_x), float(origin_y), float(cell_size),
-            int(num_cols), int(num_rows), arr, float(staging_margin))))
+            int(num_cols), int(num_rows), arr)))
+
+    def set_staging_bounds(self, min_x, min_y, max_x, max_y, margin):
+        """Record the sandbox extent (CARLA-local metres) and the inward staging-ring width reserved
+        at its edge for traffic entry/exit. Written by the digital-twin build for every height-align
+        mode; read back by get_staging_bounds. Returns True on success."""
+        return bool(_sync(self._client.SetStagingBoundsAsync(
+            float(min_x), float(min_y), float(max_x), float(max_y), float(margin))))
 
     def get_staging_bounds(self):
-        """Boundary-aware-traffic staging bounds, or None when the world has no draped terrain.
-        Returns a dict: {min_x, min_y, max_x, max_y, margin} in CARLA-local metres — the draped
-        sandbox extent plus the inward staging-ring width. The scene perimeter (region of interest)
-        is these bounds inset by `margin`; the staging ring is between the perimeter and the bounds."""
+        """Boundary-aware-traffic staging bounds, or None for a world that was loaded rather than
+        built from an OSM area. Returns a dict: {min_x, min_y, max_x, max_y, margin} in CARLA-local
+        metres — the sandbox extent plus the inward staging-ring width. The scene perimeter (region
+        of interest) is these bounds inset by `margin`; the staging ring is between the perimeter
+        and the bounds."""
         vals = _sync(self._client.GetStagingBoundsAsync())
         if vals is None or vals.Count < 5:
             return None
@@ -1653,7 +1786,8 @@ class World:
 
     def start_recording(self, camera, record_dir, hz=2.0, affiliation="n", stale=3.0,
                         fov=90.0, platform_type="uas-fixed", platform_affiliation="f",
-                        platform_callsign="OVERWATCH", platform_uid=None, distortion="none"):
+                        platform_callsign="OVERWATCH", platform_uid=None, distortion="none",
+                        run_id=None, scenario_id=None, seed=None):
         """Start native (C#) recording of `camera`'s imagery to `record_dir`: every 1/hz seconds a
         lossless PNG of the clean frame + a paired CoT-XML telemetry sidecar, encoded on the .NET thread
         pool (no Python/GIL in the hot path). Returns the FrameRecorder, or None if unavailable.
@@ -1664,7 +1798,13 @@ class World:
         or a raw CoT type string; `platform_affiliation` is the CoT standard identity (default 'f' friend,
         as the platform is our own collection asset); `platform_callsign`/`platform_uid` name the track
         (uid defaults to CARLA-SENSOR-<camera id>); `distortion` describes the lens model ('none' at CARLA
-        defaults)."""
+        defaults).
+
+        Every capture records the simulation tick that produced it, so a still and its sidecar are bound
+        to a simulation instant rather than to wall-clock time, which does not track the simulation
+        clock. `run_id` groups the captures of one execution (generated from the start time when not
+        given), `scenario_id` names the scenario driving the run, and `seed` records the integer the run
+        was started with so it can be reproduced."""
         if not _CARLANET_RECORDING_AVAILABLE:
             print("native recording unavailable: CarlaNet.Recording assembly not loaded "
                   "(rebuild the wheel/DLLs).", file=sys.stderr)
@@ -1676,9 +1816,60 @@ class World:
         cot_type = SensorPlatformOptions.ResolveCotType(str(platform_type), str(platform_affiliation))
         opts = SensorPlatformOptions(float(fov), cot_type, str(platform_callsign), str(uid),
                                      "sensor.camera.rgb", str(distortion))
+        # Positional through `workers` (0 = default worker count), since the run-identity arguments
+        # follow it in the C# signature.
         self._recorder = FrameRecorder(self._client, token, str(record_dir), float(hz),
-                                       str(affiliation), float(stale), opts)
+                                       str(affiliation), float(stale), opts, 0,
+                                       None if run_id is None else str(run_id),
+                                       None if scenario_id is None else str(scenario_id),
+                                       None if seed is None else int(seed))
         return self._recorder
+
+    def start_scenario(self, path, traffic_manager, report=None):
+        """Run an ASAM OpenSCENARIO storyboard against the loaded world. Returns the executor, or None
+        if unavailable.
+
+        Parsing, entity placement, trigger evaluation and vehicle commands all happen in .NET, driven by
+        the world tick. Python starts and stops a scenario and does not participate in its execution, so
+        scenario timing does not depend on interpreter scheduling or on round trips through this client.
+
+        `traffic_manager` is the TrafficManager the scenario's vehicles are driven by, as returned by
+        `Client.get_trafficmanager()`. `report` receives one line per state change — an act starting, a
+        vehicle stopping — and is called from the tick thread, so it must not block."""
+        if not _CARLANET_SCENARIO_AVAILABLE:
+            print("scenario execution unavailable: CarlaNet.Scenario assembly not loaded "
+                  "(rebuild the wheel/DLLs).", file=sys.stderr)
+            return None
+        from CarlaNet.Scenario import OpenScenarioParser, RoadNetwork, ScenarioExecutor
+        from System import Action, String
+
+        self.stop_scenario()
+        definition = OpenScenarioParser.LoadFile(str(path))
+
+        # Resolve the storyboard's road-referenced positions against the network the server actually
+        # has loaded, rather than against the file the scenario names.
+        network = RoadNetwork.FromOpenDrive(_sync(self._client.GetMapDataAsync()))
+
+        native_tm = getattr(traffic_manager, "_tm", None)
+        if native_tm is None:
+            raise RuntimeError(
+                "a working TrafficManager is required to run a scenario; get_trafficmanager() "
+                "returned a fallback, so the CarlaNet.Map / CarlaNet.TrafficManager assemblies are "
+                "probably missing")
+
+        callback = Action[String](report) if report is not None else None
+        self._scenario = ScenarioExecutor(self._client, native_tm, definition, network, callback)
+        return self._scenario
+
+    def stop_scenario(self):
+        """Stop a running scenario and remove the vehicles it placed."""
+        s = getattr(self, "_scenario", None)
+        if s is not None:
+            try:
+                s.Dispose()
+            except Exception:
+                pass
+            self._scenario = None
 
     def stop_recording(self):
         """Stop native recording (flushes pending captures)."""
@@ -2163,8 +2354,44 @@ class Client:
 
     # ── TM registration helpers ───────────────────────────────────────────────
     @staticmethod
+    def _tm_register_actors(actors, tm_port: int, enabled: bool):
+        """Register/unregister actors with the cached TM on tm_port (no-op if none).
+
+        Takes the actor records themselves, so the TM does not have to ask the simulator for them
+        again. That round trip returns nothing for a vehicle spawned in the same frame — the
+        simulator has not published it yet — and the registration is then dropped, leaving a vehicle
+        that is never driven and never says so.
+        """
+        cs_tm = Client._tm_for_port(tm_port)
+        if cs_tm is None:
+            return
+        from System.Collections.Generic import List as _List
+        cs_actors = _List[_Actor]()
+        for a in actors:
+            cs_actors.Add(a)
+        try:
+            if enabled:
+                cs_tm.RegisterVehicles(cs_actors)
+            else:
+                cs_tm.UnregisterVehicles(cs_actors)
+        except Exception as ex:
+            import sys
+            print(f"traffic-manager registration failed: {ex!r}", file=sys.stderr)
+
+    @staticmethod
+    def _tm_for_port(tm_port: int):
+        """The C# TrafficManager cached for this port, or None if nothing is using it."""
+        cache = getattr(Client, "_tm_cache", None)
+        if not cache:
+            return None
+        tm = cache.get(int(tm_port))
+        return None if tm is None else getattr(tm, "_tm", None)
+
+    @staticmethod
     def _tm_register_ids(actor_ids, tm_port: int, enabled: bool):
-        """Register/unregister actor IDs with the cached TM on tm_port (no-op if none)."""
+        """Register/unregister actor IDs with the cached TM on tm_port (no-op if none).
+
+        Only for callers that have an id and nothing else; prefer _tm_register_actors."""
         cache = getattr(Client, "_tm_cache", None)
         if not cache:
             return

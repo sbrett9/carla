@@ -26,8 +26,9 @@ destroyed is dropped immediately (no stale set_fade calls), and it stops cleanly
 
 Prereqs:
   * Headless server running (RunCarlaServer.ps1).
-  * A draped digital-twin world already built (test_digital_twin.py --height-align drape), so the
-    server reports staging bounds (the map edge ring). Without it this script has no margin to use.
+  * A digital-twin world already built from an OSM area (test_digital_twin.py, any --height-align
+    mode), so the server reports staging bounds (the map edge ring). Without it this script has no
+    margin to use.
   * A rebuilt server + carlanet wheel that include set_actor_fade (otherwise the fade is a no-op;
     this script checks for it up front and tells you to rebuild).
 
@@ -147,8 +148,8 @@ def main() -> int:
     except Exception as e:
         print(f"get_staging_bounds failed: {e!r}", file=sys.stderr)
     if not staging:
-        print("ERROR: no staging bounds. Build a draped world first:\n"
-              "       python test_digital_twin.py --height-align drape", file=sys.stderr)
+        print("ERROR: no staging bounds. Build a world from an OSM area first:\n"
+              "       python test_digital_twin.py", file=sys.stderr)
         return 1
     print(f"staging: x[{staging['min_x']:.0f},{staging['max_x']:.0f}] "
           f"y[{staging['min_y']:.0f},{staging['max_y']:.0f}] margin {staging['margin']:.0f} m")
