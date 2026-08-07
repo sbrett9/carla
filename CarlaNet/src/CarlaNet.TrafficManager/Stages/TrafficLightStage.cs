@@ -49,6 +49,7 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
     private readonly Parameters _parameters;
     private readonly RandomGenerator _random;
     private readonly CarlaClient? _client;
+    private readonly InMemoryMap? _localMap;
 
     // Per-junction FIFO of vehicles approaching a non-signalised junction.
     // Mirrors `std::deque<ActorId>` upstream — LinkedList gives us O(1)
@@ -99,13 +100,15 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
         BufferMap bufferMap,
         Parameters parameters,
         RandomGenerator random,
-        CarlaClient? client = null)
+        CarlaClient? client = null,
+        InMemoryMap? localMap = null)
     {
         _simulationState = simulationState;
         _bufferMap = bufferMap;
         _parameters = parameters;
         _random = random;
         _client = client;
+        _localMap = localMap;
     }
 
     public IReadOnlyDictionary<ActorId, TrafficLightFrame> GetOutput() => _output;
@@ -258,6 +261,18 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             // matters, and a vehicle arriving against a red never commits, so it still stops.
             bool committedToJunction = _committedToJunction.Contains(egoActorId);
 
+            // Whether the vehicle itself is inside a junction, as opposed to its horizon buffer
+            // pointing into one. These come apart exactly where it matters: the buffer looks ahead,
+            // so while a vehicle is still crossing an intersection its front waypoint has already
+            // moved onto the road beyond, taking the next signal's identity with it. A vehicle
+            // part-way through a left turn would then brake for a signal on the far side and stop
+            // dead across the junction. Measured before this test existed: 325 vehicles committed to
+            // a junction and then began braking within twelve seconds, many inside a fifth of a
+            // second, several for a signal 4.5 m past the junction they were still in.
+            bool insideJunction =
+                _localMap is not null
+                && _localMap.GetWaypoint(_simulationState.GetLocation(egoActorId)).CheckJunction();
+
             // A vehicle is only handed a light's state by the simulator while it physically overlaps
             // that light's stop-line trigger box. On a road posted well above walking pace it crosses
             // that box in a fraction of a second — measured at 0.2 to 0.8 s over 3.7 to 8.0 m — which
@@ -290,7 +305,7 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             // this tick: a vehicle stopped short of the line is still stopping for the signal while
             // it edges up to it.
             bool stoppingForSignal = false;
-            if (committedToJunction || !signalAheadIsStopping)
+            if (committedToJunction || insideJunction || !signalAheadIsStopping)
             {
                 // Nothing ahead to stop for: either the signal has changed to permit this vehicle, it
                 // is no longer the signal governing the lane, or the vehicle is already crossing.
@@ -398,7 +413,7 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             // this tick) has committed to crossing; one that has left the junction behind releases it.
             // Re-asserted every tick, so a committed vehicle stays committed for as long as it is
             // still crossing.
-            if (!headingIntoJunction)
+            if (!headingIntoJunction && !insideJunction)
                 _committedToJunction.Remove(egoActorId);
             else if (!trafficLightHazard)
             {
