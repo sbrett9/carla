@@ -140,7 +140,8 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
             bufferMap: _bufferMap,
             parameters: _parameters,
             random: _randomDevice,
-            client: _client);
+            client: _client,
+            localMap: _localMap);
 
         _motionPlanStage = new MotionPlanStage(
             simulationState: _simulationState,
