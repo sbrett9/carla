@@ -58,7 +58,58 @@ public sealed class ActorSnapshot
         bool atTrafficLight = s[24] != 0;
         return new VehicleObservedState(speedLimit, tlState, atTrafficLight);
     }
+
+    /// <summary>
+    /// Decode the type-dependent union as a traffic light's state. Byte offsets within
+    /// <see cref="TypeDependentState"/>, matching <c>detail::TrafficLightData</c>, which is
+    /// declared under <c>#pragma pack(1)</c> and so has no padding:
+    /// <list type="bullet">
+    ///   <item><c>sign_id</c> char[32] @ 0 — the OpenDRIVE signal id, NUL-terminated</item>
+    ///   <item><c>green_time</c> / <c>yellow_time</c> / <c>red_time</c> / <c>elapsed_time</c>
+    ///         f32 @ 32, 36, 40, 44</item>
+    ///   <item><c>pole_index</c> u32 @ 48</item>
+    ///   <item><c>time_is_frozen</c> bool @ 52</item>
+    ///   <item><c>state</c> u8 @ 53</item>
+    /// </list>
+    /// Returns null when the union is too short, or when the signal id is empty — a light spawned
+    /// as a plain actor rather than from OpenDRIVE writes no id, and cannot be matched to the map.
+    /// </summary>
+    internal TrafficLightObservedState? ParseTrafficLightState()
+    {
+        ReadOnlySpan<byte> s = TypeDependentState;
+        if (s.Length < 54) return null;
+        ReadOnlySpan<byte> idBytes = s[..32];
+        int end = idBytes.IndexOf((byte)0);
+        if (end < 0) end = idBytes.Length;
+        if (end == 0) return null;
+        string signId = System.Text.Encoding.ASCII.GetString(idBytes[..end]);
+        return new TrafficLightObservedState(
+            signId,
+            (TrafficLightState)s[53],
+            BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(s[32..])),
+            BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(s[36..])),
+            BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(s[40..])),
+            BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(s[44..])),
+            BinaryPrimitives.ReadUInt32LittleEndian(s[48..]),
+            s[52] != 0);
+    }
 }
+
+/// <summary>
+/// A traffic light's state as the world observer reports it, keyed by the OpenDRIVE signal id the
+/// light was generated from. Read for every light every tick, so a vehicle can be told the state of
+/// the signal governing its approach from any distance, rather than only while it overlaps that
+/// signal's stop-line trigger box.
+/// </summary>
+public readonly record struct TrafficLightObservedState(
+    string SignId,
+    TrafficLightState State,
+    float GreenTime,
+    float YellowTime,
+    float RedTime,
+    float ElapsedTime,
+    uint PoleIndex,
+    bool TimeIsFrozen);
 
 /// <summary>
 /// Per-vehicle dynamic state decoded from the world-observer snapshot's type-dependent
@@ -1412,6 +1463,55 @@ public sealed class CarlaClient : IAsyncDisposable
     /// union carries different data for walkers/traffic-lights. Returns Green / 0 / false when the
     /// actor is not yet in the cache, so a caller defaults to "unimpeded" rather than "stop".
     /// </summary>
+    /// <summary>
+    /// Learn which actors are traffic lights, so their state can afterwards be read from the cached
+    /// snapshot with no further RPC. Traffic lights are spawned when the map loads and live for the
+    /// whole episode, so this is done once; call it again only if the map is reloaded.
+    /// </summary>
+    /// <remarks>
+    /// The world-observer snapshot does not say what type an actor is — the type-dependent union is
+    /// discriminated by a type the server knows and does not transmit — so the set has to be
+    /// established over RPC. Lights whose signal id is empty are kept out: they were placed by hand
+    /// rather than generated from OpenDRIVE, and nothing in the map can refer to them.
+    /// </remarks>
+    public async Task<int> RefreshTrafficLightRegistryAsync()
+    {
+        var ids = _actorCache.Keys.ToList();
+        if (ids.Count == 0) return 0;
+        var actors = await GetActorsByIdAsync(ids).ConfigureAwait(false);
+        var found = new Dictionary<ActorId, string>();
+        foreach (var actor in actors)
+        {
+            if (!actor.Description.Id.StartsWith("traffic.traffic_light", StringComparison.Ordinal))
+                continue;
+            if (!_actorCache.TryGetValue(actor.Id, out var snap)) continue;
+            if (snap.ParseTrafficLightState() is not { } tl) continue;
+            found[actor.Id] = tl.SignId;
+        }
+        _trafficLightIds = found;
+        return found.Count;
+    }
+
+    private IReadOnlyDictionary<ActorId, string> _trafficLightIds =
+        new Dictionary<ActorId, string>();
+
+    /// <summary>
+    /// The live state of every generated traffic light, keyed by the OpenDRIVE signal id it was
+    /// built from. Read from the cached snapshot, so this costs one pass over the known lights and
+    /// no RPC. Empty until <see cref="RefreshTrafficLightRegistryAsync"/> has run.
+    /// </summary>
+    public IReadOnlyDictionary<string, TrafficLightState> GetTrafficLightStatesBySignId()
+    {
+        var states = new Dictionary<string, TrafficLightState>(_trafficLightIds.Count);
+        foreach (var (actorId, signId) in _trafficLightIds)
+        {
+            if (!_actorCache.TryGetValue(actorId, out var snap)) continue;
+            if (snap.ParseTrafficLightState() is not { } tl) continue;
+            states[signId] = tl.State;
+        }
+        return states;
+    }
+
     public VehicleObservedState GetActorVehicleState(ActorId id)
         => _actorCache.TryGetValue(id, out var s)
             ? s.ParseVehicleState()

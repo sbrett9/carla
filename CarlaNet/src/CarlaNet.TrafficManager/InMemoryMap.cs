@@ -203,6 +203,61 @@ internal sealed class InMemoryMap
 
     private readonly record struct SegmentId(RoadId RoadId, LaneId LaneId, SectionId SectionId);
 
+    // One dynamic signal on a road: where its stop line sits, and which lanes it governs.
+    private readonly record struct RoadSignal(string SignalId, double S, IReadOnlyList<LaneValidity> Validities);
+
+    /// <summary>
+    /// The road's traffic-light signals, in the order they appear along it. Static signs are left
+    /// out: they do not change state, so nothing downstream needs to watch them.
+    /// </summary>
+    private static List<RoadSignal> DynamicSignalsOn(CarlaNet.Map.Road.Road road)
+    {
+        var result = new List<RoadSignal>();
+        foreach (var info in road.Info.All)
+        {
+            if (info is not RoadInfoSignal signalRef) continue;
+            if (!signalRef.IsDynamic) continue;
+            if (signalRef.Validities.Count == 0) continue;
+            result.Add(new RoadSignal(signalRef.SignalId, signalRef.S, signalRef.Validities));
+        }
+        result.Sort(static (a, b) => a.S.CompareTo(b.S));
+        return result;
+    }
+
+    /// <summary>
+    /// The nearest signal a vehicle in <paramref name="laneId"/> at <paramref name="s"/> will reach,
+    /// and how far ahead it is. Null when the lane reaches none.
+    /// </summary>
+    /// <remarks>
+    /// Direction of travel follows the OpenDRIVE convention: negative lane ids run with increasing
+    /// s, positive ids against it. A signal behind the vehicle is not the one governing it, so the
+    /// comparison has to respect that rather than taking whichever is closest in either direction.
+    /// </remarks>
+    private static (string SignalId, float Distance)? NextSignalAlongLane(
+        List<RoadSignal> signals, LaneId laneId, double s)
+    {
+        if (signals.Count == 0) return null;
+        bool travellingWithS = laneId < 0;
+        (string, float)? best = null;
+        double bestDistance = double.MaxValue;
+        foreach (var signal in signals)
+        {
+            double distance = travellingWithS ? signal.S - s : s - signal.S;
+            if (distance < 0.0 || distance >= bestDistance) continue;
+            bool governsThisLane = false;
+            foreach (var validity in signal.Validities)
+            {
+                int low = Math.Min(validity.FromLane, validity.ToLane);
+                int high = Math.Max(validity.FromLane, validity.ToLane);
+                if (laneId >= low && laneId <= high) { governsThisLane = true; break; }
+            }
+            if (!governsThisLane) continue;
+            bestDistance = distance;
+            best = (signal.SignalId, (float)distance);
+        }
+        return best;
+    }
+
     private Dictionary<SegmentId, List<SimpleWaypoint>> BuildSegmentMap()
     {
         var map = new Dictionary<SegmentId, List<SimpleWaypoint>>();
@@ -211,6 +266,7 @@ internal sealed class InMemoryMap
 
         foreach (var road in _worldMap.Roads.Values)
         {
+            var roadSignals = DynamicSignalsOn(road);
             for (double s = EPS; s < road.Length - EPS; s += step)
             {
                 foreach (var section in LaneSectionsAt(road, s))
@@ -251,6 +307,12 @@ internal sealed class InMemoryMap
                                 ? (float)(speed.Speed * 3.6)
                                 : 0f,
                         };
+
+                        if (NextSignalAlongLane(roadSignals, lane.Id, s) is var (signalId, distance))
+                        {
+                            sw.GoverningSignalId = signalId;
+                            sw.DistanceToGoverningSignal = distance;
+                        }
 
                         var sid = new SegmentId(road.Id, lane.Id, section.Id);
                         if (!map.TryGetValue(sid, out var list))

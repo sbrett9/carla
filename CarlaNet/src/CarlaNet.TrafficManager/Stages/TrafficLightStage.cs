@@ -61,6 +61,23 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
     // Last (atTrafficLight, state) pair reported for each vehicle, so the signal it is being shown
     // is reported on change rather than every tick.
     private readonly Dictionary<ActorId, (bool AtLight, TLS State)> _lastReportedLight = new();
+
+    // Live state of every generated traffic light, keyed by the OpenDRIVE signal id the waypoints
+    // refer to. Refreshed once per tick; empty when the simulator connection is absent, in which
+    // case approach control does nothing and the box-based decision is the only one in play.
+    private IReadOnlyDictionary<string, TLS> _signalStates = new Dictionary<string, TLS>();
+    // Vehicles currently braking for a signal they can see but are not yet standing at, so the
+    // hold and the release are each reported once rather than every tick.
+    private readonly HashSet<ActorId> _heldOnApproach = new();
+
+    // Deceleration assumed available for a planned stop at a signal, in m/s². Below what the tyres
+    // could deliver, because the point is to stop short of the line rather than as late as possible.
+    private const float ComfortableDecelerationMetresPerSecondSquared = 3.5f;
+    // Applied to the computed stopping distance, so braking begins before the stop becomes marginal.
+    private const float ApproachBrakingMargin = 1.6f;
+    // Vehicles close to a red hold for it whatever their speed, so one that has crept forward or is
+    // already stopped at the line stays there instead of easing over it.
+    private const float MinimumSignalApproachMetres = 8.0f;
     // Vehicles that entered a signalised junction while permitted to proceed, and so must clear it
     // rather than stop part-way across if the light changes behind them. See Update().
     private readonly HashSet<ActorId> _committedToJunction = new();
@@ -97,6 +114,76 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
     {
         _currentTimestamp = elapsedSeconds;
     }
+
+    /// <summary>
+    /// Re-read every traffic light's state for this tick. Reads the world-observer snapshot the
+    /// simulator already sends, so it costs one pass over the lights and no round trip. Called once
+    /// per tick by the orchestrator, alongside <see cref="SetCurrentTimestamp"/>.
+    /// </summary>
+    public void RefreshSignalStates()
+    {
+        if (_client is null) return;
+        var observed = _client.GetTrafficLightStatesBySignId();
+        if (observed.Count == 0)
+        {
+            EnsureSignalRegistryDiscovery();
+            return;
+        }
+        var states = new Dictionary<string, TLS>(observed.Count);
+        foreach (var (signalId, state) in observed)
+            states[signalId] = (TLS)(byte)state;
+        _signalStates = states;
+    }
+
+    /// <summary>
+    /// Establish which actors are traffic lights, off the tick.
+    /// </summary>
+    /// <remarks>
+    /// Learning this costs a round trip, and the tick holds the registration lock, so doing it here
+    /// would stall whichever thread owns the world tick. It also cannot be done once at construction:
+    /// the lights are found through the world-observer snapshot, which is not populated until the
+    /// observer has delivered a frame. So it is attempted in the background and retried on an
+    /// interval — a map with no traffic lights simply never succeeds, at the cost of one idle request
+    /// every few seconds rather than one per tick.
+    /// </remarks>
+    private void EnsureSignalRegistryDiscovery()
+    {
+        if (_signalRegistryDiscovery is { IsCompleted: false }) return;
+        long now = Environment.TickCount64;
+        if (now - _lastSignalRegistryAttempt < SignalRegistryRetryIntervalMs) return;
+        _lastSignalRegistryAttempt = now;
+        CarlaClient client = _client!;
+        _signalRegistryDiscovery = Task.Run(async () =>
+        {
+            try
+            {
+                int found = await client.RefreshTrafficLightRegistryAsync().ConfigureAwait(false);
+                if (found > 0)
+                    TrafficReport.Writer.WriteLine(
+                        $"{DateTime.Now:HH:mm:ss.fff} [traffic] tracking {found} traffic lights by "
+                        + "signal id; approaching vehicles are told their state from a distance.");
+            }
+            catch (Exception ex)
+            {
+                TrafficReport.Writer.WriteLine(
+                    $"{DateTime.Now:HH:mm:ss.fff} [traffic] could not enumerate traffic lights "
+                    + $"({ex.Message}); vehicles will only see a signal while standing at it.");
+            }
+        });
+    }
+
+    private Task? _signalRegistryDiscovery;
+    private long _lastSignalRegistryAttempt;
+    private const long SignalRegistryRetryIntervalMs = 5000;
+
+    /// <summary>Number of traffic lights whose state is currently being tracked.</summary>
+    public int TrackedSignalCount => _signalStates.Count;
+
+    /// <summary>
+    /// Supply signal states directly, for tests that have no simulator connection.
+    /// </summary>
+    internal void SetSignalStatesForTesting(IReadOnlyDictionary<string, TLS> states)
+        => _signalStates = states;
 
     /// <summary>
     /// Decide whether the supplied vehicle should brake for a TL / stop /
@@ -165,6 +252,62 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             // matters, and a vehicle arriving against a red never commits, so it still stops.
             bool committedToJunction = _committedToJunction.Contains(egoActorId);
 
+            // A vehicle is only handed a light's state by the simulator while it physically overlaps
+            // that light's stop-line trigger box. On a road posted well above walking pace it crosses
+            // that box in a fraction of a second — measured at 0.2 to 0.8 s over 3.7 to 8.0 m — which
+            // is far less than it needs to stop, and the moment it leaves the box the answer reverts
+            // to "not at a light, green". Waiting to be told therefore means being told too late, and
+            // then told nothing at all.
+            //
+            // So read the signal governing this lane directly, from any distance, and start braking
+            // while there is still room to stop. The waypoint knows which signal it is approaching and
+            // how far ahead the stop line is; the state comes from the light itself rather than from
+            // whichever box the vehicle happens to be standing in. A vehicle already committed to its
+            // manoeuvre is exempt, as it is for the box-based decision below.
+            bool heldByApproachingSignal = false;
+            if (!committedToJunction
+                && egoBuffer is { Count: > 0 }
+                && egoBuffer[0].GoverningSignalId is { } approachingSignalId
+                && _signalStates.TryGetValue(approachingSignalId, out TLS approachingState)
+                && approachingState != TLS.Green
+                && approachingState != TLS.Off
+                && _parameters.GetPercentageRunningLight(egoActorId) <= _random.Next())
+            {
+                Vector3D velocity = _simulationState.GetVelocity(egoActorId);
+                float speed = MathF.Sqrt(
+                    velocity.X * velocity.X + velocity.Y * velocity.Y + velocity.Z * velocity.Z);
+                // Room to stop, plus a margin so the decision is made before it is marginal. Braking
+                // is the emergency stop the motion planner already applies for a light, so this is
+                // the distance at which that stop still lands short of the line.
+                float roomToStop =
+                    speed * speed / (2f * ComfortableDecelerationMetresPerSecondSquared);
+                float startBrakingAt =
+                    MathF.Max(roomToStop * ApproachBrakingMargin, MinimumSignalApproachMetres);
+                heldByApproachingSignal = egoBuffer[0].DistanceToGoverningSignal <= startBrakingAt;
+            }
+
+            // Report the transition either way. Being held for a signal the vehicle cannot yet be
+            // standing at is the behaviour this is here to produce, and being released is what
+            // distinguishes a working signal from one that has stopped traffic permanently.
+            if (_heldOnApproach.Contains(egoActorId) != heldByApproachingSignal)
+            {
+                if (heldByApproachingSignal)
+                {
+                    _heldOnApproach.Add(egoActorId);
+                    TrafficReport.Writer.WriteLine(
+                        $"{DateTime.Now:HH:mm:ss.fff} [traffic] vehicle {egoActorId} braking for "
+                        + $"signal {egoBuffer![0].GoverningSignalId} "
+                        + $"{egoBuffer[0].DistanceToGoverningSignal:F1} m ahead.");
+                }
+                else
+                {
+                    _heldOnApproach.Remove(egoActorId);
+                    TrafficReport.Writer.WriteLine(
+                        $"{DateTime.Now:HH:mm:ss.fff} [traffic] vehicle {egoActorId} released by its "
+                        + "signal.");
+                }
+            }
+
             // Case 1: at a signalised junction with a red/yellow light.
             if (isAtTrafficLight
                 && trafficLightState != TLS.Green
@@ -198,6 +341,11 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
                 AddActorToNonSignalisedJunction(egoActorId, affectedJunctionId);
                 trafficLightHazard = true;
             }
+
+            // Hold for a signal seen on approach as well as for one the vehicle is standing at. This
+            // has to be applied before commitment is decided below, so that a vehicle still short of
+            // a red does not commit to crossing on the strength of nothing having stopped it yet.
+            trafficLightHazard |= heldByApproachingSignal;
 
             // Update the commitment: a vehicle proceeding into the junction (nothing holding it back
             // this tick) has committed to crossing; one that has left the junction behind releases it.
@@ -265,6 +413,7 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
         _vehicleStopTime.Clear();
         _committedToJunction.Clear();
         _lastReportedLight.Clear();
+        _heldOnApproach.Clear();
         _output.Clear();
     }
 

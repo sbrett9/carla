@@ -408,6 +408,7 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
             // Update simulator time on the time-sensitive stages.
             double elapsedSeconds = Environment.TickCount64 / 1000.0;
             _trafficLightStage.SetCurrentTimestamp(elapsedSeconds);
+            _trafficLightStage.RefreshSignalStates();
             _motionPlanStage.UpdateCurrentTimestamp(elapsedSeconds);
 
             // ── 3. LocalizationStage per vehicle ─────────────────────
