@@ -112,6 +112,20 @@ internal sealed class SimpleWaypoint
     /// </summary>
     public float SpeedLimitKph { get; internal set; }
 
+    /// <summary>
+    /// OpenDRIVE id of the next dynamic signal governing this lane in the direction of travel, or
+    /// null where the lane reaches no signal. Cached at graph-build time so a vehicle can be told
+    /// the state of the signal it is approaching without waiting to overlap that signal's stop-line
+    /// trigger box, which it may cross too quickly to stop within.
+    /// </summary>
+    public string? GoverningSignalId { get; internal set; }
+
+    /// <summary>
+    /// Distance along the lane from this waypoint to <see cref="GoverningSignalId"/>'s stop line,
+    /// in metres. Meaningless when there is no governing signal.
+    /// </summary>
+    public float DistanceToGoverningSignal { get; internal set; }
+
     // ── Graph back-references (Wave 3 wires these up) ──────────────────────
 
     /// <summary>Successor waypoints (next-along-the-lane-graph).</summary>
