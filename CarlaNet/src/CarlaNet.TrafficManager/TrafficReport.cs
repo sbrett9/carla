@@ -50,9 +50,22 @@ internal static class TrafficReport
                 {
                     string? dir = System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path));
                     if (!string.IsNullOrEmpty(dir)) System.IO.Directory.CreateDirectory(dir);
-                    // Appending: the host normally owns this file and has already written its own
-                    // startup banner to it by the time the traffic manager exists.
-                    _file = new System.IO.StreamWriter(path, append: true) { AutoFlush = true };
+                    // The host owns this file and keeps its own handle open on it for the whole run,
+                    // so the share mode has to permit another writer: StreamWriter's own file open
+                    // asks for FileShare.Read, which denies write access that the host already holds
+                    // and fails with a sharing violation every time. That failure is only reportable
+                    // to the console — the file it would have gone to is the one that could not be
+                    // opened — so it reads as the traffic manager having nothing to say.
+                    //
+                    // Append mode on both sides is what keeps the two writers from overwriting each
+                    // other: every write goes to the end of the file as it stands, rather than to a
+                    // position each handle tracks independently.
+                    var stream = new System.IO.FileStream(
+                        path,
+                        System.IO.FileMode.Append,
+                        System.IO.FileAccess.Write,
+                        System.IO.FileShare.ReadWrite);
+                    _file = new System.IO.StreamWriter(stream) { AutoFlush = true };
                 }
                 catch (Exception ex)
                 {

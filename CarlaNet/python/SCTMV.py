@@ -172,14 +172,20 @@ def _timestamp_console(log_path=None):
 
     The Traffic Manager writes its own '[route]' and '[traffic]' lines straight to .NET's stderr,
     which never passes through these objects; it timestamps them itself in the same format so the
-    two interleave readably. Those lines reach the console but NOT the log file, because .NET holds
-    its own handle to the same descriptor — the log captures everything this process prints.
+    two interleave readably. Asking it for the same file (set_event_log_path) puts those lines in
+    the log too, which is the only way to get them there.
+
+    Opened for appending, not writing, because the Traffic Manager holds its own handle on the same
+    file: two writers each tracking their own position would overwrite each other's lines, whereas
+    appending sends every write to the end of the file as it stands. The file is truncated first so
+    a run still starts from empty.
     """
     sink = None
     if log_path:
         try:
             os.makedirs(os.path.dirname(os.path.abspath(log_path)), exist_ok=True)
-            sink = open(log_path, "w", encoding="utf-8")
+            open(log_path, "w", encoding="utf-8").close()
+            sink = open(log_path, "a", encoding="utf-8")
         except Exception as e:
             print(f"could not open log file {log_path!r}: {e!r}", file=sys.stderr)
     if not isinstance(sys.stdout, _TimestampedStream):
