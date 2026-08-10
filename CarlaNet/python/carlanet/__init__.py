@@ -1505,8 +1505,11 @@ class World:
 
     def set_layer_visible(self, layer: str, visible: bool):
         """Per-layer visibility (08_Layer_Architecture). `layer` is a Cesium tileset tag
-        ('photoreal'/'ground', '' = all tilesets) or 'road' (the OpenDRIVE mesh). Rendering
-        only — collision is independent (see set_layer_collision)."""
+        ('photoreal'/'ground', '' = all tilesets), 'road' (the OpenDRIVE mesh) or 'signals'
+        (the traffic lights and stop/yield/speed-limit signs generated from OpenDRIVE — signals
+        matched to a hand-placed actor, as in the shipped towns, are not affected). Rendering
+        only — collision is independent (see set_layer_collision), so hidden signals keep their
+        stop-line trigger volumes and vehicles go on obeying them."""
         return bool(_sync(self._client.SetLayerVisibleAsync(str(layer), bool(visible))))
 
     def set_layer_collision(self, layer: str, enabled: bool):
