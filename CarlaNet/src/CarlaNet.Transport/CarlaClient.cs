@@ -781,7 +781,10 @@ public sealed class CarlaClient : IAsyncDisposable
         => _rpc.CallAsync<bool>("set_road_rendered", rendered);
 
     /// Per-layer visibility (08_Layer_Architecture). <paramref name="layer"/> is a Cesium
-    /// tileset tag ("photoreal"/"ground", "" = all tilesets) or "road" (the OpenDRIVE mesh).
+    /// tileset tag ("photoreal"/"ground", "" = all tilesets), "road" (the OpenDRIVE mesh) or
+    /// "signals" (the traffic lights and stop/yield/speed-limit signs generated from OpenDRIVE;
+    /// signals matched to a hand-placed actor are not affected). Rendering only, so hidden
+    /// signals keep their stop-line trigger volumes and vehicles go on obeying them.
     public Task<bool> SetLayerVisibleAsync(string layer, bool visible)
         => _rpc.CallAsync<bool>("set_layer_visible", layer, visible);
 

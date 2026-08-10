@@ -8,6 +8,7 @@
 #include "Carla.h"
 #include "Carla/Server/CarlaServerResponse.h"
 #include "Carla/Traffic/TrafficLightGroup.h"
+#include "Carla/Traffic/TrafficLightManager.h"
 #include "Carla/OpenDrive/OpenDrive.h"
 #include "Carla/OpenDrive/OpenDriveGenerator.h"
 #include "Carla/Util/DebugShapeDrawer.h"
@@ -608,7 +609,8 @@ void FCarlaServer::FPimpl::BindActions()
   };
 
   // Per-layer visibility (08_Layer_Architecture). `layer` is "photoreal"/"ground" (a Cesium
-  // tileset tag) or "road" (the OpenDRIVE mesh). Rendering only — collision is independent.
+  // tileset tag), "road" (the OpenDRIVE mesh) or "signals" (the traffic lights and signs generated
+  // from OpenDRIVE). Rendering only — collision is independent.
   BIND_SYNC(set_layer_visible) << [this](std::string layer, bool visible) -> R<bool>
   {
     REQUIRE_CARLA_EPISODE();
@@ -628,6 +630,19 @@ void FCarlaServer::FPimpl::BindActions()
         ++Count;
       }
       UE_LOG(LogCarlaServer, Log, TEXT("set_layer_visible(road,%d): %d road mesh actor(s)"), visible ? 1 : 0, Count);
+    }
+    else if (Layer == TEXT("signals"))
+    {
+      ACarlaGameModeBase* GameMode = UCarlaStatics::GetGameMode(World);
+      ATrafficLightManager* Manager = GameMode ? GameMode->GetTrafficLightManager() : nullptr;
+      if (!Manager)
+      {
+        RESPOND_ERROR("no traffic light manager to toggle generated signals in");
+      }
+      // Hides the meshes only: the stop-line trigger volumes stay live, so vehicles keep obeying a
+      // signal they can no longer see.
+      Manager->SetGeneratedSignalsVisible(visible);
+      UE_LOG(LogCarlaServer, Log, TEXT("set_layer_visible(signals,%d)"), visible ? 1 : 0);
     }
     else
     {
