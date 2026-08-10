@@ -46,6 +46,9 @@ Controls (hold RIGHT MOUSE to fly, like the Unreal editor):
     R             toggle CARLA road-mesh RENDERING on/off (collision unaffected)
     B             toggle the OSM PERIMETER overlay (red rectangle + corner posts)
     M             toggle the MARGIN/interior-boundary overlay (blue rectangle)
+    L             toggle RENDERING of the traffic lights and signs generated from OpenDRIVE (mast
+                  arms, stop/yield/speed-limit signs). Rendering only: their stop-line triggers stay
+                  live, so vehicles go on obeying a signal you have hidden
     T             toggle TRAFFIC on/off (staging fade traffic)
     X             run/stop the OpenSCENARIO storyboard given by --scenario
     Y             toggle TELEMETRY (CoT over UDP) on/off
@@ -2014,6 +2017,7 @@ def main() -> int:
     ground_visible = False
     ground_collision = True
     road_rendered = True
+    signals_visible = True
     show_perimeter = False
     show_margin = False
     time_advancing = bool(args.time_advance)
@@ -2381,6 +2385,10 @@ def main() -> int:
                     road_rendered = not road_rendered
                     try: world.set_road_rendered(road_rendered)
                     except Exception as e: print(f"set_road_rendered failed: {e!r}", file=sys.stderr)
+                elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_l:
+                    signals_visible = not signals_visible
+                    try: world.set_layer_visible("signals", signals_visible)
+                    except Exception as e: print(f"set_layer_visible(signals) failed: {e!r}", file=sys.stderr)
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_b:
                     show_perimeter = not show_perimeter
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_m:
@@ -2530,12 +2538,13 @@ def main() -> int:
                 f"yaw {pose['yaw']:6.1f} pitch {pose['pitch']:6.1f}   [{'SYNC' if sync else 'ASYNC'}]",
                 f"speed {speed:4.0f}   photoreal(C) {'ON' if photoreal_visible else 'OFF'}   "
                 f"ground(G) {'ON' if ground_visible else 'OFF'}   gColl(V) {'ON' if ground_collision else 'OFF'}   "
-                f"road(R) {'ON' if road_rendered else 'OFF'}   perim(B) {'ON' if show_perimeter else 'OFF'}   "
+                f"road(R) {'ON' if road_rendered else 'OFF'}   signals(L) {'ON' if signals_visible else 'OFF'}   "
+                f"perim(B) {'ON' if show_perimeter else 'OFF'}   "
                 f"margin(M) {'ON' if show_margin else 'OFF'}   time(K) {time_str}",
                 f"traffic(T) {traf_str}   telemetry(Y) {tel_str}   record(F) {rec_str}   "
                 f"orbit(O) {'ON' if orbit_info['orbit_enabled'] else 'OFF'}   "
                 f"fps {clock.get_fps():4.0f}   frames {state['frames']}",
-                "RMB look | Ctrl+LMB measure | WASD/EQ fly | wheel speed | Shift fast | C/G/V/R/B/M layers | "
+                "RMB look | Ctrl+LMB measure | WASD/EQ fly | wheel speed | Shift fast | C/G/V/R/L/B/M layers | "
                 "K time | T traffic | Y telemetry | F record |",
                 "O orbit | P pause orbit | Space reset | Esc quit",
             ]

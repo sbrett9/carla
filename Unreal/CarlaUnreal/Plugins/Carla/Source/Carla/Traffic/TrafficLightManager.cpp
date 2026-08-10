@@ -290,6 +290,7 @@ void ATrafficLightManager::RemoveGeneratedSignalsAndTrafficLights()
     Sign->Destroy();
   }
   TrafficSigns.Empty();
+  GeneratedSignals.Empty();
 
   for(auto& TrafficGroup : TrafficGroups)
   {
@@ -582,6 +583,50 @@ static void MakeSignalMeshesPassThrough(AActor *SignalActor)
   }
 }
 
+// Rendering-only visibility for one signal actor's meshes. Shape components are skipped: they are
+// the stop-line trigger volumes, they never render, and the sign stops detecting vehicles if they
+// are disturbed.
+static void SetSignalMeshesVisible(AActor *SignalActor, bool bVisible)
+{
+  TArray<UPrimitiveComponent *> Primitives;
+  SignalActor->GetComponents(Primitives);
+  for (auto *Primitive : Primitives)
+  {
+    if (!Primitive->IsA<UShapeComponent>())
+    {
+      Primitive->SetVisibility(bVisible);
+    }
+  }
+}
+
+void ATrafficLightManager::RegisterGeneratedSignal(AActor *SignalActor)
+{
+  if (!IsValid(SignalActor))
+  {
+    return;
+  }
+  MakeSignalMeshesPassThrough(SignalActor);
+  GeneratedSignals.Add(SignalActor);
+  // Signals can be regenerated while the props are hidden; match the state the world is already in
+  // rather than popping back into view.
+  if (!bGeneratedSignalsVisible)
+  {
+    SetSignalMeshesVisible(SignalActor, false);
+  }
+}
+
+void ATrafficLightManager::SetGeneratedSignalsVisible(bool bVisible)
+{
+  bGeneratedSignalsVisible = bVisible;
+  for (AActor *Signal : GeneratedSignals)
+  {
+    if (IsValid(Signal))
+    {
+      SetSignalMeshesVisible(Signal, bVisible);
+    }
+  }
+}
+
 void ATrafficLightManager::SpawnTrafficLights()
 {
   namespace cr = carla::road;
@@ -690,7 +735,7 @@ void ATrafficLightManager::SpawnTrafficLights()
     UTrafficLightComponent *TrafficLightComponent = TrafficLight->GetTrafficLightComponent();
     TrafficLightComponent->SetSignId(SignalId.c_str());
 
-    MakeSignalMeshesPassThrough(TrafficLight);
+    RegisterGeneratedSignal(TrafficLight);
 
     if (ClosestWaypointToSignal)
     {
@@ -782,7 +827,7 @@ void ATrafficLightManager::SpawnSignals()
           FAttachmentTransformRules::KeepRelativeTransform);
       SignComponent->InitializeSign(GetMap().value());
 
-      MakeSignalMeshesPassThrough(TrafficSign);
+      RegisterGeneratedSignal(TrafficSign);
 
       auto ClosestWaypointToSignal =
           GetMap()->GetClosestWaypointOnRoad(CarlaTransform.location);
@@ -835,7 +880,7 @@ void ATrafficLightManager::SpawnSignals()
       SignComponent->InitializeSign(GetMap().value());
       SignComponent->SetSpeedLimit(Signal->GetValue());
 
-      MakeSignalMeshesPassThrough(TrafficSign);
+      RegisterGeneratedSignal(TrafficSign);
 
       auto ClosestWaypointToSignal =
           GetMap()->GetClosestWaypointOnRoad(CarlaTransform.location);

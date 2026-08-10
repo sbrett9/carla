@@ -59,11 +59,22 @@ public:
   // Called when the game starts by the gamemode
   void InitializeTrafficLights();
 
+  // Shows or hides the meshes of every signal actor this manager generated from OpenDRIVE (the
+  // OpenDRIVE mast arms, stop, yield and speed-limit props). Rendering only: the actors, their sign
+  // components and their trigger volumes are left in place, so a hidden light still holds traffic
+  // at its stop line and the truth telemetry is unchanged. Signals matched to a hand-placed actor
+  // are never touched, which keeps the shipped towns out of scope.
+  void SetGeneratedSignalsVisible(bool bVisible);
+
 private:
 
   void SpawnTrafficLights();
 
   void SpawnSignals();
+
+  // Prepares a signal actor spawned from OpenDRIVE: makes its meshes non-blocking and records it,
+  // so the visibility toggle can address exactly the generated props and nothing else.
+  void RegisterGeneratedSignal(AActor *SignalActor);
 
   void RemoveRoadrunnerProps() const;
 
@@ -83,6 +94,14 @@ private:
 
   // Mapped references to TrafficSigns
   TArray<ATrafficSignBase*> TrafficSigns;
+
+  // Signal actors generated from OpenDRIVE. Signals that matched a hand-placed actor are
+  // deliberately absent, so anything driven off this list stays clear of the shipped towns.
+  UPROPERTY()
+  TArray<AActor*> GeneratedSignals;
+
+  UPROPERTY()
+  bool bGeneratedSignalsVisible = true;
 
   UPROPERTY(EditAnywhere, Category= "Traffic Light Manager")
   TSubclassOf<AActor> TrafficLightModel_RHT;
