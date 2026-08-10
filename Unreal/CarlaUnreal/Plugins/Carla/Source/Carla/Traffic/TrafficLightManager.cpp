@@ -542,16 +542,28 @@ static int32 CountDrivingLanesOnSide(const carla::road::Lane &Lane)
   return FMath::Max(Count, 1);
 }
 
-// Lets traffic drive through a signal actor spawned from OpenDRIVE without letting it disappear from
-// the raycast sensors.
+// Lets traffic drive through a signal actor spawned from OpenDRIVE.
 //
 // These poles are placed from map geometry, so a mast arm can end up hanging low enough over the
-// carriageway that a tall vehicle does not clear its heads, and blocking physics then wedges that
-// vehicle against a prop whose only jobs are to be seen and to trigger its stop line. Query-only
-// collision removes the rigid-body contact (Chaos generates none unless both bodies simulate) while
-// leaving the meshes' response container untouched, so lidar and radar - which trace the SensorTrace
-// channel that the meshes' BlockAll profile answers - still return points on them, and pedestrian
-// capsule sweeps still path around the pole.
+// carriageway that a tall vehicle does not clear its heads, and the pole's ground base sits close
+// enough to the kerb to catch a wheel. Either way a prop whose only jobs are to be seen and to
+// trigger its stop line ends up wedging traffic.
+//
+// A vehicle touches the world in two independent ways, so both have to be dealt with:
+//
+//   - The chassis is a simulating rigid body. Query-only collision removes its contact with the
+//     prop (Chaos generates none unless both bodies simulate), which is what clears the mast arm
+//     hanging over the lane.
+//   - The wheels are not. UChaosWheeledVehicleSimulation::PerformSuspensionTraces finds the surface
+//     under each wheel with spatial queries, and query-only collision deliberately keeps a body in
+//     the query tree - that is the whole point of the mode. So until the channel those queries run
+//     on is ignored, every wheel still climbs the pole and its ground base even though the body of
+//     the vehicle passes through.
+//
+// The rest of the response container is left as the blueprint set it, and the collision mode stays
+// query-only rather than the NoCollision profile, which would drop the props out of every query at
+// once - including the camera and visibility traces, and the walker capsule sweeps that let
+// pedestrians path around a pole.
 static void MakeSignalMeshesPassThrough(AActor *SignalActor)
 {
   TArray<UPrimitiveComponent *> Primitives;
@@ -560,10 +572,13 @@ static void MakeSignalMeshesPassThrough(AActor *SignalActor)
   {
     // Shape components are the sign's detection volumes: overlap-only already, and the sign stops
     // working without them.
-    if (!Primitive->IsA<UShapeComponent>())
+    if (Primitive->IsA<UShapeComponent>())
     {
-      Primitive->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+      continue;
     }
+    Primitive->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+    // PerformSuspensionTraces hard-codes WorldDynamic as its query channel.
+    Primitive->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Ignore);
   }
 }
 
