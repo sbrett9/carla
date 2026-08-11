@@ -68,6 +68,7 @@ class CotUdpEmitter:
         uid_prefix: str = "CARLA-TRUTH",
         when: datetime | None = None,
         solar: dict | None = None,
+        capture=None,
     ) -> str:
         """Convert vehicle telemetry record to CoT XML event string.
 
@@ -146,6 +147,9 @@ class CotUdpEmitter:
                 "vz": f"{rec['vz']:.2f}",
             },
         )
+
+        if capture is not None:
+            ET.SubElement(detail, "_capture", capture.attributes())
 
         if solar:
             ET.SubElement(

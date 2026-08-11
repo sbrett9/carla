@@ -41,15 +41,13 @@ Prerequisites:
 Usage:
     python run_SCTMV.py [options]
 """
+import logging
 import os
 import signal
 import sys
 import threading
 import time
-import xml.etree.ElementTree as ET
-
-import numpy as np
-import pygame
+from datetime import datetime, timezone
 
 # Build-tool paths must be on the environment BEFORE carlanet is imported (netconvert / PROJ).
 _THIS = os.path.dirname(os.path.abspath(__file__))
@@ -58,8 +56,15 @@ _INSTALL = os.path.join(_REPO, "Build", "sumo-install")
 # Prefer an explicit path from the environment (set by a packaged distribution that bundles its own
 # netconvert/PROJ outside the source tree); fall back to the in-repo build location otherwise.
 _NETCONVERT = os.environ.get("CARLA_NETCONVERT") or os.path.join(
-    _INSTALL, "bin", "netconvert.exe" if os.name == "nt" else "netconvert")
-_PROJ = os.environ.get("PROJ_LIB") or os.environ.get("PROJ_DATA") or os.path.join(_INSTALL, "share", "proj")
+    _INSTALL,
+    "bin",
+    "netconvert.exe" if os.name == "nt" else "netconvert",
+)
+_PROJ = os.environ.get("PROJ_LIB") or os.environ.get("PROJ_DATA") or os.path.join(
+    _INSTALL,
+    "share",
+    "proj",
+)
 os.environ.setdefault("CARLA_NETCONVERT", _NETCONVERT)
 os.environ.setdefault("PROJ_LIB", _PROJ)
 os.environ.setdefault("PROJ_DATA", _PROJ)
@@ -71,27 +76,44 @@ import carlanet as carla
 from carlacontrol import (
     CarlaControlArgumentParser,
     NativeRecorder,
-    Pose,
+    OrbitSensorController,
     PygameInterface,
     PyGameSensorController,
+    ScenarioController,
     SensorRig,
+    SimClock,
     TelemetryController,
     TrafficController,
     WorldBuilder,
 )
 
+
+def _configure_logging(log_path: str | None) -> None:
+    handlers: list[logging.Handler] = [logging.StreamHandler()]
+    if log_path:
+        os.makedirs(os.path.dirname(os.path.abspath(log_path)), exist_ok=True)
+        handlers.append(logging.FileHandler(log_path, mode="w", encoding="utf-8"))
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s.%(msecs)03d %(levelname)s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+        handlers=handlers,
+        force=True,
+    )
+
+
 def main() -> int:
     # Parse Args
     args = CarlaControlArgumentParser(_REPO, description=__doc__).parse_args()
+    _configure_logging(args.log)
+    logger = logging.getLogger(__name__)
     sync = not args.asynchronous
 
     client = carla.Client(args.host, args.port)
     client.set_timeout(15.0)
     world = client.get_world()
-    
-    print(f"server version: {client.get_server_version()}")
-    
 
+    logger.info("server version: %s", client.get_server_version())
 
     # Build the world (with the server still free-running; the build RPC needs that).
     if args.build:
@@ -99,18 +121,16 @@ def main() -> int:
         if not world_builder.build_world(client, args):
             return 1
     else:
-        print("attach mode (--no-build): using the world already on the server")
+        logger.info("attach mode (--no-build): using the world already on the server")
+
+    client.set_timeout(20.0)
+    world = client.get_world()
+
     # Configure solar time/date (re-applied every run because the sun is respawned on each world build).
     WorldBuilder.setup_solar_time(world, args)
 
     # Configure world synchronous/asynchronous mode.
     WorldBuilder.configure_sync_mode(world, sync, args.fixed_delta)
-    
-    client.set_timeout(20.0)
-    world = client.get_world()
-
-
-
 
     # Traffic controller — configure for sync/async mode.
     tm = client.get_trafficmanager(args.tm_port)
@@ -118,26 +138,49 @@ def main() -> int:
 
     traffic = TrafficController.create(world, client, tm, args)
     if not traffic.available:
-        print(f"traffic unavailable: {traffic_controller.reason}", file=sys.stderr)
-    
-    # Telemetry Controller
-    telemetry = TelemetryController(world, args)
-    if not telemetry.available:
-        print(f"telemetry unavailable: {telemetry.reason}", file=sys.stderr)
+        logger.warning("traffic unavailable: %s", traffic.reason)
 
+    # Telemetry Controller
+    run_id = f"run-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
+    try:
+        origin = world.get_cesium_origin()
+    except Exception as e:
+        logger.warning(
+            "get_cesium_origin failed (telemetry disabled): %r",
+            e,
+        )
+        origin = None
+    sim_clock = SimClock(world)
+    logger.info("run id: %s", run_id)
+    telemetry = TelemetryController(world, origin, args, clock=sim_clock)
+    if not telemetry.available:
+        logger.warning("telemetry unavailable: %s", telemetry.reason)
 
     # Sensors: RGB (display) + depth (Ctrl+LMB picking). Listeners are configured automatically
     # based on args.asynchronous: sync mode uses queues, async mode stores frames directly.
     sensors = SensorRig(world=world, args=args)
 
+    # PyGameSensorController to move the sensor rig around the world
+    controller = PyGameSensorController(sensors, world, sensors.get_initial_pose())
+    orbit_sensor_controller = OrbitSensorController(
+        sensors=sensors,
+        world=world,
+        args=args,
+        flight_controller=controller,
+        logger=logger,
+        sync=sync,
+    )
+    orbit_sensor_controller.start_updater()
+
+    if args.orbit:
+        orbit_sensor_controller.set_enabled(True)
     # Recorder: the native (C#) FrameRecorder encodes frames in .NET off the GIL. If the
     # CarlaNet.Recording assembly is absent the recorder reports itself unavailable when toggled (the
     # whole client is CarlaNet, so a missing recording assembly means the build itself is incomplete).
-    recorder= NativeRecorder(world, sensors.camera, args)
-
-
-    # PyGameSensorController to move the sensor rig around the world
-    controller = PyGameSensorController(sensors, world, sensors.get_initial_pose())
+    recorder = NativeRecorder(world, sensors.camera, args, run_id=run_id)
+    scenario = ScenarioController(world, args.scenario, tm)
+    if args.scenario:
+        logger.info("scenario armed: %s (X to run)", os.path.basename(args.scenario))
 
     # lastly link everything into the PyGameInterface
     pg = PygameInterface(
@@ -150,6 +193,8 @@ def main() -> int:
         traffic=traffic,
         telemetry=telemetry,
         recorder=recorder,
+        scenario=scenario,
+        orbit_sensor_controller=orbit_sensor_controller,
     )
 
 
@@ -162,16 +207,17 @@ def main() -> int:
     # because there the single world.tick() must own all of it.
 
     stop_flag = {"value": False}
-    
+    worker_systems = [traffic, telemetry, scenario, recorder]
+
     def _worker():
         while not stop_flag["value"]:
             now = time.time()
-            for system in [traffic, telemetry, recorder]:
+            for system in worker_systems:
                 try:
                     system.apply_want()
                     system.update(now)
                 except Exception as e:
-                    print(f"{system} worker: {e!r}", file=sys.stderr)
+                    logger.exception("%s worker update failed: %r", system, e)
             time.sleep(0.05)
 
 
@@ -180,9 +226,6 @@ def main() -> int:
         worker_thread = threading.Thread(target=_worker, daemon=True)
         worker_thread.start()
         controller.start_async()
-
-
-
     # main thread setup
     # Clean stop on Ctrl+C even when blocked inside a .NET call (pythonnet can swallow KeyboardInterrupt).
     stop = {"flag": False}
@@ -193,9 +236,7 @@ def main() -> int:
 
     try:
         while pg.running and not stop["flag"]:
-
             pg_quit = pg.process_events()
-            
             if pg_quit:
                 break
 
@@ -208,32 +249,28 @@ def main() -> int:
                     sensors.store_depth(dimg, controller.pose)
 
                 # Apply camera transform (sync mode applies immediately)
-                controller.apply_transform_sync()
+                if not orbit_sensor_controller.orbit_enabled:
+                    controller.apply_transform_sync()
 
                 # Sync mode owns everything on the tick thread: step traffic + telemetry inline.
                 now = time.time()
-                for system in [traffic, telemetry, recorder]:
+                for system in worker_systems:
                     try:
                         system.apply_want()
                         system.update(now)
-                    except Exception as e: 
-                        print(f"{system}.update failed: {e!r}", file=sys.stderr)
-                    
+                    except Exception as e:
+                        logger.exception("%s.update failed: %r", system, e)
             else:
-                controller.apply_transform_async()   # background controller applies it
+                if not orbit_sensor_controller.orbit_enabled:
+                    controller.apply_transform_async()   # background controller applies it
                 # Async: traffic + telemetry RPCs run on the background worker thread, never here, so
                 # the render loop stays smooth regardless of RPC latency.
-
-            
             pg.render()
-
-
-
     except KeyboardInterrupt:
         pass
 
     finally:
-        print("\nstopping; restoring server state...")
+        logger.info("stopping; restoring server state...")
         # Stop the background threads FIRST so nothing races the despawn below.
 
         stop_flag["value"] = True
@@ -244,28 +281,35 @@ def main() -> int:
         if worker_thread is not None:
             worker_thread.join(timeout=2.0)
 
-        try: 
-            traffic.disable()        # despawn any remaining vehicles (now single-threaded)
-        except Exception: 
-            pass
-        
+        orbit_sensor_controller.stop_updater()
+
         try:
-            if recorder.recording: 
+            scenario.toggle_want(False)
+            scenario.apply_want()
+        except Exception:
+            pass
+
+        try:
+            traffic.disable()        # despawn any remaining vehicles (now single-threaded)
+        except Exception:
+            pass
+
+        try:
+            if recorder.recording:
                 recorder.stop()
-        except Exception: 
+        except Exception:
             pass
-        try: 
+        try:
             telemetry.close()
-        except Exception: 
+        except Exception:
             pass
-        
-        
+
         # Restore asynchronous mode so the headless server is never left waiting for a tick.
         try:
             tm.set_synchronous_mode(False)
         except Exception:
             pass
-            
+
         WorldBuilder.configure_sync_mode(world, sync=False)
 
         sensors.cleanup()

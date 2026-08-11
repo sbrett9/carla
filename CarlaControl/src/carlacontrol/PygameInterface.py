@@ -17,6 +17,8 @@ from typing import Any
 import numpy as np
 import pygame
 
+from .Pose import Pose
+
 
 class PygameInterface:
     def __init__(
@@ -32,6 +34,8 @@ class PygameInterface:
         traffic=None,
         telemetry=None,
         recorder=None,
+        scenario=None,
+        orbit_sensor_controller=None,
     ):
         """Initialize pygame interface.
 
@@ -47,6 +51,8 @@ class PygameInterface:
             traffic: Optional TrafficController instance
             telemetry: Optional TelemetryController instance
             recorder: Optional NativeRecorder instance
+            scenario: Optional ScenarioController instance
+            orbit_sensor_controller: Optional OrbitSensorController instance
         """
         self.width = args.width
         self.height = args.height
@@ -61,6 +67,8 @@ class PygameInterface:
         self.traffic = traffic
         self.telemetry = telemetry
         self.recorder = recorder
+        self.scenario = scenario
+        self.orbit_sensor_controller = orbit_sensor_controller
         self.logger = logging.getLogger(__name__)
 
         # Pygame Setup, and pull in class attributes for quick access
@@ -267,10 +275,22 @@ class PygameInterface:
         """Register hotkeys for subsystems."""
         if self.traffic:
             self.register_hotkey(pygame.K_t, lambda: self.traffic.toggle_want())
+        if self.scenario:
+            self.register_hotkey(pygame.K_x, lambda: self.scenario.toggle_want())
         if self.telemetry:
             self.register_hotkey(pygame.K_y, lambda: self.telemetry.toggle_want())
         if self.recorder:
             self.register_hotkey(pygame.K_f, lambda: self.recorder.toggle_want())
+        if self.orbit_sensor_controller:
+            self.register_hotkey(pygame.K_o, lambda: self.orbit_sensor_controller.toggle_orbit())
+            self.register_hotkey(pygame.K_p, self._toggle_orbit_pause)
+
+    def _toggle_orbit_pause(self) -> None:
+        if not self.orbit_sensor_controller or not self.orbit_sensor_controller.orbit_enabled:
+            return
+        self.orbit_sensor_controller.toggle_orbit_pause()
+        state = "paused" if self.orbit_sensor_controller.orbit_paused else "resumed"
+        self.logger.info("orbit %s", state)
 
     def get_events(self) -> dict[str, Any]:
         """Process pygame events and return state changes.
@@ -377,7 +397,10 @@ class PygameInterface:
         # handle pick request
         if events["pick_request"] and self.sensors:
             try:
-                lat0, lon0, origin_h = self.world.get_cesium_origin()
+                try:
+                    lat0, lon0, origin_h = self.world.get_cesium_origin()
+                except Exception:
+                    lat0 = lon0 = origin_h = None
                 pick_result = self.sensors.pick_world_point(
                     events["pick_request"][0],
                     events["pick_request"][1],
@@ -387,10 +410,20 @@ class PygameInterface:
                 )
                 self.pick_result = pick_result
                 self.note = None
-                self.logger.info(
-                    f"world pick: from pixel location {events['pick_request']} -> lat={pick_result.get('lat'):.7f}, lon={pick_result.get('lon'):.7f}, "
-                    f"elev={pick_result.get('elev_m'):.1f}m"
-                )
+                if pick_result.get("lat") is not None and pick_result.get("lon") is not None:
+                    self.logger.info(
+                        "world pick: from pixel location %s -> lat=%.7f, lon=%.7f, elev=%.1fm",
+                        events["pick_request"],
+                        pick_result["lat"],
+                        pick_result["lon"],
+                        pick_result["elev_m"],
+                    )
+                else:
+                    self.logger.info(
+                        "world pick: from pixel location %s -> elev=%.1fm (georeference unavailable)",
+                        events["pick_request"],
+                        pick_result["elev_m"],
+                    )
             except ValueError as e:
                 self.note = (str(e), time.time())
                 self.logger.info(f"world pick failed: {e}")
@@ -421,14 +454,20 @@ class PygameInterface:
                 self.blit_surface(PygameInterface.image_to_surface(rgb_image))
 
             # get position and render boundry overlays
-            cam_pose = self.sensors.get_position()
+            if self.orbit_sensor_controller and self.orbit_sensor_controller.orbit_enabled:
+                cam_pose = Pose.from_carla_transform(
+                    self.orbit_sensor_controller.controlled_object.get_current_transform()
+                )
+            else:
+                cam_pose = self.sensors.get_position()
             cam_xyz = (cam_pose.x, cam_pose.y, cam_pose.z)
             self.render_boundary_overlays(cam_xyz, cam_pose.yaw, cam_pose.pitch)
 
-            # Shared georeference origin (used by both the picker and the telemetry emitter).
-            lat0, lon0, origin_h = self.world.get_cesium_origin()
             ft_per_m = self.sensors.FT_PER_M
-            # get hud info
+            try:
+                _, _, origin_h = self.world.get_cesium_origin()
+            except Exception:
+                origin_h = 0.0
             elev_ft = (origin_h + cam_pose.z) * ft_per_m
             gz = self.sensors.ground_z
             agl_ft = (cam_pose.z - gz) * ft_per_m if gz is not None else None
@@ -480,10 +519,26 @@ class PygameInterface:
         else:
             rec_str = "n/a"
 
+        if self.scenario:
+            if self.scenario.running:
+                scen_str = self.scenario.status()
+            elif self.scenario.available:
+                scen_str = "armed"
+            else:
+                scen_str = "n/a"
+        else:
+            scen_str = "n/a"
+
+        orbit_info = (
+            self.orbit_sensor_controller.get_hud_info() if self.orbit_sensor_controller else None
+        )
+        orbit_enabled = bool(orbit_info and orbit_info["orbit_enabled"])
+        orbit_str = "ON" if orbit_enabled else "OFF"
+
         # slap it all together
         if cam_pose:
             pose_str = (
-                f"elev {elev_ft:6.0f} ft   AGL {agl_str} ft   x {cam_pose.x:7.1f}  N {cam_pose.y:7.1f}   "
+                f"elev {elev_ft:6.0f} ft   AGL {agl_str} ft   x {cam_pose.x:7.1f}  N {-cam_pose.y:7.1f}   "
                 f"yaw {cam_pose.yaw:6.1f} pitch {cam_pose.pitch:6.1f}   [{'SYNC' if self.sync else 'ASYNC'}]"
             )
             speed_val = self.controller.speed if self.controller else 0.0
@@ -499,11 +554,31 @@ class PygameInterface:
             f"ground(G) {'ON' if self.get_flag('ground_visible') else 'OFF'}   gColl(V) {'ON' if self.get_flag('ground_collision') else 'OFF'}   "
             f"road(R) {'ON' if self.get_flag('road_rendered') else 'OFF'}   perim(B) {'ON' if self.get_flag('show_perimeter') else 'OFF'}   "
             f"margin(M) {'ON' if self.get_flag('show_margin') else 'OFF'}   time(K) {time_str}",
-            f"traffic(T) {traf_str}   telemetry(Y) {tel_str}   record(F) {rec_str}   "
+            f"traffic(T) {traf_str}   scenario(X) {scen_str}   telemetry(Y) {tel_str}   record(F) {rec_str}   "
+            f"orbit(O) {orbit_str}   "
             f"fps {self.get_fps():4.0f}   frames {frames_val}",
-            "RMB look | Ctrl+LMB measure | WASD/EQ fly | wheel speed | Shift fast | C/G/V/R/B/M layers | "
-            "K time | T traffic | Y telemetry | F record | Space reset | Esc quit",
+            "RMB look | Ctrl+LMB measure | WASD/EQ fly | wheel speed | Shift fast | C/G/V/R/B/M layers | ",
+            "K time | T traffic | X scenario | Y telemetry | F record | O orbit | P pause orbit | Space reset | Esc quit",
         ]
+
+        if orbit_enabled and orbit_info is not None:
+            center_latlon = orbit_info.get("center_latlon")
+            if center_latlon is not None:
+                center_lat, center_lon = center_latlon
+            else:
+                center_lat, center_lon = None, None
+            if center_lat is not None and center_lon is not None:
+                latlon_str = f"lat {center_lat:.7f}, lon {center_lon:.7f}"
+            else:
+                latlon_str = "lat/lon unavailable"
+            orbit_status = "PAUSED" if orbit_info["orbit_paused"] else "ACTIVE"
+            orbit_line = (
+                f"ORBIT: center ({orbit_info['orbit_center'][0]:7.1f}, {orbit_info['orbit_center'][1]:7.1f})   "
+                f"radius {orbit_info['radius_feet']:6.0f} ft   altitude {orbit_info['cam_altitude_feet']:6.0f} ft   "
+                f"{latlon_str}   progress {orbit_info['orbit_progress']:5.1f}%   "
+                f"speed {orbit_info['orbit_speed']:5.1f} s   {orbit_status}"
+            )
+            hud.insert(-2, orbit_line)
 
         # draw hud
         bar_h = self.draw_hud_bar(hud, y_offset=0)
@@ -512,6 +587,8 @@ class PygameInterface:
             yaw_r = math.radians(cam_pose.yaw)
             bearing = math.degrees(math.atan2(math.cos(yaw_r), -math.sin(yaw_r))) % 360.0
             self.draw_compass(self.width - 52, bar_h + 48, 40, bearing)
+            if orbit_enabled and orbit_info is not None:
+                self.draw_orbit_viz(60, bar_h + 48, 40, orbit_info["angle"])
 
         # draws a "flyout" with information about the picked point
         pick = self.pick_result
@@ -608,6 +685,14 @@ class PygameInterface:
 
         hdg = self.font.render(f"{bearing_deg:03.0f}", True, (255, 255, 0))
         self.display.blit(hdg, (cx - hdg.get_width() / 2, cy + radius + 2))
+
+    def draw_orbit_viz(self, cx: int, cy: int, radius: int, angle: float) -> None:
+        pygame.draw.circle(self.display, (100, 100, 100), (cx, cy), radius, 1)
+        pygame.draw.circle(self.display, (255, 80, 80), (cx, cy), 3)
+        viz_cam_x = cx + int(radius * math.cos(angle))
+        viz_cam_y = cy + int(radius * math.sin(angle))
+        pygame.draw.circle(self.display, (0, 255, 255), (viz_cam_x, viz_cam_y), 4)
+        pygame.draw.line(self.display, (0, 255, 255), (viz_cam_x, viz_cam_y), (cx, cy), 1)
 
     def draw_hud_bar(self, lines: list[str], y_offset: int = 0) -> int:
         """Draw a semi-transparent HUD bar with text lines.

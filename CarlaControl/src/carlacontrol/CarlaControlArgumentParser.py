@@ -38,8 +38,11 @@ class CarlaControlArgumentParser:
         self._add_build_args(ap)
         self._add_view_args(ap)
         self._add_traffic_args(ap)
+        self._add_scenario_args(ap)
         self._add_telemetry_args(ap)
+        self._add_runtime_logging_args(ap)
         self._add_recording_args(ap)
+        self._add_orbit_args(ap)
 
         return ap
 
@@ -134,7 +137,7 @@ class CarlaControlArgumentParser:
             "--terrain-margin",
             type=float,
             default=30.48,
-            help="'drape' only: width (m) of the staging ring just inside the map edge "
+            help="width (m) of the staging ring just inside the map edge "
             "where boundary-aware traffic enters/exits (default ~100 ft)",
         )
         build.add_argument(
@@ -267,9 +270,83 @@ class CarlaControlArgumentParser:
         traf.add_argument(
             "--route",
             action="store_true",
-            help="use the Traffic Manager's custom-path routing to send each vehicle toward "
-            "a far edge. OFF by default because routing can occasionally push a vehicle "
-            "off the road or off a clipped dead-end.",
+            help="give each vehicle a far-edge destination and a route to it, searched "
+            "over the road network before the vehicle is spawned. The same seed and "
+            "the same spawn points yield the same routes; speed, braking and "
+            "traffic-signal response stay emergent. A spawn point with no route to "
+            "any destination is skipped, so spawning is slower. OFF by default.",
+        )
+        traf.add_argument(
+            "--stall-timeout",
+            type=float,
+            default=45.0,
+            metavar="SECONDS",
+            help="despawn a vehicle that has driven into the scene and then stopped dead "
+            "for this long (default 45). Set well above any traffic-light phase, so "
+            "waiting at a light is not mistaken for a stall. 0 keeps them forever, "
+            "which leaves a stalled vehicle blocking its lane for the rest of the run.",
+        )
+        traf.add_argument(
+            "--spawn-at-speed",
+            action="store_true",
+            help="give each vehicle its road speed the instant it is created, instead of "
+            "letting it accelerate from rest. OFF by default: this sets the body's "
+            "velocity while its wheels are still stationary, so the tyre model sees "
+            "full slip and the vehicle briefly has no grip — which can carry it off "
+            "the road before the traffic manager has any say.",
+        )
+        traf.add_argument(
+            "--speed-scale",
+            type=float,
+            default=100.0,
+            metavar="PCT",
+            help="drive this percentage of each road's posted speed limit (default 100). "
+            "Lower it to run the whole fleet slower without flattening the "
+            "differences between roads: 40 gives 40% of the limit everywhere, so a "
+            "65 mph freeway becomes 26 mph and a 25 mph street becomes 10. Useful "
+            "for telling apart behaviour that degrades with speed from behaviour "
+            "that is wrong at any speed.",
+        )
+        traf.add_argument(
+            "--speed-spread",
+            type=float,
+            default=20.0,
+            metavar="PCT",
+            help="how much drivers differ from the posted speed limit, as a percentage "
+            "either side of it (default 20, so each vehicle drives between 80% and "
+            "120% of the limit on whatever road it is on). The limit itself comes "
+            "from the map: OpenDRIVE carries one per lane, derived from the OSM "
+            "maxspeed tags. 0 makes every vehicle drive exactly the limit.",
+        )
+        traf.add_argument(
+            "--route-replan-limit",
+            type=int,
+            default=3,
+            metavar="N",
+            help="a vehicle knocked off its route is replanned from where it now is. "
+            "After N consecutive failures the greedy fallback takes over, if it is "
+            "enabled. 0 means the fallback is never reached however often "
+            "replanning fails (default 3).",
+        )
+        traf.add_argument(
+            "--route-greedy-fallback",
+            action="store_true",
+            help="after --route-replan-limit failures, hand the vehicle back to greedy "
+            "steering toward its destination instead of going on trying to plan a "
+            "route. OFF by default: a routed vehicle either follows a route that "
+            "was actually searched for, or says on the console that it cannot find "
+            "one.",
+        )
+
+    def _add_scenario_args(self, ap: argparse.ArgumentParser) -> None:
+        scen = ap.add_argument_group("scenario")
+        scen.add_argument(
+            "--scenario",
+            default=None,
+            help="an ASAM OpenSCENARIO storyboard (.xosc) to run against the built world; "
+            "loaded at startup so problems surface immediately, and started with X. "
+            "Positions are resolved against the road network the server has loaded, so "
+            "the storyboard must have been authored against this same world.",
         )
 
     def _add_telemetry_args(self, ap: argparse.ArgumentParser) -> None:
@@ -300,6 +377,15 @@ class CarlaControlArgumentParser:
             action="store_true",
             dest="echo",
             help="also print each CoT event",
+        )
+
+    def _add_runtime_logging_args(self, ap: argparse.ArgumentParser) -> None:
+        ap.add_argument(
+            "--log",
+            default=None,
+            metavar="FILE",
+            help="also write this run's console output to FILE, with timestamps. "
+            "Flushed line by line, so a run that ends badly still leaves its log.",
         )
 
     def _add_recording_args(self, ap: argparse.ArgumentParser) -> None:
@@ -342,6 +428,52 @@ class CarlaControlArgumentParser:
             "--platform-uid",
             default=None,
             help="CoT track uid for the platform (default: CARLA-SENSOR-<camera id>).",
+        )
+
+    def _add_orbit_args(self, ap: argparse.ArgumentParser) -> None:
+        orbit = ap.add_argument_group("orbit")
+        orbit.add_argument(
+            "--orbit",
+            action="store_true",
+            help="start with the orbit camera running instead of free flight; O toggles "
+            "between the two at any time either way",
+        )
+        orbit.add_argument("--orbit-x", type=float, default=None, help="orbit center X (CARLA metres)")
+        orbit.add_argument(
+            "--orbit-y",
+            type=float,
+            default=None,
+            help="orbit center Y (CARLA metres; -Y is North)",
+        )
+        orbit.add_argument(
+            "--orbit-lat",
+            type=float,
+            default=None,
+            help="orbit center latitude (alternative to --orbit-x/--orbit-y)",
+        )
+        orbit.add_argument(
+            "--orbit-lon",
+            type=float,
+            default=None,
+            help="orbit center longitude (alternative to --orbit-x/--orbit-y)",
+        )
+        orbit.add_argument(
+            "--orbit-radius",
+            type=float,
+            default=656.0,
+            help="orbit radius in FEET (default 656 = 200m)",
+        )
+        orbit.add_argument(
+            "--orbit-altitude",
+            type=float,
+            default=1700,
+            help="camera altitude above the orbit centre, in FEET (default 1700).",
+        )
+        orbit.add_argument(
+            "--orbit-speed",
+            type=float,
+            default=240.0,
+            help="orbit speed in seconds (default 240 = 4 min)",
         )
 
     def parse(self, args: list[str] | None = None) -> dict:

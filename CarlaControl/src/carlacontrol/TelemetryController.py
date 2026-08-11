@@ -11,16 +11,24 @@ import logging
 import carlanet as carla
 
 from .CotUdpEmitter import CotUdpEmitter
+from .SimClock import SimClock
 
 
 class TelemetryController:
     """CoT-over-UDP emitter as a steppable subsystem. Needs the georeference origin; if it is
     missing the toggle is disabled. Off by default."""
 
-    def __init__(self, world: carla.World, args):
+    def __init__(
+        self,
+        world: carla.World,
+        origin,
+        args,
+        clock: SimClock | None = None,
+    ):
         self.world = world
-        self.origin = world.get_cesium_origin()
+        self.origin = origin
         self.args = args
+        self.clock = clock
         self.logger = logging.getLogger(__name__)
         self.available = self.origin is not None
         self.reason = "" if self.available else "no georeference origin (get_cesium_origin failed)"
@@ -91,6 +99,7 @@ class TelemetryController:
                 affiliation=self.args.affiliation,
                 stale_seconds=self.args.stale,
                 solar=solar,
+                capture=self.clock,
             )
             self.emit.send(xml)
             if self.args.echo:

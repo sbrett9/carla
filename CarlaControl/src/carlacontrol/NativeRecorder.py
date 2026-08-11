@@ -28,7 +28,7 @@ class NativeRecorder:
         recorder.stop()  # Clean shutdown
     """
 
-    def __init__(self, world: carla.World, camera: carla.Actor, args):
+    def __init__(self, world: carla.World, camera: carla.Actor, args, run_id: str | None = None):
         """Initialize the native recorder.
 
         Args:
@@ -39,6 +39,8 @@ class NativeRecorder:
         """
         self.world = world
         self.camera = camera
+        self.args = args
+        self.run_id = run_id
         self.record_dir = args.record_dir
         self.record_hz = args.record_hz
         self.affiliation = args.affiliation
@@ -88,6 +90,8 @@ class NativeRecorder:
                 platform_affiliation=self.platform_affiliation,
                 platform_callsign=self.platform_callsign,
                 platform_uid=self.platform_uid,
+                run_id=self.run_id,
+                seed=self.args.seed,
             )
 
             if self._handle is None:

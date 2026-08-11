@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 import random
+import time
 
 import carlanet as carla
 
@@ -161,6 +163,15 @@ class TrafficController:
         self.last_check = 0.0
         self.last_summary = 0.0
         self.despawns = {}
+        self.routes_planned = 0
+        self.unroutable_spawns = 0
+        self.route_plan_ms_max = 0.0
+        self.route_plan_ms_total = 0.0
+        self.route_searches = 0
+        self.spawn_ms = 0.0
+        self.reconcile_ms = 0.0
+        self.stuck_travel = []
+        self.stalled_models = {}
         
         if staging is not None:
             self.logger.info(f"traffic controller initialized: {len(blueprints)} blueprints, {len(spawn_pool)} spawn points")
@@ -205,7 +216,7 @@ class TrafficController:
             return stub
         if not staging:
             stub.available = False
-            stub.reason = "no staging bounds (build a draped world: --height-align drape)"
+            stub.reason = "no staging bounds (this world was loaded, not built from an OSM area)"
             return stub
         
         logger.info(f"staging bounds retrieved: {staging['max_x'] - staging['min_x']:.0f}x{staging['max_y'] - staging['min_y']:.0f}m, margin={staging['margin']:.0f}m")
@@ -250,7 +261,13 @@ class TrafficController:
             sp
             for sp in ring_sps
             if cls.inward_min(sp.location.x, sp.location.y, staging) <= -2.0
-            and cls.red_clearance(sp.location.x, sp.location.y, staging) >= 5.0
+            and cls.fits_inside_red_edge(
+                sp.location.x,
+                sp.location.y,
+                sp.rotation.yaw,
+                cls._ASSUMED_EXTENT,
+                staging,
+            )
         ]
         if len(spawn_pool) < 8:
             logger.info(f"spawn pool too small ({len(spawn_pool)}), using all {len(ring_sps)} ring spawn points")
@@ -291,6 +308,36 @@ class TrafficController:
             f"traffic: {len(ring_sps)} inward edge-ring spawn points; "
             f"{len(spawn_pool)} usable in-margin spawn points (set_actor_fade OK)"
         )
+
+        if args.log:
+            try:
+                tm.set_event_log_path(os.path.abspath(args.log))
+            except Exception as e:
+                logger.warning("traffic: traffic-manager lines will not reach the log (%r)", e)
+        if args.speed_scale != 100.0:
+            try:
+                tm.set_global_percentage_speed_difference(100.0 - args.speed_scale)
+                logger.info(
+                    "traffic: driving %.0f%% of each road's posted speed limit",
+                    args.speed_scale,
+                )
+            except Exception as e:
+                logger.warning("traffic: speed scale unavailable (%r)", e)
+        if args.route:
+            try:
+                tm.set_route_replan_attempt_limit(args.route_replan_limit)
+                tm.set_route_greedy_fallback_enabled(args.route_greedy_fallback)
+            except Exception as e:
+                logger.warning("traffic: route recovery knobs unavailable (%r); using defaults", e)
+            if args.route_greedy_fallback:
+                recovery = (
+                    f"after {args.route_replan_limit} failed replans, steer greedily"
+                    if args.route_replan_limit > 0
+                    else "keep replanning (limit 0)"
+                )
+            else:
+                recovery = "keep replanning indefinitely"
+            logger.info("traffic: routes are planned before spawn; off-route recovery = %s", recovery)
 
         if args.start_traffic:
             ctl.want_enabled = True
@@ -352,35 +399,77 @@ class TrafficController:
         except Exception:
             pass
 
+    @staticmethod
+    def red_edge_deficit(x, y, yaw_deg, ext, b, pad=0.6):
+        """How far a vehicle footprint pokes past the nearest red edge, plus that edge's inward normal."""
+        edges = (
+            ("W", x - b["min_x"], (1.0, 0.0)),
+            ("E", b["max_x"] - x, (-1.0, 0.0)),
+            ("S", y - b["min_y"], (0.0, 1.0)),
+            ("N", b["max_y"] - y, (0.0, -1.0)),
+        )
+        _, clearance, normal = min(edges, key=lambda e: e[1])
+        yaw = math.radians(yaw_deg)
+        half_extent = (
+            (abs(ext[0] * math.cos(yaw)) + abs(ext[1] * math.sin(yaw)))
+            if normal[0] != 0.0
+            else (abs(ext[0] * math.sin(yaw)) + abs(ext[1] * math.cos(yaw)))
+        )
+        return (half_extent + pad) - clearance, normal
+
+    @classmethod
+    def fits_inside_red_edge(cls, x, y, yaw_deg, ext, b, pad=0.6):
+        """True if a vehicle spawned here can be nudged forward to lie wholly inside the red edge."""
+        deficit, normal = cls.red_edge_deficit(x, y, yaw_deg, ext, b, pad)
+        if deficit <= 0:
+            return True
+        yaw = math.radians(yaw_deg)
+        ux, uy = math.cos(yaw), math.sin(yaw)
+        dot = ux * normal[0] + uy * normal[1]
+        if dot < 0.2:
+            return False
+        distance = min(deficit / dot, b["margin"])
+        nx = x + ux * distance
+        ny = y + uy * distance
+        residual, _ = cls.red_edge_deficit(nx, ny, yaw_deg, ext, b, pad)
+        return residual <= 1e-3
+
+    def plan_route_from(self, spawn_tf):
+        """Plan a route from a spawn point before spawning, skipping unreachable destinations."""
+        for _ in range(self._ROUTE_DESTINATION_TRIES):
+            destination = self.pick_destination(spawn_tf).location
+            t0 = time.perf_counter()
+            try:
+                route = self.tm.plan_route(spawn_tf.location, destination)
+            except Exception as e:
+                self.logger.warning("route planning unavailable: %r", e)
+                return None
+            elapsed_ms = (time.perf_counter() - t0) * 1000.0
+            self.route_searches += 1
+            self.route_plan_ms_total += elapsed_ms
+            self.route_plan_ms_max = max(self.route_plan_ms_max, elapsed_ms)
+            if route is not None:
+                return route
+        return None
+
     def clear_shift(self, loc, yaw_deg, ext, pad=0.6):
         """Offset (dx, dy) to move a vehicle FORWARD along its lane just far enough that its whole
         footprint clears the nearest red (sandbox) edge."""
-        b = self.b
-        edges = (
-            ("W", loc.x - b["min_x"], (1.0, 0.0)),
-            ("E", b["max_x"] - loc.x, (-1.0, 0.0)),
-            ("S", loc.y - b["min_y"], (0.0, 1.0)),
-            ("N", b["max_y"] - loc.y, (0.0, -1.0)),
-        )
-        _, c, n = min(edges, key=lambda e: e[1])
-        yaw = math.radians(yaw_deg)
-        he = (
-            (abs(ext[0] * math.cos(yaw)) + abs(ext[1] * math.sin(yaw)))
-            if n[0] != 0.0
-            else (abs(ext[0] * math.sin(yaw)) + abs(ext[1] * math.cos(yaw)))
-        )
-        deficit = (he + pad) - c
+        deficit, normal = self.red_edge_deficit(loc.x, loc.y, yaw_deg, ext, self.b, pad)
         if deficit <= 0:
             return (0.0, 0.0)
+        yaw = math.radians(yaw_deg)
         ux, uy = math.cos(yaw), math.sin(yaw)
-        dot = ux * n[0] + uy * n[1]
+        dot = ux * normal[0] + uy * normal[1]
         if dot < 0.2:
             return (0.0, 0.0)
-        d = min(deficit / dot, b["margin"])
-        return (ux * d, uy * d)
+        distance = min(deficit / dot, self.b["margin"])
+        return (ux * distance, uy * distance)
 
     _NEW_VEHICLE_RADIUS = 3.7
     _SPAWN_CLEAR_PAD = 1.0
+    _ASSUMED_EXTENT = (3.5, 1.1)
+    _ROUTE_DESTINATION_TRIES = 4
 
     def occupied(self, x, y):
         """True if any tracked vehicle's footprint is close enough to (x, y) that spawning there would overlap it."""
@@ -398,11 +487,20 @@ class TrafficController:
         pool = list(self.spawn_pool)
         random.shuffle(pool)
         for sp in pool:
-            ex, ey = self.clear_shift(sp.location, sp.rotation.yaw, (3.5, 1.1))
+            ex, ey = self.clear_shift(sp.location, sp.rotation.yaw, self._ASSUMED_EXTENT)
+            if self.occupied(sp.location.x, sp.location.y):
+                continue
             if self.occupied(sp.location.x + ex, sp.location.y + ey):
                 continue
+            route = None
+            if self.args.route:
+                route = self.plan_route_from(sp)
+                if route is None:
+                    self.unroutable_spawns += 1
+                    continue
+            bp = self.spawn_bp()
             try:
-                v = self.world.spawn_actor(self.spawn_bp(), sp)
+                v = self.world.spawn_actor(bp, sp)
             except Exception:
                 continue
             try:
@@ -431,8 +529,37 @@ class TrafficController:
                 if self.args.fade:
                     self.safe_fade(v, 1.0 - op)
                 v.set_autopilot(True, self.args.tm_port)
-                if self.args.route:
-                    self.tm.set_path(v, [self.pick_destination(sp).location])
+                difference = 0.0
+                if self.args.speed_spread > 0:
+                    spread = float(self.args.speed_spread)
+                    difference = random.uniform(-spread, spread)
+                    self.tm.set_percentage_speed_difference(v, difference)
+                limit_kph = 0.0
+                if self.args.spawn_at_speed:
+                    try:
+                        limit_kph = self.tm.get_speed_limit_kph_at(sp.location)
+                    except Exception:
+                        pass
+                if limit_kph > 0.0:
+                    target = (
+                        (limit_kph / 3.6)
+                        * (self.args.speed_scale / 100.0)
+                        * (1.0 - difference / 100.0)
+                    )
+                    yaw = math.radians(syaw)
+                    try:
+                        v.set_target_velocity(
+                            carla.Vector3D(
+                                x=target * math.cos(yaw),
+                                y=target * math.sin(yaw),
+                                z=0.0,
+                            )
+                        )
+                    except Exception:
+                        pass
+                if route is not None:
+                    self.tm.apply_route(v, route)
+                    self.routes_planned += 1
             except Exception as e:
                 self.logger.warning(f"setup failed for {v.id}: {e!r}")
                 try:
@@ -446,7 +573,11 @@ class TrafficController:
                 "entered": False,
                 "born": now,
                 "xy": (sx, sy),
+                "spawn_xy": (sx, sy),
+                "routed": route is not None,
+                "bp": str(getattr(bp, "id", "?")),
                 "stuck": 0.0,
+                "stalled": 0.0,
                 "misses": 0,
                 "speed": 0.0,
             }
@@ -457,6 +588,17 @@ class TrafficController:
 
     def despawn(self, vid, actor, reason="other"):
         self.despawns[reason] = self.despawns.get(reason, 0) + 1
+        if reason == "stalled":
+            rec = self.actors.get(vid)
+            if rec:
+                model = rec.get("bp", "?").split(".", 1)[-1]
+                self.stalled_models[model] = self.stalled_models.get(model, 0) + 1
+        if reason == "stuck":
+            rec = self.actors.get(vid)
+            if rec and rec.get("spawn_xy") and rec.get("xy"):
+                sx, sy = rec["spawn_xy"]
+                cx, cy = rec["xy"]
+                self.stuck_travel.append((math.hypot(cx - sx, cy - sy), rec.get("routed", False)))
         if self.args.fade:
             try:
                 actor.set_fade(1.0)
@@ -498,10 +640,13 @@ class TrafficController:
         b = self.b
         if len(self.actors) < self.args.max and (now - self.last_spawn) >= self.args.spawn_interval:
             self.last_spawn = now
+            t0 = time.perf_counter()
             self.spawn_one(now)
+            self.spawn_ms += (time.perf_counter() - t0) * 1000.0
         if now - self.last_check < self.CHECK_S:
             return
         self.last_check = now
+        reconcile_t0 = time.perf_counter()
 
         mnx, mny, mxx, mxy = b["min_x"], b["min_y"], b["max_x"], b["max_y"]
         ids = list(self.actors.keys())
@@ -561,24 +706,68 @@ class TrafficController:
                 if rec["entered"] and self.red_clearance(loc.x, loc.y, b) <= self.RED_CLEAR:
                     self.despawn(vid, a, "red-edge")
                     continue
-                if rec["entered"] or xy is None or dist > 0.05:
+                if xy is None or dist > 0.05:
                     rec["stuck"] = 0.0
-                else:
+                    rec["stalled"] = 0.0
+                elif not rec["entered"]:
                     rec["stuck"] += self.CHECK_S
                     if rec["stuck"] >= 6.0:
                         self.despawn(vid, a, "stuck")
                         continue
+                else:
+                    rec["stalled"] += self.CHECK_S
+                    if self.args.stall_timeout > 0 and rec["stalled"] >= self.args.stall_timeout:
+                        self.despawn(vid, a, "stalled")
+                        continue
+
+        self.reconcile_ms += (time.perf_counter() - reconcile_t0) * 1000.0
 
         if now - self.last_summary >= self.SUMMARY_S:
+            window = max(self.CHECK_S, now - self.last_summary)
             self.last_summary = now
             entered = sum(1 for r in self.actors.values() if r["entered"])
             speeds = [r["speed"] for r in self.actors.values()]
             avg = sum(speeds) / len(speeds) if speeds else 0.0
             mx = max(speeds) if speeds else 0.0
             reasons = " ".join(f"{k}={v}" for k, v in sorted(self.despawns.items())) or "none"
+            routes = ""
+            if self.args.route:
+                timing = ""
+                if self.route_searches:
+                    timing = (
+                        f", search {self.route_plan_ms_total / self.route_searches:.0f} ms avg "
+                        f"{self.route_plan_ms_max:.0f} ms worst"
+                    )
+                routes = (
+                    f" | routes: {self.routes_planned} planned, "
+                    f"{self.unroutable_spawns} spawn points skipped as unreachable{timing}"
+                )
+                self.route_plan_ms_max = 0.0
+                self.route_plan_ms_total = 0.0
+                self.route_searches = 0
+            cost = (
+                f" | cost {self.spawn_ms / window:.0f}+{self.reconcile_ms / window:.0f} ms/s "
+                f"(spawn+reconcile)"
+            )
+            self.spawn_ms = 0.0
+            self.reconcile_ms = 0.0
+            if self.stuck_travel:
+                travelled = [d for d, _ in self.stuck_travel]
+                never = sum(1 for d in travelled if d < 1.0)
+                routed = sum(1 for _, routed_flag in self.stuck_travel if routed_flag)
+                cost += (
+                    f" | stuck: {never}/{len(travelled)} never moved at all, "
+                    f"furthest got {max(travelled):.1f} m, {routed} had a route"
+                )
+                self.stuck_travel.clear()
+            if self.stalled_models:
+                worst = sorted(self.stalled_models.items(), key=lambda kv: -kv[1])[:3]
+                cost += " | stalled: " + ", ".join(f"{m}x{n}" for m, n in worst)
+                self.stalled_models.clear()
             self.logger.info(
                 f"traffic: {len(self.actors)} alive ({entered} entered, "
-                f"speed avg {avg:.1f} max {mx:.1f} m/s) | despawns/{self.SUMMARY_S:.0f}s: {reasons}"
+                f"speed avg {avg:.1f} max {mx:.1f} m/s) | despawns/{self.SUMMARY_S:.0f}s: "
+                f"{reasons}{routes}{cost}"
             )
             self.despawns.clear()
 
