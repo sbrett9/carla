@@ -378,7 +378,13 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             {
                 if (currentJunctionId != -1)
                     RemoveActor(egoActorId);
-                trafficLightHazard = !committedToJunction;
+                // A vehicle physically inside the intersection is never held by a signal, whether or
+                // not it was granted commitment on the way in. Commitment alone is not enough: it is
+                // only granted while nothing is holding the vehicle back, so one whose light was
+                // already red as it entered never receives it, and would then be stopped by the same
+                // red it is standing past — blocking every movement that crosses it until its own
+                // light cycles green. A vehicle that has entered has to leave.
+                trafficLightHazard = !committedToJunction && !insideJunction;
             }
             // Case 2: currently arbitrating a non-signalised junction.
             else if (currentJunctionId != -1)
