@@ -161,19 +161,17 @@ def main() -> int:
     sensors = SensorRig(world=world, args=args)
 
     # PyGameSensorController to move the sensor rig around the world
-    controller = PyGameSensorController(sensors, world, sensors.get_initial_pose())
+    pygame_controller = PyGameSensorController(sensors, world, sensors.get_initial_pose())
     orbit_sensor_controller = OrbitSensorController(
         sensors=sensors,
         world=world,
         args=args,
-        flight_controller=controller,
+        flight_controller=pygame_controller,
         logger=logger,
         sync=sync,
     )
     orbit_sensor_controller.start_updater()
 
-    if args.orbit:
-        orbit_sensor_controller.set_enabled(True)
     # Recorder: the native (C#) FrameRecorder encodes frames in .NET off the GIL. If the
     # CarlaNet.Recording assembly is absent the recorder reports itself unavailable when toggled (the
     # whole client is CarlaNet, so a missing recording assembly means the build itself is incomplete).
@@ -189,7 +187,7 @@ def main() -> int:
         window_title="SCTMV — Single Client Traffic Manager & Viewer",
         sync=sync,
         sensors=sensors,
-        controller=controller,
+        controller=pygame_controller,
         traffic=traffic,
         telemetry=telemetry,
         recorder=recorder,
@@ -225,14 +223,15 @@ def main() -> int:
     if not sync:
         worker_thread = threading.Thread(target=_worker, daemon=True)
         worker_thread.start()
-        controller.start_async()
+        pygame_controller.start_async()
+        
     # main thread setup
     # Clean stop on Ctrl+C even when blocked inside a .NET call (pythonnet can swallow KeyboardInterrupt).
     stop = {"flag": False}
     try:
         signal.signal(signal.SIGINT, lambda *a: stop.__setitem__("flag", True))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warn("Failed to set signal handler: %r", e)
 
     try:
         while pg.running and not stop["flag"]:
@@ -250,7 +249,7 @@ def main() -> int:
 
                 # Apply camera transform (sync mode applies immediately)
                 if not orbit_sensor_controller.orbit_enabled:
-                    controller.apply_transform_sync()
+                    pygame_controller.apply_transform_sync()
 
                 # Sync mode owns everything on the tick thread: step traffic + telemetry inline.
                 now = time.time()
@@ -262,7 +261,7 @@ def main() -> int:
                         logger.exception("%s.update failed: %r", system, e)
             else:
                 if not orbit_sensor_controller.orbit_enabled:
-                    controller.apply_transform_async()   # background controller applies it
+                    pygame_controller.apply_transform_async()   # background controller applies it
                 # Async: traffic + telemetry RPCs run on the background worker thread, never here, so
                 # the render loop stays smooth regardless of RPC latency.
             pg.render()
@@ -276,7 +275,7 @@ def main() -> int:
         stop_flag["value"] = True
 
         if not sync:
-            controller.stop_async()
+            pygame_controller.stop_async()
 
         if worker_thread is not None:
             worker_thread.join(timeout=2.0)
@@ -291,24 +290,24 @@ def main() -> int:
 
         try:
             traffic.disable()        # despawn any remaining vehicles (now single-threaded)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warn("Failed to disable traffic during shutdown: %r", e)
 
         try:
             if recorder.recording:
                 recorder.stop()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warn("Failed to stop recorder during shutdown: %r", e)
         try:
             telemetry.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warn("Failed to close telemetry during shutdown: %r", e)
 
         # Restore asynchronous mode so the headless server is never left waiting for a tick.
         try:
             tm.set_synchronous_mode(False)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warn("Failed to restore asynchronous mode during shutdown: %r", e)
 
         WorldBuilder.configure_sync_mode(world, sync=False)
 
