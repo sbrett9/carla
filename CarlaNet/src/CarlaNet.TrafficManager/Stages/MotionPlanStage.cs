@@ -145,6 +145,7 @@ internal sealed class MotionPlanStage : IStageWithRemoveActor
     {
         _pidStateMap.Remove(actorId);
         _teleportationInstance.Remove(actorId);
+        _stalledInJunction.Remove(actorId);
         _output.Remove(actorId);
     }
 
@@ -153,6 +154,7 @@ internal sealed class MotionPlanStage : IStageWithRemoveActor
     {
         _pidStateMap.Clear();
         _teleportationInstance.Clear();
+        _stalledInJunction.Clear();
         _output.Clear();
     }
 
@@ -276,6 +278,9 @@ internal sealed class MotionPlanStage : IStageWithRemoveActor
         // Junction-blocked check.
         bool safeAfterJunction = SafeAfterJunction(localization, tlHazard, collisionEmergencyStop);
         bool emergencyStop = tlHazard || collisionEmergencyStop || !safeAfterJunction;
+
+        ReportJunctionStall(
+            actorId, vehicleLocation, vehicleSpeed, tlHazard, collisionEmergencyStop, safeAfterJunction);
 
         if (physicsEnabled && !_simulationState.IsDormant(actorId))
         {
@@ -413,6 +418,80 @@ internal sealed class MotionPlanStage : IStageWithRemoveActor
     // ═════════════════════════════════════════════════════════════════════
     //                          Helpers (private)
     // ═════════════════════════════════════════════════════════════════════
+
+    // ── Junction occupancy reporting ───────────────────────────────────────
+
+    // Vehicles at a stand inside a junction: when they stopped, which junction, and whether that has
+    // been reported yet. Purely diagnostic — nothing reads it to make a driving decision.
+    private readonly Dictionary<ActorId, (double Since, GeoGridId Junction, bool Reported)> _stalledInJunction = new();
+
+    // How long a vehicle must be stopped inside a junction before it is reported. Long enough that a
+    // vehicle pausing mid-turn to take a gap is not reported as blocking the intersection.
+    private const double JunctionStallReportSeconds = 4.0;
+    // At or below this speed a vehicle counts as stopped, in m/s.
+    private const float JunctionStallSpeed = 0.5f;
+
+    /// <summary>
+    /// Report a vehicle left standing inside a junction, why it is being held, and how long it stayed.
+    /// </summary>
+    /// <remarks>
+    /// A vehicle stopped in an intersection blocks every movement that crosses it, so what matters is
+    /// which of the three things that can stop it is doing so. They have entirely different causes: a
+    /// signal it is obeying, a vehicle it would hit, or no room on the far side — and a fourth case,
+    /// where none of them is set, means the traffic manager is not braking the vehicle at all and it
+    /// is being held by something outside this pipeline.
+    ///
+    /// Reported on entry and again on release, because the duration is what separates a vehicle
+    /// edging through a busy junction from one that has blocked it.
+    /// </remarks>
+    private void ReportJunctionStall(
+        ActorId actorId,
+        Location vehicleLocation,
+        float vehicleSpeed,
+        bool tlHazard,
+        bool collisionEmergencyStop,
+        bool safeAfterJunction)
+    {
+        SimpleWaypoint here = _localMap.GetWaypoint(vehicleLocation);
+        bool stalled = here.CheckJunction() && vehicleSpeed < JunctionStallSpeed;
+
+        if (!stalled)
+        {
+            if (_stalledInJunction.TryGetValue(actorId, out var finished))
+            {
+                _stalledInJunction.Remove(actorId);
+                if (finished.Reported)
+                    TrafficReport.Writer.WriteLine(
+                        $"{DateTime.Now:HH:mm:ss.fff} [traffic] vehicle {actorId} moved off after "
+                        + $"{_currentTimestamp - finished.Since:F1}s stopped inside junction "
+                        + $"{finished.Junction}.");
+            }
+            return;
+        }
+
+        GeoGridId junction = here.GetJunctionId();
+        if (!_stalledInJunction.TryGetValue(actorId, out var stall) || stall.Junction != junction)
+        {
+            _stalledInJunction[actorId] = (_currentTimestamp, junction, false);
+            return;
+        }
+        if (stall.Reported || _currentTimestamp - stall.Since < JunctionStallReportSeconds) return;
+
+        _stalledInJunction[actorId] = (stall.Since, junction, true);
+        string held =
+            !safeAfterJunction ? "no room beyond the junction"
+            : collisionEmergencyStop ? "a vehicle in its way"
+            : tlHazard ? "a signal"
+            : "nothing this stage decided — the traffic manager is not braking it";
+        int alsoStalled = 0;
+        foreach (var other in _stalledInJunction)
+            if (other.Key != actorId && other.Value.Junction == junction) alsoStalled++;
+        TrafficReport.Writer.WriteLine(
+            $"{DateTime.Now:HH:mm:ss.fff} [traffic] vehicle {actorId} stopped inside junction "
+            + $"{junction} for {_currentTimestamp - stall.Since:F1}s, held by {held} "
+            + $"({alsoStalled} other vehicle(s) stopped in it) at "
+            + $"({vehicleLocation.X:F1}, {vehicleLocation.Y:F1}).");
+    }
 
     private bool SafeAfterJunction(LocalizationData localization, bool tlHazard, bool collisionEmergencyStop)
     {

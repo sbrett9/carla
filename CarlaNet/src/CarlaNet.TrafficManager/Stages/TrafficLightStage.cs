@@ -71,9 +71,6 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
     // Held rather than recomputed so a vehicle that has begun stopping for a signal keeps stopping
     // until that signal permits it, instead of re-deciding on a threshold its own braking moves.
     private readonly Dictionary<ActorId, string> _heldOnApproach = new();
-    // Vehicles at a stand inside a junction: when they stopped, which junction, and whether that has
-    // been reported yet. Purely diagnostic — nothing reads it to make a driving decision.
-    private readonly Dictionary<ActorId, (double Since, GeoGridId Junction, bool Reported)> _stalledInJunction = new();
 
     // Deceleration assumed available when stopping for a signal, in m/s². The motion planner answers
     // a signal hazard with full brake rather than a controlled deceleration, so this is set near what
@@ -88,9 +85,6 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
     // At or below this speed a vehicle counts as stopped, in m/s. A vehicle stopped short of its
     // signal releases the brake so ordinary control can close the gap to whatever is in front.
     private const float CreepSpeedMetresPerSecond = 0.5f;
-    // How long a vehicle must be stopped inside a junction before it is reported as blocking it.
-    // Long enough that a vehicle pausing mid-turn for a gap is not reported as a gridlock.
-    private const double JunctionStallReportSeconds = 4.0;
     // Vehicles that entered a signalised junction while permitted to proceed, and so must clear it
     // rather than stop part-way across if the light changes behind them. See Update().
     private readonly HashSet<ActorId> _committedToJunction = new();
@@ -281,40 +275,9 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
                 + approachVelocity.Y * approachVelocity.Y
                 + approachVelocity.Z * approachVelocity.Z);
 
-            SimpleWaypoint? egoOnMap = _localMap?.GetWaypoint(_simulationState.GetLocation(egoActorId));
-            bool insideJunction = egoOnMap is not null && egoOnMap.CheckJunction();
-
-            // Report a vehicle that has come to a stand INSIDE a junction and stayed there. Nothing
-            // in the traffic manager encodes right of way for a turn across traffic: two vehicles on
-            // crossing paths negotiate purely on the geometry of their swept paths, and that decision
-            // can reverse as they move, so a pair can advance into each other and lock. Distinguishing
-            // that from a vehicle simply queueing needs to know it is stopped, in the intersection,
-            // and not alone there.
-            if (insideJunction && approachSpeed < CreepSpeedMetresPerSecond)
-            {
-                GeoGridId blockedIn = egoOnMap!.GetJunctionId();
-                if (!_stalledInJunction.TryGetValue(egoActorId, out var stall) || stall.Junction != blockedIn)
-                {
-                    _stalledInJunction[egoActorId] = (_currentTimestamp, blockedIn, false);
-                }
-                else if (!stall.Reported && _currentTimestamp - stall.Since >= JunctionStallReportSeconds)
-                {
-                    _stalledInJunction[egoActorId] = (stall.Since, blockedIn, true);
-                    int alsoStalled = 0;
-                    foreach (var other in _stalledInJunction)
-                        if (other.Key != egoActorId && other.Value.Junction == blockedIn) alsoStalled++;
-                    TrafficReport.Writer.WriteLine(
-                        $"{DateTime.Now:HH:mm:ss.fff} [traffic] vehicle {egoActorId} has been stopped "
-                        + $"inside junction {blockedIn} for {_currentTimestamp - stall.Since:F1}s "
-                        + $"({alsoStalled} other vehicle(s) also stopped in it) at "
-                        + $"({_simulationState.GetLocation(egoActorId).X:F1}, "
-                        + $"{_simulationState.GetLocation(egoActorId).Y:F1}).");
-                }
-            }
-            else
-            {
-                _stalledInJunction.Remove(egoActorId);
-            }
+            bool insideJunction =
+                _localMap is not null
+                && _localMap.GetWaypoint(_simulationState.GetLocation(egoActorId)).CheckJunction();
 
             // A vehicle is only handed a light's state by the simulator while it physically overlaps
             // that light's stop-line trigger box. On a road posted well above walking pace it crosses
@@ -513,7 +476,6 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
         _committedToJunction.Clear();
         _lastReportedLight.Clear();
         _heldOnApproach.Clear();
-        _stalledInJunction.Clear();
         _output.Clear();
     }
 
