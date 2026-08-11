@@ -46,6 +46,9 @@ Controls (hold RIGHT MOUSE to fly, like the Unreal editor):
     R             toggle CARLA road-mesh RENDERING on/off (collision unaffected)
     B             toggle the OSM PERIMETER overlay (red rectangle + corner posts)
     M             toggle the MARGIN/interior-boundary overlay (blue rectangle)
+    ]             toggle the Traffic Manager's per-vehicle diagnostics (what signal each vehicle is
+                  shown, when it brakes for one, when it is left standing in a junction). Off unless
+                  --traffic-diagnostics was given. Removals and route failures are always reported.
     L             toggle RENDERING of the traffic lights and signs generated from OpenDRIVE (mast
                   arms, stop/yield/speed-limit signs). Rendering only: their stop-line triggers stay
                   live, so vehicles go on obeying a signal you have hidden
@@ -359,6 +362,15 @@ def parse_args():
     tel.add_argument("--stale", type=float, default=3.0, help="CoT stale seconds")
     tel.add_argument("--ttl", type=int, default=1, help="multicast TTL")
     tel.add_argument("--print", action="store_true", dest="echo", help="also print each CoT event")
+
+    ap.add_argument("--traffic-diagnostics", action="store_true",
+                    help="start with the Traffic Manager's per-vehicle diagnostics on: what signal "
+                         "each vehicle is shown, when it brakes for one and is released, when it "
+                         "commits to a junction, and when it is left standing inside one. Off by "
+                         "default because they describe every vehicle rather than reporting "
+                         "something unusual, so at fleet scale they bury the lines worth reading. "
+                         "Toggle live with ']'. Vehicles being removed and routes failing are "
+                         "always reported either way.")
 
     ap.add_argument("--log", default=None, metavar="FILE",
                     help="also write this run's console output to FILE, with the same timestamps. "
@@ -790,6 +802,12 @@ class TrafficController:
               f"inward {min(im):.0f}..{max(im):.0f} m (negative inward = inside the margin, as intended)")
         print(f"traffic: {len(ring_sps)} inward edge-ring spawn points; "
               f"{len(spawn_pool)} usable in-margin spawn points (set_actor_fade OK)")
+        try:
+            tm.set_traffic_diagnostics(args.traffic_diagnostics)
+            if args.traffic_diagnostics:
+                print("traffic: per-vehicle diagnostics ON (']' toggles)")
+        except Exception as e:
+            print(f"traffic: diagnostics switch unavailable ({e!r})", file=sys.stderr)
         if args.log:
             # The traffic manager writes to its own console handle, so it has to be asked
             # separately or its lines are the ones missing from the log when they are needed.
@@ -2018,6 +2036,8 @@ def main() -> int:
     ground_collision = True
     road_rendered = True
     signals_visible = True
+    # Follows --traffic-diagnostics so the heads-up display agrees with what was asked for.
+    traffic_diagnostics = bool(args.traffic_diagnostics)
     show_perimeter = False
     show_margin = False
     time_advancing = bool(args.time_advance)
@@ -2385,6 +2405,14 @@ def main() -> int:
                     road_rendered = not road_rendered
                     try: world.set_road_rendered(road_rendered)
                     except Exception as e: print(f"set_road_rendered failed: {e!r}", file=sys.stderr)
+                elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_RIGHTBRACKET:
+                    traffic_diagnostics = not traffic_diagnostics
+                    try:
+                        traffic.tm.set_traffic_diagnostics(traffic_diagnostics)
+                        print(f"traffic: per-vehicle diagnostics "
+                              f"{'ON' if traffic_diagnostics else 'OFF'}")
+                    except Exception as e:
+                        print(f"set_traffic_diagnostics failed: {e!r}", file=sys.stderr)
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_l:
                     signals_visible = not signals_visible
                     try: world.set_layer_visible("signals", signals_visible)
@@ -2539,13 +2567,14 @@ def main() -> int:
                 f"speed {speed:4.0f}   photoreal(C) {'ON' if photoreal_visible else 'OFF'}   "
                 f"ground(G) {'ON' if ground_visible else 'OFF'}   gColl(V) {'ON' if ground_collision else 'OFF'}   "
                 f"road(R) {'ON' if road_rendered else 'OFF'}   signals(L) {'ON' if signals_visible else 'OFF'}   "
+                f"diag(]) {'ON' if traffic_diagnostics else 'OFF'}   "
                 f"perim(B) {'ON' if show_perimeter else 'OFF'}   "
                 f"margin(M) {'ON' if show_margin else 'OFF'}   time(K) {time_str}",
                 f"traffic(T) {traf_str}   telemetry(Y) {tel_str}   record(F) {rec_str}   "
                 f"orbit(O) {'ON' if orbit_info['orbit_enabled'] else 'OFF'}   "
                 f"fps {clock.get_fps():4.0f}   frames {state['frames']}",
                 "RMB look | Ctrl+LMB measure | WASD/EQ fly | wheel speed | Shift fast | C/G/V/R/L/B/M layers | "
-                "K time | T traffic | Y telemetry | F record |",
+                "K time | T traffic | Y telemetry | F record | ] traffic diag |",
                 "O orbit | P pause orbit | Space reset | Esc quit",
             ]
             

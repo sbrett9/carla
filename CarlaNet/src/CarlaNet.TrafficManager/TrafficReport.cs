@@ -24,6 +24,32 @@ internal static class TrafficReport
     /// <summary>Write traffic-manager events here. Never null.</summary>
     public static System.IO.TextWriter Writer => _writer;
 
+    private static int _diagnosticsEnabled;
+
+    /// <summary>
+    /// Whether the per-vehicle observational reporting is emitted: what signal each vehicle is being
+    /// shown, when it brakes for one and is released, when it commits to a junction, and when it is
+    /// left standing inside one.
+    /// </summary>
+    /// <remarks>
+    /// Off by default. These lines describe what every vehicle is doing rather than reporting
+    /// something exceptional, so at fleet scale they dominate the log and bury the events that are
+    /// worth noticing. They stay available because each of them has, at some point, been the only way
+    /// to tell a subsystem acting wrongly from one not acting at all.
+    ///
+    /// This does not gate a vehicle being removed, a route failing, or a signal registry that could
+    /// not be read. Those are exceptional and stay on: silence about them is what makes traffic
+    /// misbehaviour expensive to diagnose.
+    ///
+    /// Callers should test this before building their message, since these sit on the per-vehicle
+    /// path and the string would otherwise be formatted only to be discarded.
+    /// </remarks>
+    public static bool DiagnosticsEnabled
+    {
+        get => Volatile.Read(ref _diagnosticsEnabled) != 0;
+        set => Volatile.Write(ref _diagnosticsEnabled, value ? 1 : 0);
+    }
+
     /// <summary>
     /// Also append events to <paramref name="path"/>, or stop doing so when it is null. Opening a
     /// new file closes the previous one. A path that cannot be opened is reported and otherwise

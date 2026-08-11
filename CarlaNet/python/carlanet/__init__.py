@@ -1278,6 +1278,21 @@ class TrafficManager:
         """Stop watching a vehicle's route. Its current path is left in place."""
         self._tm.ClearRoute(actor._actor)
 
+    def set_traffic_diagnostics(self, enabled: bool):
+        """Turn the per-vehicle traffic diagnostics on or off while the simulation is running.
+
+        Covers what signal each vehicle is shown, when it brakes for one and is released, when it
+        commits to a junction, and when it is left standing inside one. Off by default: these
+        describe what every vehicle is doing rather than reporting something exceptional, so at
+        fleet scale they bury the lines worth noticing.
+
+        Vehicles being removed and routes failing are not covered and are always reported."""
+        self._tm.SetTrafficDiagnostics(bool(enabled))
+
+    def get_traffic_diagnostics(self) -> bool:
+        """Whether the per-vehicle traffic diagnostics are currently being emitted."""
+        return bool(self._tm.GetTrafficDiagnostics())
+
     def set_event_log_path(self, path):
         """Also append the Traffic Manager's event lines to `path` (None to stop).
 
