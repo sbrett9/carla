@@ -229,7 +229,8 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             // different causes and different fixes, and nothing else emitted here separates them:
             // a red suppresses commitment, so it can never appear on a commitment line.
             var seen = (isAtTrafficLight, trafficLightState);
-            if (!_lastReportedLight.TryGetValue(egoActorId, out var previouslySeen) || previouslySeen != seen)
+            if (TrafficReport.DiagnosticsEnabled
+                && (!_lastReportedLight.TryGetValue(egoActorId, out var previouslySeen) || previouslySeen != seen))
             {
                 _lastReportedLight[egoActorId] = seen;
                 Location where = _simulationState.GetLocation(egoActorId);
@@ -357,7 +358,8 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             if (stoppingForSignal && alreadyHeldFor != governingSignalId)
             {
                 _heldOnApproach[egoActorId] = governingSignalId!;
-                TrafficReport.Writer.WriteLine(
+                if (TrafficReport.DiagnosticsEnabled)
+                    TrafficReport.Writer.WriteLine(
                     $"{DateTime.Now:HH:mm:ss.fff} [traffic] vehicle {egoActorId} braking for "
                     + $"signal {governingSignalId} "
                     + $"{egoBuffer![0].DistanceToGoverningSignal:F1} m ahead.");
@@ -365,7 +367,8 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             else if (!stoppingForSignal && alreadyHeldFor is not null)
             {
                 _heldOnApproach.Remove(egoActorId);
-                TrafficReport.Writer.WriteLine(
+                if (TrafficReport.DiagnosticsEnabled)
+                    TrafficReport.Writer.WriteLine(
                     $"{DateTime.Now:HH:mm:ss.fff} [traffic] vehicle {egoActorId} released by signal "
                     + $"{alreadyHeldFor}.");
             }
@@ -429,7 +432,8 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
                 // through the light — and the buffer head can be well ahead of the vehicle, because
                 // a lane change replaces the whole buffer with a change-over point walked up to
                 // MAX_WPT_DISTANCE down the new lane.
-                if (_committedToJunction.Add(egoActorId) && egoBuffer is { Count: > 0 })
+                if (_committedToJunction.Add(egoActorId) && egoBuffer is { Count: > 0 }
+                    && TrafficReport.DiagnosticsEnabled)
                 {
                     float ahead = MathF.Sqrt(
                         egoBuffer[0].DistanceSquared(_simulationState.GetLocation(egoActorId)));

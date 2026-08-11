@@ -460,7 +460,7 @@ internal sealed class MotionPlanStage : IStageWithRemoveActor
             if (_stalledInJunction.TryGetValue(actorId, out var finished))
             {
                 _stalledInJunction.Remove(actorId);
-                if (finished.Reported)
+                if (finished.Reported && TrafficReport.DiagnosticsEnabled)
                     TrafficReport.Writer.WriteLine(
                         $"{DateTime.Now:HH:mm:ss.fff} [traffic] vehicle {actorId} moved off after "
                         + $"{_currentTimestamp - finished.Since:F1}s stopped inside junction "
@@ -476,6 +476,7 @@ internal sealed class MotionPlanStage : IStageWithRemoveActor
             return;
         }
         if (stall.Reported || _currentTimestamp - stall.Since < JunctionStallReportSeconds) return;
+        if (!TrafficReport.DiagnosticsEnabled) return;
 
         _stalledInJunction[actorId] = (stall.Since, junction, true);
         string held =

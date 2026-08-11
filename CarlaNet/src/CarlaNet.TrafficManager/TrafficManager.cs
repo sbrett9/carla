@@ -293,6 +293,21 @@ public sealed class TrafficManager : IAsyncDisposable
     /// </remarks>
     public void SetEventLogPath(string? path) => TrafficReport.SetLogFile(path);
 
+    /// <summary>
+    /// Turn the per-vehicle traffic diagnostics on or off while the simulation runs: what signal each
+    /// vehicle is shown, when it brakes for one and is released, when it commits to a junction, and
+    /// when it is left standing inside one. Off by default.
+    /// </summary>
+    /// <remarks>
+    /// Vehicles being removed, routes failing, and a signal registry that could not be read are not
+    /// covered by this and are always reported, because a subsystem acting on a vehicle without
+    /// saying so cannot be told apart from one that is not acting at all.
+    /// </remarks>
+    public void SetTrafficDiagnostics(bool enabled) => TrafficReport.DiagnosticsEnabled = enabled;
+
+    /// <summary>Whether the per-vehicle traffic diagnostics are currently being emitted.</summary>
+    public bool GetTrafficDiagnostics() => TrafficReport.DiagnosticsEnabled;
+
     /// <summary>Number of vehicles currently following a planned route.</summary>
     public int RoutedVehicleCount => _local.RouteSupervisor.RoutedVehicleCount;
 
