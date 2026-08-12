@@ -7,10 +7,11 @@ name: CarlaNet-Python-Lint
 # PRs. A manual run (workflow_dispatch) audits the whole directory instead.
 
 on:
-  pull_request:
-    paths:
-      - 'CarlaNet/python/**'
-      - '.github/workflows/carlanet_python_lint.yml'
+  # disabled automatic builds, uncomment to re-enable
+  # pull_request:
+  #   paths:
+  #     - 'CarlaNet/python/**'
+  #     - '.github/workflows/carlanet_python_lint.yml'
   workflow_dispatch:
 
 permissions:
