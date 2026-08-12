@@ -103,6 +103,7 @@ class PygameInterface:
             "ground_visible": False,
             "ground_collision": True,
             "road_rendered": True,
+            "signals_visible": True,
             "time_advancing": False,
         }
 
@@ -212,7 +213,7 @@ class PygameInterface:
         """Toggle CARLA world layer visibility.
 
         Args:
-            layer_name: Layer name ("photoreal" or "ground")
+            layer_name: Layer name ("photoreal", "ground" or "signals")
         """
         if self.world is None:
             return
@@ -269,6 +270,7 @@ class PygameInterface:
         self.register_hotkey(pygame.K_g, lambda: self._toggle_layer("ground"))
         self.register_hotkey(pygame.K_v, self._toggle_collision)
         self.register_hotkey(pygame.K_r, self._toggle_road)
+        self.register_hotkey(pygame.K_l, lambda: self._toggle_layer("signals"))
         self.register_hotkey(pygame.K_k, self._toggle_time_advance)
 
     def _register_subsystem_hotkeys(self) -> None:
@@ -552,12 +554,13 @@ class PygameInterface:
             pose_str,
             f"speed {speed_val:4.0f}   photoreal(C) {'ON' if self.get_flag('photoreal_visible') else 'OFF'}   "
             f"ground(G) {'ON' if self.get_flag('ground_visible') else 'OFF'}   gColl(V) {'ON' if self.get_flag('ground_collision') else 'OFF'}   "
-            f"road(R) {'ON' if self.get_flag('road_rendered') else 'OFF'}   perim(B) {'ON' if self.get_flag('show_perimeter') else 'OFF'}   "
+            f"road(R) {'ON' if self.get_flag('road_rendered') else 'OFF'}   signals(L) {'ON' if self.get_flag('signals_visible') else 'OFF'}   "
+            f"perim(B) {'ON' if self.get_flag('show_perimeter') else 'OFF'}   "
             f"margin(M) {'ON' if self.get_flag('show_margin') else 'OFF'}   time(K) {time_str}",
             f"traffic(T) {traf_str}   scenario(X) {scen_str}   telemetry(Y) {tel_str}   record(F) {rec_str}   "
             f"orbit(O) {orbit_str}   "
             f"fps {self.get_fps():4.0f}   frames {frames_val}",
-            "RMB look | Ctrl+LMB measure | WASD/EQ fly | wheel speed | Shift fast | C/G/V/R/B/M layers | ",
+            "RMB look | Ctrl+LMB measure | WASD/EQ fly | wheel speed | Shift fast | C/G/V/R/L/B/M layers | ",
             "K time | T traffic | X scenario | Y telemetry | F record | O orbit | P pause orbit | Space reset | Esc quit",
         ]
 

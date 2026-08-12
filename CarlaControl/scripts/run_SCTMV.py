@@ -25,6 +25,9 @@ Controls (hold RIGHT MOUSE to fly):
     G             toggle World Terrain rendering
     V             toggle World Terrain collision (default ON)
     R             toggle CARLA road-mesh rendering
+    L             toggle rendering of the traffic lights and signs generated from OpenDRIVE
+                  (rendering only: stop-line triggers stay live, so vehicles keep obeying
+                  a signal you have hidden)
     B             toggle OSM perimeter overlay
     M             toggle margin/boundary overlay
     T             toggle traffic
