@@ -248,7 +248,7 @@ def main() -> int:
 
                 dimg = sensors.get_latest_depth()
                 if dimg is not None:
-                    sensors.store_depth(dimg, controller.pose)
+                    sensors.store_depth(dimg, pygame_controller.pose)
 
                 # Apply camera transform (sync mode applies immediately)
                 if not orbit_sensor_controller.orbit_enabled:
