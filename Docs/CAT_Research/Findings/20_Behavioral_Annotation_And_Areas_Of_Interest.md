@@ -121,7 +121,7 @@ PatternInstance
   parameters{}          the swept values that defined this instance
   aoi_refs[]            areas of interest the pattern is defined against, where any
   participants[]        { entity_id, role }        role: subject | accomplice | foil | …
-  intervals[]           { participant, phase, commanded_start … observed_end }
+  intervals[]           { participant, phase, issued … observed }   three onsets, §2.4
   supervision           annotated | nominal
 ```
 
@@ -130,25 +130,51 @@ instances this vehicle is participating in at this instant, and in what phase (�
 needed; neither substitutes for the other, and §7.5 keeps the instance form as the authoritative
 artifact.
 
-### 2.4 Commanded and observed interval boundaries differ, measurably
+### 2.4 There is no single instant at which a phase begins
 
-A dwell is authored as "decelerate, then hold". The executor issues the ramp at a known tick; the
-vehicle actually reaches standstill later. [18 §4.4](18_Scenario_Fabrication_For_EPoL_Training.md)
-measured that gap at **5.1 s** for the recommended ramped stop, and at 22.5 s for a zero speed target
-that coasts. Five seconds at a 2 Hz capture rate is ten frames of a "loitering" label applied to a
-vehicle that is visibly still moving.
+**There is no dwell primitive.** The executor has no dwell construct, no dwell action and no dwell
+state — the word appears in `CarlaNet.Scenario` only in comments. A dwell is emergent, assembled from
+three ordinary constructs: a speed action targeting zero, a stand-still trigger carrying the dwell
+duration, and a speed action returning to a travelling speed. That is worth stating plainly because it
+means the annotation channel cannot key off a phase the executor recognises; there is none to key off.
 
-Temporal-localization evaluation is interval-overlap-sensitive, so this is not a rounding detail. Both
-boundaries are cheap to record and neither can be reconstructed from the other:
+What the executor does with a **single** authored speed action to zero is decompose it
+(`ScenarioExecutor.cs:239-277`, `:350-373`, `:516-541`):
 
-- **Commanded** — the tick at which the executor applied the action. Known exactly; it is where
-  `ApplySpeed` sets up the transition (`ScenarioExecutor.cs:350-373`).
-- **Observed** — the tick at which the physical predicate for the phase first held. For a dwell the
-  executor already computes it: `EntityRuntime.StationarySeconds` accumulates from the world's own
-  velocity report rather than from what was commanded (`ScenarioExecutor.cs:246-253`), which is exactly
-  the property wanted.
+| | What happens | Where |
+|---|---|---|
+| Action fires | A transition is stored: from the current speed, to the target, over the authored duration | `ApplySpeed`, `:350-373` |
+| Each tick during the transition | The interpolated target is commanded — **floored at 1.0 m/s**, so the Traffic Manager is never given a zero target | `AdvanceEntities` `:257-264`; `Command` `:516-522` |
+| Transition ends, target ≤ 0 | The vehicle is unregistered, autopilot is turned off, and brake and handbrake are applied together | `Hold`, `:267-271`, `:528-541` |
+| Thereafter | Stationary time accumulates while the **world-reported** speed is ≤ 0.15 m/s | `:245-253` |
 
-Record both. Let the trainer choose which defines the interval; do not choose on its behalf.
+So a stop is a ramp down to 1 m/s followed by a brake, not a smooth approach to zero, and the floor is
+deliberate: a zero target produces neither throttle nor brake, which
+[18 §4.4](18_Scenario_Fabrication_For_EPoL_Training.md) measured as a 22.5 s roll-down to rest against
+1.1 s with the brake applied, and which the idle cull then destroys. That mechanism is measured,
+rejected, and unreachable from the executor — it is named here only so it is not mistaken for a case
+the annotation has to cover.
+
+**The consequence for annotation is that "when the dwell began" has three defensible answers**, and
+they are separated by an interval the scenario itself sets:
+
+- **Action fired** — the tick the transition was stored. Exact, and the earliest defensible onset.
+- **Hold applied** — the tick the brake went on, which is the action's start plus the authored
+  `SpeedActionDynamics` duration. This is where the vehicle is *committed* to stopping.
+- **Observed standstill** — the tick the world first reported ≤ 0.15 m/s. The executor already tracks
+  it, from the world's own velocity rather than from what was commanded, so a vehicle that fails to
+  stop cannot satisfy the trigger.
+
+The gap between them is **not a constant and cannot be calibrated away**, because the ramp duration is
+an authored property of each speed action, not a property of the system. The 5.1 s recorded in
+[18 §4.4](18_Scenario_Fabrication_For_EPoL_Training.md) is one probe's profile, not a system figure.
+At a 2 Hz capture even a short ramp is several frames of a "loitering" label on a vehicle that is
+visibly still moving, and temporal-localization evaluation is interval-overlap-sensitive, so this is
+not a rounding detail.
+
+Record all three. They are already computed or trivially available at the moment they occur, none can
+be reconstructed from the others afterwards, and which one defines the interval is the trainer's
+choice, not the simulator's.
 
 ### 2.5 A label the camera never saw is not training data
 
@@ -206,7 +232,7 @@ annotation model, which is what the table is for.
 
 | # | Pattern | What it demands |
 |---|---|---|
-| 1 | **Dwell / loiter near a site** | Interval with distinct commanded and observed onsets (§2.4); a site reference |
+| 1 | **Dwell / loiter near a site** | Three distinct onsets separated by the authored ramp (§2.4); a site reference. Note there is no dwell primitive — it is assembled from a speed action, a stand-still trigger and a second speed action |
 | 2 | **High-rate approach** — enters the vicinity of a site above a speed band, never stops | No standstill to key on; the interval is defined by *place*, not by a motion event, so the annotation cannot be inferred from a kinematic state machine |
 | 3 | **Circling / repeated orbit** | An unbounded pattern; the interval must be closable by the scenario's end, and the record must distinguish "ended because it finished" from "ended because the run did" |
 | 4 | **Class-conditioned presence** — a heavy goods vehicle in a residential area at 03:00 | Not a motion pattern at all. The annotation must be able to span an entity's whole life and reference class, place and time jointly. Also the case where the detector's class output is part of the phenomenon, so truth must carry the class (it does: `base_type`, `type_id`) |
@@ -559,8 +585,10 @@ PatternInstance
 Interval
   participant         entity_id
   phase               free term within the instance — approach, dwell, depart, lap
-  commanded_start_tick / commanded_end_tick
-  observed_start_tick / observed_end_tick    (§2.4; absent where no physical predicate applies)
+  issued_start_tick / issued_end_tick        the tick the action fired (§2.4)
+  committed_start_tick / committed_end_tick  the tick the ramp finished and the phase was entered
+  observed_start_tick / observed_end_tick    the tick the physical predicate first held; absent for a
+                                             phase that has no physical predicate
   closed_by           trigger | scenario_end | entity_removed | aborted
 ```
 
@@ -664,7 +692,8 @@ Two new `<detail>` children, kept separate precisely so §2.1's boundary is visi
   <_supervision state="annotated" vocabulary="1">
     <annotation instance="pi_loiter_a" label="loiter" phase="dwell" role="subject"
                 aoi="school_lot"
-                commanded_start_tick="10420" observed_start_tick="10522"/>
+                issued_start_tick="10420" committed_start_tick="10460"
+                observed_start_tick="10502"/>
   </_supervision>
 
   <!-- computed identically for every vehicle, including ambient; not a label -->
@@ -912,7 +941,7 @@ Numbered for reference within this document; they do not extend
 | 2 | **Supervision is three-valued** — `annotated`, `nominal`, `unlabelled` — and the state is always written explicitly. Absence of an element is not a negative (§2.2) |
 | 3 | **Annotations are authored intent; area relations are derived context.** They live in separate sidecar elements and no geometric predicate ever writes an annotation (§2.1, §8.5) |
 | 4 | **The unit of supervision is a pattern instance** with participants and intervals, not a per-vehicle flag. The sidecar carries a per-tick projection; the manifest carries the instance form and is authoritative (§2.3, §7.5) |
-| 5 | **Both commanded and observed interval boundaries are recorded.** They differ by the ramp, measured at 5.1 s in [18 §4.4](18_Scenario_Fabrication_For_EPoL_Training.md), and the choice between them belongs to the trainer (§2.4) |
+| 5 | **All three interval onsets are recorded** — action issued, phase committed, physical predicate observed. They are separated by the authored ramp duration, so the gap is a property of the scenario rather than a constant that could be calibrated away, and which one defines the interval is the trainer's choice (§2.4) |
 | 6 | **The primary in-file channel is `UserDefinedAction`/`CustomCommandAction`**, with entity `<Properties>` for static identity, and a companion file as an equal-status alternative compiling to the same representation. Name conventions are expansion sugar and never the sole carrier (§5.5) |
 | 7 | **Static identity travels as a custom spawn attribute**, because the engine stores it unvalidated and the recorder preserves it, so it survives record and replay where an in-process registry cannot (§4.5, §7.2, §7.7) |
 | 8 | **`role_name` stays a provenance field.** `hero` and `ego` are not used to mean anything about annotation; they carry Traffic Manager, ROS2 and replayer behaviour (§4.3) |
