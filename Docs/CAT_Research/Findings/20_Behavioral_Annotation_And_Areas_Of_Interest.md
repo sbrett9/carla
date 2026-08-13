@@ -89,6 +89,9 @@ negative. False negatives in the training set are far more damaging to an anomal
 one-class model than missing positives, because they teach the model that the target behaviour is
 normal.
 
+That a forty-minute ambient stop is currently impossible is not a defence — it is a separate problem,
+and fixing it makes this one larger. See §2.8.
+
 Three states, then:
 
 | State | Meaning | Who gets it |
@@ -223,6 +226,69 @@ Without them the model has no way to learn that duration alone is not the signal
 parked car in a fielded scene fires the detector. This is the case that most justifies the
 `nominal` state of §2.2 existing at all, and it is the reason the "control non-anomalous vehicles in
 the same scenario" requirement is not a convenience.
+
+### 2.8 The Traffic Manager's housekeeping edits the distribution being learned
+
+An EPoL model learns the distribution of ordinary movement. Anything that silently reshapes that
+distribution is therefore editing the training target, and the Traffic Manager contains one such
+mechanism operating on the ambient population by design.
+
+**The idle cull imposes a ceiling on how long any ambient vehicle can be stationary.** A registered
+vehicle idle for `BLOCKED_TIME_THRESHOLD` — 90 seconds, or 180 held at a red light
+(`Constants.cs:39-42`) — is destroyed and deregistered (`Stages/ALSM.cs:192-203`). It exists to clear
+vehicles that have become genuinely stuck, and for that purpose it is correct. For a capture it means
+**no ambient vehicle can ever be observed parked**, which is a strong and entirely artificial claim
+about ordinary behaviour to bake into a corpus whose headline pattern class concerns stationary
+vehicles.
+
+Three consequences, each independent of the others:
+
+- **It truncates the very distribution the model is meant to learn.** Long stops occur constantly in
+  real traffic. A corpus in which they never exceed ninety seconds teaches a ceiling that is a property
+  of this simulator's housekeeping and of nothing else.
+- **It masks the accidental positives of §2.2 rather than preventing them.** The reason ambient
+  traffic rarely produces a convincing loiter today is that the cull removes any vehicle that would
+  have. Relaxing it improves realism and raises the accidental-positive rate at the same time, so the
+  auditing story of §2.2 and the relaxation are **coupled** and should not be sequenced apart.
+- **Its firing point is not reproducible.** The threshold is measured against ALSM's wall-clock
+  timestamp rather than simulation time (`Stages/ALSM.cs:218-225`), and
+  [18 §4.3](18_Scenario_Fabrication_For_EPoL_Training.md) records the clock ratio as load-dependent —
+  90 seconds of wall clock landing near 76 seconds of simulated time at the ratio measured there. So
+  the cull removes different vehicles at different simulated moments in two runs of the same seed, and
+  the ambient population is not reproducible between runs while it is active. For a pipeline whose
+  value rests on reproducible captures, that is an independent reason to be able to switch it off, not
+  merely permission to.
+
+**Scenario entities are already outside this.** The executor's stop unregisters the vehicle
+(`ScenarioExecutor.cs:528-541`) and idle bookkeeping covers registered vehicles only, which is why
+[18 D6](18_Scenario_Fabrication_For_EPoL_Training.md) could drop the per-vehicle exemption as a
+precondition. The requirement recorded here is therefore about the **ambient** population, and it is a
+different requirement from the one doc 18 considered.
+
+**The requirement: cull behaviour must be switchable at run level, and detection must be separable
+from destruction.** Simply disabling it is not safe, because the cull is the only mechanism that ever
+clears a queue behind a stopped vehicle — collision negotiation is purely geometric and exempts
+nothing, and the lane-change escape needs the obstacle seen between 20 and 50 m out with free adjacent
+lanes ([18 §4.3](18_Scenario_Fabrication_For_EPoL_Training.md)). A deadlock in a multi-hour capture
+would therefore persist and grow, which is its own corruption of the ambient distribution and is
+**silent**, since the removal report is currently the only thing that says anything at all. Retaining
+detection while suppressing destruction keeps the diagnostic that says a capture is degrading while it
+is still degrading, and gives §2.2's audit a ready-made signal: a vehicle stationary far beyond the
+threshold with no authored reason is exactly the record a human should review.
+
+Two notes for whoever builds it. The plumbing has a **complete precedent** — the dead-end removal in
+the very next block is already gated on a Traffic Manager parameter (`Stages/ALSM.cs:205-217`), and
+that parameter runs `Parameters.cs:225,443` → `ITrafficManagerCallback.cs:112` → `TrafficManager.cs:222`
+→ the Python shim (`carlanet/__init__.py:1377`), so a second flag follows a path that already exists.
+And the two removal paths are **genuinely distinct**: a vehicle at a graph dead-end is finished, not
+stuck, and should not be swept up in the same switch.
+
+A run-level switch is also strictly safer than the per-vehicle exemption doc 18 sketched. That
+exemption had to be applied at the nomination site rather than at destruction, because only the single
+most-idle vehicle is nominated per pass (`Stages/ALSM.cs:189-190`) and a permanently parked exempt
+vehicle would otherwise hold that slot forever, shielding every genuinely stuck vehicle behind it and
+disabling the cull for the whole population by accident. A run-level switch has no such failure mode,
+because nothing is nominated when nothing is destroyed.
 
 ## 3. The pattern classes the design has to cover
 
@@ -922,6 +988,8 @@ Tier 1 removes the deficiency; tiers 2 and 3 make it scale and make it portable.
 | 2 | Compile step reports what it resolved — entity, area and catalogue references, and the roads a street name resolved to — since a preview cannot check any of it (§5.5) | Tooling |
 | 2 | In-frustum fraction per interval, from the sensor pose and intrinsics already in the sidecar (§2.5) | Post-process, or `CarlaNet.Recording` |
 | 2 | `<_supervision>` and `<_aoi>` on the live feed, diagnostic only | Python — `SCTMV.py:1235-1280` |
+| 2 | **Run-level switch over idle-cull behaviour, separating detection from destruction** (§2.8), plumbed as a launch option so the choice is made per capture. Follows the existing dead-end-removal parameter path exactly | C# — `Parameters.cs`, `Stages/ALSM.cs:192-203`, `ITrafficManagerCallback.cs`, `TrafficManager.cs`, Python shim; flag in `SCTMV.py` |
+| 2 | Surface retained stuck-detections as derived context, so a vehicle stationary far past the threshold with no authored reason is auditable (§2.2, §2.8) | C# — `VehicleTelemetryService.cs`, alongside `<_aoi>` |
 | 3 | Area-of-interest file: reader, validator, local resolution | Python/C# in the build path |
 | 3 | Areas-of-interest actor, `Set`/`Get` library, RPC pair, shim wrappers, debug draw | C++ — mirroring `StagingBounds.h` and `CarlaServer.cpp:727-760` |
 | 3 | `<_aoi>` derived relations in the truth producer, with the emission cap of §7.4 | C# — `VehicleTelemetryService.cs` |
@@ -950,6 +1018,7 @@ Numbered for reference within this document; they do not extend
 | 11 | **The annotation registry is process-local**, which suits SCTMV where the executor and recorder share a process. A cross-process recorder would need the annotation state published to the server, and that is a separate decision if it is ever wanted (§7.3) |
 | 12 | **Vehicle selection is expressed as an OpenSCENARIO catalogue reference where the author has a presentational reason, and as a category resolved to a set on the run seed where they do not.** The catalogue is generated from a running server and versioned with the distribution; hand-picking distinctive vehicles for annotated entities is the appearance confounder of §2.6 and stays prohibited (§5.6) |
 | 13 | **Text authoring is the format's primary surface, and the graphical canvas is a preview surface.** No construct is chosen or rejected on the grounds that the canvas cannot emit it; hand authoring stays possible throughout, which means every convention has to be documented and validated rather than merely implemented (§5) |
+| 14 | **Idle-cull behaviour must be switchable per capture, and detection must remain available when destruction is suppressed.** The cull truncates the ambient stationary distribution at ninety seconds, fires at an irreproducible simulated moment, and is simultaneously the only mechanism that clears a queue — so neither leaving it on nor switching it off wholesale is right for a capture. This amends [18 D6](18_Scenario_Fabrication_For_EPoL_Training.md), which considered only the per-vehicle case (§2.8) |
 
 ## 11. Open questions
 
@@ -971,7 +1040,8 @@ Numbered for reference within this document; they do not extend
    simulator about which vehicles were inside an area is a worse failure than a larger file.
 5. **How an accidental positive in the ambient population should be handled once found** (§2.2) —
    excluded from the corpus, or promoted to `annotated` with a provenance marker distinguishing it from
-   an authored one. The second is more valuable and more dangerous.
+   an authored one. The second is more valuable and more dangerous. Note this question gets *larger*
+   the moment the idle cull is relaxed (§2.8), so it is not safely deferrable past that change.
 6. **Digest tiering for area edits** (§8.4). Interacts with the world-binding contract of
    [18 §5.5](18_Scenario_Fabrication_For_EPoL_Training.md), which is itself unbuilt, so both should be
    decided together rather than one constraining the other by accident.
@@ -993,3 +1063,10 @@ Numbered for reference within this document; they do not extend
    given author happens to know — and the same package is what a human authoring by hand needs to read.
    The open part is scope and where it lives, not whether the artifacts are worth having, since every
    one of them is already earned by something above.
+10. **What a capture should do when the idle cull is suppressed and a queue forms anyway** (§2.8).
+    Retained detection tells you it happened; it does not say whether the affected span of the run is
+    still usable, whether the jammed vehicles should be excluded from the ambient population rather
+    than counted as ordinary behaviour, or whether some bounded intervention — clearing only vehicles
+    idle far beyond any plausible authored stop — is preferable to a plain on/off. That last option is
+    effectively a third cull policy, and it should be decided deliberately rather than invented during
+    implementation.
