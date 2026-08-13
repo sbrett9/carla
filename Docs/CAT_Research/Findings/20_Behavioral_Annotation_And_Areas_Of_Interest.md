@@ -179,19 +179,54 @@ Record all three. They are already computed or trivially available at the moment
 be reconstructed from the others afterwards, and which one defines the interval is the trainer's
 choice, not the simulator's.
 
-### 2.5 A label the camera never saw is not training data
+### 2.5 An annotation nothing observed is a hole in the denominator
 
-The EPoL model is fed tracks from a detector looking through one camera. An annotated interval during
-which the vehicle sat outside the field of view, or fully occluded behind photoreal geometry, produces
-no track and therefore no trainable example — but it still counts as a positive in any naive tally, so
-it silently inflates the apparent positive rate and depresses measured recall.
+Truth is omniscient and the collection is not. Every vehicle in the world appears in the sidecar
+whether or not any sensor could see it, so an annotated interval can be recorded in full while no
+imagery of it exists. What follows from that is narrower than it first appears, and the narrowing
+matters.
 
-Everything needed to compute observability is already in the sidecar: the collection platform's pose
-and full pinhole intrinsics (`CotWriter.cs:101-124`), and each vehicle's position. Per-vehicle
-occlusion is the subject of [17](17_Photoreal_Occlusion_Metric.md) and is not a prerequisite —
-in-frustum alone is worth having immediately. The manifest should carry, per interval, the fraction of
-its frames in which the participant was within the camera footprint, so unusable positives can be
-filtered rather than trained against.
+**It is not a training problem.** An unobserved interval yields no detection, therefore no track,
+therefore no training example. It cannot corrupt what the model learns, because it never reaches the
+model. Nothing has to be done to protect training from it.
+
+**It is an accounting problem, in two specific places.**
+
+- **The evaluation denominator.** Asking "how many of the authored loiters did the model flag?" and
+  dividing by the number of *authored* intervals charges the model with instances no sensor ever saw.
+  The honest denominator is intervals observed by at least one collection sensor. Without the
+  observability record, that denominator cannot be reconstructed after the fact, because the manifest
+  and the imagery are the only two artifacts and neither alone says which intervals were covered.
+- **The base rate.** §2.6 records prevalence from the manifest. Computed over authored rather than
+  observed intervals it is overstated, and precision at low prevalence — the regime an anomaly model
+  actually operates in — is dominated by exactly that number.
+
+So the proposal is precisely the one the accounting implies: **record, per annotated interval, the
+span during which the participant was observable, and by which sensors.** That turns an authored
+interval into an observed sub-interval, which is the unit both the denominator and the base rate
+should be computed over.
+
+**Observability is a property of the collection, not of one camera.** CARLA is multi-client and
+supports any number of cameras in a scene simultaneously, so an interval can be covered by one sensor,
+several, or none, and coverage can pass between sensors mid-interval. Two quantities are therefore
+wanted and neither substitutes for the other: the **union** across all collection sensors, which is
+what the denominator above needs, and the **per-sensor** span, because each camera feeds its own
+detector producing its own tracks, so supervision is transferred per sensor unless something fuses
+them first (§7.6).
+
+The present implementation records one camera, and that is an implementation state rather than a
+design limit: `FrameRecorder` subscribes to a single stream token (`FrameRecorder.cs:59-98`) and the
+shim holds one recorder per client (`carlanet/__init__.py:1824`). Additional cameras today mean
+additional client processes, which has a consequence for the annotation registry that §7.3's
+process-local design does not survive unchanged — recorded against decision 11 in §10 rather than
+buried here.
+
+Everything needed for the geometry already exists per capture: the collection platform's pose and full
+pinhole intrinsics (`CotWriter.cs:101-124`) and each vehicle's position. In-frustum coverage is worth
+having immediately and needs nothing new. Whether a vehicle inside the frustum was actually *visible*
+is the harder question — occlusion by photoreal geometry — and is the subject of
+[17](17_Photoreal_Occlusion_Metric.md); it refines this measure rather than being a prerequisite for
+it.
 
 ### 2.6 Confounders the annotation channel must not introduce
 
@@ -738,10 +773,21 @@ Three properties the registry needs, each for a reason already observed in this 
   every vehicle, not a missing element (§2.2).
 
 The registry is process-local. That is correct for SCTMV, which runs the executor and the recorder in
-one process (§4.1), and it is a **stated constraint** rather than an oversight: a recorder in a
-different client process would see no annotations. If that configuration is ever wanted, the fix is to
-publish the annotation state to the server the way staging bounds are (§8.4), not to widen the
-registry.
+one process (§4.1), and it is sufficient for a single collection camera — which is all the recorder
+supports today, since it binds one stream token (`FrameRecorder.cs:59-98`) and the shim holds one
+recorder per client (`carlanet/__init__.py:1824`).
+
+**It does not extend to multiple collection cameras, and that limit is closer than it looks.** CARLA
+is multi-client and several cameras can observe one scene at once; adding one today means adding a
+client process, and a recorder in another process reads an empty registry and writes `unlabelled` on
+every vehicle. Nothing errors — the second camera's captures simply arrive unsupervised, and look
+exactly like a run in which no scenario was active.
+
+Two ways out, and the choice should be made before multi-camera capture rather than after: publish the
+annotation state to the server the way staging bounds are (§8.4), so any client can read it; or keep
+the registry and require every recorder to live in the process running the executor. The first is more
+work and removes the constraint; the second is free and must then be enforced, because the failure mode
+is silent. Recorded as decision 11.
 
 ### 7.4 The sidecar
 
@@ -807,7 +853,8 @@ authoritative supervision artifact is a **manifest written once per run** beside
 - the world binding of [18 §5.5](18_Scenario_Fabrication_For_EPoL_Training.md) — the `.xodr` digest
 - the resolved area-of-interest table (§8), so the manifest is self-contained
 - every `PatternInstance` with its participants and closed intervals
-- per interval: the participant's actor id in this run, and the in-frustum fraction of §2.5
+- per interval: the participant's actor id in this run, and its observed span (§2.5) — both the union
+  across collection sensors and the per-sensor breakdown, since tracks are produced per sensor
 - run-level prevalence: annotated vehicle-seconds against total observed vehicle-seconds (§2.6)
 
 It must be written incrementally and closed at scenario end, not held in memory until then; a run that
@@ -823,9 +870,19 @@ post-process must transfer supervision from truth tracks onto detector tracks, a
 
 - one truth entity can map to several detector tracks (identity switches, re-acquisitions), so the
   exported supervision is per (detector track, interval), not per entity;
+- **with several collection cameras there are several detectors**, each producing its own tracks over
+  the same world, so one truth entity maps to a track set *per sensor* and supervision is transferred
+  once per sensor. A single truth interval can therefore yield several supervised spans that overlap
+  in time and differ in coverage — which is correct, and is why §2.5 wants the per-sensor breakdown
+  and not only the union;
 - a detector track that spans an interval boundary must be clipped, not labelled wholesale;
 - the association quality per assignment should be recorded, so a mis-associated label is findable
   later rather than being an unexplained hard example.
+
+Whether the model is fed per-sensor tracks or tracks fused across sensors is a modelling choice that
+sits outside this document, but it changes what "observed" means — union under fusion, per-sensor
+without it — so the manifest records both and lets the choice be made downstream rather than baked in
+at capture time.
 
 None of this requires anything of the simulator beyond the manifest and sidecar above. It does require
 the manifest to be the source, because a detector track can only be clipped against interval bounds
@@ -986,7 +1043,8 @@ Tier 1 removes the deficiency; tiers 2 and 3 make it scale and make it portable.
 | 2 | Vocabulary declaration and versioning; compile-time validation of every reference | Tooling |
 | 2 | Blueprint selection from a per-category **set** drawn on the run seed, when no catalogue reference is given — the appearance confounder of §2.6, and already open as [18 §9 question 2](18_Scenario_Fabrication_For_EPoL_Training.md) | C# — `BlueprintChooser.cs:43-63` |
 | 2 | Compile step reports what it resolved — entity, area and catalogue references, and the roads a street name resolved to — since a preview cannot check any of it (§5.5) | Tooling |
-| 2 | In-frustum fraction per interval, from the sensor pose and intrinsics already in the sidecar (§2.5) | Post-process, or `CarlaNet.Recording` |
+| 2 | Observed span per interval, per sensor and unioned, from the sensor pose and intrinsics already in the sidecar (§2.5) | Post-process, or `CarlaNet.Recording` |
+| 2 | Make the annotation state reachable by a recorder in another process, so a second camera on a second client is not silently unsupervised (§2.5, §7.3, decision 11) | C# — publish alongside the world's staging bounds, or an equivalent server-held record |
 | 2 | `<_supervision>` and `<_aoi>` on the live feed, diagnostic only | Python — `SCTMV.py:1235-1280` |
 | 2 | **Run-level switch over idle-cull behaviour, separating detection from destruction** (§2.8), plumbed as a launch option so the choice is made per capture. Follows the existing dead-end-removal parameter path exactly | C# — `Parameters.cs`, `Stages/ALSM.cs:192-203`, `ITrafficManagerCallback.cs`, `TrafficManager.cs`, Python shim; flag in `SCTMV.py` |
 | 2 | Surface retained stuck-detections as derived context, so a vehicle stationary far past the threshold with no authored reason is auditable (§2.2, §2.8) | C# — `VehicleTelemetryService.cs`, alongside `<_aoi>` |
@@ -1015,7 +1073,7 @@ Numbered for reference within this document; they do not extend
 | 8 | **`role_name` stays a provenance field.** `hero` and `ego` are not used to mean anything about annotation; they carry Traffic Manager, ROS2 and replayer behaviour (§4.3) |
 | 9 | **The CoT affiliation is not overloaded.** Annotated vehicles stay `a-n-G-E-V`; display distinction is a viewer concern driven by `<_supervision>` (§7.4) |
 | 10 | **Areas of interest are adopted**, supplied as GeoJSON beside the OSM, validated at build, and held in the world on a dedicated actor with a `Set`/`Get` RPC pair in the manner of staging bounds. Both polygons and centre-with-radius are supported (§8) |
-| 11 | **The annotation registry is process-local**, which suits SCTMV where the executor and recorder share a process. A cross-process recorder would need the annotation state published to the server, and that is a separate decision if it is ever wanted (§7.3) |
+| 11 | **The annotation registry is process-local**, which suits SCTMV where the executor and recorder share a process — **but this does not survive multiple collection cameras.** Additional cameras mean additional client processes, and a recorder in another process sees an empty registry and reports every vehicle `unlabelled`, silently. So either the annotation state is published to the server the way staging bounds are, or multi-camera capture is restricted to one process. This is a decision to take before multi-camera capture, not after (§2.5, §7.3) |
 | 12 | **Vehicle selection is expressed as an OpenSCENARIO catalogue reference where the author has a presentational reason, and as a category resolved to a set on the run seed where they do not.** The catalogue is generated from a running server and versioned with the distribution; hand-picking distinctive vehicles for annotated entities is the appearance confounder of §2.6 and stays prohibited (§5.6) |
 | 13 | **Text authoring is the format's primary surface, and the graphical canvas is a preview surface.** No construct is chosen or rejected on the grounds that the canvas cannot emit it; hand authoring stays possible throughout, which means every convention has to be documented and validated rather than merely implemented (§5) |
 | 14 | **Idle-cull behaviour must be switchable per capture, and detection must remain available when destruction is suppressed.** The cull truncates the ambient stationary distribution at ninety seconds, fires at an irreproducible simulated moment, and is simultaneously the only mechanism that clears a queue — so neither leaving it on nor switching it off wholesale is right for a capture. This amends [18 D6](18_Scenario_Fabrication_For_EPoL_Training.md), which considered only the per-vehicle case (§2.8) |
@@ -1026,7 +1084,7 @@ Numbered for reference within this document; they do not extend
    annotated interval yields a usable detector track. Unmeasured. The first thing to run once tier 1
    exists is one authored dwell plus ambient traffic, captured, detected, and the supervision
    transferred — and then a count of how many annotated frames produced a track at all. §2.5's
-   in-frustum fraction is the cheap proxy; the real number needs the detector.
+   in-frustum span is the cheap proxy; the real number needs the detector.
 2. **What the vocabulary should contain at v1.** The ten classes of §3 are a design test, not a
    proposed term list. The list should be settled with the model's requirements in hand, since terms
    are cheap to add and expensive to rename once a corpus exists.
