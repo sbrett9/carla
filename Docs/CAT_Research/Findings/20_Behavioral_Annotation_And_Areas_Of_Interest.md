@@ -246,8 +246,10 @@ get into the world rather than by the annotation itself:
   inward staging ring (`CarlaNet/python/SCTMV.py:555-574`). These are visibly different behaviours and
   a nominal scripted entity is the control that keeps them from separating the classes.
 - **Prevalence.** Anomaly-model evaluation at low base rates is dominated by the base rate. The
-  manifest gives it exactly — count of annotated intervals against total observed vehicle-seconds — so
-  it should be recorded per run rather than reconstructed by counting XML files.
+  manifest gives it exactly — annotated against total observed vehicle-seconds — so it should be
+  recorded per run rather than reconstructed by counting XML files. With more than one collection
+  camera it is not a single number: each sensor sees a different slice of the world, so prevalence
+  differs per sensor and again for the union (§7.5).
 
 ### 2.7 The scenario system's unique product is hard negatives
 
@@ -709,17 +711,28 @@ Two things stay *out* of the vocabulary and in `parameters` instead: magnitudes 
 approach speed) and places (an area id). Encoding them into terms — `loiter_45min_near_school` —
 produces an unbounded term list and makes stratification impossible.
 
-### 6.3 Three identifiers, three jobs
+### 6.3 Four identifiers, four jobs
 
 | Identifier | Answers | Lifetime |
 |---|---|---|
 | `actor_id` | Which simulated object is this, right now | One run; already emitted |
 | `entity_id` | Which authored entity is this, in any run of this scenario | Across runs of a scenario |
 | `instance_id` | Which occurrence of a pattern is this | Across runs, and across participants of one phenomenon |
+| `sensor_id` | Which collection sensor produced this imagery and these tracks | Across runs, once given a stable value |
 
-All three belong in the truth record. Emitting only the first is the current state; emitting only the
-second would break intra-run association with the detector; the third is what makes multi-participant
-and multi-interval patterns reassemblable.
+The first three belong in the truth record. Emitting only `actor_id` is the current state; emitting
+only `entity_id` would break intra-run association with the detector; `instance_id` is what makes
+multi-participant and multi-interval patterns reassemblable.
+
+**`sensor_id` has the same defect `actor_id` has, for the same reason.** The collection platform's
+identifier defaults to `CARLA-SENSOR-<camera actor id>` (`carlanet/__init__.py:1818`), and a camera is
+an actor, so it is a different identifier in every run. With one camera that is harmless — there is
+nothing to confuse it with. With several it is the only thing distinguishing one sensor's coverage and
+tracks from another's, and §2.5's per-sensor observability, §7.5's manifest and §7.6's per-sensor
+supervision all key on it. The fix is the same as for entities: an authored, stable value, defaulted
+from the actor id only when none is given. The parameter to supply it already exists
+(`platform_uid`, `carlanet/__init__.py:1818`); what is missing is a convention requiring it and
+anything that checks.
 
 ## 7. Carrying it through the system
 
@@ -833,9 +846,23 @@ Notes on the shape:
   truth-versus-detection comparison that the identical-shape contract exists for. A viewer may colour
   annotated tracks differently from the `_supervision` element; the emitted affiliation stays neutral.
 
+- **A sidecar is per camera, and supervision is not.** Each recorder writes its own sidecar, so with
+  several cameras the same vehicle at the same tick appears in several files. `<_supervision>` and
+  `<_aoi>` are world-scoped and must be **identical** in all of them for a given tick — they describe
+  the world, not the view — and a disagreement between two sidecars at one tick is a bug, not a
+  difference of perspective. What legitimately differs per file is the sensor block and whatever
+  observability is derived from it. Stating this is worth the line, because the natural
+  implementation reads the registry once per capture per recorder, and two recorders reading a
+  tick-stamped snapshot at slightly different moments is exactly how they would silently diverge —
+  which is the reason §7.3 stamps the snapshot with the tick it describes rather than serving
+  "current".
+
 The live UDP feed (`SCTMV.py:1235-1280`) should carry the same elements, on the same footing as
 `_capture` there — **diagnostic only**, so an operator watching the map can see which vehicle is the
-subject. The recorded sidecar remains the sole truth source.
+subject. The recorded sidecar remains the sole truth source. Note that the live feed is per client
+too, so several clients emitting to the same address multiply the tracks a viewer sees; that is a
+property of the existing feed rather than anything introduced here, but it is worth knowing before a
+second client is pointed at the same endpoint.
 
 For the PNG, `carla:capture` already makes a still self-describing when separated from its sidecar
 (`CarlaNet.Recording/CaptureMetadata.cs:31-36`). A compact `carla:supervision` chunk listing annotated
@@ -860,6 +887,29 @@ authoritative supervision artifact is a **manifest written once per run** beside
 It must be written incrementally and closed at scenario end, not held in memory until then; a run that
 crashes at minute forty of forty-five otherwise loses its supervision entirely while keeping every
 capture.
+
+**With several collection cameras the manifest has one writer and several contributors, and the
+current run identity cannot express that.** Supervision is world-scoped — one scenario, one set of
+pattern instances, however many cameras watch it — so there is exactly one manifest per capture
+session, written by whichever process holds the annotation state. Observability is sensor-scoped, so
+each recorder contributes its own coverage spans to it. Three consequences, each of which is a defect
+today rather than a design choice:
+
+- **Run identity is generated per recorder, not per session.** A recorder given no `run_id` derives
+  one from its own start instant (`FrameRecorder.cs:76-78`), and the comment there says it is "unique
+  enough per recorder" — precisely the wrong property when several recorders are covering one
+  scenario. Two cameras started seconds apart produce two unrelated run identifiers and nothing ties
+  their captures together. A capture session needs an identity assigned once and handed to every
+  recorder, with the per-recorder default retained only for a single-camera run.
+- **Captures cannot be paired across cameras by name.** The file stem is local wall-clock time to the
+  millisecond (`FrameRecorder.cs:160-161`), and two cameras sample on their own phase, so the same
+  simulated instant carries different names in different directories. The tick already recorded on
+  every capture is the join key, which is what [18 D3](18_Scenario_Fabrication_For_EPoL_Training.md)
+  exists for; nothing needs adding, but nothing should be built expecting filenames to correspond.
+- **Prevalence becomes a per-sensor quantity.** §2.6's ratio of annotated to total observed
+  vehicle-seconds has a different value for each camera and a third value for the union, and the
+  manifest should carry all of them rather than one unlabelled number, since which is correct depends
+  on whether the model consumes fused or per-sensor tracks (§7.6).
 
 ### 7.6 Transfer to detector tracks
 
@@ -1045,6 +1095,8 @@ Tier 1 removes the deficiency; tiers 2 and 3 make it scale and make it portable.
 | 2 | Compile step reports what it resolved — entity, area and catalogue references, and the roads a street name resolved to — since a preview cannot check any of it (§5.5) | Tooling |
 | 2 | Observed span per interval, per sensor and unioned, from the sensor pose and intrinsics already in the sidecar (§2.5) | Post-process, or `CarlaNet.Recording` |
 | 2 | Make the annotation state reachable by a recorder in another process, so a second camera on a second client is not silently unsupervised (§2.5, §7.3, decision 11) | C# — publish alongside the world's staging bounds, or an equivalent server-held record |
+| 2 | **Capture-session identity assigned once and handed to every recorder**, replacing the per-recorder wall-clock default for multi-camera runs (§7.5) | C# — `FrameRecorder.cs:76-78`; Python — `SCTMV.py` |
+| 2 | **A stable `sensor_id`**, so a collection sensor is identifiable across runs rather than by its actor id (§6.3) | Python shim default at `carlanet/__init__.py:1818`, plus a convention and a check |
 | 2 | `<_supervision>` and `<_aoi>` on the live feed, diagnostic only | Python — `SCTMV.py:1235-1280` |
 | 2 | **Run-level switch over idle-cull behaviour, separating detection from destruction** (§2.8), plumbed as a launch option so the choice is made per capture. Follows the existing dead-end-removal parameter path exactly | C# — `Parameters.cs`, `Stages/ALSM.cs:192-203`, `ITrafficManagerCallback.cs`, `TrafficManager.cs`, Python shim; flag in `SCTMV.py` |
 | 2 | Surface retained stuck-detections as derived context, so a vehicle stationary far past the threshold with no authored reason is auditable (§2.2, §2.8) | C# — `VehicleTelemetryService.cs`, alongside `<_aoi>` |
@@ -1077,6 +1129,7 @@ Numbered for reference within this document; they do not extend
 | 12 | **Vehicle selection is expressed as an OpenSCENARIO catalogue reference where the author has a presentational reason, and as a category resolved to a set on the run seed where they do not.** The catalogue is generated from a running server and versioned with the distribution; hand-picking distinctive vehicles for annotated entities is the appearance confounder of §2.6 and stays prohibited (§5.6) |
 | 13 | **Text authoring is the format's primary surface, and the graphical canvas is a preview surface.** No construct is chosen or rejected on the grounds that the canvas cannot emit it; hand authoring stays possible throughout, which means every convention has to be documented and validated rather than merely implemented (§5) |
 | 14 | **Idle-cull behaviour must be switchable per capture, and detection must remain available when destruction is suppressed.** The cull truncates the ambient stationary distribution at ninety seconds, fires at an irreproducible simulated moment, and is simultaneously the only mechanism that clears a queue — so neither leaving it on nor switching it off wholesale is right for a capture. This amends [18 D6](18_Scenario_Fabrication_For_EPoL_Training.md), which considered only the per-vehicle case (§2.8) |
+| 15 | **Supervision is world-scoped and observability is sensor-scoped.** One capture session has one manifest however many cameras record it, and `<_supervision>` for a given tick is identical in every camera's sidecar; coverage, prevalence and transferred supervision are per sensor and are also reported unioned. Anything that differs per camera in the supervision itself is a defect (§2.5, §7.4, §7.5, §7.6) |
 
 ## 11. Open questions
 
