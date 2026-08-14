@@ -302,7 +302,7 @@ class CarlaControlArgumentParser:
             metavar="PCT",
             help="drive this percentage of each road's posted speed limit (default 100). "
             "Lower it to run the whole fleet slower without flattening the "
-            "differences between roads: 40 gives 40% of the limit everywhere, so a "
+            "differences between roads: 40 gives 40%% of the limit everywhere, so a "
             "65 mph freeway becomes 26 mph and a 25 mph street becomes 10. Useful "
             "for telling apart behaviour that degrades with speed from behaviour "
             "that is wrong at any speed.",
@@ -313,8 +313,8 @@ class CarlaControlArgumentParser:
             default=20.0,
             metavar="PCT",
             help="how much drivers differ from the posted speed limit, as a percentage "
-            "either side of it (default 20, so each vehicle drives between 80% and "
-            "120% of the limit on whatever road it is on). The limit itself comes "
+            "either side of it (default 20, so each vehicle drives between 80%% and "
+            "120%% of the limit on whatever road it is on). The limit itself comes "
             "from the map: OpenDRIVE carries one per lane, derived from the OSM "
             "maxspeed tags. 0 makes every vehicle drive exactly the limit.",
         )
