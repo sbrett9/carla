@@ -84,6 +84,17 @@ echo "[build_wheel] wheel built: $wheel_path"
 
 if [ "$do_install" -eq 1 ]; then
     echo "[build_wheel] installing wheel with --force-reinstall"
-    "$python_bin" -m pip install --force-reinstall "$wheel_path"
+    # carlacontrol depends on carlanet, a locally-built wheel that is published to no package
+    # index. A plain 'pip install --force-reinstall <wheel>' re-resolves the WHOLE dependency
+    # tree and dies trying to fetch carlanet from an index ("No matching distribution found for
+    # carlanet"). So install in two steps: (1) force-reinstall carlacontrol itself with --no-deps
+    # to refresh its code without disturbing deps, then (2) a normal (non-force) install that pulls
+    # only *missing* deps, with CarlaNet's dist dir on --find-links so a not-yet-installed carlanet
+    # resolves from the local wheel instead of an index.
+    "$python_bin" -m pip install --force-reinstall --no-deps "$wheel_path"
+    carlanet_dist="$script_dir/../CarlaNet/python/dist"
+    dep_args=()
+    [ -d "$carlanet_dist" ] && dep_args+=(--find-links "$carlanet_dist")
+    "$python_bin" -m pip install "$wheel_path" "${dep_args[@]}"
     echo "[build_wheel] install complete"
 fi

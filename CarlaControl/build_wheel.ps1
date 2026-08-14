@@ -77,6 +77,17 @@ Write-Info "[build_wheel] wheel built: $($wheelPath.FullName)"
 
 if ($Install) {
     Write-Info "[build_wheel] installing wheel with --force-reinstall"
-    Invoke-NativeChecked 'wheel install' { python -m pip install --force-reinstall $wheelPath.FullName }
+    # carlacontrol depends on carlanet, a locally-built wheel that is published to no package
+    # index. A plain 'pip install --force-reinstall <wheel>' re-resolves the WHOLE dependency
+    # tree and dies trying to fetch carlanet from an index ("No matching distribution found for
+    # carlanet"). So install in two steps: (1) force-reinstall carlacontrol itself with --no-deps
+    # to refresh its code without disturbing deps, then (2) a normal (non-force) install that pulls
+    # only *missing* deps, with CarlaNet's dist dir on --find-links so a not-yet-installed carlanet
+    # resolves from the local wheel instead of an index.
+    Invoke-NativeChecked 'wheel install (force, no-deps)' { python -m pip install --force-reinstall --no-deps $wheelPath.FullName }
+    $carlanetDist = Join-Path $scriptDir '..\CarlaNet\python\dist'
+    $depArgs = @('-m', 'pip', 'install', $wheelPath.FullName)
+    if (Test-Path $carlanetDist) { $depArgs += @('--find-links', $carlanetDist) }
+    Invoke-NativeChecked 'wheel deps' { python @depArgs }
     Write-Info "[build_wheel] install complete"
 }
