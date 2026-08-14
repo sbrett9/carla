@@ -337,6 +337,17 @@ class CarlaControlArgumentParser:
             "was actually searched for, or says on the console that it cannot find "
             "one.",
         )
+        traf.add_argument(
+            "--traffic-diagnostics",
+            action="store_true",
+            help="start with the Traffic Manager's per-vehicle diagnostics on: what signal "
+            "each vehicle is shown, when it brakes for one and is released, when it "
+            "commits to a junction, and when it is left standing inside one. Off by "
+            "default because they describe every vehicle rather than reporting "
+            "something unusual, so at fleet scale they bury the lines worth reading. "
+            "Toggle live with ']'. Vehicles being removed and routes failing are "
+            "always reported either way.",
+        )
 
     def _add_scenario_args(self, ap: argparse.ArgumentParser) -> None:
         scen = ap.add_argument_group("scenario")

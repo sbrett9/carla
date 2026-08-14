@@ -31,6 +31,10 @@ Controls (hold RIGHT MOUSE to fly):
     B             toggle OSM perimeter overlay
     M             toggle margin/boundary overlay
     T             toggle traffic
+    ]             toggle the Traffic Manager's per-vehicle diagnostics (what signal each
+                  vehicle is shown, when it brakes for one, when it is left standing in a
+                  junction). Off unless --traffic-diagnostics was given; vehicle removals
+                  and route failures are always reported either way
     Y             toggle telemetry
     F             toggle recording
     Space         reset to start pose

@@ -104,6 +104,7 @@ class PygameInterface:
             "ground_collision": True,
             "road_rendered": True,
             "signals_visible": True,
+            "traffic_diagnostics": False,
             "time_advancing": False,
         }
 
@@ -116,6 +117,10 @@ class PygameInterface:
 
         if hasattr(args, "time_advance"):
             self._flags["time_advancing"] = bool(args.time_advance)
+
+        # Follows --traffic-diagnostics so the HUD agrees with what was asked for.
+        if hasattr(args, "traffic_diagnostics"):
+            self._flags["traffic_diagnostics"] = bool(args.traffic_diagnostics)
 
         if hasattr(args, "fov"):
             self.setup_boundary_overlays(fov=args.fov)
@@ -262,6 +267,23 @@ class PygameInterface:
         except Exception as e:
             self.logger.error(f"set_time_advance failed: {e!r}")
 
+    def _toggle_traffic_diagnostics(self) -> None:
+        """Toggle the Traffic Manager's per-vehicle diagnostics.
+
+        Rendering-independent: this only changes whether the Traffic Manager reports what
+        each vehicle is doing, not what any vehicle does. Vehicles being removed and routes
+        failing are always reported regardless.
+        """
+        if not self.traffic:
+            return
+
+        new_value = self.toggle_flag("traffic_diagnostics")
+        try:
+            self.traffic.tm.set_traffic_diagnostics(new_value)
+            self.logger.info(f"traffic: per-vehicle diagnostics {'ON' if new_value else 'OFF'}")
+        except Exception as e:
+            self.logger.error(f"set_traffic_diagnostics failed: {e!r}")
+
     def _register_builtin_hotkeys(self) -> None:
         """Register built-in hotkeys for standard flags and world controls."""
         self.register_hotkey(pygame.K_b, lambda: self.toggle_flag("show_perimeter"))
@@ -277,6 +299,7 @@ class PygameInterface:
         """Register hotkeys for subsystems."""
         if self.traffic:
             self.register_hotkey(pygame.K_t, lambda: self.traffic.toggle_want())
+            self.register_hotkey(pygame.K_RIGHTBRACKET, self._toggle_traffic_diagnostics)
         if self.scenario:
             self.register_hotkey(pygame.K_x, lambda: self.scenario.toggle_want())
         if self.telemetry:
@@ -555,13 +578,14 @@ class PygameInterface:
             f"speed {speed_val:4.0f}   photoreal(C) {'ON' if self.get_flag('photoreal_visible') else 'OFF'}   "
             f"ground(G) {'ON' if self.get_flag('ground_visible') else 'OFF'}   gColl(V) {'ON' if self.get_flag('ground_collision') else 'OFF'}   "
             f"road(R) {'ON' if self.get_flag('road_rendered') else 'OFF'}   signals(L) {'ON' if self.get_flag('signals_visible') else 'OFF'}   "
+            f"diag(]) {'ON' if self.get_flag('traffic_diagnostics') else 'OFF'}   "
             f"perim(B) {'ON' if self.get_flag('show_perimeter') else 'OFF'}   "
             f"margin(M) {'ON' if self.get_flag('show_margin') else 'OFF'}   time(K) {time_str}",
             f"traffic(T) {traf_str}   scenario(X) {scen_str}   telemetry(Y) {tel_str}   record(F) {rec_str}   "
             f"orbit(O) {orbit_str}   "
             f"fps {self.get_fps():4.0f}   frames {frames_val}",
             "RMB look | Ctrl+LMB measure | WASD/EQ fly | wheel speed | Shift fast | C/G/V/R/L/B/M layers | ",
-            "K time | T traffic | X scenario | Y telemetry | F record | O orbit | P pause orbit | Space reset | Esc quit",
+            "K time | T traffic | ] traffic diag | X scenario | Y telemetry | F record | O orbit | P pause orbit | Space reset | Esc quit",
         ]
 
         if orbit_enabled and orbit_info is not None:

@@ -309,6 +309,12 @@ class TrafficController:
             f"{len(spawn_pool)} usable in-margin spawn points (set_actor_fade OK)"
         )
 
+        try:
+            tm.set_traffic_diagnostics(args.traffic_diagnostics)
+            if args.traffic_diagnostics:
+                logger.info("traffic: per-vehicle diagnostics ON (']' toggles)")
+        except Exception as e:
+            logger.warning("traffic: diagnostics switch unavailable (%r)", e)
         if args.log:
             try:
                 tm.set_event_log_path(os.path.abspath(args.log))
