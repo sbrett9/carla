@@ -1,0 +1,27 @@
+# Pre-commit hooks for the carlanet and carlacontrol Python code.
+#
+# One-time setup per clone:
+#   pip install pre-commit
+#   pre-commit install
+#
+# Manual full run:
+#   pre-commit run --all-files
+#
+# Scope: only files under CarlaNet/python and CarlaControl are checked; the rest
+# of the CARLA repo is left alone. Ruff discovers the appropriate ruff.toml by
+# walking up from each file, so no config path is passed here.
+#
+# Note: hooks run on the files you are committing. Editing a pre-existing file
+# that still carries the legacy lint backlog will surface its violations (and
+# ruff-format will reformat it). That is the "clean it as you touch it" policy;
+# bypass with `git commit --no-verify` if you must land an unrelated change.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.21
+    hooks:
+      - id: ruff-check
+        name: ruff (carlanet + carlacontrol)
+        files: ^(CarlaNet/python|CarlaControl)/.*\.(py|ipynb)$
+      - id: ruff-format
+        name: ruff-format (carlanet + carlacontrol)
+        files: ^(CarlaNet/python|CarlaControl)/.*\.(py|ipynb)$

@@ -1,0 +1,67 @@
+# Ruff configuration for the carlanet Python code.
+# Docs: https://docs.astral.sh/ruff/settings/
+#
+# Prose conventions that ruff cannot enforce (union syntax, class-based
+# architecture, one-class-per-file, import placement) live in AGENTS.md
+# alongside this file.
+
+line-length = 100
+target-version = "py312"
+
+exclude = [
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+    "__pycache__",
+]
+
+[lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+    "RET",  # flake8-return
+    "ARG",  # flake8-unused-arguments
+]
+
+ignore = [
+    "E501",    # line-too-long: the formatter wraps code; long URLs/strings are allowed to run over
+    "B008",    # do not perform function calls in argument defaults (breaks Depends()-style APIs)
+    "SIM108",  # use a ternary instead of if-else (an explicit block is often clearer)
+    "N801",    # class name should use CapWords (allows domain names like Coordinate_UTM)
+    "N806",    # variable in function should be lowercase (allows local names like Coordinate_UTM)
+    "N999",    # invalid module name: AGENTS.md requires PascalCase filenames to match class names
+    "C408",    # unnecessary dict()/list()/tuple() call (the call form is sometimes more readable)
+    "SIM105",  # use contextlib.suppress() instead of try/except/pass
+]
+
+[lint.per-file-ignores]
+# Package __init__ files re-export the public API; the imports are intentional.
+"__init__.py" = ["F401"]
+# Test functions accept fixtures they don't always reference by name.
+"test_*.py" = ["ARG001", "ARG002"]
+"*_test.py" = ["ARG001", "ARG002"]
+# Notebooks run cells conditionally and out of order, so top-of-file import
+# placement and unused-import analysis don't hold.
+"*.ipynb" = ["E402", "F401"]
+
+[lint.isort]
+known-first-party = ["carlanet"]
+section-order = [
+    "future",
+    "standard-library",
+    "third-party",
+    "first-party",
+    "local-folder",
+]

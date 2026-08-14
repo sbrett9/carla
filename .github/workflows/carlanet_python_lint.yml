@@ -1,0 +1,55 @@
+name: CarlaNet-Python-Lint
+
+# Lints the carlanet Python code with ruff (config: CarlaNet/python/ruff.toml).
+#
+# On a pull request only the Python files the PR actually changed are checked,
+# so the pre-existing lint backlog under CarlaNet/python does not fail unrelated
+# PRs. A manual run (workflow_dispatch) audits the whole directory instead.
+
+on:
+  # disabled automatic builds, uncomment to re-enable
+  # pull_request:
+  #   paths:
+  #     - 'CarlaNet/python/**'
+  #     - '.github/workflows/carlanet_python_lint.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: carlanet-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ruff:
+    name: Ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install ruff
+        run: pipx install ruff==0.15.21
+
+      - name: Lint
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            files=$(git diff --name-only --diff-filter=ACMR "$base" HEAD -- CarlaNet/python \
+                      | grep -E '\.(py|ipynb)$' || true)
+            if [ -z "$files" ]; then
+              echo "No changed carlanet Python files to lint."
+              exit 0
+            fi
+            echo "Linting changed files:"
+            echo "$files" | sed 's/^/  /'
+            ruff check $files
+            ruff format --check $files
+          else
+            echo "Manual run: full-tree audit of CarlaNet/python"
+            ruff check CarlaNet/python
+            ruff format --check CarlaNet/python
+          fi

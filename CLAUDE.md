@@ -37,3 +37,5 @@ conversation that produced it**. State *what changed and why*, factually.
   trade-offs, and any validation. Domain terms and issue IDs are fine.
 
 (Forward-only — existing history is grandfathered, don't rewrite it.)
+
+@AGENTS.md
