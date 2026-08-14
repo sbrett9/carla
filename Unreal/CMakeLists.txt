@@ -309,13 +309,13 @@ foreach (DEF_FILE ${CARLA_UNREAL_DEF_FILES})
     COMMAND
       ${CMAKE_COMMAND}
     ARGS
-      -E create_symlink
+      -E copy_if_different
       ${CMAKE_CURRENT_BINARY_DIR}/${DEF_FILE}
       ${CARLA_UE_CARLA_PATH}/${DEF_FILE}
     COMMAND
       ${CMAKE_COMMAND}
     ARGS
-      -E create_symlink
+      -E copy_if_different
       ${CMAKE_CURRENT_BINARY_DIR}/${DEF_FILE}
       ${CARLA_UE_CARLA_TOOLS_PATH}/${DEF_FILE}
   )
