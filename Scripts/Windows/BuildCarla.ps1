@@ -1,15 +1,17 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Build CarlaUnrealEditor (C++) and/or CarlaNet (.NET) + the carlanet Python wheel.
+    Build CarlaUnrealEditor (C++) and/or CarlaNet (.NET) + the carlanet & carlacontrol Python wheels.
 
 .DESCRIPTION
-    Two independent stages:
+    Three independent stages:
       1) Unreal  — compiles CarlaUnrealEditor (the Carla plugin, CesiumCarlaBridge, ...)
                    via the UE 5.7.4 Build.bat.
       2) CarlaNet — builds the .NET libcarla replacement and the carlanet Python wheel
                    via CarlaNet/python/build_wheel.ps1.
-    CarlaNet runs even if the Unreal build failed, so you still get full diagnostics.
+      3) CarlaControl — builds the carlacontrol Python wheel (the run_SCTMV.py client
+                   package) via CarlaControl/build_wheel.ps1.
+    CarlaNet and CarlaControl run even if the Unreal build failed, so you still get full diagnostics.
 
     The CARLA repo root is derived from this script's location (carla/Scripts/Windows/),
     two directories up -- it never needs to be passed. The UE engine is found via
@@ -25,12 +27,15 @@
     running editor first (locked binaries can't be deleted).
 .PARAMETER SkipCarlaNet
     Skip the CarlaNet (.NET) build + wheel.
+.PARAMETER SkipCarlaControl
+    Skip the CarlaControl (carlacontrol) Python wheel.
 .PARAMETER InstallWheel
-    Also pip-install the freshly built wheel (--force-reinstall).
+    Also pip-install the freshly built wheels (--force-reinstall). Applies to both the
+    carlanet and carlacontrol wheels.
 .PARAMETER CleanWheel
-    Wipe CarlaNet\python build artifacts (build/, dist/, carlanet\dlls, *.egg-info) before
-    building the wheel, by passing -Clean through to build_wheel.ps1. Use this when a stale or
-    corrupted python\build dir is producing a bad/failed wheel under -InstallWheel.
+    Wipe each package's build artifacts (build/, dist/, *.egg-info; carlanet also \dlls) before
+    building the wheels, by passing -Clean through to the build_wheel.ps1 scripts. Use this when a
+    stale or corrupted build dir is producing a bad/failed wheel under -InstallWheel.
 .PARAMETER Vs
     Force a Visual Studio toolchain: '2022' or '2026'. If omitted, uses the
     newest installed VS that has MSVC 14.44 (or current VS dev prompt if active).
@@ -62,7 +67,8 @@ param(
     [switch]$SkipUnreal,      # skip the CarlaUnrealEditor C++ build
     [switch]$CleanUnreal,     # wipe editor Intermediate/Binaries first for a full from-scratch rebuild
     [switch]$SkipCarlaNet,    # skip the CarlaNet (.NET) build + wheel
-    [switch]$InstallWheel,    # also pip-install the freshly built wheel (--force-reinstall)
+    [switch]$SkipCarlaControl,# skip the CarlaControl (carlacontrol) Python wheel
+    [switch]$InstallWheel,    # also pip-install the freshly built wheels (--force-reinstall)
     [switch]$CleanWheel,      # wipe CarlaNet\python build artifacts (build/dist/dlls/egg-info) first
     [string]$UnrealEngineRoot,# UE 5.7.4 root; env CARLA_UNREAL_ENGINE_PATH
     [int]$MaxParallelActions = 4, # cap parallel UBT editor-build actions; 0 = uncapped (UBT decides)
@@ -79,7 +85,7 @@ $ErrorActionPreference = 'Stop'
 
 function Show-Usage {
     @'
-BuildCarla.ps1 - build CarlaUnrealEditor (C++) and/or CarlaNet (.NET) + the carlanet wheel.
+BuildCarla.ps1 - build CarlaUnrealEditor (C++) and/or CarlaNet (.NET) + the carlanet & carlacontrol wheels.
 
 USAGE:
   .\BuildCarla.ps1 [options]
@@ -90,8 +96,9 @@ OPTIONS (PowerShell-native | legacy alias):
   -SkipUnreal                --skip-unreal               Skip the CarlaUnrealEditor C++ build.
   -CleanUnreal               --clean-unreal / --rebuild  Wipe Intermediate/Binaries first (full editor rebuild; keeps cesium-native).
   -SkipCarlaNet              --skip-carlanet             Skip the CarlaNet (.NET) build + wheel.
-  -InstallWheel              --install-wheel             pip-install the freshly built wheel.
-  -CleanWheel                --clean-wheel               Wipe CarlaNet\python build/dist/dlls before building the wheel.
+  -SkipCarlaControl          --skip-carlacontrol         Skip the CarlaControl (carlacontrol) Python wheel.
+  -InstallWheel              --install-wheel             pip-install the freshly built wheels (carlanet + carlacontrol).
+  -CleanWheel                --clean-wheel               Wipe each package's build/dist/dlls before building the wheels.
   -UnrealEngineRoot <dir>    --unreal-engine-root=<dir>  UE 5.7.4 source-build root.
   -MaxParallelActions <n>    --max-parallel-actions=<n>  Cap parallel editor-build actions (default 4; 0 = uncapped).
   -Help               / -h   --help                      Show this help.
@@ -118,6 +125,7 @@ if ($Remaining) {
             '^(--skip-unreal)$'                    { $SkipUnreal = $true }
             '^(--clean-unreal|--rebuild)$'         { $CleanUnreal = $true }
             '^(--skip-carlanet|--skip-carla-net)$' { $SkipCarlaNet = $true }
+            '^(--skip-carlacontrol|--skip-carla-control)$' { $SkipCarlaControl = $true }
             '^(--install-wheel)$'                  { $InstallWheel = $true }
             '^(--clean-wheel)$'                    { $CleanWheel = $true }
             '^(--vs)$'                             { if ($null -eq $next) { throw "Argument '$key' requires a value." } $Vs = $next;               if ($null -eq $val) { $idx++ } }
@@ -320,6 +328,7 @@ $UE_ROOT         = $UnrealEngineRoot
 $CARLA_UPROJECT  = Join-Path $CarlaRoot "Unreal\CarlaUnreal\CarlaUnreal.uproject"
 $LOG_FILE        = Join-Path $RepoParent "Carla_build.log"
 $CARLANET_WHEEL  = Join-Path $CarlaRoot "CarlaNet\python\build_wheel.ps1"
+$CARLACONTROL_WHEEL = Join-Path $CarlaRoot "CarlaControl\build_wheel.ps1"
 
 Write-Info "CARLA repo: $CarlaRoot"
 Write-Info "UE engine : $UE_ROOT"
@@ -327,6 +336,7 @@ Write-Info "UE engine : $UE_ROOT"
 
 $ueResult  = 0   # 0 = success/skipped
 $netResult = 0
+$ctlResult = 0
 
 # ============================================================================
 #  1) Unreal — CarlaUnrealEditor (C++: Carla plugin, CesiumCarlaBridge, etc.)
@@ -461,18 +471,57 @@ if (-not $SkipCarlaNet) {
 }
 
 # ============================================================================
+#  3) CarlaControl — carlacontrol Python wheel (the run_SCTMV.py client package).
+#     Pure Python, so it has no .NET/native step; independent of both builds above.
+# ============================================================================
+if (-not $SkipCarlaControl) {
+    Write-Info "`n============================================================"
+    Write-Info " Building CarlaControl (carlacontrol) Python wheel"
+    Write-Info "============================================================"
+
+    if (-not (Test-Path $CARLACONTROL_WHEEL)) {
+        Write-Fail "CarlaControl wheel script not found: $CARLACONTROL_WHEEL"
+        "CARLACONTROL BUILD FAILED (build_wheel.ps1 missing) - $(Get-Date)" | Add-Content $LOG_FILE
+        $ctlResult = 1
+    } else {
+        try {
+            # Same interface as CarlaNet's build_wheel.ps1: switches must be splatted via a
+            # HASHTABLE (array splatting passes '-Install' as a positional value and errors).
+            $ctlArgs = @{}
+            if ($InstallWheel) { $ctlArgs['Install'] = $true }
+            if ($CleanWheel)   { $ctlArgs['Clean']   = $true }
+            & $CARLACONTROL_WHEEL @ctlArgs 2>&1 | Tee-Object -FilePath $LOG_FILE -Append
+            # build_wheel.ps1 throws on any failure; reaching here means success.
+            $ctlResult = 0
+            "CARLACONTROL BUILD SUCCEEDED - $(Get-Date)" | Add-Content $LOG_FILE
+            Write-Info "`nCARLACONTROL BUILD SUCCEEDED"
+        } catch {
+            $ctlResult = 1
+            "CARLACONTROL BUILD FAILED: $_ - $(Get-Date)" | Add-Content $LOG_FILE
+            Write-Fail "`nCARLACONTROL BUILD FAILED: $_"
+        }
+    }
+} else {
+    Write-Info "Skipping CarlaControl build (-SkipCarlaControl)."
+    "CARLACONTROL BUILD SKIPPED - $(Get-Date)" | Add-Content $LOG_FILE
+}
+
+# ============================================================================
 #  Summary
 # ============================================================================
 Write-Info "`n============================================================"
 $ueFailed  = (-not $SkipUnreal)    -and ($ueResult  -ne 0)
 $netFailed = (-not $SkipCarlaNet)  -and ($netResult -ne 0)
+$ctlFailed = (-not $SkipCarlaControl) -and ($ctlResult -ne 0)
 $ueLine  = " Unreal : {0}" -f $(if ($SkipUnreal)   { "skipped" } elseif ($ueResult  -eq 0) { "OK" } else { "FAILED ($ueResult)" })
 $netLine = " CarlaNet: {0}" -f $(if ($SkipCarlaNet){ "skipped" } elseif ($netResult -eq 0) { "OK" } else { "FAILED ($netResult)" })
+$ctlLine = " CarlaControl: {0}" -f $(if ($SkipCarlaControl){ "skipped" } elseif ($ctlResult -eq 0) { "OK" } else { "FAILED ($ctlResult)" })
 if ($ueFailed)  { Write-Fail $ueLine }  else { Write-Info $ueLine }
 if ($netFailed) { Write-Fail $netLine } else { Write-Info $netLine }
+if ($ctlFailed) { Write-Fail $ctlLine } else { Write-Info $ctlLine }
 Write-Info "============================================================"
 Write-Info "Log: $LOG_FILE"
 Write-Info "UBT detail: $UE_ROOT\Engine\Programs\UnrealBuildTool\Log.txt"
 
-$final = if (($ueResult -ne 0) -or ($netResult -ne 0)) { 1 } else { 0 }
+$final = if (($ueResult -ne 0) -or ($netResult -ne 0) -or ($ctlResult -ne 0)) { 1 } else { 0 }
 exit $final

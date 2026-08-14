@@ -2,12 +2,14 @@
 #
 # BuildCarla.sh — Linux equivalent of Scripts/Windows/BuildCarla.ps1
 #
-# Build CarlaUnrealEditor (C++) and/or CarlaNet (.NET) + the carlanet Python wheel.
+# Build CarlaUnrealEditor (C++) and/or CarlaNet (.NET) + the carlanet & carlacontrol Python wheels.
 #   1) Unreal  — compiles CarlaUnrealEditor via the UE 5.7.4 Linux Build.sh.
 #   2) CarlaNet — delegates to CarlaNet/python/build_wheel.sh, which `dotnet publish`es
 #                 the .NET libcarla replacement into the python shim, then builds (and
 #                 optionally installs) the carlanet wheel.
-# CarlaNet runs even if the Unreal build failed, so you still get full diagnostics.
+#   3) CarlaControl — delegates to CarlaControl/build_wheel.sh to build (and optionally
+#                 install) the carlacontrol wheel (the run_SCTMV.py client package).
+# CarlaNet and CarlaControl run even if the Unreal build failed, so you still get full diagnostics.
 #
 # Paths are derived from this script's location (it lives at carla/Scripts/Linux/, so the
 # CARLA repo root is two directories up). The engine is found via --unreal-engine-root,
@@ -22,6 +24,7 @@ repo_parent="$(cd "$carla_root/.." && pwd)"
 
 skip_unreal=0
 skip_carlanet=0
+skip_carlacontrol=0
 install_wheel=0
 clean_unreal=0
 clean_wheel=0
@@ -32,15 +35,16 @@ usage() {
     cat <<'EOF'
 Usage: BuildCarla.sh [options]
 
-Build CarlaUnrealEditor (C++) and/or CarlaNet (.NET) + the carlanet Python wheel.
+Build CarlaUnrealEditor (C++) and/or CarlaNet (.NET) + the carlanet & carlacontrol Python wheels.
 
 Options:
   --skip-unreal              Skip the CarlaUnrealEditor C++ build.
   --clean-unreal, --rebuild  Wipe editor + plugin Intermediate/Binaries first for a full
                              from-scratch rebuild (keeps the built cesium-native ThirdParty).
   --skip-carlanet            Skip the CarlaNet (.NET) build + wheel.
-  --install-wheel            Also pip-install the freshly built wheel (--force-reinstall).
-  --clean-wheel              Wipe CarlaNet/python build/dist/dlls/egg-info before building the wheel.
+  --skip-carlacontrol        Skip the CarlaControl (carlacontrol) Python wheel.
+  --install-wheel            Also pip-install the freshly built wheels (carlanet + carlacontrol, --force-reinstall).
+  --clean-wheel              Wipe each package's build/dist/dlls/egg-info before building the wheels.
   --allow-uba                Keep the Unreal Build Accelerator enabled. UBA is disabled by default
                              because it crashes (NullReferenceException) under non-root Linux builds.
   --unreal-engine-root <path>
@@ -62,6 +66,7 @@ while [ $# -gt 0 ]; do
         --skip-unreal)          skip_unreal=1 ;;
         --clean-unreal|--rebuild) clean_unreal=1 ;;
         --skip-carlanet)        skip_carlanet=1 ;;
+        --skip-carlacontrol)    skip_carlacontrol=1 ;;
         --install-wheel)        install_wheel=1 ;;
         --clean-wheel)          clean_wheel=1 ;;
         --allow-uba)            allow_uba=1 ;;
@@ -82,6 +87,7 @@ carla_uproject="$carla_root/Unreal/CarlaUnreal/CarlaUnreal.uproject"
 # so writing the log there fails with "permission denied" under a non-root container build.
 log_file="$carla_root/Build/Carla_build.log"
 python_dir="$carla_root/CarlaNet/python"
+carlacontrol_dir="$carla_root/CarlaControl"
 
 echo "CARLA repo: $carla_root"
 echo "UE engine : $unreal_engine_root"
@@ -116,6 +122,7 @@ fi
 
 ue_result=0    # 0 = success/skipped
 net_result=0
+ctl_result=0
 
 # ============================================================================
 #  1) Unreal — CarlaUnrealEditor (C++: Carla plugin, CesiumCarlaBridge, etc.)
@@ -244,18 +251,53 @@ else
 fi
 
 # ============================================================================
+#  3) CarlaControl — carlacontrol Python wheel (the run_SCTMV.py client package).
+#     Delegates to CarlaControl/build_wheel.sh. Pure Python (no .NET/native step),
+#     independent of both builds above.
+# ============================================================================
+if [ "$skip_carlacontrol" -eq 0 ]; then
+    echo ""
+    echo "============================================================"
+    echo " Building CarlaControl (carlacontrol) Python wheel"
+    echo "============================================================"
+
+    ctl_wheel_sh="$carlacontrol_dir/build_wheel.sh"
+    if [ ! -f "$ctl_wheel_sh" ]; then
+        echo "CarlaControl wheel script not found: $ctl_wheel_sh" | tee -a "$log_file"
+        ctl_result=1
+    else
+        ctl_args=()
+        [ "$install_wheel" -eq 1 ] && ctl_args+=(--install)
+        [ "$clean_wheel" -eq 1 ]   && ctl_args+=(--clean)
+        bash "$ctl_wheel_sh" "${ctl_args[@]}" 2>&1 | tee -a "$log_file"
+        ctl_result=${PIPESTATUS[0]}
+    fi
+
+    if [ "$ctl_result" -eq 0 ]; then
+        echo "CARLACONTROL BUILD SUCCEEDED - $(date)" | tee -a "$log_file"
+    else
+        echo "CARLACONTROL BUILD FAILED (exit code $ctl_result) - $(date)" | tee -a "$log_file"
+    fi
+else
+    echo "Skipping CarlaControl build (--skip-carlacontrol)."
+    echo "CARLACONTROL BUILD SKIPPED - $(date)" >> "$log_file"
+fi
+
+# ============================================================================
 #  Summary
 # ============================================================================
 echo ""
 echo "============================================================"
 if [ "$skip_unreal" -eq 1 ]; then ue_msg="skipped"; elif [ "$ue_result" -eq 0 ]; then ue_msg="OK"; else ue_msg="FAILED ($ue_result)"; fi
 if [ "$skip_carlanet" -eq 1 ]; then net_msg="skipped"; elif [ "$net_result" -eq 0 ]; then net_msg="OK"; else net_msg="FAILED ($net_result)"; fi
+if [ "$skip_carlacontrol" -eq 1 ]; then ctl_msg="skipped"; elif [ "$ctl_result" -eq 0 ]; then ctl_msg="OK"; else ctl_msg="FAILED ($ctl_result)"; fi
 echo " Unreal : $ue_msg"
 echo " CarlaNet: $net_msg"
+echo " CarlaControl: $ctl_msg"
 echo "============================================================"
 echo "Log: $log_file"
 
-if [ "$ue_result" -ne 0 ] || [ "$net_result" -ne 0 ]; then
+if [ "$ue_result" -ne 0 ] || [ "$net_result" -ne 0 ] || [ "$ctl_result" -ne 0 ]; then
     exit 1
 fi
 exit 0
