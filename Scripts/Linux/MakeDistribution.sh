@@ -5,14 +5,14 @@
 # Produces  Build/Dist/Carla-<version>-Linux-<config>.tar.gz  containing everything needed to run the
 # digital-twin single-client traffic-manager demo on another Linux machine:
 #   CarlaServer/   the cooked CARLA server (the packaged game binary; run with CarlaUnreal.sh)
-#   wheels/        the carlanet Python wheel (install into a venv)
-#   scripts/       SCTMV.py + osm_clip.py (the demo client + OSM clipper)
+#   wheels/        the carlanet + carlacontrol Python wheels (install into a venv)
+#   scripts/       run_SCTMV.py (the demo client; imports carlanet + carlacontrol)
 #   osm/           the example OpenStreetMap maps SCTMV can build worlds from
 #   tools/sumo/    SUMO netconvert + its shared libraries + PROJ data (OSM -> OpenDRIVE conversion)
 #   setup-venv.sh / run-server.sh / run-sctmv.sh / README.md
 #
 # Run this AFTER the build + cook have produced the artifacts:
-#   ./Scripts/Linux/BuildCarla.sh                                   # editor + carlanet wheel
+#   ./Scripts/Linux/BuildCarla.sh                                   # editor + carlanet & carlacontrol wheels
 #   cmake --build Build --target package-development                # cook + stage the server
 # then:
 #   ./Scripts/Linux/MakeDistribution.sh                            # assemble the tarball
@@ -51,7 +51,7 @@ case "$config" in
 esac
 
 if [ "$do_build" -eq 1 ]; then
-    echo "[dist] building editor + carlanet wheel (BuildCarla.sh)"
+    echo "[dist] building editor + carlanet & carlacontrol wheels (BuildCarla.sh)"
     ./Scripts/Linux/BuildCarla.sh
     # Skip the cmake package target's own Compress.cmake step (CARLA_UNREAL_PACKAGE_NO_COMPRESSION):
     # it single-threaded-gzips the whole ~30-40 GB package into Build/Package/<name>.tar.gz, which is
@@ -88,13 +88,20 @@ mkdir -p "$dist"/{CarlaServer,wheels,scripts,osm,tools/sumo/lib}
 # 1. Cooked server.
 cp -a "$pkg_parent/." "$dist/CarlaServer/"
 
-# 2. carlanet wheel (newest).
-whl="$(ls -t "$root"/CarlaNet/python/dist/*.whl 2>/dev/null | head -1 || true)"
-if [ -n "$whl" ]; then cp "$whl" "$dist/wheels/"; echo "[dist] wheel: $(basename "$whl")"
-else echo "[dist] WARNING: no wheel under CarlaNet/python/dist (run build_wheel.sh / BuildCarla.sh)"; fi
+# 2. Python client wheels (newest of each): carlanet (the .NET bridge) and carlacontrol (the
+#    run_SCTMV client package). carlacontrol depends on carlanet, so both must be bundled.
+copy_newest_wheel() {   # <dist-dir>
+    local w
+    w="$(ls -t "$1"/*.whl 2>/dev/null | head -1 || true)"
+    if [ -n "$w" ]; then cp "$w" "$dist/wheels/"; echo "[dist] wheel: $(basename "$w")"
+    else echo "[dist] WARNING: no wheel under $1 (run build_wheel.sh / BuildCarla.sh)"; fi
+}
+copy_newest_wheel "$root/CarlaNet/python/dist"
+copy_newest_wheel "$root/CarlaControl/dist"
 
-# 3. Demo client + its only local import.
-cp "$root/CarlaNet/python/SCTMV.py" "$root/CarlaNet/python/osm_clip.py" "$dist/scripts/"
+# 3. Demo client. run_SCTMV.py imports carlanet + carlacontrol (both installed from wheels/ above);
+#    it has no sibling-file imports, and reads netconvert/PROJ paths from the env set by run-sctmv.sh.
+cp "$root/CarlaControl/scripts/run_SCTMV.py" "$dist/scripts/"
 
 # 4. Example OSM maps.
 cp "$root"/Import/*.osm "$dist/osm/" 2>/dev/null || echo "[dist] WARNING: no .osm files under Import/"
@@ -143,13 +150,15 @@ fi
 # 6. Helper scripts + README for the target machine.
 cat > "$dist/setup-venv.sh" <<'VENV'
 #!/usr/bin/env bash
-# Create a Python venv and install the carlanet wheel + the demo's Python dependencies.
+# Create a Python venv and install the carlanet + carlacontrol wheels + the demo's Python deps.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 python3 -m venv "$here/venv"
 . "$here/venv/bin/activate"
 pip install --upgrade pip
-pip install "$here"/wheels/*.whl numpy pygame
+# Both wheels are passed together (and --find-links points at wheels/) so carlacontrol's dependency
+# on the local-only carlanet wheel resolves from the bundle rather than a package index.
+pip install --find-links "$here/wheels" "$here"/wheels/*.whl numpy pygame
 echo "venv ready: source $here/venv/bin/activate"
 VENV
 chmod +x "$dist/setup-venv.sh"
@@ -171,15 +180,15 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$here/venv/bin/activate"
 export CARLA_NETCONVERT="$here/tools/sumo/netconvert"
 [ -f "$here/tools/sumo/proj/proj.db" ] && export PROJ_LIB="$here/tools/sumo/proj" PROJ_DATA="$here/tools/sumo/proj"
-exec python "$here/scripts/SCTMV.py" "$@"
+exec python "$here/scripts/run_SCTMV.py" "$@"
 RUN
 chmod +x "$dist/run-sctmv.sh"
 
 cat > "$dist/README.md" <<README
 # CARLA ${pkgname#Carla-} distribution
 
-Self-contained CARLA digital-twin bundle: the cooked server, the carlanet Python client, the SCTMV
-demo, example OSM maps, and SUMO netconvert.
+Self-contained CARLA digital-twin bundle: the cooked server, the carlanet + carlacontrol Python
+client packages, the run_SCTMV demo, example OSM maps, and SUMO netconvert.
 
 ## Target prerequisites
 - 64-bit Linux compatible with the build host (RHEL 8 / glibc 2.28 or newer).
@@ -190,11 +199,11 @@ demo, example OSM maps, and SUMO netconvert.
 
 ## Run it
 \`\`\`sh
-./setup-venv.sh                      # one-time: venv + carlanet wheel + numpy + pygame
+./setup-venv.sh                      # one-time: venv + carlanet & carlacontrol wheels + numpy + pygame
 ./run-server.sh &                    # start the CARLA server (needs GPU/Vulkan)
 ./run-sctmv.sh --osm osm/Lakeview_Carson.osm   # build a world from an OSM map and run the demo
 \`\`\`
-\`run-sctmv.sh\` points carlanet at the bundled \`tools/sumo/netconvert\`; pass \`--help\` to SCTMV for options.
+\`run-sctmv.sh\` points carlanet at the bundled \`tools/sumo/netconvert\`; pass \`--help\` to run-sctmv for options.
 README
 
 # 7. Tarball. Compressing ~30 GB with single-threaded gzip is slow; use pigz (parallel gzip) when
