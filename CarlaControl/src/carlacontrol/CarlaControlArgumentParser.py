@@ -440,6 +440,34 @@ class CarlaControlArgumentParser:
             default=None,
             help="CoT track uid for the platform (default: CARLA-SENSOR-<camera id>).",
         )
+        rec.add_argument(
+            "--no-occlusion",
+            dest="occlusion",
+            action="store_false",
+            help="do not record how much of each vehicle the camera can actually see. By default "
+            "every capture measures, per vehicle, the fraction of it hidden behind buildings, "
+            "trees, terrain or other vehicles, and writes it into the sidecar as occlusion "
+            "(0 = fully visible, 1 = fully hidden) plus a coarse occlusion_level band, so a "
+            "process drawing training boxes can drop the ones it cannot see and label the rest. "
+            "The measurement reads the depth camera, adding a second subscription to its frames.",
+        )
+        rec.add_argument(
+            "--occlusion-margin",
+            type=float,
+            default=1.0,
+            help="metres nearer than a vehicle's own surface that something must be before it "
+            "counts as hiding it (default 1.0). Absorbs the gap between the vehicle's bounding "
+            "box and its real bodywork; raise it if vehicles report occlusion with a clear view, "
+            "lower it if an obstruction pressed right against a vehicle is being missed.",
+        )
+        rec.add_argument(
+            "--occlusion-samples",
+            type=int,
+            default=24,
+            help="how finely each vehicle's outline is sampled when measuring occlusion, as the "
+            "number of samples across its longer side (default 24). Higher is smoother and "
+            "costs more per capture.",
+        )
 
     def _add_orbit_args(self, ap: argparse.ArgumentParser) -> None:
         orbit = ap.add_argument_group("orbit")

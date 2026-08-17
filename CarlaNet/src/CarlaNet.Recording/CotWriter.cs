@@ -171,6 +171,16 @@ public static class CotWriter
             w.WriteAttributeString("vx", F(r.Vx, "0.00"));
             w.WriteAttributeString("vy", F(r.Vy, "0.00"));
             w.WriteAttributeString("vz", F(r.Vz, "0.00"));
+            // How much of this vehicle the camera cannot see, and that fraction as a coarse band, so
+            // a consumer drawing training boxes can drop the hidden ones and label the partials.
+            // Written only when it was measured: an absent attribute means unknown, which is not the
+            // same claim as "nothing is in the way".
+            if (!double.IsNaN(r.Occlusion))
+            {
+                w.WriteAttributeString("occlusion", F(r.Occlusion, "0.000"));
+                w.WriteAttributeString("occlusion_level",
+                                       r.OcclusionLevel.ToString(CultureInfo.InvariantCulture));
+            }
             w.WriteEndElement(); // _carla
 
             w.WriteEndElement(); // detail

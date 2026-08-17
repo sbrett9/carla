@@ -35,7 +35,8 @@ Same shape ⇒ truth-vs-detection scoring is a direct diff (position error, clas
             type_id="vehicle.audi.tt" base_type="car" special_type=""
             length_m="4.5" width_m="2.0" height_m="1.4"
             color="0,0,0" role_name="autopilot"
-            vx="11.2" vy="-1.4" vz="0.0"/>      <!-- truth extras; WinTAK ignores unknown detail -->
+            vx="11.2" vy="-1.4" vz="0.0"
+            occlusion="0.420" occlusion_level="2"/> <!-- truth extras; WinTAK ignores unknown detail -->
   </detail>
 </event>
 ```
@@ -89,6 +90,30 @@ Carries the richer-than-ADS-B fields for the scoring harness / any TAK plugin; W
 detail children. Attributes: `source` (`truth`|`detection`), `actor_id`, `type_id`, `base_type`,
 `special_type`, `length_m`/`width_m`/`height_m` (from `bounding_box.extent × 2`), `color`, `role_name`,
 raw `vx`/`vy`/`vz`. (Detection fills what it can: `source="detection"`, confidence, predicted class.)
+
+### 5.1 Occlusion (recorded captures only)
+
+| Attribute | Meaning |
+|---|---|
+| `occlusion` | Fraction of the vehicle's silhouette hidden from **this capture's camera** by anything nearer — photoreal buildings and trees, terrain relief, other vehicles — 0 (wholly visible) to 1 (wholly hidden). |
+| `occlusion_level` | The same value as a coarse band: `0` wholly visible · `1` up to 30 % · `2` 30–60 % · `3` 60–90 % · `4` over 90 % (the bands the amodal-segmentation datasets report against). |
+
+Occlusion is **camera-relative** — a property of the (vehicle, sensor) pair, not of the vehicle — so
+it is only emitted in the recorded sidecar, where the frame already carries a sensor pose (16), and
+never on the live UDP feed, which has no camera. Both attributes are **absent when it was not
+measured** (no depth capture paired with the frame, or the vehicle projects outside it); an absent
+attribute means *unknown*, which is not the same claim as "nothing is in the way". Measurement and
+tuning: [17_Photoreal_Occlusion_Metric.md](17_Photoreal_Occlusion_Metric.md).
+
+### 5.2 Which vehicles are reported
+
+Truth is emitted only for vehicles that have **arrived in the scene**. Boundary-aware staging traffic
+spawns a vehicle transparent out in the entry ring and dissolves it in as it crosses into the
+interior; one that has never been fully opaque has not arrived and is left out, because a
+half-dissolved car is not something a sensor should be told is there. A vehicle that has arrived stays
+reported while it dissolves back out on its way off the map. Vehicles nothing fades — a hero vehicle,
+scenario traffic, anything spawned by hand — are reported from the moment they spawn, so this makes no
+difference to a run without staging traffic.
 
 ## 6. Producers
 

@@ -28,19 +28,32 @@ class NativeRecorder:
         recorder.stop()  # Clean shutdown
     """
 
-    def __init__(self, world: carla.World, camera: carla.Actor, args, run_id: str | None = None):
+    def __init__(
+        self,
+        world: carla.World,
+        camera: carla.Actor,
+        args,
+        run_id: str | None = None,
+        depth_camera: carla.Actor | None = None,
+    ):
         """Initialize the native recorder.
 
         Args:
             world: CARLA world object
             camera: CARLA camera sensor actor to record
             args: Parsed arguments with record_dir, record_hz, affiliation, stale, fov,
-                  platform_type, platform_affiliation, platform_callsign, platform_uid
+                  platform_type, platform_affiliation, platform_callsign, platform_uid,
+                  occlusion, occlusion_margin, occlusion_samples
+            run_id: Identifier grouping every capture of this run
+            depth_camera: Depth camera held at the recorded camera's pose. When given (and
+                  --no-occlusion was not passed) each capture also records how much of each
+                  vehicle the camera cannot see.
         """
         self.world = world
         self.camera = camera
         self.args = args
         self.run_id = run_id
+        self.depth_camera = depth_camera if getattr(args, "occlusion", True) else None
         self.record_dir = args.record_dir
         self.record_hz = args.record_hz
         self.affiliation = args.affiliation
@@ -61,7 +74,8 @@ class NativeRecorder:
 
         self.logger.info(
             f"native recorder initialized: dir={self.record_dir}, hz={self.record_hz}, "
-            f"available={self.available}"
+            f"available={self.available}, "
+            f"occlusion={'on' if self.depth_camera is not None else 'off'}"
         )
 
     def apply_want(self) -> None:
@@ -92,6 +106,9 @@ class NativeRecorder:
                 platform_uid=self.platform_uid,
                 run_id=self.run_id,
                 seed=self.args.seed,
+                depth_camera=self.depth_camera,
+                occlusion_margin_m=getattr(self.args, "occlusion_margin", 1.0),
+                occlusion_samples=getattr(self.args, "occlusion_samples", 24),
             )
 
             if self._handle is None:
@@ -107,10 +124,28 @@ class NativeRecorder:
 
         elif not self.want_enabled and self.recording:
             n = self.saved
+            note = self._occlusion_note()
             self.world.stop_recording()
             self.recording = False
             self._handle = None
-            self.logger.info(f"recording stopped: {n} capture(s) saved")
+            self.logger.info(f"recording stopped: {n} capture(s) saved{note}")
+
+    def _occlusion_note(self) -> str:
+        """How many captures got a per-vehicle occlusion measurement, for the stop message."""
+        if self._handle is None or not self._handle.MeasuresOcclusion:
+            return ""
+        try:
+            measured = int(self._handle.OcclusionMeasured)
+            unmatched = int(self._handle.OcclusionUnmatched)
+        except Exception as e:
+            self.logger.debug(f"failed to read occlusion counters: {e}")
+            return ""
+        if unmatched:
+            return (
+                f"; occlusion measured on {measured}, "
+                f"skipped on {unmatched} with no matching depth frame"
+            )
+        return f"; occlusion measured on {measured}"
 
     def toggle_want(self, enabled: bool | None = None) -> None:
         """

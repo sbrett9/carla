@@ -182,7 +182,11 @@ def main() -> int:
     # Recorder: the native (C#) FrameRecorder encodes frames in .NET off the GIL. If the
     # CarlaNet.Recording assembly is absent the recorder reports itself unavailable when toggled (the
     # whole client is CarlaNet, so a missing recording assembly means the build itself is incomplete).
-    recorder = NativeRecorder(world, sensors.camera, args, run_id=run_id)
+    # The depth camera rides the RGB camera's pose, which is what lets each capture record how much
+    # of every vehicle that camera can actually see.
+    recorder = NativeRecorder(
+        world, sensors.camera, args, run_id=run_id, depth_camera=sensors.depth_cam
+    )
     scenario = ScenarioController(world, args.scenario, tm)
     if args.scenario:
         logger.info("scenario armed: %s (X to run)", os.path.basename(args.scenario))

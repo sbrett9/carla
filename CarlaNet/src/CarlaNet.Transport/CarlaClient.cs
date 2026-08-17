@@ -141,6 +141,21 @@ public sealed class CarlaClient : IAsyncDisposable
     // no RPC and no polling; empty until the first snapshot arrives.
     private volatile double[] _solar = System.Array.Empty<double>();
 
+    // ── Staging-fade state (see SetActorFadeAsync / GetActorOpacity / IsActorEstablished) ──
+    // set_actor_fade writes straight to render state server-side and has no read-back, so the client
+    // that issued it is the only holder of the value. Recording it here is what lets consumers in this
+    // process — the truth telemetry above all — know how visible a vehicle currently is and whether it
+    // has finished arriving. Written from whichever thread calls SetActorFadeAsync and read from the
+    // recorder's stream threads, hence the concurrent map.
+    private readonly ConcurrentDictionary<ActorId, (double Opacity, bool Established)> _fade = new();
+
+    /// <summary>
+    /// Opacity at or above which a fading-in vehicle counts as having arrived. Staging traffic drives
+    /// the fade from the fraction of the vehicle's footprint inside the scene interior, so it reaches
+    /// exactly 1 only once the whole footprint is across; this tolerance absorbs that last sliver.
+    /// </summary>
+    public const double EstablishedOpacity = 0.99;
+
     // ── Telemetry-truth decoupling state (set by GenerateWorldFromOsmWithElevationAsync) ──
     // The digital-twin reports each vehicle's ELLIPSOIDAL-WGS84 altitude (hae) from the
     // bare-earth DTM (Cesium World Terrain), NOT from where the vehicle physically sits. With
@@ -1118,9 +1133,33 @@ public sealed class CarlaClient : IAsyncDisposable
     /// Set the actor's staging fade: 0 = fully opaque, 1 = fully dissolved away. Writes the value to
     /// Custom Primitive Data index 8 on every primitive component server-side; vehicle materials read
     /// it to drive a dithered opacity dissolve for boundary-aware traffic entering/leaving the scene.
+    /// The value is also remembered locally (<see cref="GetActorOpacity"/>,
+    /// <see cref="IsActorEstablished"/>) because the server keeps no readable copy of it.
     /// </summary>
     public Task SetActorFadeAsync(ActorId id, double hide)
-        => _rpc.CallVoidAsync("set_actor_fade", id, hide);
+    {
+        double opacity = 1.0 - Math.Clamp(hide, 0.0, 1.0);
+        _fade.AddOrUpdate(
+            id,
+            _ => (opacity, opacity >= EstablishedOpacity),
+            (_, previous) => (opacity, previous.Established || opacity >= EstablishedOpacity));
+        return _rpc.CallVoidAsync("set_actor_fade", id, hide);
+    }
+
+    /// <summary>
+    /// The actor's staging opacity as this client last set it: 1 = fully opaque, 0 = fully dissolved
+    /// away. An actor nobody has faded reads 1 — nothing has asked for it to be anything else.
+    /// </summary>
+    public double GetActorOpacity(ActorId id) => _fade.TryGetValue(id, out var fade) ? fade.Opacity : 1.0;
+
+    /// <summary>
+    /// Whether the actor has ever been fully opaque. Boundary-aware staging traffic spawns a vehicle
+    /// transparent out in the entry ring and fades it up as it crosses into the scene interior, so
+    /// this latches the first time the vehicle is wholly inside and stays true while it fades back
+    /// out on its way off the map — it answers "has this vehicle arrived", not "is it opaque right
+    /// now". Actors nobody has faded are established from the moment they are seen.
+    /// </summary>
+    public bool IsActorEstablished(ActorId id) => !_fade.TryGetValue(id, out var fade) || fade.Established;
 
     // ── §8.9 Vehicle Control ──────────────────────────────────────────────────
 
@@ -1444,7 +1483,12 @@ public sealed class CarlaClient : IAsyncDisposable
         // ConcurrentDictionary enumeration is safe.
         foreach (var kv in _actorCache)
             if (!_observedIds.Contains(kv.Key))
+            {
                 _actorCache.TryRemove(kv.Key, out _);
+                // Drop the staging-fade record with the actor, so a recycled id never inherits the
+                // arrival state of the vehicle that held it before.
+                _fade.TryRemove(kv.Key, out _);
+            }
     }
 
     // ── Actor state queries (sourced from world observer cache) ───────────────

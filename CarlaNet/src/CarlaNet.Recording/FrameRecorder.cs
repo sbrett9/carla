@@ -34,6 +34,8 @@ public sealed class FrameRecorder : IDisposable
     private readonly string? _runId, _scenarioId;
     private readonly long? _seed;
 
+    private readonly OcclusionEstimator? _occlusion;
+
     private readonly Channel<Job> _channel;
     private readonly Task[] _workers;
     private readonly IDisposable _subscription;
@@ -48,6 +50,15 @@ public sealed class FrameRecorder : IDisposable
     public bool HaveTelemetryOrigin => _haveOrigin;
     public string Directory => _dir;
 
+    /// <summary>Whether captures carry a per-vehicle occlusion measurement.</summary>
+    public bool MeasuresOcclusion => _occlusion is not null;
+
+    /// <summary>Captures whose vehicles were measured against a depth capture of the same instant.</summary>
+    public long OcclusionMeasured => _occlusion?.Matched ?? 0;
+
+    /// <summary>Captures left without occlusion because no usable depth capture matched them.</summary>
+    public long OcclusionUnmatched => _occlusion?.Missed ?? 0;
+
     /// <param name="streamToken">The camera actor's StreamToken (24-byte sensor stream token).</param>
     /// <param name="hz">Captures per second (may be fractional). Decimated against sim time.</param>
     /// <param name="platform">Collection-platform options; when supplied (and a georeference origin is
@@ -56,10 +67,15 @@ public sealed class FrameRecorder : IDisposable
     /// each capture so stills and sidecars can be gathered back into a run after the fact.</param>
     /// <param name="scenarioId">The scenario driving this run, where there is one.</param>
     /// <param name="seed">Seed the run was started with, recorded so it can be reproduced.</param>
+    /// <param name="depthStreamToken">StreamToken of a depth camera held at the recorded camera's
+    /// pose and field of view. Supplying it adds a per-vehicle occlusion measurement to each capture,
+    /// at the cost of a second subscription to that camera. Null leaves occlusion unmeasured.</param>
+    /// <param name="occlusion">Tuning for that measurement; defaults when null.</param>
     public FrameRecorder(CarlaClient client, byte[] streamToken, string dir, double hz,
                          string affiliation = "n", double staleSeconds = 3.0,
                          SensorPlatformOptions? platform = null, int workers = 0,
-                         string? runId = null, string? scenarioId = null, long? seed = null)
+                         string? runId = null, string? scenarioId = null, long? seed = null,
+                         byte[]? depthStreamToken = null, OcclusionOptions? occlusion = null)
     {
         if (streamToken is not { Length: 24 })
             throw new ArgumentException("streamToken must be a 24-byte sensor stream token", nameof(streamToken));
@@ -83,6 +99,9 @@ public sealed class FrameRecorder : IDisposable
         _telemetry = new VehicleTelemetryService(client);
         try { _origin = _telemetry.GetOrigin(); _haveOrigin = true; }
         catch { _haveOrigin = false; }
+
+        if (depthStreamToken is not null)
+            _occlusion = new OcclusionEstimator(client, depthStreamToken, occlusion);
 
         int n = workers > 0 ? workers : Math.Max(2, Environment.ProcessorCount / 2);
         _channel = Channel.CreateBounded<Job>(new BoundedChannelOptions(Math.Max(4, n * 2))
@@ -120,6 +139,15 @@ public sealed class FrameRecorder : IDisposable
             try { recs = _telemetry.Compute(_origin); } catch { }
         }
 
+        // How much of each vehicle this camera can actually see. Occlusion belongs to the
+        // (vehicle, camera) pair, so it is measured against the depth capture of THIS frame from THIS
+        // pose; when none matches, the capture simply carries no occlusion rather than a stale one.
+        if (_occlusion is not null && recs.Count > 0)
+        {
+            try { recs = MeasureOcclusion(recs, frame.Header.Frame, t, frame.SensorTransform); }
+            catch { }
+        }
+
         // Solar state paired to this tick, read lock-free from the world-observer cache (no RPC, no
         // poll) — the same snapshot the telemetry above came from.
         IReadOnlyList<double> solar = _client.GetCachedSolarState();
@@ -146,6 +174,25 @@ public sealed class FrameRecorder : IDisposable
         var job = new Job(captured, w, h, img.RawBgra, recs, solar, sensor, capture);
         if (!_channel.Writer.TryWrite(job))
             Interlocked.Increment(ref _dropped);
+    }
+
+    private IReadOnlyList<VehicleTelemetry> MeasureOcclusion(
+        IReadOnlyList<VehicleTelemetry> recs, ulong tick, double simTime, Transform cameraTransform)
+    {
+        var depth = _occlusion!.MatchTo(tick, simTime, cameraTransform);
+        if (depth is null) return recs;
+
+        var boxes = new List<VehicleBox>(recs.Count);
+        foreach (var r in recs) boxes.Add(new VehicleBox(r.Id, r.ActorTransform, r.BoundingBox));
+        var measured = _occlusion.Estimate(depth, boxes);
+        if (measured.Count == 0) return recs;
+
+        var merged = new List<VehicleTelemetry>(recs.Count);
+        foreach (var r in recs)
+            merged.Add(measured.TryGetValue(r.Id, out var m)
+                ? r with { Occlusion = m.Fraction, OcclusionLevel = m.Level }
+                : r);
+        return merged;
     }
 
     private async Task WorkerLoopAsync()
@@ -180,6 +227,7 @@ public sealed class FrameRecorder : IDisposable
     public void Dispose()
     {
         try { _subscription.Dispose(); } catch { /* already gone */ }
+        _occlusion?.Dispose();
         _channel.Writer.TryComplete();
         try { Task.WaitAll(_workers, TimeSpan.FromSeconds(10)); } catch { /* best-effort flush */ }
     }

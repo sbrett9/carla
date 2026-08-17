@@ -1718,6 +1718,11 @@ class World:
         roughly the pivot. No live Cesium sampling happens here (it has multi-tick latency) — all data
         is read from grids cached at world-build time. `lat`/`lon` are always exact and untouched.
 
+        Boundary-aware staging traffic spawns a vehicle transparent out in the entry ring and
+        dissolves it in as it crosses into the scene interior; a vehicle that has never been fully
+        opaque has not arrived yet and is left out. Vehicles nobody fades are reported from the moment
+        they spawn, so this makes no difference to a run without staging traffic.
+
         Each dict: id, type_id, base_type, special_type, color, role_name, lat, lon, hae, hae_dtm,
         speed_mps, course_deg, vx, vy, vz, length_m, width_m, height_m. Heights are ELLIPSOIDAL
         WGS84 (HAE)."""
@@ -1737,6 +1742,8 @@ class World:
         table = None if drape is not None else self._bare_earth_dtm_table()
         out = []
         for v in self.get_actors().filter("vehicle.*"):
+            if not self._client.IsActorEstablished(v.id):
+                continue                                   # still fading in from the staging ring
             tf = v.get_transform()
             vel = v.get_velocity()
             loc = tf.location
@@ -1805,7 +1812,8 @@ class World:
     def start_recording(self, camera, record_dir, hz=2.0, affiliation="n", stale=3.0,
                         fov=90.0, platform_type="uas-fixed", platform_affiliation="f",
                         platform_callsign="OVERWATCH", platform_uid=None, distortion="none",
-                        run_id=None, scenario_id=None, seed=None):
+                        run_id=None, scenario_id=None, seed=None, depth_camera=None,
+                        occlusion_margin_m=1.0, occlusion_samples=24):
         """Start native (C#) recording of `camera`'s imagery to `record_dir`: every 1/hz seconds a
         lossless PNG of the clean frame + a paired CoT-XML telemetry sidecar, encoded on the .NET thread
         pool (no Python/GIL in the hot path). Returns the FrameRecorder, or None if unavailable.
@@ -1822,25 +1830,37 @@ class World:
         to a simulation instant rather than to wall-clock time, which does not track the simulation
         clock. `run_id` groups the captures of one execution (generated from the start time when not
         given), `scenario_id` names the scenario driving the run, and `seed` records the integer the run
-        was started with so it can be reproduced."""
+        was started with so it can be reproduced.
+
+        Pass `depth_camera` — a sensor.camera.depth held at the same pose and field of view as
+        `camera` — to have each capture also record, per vehicle, the fraction of that vehicle the
+        camera cannot see because a building, a tree, terrain or another vehicle stands in the way
+        (`occlusion` and `occlusion_level` in the sidecar's truth extras). `occlusion_margin_m` is how
+        much nearer than a vehicle's own surface something has to be before it counts as blocking it,
+        and `occlusion_samples` how finely each vehicle's outline is sampled. Measuring costs a second
+        subscription to that camera's stream, so it happens only when a depth camera is given."""
         if not _CARLANET_RECORDING_AVAILABLE:
             print("native recording unavailable: CarlaNet.Recording assembly not loaded "
                   "(rebuild the wheel/DLLs).", file=sys.stderr)
             return None
-        from CarlaNet.Recording import FrameRecorder, SensorPlatformOptions
+        from CarlaNet.Recording import FrameRecorder, OcclusionOptions, SensorPlatformOptions
         self.stop_recording()
         token = camera._actor.StreamToken
         uid = platform_uid or f"CARLA-SENSOR-{camera.id}"
         cot_type = SensorPlatformOptions.ResolveCotType(str(platform_type), str(platform_affiliation))
         opts = SensorPlatformOptions(float(fov), cot_type, str(platform_callsign), str(uid),
                                      "sensor.camera.rgb", str(distortion))
+        depth_token = None if depth_camera is None else depth_camera._actor.StreamToken
+        occlusion = None if depth_camera is None else OcclusionOptions(
+            float(occlusion_margin_m), int(occlusion_samples))
         # Positional through `workers` (0 = default worker count), since the run-identity arguments
         # follow it in the C# signature.
         self._recorder = FrameRecorder(self._client, token, str(record_dir), float(hz),
                                        str(affiliation), float(stale), opts, 0,
                                        None if run_id is None else str(run_id),
                                        None if scenario_id is None else str(scenario_id),
-                                       None if seed is None else int(seed))
+                                       None if seed is None else int(seed),
+                                       depth_token, occlusion)
         return self._recorder
 
     def start_scenario(self, path, traffic_manager, report=None):
