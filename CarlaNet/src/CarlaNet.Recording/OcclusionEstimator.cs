@@ -53,14 +53,25 @@ public sealed class OcclusionEstimator : IDisposable
     private readonly IDisposable _subscription;
     private readonly DepthFrame?[] _ring = new DepthFrame?[RingSize];
     private int _next;
-    private long _matched, _missed;
+    private long _matched, _missedNoCaptures, _missedOutOfStep, _missedPose;
 
     /// <summary>Recorded frames that found a depth capture of the same instant and pose.</summary>
     public long Matched => Interlocked.Read(ref _matched);
 
-    /// <summary>Recorded frames left without occlusion because no depth capture matched them — the
-    /// depth camera lagging, stopping, or drifting off the recorded camera's pose.</summary>
-    public long Missed => Interlocked.Read(ref _missed);
+    /// <summary>Recorded frames that arrived with no depth capture available at all — the depth
+    /// camera never delivered, or stopped.</summary>
+    public long MissedNoCaptures => Interlocked.Read(ref _missedNoCaptures);
+
+    /// <summary>Recorded frames whose depth captures were all of some other instant — the depth
+    /// stream running too far behind or ahead of the recorded one to pair with it.</summary>
+    public long MissedOutOfStep => Interlocked.Read(ref _missedOutOfStep);
+
+    /// <summary>Recorded frames whose depth capture was of the right instant but the wrong place —
+    /// the two cameras are no longer looking from the same pose.</summary>
+    public long MissedPose => Interlocked.Read(ref _missedPose);
+
+    /// <summary>Recorded frames left without occlusion, for any reason.</summary>
+    public long Missed => MissedNoCaptures + MissedOutOfStep + MissedPose;
 
     /// <param name="depthStreamToken">The depth camera actor's 24-byte sensor stream token. The
     /// subscription is this estimator's own, so it neither disturbs nor depends on any other listener
@@ -94,26 +105,53 @@ public sealed class OcclusionEstimator : IDisposable
     /// </summary>
     public DepthFrame? MatchTo(ulong frame, double timestamp, Transform cameraTransform)
     {
+        // The two cameras arrive over separate connections, so the depth capture for this instant may
+        // still be in flight when the recorded frame lands. Wait a little for it rather than giving
+        // up immediately — but only a little, since this runs on the thread reading the recorded
+        // stream. If it never turns up, say which way it failed rather than just that it did.
+        long deadline = Environment.TickCount64 + Math.Max(0, _options.MatchWaitMilliseconds);
+        while (true)
+        {
+            var (best, gap, anyAvailable) = FindNearest(frame, timestamp);
+            if (best is not null && gap <= _options.FrameToleranceSeconds)
+            {
+                if (!IsCoLocated(best, cameraTransform))
+                {
+                    Interlocked.Increment(ref _missedPose);
+                    return null;
+                }
+                Interlocked.Increment(ref _matched);
+                return best;
+            }
+            if (Environment.TickCount64 >= deadline)
+            {
+                if (anyAvailable) Interlocked.Increment(ref _missedOutOfStep);
+                else Interlocked.Increment(ref _missedNoCaptures);
+                return null;
+            }
+            Thread.Sleep(2);
+        }
+    }
+
+    /// <summary>The held capture closest to an instant, how far off it is, and whether there were any
+    /// captures to choose from at all.</summary>
+    private (DepthFrame? Best, double Gap, bool AnyAvailable) FindNearest(ulong frame, double timestamp)
+    {
         DepthFrame? best = null;
         double bestGap = double.PositiveInfinity;
+        bool anyAvailable = false;
         lock (_ring)
         {
             foreach (var candidate in _ring)
             {
                 if (candidate is null) continue;
-                if (candidate.Frame == frame) { best = candidate; bestGap = 0.0; break; }
+                anyAvailable = true;
+                if (candidate.Frame == frame) return (candidate, 0.0, true);
                 double gap = Math.Abs(candidate.Timestamp - timestamp);
                 if (gap < bestGap) { best = candidate; bestGap = gap; }
             }
         }
-
-        if (best is null || bestGap > _options.FrameToleranceSeconds || !IsCoLocated(best, cameraTransform))
-        {
-            Interlocked.Increment(ref _missed);
-            return null;
-        }
-        Interlocked.Increment(ref _matched);
-        return best;
+        return (best, bestGap, anyAvailable);
     }
 
     private bool IsCoLocated(DepthFrame depth, Transform cameraTransform)

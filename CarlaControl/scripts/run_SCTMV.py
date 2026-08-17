@@ -168,7 +168,9 @@ def main() -> int:
     sensors = SensorRig(world=world, args=args)
 
     # PyGameSensorController to move the sensor rig around the world
-    pygame_controller = PyGameSensorController(sensors, world, sensors.get_initial_pose())
+    pygame_controller = PyGameSensorController(
+        sensors, world, sensors.get_initial_pose(), speed=args.speed
+    )
     orbit_sensor_controller = OrbitSensorController(
         sensors=sensors,
         world=world,

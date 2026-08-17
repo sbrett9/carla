@@ -181,8 +181,13 @@ class SensorRig:
         return self.initial_pose.copy()
 
     def reset_to_initial_pose(self) -> None:
-        """Reset the camera to its initial pose."""
-        self.camera.set_transform(self.initial_pose.to_carla_transform())
+        """Reset the whole rig to its initial pose.
+
+        Every camera has to move together: measurements that pair the depth camera's frames with the
+        colour camera's are only valid while the two are looking from the same place, and a depth
+        camera left behind at the old pose silently invalidates them.
+        """
+        self.set_transform(self.initial_pose.to_carla_transform())
         self.logger.info(f"reset to initial pose of {self.initial_pose}")
 
     def get_current_transform(self) -> carla.Transform:

@@ -59,6 +59,15 @@ public sealed class FrameRecorder : IDisposable
     /// <summary>Captures left without occlusion because no usable depth capture matched them.</summary>
     public long OcclusionUnmatched => _occlusion?.Missed ?? 0;
 
+    /// <summary>Of those, the ones that found no depth capture at all.</summary>
+    public long OcclusionNoDepthCaptures => _occlusion?.MissedNoCaptures ?? 0;
+
+    /// <summary>Of those, the ones whose depth captures were all of some other instant.</summary>
+    public long OcclusionDepthOutOfStep => _occlusion?.MissedOutOfStep ?? 0;
+
+    /// <summary>Of those, the ones whose depth capture was of the wrong pose.</summary>
+    public long OcclusionDepthWrongPose => _occlusion?.MissedPose ?? 0;
+
     /// <param name="streamToken">The camera actor's StreamToken (24-byte sensor stream token).</param>
     /// <param name="hz">Captures per second (may be fractional). Decimated against sim time.</param>
     /// <param name="platform">Collection-platform options; when supplied (and a georeference origin is

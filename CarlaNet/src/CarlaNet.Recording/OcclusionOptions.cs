@@ -51,6 +51,14 @@ public sealed record OcclusionOptions(double MarginMetres, int SamplesAcross, do
     /// </summary>
     public double FrameToleranceSeconds { get; init; } = 0.05;
 
+    /// <summary>
+    /// How long to wait for the depth capture belonging to a recorded frame before giving up on it.
+    /// The two cameras arrive over separate connections, so the depth one can still be in flight when
+    /// the recorded frame lands. This runs on the thread reading the recorded stream, so it has to
+    /// stay well inside the gap between captures.
+    /// </summary>
+    public int MatchWaitMilliseconds { get; init; } = 100;
+
     /// <summary>How far the depth camera may sit from the recorded camera before the pair is treated
     /// as no longer co-located and the frame's occlusion is abandoned rather than mismeasured.</summary>
     public double PoseToleranceMetres { get; init; } = 0.5;

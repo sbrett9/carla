@@ -22,7 +22,14 @@ class PyGameSensorController(SensorController):
     transform updates and ground elevation tracking for AGL calculations.
     """
 
-    def __init__(self, sensor_rig: SensorRig, world: carla.World, initial_pose: Pose, speed: float = 10.0):
+    # Slowest the mouse wheel will wind the camera down to, in m/s.
+    MIN_SPEED_MPS = 2.0
+
+    # Each wheel notch scales the speed by this rather than adding a fixed amount, so one notch is
+    # worth the same proportion whether creeping along a street or crossing the map.
+    WHEEL_SPEED_FACTOR = 1.2
+
+    def __init__(self, sensor_rig: SensorRig, world: carla.World, initial_pose: Pose, speed: float = 60.0):
         """Initialize pygame mover.
 
         Args:
@@ -160,7 +167,10 @@ class PyGameSensorController(SensorController):
         # update speed from mouse wheel
         if events["mouse_wheel_delta"]:
             old_speed = self.speed
-            self.speed = max(1.0, self.speed + events["mouse_wheel_delta"] * 5.0)
+            self.speed = max(
+                self.MIN_SPEED_MPS,
+                self.speed * (self.WHEEL_SPEED_FACTOR ** events["mouse_wheel_delta"]),
+            )
             self.logger.debug(f"speed changed: {old_speed:.1f} -> {self.speed:.1f} m/s")
 
         movement = self.get_flying_movement(dt, events["pressed_keys"])

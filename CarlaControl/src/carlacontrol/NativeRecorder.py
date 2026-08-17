@@ -137,15 +137,27 @@ class NativeRecorder:
         try:
             measured = int(self._handle.OcclusionMeasured)
             unmatched = int(self._handle.OcclusionUnmatched)
+            none_at_all = int(self._handle.OcclusionNoDepthCaptures)
+            out_of_step = int(self._handle.OcclusionDepthOutOfStep)
+            wrong_pose = int(self._handle.OcclusionDepthWrongPose)
         except Exception as e:
             self.logger.debug(f"failed to read occlusion counters: {e}")
             return ""
-        if unmatched:
-            return (
-                f"; occlusion measured on {measured}, "
-                f"skipped on {unmatched} with no matching depth frame"
+        if not unmatched:
+            return f"; occlusion measured on {measured}"
+        # Name which way the pairing failed: no depth frames at all means the depth camera never
+        # delivered, out-of-step means its stream is running behind or ahead of the recorded one, and
+        # wrong-pose means the two cameras are no longer looking from the same place.
+        reasons = ", ".join(
+            f"{count} {label}"
+            for label, count in (
+                ("with no depth frame at all", none_at_all),
+                ("with the depth stream out of step", out_of_step),
+                ("with the cameras at different poses", wrong_pose),
             )
-        return f"; occlusion measured on {measured}"
+            if count
+        )
+        return f"; occlusion measured on {measured}, skipped on {unmatched} ({reasons})"
 
     def toggle_want(self, enabled: bool | None = None) -> None:
         """
