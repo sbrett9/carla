@@ -33,6 +33,11 @@ public readonly record struct VehicleOcclusion(double Fraction, int Level, int S
 /// A mid-fade vehicle occluding another is measured as whatever the depth capture shows of it, which
 /// depends on how far the dithered dissolve has been resolved; weighting an occluder by its opacity
 /// exactly needs the occluder's identity, which depth alone does not carry.
+///
+/// Depth readings lose accuracy with range — measurably, and predictably enough to correct for — so
+/// the threshold that decides "nearer than the vehicle" widens with range
+/// (<see cref="OcclusionOptions.RangeErrorCoefficient"/>). Beyond the depth capture's far plane every
+/// reading saturates and no comparison is possible at all, and those vehicles go unreported.
 /// </summary>
 public sealed class OcclusionEstimator : IDisposable
 {
@@ -71,7 +76,7 @@ public sealed class OcclusionEstimator : IDisposable
 
     private void OnDepthFrame(SensorFrame frame)
     {
-        var depth = DepthFrame.FromSensorFrame(frame);
+        var depth = DepthFrame.FromSensorFrame(frame, _options.MaxRangeMetres);
         if (depth is null) return;
         lock (_ring)
         {
@@ -248,16 +253,24 @@ public sealed class OcclusionEstimator : IDisposable
                 if (!Slab(originZ, dirZ, extent.Z, ref enter, ref exit)) continue;
                 if (exit <= 0.0) continue;                      // the whole vehicle is behind the lens
                 double surface = Math.Max(enter, NearPlaneMetres);
-                // Every reading saturates at the depth camera's far plane, so out there the
+                // Every reading saturates at the greatest range the camera reports, so out there the
                 // comparison below would call any vehicle hidden whatever is really in front of it.
-                // Leave those samples out; a vehicle wholly past the far plane reports nothing.
-                if (surface >= DepthFrame.FarPlaneMetres) continue;
+                // Leave those samples out; a vehicle wholly beyond that range reports nothing.
+                if (surface >= depth.MaxRangeMetres) continue;
 
                 samples++;
                 // Anything the camera sees nearer than the vehicle's leading surface is in front of
                 // it. Everything belonging to the vehicle itself lies past that surface, so its own
                 // bodywork can never be counted here.
-                if (depth.RangeAt(x, y) < surface - options.MarginMetres) hidden++;
+                //
+                // The margin grows with range because a depth reading itself falls short of the true
+                // range by more and more the further out it is measured. Without that term the
+                // vehicle's own surface eventually reads as standing in front of itself, and every
+                // vehicle past about a kilometre reports as fully hidden. Sizing the term from the
+                // vehicle's range rather than the reading's makes it very slightly generous — a
+                // nearer occluder is biased less — which errs towards calling a vehicle visible.
+                double margin = options.MarginMetres + options.RangeErrorCoefficient * surface * surface;
+                if (depth.RangeAt(x, y) < surface - margin) hidden++;
             }
         }
 

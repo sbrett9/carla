@@ -1851,8 +1851,13 @@ class World:
         opts = SensorPlatformOptions(float(fov), cot_type, str(platform_callsign), str(uid),
                                      "sensor.camera.rgb", str(distortion))
         depth_token = None if depth_camera is None else depth_camera._actor.StreamToken
-        occlusion = None if depth_camera is None else OcclusionOptions(
-            float(occlusion_margin_m), int(occlusion_samples))
+        occlusion = None
+        if depth_camera is not None:
+            # Read the range the camera actually encodes over off its own description, rather than
+            # taking it on trust: decoding against a different figure scales every reading silently.
+            max_range_m = float(depth_camera.attributes.get("max_range", 1000.0))
+            occlusion = OcclusionOptions(
+                float(occlusion_margin_m), int(occlusion_samples), max_range_m)
         # Positional through `workers` (0 = default worker count), since the run-identity arguments
         # follow it in the C# signature.
         self._recorder = FrameRecorder(self._client, token, str(record_dir), float(hz),

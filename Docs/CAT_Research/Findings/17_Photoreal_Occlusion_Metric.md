@@ -335,12 +335,67 @@ skips vehicles that have never been established, closing the defect §9 recorded
 nobody fades is established from the start. The same gate is applied on the shim's own telemetry path
 so both agree.
 
-### 12.3 Still open
+### 12.3 What the depth camera actually delivers (measured 2026-08-17)
+
+Measured against known camera-to-ground distances, by parking a nadir depth camera over a road point
+in Town10HD and stepping it up from 50 m to 12 km. Repeated rounds agreed to six decimal places, so
+these are systematic biases, not noise.
+
+| true range | reported | error | relative |
+|---|---|---|---|
+| 500 m | 500.5 | −0.29 m | 0.058 % |
+| 990 m | 989.7 | −1.05 m | 0.106 % |
+| 1 500 m | 1 498.4 | −2.35 m | 0.157 % |
+| 3 000 m | 2 991.5 | −9.27 m | 0.309 % |
+| 6 000 m | 5 964.8 | −35.99 m | 0.600 % |
+| 12 000 m | 11 858.3 | −142.5 m | 1.187 % |
+
+Four findings, each of which changed something:
+
+- **Range readings are biased low by about `1.0e-6 × range²`** — equivalently, short by roughly 0.1 %
+  of the range for every kilometre of range. This is the scene depth buffer, not the encoding: the
+  same geometry gives the same error under two encodings a factor of twenty apart. It matches
+  reversed-Z float depth with a 10 cm near clip (`2⁻²³·z²/near`), so the lever on it is the **near**
+  clip plane, not the far one.
+- **That bias breaks a fixed occlusion margin.** An unoccluded vehicle's own surface reads nearer
+  than the vehicle, so once the bias exceeds the margin every vehicle reports as fully hidden — at
+  about 975 m with a 1 m margin. Fixed by growing the margin with range
+  (`OcclusionOptions.RangeErrorCoefficient`), which is exact for the unoccluded case: the bias term
+  cancels, so a clear view can never read as hidden at any range.
+- **Depth is measured along the optical axis, not radially from the lens.** Rings of pixels at 10°,
+  15°, 20° and 30° off axis over flat ground all read the centre value; radial would have read 3.5 %
+  to 15.5 % longer. This is the convention the projection here and the viewer's picker both assume.
+- **Neither resolution nor field of view affects range precision.** A 16× resolution change and a 7×
+  field-of-view change moved the error by under 0.15 m on a 1.05 m bias, with no trend. They do set
+  pixels-on-target, which is what limits how finely the occlusion fraction can be resolved: at
+  1280×720 and 90°, a 4.5 m vehicle is about 5 px long at 555 m and 3 px at 914 m, so a narrower
+  field of view buys more resolution of the metric than a larger frame does.
+
+The range limit itself turned out to be a **material parameter that already exists** — `Far_1` in both
+`DepthEffectMaterial` and `DepthEffectMaterial_GLSL`, default 100000 (centimetres). Raising it on a
+live sensor was verified to work and to read correctly out to 12 km, with Town10HD's ground still
+rendered at that altitude, so no asset change was needed — only plumbing.
+
+That plumbing is now in: the depth camera carries a **`max_range` attribute** (metres, default 1000)
+which [ADepthCamera](../../../Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Sensor/DepthCamera.cpp)
+hands to `Far_1`. Because the default matches what the material already held, a camera that does not
+ask for anything behaves exactly as before — including the two depth visualisations CARLA ships,
+whose grey ramps are tuned to a 1000 m range and would go dark under a longer one. Consumers read the
+range back off the sensor's own description rather than assuming it, since decoding against a
+different figure scales every reading with nothing to signal it. The viewer asks for 20 km by default
+(`--depth-max-range`), which removes the altitude ceiling for the collection flown here.
+
+### 12.4 Still open
 
 - The **live verification in §10** — park a vehicle behind a building in SF Laurel Heights and sweep
   the camera from clear to blocked — has not been run. The unit tests assert the same monotonic
   0 → 1 behaviour against synthetic depth captures, which checks the arithmetic, not the world.
 - **`margin` and sample density** are defaulted (1 m, 24 across), not tuned against real captures.
+  The range-dependent part of the margin now is measured (§12.3); the fixed part is not.
+- **The camera's near clip plane** is the only lever on range accuracy, roughly linearly (§12.3), and
+  it has not been touched. At 20 km the reported range is short by hundreds of metres — no obstacle to
+  occlusion, where a vehicle and the building hiding it differ in range by far more than that, but not
+  good enough to range with. Deferred until the sidecars show whether anything needs better.
 - **§5.2 differencing**, and with it exact opacity weighting and true visible-region boxes.
 - Whether to also carry per-vehicle **opacity** into the sidecar. It is a "do not train on this"
   signal of the same kind as occlusion, and the recorder now has it, but it is not part of the

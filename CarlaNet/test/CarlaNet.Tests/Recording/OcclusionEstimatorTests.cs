@@ -16,13 +16,14 @@ public class OcclusionEstimatorTests
     private static readonly Transform Boresight =
         new(new Location(0f, 0f, 0f), new Rotation(0f, 0f, 0f));
 
-    private static DepthFrame Capture(Transform pose, Func<int, int, double> rangeAt)
+    private static DepthFrame Capture(Transform pose, Func<int, int, double> rangeAt,
+                                      double maxRangeM = DepthFrame.DefaultMaxRangeMetres)
     {
         var bgra = new byte[Size * Size * 4];
         for (int y = 0; y < Size; y++)
             for (int x = 0; x < Size; x++)
-                DepthFrame.WriteRange(bgra, y * Size + x, rangeAt(x, y));
-        return new DepthFrame(1, 0.0, pose, Size, Size, HFovDeg, bgra);
+                DepthFrame.WriteRange(bgra, y * Size + x, rangeAt(x, y), maxRangeM);
+        return new DepthFrame(1, 0.0, pose, Size, Size, HFovDeg, bgra, maxRangeM);
     }
 
     // A 4 m x 2 m x 1.5 m vehicle — a saloon's bounding box.
@@ -123,14 +124,83 @@ public class OcclusionEstimatorTests
         Assert.Empty(measured);
     }
 
+    // A vehicle far enough away that the depth camera's own range error is several times the base
+    // margin. The camera looks along +X, so every ray that reaches the box enters through its flat
+    // leading face at one range, and a uniform depth image can stand in for "the vehicle itself,
+    // measured with the error a reading at that range carries".
+    private const double DistantRange = 900.0;
+    private const double DistantSurface = DistantRange - 2.0;      // the box's leading face
+    private const double TestErrorCoefficient = 5.0e-6;            // 4.03 m of shortfall out there
+
+    private static DepthFrame CaptureOfVehicleItself(double errorCoefficient) =>
+        Capture(Boresight, (_, _) => DistantSurface - errorCoefficient * DistantSurface * DistantSurface);
+
     [Fact]
-    public void A_Vehicle_Past_The_Depth_Far_Plane_Is_Not_Reported()
+    public void A_Distant_Vehicle_In_Clear_View_Is_Not_Reported_Hidden()
+    {
+        // The regression this guards: with a fixed margin, the depth camera's range error eventually
+        // exceeds it and the vehicle's own surface reads as standing in front of the vehicle, so
+        // every distant vehicle reports as fully hidden with nothing whatever in the way.
+        var options = OcclusionOptions.Default with { RangeErrorCoefficient = TestErrorCoefficient };
+        var occlusion = Measure(CaptureOfVehicleItself(TestErrorCoefficient),
+                                Vehicle(1, DistantRange, 0, 0), options);
+        Assert.Equal(0.0, occlusion.Fraction, 6);
+    }
+
+    [Fact]
+    public void Ignoring_The_Depth_Range_Error_Would_Hide_That_Vehicle()
+    {
+        // The same capture with the range term switched off — the behaviour the fix replaces.
+        var options = OcclusionOptions.Default with { RangeErrorCoefficient = 0.0 };
+        var occlusion = Measure(CaptureOfVehicleItself(TestErrorCoefficient),
+                                Vehicle(1, DistantRange, 0, 0), options);
+        Assert.Equal(1.0, occlusion.Fraction, 6);
+    }
+
+    [Fact]
+    public void A_Distant_Vehicle_Really_Behind_Something_Is_Still_Hidden()
+    {
+        // The widened margin must not blind the test: an occluder well in front still registers.
+        var options = OcclusionOptions.Default with { RangeErrorCoefficient = TestErrorCoefficient };
+        var depth = Capture(Boresight, (_, _) => DistantSurface - 100.0);
+        var occlusion = Measure(depth, Vehicle(1, DistantRange, 0, 0), options);
+        Assert.Equal(1.0, occlusion.Fraction, 6);
+    }
+
+    [Fact]
+    public void The_Range_Term_Is_Negligible_Close_In()
+    {
+        // At bumper ranges the correction is microns, so near-field behaviour is untouched.
+        var vehicle = Vehicle(1, 10, 0, 0);
+        Assert.Equal(0.0, Measure(Capture(Boresight, (_, _) => 7.5), vehicle).Fraction, 6);
+        Assert.Equal(1.0, Measure(Capture(Boresight, (_, _) => 6.5), vehicle).Fraction, 6);
+    }
+
+    [Fact]
+    public void A_Vehicle_Past_The_Cameras_Range_Is_Not_Reported()
     {
         // Out there every reading saturates, so nothing can be told apart; reporting the vehicle as
         // hidden would quietly drop a legitimate distant target from the training set.
         var depth = Capture(Boresight, (_, _) => SkyRange);
-        var vehicle = Vehicle(1, DepthFrame.FarPlaneMetres + 50.0, 0, 0);
+        var vehicle = Vehicle(1, DepthFrame.DefaultMaxRangeMetres + 50.0, 0, 0);
         Assert.Empty(OcclusionEstimator.Estimate(depth, [vehicle], OcclusionOptions.Default));
+    }
+
+    [Fact]
+    public void Raising_The_Cameras_Range_Brings_Distant_Vehicles_Into_Reach()
+    {
+        // The same vehicle the previous test cannot reach, measured by a camera told to report over
+        // twenty kilometres instead of one.
+        const double maxRange = 20000.0;
+        double range = DepthFrame.DefaultMaxRangeMetres + 50.0;
+        var vehicle = Vehicle(1, range, 0, 0);
+        var options = OcclusionOptions.Default with { MaxRangeMetres = maxRange };
+
+        var clear = Capture(Boresight, (_, _) => maxRange, maxRange);
+        Assert.Equal(0.0, Measure(clear, vehicle, options).Fraction, 6);
+
+        var blocked = Capture(Boresight, (_, _) => range / 2.0, maxRange);
+        Assert.Equal(1.0, Measure(blocked, vehicle, options).Fraction, 6);
     }
 
     [Fact]
@@ -168,14 +238,16 @@ public class OcclusionEstimatorTests
     public void Levels_Follow_The_Published_Occlusion_Bands(double fraction, int expected)
         => Assert.Equal(expected, OcclusionEstimator.LevelFor(fraction));
 
-    [Fact]
-    public void Range_Survives_The_Colour_Encoding()
+    [Theory]
+    [InlineData(DepthFrame.DefaultMaxRangeMetres)]
+    [InlineData(20000.0)]
+    public void Range_Survives_The_Colour_Encoding(double maxRangeM)
     {
         var bgra = new byte[4 * 4];
-        double[] ranges = [0.0, 7.5, 123.456, DepthFrame.FarPlaneMetres];
-        for (int i = 0; i < ranges.Length; i++) DepthFrame.WriteRange(bgra, i, ranges[i]);
-        var depth = new DepthFrame(1, 0.0, Boresight, 4, 1, HFovDeg, bgra);
+        double[] ranges = [0.0, 7.5, 123.456, maxRangeM];
+        for (int i = 0; i < ranges.Length; i++) DepthFrame.WriteRange(bgra, i, ranges[i], maxRangeM);
+        var depth = new DepthFrame(1, 0.0, Boresight, 4, 1, HFovDeg, bgra, maxRangeM);
         for (int i = 0; i < ranges.Length; i++)
-            Assert.Equal(ranges[i], depth.RangeAt(i, 0), 3);
+            Assert.Equal(ranges[i], depth.RangeAt(i, 0), 2);
     }
 }

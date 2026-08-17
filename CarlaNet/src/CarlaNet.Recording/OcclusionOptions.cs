@@ -18,10 +18,31 @@ namespace CarlaNet.Recording;
 /// vehicle is bounded regardless of how large it appears; a vehicle smaller than this in pixels is
 /// sampled at every pixel. Higher is smoother and slower.
 /// </param>
-public sealed record OcclusionOptions(double MarginMetres, int SamplesAcross)
+/// <param name="MaxRangeMetres">
+/// The greatest range the depth camera reports, which must be the <c>max_range</c> its actor
+/// description was given. Getting it wrong scales every reading by the ratio between the two, with
+/// nothing to signal it, so it is a constructor parameter rather than optional tuning: whoever
+/// spawned the camera has to say.
+/// </param>
+public sealed record OcclusionOptions(double MarginMetres, int SamplesAcross, double MaxRangeMetres)
 {
-    /// <summary>Settings used when a caller asks for occlusion without tuning it.</summary>
-    public static OcclusionOptions Default { get; } = new(1.0, 24);
+    /// <summary>Settings used when a caller asks for occlusion without tuning it, against a camera
+    /// left at its own default range.</summary>
+    public static OcclusionOptions Default { get; } = new(1.0, 24, DepthFrame.DefaultMaxRangeMetres);
+
+    /// <summary>
+    /// How fast the depth camera's reported range falls short of the true range, as a coefficient on
+    /// the square of that range. The scene's depth buffer holds far more precision near the camera
+    /// than far from it, so a reading is biased low by roughly this much times range squared — about
+    /// 0.1 % of the range for every kilometre of range, which is 0.3 m at 500 m, 1 m at 1 km and 9 m
+    /// at 3 km. Left uncorrected that bias eventually exceeds <see cref="MarginMetres"/> and every
+    /// vehicle reads as hidden, so the margin grows with range by this law.
+    ///
+    /// The default was measured against known camera-to-ground distances from 50 m to 12 km. It is a
+    /// property of the camera's near clip plane rather than a universal constant, so it wants
+    /// re-measuring if that ever changes.
+    /// </summary>
+    public double RangeErrorCoefficient { get; init; } = 1.0e-6;
 
     /// <summary>
     /// How far apart in simulation time a depth capture and the recorded frame may be and still be

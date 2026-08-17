@@ -227,6 +227,18 @@ class CarlaControlArgumentParser:
         view.add_argument("--speed", type=float, default=60.0, help="initial move speed (m/s)")
         view.add_argument("--width", type=int, default=1280)
         view.add_argument("--height", type=int, default=720)
+        view.add_argument(
+            "--depth-max-range",
+            type=float,
+            default=20000.0,
+            help="how far the depth camera can measure, in metres (default 20000). Depth is what "
+            "Ctrl+LMB measures a point with and what tells the recorder whether a vehicle is "
+            "hidden behind something; anything further away than this reads the same as empty "
+            "sky. CARLA's own default of 1000 runs out at about 3250 ft looking straight down, "
+            "and sooner when the camera is tilted. Raising it costs no accuracy worth "
+            "measuring, but accuracy does fall off with distance either way: a reading is short "
+            "by roughly 0.1%% of the distance for every kilometre of distance.",
+        )
 
     def _add_traffic_args(self, ap: argparse.ArgumentParser) -> None:
         """Add staging traffic arguments."""
