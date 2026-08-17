@@ -385,13 +385,59 @@ range back off the sensor's own description rather than assuming it, since decod
 different figure scales every reading with nothing to signal it. The viewer asks for 20 km by default
 (`--depth-max-range`), which removes the altitude ceiling for the collection flown here.
 
-### 12.4 Still open
+### 12.4 Confirmed against real collects (2026-08-17)
 
-- The **live verification in §10** — park a vehicle behind a building in SF Laurel Heights and sweep
-  the camera from clear to blocked — has not been run. The unit tests assert the same monotonic
-  0 → 1 behaviour against synthetic depth captures, which checks the arithmetic, not the world.
+Recorded over the Arapahoe/I-25 world with a scenario running and ambient traffic, which is most of
+the verification §10 asks for — short of deliberately staging a vehicle behind a chosen building.
+
+**It tracks a vehicle through an obstruction.** From a stationary camera at a fixed −20.6°, a scenario
+bus was watched for 25 captures. Occlusion ran 0.89 → 0.00 as it cleared the first obstruction, then
+0.02 → 0.29 → 0.69 → 0.92 → **1.00** → 0.94 → 0.40 → 0.00 through a second, then a brief 0.23 clip,
+then seven consecutive captures at 0.00 in the clear. Nothing steps between 0 and 1: it ramps through
+intermediate values on both entry and exit, which is what an obstruction sweeping across a silhouette
+produces and what a broken measurement would not. The camera never moved, so every bit of that came
+from the vehicle's own motion.
+
+**It tracks viewing geometry.** Two collects over the same world differing only in look angle:
+
+| | shallow (−27°) | steep (−73.7°) |
+|---|---|---|
+| vehicles measured | 42 | 62 |
+| wholly visible | 1 | 55 |
+| effectively invisible | 29 | 0 |
+| median samples per vehicle | 51 | 155 |
+| smallest apparent width | 2 px | 15 px |
+
+Looking across the city, most vehicles are behind something and many are a few pixels across. Looking
+down at the roads, almost nothing occludes and everything is well resolved. That is the physical
+expectation, and it is the reason the metric matters for an airborne collection: the same scene yields
+wildly different usable-label counts depending on where the camera looks.
+
+**Occlusion is per-camera, the track list is not.** Across one collect, 234 vehicle records carried
+104 occlusion annotations; the other 130 vehicles were outside that camera's frame. So each camera's
+sidecar is complete world truth plus that camera's own visibility opinion — which is what a
+multi-camera rig needs, provided a consumer reads the absence of the attribute as "this camera cannot
+say" rather than "not occluded".
+
+**Precision is set by apparent size, and is now self-describing.** Beyond 300 m every reported
+fraction was a simple ratio — a half, a third, a sixth — because a vehicle 1.1 km from a 90° camera is
+about 3 px long and only a handful of samples land on it. Inside 150 m the values are fine-grained.
+That is invisible to anyone reading the fraction alone, so each measured vehicle now also records
+`occlusion_samples` and its apparent size in pixels ([09](09_Telemetry_CoT_Contract.md) §5.1). Both
+were already computed and discarded, so they cost nothing but the bytes. Apparent size is also the
+natural first gate for a training set: a three-pixel vehicle is a poor example whether or not
+something stands in front of it.
+
+### 12.5 Still open
+
+- The **staged half of §10** — park a vehicle behind a chosen building and sweep the camera itself from
+  clear line-of-sight to fully blocked — has not been run. What §12.4 shows is the moving-vehicle,
+  fixed-camera case, which is the same behaviour observed from the other side; a staged sweep would
+  additionally pin down the angle at which a known obstruction starts to bite.
 - **`margin` and sample density** are defaulted (1 m, 24 across), not tuned against real captures.
-  The range-dependent part of the margin now is measured (§12.3); the fixed part is not.
+  The range-dependent part of the margin is measured (§12.3); the fixed part is not.
+- **A minimum apparent size** for a usable training box is not chosen. The data to choose it now rides
+  in the sidecar (§12.4) but nothing acts on it.
 - **The camera's near clip plane** is the only lever on range accuracy, roughly linearly (§12.3), and
   it has not been touched. At 20 km the reported range is short by hundreds of metres — no obstacle to
   occlusion, where a vehicle and the building hiding it differ in range by far more than that, but not
