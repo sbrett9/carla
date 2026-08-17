@@ -217,6 +217,32 @@ public class OcclusionEstimatorTests
     }
 
     [Fact]
+    public void Apparent_Size_Grows_As_A_Vehicle_Comes_Closer()
+    {
+        // Reported so a consumer can tell a well-resolved measurement from a few-pixel guess, and
+        // drop boxes too small to be worth drawing whatever their occlusion says.
+        var depth = Capture(Boresight, (_, _) => SkyRange);
+        var near = Measure(depth, Vehicle(1, 20, 0, 0));
+        var far = Measure(depth, Vehicle(1, 400, 0, 0));
+
+        Assert.True(near.ApparentWidthPx > far.ApparentWidthPx,
+                    $"near {near.ApparentWidthPx}px should exceed far {far.ApparentWidthPx}px");
+        Assert.True(far.ApparentWidthPx > 0);
+        Assert.True(near.ApparentHeightPx > far.ApparentHeightPx);
+        // Apparent size scales with 1/range, so a twentyfold range gives roughly a twentieth the size.
+        Assert.InRange((double)near.ApparentWidthPx / far.ApparentWidthPx, 10.0, 30.0);
+    }
+
+    [Fact]
+    public void A_Distant_Vehicle_Rests_On_Few_Samples()
+    {
+        // The reason a far-off fraction lands on coarse values like a half or a third.
+        var depth = Capture(Boresight, (_, _) => SkyRange);
+        Assert.True(Measure(depth, Vehicle(1, 400, 0, 0)).Samples
+                    < Measure(depth, Vehicle(1, 20, 0, 0)).Samples);
+    }
+
+    [Fact]
     public void Sample_Count_Is_Bounded_By_The_Requested_Density()
     {
         // A vehicle filling the frame must not cost a sample per pixel.

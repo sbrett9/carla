@@ -36,7 +36,8 @@ Same shape ⇒ truth-vs-detection scoring is a direct diff (position error, clas
             length_m="4.5" width_m="2.0" height_m="1.4"
             color="0,0,0" role_name="autopilot"
             vx="11.2" vy="-1.4" vz="0.0"
-            occlusion="0.420" occlusion_level="2"/> <!-- truth extras; WinTAK ignores unknown detail -->
+            occlusion="0.420" occlusion_level="2" occlusion_samples="96"
+            apparent_width_px="48" apparent_height_px="21"/> <!-- truth extras; WinTAK ignores unknown detail -->
   </detail>
 </event>
 ```
@@ -97,6 +98,15 @@ raw `vx`/`vy`/`vz`. (Detection fills what it can: `source="detection"`, confiden
 |---|---|
 | `occlusion` | Fraction of the vehicle's silhouette hidden from **this capture's camera** by anything nearer — photoreal buildings and trees, terrain relief, other vehicles — 0 (wholly visible) to 1 (wholly hidden). |
 | `occlusion_level` | The same value as a coarse band: `0` wholly visible · `1` up to 30 % · `2` 30–60 % · `3` 60–90 % · `4` over 90 % (the bands the amodal-segmentation datasets report against). |
+| `occlusion_samples` | How many points across the vehicle's outline the fraction was measured over. |
+| `apparent_width_px`, `apparent_height_px` | How large the vehicle appears in the frame — its full projected footprint, including any part outside the frame. |
+
+**Read the fraction against the sample count.** A vehicle far enough away to cover a few pixels yields
+a few samples, and can then only report coarse values — a half, a third — however many decimal places
+it is written to. Measured at ~1.1 km with a 90° camera, vehicles are about 3 px long and every
+reported fraction is a simple ratio, where vehicles inside 150 m give fine-grained values. The
+apparent size is also the natural gate for whether a box is worth drawing at all: a three-pixel
+vehicle is a poor training example whether or not anything is in front of it.
 
 Occlusion is **camera-relative** — a property of the (vehicle, sensor) pair, not of the vehicle — so
 it is only emitted in the recorded sidecar, where the frame already carries a sensor pose (16), and

@@ -41,6 +41,22 @@ public sealed record VehicleTelemetry(
     public int OcclusionLevel { get; init; } = -1;
 
     /// <summary>
+    /// How many points across the vehicle's outline the <see cref="Occlusion"/> fraction was measured
+    /// over. Few samples means few possible values: a vehicle covering a handful of pixels can only
+    /// report halves and thirds, however many decimal places the fraction is written to. 0 when
+    /// occlusion was not measured.
+    /// </summary>
+    public int OcclusionSamples { get; init; }
+
+    /// <summary>How wide the vehicle appears in the frame, in pixels — its full projected footprint,
+    /// including any part outside the frame. 0 when occlusion was not measured.</summary>
+    public int ApparentWidthPx { get; init; }
+
+    /// <summary>How tall the vehicle appears in the frame, in pixels. See
+    /// <see cref="ApparentWidthPx"/>.</summary>
+    public int ApparentHeightPx { get; init; }
+
+    /// <summary>
     /// The vehicle's staging opacity: 1 = fully opaque, below 1 = part-way through the dissolve that
     /// fades boundary-aware traffic in and out at the scene edge.
     /// </summary>

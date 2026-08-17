@@ -8,10 +8,14 @@ namespace CarlaNet.Recording;
 /// reports in its own frame. The geometry an occlusion measurement works from.</summary>
 public readonly record struct VehicleBox(ActorId ActorId, Transform ActorTransform, BoundingBox Box);
 
-/// <summary>How much of one vehicle the camera cannot see, and how many silhouette samples that
-/// verdict rests on (a handful of samples on a distant vehicle is a coarser number than a few
-/// hundred on a near one).</summary>
-public readonly record struct VehicleOcclusion(double Fraction, int Level, int Samples);
+/// <summary>How much of one vehicle the camera cannot see, together with what that verdict rests on.
+/// <paramref name="Samples"/> is how many points across the vehicle's outline were tested, and
+/// <paramref name="ApparentWidthPx"/> / <paramref name="ApparentHeightPx"/> how large it appears in
+/// the frame. Both matter for reading the fraction: a vehicle a kilometre away covers a few pixels
+/// and yields a handful of samples, so its fraction can only land on a few coarse values, where a
+/// near one is measured over hundreds.</summary>
+public readonly record struct VehicleOcclusion(
+    double Fraction, int Level, int Samples, int ApparentWidthPx, int ApparentHeightPx);
 
 /// <summary>
 /// Measures, per vehicle and per camera, how much of the vehicle is hidden behind something nearer.
@@ -314,7 +318,11 @@ public sealed class OcclusionEstimator : IDisposable
 
         if (samples == 0) return null;
         double fraction = (double)hidden / samples;
-        return new VehicleOcclusion(fraction, LevelFor(fraction), samples);
+        // Apparent size is the full projected footprint, not the part clipped to the frame, so it
+        // reads as "how big does this vehicle look" rather than "how much of it is on screen".
+        return new VehicleOcclusion(
+            fraction, LevelFor(fraction), samples,
+            (int)Math.Round(maxU - minU), (int)Math.Round(maxV - minV));
     }
 
     /// <summary>

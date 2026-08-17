@@ -26,9 +26,16 @@ public class CotWriterTests
     [Fact]
     public void Measured_Occlusion_Rides_In_The_Truth_Extras()
     {
-        string xml = Write(Saloon() with { Occlusion = 0.42, OcclusionLevel = 2 });
+        string xml = Write(Saloon() with
+        {
+            Occlusion = 0.42, OcclusionLevel = 2,
+            OcclusionSamples = 96, ApparentWidthPx = 48, ApparentHeightPx = 21,
+        });
         Assert.Contains("occlusion=\"0.420\"", xml);
         Assert.Contains("occlusion_level=\"2\"", xml);
+        Assert.Contains("occlusion_samples=\"96\"", xml);
+        Assert.Contains("apparent_width_px=\"48\"", xml);
+        Assert.Contains("apparent_height_px=\"21\"", xml);
     }
 
     [Fact]

@@ -199,7 +199,14 @@ public sealed class FrameRecorder : IDisposable
         var merged = new List<VehicleTelemetry>(recs.Count);
         foreach (var r in recs)
             merged.Add(measured.TryGetValue(r.Id, out var m)
-                ? r with { Occlusion = m.Fraction, OcclusionLevel = m.Level }
+                ? r with
+                {
+                    Occlusion = m.Fraction,
+                    OcclusionLevel = m.Level,
+                    OcclusionSamples = m.Samples,
+                    ApparentWidthPx = m.ApparentWidthPx,
+                    ApparentHeightPx = m.ApparentHeightPx,
+                }
                 : r);
         return merged;
     }
