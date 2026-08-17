@@ -29,6 +29,10 @@ class SensorRig:
 
     FT_PER_M = 3.28084
 
+    # How close to the camera's greatest range a reading has to be before it is treated as having hit
+    # nothing at all. Ten metres of a range that is kilometres long, so it costs nothing real.
+    SATURATION_MARGIN_M = 10.0
+
     def __init__(self, world: carla.World, args):
         """Initialize and spawn RGB and depth cameras.
 
@@ -68,6 +72,18 @@ class SensorRig:
         dbp.set_attribute("image_size_y", str(args.height))
         if dbp.has_attribute("fov"):
             dbp.set_attribute("fov", str(args.fov))
+        # How far the depth camera can report. A surface beyond it is indistinguishable from sky, and
+        # the stock 1000 m runs out at about 3250 ft looking straight down, which is inside the
+        # altitudes flown here. An older server without the attribute keeps its built-in range.
+        self.depth_max_range_m = float(getattr(args, "depth_max_range", 1000.0))
+        if dbp.has_attribute("max_range"):
+            dbp.set_attribute("max_range", str(self.depth_max_range_m))
+        else:
+            self.depth_max_range_m = 1000.0
+            self.logger.warning(
+                "server's depth camera has no max_range attribute; depth is limited to 1000 m "
+                "(rebuild the server to raise it)"
+            )
 
         # Spawn cameras
         tf = self.initial_pose.to_carla_transform()
@@ -165,8 +181,13 @@ class SensorRig:
         return self.initial_pose.copy()
 
     def reset_to_initial_pose(self) -> None:
-        """Reset the camera to its initial pose."""
-        self.camera.set_transform(self.initial_pose.to_carla_transform())
+        """Reset the whole rig to its initial pose.
+
+        Every camera has to move together: measurements that pair the depth camera's frames with the
+        colour camera's are only valid while the two are looking from the same place, and a depth
+        camera left behind at the old pose silently invalidates them.
+        """
+        self.set_transform(self.initial_pose.to_carla_transform())
         self.logger.info(f"reset to initial pose of {self.initial_pose}")
 
     def get_current_transform(self) -> carla.Transform:
@@ -267,11 +288,14 @@ class SensorRig:
         g = float(arr[v, u, 1])
         r = float(arr[v, u, 2])
         normalized = (r + g * 256.0 + b * 65536.0) / (256.0**3 - 1.0)
+        depth_m = normalized * self.depth_max_range_m
 
-        if normalized >= 0.99:
+        # Readings saturate at the camera's greatest range, so sky and anything beyond that range
+        # arrive as the same maximum value. The band that counts as saturated is a fixed distance,
+        # not a fraction of the range: as a fraction it would swallow whole kilometres of real
+        # surface once the range is set high.
+        if depth_m >= self.depth_max_range_m - self.SATURATION_MARGIN_M:
             raise ValueError("no surface (sky)")
-
-        depth_m = normalized * 1000.0
         cp = self._latest_depth["pose"]
         cam_loc = (cp.x, cp.y, cp.z)
         yr = math.radians(cp.yaw)

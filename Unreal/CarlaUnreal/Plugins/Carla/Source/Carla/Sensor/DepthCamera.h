@@ -22,6 +22,8 @@ public:
 
   ADepthCamera(const FObjectInitializer &ObjectInitializer);
 
+  void Set(const FActorDescription &ActorDescription) override;
+
 protected:
 
   void PostPhysTick(UWorld *World, ELevelTick TickType, float DeltaSeconds) override;

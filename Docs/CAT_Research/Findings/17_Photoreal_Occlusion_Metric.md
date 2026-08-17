@@ -1,6 +1,7 @@
 # Photoreal Occlusion Metric — per-vehicle % occlusion under unsegmented Cesium geometry
 
-**Date:** 2026-07-10 · **Status:** PROPOSED (research + design for review; implementation to follow).
+**Date:** 2026-07-10 · **Status:** the depth-based measurement and the arrival gate are BUILT
+(2026-08-17, §12); pixel-exact differencing and the live sweep in §10 are still ahead.
 **Datum:** ellipsoidal WGS84 (HAE), bare-earth referenced — `project_datum_decision`.
 **Relates to:** [09_Telemetry_CoT_Contract.md](09_Telemetry_CoT_Contract.md) (the per-vehicle truth block this
 extends), [16_Sensor_Pose_In_Recordings.md](16_Sensor_Pose_In_Recordings.md) (the camera pose/intrinsics an
@@ -188,6 +189,9 @@ Recommended policy for the YOLO prototype:
 
 ## 8. Recommended phasing
 
+*Step 1 below is built, together with the arrival gate §9 requires ahead of it; see §12 for what
+shipped and where it departed from this plan. Steps 2 and 3 are still ahead.*
+
 1. **Phase 1 — depth-margin point grid in the recorder.** Continuous occlusion fraction + bucket into the
    `_carla` block; gate/tag the drawer. No engine change; reuses the existing depth camera and projection math.
 2. **Phase 2 — amodal/modal instance-seg differencing.** Pixel-exact ground truth and true modal masks; use it
@@ -207,7 +211,8 @@ Recommended policy for the YOLO prototype:
   [VehicleTelemetryService.Compute](../../../CarlaNet/src/CarlaNet.Recording/VehicleTelemetryService.cs) today
   emits a record for **every** `vehicle.*` actor with no fade/interior gate. Implementation: the recorder must
   learn each vehicle's `entered` state — plumbed from SCTMV (the client authority for it) or re-derived from
-  the staging bounds + vehicle position server-side; resolve at build time.
+  the staging bounds + vehicle position server-side; resolve at build time. **Built** — the defect is
+  fixed and the plumbing turned out to be neither of those options; see §12.2.
 - **Translucency counts as partial occlusion, linear in opacity.** An occluder at opacity α contributes **α**
   to the target's occlusion (α=0 → none, α=1 → full); fully-opaque occluders (buildings, trees, *established*
   vehicles) always count fully. In practice a not-yet-entered faded vehicle occluding an established target is
@@ -227,13 +232,14 @@ Recommended policy for the YOLO prototype:
 
 ### Open (implementation tuning, resolve empirically)
 
-- **Self-occlusion handling** — sample only camera-facing OBB faces, or define the amodal denominator from a
-  vehicle-only depth/instance pass.
-- **Sample density and `margin`** vs the 1000 m depth far-plane and pixel quantisation.
+- ~~**Self-occlusion handling**~~ — settled by the build: sampling in image space against the box's ray
+  entry point makes self-occlusion structurally impossible (§12.1).
+- **Sample density and `margin`** vs the 1000 m depth far-plane and pixel quantisation. Defaulted at 24
+  samples across and 1 m; still untuned against real captures.
 - **Per-frame photoreal-toggle cost** under synchronous recording (§5.2) — measure before adopting the two-pass
   method.
-- **Exact plumbing** of `entered` and opacity into the recorder (client push vs server-side snapshot /
-  derivation), per the two resolved decisions.
+- ~~**Exact plumbing** of `entered` and opacity into the recorder~~ — settled by the build: neither client
+  push nor a server snapshot, because the client that issues the fade already holds it (§12.2).
 - **Physical vs bare-earth altitude** for exact projection — the doc-16 §5 caveat applies (pixel-geometry
   reconstruction is done in physical space).
 
@@ -260,3 +266,184 @@ occluded target.
   (arXiv 2012.02107).
 - CARLA dataset-generation tooling with occlusion handling: *CarFree* and *CADET* (Carla Automated Dataset
   Extraction Tool).
+
+## 12. What was built (2026-08-17)
+
+The depth-based measurement (§5.1) and the arrival gate (§9) are implemented and unit-tested; the
+pixel-exact differencing (§5.2) is not. Where the build resolved something this document left open,
+it is recorded here.
+
+### 12.1 The measurement
+
+[OcclusionEstimator](../../../CarlaNet/src/CarlaNet.Recording/OcclusionEstimator.cs) subscribes to a
+depth camera held at the recorded camera's pose, pairs each depth capture with the recorded frame by
+simulation frame number (falling back to simulation time, and refusing the pair outright if the two
+cameras have drifted apart in position or boresight — silently mismeasuring is worse than reporting
+nothing), and measures each vehicle against it.
+
+**The sampling is in image space, not on the box surface.** §5.1 proposed sampling points on the
+camera-facing faces of the oriented bounding box; the built version instead samples a pixel grid over
+the box's projected footprint and intersects each pixel's camera ray with the box. This is the same
+depth-margin test, re-parameterised, and it is better on three counts:
+
+- **Self-occlusion becomes structurally impossible.** The comparison is against the ray's *entry*
+  point into the box, and everything belonging to the vehicle lies between entry and exit, so the
+  vehicle's own bodywork can never read as an occluder. This removes the first open question in §9
+  rather than tuning around it.
+- **It measures the silhouette, not the box.** Rays that miss the box are not sampled, so the
+  denominator is the vehicle's actual projected outline rather than its bounding rectangle — the
+  "box vs silhouette" over-count in §5.1 largely goes away.
+- **The fraction is an area fraction**, uniform in pixels, which is what the amodal literature's
+  ratio-of-occluded-region actually means, so it is directly comparable to the §5.2 upgrade when that
+  arrives.
+
+Sampling density is a step over that footprint chosen to give a set number of samples across the
+longer side (default 24), so cost per vehicle is bounded however large it appears. Levels use the
+KINS bands plus a fifth for the effectively-invisible remainder (§7), and both the fraction and the
+band ride in the `_carla` block — see [09](09_Telemetry_CoT_Contract.md) §5.1.
+
+Occlusion is measured for **telemetered vehicles only**, and only on recorded captures: it is a
+property of the (vehicle, camera) pair, and the live UDP feed has no camera.
+
+**Cost.** The measurement takes its own subscription to the depth camera's stream, so recording with
+occlusion doubles that camera's stream traffic. It is off unless a depth camera is handed to the
+recorder, and `--no-occlusion` turns it off for a run that does not want it.
+
+**Translucency remains the documented approximation** (§9). A mid-fade vehicle occluding another is
+counted as whatever the depth capture shows of it, which depends on how far the dithered dissolve has
+resolved. Exact linear weighting needs the occluder's identity, which depth alone does not carry;
+that is §5.2's to deliver. Per-vehicle opacity is now available to the recorder (below) ready for it.
+
+### 12.2 The arrival gate and per-vehicle opacity
+
+§9 left the plumbing of `entered` and opacity open between "client push" and "server-side snapshot or
+derivation". **Neither: the client already holds the value.** `set_actor_fade` writes straight to
+render state and the server keeps no readable copy, so the client that issued the fade is its only
+holder. [CarlaClient](../../../CarlaNet/src/CarlaNet.Transport/CarlaClient.cs) now records each
+`set_actor_fade` it sends and latches the moment a vehicle first reaches full opacity, exposing
+`GetActorOpacity` and `IsActorEstablished`; the record is dropped when the actor leaves the
+world-observer snapshot, so a recycled actor id never inherits the previous vehicle's arrival state.
+
+This is exact, costs nothing, and needs no engine change — where widening the world-observer packet
+would have added four bytes per actor per tick, forever, to carry a value this very process had just
+sent. Its one assumption is that a single client owns the fades, which is what SCTMV is; a second
+client fading the same vehicles would not be seen.
+
+[VehicleTelemetryService](../../../CarlaNet/src/CarlaNet.Recording/VehicleTelemetryService.cs) then
+skips vehicles that have never been established, closing the defect §9 recorded (a record for every
+`vehicle.*` actor regardless of fade). The gate is inert without staging traffic, since a vehicle
+nobody fades is established from the start. The same gate is applied on the shim's own telemetry path
+so both agree.
+
+### 12.3 What the depth camera actually delivers (measured 2026-08-17)
+
+Measured against known camera-to-ground distances, by parking a nadir depth camera over a road point
+in Town10HD and stepping it up from 50 m to 12 km. Repeated rounds agreed to six decimal places, so
+these are systematic biases, not noise.
+
+| true range | reported | error | relative |
+|---|---|---|---|
+| 500 m | 500.5 | −0.29 m | 0.058 % |
+| 990 m | 989.7 | −1.05 m | 0.106 % |
+| 1 500 m | 1 498.4 | −2.35 m | 0.157 % |
+| 3 000 m | 2 991.5 | −9.27 m | 0.309 % |
+| 6 000 m | 5 964.8 | −35.99 m | 0.600 % |
+| 12 000 m | 11 858.3 | −142.5 m | 1.187 % |
+
+Four findings, each of which changed something:
+
+- **Range readings are biased low by about `1.0e-6 × range²`** — equivalently, short by roughly 0.1 %
+  of the range for every kilometre of range. This is the scene depth buffer, not the encoding: the
+  same geometry gives the same error under two encodings a factor of twenty apart. It matches
+  reversed-Z float depth with a 10 cm near clip (`2⁻²³·z²/near`), so the lever on it is the **near**
+  clip plane, not the far one.
+- **That bias breaks a fixed occlusion margin.** An unoccluded vehicle's own surface reads nearer
+  than the vehicle, so once the bias exceeds the margin every vehicle reports as fully hidden — at
+  about 975 m with a 1 m margin. Fixed by growing the margin with range
+  (`OcclusionOptions.RangeErrorCoefficient`), which is exact for the unoccluded case: the bias term
+  cancels, so a clear view can never read as hidden at any range.
+- **Depth is measured along the optical axis, not radially from the lens.** Rings of pixels at 10°,
+  15°, 20° and 30° off axis over flat ground all read the centre value; radial would have read 3.5 %
+  to 15.5 % longer. This is the convention the projection here and the viewer's picker both assume.
+- **Neither resolution nor field of view affects range precision.** A 16× resolution change and a 7×
+  field-of-view change moved the error by under 0.15 m on a 1.05 m bias, with no trend. They do set
+  pixels-on-target, which is what limits how finely the occlusion fraction can be resolved: at
+  1280×720 and 90°, a 4.5 m vehicle is about 5 px long at 555 m and 3 px at 914 m, so a narrower
+  field of view buys more resolution of the metric than a larger frame does.
+
+The range limit itself turned out to be a **material parameter that already exists** — `Far_1` in both
+`DepthEffectMaterial` and `DepthEffectMaterial_GLSL`, default 100000 (centimetres). Raising it on a
+live sensor was verified to work and to read correctly out to 12 km, with Town10HD's ground still
+rendered at that altitude, so no asset change was needed — only plumbing.
+
+That plumbing is now in: the depth camera carries a **`max_range` attribute** (metres, default 1000)
+which [ADepthCamera](../../../Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Sensor/DepthCamera.cpp)
+hands to `Far_1`. Because the default matches what the material already held, a camera that does not
+ask for anything behaves exactly as before — including the two depth visualisations CARLA ships,
+whose grey ramps are tuned to a 1000 m range and would go dark under a longer one. Consumers read the
+range back off the sensor's own description rather than assuming it, since decoding against a
+different figure scales every reading with nothing to signal it. The viewer asks for 20 km by default
+(`--depth-max-range`), which removes the altitude ceiling for the collection flown here.
+
+### 12.4 Confirmed against real collects (2026-08-17)
+
+Recorded over the Arapahoe/I-25 world with a scenario running and ambient traffic, which is most of
+the verification §10 asks for — short of deliberately staging a vehicle behind a chosen building.
+
+**It tracks a vehicle through an obstruction.** From a stationary camera at a fixed −20.6°, a scenario
+bus was watched for 25 captures. Occlusion ran 0.89 → 0.00 as it cleared the first obstruction, then
+0.02 → 0.29 → 0.69 → 0.92 → **1.00** → 0.94 → 0.40 → 0.00 through a second, then a brief 0.23 clip,
+then seven consecutive captures at 0.00 in the clear. Nothing steps between 0 and 1: it ramps through
+intermediate values on both entry and exit, which is what an obstruction sweeping across a silhouette
+produces and what a broken measurement would not. The camera never moved, so every bit of that came
+from the vehicle's own motion.
+
+**It tracks viewing geometry.** Two collects over the same world differing only in look angle:
+
+| | shallow (−27°) | steep (−73.7°) |
+|---|---|---|
+| vehicles measured | 42 | 62 |
+| wholly visible | 1 | 55 |
+| effectively invisible | 29 | 0 |
+| median samples per vehicle | 51 | 155 |
+| smallest apparent width | 2 px | 15 px |
+
+Looking across the city, most vehicles are behind something and many are a few pixels across. Looking
+down at the roads, almost nothing occludes and everything is well resolved. That is the physical
+expectation, and it is the reason the metric matters for an airborne collection: the same scene yields
+wildly different usable-label counts depending on where the camera looks.
+
+**Occlusion is per-camera, the track list is not.** Across one collect, 234 vehicle records carried
+104 occlusion annotations; the other 130 vehicles were outside that camera's frame. So each camera's
+sidecar is complete world truth plus that camera's own visibility opinion — which is what a
+multi-camera rig needs, provided a consumer reads the absence of the attribute as "this camera cannot
+say" rather than "not occluded".
+
+**Precision is set by apparent size, and is now self-describing.** Beyond 300 m every reported
+fraction was a simple ratio — a half, a third, a sixth — because a vehicle 1.1 km from a 90° camera is
+about 3 px long and only a handful of samples land on it. Inside 150 m the values are fine-grained.
+That is invisible to anyone reading the fraction alone, so each measured vehicle now also records
+`occlusion_samples` and its apparent size in pixels ([09](09_Telemetry_CoT_Contract.md) §5.1). Both
+were already computed and discarded, so they cost nothing but the bytes. Apparent size is also the
+natural first gate for a training set: a three-pixel vehicle is a poor example whether or not
+something stands in front of it.
+
+### 12.5 Still open
+
+- The **staged half of §10** — park a vehicle behind a chosen building and sweep the camera itself from
+  clear line-of-sight to fully blocked — has not been run. What §12.4 shows is the moving-vehicle,
+  fixed-camera case, which is the same behaviour observed from the other side; a staged sweep would
+  additionally pin down the angle at which a known obstruction starts to bite.
+- **`margin` and sample density** are defaulted (1 m, 24 across), not tuned against real captures.
+  The range-dependent part of the margin is measured (§12.3); the fixed part is not.
+- **A minimum apparent size** for a usable training box is not chosen. The data to choose it now rides
+  in the sidecar (§12.4) but nothing acts on it.
+- **The camera's near clip plane** is the only lever on range accuracy, roughly linearly (§12.3), and
+  it has not been touched. At 20 km the reported range is short by hundreds of metres — no obstacle to
+  occlusion, where a vehicle and the building hiding it differ in range by far more than that, but not
+  good enough to range with. Deferred until the sidecars show whether anything needs better.
+- **§5.2 differencing**, and with it exact opacity weighting and true visible-region boxes.
+- Whether to also carry per-vehicle **opacity** into the sidecar. It is a "do not train on this"
+  signal of the same kind as occlusion, and the recorder now has it, but it is not part of the
+  contract yet.
+

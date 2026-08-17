@@ -25,6 +25,7 @@
     <ProjectReference Include="..\..\src\CarlaNet.Transport\CarlaNet.Transport.csproj" />
     <ProjectReference Include="..\..\src\CarlaNet.Sensors\CarlaNet.Sensors.csproj" />
     <ProjectReference Include="..\..\src\CarlaNet.Map\CarlaNet.Map.csproj" />
+    <ProjectReference Include="..\..\src\CarlaNet.Recording\CarlaNet.Recording.csproj" />
     <ProjectReference Include="..\..\src\CarlaNet.Scenario\CarlaNet.Scenario.csproj" />
   </ItemGroup>
 

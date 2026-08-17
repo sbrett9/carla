@@ -171,6 +171,26 @@ public static class CotWriter
             w.WriteAttributeString("vx", F(r.Vx, "0.00"));
             w.WriteAttributeString("vy", F(r.Vy, "0.00"));
             w.WriteAttributeString("vz", F(r.Vz, "0.00"));
+            // How much of this vehicle the camera cannot see, and that fraction as a coarse band, so
+            // a consumer drawing training boxes can drop the hidden ones and label the partials.
+            // Written only when it was measured: an absent attribute means unknown, which is not the
+            // same claim as "nothing is in the way".
+            if (!double.IsNaN(r.Occlusion))
+            {
+                w.WriteAttributeString("occlusion", F(r.Occlusion, "0.000"));
+                w.WriteAttributeString("occlusion_level",
+                                       r.OcclusionLevel.ToString(CultureInfo.InvariantCulture));
+                // What the fraction rests on. A vehicle far enough away to cover a few pixels yields
+                // a few samples, and can then only report coarse values however many decimals it is
+                // written to, so a consumer needs these to know how much to trust it — and to drop
+                // boxes too small to be worth drawing at all, occluded or not.
+                w.WriteAttributeString("occlusion_samples",
+                                       r.OcclusionSamples.ToString(CultureInfo.InvariantCulture));
+                w.WriteAttributeString("apparent_width_px",
+                                       r.ApparentWidthPx.ToString(CultureInfo.InvariantCulture));
+                w.WriteAttributeString("apparent_height_px",
+                                       r.ApparentHeightPx.ToString(CultureInfo.InvariantCulture));
+            }
             w.WriteEndElement(); // _carla
 
             w.WriteEndElement(); // detail

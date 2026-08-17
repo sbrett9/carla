@@ -58,6 +58,14 @@ public sealed class VehicleTelemetryService
             string typeId = meta.Description.Id;
             if (!typeId.StartsWith("vehicle.", StringComparison.Ordinal)) continue;
 
+            // Truth telemetry describes vehicles that are actually in the scene. Boundary-aware
+            // staging traffic spawns a vehicle transparent out in the entry ring and dissolves it in
+            // as it crosses into the interior, so one that has never been fully opaque has not
+            // arrived yet and is deliberately not reported — a half-dissolved car is not something a
+            // sensor should be told is there. Vehicles nobody fades are established from the start,
+            // so this gate is inert unless staging traffic is running.
+            if (!_client.IsActorEstablished(id)) continue;
+
             var snap = _client.GetActorSnapshot(id);
             if (snap is null) continue;
             var loc = snap.Transform.Location;
@@ -93,7 +101,14 @@ public sealed class VehicleTelemetryService
                 Attr(attrs, "color", ""), Attr(attrs, "role_name", ""),
                 geo.Latitude, geo.Longitude, hae, haeDtm,
                 speed, course, vx, vy, vz,
-                2.0 * ext.X, 2.0 * ext.Y, 2.0 * ext.Z));
+                2.0 * ext.X, 2.0 * ext.Y, 2.0 * ext.Z)
+            {
+                Opacity = _client.GetActorOpacity(id),
+                // Carried alongside the truth so anything measuring against the imagery — occlusion,
+                // a projected bounding box — works from the same pose this record was built from.
+                ActorTransform = snap.Transform,
+                BoundingBox = meta.BoundingBox,
+            });
         }
         // Drop cached descriptions for actors no longer present so this cache tracks the live world too
         // (ids come from the world-observer snapshot, which now evicts destroyed actors).
