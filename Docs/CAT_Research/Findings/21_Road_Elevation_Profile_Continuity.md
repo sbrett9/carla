@@ -1,0 +1,502 @@
+# Road Elevation Profile Continuity — faceted road surfaces from a slope-discontinuous vertical fit
+
+**Date:** 2026-08-17 · **Status:** measured and specified; no production code changed yet. Tracked as
+[sbrett9/carla#29](https://github.com/sbrett9/carla/issues/29), worked on branch
+`feature/JNI-347-road-mesh-elevation-profile-continuity`.
+**Datum:** ellipsoidal WGS84 (HAE) throughout — `project_datum_decision`. Nothing here changes the
+datum or the height source; this is entirely about how an already-sampled height series is turned into
+OpenDRIVE records.
+**Relates to:** [04_DynamicWorld_DataPipeline.md](04_DynamicWorld_DataPipeline.md) (§2a defines the
+record; §4c is where the linear fit was chosen and the cubic deferred),
+[06_Elevation_Strategy.md](06_Elevation_Strategy.md) (§10 grade separation — the `Raised` samples this
+work must not smear), [02_CARLA_OSM_MapGen.md](02_CARLA_OSM_MapGen.md),
+[08_Layer_Architecture.md](08_Layer_Architecture.md).
+**Code:** `CarlaNet.Map/OpenDrive/ElevationInjector.cs`, `CarlaNet.Transport/CarlaClient.cs`,
+`LibCarla/source/carla/road/{Road,Lane,Map}.cpp`, `LibCarla/source/carla/road/MeshFactory.cpp`.
+
+---
+
+## 1. The defect
+
+Roads in generated digital-twin worlds are visibly **faceted in the vertical direction**: the surface
+reads as a chain of flat panels with a crease at every sample boundary rather than a continuous grade.
+
+The cause is neither the road mesh nor the plan-view geometry. It is the `<elevationProfile>` that
+`ElevationInjector` writes. Every record is emitted as a straight ramp (`c=0, d=0`), so the vertical
+profile is **C0 continuous but C1 discontinuous** — the height is exact at every sample and the slope
+steps at every one of them. The mesh is tessellated at `vertex_distance = 2.0 m` against samples `10 m`
+apart, so it faithfully reproduces all five facets of each slope break.
+
+Two structural errors compound it, and neither is fixed by a better intra-road fit: short connector
+roads inside junctions sample their heights independently of the roads they join, and the two
+opposing-direction roads that OSM encodes for a single street are sampled and fitted independently of
+each other.
+
+## 2. What the record is, and who reads it
+
+`<elevationProfile>` holds one or more `<elevation s a b c d>` records, each a cubic in the distance
+along the road from that record's own start station:
+
+```
+z(ds) = a + b·ds + c·ds² + d·ds³        ds = s − record_s
+```
+
+Two of the four terms are being discarded.
+
+The profile has exactly one evaluation chokepoint, `Road::GetDirectedPointIn`
+(`LibCarla/source/carla/road/Road.cpp:184-204`), which sets both the height and the pitch:
+
+```cpp
+const auto elevation_info = GetElevationOn(s);
+p.location.z = static_cast<float>(elevation_info.Evaluate(s));
+p.pitch      = elevation_info.Tangent(s);
+```
+
+Everything downstream inherits from it:
+
+- **Road mesh vertices** — `MeshFactory.cpp:891, 991` build lane geometry from
+  `road.GetDirectedPointIn(s_current)`.
+- **Waypoint z and pitch** — `Lane::ComputeTransform` (`Lane.cpp:180`, also `:245`) calls the same
+  function, so the traffic manager's path, spawn placement, and per-vehicle telemetry truth all follow
+  the same curve the mesh does.
+
+That single shared chokepoint is why this is worth fixing at the profile and nowhere else: it is the
+only representation both the rendered surface and the driven path read.
+
+> Correction to [04_DynamicWorld_DataPipeline.md](04_DynamicWorld_DataPipeline.md) §2b, which states
+> that `MeshFactory` inspects the elevation `c`/`d` coefficients to decide flatness (cited there as
+> `MeshFactory.cpp:88-93`). No such check exists in this tree — searching `MeshFactory.cpp` for
+> "elevation" returns nothing. The mesh path reaches elevation only through `GetDirectedPointIn`.
+> Emitting non-zero `c`/`d` therefore changes vertex heights and nothing else; there is no flatness
+> fast-path to fall out of.
+
+## 3. Measured baseline
+
+All figures below were measured on branch tip `f08869292` by parsing the ten already-generated maps in
+`Build/sumo-smoketest/*_elevated.xodr` — read-only, no server, no editor. The method is stated with
+each table so the numbers can be reproduced or contradicted.
+
+### 3.1 Census of emitted records
+
+Counting `<elevation>` records and their coefficients, roads carrying a profile, and the plan-view
+geometry primitives:
+
+| map | records | `c≠0` | `d≠0` | roads | >2 records | last record `b=0` | line/arc/paramPoly3 |
+|---|---:|---:|---:|---:|---:|---:|---|
+| Arapahoe_I25 | 5,431 | 0 | 0 | 1,053 | 664 | 1,053 | 714/0/1,865 |
+| Bellvue_Overpass | 1,195 | 0 | 0 | 43 | 29 | 43 | 49/0/125 |
+| East56th | 90 | 0 | 0 | 18 | 12 | 18 | 6/0/12 |
+| GalleyRoad | 2,248 | 0 | 0 | 416 | 300 | 416 | 240/0/550 |
+| Gardnerville_Centerville_Lane | 1,675 | 0 | 0 | 213 | 158 | 213 | 124/0/337 |
+| IRAN | 6,322 | 0 | 0 | 1,795 | 1,218 | 1,795 | 932/0/1,860 |
+| Iran_Route_96 | 1,652 | 0 | 0 | 50 | 44 | 50 | 142/0/214 |
+| Lakeview_Carson | 3,328 | 0 | 0 | 329 | 245 | 329 | 462/0/1,374 |
+| SF_LaurelHeights | 2,239 | 0 | 0 | 498 | 373 | 498 | 247/0/512 |
+| wrigley | 10,130 | 0 | 0 | 2,785 | 768 | 2,785 | 1,765/0/1,925 |
+| **total** | **34,310** | **0** | **0** | **7,200** | **3,811** | **7,200 (100%)** | **4,681/0/8,774** |
+
+Three things follow directly.
+
+**The quadratic and cubic terms are never used.** Not once in 34,310 records.
+
+**Every road ends dead-flat.** All 7,200 of them. The fitting loop derives `b` from the *next* sample
+(`ElevationInjector.cs:199-205`), so the last record has no `i+1` and keeps its initialised `b = 0`.
+Each road therefore arrives at its successor carrying zero grade regardless of the grade it was
+actually on.
+
+**Plan-view geometry is already smooth and is not part of this defect.** Zero `<arc>` records;
+`paramPoly3` outnumbers `line` by 8,774 to 4,681. netconvert's
+`--opendrive-output.straight-threshold` default of `1e-08` degrees already emits a parameterised curve
+for essentially every bend. There is no horizontal smoothing left on the table.
+
+> These totals corroborate the independent census recorded in issue #29, which covered nine maps
+> before `East56th` was generated. Subtracting `East56th` from the table above gives 34,220 records,
+> 7,182 roads, 3,799 with more than two records, 7,182 ending `b=0`, and 4,675/0/8,762 plan-view
+> primitives — matching the issue exactly on every figure.
+
+### 3.2 Slope discontinuity at internal record boundaries
+
+At each internal boundary, the step between the incoming record's tangent evaluated at the boundary
+station and the outgoing record's `b`:
+
+```
+|b[i] − (b[i−1] + 2·c[i−1]·h + 3·d[i−1]·h²)|      h = s[i] − s[i−1]
+```
+
+which under the present fit reduces to `|b[i] − b[i−1]|`. Slope is dimensionless (rise/run), so 0.02
+is a 2 % grade step.
+
+| map | boundaries | median | p90 | p99 | max | fraction > 0.02 |
+|---|---:|---:|---:|---:|---:|---:|
+| Arapahoe_I25 | 4,378 | 0.0100 | 0.0482 | 0.1447 | 0.345 | 29.8 % |
+| Bellvue_Overpass | 1,152 | 0.0073 | 0.0272 | 0.0684 | 0.122 | 17.4 % |
+| East56th | 72 | 0.0024 | 0.0122 | 0.0158 | 0.018 | 0.0 % |
+| GalleyRoad | 1,832 | 0.0108 | 0.0643 | 0.3794 | 0.684 | 34.8 % |
+| Gardnerville_Centerville_Lane | 1,462 | 0.0107 | 0.0355 | 0.0636 | 0.088 | 27.4 % |
+| IRAN | 4,527 | 0.0087 | 0.0281 | 0.0813 | 0.717 | 19.6 % |
+| Iran_Route_96 | 1,602 | 0.0056 | 0.0287 | 0.3657 | 0.581 | 14.1 % |
+| Lakeview_Carson | 2,999 | 0.0116 | 0.0463 | 0.1159 | 0.238 | 31.3 % |
+| SF_LaurelHeights | 1,741 | 0.0149 | 0.0575 | 0.1382 | 0.256 | 40.8 % |
+| wrigley | 7,345 | 0.0140 | 0.7690 | 2.2115 | 52.61 | 41.0 % |
+| **all** | **27,110** | **0.0105** | **0.0754** | **1.2957** | **52.61** | **30.7 %** |
+
+The corresponding **height** step at the same boundaries — `|a[i] − (a[i−1] + b[i−1]·h + …)|` — has a
+maximum of `1.8e-15 m` across all ten maps. C0 continuity is exact to floating point. The defect is
+purely C1, which is what makes it a fitting problem rather than a sampling or bookkeeping one.
+
+`wrigley` (dense urban Chicago) is the noise-dominated case: 1,111 of its 7,345 boundaries exceed a
+0.5 slope step, and those have a **median span of 10.00 m on roads of median length 89.8 m** — they
+are ordinary full-step spans, not degenerate stubs. Its extreme tail (52.61) is separately explained
+by sub-metre roads: the worst offenders are 0.20 m-long roads carrying two records. Both classes are
+real and want different treatment — the first wants filtering (§7), the second wants the short-road
+handling in §8 and §9.
+
+### 3.3 Height and slope mismatch across road-to-road links
+
+For every `<link>` `predecessor`/`successor` with `elementType="road"`, each road's fitted profile is
+evaluated at its own contact station and compared with the neighbour's at the station named by
+`contactPoint`. Travel direction reverses when two roads meet end-to-end or start-to-start, so the
+neighbour's tangent is negated in those cases before comparison.
+
+| map | links | \|dz\| median | \|dz\| p90 | \|dz\| max | slope median | slope p90 | slope max | slope > 0.02 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Arapahoe_I25 | 1,464 | 0.0000 | 0.124 | 2.359 | 0.0187 | 0.0501 | 0.323 | 47.6 % |
+| Bellvue_Overpass | 54 | 0.0000 | 0.040 | 0.111 | 0.0153 | 0.0370 | 0.095 | 29.6 % |
+| East56th | 24 | 0.0068 | 0.087 | 0.183 | 0.0068 | 0.0159 | 0.017 | 0.0 % |
+| GalleyRoad | 620 | 0.0001 | 0.143 | 2.906 | 0.0254 | 0.1004 | 0.635 | 55.6 % |
+| Gardnerville_Centerville_Lane | 316 | 0.0000 | 0.094 | 0.404 | 0.0125 | 0.0417 | 0.079 | 32.9 % |
+| IRAN | 2,526 | 0.0000 | 0.060 | 1.856 | 0.0098 | 0.0294 | 0.468 | 21.0 % |
+| Iran_Route_96 | 58 | 0.0000 | 0.029 | 0.191 | 0.0193 | 0.0593 | 0.306 | 48.3 % |
+| Lakeview_Carson | 488 | 0.0003 | 0.344 | 1.197 | 0.0534 | 0.1119 | 0.237 | 78.7 % |
+| SF_LaurelHeights | 746 | 0.0000 | 0.073 | 0.586 | 0.0160 | 0.0618 | 0.139 | 41.8 % |
+| wrigley | 2,956 | 0.0000 | 0.152 | 19.54 | 0.0124 | 0.6185 | 33.33 | 37.1 % |
+
+Heights across links largely agree — both roads sample the same plan position, so the median `dz` is
+0.0000 m nearly everywhere — but the tails are real and map-dependent, reaching 1.20 m on
+Lakeview_Carson and 2.9 m on GalleyRoad. **Slope is the dominant failure**: mismatched beyond 0.02 on
+21-79 % of links on every map with relief.
+
+This table reproduces the corresponding measurement in issue #29 to three decimals on both maps it
+reported (Iran_Route_96: 58 links, max `dz` 0.191, max slope 0.306, 48 %; Lakeview_Carson: 488 links,
+`dz` p90 0.344 / max 1.197, slope p90 0.112 / max 0.238, 79 %), which were measured independently.
+
+### 3.4 Junction connector grades
+
+Grades implied between consecutive records on roads with `junction != -1`:
+
+| map | connector roads | spans | > 15 % | > 25 % | worst | median road length |
+|---|---:|---:|---:|---:|---:|---:|
+| Arapahoe_I25 | 732 | 1,279 | 6 | 1 | 32.3 % | 10.68 m |
+| Bellvue_Overpass | 27 | 54 | 0 | 0 | 9.5 % | 10.13 m |
+| East56th | 12 | 18 | 0 | 0 | 1.5 % | 11.92 m |
+| GalleyRoad | 310 | 512 | 30 | 13 | 55.1 % | 11.94 m |
+| Gardnerville_Centerville_Lane | 158 | 263 | 0 | 0 | 7.9 % | 11.94 m |
+| IRAN | 1,263 | 2,096 | 9 | 6 | 67.9 % | 11.99 m |
+| Iran_Route_96 | 29 | 62 | 1 | 1 | 30.6 % | 16.74 m |
+| Lakeview_Carson | 244 | 417 | 6 | 0 | 23.7 % | 12.02 m |
+| SF_LaurelHeights | 373 | 687 | 0 | 0 | 13.6 % | 11.98 m |
+| wrigley | 1,478 | 1,713 | 322 | 304 | 763 % | 9.65 m |
+
+These are **sampled terrain heights, not fitting artifacts** — a C1 fit will round the creases either
+side of them and leave the ramp itself standing at full height. A 30 % grade over ten metres is not a
+road, and 763 % is not a surface at all.
+
+`Iran_Route_96` (62 spans, one above 15 %, worst 30.6 %) and `Lakeview_Carson` (417 spans, six above
+15 %, worst 23.7 %) match issue #29 exactly.
+
+### 3.5 Terminal-span geometry
+
+`StationsAlong` (`ElevationInjector.cs:86-93`) yields `0, step, 2·step, …` strictly below the road
+length, then **exactly `length`**. The final span is therefore a remainder of whatever the road length
+leaves over, not a full step:
+
+| quantity | value |
+|---|---|
+| roads measured | 7,200 |
+| terminal span, median | 4.99 m |
+| terminal span, p10 | 0.94 m |
+| terminal span, min | 0.0063 m |
+| terminal spans under 1 m | 10.3 % |
+| terminal spans under 0.1 m | 0.4 % |
+| **terminal spans implying a grade above 15 %** | **585 of 7,200 (8.1 %)** |
+
+A full step's worth of sampling noise divided by a centimetre-scale remainder produces an arbitrarily
+large apparent grade. Today that grade is discarded (the last record's `b` is forced to 0), so the
+error is currently latent — but any fix that starts honouring the terminal tangent inherits it. The
+terminal span must be handled explicitly, not merely included in the fit.
+
+## 4. Causes, in impact order
+
+1. **Slope discontinuity at every sample boundary.** `BuildElevationProfile`
+   (`ElevationInjector.cs:191-213`) hardcodes `c=0, d=0`. Each span is an independent straight ramp
+   with no tangent agreement at either end. Measured at §3.2: 30.7 % of boundaries step more than 2 %
+   grade, median step 1.05 %.
+
+2. **Every road ends dead-flat.** 7,200 of 7,200 (§3.1). Guarantees a kink at every junction
+   independent of the terrain.
+
+3. **Slope is discontinuous across roads; height mostly is not.** §3.3 — slope mismatched on 21-79 %
+   of links, heights agreeing at the median but with a 0.2-2.9 m tail.
+
+4. **Junction connectors sample their heights independently.** §3.4 — two connectors leaving one node
+   can disagree by metres over ten metres of length. Short connectors are also structurally immune to
+   `RejectOutliers` (`ElevationInjector.cs:281-305`), which needs a valid neighbour on **both** sides
+   and so can never bracket anything on a two-record road.
+
+5. **Opposing carriageways of one street are fitted independently.** OSM encodes each direction as its
+   own way, so netconvert emits two `<road>` records on a coincident reference line — the reason the
+   OSM mesh defaults set `wall_height = 0` (`CarlaNet/python/carlanet/__init__.py:469-475`).
+   `ElevationInjector` treats them as unrelated: separate sample series, separate outlier rejection,
+   separate fits, on 10 m grids whose stations land at *different physical points* because
+   `s_left = length − s_right` is generally not a multiple of the step. On a 39 % grade a 5 m station
+   offset is 2 m of height. Issue #29 measured the consequence on `Iran_Route_96` roads 180/199 — two
+   2,303.05 m roads whose reference lines are coincident to 0.000 m at all 461 compared stations:
+   median `|dz|` 0.008 m, p90 0.091 m, **max 1.201 m**, 6 % of stations above 0.25 m, and **242
+   crossovers** where the two halves of one carriageway swap which is on top.
+
+6. **Unfiltered photogrammetry noise.** `RejectOutliers` removes only isolated spikes beyond 4 m from
+   both neighbours (default `outlierThresholdMeters = 4.0`, `ElevationInjector.cs:139`). Everything
+   below that enters the profile as a genuine-looking slope change. There is no low-pass filter
+   anywhere in the chain. §3.2's `wrigley` result — 1,111 boundaries stepping more than 0.5 slope on
+   ordinary 10 m spans — is this cause, not the fit.
+
+## 5. Why the existing junction mesh smoothing does not cover this
+
+`Map::GenerateChunkedMesh` (`Map.cpp:1117-1200`) — the path OpenDRIVE world generation actually takes —
+already smooths junctions when `smooth_junctions` is set, which the OSM mesh defaults do set
+(`carlanet/__init__.py:469-475`). `MeshFactory::MergeAndSmooth` (`MeshFactory.cpp:1098-1131`) runs
+**100 iterations of weighted Laplacian z-smoothing (λ = 0.5)** over junction lane-mesh vertices.
+
+Its scope is narrow in two ways that matter here, both read from `GetVertexNeighborhoodAndWeights`
+(`MeshFactory.cpp:1050-1096`):
+
+- The r-tree contains **only the junction's own connector lane meshes**. Approach roads are not in the
+  neighbourhood, so the smoothing cannot carry slope across the junction boundary.
+- Only interior vertices are moved (`i > 2 && i < n-2`); the first and last two vertices of each lane
+  mesh are pinned. The junction's boundary heights are held exactly where the profile put them, so a
+  connector spanning a 3 m height error still spans it — the error is redistributed along the
+  connector, not removed.
+
+There is a further consequence worth stating explicitly, because it is not recorded anywhere else:
+**this smoothing moves mesh vertices only, never the profile.** Waypoint z inside a junction still
+comes from the raw cubic via `Lane::ComputeTransform` → `GetDirectedPointIn` (§2). Wherever the
+Laplacian moves a junction vertex, the rendered surface and the driven path disagree by that amount.
+Vehicles crossing a junction are placed against a curve that is not the surface they are drawn on.
+Correcting the profile fixes both consumers at once; leaning harder on mesh smoothing would widen the
+gap between them. The size of that gap has not been measured — it needs the built mesh, so it is a
+runtime measurement, not an offline one.
+
+## 6. Monotone cubic Hermite fit
+
+Add a fit mode that emits real `c` and `d` from a **monotone cubic Hermite interpolant with
+Fritsch-Carlson tangent limiting** (PCHIP). Keep `PiecewiseConstant` and `PiecewiseLinear` intact and
+selectable; name the new member for what it does.
+
+**Monotone specifically, not a natural cubic spline.** A natural spline solves a global tridiagonal
+system for C2 continuity and is free to overshoot between knots; on a noisy real-world height series
+it invents humps and dips that were never sampled. On a road surface an invented 30 cm hump reads
+worse than the polyline it replaced, and it would also corrupt the bare-earth telemetry truth derived
+from the same profile. Fritsch-Carlson limiting guarantees the interpolant stays within the bracketing
+sample values on monotone runs, at the cost of dropping to C1 rather than C2 — which is exactly the
+continuity class the defect calls for.
+
+Per road, with samples `(s_i, z_i)`, spans `h_i = s_{i+1} − s_i` and secants
+`Δ_i = (z_{i+1} − z_i)/h_i`:
+
+1. Initial tangents `m_i` from the weighted three-point difference (one-sided at the ends).
+2. Wherever `Δ_i = 0`, force `m_i = m_{i+1} = 0` — a flat run stays flat.
+3. Wherever `sign(m_i) ≠ sign(Δ_i)`, force `m_i = 0` — no reversal against the local secant.
+4. Limit: with `α = m_i/Δ_i`, `β = m_{i+1}/Δ_i`, if `α² + β² > 9` scale both by `τ = 3/√(α² + β²)`.
+
+Then each span emits one record keyed at `s_i`:
+
+```
+a = z_i
+b = m_i
+c = (3·Δ_i − 2·m_i − m_{i+1}) / h_i
+d = (m_i + m_{i+1} − 2·Δ_i) / h_i²
+```
+
+This reproduces `z_i` and `z_{i+1}` exactly and matches tangents at both ends, so the slope step at
+every internal boundary becomes zero by construction rather than by tolerance. CARLA evaluates with
+`ds = s − record_s` (§2), which is the same convention these coefficients are written in, so no
+station shifting is required beyond what `CubicPolynomial.Set(a,b,c,d,s)` already does.
+
+Degenerate spans need explicit handling: an `h_i` below a floor (the 6 mm terminal spans of §3.5)
+makes `c` and `d` numerically explosive. Merge or drop such a station rather than fitting through it.
+
+## 7. Noise filtering before the fit
+
+Low-pass each road's z series before fitting — Savitzky-Golay, or robust LOESS where the extra cost is
+justified. The fit removes creases; it does not remove the noise that created them, and §3.2's
+`wrigley` result shows the noise alone is large enough to matter on ordinary spans.
+
+Constraints:
+
+- **Must not smooth across `Raised` runs.** The `Raised` flag marks heights deliberately routed to the
+  photoreal surface by `GradeSeparation` (bridge decks — [06](06_Elevation_Strategy.md) §10). Those
+  samples are already exempt from outlier rejection (`ElevationInjector.cs:292`) and must be exempt
+  here too. Anchor the filter at the boundaries of a raised run and filter each side independently: a
+  deck transition is a real step, not noise. Smearing a deck back into the road beneath it is
+  precisely the defect the layer routing exists to prevent.
+- **Must not smooth across genuine grade breaks at road ends.** A road end is a boundary condition,
+  not an interior point.
+- **Strength is a parameter with a conservative default**, and the probe (§14) reports what each
+  setting does to deviation-from-samples, so the smoothing/fidelity trade-off is visible rather than
+  assumed. Filtering necessarily moves the curve off the sampled points; how far is a decision, and it
+  needs a number attached.
+
+## 8. Road-end tangents and junction slope continuity
+
+Resolve one height per shared node so incident roads agree, and set endpoint tangents so slope carries
+through the junction rather than resetting.
+
+The `b = 0`-on-last-record bug (§3.1, cause 2) is fixed as part of this: the final record needs a real
+tangent derived from the incoming grade. §3.5 is the trap — the terminal span is a short remainder,
+and 8.1 % of them imply a grade above 15 %. Deriving the terminal tangent from that span alone
+substitutes one artificial number for another. Derive it from the road's approach grade over a
+distance comparable to the sample step, and treat the terminal station as a point the curve must pass
+through rather than a span to take a slope from.
+
+The failure mode is corroborated from an unrelated toolchain: the community CARLA map-building notes
+at `thillRobot/carla_simulator/docs/maps.md` describe hitting it via RoadRunner and having to rebuild
+maneuver roads by hand. It is a known class of defect in OpenDRIVE map production, worth fixing
+explicitly rather than hoping a better intra-road fit conceals it.
+
+## 9. Junction connector height sourcing
+
+A connector inside a junction should take its heights from a surface consistent with the junction it
+belongs to and the roads it links, rather than sampling independently. Two connectors leaving one node
+must not disagree by metres (§3.4).
+
+Constrain a connector's profile to interpolate between its resolved endpoint heights when its own
+samples imply a grade the linked roads do not carry. Note that outlier rejection cannot help here:
+`RejectOutliers` needs a valid neighbour on both sides, and a two-record road has no interior point.
+Sub-metre connector roads (§3.2, the 0.20 m roads behind `wrigley`'s extreme tail) should carry a
+single record at the resolved node height rather than a fitted ramp.
+
+## 10. Paired carriageway height agreement
+
+Detect opposing-direction road pairs — equal length, coincident reference line, headings opposite at
+matched stations — and give the pair **one shared height series** rather than two independent ones.
+Sampling once and evaluating both roads' profiles from it removes the station-offset error at its
+source (cause 5) and costs no extra Cesium round-trips; it halves them for these roads. Each road
+keeps its own `<elevation>` records — only the underlying heights are shared.
+
+Detection is cheap and safe to gate on strict agreement: issue #29's measurement found roads 180/199
+coincident to 0.000 m at all 461 compared stations, so a tight coincidence tolerance will not produce
+false pairs.
+
+## 11. Sample density, and only after the above
+
+With the fit and the filter in place, evaluate reducing `--step` (`CarlaNet/python/SCTMV.py:228`,
+`sample_step_meters` default 10.0, `CarlaNet/python/carlanet/__init__.py:2228`).
+
+Reducing it *before* §6 and §7 makes things strictly worse: more samples under a linear fit means more
+noise-driven slope breaks per metre, and §3.2 shows the noise is already the larger term on the worst
+maps. Sampling is a Cesium round-trip and dominates build time, so measure the cost against the
+measured improvement rather than assuming it helps.
+
+## 12. Netconvert flags — real but secondary
+
+Cheap to test via `OsmConversionOptions.ExtraArgs` with no rebuild; the effective argument list is
+built in `CarlaNet/src/CarlaNet.Map/OsmConverter.cs:222-288` and `SCTMV.py` appends the drivable-road
+filter. Small next to §6-§10, but worth trying:
+
+- `--geometry.min-dist 1.0` (default `-1`, off) — drops near-duplicate OSM geometry points that create
+  micro-kinks. Most relevant of the set.
+- `--junctions.internal-link-detail 10` (default `5`) — smoother s-curves through intersections.
+- `--geometry.min-radius.fix` (default off; `min-radius` 9 m) — straightens hairpin artifacts from OSM
+  node noise.
+
+Already at useful defaults, leave alone: `--geometry.max-grade.fix` (true), `--junctions.corner-detail`
+(5), `--opendrive-output.straight-threshold` (1e-08).
+
+**Do not add `--osm.elevation` or `--osm.layer-elevation`.** Those are OSM-tag and DEM elevation
+heuristics that would fight both the Cesium sampling and the `GradeSeparation` layer routing. Our
+elevation source is better for this application.
+
+## 13. Out of scope
+
+- **Triangular holes in the generated road mesh** — tracked separately in
+  [sbrett9/carla#30](https://github.com/sbrett9/carla/issues/30), and measured there as not
+  attributable to the `.xodr`.
+- **Removing the wash crossing at `Iran_Route_96` 27.0705587, 55.9590512.** The 5.7 m dip is real
+  sampled terrain. A monotone fit rounds its creases and keeps the descent, which is correct unless
+  the road actually crosses on a causeway or culvert — a layer-routing question for `GradeSeparation`,
+  not a fitting one.
+- **Merging a junction into a single mesh.** The surfaces at a junction are genuine separate `<road>`
+  records; netconvert emits connectors as roads and CARLA meshes each road separately. This work makes
+  the pieces agree in height and slope where they meet; it does not stitch them.
+- **Horizontal/plan-view geometry** — measured as already smooth (§3.1).
+- **The `CarlaTools` Digital Twin tool.** Its OSM→xodr link is a dead stub
+  (`CustomFileDownloader.cpp:72`, `HAS_OSM2ODR` never defined), and it is an editor-time map baker,
+  architecturally at odds with headless runtime generation.
+- **Changing `vertex_distance` (2.0 m).** The mesh faithfully reproduces a jagged input; coarsening it
+  would hide the symptom and lose road-surface fidelity.
+
+## 14. Work order
+
+Later items depend on earlier ones being validated, so the order is load-bearing.
+
+1. **Offline probe** — read-only, no server, no editor; precedent
+   `CarlaNet/python/probe_grade_separation.py`. Reads an existing `*_elevated.xodr`, recovers each
+   road's `(s, z)` series from the `a` attributes (which are the sampled heights), re-fits with a
+   candidate scheme, and reports: slope discontinuity distribution at internal boundaries; max/RMS
+   deviation of the fitted curve from the samples; overshoot outside bracketing sample values on
+   monotone runs; endpoint height and slope mismatch across links; connector grades against the roads
+   they link; paired-carriageway disagreement with crossover count; and a locate-by-lat/lon mode so a
+   surface reported from a running session can be tied to road ids without loading the map. The
+   measurements in §3 are the control it must reproduce.
+2. **Monotone cubic Hermite fit mode** (§6).
+3. **Pre-fit low-pass filter** (§7).
+4. **Road-end tangents and junction slope continuity** (§8).
+5. **Junction connector height sourcing** (§9).
+6. **Paired carriageway height agreement** (§10).
+7. **Sample density evaluation** (§11).
+8. **Netconvert flag trial** (§12).
+
+## 15. Acceptance criteria
+
+Each reported with the measured number, not a claim. Baselines are §3.
+
+| # | criterion | baseline |
+|---|---|---|
+| 1 | Zero `<elevation>` records with both `c=0` and `d=0` on any road carrying more than two samples | 3,811 such roads, 100 % linear |
+| 2 | Slope discontinuity at internal boundaries below a stated epsilon, with the before/after distribution | median 0.0105, p90 0.0754, 30.7 % above 0.02 |
+| 3 | Zero overshoot outside bracketing sample values on monotone runs | not applicable to a linear fit; this is the new risk the monotone constraint bounds |
+| 4 | Slope mismatch across road-to-road links below a stated tolerance, and no road ending with an artificial `b = 0` | 21-79 % of links above 0.02; 7,200 of 7,200 roads end `b=0` |
+| 5 | Junction endpoint height agreement within a stated tolerance | max 0.19 m Iran_Route_96, 1.20 m Lakeview_Carson, 2.91 m GalleyRoad |
+| 6 | No junction connector carrying a grade the roads it links do not | worst 30.6 % Iran_Route_96, 23.7 % Lakeview_Carson, 55.1 % GalleyRoad |
+| 7 | Paired opposing carriageways agree within a stated tolerance at matched stations, crossovers driven to zero | roads 180/199: max 1.201 m, 6 % of stations above 0.25 m, 242 crossovers |
+| 8 | `dotnet test` green, `ElevationInjectorTests` and `GradeSeparationTests` in particular | `GradeSeparationTests.cs:779` pins `PiecewiseLinear` for deck preservation |
+| 9 | New unit tests covering the fit mode, the filter, the road-end tangent, connector height sourcing, and carriageway pairing | — |
+
+Criterion 8 additionally requires a **regression test that a bridge deck survives the new fit and the
+filtering** — the `Raised` exemption of §7 proven, not asserted.
+
+## 16. Visual verification
+
+Measurements do not close this. The road surface is judged visually by running `SCTMV.py`:
+
+- **`Iran_Route_96` at 27.0769276, 55.9823149** — junction fork; road 190 forks into 191 and 196
+  through connectors 211 and 212, with four slope reversals in twenty metres of travel (issue #29).
+- **`Iran_Route_96` at 27.0705587, 55.9590512** — split carriageway over a wash; roads 180 and 199.
+- **`Lakeview_Carson`** or **`SF_LaurelHeights`** — real relief, the general check. Lakeview_Carson
+  carries the worst link-slope mismatch measured (78.7 %); SF_LaurelHeights the worst
+  internal-boundary rate (40.8 %).
+- **`Bellvue_Overpass`** and **`Arapahoe_I25`** — grade-separation regression cases. Bridge decks must
+  not smear into the roads beneath them.
+- **`wrigley`** — the noise-dominated case, and the one that exercises the degenerate sub-metre
+  connector handling.
+
+## Sources
+
+- OpenDRIVE 1.4 §5.3.5 road elevation (the `<elevation>` cubic form).
+- F. N. Fritsch and R. E. Carlson, *Monotone Piecewise Cubic Interpolation*, SIAM Journal on Numerical
+  Analysis 17(2), 1980 — the tangent-limiting condition in §6.
+- A. Savitzky and M. J. E. Golay, *Smoothing and Differentiation of Data by Simplified Least Squares
+  Procedures*, Analytical Chemistry 36(8), 1964.
+- SUMO netconvert option reference (geometry and junction options, §12).
+- `thillRobot/carla_simulator`, `docs/maps.md` — independent report of the junction continuity failure
+  from a RoadRunner toolchain.
