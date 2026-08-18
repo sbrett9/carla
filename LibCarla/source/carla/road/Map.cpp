@@ -1100,7 +1100,7 @@ namespace road {
         }
       }
       if(smooth_junctions) {
-        out_mesh += *mesh_factory.MergeAndSmooth(lane_meshes);
+        out_mesh += *mesh_factory.ResolveJunctionSurface(lane_meshes);
       } else {
         geom::Mesh junction_mesh;
         for(auto& lane : lane_meshes) {
@@ -1153,7 +1153,10 @@ namespace road {
         }
       }
       if(params.smooth_junctions) {
-        auto merged_mesh = mesh_factory.MergeAndSmooth(lane_meshes);
+        // One continuous surface per height layer, rather than overlapping lane
+        // strips blended after the fact. Sidewalks keep their own geometry: they sit
+        // above the carriageway and are not part of the drivable surface.
+        auto merged_mesh = mesh_factory.ResolveJunctionSurface(lane_meshes);
         for(auto& lane : sidewalk_lane_meshes) {
           *merged_mesh += *lane;
         }

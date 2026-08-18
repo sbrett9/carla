@@ -110,6 +110,21 @@ namespace geom {
 
     std::unique_ptr<Mesh> MergeAndSmooth(std::vector<std::unique_ptr<Mesh>> &lane_meshes) const;
 
+    /// Resolves a junction's overlapping lane strips into one continuous surface per
+    /// height layer.
+    ///
+    /// OpenDRIVE models a junction as turning paths, so meshing each connector lane
+    /// separately leaves the asphalt between the paths uncovered while the paths
+    /// themselves overlap and disagree about height. Sampling the strips into a height
+    /// field, resolving one height per plan position, paving the enclosed gaps and
+    /// triangulating once removes both: the result shares vertices across every cell
+    /// boundary, so it is continuous by construction rather than smoothed afterwards.
+    ///
+    /// Layers are kept apart so a grade separation inside a junction footprint is not
+    /// collapsed — a deck must not be welded to the road running beneath it.
+    std::unique_ptr<Mesh> ResolveJunctionSurface(
+        const std::vector<std::unique_ptr<Mesh>> &lane_meshes) const;
+
     // -- LaneMarks --
     void GenerateLaneMarkForRoad(const road::Road& road,
       std::vector<std::unique_ptr<Mesh>>& inout,
@@ -144,6 +159,18 @@ namespace geom {
       float max_weight_distance         =  5.0f;
       float same_lane_weight_multiplier =  2.0f;
       float lane_ends_multiplier        =  2.0f;
+      // Junction surface resolution. The cell size is the knee of the measured
+      // curve: halving it quadruples the vertex count for no gain in boundary
+      // accuracy, while doubling it stops the gap filling resolving the narrow
+      // spaces between connector paths.
+      float junction_cell_size          =  0.5f;
+      // Height difference above which two overlapping surfaces are separate
+      // layers rather than one surface sampled twice. Above the worst
+      // same-layer disagreement measured and below the shallowest clearance.
+      float junction_layer_separation   =  3.0f;
+      // How far, in cells, an enclosed gap is paved inwards from the surface
+      // around it. Leaves the open edge of the network its own shape.
+      int   junction_fill_radius        =  4;
     };
 
     RoadParameters road_param;
