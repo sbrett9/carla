@@ -114,6 +114,59 @@ class Geometry(NamedTuple):
         cos_h, sin_h = math.cos(self.hdg), math.sin(self.hdg)
         return self.x + u * cos_h - v * sin_h, self.y + u * sin_h + v * cos_h
 
+    def heading(self, s: float) -> float:
+        """Plan-view heading at absolute station ``s``."""
+        ds = max(0.0, min(s - self.s, self.length))
+        if self.kind == "arc":
+            return self.hdg + ds * self.params.get("curvature", 0.0)
+        if self.kind == "paramPoly3":
+            p = ds / self.length if self.params.get("normalized", 1.0) else ds
+            du = self.params["bU"] + 2 * self.params["cU"] * p + 3 * self.params["dU"] * p * p
+            dv = self.params["bV"] + 2 * self.params["cV"] * p + 3 * self.params["dV"] * p * p
+            return self.hdg + math.atan2(dv, du)
+        return self.hdg
+
+
+class Poly3(NamedTuple):
+    """An OpenDRIVE cubic keyed at its own start offset."""
+
+    s: float
+    a: float
+    b: float
+    c: float
+    d: float
+
+    def evaluate(self, s: float) -> float:
+        ds = s - self.s
+        return self.a + self.b * ds + self.c * ds * ds + self.d * ds * ds * ds
+
+
+class Lane(NamedTuple):
+    """One ``<lane>`` and the width polynomials along it."""
+
+    id: int
+    type: str
+    widths: list[Poly3]
+
+    def width_at(self, s_offset: float) -> float:
+        """Lane width at a station measured from its lane section's start."""
+        if not self.widths:
+            return 0.0
+        chosen = self.widths[0]
+        for w in self.widths:
+            if w.s <= s_offset + 1e-9:
+                chosen = w
+            else:
+                break
+        return max(0.0, chosen.evaluate(s_offset))
+
+
+class LaneSection(NamedTuple):
+    """One ``<laneSection>`` and its lanes, ordered outward from the reference line."""
+
+    s: float
+    lanes: list[Lane]
+
 
 class Road:
     """One ``<road>`` of a parsed map, with its profile, links and plan view."""
@@ -126,6 +179,8 @@ class Road:
         self.links: list[RoadLink] = self._read_links(node)
         self.geometries: list[Geometry] = self._read_plan_view(node)
         self.has_lane_offset: bool = node.find("lanes/laneOffset") is not None
+        self.lane_offsets: list[Poly3] = self._read_polys(node, "lanes/laneOffset", "s")
+        self.lane_sections: list[LaneSection] = self._read_lane_sections(node)
 
     @property
     def is_connector(self) -> bool:
@@ -152,6 +207,70 @@ class Road:
             else:
                 break
         return chosen.position(s)
+
+    @staticmethod
+    def _read_polys(node: ET.Element, path: str, key: str) -> list[Poly3]:
+        polys = [
+            Poly3(*(float(e.get(k, "0")) for k in (key, "a", "b", "c", "d")))
+            for e in node.findall(path)
+        ]
+        return sorted(polys)
+
+    def _read_lane_sections(self, node: ET.Element) -> list[LaneSection]:
+        sections = []
+        for element in node.findall("lanes/laneSection"):
+            lanes = []
+            for lane in element.iter("lane"):
+                lane_id = int(lane.get("id", "0"))
+                if lane_id == 0:
+                    continue  # the centre lane carries no width
+                lanes.append(
+                    Lane(
+                        id=lane_id,
+                        type=lane.get("type", "none"),
+                        widths=self._read_polys(lane, "width", "sOffset"),
+                    )
+                )
+            sections.append(
+                LaneSection(s=float(element.get("s", "0")), lanes=sorted(lanes, key=lambda x: x.id))
+            )
+        return sorted(sections)
+
+    def lane_section_at(self, s: float) -> LaneSection | None:
+        """The lane section governing a station."""
+        if not self.lane_sections:
+            return None
+        chosen = self.lane_sections[0]
+        for section in self.lane_sections:
+            if section.s <= s + 1e-9:
+                chosen = section
+            else:
+                break
+        return chosen
+
+    def lane_offset_at(self, s: float) -> float:
+        """Lateral shift of the lane origin from the reference line."""
+        if not self.lane_offsets:
+            return 0.0
+        chosen = self.lane_offsets[0]
+        for poly in self.lane_offsets:
+            if poly.s <= s + 1e-9:
+                chosen = poly
+            else:
+                break
+        return chosen.evaluate(s)
+
+    def heading(self, s: float) -> float | None:
+        """Plan-view heading at a station, from the governing geometry element."""
+        if not self.geometries:
+            return None
+        chosen = self.geometries[0]
+        for geometry in self.geometries:
+            if geometry.s <= s + 1e-9:
+                chosen = geometry
+            else:
+                break
+        return chosen.heading(s)
 
     @staticmethod
     def _read_profile(node: ET.Element) -> list[ElevationRecord]:
