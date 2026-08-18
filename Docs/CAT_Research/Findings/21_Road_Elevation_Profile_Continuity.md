@@ -428,6 +428,10 @@ elevation source is better for this application.
 - **Merging a junction into a single mesh.** The surfaces at a junction are genuine separate `<road>`
   records; netconvert emits connectors as roads and CARLA meshes each road separately. This work makes
   the pieces agree in height and slope where they meet; it does not stitch them.
+- **Changing the junction Laplacian smoothing.** `MergeAndSmooth` stays as it is (§5). This work
+  removes the profile errors it is currently papering over; it does not extend, retune, or disable it.
+- **Measuring the mesh-versus-waypoint gap inside junctions.** Real (§5) but it needs the built mesh
+  at runtime, and no work item in §14 depends on the number.
 - **Horizontal/plan-view geometry** — measured as already smooth (§3.1).
 - **The `CarlaTools` Digital Twin tool.** Its OSM→xodr link is a dead stub
   (`CustomFileDownloader.cpp:72`, `HAS_OSM2ODR` never defined), and it is an editor-time map baker,
@@ -463,16 +467,17 @@ Each reported with the measured number, not a claim. Baselines are §3.
 | # | criterion | baseline |
 |---|---|---|
 | 1 | Zero `<elevation>` records with both `c=0` and `d=0` on any road carrying more than two samples | 3,811 such roads, 100 % linear |
-| 2 | Slope discontinuity at internal boundaries below a stated epsilon, with the before/after distribution | median 0.0105, p90 0.0754, 30.7 % above 0.02 |
+| 2 | Slope discontinuity at internal boundaries below a stated epsilon, with the before/after distribution; height continuity must not regress | median 0.0105, p90 0.0754, p99 1.2957, max 52.61, 30.7 % of 27,110 boundaries above 0.02; height step already exact at 1.8e-15 m |
 | 3 | Zero overshoot outside bracketing sample values on monotone runs | not applicable to a linear fit; this is the new risk the monotone constraint bounds |
 | 4 | Slope mismatch across road-to-road links below a stated tolerance, and no road ending with an artificial `b = 0` | 21-79 % of links above 0.02; 7,200 of 7,200 roads end `b=0` |
 | 5 | Junction endpoint height agreement within a stated tolerance | max 0.19 m Iran_Route_96, 1.20 m Lakeview_Carson, 2.91 m GalleyRoad |
 | 6 | No junction connector carrying a grade the roads it links do not | worst 30.6 % Iran_Route_96, 23.7 % Lakeview_Carson, 55.1 % GalleyRoad |
 | 7 | Paired opposing carriageways agree within a stated tolerance at matched stations, crossovers driven to zero | roads 180/199: max 1.201 m, 6 % of stations above 0.25 m, 242 crossovers |
-| 8 | `dotnet test` green, `ElevationInjectorTests` and `GradeSeparationTests` in particular | `GradeSeparationTests.cs:779` pins `PiecewiseLinear` for deck preservation |
-| 9 | New unit tests covering the fit mode, the filter, the road-end tangent, connector height sourcing, and carriageway pairing | — |
+| 8 | Terminal records carry a tangent derived from the approach grade rather than from the remainder span, demonstrated on the roads where the two differ | 585 of 7,200 roads (8.1 %) have a terminal span implying a grade above 15 %; minimum terminal span 6.3 mm |
+| 9 | `dotnet test` green, `ElevationInjectorTests` and `GradeSeparationTests` in particular | `GradeSeparationTests.cs:779` pins `PiecewiseLinear` for deck preservation |
+| 10 | New unit tests covering the fit mode, the filter, the road-end tangent, connector height sourcing, and carriageway pairing | — |
 
-Criterion 8 additionally requires a **regression test that a bridge deck survives the new fit and the
+Criterion 9 additionally requires a **regression test that a bridge deck survives the new fit and the
 filtering** — the `Raised` exemption of §7 proven, not asserted.
 
 ## 16. Visual verification
