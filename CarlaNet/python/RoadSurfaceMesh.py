@@ -249,6 +249,58 @@ class RoadSurfaceMesh:
                 areas.append(blob * cell_area)
         return sum(areas), len(areas), max(areas) if areas else 0.0
 
+    def surface_disagreement(
+        self, strips: list[Strip], step: float = 0.5
+    ) -> tuple[int, float, float, float]:
+        """Vertical spread where two surfaces cover the same plan position.
+
+        Inside a junction the connectors overlap, and each samples its heights
+        independently, so the surfaces disagree. Where the disagreement is a step rather
+        than a blend it is a bump for a vehicle: collision uses these triangles directly.
+
+        Returns ``(samples, median, p90, max)`` over cells covered more than once.
+        """
+        quads = []
+        for s in strips:
+            for i in range(len(s.right) - 1):
+                corners = (s.right[i], s.left[i], s.left[i + 1], s.right[i + 1])
+                plan = tuple(c[:2] for c in corners)
+                quads.append((plan, sum(c[2] for c in corners) / 4.0))
+        if not quads:
+            return 0, 0.0, 0.0, 0.0
+
+        xs = [v[0] for q, _ in quads for v in q]
+        ys = [v[1] for q, _ in quads for v in q]
+        min_x, min_y = min(xs), min(ys)
+        cols = int((max(xs) - min_x) / step) + 1
+        rows = int((max(ys) - min_y) / step) + 1
+
+        lowest: dict[int, float] = {}
+        highest: dict[int, float] = {}
+        for plan, z in quads:
+            qx = [v[0] for v in plan]
+            qy = [v[1] for v in plan]
+            for row in range(
+                max(0, int((min(qy) - min_y) / step)), min(rows, int((max(qy) - min_y) / step) + 2)
+            ):
+                for col in range(
+                    max(0, int((min(qx) - min_x) / step)),
+                    min(cols, int((max(qx) - min_x) / step) + 2),
+                ):
+                    point = (min_x + col * step, min_y + row * step)
+                    if not self._inside(plan, point):
+                        continue
+                    key = row * cols + col
+                    if key not in lowest or z < lowest[key]:
+                        lowest[key] = z
+                    if key not in highest or z > highest[key]:
+                        highest[key] = z
+
+        gaps = sorted(highest[k] - lowest[k] for k in highest if highest[k] - lowest[k] > 1e-9)
+        if not gaps:
+            return 0, 0.0, 0.0, 0.0
+        return (len(gaps), gaps[len(gaps) // 2], gaps[int(len(gaps) * 0.9)], gaps[-1])
+
     @staticmethod
     def _inside(quad, point) -> bool:
         sign = None
