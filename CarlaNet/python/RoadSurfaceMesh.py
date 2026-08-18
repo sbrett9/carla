@@ -160,6 +160,111 @@ class RoadSurfaceMesh:
 
     # ── measurements ─────────────────────────────────────────────────────────
 
+    def interior_holes(self, strips: list[Strip], step: float = 0.5) -> tuple[float, int, float]:
+        """Unpaved area fully enclosed by paving, in square metres.
+
+        The measure that matters for a vehicle: a gap open to the outside is just the
+        edge of the road network, but a gap surrounded by surface is a hole to drop
+        through. Uncovered cells reachable from outside the sampled area are flood-filled
+        away; what remains is enclosed.
+
+        Returns ``(total_area, hole_count, largest_area)``.
+        """
+        quads = [
+            (s.right[i][:2], s.left[i][:2], s.left[i + 1][:2], s.right[i + 1][:2])
+            for s in strips
+            for i in range(len(s.right) - 1)
+        ]
+        if not quads:
+            return 0.0, 0, 0.0
+
+        xs = [v[0] for q in quads for v in q]
+        ys = [v[1] for q in quads for v in q]
+        # One cell of margin so the flood fill always has an outside to start from.
+        min_x, min_y = min(xs) - step, min(ys) - step
+        cols = int((max(xs) + step - min_x) / step) + 1
+        rows = int((max(ys) + step - min_y) / step) + 1
+
+        # Rasterise each quad through its bounding box rather than testing every cell
+        # against every quad.
+        covered = [[False] * cols for _ in range(rows)]
+        for quad in quads:
+            qx = [v[0] for v in quad]
+            qy = [v[1] for v in quad]
+            for row in range(
+                max(0, int((min(qy) - min_y) / step)), min(rows, int((max(qy) - min_y) / step) + 2)
+            ):
+                for col in range(
+                    max(0, int((min(qx) - min_x) / step)),
+                    min(cols, int((max(qx) - min_x) / step) + 2),
+                ):
+                    if covered[row][col]:
+                        continue
+                    point = (min_x + col * step, min_y + row * step)
+                    if self._inside(quad, point):
+                        covered[row][col] = True
+
+        outside = [[False] * cols for _ in range(rows)]
+        stack = [(r, c) for r in range(rows) for c in (0, cols - 1) if not covered[r][c]]
+        stack += [(r, c) for c in range(cols) for r in (0, rows - 1) if not covered[r][c]]
+        for r, c in stack:
+            outside[r][c] = True
+        while stack:
+            r, c = stack.pop()
+            for dr, dc in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nr, nc = r + dr, c + dc
+                if (
+                    0 <= nr < rows
+                    and 0 <= nc < cols
+                    and not covered[nr][nc]
+                    and not outside[nr][nc]
+                ):
+                    outside[nr][nc] = True
+                    stack.append((nr, nc))
+
+        # Label what is left: unpaved and unreachable from outside.
+        seen = [[False] * cols for _ in range(rows)]
+        areas = []
+        cell_area = step * step
+        for r in range(rows):
+            for c in range(cols):
+                if covered[r][c] or outside[r][c] or seen[r][c]:
+                    continue
+                blob, frontier = 0, [(r, c)]
+                seen[r][c] = True
+                while frontier:
+                    br, bc = frontier.pop()
+                    blob += 1
+                    for dr, dc in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                        nr, nc = br + dr, bc + dc
+                        if (
+                            0 <= nr < rows
+                            and 0 <= nc < cols
+                            and not covered[nr][nc]
+                            and not outside[nr][nc]
+                            and not seen[nr][nc]
+                        ):
+                            seen[nr][nc] = True
+                            frontier.append((nr, nc))
+                areas.append(blob * cell_area)
+        return sum(areas), len(areas), max(areas) if areas else 0.0
+
+    @staticmethod
+    def _inside(quad, point) -> bool:
+        sign = None
+        for i in range(len(quad)):
+            ax, ay = quad[i]
+            bx, by = quad[(i + 1) % len(quad)]
+            cross = (bx - ax) * (point[1] - ay) - (by - ay) * (point[0] - ax)
+            if abs(cross) < 1e-12:
+                continue
+            positive = cross > 0
+            if sign is None:
+                sign = positive
+            elif positive != sign:
+                return False
+        return True
+
     def seam_report(self, weld_tolerance: float = 0.05) -> dict[str, float | int]:
         """How much of the surface is duplicated rather than shared.
 
