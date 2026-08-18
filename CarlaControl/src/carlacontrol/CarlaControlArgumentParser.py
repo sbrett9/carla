@@ -97,6 +97,22 @@ class CarlaControlArgumentParser:
             "--step", type=float, default=10.0, help="reference-line sample spacing (m)"
         )
         build.add_argument(
+            "--additional-width",
+            type=float,
+            default=0.6,
+            help="extra width added to each side of a driving lane inside a junction (m). "
+            "Makes connectors overlap rather than leave gaps on curves; 0 removes the "
+            "overhang past the roads a connector joins",
+        )
+        build.add_argument(
+            "--no-smooth-junctions",
+            dest="smooth_junctions",
+            action="store_false",
+            help="skip the height smoothing applied to junction surfaces when the world "
+            "mesh is built",
+        )
+        build.set_defaults(smooth_junctions=True)
+        build.add_argument(
             "--origin-height",
             type=float,
             default=None,
