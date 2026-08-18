@@ -62,15 +62,21 @@ class JunctionSurface:
     #: interiors measured while leaving the open edge of the network its shape.
     FILL_RADIUS_CELLS = 4
 
+    #: Neighbour-averaging passes over the resolved height field, removing the flips
+    #: left where the lower of two overlapping surfaces changes from cell to cell.
+    RELAX_PASSES = 4
+
     def __init__(
         self,
         cell: float | None = None,
         layer_separation: float | None = None,
         fill_radius: int | None = None,
+        relax_passes: int | None = None,
     ) -> None:
         self.cell = cell or self.CELL_METRES
         self.layer_separation = layer_separation or self.LAYER_SEPARATION_METRES
         self.fill_radius = self.FILL_RADIUS_CELLS if fill_radius is None else fill_radius
+        self.relax_passes = self.RELAX_PASSES if relax_passes is None else relax_passes
 
     # ── layers ───────────────────────────────────────────────────────────────
 
@@ -78,7 +84,35 @@ class JunctionSurface:
         """One surface per height layer covered by these strips."""
         cells = self._sample(strips)
         layers = [layer for layer in self._split_layers(cells) if layer]
-        return [self._triangulate(self._close_gaps(layer)) for layer in layers]
+        return [self._triangulate(self._relax(self._close_gaps(layer))) for layer in layers]
+
+    def _relax(self, layer: dict[tuple[int, int], float]) -> dict[tuple[int, int], float]:
+        """Take the flips out of the resolved height field.
+
+        Where two connectors overlap and disagree, the lower of the two wins — and which
+        one is lower can change from cell to cell, leaving a field that jumps by the
+        amount the two disagreed. Measured at up to 0.47 m across a single 0.5 m cell,
+        which is a wall rather than a road.
+
+        Averaging each cell against its neighbours removes those flips. This is not the
+        junction smoothing it replaces: that one blended separate overlapping ribbons
+        into each other and left the mesh disagreeing with the profile. This runs inside
+        one already-single-valued surface, so it cannot reintroduce a stack, and it
+        stays within a layer, so a deck is never pulled towards the road beneath it.
+        """
+        relaxed = dict(layer)
+        for _ in range(self.relax_passes):
+            updated: dict[tuple[int, int], float] = {}
+            for (col, row), height in relaxed.items():
+                total, count = height, 1
+                for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    neighbour = relaxed.get((col + dc, row + dr))
+                    if neighbour is not None:
+                        total += neighbour
+                        count += 1
+                updated[(col, row)] = total / count
+            relaxed = updated
+        return relaxed
 
     def _close_gaps(self, layer: dict[tuple[int, int], float]) -> dict[tuple[int, int], float]:
         """Pave the gaps a junction's connector paths leave between them.

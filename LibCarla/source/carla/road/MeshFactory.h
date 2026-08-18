@@ -171,6 +171,11 @@ namespace geom {
       // How far, in cells, an enclosed gap is paved inwards from the surface
       // around it. Leaves the open edge of the network its own shape.
       int   junction_fill_radius        =  4;
+      // Neighbour-averaging passes over the resolved height field, removing the
+      // flips left where the lower of two overlapping surfaces changes from cell
+      // to cell. Four is the measured knee: more barely reduces the remaining
+      // roughness while moving the surface further from its samples.
+      int   junction_relax_passes       =  4;
     };
 
     RoadParameters road_param;

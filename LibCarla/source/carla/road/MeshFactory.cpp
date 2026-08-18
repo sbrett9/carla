@@ -1203,6 +1203,43 @@ namespace {
     }
   }
 
+  /// Take the flips out of the resolved height field.
+  ///
+  /// Where two connectors overlap and disagree, the lower of the two wins, and which one
+  /// is lower can change from cell to cell — leaving a field that jumps by the amount the
+  /// two disagreed, measured at up to 0.47 m across a single 0.5 m cell. Averaging each
+  /// cell against its neighbours removes those flips.
+  ///
+  /// This is not the junction smoothing it replaces. That one blended separate
+  /// overlapping ribbons into each other and left the mesh disagreeing with the profile
+  /// the waypoints follow. This runs inside one already single-valued surface, so it
+  /// cannot reintroduce a stack, and it stays within a layer, so a deck is never pulled
+  /// towards the road beneath it.
+  void RelaxLayer(
+      std::unordered_map<Cell, float, CellHash> &layer,
+      const int passes) {
+    const std::array<Cell, 4> neighbours = {
+        Cell{1, 0}, Cell{-1, 0}, Cell{0, 1}, Cell{0, -1}};
+    for (int pass = 0; pass < passes; ++pass) {
+      std::unordered_map<Cell, float, CellHash> updated;
+      updated.reserve(layer.size());
+      for (const auto &entry : layer) {
+        float total = entry.second;
+        int count = 1;
+        for (const auto &step : neighbours) {
+          const auto found = layer.find(
+              Cell{entry.first.col + step.col, entry.first.row + step.row});
+          if (found != layer.end()) {
+            total += found->second;
+            ++count;
+          }
+        }
+        updated[entry.first] = total / static_cast<float>(count);
+      }
+      layer.swap(updated);
+    }
+  }
+
   /// Emit one layer as two triangles per cell on shared corner vertices.
   void AppendLayerSurface(
       Mesh &out_mesh,
@@ -1349,6 +1386,7 @@ namespace {
           }
         }
         PaveEnclosedGaps(layer, road_param.junction_fill_radius);
+        RelaxLayer(layer, road_param.junction_relax_passes);
         AppendLayerSurface(out_mesh, layer, cell);
       }
     }
