@@ -126,24 +126,24 @@ class JunctionSurface:
         """
         filled = dict(layer)
         for _ in range(self.fill_radius):
-            additions: dict[tuple[int, int], float] = {}
+            # Each candidate collects the heights of the paved cells around it: two or
+            # more means it is enclosed rather than on the open edge of the network.
+            additions: dict[tuple[int, int], list[float]] = {}
             for (col, row), height in filled.items():
                 for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
                     key = (col + dc, row + dr)
                     if key in filled:
                         continue
-                    additions[key] = additions.get(key, 0.0) + height
-            # Only keep a candidate if enough neighbours already carry surface, which is
-            # what distinguishes an enclosed gap from the open edge of the network.
-            counts: dict[tuple[int, int], int] = {}
-            for col, row in filled:
-                for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                    key = (col + dc, row + dr)
-                    if key not in filled:
-                        counts[key] = counts.get(key, 0) + 1
-            for key, total in additions.items():
-                if counts.get(key, 0) >= 2:
-                    filled[key] = total / counts[key]
+                    additions.setdefault(key, []).append(height)
+            for key, heights in additions.items():
+                if len(heights) < 2:
+                    continue
+                # Paving between two surfaces that disagree would invent a ramp where
+                # there is a gap; only a gap whose surrounding surface agrees with itself
+                # is interior to the road.
+                if max(heights) - min(heights) > self.layer_separation:
+                    continue
+                filled[key] = sum(heights) / len(heights)
         return filled
 
     def _sample(self, strips: list[Strip]) -> dict[tuple[int, int], list[float]]:
@@ -201,6 +201,26 @@ class JunctionSurface:
                 while frontier:
                     (col, row), which = frontier.pop()
                     height = clustered[(col, row)][which]
+                    # A layer is a height *function* of plan position: one value per
+                    # cell. A ramp climbing to a deck is continuously connected to the
+                    # road it crosses, so growing purely by connectivity would walk up
+                    # the ramp and claim both — and the cell where they cross can only
+                    # keep one of them, burying the underpass. Reaching a cell this
+                    # layer already occupies means the surface has passed over itself,
+                    # so it stops there and the rest becomes its own sheet.
+                    if (col, row) in layer:
+                        continue
+                    # Growth is checked against the cell it came from, but two branches
+                    # — one along the ground, one climbing a ramp — can meet and become
+                    # neighbours without ever being compared, leaving a step of metres
+                    # inside one sheet. A cell joins only if it agrees with every
+                    # neighbour the layer already holds.
+                    if any(
+                        abs(layer[n] - height) > self.layer_separation
+                        for n in ((col + 1, row), (col - 1, row), (col, row + 1), (col, row - 1))
+                        if n in layer
+                    ):
+                        continue
                     layer[(col, row)] = height
                     for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
                         neighbour = (col + dc, row + dr)
