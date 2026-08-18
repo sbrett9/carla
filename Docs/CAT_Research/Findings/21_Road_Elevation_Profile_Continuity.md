@@ -13,6 +13,9 @@ work must not smear), [02_CARLA_OSM_MapGen.md](02_CARLA_OSM_MapGen.md),
 [08_Layer_Architecture.md](08_Layer_Architecture.md).
 **Code:** `CarlaNet.Map/OpenDrive/ElevationInjector.cs`, `CarlaNet.Transport/CarlaClient.cs`,
 `LibCarla/source/carla/road/{Road,Lane,Map}.cpp`, `LibCarla/source/carla/road/MeshFactory.cpp`.
+**Client:** world generation and the visual check run through `CarlaControl/scripts/run_SCTMV.py`
+and the `carlacontrol` package, which supersede the monolithic `CarlaNet/python/SCTMV.py`. Build
+arguments live in `CarlaControlArgumentParser`, and the OSM-to-world path in `WorldBuilder`.
 
 ---
 
@@ -397,8 +400,10 @@ false pairs.
 
 ## 11. Sample density, and only after the above
 
-With the fit and the filter in place, evaluate reducing `--step` (`CarlaNet/python/SCTMV.py:228`,
-`sample_step_meters` default 10.0, `CarlaNet/python/carlanet/__init__.py:2228`).
+With the fit and the filter in place, evaluate reducing `--step`
+(`CarlaControl/src/carlacontrol/CarlaControlArgumentParser.py:97`, default 10.0, reaching the
+generator as `sample_step_meters` at `CarlaControl/src/carlacontrol/WorldBuilder.py:116` and
+defaulting to the same 10.0 in `CarlaNet/python/carlanet/__init__.py:2228`).
 
 Reducing it *before* §6 and §7 makes things strictly worse: more samples under a linear fit means more
 noise-driven slope breaks per metre, and §3.2 shows the noise is already the larger term on the worst
@@ -408,8 +413,9 @@ measured improvement rather than assuming it helps.
 ## 12. Netconvert flags — real but secondary
 
 Cheap to test via `OsmConversionOptions.ExtraArgs` with no rebuild; the effective argument list is
-built in `CarlaNet/src/CarlaNet.Map/OsmConverter.cs:222-288` and `SCTMV.py` appends the drivable-road
-filter. Small next to §6-§10, but worth trying:
+built in `CarlaNet/src/CarlaNet.Map/OsmConverter.cs:222-288`, and `WorldBuilder` appends the
+drivable-road filter and sets `opts.ExtraArgs`
+(`CarlaControl/src/carlacontrol/WorldBuilder.py:38-46`). Small next to §6-§10, but worth trying:
 
 - `--geometry.min-dist 1.0` (default `-1`, off) — drops near-duplicate OSM geometry points that create
   micro-kinks. Most relevant of the set.
@@ -490,7 +496,8 @@ filtering** — the `Raised` exemption of §7 proven, not asserted.
 
 ## 16. Visual verification
 
-Measurements do not close this. The road surface is judged visually by running `SCTMV.py`:
+Measurements do not close this. The road surface is judged visually by running the SCTMV client,
+`CarlaControl/scripts/run_SCTMV.py`:
 
 - **`Iran_Route_96` at 27.0769276, 55.9823149** — junction fork; road 190 forks into 191 and 196
   through connectors 211 and 212, with four slope reversals in twenty metres of travel (issue #29).
