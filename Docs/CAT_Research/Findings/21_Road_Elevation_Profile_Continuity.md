@@ -1,6 +1,7 @@
 # Road Elevation Profile Continuity — faceted road surfaces from a slope-discontinuous vertical fit
 
-**Date:** 2026-08-17 · **Status:** measured and specified; no production code changed yet. Tracked as
+**Date:** 2026-08-17 · **Status:** work items 1, 2, 4 and 6 built and measured (§17, §19); the road
+mesh assembly is now in scope as §18. Tracked as
 [sbrett9/carla#29](https://github.com/sbrett9/carla/issues/29), worked on branch
 `feature/JNI-347-road-mesh-elevation-profile-continuity`.
 **Datum:** ellipsoidal WGS84 (HAE) throughout — `project_datum_decision`. Nothing here changes the
@@ -439,13 +440,12 @@ elevation source is better for this application.
   sampled terrain. A monotone fit rounds its creases and keeps the descent, which is correct unless
   the road actually crosses on a causeway or culvert — a layer-routing question for `GradeSeparation`,
   not a fitting one.
-- **Merging a junction into a single mesh.** The surfaces at a junction are genuine separate `<road>`
-  records; netconvert emits connectors as roads and CARLA meshes each road separately. This work makes
-  the pieces agree in height and slope where they meet; it does not stitch them.
-- **Changing the junction Laplacian smoothing.** `MergeAndSmooth` stays as it is (§5). This work
-  removes the profile errors it is currently papering over; it does not extend, retune, or disable it.
-- **Measuring the mesh-versus-waypoint gap inside junctions.** Real (§5) but it needs the built mesh
-  at runtime, and no work item in §14 depends on the number.
+- ~~**Merging a junction into a single mesh.**~~ **Now in scope — see §18.** Held out originally on
+  the reasoning that netconvert emits connectors as separate roads and CARLA meshes each separately.
+  That is still true, but §18 measures the consequence: once the profile agrees, the remaining visible
+  damage at an intersection is the mesh assembly, not the elevation.
+- ~~**Changing the junction Laplacian smoothing.**~~ **Now in scope — see §18**, since retriangulating
+  a junction supersedes what `MergeAndSmooth` is attempting.
 - **Horizontal/plan-view geometry** — measured as already smooth (§3.1).
 - **The `CarlaTools` Digital Twin tool.** Its OSM→xodr link is a dead stub
   (`CustomFileDownloader.cpp:72`, `HAS_OSM2ODR` never defined), and it is an editor-time map baker,
@@ -473,6 +473,14 @@ Later items depend on earlier ones being validated, so the order is load-bearing
 6. **Paired carriageway height agreement** (§10).
 7. **Sample density evaluation** (§11).
 8. **Netconvert flag trial** (§12).
+9. **Offline mesh probe** (§18) — reconstruct the vertices `MeshFactory` emits, from the .xodr, so
+   mesh changes are measurable without the engine the way profile changes were.
+10. **Weld coincident vertices** within each generated mesh (§18).
+11. **Retriangulate junctions as one surface** (§18).
+
+Items 1, 2, 4 and 6 are done. Item 5 is deferred behind §18: once a junction is one retriangulated
+surface its interior grade comes from the resolved height field, so connector height sourcing
+largely dissolves into it for rendering. It still matters for waypoints, so it stays on the list.
 
 ## 15. Acceptance criteria
 
@@ -641,6 +649,114 @@ is present — and it must be measured per map rather than assumed.
   issue reports 1.2 m. The road identification, lengths, profiles and wash figures all
   match exactly, so this is a difference in the distance metric, not in the finding; it
   is unexplained and does not affect anything downstream.
+
+
+## 18. Single triangulated road surface
+
+Brought into scope 2026-08-18 after the elevation work landed and the road surface was still
+visibly shattered at intersections. The measurements below say why: **the profile is no longer the
+limiting factor there, the mesh assembly is.**
+
+### The profile at a junction is already agreed
+
+Junction 106 of `Arapahoe_I25` — the intersection three reported picks landed in — carries 14
+connector roads within a 30 m radius. Sampling every connector at 1 m and comparing heights wherever
+two *different* connectors pass through the same plan position (within 1.5 m):
+
+| | |
+|---|---|
+| plan-coincident sample pairs | 398 |
+| vertical gap, median | **0.020 m** |
+| p90 | 0.085 m |
+| max | **0.207 m** |
+| over 0.25 m | **0.0 %** |
+
+Two centimetres median. No further profile work changes what that intersection looks like.
+
+### What the mesh actually is
+
+- `Map::GenerateChunkedMesh` (`Map.cpp:1117-1200`) emits one mesh per lane section per road, split
+  at `max_road_length` (500 m for OSM), plus one merged mesh per junction, then bins everything into
+  a grid. On `Arapahoe_I25` that is **183 junction meshes and 321 non-junction roads**.
+- Junction 106 alone is assembled from **21 independent lane ribbons** across its 14 connectors.
+- `Mesh::operator+=` (`Mesh.cpp:348-373`) appends the vertex, normal, index and UV buffers and
+  offsets the indices. **It never welds, never deduplicates, and never shares a vertex.** A junction
+  is therefore one mesh *object* but not one *surface*: overlapping quad strips whose edges are
+  duplicated, sitting 2-20 cm apart.
+
+At those separations the depth buffer cannot order the surfaces reliably, which is what produces the
+hard polygon boundaries, bright slivers and shadow acne that survive a correct elevation profile.
+`MergeAndSmooth`'s 100-iteration Laplacian is upstream's attempt to hide exactly this; it is
+insufficient, it only moves interior vertices, and it displaces the mesh from the profile the
+waypoints still follow (§5).
+
+### There are no lane semantics in the mesh to lose
+
+This is the finding that unblocks stitching. `OpenDriveGenerator.cpp:87-102` spawns each chunk as one
+`AProceduralMeshActor` and calls `CreateMeshSection_LinearColor` with **section index 0, empty UVs,
+empty vertex colours, empty tangents**, and no semantic tagging. Lane type, lane id and road id never
+reach the engine, and sidewalk lanes are already merged into the same actor as driving lanes.
+
+Lane semantics live in the OpenDRIVE `Map` object — waypoints, routing, lane changes and the traffic
+manager all read that and never the mesh. **Merging the mesh into one surface costs no driving
+semantics.** Where per-triangle attribution is wanted later (labelling, segmentation), the route is
+vertex attributes — `CreateMeshSection_LinearColor` already accepts UV0 and VertexColor and both are
+currently passed empty — not split geometry. That is strictly more capable than the present state.
+
+### Order of work
+
+**Fix the data before welding it.** Welding is a representation change and cannot repair a genuine
+disagreement: where two surfaces are centimetres apart it produces a clean single surface, but across
+a real step it would either leave the step or bridge it with a near-vertical triangle. §10 therefore
+lands first, and did.
+
+1. **Offline mesh probe.** Reconstruct the vertices `MeshFactory` emits directly from the .xodr —
+   lane widths and `GetCornerPositions` are all recoverable — and measure duplicate vertices,
+   coincident-but-unwelded pairs, T-junctions and overlapping faces. Without this the mesh work is
+   judged from screenshots, which is what the elevation work deliberately avoided.
+2. **Weld coincident vertices** within each generated mesh, tolerance a few centimetres. Bounded,
+   removes the z-fighting, measurable against step 1.
+3. **Retriangulate junctions** as one surface: take the union of the connector lane footprints in
+   plan, triangulate once, and sample z from the resolved elevation profile.
+
+Constraint carried from §7 and §10: a grade separation passing through a junction footprint must not
+be welded or triangulated into the surface beneath it. `Raised` samples mark those, and the mesh
+stage has to honour them the same way the fit does.
+
+
+## 19. What landed, and what it measured
+
+`ElevationFitMode.MonotoneCubicHermite` carries items 2, 4 and 6 together and is selected at the
+production call site. `PiecewiseConstant` and `PiecewiseLinear` are untouched and reproduce their
+previous output byte for byte, so the whole change is gated on the fit mode.
+
+Measured by re-running the injector over the ten smoketest maps and reading the output with the
+probe. On `Arapahoe_I25`, confirmed against a map generated by the running client rather than a
+simulation:
+
+| quantity | before | after |
+|---|---|---|
+| slope kinks inside roads, above 0.02 | 17-41 % of boundaries | **0.0 % on every map** |
+| records carrying curvature | 0 of 34,310 | 4,211 of 5,364 on Arapahoe_I25 |
+| roads ending on an artificial `b = 0` | 7,200 of 7,200 | only the genuinely flat ones |
+| height mismatch where linked roads meet | up to 19.5 m | **exactly 0.000 m on every map** |
+| junction seam slope, median | 0.0098-0.0534 | ~0, continuous |
+| paired carriageway disagreement, worst | 0.026-13.442 m | 0.002-0.770 m |
+| carriageway crossovers | 19-976 per map | roughly halved on every map |
+
+Two things the measurement caught that reasoning had not:
+
+**Item 4 introduced a defect that only item 6 exposed.** The two directions of a street never link to
+each other, so the junction pass put their mirrored ends in different node groups and resolved them
+to different heights — reopening along the centre line the disagreement the shared height series had
+just closed. On `wrigley` that alone was 9.0 m. Tying a merged pair's corners into one node took it
+under a metre. A junction resolution that groups only *linked* ends is incomplete: coincident ends
+must be grouped too.
+
+**Fitting a shared surface is not the same as sharing a series.** The first implementation evaluated
+the merged surface at each road's own stations, which left `Arapahoe_I25` at 0.470 m and *raised* the
+crossover count. Both roads must carry records at the same physical stations, so their fitted curves
+are reflections of each other rather than two independent fits of one function.
 
 
 ## Sources
