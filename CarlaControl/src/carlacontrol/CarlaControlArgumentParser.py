@@ -108,8 +108,9 @@ class CarlaControlArgumentParser:
             "--no-smooth-junctions",
             dest="smooth_junctions",
             action="store_false",
-            help="skip the height smoothing applied to junction surfaces when the world "
-            "mesh is built",
+            help="build the road mesh as one strip per lane, the way it was before the "
+            "drivable surface was resolved into one continuous sheet per height layer. "
+            "Kept as an escape hatch for comparison",
         )
         build.set_defaults(smooth_junctions=True)
         build.add_argument(

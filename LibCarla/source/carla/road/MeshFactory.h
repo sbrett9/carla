@@ -110,20 +110,27 @@ namespace geom {
 
     std::unique_ptr<Mesh> MergeAndSmooth(std::vector<std::unique_ptr<Mesh>> &lane_meshes) const;
 
-    /// Resolves a junction's overlapping lane strips into one continuous surface per
-    /// height layer.
+    /// Resolves every drivable lane strip into one continuous surface per height layer,
+    /// returned as tiles that share their vertices across tile boundaries.
     ///
-    /// OpenDRIVE models a junction as turning paths, so meshing each connector lane
-    /// separately leaves the asphalt between the paths uncovered while the paths
-    /// themselves overlap and disagree about height. Sampling the strips into a height
-    /// field, resolving one height per plan position, paving the enclosed gaps and
-    /// triangulating once removes both: the result shares vertices across every cell
-    /// boundary, so it is continuous by construction rather than smoothed afterwards.
+    /// Meshing each lane separately leaves the network as hundreds of overlapping ribbons:
+    /// inside a junction the turning paths overlap and disagree about height while the
+    /// asphalt between them is never covered at all, and between roads every boundary is a
+    /// pair of unwelded edges. Sampling the strips into a height field, resolving one
+    /// height per plan position, paving the enclosed gaps and triangulating once removes
+    /// all of it — the result shares vertices across every cell boundary, so it is
+    /// continuous by construction rather than smoothed afterwards.
     ///
-    /// Layers are kept apart so a grade separation inside a junction footprint is not
-    /// collapsed — a deck must not be welded to the road running beneath it.
-    std::unique_ptr<Mesh> ResolveJunctionSurface(
-        const std::vector<std::unique_ptr<Mesh>> &lane_meshes) const;
+    /// Layers are kept apart so a grade separation is not collapsed: a road that passes
+    /// beneath a deck must not be welded to it. A layer is a height function of plan
+    /// position, so growth stops where the surface passes over itself.
+    ///
+    /// \param tile_size Edge length of the emitted tiles. Corner heights are resolved
+    ///        across the whole layer first, so neighbouring tiles place identical
+    ///        vertices on their shared edge.
+    std::vector<std::unique_ptr<Mesh>> ResolveDrivableSurface(
+        const std::vector<std::unique_ptr<Mesh>> &lane_meshes,
+        float tile_size) const;
 
     // -- LaneMarks --
     void GenerateLaneMarkForRoad(const road::Road& road,

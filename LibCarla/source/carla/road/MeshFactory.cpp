@@ -1177,28 +1177,38 @@ namespace {
   /// the open edge of the road network and keeps its shape.
   void PaveEnclosedGaps(
       std::unordered_map<Cell, float, CellHash> &layer,
-      const int fill_radius) {
+      const int fill_radius,
+      const float separation) {
     const std::array<Cell, 4> neighbours = {
         Cell{1, 0}, Cell{-1, 0}, Cell{0, 1}, Cell{0, -1}};
     for (int pass = 0; pass < fill_radius; ++pass) {
-      std::unordered_map<Cell, std::pair<float, int>, CellHash> candidates;
+      // Each candidate collects the heights around it: two or more paved neighbours
+      // means it is enclosed by surface rather than sitting on the open edge.
+      std::unordered_map<Cell, std::vector<float>, CellHash> candidates;
       for (const auto &entry : layer) {
         for (const auto &step : neighbours) {
           const Cell key{entry.first.col + step.col, entry.first.row + step.row};
-          if (layer.count(key) != 0) {
-            continue;
+          if (layer.count(key) == 0) {
+            candidates[key].push_back(entry.second);
           }
-          auto &candidate = candidates[key];
-          candidate.first += entry.second;
-          candidate.second += 1;
         }
       }
-      // Two or more paved neighbours means the cell is enclosed by surface rather
-      // than sitting on the open edge of the road network.
       for (const auto &candidate : candidates) {
-        if (candidate.second.second >= 2) {
-          layer[candidate.first] = candidate.second.first / candidate.second.second;
+        const auto &heights = candidate.second;
+        if (heights.size() < 2) {
+          continue;
         }
+        const auto range = std::minmax_element(heights.begin(), heights.end());
+        // Paving between two surfaces that disagree would invent a ramp where there is
+        // a gap; only a gap whose surrounding surface agrees with itself is interior.
+        if (*range.second - *range.first > separation) {
+          continue;
+        }
+        float total = 0.0f;
+        for (const float h : heights) {
+          total += h;
+        }
+        layer[candidate.first] = total / static_cast<float>(heights.size());
       }
     }
   }
@@ -1240,13 +1250,18 @@ namespace {
     }
   }
 
-  /// Emit one layer as two triangles per cell on shared corner vertices.
-  void AppendLayerSurface(
-      Mesh &out_mesh,
+  /// Emit one layer as tiles of two triangles per cell.
+  ///
+  /// Corner heights are resolved across the whole layer before any tile is built, and
+  /// each corner averages the cells meeting there. Neighbouring tiles therefore compute
+  /// an identical position and height for every vertex on their shared edge, so the
+  /// tiling introduces no seam — and within a tile, neighbouring quads share the vertex
+  /// itself, so the surface is continuous by construction.
+  void AppendLayerTiles(
+      std::vector<std::unique_ptr<Mesh>> &out_tiles,
       const std::unordered_map<Cell, float, CellHash> &layer,
-      const float cell) {
-    // Corner heights average the cells meeting there, so neighbouring quads share
-    // both the vertex and its height and the surface has no seam to weld.
+      const float cell,
+      const float tile_size) {
     std::unordered_map<Cell, std::pair<float, int>, CellHash> corners;
     const std::array<Cell, 4> offsets = {Cell{0, 0}, Cell{1, 0}, Cell{0, 1}, Cell{1, 1}};
     for (const auto &entry : layer) {
@@ -1257,36 +1272,57 @@ namespace {
       }
     }
 
-    const size_t base = out_mesh.GetVerticesNum();
-    std::unordered_map<Cell, size_t, CellHash> index_of;
-    for (const auto &corner : corners) {
-      const size_t next = base + index_of.size();
-      index_of[corner.first] = next;
-      out_mesh.AddVertex(Mesh::vertex_type(
-          corner.first.col * cell,
-          corner.first.row * cell,
-          corner.second.first / corner.second.second));
+    const int cells_per_tile = std::max(1, static_cast<int>(std::lround(tile_size / cell)));
+    std::unordered_map<Cell, std::vector<Cell>, CellHash> tiles;
+    for (const auto &entry : layer) {
+      tiles[Cell{
+          static_cast<int>(std::floor(static_cast<float>(entry.first.col) / cells_per_tile)),
+          static_cast<int>(std::floor(static_cast<float>(entry.first.row) / cells_per_tile))}]
+          .push_back(entry.first);
     }
 
-    for (const auto &entry : layer) {
-      const auto a = index_of[entry.first];
-      const auto b = index_of[Cell{entry.first.col + 1, entry.first.row}];
-      const auto c = index_of[Cell{entry.first.col + 1, entry.first.row + 1}];
-      const auto d = index_of[Cell{entry.first.col, entry.first.row + 1}];
-      out_mesh.AddIndex(static_cast<Mesh::index_type>(a + 1));
-      out_mesh.AddIndex(static_cast<Mesh::index_type>(b + 1));
-      out_mesh.AddIndex(static_cast<Mesh::index_type>(c + 1));
-      out_mesh.AddIndex(static_cast<Mesh::index_type>(a + 1));
-      out_mesh.AddIndex(static_cast<Mesh::index_type>(c + 1));
-      out_mesh.AddIndex(static_cast<Mesh::index_type>(d + 1));
+    for (const auto &tile : tiles) {
+      Mesh mesh;
+      mesh.AddMaterial("road");
+      std::unordered_map<Cell, size_t, CellHash> index_of;
+      for (const auto &key : tile.second) {
+        for (const auto &offset : offsets) {
+          const Cell corner{key.col + offset.col, key.row + offset.row};
+          if (index_of.count(corner) != 0) {
+            continue;
+          }
+          const size_t next = index_of.size();
+          index_of[corner] = next;
+          const auto &sum = corners.at(corner);
+          mesh.AddVertex(Mesh::vertex_type(
+              corner.col * cell,
+              corner.row * cell,
+              sum.first / static_cast<float>(sum.second)));
+        }
+      }
+      for (const auto &key : tile.second) {
+        const auto a = index_of.at(key);
+        const auto b = index_of.at(Cell{key.col + 1, key.row});
+        const auto c = index_of.at(Cell{key.col + 1, key.row + 1});
+        const auto d = index_of.at(Cell{key.col, key.row + 1});
+        mesh.AddIndex(static_cast<Mesh::index_type>(a + 1));
+        mesh.AddIndex(static_cast<Mesh::index_type>(b + 1));
+        mesh.AddIndex(static_cast<Mesh::index_type>(c + 1));
+        mesh.AddIndex(static_cast<Mesh::index_type>(a + 1));
+        mesh.AddIndex(static_cast<Mesh::index_type>(c + 1));
+        mesh.AddIndex(static_cast<Mesh::index_type>(d + 1));
+      }
+      mesh.EndMaterial();
+      out_tiles.push_back(std::make_unique<Mesh>(std::move(mesh)));
     }
   }
 
 } // namespace
 
 
-  std::unique_ptr<Mesh> MeshFactory::ResolveJunctionSurface(
-      const std::vector<std::unique_ptr<Mesh>> &lane_meshes) const {
+  std::vector<std::unique_ptr<Mesh>> MeshFactory::ResolveDrivableSurface(
+      const std::vector<std::unique_ptr<Mesh>> &lane_meshes,
+      const float tile_size) const {
     const float cell = road_param.junction_cell_size;
     const float separation = road_param.junction_layer_separation;
 
@@ -1321,8 +1357,9 @@ namespace {
         }
       }
     }
+    std::vector<std::unique_ptr<Mesh>> out_tiles;
     if (samples.empty()) {
-      return std::make_unique<Mesh>();
+      return out_tiles;
     }
 
     // 2. Reduce each cell to one height per layer. A surface model can place a
@@ -1355,8 +1392,6 @@ namespace {
     const std::array<Cell, 4> neighbours = {
         Cell{1, 0}, Cell{-1, 0}, Cell{0, 1}, Cell{0, -1}};
 
-    Mesh out_mesh;
-    out_mesh.AddMaterial("road");
     for (const auto &seed : clustered) {
       for (size_t index = 0; index < seed.second.size(); ++index) {
         if (claimed.at(seed.first)[index] != 0) {
@@ -1369,6 +1404,29 @@ namespace {
           const auto current = frontier.back();
           frontier.pop_back();
           const float height = clustered.at(current.first).at(current.second);
+          // A layer is a height function of plan position: one value per cell. A ramp
+          // climbing to a deck is continuously connected to the road it crosses, so
+          // growing purely by connectivity would claim both and the crossing cell could
+          // keep only one of them, burying the underpass. Reaching a cell this layer
+          // already holds means the surface has passed over itself, so it stops there.
+          if (layer.count(current.first) != 0) {
+            continue;
+          }
+          // Growth is checked against the cell it came from, but two branches — one along
+          // the ground, one climbing a ramp — can meet as neighbours without ever being
+          // compared. A cell joins only if it agrees with every neighbour already held.
+          bool agrees = true;
+          for (const auto &step : neighbours) {
+            const auto held = layer.find(
+                Cell{current.first.col + step.col, current.first.row + step.row});
+            if (held != layer.end() && std::abs(held->second - height) > separation) {
+              agrees = false;
+              break;
+            }
+          }
+          if (!agrees) {
+            continue;
+          }
           layer[current.first] = height;
           for (const auto &step : neighbours) {
             const Cell key{current.first.col + step.col, current.first.row + step.row};
@@ -1385,13 +1443,12 @@ namespace {
             }
           }
         }
-        PaveEnclosedGaps(layer, road_param.junction_fill_radius);
+        PaveEnclosedGaps(layer, road_param.junction_fill_radius, separation);
         RelaxLayer(layer, road_param.junction_relax_passes);
-        AppendLayerSurface(out_mesh, layer, cell);
+        AppendLayerTiles(out_tiles, layer, cell, tile_size);
       }
     }
-    out_mesh.EndMaterial();
-    return std::make_unique<Mesh>(out_mesh);
+    return out_tiles;
   }
 
 

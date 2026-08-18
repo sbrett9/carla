@@ -1100,7 +1100,7 @@ namespace road {
         }
       }
       if(smooth_junctions) {
-        out_mesh += *mesh_factory.ResolveJunctionSurface(lane_meshes);
+        out_mesh += *mesh_factory.MergeAndSmooth(lane_meshes);
       } else {
         geom::Mesh junction_mesh;
         for(auto& lane : lane_meshes) {
@@ -1118,6 +1118,42 @@ namespace road {
       const rpc::OpendriveGenerationParameters& params) const {
     geom::MeshFactory mesh_factory(params);
     std::vector<std::unique_ptr<geom::Mesh>> out_mesh_list;
+
+    // Resolve the whole drivable network into one surface per height layer, rather than
+    // one ribbon per lane. Meshing lanes separately leaves the roads as unwelded strips,
+    // the junction interiors unpaved, and the turning paths overlapping each other at
+    // heights they each sampled independently. Resolving once removes all three, and the
+    // tiles it returns share their vertices along the edges where they meet.
+    //
+    // Sidewalks keep the per-lane path: they sit above the carriageway and are not part
+    // of the drivable surface.
+    if (params.smooth_junctions) {
+      std::vector<std::unique_ptr<geom::Mesh>> drivable;
+      std::vector<std::unique_ptr<geom::Mesh>> sidewalks;
+      for (auto &&pair : _data.GetRoads()) {
+        for (auto &&lane_section : pair.second.GetLaneSections()) {
+          for (auto &&lane_pair : lane_section.GetLanes()) {
+            const auto &lane = lane_pair.second;
+            if (lane.GetId() == 0) {
+              continue;
+            }
+            if (lane.GetType() == road::Lane::LaneType::Sidewalk) {
+              sidewalks.push_back(mesh_factory.Generate(lane));
+            } else if (lane.GetType() == road::Lane::LaneType::Driving) {
+              drivable.push_back(mesh_factory.Generate(lane));
+            }
+          }
+        }
+      }
+      out_mesh_list = mesh_factory.ResolveDrivableSurface(
+          drivable, static_cast<float>(params.max_road_length));
+      for (auto &sidewalk : sidewalks) {
+        if (sidewalk->GetVertices().size() != 0) {
+          out_mesh_list.push_back(std::move(sidewalk));
+        }
+      }
+      return out_mesh_list;
+    }
 
     std::unordered_map<JuncId, geom::Mesh> junction_map;
     for (auto &&pair : _data.GetRoads()) {
@@ -1153,10 +1189,7 @@ namespace road {
         }
       }
       if(params.smooth_junctions) {
-        // One continuous surface per height layer, rather than overlapping lane
-        // strips blended after the fact. Sidewalks keep their own geometry: they sit
-        // above the carriageway and are not part of the drivable surface.
-        auto merged_mesh = mesh_factory.ResolveJunctionSurface(lane_meshes);
+        auto merged_mesh = mesh_factory.MergeAndSmooth(lane_meshes);
         for(auto& lane : sidewalk_lane_meshes) {
           *merged_mesh += *lane;
         }
