@@ -703,6 +703,31 @@ semantics.** Where per-triangle attribution is wanted later (labelling, segmenta
 vertex attributes — `CreateMeshSection_LinearColor` already accepts UV0 and VertexColor and both are
 currently passed empty — not split geometry. That is strictly more capable than the present state.
 
+### The junction extra width is load-bearing — do not remove it
+
+`additional_width` (0.6 m, added to each *half*-width of a driving lane inside a junction) makes
+every connector 1.2 m wider than the roads it joins. That overhang is visible on short connectors —
+of the 18 under 3 m long on `Arapahoe_I25`, all are wider than they are long, and the 1.30 m
+connector at 39.5955106, −104.8856034 is 4.55 m wide against the 3.35 m lanes either side.
+
+It is nonetheless doing real work. The parameter is a mesh-generation input rather than something
+written into the .xodr, so both settings can be measured against one map:
+
+| | `additional_width = 0.6` | `= 0.0` |
+|---|---:|---:|
+| junctions enclosing a hole > 0.5 m² | 44 of 183 | **60 of 183** |
+| total enclosed hole area | 347.0 m² | **668.2 m²** |
+| largest single hole | 66.8 m² | 66.8 m² |
+| cross-strip duplicate vertices | 49.4 % | 55.3 % |
+
+Removing the overhang **nearly doubles** the enclosed hole area: the overlap it creates is what
+closes the seams between adjacent connectors. The largest single hole is identical under both,
+confirming that the big holes are unmodelled junction interior rather than seam slack, and that no
+setting of this parameter reaches them.
+
+Keep it at 0.6. Retriangulation should subsume it: a single junction surface has no inter-connector
+seams to bridge, so the overhang becomes unnecessary rather than merely tolerated.
+
 ### Order of work
 
 **Fix the data before welding it.** Welding is a representation change and cannot repair a genuine
