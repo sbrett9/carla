@@ -176,6 +176,14 @@ Heights across links largely agree — both roads sample the same plan position,
 Lakeview_Carson and 2.9 m on GalleyRoad. **Slope is the dominant failure**: mismatched beyond 0.02 on
 21-79 % of links on every map with relief.
 
+Read the slope column precisely. Because every road ends `b = 0` (§3.1) and a successor link always
+contacts the next road's start, **100 % of these comparisons have one side pinned to zero** — measured
+on all ten maps. The figure is a sound measure of *a slope kink exists at this seam*, which is the
+defect, but it is not a measure of the two roads disagreeing about the terrain grade: it is
+essentially the magnitude of whichever side is not zeroed. What the roads actually disagree about
+only becomes measurable once both sides carry real tangents (§17). Seams are counted once each, not
+once per direction.
+
 This table reproduces the corresponding measurement in issue #29 to three decimals on both maps it
 reported (Iran_Route_96: 58 links, max `dz` 0.191, max slope 0.306, 48 %; Lakeview_Carson: 488 links,
 `dz` p90 0.344 / max 1.197, slope p90 0.112 / max 0.238, 79 %), which were measured independently.
@@ -469,7 +477,7 @@ Each reported with the measured number, not a claim. Baselines are §3.
 | 1 | Zero `<elevation>` records with both `c=0` and `d=0` on any road carrying more than two samples | 3,811 such roads, 100 % linear |
 | 2 | Slope discontinuity at internal boundaries below a stated epsilon, with the before/after distribution; height continuity must not regress | median 0.0105, p90 0.0754, p99 1.2957, max 52.61, 30.7 % of 27,110 boundaries above 0.02; height step already exact at 1.8e-15 m |
 | 3 | Zero overshoot outside bracketing sample values on monotone runs | not applicable to a linear fit; this is the new risk the monotone constraint bounds |
-| 4 | Slope mismatch across road-to-road links below a stated tolerance, and no road ending with an artificial `b = 0` | 21-79 % of links above 0.02; 7,200 of 7,200 roads end `b=0` |
+| 4 | Slope mismatch across road-to-road links below a stated tolerance, and no road ending with an artificial `b = 0` | 7,200 of 7,200 roads end `b=0`. The 21-79 % of links above 0.02 measures the kink, not a road-to-road disagreement — 100 % of comparisons have one side pinned to zero (§3.3), so the tolerance must be set against the post-fit measurement in §17 |
 | 5 | Junction endpoint height agreement within a stated tolerance | max 0.19 m Iran_Route_96, 1.20 m Lakeview_Carson, 2.91 m GalleyRoad |
 | 6 | No junction connector carrying a grade the roads it links do not | worst 30.6 % Iran_Route_96, 23.7 % Lakeview_Carson, 55.1 % GalleyRoad |
 | 7 | Paired opposing carriageways agree within a stated tolerance at matched stations, crossovers driven to zero | roads 180/199: max 1.201 m, 6 % of stations above 0.25 m, 242 crossovers |
@@ -515,23 +523,52 @@ so on), so the Fritsch-Carlson limiting is holding. Height continuity does not r
 the C0 step stays at machine epsilon, rising from ~1e-15 m to ~1e-14 m purely from the
 extra rounding of evaluating a full cubic. Criteria 1, 2 and 3 are met by the fit alone.
 
-### The fit alone does not fix continuity between roads
+### The link-slope baseline measures the kink, not a disagreement between roads
 
-Slope mismatch across road-to-road links **does not reliably improve, and on some maps
-gets worse**:
+The probe established something that changes how §3.3 and criterion 4 must be read.
+**On every one of the ten maps, 100 % of link comparisons have one side pinned to
+`b = 0`.** Every road ends flat, and in these files a successor link always contacts the
+next road's start while a predecessor link always contacts the previous road's end — so
+one of the two tangents being compared is always the artificial zero.
 
-| map | above 0.02 before | after |
-|---|---:|---:|
-| Arapahoe_I25 | 47.6 % | 36.9 % |
-| Bellvue_Overpass | 29.6 % | **40.7 %** |
-| East56th | 0.0 % | **4.2 %** |
+The pre-fix figure of 21-79 % of links above 0.02 is therefore a valid measure of *there
+is a slope kink at this seam* — the kink is real, and it is the defect — but it is **not**
+a measure of the two roads disagreeing about the terrain grade. It is essentially the
+magnitude of whichever side is not zeroed. Cause 3's ranking stands; its explanation
+needed this correction.
 
-The mechanism is not a defect in the fit. Replacing the artificial `b = 0` with a real
-terminal grade means two independently derived real grades now meet at a junction where
-previously a zero met a grade — and where the neighbour was nearly flat, the mismatch
-grows. **§8 is therefore load-bearing rather than a refinement**: the endpoint tangents
-have to be resolved jointly across the junction, not per road. Item 2 must not be landed
-alone and judged on link statistics.
+Once both sides carry real tangents the quantity becomes measurable for the first time,
+and it is non-zero. Comparing it against the pre-fix number compares two different
+things, so the paired per-seam change is the only honest read:
+
+| map | seams | mean before | mean after | improved | worsened |
+|---|---:|---:|---:|---:|---:|
+| Arapahoe_I25 | 1,464 | 0.0246 | 0.0260 | 795 | 668 |
+| Bellvue_Overpass | 54 | 0.0184 | 0.0214 | 24 | 30 |
+| East56th | 24 | 0.0078 | 0.0076 | 12 | 12 |
+| GalleyRoad | 620 | 0.0490 | 0.0519 | 328 | 292 |
+| Gardnerville_Centerville_Lane | 316 | 0.0170 | 0.0173 | 153 | 163 |
+| IRAN | 2,526 | 0.0144 | 0.0145 | 1,312 | 1,213 |
+| Iran_Route_96 | 58 | 0.0300 | 0.0264 | 37 | 21 |
+| Lakeview_Carson | 488 | 0.0572 | 0.0412 | 309 | 177 |
+| SF_LaurelHeights | 746 | 0.0253 | 0.0332 | 314 | 432 |
+| wrigley | 2,956 | 0.2133 | 0.3976 | 1,069 | 1,866 |
+
+Most maps split near evenly, which is what swapping one quantity for a different one
+looks like. Lakeview_Carson and Iran_Route_96 — the two with real relief and no elevated
+structures — improve outright. `wrigley` degrades sharply, but its "real" grades include
+the 11 m structure arches of the next subsection, so exposing them is the measurement
+working, not the fit failing.
+
+**§8 is load-bearing rather than a refinement**, for this reason rather than the one first
+recorded here: the residual disagreement between adjacent roads is only visible after the
+fit, it is non-zero on every map, and nothing in §6 addresses it. Endpoint tangents have
+to be resolved jointly across the junction. Item 2 should not be landed alone and judged
+on link statistics, because the pre-fix statistic it would be judged against does not
+measure the same thing.
+
+Seams are counted once each, not once per direction — verified on Iran_Route_96, where 58
+directed comparisons cover 58 distinct seams.
 
 Junction connector grades are **unchanged** by the fit — worst 32.3 % on Arapahoe_I25
 before and after, 30.6 % on Iran_Route_96 — confirming by measurement what §3.4 argued:
