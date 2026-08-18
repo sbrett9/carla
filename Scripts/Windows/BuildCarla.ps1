@@ -64,6 +64,7 @@
 [CmdletBinding(PositionalBinding = $false)]
 param(
     [string]$Vs,              # force VS toolchain: '2022' or '2026'; omit to auto-detect
+    [switch]$SkipLibCarla,    # skip the LibCarla (C++) build the Carla plugin links
     [switch]$SkipUnreal,      # skip the CarlaUnrealEditor C++ build
     [switch]$CleanUnreal,     # wipe editor Intermediate/Binaries first for a full from-scratch rebuild
     [switch]$SkipCarlaNet,    # skip the CarlaNet (.NET) build + wheel
@@ -334,12 +335,47 @@ Write-Info "CARLA repo: $CarlaRoot"
 Write-Info "UE engine : $UE_ROOT"
 "Build started: $(Get-Date)" | Set-Content $LOG_FILE
 
-$ueResult  = 0   # 0 = success/skipped
+$libResult = 0   # 0 = success/skipped
+$ueResult  = 0
 $netResult = 0
 $ctlResult = 0
 
 # ============================================================================
-#  1) Unreal — CarlaUnrealEditor (C++: Carla plugin, CesiumCarlaBridge, etc.)
+#  1) LibCarla — the C++ the Carla plugin links against
+# ============================================================================
+# The Carla plugin links Build\LibCarla\carla-server.lib, listed in the plugin's
+# Libraries.def. That library holds the server-side road model — OpenDriveParser, Map,
+# Lane and MeshFactory — which is what turns an .xodr into the road mesh inside the
+# engine. It is CARLA's own source, not a third-party dependency, so an edit to it has
+# to be compiled here: without this the Unreal step below happily relinks the plugin
+# against whatever carla-server.lib was last produced, and a C++ change appears to have
+# had no effect at all.
+if (-not $SkipLibCarla) {
+    Write-Info "============================================================"
+    Write-Info " Building LibCarla (carla-server)"
+    Write-Info "============================================================"
+    if (-not (Test-Path (Join-Path $CarlaRoot 'Build\CMakeCache.txt'))) {
+        Write-Fail "No CMake cache in Build\ — run CarlaSetup.ps1 first to configure it."
+        $libResult = 1
+    } else {
+        try {
+            cmake --build (Join-Path $CarlaRoot 'Build') --target carla-server 2>&1 |
+                Tee-Object -FilePath $LOG_FILE -Append
+            $libResult = $LASTEXITCODE
+        } catch {
+            Write-Fail "LibCarla build failed: $_"
+            $libResult = 1
+        }
+        if ($libResult -ne 0) { Write-Fail "`nLIBCARLA BUILD FAILED" }
+        else                  { Write-Info "`nLIBCARLA BUILD SUCCEEDED" }
+    }
+    if ($libResult -ne 0) { exit $libResult }
+} else {
+    Write-Info "Skipping LibCarla build (-SkipLibCarla)."
+}
+
+# ============================================================================
+#  2) Unreal — CarlaUnrealEditor (C++: Carla plugin, CesiumCarlaBridge, etc.)
 # ============================================================================
 if (-not $SkipUnreal) {
     Write-Info "============================================================"
@@ -432,7 +468,7 @@ if (-not $SkipUnreal) {
 }
 
 # ============================================================================
-#  2) CarlaNet — .NET build + Python wheel (publishes DLLs into the shim,
+#  3) CarlaNet — .NET build + Python wheel (publishes DLLs into the shim,
 #     then produces carlanet-*.whl). Independent of the Unreal build, so it
 #     runs even if the C++ build failed (you still get full diagnostics).
 # ============================================================================
@@ -471,7 +507,7 @@ if (-not $SkipCarlaNet) {
 }
 
 # ============================================================================
-#  3) CarlaControl — carlacontrol Python wheel (the run_SCTMV.py client package).
+#  4) CarlaControl — carlacontrol Python wheel (the run_SCTMV.py client package).
 #     Pure Python, so it has no .NET/native step; independent of both builds above.
 # ============================================================================
 if (-not $SkipCarlaControl) {
