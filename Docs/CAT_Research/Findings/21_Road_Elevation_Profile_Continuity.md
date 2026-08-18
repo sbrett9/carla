@@ -495,6 +495,110 @@ Measurements do not close this. The road surface is judged visually by running `
 - **`wrigley`** — the noise-dominated case, and the one that exercises the degenerate sub-metre
   connector handling.
 
+## 17. What the probe measured
+
+`CarlaNet/python/probe_elevation_profile.py` (with `ElevationProfileProbe` and
+`ElevationProfileFitter`) implements §14 item 1. Its "before" column reproduces every
+table in §3 exactly on all ten maps, and its locate mode reproduces both named
+reproducers of §16 — the same five roads within 45 m of the junction fork, the same
+closest approaches, and the same `+0.092 / 0.000 / +0.306 / 0.000 / −0.061` slope
+sequence through it. That is the control; the results below are what the candidate
+monotone fit does against it.
+
+### The fit does what it was specified to do
+
+Re-fitting every road with monotone cubic Hermite drives the slope step at internal
+record boundaries to **exactly zero on all ten maps** — median, p90, p99 and max all
+0.0000, against a 30.7 % baseline above 0.02. Overshoot is **0 violations across every
+monotone span on every map** (4,310 spans on Arapahoe_I25, 1,602 on Iran_Route_96, and
+so on), so the Fritsch-Carlson limiting is holding. Height continuity does not regress:
+the C0 step stays at machine epsilon, rising from ~1e-15 m to ~1e-14 m purely from the
+extra rounding of evaluating a full cubic. Criteria 1, 2 and 3 are met by the fit alone.
+
+### The fit alone does not fix continuity between roads
+
+Slope mismatch across road-to-road links **does not reliably improve, and on some maps
+gets worse**:
+
+| map | above 0.02 before | after |
+|---|---:|---:|
+| Arapahoe_I25 | 47.6 % | 36.9 % |
+| Bellvue_Overpass | 29.6 % | **40.7 %** |
+| East56th | 0.0 % | **4.2 %** |
+
+The mechanism is not a defect in the fit. Replacing the artificial `b = 0` with a real
+terminal grade means two independently derived real grades now meet at a junction where
+previously a zero met a grade — and where the neighbour was nearly flat, the mismatch
+grows. **§8 is therefore load-bearing rather than a refinement**: the endpoint tangents
+have to be resolved jointly across the junction, not per road. Item 2 must not be landed
+alone and judged on link statistics.
+
+Junction connector grades are **unchanged** by the fit — worst 32.3 % on Arapahoe_I25
+before and after, 30.6 % on Iran_Route_96 — confirming by measurement what §3.4 argued:
+a C1 fit rounds the creases either side of a connector ramp and leaves the ramp standing.
+§9 is needed for criterion 6.
+
+Paired carriageways improve but nowhere near enough: roads 180/199 go from max 1.2015 m
+and 242 crossovers to max 1.0506 m and 202 crossovers. §10 is needed for criterion 7.
+
+### Sustained departures that outlier rejection cannot reach
+
+The pairing detector finds **533 carriageway pairs on `wrigley`**, of which **45 carry a
+sustained departure** — a continuous run, 25 to 45 m long, over which the two halves of
+one street disagree by more than a metre, reaching **12.674 m**. Inspected directly, the
+two profiles agree to 0.000 m at both shared endpoints and one carriageway arches
+smoothly over its twin in between: its samples landed on an overhead structure while the
+twin's landed on the ground.
+
+Because the departure is a smooth run rather than an isolated spike, **`RejectOutliers`
+cannot reach it by construction** — it only rejects a sample that is far from *both*
+neighbours, and every sample along the arch is close to its neighbours. This is a
+distinct failure mode from the noise of cause 6, at roughly forty times the magnitude,
+and it makes §10 do more than remove station-offset error. It also constrains §10: the
+shared series cannot simply be taken from one road of the pair, because on these roads
+one of the two is on a structure. Choosing the lower, or the layer-consistent, series is
+a decision §10 has to make explicitly.
+
+### The low-pass is not a free win, and must not be applied blind
+
+Sweeping the filter window with the linear fit (whose slope steps are exactly the
+sampled grade variation) separates what the filter removes from what it costs:
+
+| window | SF_LaurelHeights above 0.02 | its rms deviation | wrigley above 0.02 | its rms deviation |
+|---:|---:|---:|---:|---:|
+| 1 (off) | 40.8 % | 0.000 m | 41.0 % | 0.000 m |
+| 5 | 30.4 % | 0.066 m | **45.4 %** | 0.633 m |
+| 7 | 27.4 % | 0.077 m | **45.7 %** | 0.833 m |
+| 9 | 27.7 % | 0.080 m | **46.4 %** | 0.954 m |
+
+On a map whose roughness really is zero-mean noise the trade is good: SF_LaurelHeights
+loses a quarter of its grade breaks for 6.6 cm rms. On `wrigley` the filter **makes the
+metric worse at every strength** while dragging the curve up to 6.4 m (window 5) from
+the sampled heights, because smoothing an 11 m arch spreads one large grade break into
+several moderate ones instead of removing it. Worse, a 6.4 m excursion is the deck-smear
+failure the `Raised` exemption exists to prevent, reproduced here on a map where the
+probe has no `Raised` information at all.
+
+So §7's "conservative default" cannot be a single global number. The filter needs to be
+gated on the series actually being noise — or applied only where no sustained departure
+is present — and it must be measured per map rather than assumed.
+
+### Probe limitations, stated
+
+- **`Raised` flags are invisible to it.** They live in `ElevationInjector`'s in-memory
+  sample list, not in the .xodr, so the probe cannot verify deck preservation. That check
+  belongs to `probe_grade_separation.py` and to the C# regression test in criterion 9.
+- **A filter window of `order + 1` points or fewer is a mathematical no-op** — the
+  polynomial passes through the centre sample exactly. With the default order 2 this
+  makes windows of 3 do nothing at all; the tool warns rather than silently reporting
+  "no change".
+- **One derived figure differs from the issue.** At the split-carriageway reproducer the
+  probe measures the nearest approach of both roads' reference lines as 0.74 m where the
+  issue reports 1.2 m. The road identification, lengths, profiles and wash figures all
+  match exactly, so this is a difference in the distance metric, not in the finding; it
+  is unexplained and does not affect anything downstream.
+
+
 ## Sources
 
 - OpenDRIVE 1.4 §5.3.5 road elevation (the `<elevation>` cubic form).
