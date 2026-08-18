@@ -784,6 +784,32 @@ public class GradeSeparationTests
         Assert.Equal(6.0, ElevationAt(Inject(true), roadId: "1", s: 50.0), 3);
     }
 
+    [Fact]
+    public void OutlierRejection_SparesRaisedSamplesUnderTheCubicFitToo()
+    {
+        // The same deck, fitted with the C1 cubic rather than straight ramps. The fit interpolates
+        // its samples, so a deliberately raised deck must still stand at its full height instead of
+        // being rounded back into the road beneath it.
+        var map = LoadCrossing();
+        var samples = ElevationInjector.ExtractCenterlineSamples(map, 10.0);
+        var heights = new double[samples.Count];
+        for (int i = 0; i < samples.Count; ++i) heights[i] = 100.0;
+
+        int spike = samples.Select((s, i) => (s, i)).First(p => p.s.RoadId == 1u && p.s.S == 50.0).i;
+        heights[spike] = 106.0;
+
+        string Inject(bool raised)
+        {
+            var flags = new bool[samples.Count];
+            flags[spike] = raised;
+            return ElevationInjector.InjectElevation(CrossingXodr, samples, heights, 100.0,
+                ElevationFitMode.MonotoneCubicHermite, 4.0, flags);
+        }
+
+        Assert.Equal(0.0, ElevationAt(Inject(false), roadId: "1", s: 50.0), 3);
+        Assert.Equal(6.0, ElevationAt(Inject(true), roadId: "1", s: 50.0), 3);
+    }
+
     private static double ElevationAt(string xodr, string roadId, double s)
     {
         var road = System.Xml.Linq.XDocument.Parse(xodr).Root!
