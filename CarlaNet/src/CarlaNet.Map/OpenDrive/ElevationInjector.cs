@@ -185,11 +185,20 @@ public static class ElevationInjector
         var doc = XDocument.Parse(openDriveXml);
         var root = doc.Root ?? throw new ArgumentException("not an OpenDRIVE document (no root)");
 
-        // Slope only carries through a junction under the C1 fit; the piecewise modes stay exactly
-        // as they were, so selecting one of them reproduces the previous output byte for byte.
-        var endTangents = mode == ElevationFitMode.MonotoneCubicHermite
-            ? ResolveLinkedRoadEnds(root, perRoad)
-            : new Dictionary<RoadEnd, double>();
+        // Sharing a height series between the two directions of a street, and carrying slope
+        // through a junction, both ride with the C1 fit; the piecewise modes stay exactly as they
+        // were, so selecting one of them reproduces the previous output byte for byte.
+        Dictionary<RoadEnd, double> endTangents;
+        if (mode == ElevationFitMode.MonotoneCubicHermite)
+        {
+            // Before the junction pass, so resolved node heights see the shared series.
+            var carriageways = MergeOpposingCarriageways(openDriveXml, perRoad);
+            endTangents = ResolveLinkedRoadEnds(root, perRoad, carriageways);
+        }
+        else
+        {
+            endTangents = new Dictionary<RoadEnd, double>();
+        }
 
         foreach (var roadNode in root.Elements("road"))
         {
@@ -410,6 +419,155 @@ public static class ElevationInjector
         }
     }
 
+    // ── opposing carriageways of one street ──────────────────────────────────
+
+    /// <summary>How far apart two reference lines may be and still be the same centreline.</summary>
+    private const double CarriagewayCoincidenceMeters = 0.5;
+
+    /// <summary>
+    /// Gives the two directions of one street a single height series.
+    ///
+    /// netconvert models each direction of a two-way street as its own edge, so one physical
+    /// street arrives as two &lt;road&gt; records sharing a centreline, each carrying its lane on its
+    /// own side. Sampled and fitted independently, the two disagree — and because road A's station
+    /// <c>s</c> is road B's station <c>length − s</c>, their sample grids land at different
+    /// physical points, so the disagreement is largest exactly where the grade is steepest. The
+    /// two halves of one street then meet along its centre line at different heights.
+    ///
+    /// Where the two disagree the lower is taken, not the average. Both sample the same ground
+    /// through a surface model that includes whatever stands on it, so the error is one-sided: a
+    /// sample can land on a canopy or a deck above the road, never below it. Pairs carrying
+    /// deliberately raised samples are left alone — there the height difference is a real grade
+    /// separation rather than a sampling error.
+    /// </summary>
+    private static List<(RoadId Left, RoadId Right)> MergeOpposingCarriageways(
+        string openDriveXml, Dictionary<RoadId, List<(double S, double Z, bool Raised)>> perRoad)
+    {
+        var merged = new List<(RoadId, RoadId)>();
+        var map = OpenDriveParser.Load(openDriveXml);
+        if (map is null)
+            return merged;
+
+        foreach (var (left, right) in FindOpposingCarriageways(map, perRoad))
+        {
+            var a = perRoad[left];
+            var b = perRoad[right];
+            if (a.Any(p => p.Raised) || b.Any(p => p.Raised))
+                continue;
+
+            double length = a[^1].S;
+            // Both series expressed on the same physical axis: road B runs the other way, so its
+            // station s sits at length − s along road A.
+            var mirrored = b.Select(p => (S: length - p.S, p.Z)).OrderBy(p => p.S).ToList();
+
+            // One series, sampled once. Both roads then carry records at the same physical points
+            // — B's mirrored — so their fitted curves are reflections of each other and agree
+            // everywhere rather than merely closely.
+            var shared = new List<(double S, double Z)>(a.Count);
+            foreach (var (s, z, _) in a)
+                shared.Add((s, Math.Min(z, InterpolateHeight(mirrored, s))));
+
+            a.Clear();
+            foreach (var (s, z) in shared)
+                a.Add((s, z, false));
+
+            b.Clear();
+            for (int i = shared.Count - 1; i >= 0; --i)
+                b.Add((length - shared[i].S, shared[i].Z, false));
+
+            merged.Add((left, right));
+        }
+        return merged;
+    }
+
+    /// <summary>
+    /// Road pairs of equal length whose reference lines are coincident when one is traversed
+    /// backwards, and which point in opposite directions where they meet.
+    /// </summary>
+    private static List<(RoadId Left, RoadId Right)> FindOpposingCarriageways(
+        Road.Map map, Dictionary<RoadId, List<(double S, double Z, bool Raised)>> perRoad)
+    {
+        var byLength = new Dictionary<long, List<RoadId>>();
+        foreach (var (id, profile) in perRoad)
+        {
+            if (profile.Count < 2 || !map.Roads.TryGetValue(id, out var road) || road.Length <= 0.0)
+                continue;
+            long key = (long)Math.Round(road.Length * 100.0);
+            if (!byLength.TryGetValue(key, out var list))
+                byLength[key] = list = new List<RoadId>();
+            list.Add(id);
+        }
+
+        var pairs = new List<(RoadId, RoadId)>();
+        var taken = new HashSet<RoadId>();
+        foreach (var group in byLength.Values)
+        {
+            group.Sort();
+            for (int i = 0; i < group.Count; ++i)
+            {
+                if (taken.Contains(group[i])) continue;
+                for (int j = i + 1; j < group.Count; ++j)
+                {
+                    if (taken.Contains(group[j])) continue;
+                    if (!IsOpposingCarriageway(map, group[i], group[j])) continue;
+                    pairs.Add((group[i], group[j]));
+                    taken.Add(group[i]);
+                    taken.Add(group[j]);
+                    break;
+                }
+            }
+        }
+        return pairs;
+    }
+
+    private static bool IsOpposingCarriageway(Road.Map map, RoadId leftId, RoadId rightId)
+    {
+        var left = map.Roads[leftId];
+        var right = map.Roads[rightId];
+        double length = left.Length;
+        const int probes = 9;
+        for (int k = 0; k <= probes; ++k)
+        {
+            double s = length * k / probes;
+            var here = Road.Map.GetDirectedPointInNoLaneOffset(left, s);
+            var there = Road.Map.GetDirectedPointInNoLaneOffset(right, length - s);
+            double dx = here.Location.X - there.Location.X;
+            double dy = here.Location.Y - there.Location.Y;
+            if (Math.Sqrt(dx * dx + dy * dy) > CarriagewayCoincidenceMeters)
+                return false;
+            // Traversed in opposite directions, so the headings must be roughly antiparallel.
+            double delta = Math.Abs(NormalizeAngle(here.Tangent - there.Tangent + Math.PI));
+            if (delta > 0.35)
+                return false;
+        }
+        return true;
+    }
+
+    private static double NormalizeAngle(double radians)
+    {
+        while (radians > Math.PI) radians -= 2.0 * Math.PI;
+        while (radians < -Math.PI) radians += 2.0 * Math.PI;
+        return radians;
+    }
+
+    /// <summary>Height of a station-ordered series at <paramref name="s"/>, held flat past its ends.</summary>
+    private static double InterpolateHeight(List<(double S, double Z)> series, double s)
+    {
+        if (series.Count == 0) return double.NaN;
+        if (s <= series[0].S) return series[0].Z;
+        if (s >= series[^1].S) return series[^1].Z;
+        int low = 0, high = series.Count - 1;
+        while (high - low > 1)
+        {
+            int mid = (low + high) / 2;
+            if (series[mid].S <= s) low = mid; else high = mid;
+        }
+        double span = series[high].S - series[low].S;
+        if (span <= 1e-9) return series[low].Z;
+        double t = (s - series[low].S) / span;
+        return series[low].Z + (series[high].Z - series[low].Z) * t;
+    }
+
     // ── junction height and slope continuity ─────────────────────────────────
 
     /// <summary>One end of one road — the unit a junction node is assembled from.</summary>
@@ -430,9 +588,10 @@ public static class ElevationInjector
     /// is a real step, not something to average away.
     /// </summary>
     private static Dictionary<RoadEnd, double> ResolveLinkedRoadEnds(
-        XElement root, Dictionary<RoadId, List<(double S, double Z, bool Raised)>> perRoad)
+        XElement root, Dictionary<RoadId, List<(double S, double Z, bool Raised)>> perRoad,
+        List<(RoadId Left, RoadId Right)> carriageways)
     {
-        var nodes = GroupLinkedRoadEnds(root, perRoad);
+        var nodes = GroupLinkedRoadEnds(root, perRoad, carriageways);
         var tangents = new Dictionary<RoadEnd, double>();
 
         foreach (var node in nodes)
@@ -483,7 +642,8 @@ public static class ElevationInjector
     /// backwards, so its grade enters the average negated.
     /// </remarks>
     private static List<List<(RoadEnd End, double Parity)>> GroupLinkedRoadEnds(
-        XElement root, Dictionary<RoadId, List<(double S, double Z, bool Raised)>> perRoad)
+        XElement root, Dictionary<RoadId, List<(double S, double Z, bool Raised)>> perRoad,
+        List<(RoadId Left, RoadId Right)> carriageways)
     {
         var parent = new Dictionary<RoadEnd, RoadEnd>();
         var parity = new Dictionary<RoadEnd, double>();
@@ -536,6 +696,27 @@ public static class ElevationInjector
                     continue;
                 parent[theirsRoot] = mineRoot;
                 parity[theirsRoot] = parity[mine] * relative * parity[theirs];
+            }
+        }
+
+        // The two directions of one street are separate roads that never link to each other, yet
+        // their mirrored ends sit on the same corner of a junction. Without this they land in
+        // different node groups and get resolved to different heights, which reopens along the
+        // street's centre line the very disagreement the shared height series just closed.
+        foreach (var (left, right) in carriageways)
+        {
+            foreach (var (mineAtStart, theirsAtStart) in new[] { (true, false), (false, true) })
+            {
+                var mine = new RoadEnd(left, mineAtStart);
+                var theirs = new RoadEnd(right, theirsAtStart);
+                Add(mine);
+                Add(theirs);
+                var mineRoot = Find(mine);
+                var theirsRoot = Find(theirs);
+                if (mineRoot.Equals(theirsRoot))
+                    continue;
+                parent[theirsRoot] = mineRoot;
+                parity[theirsRoot] = parity[mine] * 1.0 * parity[theirs];
             }
         }
 
