@@ -172,6 +172,15 @@ class TrafficController:
         self.reconcile_ms = 0.0
         self.stuck_travel = []
         self.stalled_models = {}
+        # Destinations beyond the entry ring, and the ones already known to route from a
+        # given entry point. See destination_candidates for why the ring alone is not
+        # enough to keep a sparse network populated.
+        try:
+            self.map_sps = list(world.get_map().get_spawn_points())
+        except Exception as e:  # the ring alone still works, just less well
+            self.logger.debug(f"failed to read map spawn points: {e}")
+            self.map_sps = []
+        self.reached_from = {}
         
         if staging is not None:
             self.logger.info(f"traffic controller initialized: {len(blueprints)} blueprints, {len(spawn_pool)} spawn points")
@@ -388,15 +397,57 @@ class TrafficController:
             pass
         return ok
 
-    def pick_destination(self, spawn_tf):
-        s_edge = self.edge_of(spawn_tf.location.x, spawn_tf.location.y, self.b)
-        cands = [
+    @staticmethod
+    def _place_key(location):
+        return (round(location.x, 1), round(location.y, 1))
+
+    def destination_candidates(self, spawn_tf):
+        """Destinations to try from this entry point, best first.
+
+        Traffic is meant to cross the scene, so a ring point on another edge comes first
+        and the far ones before the near.
+
+        The ring alone is not enough. Where a network is sparse, most pairs of entry
+        points have no route between them: on the Hormuz trunk highway the ring is three
+        distinct points, and 14 of the 20 ordered pairs between them cannot be routed,
+        because a divided highway clipped to a box offers no way to turn from one
+        carriageway to the other. Drawing only from that set left the map with no ambient
+        traffic at all, every spawn being skipped as unreachable. The same shape of
+        failure keeps vehicles off a motorway that crosses a denser map.
+
+        So the map's own spawn points follow the ring. A vehicle then still gets a route
+        across the scene rather than none, even if it ends inside the scene rather than
+        at the far edge.
+        """
+        spawn_edge = self.edge_of(spawn_tf.location.x, spawn_tf.location.y, self.b)
+        far_first = sorted(
+            self.ring_sps, key=lambda sp: -spawn_tf.location.distance(sp.location)
+        )
+        other_edge = [
             sp
-            for sp in self.ring_sps
-            if self.edge_of(sp.location.x, sp.location.y, self.b) != s_edge
-        ] or self.ring_sps
-        cands.sort(key=lambda sp: -spawn_tf.location.distance(sp.location))
-        return random.choice(cands[: max(1, len(cands) // 2)])
+            for sp in far_first
+            if self.edge_of(sp.location.x, sp.location.y, self.b) != spawn_edge
+        ]
+        same_edge = [sp for sp in far_first if sp not in other_edge]
+        elsewhere = sorted(
+            self.map_sps, key=lambda sp: -spawn_tf.location.distance(sp.location)
+        )
+
+        ordered, seen = [], {self._place_key(spawn_tf.location)}
+        for sp in other_edge + same_edge + elsewhere:
+            key = self._place_key(sp.location)
+            if key in seen:
+                continue
+            seen.add(key)
+            ordered.append(sp)
+        return ordered
+
+    def pick_destination(self, spawn_tf):
+        candidates = self.destination_candidates(spawn_tf)
+        if not candidates:
+            return spawn_tf
+        head = candidates[: max(1, min(len(candidates), self._ROUTE_DESTINATION_TRIES) // 2)]
+        return random.choice(head)
 
     @staticmethod
     def safe_fade(v, hide):
@@ -441,12 +492,33 @@ class TrafficController:
         return residual <= 1e-3
 
     def plan_route_from(self, spawn_tf):
-        """Plan a route from a spawn point before spawning, skipping unreachable destinations."""
-        for _ in range(self._ROUTE_DESTINATION_TRIES):
-            destination = self.pick_destination(spawn_tf).location
+        """Plan a route from an entry point, walking candidates until one is reachable.
+
+        Re-drawing at random from a handful of ring points cannot find the route that
+        exists: with three distinct entry points, four draws keep asking about the same
+        two unreachable destinations. The candidates are walked in order instead, so a
+        reachable one further down the list is actually reached.
+
+        A destination that routed from this entry point before is remembered and tried
+        first, since each search is an A* over the road graph and repeating the failures
+        every spawn is what made this expensive as well as fruitless.
+        """
+        entry = self._place_key(spawn_tf.location)
+        known = self.reached_from.get(entry, [])
+        candidates = known + [
+            sp
+            for sp in self.destination_candidates(spawn_tf)
+            if self._place_key(sp.location) not in {self._place_key(k.location) for k in known}
+        ]
+        for attempt, destination_tf in enumerate(candidates):
+            if attempt >= self._ROUTE_DESTINATION_TRIES and not known:
+                if attempt >= self._ROUTE_DESTINATION_TRIES + self._ROUTE_FALLBACK_TRIES:
+                    break
+            elif attempt >= self._ROUTE_DESTINATION_TRIES:
+                break
             t0 = time.perf_counter()
             try:
-                route = self.tm.plan_route(spawn_tf.location, destination)
+                route = self.tm.plan_route(spawn_tf.location, destination_tf.location)
             except Exception as e:
                 self.logger.warning("route planning unavailable: %r", e)
                 return None
@@ -455,6 +527,8 @@ class TrafficController:
             self.route_plan_ms_total += elapsed_ms
             self.route_plan_ms_max = max(self.route_plan_ms_max, elapsed_ms)
             if route is not None:
+                if not known:
+                    self.reached_from.setdefault(entry, []).append(destination_tf)
                 return route
         return None
 
@@ -476,6 +550,10 @@ class TrafficController:
     _SPAWN_CLEAR_PAD = 1.0
     _ASSUMED_EXTENT = (3.5, 1.1)
     _ROUTE_DESTINATION_TRIES = 4
+    # Destinations beyond the entry ring to try when no ring point can be reached. A
+    # sparse network needs this: the ring is where traffic should ideally end, not the
+    # only place it can.
+    _ROUTE_FALLBACK_TRIES = 16
 
     def occupied(self, x, y):
         """True if any tracked vehicle's footprint is close enough to (x, y) that spawning there would overlap it."""
