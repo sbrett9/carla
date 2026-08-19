@@ -703,7 +703,7 @@ semantics.** Where per-triangle attribution is wanted later (labelling, segmenta
 vertex attributes — `CreateMeshSection_LinearColor` already accepts UV0 and VertexColor and both are
 currently passed empty — not split geometry. That is strictly more capable than the present state.
 
-### The junction extra width is load-bearing — do not remove it
+### The junction extra width was load-bearing, and is not any more
 
 `additional_width` (0.6 m, added to each *half*-width of a driving lane inside a junction) makes
 every connector 1.2 m wider than the roads it joins. That overhang is visible on short connectors —
@@ -725,8 +725,29 @@ closes the seams between adjacent connectors. The largest single hole is identic
 confirming that the big holes are unmodelled junction interior rather than seam slack, and that no
 setting of this parameter reaches them.
 
-Keep it at 0.6. Retriangulation should subsume it: a single junction surface has no inter-connector
-seams to bridge, so the overhang becomes unnecessary rather than merely tolerated.
+That was measured against the ribbon mesh, and the resolved surface subsumes it exactly as
+anticipated: a single surface has no inter-connector seams to bridge, and the asphalt between
+turning paths is covered by the enclosure test rather than by overlapping the paths themselves.
+
+Re-measured against the resolved surface, the overhang is no longer neutral — it is harmful:
+
+| | `additional_width = 0.0` | `= 0.6` (default) |
+|---|---:|---:|
+| known hole and non-hole points classified correctly | **13 of 13** | 12 of 13 — paves the median |
+| height layers | **13** | 24 |
+| one-cell cracks through the surface | **203** (51 m²) | 228 (57 m²) |
+| paved area | 245,429 m² | 248,802 m² |
+| worst neighbour step, edge / diagonal | 0.395 / 0.646 m | 0.381 / 0.457 m |
+
+Two costs. Widening a connector far enough across a median makes the median read as enclosed by
+junction paving, so the gap filling paves it — the island-and-spike defect returning through a
+different door. And the added overlap stacks surfaces that disagree in height, which the layer split
+then tears into separate sheets: 24 layers where true lane width gives 13, on 3,373 m² of asphalt
+that does not exist in the road network. Against that, it buys a slightly better worst diagonal step.
+
+The resolved-surface path therefore meshes connectors at their true lane width regardless of the
+parameter. The parameter is kept, and still applies to the per-lane path, which still needs it —
+removing it there would reopen the 668.2 m² measured above.
 
 ### Order of work
 

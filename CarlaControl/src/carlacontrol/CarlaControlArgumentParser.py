@@ -100,9 +100,10 @@ class CarlaControlArgumentParser:
             "--additional-width",
             type=float,
             default=0.6,
-            help="extra width added to each side of a driving lane inside a junction (m). "
-            "Makes connectors overlap rather than leave gaps on curves; 0 removes the "
-            "overhang past the roads a connector joins",
+            help="extra width added to each side of a driving lane inside a junction (m), "
+            "making connectors overlap rather than leave gaps on curves. Applies only "
+            "with --no-smooth-junctions: the resolved drivable surface covers the gaps "
+            "directly and meshes connectors at their true lane width",
         )
         build.add_argument(
             "--no-smooth-junctions",

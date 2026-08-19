@@ -1128,6 +1128,18 @@ namespace road {
     // Sidewalks keep the per-lane path: they sit above the carriageway and are not part
     // of the drivable surface.
     if (params.smooth_junctions) {
+      // Connectors are meshed at their true lane width here. The extra width exists to
+      // make neighbouring turning paths overlap, so that between them they cover the
+      // asphalt no single connector does — a compensation for ribbons that cannot weld.
+      // The resolved surface covers that asphalt directly, so the overlap buys nothing
+      // and costs: measured on Arapahoe_I25, the default 0.6 m widens connectors far
+      // enough across a median for it to read as enclosed by junction paving, so the
+      // gap filling paves it, and the added overlap stacks surfaces that disagree in
+      // height into sheets the layer split then tears apart — 24 layers against 13, on
+      // 3,373 m2 of asphalt that is not there in the road network.
+      //
+      // The parameter still applies to the per-lane path below, which does need it.
+      mesh_factory.road_param.extra_lane_width = 0.0f;
       std::vector<std::unique_ptr<geom::Mesh>> drivable;
       std::vector<bool> from_junction;
       std::vector<std::unique_ptr<geom::Mesh>> sidewalks;
