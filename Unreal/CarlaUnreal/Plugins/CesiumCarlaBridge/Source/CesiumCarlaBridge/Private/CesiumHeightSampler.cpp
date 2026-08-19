@@ -16,6 +16,7 @@
 #include "Components/LightComponent.h"
 #include "Components/SkyLightComponent.h"
 #include "EngineUtils.h" // TActorIterator
+#include "HAL/PlatformTime.h" // FPlatformTime (sampling cost)
 #include "UObject/UnrealType.h" // FDoubleProperty (reflection read of CesiumSunSky angles)
 
 // Process-global sample state. One sample at a time, which is all the pipeline
@@ -27,6 +28,19 @@ namespace
 	TArray<FCesiumSampleHeightResult> GResults;
 	TArray<FString> GWarnings;
 	FString GStatus;
+
+	// What the sampling costs. A drape grid is issued one batch at a time, so a build
+	// that takes an hour gives no sign of whether it is sampling slowly or simply
+	// sampling a great many points -- 2,664,983 of them for a 10.7 km2 area at 2 m.
+	// The per-batch rate separates the two, and the running total is what to compare
+	// against the wall-clock the client reports for the whole build.
+	//
+	// Totals cover one map: ConfigureCesiumForOrigin resets them, and it runs once per
+	// build. The Cesium callback fires on the game thread, so no locking is required.
+	double GBatchStartSeconds = 0.0;
+	double GSampleSeconds = 0.0;
+	int64 GSampledPoints = 0;
+	int32 GBatchCount = 0;
 
 	void HandleHeightsSampled(
 		ACesium3DTileset* /*Tileset*/,
@@ -49,6 +63,17 @@ namespace
 			TEXT("Sampled %d point(s): %d succeeded, %d warning(s)."),
 			InResults.Num(), Ok, InWarnings.Num());
 		UE_LOG(LogTemp, Display, TEXT("[CesiumCarlaBridge] %s"), *GStatus);
+
+		const double BatchSeconds = FPlatformTime::Seconds() - GBatchStartSeconds;
+		GSampleSeconds += BatchSeconds;
+		GSampledPoints += InResults.Num();
+		++GBatchCount;
+		UE_LOG(LogTemp, Display,
+			TEXT("[CesiumCarlaBridge]   batch %d: %.3f s (%.0f point/s); "
+				 "%lld point(s) in %.1f s for this map"),
+			GBatchCount, BatchSeconds,
+			BatchSeconds > 0.0 ? InResults.Num() / BatchSeconds : 0.0,
+			GSampledPoints, GSampleSeconds);
 
 		// Per point, at Verbose. A drape grid is one point per cell over the whole map
 		// area, so this loop runs millions of times on a large one: 2,664,983 points for
@@ -210,6 +235,7 @@ bool UCesiumHeightSampler::RequestSample(
 
 	FCesiumSampleHeightMostDetailedCallback Callback;
 	Callback.BindStatic(&HandleHeightsSampled);
+	GBatchStartSeconds = FPlatformTime::Seconds();
 	Tileset->SampleHeightMostDetailed(LonLatHeight, Callback);
 	return true;
 }
@@ -262,6 +288,11 @@ bool UCesiumHeightSampler::ConfigureCesiumForOrigin(
 	int64 GroundIonAssetId,
 	bool bRefreshTileset)
 {
+	// One map's worth of sampling cost. This runs once per build, before any sampling.
+	GSampleSeconds = 0.0;
+	GSampledPoints = 0;
+	GBatchCount = 0;
+
 	UWorld* World = GEngine
 		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
 		: nullptr;
