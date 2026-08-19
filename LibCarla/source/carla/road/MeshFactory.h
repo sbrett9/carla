@@ -175,9 +175,10 @@ namespace geom {
       // layers rather than one surface sampled twice. Above the worst
       // same-layer disagreement measured and below the shallowest clearance.
       float junction_layer_separation   =  3.0f;
-      // How far, in cells, an enclosed gap is paved inwards from the surface
-      // around it. Leaves the open edge of the network its own shape.
-      int   junction_fill_radius        =  4;
+      // Largest enclosed gap that is paved, in square metres. Interior gaps
+      // measured top out near 67 m2 while the smallest city block a network
+      // rings is far larger, so anything between the two separates them.
+      float junction_max_gap_area       = 1000.0f;
       // Neighbour-averaging passes over the resolved height field, removing the
       // flips left where the lower of two overlapping surfaces changes from cell
       // to cell. Four is the measured knee: more barely reduces the remaining

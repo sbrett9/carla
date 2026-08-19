@@ -57,10 +57,10 @@ class JunctionSurface:
     #: measured (1.27 m) and well below the shallowest grade separation (6.8 m).
     LAYER_SEPARATION_METRES = 3.0
 
-    #: How far, in cells, a gap is paved inwards from the surface surrounding it. Four
-    #: cells at 0.5 m closes gaps up to roughly 4 m across, which covers the junction
-    #: interiors measured while leaving the open edge of the network its shape.
-    FILL_RADIUS_CELLS = 4
+    #: Largest enclosed gap that is paved, in square metres. Interior gaps measured on
+    #: Arapahoe_I25 top out at 67 m2 while the smallest city block the network rings is
+    #: far larger, so anything between the two separates them.
+    MAX_GAP_AREA_M2 = 1000.0
 
     #: Neighbour-averaging passes over the resolved height field, removing the flips
     #: left where the lower of two overlapping surfaces changes from cell to cell.
@@ -70,12 +70,12 @@ class JunctionSurface:
         self,
         cell: float | None = None,
         layer_separation: float | None = None,
-        fill_radius: int | None = None,
+        max_gap_area: float | None = None,
         relax_passes: int | None = None,
     ) -> None:
         self.cell = cell or self.CELL_METRES
         self.layer_separation = layer_separation or self.LAYER_SEPARATION_METRES
-        self.fill_radius = self.FILL_RADIUS_CELLS if fill_radius is None else fill_radius
+        self.max_gap_area = self.MAX_GAP_AREA_M2 if max_gap_area is None else max_gap_area
         self.relax_passes = self.RELAX_PASSES if relax_passes is None else relax_passes
 
     # ── layers ───────────────────────────────────────────────────────────────
@@ -115,50 +115,101 @@ class JunctionSurface:
         return relaxed
 
     def _close_gaps(self, layer: dict[tuple[int, int], float]) -> dict[tuple[int, int], float]:
-        """Pave the gaps a junction's connector paths leave between them.
+        """Pave the gaps a junction's turning paths leave enclosed between them.
 
-        OpenDRIVE models a junction as turning paths, so the asphalt between them is
-        never covered by any lane — on `Arapahoe_I25` that leaves 347 m² of enclosed gaps
-        for a vehicle to drop through. A gap narrower than ``self.fill_radius`` cells is
-        interior to the junction and gets paved at the height of the surface around it;
-        anything wider is left alone, so the outer boundary of the road network keeps its
-        shape instead of being inflated.
+        OpenDRIVE models a junction as turning paths — a u-turn, some left turns, the
+        straight-throughs, the rights — and between them sits asphalt no lane ever
+        covers. A vehicle drops through it, since collision uses these triangles.
+
+        The test is enclosure, not distance. A gap the turning paths surround is interior
+        to the intersection and gets paved whatever its shape; a gap that opens outward is
+        not, which is what keeps the median between two approach carriageways unpaved —
+        it reaches the space outside the network, so the flood fill from outside finds it.
+        A convex hull of the junction cannot make that distinction: measured on
+        `Arapahoe_I25`, the median beside junction 114 lies inside that junction's hull.
+
+        Regions above ``max_gap_area`` are left alone. The city blocks a road network
+        rings are enclosed by the same test, and they are four orders of magnitude larger
+        than the largest interior gap measured, so the two never overlap.
         """
         filled = dict(layer)
-        for _ in range(self.fill_radius):
-            # Each candidate collects the heights of the paved cells around it: two or
-            # more means it is enclosed rather than on the open edge of the network.
-            additions: dict[tuple[int, int], list[float]] = {}
-            for (col, row), height in filled.items():
-                for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                    key = (col + dc, row + dr)
-                    if key in filled:
+        for region in self._enclosed_regions(layer):
+            if len(region) * self.cell * self.cell > self.max_gap_area:
+                continue
+            remaining = set(region)
+            # Work inwards from the surface around the gap, so each cell takes the height
+            # of what it already touches.
+            while remaining:
+                progressed = False
+                for key in sorted(remaining):
+                    col, row = key
+                    around = [
+                        filled[(col + dc, row + dr)]
+                        for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                        if (col + dc, row + dr) in filled
+                    ]
+                    if not around:
                         continue
-                    additions.setdefault(key, []).append(height)
-            for key, heights in additions.items():
-                if len(heights) < 2:
-                    continue
-                # Paving between two surfaces that disagree would invent a ramp where
-                # there is a gap; only a gap whose surrounding surface agrees with itself
-                # is interior to the road.
-                if max(heights) - min(heights) > self.layer_separation:
-                    continue
-                height = sum(heights) / len(heights)
-                # Each pass makes the cells it paved contributors to the next, so without
-                # this the fill walks off the edge of a deck and keeps going until it
-                # meets the road below, leaving a ramp of paved cells standing in the
-                # road as a fin. A new cell must agree with everything already around it,
-                # diagonals included, since those share a corner vertex too.
-                col, row = key
-                if any(
-                    abs(filled[(col + dc, row + dr)] - height) > self.layer_separation
-                    for dc in (-1, 0, 1)
-                    for dr in (-1, 0, 1)
-                    if (dc or dr) and (col + dc, row + dr) in filled
-                ):
-                    continue
-                filled[key] = height
+                    height = sum(around) / len(around)
+                    if not self._agrees(filled, key, height):
+                        remaining.discard(key)
+                        progressed = True
+                        continue
+                    filled[key] = height
+                    remaining.discard(key)
+                    progressed = True
+                if not progressed:
+                    break
         return filled
+
+    def _enclosed_regions(self, layer: dict[tuple[int, int], float]) -> list[list[tuple[int, int]]]:
+        """Unpaved regions this sheet completely surrounds."""
+        if not layer:
+            return []
+        cols = [c for c, _ in layer]
+        rows = [r for _, r in layer]
+        lo_c, hi_c = min(cols) - 1, max(cols) + 1
+        lo_r, hi_r = min(rows) - 1, max(rows) + 1
+
+        regions: list[list[tuple[int, int]]] = []
+        seen: set[tuple[int, int]] = set()
+        for start_c in range(lo_c, hi_c + 1):
+            for start_r in range(lo_r, hi_r + 1):
+                start = (start_c, start_r)
+                if start in layer or start in seen:
+                    continue
+                region, stack, open_to_outside = [], [start], False
+                seen.add(start)
+                while stack:
+                    col, row = stack.pop()
+                    region.append((col, row))
+                    if col in (lo_c, hi_c) or row in (lo_r, hi_r):
+                        open_to_outside = True
+                    for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                        key = (col + dc, row + dr)
+                        if (
+                            lo_c <= key[0] <= hi_c
+                            and lo_r <= key[1] <= hi_r
+                            and key not in layer
+                            and key not in seen
+                        ):
+                            seen.add(key)
+                            stack.append(key)
+                if not open_to_outside:
+                    regions.append(region)
+        return regions
+
+    def _agrees(
+        self, layer: dict[tuple[int, int], float], key: tuple[int, int], height: float
+    ) -> bool:
+        """True when a height fits every neighbour already held, diagonals included."""
+        col, row = key
+        return not any(
+            abs(layer[(col + dc, row + dr)] - height) > self.layer_separation
+            for dc in (-1, 0, 1)
+            for dr in (-1, 0, 1)
+            if (dc or dr) and (col + dc, row + dr) in layer
+        )
 
     def _sample(self, strips: list[Strip]) -> dict[tuple[int, int], list[float]]:
         """Every height each strip contributes to each cell of the grid."""
