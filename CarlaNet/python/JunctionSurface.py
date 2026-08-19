@@ -57,10 +57,17 @@ class JunctionSurface:
     #: measured (1.27 m) and well below the shallowest grade separation (6.8 m).
     LAYER_SEPARATION_METRES = 3.0
 
-    #: Largest enclosed gap that is paved, in square metres. Interior gaps measured on
-    #: Arapahoe_I25 top out at 67 m2 while the smallest city block the network rings is
-    #: far larger, so anything between the two separates them.
-    MAX_GAP_AREA_M2 = 1000.0
+    #: How far a paved gap may sit from the surface around it, in metres. The layer
+    #: separation is the wrong tolerance here: it asks whether two cells belong to the
+    #: same sheet, which a deck and the ramp beside it can, while this asks whether
+    #: bridging them would invent a slope. Tight enough that a gap beside a deck edge is
+    #: left open rather than ramped into.
+    FILL_TOLERANCE_M = 0.5
+
+    #: How far paving must lie in every direction for a gap to count as interior, in
+    #: metres. Comfortably spans the interior of the intersections measured while falling
+    #: far short of the space between roads, which is what keeps a median unpaved.
+    MAX_GAP_SPAN_M = 20.0
 
     #: Neighbour-averaging passes over the resolved height field, removing the flips
     #: left where the lower of two overlapping surfaces changes from cell to cell.
@@ -70,12 +77,14 @@ class JunctionSurface:
         self,
         cell: float | None = None,
         layer_separation: float | None = None,
-        max_gap_area: float | None = None,
+        max_gap_span: float | None = None,
+        fill_tolerance: float | None = None,
         relax_passes: int | None = None,
     ) -> None:
         self.cell = cell or self.CELL_METRES
         self.layer_separation = layer_separation or self.LAYER_SEPARATION_METRES
-        self.max_gap_area = self.MAX_GAP_AREA_M2 if max_gap_area is None else max_gap_area
+        self.max_gap_span = self.MAX_GAP_SPAN_M if max_gap_span is None else max_gap_span
+        self.fill_tolerance = self.FILL_TOLERANCE_M if fill_tolerance is None else fill_tolerance
         self.relax_passes = self.RELAX_PASSES if relax_passes is None else relax_passes
 
     # ── layers ───────────────────────────────────────────────────────────────
@@ -133,79 +142,96 @@ class JunctionSurface:
         than the largest interior gap measured, so the two never overlap.
         """
         filled = dict(layer)
-        for region in self._enclosed_regions(layer):
-            if len(region) * self.cell * self.cell > self.max_gap_area:
-                continue
-            remaining = set(region)
-            # Work inwards from the surface around the gap, so each cell takes the height
-            # of what it already touches.
-            while remaining:
-                progressed = False
-                for key in sorted(remaining):
-                    col, row = key
-                    around = [
-                        filled[(col + dc, row + dr)]
-                        for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1))
-                        if (col + dc, row + dr) in filled
-                    ]
-                    if not around:
-                        continue
-                    height = sum(around) / len(around)
-                    if not self._agrees(filled, key, height):
-                        remaining.discard(key)
-                        progressed = True
-                        continue
+        remaining = set(self._enclosed_cells(layer))
+        # Work inwards from the surface around the gap, so each cell takes the height of
+        # what it already touches.
+        while remaining:
+            progressed = False
+            for key in sorted(remaining):
+                col, row = key
+                around = [
+                    filled[(col + dc, row + dr)]
+                    for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                    if (col + dc, row + dr) in filled
+                ]
+                if not around:
+                    continue
+                height = sum(around) / len(around)
+                if self._agrees(filled, key, height, self.fill_tolerance):
                     filled[key] = height
-                    remaining.discard(key)
-                    progressed = True
-                if not progressed:
-                    break
+                remaining.discard(key)
+                progressed = True
+            if not progressed:
+                break
         return filled
 
-    def _enclosed_regions(self, layer: dict[tuple[int, int], float]) -> list[list[tuple[int, int]]]:
-        """Unpaved regions this sheet completely surrounds."""
-        if not layer:
-            return []
-        cols = [c for c, _ in layer]
-        rows = [r for _, r in layer]
-        lo_c, hi_c = min(cols) - 1, max(cols) + 1
-        lo_r, hi_r = min(rows) - 1, max(rows) + 1
+    def _enclosed_cells(self, layer: dict[tuple[int, int], float]) -> list[tuple[int, int]]:
+        """Unpaved cells the surface surrounds, found without flooding the whole plane.
 
-        regions: list[list[tuple[int, int]]] = []
-        seen: set[tuple[int, int]] = set()
-        for start_c in range(lo_c, hi_c + 1):
-            for start_r in range(lo_r, hi_r + 1):
-                start = (start_c, start_r)
-                if start in layer or start in seen:
-                    continue
-                region, stack, open_to_outside = [], [start], False
-                seen.add(start)
-                while stack:
-                    col, row = stack.pop()
-                    region.append((col, row))
-                    if col in (lo_c, hi_c) or row in (lo_r, hi_r):
-                        open_to_outside = True
-                    for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                        key = (col + dc, row + dr)
-                        if (
-                            lo_c <= key[0] <= hi_c
-                            and lo_r <= key[1] <= hi_r
-                            and key not in layer
-                            and key not in seen
-                        ):
-                            seen.add(key)
-                            stack.append(key)
-                if not open_to_outside:
-                    regions.append(region)
-        return regions
+        A cell is interior when paving lies within reach in all four directions. That is
+        a local test costing a bounded ray per direction, so it scales with the gaps
+        rather than with the sheet's bounding box — which for a whole road network is
+        mostly the empty space around it.
+
+        It is also what separates an intersection's interior from a median. The interior
+        of a junction is ringed by turning paths, so every ray hits one; a median between
+        two approach carriageways runs away down the road, so the ray along it reaches
+        the limit and finds nothing. A convex hull of the junction cannot tell them apart
+        — measured on `Arapahoe_I25`, the median beside junction 114 lies inside that
+        junction's own hull.
+        """
+        reach = max(1, int(self.max_gap_span / self.cell))
+        candidates: set[tuple[int, int]] = set()
+        for col, row in layer:
+            for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                key = (col + dc, row + dr)
+                if key not in layer:
+                    candidates.add(key)
+
+        interior: list[tuple[int, int]] = []
+        checked: set[tuple[int, int]] = set()
+        frontier = list(candidates)
+        while frontier:
+            cell = frontier.pop()
+            if cell in checked or cell in layer:
+                continue
+            checked.add(cell)
+            if not self._surrounded(layer, cell, reach):
+                continue
+            interior.append(cell)
+            # A gap is usually more than one cell wide, so its neighbours are candidates
+            # too even though they do not touch paving themselves.
+            for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                key = (cell[0] + dc, cell[1] + dr)
+                if key not in layer and key not in checked:
+                    frontier.append(key)
+        return interior
+
+    def _surrounded(
+        self, layer: dict[tuple[int, int], float], cell: tuple[int, int], reach: int
+    ) -> bool:
+        """True when paving lies within ``reach`` cells in all four directions."""
+        col, row = cell
+        for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            for step in range(1, reach + 1):
+                if (col + dc * step, row + dr * step) in layer:
+                    break
+            else:
+                return False
+        return True
 
     def _agrees(
-        self, layer: dict[tuple[int, int], float], key: tuple[int, int], height: float
+        self,
+        layer: dict[tuple[int, int], float],
+        key: tuple[int, int],
+        height: float,
+        tolerance: float | None = None,
     ) -> bool:
         """True when a height fits every neighbour already held, diagonals included."""
+        limit = self.layer_separation if tolerance is None else tolerance
         col, row = key
         return not any(
-            abs(layer[(col + dc, row + dr)] - height) > self.layer_separation
+            abs(layer[(col + dc, row + dr)] - height) > limit
             for dc in (-1, 0, 1)
             for dr in (-1, 0, 1)
             if (dc or dr) and (col + dc, row + dr) in layer

@@ -1194,118 +1194,118 @@ namespace {
     return true;
   }
 
-  /// Unpaved regions a sheet completely surrounds.
-  std::vector<std::vector<Cell>> EnclosedRegions(
-      const std::unordered_map<Cell, float, CellHash> &layer) {
-    std::vector<std::vector<Cell>> regions;
-    if (layer.empty()) {
-      return regions;
-    }
-    int lo_c = std::numeric_limits<int>::max(), hi_c = std::numeric_limits<int>::min();
-    int lo_r = lo_c, hi_r = hi_c;
-    for (const auto &entry : layer) {
-      lo_c = std::min(lo_c, entry.first.col); hi_c = std::max(hi_c, entry.first.col);
-      lo_r = std::min(lo_r, entry.first.row); hi_r = std::max(hi_r, entry.first.row);
-    }
-    --lo_c; ++hi_c; --lo_r; ++hi_r;
-
-    std::unordered_map<Cell, bool, CellHash> seen;
-    const std::array<Cell, 4> neighbours = {
-        Cell{1, 0}, Cell{-1, 0}, Cell{0, 1}, Cell{0, -1}};
-    for (int start_c = lo_c; start_c <= hi_c; ++start_c) {
-      for (int start_r = lo_r; start_r <= hi_r; ++start_r) {
-        const Cell start{start_c, start_r};
-        if (layer.count(start) != 0 || seen.count(start) != 0) {
-          continue;
-        }
-        std::vector<Cell> region;
-        std::vector<Cell> stack{start};
-        seen[start] = true;
-        bool open_to_outside = false;
-        while (!stack.empty()) {
-          const Cell current = stack.back();
-          stack.pop_back();
-          region.push_back(current);
-          if (current.col == lo_c || current.col == hi_c ||
-              current.row == lo_r || current.row == hi_r) {
-            open_to_outside = true;
-          }
-          for (const auto &step : neighbours) {
-            const Cell key{current.col + step.col, current.row + step.row};
-            if (key.col < lo_c || key.col > hi_c || key.row < lo_r || key.row > hi_r) {
-              continue;
-            }
-            if (layer.count(key) == 0 && seen.count(key) == 0) {
-              seen[key] = true;
-              stack.push_back(key);
-            }
-          }
-        }
-        if (!open_to_outside) {
-          regions.push_back(std::move(region));
+  /// True when paving lies within `reach` cells of `cell` in all four directions.
+  bool Surrounded(
+      const std::unordered_map<Cell, float, CellHash> &layer,
+      const Cell &cell,
+      const int reach) {
+    const std::array<Cell, 4> steps = {Cell{1, 0}, Cell{-1, 0}, Cell{0, 1}, Cell{0, -1}};
+    for (const auto &step : steps) {
+      bool found = false;
+      for (int distance = 1; distance <= reach; ++distance) {
+        if (layer.count(Cell{cell.col + step.col * distance,
+                             cell.row + step.row * distance}) != 0) {
+          found = true;
+          break;
         }
       }
+      if (!found) {
+        return false;
+      }
     }
-    return regions;
+    return true;
   }
 
-  /// Pave the gaps a junction's turning paths leave enclosed between them.
+  /// Pave the gaps a junction's turning paths leave between them.
   ///
   /// OpenDRIVE models a junction as turning paths — a u-turn, some left turns, the
   /// straight-throughs, the rights — and between them sits asphalt no lane ever covers.
   /// A vehicle drops through it, since collision uses these triangles directly.
   ///
-  /// The test is enclosure, not distance. A gap the turning paths surround is interior to
-  /// the intersection and is paved whatever its shape; a gap that opens outward is not,
-  /// which is what leaves the median between two approach carriageways unpaved. A convex
-  /// hull of the junction cannot make that distinction — measured on Arapahoe_I25, the
-  /// median beside junction 114 lies inside that junction's own hull.
+  /// A gap counts as interior when paving lies within reach in all four directions. That
+  /// separates an intersection from a median: the interior of a junction is ringed by
+  /// turning paths so every ray hits one, while a median between two approach
+  /// carriageways runs away down the road and the ray along it finds nothing. A convex
+  /// hull of the junction cannot tell them apart — measured on Arapahoe_I25, the median
+  /// beside junction 114 lies inside that junction's own hull.
   ///
-  /// Regions larger than max_gap_area are left alone: the city blocks a road network
-  /// rings are enclosed by the same test and are orders of magnitude larger than the
-  /// largest interior gap, so the two never overlap.
+  /// The test is local, costing a bounded ray rather than a flood across the empty space
+  /// around the network, which is most of a road map's bounding box.
+  ///
+  /// Filling uses its own tolerance rather than the layer separation. That asks whether
+  /// two cells belong to one sheet, which a deck and the ramp beside it can, while this
+  /// asks whether bridging a gap would invent a slope.
   void PaveEnclosedGaps(
       std::unordered_map<Cell, float, CellHash> &layer,
       const float cell,
-      const float max_gap_area,
-      const float separation) {
-    const std::array<Cell, 4> neighbours = {
-        Cell{1, 0}, Cell{-1, 0}, Cell{0, 1}, Cell{0, -1}};
-    for (const auto &region : EnclosedRegions(layer)) {
-      if (region.size() * cell * cell > max_gap_area) {
+      const float max_gap_span,
+      const float fill_tolerance) {
+    const int reach = std::max(1, static_cast<int>(std::lround(max_gap_span / cell)));
+    const std::array<Cell, 4> steps = {Cell{1, 0}, Cell{-1, 0}, Cell{0, 1}, Cell{0, -1}};
+
+    std::vector<Cell> frontier;
+    for (const auto &entry : layer) {
+      for (const auto &step : steps) {
+        const Cell key{entry.first.col + step.col, entry.first.row + step.row};
+        if (layer.count(key) == 0) {
+          frontier.push_back(key);
+        }
+      }
+    }
+
+    std::unordered_map<Cell, bool, CellHash> checked;
+    std::vector<Cell> interior;
+    while (!frontier.empty()) {
+      const Cell current = frontier.back();
+      frontier.pop_back();
+      if (checked.count(current) != 0 || layer.count(current) != 0) {
         continue;
       }
-      std::vector<Cell> remaining = region;
-      // Work inwards from the surface around the gap, so each cell takes the height of
-      // what it already touches.
-      while (!remaining.empty()) {
-        std::vector<Cell> still_open;
-        bool progressed = false;
-        for (const auto &key : remaining) {
-          float total = 0.0f;
-          int count = 0;
-          for (const auto &step : neighbours) {
-            const auto found = layer.find(Cell{key.col + step.col, key.row + step.row});
-            if (found != layer.end()) {
-              total += found->second;
-              ++count;
-            }
-          }
-          if (count == 0) {
-            still_open.push_back(key);
-            continue;
-          }
-          progressed = true;
-          const float height = total / static_cast<float>(count);
-          if (AgreesWithNeighbours(layer, key, height, separation)) {
-            layer[key] = height;
-          }
-        }
-        if (!progressed) {
-          break;
-        }
-        remaining.swap(still_open);
+      checked[current] = true;
+      if (!Surrounded(layer, current, reach)) {
+        continue;
       }
+      interior.push_back(current);
+      // A gap is usually more than one cell wide, so its neighbours are candidates too
+      // even though they do not touch paving themselves.
+      for (const auto &step : steps) {
+        const Cell key{current.col + step.col, current.row + step.row};
+        if (layer.count(key) == 0 && checked.count(key) == 0) {
+          frontier.push_back(key);
+        }
+      }
+    }
+
+    // Work inwards from the surface around each gap, so every cell takes the height of
+    // what it already touches.
+    std::vector<Cell> remaining = std::move(interior);
+    while (!remaining.empty()) {
+      std::vector<Cell> still_open;
+      bool progressed = false;
+      for (const auto &key : remaining) {
+        float total = 0.0f;
+        int count = 0;
+        for (const auto &step : steps) {
+          const auto found = layer.find(Cell{key.col + step.col, key.row + step.row});
+          if (found != layer.end()) {
+            total += found->second;
+            ++count;
+          }
+        }
+        if (count == 0) {
+          still_open.push_back(key);
+          continue;
+        }
+        progressed = true;
+        const float height = total / static_cast<float>(count);
+        if (AgreesWithNeighbours(layer, key, height, fill_tolerance)) {
+          layer[key] = height;
+        }
+      }
+      if (!progressed) {
+        break;
+      }
+      remaining.swap(still_open);
     }
   }
 
@@ -1536,7 +1536,8 @@ namespace {
             }
           }
         }
-        PaveEnclosedGaps(layer, cell, road_param.junction_max_gap_area, separation);
+        PaveEnclosedGaps(layer, cell, road_param.junction_max_gap_span,
+                         road_param.junction_fill_tolerance);
         RelaxLayer(layer, road_param.junction_relax_passes);
         AppendLayerTiles(out_tiles, layer, cell, tile_size);
       }

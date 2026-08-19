@@ -175,10 +175,14 @@ namespace geom {
       // layers rather than one surface sampled twice. Above the worst
       // same-layer disagreement measured and below the shallowest clearance.
       float junction_layer_separation   =  3.0f;
-      // Largest enclosed gap that is paved, in square metres. Interior gaps
-      // measured top out near 67 m2 while the smallest city block a network
-      // rings is far larger, so anything between the two separates them.
-      float junction_max_gap_area       = 1000.0f;
+      // How far paving must lie in every direction for a gap to count as
+      // interior to an intersection rather than the space beside a road.
+      float junction_max_gap_span       = 20.0f;
+      // How far a paved gap may sit from the surface around it. The layer
+      // separation is the wrong tolerance: it asks whether two cells belong to
+      // one sheet, which a deck and the ramp beside it can, while this asks
+      // whether bridging them would invent a slope.
+      float junction_fill_tolerance     =  0.5f;
       // Neighbour-averaging passes over the resolved height field, removing the
       // flips left where the lower of two overlapping surfaces changes from cell
       // to cell. Four is the measured knee: more barely reduces the remaining
