@@ -34,8 +34,8 @@ class WorldBuilder:
             2.0,                      # vertex distance
             500.0,                    # maximum road length before a road is split
             0.0,                      # wall height
-            args.additional_width,    # extra width per side on junction driving lanes
-            args.smooth_junctions,
+            0.0,                      # extra width per side on junction driving lanes
+            True,                     # resolve the drivable network into one surface
             True,                     # mesh visibility
             True,                     # pedestrian navigation
         )

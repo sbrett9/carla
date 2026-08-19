@@ -749,6 +749,12 @@ The resolved-surface path therefore meshes connectors at their true lane width r
 parameter. The parameter is kept, and still applies to the per-lane path, which still needs it —
 removing it there would reopen the 668.2 m² measured above.
 
+Both mesh options are withdrawn from the command line, which now always builds the resolved surface.
+`--additional-width` no longer reaches anything on that path, and `--no-smooth-junctions` selected
+the per-lane mesh the resolved surface replaces. The parameters remain in the generation struct and
+the wire format, and the per-lane path remains in the engine, since the pedestrian navigation mesh
+is built from it through `Map::GenerateMesh` — a separate entry point that this work did not touch.
+
 ### Order of work
 
 **Fix the data before welding it.** Welding is a representation change and cannot repair a genuine

@@ -97,24 +97,6 @@ class CarlaControlArgumentParser:
             "--step", type=float, default=10.0, help="reference-line sample spacing (m)"
         )
         build.add_argument(
-            "--additional-width",
-            type=float,
-            default=0.6,
-            help="extra width added to each side of a driving lane inside a junction (m), "
-            "making connectors overlap rather than leave gaps on curves. Applies only "
-            "with --no-smooth-junctions: the resolved drivable surface covers the gaps "
-            "directly and meshes connectors at their true lane width",
-        )
-        build.add_argument(
-            "--no-smooth-junctions",
-            dest="smooth_junctions",
-            action="store_false",
-            help="build the road mesh as one strip per lane, the way it was before the "
-            "drivable surface was resolved into one continuous sheet per height layer. "
-            "Kept as an escape hatch for comparison",
-        )
-        build.set_defaults(smooth_junctions=True)
-        build.add_argument(
             "--origin-height",
             type=float,
             default=None,
