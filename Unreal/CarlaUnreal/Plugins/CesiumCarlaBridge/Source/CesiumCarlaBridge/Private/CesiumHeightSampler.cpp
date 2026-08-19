@@ -50,13 +50,44 @@ namespace
 			InResults.Num(), Ok, InWarnings.Num());
 		UE_LOG(LogTemp, Display, TEXT("[CesiumCarlaBridge] %s"), *GStatus);
 
+		// Per point, at Verbose. A drape grid is one point per cell over the whole map
+		// area, so this loop runs millions of times on a large one: 2,664,983 points for
+		// a 10.7 km2 area at 2 m, which at Display wrote 3.7 million lines and a 463 MB
+		// log. The formatting and synchronous file write per point dominated the sample,
+		// making a build that was progressing normally look like a hang.
+		//
+		// Enable with -LogCmds="LogTemp Verbose" when a specific point needs inspecting.
 		for (int32 i = 0; i < InResults.Num(); ++i)
 		{
 			const FCesiumSampleHeightResult& R = InResults[i];
-			UE_LOG(LogTemp, Display,
+			UE_LOG(LogTemp, Verbose,
 				TEXT("[CesiumCarlaBridge]   [%d] lon=%.7f lat=%.7f h=%.3f m ok=%d"),
 				i, R.LongitudeLatitudeHeight.X, R.LongitudeLatitudeHeight.Y,
 				R.LongitudeLatitudeHeight.Z, R.SampleSuccess ? 1 : 0);
+		}
+
+		// The points that failed are worth seeing without turning the rest on, since a
+		// height that did not sample is a hole in the drape. Capped, because a tileset
+		// that covers none of the area fails every point and would spam just as badly.
+		constexpr int32 MaxFailuresLogged = 20;
+		int32 Reported = 0;
+		for (int32 i = 0; i < InResults.Num(); ++i)
+		{
+			const FCesiumSampleHeightResult& R = InResults[i];
+			if (R.SampleSuccess)
+			{
+				continue;
+			}
+			if (Reported++ >= MaxFailuresLogged)
+			{
+				UE_LOG(LogTemp, Warning,
+					TEXT("[CesiumCarlaBridge]   ... and %d more points that did not sample"),
+					InResults.Num() - Ok - MaxFailuresLogged);
+				break;
+			}
+			UE_LOG(LogTemp, Warning,
+				TEXT("[CesiumCarlaBridge]   [%d] did not sample: lon=%.7f lat=%.7f"),
+				i, R.LongitudeLatitudeHeight.X, R.LongitudeLatitudeHeight.Y);
 		}
 		for (const FString& W : InWarnings)
 		{
