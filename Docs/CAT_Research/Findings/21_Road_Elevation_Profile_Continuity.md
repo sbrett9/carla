@@ -784,6 +784,77 @@ crossover count. Both roads must carry records at the same physical stations, so
 are reflections of each other rather than two independent fits of one function.
 
 
+## 20. Holes in the resolved surface
+
+Resolving the network into one surface per height layer left holes a vehicle drops through. They
+looked alike in the viewer and had three unrelated causes, which is why fixing one never moved the
+others. All three were found by mapping cell coverage around lat/lon points taken from the running
+scene, not by reading the code.
+
+### The enclosure test was too strict, then too loose
+
+Paving a gap because paving surrounds it fills medians, the triangular islands between a slip lane
+and the road it leaves, and the outside of bends — all have road on every side. Requiring instead
+that *every* ray land on junction-connector paving cleared those but opened new holes inside real
+intersections, where a ray leaving through an approach arm lands on the through road beyond it.
+
+Measured over both sets of points, the two populations separate cleanly on a majority rather than a
+unanimity:
+
+| | reaches junction paving, of 8 directions | nearest junction paving |
+|---|---|---|
+| gaps genuinely inside an intersection | 5, 5, 6, 8, 8 | 0.5-1.5 m |
+| median, island, bulge, two juts, spike | 0, 1, 2, 2, 2 | 6 m to none |
+
+Nothing measured falls between two and five. The test is now: paving within reach along all four
+axes, *and* junction paving in more than half of the eight directions. The axis condition is what
+still excludes a median — the ray running along it reaches the limit and finds nothing.
+
+### Layer growth was discarding the cells it rejected
+
+A cell was marked claimed when it was *queued*, not when it was placed. The two tests that reject a
+cell — the layer already occupies that plan position, or the cell disagrees with a neighbour the
+layer holds — then dropped it into nothing: it belonged to no layer, and no later seed could pick it
+up because it was already marked. 217 cells map-wide, 54 m2, arranged in one-cell lines along every
+boundary where two growth branches meet. The long diagonal crack across the I-25 deck was this.
+
+A cell is now claimed only when placed, and the seed sweep repeats until a pass finds nothing
+unclaimed — a single pass only recovers rejects that happen to sit later in iteration order. Every
+sampled cell now ends up in a layer: 977,848 of 977,848, against 977,631 before.
+
+### Adjacent lane quads leave a sliver neither one covers
+
+Two lanes derive their shared boundary independently, from different reference lines, so the two
+edges disagree by a fraction of a millimetre. A cell centre landing inside that sliver is claimed by
+neither quad. 663 cells map-wide, 166 m2, pinched between paving on opposite sides — a crack
+narrower than a wheel, running down otherwise solid road.
+
+This is closed morphologically: a cell is paved when paving lies within a metre on two opposite
+sides, the two sides agree in height, and the result agrees with all eight neighbours. The height
+agreement is what makes it safe to run over the whole network rather than only inside junctions — it
+cannot bridge a deck to the road beneath it, and it cannot round off the end of a road.
+
+### Measured together
+
+| quantity | before | after |
+|---|---|---|
+| known hole and non-hole points classified correctly | 8 of 13 | **13 of 13** |
+| cells lost by layer splitting | 217 (54 m2) | **0** |
+| one-cell cracks through the surface | 877 (219 m2) | **203 (51 m2)** |
+| worst neighbour step, edge / diagonal | 0.395 / 0.646 m | 0.395 / 0.646 m |
+| neighbour pairs above 1 m, of 3.8 M | 0 | 0 |
+| median neighbour step | - | 6.5 mm (p99 58.8 mm) |
+| grade separation preserved | 6.64 m | 7.41 m (true clearance 6.8 m) |
+
+The worst neighbour step is unchanged, but only because of `RelaxLayer`. Before relaxation the
+retained cells raise it to 1.099 m: they are exactly the places where overlapping ribbons disagreed,
+which is why they failed the growth test in the first place. Relaxation is doing real work here, not
+cosmetic smoothing — without it these fixes would trade holes for steps.
+
+The 203 cracks that remain are wider than a metre or have sides that disagree in height, so they are
+left open deliberately rather than bridged with invented slope.
+
+
 ## Sources
 
 - OpenDRIVE 1.4 §5.3.5 road elevation (the `<elevation>` cubic form).

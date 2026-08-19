@@ -69,6 +69,11 @@ class JunctionSurface:
     #: far short of the space between roads, which is what keeps a median unpaved.
     MAX_GAP_SPAN_M = 20.0
 
+    #: Widest sliver between two lane quads that is paved over, in metres. Wide enough
+    #: for the cracks measured, which are a cell or two across, and far narrower than the
+    #: gap between a deck and the road beneath it.
+    CRACK_SPAN_M = 1.0
+
     #: Neighbour-averaging passes over the resolved height field, removing the flips
     #: left where the lower of two overlapping surfaces changes from cell to cell.
     RELAX_PASSES = 4
@@ -79,12 +84,14 @@ class JunctionSurface:
         layer_separation: float | None = None,
         max_gap_span: float | None = None,
         fill_tolerance: float | None = None,
+        crack_span: float | None = None,
         relax_passes: int | None = None,
     ) -> None:
         self.cell = cell or self.CELL_METRES
         self.layer_separation = layer_separation or self.LAYER_SEPARATION_METRES
         self.max_gap_span = self.MAX_GAP_SPAN_M if max_gap_span is None else max_gap_span
         self.fill_tolerance = self.FILL_TOLERANCE_M if fill_tolerance is None else fill_tolerance
+        self.crack_span = self.CRACK_SPAN_M if crack_span is None else crack_span
         self.relax_passes = self.RELAX_PASSES if relax_passes is None else relax_passes
 
     # ── layers ───────────────────────────────────────────────────────────────
@@ -95,7 +102,9 @@ class JunctionSurface:
         junction_cells = self._sample_junction_cells(strips)
         layers = [layer for layer in self._split_layers(cells) if layer]
         return [
-            self._triangulate(self._relax(self._close_gaps(layer, junction_cells)))
+            self._triangulate(
+                self._relax(self._close_gaps(self._close_cracks(layer), junction_cells))
+            )
             for layer in layers
         ]
 
@@ -143,6 +152,58 @@ class JunctionSurface:
                 updated[(col, row)] = total / count
             relaxed = updated
         return relaxed
+
+    def _close_cracks(self, layer: dict[tuple[int, int], float]) -> dict[tuple[int, int], float]:
+        """Pave the slivers left where two lane quads meet.
+
+        Adjacent lanes derive their shared boundary independently, from different
+        reference lines, so the two edges disagree by a fraction of a millimetre. A cell
+        centre landing inside that sliver is claimed by neither quad and the surface is
+        left with a crack through it. Measured on `Arapahoe_I25`: 663 cells map-wide,
+        166 m2, pinched between paving on opposite sides — narrower than a wheel and
+        directly in the road.
+
+        A cell is paved when paving lies close on two opposite sides and the two agree in
+        height. That is what makes this safe to run over the whole network rather than
+        inside junctions: it can only bridge a crack narrower than ``crack_span``, and
+        only where both sides are already at the same height, so it cannot close the space
+        between a deck and the road beneath it, nor round off the end of a road.
+        """
+        reach = max(1, int(self.crack_span / self.cell))
+        paved = dict(layer)
+        for _ in range(reach):
+            additions: dict[tuple[int, int], float] = {}
+            candidates = {
+                (col + dc, row + dr)
+                for col, row in paved
+                for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                if (col + dc, row + dr) not in paved
+            }
+            for col, row in candidates:
+                for dc, dr in ((1, 0), (0, 1)):
+                    near = far = None
+                    for step in range(1, reach + 1):
+                        if near is None:
+                            near = paved.get((col + dc * step, row + dr * step))
+                        if far is None:
+                            far = paved.get((col - dc * step, row - dr * step))
+                    if near is None or far is None:
+                        continue
+                    if abs(near - far) > self.fill_tolerance:
+                        continue
+                    height = (near + far) / 2.0
+                    # The two sides of the crack agreeing does not mean the height suits
+                    # what else the cell touches: a crack running along the lip of a deck
+                    # has the deck on one diagonal and the road below on the other, and
+                    # bridging it there left a 1.10 m step standing in the surface.
+                    if not self._agrees(paved, (col, row), height, self.fill_tolerance):
+                        continue
+                    additions[(col, row)] = height
+                    break
+            if not additions:
+                break
+            paved.update(additions)
+        return paved
 
     def _close_gaps(
         self,
@@ -243,26 +304,40 @@ class JunctionSurface:
         reach: int,
         junction_cells: set[tuple[int, int]],
     ) -> bool:
-        """True when a junction's own paving lies within ``reach`` in all four directions.
+        """True when a gap is enclosed by paving and sits inside an intersection.
 
-        Reaching *any* paving is not enough. A triangular island between a slip lane and
-        the road it leaves, a median, the outside of a bend — all have road on every side
-        and would be paved over, which is what filled them in the surface before this.
-        Requiring the paving to belong to a junction connector is what confines the fill
-        to the inside of an intersection, where the turning paths genuinely ring a piece
-        of asphalt no lane covers.
+        Two conditions, because neither alone separates the cases measured.
+
+        Paving must lie within ``reach`` along all four axes. That is what excludes a
+        median: the interior of a junction is ringed by turning paths so every ray hits
+        one, while a median between two approach carriageways runs away down the road and
+        the ray along it finds nothing.
+
+        Junction paving must lie in most of the eight directions. Enclosure alone is not
+        enough — a triangular island between a slip lane and the road it leaves, or the
+        outside of a bend, has road on every side too, and paving those was what raised
+        the islands and spikes standing in the scene. Measured on `Arapahoe_I25`, gaps
+        genuinely inside an intersection reach junction paving in five to eight of the
+        eight directions and from no further than 1.5 m, while every island, jut and
+        median reaches it in at most two and from 6 m or more. Nothing measured falls
+        between, so a simple majority separates them.
         """
         col, row = cell
-        for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        axes = ((1, 0), (-1, 0), (0, 1), (0, -1))
+        diagonals = ((1, 1), (-1, -1), (1, -1), (-1, 1))
+        junction_hits = 0
+        for dc, dr in axes + diagonals:
             hit = None
             for step in range(1, reach + 1):
                 key = (col + dc * step, row + dr * step)
                 if key in layer:
                     hit = key
                     break
-            if hit is None or hit not in junction_cells:
+            if hit is None and (dc, dr) in axes:
                 return False
-        return True
+            if hit is not None and hit in junction_cells:
+                junction_hits += 1
+        return junction_hits > len(axes + diagonals) // 2
 
     def _agrees(
         self,
@@ -326,55 +401,72 @@ class JunctionSurface:
         assigned: dict[tuple[int, int], list[bool]] = {
             k: [False] * len(v) for k, v in clustered.items()
         }
-        for seed_key, heights in clustered.items():
-            for index in range(len(heights)):
-                if assigned[seed_key][index]:
-                    continue
-                layer: dict[tuple[int, int], float] = {}
-                frontier = [(seed_key, index)]
-                assigned[seed_key][index] = True
-                while frontier:
-                    (col, row), which = frontier.pop()
-                    height = clustered[(col, row)][which]
-                    # A layer is a height *function* of plan position: one value per
-                    # cell. A ramp climbing to a deck is continuously connected to the
-                    # road it crosses, so growing purely by connectivity would walk up
-                    # the ramp and claim both — and the cell where they cross can only
-                    # keep one of them, burying the underpass. Reaching a cell this
-                    # layer already occupies means the surface has passed over itself,
-                    # so it stops there and the rest becomes its own sheet.
-                    if (col, row) in layer:
+        # A cell rejected while one layer grows is left unclaimed so it can seed a layer
+        # of its own, but a single sweep only reaches the ones that sit later in iteration
+        # order. Sweeping until a pass finds nothing unclaimed is what makes "every
+        # sampled cell ends up in some layer" hold whatever order the cells come in.
+        # Each pass that finds an unclaimed cell claims at least that one, so it ends.
+        sweeping = True
+        while sweeping:
+            sweeping = False
+            for seed_key, heights in clustered.items():
+                for index in range(len(heights)):
+                    if assigned[seed_key][index]:
                         continue
-                    # Growth is checked against the cell it came from, but two branches
-                    # — one along the ground, one climbing a ramp — can meet and become
-                    # neighbours without ever being compared, leaving a step of metres
-                    # inside one sheet. A cell joins only if it agrees with every
-                    # neighbour the layer already holds.
-                    # Every cell touching a corner shares that corner's vertex, and two
-                    # cells that are only diagonal neighbours still share one. Comparing
-                    # the four edge neighbours alone let a deck cell sit diagonally
-                    # against a road cell: their shared corner averaged between the two
-                    # and the triangles stretched from one height to the other, leaving
-                    # a vertical fin standing in the road. All eight are compared.
-                    if any(
-                        abs(layer[(col + dc, row + dr)] - height) > self.layer_separation
-                        for dc in (-1, 0, 1)
-                        for dr in (-1, 0, 1)
-                        if (dc or dr) and (col + dc, row + dr) in layer
-                    ):
-                        continue
-                    layer[(col, row)] = height
-                    for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                        neighbour = (col + dc, row + dr)
-                        if neighbour not in clustered:
+                    sweeping = True
+                    layer: dict[tuple[int, int], float] = {}
+                    # Claiming a cell when it is queued rather than when it is placed loses
+                    # every cell the two tests below reject: it belongs to no layer, and no
+                    # later seed can pick it up. That left 217 cells map-wide (54 m2) missing
+                    # from the surface, in one-cell cracks along the line where two growth
+                    # branches meet — a wheel drops through them. A cell is claimed only once
+                    # it is actually placed, so a rejected one is still free to seed a layer
+                    # of its own.
+                    queued: set[tuple[tuple[int, int], int]] = {(seed_key, index)}
+                    frontier = [(seed_key, index)]
+                    while frontier:
+                        (col, row), which = frontier.pop()
+                        height = clustered[(col, row)][which]
+                        # A layer is a height *function* of plan position: one value per
+                        # cell. A ramp climbing to a deck is continuously connected to the
+                        # road it crosses, so growing purely by connectivity would walk up
+                        # the ramp and claim both — and the cell where they cross can only
+                        # keep one of them, burying the underpass. Reaching a cell this
+                        # layer already occupies means the surface has passed over itself,
+                        # so it stops there and the rest becomes its own sheet.
+                        if (col, row) in layer:
                             continue
-                        for other, other_height in enumerate(clustered[neighbour]):
-                            if assigned[neighbour][other]:
+                        # Growth is checked against the cell it came from, but two branches
+                        # — one along the ground, one climbing a ramp — can meet and become
+                        # neighbours without ever being compared, leaving a step of metres
+                        # inside one sheet. A cell joins only if it agrees with every
+                        # neighbour the layer already holds.
+                        # Every cell touching a corner shares that corner's vertex, and two
+                        # cells that are only diagonal neighbours still share one. Comparing
+                        # the four edge neighbours alone let a deck cell sit diagonally
+                        # against a road cell: their shared corner averaged between the two
+                        # and the triangles stretched from one height to the other, leaving
+                        # a vertical fin standing in the road. All eight are compared.
+                        if any(
+                            abs(layer[(col + dc, row + dr)] - height) > self.layer_separation
+                            for dc in (-1, 0, 1)
+                            for dr in (-1, 0, 1)
+                            if (dc or dr) and (col + dc, row + dr) in layer
+                        ):
+                            continue
+                        assigned[(col, row)][which] = True
+                        layer[(col, row)] = height
+                        for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                            neighbour = (col + dc, row + dr)
+                            if neighbour not in clustered:
                                 continue
-                            if abs(other_height - height) <= self.layer_separation:
-                                assigned[neighbour][other] = True
-                                frontier.append((neighbour, other))
-                layers.append(layer)
+                            for other, other_height in enumerate(clustered[neighbour]):
+                                if assigned[neighbour][other] or (neighbour, other) in queued:
+                                    continue
+                                if abs(other_height - height) <= self.layer_separation:
+                                    queued.add((neighbour, other))
+                                    frontier.append((neighbour, other))
+                    layers.append(layer)
         return layers
 
     # ── triangulation ────────────────────────────────────────────────────────

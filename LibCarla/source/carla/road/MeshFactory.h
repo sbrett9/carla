@@ -188,6 +188,10 @@ namespace geom {
       // one sheet, which a deck and the ramp beside it can, while this asks
       // whether bridging them would invent a slope.
       float junction_fill_tolerance     =  0.5f;
+      // Widest sliver between two lane quads that is paved over. Wide enough for
+      // the cracks measured, which are a cell or two across, and far narrower
+      // than the gap between a deck and the road beneath it.
+      float junction_crack_span         =  1.0f;
       // Neighbour-averaging passes over the resolved height field, removing the
       // flips left where the lower of two overlapping surfaces changes from cell
       // to cell. Four is the measured knee: more barely reduces the remaining

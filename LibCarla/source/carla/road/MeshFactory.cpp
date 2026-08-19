@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <unordered_map>
 #include <vector>
@@ -1194,34 +1195,132 @@ namespace {
     return true;
   }
 
-  /// True when a junction's own paving lies within `reach` in all four directions.
+  /// True when a gap is enclosed by paving and sits inside an intersection.
   ///
-  /// Reaching any paving is not enough. A triangular island between a slip lane and the
-  /// road it leaves, a median between approach carriageways, the outside of a bend —
-  /// all have road on every side, and treating those as interior paved over each of
-  /// them. Requiring the paving to belong to a junction connector confines the fill to
-  /// the inside of an intersection, where the turning paths genuinely ring a piece of
-  /// asphalt no lane covers.
+  /// Two conditions, because neither alone separates the cases measured.
+  ///
+  /// Paving must lie within `reach` along all four axes. That is what excludes a median:
+  /// the interior of a junction is ringed by turning paths so every ray hits one, while a
+  /// median between two approach carriageways runs away down the road and the ray along
+  /// it finds nothing.
+  ///
+  /// Junction paving must lie in most of the eight directions. Enclosure alone is not
+  /// enough — a triangular island between a slip lane and the road it leaves, or the
+  /// outside of a bend, has road on every side too, and paving those raised islands and
+  /// spikes standing in the scene. Measured on Arapahoe_I25, gaps genuinely inside an
+  /// intersection reach junction paving in five to eight of the eight directions and from
+  /// no further than 1.5 m, while every island, jut and median reaches it in at most two
+  /// and from 6 m or more. Nothing measured falls between, so a majority separates them.
   bool Surrounded(
       const std::unordered_map<Cell, float, CellHash> &layer,
       const std::unordered_map<Cell, bool, CellHash> &junction_cells,
       const Cell &cell,
       const int reach) {
-    const std::array<Cell, 4> steps = {Cell{1, 0}, Cell{-1, 0}, Cell{0, 1}, Cell{0, -1}};
-    for (const auto &step : steps) {
+    const std::array<Cell, 8> directions = {
+        Cell{1, 0}, Cell{-1, 0}, Cell{0, 1}, Cell{0, -1},
+        Cell{1, 1}, Cell{-1, -1}, Cell{1, -1}, Cell{-1, 1}};
+    const size_t axis_count = 4u;
+    size_t junction_hits = 0u;
+    for (size_t index = 0u; index < directions.size(); ++index) {
       bool found = false;
+      bool on_junction = false;
       for (int distance = 1; distance <= reach; ++distance) {
-        const Cell key{cell.col + step.col * distance, cell.row + step.row * distance};
+        const Cell key{cell.col + directions[index].col * distance,
+                       cell.row + directions[index].row * distance};
         if (layer.count(key) != 0) {
-          found = junction_cells.count(key) != 0;
+          found = true;
+          on_junction = junction_cells.count(key) != 0;
           break;
         }
       }
-      if (!found) {
+      if (!found && index < axis_count) {
         return false;
       }
+      if (on_junction) {
+        ++junction_hits;
+      }
     }
-    return true;
+    return junction_hits > directions.size() / 2u;
+  }
+
+  /// Pave the slivers left where two lane quads meet.
+  ///
+  /// Adjacent lanes derive their shared boundary independently, from different reference
+  /// lines, so the two edges disagree by a fraction of a millimetre. A cell centre landing
+  /// inside that sliver is claimed by neither quad and the surface is left with a crack
+  /// through it. Measured on Arapahoe_I25: 663 cells map-wide, 166 m2, pinched between
+  /// paving on opposite sides — narrower than a wheel and directly in the road.
+  ///
+  /// A cell is paved when paving lies close on two opposite sides and the two agree in
+  /// height. That is what makes this safe to run over the whole network rather than inside
+  /// junctions: it can only bridge a crack narrower than `crack_span`, and only where both
+  /// sides already sit at the same height, so it cannot close the space between a deck and
+  /// the road beneath it, nor round off the end of a road.
+  void PaveNarrowCracks(
+      std::unordered_map<Cell, float, CellHash> &layer,
+      const float cell,
+      const float crack_span,
+      const float fill_tolerance) {
+    const int reach = std::max(1, static_cast<int>(std::lround(crack_span / cell)));
+    const std::array<Cell, 4> steps = {Cell{1, 0}, Cell{-1, 0}, Cell{0, 1}, Cell{0, -1}};
+    const std::array<Cell, 2> axes = {Cell{1, 0}, Cell{0, 1}};
+
+    for (int pass = 0; pass < reach; ++pass) {
+      std::unordered_map<Cell, bool, CellHash> candidates;
+      for (const auto &entry : layer) {
+        for (const auto &step : steps) {
+          const Cell key{entry.first.col + step.col, entry.first.row + step.row};
+          if (layer.count(key) == 0) {
+            candidates[key] = true;
+          }
+        }
+      }
+
+      std::unordered_map<Cell, float, CellHash> additions;
+      for (const auto &candidate : candidates) {
+        const Cell &key = candidate.first;
+        for (const auto &axis : axes) {
+          const float *near_side = nullptr;
+          const float *far_side = nullptr;
+          for (int distance = 1; distance <= reach; ++distance) {
+            if (near_side == nullptr) {
+              const auto found = layer.find(
+                  Cell{key.col + axis.col * distance, key.row + axis.row * distance});
+              if (found != layer.end()) {
+                near_side = &found->second;
+              }
+            }
+            if (far_side == nullptr) {
+              const auto found = layer.find(
+                  Cell{key.col - axis.col * distance, key.row - axis.row * distance});
+              if (found != layer.end()) {
+                far_side = &found->second;
+              }
+            }
+          }
+          if (near_side == nullptr || far_side == nullptr ||
+              std::abs(*near_side - *far_side) > fill_tolerance) {
+            continue;
+          }
+          const float height = (*near_side + *far_side) * 0.5f;
+          // The two sides agreeing does not mean the height suits what else the cell
+          // touches: a crack running along the lip of a deck has the deck on one diagonal
+          // and the road below on the other, and bridging it there leaves a step standing
+          // in the surface.
+          if (!AgreesWithNeighbours(layer, key, height, fill_tolerance)) {
+            continue;
+          }
+          additions[key] = height;
+          break;
+        }
+      }
+      if (additions.empty()) {
+        break;
+      }
+      for (const auto &addition : additions) {
+        layer[addition.first] = addition.second;
+      }
+    }
   }
 
   /// Pave the gaps a junction's turning paths leave between them.
@@ -1500,64 +1599,88 @@ namespace {
     // 3. Grow layers across neighbouring cells, so a ramp climbing away from the
     //    ground stays attached to the deck it leads to rather than the road it crosses.
     std::unordered_map<Cell, std::vector<char>, CellHash> claimed;
+    // Claiming a cell when it is queued rather than when it is placed loses every cell
+    // the two tests below reject: it belongs to no layer, and no later seed can pick it
+    // up. That left 217 cells map-wide (54 m2) missing from the surface, in one-cell
+    // cracks along the line where two growth branches meet — a wheel drops through them.
+    // A cell is claimed only once it is actually placed, so a rejected one is still free
+    // to seed a layer of its own. Queueing is tracked separately, per layer, by stamping
+    // the layer's number rather than clearing a set each time.
+    std::unordered_map<Cell, std::vector<uint32_t>, CellHash> queued;
     for (const auto &entry : clustered) {
       claimed[entry.first].assign(entry.second.size(), 0);
+      queued[entry.first].assign(entry.second.size(), 0u);
     }
+    uint32_t layer_number = 0u;
     const std::array<Cell, 4> neighbours = {
         Cell{1, 0}, Cell{-1, 0}, Cell{0, 1}, Cell{0, -1}};
 
-    for (const auto &seed : clustered) {
-      for (size_t index = 0; index < seed.second.size(); ++index) {
-        if (claimed.at(seed.first)[index] != 0) {
-          continue;
-        }
-        std::unordered_map<Cell, float, CellHash> layer;
-        std::vector<std::pair<Cell, size_t>> frontier{{seed.first, index}};
-        claimed.at(seed.first)[index] = 1;
-        while (!frontier.empty()) {
-          const auto current = frontier.back();
-          frontier.pop_back();
-          const float height = clustered.at(current.first).at(current.second);
-          // A layer is a height function of plan position: one value per cell. A ramp
-          // climbing to a deck is continuously connected to the road it crosses, so
-          // growing purely by connectivity would claim both and the crossing cell could
-          // keep only one of them, burying the underpass. Reaching a cell this layer
-          // already holds means the surface has passed over itself, so it stops there.
-          if (layer.count(current.first) != 0) {
+    // A cell rejected while one layer grows is left unclaimed so it can seed a layer of
+    // its own, but a single sweep only reaches the ones that sit later in iteration order.
+    // Sweeping until a pass finds nothing unclaimed is what makes "every sampled cell ends
+    // up in some layer" hold whatever order the cells come in. Each pass that finds an
+    // unclaimed cell claims at least that one, so this terminates.
+    bool sweeping = true;
+    while (sweeping) {
+      sweeping = false;
+      for (const auto &seed : clustered) {
+        for (size_t index = 0; index < seed.second.size(); ++index) {
+          if (claimed.at(seed.first)[index] != 0) {
             continue;
           }
-          // Growth is checked against the cell it came from, but two branches — one along
-          // the ground, one climbing a ramp — can meet as neighbours without ever being
-          // compared. A cell joins only if it agrees with every neighbour already held.
-          //
-          // All eight, not just the four edges: every cell touching a corner shares that
-          // corner's vertex, so two cells that are only diagonal neighbours still share
-          // one. Comparing edges alone lets a deck cell sit diagonally against a road
-          // cell, and their shared corner then averages between the two while the
-          // triangles stretch from one height to the other — a vertical fin in the road.
-          if (!AgreesWithNeighbours(layer, current.first, height, separation)) {
-            continue;
-          }
-          layer[current.first] = height;
-          for (const auto &step : neighbours) {
-            const Cell key{current.first.col + step.col, current.first.row + step.row};
-            const auto found = clustered.find(key);
-            if (found == clustered.end()) {
+          sweeping = true;
+          std::unordered_map<Cell, float, CellHash> layer;
+          std::vector<std::pair<Cell, size_t>> frontier{{seed.first, index}};
+          ++layer_number;
+          queued.at(seed.first)[index] = layer_number;
+          while (!frontier.empty()) {
+            const auto current = frontier.back();
+            frontier.pop_back();
+            const float height = clustered.at(current.first).at(current.second);
+            // A layer is a height function of plan position: one value per cell. A ramp
+            // climbing to a deck is continuously connected to the road it crosses, so
+            // growing purely by connectivity would claim both and the crossing cell could
+            // keep only one of them, burying the underpass. Reaching a cell this layer
+            // already holds means the surface has passed over itself, so it stops there.
+            if (layer.count(current.first) != 0) {
               continue;
             }
-            for (size_t other = 0; other < found->second.size(); ++other) {
-              if (claimed.at(key)[other] == 0 &&
-                  std::abs(found->second[other] - height) <= separation) {
-                claimed.at(key)[other] = 1;
-                frontier.push_back({key, other});
+            // Growth is checked against the cell it came from, but two branches — one along
+            // the ground, one climbing a ramp — can meet as neighbours without ever being
+            // compared. A cell joins only if it agrees with every neighbour already held.
+            //
+            // All eight, not just the four edges: every cell touching a corner shares that
+            // corner's vertex, so two cells that are only diagonal neighbours still share
+            // one. Comparing edges alone lets a deck cell sit diagonally against a road
+            // cell, and their shared corner then averages between the two while the
+            // triangles stretch from one height to the other — a vertical fin in the road.
+            if (!AgreesWithNeighbours(layer, current.first, height, separation)) {
+              continue;
+            }
+            claimed.at(current.first)[current.second] = 1;
+            layer[current.first] = height;
+            for (const auto &step : neighbours) {
+              const Cell key{current.first.col + step.col, current.first.row + step.row};
+              const auto found = clustered.find(key);
+              if (found == clustered.end()) {
+                continue;
+              }
+              for (size_t other = 0; other < found->second.size(); ++other) {
+                if (claimed.at(key)[other] == 0 && queued.at(key)[other] != layer_number &&
+                    std::abs(found->second[other] - height) <= separation) {
+                  queued.at(key)[other] = layer_number;
+                  frontier.push_back({key, other});
+                }
               }
             }
           }
+          PaveNarrowCracks(layer, cell, road_param.junction_crack_span,
+                           road_param.junction_fill_tolerance);
+          PaveEnclosedGaps(layer, junction_cells, cell, road_param.junction_max_gap_span,
+                           road_param.junction_fill_tolerance);
+          RelaxLayer(layer, road_param.junction_relax_passes);
+          AppendLayerTiles(out_tiles, layer, cell, tile_size);
         }
-        PaveEnclosedGaps(layer, junction_cells, cell, road_param.junction_max_gap_span,
-                         road_param.junction_fill_tolerance);
-        RelaxLayer(layer, road_param.junction_relax_passes);
-        AppendLayerTiles(out_tiles, layer, cell, tile_size);
       }
     }
     return out_tiles;
