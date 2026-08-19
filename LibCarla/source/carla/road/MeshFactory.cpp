@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -1174,6 +1175,59 @@ namespace {
   }
 
 
+  /// How many workers to split a piece of work of this size across.
+  size_t WorkerCount(const size_t count) {
+    if (count < 2u) {
+      return 1u;
+    }
+    unsigned int available = std::thread::hardware_concurrency();
+    if (available == 0u) {
+      available = 1u;
+    }
+    return std::min<size_t>(available, count);
+  }
+
+  /// Run `body(begin, end)` over [0, count), split into one contiguous range per worker
+  /// and run on this thread together with the others.
+  ///
+  /// Resolving the surface is the part of building a road network that scales with the
+  /// ground the network covers rather than with the roads on it, so it is where a large
+  /// map spends its time. The layer split is the one stage that cannot be divided --
+  /// growth claims cells in an order that decides which sheet they land in -- but the
+  /// stages around it are per-cell stencils and per-item builds, and those are what this
+  /// splits. Measured on the resolve as a whole, the sequential split holds the ceiling
+  /// near three times regardless of how many cores are thrown at the rest.
+  ///
+  /// Ranges are contiguous and fixed, so every worker sees the same items on every run
+  /// and a float sum is always accumulated in the same order: the surface a build
+  /// produces does not depend on how many cores it had.
+  template <typename Body>
+  void ParallelRanges(const size_t count, const Body &body) {
+    if (count == 0u) {
+      return;
+    }
+    const size_t workers = WorkerCount(count);
+    const size_t chunk = (count + workers - 1u) / workers;
+    if (workers <= 1u) {
+      body(size_t(0u), count);
+      return;
+    }
+    std::vector<std::thread> threads;
+    threads.reserve(workers - 1u);
+    for (size_t worker = 1u; worker < workers; ++worker) {
+      const size_t begin = std::min(count, chunk * worker);
+      const size_t end = std::min(count, begin + chunk);
+      if (begin >= end) {
+        break;
+      }
+      threads.emplace_back([&body, begin, end] { body(begin, end); });
+    }
+    body(size_t(0u), std::min(count, chunk));
+    for (auto &thread : threads) {
+      thread.join();
+    }
+  }
+
   /// True when a height fits every neighbour the layer already holds, diagonals
   /// included — those share a corner vertex just as edge neighbours do.
   bool AgreesWithNeighbours(
@@ -1228,9 +1282,21 @@ namespace {
         }
       }
 
-      std::unordered_map<Cell, float, CellHash> additions;
+      // Every candidate is read-only against `layer`, so they can be tested at once and
+      // the results merged before any of them is paved.
+      std::vector<Cell> pending;
+      pending.reserve(candidates.size());
       for (const auto &candidate : candidates) {
-        const Cell &key = candidate.first;
+        pending.push_back(candidate.first);
+      }
+      const size_t crack_workers = WorkerCount(pending.size());
+      std::vector<std::vector<std::pair<Cell, float>>> discovered(crack_workers);
+      const size_t crack_chunk = (pending.size() + crack_workers - 1u) / crack_workers;
+      ParallelRanges(pending.size(), [&](const size_t begin, const size_t end) {
+      auto &into =
+          discovered[std::min(crack_workers - 1u, begin / std::max<size_t>(1u, crack_chunk))];
+      for (size_t c = begin; c < end; ++c) {
+        const Cell &key = pending[c];
         for (const auto &axis : axes) {
           const float *near_side = nullptr;
           const float *far_side = nullptr;
@@ -1262,15 +1328,21 @@ namespace {
           if (!AgreesWithNeighbours(layer, key, height, fill_tolerance)) {
             continue;
           }
-          additions[key] = height;
+          into.emplace_back(key, height);
           break;
         }
       }
-      if (additions.empty()) {
-        break;
+      });
+
+      bool added = false;
+      for (const auto &batch : discovered) {
+        for (const auto &addition : batch) {
+          layer[addition.first] = addition.second;
+          added = true;
+        }
       }
-      for (const auto &addition : additions) {
-        layer[addition.first] = addition.second;
+      if (!added) {
+        break;
       }
     }
   }
@@ -1404,25 +1476,61 @@ namespace {
   void RelaxLayer(
       std::unordered_map<Cell, float, CellHash> &layer,
       const int passes) {
+    if (passes <= 0 || layer.empty()) {
+      return;
+    }
+    // Resolve the neighbourhood once into indices, then run the passes over plain
+    // arrays. Relaxing moves heights but never changes which cells exist, so walking
+    // the map by hash on every pass re-answers a question whose answer cannot have
+    // changed -- four lookups per cell per pass, fourteen million of them on a
+    // map-wide sheet. Indices also make each pass a flat loop over contiguous memory,
+    // which is what allows it to be split across workers at all.
+    std::vector<Cell> keys;
+    std::vector<float> height;
+    keys.reserve(layer.size());
+    height.reserve(layer.size());
+    std::unordered_map<Cell, size_t, CellHash> index_of;
+    index_of.reserve(layer.size());
+    for (const auto &entry : layer) {
+      index_of[entry.first] = keys.size();
+      keys.push_back(entry.first);
+      height.push_back(entry.second);
+    }
+
     const std::array<Cell, 4> neighbours = {
         Cell{1, 0}, Cell{-1, 0}, Cell{0, 1}, Cell{0, -1}};
-    for (int pass = 0; pass < passes; ++pass) {
-      std::unordered_map<Cell, float, CellHash> updated;
-      updated.reserve(layer.size());
-      for (const auto &entry : layer) {
-        float total = entry.second;
-        int count = 1;
-        for (const auto &step : neighbours) {
-          const auto found = layer.find(
-              Cell{entry.first.col + step.col, entry.first.row + step.row});
-          if (found != layer.end()) {
-            total += found->second;
-            ++count;
-          }
+    const size_t absent = ~static_cast<size_t>(0u);
+    std::vector<std::array<size_t, 4>> around(keys.size());
+    ParallelRanges(keys.size(), [&](const size_t begin, const size_t end) {
+      for (size_t i = begin; i < end; ++i) {
+        for (size_t n = 0u; n < neighbours.size(); ++n) {
+          const auto found = index_of.find(
+              Cell{keys[i].col + neighbours[n].col, keys[i].row + neighbours[n].row});
+          around[i][n] = found == index_of.end() ? absent : found->second;
         }
-        updated[entry.first] = total / static_cast<float>(count);
       }
-      layer.swap(updated);
+    });
+
+    std::vector<float> next(height.size());
+    for (int pass = 0; pass < passes; ++pass) {
+      ParallelRanges(height.size(), [&](const size_t begin, const size_t end) {
+        for (size_t i = begin; i < end; ++i) {
+          float total = height[i];
+          int count = 1;
+          for (const size_t neighbour : around[i]) {
+            if (neighbour != absent) {
+              total += height[neighbour];
+              ++count;
+            }
+          }
+          next[i] = total / static_cast<float>(count);
+        }
+      });
+      height.swap(next);
+    }
+
+    for (size_t i = 0u; i < keys.size(); ++i) {
+      layer[keys[i]] = height[i];
     }
   }
 
@@ -1457,11 +1565,22 @@ namespace {
           .push_back(entry.first);
     }
 
+    // A tile shares its edge vertices with its neighbours through `corners`, which is
+    // already resolved across the whole layer, so no tile needs to see another and they
+    // can be built at once.
+    std::vector<const std::vector<Cell> *> ordered;
+    ordered.reserve(tiles.size());
     for (const auto &tile : tiles) {
+      ordered.push_back(&tile.second);
+    }
+    std::vector<std::unique_ptr<Mesh>> built(ordered.size());
+    ParallelRanges(ordered.size(), [&](const size_t begin, const size_t end) {
+    for (size_t t = begin; t < end; ++t) {
+      const std::vector<Cell> &tile_cells = *ordered[t];
       Mesh mesh;
       mesh.AddMaterial("road");
       std::unordered_map<Cell, size_t, CellHash> index_of;
-      for (const auto &key : tile.second) {
+      for (const auto &key : tile_cells) {
         for (const auto &offset : offsets) {
           const Cell corner{key.col + offset.col, key.row + offset.row};
           if (index_of.count(corner) != 0) {
@@ -1476,7 +1595,7 @@ namespace {
               sum.first / static_cast<float>(sum.second)));
         }
       }
-      for (const auto &key : tile.second) {
+      for (const auto &key : tile_cells) {
         const auto a = index_of.at(key);
         const auto b = index_of.at(Cell{key.col + 1, key.row});
         const auto c = index_of.at(Cell{key.col + 1, key.row + 1});
@@ -1489,7 +1608,11 @@ namespace {
         mesh.AddIndex(static_cast<Mesh::index_type>(d + 1));
       }
       mesh.EndMaterial();
-      out_tiles.push_back(std::make_unique<Mesh>(std::move(mesh)));
+      built[t] = std::make_unique<Mesh>(std::move(mesh));
+    }
+    });
+    for (auto &mesh : built) {
+      out_tiles.push_back(std::move(mesh));
     }
   }
 
@@ -1505,8 +1628,19 @@ namespace {
     // 1. Sample every lane strip into the height field. A lane mesh stores its
     //    vertices as consecutive right/left pairs along the lane, so each pair of
     //    stations is one quad.
-    std::unordered_map<Cell, std::vector<float>, CellHash> samples;
-    for (const auto &mesh : lane_meshes) {
+    // Rasterised across workers into a height field each, then merged. A worker takes a
+    // run of lane meshes and never looks at another's, so nothing is shared while the
+    // quads are being tested; the merge that follows costs one move per cell touched.
+    // Order does not matter to the result: the clustering below sorts each cell's
+    // heights before reducing them.
+    const size_t sample_workers = WorkerCount(lane_meshes.size());
+    std::vector<std::unordered_map<Cell, std::vector<float>, CellHash>> partials(
+        sample_workers);
+    const size_t sample_chunk = (lane_meshes.size() + sample_workers - 1u) / sample_workers;
+    ParallelRanges(lane_meshes.size(), [&](const size_t begin, const size_t end) {
+    auto &into = partials[std::min(sample_workers - 1u, begin / std::max<size_t>(1u, sample_chunk))];
+    for (size_t mesh_index = begin; mesh_index < end; ++mesh_index) {
+      const auto &mesh = lane_meshes[mesh_index];
       const auto &vertices = mesh->GetVertices();
       for (size_t i = 0; i + 3 < vertices.size(); i += 2) {
         const std::array<geom::Vector2D, 4> quad = {
@@ -1527,9 +1661,22 @@ namespace {
           for (int row = static_cast<int>(std::floor(min_y / cell)) - 1;
                row <= static_cast<int>(std::floor(max_y / cell)) + 1; ++row) {
             if (InsideQuad(quad, col * cell, row * cell)) {
-              samples[Cell{col, row}].push_back(height);
+              into[Cell{col, row}].push_back(height);
             }
           }
+        }
+      }
+    }
+    });
+
+    std::unordered_map<Cell, std::vector<float>, CellHash> samples;
+    for (auto &partial : partials) {
+      for (auto &entry : partial) {
+        auto &into = samples[entry.first];
+        if (into.empty()) {
+          into = std::move(entry.second);
+        } else {
+          into.insert(into.end(), entry.second.begin(), entry.second.end());
         }
       }
     }
