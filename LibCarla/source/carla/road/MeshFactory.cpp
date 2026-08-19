@@ -1172,6 +1172,27 @@ namespace {
   }
 
 
+  /// True when a height fits every neighbour the layer already holds, diagonals
+  /// included — those share a corner vertex just as edge neighbours do.
+  bool AgreesWithNeighbours(
+      const std::unordered_map<Cell, float, CellHash> &layer,
+      const Cell &cell,
+      const float height,
+      const float separation) {
+    for (int dc = -1; dc <= 1; ++dc) {
+      for (int dr = -1; dr <= 1; ++dr) {
+        if (dc == 0 && dr == 0) {
+          continue;
+        }
+        const auto held = layer.find(Cell{cell.col + dc, cell.row + dr});
+        if (held != layer.end() && std::abs(held->second - height) > separation) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
   /// Pave the gaps a junction's turning paths leave between them. A gap with paved
   /// neighbours on two or more sides is interior to the junction; one with fewer is
   /// the open edge of the road network and keeps its shape.
@@ -1208,7 +1229,14 @@ namespace {
         for (const float h : heights) {
           total += h;
         }
-        layer[candidate.first] = total / static_cast<float>(heights.size());
+        const float height = total / static_cast<float>(heights.size());
+        // Each pass makes the cells it paved contributors to the next, so without this
+        // the fill walks off the edge of a deck and keeps going until it meets the road
+        // below, leaving a ramp of paved cells standing in the road as a fin.
+        if (!AgreesWithNeighbours(layer, candidate.first, height, separation)) {
+          continue;
+        }
+        layer[candidate.first] = height;
       }
     }
   }
@@ -1415,16 +1443,13 @@ namespace {
           // Growth is checked against the cell it came from, but two branches — one along
           // the ground, one climbing a ramp — can meet as neighbours without ever being
           // compared. A cell joins only if it agrees with every neighbour already held.
-          bool agrees = true;
-          for (const auto &step : neighbours) {
-            const auto held = layer.find(
-                Cell{current.first.col + step.col, current.first.row + step.row});
-            if (held != layer.end() && std::abs(held->second - height) > separation) {
-              agrees = false;
-              break;
-            }
-          }
-          if (!agrees) {
+          //
+          // All eight, not just the four edges: every cell touching a corner shares that
+          // corner's vertex, so two cells that are only diagonal neighbours still share
+          // one. Comparing edges alone lets a deck cell sit diagonally against a road
+          // cell, and their shared corner then averages between the two while the
+          // triangles stretch from one height to the other — a vertical fin in the road.
+          if (!AgreesWithNeighbours(layer, current.first, height, separation)) {
             continue;
           }
           layer[current.first] = height;

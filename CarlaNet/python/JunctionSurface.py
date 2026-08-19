@@ -143,7 +143,21 @@ class JunctionSurface:
                 # is interior to the road.
                 if max(heights) - min(heights) > self.layer_separation:
                     continue
-                filled[key] = sum(heights) / len(heights)
+                height = sum(heights) / len(heights)
+                # Each pass makes the cells it paved contributors to the next, so without
+                # this the fill walks off the edge of a deck and keeps going until it
+                # meets the road below, leaving a ramp of paved cells standing in the
+                # road as a fin. A new cell must agree with everything already around it,
+                # diagonals included, since those share a corner vertex too.
+                col, row = key
+                if any(
+                    abs(filled[(col + dc, row + dr)] - height) > self.layer_separation
+                    for dc in (-1, 0, 1)
+                    for dr in (-1, 0, 1)
+                    if (dc or dr) and (col + dc, row + dr) in filled
+                ):
+                    continue
+                filled[key] = height
         return filled
 
     def _sample(self, strips: list[Strip]) -> dict[tuple[int, int], list[float]]:
@@ -215,10 +229,17 @@ class JunctionSurface:
                     # neighbours without ever being compared, leaving a step of metres
                     # inside one sheet. A cell joins only if it agrees with every
                     # neighbour the layer already holds.
+                    # Every cell touching a corner shares that corner's vertex, and two
+                    # cells that are only diagonal neighbours still share one. Comparing
+                    # the four edge neighbours alone let a deck cell sit diagonally
+                    # against a road cell: their shared corner averaged between the two
+                    # and the triangles stretched from one height to the other, leaving
+                    # a vertical fin standing in the road. All eight are compared.
                     if any(
-                        abs(layer[n] - height) > self.layer_separation
-                        for n in ((col + 1, row), (col - 1, row), (col, row + 1), (col, row - 1))
-                        if n in layer
+                        abs(layer[(col + dc, row + dr)] - height) > self.layer_separation
+                        for dc in (-1, 0, 1)
+                        for dr in (-1, 0, 1)
+                        if (dc or dr) and (col + dc, row + dr) in layer
                     ):
                         continue
                     layer[(col, row)] = height
