@@ -839,7 +839,7 @@ once: specks of 0.2 to 0.5 m² inside intersections left open because they sit a
 connector, while gaps that a median happens to run past still read as interior.
 
 Flooding answers the question the rays were standing in for. A gap that closes is a hole; a gap that
-reaches the outside is the space beside the road. On  the median, the jut and the
+reaches the outside is the space beside the road. On `Arapahoe_I25` the median, the jut and the
 spike are **not enclosed at all**, so this excludes them without knowing which paving belongs to a
 junction — the connector-ownership tracking, the ray casts and the majority rule all go away.
 
