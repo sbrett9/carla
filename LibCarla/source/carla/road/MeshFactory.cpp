@@ -1195,54 +1195,6 @@ namespace {
     return true;
   }
 
-  /// True when a gap is enclosed by paving and sits inside an intersection.
-  ///
-  /// Two conditions, because neither alone separates the cases measured.
-  ///
-  /// Paving must lie within `reach` along all four axes. That is what excludes a median:
-  /// the interior of a junction is ringed by turning paths so every ray hits one, while a
-  /// median between two approach carriageways runs away down the road and the ray along
-  /// it finds nothing.
-  ///
-  /// Junction paving must lie in most of the eight directions. Enclosure alone is not
-  /// enough — a triangular island between a slip lane and the road it leaves, or the
-  /// outside of a bend, has road on every side too, and paving those raised islands and
-  /// spikes standing in the scene. Measured on Arapahoe_I25, gaps genuinely inside an
-  /// intersection reach junction paving in five to eight of the eight directions and from
-  /// no further than 1.5 m, while every island, jut and median reaches it in at most two
-  /// and from 6 m or more. Nothing measured falls between, so a majority separates them.
-  bool Surrounded(
-      const std::unordered_map<Cell, float, CellHash> &layer,
-      const std::unordered_map<Cell, bool, CellHash> &junction_cells,
-      const Cell &cell,
-      const int reach) {
-    const std::array<Cell, 8> directions = {
-        Cell{1, 0}, Cell{-1, 0}, Cell{0, 1}, Cell{0, -1},
-        Cell{1, 1}, Cell{-1, -1}, Cell{1, -1}, Cell{-1, 1}};
-    const size_t axis_count = 4u;
-    size_t junction_hits = 0u;
-    for (size_t index = 0u; index < directions.size(); ++index) {
-      bool found = false;
-      bool on_junction = false;
-      for (int distance = 1; distance <= reach; ++distance) {
-        const Cell key{cell.col + directions[index].col * distance,
-                       cell.row + directions[index].row * distance};
-        if (layer.count(key) != 0) {
-          found = true;
-          on_junction = junction_cells.count(key) != 0;
-          break;
-        }
-      }
-      if (!found && index < axis_count) {
-        return false;
-      }
-      if (on_junction) {
-        ++junction_hits;
-      }
-    }
-    return junction_hits > directions.size() / 2u;
-  }
-
   /// Pave the slivers left where two lane quads meet.
   ///
   /// Adjacent lanes derive their shared boundary independently, from different reference
@@ -1344,42 +1296,62 @@ namespace {
   /// asks whether bridging a gap would invent a slope.
   void PaveEnclosedGaps(
       std::unordered_map<Cell, float, CellHash> &layer,
-      const std::unordered_map<Cell, bool, CellHash> &junction_cells,
       const float cell,
-      const float max_gap_span,
+      const float max_gap_area,
       const float fill_tolerance) {
-    const int reach = std::max(1, static_cast<int>(std::lround(max_gap_span / cell)));
+    const size_t limit = static_cast<size_t>(
+        std::max(1.0f, max_gap_area / (cell * cell)));
     const std::array<Cell, 4> steps = {Cell{1, 0}, Cell{-1, 0}, Cell{0, 1}, Cell{0, -1}};
 
-    std::vector<Cell> frontier;
+    // Flood each gap, and keep it only if it closes under the cap.
+    //
+    // A gap the paving closes around is a hole a wheel drops into. A gap that reaches the
+    // outside is the space beside the road — a median between two approach carriageways,
+    // the verge, the space between a road and the ramp beside it — and paving those is
+    // what raised islands and spikes standing in the scene.
+    //
+    // Flooding answers that directly, where casting a ray in a few directions could not:
+    // rays report what a gap is near, not whether it is closed, so a median that happens
+    // to run past a junction reads the same as the junction's interior. Measured on
+    // Arapahoe_I25, the median, the jut and the spike are not enclosed at all, so this
+    // excludes them without needing to know which paving belongs to a junction.
+    //
+    // The cap is what stops the open ground outside the network counting as one enormous
+    // gap, and what keeps this bounded: a flood that reaches the cap is abandoned, and
+    // every cell it reached is abandoned with it so the next boundary cell does not walk
+    // the same ground again.
+    std::unordered_map<Cell, bool, CellHash> done;
+    std::vector<Cell> interior;
     for (const auto &entry : layer) {
       for (const auto &step : steps) {
-        const Cell key{entry.first.col + step.col, entry.first.row + step.row};
-        if (layer.count(key) == 0) {
-          frontier.push_back(key);
+        const Cell seed{entry.first.col + step.col, entry.first.row + step.row};
+        if (layer.count(seed) != 0 || done.count(seed) != 0) {
+          continue;
         }
-      }
-    }
-
-    std::unordered_map<Cell, bool, CellHash> checked;
-    std::vector<Cell> interior;
-    while (!frontier.empty()) {
-      const Cell current = frontier.back();
-      frontier.pop_back();
-      if (checked.count(current) != 0 || layer.count(current) != 0) {
-        continue;
-      }
-      checked[current] = true;
-      if (!Surrounded(layer, junction_cells, current, reach)) {
-        continue;
-      }
-      interior.push_back(current);
-      // A gap is usually more than one cell wide, so its neighbours are candidates too
-      // even though they do not touch paving themselves.
-      for (const auto &step : steps) {
-        const Cell key{current.col + step.col, current.row + step.row};
-        if (layer.count(key) == 0 && checked.count(key) == 0) {
-          frontier.push_back(key);
+        std::unordered_map<Cell, bool, CellHash> region;
+        std::vector<Cell> frontier{seed};
+        region[seed] = true;
+        bool overflowed = false;
+        while (!frontier.empty()) {
+          if (region.size() > limit) {
+            overflowed = true;
+            break;
+          }
+          const Cell current = frontier.back();
+          frontier.pop_back();
+          for (const auto &edge : steps) {
+            const Cell key{current.col + edge.col, current.row + edge.row};
+            if (layer.count(key) == 0 && region.count(key) == 0) {
+              region[key] = true;
+              frontier.push_back(key);
+            }
+          }
+        }
+        for (const auto &held : region) {
+          done[held.first] = true;
+          if (!overflowed) {
+            interior.push_back(held.first);
+          }
         }
       }
     }
@@ -1526,7 +1498,6 @@ namespace {
 
   std::vector<std::unique_ptr<Mesh>> MeshFactory::ResolveDrivableSurface(
       const std::vector<std::unique_ptr<Mesh>> &lane_meshes,
-      const std::vector<bool> &from_junction,
       const float tile_size) const {
     const float cell = road_param.junction_cell_size;
     const float separation = road_param.junction_layer_separation;
@@ -1535,12 +1506,7 @@ namespace {
     //    vertices as consecutive right/left pairs along the lane, so each pair of
     //    stations is one quad.
     std::unordered_map<Cell, std::vector<float>, CellHash> samples;
-    // Which cells a junction connector covers, as opposed to a road between junctions.
-    std::unordered_map<Cell, bool, CellHash> junction_cells;
-    for (size_t mesh_index = 0; mesh_index < lane_meshes.size(); ++mesh_index) {
-      const auto &mesh = lane_meshes[mesh_index];
-      const bool is_junction =
-          mesh_index < from_junction.size() && from_junction[mesh_index];
+    for (const auto &mesh : lane_meshes) {
       const auto &vertices = mesh->GetVertices();
       for (size_t i = 0; i + 3 < vertices.size(); i += 2) {
         const std::array<geom::Vector2D, 4> quad = {
@@ -1562,9 +1528,6 @@ namespace {
                row <= static_cast<int>(std::floor(max_y / cell)) + 1; ++row) {
             if (InsideQuad(quad, col * cell, row * cell)) {
               samples[Cell{col, row}].push_back(height);
-              if (is_junction) {
-                junction_cells[Cell{col, row}] = true;
-              }
             }
           }
         }
@@ -1676,7 +1639,7 @@ namespace {
           }
           PaveNarrowCracks(layer, cell, road_param.junction_crack_span,
                            road_param.junction_fill_tolerance);
-          PaveEnclosedGaps(layer, junction_cells, cell, road_param.junction_max_gap_span,
+          PaveEnclosedGaps(layer, cell, road_param.junction_max_gap_area,
                            road_param.junction_fill_tolerance);
           RelaxLayer(layer, road_param.junction_relax_passes);
           AppendLayerTiles(out_tiles, layer, cell, tile_size);

@@ -128,13 +128,8 @@ namespace geom {
     /// \param tile_size Edge length of the emitted tiles. Corner heights are resolved
     ///        across the whole layer first, so neighbouring tiles place identical
     ///        vertices on their shared edge.
-    /// \param from_junction Marks, per lane mesh, whether it belongs to a junction
-    ///        connector rather than a road between junctions. Only a gap ringed by
-    ///        connector paving is interior to an intersection; a median, or the island
-    ///        between a slip lane and the road it leaves, has road on every side too.
     std::vector<std::unique_ptr<Mesh>> ResolveDrivableSurface(
         const std::vector<std::unique_ptr<Mesh>> &lane_meshes,
-        const std::vector<bool> &from_junction,
         float tile_size) const;
 
     // -- LaneMarks --
@@ -180,9 +175,17 @@ namespace geom {
       // layers rather than one surface sampled twice. Above the worst
       // same-layer disagreement measured and below the shallowest clearance.
       float junction_layer_separation   =  3.0f;
-      // How far paving must lie in every direction for a gap to count as
-      // interior to an intersection rather than the space beside a road.
-      float junction_max_gap_span       = 20.0f;
+      // Largest enclosed gap that is paved, in square metres. A gap the
+      // surface closes around is a hole a wheel drops into; a gap that opens
+      // outward is the space beside the road, and is left alone whatever its
+      // size. Among enclosed gaps, size is the only separator available and it
+      // is not a clean one: on Arapahoe_I25 the holes confirmed against the
+      // photoreal run from 11.2 to 28.2 m2 and the enclosed ground confirmed to
+      // need leaving alone starts at 521.5 m2, but ten regions lie between and
+      // none has been checked. This sits above every confirmed hole with room
+      // to spare and well below every confirmed island, so the unchecked middle
+      // is left unpaved rather than guessed at.
+      float junction_max_gap_area       = 100.0f;
       // How far a paved gap may sit from the surface around it. The layer
       // separation is the wrong tolerance: it asks whether two cells belong to
       // one sheet, which a deck and the ramp beside it can, while this asks

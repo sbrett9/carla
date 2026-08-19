@@ -1141,10 +1141,8 @@ namespace road {
       // The parameter still applies to the per-lane path below, which does need it.
       mesh_factory.road_param.extra_lane_width = 0.0f;
       std::vector<std::unique_ptr<geom::Mesh>> drivable;
-      std::vector<bool> from_junction;
       std::vector<std::unique_ptr<geom::Mesh>> sidewalks;
       for (auto &&pair : _data.GetRoads()) {
-        const bool is_junction = pair.second.IsJunction();
         for (auto &&lane_section : pair.second.GetLaneSections()) {
           for (auto &&lane_pair : lane_section.GetLanes()) {
             const auto &lane = lane_pair.second;
@@ -1155,13 +1153,12 @@ namespace road {
               sidewalks.push_back(mesh_factory.Generate(lane));
             } else if (lane.GetType() == road::Lane::LaneType::Driving) {
               drivable.push_back(mesh_factory.Generate(lane));
-              from_junction.push_back(is_junction);
             }
           }
         }
       }
       out_mesh_list = mesh_factory.ResolveDrivableSurface(
-          drivable, from_junction, static_cast<float>(params.max_road_length));
+          drivable, static_cast<float>(params.max_road_length));
       for (auto &sidewalk : sidewalks) {
         if (sidewalk->GetVertices().size() != 0) {
           out_mesh_list.push_back(std::move(sidewalk));

@@ -818,7 +818,7 @@ looked alike in the viewer and had three unrelated causes, which is why fixing o
 others. All three were found by mapping cell coverage around lat/lon points taken from the running
 scene, not by reading the code.
 
-### The enclosure test was too strict, then too loose
+### The enclosure test: near a junction is not the same as enclosed
 
 Paving a gap because paving surrounds it fills medians, the triangular islands between a slip lane
 and the road it leaves, and the outside of bends — all have road on every side. Requiring instead
@@ -833,9 +833,34 @@ unanimity:
 | gaps genuinely inside an intersection | 5, 5, 6, 8, 8 | 0.5-1.5 m |
 | median, island, bulge, two juts, spike | 0, 1, 2, 2, 2 | 6 m to none |
 
-Nothing measured falls between two and five. The test is now: paving within reach along all four
-axes, *and* junction paving in more than half of the eight directions. The axis condition is what
-still excludes a median — the ray running along it reaches the limit and finds nothing.
+Nothing measured fell between two and five, so that rule shipped. It was still wrong. Rays report
+what a gap is *near*, not whether it is closed, and the next build showed both failure modes at
+once: specks of 0.2 to 0.5 m² inside intersections left open because they sit away from any
+connector, while gaps that a median happens to run past still read as interior.
+
+Flooding answers the question the rays were standing in for. A gap that closes is a hole; a gap that
+reaches the outside is the space beside the road. On  the median, the jut and the
+spike are **not enclosed at all**, so this excludes them without knowing which paving belongs to a
+junction — the connector-ownership tracking, the ray casts and the majority rule all go away.
+
+Flooding is bounded by a cap: a flood that reaches it is abandoned, along with every cell it
+reached, so the open ground outside the network is walked once rather than once per boundary cell.
+
+Size is then the only separator left among enclosed gaps, and it is **not** a clean one. Measured on
+the surface *before* filling — measuring it after filling is what produced the earlier claim that
+holes top out at 64 m², since by then the holes were gone:
+
+| | area |
+|---|---|
+| holes confirmed against the photoreal | 11.2, 25.0, 28.2 m² |
+| enclosed ground confirmed to need leaving alone | island 521.5 m², bulge 787.8 m² |
+| enclosed regions in between, none of them checked | 33.8, 64.8, 140.0, 159.5, 181.2, 238.8, 402.8, 451.8, 469.2 m² |
+
+The cap is 100 m²: above every confirmed hole with room to spare, well below every confirmed island,
+leaving the unchecked middle unpaved rather than guessed at. Several of those middle regions are
+long thin strips — 402.8 m² is 88.5 × 7.5 m, 181.2 m² is 3.5 × 61 m — which is the shape of a
+median, while every confirmed hole is compact. Checking them against the photoreal would allow the
+cap to be set on evidence rather than on a margin.
 
 ### Layer growth was discarding the cells it rejected
 

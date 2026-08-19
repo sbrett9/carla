@@ -64,10 +64,17 @@ class JunctionSurface:
     #: left open rather than ramped into.
     FILL_TOLERANCE_M = 0.5
 
-    #: How far paving must lie in every direction for a gap to count as interior, in
-    #: metres. Comfortably spans the interior of the intersections measured while falling
-    #: far short of the space between roads, which is what keeps a median unpaved.
-    MAX_GAP_SPAN_M = 20.0
+    #: Largest enclosed gap that is paved, in square metres. A gap the surface encloses
+    #: is a hole a wheel drops into; a gap that opens outward is the space beside the
+    #: road, and is left alone whatever its size.
+    #:
+    #: Among enclosed gaps, size is the only separator available, and it is not a clean
+    #: one. On `Arapahoe_I25` the holes confirmed against the photoreal run from 11.2 to
+    #: 28.2 m2 and the enclosed ground confirmed to need leaving alone starts at 521.5 m2,
+    #: but ten regions lie between and none of them has been checked. This sits above
+    #: every confirmed hole with room to spare and well below every confirmed island, so
+    #: the unchecked middle is left unpaved rather than guessed at.
+    MAX_ENCLOSED_GAP_AREA_M2 = 100.0
 
     #: Widest sliver between two lane quads that is paved over, in metres. Wide enough
     #: for the cracks measured, which are a cell or two across, and far narrower than the
@@ -82,14 +89,14 @@ class JunctionSurface:
         self,
         cell: float | None = None,
         layer_separation: float | None = None,
-        max_gap_span: float | None = None,
+        max_gap_area: float | None = None,
         fill_tolerance: float | None = None,
         crack_span: float | None = None,
         relax_passes: int | None = None,
     ) -> None:
         self.cell = cell or self.CELL_METRES
         self.layer_separation = layer_separation or self.LAYER_SEPARATION_METRES
-        self.max_gap_span = self.MAX_GAP_SPAN_M if max_gap_span is None else max_gap_span
+        self.max_gap_area = self.MAX_ENCLOSED_GAP_AREA_M2 if max_gap_area is None else max_gap_area
         self.fill_tolerance = self.FILL_TOLERANCE_M if fill_tolerance is None else fill_tolerance
         self.crack_span = self.CRACK_SPAN_M if crack_span is None else crack_span
         self.relax_passes = self.RELAX_PASSES if relax_passes is None else relax_passes
@@ -99,31 +106,11 @@ class JunctionSurface:
     def build(self, strips: list[Strip]) -> list[Surface]:
         """One surface per height layer covered by these strips."""
         cells = self._sample(strips)
-        junction_cells = self._sample_junction_cells(strips)
         layers = [layer for layer in self._split_layers(cells) if layer]
         return [
-            self._triangulate(
-                self._relax(self._close_gaps(self._close_cracks(layer), junction_cells))
-            )
+            self._triangulate(self._relax(self._close_gaps(self._close_cracks(layer))))
             for layer in layers
         ]
-
-    def _sample_junction_cells(self, strips: list[Strip]) -> set[tuple[int, int]]:
-        """Cells a junction connector covers, as opposed to a road between junctions."""
-        owned: set[tuple[int, int]] = set()
-        for strip in strips:
-            if strip.junction == "-1":
-                continue
-            for i in range(len(strip.right) - 1):
-                corners = (strip.right[i], strip.left[i], strip.left[i + 1], strip.right[i + 1])
-                plan = tuple(c[:2] for c in corners)
-                xs = [v[0] for v in plan]
-                ys = [v[1] for v in plan]
-                for col in range(int(min(xs) / self.cell) - 1, int(max(xs) / self.cell) + 2):
-                    for row in range(int(min(ys) / self.cell) - 1, int(max(ys) / self.cell) + 2):
-                        if RoadSurfaceMesh._inside(plan, (col * self.cell, row * self.cell)):
-                            owned.add((col, row))
-        return owned
 
     def _relax(self, layer: dict[tuple[int, int], float]) -> dict[tuple[int, int], float]:
         """Take the flips out of the resolved height field.
@@ -205,30 +192,19 @@ class JunctionSurface:
             paved.update(additions)
         return paved
 
-    def _close_gaps(
-        self,
-        layer: dict[tuple[int, int], float],
-        junction_cells: set[tuple[int, int]],
-    ) -> dict[tuple[int, int], float]:
-        """Pave the gaps a junction's turning paths leave enclosed between them.
+    def _close_gaps(self, layer: dict[tuple[int, int], float]) -> dict[tuple[int, int], float]:
+        """Pave the gaps the surface encloses.
 
         OpenDRIVE models a junction as turning paths — a u-turn, some left turns, the
         straight-throughs, the rights — and between them sits asphalt no lane ever
-        covers. A vehicle drops through it, since collision uses these triangles.
+        covers. A vehicle drops through it, since collision uses these triangles. The
+        same holds wherever two roads meet without their lane polygons quite touching.
 
-        The test is enclosure, not distance. A gap the turning paths surround is interior
-        to the intersection and gets paved whatever its shape; a gap that opens outward is
-        not, which is what keeps the median between two approach carriageways unpaved —
-        it reaches the space outside the network, so the flood fill from outside finds it.
-        A convex hull of the junction cannot make that distinction: measured on
-        `Arapahoe_I25`, the median beside junction 114 lies inside that junction's hull.
-
-        Regions above ``max_gap_area`` are left alone. The city blocks a road network
-        rings are enclosed by the same test, and they are four orders of magnitude larger
-        than the largest interior gap measured, so the two never overlap.
+        What counts as enclosed, and how the size cap separates a hole from a piece of
+        ground that must stay unpaved, is described on ``_enclosed_cells``.
         """
         filled = dict(layer)
-        remaining = set(self._enclosed_cells(layer, junction_cells))
+        remaining = set(self._enclosed_cells(layer))
         # Work inwards from the surface around the gap, so each cell takes the height of
         # what it already touches.
         while remaining:
@@ -251,93 +227,51 @@ class JunctionSurface:
                 break
         return filled
 
-    def _enclosed_cells(
-        self,
-        layer: dict[tuple[int, int], float],
-        junction_cells: set[tuple[int, int]],
-    ) -> list[tuple[int, int]]:
-        """Unpaved cells the surface surrounds, found without flooding the whole plane.
+    def _enclosed_cells(self, layer: dict[tuple[int, int], float]) -> list[tuple[int, int]]:
+        """Unpaved cells the surface encloses, found by flooding each gap under a cap.
 
-        A cell is interior when paving lies within reach in all four directions. That is
-        a local test costing a bounded ray per direction, so it scales with the gaps
-        rather than with the sheet's bounding box — which for a whole road network is
-        mostly the empty space around it.
+        A gap the paving closes around is a hole a wheel drops into. A gap that reaches
+        the outside is the space beside the road — a median between two approach
+        carriageways, the verge, the space between a road and the ramp beside it — and
+        paving those is what raised islands and spikes standing in the scene.
 
-        It is also what separates an intersection's interior from a median. The interior
-        of a junction is ringed by turning paths, so every ray hits one; a median between
-        two approach carriageways runs away down the road, so the ray along it reaches
-        the limit and finds nothing. A convex hull of the junction cannot tell them apart
-        — measured on `Arapahoe_I25`, the median beside junction 114 lies inside that
-        junction's own hull.
+        Flooding answers that directly, where a ray cast in a few directions could not:
+        rays report what a gap is near, not whether it is closed, so a median that happens
+        to run past a junction reads the same as the junction's interior. Measured on
+        `Arapahoe_I25`, the median, the jut and the spike are not enclosed at all, so this
+        excludes them without needing to know which paving belongs to a junction.
+
+        The cap keeps it bounded, and is what stops the open ground outside the network
+        counting as one enormous gap: a flood that reaches the cap is abandoned, and every
+        cell it reached is abandoned with it so the next boundary cell does not walk the
+        same ground again. Size then separates the remaining two populations — real holes
+        measured up to 64 m2, the enclosed ground that must stay unpaved from 522 m2 up.
         """
-        reach = max(1, int(self.max_gap_span / self.cell))
-        candidates: set[tuple[int, int]] = set()
+        limit = max(1, int(self.max_gap_area / (self.cell * self.cell)))
+        interior: list[tuple[int, int]] = []
+        done: set[tuple[int, int]] = set()
         for col, row in layer:
             for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                key = (col + dc, row + dr)
-                if key not in layer:
-                    candidates.add(key)
-
-        interior: list[tuple[int, int]] = []
-        checked: set[tuple[int, int]] = set()
-        frontier = list(candidates)
-        while frontier:
-            cell = frontier.pop()
-            if cell in checked or cell in layer:
-                continue
-            checked.add(cell)
-            if not self._surrounded(layer, cell, reach, junction_cells):
-                continue
-            interior.append(cell)
-            # A gap is usually more than one cell wide, so its neighbours are candidates
-            # too even though they do not touch paving themselves.
-            for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                key = (cell[0] + dc, cell[1] + dr)
-                if key not in layer and key not in checked:
-                    frontier.append(key)
+                seed = (col + dc, row + dr)
+                if seed in layer or seed in done:
+                    continue
+                region: set[tuple[int, int]] = {seed}
+                frontier = [seed]
+                overflowed = False
+                while frontier:
+                    if len(region) > limit:
+                        overflowed = True
+                        break
+                    cur = frontier.pop()
+                    for ec, er in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                        nxt = (cur[0] + ec, cur[1] + er)
+                        if nxt not in layer and nxt not in region:
+                            region.add(nxt)
+                            frontier.append(nxt)
+                done |= region
+                if not overflowed:
+                    interior.extend(region)
         return interior
-
-    def _surrounded(
-        self,
-        layer: dict[tuple[int, int], float],
-        cell: tuple[int, int],
-        reach: int,
-        junction_cells: set[tuple[int, int]],
-    ) -> bool:
-        """True when a gap is enclosed by paving and sits inside an intersection.
-
-        Two conditions, because neither alone separates the cases measured.
-
-        Paving must lie within ``reach`` along all four axes. That is what excludes a
-        median: the interior of a junction is ringed by turning paths so every ray hits
-        one, while a median between two approach carriageways runs away down the road and
-        the ray along it finds nothing.
-
-        Junction paving must lie in most of the eight directions. Enclosure alone is not
-        enough — a triangular island between a slip lane and the road it leaves, or the
-        outside of a bend, has road on every side too, and paving those was what raised
-        the islands and spikes standing in the scene. Measured on `Arapahoe_I25`, gaps
-        genuinely inside an intersection reach junction paving in five to eight of the
-        eight directions and from no further than 1.5 m, while every island, jut and
-        median reaches it in at most two and from 6 m or more. Nothing measured falls
-        between, so a simple majority separates them.
-        """
-        col, row = cell
-        axes = ((1, 0), (-1, 0), (0, 1), (0, -1))
-        diagonals = ((1, 1), (-1, -1), (1, -1), (-1, 1))
-        junction_hits = 0
-        for dc, dr in axes + diagonals:
-            hit = None
-            for step in range(1, reach + 1):
-                key = (col + dc * step, row + dr * step)
-                if key in layer:
-                    hit = key
-                    break
-            if hit is None and (dc, dr) in axes:
-                return False
-            if hit is not None and hit in junction_cells:
-                junction_hits += 1
-        return junction_hits > len(axes + diagonals) // 2
 
     def _agrees(
         self,
