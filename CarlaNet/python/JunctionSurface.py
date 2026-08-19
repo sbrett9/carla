@@ -92,8 +92,29 @@ class JunctionSurface:
     def build(self, strips: list[Strip]) -> list[Surface]:
         """One surface per height layer covered by these strips."""
         cells = self._sample(strips)
+        junction_cells = self._sample_junction_cells(strips)
         layers = [layer for layer in self._split_layers(cells) if layer]
-        return [self._triangulate(self._relax(self._close_gaps(layer))) for layer in layers]
+        return [
+            self._triangulate(self._relax(self._close_gaps(layer, junction_cells)))
+            for layer in layers
+        ]
+
+    def _sample_junction_cells(self, strips: list[Strip]) -> set[tuple[int, int]]:
+        """Cells a junction connector covers, as opposed to a road between junctions."""
+        owned: set[tuple[int, int]] = set()
+        for strip in strips:
+            if strip.junction == "-1":
+                continue
+            for i in range(len(strip.right) - 1):
+                corners = (strip.right[i], strip.left[i], strip.left[i + 1], strip.right[i + 1])
+                plan = tuple(c[:2] for c in corners)
+                xs = [v[0] for v in plan]
+                ys = [v[1] for v in plan]
+                for col in range(int(min(xs) / self.cell) - 1, int(max(xs) / self.cell) + 2):
+                    for row in range(int(min(ys) / self.cell) - 1, int(max(ys) / self.cell) + 2):
+                        if RoadSurfaceMesh._inside(plan, (col * self.cell, row * self.cell)):
+                            owned.add((col, row))
+        return owned
 
     def _relax(self, layer: dict[tuple[int, int], float]) -> dict[tuple[int, int], float]:
         """Take the flips out of the resolved height field.
@@ -123,7 +144,11 @@ class JunctionSurface:
             relaxed = updated
         return relaxed
 
-    def _close_gaps(self, layer: dict[tuple[int, int], float]) -> dict[tuple[int, int], float]:
+    def _close_gaps(
+        self,
+        layer: dict[tuple[int, int], float],
+        junction_cells: set[tuple[int, int]],
+    ) -> dict[tuple[int, int], float]:
         """Pave the gaps a junction's turning paths leave enclosed between them.
 
         OpenDRIVE models a junction as turning paths — a u-turn, some left turns, the
@@ -142,7 +167,7 @@ class JunctionSurface:
         than the largest interior gap measured, so the two never overlap.
         """
         filled = dict(layer)
-        remaining = set(self._enclosed_cells(layer))
+        remaining = set(self._enclosed_cells(layer, junction_cells))
         # Work inwards from the surface around the gap, so each cell takes the height of
         # what it already touches.
         while remaining:
@@ -165,7 +190,11 @@ class JunctionSurface:
                 break
         return filled
 
-    def _enclosed_cells(self, layer: dict[tuple[int, int], float]) -> list[tuple[int, int]]:
+    def _enclosed_cells(
+        self,
+        layer: dict[tuple[int, int], float],
+        junction_cells: set[tuple[int, int]],
+    ) -> list[tuple[int, int]]:
         """Unpaved cells the surface surrounds, found without flooding the whole plane.
 
         A cell is interior when paving lies within reach in all four directions. That is
@@ -196,7 +225,7 @@ class JunctionSurface:
             if cell in checked or cell in layer:
                 continue
             checked.add(cell)
-            if not self._surrounded(layer, cell, reach):
+            if not self._surrounded(layer, cell, reach, junction_cells):
                 continue
             interior.append(cell)
             # A gap is usually more than one cell wide, so its neighbours are candidates
@@ -208,15 +237,30 @@ class JunctionSurface:
         return interior
 
     def _surrounded(
-        self, layer: dict[tuple[int, int], float], cell: tuple[int, int], reach: int
+        self,
+        layer: dict[tuple[int, int], float],
+        cell: tuple[int, int],
+        reach: int,
+        junction_cells: set[tuple[int, int]],
     ) -> bool:
-        """True when paving lies within ``reach`` cells in all four directions."""
+        """True when a junction's own paving lies within ``reach`` in all four directions.
+
+        Reaching *any* paving is not enough. A triangular island between a slip lane and
+        the road it leaves, a median, the outside of a bend — all have road on every side
+        and would be paved over, which is what filled them in the surface before this.
+        Requiring the paving to belong to a junction connector is what confines the fill
+        to the inside of an intersection, where the turning paths genuinely ring a piece
+        of asphalt no lane covers.
+        """
         col, row = cell
         for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            hit = None
             for step in range(1, reach + 1):
-                if (col + dc * step, row + dr * step) in layer:
+                key = (col + dc * step, row + dr * step)
+                if key in layer:
+                    hit = key
                     break
-            else:
+            if hit is None or hit not in junction_cells:
                 return False
         return True
 

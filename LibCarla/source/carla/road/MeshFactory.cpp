@@ -1194,18 +1194,26 @@ namespace {
     return true;
   }
 
-  /// True when paving lies within `reach` cells of `cell` in all four directions.
+  /// True when a junction's own paving lies within `reach` in all four directions.
+  ///
+  /// Reaching any paving is not enough. A triangular island between a slip lane and the
+  /// road it leaves, a median between approach carriageways, the outside of a bend —
+  /// all have road on every side, and treating those as interior paved over each of
+  /// them. Requiring the paving to belong to a junction connector confines the fill to
+  /// the inside of an intersection, where the turning paths genuinely ring a piece of
+  /// asphalt no lane covers.
   bool Surrounded(
       const std::unordered_map<Cell, float, CellHash> &layer,
+      const std::unordered_map<Cell, bool, CellHash> &junction_cells,
       const Cell &cell,
       const int reach) {
     const std::array<Cell, 4> steps = {Cell{1, 0}, Cell{-1, 0}, Cell{0, 1}, Cell{0, -1}};
     for (const auto &step : steps) {
       bool found = false;
       for (int distance = 1; distance <= reach; ++distance) {
-        if (layer.count(Cell{cell.col + step.col * distance,
-                             cell.row + step.row * distance}) != 0) {
-          found = true;
+        const Cell key{cell.col + step.col * distance, cell.row + step.row * distance};
+        if (layer.count(key) != 0) {
+          found = junction_cells.count(key) != 0;
           break;
         }
       }
@@ -1237,6 +1245,7 @@ namespace {
   /// asks whether bridging a gap would invent a slope.
   void PaveEnclosedGaps(
       std::unordered_map<Cell, float, CellHash> &layer,
+      const std::unordered_map<Cell, bool, CellHash> &junction_cells,
       const float cell,
       const float max_gap_span,
       const float fill_tolerance) {
@@ -1262,7 +1271,7 @@ namespace {
         continue;
       }
       checked[current] = true;
-      if (!Surrounded(layer, current, reach)) {
+      if (!Surrounded(layer, junction_cells, current, reach)) {
         continue;
       }
       interior.push_back(current);
@@ -1418,6 +1427,7 @@ namespace {
 
   std::vector<std::unique_ptr<Mesh>> MeshFactory::ResolveDrivableSurface(
       const std::vector<std::unique_ptr<Mesh>> &lane_meshes,
+      const std::vector<bool> &from_junction,
       const float tile_size) const {
     const float cell = road_param.junction_cell_size;
     const float separation = road_param.junction_layer_separation;
@@ -1426,7 +1436,12 @@ namespace {
     //    vertices as consecutive right/left pairs along the lane, so each pair of
     //    stations is one quad.
     std::unordered_map<Cell, std::vector<float>, CellHash> samples;
-    for (const auto &mesh : lane_meshes) {
+    // Which cells a junction connector covers, as opposed to a road between junctions.
+    std::unordered_map<Cell, bool, CellHash> junction_cells;
+    for (size_t mesh_index = 0; mesh_index < lane_meshes.size(); ++mesh_index) {
+      const auto &mesh = lane_meshes[mesh_index];
+      const bool is_junction =
+          mesh_index < from_junction.size() && from_junction[mesh_index];
       const auto &vertices = mesh->GetVertices();
       for (size_t i = 0; i + 3 < vertices.size(); i += 2) {
         const std::array<geom::Vector2D, 4> quad = {
@@ -1448,6 +1463,9 @@ namespace {
                row <= static_cast<int>(std::floor(max_y / cell)) + 1; ++row) {
             if (InsideQuad(quad, col * cell, row * cell)) {
               samples[Cell{col, row}].push_back(height);
+              if (is_junction) {
+                junction_cells[Cell{col, row}] = true;
+              }
             }
           }
         }
@@ -1536,7 +1554,7 @@ namespace {
             }
           }
         }
-        PaveEnclosedGaps(layer, cell, road_param.junction_max_gap_span,
+        PaveEnclosedGaps(layer, junction_cells, cell, road_param.junction_max_gap_span,
                          road_param.junction_fill_tolerance);
         RelaxLayer(layer, road_param.junction_relax_passes);
         AppendLayerTiles(out_tiles, layer, cell, tile_size);

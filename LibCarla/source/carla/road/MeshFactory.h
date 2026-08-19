@@ -128,8 +128,13 @@ namespace geom {
     /// \param tile_size Edge length of the emitted tiles. Corner heights are resolved
     ///        across the whole layer first, so neighbouring tiles place identical
     ///        vertices on their shared edge.
+    /// \param from_junction Marks, per lane mesh, whether it belongs to a junction
+    ///        connector rather than a road between junctions. Only a gap ringed by
+    ///        connector paving is interior to an intersection; a median, or the island
+    ///        between a slip lane and the road it leaves, has road on every side too.
     std::vector<std::unique_ptr<Mesh>> ResolveDrivableSurface(
         const std::vector<std::unique_ptr<Mesh>> &lane_meshes,
+        const std::vector<bool> &from_junction,
         float tile_size) const;
 
     // -- LaneMarks --
