@@ -504,26 +504,38 @@ class TrafficController:
 
         Re-drawing at random from a handful of ring points cannot find the route that
         exists: with three distinct entry points, four draws keep asking about the same
-        two unreachable destinations. The candidates are walked in order instead, so a
-        reachable one further down the list is actually reached.
+        two unreachable destinations. The candidates are walked instead.
 
-        A destination that routed from this entry point before is remembered and tried
-        first, since each search is an A* over the road graph and repeating the failures
-        every spawn is what made this expensive as well as fruitless.
+        They are biased to the far half, so a vehicle crosses the scene rather than
+        leaving by the nearest edge, but shuffled within it. Taking the single furthest
+        every time sends every vehicle from an entry down one line -- measured, eight
+        successive spawns from the west entry all chose the same destination -- when
+        several of the reachable ones are equally good exits.
+
+        A destination that routed from this entry is remembered and usually reused, since
+        each search is an A* over the road graph and repeating the failures every spawn is
+        expensive as well as fruitless. Some spawns look for a new one anyway, so the set
+        of known destinations grows instead of freezing on whichever was found first.
         """
         entry = self._place_key(spawn_tf.location)
-        known = self.reached_from.get(entry, [])
-        candidates = known + [
+        known = self.reached_from.setdefault(entry, [])
+        known_keys = {self._place_key(sp.location) for sp in known}
+
+        fresh = [
             sp
             for sp in self.destination_candidates(spawn_tf)
-            if self._place_key(sp.location) not in {self._place_key(k.location) for k in known}
+            if self._place_key(sp.location) not in known_keys
         ]
-        for attempt, destination_tf in enumerate(candidates):
-            if attempt >= self._ROUTE_DESTINATION_TRIES and not known:
-                if attempt >= self._ROUTE_DESTINATION_TRIES + self._ROUTE_FALLBACK_TRIES:
-                    break
-            elif attempt >= self._ROUTE_DESTINATION_TRIES:
-                break
+        far = fresh[: max(1, len(fresh) // 2)]
+        random.shuffle(far)
+        fresh = far + fresh[len(far) :]
+
+        exploring = not known or random.random() < self._DESTINATION_EXPLORE_CHANCE
+        remembered = random.sample(known, len(known))
+        order = fresh + remembered if exploring else remembered + fresh
+
+        budget = self._ROUTE_DESTINATION_TRIES + self._ROUTE_FALLBACK_TRIES
+        for destination_tf in order[:budget]:
             t0 = time.perf_counter()
             try:
                 route = self.tm.plan_route(spawn_tf.location, destination_tf.location)
@@ -535,8 +547,9 @@ class TrafficController:
             self.route_plan_ms_total += elapsed_ms
             self.route_plan_ms_max = max(self.route_plan_ms_max, elapsed_ms)
             if route is not None:
-                if not known:
-                    self.reached_from.setdefault(entry, []).append(destination_tf)
+                key = self._place_key(destination_tf.location)
+                if key not in known_keys and len(known) < self._REMEMBERED_DESTINATIONS:
+                    known.append(destination_tf)
                 return route
         return None
 
@@ -562,6 +575,12 @@ class TrafficController:
     # sparse network needs this: the ring is where traffic should ideally end, not the
     # only place it can.
     _ROUTE_FALLBACK_TRIES = 16
+    # How often a spawn looks for a destination it has not used from this entry before,
+    # rather than reusing one already known to route. Enough that the set keeps growing,
+    # rare enough that most spawns cost one search.
+    _DESTINATION_EXPLORE_CHANCE = 0.25
+    # How many known-good destinations to keep per entry point.
+    _REMEMBERED_DESTINATIONS = 8
 
     def occupied(self, x, y):
         """True if any tracked vehicle's footprint is close enough to (x, y) that spawning there would overlap it."""
