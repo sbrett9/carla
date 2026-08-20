@@ -406,6 +406,7 @@ public sealed class CarlaClient : IAsyncDisposable
         int drapeChunkCells = 64,
         double drapeMaxDrapeMeters = 5.0,
         string? drapeCacheDir = null,
+        bool photorealClamp = false,
         CancellationToken ct = default)
     {
         // 1) OSM -> flat .xodr (offline, native netconvert). Also capture the SUMO network when
@@ -675,10 +676,15 @@ public sealed class CarlaClient : IAsyncDisposable
                 roadEllipsoidal[i] = CarlaNet.Map.OpenDrive.DrapeTerrain.SampleBilinear(
                     drapeRes.DrapedZ, sandboxSpec, samples[i].X, samples[i].Y) + gradeLift[i];
 
-            // Put back the stations the de-spike dropped onto bare earth. It anchors a cell to
-            // the ground wherever the photoreal stands well above it, reading that as a
-            // structure; over open terrain there is no structure and the road follows the
-            // ground down into the hillside it should be lying on.
+            // Optionally put back the stations the de-spike dropped onto bare earth. It anchors
+            // a cell to the ground wherever the photoreal stands well above it, reading that as
+            // a structure. Over bare terrain that is wrong and the road follows the ground down
+            // into the hillside it should lie on -- but over a tree-lined street it is right,
+            // and lifting the road back onto the photoreal there puts it on the canopy. The
+            // photoreal is a surface model: it cannot tell a road under trees from a road on a
+            // steep bank, so this is off until something can.
+            if (photorealClamp)
+            {
             var photorealAtSample = new double[samples.Count];
             for (int i = 0; i < samples.Count; i++)
                 photorealAtSample[i] = CarlaNet.Map.OpenDrive.DrapeTerrain.SampleBilinear(
@@ -690,6 +696,7 @@ public sealed class CarlaClient : IAsyncDisposable
                 + (clamp.Lifted > 0 ? $" (largest {clamp.LargestLiftMeters:F2} m)" : "")
                 + $"; left alone: {clamp.UnderDeck} under a deck, {clamp.Sustained} on a "
                 + $"sustained grade, {clamp.Raised} deliberately raised.");
+            }
         }
         else
         {
