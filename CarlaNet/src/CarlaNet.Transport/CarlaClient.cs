@@ -181,6 +181,20 @@ public sealed class CarlaClient : IAsyncDisposable
     /// after it.</summary>
     public bool PhotorealClampEnabled { get; set; }
 
+    /// <summary>How many smoothing passes to run along each road over the bare-earth heights,
+    /// before any grade-separation lift is added. Zero leaves them as sampled.
+    ///
+    /// The drape already does this to its grid, two box-blur passes in DrapeTerrain.Despike, and
+    /// the surface a road follows there is the blurred one. Reading bare earth point by point
+    /// skips it, so a road inherits every wrinkle of a terrain model that knows nothing about
+    /// roads. Measured on Arapahoe_I25 the worst bend between adjacent stations is 5.99 m as
+    /// sampled and 1.46 m after one pass.
+    ///
+    /// The kernel is 1-2-1, which leaves any straight grade exactly where it was: it can only
+    /// remove curvature, never tilt a hill. It runs on the terrain alone, so a deck keeps the full
+    /// height its lift gives it.</summary>
+    public int TerrainSmoothingPasses { get; set; } = 1;
+
     /// <summary>Where to write a record of every height the elevation pass used, or null for
     /// none.
     ///
@@ -735,6 +749,25 @@ public sealed class CarlaClient : IAsyncDisposable
         // Only the road MESH is shifted by heightOffset (visual seating on the photoreal); the
         // reported telemetry HAE is now decoupled from that shift and reports bare-earth DTM truth.
         double originHeight = originHeightOverride ?? heights[0].Altitude;
+
+        // Smooth the bare-earth heights along each road before anything is added to them. A
+        // terrain model is not a road surface: it knows nothing about carriageways, and a road
+        // that follows it point by point inherits every wrinkle. The drape blurs its grid for the
+        // same reason; sampling point by point skips that, which is why this mode needs its own.
+        // Grouped by road because a road is what a profile runs along, and the smoothing must not
+        // reach across a junction into a road going somewhere else.
+        var groundHeights = new double[samples.Count];
+        for (int i = 0; i < samples.Count; i++) groundHeights[i] = heights[i + 1].Altitude;
+        // Only the terrain mode. 'none' and the constant-offset modes are meant to hand back bare
+        // earth as sampled, and the drape follows its own already-blurred grid instead of these.
+        int passes = terrainAlign ? TerrainSmoothingPasses : 0;
+        int smoothed = SmoothAlongRoads(samples, groundHeights, passes);
+        if (smoothed > 0)
+        {
+            Console.WriteLine($"[elevation] smoothed bare earth along {smoothed} road(s), "
+                + $"{passes} pass(es)");
+        }
+
         var roadEllipsoidal = new double[samples.Count];
         // At-grade roads conform to the SAME draped surface as the terrain (bilinear at each
         // centerline point), so the road mesh and the collision heightfield coincide — no seam. A
@@ -774,7 +807,7 @@ public sealed class CarlaClient : IAsyncDisposable
             // offset here; the constant-offset modes raise the road onto the imagery.
             double roadShift = terrainAlign ? 0.0 : heightOffset;
             for (int i = 0; i < samples.Count; i++)
-                roadEllipsoidal[i] = heights[i + 1].Altitude + roadShift + gradeLift[i];
+                roadEllipsoidal[i] = groundHeights[i] + roadShift + gradeLift[i];
         }
 
         // Record what this build actually used, before the fit turns it into cubics.
@@ -926,6 +959,57 @@ public sealed class CarlaClient : IAsyncDisposable
     // several ticks. We kick it off then poll until results arrive. REQUIRES the
     // server to be ticking (async mode, e.g. during world generation) AND a Cesium
     // tileset present in the level.
+    /// <summary>Runs a 1-2-1 smoothing along each road, in place. Returns how many roads were
+    /// touched.
+    ///
+    /// Samples arrive grouped by road and ascending in s, so a road is a contiguous run. The ends
+    /// are left alone: they are where roads meet, and moving one would pull a junction apart.
+    ///
+    /// A 1-2-1 kernel reproduces any straight line exactly, so a constant grade comes through
+    /// untouched however many passes are run. Only curvature is reduced, which at ten-metre
+    /// spacing is where a bump lives.</summary>
+    private static int SmoothAlongRoads(
+        IReadOnlyList<CarlaNet.Map.OpenDrive.CenterlineSample> samples,
+        double[] heights,
+        int passes)
+    {
+        if (passes <= 0 || samples.Count < 3) return 0;
+
+        int touched = 0;
+        int start = 0;
+        while (start < samples.Count)
+        {
+            int end = start;
+            while (end + 1 < samples.Count && samples[end + 1].RoadId == samples[start].RoadId)
+            {
+                ++end;
+            }
+            int count = end - start + 1;
+            if (count >= 3)
+            {
+                var work = new double[count];
+                for (int p = 0; p < passes; ++p)
+                {
+                    work[0] = heights[start];
+                    work[count - 1] = heights[end];
+                    for (int k = 1; k < count - 1; ++k)
+                    {
+                        double a = heights[start + k - 1];
+                        double b = heights[start + k];
+                        double c = heights[start + k + 1];
+                        work[k] = double.IsFinite(a) && double.IsFinite(c)
+                            ? 0.25 * a + 0.5 * b + 0.25 * c
+                            : b;
+                    }
+                    for (int k = 0; k < count; ++k) heights[start + k] = work[k];
+                }
+                ++touched;
+            }
+            start = end + 1;
+        }
+        return touched;
+    }
+
     /// <summary>Writes one row per centreline sample: where it is, every height the elevation
     /// pass read there, and what the road ended up at.
     ///
