@@ -68,6 +68,20 @@ public sealed record GradeSeparationOptions
     /// (<see cref="DrapeTerrain.Despike"/>), since both describe the same deck.</summary>
     public double StructureFootprintHalfWidthMeters { get; init; } = 15.0;
 
+    /// <summary>Whether a run of lifted samples must reach <see cref="MinStructureMeters"/>
+    /// somewhere along it to be kept.
+    ///
+    /// A structure is already defined as standing at least that tall, but the test was applied to
+    /// samples rather than to the run they form, so a taper or a stray match could leave a lift
+    /// far below it. Measured on Arapahoe_I25: seven runs peak between 4.99 and 7.50 m over 80 to
+    /// 120 m, and seventy-three others peak at 1.19 m or less, fifty of them a single station,
+    /// putting a step of a quarter to one metre into a road crossing flat ground.
+    ///
+    /// The height is used rather than the length or the ground beneath, because neither of those
+    /// holds in general: a short bridge is still a bridge, and an overpass crossing a road at
+    /// grade has flat ground under it.</summary>
+    public bool RequireRunToReachStructureHeight { get; init; } = true;
+
     /// <summary>How close a centreline sample must be to a structure's end node for that node to
     /// seed an approach ramp. A node further than this from every sample of its own way is not
     /// covered by the road network there, and the nearest sample is then somewhere out along the
@@ -286,12 +300,24 @@ public static class GradeSeparation
             samples, matchedWay, matchedStation, underIndices, elevated, surfaceHeights,
             groundHeights, atGradeHeights, atGradeOffsetMeters, opt, lift);
 
+        // 6) Drop runs of lift that never reach the height of a structure. A taper or a stray
+        //    match leaves a lift too small to be anything real, and on the ground it is a step in
+        //    a road that should have stayed where it was.
+        int unspanned = DropLiftsBelowStructureHeight(samples, opt, lift);
+
         int lifted = 0;
         double maxLift = 0.0;
         for (int i = 0; i < lift.Length; ++i)
         {
             if (lift[i] != 0.0) lifted++;
             if (Math.Abs(lift[i]) > Math.Abs(maxLift)) maxLift = lift[i];
+        }
+
+        if (unspanned > 0)
+        {
+            Console.WriteLine(
+                $"[GradeSeparation] dropped {unspanned} lifted sample(s) in runs never reaching "
+                + $"{opt.MinStructureMeters:F1} m, too small to be a structure");
         }
 
         Console.WriteLine(
@@ -727,6 +753,48 @@ public static class GradeSeparation
     }
 
     // What is left of a lift after travelling `distance` at `grade`, keeping its sign; 0 once spent.
+    /// <summary>Zeroes any run of lifted samples that never reaches the height of a structure.
+    ///
+    /// A run is contiguous along one road, so the taper at the end of a real deck is kept: it
+    /// belongs to a run that reaches the deck's own height. What goes is a run that never gets
+    /// there at all. Returns how many samples were dropped.</summary>
+    private static int DropLiftsBelowStructureHeight(
+        IReadOnlyList<CenterlineSample> samples,
+        GradeSeparationOptions opt,
+        double[] lift)
+    {
+        if (!opt.RequireRunToReachStructureHeight) return 0;
+
+        int dropped = 0;
+        int i = 0;
+        while (i < lift.Length)
+        {
+            if (lift[i] == 0.0)
+            {
+                ++i;
+                continue;
+            }
+            int j = i;
+            double peak = Math.Abs(lift[i]);
+            while (j + 1 < lift.Length && lift[j + 1] != 0.0
+                   && samples[j + 1].RoadId == samples[i].RoadId)
+            {
+                ++j;
+                peak = Math.Max(peak, Math.Abs(lift[j]));
+            }
+            if (peak < opt.MinStructureMeters)
+            {
+                for (int k = i; k <= j; ++k)
+                {
+                    if (lift[k] != 0.0) ++dropped;
+                    lift[k] = 0.0;
+                }
+            }
+            i = j + 1;
+        }
+        return dropped;
+    }
+
     private static double Reach(double lift, double distance, double grade)
     {
         double remaining = Math.Abs(lift) - grade * Math.Max(0.0, distance);

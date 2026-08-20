@@ -336,6 +336,29 @@ public class GradeSeparationTests
     }
 
     [Fact]
+    public void ATaperIsKept_BecauseItBelongsToARunThatReachesStructureHeight()
+    {
+        var map = LoadCrossing();
+        var origin = map.GeoReference;
+        var samples = ElevationInjector.ExtractCenterlineSamples(map, 10.0);
+        BuildSurfaces(samples, out var surface, out var ground);
+
+        var result = WithOsm(origin, CrossingWays(("highway", "motorway"), ("bridge", "yes")),
+            p => GradeSeparation.Compute(map, samples, OsmRoadLayers.Read(p, origin),
+                surface, ground, SystematicOffset));
+
+        // The deck is 4.2 m up, so its run survives; the approach samples that taper away from it
+        // are part of that run and survive with it, however small they are on their own.
+        var lifts = new List<double>();
+        for (int i = 0; i < samples.Count; ++i)
+            if (samples[i].RoadId == 1u && result.Lift[i] != 0.0)
+                lifts.Add(result.Lift[i]);
+        Assert.NotEmpty(lifts);
+        Assert.True(lifts.Max() >= new GradeSeparationOptions().MinStructureMeters,
+            "the run has to reach structure height for any of it to be kept");
+    }
+
+    [Fact]
     public void NoLayeredWays_LeavesEveryRoadAtGrade()
     {
         // Without a layer tag the extract records no vertical structure, so the surface reading over
