@@ -674,6 +674,22 @@ public sealed class CarlaClient : IAsyncDisposable
             for (int i = 0; i < samples.Count; i++)
                 roadEllipsoidal[i] = CarlaNet.Map.OpenDrive.DrapeTerrain.SampleBilinear(
                     drapeRes.DrapedZ, sandboxSpec, samples[i].X, samples[i].Y) + gradeLift[i];
+
+            // Put back the stations the de-spike dropped onto bare earth. It anchors a cell to
+            // the ground wherever the photoreal stands well above it, reading that as a
+            // structure; over open terrain there is no structure and the road follows the
+            // ground down into the hillside it should be lying on.
+            var photorealAtSample = new double[samples.Count];
+            for (int i = 0; i < samples.Count; i++)
+                photorealAtSample[i] = CarlaNet.Map.OpenDrive.DrapeTerrain.SampleBilinear(
+                    drapeSurface, sandboxSpec, samples[i].X, samples[i].Y);
+            var clamp = CarlaNet.Map.OpenDrive.PhotorealClamp.Apply(
+                samples, roadEllipsoidal, photorealAtSample, raisedSamples);
+            Console.WriteLine(
+                $"[photoreal clamp] {clamp.Lifted} station(s) lifted back onto the photoreal"
+                + (clamp.Lifted > 0 ? $" (largest {clamp.LargestLiftMeters:F2} m)" : "")
+                + $"; left alone: {clamp.UnderDeck} under a deck, {clamp.Sustained} on a "
+                + $"sustained grade, {clamp.Raised} deliberately raised.");
         }
         else
         {
