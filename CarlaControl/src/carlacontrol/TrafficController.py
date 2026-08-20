@@ -144,7 +144,17 @@ class TrafficController:
         else:
             logger.info("mode: ASYNCHRONOUS (server free-running)")
 
-    def __init__(self, world: carla.World, tm, args, staging: dict | None, blueprints: list, ring_sps: list, spawn_pool: list, floor_z: float):
+    def __init__(
+        self,
+        world: carla.World,
+        tm,
+        args,
+        staging: dict | None,
+        blueprints: list,
+        ring_sps: list,
+        spawn_pool: list,
+        floor_z: float,
+    ):
         self.world = world
         self.tm = tm
         self.args = args
@@ -181,9 +191,18 @@ class TrafficController:
             self.logger.debug(f"failed to read map spawn points: {e}")
             self.map_sps = []
         self.reached_from = {}
-        
+        # Same-side routes, and everything they are rated against. A vehicle is meant to
+        # cross the scene, so leaving by the side it entered from is a last resort and its
+        # share of all routes is held to --same-side-exit-rate. Counted since traffic was
+        # last switched on, so the rate describes this session rather than the process.
+        self.routes_session = 0
+        self.routes_same_side = 0
+        self.same_side_refused = set()
+
         if staging is not None:
-            self.logger.info(f"traffic controller initialized: {len(blueprints)} blueprints, {len(spawn_pool)} spawn points")
+            self.logger.info(
+                f"traffic controller initialized: {len(blueprints)} blueprints, {len(spawn_pool)} spawn points"
+            )
 
     def apply_want(self) -> None:
         """Reconcile actual on/off with the hotkey's desired state."""
@@ -227,8 +246,10 @@ class TrafficController:
             stub.available = False
             stub.reason = "no staging bounds (this world was loaded, not built from an OSM area)"
             return stub
-        
-        logger.info(f"staging bounds retrieved: {staging['max_x'] - staging['min_x']:.0f}x{staging['max_y'] - staging['min_y']:.0f}m, margin={staging['margin']:.0f}m")
+
+        logger.info(
+            f"staging bounds retrieved: {staging['max_x'] - staging['min_x']:.0f}x{staging['max_y'] - staging['min_y']:.0f}m, margin={staging['margin']:.0f}m"
+        )
 
         bp_lib = world.get_blueprint_library()
         blueprints = list(bp_lib.filter(args.filter))
@@ -236,7 +257,9 @@ class TrafficController:
         cars = [b for b in blueprints if not cls.is_two_wheeled(b)]
         if cars:
             blueprints = cars
-            logger.info(f"excluded two-wheeled vehicles: {len(blueprints)} car blueprints remaining")
+            logger.info(
+                f"excluded two-wheeled vehicles: {len(blueprints)} car blueprints remaining"
+            )
         if args.generation != "all":
             try:
                 gen = int(args.generation)
@@ -279,7 +302,9 @@ class TrafficController:
             )
         ]
         if len(spawn_pool) < 8:
-            logger.info(f"spawn pool too small ({len(spawn_pool)}), using all {len(ring_sps)} ring spawn points")
+            logger.info(
+                f"spawn pool too small ({len(spawn_pool)}), using all {len(ring_sps)} ring spawn points"
+            )
             spawn_pool = ring_sps
 
         cx, cy = cls.scene_center(staging)
@@ -299,7 +324,7 @@ class TrafficController:
             )
             return ctl
         logger.info("fade selftest passed: set_actor_fade available")
-            
+
         sw = staging["max_x"] - staging["min_x"]
         sh = staging["max_y"] - staging["min_y"]
         m = staging["margin"]
@@ -352,12 +377,16 @@ class TrafficController:
                 )
             else:
                 recovery = "keep replanning indefinitely"
-            logger.info("traffic: routes are planned before spawn; off-route recovery = %s", recovery)
+            logger.info(
+                "traffic: routes are planned before spawn; off-route recovery = %s", recovery
+            )
 
         if args.start_traffic:
             ctl.want_enabled = True
-        
-        logger.info(f"traffic controller ready: {len(blueprints)} blueprints, {len(spawn_pool)} spawn points, max={args.max} vehicles")
+
+        logger.info(
+            f"traffic controller ready: {len(blueprints)} blueprints, {len(spawn_pool)} spawn points, max={args.max} vehicles"
+        )
 
         return ctl
 
@@ -420,18 +449,14 @@ class TrafficController:
         at the far edge.
         """
         spawn_edge = self.edge_of(spawn_tf.location.x, spawn_tf.location.y, self.b)
-        far_first = sorted(
-            self.ring_sps, key=lambda sp: -spawn_tf.location.distance(sp.location)
-        )
+        far_first = sorted(self.ring_sps, key=lambda sp: -spawn_tf.location.distance(sp.location))
         other_edge = [
             sp
             for sp in far_first
             if self.edge_of(sp.location.x, sp.location.y, self.b) != spawn_edge
         ]
         same_edge = [sp for sp in far_first if sp not in other_edge]
-        elsewhere = sorted(
-            self.map_sps, key=lambda sp: -spawn_tf.location.distance(sp.location)
-        )
+        elsewhere = sorted(self.map_sps, key=lambda sp: -spawn_tf.location.distance(sp.location))
 
         ordered, seen = [], {self._place_key(spawn_tf.location)}
         for sp in other_edge + same_edge + elsewhere:
@@ -456,6 +481,24 @@ class TrafficController:
             return spawn_tf
         head = candidates[: max(1, min(len(candidates), self._ROUTE_DESTINATION_TRIES) // 2)]
         return random.choice(head)
+
+    def same_side(self, spawn_tf, destination_tf):
+        """True when a destination lies on the same side of the area as the entry."""
+        return self.edge_of(
+            destination_tf.location.x, destination_tf.location.y, self.b
+        ) == self.edge_of(spawn_tf.location.x, spawn_tf.location.y, self.b)
+
+    def same_side_allowed(self):
+        """Whether one more same-side route would stay within the permitted share.
+
+        Rated against the routes planned since traffic was switched on, so the share
+        describes the session the viewer is watching. At the default of 0 no arithmetic
+        applies: none is permitted, whatever the network offers.
+        """
+        rate = float(getattr(self.args, "same_side_exit_rate", 0.0) or 0.0)
+        if rate <= 0.0:
+            return False
+        return (self.routes_same_side + 1) <= rate * (self.routes_session + 1)
 
     @staticmethod
     def safe_fade(v, hide):
@@ -534,6 +577,48 @@ class TrafficController:
         remembered = random.sample(known, len(known))
         order = fresh + remembered if exploring else remembered + fresh
 
+        # Crossing the scene comes first and same-side only after every crossing has been
+        # tried, so a same-side exit is reached for when there is nothing else rather than
+        # because it happened to sort well.
+        crossing = [sp for sp in order if not self.same_side(spawn_tf, sp)]
+        same_side = [sp for sp in order if self.same_side(spawn_tf, sp)]
+        if same_side and not self.same_side_allowed():
+            if not crossing and entry not in self.same_side_refused:
+                self.same_side_refused.add(entry)
+                rate = float(getattr(self.args, "same_side_exit_rate", 0.0) or 0.0)
+                side = self.edge_of(spawn_tf.location.x, spawn_tf.location.y, self.b)
+                if rate <= 0.0:
+                    self.logger.warning(
+                        "the entry at (%.0f, %.0f) can only reach destinations on the %s "
+                        "side it came in on, and --same-side-exit-rate is 0, so it spawns "
+                        "nothing. Give the rate a non-zero value to let a share of traffic "
+                        "double back here.",
+                        spawn_tf.location.x,
+                        spawn_tf.location.y,
+                        side,
+                    )
+                else:
+                    # The share is rated against routes planned this session, across every
+                    # entry. Normally other entries supply that denominator and this one
+                    # gets its turn. Where no entry anywhere can cross, nothing accrues and
+                    # a rate below 1 never comes due -- which is the rate meaning what it
+                    # says, but worth naming rather than looking like a silent refusal.
+                    self.logger.warning(
+                        "the entry at (%.0f, %.0f) can only reach destinations on the %s "
+                        "side it came in on, and %d of %d routes this session are already "
+                        "same-side, so --same-side-exit-rate %g does not allow another yet. "
+                        "The share is counted across all entries; if none of them can cross "
+                        "the scene, nothing accrues and a rate below 1 never comes due.",
+                        spawn_tf.location.x,
+                        spawn_tf.location.y,
+                        side,
+                        self.routes_same_side,
+                        self.routes_session,
+                        rate,
+                    )
+            same_side = []
+        order = crossing + same_side
+
         budget = self._ROUTE_DESTINATION_TRIES + self._ROUTE_FALLBACK_TRIES
         for destination_tf in order[:budget]:
             t0 = time.perf_counter()
@@ -550,6 +635,9 @@ class TrafficController:
                 key = self._place_key(destination_tf.location)
                 if key not in known_keys and len(known) < self._REMEMBERED_DESTINATIONS:
                     known.append(destination_tf)
+                self.routes_session += 1
+                if self.same_side(spawn_tf, destination_tf):
+                    self.routes_same_side += 1
                 return route
         return None
 
@@ -732,6 +820,11 @@ class TrafficController:
         if not self.enabled:
             self.enabled = True
             self.last_spawn = 0.0
+            # A new session: the same-side share is rated against this session's routes.
+            # routes_planned is a lifetime count of routes applied and is left alone.
+            self.routes_session = 0
+            self.routes_same_side = 0
+            self.same_side_refused.clear()
             self.logger.info(
                 f"traffic ON (up to {self.args.max}, "
                 f"{'routed' if self.args.route else 'autopilot'})"

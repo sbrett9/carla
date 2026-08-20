@@ -171,6 +171,18 @@ class CarlaControlArgumentParser:
             "south). See --road-offset-east.",
         )
         build.add_argument(
+            "--same-side-exit-rate",
+            type=float,
+            default=0.0,
+            metavar="FRACTION",
+            help="how often ambient traffic may leave by the same side of the area it "
+            "entered from, as a fraction of all routes planned since traffic was last "
+            "switched on: 0.0002 is one in five thousand. Traffic is meant to cross the "
+            "scene, so this is a last resort, tried only when nothing on another side can "
+            "be reached. The default of 0 forbids it outright, and an entry point with no "
+            "route to another side then spawns nothing and says so once",
+        )
+        build.add_argument(
             "--no-ground-collision",
             dest="ground_collision",
             action="store_false",
