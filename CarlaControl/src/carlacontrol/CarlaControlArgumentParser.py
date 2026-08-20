@@ -119,13 +119,18 @@ class CarlaControlArgumentParser:
         )
         build.add_argument(
             "--height-align",
-            choices=["area", "origin", "none", "drape"],
+            choices=["area", "origin", "none", "drape", "terrain"],
             default="none",
-            help="how roads and drivable ground match the photoreal imagery: 'none' "
-            "(default) leaves them on the bare-earth terrain; 'area'/'origin' raise "
-            "everything by one constant height; 'drape' matches the photoreal "
-            "point-by-point (required for the staging traffic margin). Telemetry "
-            "altitude stays true bare-earth in every mode.",
+            help="how roads and drivable ground match the photoreal imagery. 'none' "
+            "(default) leaves roads on bare-earth terrain and moves nothing. 'terrain' "
+            "also leaves roads on the terrain, and shifts the imagery down onto them by "
+            "the one systematic gap between the two, so the picture lines up without the "
+            "road following trees. 'area'/'origin' do the reverse, raising roads and the "
+            "collidable ground onto the imagery by that same constant. 'drape' follows "
+            "the photoreal point by point, which seats the road on the imagery exactly "
+            "but rides over anything standing beside the carriageway. Roads the map marks "
+            "as bridges or tunnels keep their own measured clearance in every mode, and "
+            "telemetry altitude stays true bare-earth throughout.",
         )
         build.add_argument(
             "--terrain-res",

@@ -475,6 +475,18 @@ public sealed class CarlaClient : IAsyncDisposable
         //   offset field. The ground layer is revealed here, so the grid samples in the same window
         //   as the road heights.
         bool drape = string.Equals(heightAlign, "drape", StringComparison.OrdinalIgnoreCase);
+        // "terrain": the road follows bare earth and the imagery is brought to it, rather than the
+        // road being brought to the imagery. The photoreal is a SURFACE model -- it carries trees,
+        // canopies and awnings -- so a road that follows it rides over whatever stands beside the
+        // carriageway. Measured across the road stations of Arapahoe_I25, bare earth bends by a
+        // median of 4.2 cm per station against 49.5 cm for the raw photoreal, and its worst bend is
+        // 2.87 m against 12.09 m for the road as the drape builds it.
+        //
+        // The imagery is then shifted by the one systematic gap between the two surfaces, so it sits
+        // on the terrain the road is on. That gap is a property of how the two tilesets were
+        // produced, not of the ground: -0.81 m on Arapahoe_I25 and -0.83 m on Hormuz, near enough
+        // identical on two maps half a world apart.
+        bool terrainAlign = string.Equals(heightAlign, "terrain", StringComparison.OrdinalIgnoreCase);
 
         // The sandbox rectangle covers the OSM bounds exactly (no outward expansion), gridded at the
         // terrain resolution. It is computed for EVERY height-align mode: "drape" samples this grid
@@ -531,7 +543,8 @@ public sealed class CarlaClient : IAsyncDisposable
         //       "none"   = no correction.
         //     Offset is computed from the data — no user correction factor.
         double heightOffset = 0.0;
-        bool wantAlign = ionAssetId > 0 && (heightAlign == "origin" || heightAlign == "area");
+        bool wantAlign = ionAssetId > 0
+            && (heightAlign == "origin" || heightAlign == "area" || terrainAlign);
         // The photoreal surface is also where a bridge deck's real clearance is read, so sample it at
         // the road points whenever the OSM records anything off grade. The drape mode already has
         // both surfaces on its grid and needs no second pass.
@@ -549,7 +562,7 @@ public sealed class CarlaClient : IAsyncDisposable
                     if (double.IsFinite(pg) && double.IsFinite(wt)) heightOffset = pg - wt;
                     Console.WriteLine($"[height-align origin] photoreal-ground gap at origin = {heightOffset:F2} m");
                 }
-                else // "area": median of (photoreal - ground) over the road points
+                else // "area" and "terrain": median of (photoreal - ground) over the road points
                 {
                     var diffs = new List<double>(samples.Count);
                     for (int i = 1; i < points.Count; i++)
@@ -627,9 +640,14 @@ public sealed class CarlaClient : IAsyncDisposable
                 }
             }
 
+            // Under "terrain" the at-grade road IS bare earth, so that is the surface a lift is
+            // added to. The offset still describes where the imagery ends up, so a deck lands on
+            // the shifted photoreal: lift = surface - ground - offset, which is zero over open
+            // ground and the deck's own measured clearance under a structure.
+            var atGradeSurface = terrainAlign ? groundAtSample : atGradeAtSample;
             var separation = CarlaNet.Map.OpenDrive.GradeSeparation.Compute(
                 map, samples, osmLayers, surfaceAtSample, groundAtSample, atGradeOffset,
-                separationOptions, atGradeAtSample);
+                separationOptions, atGradeSurface);
             gradeLift = separation.Lift;
             elevatedStructures = separation.ElevatedWays;
             for (int i = 0; i < samples.Count; i++) raisedSamples[i] = gradeLift[i] != 0.0;
@@ -662,7 +680,8 @@ public sealed class CarlaClient : IAsyncDisposable
         // the per-point DTM table survives a future spatially-varying drape and off-road vehicles.
         // Build the table from the INPUT sample lat/lon (points[1..]) so coordinates are exact
         // regardless of whether the server echoes lat/lon back in the height results.
-        LastHeightAlignOffset = heightOffset;
+        // "terrain" leaves the road on bare earth, so there is nothing for telemetry to subtract.
+        LastHeightAlignOffset = terrainAlign ? 0.0 : heightOffset;
         var dtmSamples = new GeoLocation[samples.Count];
         for (int i = 0; i < samples.Count; i++)
             dtmSamples[i] = new GeoLocation(points[i + 1].Latitude, points[i + 1].Longitude, heights[i + 1].Altitude);
@@ -707,8 +726,11 @@ public sealed class CarlaClient : IAsyncDisposable
         }
         else
         {
+            // "terrain" leaves the road on bare earth and moves the imagery instead, so it adds no
+            // offset here; the constant-offset modes raise the road onto the imagery.
+            double roadShift = terrainAlign ? 0.0 : heightOffset;
             for (int i = 0; i < samples.Count; i++)
-                roadEllipsoidal[i] = heights[i + 1].Altitude + heightOffset + gradeLift[i];
+                roadEllipsoidal[i] = heights[i + 1].Altitude + roadShift + gradeLift[i];
         }
 
         // 5) Inject the sampled heights into the .xodr <elevationProfile>. The C1 fit removes the
@@ -781,6 +803,29 @@ public sealed class CarlaClient : IAsyncDisposable
             LastDrapedOffsetBytes = offBytes;
             LastDrapedDtmBytes = dtmBytes;
             LastHeightAlignOffset = 0.0;   // drape uses the per-cell field, not the scalar
+        }
+        else if (terrainAlign)
+        {
+            // "terrain": the road is on bare earth, so the collidable ground layer stays exactly
+            // where it is and the two coincide with no shift at all. The imagery moves instead --
+            // by the same systematic gap, in the opposite direction -- so the photoreal sits on the
+            // terrain the road runs on rather than the road being lifted into the canopy.
+            //
+            // Telemetry needs no correction in this mode: the road is at bare earth, so the
+            // reported height is already bare-earth truth and LastHeightAlignOffset stays zero.
+            LastDrapeActive = false;
+            LastHeightAlignOffset = 0.0;
+            if (ionAssetId > 0 && heightOffset != 0.0)
+            {
+                await SetLayerOffsetAsync("photoreal", -heightOffset).ConfigureAwait(false);
+                Console.WriteLine($"[height-align terrain] imagery shifted {-heightOffset:F2} m onto "
+                    + "the terrain; roads and collidable ground left on bare earth");
+            }
+            if (groundIonAssetId > 0)
+            {
+                await SetLayerOffsetAsync("ground", 0.0).ConfigureAwait(false);
+                await SetLayerCollisionAsync("ground", groundCollision).ConfigureAwait(false);
+            }
         }
         else if (groundIonAssetId > 0)
         {
