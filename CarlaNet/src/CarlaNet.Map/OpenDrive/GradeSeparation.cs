@@ -300,7 +300,15 @@ public static class GradeSeparation
             samples, matchedWay, matchedStation, underIndices, elevated, surfaceHeights,
             groundHeights, atGradeHeights, atGradeOffsetMeters, opt, lift);
 
-        // 6) Drop runs of lift that never reach the height of a structure. A taper or a stray
+        // 6) Carry a deck's lift into the roads it joins, across the .xodr road links. The
+        //    approach ramps above walk the OSM node graph, which cannot reach a junction
+        //    connector: netconvert synthesises those roads and no OSM way lies behind them. A deck
+        //    ending at a junction therefore had nothing to ramp into and simply stopped, and since
+        //    linked road ends are resolved to one height, the drop landed inside the deck's own
+        //    last station -- 5.48 m in 10 m on road 2117 of Arapahoe_I25.
+        int carried = CarryLiftAcrossRoadLinks(map, samples, opt, lift);
+
+        // 7) Drop runs of lift that never reach the height of a structure. A taper or a stray
         //    match leaves a lift too small to be anything real, and on the ground it is a step in
         //    a road that should have stayed where it was.
         int unspanned = DropLiftsBelowStructureHeight(samples, opt, lift);
@@ -311,6 +319,13 @@ public static class GradeSeparation
         {
             if (lift[i] != 0.0) lifted++;
             if (Math.Abs(lift[i]) > Math.Abs(maxLift)) maxLift = lift[i];
+        }
+
+        if (carried > 0)
+        {
+            Console.WriteLine(
+                $"[GradeSeparation] carried a deck's lift into {carried} sample(s) on the roads it "
+                + "joins, so an approach ramps down instead of stepping off");
         }
 
         if (unspanned > 0)
@@ -753,6 +768,104 @@ public static class GradeSeparation
     }
 
     // What is left of a lift after travelling `distance` at `grade`, keeping its sign; 0 once spent.
+    /// <summary>Spreads each road end's lift into the roads linked to it, decaying at the ramp
+    /// gradient, so a deck descends to grade instead of stepping off its own last station.
+    ///
+    /// This walks the .xodr road links rather than the OSM node graph, which is what
+    /// ApplyApproachRamps uses. The two are not the same network: a junction connecting-road is
+    /// synthesised by netconvert and has no OSM way behind it, so a deck that ends at a junction
+    /// is invisible to the node walk however well connected it is on the ground.
+    ///
+    /// A road end is reached with whatever lift survives the distance travelled, and the largest
+    /// arrival wins, so a ramp is never steeper than the gradient however the network branches.
+    /// Existing lift is never reduced. Returns how many samples were raised.</summary>
+    private static int CarryLiftAcrossRoadLinks(
+        Road.Map map,
+        IReadOnlyList<CenterlineSample> samples,
+        GradeSeparationOptions opt,
+        double[] lift)
+    {
+        if (opt.ApproachRampGrade <= 0.0 || samples.Count == 0) return 0;
+
+        var stations = new Dictionary<RoadId, List<int>>();
+        for (int i = 0; i < samples.Count; ++i)
+        {
+            if (!stations.TryGetValue(samples[i].RoadId, out var list))
+            {
+                stations[samples[i].RoadId] = list = [];
+            }
+            list.Add(i);
+        }
+        foreach (var list in stations.Values)
+        {
+            list.Sort((a, b) => samples[a].S.CompareTo(samples[b].S));
+        }
+
+        // Arriving at a road end with a budget of lift; the end is the road's start when
+        // fromStart, otherwise its far end. Best arrival wins, so each end is walked once per
+        // improvement rather than once per path.
+        var best = new Dictionary<(RoadId Road, bool FromStart), double>();
+        var queue = new PriorityQueue<(RoadId Road, bool FromStart, double Budget), double>();
+
+        void Offer(RoadId road, bool fromStart, double budget)
+        {
+            if (budget <= 0.0 || !stations.ContainsKey(road)) return;
+            var key = (road, fromStart);
+            if (best.TryGetValue(key, out double had) && had >= budget) return;
+            best[key] = budget;
+            queue.Enqueue((road, fromStart, budget), -budget);
+        }
+
+        void OfferNeighbours(RoadId from, bool atRoadStart, double budget)
+        {
+            if (budget <= 0.0 || !map.Roads.TryGetValue(from, out var road)) return;
+            foreach (var neighbour in atRoadStart ? road.Prevs : road.Nexts)
+            {
+                if (neighbour is null || neighbour.Id == from) continue;
+                // Enter the neighbour at whichever of its ends touches this road.
+                if (neighbour.PredecessorRoadId == from) Offer(neighbour.Id, true, budget);
+                if (neighbour.SuccessorRoadId == from) Offer(neighbour.Id, false, budget);
+            }
+        }
+
+        // Every road end that already carries lift is a source.
+        foreach (var (roadId, list) in stations)
+        {
+            if (list.Count == 0) continue;
+            OfferNeighbours(roadId, atRoadStart: true, budget: lift[list[0]]);
+            OfferNeighbours(roadId, atRoadStart: false, budget: lift[list[^1]]);
+        }
+
+        int raised = 0;
+        while (queue.TryDequeue(out var entry, out _))
+        {
+            if (!best.TryGetValue((entry.Road, entry.FromStart), out double current)
+                || current > entry.Budget)
+            {
+                continue;   // a better arrival superseded this one
+            }
+            var list = stations[entry.Road];
+            double length = map.Roads.TryGetValue(entry.Road, out var road) ? road.Length : 0.0;
+            double entryStation = entry.FromStart ? 0.0 : length;
+
+            foreach (int i in list)
+            {
+                double travelled = Math.Abs(samples[i].S - entryStation);
+                double reach = entry.Budget - opt.ApproachRampGrade * travelled;
+                if (reach <= lift[i]) continue;
+                if (lift[i] == 0.0) ++raised;
+                lift[i] = reach;
+            }
+
+            double residual = entry.Budget - opt.ApproachRampGrade * length;
+            if (residual > 0.0)
+            {
+                OfferNeighbours(entry.Road, atRoadStart: !entry.FromStart, budget: residual);
+            }
+        }
+        return raised;
+    }
+
     /// <summary>Zeroes any run of lifted samples that never reaches the height of a structure.
     ///
     /// A run is contiguous along one road, so the taper at the end of a real deck is kept: it
