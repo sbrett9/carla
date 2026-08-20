@@ -198,6 +198,10 @@ class TrafficController:
         self.routes_session = 0
         self.routes_same_side = 0
         self.same_side_refused = set()
+        # Destinations already proven not to route from an entry. Without this every
+        # spawn re-tests the same failures, which is what made a cap on attempts
+        # necessary in the first place.
+        self.unreachable_from = {}
 
         if staging is not None:
             self.logger.info(
@@ -522,12 +526,14 @@ class TrafficController:
         """
         entry = self._place_key(spawn_tf.location)
         known = self.reached_from.setdefault(entry, [])
+        dead = self.unreachable_from.setdefault(entry, set())
         known_keys = {self._place_key(sp.location) for sp in known}
 
         fresh = [
             sp
             for sp in self.destination_candidates(spawn_tf)
             if self._place_key(sp.location) not in known_keys
+            and self._place_key(sp.location) not in dead
         ]
         far = fresh[: max(1, len(fresh) // 2)]
         random.shuffle(far)
@@ -537,14 +543,18 @@ class TrafficController:
         remembered = random.sample(known, len(known))
         order = fresh + remembered if exploring else remembered + fresh
 
-        # Every crossing is tried before any same-side exit, so doubling back is used
-        # only when there is no route out of the other sides at all -- not merely when a
-        # same-side destination happened to sort well.
+        # A same-side exit is considered only once every crossing has been proven not to
+        # route -- proven, not merely tried this once, which is what remembering the
+        # failures buys. Until then the crossings are the only candidates.
         crossing = [sp for sp in order if not self.same_side(spawn_tf, sp)]
         same_side = [sp for sp in order if self.same_side(spawn_tf, sp)]
-        if same_side and not self.same_side_allowed():
-            same_side = []
-            if not crossing and entry not in self.same_side_refused:
+        if crossing:
+            candidates = crossing
+        elif same_side and self.same_side_allowed():
+            candidates = same_side
+        else:
+            candidates = []
+            if same_side and entry not in self.same_side_refused:
                 self.same_side_refused.add(entry)
                 self.logger.warning(
                     "the entry at (%.0f, %.0f) can only reach destinations on the %s side "
@@ -554,13 +564,11 @@ class TrafficController:
                     spawn_tf.location.y,
                     self.edge_of(spawn_tf.location.x, spawn_tf.location.y, self.b),
                 )
-        # The two sets get their own budgets. Sharing one lets a long run of unroutable
-        # crossings use it up before a single same-side exit is tried, which would starve
-        # the last resort exactly where it is the only route -- an entry can carry more
-        # crossing candidates than the budget allows attempts.
-        budget = self._ROUTE_DESTINATION_TRIES + self._ROUTE_FALLBACK_TRIES
-        order = crossing[:budget] + same_side[: self._ROUTE_DESTINATION_TRIES]
-        for destination_tf in order:
+
+        deadline = time.perf_counter() + self._ROUTE_SEARCH_BUDGET_MS / 1000.0
+        for destination_tf in candidates:
+            if time.perf_counter() >= deadline:
+                break
             t0 = time.perf_counter()
             try:
                 route = self.tm.plan_route(spawn_tf.location, destination_tf.location)
@@ -571,6 +579,9 @@ class TrafficController:
             self.route_searches += 1
             self.route_plan_ms_total += elapsed_ms
             self.route_plan_ms_max = max(self.route_plan_ms_max, elapsed_ms)
+            if route is None:
+                dead.add(self._place_key(destination_tf.location))
+                continue
             if route is not None:
                 key = self._place_key(destination_tf.location)
                 if key not in known_keys and len(known) < self._REMEMBERED_DESTINATIONS:
@@ -614,7 +625,14 @@ class TrafficController:
     # Destinations beyond the entry ring to try when no ring point can be reached. A
     # sparse network needs this: the ring is where traffic should ideally end, not the
     # only place it can.
-    _ROUTE_FALLBACK_TRIES = 16
+    # How long one spawn may spend searching for a route before giving up and letting the
+    # next frame carry on. A search costs about 10 ms on the networks measured and the
+    # synchronous tick is 50 ms at 20 fps, so this is roughly two searches: enough to
+    # place a vehicle whose destination is already known, small enough not to cost a
+    # frame. Nothing is lost by stopping, because both the successes and the failures are
+    # remembered -- an entry works through its candidates across successive spawns rather
+    # than re-testing them, so the cost of a cold entry is paid once and not per spawn.
+    _ROUTE_SEARCH_BUDGET_MS = 25.0
     # How often a spawn looks for a destination it has not used from this entry before,
     # rather than reusing one already known to route. Enough that the set keeps growing,
     # rare enough that most spawns cost one search.
@@ -777,6 +795,7 @@ class TrafficController:
             self.routes_session = 0
             self.routes_same_side = 0
             self.same_side_refused.clear()
+            self.unreachable_from.clear()
             self.logger.info(
                 f"traffic ON (up to {self.args.max}, "
                 f"{'routed' if self.args.route else 'autopilot'})"
