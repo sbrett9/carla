@@ -554,10 +554,13 @@ class TrafficController:
                     spawn_tf.location.y,
                     self.edge_of(spawn_tf.location.x, spawn_tf.location.y, self.b),
                 )
-        order = crossing + same_side
-
+        # The two sets get their own budgets. Sharing one lets a long run of unroutable
+        # crossings use it up before a single same-side exit is tried, which would starve
+        # the last resort exactly where it is the only route -- an entry can carry more
+        # crossing candidates than the budget allows attempts.
         budget = self._ROUTE_DESTINATION_TRIES + self._ROUTE_FALLBACK_TRIES
-        for destination_tf in order[:budget]:
+        order = crossing[:budget] + same_side[: self._ROUTE_DESTINATION_TRIES]
+        for destination_tf in order:
             t0 = time.perf_counter()
             try:
                 route = self.tm.plan_route(spawn_tf.location, destination_tf.location)
