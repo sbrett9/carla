@@ -180,6 +180,14 @@ public sealed class CarlaClient : IAsyncDisposable
     /// after it.</summary>
     public bool PhotorealClampEnabled { get; set; }
 
+    /// <summary>How far east the road network was slid to sit on the roadway in the imagery,
+    /// in metres, as passed to netconvert. Heights are then read at the position the map data
+    /// gave a road, not the position it was moved to.</summary>
+    public double RoadOffsetEast { get; set; }
+
+    /// <summary>How far north the road network was slid. See <see cref="RoadOffsetEast"/>.</summary>
+    public double RoadOffsetNorth { get; set; }
+
     public double LastHeightAlignOffset { get; private set; }
     public IReadOnlyList<GeoLocation> LastGroundDtmSamples { get; private set; } = [];
 
@@ -428,7 +436,31 @@ public sealed class CarlaClient : IAsyncDisposable
         var origin = map.GeoReference;
         var samples = CarlaNet.Map.OpenDrive.ElevationInjector
             .ExtractCenterlineSamples(map, sampleStepMeters);
-        var geo = CarlaNet.Map.OpenDrive.ElevationInjector.ToGeo(samples, origin);
+        // Every height is read at the position the map data gave a road, not the position the
+        // road was slid to. netconvert has already moved the geometry, so undoing the shift here
+        // is what makes the order sample-then-shift: a road keeps the elevation of the ground it
+        // was drawn on and carries it sideways, rather than picking up whatever it was moved over.
+        //
+        // The same positions are used to match a sample to its OSM way, so the bridge and tunnel
+        // records still line up with the ways they came from.
+        //
+        // netconvert's --offset.y is northing; the OpenDRIVE reader flips it into CARLA's
+        // -Y = north, so undoing a northward shift adds to Y.
+        var probes = samples;
+        if (RoadOffsetEast != 0.0 || RoadOffsetNorth != 0.0)
+        {
+            var moved = new CarlaNet.Map.OpenDrive.CenterlineSample[samples.Count];
+            for (int i = 0; i < samples.Count; i++)
+            {
+                moved[i] = new CarlaNet.Map.OpenDrive.CenterlineSample(
+                    samples[i].RoadId, samples[i].S,
+                    samples[i].X - RoadOffsetEast, samples[i].Y + RoadOffsetNorth);
+            }
+            probes = moved;
+            Console.WriteLine($"[road offset] heights read {RoadOffsetEast:+0.00;-0.00;0} m east / "
+                + $"{RoadOffsetNorth:+0.00;-0.00;0} m north of where the roads now sit");
+        }
+        var geo = CarlaNet.Map.OpenDrive.ElevationInjector.ToGeo(probes, origin);
 
         // 2a) Read the vertical structure out of the OSM. netconvert discards `layer`/`bridge`, so
         //     without this the .xodr has no record of which road passes over which and a sampled
@@ -621,7 +653,7 @@ public sealed class CarlaClient : IAsyncDisposable
                 atGradeAtSample = new double[samples.Count];
                 for (int i = 0; i < samples.Count; i++)
                     atGradeAtSample[i] = CarlaNet.Map.OpenDrive.DrapeTerrain.SampleBilinear(
-                        openDrape.DrapedZ, sandboxSpec, samples[i].X, samples[i].Y);
+                        openDrape.DrapedZ, sandboxSpec, probes[i].X, probes[i].Y);
             }
 
             for (int i = 0; i < samples.Count; i++)
@@ -629,9 +661,9 @@ public sealed class CarlaClient : IAsyncDisposable
                 if (drape)
                 {
                     surfaceAtSample[i] = CarlaNet.Map.OpenDrive.DrapeTerrain.SampleBilinear(
-                        drapeSurface, sandboxSpec, samples[i].X, samples[i].Y);
+                        drapeSurface, sandboxSpec, probes[i].X, probes[i].Y);
                     groundAtSample[i] = CarlaNet.Map.OpenDrive.DrapeTerrain.SampleBilinear(
-                        drapeGround, sandboxSpec, samples[i].X, samples[i].Y);
+                        drapeGround, sandboxSpec, probes[i].X, probes[i].Y);
                 }
                 else
                 {
@@ -646,7 +678,7 @@ public sealed class CarlaClient : IAsyncDisposable
             // ground and the deck's own measured clearance under a structure.
             var atGradeSurface = terrainAlign ? groundAtSample : atGradeAtSample;
             var separation = CarlaNet.Map.OpenDrive.GradeSeparation.Compute(
-                map, samples, osmLayers, surfaceAtSample, groundAtSample, atGradeOffset,
+                map, probes, osmLayers, surfaceAtSample, groundAtSample, atGradeOffset,
                 separationOptions, atGradeSurface);
             gradeLift = separation.Lift;
             elevatedStructures = separation.ElevatedWays;
@@ -700,7 +732,7 @@ public sealed class CarlaClient : IAsyncDisposable
         {
             for (int i = 0; i < samples.Count; i++)
                 roadEllipsoidal[i] = CarlaNet.Map.OpenDrive.DrapeTerrain.SampleBilinear(
-                    drapeRes.DrapedZ, sandboxSpec, samples[i].X, samples[i].Y) + gradeLift[i];
+                    drapeRes.DrapedZ, sandboxSpec, probes[i].X, probes[i].Y) + gradeLift[i];
 
             // Optionally put back the stations the de-spike dropped onto bare earth. It anchors
             // a cell to the ground wherever the photoreal stands well above it, reading that as
@@ -714,9 +746,9 @@ public sealed class CarlaClient : IAsyncDisposable
             var photorealAtSample = new double[samples.Count];
             for (int i = 0; i < samples.Count; i++)
                 photorealAtSample[i] = CarlaNet.Map.OpenDrive.DrapeTerrain.SampleBilinear(
-                    drapeSurface, sandboxSpec, samples[i].X, samples[i].Y);
+                    drapeSurface, sandboxSpec, probes[i].X, probes[i].Y);
             var clamp = CarlaNet.Map.OpenDrive.PhotorealClamp.Apply(
-                samples, roadEllipsoidal, photorealAtSample, raisedSamples);
+                probes, roadEllipsoidal, photorealAtSample, raisedSamples);
             Console.WriteLine(
                 $"[photoreal clamp] {clamp.Lifted} station(s) lifted back onto the photoreal"
                 + (clamp.Lifted > 0 ? $" (largest {clamp.LargestLiftMeters:F2} m)" : "")
