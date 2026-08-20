@@ -161,6 +161,8 @@ class WorldBuilder:
             terrain_res=args.terrain_res,
             terrain_margin=args.terrain_margin,
             drape_cache_dir=args.drape_cache_dir,
+            road_offset_east=args.road_offset_east,
+            road_offset_north=args.road_offset_north,
         )
         dt = time.time() - t0
         roads = elevated.count("<road ")

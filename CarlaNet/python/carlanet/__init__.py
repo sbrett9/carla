@@ -2235,7 +2235,9 @@ class Client:
                                                terrain_margin=30.48,
                                                drape_chunk_cells=64,
                                                drape_max_drape=5.0,
-                                               drape_cache_dir=None):
+                                               drape_cache_dir=None,
+                                               road_offset_east=0.0,
+                                               road_offset_north=0.0):
         """Full headless digital-twin build (no editor): OSM -> elevated, Cesium-aligned
         OpenDRIVE world. Converts OSM->.xodr, samples Cesium terrain heights at the road
         reference line, injects them into the .xodr <elevationProfile>, generates the
@@ -2273,6 +2275,12 @@ class Client:
         """
         from System import TimeSpan
         from System.Threading import CancellationToken
+        # How far the road network was slid sideways to sit on the roadway in the imagery.
+        # Set as properties, not arguments: the call below is positional, so a new parameter
+        # would shift every argument after it. Heights are read at the position the map data
+        # gave a road, and the road carries that height to where it was moved.
+        self._inner.RoadOffsetEast = float(road_offset_east)
+        self._inner.RoadOffsetNorth = float(road_offset_north)
         params = _default_osm_opendrive_params() if parameters is None else parameters
         settle = TimeSpan.FromSeconds(float(cesium_settle_seconds)) if cesium_settle_seconds else TimeSpan(0)
         oh = None if origin_height is None else float(origin_height)
