@@ -145,6 +145,10 @@ class WorldBuilder:
         self.logger.info("[build] generate_world_from_osm_with_elevation (convert -> sample -> inject -> build)...")
         self.logger.info("        (blocks while sampling heights and meshing the elevated road network)")
         client.set_timeout(args.timeout)
+        # Beside the elevated .xodr, a record of every height this build used. The .xodr keeps only
+        # the fitted result, and re-sampling the terrain afterwards does not reproduce what the
+        # build saw, so without this a bump cannot be traced back to what caused it.
+        elevation_diagnostics = os.path.splitext(save_path)[0] + "_elevation.tsv"
         t0 = time.time()
         elevated = client.generate_world_from_osm_with_elevation(
             osm_for_build,
@@ -163,6 +167,7 @@ class WorldBuilder:
             drape_cache_dir=args.drape_cache_dir,
             road_offset_east=args.road_offset_east,
             road_offset_north=args.road_offset_north,
+            elevation_diagnostics_path=elevation_diagnostics,
         )
         dt = time.time() - t0
         roads = elevated.count("<road ")

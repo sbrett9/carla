@@ -3,6 +3,7 @@
 // Default port: 2000.
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
+using System.Text;
 using System.Reflection;
 using CarlaNet.Transport.MsgPackRpc;
 using CarlaNet.Transport.Streaming;
@@ -179,6 +180,17 @@ public sealed class CarlaClient : IAsyncDisposable
     /// GenerateWorldFromOsmWithElevationAsync positionally, so adding one shifts every argument
     /// after it.</summary>
     public bool PhotorealClampEnabled { get; set; }
+
+    /// <summary>Where to write a record of every height the elevation pass used, or null for
+    /// none.
+    ///
+    /// Without it the heights a build used cannot be recovered afterwards. The .xodr keeps only
+    /// the fitted result, and re-sampling the terrain from outside does not reproduce what the
+    /// build saw: the pipeline queries Cesium point by point, while anything offline has only a
+    /// cached grid, and the two disagree by a quarter of a metre at the 95th percentile. Anything
+    /// smaller than that cannot be told from the difference between the two, which is a poor
+    /// footing for judging a bump.</summary>
+    public string? ElevationDiagnosticsPath { get; set; }
 
     /// <summary>How far east the road network was slid to sit on the roadway in the imagery,
     /// in metres, as passed to netconvert. Heights are then read at the position the map data
@@ -765,6 +777,14 @@ public sealed class CarlaClient : IAsyncDisposable
                 roadEllipsoidal[i] = heights[i + 1].Altitude + roadShift + gradeLift[i];
         }
 
+        // Record what this build actually used, before the fit turns it into cubics.
+        if (!string.IsNullOrWhiteSpace(ElevationDiagnosticsPath))
+        {
+            WriteElevationDiagnostics(
+                ElevationDiagnosticsPath!, probes, geo, heights, photo, gradeLift, raisedSamples,
+                roadEllipsoidal, originHeight, heightAlign);
+        }
+
         // 5) Inject the sampled heights into the .xodr <elevationProfile>. The C1 fit removes the
         //    crease the piecewise-linear ramps left at every sample boundary, and carries height
         //    and slope through junction connectors so the surface does not step at intersections.
@@ -906,6 +926,67 @@ public sealed class CarlaClient : IAsyncDisposable
     // several ticks. We kick it off then poll until results arrive. REQUIRES the
     // server to be ticking (async mode, e.g. during world generation) AND a Cesium
     // tileset present in the level.
+    /// <summary>Writes one row per centreline sample: where it is, every height the elevation
+    /// pass read there, and what the road ended up at.
+    ///
+    /// This is the record that makes a build answerable afterwards. A bump in the road can then be
+    /// attributed to the terrain, to a grade-separation lift, or to the fit, by reading the row
+    /// rather than by re-sampling and hoping the sampling agrees.</summary>
+    private static void WriteElevationDiagnostics(
+        string path,
+        IReadOnlyList<CarlaNet.Map.OpenDrive.CenterlineSample> samples,
+        IReadOnlyList<CarlaNet.Map.OpenDrive.GeoSample> geo,
+        IReadOnlyList<GeoLocation> ground,
+        IReadOnlyList<GeoLocation> photoreal,
+        IReadOnlyList<double> lift,
+        IReadOnlyList<bool> raised,
+        IReadOnlyList<double> roadEllipsoidal,
+        double originHeight,
+        string heightAlign)
+    {
+        try
+        {
+            string? folder = Path.GetDirectoryName(Path.GetFullPath(path));
+            if (!string.IsNullOrEmpty(folder)) Directory.CreateDirectory(folder);
+
+            // ground and photoreal carry the origin at index 0, so a sample's own reading is one on.
+            bool havePhotoreal = photoreal.Count == samples.Count + 1;
+            var text = new StringBuilder();
+            text.Append("# height-align=").Append(heightAlign)
+                .Append("  origin_height=").Append(F(originHeight))
+                .Append("  samples=").Append(samples.Count).Append('\n');
+            text.Append("road\ts\tx\ty\tlatitude\tlongitude\tground\tphotoreal\tlift\t"
+                + "raised\troad_ellipsoidal\troad_z\n");
+            for (int i = 0; i < samples.Count; ++i)
+            {
+                double g = i + 1 < ground.Count ? ground[i + 1].Altitude : double.NaN;
+                double s = havePhotoreal ? photoreal[i + 1].Altitude : double.NaN;
+                text.Append(samples[i].RoadId).Append('\t')
+                    .Append(F(samples[i].S)).Append('\t')
+                    .Append(F(samples[i].X)).Append('\t')
+                    .Append(F(samples[i].Y)).Append('\t')
+                    .Append(F(geo[i].Latitude)).Append('\t')
+                    .Append(F(geo[i].Longitude)).Append('\t')
+                    .Append(F(g)).Append('\t')
+                    .Append(F(s)).Append('\t')
+                    .Append(F(lift[i])).Append('\t')
+                    .Append(raised[i] ? '1' : '0').Append('\t')
+                    .Append(F(roadEllipsoidal[i])).Append('\t')
+                    .Append(F(roadEllipsoidal[i] - originHeight)).Append('\n');
+            }
+            File.WriteAllText(path, text.ToString());
+            Console.WriteLine($"[elevation] wrote {samples.Count} sample rows to {path}");
+        }
+        catch (Exception e)
+        {
+            // A diagnostic must never be the reason a build fails.
+            Console.WriteLine($"[elevation] could not write diagnostics to {path}: {e.Message}");
+        }
+    }
+
+    private static string F(double v) =>
+        double.IsNaN(v) ? "nan" : v.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+
     /// Point the loaded world's CesiumGeoreference at <paramref name="origin"/>
     /// (latitude, longitude, altitude=OriginHeight) and optionally set the ion token /
     /// asset id on its tilesets. Call after generate_opendrive_world so the reloaded
