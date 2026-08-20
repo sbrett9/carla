@@ -172,6 +172,14 @@ public sealed class CarlaClient : IAsyncDisposable
     //   exact input sample coordinates (not server-echoed); a nearest/IDW lookup at a vehicle's
     //   lat/lon yields the bare-earth ground there (telemetry diagnostic hae_dtm, and the hook for a
     //   future spatially-varying drape where the offset is no longer a single constant).
+    /// <summary>Whether a road station dropped onto bare earth by the de-spike is lifted back
+    /// onto the photoreal. Off: the photoreal is a surface model, so it cannot tell a road under
+    /// a tree canopy from a road on a steep bank, and lifting the first puts the road on the
+    /// canopy. A property rather than a parameter because the Python shim calls
+    /// GenerateWorldFromOsmWithElevationAsync positionally, so adding one shifts every argument
+    /// after it.</summary>
+    public bool PhotorealClampEnabled { get; set; }
+
     public double LastHeightAlignOffset { get; private set; }
     public IReadOnlyList<GeoLocation> LastGroundDtmSamples { get; private set; } = [];
 
@@ -406,7 +414,6 @@ public sealed class CarlaClient : IAsyncDisposable
         int drapeChunkCells = 64,
         double drapeMaxDrapeMeters = 5.0,
         string? drapeCacheDir = null,
-        bool photorealClamp = false,
         CancellationToken ct = default)
     {
         // 1) OSM -> flat .xodr (offline, native netconvert). Also capture the SUMO network when
@@ -683,7 +690,7 @@ public sealed class CarlaClient : IAsyncDisposable
             // and lifting the road back onto the photoreal there puts it on the canopy. The
             // photoreal is a surface model: it cannot tell a road under trees from a road on a
             // steep bank, so this is off until something can.
-            if (photorealClamp)
+            if (PhotorealClampEnabled)
             {
             var photorealAtSample = new double[samples.Count];
             for (int i = 0; i < samples.Count; i++)
