@@ -440,6 +440,14 @@ class TrafficController:
                 continue
             seen.add(key)
             ordered.append(sp)
+        # Furthest first, across the ring and the map together. Preferring any ring point
+        # over any other destination sends a vehicle to the nearest edge rather than
+        # across the scene: entering at the west of the Hormuz highway, the far entry is
+        # unreachable because it is an entry, and the next ring point along is 2.0 km away
+        # on the same side, where the east exit it should be heading for is 4.9 km off.
+        # Distance says what the ring was standing in for, and the sort is stable, so a
+        # ring point still wins against anything equally far.
+        ordered.sort(key=lambda sp: -spawn_tf.location.distance(sp.location))
         return ordered
 
     def pick_destination(self, spawn_tf):
