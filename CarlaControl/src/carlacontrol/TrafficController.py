@@ -489,58 +489,18 @@ class TrafficController:
         ) == self.edge_of(spawn_tf.location.x, spawn_tf.location.y, self.b)
 
     def same_side_allowed(self):
-        """Whether one more same-side route would stay within the permitted share.
+        """Whether a same-side exit may be used at all.
 
-        Rated against the routes planned since traffic was switched on, so the share
-        describes the session the viewer is watching. At the default of 0 no arithmetic
-        applies: none is permitted, whatever the network offers.
+        Only reached once every crossing has been tried and none could be routed, so by
+        the time this is asked a same-side exit is the only route there is. Rationing it
+        against a share of the session's routes would then be rationing against itself:
+        if the only routes available are same-side, their share is one, and any rate below
+        one refuses forever. The rate says whether doubling back is permitted; the search
+        order is what keeps it rare.
+
+        Zero means zero. An entry that can only reach its own side spawns nothing.
         """
-        rate = float(getattr(self.args, "same_side_exit_rate", 0.0) or 0.0)
-        if rate <= 0.0:
-            return False
-        return (self.routes_same_side + 1) <= rate * (self.routes_session + 1)
-
-    @staticmethod
-    def safe_fade(v, hide):
-        try:
-            v.set_fade(hide)
-        except Exception:
-            pass
-
-    @staticmethod
-    def red_edge_deficit(x, y, yaw_deg, ext, b, pad=0.6):
-        """How far a vehicle footprint pokes past the nearest red edge, plus that edge's inward normal."""
-        edges = (
-            ("W", x - b["min_x"], (1.0, 0.0)),
-            ("E", b["max_x"] - x, (-1.0, 0.0)),
-            ("S", y - b["min_y"], (0.0, 1.0)),
-            ("N", b["max_y"] - y, (0.0, -1.0)),
-        )
-        _, clearance, normal = min(edges, key=lambda e: e[1])
-        yaw = math.radians(yaw_deg)
-        half_extent = (
-            (abs(ext[0] * math.cos(yaw)) + abs(ext[1] * math.sin(yaw)))
-            if normal[0] != 0.0
-            else (abs(ext[0] * math.sin(yaw)) + abs(ext[1] * math.cos(yaw)))
-        )
-        return (half_extent + pad) - clearance, normal
-
-    @classmethod
-    def fits_inside_red_edge(cls, x, y, yaw_deg, ext, b, pad=0.6):
-        """True if a vehicle spawned here can be nudged forward to lie wholly inside the red edge."""
-        deficit, normal = cls.red_edge_deficit(x, y, yaw_deg, ext, b, pad)
-        if deficit <= 0:
-            return True
-        yaw = math.radians(yaw_deg)
-        ux, uy = math.cos(yaw), math.sin(yaw)
-        dot = ux * normal[0] + uy * normal[1]
-        if dot < 0.2:
-            return False
-        distance = min(deficit / dot, b["margin"])
-        nx = x + ux * distance
-        ny = y + uy * distance
-        residual, _ = cls.red_edge_deficit(nx, ny, yaw_deg, ext, b, pad)
-        return residual <= 1e-3
+        return float(getattr(self.args, "same_side_exit_rate", 0.0) or 0.0) > 0.0
 
     def plan_route_from(self, spawn_tf):
         """Plan a route from an entry point, walking candidates until one is reachable.
@@ -577,46 +537,23 @@ class TrafficController:
         remembered = random.sample(known, len(known))
         order = fresh + remembered if exploring else remembered + fresh
 
-        # Crossing the scene comes first and same-side only after every crossing has been
-        # tried, so a same-side exit is reached for when there is nothing else rather than
-        # because it happened to sort well.
+        # Every crossing is tried before any same-side exit, so doubling back is used
+        # only when there is no route out of the other sides at all -- not merely when a
+        # same-side destination happened to sort well.
         crossing = [sp for sp in order if not self.same_side(spawn_tf, sp)]
         same_side = [sp for sp in order if self.same_side(spawn_tf, sp)]
         if same_side and not self.same_side_allowed():
+            same_side = []
             if not crossing and entry not in self.same_side_refused:
                 self.same_side_refused.add(entry)
-                rate = float(getattr(self.args, "same_side_exit_rate", 0.0) or 0.0)
-                side = self.edge_of(spawn_tf.location.x, spawn_tf.location.y, self.b)
-                if rate <= 0.0:
-                    self.logger.warning(
-                        "the entry at (%.0f, %.0f) can only reach destinations on the %s "
-                        "side it came in on, and --same-side-exit-rate is 0, so it spawns "
-                        "nothing. Give the rate a non-zero value to let a share of traffic "
-                        "double back here.",
-                        spawn_tf.location.x,
-                        spawn_tf.location.y,
-                        side,
-                    )
-                else:
-                    # The share is rated against routes planned this session, across every
-                    # entry. Normally other entries supply that denominator and this one
-                    # gets its turn. Where no entry anywhere can cross, nothing accrues and
-                    # a rate below 1 never comes due -- which is the rate meaning what it
-                    # says, but worth naming rather than looking like a silent refusal.
-                    self.logger.warning(
-                        "the entry at (%.0f, %.0f) can only reach destinations on the %s "
-                        "side it came in on, and %d of %d routes this session are already "
-                        "same-side, so --same-side-exit-rate %g does not allow another yet. "
-                        "The share is counted across all entries; if none of them can cross "
-                        "the scene, nothing accrues and a rate below 1 never comes due.",
-                        spawn_tf.location.x,
-                        spawn_tf.location.y,
-                        side,
-                        self.routes_same_side,
-                        self.routes_session,
-                        rate,
-                    )
-            same_side = []
+                self.logger.warning(
+                    "the entry at (%.0f, %.0f) can only reach destinations on the %s side "
+                    "it came in on, and --same-side-exit-rate is 0, so it spawns nothing. "
+                    "Give the rate a non-zero value to let traffic double back here.",
+                    spawn_tf.location.x,
+                    spawn_tf.location.y,
+                    self.edge_of(spawn_tf.location.x, spawn_tf.location.y, self.b),
+                )
         order = crossing + same_side
 
         budget = self._ROUTE_DESTINATION_TRIES + self._ROUTE_FALLBACK_TRIES
@@ -638,6 +575,18 @@ class TrafficController:
                 self.routes_session += 1
                 if self.same_side(spawn_tf, destination_tf):
                     self.routes_same_side += 1
+                    if entry not in self.same_side_refused:
+                        self.same_side_refused.add(entry)
+                        self.logger.warning(
+                            "the entry at (%.0f, %.0f) has no route to another side, so "
+                            "its traffic leaves by the %s side it came in on. Permitted "
+                            "because --same-side-exit-rate is %g; set it to 0 to leave "
+                            "this entry unused instead.",
+                            spawn_tf.location.x,
+                            spawn_tf.location.y,
+                            self.edge_of(spawn_tf.location.x, spawn_tf.location.y, self.b),
+                            float(getattr(self.args, "same_side_exit_rate", 0.0) or 0.0),
+                        )
                 return route
         return None
 
