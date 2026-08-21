@@ -1184,7 +1184,13 @@ public sealed class CarlaClient : IAsyncDisposable
             .ConfigureAwait(false);
 
         var poll = pollInterval ?? TimeSpan.FromMilliseconds(50);
-        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(120));
+        // Scale the wait with the work. Sampling asks the tileset for its most detailed level at
+        // every point, so the time taken follows the point count and how much of the tileset is
+        // already resident: the same request that finishes in well under a minute against a warm
+        // server exceeded a flat two minutes against one just restarted, and failed a build that
+        // had nothing wrong with it. Arapahoe_I25 asks for 5,431 points.
+        var budget = timeout ?? TimeSpan.FromSeconds(Math.Max(120.0, points.Count * 0.05));
+        var deadline = DateTime.UtcNow + budget;
         while (true)
         {
             ct.ThrowIfCancellationRequested();
@@ -1196,7 +1202,9 @@ public sealed class CarlaClient : IAsyncDisposable
                 return results;
             if (DateTime.UtcNow > deadline)
                 throw new TimeoutException(
-                    $"terrain-height sampling did not complete within {(timeout ?? TimeSpan.FromSeconds(120)).TotalSeconds:0} s");
+                    $"terrain-height sampling of {points.Count} point(s) did not complete within "
+                    + $"{budget.TotalSeconds:0} s. A server that has just started has none of the "
+                    + "tileset resident yet; try again once it has streamed, or raise --settle.");
             await Task.Delay(poll, ct).ConfigureAwait(false);
         }
     }
