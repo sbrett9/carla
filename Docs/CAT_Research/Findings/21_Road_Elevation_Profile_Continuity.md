@@ -4,6 +4,9 @@
 mesh assembly is now in scope as §18. Tracked as
 [sbrett9/carla#29](https://github.com/sbrett9/carla/issues/29), worked on branch
 `feature/JNI-347-road-mesh-elevation-profile-continuity`.
+
+**Closed.** What landed and what remains open is in §24; the limits that bound how far this could
+go are in §22, and the approaches built and withdrawn are in §23.
 **Datum:** ellipsoidal WGS84 (HAE) throughout — `project_datum_decision`. Nothing here changes the
 datum or the height source; this is entirely about how an already-sampled height series is turned into
 OpenDRIVE records.
@@ -905,6 +908,205 @@ cosmetic smoothing — without it these fixes would trade holes for steps.
 
 The 203 cracks that remain are wider than a metre or have sides that disagree in height, so they are
 left open deliberately rather than bridged with invented slope.
+
+
+## 21. Resolving the surface across workers
+
+The resolve scales with the ground a network covers rather than with the roads on it, so it is
+where a large map spends its time, and it ran on one thread.
+
+Profiling the stages first ruled out the obvious approach. Handing each height layer to a worker
+caps at **1.07×**, because the map-wide sheet holds **93.6 % of the cells**. All the gain has to
+come from inside a layer.
+
+| stage | share | divisible |
+|---|---|---|
+| sample lane quads into cells | 13.4 % | yes, over lane meshes |
+| **split into height layers** | **29.0 %** | **no — growth claims cells in an order that decides which sheet they land in** |
+| close slivers | 7.2 % | yes |
+| pave enclosed gaps | 20.1 % | partly |
+| relax | 19.8 % | yes, a stencil |
+| triangulate | 10.4 % | yes, per tile |
+
+Sampling, sliver closing, relaxation and tile building are split across workers; the layer split
+stays sequential and holds the ceiling near **three times** however many cores are available.
+Ranges are contiguous and fixed, so a float sum accumulates in the same order whatever the core
+count and the surface does not depend on the machine.
+
+Relaxation also stopped re-asking a question whose answer cannot change. It walked the map by hash
+every pass to find a neighbourhood that relaxing never alters — fourteen million lookups on a
+map-wide sheet. The neighbourhood now resolves to indices once and the passes run over flat arrays,
+which is what allows them to be split at all.
+
+### What a build spends its time on, and one line that dominated it
+
+A build reported one wall-clock for convert, sample, inject and mesh together, so a slow one gave
+no sign of which stage it was in. Height sampling is now timed per batch and road meshing as a
+whole, with the piece, vertex and triangle counts beside it.
+
+That instrumentation was written because of this: the sample callback logged one `Display` line per
+sampled point. A drape grid is one point per cell over the whole map area, so building the Hormuz
+trunk highway at 2 m over its 10.7 km² bounds is **2,664,983 points**, which wrote **3,739,497
+lines and a 463 MB log**. Formatting and a synchronous file write per point dominated the sample
+and made a build that was progressing normally look like a hang for over an hour. The per-point
+line is now `Verbose`; points that fail to sample are reported at `Warning`, capped, since a height
+that did not sample is a hole in the drape and was previously invisible among millions of `ok=1`
+lines.
+
+
+## 22. Two elevation sources that disagree, and what that bounds
+
+The road can follow the photoreal or bare earth. They are different measurements and they disagree,
+so the choice is a trade rather than a preference.
+
+- The **photoreal** is a *surface* model. It carries trees, canopies and awnings, and it resolves
+  man-made cuts.
+- **Bare earth** is a *terrain* model. Smooth and free of vegetation, but its postings are coarse
+  enough to be blind to a cut or an embankment.
+
+Measured at the road stations: the photoreal sits a median **0.81 m** below bare earth on
+`Arapahoe_I25` and **0.83 m** below on the Hormuz trunk highway — near enough identical on two maps
+half a world apart, which is what makes a single constant defensible at all.
+
+Locally it does not hold. Across a 30 m drainage channel on `Arapahoe_I25`, the photoreal has a
+flat floor at 1739.4 m while the terrain runs the general grade straight over it, climbing 1740 to
+1746 m; the two differ by up to **4.8 m** there and by **−6.03 m to +12.80 m** within 200 m. One
+model can see the channel and the other cannot.
+
+What follows from that:
+
+**Only a rigid vertical shift is available for the photoreal.** Cesium renders a 3D tileset as
+authored; there is no per-cell warp. The two can be aligned on average and never everywhere.
+
+**Whichever surface the road follows, it inherits that surface's errors.** Following the photoreal
+seats the road on the visible pavement and rides over whatever stands beside the carriageway.
+Following bare earth is smooth and detached from the imagery wherever the terrain is blind to real
+ground.
+
+| road follows | bend per station | worst bend |
+|---|---|---|
+| the drape, as built | 24.5 cm mean | 12.09 m |
+| bare earth, as sampled | 4.2 cm median | 2.87 m |
+| the raw photoreal | 49.5 cm mean | — |
+
+**The grade separation is the escape hatch for the known exceptions.** Where the OSM tags a bridge
+or tunnel, the deck reads its clearance from the photoreal, so the one case where terrain is
+confidently wrong in a predictable way is handled explicitly.
+
+**The unmodelled cut is what remains.** The terrain is wrong there, the OSM tags nothing, and no
+arithmetic over these two surfaces recovers it. That needs a third source.
+
+### Elevation cannot be measured from outside the pipeline
+
+This is the most useful thing learned, and it was learned late.
+
+The pipeline samples bare earth by live Cesium point queries. Anything offline has only a cached
+grid. Measured across 5,323 stations, those two samplings of the same ground differ by:
+
+| percentile | difference |
+|---|---|
+| p50 | 0.013 m |
+| p90 | 0.111 m |
+| p95 | 0.241 m |
+| p98 | 0.686 m |
+
+5,069 of 5,323 stations agree within 0.25 m, but the tail is long. Any effect smaller than about
+half a metre cannot be told apart from the disagreement itself.
+
+Three changes in this work were justified by measurements inside that noise band and had to be
+withdrawn. In the clearest case a rule was defended by "seventy-one runs of small lift"; the
+build's own count, once the console output was finally read, was **thirty samples**. The mesh work
+did not suffer this, because a mesh can be rebuilt offline from the `.xodr` exactly — there the
+replay *is* the ground truth.
+
+The remedy is to make the pipeline record what it used rather than reconstruct it afterwards. That
+was built and is described in §23.
+
+
+## 23. Tried and set aside
+
+Three approaches were built, measured and withdrawn. They are preserved on
+`feature/JNI-347-roads-on-terrain`, at `b41b14a7d`, rather than deleted, because each is a real
+answer to a real question and the measurements are worth more than the code.
+
+**Lifting a road back onto the photoreal where the de-spike dropped it to bare earth.** The drape
+anchors a cell to the ground wherever the photoreal stands well above it, reading that as a
+structure. Over open terrain there is no structure, and a single station on the Hormuz highway fell
+five metres into a hillside. A clamp fixed that and broke `Arapahoe_I25`: the surface is a surface
+model, so a road under a tree canopy and a road on a steep bank look identical to it, and the clamp
+lifted 153 stations onto the canopy above the street. **The photoreal cannot distinguish the two,
+and no threshold over it can.**
+
+That attempt also produced the one durable finding of the three. **All 24 stations under a real
+deck on `Arapahoe_I25` carry no `bridge`, `layer` or `tunnel` tag** — those tags belong to the way
+doing the bridging, never to the road passing underneath. Any rule that exempts underpasses by tag
+will lift every underpass on the map onto the deck above it. A geometric test — is another road
+overhead — identified all 24 correctly.
+
+**A height-align mode that moves the imagery to the road.** Roads on bare earth, the collidable
+ground unshifted so the two coincide exactly, and the photoreal shifted by the one systematic gap.
+It worked as specified: roads tracked bare earth to a 0.21 m spread, the worst bend fell from
+12.09 m to 5.99 m, and the build took 79 s against 151 s because no grid is sampled. It was
+withdrawn because the result was judged worse in the viewer than the drape, and because the
+remaining defects concentrated at the grade separations, where the deck lift then had to carry the
+whole structure height rather than a residue.
+
+**Two changes to the grade separation.** Dropping runs of lift that never reach structure height,
+and carrying a deck's lift across the `.xodr` road links so an approach ramps down instead of
+stepping off. The second rests on a correct observation worth keeping: approach ramps walk the OSM
+node graph, and **a junction connecting-road is not on it** — netconvert synthesises those roads and
+no OSM way lies behind them — so a deck ending at a junction has nothing to ramp into. Both were
+withdrawn with the mode they were built for.
+
+Also on that branch, and the piece most worth reviving first: **the pipeline writing one row per
+centreline sample beside the elevated `.xodr`** — position, the bare-earth and photoreal heights
+read there, the lift applied, and the height the road ended at. With it, a bump can be attributed to
+the terrain, to a lift, or to the fit by reading the row. Without it, §22 says the attempt is not
+worth making.
+
+
+## 24. State at close
+
+The road surface work is complete and this document is closed. What stands on
+`feature/JNI-347-road-mesh-elevation-profile-continuity`:
+
+**The elevation profile is C1.** Slope kinks inside roads fall from 17–41 % of boundaries to
+**0.0 % on every one of the ten smoketest maps**; height mismatch where linked roads meet goes from
+up to 19.5 m to **exactly 0.000 m**; paired carriageway disagreement on `Arapahoe_I25` from 0.879 m
+to 0.023 m.
+
+**The drivable network resolves into one surface per height layer**, tiles sharing vertices, in
+place of one ribbon per lane. On `Arapahoe_I25`: **0 cells lost** against 217, one-cell cracks
+**203** against 877, all **14** known hole and non-hole points classified correctly against 8,
+worst neighbour step 0.395 m edge and 0.646 m diagonal with none above a metre, median step 6.5 mm
+over 3.8 M pairs, and grade separation preserved at 7.41 m against a true clearance of 6.8 m.
+Connectors mesh at true lane width; the extra width that existed to make ribbons overlap is
+measured as obsolete and no longer applied on this path.
+
+**The resolve is split across workers** where it can be, with the ceiling and the reason for it
+recorded in §21.
+
+**Ambient traffic reaches the scene.** This was found while testing the mesh and fixed here: no
+vehicle spawned at all on a sparse network, because destinations were drawn only from the entry
+ring and most pairs of entry points have no route between them. Destinations now extend beyond the
+ring, ordered by distance so a vehicle crosses the scene, varied between spawns, and a vehicle may
+not leave by the side it entered unless nothing else is reachable and `--same-side-exit-rate`
+permits it. Route search is bounded by time rather than an invented attempt count, and failures are
+remembered so no destination is tested twice.
+
+### Open
+
+- **Deck ends step off rather than ramping**, up to 6.26 m in one 10 m station on `Arapahoe_I25`,
+  across the seven real grade separations. The cause is identified in §23; the fix is not in.
+- **Boundary cells are rasterised to the 0.5 m grid**, so a deck edge is a staircase and the drop
+  shows through each step. Clipping boundary cells to the true lane polygon would give an exact
+  edge at the current cell size; shrinking the cell would not — 0.25 m quadruples the triangles to
+  7.9 M, raises the layer count from 13 to 22, and regresses a known case.
+- **203 one-cell cracks remain**, either wider than a metre or with sides that disagree in height,
+  so they are left open rather than bridged with invented slope.
+- **The pedestrian navigation mesh is still built from the per-lane ribbons**, through
+  `Map::GenerateMesh`, a separate entry point this work did not touch. The single manifold is the
+  drivable surface only.
 
 
 ## Sources
