@@ -47,6 +47,12 @@ public sealed class VehicleTelemetryService
             foreach (var a in fetched) _meta[a.Id] = a;
         }
 
+        // Recover the surface shift for a world this client did not build (a reconnect, or a world
+        // opened rather than generated). Without it the height-align state below reads as "no shift"
+        // and the photoreal-referenced height would be reported as bare-earth truth. Idempotent and
+        // queried at most once per world, so it is safe in this per-tick path.
+        _client.EnsureBareEarthReference();
+
         bool drape = _client.LastDrapeActive;
         if (drape) EnsureDrapeGrids();
         var dtmSamples = _client.LastGroundDtmSamples;

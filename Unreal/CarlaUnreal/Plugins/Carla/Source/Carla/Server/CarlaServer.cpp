@@ -75,6 +75,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Misc/FileHelper.h"
 #include "Animation/PoseSnapshot.h"
+#include "BareEarthReference.h"
 #include "CesiumHeightSampler.h"
 #include "DrapedTerrain.h"
 #include "StagingBounds.h"
@@ -758,6 +759,97 @@ void FCarlaServer::FPimpl::BindActions()
       return std::vector<double>{};   // this world has no recorded sandbox
     }
     return std::vector<double>{ minX, minY, maxX, maxY, margin };
+  };
+
+  // Record how to recover bare-earth height from the height a vehicle physically drives at:
+  //   bare-earth HAE = physical HAE - offset
+  // The offset is a single constant when the road surface was shifted by one amount, or a per-cell
+  // field over the OSM sandbox when it was conformed point-by-point to the photoreal ("drape").
+  // Written by the digital-twin build so that a client which did NOT generate this world - one that
+  // reconnects to a running server, or opens a persisted level - can still report truth instead of
+  // silently reporting the shifted height. Grids are row-major [row*num_cols + col], metres, on the
+  // same grid as build_draped_terrain; both are empty when drape_active is false.
+  BIND_SYNC(set_bare_earth_reference) << [this](
+      double offset_meters, bool drape_active,
+      double min_x, double min_y, double cell_size,
+      int32_t num_cols, int32_t num_rows,
+      std::vector<float> offset_grid, std::vector<float> ground_grid) -> R<bool>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to record a bare-earth reference in");
+    }
+    TArray<float> OffsetGrid;
+    TArray<float> GroundGrid;
+    if (drape_active)
+    {
+      OffsetGrid.Reserve(static_cast<int32>(offset_grid.size()));
+      for (float V : offset_grid) { OffsetGrid.Add(V); }
+      GroundGrid.Reserve(static_cast<int32>(ground_grid.size()));
+      for (float V : ground_grid) { GroundGrid.Add(V); }
+    }
+    if (!UBareEarthReference::Set(
+            World, offset_meters, drape_active, min_x, min_y, cell_size,
+            num_cols, num_rows, OffsetGrid, GroundGrid))
+    {
+      RESPOND_ERROR("bare-earth reference record failed (see log)");
+    }
+    return true;
+  };
+
+  // The scalar part of the bare-earth reference, as
+  // [offset_meters, drape_active, min_x, min_y, cell_size, num_cols, num_rows].
+  // Empty for a world that was loaded rather than generated, in which case a client has no basis
+  // for reporting bare-earth truth and must say so rather than assume an offset of zero.
+  BIND_SYNC(get_bare_earth_reference) << [this]() -> R<std::vector<double>>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to read a bare-earth reference from");
+    }
+    double OffsetMeters, MinX, MinY, CellSize;
+    bool bDrapeActive;
+    int32 NumCols, NumRows;
+    if (!UBareEarthReference::Get(
+            World, OffsetMeters, bDrapeActive, MinX, MinY, CellSize, NumCols, NumRows))
+    {
+      return std::vector<double>{};   // this world has no recorded reference
+    }
+    return std::vector<double>{
+        OffsetMeters, bDrapeActive ? 1.0 : 0.0, MinX, MinY, CellSize,
+        static_cast<double>(NumCols), static_cast<double>(NumRows) };
+  };
+
+  // Per-cell surface shift (draped surface height minus bare-earth height), row-major, metres.
+  // Empty unless this world was generated in "drape" mode.
+  BIND_SYNC(get_bare_earth_offset_grid) << [this]() -> R<std::vector<float>>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to read a bare-earth offset grid from");
+    }
+    const TArray<float>& Grid = UBareEarthReference::GetOffsetGrid(World);
+    return std::vector<float>(Grid.GetData(), Grid.GetData() + Grid.Num());
+  };
+
+  // Per-cell bare-earth ground height, row-major, ellipsoidal metres. Reported as the ground
+  // beneath a vehicle. Empty unless this world was generated in "drape" mode.
+  BIND_SYNC(get_bare_earth_dtm_grid) << [this]() -> R<std::vector<float>>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to read a bare-earth ground grid from");
+    }
+    const TArray<float>& Grid = UBareEarthReference::GetBareEarthDtmGrid(World);
+    return std::vector<float>(Grid.GetData(), Grid.GetData() + Grid.Num());
   };
 
   // Returns the Cesium georeference origin (latitude, longitude, ellipsoidal height in m),

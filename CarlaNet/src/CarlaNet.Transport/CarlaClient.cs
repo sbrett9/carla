@@ -175,6 +175,16 @@ public sealed class CarlaClient : IAsyncDisposable
     public double LastHeightAlignOffset { get; private set; }
     public IReadOnlyList<GeoLocation> LastGroundDtmSamples { get; private set; } = [];
 
+    // True once this client knows how to convert a physical height into bare-earth truth for the
+    // loaded world — either because it generated the world itself, or because EnsureBareEarthReference
+    // pulled the record the generating client published to the server.
+    //
+    // This flag is what separates "the surface shift is zero" from "the surface shift is unknown".
+    // Both leave LastHeightAlignOffset at 0.0, but only the first justifies reporting hae = physical.
+    // A client that reports bare-earth truth without it is reporting the shifted, photoreal-referenced
+    // height instead, and nothing about the numbers reveals the error.
+    public bool HasBareEarthReference { get; private set; }
+
     // ── Per-point drape state (set by GenerateWorldFromOsmWithElevationAsync in "drape" mode) ──
     // When LastDrapeActive, telemetry recovers bare-earth HAE per-vehicle from a PER-CELL offset
     // field (DrapedZ − DTM) over the OSM sandbox, instead of the single LastHeightAlignOffset.
@@ -286,8 +296,13 @@ public sealed class CarlaClient : IAsyncDisposable
 
     // ── §8.2 Episode Management ───────────────────────────────────────────────
 
-    public Task LoadEpisodeAsync(string mapName, bool resetSettings = true, MapLayer layer = MapLayer.All)
-        => _rpc.CallVoidAsync("load_new_episode", mapName, resetSettings, layer);
+    public async Task LoadEpisodeAsync(string mapName, bool resetSettings = true, MapLayer layer = MapLayer.All)
+    {
+        await _rpc.CallVoidAsync("load_new_episode", mapName, resetSettings, layer).ConfigureAwait(false);
+        // A new world carries its own surface shift, so anything cached for the previous one is now
+        // wrong. Clearing the fetch memo as well lets EnsureBareEarthReference query the new world.
+        InvalidateBareEarthReference();
+    }
 
     public Task LoadLevelLayerAsync(MapLayer layer)
         => _rpc.CallVoidAsync("load_map_layer", layer);
@@ -769,6 +784,19 @@ public sealed class CarlaClient : IAsyncDisposable
             await SetLayerCollisionAsync("ground", groundCollision).ConfigureAwait(false);
         }
 
+        // Publish the surface shift to the server so a client that did NOT build this world can still
+        // report bare-earth truth. Deliberately outside the height-align branches: every mode has a
+        // shift to describe, including the bare-earth case where it is zero, and "zero" has to be
+        // told apart from "unknown" by whoever reads it later. Without this record a second client
+        // reports the physical (photoreal-referenced) height as bare earth, and the numbers give no
+        // sign of it.
+        await SetBareEarthReferenceAsync(
+            LastHeightAlignOffset, LastDrapeActive,
+            LastDrapeMinX, LastDrapeMinY, LastDrapeCellSize, LastDrapeNumCols, LastDrapeNumRows,
+            LastDrapeActive ? ToFloatGrid(LastDrapedOffsetBytes) : [],
+            LastDrapeActive ? ToFloatGrid(LastDrapedDtmBytes) : []).ConfigureAwait(false);
+        HasBareEarthReference = true;
+
         // Record the sandbox extent + inward staging ring for boundary-aware traffic. Deliberately
         // outside the height-align branches: the ring is a property of the OSM area, and every mode
         // leaves a collidable surface under it (the draped heightfield, or the ground layer shifted
@@ -887,6 +915,107 @@ public sealed class CarlaClient : IAsyncDisposable
     /// by the margin.
     public Task<IReadOnlyList<double>> GetStagingBoundsAsync()
         => _rpc.CallAsync<IReadOnlyList<double>>("get_staging_bounds");
+
+    // ── Bare-earth reference (how to turn a physical height into bare-earth truth) ──────────
+    // The generating client publishes this to the server so that any OTHER client — one that
+    // reconnects, or that opens a world persisted as a level — can recover the same truth instead of
+    // silently reporting the shifted, photoreal-referenced height as bare earth.
+
+    /// Publish the surface shift for the loaded world. Pass drapeActive=false with empty grids when
+    /// the shift is a single constant; the grids are row-major, metres, on the drape terrain grid.
+    public Task<bool> SetBareEarthReferenceAsync(
+        double offsetMeters, bool drapeActive,
+        double minX, double minY, double cellSize, int numCols, int numRows,
+        float[] offsetGrid, float[] groundGrid)
+        => _rpc.CallAsync<bool>("set_bare_earth_reference",
+               offsetMeters, drapeActive, minX, minY, cellSize, numCols, numRows, offsetGrid, groundGrid);
+
+    /// [offsetMeters, drapeActive, minX, minY, cellSize, numCols, numRows]; empty when the loaded
+    /// world has no record, in which case bare-earth truth is unknown rather than zero.
+    public Task<IReadOnlyList<double>> GetBareEarthReferenceAsync()
+        => _rpc.CallAsync<IReadOnlyList<double>>("get_bare_earth_reference");
+
+    /// Per-cell surface shift, row-major metres. Empty unless the world was generated draped.
+    public Task<IReadOnlyList<float>> GetBareEarthOffsetGridAsync()
+        => _rpc.CallAsync<IReadOnlyList<float>>("get_bare_earth_offset_grid");
+
+    /// Per-cell bare-earth ground height, row-major ellipsoidal metres. Empty unless draped.
+    public Task<IReadOnlyList<float>> GetBareEarthDtmGridAsync()
+        => _rpc.CallAsync<IReadOnlyList<float>>("get_bare_earth_dtm_grid");
+
+    // Set once a fetch has been tried for the loaded world, so a telemetry loop running at 5 Hz does
+    // not re-query a world that genuinely has no record.
+    private bool _bareEarthFetchAttempted;
+
+    /// <summary>
+    /// Make sure this client can convert a physical height into bare-earth truth for the loaded
+    /// world, fetching the record from the server when this client did not generate it. Cheap and
+    /// idempotent: returns immediately once known, and queries the server at most once per world.
+    /// Returns false when the world carries no record — the caller must then report the height as
+    /// unknown rather than assume the surface was never shifted.
+    /// </summary>
+    public bool EnsureBareEarthReference()
+    {
+        if (HasBareEarthReference) return true;
+        if (_bareEarthFetchAttempted) return false;
+        _bareEarthFetchAttempted = true;
+
+        try
+        {
+            var scalars = GetBareEarthReferenceAsync().GetAwaiter().GetResult();
+            if (scalars is null || scalars.Count < 7) return false;   // world has no record
+
+            bool drape = scalars[1] != 0.0;
+            if (!drape)
+            {
+                LastHeightAlignOffset = scalars[0];
+                LastDrapeActive = false;
+                HasBareEarthReference = true;
+                return true;
+            }
+
+            int numCols = (int)scalars[5];
+            int numRows = (int)scalars[6];
+            var offsets = GetBareEarthOffsetGridAsync().GetAwaiter().GetResult();
+            var ground = GetBareEarthDtmGridAsync().GetAwaiter().GetResult();
+            int need = numCols * numRows;
+            if (offsets is null || ground is null || offsets.Count != need || ground.Count != need)
+                return false;
+
+            LastDrapeMinX = scalars[2];
+            LastDrapeMinY = scalars[3];
+            LastDrapeCellSize = scalars[4];
+            LastDrapeNumCols = numCols;
+            LastDrapeNumRows = numRows;
+            LastDrapedOffsetBytes = ToFloatBytes(offsets);
+            LastDrapedDtmBytes = ToFloatBytes(ground);
+            LastHeightAlignOffset = 0.0;   // the per-cell field is authoritative when draped
+            LastDrapeActive = true;
+            HasBareEarthReference = true;
+            return true;
+        }
+        catch
+        {
+            // An older server without these handlers, or a transport failure. Truth stays unknown,
+            // which the caller reports as such; it must not degrade into an assumed zero shift.
+            return false;
+        }
+    }
+
+    /// Forget the bare-earth reference for the previous world and allow a fresh fetch.
+    private void InvalidateBareEarthReference()
+    {
+        HasBareEarthReference = false;
+        _bareEarthFetchAttempted = false;
+    }
+
+    private static byte[] ToFloatBytes(IReadOnlyList<float> values)
+    {
+        var f = values as float[] ?? [.. values];
+        var b = new byte[f.Length * sizeof(float)];
+        Buffer.BlockCopy(f, 0, b, 0, b.Length);   // row-major float32, little-endian host
+        return b;
+    }
 
     /// The Cesium georeference origin as GeoLocation(latitude, longitude, ellipsoidal height m).
     /// True elevation of a local Unreal point = this height + the point's local Z.
