@@ -71,13 +71,20 @@ public:
 	 *
 	 * Re-importing the same world overwrites what it produced before, so a rebuilt area can be
 	 * refreshed in place.
+	 *
+	 * IonAccessToken is optional. Supplied, it is written onto the level's imagery layers and saved
+	 * with the level, which makes it editable afterwards through each layer's own Ion Access Token
+	 * but also means it travels with the level wherever the level goes. Left empty, no token is
+	 * written and the usual fallbacks apply: the project's token while editing, and CESIUM_ION_TOKEN
+	 * from the environment when the level is played.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Generated World")
 	static FWorldPackageImportResult ImportWorldPackage(
 		const FString& PackageDirectory,
 		const FString& MapName,
 		const FString& DestinationFolder = TEXT("/Game/Carla/Maps/Generated"),
-		bool bReplaceDifferentSource = false);
+		bool bReplaceDifferentSource = false,
+		const FString& IonAccessToken = TEXT(""));
 
 	/**
 	 * What a level at this destination was built from, or an empty string if there is none.

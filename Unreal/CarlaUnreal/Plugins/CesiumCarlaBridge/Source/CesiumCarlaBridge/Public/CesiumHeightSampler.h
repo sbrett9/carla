@@ -108,8 +108,11 @@ public:
 	 * Per-layer visibility in the EDITOR viewport, which is a separate flag from the one
 	 * SetLayerVisible drives. A layer hidden in the simulation is still drawn while editing, and the
 	 * bare-earth ground layer occupies the same space as the photoreal imagery, so left drawn it
-	 * hides the surface being edited. The flag set here is saved with the level and can still be
-	 * overridden per actor from the outliner.
+	 * hides the surface being edited.
+	 *
+	 * This drives the same flag as the eye icon in the outliner, so a person can always reveal a
+	 * hidden layer while editing. That flag lasts for the editor session rather than being saved,
+	 * which is why hiding is applied each time the level is opened rather than once at import.
 	 *
 	 * Returns the number of tilesets changed (-1 when there is no world). Does nothing outside the
 	 * editor, where the flag has no meaning.

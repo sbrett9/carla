@@ -349,23 +349,26 @@ namespace
  * The configuration is idempotent, so the initializer re-running it at BeginPlay is harmless and
  * remains the authority for a packaged run.
  */
-void ConfigureGlobeAsLevelContent(UWorld* World, const UGeoreferencedWorldSettings* Settings)
+void ConfigureGlobeAsLevelContent(
+	UWorld* World, const UGeoreferencedWorldSettings* Settings, const FString& IonAccessToken)
 {
 	if (!World || !Settings || !Settings->HasUsableDatum())
 	{
 		return;
 	}
 
-	// The ion access token is deliberately not supplied here. It is a credential, and anything passed
-	// in would be written into the level package and travel with it. The editor streams using the
-	// project's own Cesium ion token, and the initializer supplies the environment's token at
-	// BeginPlay for a headless or packaged run.
+	// An ion access token given here is written onto the tileset actors and saved into the level, so
+	// it travels with the level -- into source control, and into anything built or shared from it.
+	// That is worth doing on purpose, because it also makes the token editable afterwards: each
+	// tileset exposes its own Ion Access Token, so a person can change it by selecting the layer in
+	// the level. Left empty, nothing is written and the existing fallbacks apply -- the project's own
+	// token while editing, and the environment's token at BeginPlay for a headless or packaged run.
 	UCesiumHeightSampler::ConfigureCesiumForOrigin(
 		World,
 		Settings->OriginLatitude,
 		Settings->OriginLongitude,
 		Settings->OriginHeightMeters,
-		/*IonAccessToken=*/TEXT(""),
+		IonAccessToken,
 		Settings->PhotorealIonAssetId,
 		Settings->GroundIonAssetId,
 		/*bRefreshTileset=*/false);
@@ -384,17 +387,9 @@ void ConfigureGlobeAsLevelContent(UWorld* World, const UGeoreferencedWorldSettin
 		UCesiumHeightSampler::SetLayerCollision(World, Layer.Tag, Layer.bCollision);
 	}
 
-	// A layer hidden in the simulation is still drawn in the editor viewport, because the two use
-	// different visibility flags. The bare-earth ground layer is the case that matters: it occupies
-	// the same space as the photoreal imagery, so left drawn it hides the surface the level exists to
-	// show. Carry each layer's intent across to the editor flag as well.
-	for (const FGeoreferencedWorldLayer& Layer : Settings->Layers)
-	{
-		if (!Layer.Tag.IsEmpty() && !Layer.bVisible)
-		{
-			UCesiumHeightSampler::SetLayerHiddenInEditor(World, Layer.Tag, true);
-		}
-	}
+	// Hiding the layers the simulation does not draw is deliberately NOT done here. The editor's
+	// visibility flag lasts for the session rather than being saved, so it is applied when the level
+	// is opened -- see FGeneratedWorldEditorPresentation.
 }
 
 } // namespace
@@ -403,7 +398,8 @@ FWorldPackageImportResult UWorldPackageImporter::ImportWorldPackage(
 	const FString& PackageDirectory,
 	const FString& MapName,
 	const FString& DestinationFolder,
-	bool bReplaceDifferentSource)
+	bool bReplaceDifferentSource,
+	const FString& IonAccessToken)
 {
 	FWorldPackageImportResult Result;
 
@@ -571,7 +567,7 @@ FWorldPackageImportResult UWorldPackageImporter::ImportWorldPackage(
 	}
 
 	// Put the globe in the level itself, so opening it shows the world rather than bare geometry.
-	ConfigureGlobeAsLevelContent(World, Settings);
+	ConfigureGlobeAsLevelContent(World, Settings, IonAccessToken);
 
 	// Save the level package directly. SaveCurrentLevel would act on whatever the editor has open,
 	// which is deliberately not this level.

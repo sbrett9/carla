@@ -95,6 +95,35 @@ void UWorldPackageImporterWidget::ApplyLayoutAndStyle()
 		}
 	}
 
+	// An optional place to put a Cesium ion token. Built here and slotted in after the world name, so
+	// a panel authored before this field existed keeps working without being edited.
+	if (Layout && WidgetTree && MapName && !IonAccessToken)
+	{
+		IonAccessTokenLabel = WidgetTree->ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(), TEXT("IonAccessTokenLabel"));
+		IonAccessToken = WidgetTree->ConstructWidget<UEditableTextBox>(
+			UEditableTextBox::StaticClass(), TEXT("IonAccessToken"));
+		if (IonAccessTokenLabel && IonAccessToken)
+		{
+			IonAccessTokenLabel->SetText(FText::FromString(
+				TEXT("Cesium ion token (optional - saved into the level, and editable afterwards on "
+				     "each imagery layer)")));
+			FSlateFontInfo LabelFont = IonAccessTokenLabel->GetFont();
+			LabelFont.Size = 10;
+			IonAccessTokenLabel->SetFont(LabelFont);
+			IonAccessToken->SetHintText(FText::FromString(
+				TEXT("leave empty to use the editor's own token, and CESIUM_ION_TOKEN when played")));
+
+			Layout->AddChildToVerticalBox(IonAccessTokenLabel);
+			Layout->AddChildToVerticalBox(IonAccessToken);
+			// AddChild appends, which would put these after the button. Put them directly below the
+			// world name, which is the field they follow on the panel.
+			const int32 AfterMapName = Layout->GetChildIndex(MapName) + 1;
+			Layout->ShiftChild(AfterMapName, IonAccessTokenLabel);
+			Layout->ShiftChild(AfterMapName + 1, IonAccessToken);
+		}
+	}
+
 	// Let every row span the panel, so the paths in the fields are readable, and give the rows a
 	// little vertical separation.
 	const TArray<UWidget*> Rows = Layout ? Layout->GetAllChildren() : TArray<UWidget*>();
@@ -203,8 +232,11 @@ FString UWorldPackageImporterWidget::ImportFromFields()
 		: FString::Printf(TEXT("Importing %s, replacing the level already there (built from '%s')..."),
 			*World, *Existing), false);
 
+	const FString Token =
+		IonAccessToken ? IonAccessToken->GetText().ToString().TrimStartAndEnd() : FString();
+
 	const FWorldPackageImportResult Result = UWorldPackageImporter::ImportWorldPackage(
-		Directory, World, DestinationFolder, bReplaceLevelBuiltFromADifferentSource);
+		Directory, World, DestinationFolder, bReplaceLevelBuiltFromADifferentSource, Token);
 	if (!Result.bSucceeded)
 	{
 		const FString Message = FString::Printf(TEXT("Import failed: %s"), *Result.FailureReason);

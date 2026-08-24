@@ -102,6 +102,18 @@ private:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UEditableTextBox> MapName;
 
+	/**
+	 * Optional Cesium ion token to write into the level's imagery layers.
+	 *
+	 * Created here rather than bound to the layout, so a panel authored before this field existed
+	 * still compiles and still works.
+	 */
+	UPROPERTY(Transient)
+	TObjectPtr<UEditableTextBox> IonAccessToken;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> IonAccessTokenLabel;
+
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UButton> ImportButton;
 

@@ -398,7 +398,7 @@ int32 UCesiumHeightSampler::SetLayerHiddenInEditor(
 		ACesium3DTileset* Tileset = *It;
 		if (!IsValid(Tileset)) continue;
 		if (!LayerTag.IsEmpty() && !Tileset->ActorHasTag(TagName)) continue;
-		Tileset->bHiddenEd = bHidden;
+		Tileset->SetIsTemporarilyHiddenInEditor(bHidden);
 		++Count;
 	}
 	return Count;
