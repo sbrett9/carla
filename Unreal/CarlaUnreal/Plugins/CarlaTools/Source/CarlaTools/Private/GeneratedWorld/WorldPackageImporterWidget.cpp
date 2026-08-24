@@ -82,6 +82,13 @@ void UWorldPackageImporterWidget::ApplyLayoutAndStyle()
 				     "client needed.\n\n"
 				     "Re-importing the same world replaces what a previous import produced.")));
 			Description->SetAutoWrapText(true);
+			// A text block built in code carries the class default font, which is far larger than the
+			// field labels placed in the layout asset. Match those instead, so the explanation reads as
+			// supporting text rather than a headline, and soften it so the fields stay dominant.
+			FSlateFontInfo DescriptionFont = Description->GetFont();
+			DescriptionFont.Size = 10;
+			Description->SetFont(DescriptionFont);
+			Description->SetColorAndOpacity(FSlateColor(FLinearColor(0.72f, 0.72f, 0.72f, 1.0f)));
 			Layout->AddChildToVerticalBox(Description);
 			// AddChild appends, and the explanation belongs before the fields it explains.
 			Layout->ShiftChild(0, Description);

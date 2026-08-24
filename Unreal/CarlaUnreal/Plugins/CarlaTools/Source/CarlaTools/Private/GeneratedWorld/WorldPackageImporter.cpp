@@ -7,6 +7,7 @@
 #include "Carla/OpenDrive/OpenDriveGenerator.h"
 #include "GeneratedWorld/GeoreferencedWorldSettings.h"
 #include "GeneratedWorld/RoadSurfaceBaker.h"
+#include "CesiumHeightSampler.h"
 
 #include <util/ue-header-guard-begin.h>
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -332,6 +333,72 @@ FString UWorldPackageImporter::DescribeExistingImport(
 		: Existing->SourceOsmFileName;
 }
 
+namespace
+{
+
+/**
+ * Establish the globe as saved level content, rather than leaving it to be rebuilt at play time.
+ *
+ * The world initializer performs the same configuration at BeginPlay, which is what lets a level
+ * loaded by name stand up with no client. That is too late to edit against: opening the level in the
+ * editor would show baked road geometry floating in empty space, because the georeference, the
+ * imagery layers and the lighting would not exist until the level was played. Running the same
+ * configuration here makes those actors part of the level, so the editor streams the world as soon
+ * as the level is opened and a person can select and adjust the layers like any other content.
+ *
+ * The configuration is idempotent, so the initializer re-running it at BeginPlay is harmless and
+ * remains the authority for a packaged run.
+ */
+void ConfigureGlobeAsLevelContent(UWorld* World, const UGeoreferencedWorldSettings* Settings)
+{
+	if (!World || !Settings || !Settings->HasUsableDatum())
+	{
+		return;
+	}
+
+	// The ion access token is deliberately not supplied here. It is a credential, and anything passed
+	// in would be written into the level package and travel with it. The editor streams using the
+	// project's own Cesium ion token, and the initializer supplies the environment's token at
+	// BeginPlay for a headless or packaged run.
+	UCesiumHeightSampler::ConfigureCesiumForOrigin(
+		World,
+		Settings->OriginLatitude,
+		Settings->OriginLongitude,
+		Settings->OriginHeightMeters,
+		/*IonAccessToken=*/TEXT(""),
+		Settings->PhotorealIonAssetId,
+		Settings->GroundIonAssetId,
+		/*bRefreshTileset=*/false);
+
+	for (const FGeoreferencedWorldLayer& Layer : Settings->Layers)
+	{
+		if (Layer.Tag.IsEmpty())
+		{
+			continue;
+		}
+		if (Layer.VerticalOffsetMeters != 0.0)
+		{
+			UCesiumHeightSampler::SetLayerVerticalOffset(World, Layer.Tag, Layer.VerticalOffsetMeters);
+		}
+		UCesiumHeightSampler::SetLayerVisible(World, Layer.Tag, Layer.bVisible);
+		UCesiumHeightSampler::SetLayerCollision(World, Layer.Tag, Layer.bCollision);
+	}
+
+	// A layer hidden in the simulation is still drawn in the editor viewport, because the two use
+	// different visibility flags. The bare-earth ground layer is the case that matters: it occupies
+	// the same space as the photoreal imagery, so left drawn it hides the surface the level exists to
+	// show. Carry each layer's intent across to the editor flag as well.
+	for (const FGeoreferencedWorldLayer& Layer : Settings->Layers)
+	{
+		if (!Layer.Tag.IsEmpty() && !Layer.bVisible)
+		{
+			UCesiumHeightSampler::SetLayerHiddenInEditor(World, Layer.Tag, true);
+		}
+	}
+}
+
+} // namespace
+
 FWorldPackageImportResult UWorldPackageImporter::ImportWorldPackage(
 	const FString& PackageDirectory,
 	const FString& MapName,
@@ -502,6 +569,9 @@ FWorldPackageImportResult UWorldPackageImporter::ImportWorldPackage(
 			}
 		}
 	}
+
+	// Put the globe in the level itself, so opening it shows the world rather than bare geometry.
+	ConfigureGlobeAsLevelContent(World, Settings);
 
 	// Save the level package directly. SaveCurrentLevel would act on whatever the editor has open,
 	// which is deliberately not this level.

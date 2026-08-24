@@ -105,6 +105,20 @@ public:
 	static int32 SetLayerVisible(UObject* WorldContextObject, const FString& LayerTag, bool bVisible);
 
 	/**
+	 * Per-layer visibility in the EDITOR viewport, which is a separate flag from the one
+	 * SetLayerVisible drives. A layer hidden in the simulation is still drawn while editing, and the
+	 * bare-earth ground layer occupies the same space as the photoreal imagery, so left drawn it
+	 * hides the surface being edited. The flag set here is saved with the level and can still be
+	 * overridden per actor from the outliner.
+	 *
+	 * Returns the number of tilesets changed (-1 when there is no world). Does nothing outside the
+	 * editor, where the flag has no meaning.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
+	static int32 SetLayerHiddenInEditor(
+		UObject* WorldContextObject, const FString& LayerTag, bool bHidden);
+
+	/**
 	 * Per-layer physics: enable/disable collision on every ACesium3DTileset tagged LayerTag
 	 * (empty = all). Calls SetCreatePhysicsMeshes then RefreshTileset. Independent of
 	 * visibility. Returns the number changed (-1 no world).

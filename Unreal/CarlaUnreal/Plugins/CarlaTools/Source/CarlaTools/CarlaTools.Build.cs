@@ -131,7 +131,10 @@ public class CarlaTools :
       "MeshDescription",
       "MeshUtilitiesCommon",
       "Projects",
-      "PCG"
+      "PCG",
+      // Establishes the georeference, imagery layers and lighting as level content when a world
+      // package is imported. Publicly re-exports CesiumRuntime, which supplies ACesium3DTileset.
+      "CesiumCarlaBridge"
     });
 
     if (EnableNVIDIAOmniverse)
