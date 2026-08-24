@@ -6,13 +6,13 @@ vehicle truth data into a consolidated CSV file suitable for analysis or ML trai
 Each XML file represents one captured frame containing:
   * Timestamp
   * Filename
-  * Vehicle Identification 
+  * Vehicle Identification
   * Multiple vehicle tracks with position (lat/lon), speed
 
 The output CSV contains one row per vehicle per frame with all relevant attributes.
 
 Usage:
-    python XmlToCsvConverter.py -i path/to/recordings -o path/to/output.csv
+    python csv_converter.py -i path/to/recordings -o path/to/output.csv
 """
 
 import argparse
@@ -30,20 +30,22 @@ class VehicleTruthRecord:
     """One vehicle observation at a single timestamp (one recorded frame)."""
 
     # Timestamp and source metadata
-    timestamp: str              # ISO-8601 UTC timestamp when captured
-    frame_file: str             # Source XML filename (links to corresponding PNG)
+    timestamp: str  # ISO-8601 UTC timestamp when captured
+    frame_file: str  # Source XML filename (links to corresponding PNG)
 
     # Vehicle identification
-    actor_id: int               # CARLA actor ID
-    uid: str                    # CoT unique ID (CARLA-TRUTH-{actor_id})
-    callsign: str               # Vehicle callsign (e.g., "car-412")
+    actor_id: int  # CARLA actor ID
+    uid: str  # CoT unique ID (CARLA-TRUTH-{actor_id})
+    callsign: str  # Vehicle callsign (e.g., "car-412")
 
     # Position (geodetic WGS84)
-    lat: float                  # Latitude (degrees)
-    lon: float                  # Longitude (degrees)
+    lat: float  # Latitude (degrees)
+    lon: float  # Longitude (degrees)
+    hae: float  # Height above ellipsoid (meters)
 
     # Kinematics
-    speed_mps: float            # Speed (meters per second)
+    track_course: float  # Course
+    speed_mps: float  # Speed (meters per second)
 
 
 class XmlToCsvConverter:
@@ -91,7 +93,9 @@ class XmlToCsvConverter:
             self.logger.warning("No vehicle records found in any XML files")
             return
 
-        self.logger.info(f"Extracted {len(all_records)} total vehicle records from {len(xml_files)} files")
+        self.logger.info(
+            f"Extracted {len(all_records)} total vehicle records from {len(xml_files)} files"
+        )
 
         # Write to CSV
         self._write_csv(all_records)
@@ -104,10 +108,16 @@ class XmlToCsvConverter:
             root = tree.getroot()
 
             if root.tag != "events":
-                self.logger.warning(f"Skipping {xml_path.name}: root tag is '{root.tag}', expected 'events'")
+                self.logger.warning(
+                    f"Skipping {xml_path.name}: root tag is '{root.tag}', expected 'events'"
+                )
                 return []
 
-            # Extract the capture timestamp from the root element
+            # Extract the capture timestamp from the root element.
+            # Timestamp precision (milliseconds) is inherited from the recorder's
+            # CotWriter.Iso() format (yyyy-MM-ddTHH:mm:ss.fffZ). This converter does
+            # not independently validate precision, so future changes to the recorder's
+            # format would silently affect CSV output.
             capture_time = root.get("captured", "")
             if not capture_time:
                 self.logger.warning(f"Skipping {xml_path.name}: no 'captured' timestamp")
@@ -133,7 +143,9 @@ class XmlToCsvConverter:
             self.logger.error(f"Failed to parse {xml_path.name}: {e}")
             return []
 
-    def _parse_vehicle_event(self, event: ET.Element, timestamp: str, filename: str) -> VehicleTruthRecord | None:
+    def _parse_vehicle_event(
+        self, event: ET.Element, timestamp: str, filename: str
+    ) -> VehicleTruthRecord | None:
         """Parse a single vehicle <event> element into a VehicleTruthRecord."""
         try:
             uid = event.get("uid", "")
@@ -141,18 +153,29 @@ class XmlToCsvConverter:
             # Parse <point> element
             point = event.find("point")
             if point is None:
+                self.logger.warning(
+                    f"Skipping vehicle {uid} in {filename}: missing <point> element"
+                )
                 return None
             lat = float(point.get("lat", 0.0))
             lon = float(point.get("lon", 0.0))
+            hae = float(point.get("hae", 0.0))
 
             # Parse <detail> sub-elements
             detail = event.find("detail")
             if detail is None:
+                self.logger.warning(
+                    f"Skipping vehicle {uid} in {filename}: missing <detail> element"
+                )
                 return None
 
             track = detail.find("track")
             if track is None:
+                self.logger.warning(
+                    f"Skipping vehicle {uid} in {filename}: missing <track> element"
+                )
                 return None
+            track_course = float(track.get("course", 0.0))
             speed_mps = float(track.get("speed", 0.0))
 
             contact = detail.find("contact")
@@ -161,10 +184,13 @@ class XmlToCsvConverter:
             # Parse <_carla> element (extended vehicle attributes)
             carla_elem = detail.find("_carla")
             if carla_elem is None:
+                self.logger.warning(
+                    f"Skipping vehicle {uid} in {filename}: missing <_carla> element"
+                )
                 return None
 
             actor_id = int(carla_elem.get("actor_id", 0))
-            
+
             return VehicleTruthRecord(
                 timestamp=timestamp,
                 frame_file=filename,
@@ -173,6 +199,8 @@ class XmlToCsvConverter:
                 callsign=callsign,
                 lat=lat,
                 lon=lon,
+                hae=hae,
+                track_course=track_course,
                 speed_mps=speed_mps,
             )
 
@@ -213,7 +241,7 @@ class XmlToCsvConverter:
 
             self.logger.info(f"Wrote {len(records)} records to {output_path}")
 
-        except IOError as e:
+        except OSError as e:
             self.logger.error(f"Failed to write CSV to {output_path}: {e}")
             raise
 
@@ -226,11 +254,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Convert CARLA CoT-XML recording sidecars to CSV format.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-
-Reads all .xml files from the input directory and extracts vehicle truth data 
-into a CSV file.
-        """,
+        epilog=""" Reads all .xml files from the input directory and extracts vehicle truth data into a CSV file. """,
     )
 
     parser.add_argument(
@@ -274,10 +298,10 @@ into a CSV file.
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = output_path / f"{timestamp}_truth.csv"
         logger.info(f"Output is a directory, using: {output_path}")
-    elif str(output_path).endswith(('\\', '/')):
+    elif str(output_path).endswith(("\\", "/")):
         # Path ends with separator, treat as directory
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = Path(str(output_path).rstrip('\\/')) / f"{timestamp}_truth.csv"
+        output_path = Path(str(output_path).rstrip("\\/")) / f"{timestamp}_truth.csv"
         logger.info(f"Output appears to be a directory, using: {output_path}")
 
     try:
