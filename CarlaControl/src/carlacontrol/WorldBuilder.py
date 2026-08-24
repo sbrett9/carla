@@ -131,7 +131,37 @@ class WorldBuilder:
         with open(save_path, "w", encoding="utf-8") as f:
             f.write(elevated)
         self.logger.info(f"        wrote elevated .xodr -> {save_path}")
+
+        if args.emit_world_package:
+            self._write_world_package(client, args, osm_for_build, elevated)
         return True
+
+    def _write_world_package(self, client, args, osm_for_build: str, elevated: str) -> None:
+        """Record the built world on disk: road network, the grids that recover true ground height
+        from driven height, and a manifest of the origin, imagery layers and build settings.
+
+        The build itself has already succeeded by this point, so a failure to write the record is
+        reported and swallowed rather than failing the run -- losing the record is a lesser harm
+        than discarding a world that took minutes to build."""
+        map_name = os.path.splitext(os.path.basename(args.osm))[0]
+        try:
+            manifest_path = client.write_world_package(
+                args.emit_world_package,
+                map_name,
+                elevated,
+                args.height_align,
+                osm_for_build,
+                args.ion_asset_id,
+                args.ground_asset_id,
+                args.step,
+                args.terrain_res,
+                args.terrain_margin,
+                self.make_osm_conversion_options(args).ExtraArgs,
+            )
+        except Exception as ex:
+            self.logger.warning(f"world package not written: {ex}")
+            return
+        self.logger.info(f"        wrote world package -> {manifest_path}")
 
     @staticmethod
     def configure_sync_mode(world, sync: bool, fixed_delta: float = 0.05) -> None:

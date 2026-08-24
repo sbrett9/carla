@@ -3,7 +3,9 @@
 // Default port: 2000.
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Reflection;
+using CarlaNet.Map.WorldPackage;
 using CarlaNet.Transport.MsgPackRpc;
 using CarlaNet.Transport.Streaming;
 using CarlaNet.Transport.TrafficManager;
@@ -1000,6 +1002,91 @@ public sealed class CarlaClient : IAsyncDisposable
             // which the caller reports as such; it must not degrade into an assumed zero shift.
             return false;
         }
+    }
+
+    /// <summary>
+    /// Write the world just built to <paramref name="directory"/> as a world package: the elevated
+    /// OpenDRIVE, the per-cell surface reconciliation grids, and a manifest describing the datum,
+    /// the height reconciliation, the streamed layers and the sandbox.
+    ///
+    /// The datum and sandbox are read back from the server rather than remembered here, so the
+    /// package records what the world actually ended up with rather than what was requested. The
+    /// provenance arguments are the things only the caller knows: which extract was used, and the
+    /// sampling settings it was built with.
+    ///
+    /// Returns the path of the manifest that was written.
+    /// </summary>
+    public async Task<string> WriteWorldPackageAsync(
+        string directory,
+        string mapName,
+        string elevatedXodr,
+        string heightAlignMode,
+        string sourceOsmPath,
+        long photorealIonAssetId,
+        long groundIonAssetId,
+        double sampleStepMeters,
+        double terrainResolutionMeters,
+        double terrainMarginMeters,
+        IReadOnlyList<string>? netconvertExtraArgs = null)
+    {
+        GeoLocation origin = await GetCesiumOriginAsync().ConfigureAwait(false);
+        IReadOnlyList<double> staging = await GetStagingBoundsAsync().ConfigureAwait(false);
+        bool haveStaging = staging is { Count: >= 5 };
+
+        var manifest = new WorldPackageManifest
+        {
+            MapName = mapName,
+            OriginLatitude = origin.Latitude,
+            OriginLongitude = origin.Longitude,
+            OriginHeightMeters = origin.Altitude,
+            GeoReferenceString = ExtractGeoReference(elevatedXodr),
+            HeightAlignMode = heightAlignMode,
+            DrapeActive = LastDrapeActive,
+            HeightAlignOffsetMeters = LastHeightAlignOffset,
+            GridMinXMeters = LastDrapeMinX,
+            GridMinYMeters = LastDrapeMinY,
+            GridCellSizeMeters = LastDrapeCellSize,
+            GridNumCols = LastDrapeNumCols,
+            GridNumRows = LastDrapeNumRows,
+            PhotorealIonAssetId = photorealIonAssetId,
+            GroundIonAssetId = groundIonAssetId,
+            StagingMinXMeters = haveStaging ? staging[0] : 0.0,
+            StagingMinYMeters = haveStaging ? staging[1] : 0.0,
+            StagingMaxXMeters = haveStaging ? staging[2] : 0.0,
+            StagingMaxYMeters = haveStaging ? staging[3] : 0.0,
+            StagingMarginMeters = haveStaging ? staging[4] : 0.0,
+            SourceOsmFileName = Path.GetFileName(sourceOsmPath) ?? string.Empty,
+            SourceOsmSha256 = WorldPackage.HashFile(sourceOsmPath),
+            OpenDriveSha256 = WorldPackage.HashText(elevatedXodr),
+            SampleStepMeters = sampleStepMeters,
+            TerrainResolutionMeters = terrainResolutionMeters,
+            TerrainMarginMeters = terrainMarginMeters,
+            GeneratedAtUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+            GeneratorVersion = typeof(CarlaClient).Assembly.GetName().Version?.ToString() ?? string.Empty,
+            NetconvertExtraArgs = netconvertExtraArgs is null ? [] : [.. netconvertExtraArgs],
+        };
+
+        WorldPackage.Write(
+            directory, manifest, elevatedXodr,
+            LastDrapeActive ? ToFloatGrid(LastDrapedOffsetBytes) : [],
+            LastDrapeActive ? ToFloatGrid(LastDrapedDtmBytes) : []);
+        return WorldPackage.ManifestPath(directory, mapName);
+    }
+
+    /// The OpenDRIVE geoReference projection string, or empty when the document carries none.
+    private static string ExtractGeoReference(string xodr)
+    {
+        const string Open = "<geoReference";
+        int start = xodr.IndexOf(Open, StringComparison.Ordinal);
+        if (start < 0) return string.Empty;
+        // The projection sits inside a CDATA section in every document this pipeline produces.
+        int cdata = xodr.IndexOf("<![CDATA[", start, StringComparison.Ordinal);
+        int close = xodr.IndexOf("</geoReference>", start, StringComparison.Ordinal);
+        if (cdata < 0 || close < 0 || cdata > close) return string.Empty;
+        int from = cdata + "<![CDATA[".Length;
+        int to = xodr.IndexOf("]]>", from, StringComparison.Ordinal);
+        if (to < 0 || to > close) return string.Empty;
+        return xodr[from..to].Trim();
     }
 
     /// Forget the bare-earth reference for the previous world and allow a fresh fetch.

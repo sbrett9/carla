@@ -2319,6 +2319,26 @@ class Client:
             CancellationToken(False)))
         return str(xodr)
 
+    def write_world_package(self, directory, map_name, elevated_xodr, height_align_mode,
+                            source_osm_path, photoreal_ion_asset_id, ground_ion_asset_id,
+                            sample_step_meters, terrain_resolution_meters, terrain_margin_meters,
+                            netconvert_extra_args=None):
+        """Write the world this client just built to `directory` as a world package: the elevated
+        .xodr, the per-cell grids that recover true ground height from the height vehicles drive at,
+        and a manifest describing the origin, the imagery layers, the sandbox and how it was built.
+
+        Only meaningful straight after generate_world_from_osm_with_elevation on the SAME client —
+        the per-cell grids live on it. The origin and sandbox are read back from the server, so the
+        record describes the world that actually resulted rather than what was asked for. The Cesium
+        ion access token is deliberately not recorded.
+
+        Returns the path of the manifest written."""
+        return str(_sync(self._inner.WriteWorldPackageAsync(
+            str(directory), str(map_name), str(elevated_xodr), str(height_align_mode),
+            str(source_osm_path), int(photoreal_ion_asset_id), int(ground_ion_asset_id),
+            float(sample_step_meters), float(terrain_resolution_meters),
+            float(terrain_margin_meters), netconvert_extra_args)))
+
     def get_trafficmanager(self, port: int = 8000):
         """Return an in-process TrafficManager bound to the given port.
 
