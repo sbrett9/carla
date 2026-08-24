@@ -45,6 +45,11 @@ public:
   /// changing the representation does not silently take the road out of their reach.
   static const FName RoadSurfaceTag;
 
+  /// Record that this level already contains its road surface, so BeginPlay does not build a second
+  /// one over the top. Set by whatever baked the geometry in.
+  UFUNCTION(BlueprintCallable, Category = "OpenDrive")
+  void SetGeometryBaked(bool bBaked) { bGeometryBaked = bBaked; }
+
 
   AOpenDriveGenerator(const FObjectInitializer &ObjectInitializer);
 

@@ -46,6 +46,11 @@ struct CARLATOOLS_API FWorldPackageImportResult
 	UPROPERTY(BlueprintReadOnly, Category = "Import")
 	FString OpenDriveFilePath;
 
+	/** Road surface pieces baked into the level as static meshes. Zero means the level builds its
+	 *  surface at play time instead, which still drives correctly but shows nothing in the editor. */
+	UPROPERTY(BlueprintReadOnly, Category = "Import")
+	int32 RoadPiecesBaked = 0;
+
 	/** Empty on success; on failure, what went wrong in terms a person can act on. */
 	UPROPERTY(BlueprintReadOnly, Category = "Import")
 	FString FailureReason;

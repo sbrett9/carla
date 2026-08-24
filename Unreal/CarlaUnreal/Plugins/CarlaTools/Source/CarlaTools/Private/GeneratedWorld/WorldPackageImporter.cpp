@@ -4,7 +4,9 @@
 
 #include "CarlaTools.h"
 #include "GeneratedWorld/GeoreferencedWorldInitializer.h"
+#include "Carla/OpenDrive/OpenDriveGenerator.h"
 #include "GeneratedWorld/GeoreferencedWorldSettings.h"
+#include "GeneratedWorld/RoadSurfaceBaker.h"
 
 #include <util/ue-header-guard-begin.h>
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -474,6 +476,31 @@ FWorldPackageImportResult UWorldPackageImporter::ImportWorldPackage(
 		Result.FailureReason = FString::Printf(
 			TEXT("could not place the road network at %s"), *Result.OpenDriveFilePath);
 		return Result;
+	}
+
+	// Bake the road surface into the level, so opening it shows the world rather than an empty map,
+	// and tell the generator not to build a second surface over the top at play time.
+	FString OpenDriveText;
+	if (FFileHelper::LoadFileToString(OpenDriveText, *OpenDriveFile(PackageDirectory, MapName)))
+	{
+		const FRoadSurfaceBakeResult Bake =
+			URoadSurfaceBaker::BakeIntoWorld(World, OpenDriveText, MapName, Settings);
+		Result.RoadPiecesBaked = Bake.PiecesBaked;
+		if (!Bake.bSucceeded)
+		{
+			// A level without its surface is still usable -- the generator rebuilds it at play time --
+			// so this is reported rather than treated as a failed import.
+			UE_LOG(LogCarlaTools, Warning,
+				TEXT("[WorldPackageImporter] road surface not baked (%s); the level will build it at "
+				     "play time instead."), *Bake.FailureReason);
+		}
+		for (AActor* Actor : World->PersistentLevel->Actors)
+		{
+			if (AOpenDriveGenerator* Generator = Cast<AOpenDriveGenerator>(Actor))
+			{
+				Generator->SetGeometryBaked(Bake.bSucceeded);
+			}
+		}
 	}
 
 	// Save the level package directly. SaveCurrentLevel would act on whatever the editor has open,

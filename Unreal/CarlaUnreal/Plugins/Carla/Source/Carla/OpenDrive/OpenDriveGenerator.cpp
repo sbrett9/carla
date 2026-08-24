@@ -98,7 +98,7 @@ void AOpenDriveGenerator::GenerateRoadMesh()
         MeshData.Vertices,
         MeshData.Triangles,
         MeshData.Normals,
-        TArray<FVector2D>(), // UV0
+        MeshData.UV0,
         TArray<FLinearColor>(), // VertexColor
         TArray<FProcMeshTangent>(), // Tangents
         true); // Create collision
