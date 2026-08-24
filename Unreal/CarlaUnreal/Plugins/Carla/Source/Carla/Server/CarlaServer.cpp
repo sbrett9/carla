@@ -100,6 +100,34 @@ static std::vector<T> MakeVectorFromTArray(const TArray<Other> &Array)
   return {Array.GetData(), Array.GetData() + Array.Num()};
 }
 
+/// Every actor forming the road surface of a generated world.
+///
+/// Matches on the tag rather than on one concrete class so that the road can change representation
+/// without the layer RPCs quietly ceasing to find it: the runtime generator produces
+/// AProceduralMeshActor, while a road baked into a saved level is AStaticMeshActor. The class check
+/// is kept alongside the tag so a world generated before the tag existed still resolves.
+static TArray<AActor *> GetRoadSurfaceActors(UWorld *World)
+{
+  TArray<AActor *> Result;
+  if (World == nullptr)
+  {
+    return Result;
+  }
+  for (TActorIterator<AActor> It(World); It; ++It)
+  {
+    AActor *Actor = *It;
+    if (!IsValid(Actor))
+    {
+      continue;
+    }
+    if (Actor->ActorHasTag(AOpenDriveGenerator::RoadSurfaceTag) || Actor->IsA<AProceduralMeshActor>())
+    {
+      Result.Add(Actor);
+    }
+  }
+  return Result;
+}
+
 // =============================================================================
 // -- FCarlaServer::FPimpl -----------------------------------------------
 // =============================================================================
@@ -598,14 +626,13 @@ void FCarlaServer::FPimpl::BindActions()
     {
       RESPOND_ERROR("no world to toggle road rendering in");
     }
-    int32 Count = 0;
-    for (TActorIterator<AProceduralMeshActor> It(World); It; ++It)
+    const TArray<AActor *> RoadActors = GetRoadSurfaceActors(World);
+    for (AActor *RoadActor : RoadActors)
     {
-      if (!IsValid(*It)) continue;
-      (*It)->SetActorHiddenInGame(!rendered);
-      ++Count;
+      RoadActor->SetActorHiddenInGame(!rendered);
     }
-    UE_LOG(LogCarlaServer, Log, TEXT("set_road_rendered(%d): %d road mesh actor(s)"), rendered ? 1 : 0, Count);
+    UE_LOG(LogCarlaServer, Log, TEXT("set_road_rendered(%d): %d road mesh actor(s)"),
+        rendered ? 1 : 0, RoadActors.Num());
     return true;
   };
 
@@ -623,14 +650,13 @@ void FCarlaServer::FPimpl::BindActions()
     const FString Layer = cr::ToFString(layer);
     if (Layer == TEXT("road"))
     {
-      int32 Count = 0;
-      for (TActorIterator<AProceduralMeshActor> It(World); It; ++It)
+      const TArray<AActor *> RoadActors = GetRoadSurfaceActors(World);
+      for (AActor *RoadActor : RoadActors)
       {
-        if (!IsValid(*It)) continue;
-        (*It)->SetActorHiddenInGame(!visible);
-        ++Count;
+        RoadActor->SetActorHiddenInGame(!visible);
       }
-      UE_LOG(LogCarlaServer, Log, TEXT("set_layer_visible(road,%d): %d road mesh actor(s)"), visible ? 1 : 0, Count);
+      UE_LOG(LogCarlaServer, Log, TEXT("set_layer_visible(road,%d): %d road mesh actor(s)"),
+          visible ? 1 : 0, RoadActors.Num());
     }
     else if (Layer == TEXT("signals"))
     {
@@ -665,14 +691,13 @@ void FCarlaServer::FPimpl::BindActions()
     const FString Layer = cr::ToFString(layer);
     if (Layer == TEXT("road"))
     {
-      int32 Count = 0;
-      for (TActorIterator<AProceduralMeshActor> It(World); It; ++It)
+      const TArray<AActor *> RoadActors = GetRoadSurfaceActors(World);
+      for (AActor *RoadActor : RoadActors)
       {
-        if (!IsValid(*It)) continue;
-        (*It)->SetActorEnableCollision(enabled);
-        ++Count;
+        RoadActor->SetActorEnableCollision(enabled);
       }
-      UE_LOG(LogCarlaServer, Log, TEXT("set_layer_collision(road,%d): %d road mesh actor(s)"), enabled ? 1 : 0, Count);
+      UE_LOG(LogCarlaServer, Log, TEXT("set_layer_collision(road,%d): %d road mesh actor(s)"),
+          enabled ? 1 : 0, RoadActors.Num());
     }
     else
     {

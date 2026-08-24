@@ -196,8 +196,13 @@ void ACarlaGameModeBase::BeginPlay()
   // and the custom depth set to 3 used for semantic segmentation
   // The solution: Spawn a Decal.
   // It just works!
+  // Spawned transient: this decal is runtime rendering infrastructure recreated on every InitGame,
+  // not level content. Without the flag a world saved as a level would bake one in and gain another
+  // on each subsequent save.
+  FActorSpawnParameters DecalSpawnParams;
+  DecalSpawnParams.ObjectFlags = RF_Transient;
   World->SpawnActor<ADecalActor>(
-      FVector(0,0,-1000000), FRotator(0,0,0), FActorSpawnParameters());
+      FVector(0,0,-1000000), FRotator(0,0,0), DecalSpawnParams);
 
   ATrafficLightManager* Manager = GetTrafficLightManager();
   Manager->InitializeTrafficLights();
@@ -386,11 +391,17 @@ void ACarlaGameModeBase::SpawnActorFactories()
   auto *World = GetWorld();
   check(World != nullptr);
 
+  // Spawned transient: the factories are re-created and re-registered with the episode on every
+  // InitGame, so they are runtime infrastructure rather than level content. Saving a world as a
+  // level would otherwise bake in one set per save.
+  FActorSpawnParameters FactorySpawnParams;
+  FactorySpawnParams.ObjectFlags = RF_Transient;
+
   for (auto &FactoryClass : ActorFactories)
   {
     if (FactoryClass != nullptr)
     {
-      auto *Factory = World->SpawnActor<ACarlaActorFactory>(FactoryClass);
+      auto *Factory = World->SpawnActor<ACarlaActorFactory>(FactoryClass, FactorySpawnParams);
       if (Factory != nullptr)
       {
         Episode->RegisterActorFactory(*Factory);

@@ -183,7 +183,7 @@ void ATrafficLightManager::RegisterLightComponentFromOpenDRIVE(UTrafficLightComp
     // Search/create controller in the junction
     if(!TrafficControllers.Contains(ControllerId.c_str()))
     {
-      auto *NewTrafficLightController = NewObject<UTrafficLightController>();
+      auto *NewTrafficLightController = NewObject<UTrafficLightController>(TrafficLightGroup);
       NewTrafficLightController->SetControllerId(ControllerId.c_str());
       TrafficLightGroup->AddController(NewTrafficLightController);
       TrafficControllers.Add(ControllerId.c_str(), NewTrafficLightController);
@@ -200,7 +200,7 @@ void ATrafficLightManager::RegisterLightComponentFromOpenDRIVE(UTrafficLightComp
     TrafficGroups.Add(NewTrafficLightGroup->JunctionId, NewTrafficLightGroup);
     TrafficLightGroup = NewTrafficLightGroup;
 
-    auto *NewTrafficLightController = NewObject<UTrafficLightController>();
+    auto *NewTrafficLightController = NewObject<UTrafficLightController>(TrafficLightGroup);
     NewTrafficLightController->SetControllerId(FString::FromInt(TrafficLightControllerMissingId));
     NewTrafficLightController->SetRedTime(10);
     TrafficLightGroup->GetControllers().Add(NewTrafficLightController);
