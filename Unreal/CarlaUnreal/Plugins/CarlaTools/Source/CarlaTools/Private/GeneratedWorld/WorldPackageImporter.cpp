@@ -49,6 +49,26 @@ namespace
 		return FPaths::Combine(Dir, MapName + TEXT(".bareearth.bin"));
 	}
 
+	/** Load and parse a world manifest. Returns null and fills OutError when it cannot be read. */
+	TSharedPtr<FJsonObject> LoadManifestJson(
+		const FString& Dir, const FString& MapName, FString& OutError)
+	{
+		FString Text;
+		if (!FFileHelper::LoadFileToString(Text, *ManifestFile(Dir, MapName)))
+		{
+			OutError = FString::Printf(TEXT("no world manifest at %s"), *ManifestFile(Dir, MapName));
+			return nullptr;
+		}
+		TSharedPtr<FJsonObject> Json;
+		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Text);
+		if (!FJsonSerializer::Deserialize(Reader, Json) || !Json.IsValid())
+		{
+			OutError = TEXT("the world manifest is not readable JSON");
+			return nullptr;
+		}
+		return Json;
+	}
+
 	/** Read a number that the manifest may legitimately omit, leaving the default in place. */
 	double NumberOr(const TSharedPtr<FJsonObject>& Json, const TCHAR* Field, double Fallback)
 	{
@@ -141,19 +161,9 @@ UGeoreferencedWorldSettings* UWorldPackageImporter::CreateWorldSettingsAssets(
 		return nullptr;
 	}
 
-	FString ManifestText;
-	if (!FFileHelper::LoadFileToString(ManifestText, *ManifestFile(PackageDirectory, MapName)))
+	TSharedPtr<FJsonObject> Json = LoadManifestJson(PackageDirectory, MapName, OutFailureReason);
+	if (!Json.IsValid())
 	{
-		OutFailureReason = FString::Printf(
-			TEXT("no world manifest at %s"), *ManifestFile(PackageDirectory, MapName));
-		return nullptr;
-	}
-
-	TSharedPtr<FJsonObject> Json;
-	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ManifestText);
-	if (!FJsonSerializer::Deserialize(Reader, Json) || !Json.IsValid())
-	{
-		OutFailureReason = TEXT("the world manifest is not readable JSON");
 		return nullptr;
 	}
 
@@ -300,12 +310,80 @@ UGeoreferencedWorldSettings* UWorldPackageImporter::CreateWorldSettingsAssets(
 	return Settings;
 }
 
+FString UWorldPackageImporter::DescribeExistingImport(
+	const FString& MapName, const FString& DestinationFolder)
+{
+	const FString SettingsPath = DestinationFolder / (MapName + TEXT("_WorldSettings"));
+	if (!UEditorAssetLibrary::DoesAssetExist(DestinationFolder / MapName)
+		|| !UEditorAssetLibrary::DoesAssetExist(SettingsPath))
+	{
+		return FString();
+	}
+	const UGeoreferencedWorldSettings* Existing =
+		Cast<UGeoreferencedWorldSettings>(UEditorAssetLibrary::LoadAsset(SettingsPath));
+	if (!Existing)
+	{
+		return FString();
+	}
+	return Existing->SourceOsmFileName.IsEmpty()
+		? FString(TEXT("an earlier import of unrecorded origin"))
+		: Existing->SourceOsmFileName;
+}
+
 FWorldPackageImportResult UWorldPackageImporter::ImportWorldPackage(
 	const FString& PackageDirectory,
 	const FString& MapName,
-	const FString& DestinationFolder)
+	const FString& DestinationFolder,
+	bool bReplaceDifferentSource)
 {
 	FWorldPackageImportResult Result;
+
+	// Compare what is about to be written against what is already there, BEFORE anything is
+	// overwritten. Re-importing the same area is a refresh and proceeds; importing a different
+	// extract over an existing level would destroy it along with any hand editing, so that is
+	// refused unless the caller has said to replace it.
+	{
+		FString ManifestError;
+		const TSharedPtr<FJsonObject> Incoming =
+			LoadManifestJson(PackageDirectory, MapName, ManifestError);
+		if (!Incoming.IsValid())
+		{
+			Result.FailureReason = ManifestError;
+			return Result;
+		}
+		const FString IncomingSource = StringOr(Incoming, TEXT("SourceOsmFileName"));
+		const FString IncomingHash = StringOr(Incoming, TEXT("SourceOsmSha256"));
+
+		const FString SettingsPath = DestinationFolder / (MapName + TEXT("_WorldSettings"));
+		if (UEditorAssetLibrary::DoesAssetExist(DestinationFolder / MapName)
+			&& UEditorAssetLibrary::DoesAssetExist(SettingsPath))
+		{
+			if (const UGeoreferencedWorldSettings* Existing =
+					Cast<UGeoreferencedWorldSettings>(UEditorAssetLibrary::LoadAsset(SettingsPath)))
+			{
+				const bool bKnownSources =
+					!IncomingHash.IsEmpty() && !Existing->SourceOsmSha256.IsEmpty();
+				const bool bDifferent = bKnownSources && IncomingHash != Existing->SourceOsmSha256;
+				if (bDifferent && !bReplaceDifferentSource)
+				{
+					Result.FailureReason = FString::Printf(
+						TEXT("%s already exists and was built from '%s', but this package was built "
+						     "from '%s'. Importing would replace that level and any editing done to "
+						     "it. Import under a different name, or allow replacing a level built "
+						     "from a different source."),
+						*(DestinationFolder / MapName),
+						*(Existing->SourceOsmFileName.IsEmpty()
+							? FString(TEXT("an unrecorded source")) : Existing->SourceOsmFileName),
+						*(IncomingSource.IsEmpty()
+							? FString(TEXT("an unrecorded source")) : IncomingSource));
+					return Result;
+				}
+				UE_LOG(LogCarlaTools, Display,
+					TEXT("[WorldPackageImporter] replacing %s, previously built from '%s'"),
+					*(DestinationFolder / MapName), *Existing->SourceOsmFileName);
+			}
+		}
+	}
 
 	UGeoreferencedWorldSettings* Settings =
 		CreateWorldSettingsAssets(PackageDirectory, MapName, DestinationFolder, Result.FailureReason);

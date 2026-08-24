@@ -71,7 +71,17 @@ public:
 	static FWorldPackageImportResult ImportWorldPackage(
 		const FString& PackageDirectory,
 		const FString& MapName,
-		const FString& DestinationFolder = TEXT("/Game/Carla/Maps/Generated"));
+		const FString& DestinationFolder = TEXT("/Game/Carla/Maps/Generated"),
+		bool bReplaceDifferentSource = false);
+
+	/**
+	 * What a level at this destination was built from, or an empty string if there is none.
+	 *
+	 * Lets a caller tell a refresh of the same area from a replacement of it before anything is
+	 * overwritten.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Generated World")
+	static FString DescribeExistingImport(const FString& MapName, const FString& DestinationFolder);
 
 	/**
 	 * Create just the settings and per-cell field assets, without touching any level.

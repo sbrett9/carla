@@ -32,6 +32,27 @@ public:
 	FString DestinationFolder = TEXT("/Game/Carla/Maps/Generated");
 
 	/**
+	 * Allow replacing a level that was built from a different source extract.
+	 *
+	 * Off by default. Re-importing the same area always proceeds; this only governs the case where
+	 * the existing level came from different source data, where replacing it would discard that
+	 * level and any editing done to it.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generated World")
+	bool bReplaceLevelBuiltFromADifferentSource = false;
+
+	/**
+	 * Open the level once it has been imported.
+	 *
+	 * Off by default, and not merely as a preference: opening a level closes the world this panel
+	 * belongs to, which destroys the panel. It is done on a later tick so that does not happen while
+	 * the click that started it is still running, but the panel will still disappear when the level
+	 * changes. Leave it off to keep the panel open and load the level yourself.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generated World")
+	bool bOpenLevelAfterImport = false;
+
+	/**
 	 * Run the import described by the panel's fields and report the outcome in it.
 	 *
 	 * Exposed so the panel can be driven without a person clicking, which is how it is tested.
@@ -53,8 +74,28 @@ private:
 	/** Show a line in the panel and mirror it to the log, so a headless run leaves a trace. */
 	void Report(const FString& Message, bool bIsFailure);
 
+	/**
+	 * Lay the panel out and style it.
+	 *
+	 * Done here rather than in the Blueprint because the layout properties that matter -- slot
+	 * padding, fill alignment, the panel margin -- live on slots, which the editor's scripting
+	 * surface does not expose. Keeping them in code also means the panel's appearance is reviewable
+	 * as source rather than buried in a binary asset.
+	 */
+	void ApplyLayoutAndStyle();
+
 	// Bound by name to widgets of the same name in the Blueprint. A Blueprint missing any of these
 	// fails to compile, which is the intended contract: the panel's layout has to provide them.
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<class UCanvasPanel> RootPanel;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<class UVerticalBox> Layout;
+
+	/** Explains what the panel does. Created here, so the layout does not have to supply it. */
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> Description;
+
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UEditableTextBox> PackageDirectory;
 
@@ -63,6 +104,9 @@ private:
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UButton> ImportButton;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> ImportButtonLabel;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> StatusText;
