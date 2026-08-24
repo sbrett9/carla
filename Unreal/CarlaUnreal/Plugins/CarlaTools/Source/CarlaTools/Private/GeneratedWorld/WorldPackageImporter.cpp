@@ -323,6 +323,20 @@ FWorldPackageImportResult UWorldPackageImporter::ImportWorldPackage(
 	// it already carries the road generator, a player start and lighting, and deliberately carries
 	// no large-map manager, whose presence would switch on origin rebasing and strand the sandbox.
 	const FString LevelPackageName = DestinationFolder / MapName;
+
+	// Refuse to rewrite the level the editor currently has open. Replacing a world out from under
+	// the editor tears down everything that lives in it, including whatever invoked this.
+	if (const UWorld* OpenWorld = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr)
+	{
+		if (OpenWorld->GetOutermost()->GetName() == LevelPackageName)
+		{
+			Result.FailureReason = FString::Printf(
+				TEXT("%s is the level currently open; open a different level and import again"),
+				*LevelPackageName);
+			return Result;
+		}
+	}
+
 	if (UEditorAssetLibrary::DoesAssetExist(LevelPackageName))
 	{
 		UEditorAssetLibrary::DeleteAsset(LevelPackageName);
@@ -334,24 +348,29 @@ FWorldPackageImportResult UWorldPackageImporter::ImportWorldPackage(
 		return Result;
 	}
 
-	ULevelEditorSubsystem* LevelEditor = GEditor->GetEditorSubsystem<ULevelEditorSubsystem>();
-	if (!LevelEditor || !LevelEditor->LoadLevel(LevelPackageName))
+	// Edit the cloned level as an asset rather than opening it. Opening it would swap the editor's
+	// current world, which destroys everything owned by the outgoing one -- including the panel that
+	// started the import -- and the engine treats the resulting dangling references as fatal. The
+	// asset-cooking commandlets in this project populate levels the same way, without opening them.
+	UWorld* World = Cast<UWorld>(UEditorAssetLibrary::LoadAsset(LevelPackageName));
+	if (!World || !World->PersistentLevel)
 	{
-		Result.FailureReason = FString::Printf(TEXT("could not open %s"), *LevelPackageName);
+		Result.FailureReason = FString::Printf(TEXT("could not load %s"), *LevelPackageName);
 		return Result;
 	}
+	UPackage* LevelPackage = World->GetOutermost();
+	LevelPackage->FullyLoad();
 
-	UWorld* World = GEditor->GetEditorWorldContext().World();
-	if (!World)
+	// One initializer per level: replace any the template or a previous import left behind. The
+	// level's own actor list is used rather than an actor iterator, which expects a world the engine
+	// has initialised for play or editing.
+	for (int32 Index = World->PersistentLevel->Actors.Num() - 1; Index >= 0; --Index)
 	{
-		Result.FailureReason = TEXT("no editor world after opening the level");
-		return Result;
-	}
-
-	// One initializer per level: replace any the template or a previous import left behind.
-	for (TActorIterator<AGeoreferencedWorldInitializer> It(World); It; ++It)
-	{
-		if (IsValid(*It)) { It->Destroy(); }
+		AActor* Existing = World->PersistentLevel->Actors[Index];
+		if (IsValid(Existing) && Existing->IsA<AGeoreferencedWorldInitializer>())
+		{
+			Existing->Destroy();
+		}
 	}
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -379,10 +398,18 @@ FWorldPackageImportResult UWorldPackageImporter::ImportWorldPackage(
 		return Result;
 	}
 
-	UEditorLoadingAndSavingUtils::SaveDirtyPackages(/*bSaveMapPackages=*/true, /*bSaveContentPackages=*/true);
-	if (!LevelEditor->SaveCurrentLevel())
+	// Save the level package directly. SaveCurrentLevel would act on whatever the editor has open,
+	// which is deliberately not this level.
+	LevelPackage->MarkPackageDirty();
+	const FString LevelFileName = FPackageName::LongPackageNameToFilename(
+		LevelPackageName, FPackageName::GetMapPackageExtension());
+	FSavePackageArgs LevelSaveArgs;
+	LevelSaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+	LevelSaveArgs.SaveFlags = SAVE_NoError;
+	LevelSaveArgs.Error = GError;
+	if (!UPackage::SavePackage(LevelPackage, World, *LevelFileName, LevelSaveArgs))
 	{
-		Result.FailureReason = TEXT("could not save the level");
+		Result.FailureReason = FString::Printf(TEXT("could not save %s"), *LevelFileName);
 		return Result;
 	}
 
