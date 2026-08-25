@@ -446,6 +446,16 @@ function (
       -project=${CARLA_UE_PROJECT_PATH}
       -game
       -buildscw
+    # Deliberately packaged as LOOSE COOKED FILES: neither -pak nor -iostore is passed, which is what
+    # actually decides the output -- UAT ignores the UsePakFile / bGenerateChunks values in
+    # DefaultGame.ini, which say the opposite. Loose files are what let a world exported after the
+    # build be added by copying a directory into the package. Adding -pak or -iostore here would
+    # silently invalidate every already-exported level, so treat this as a decision rather than an
+    # oversight and change it together with those ini values, or not at all.
+    #
+    # -CreateReleaseVersion is deliberately absent too. It would archive the metadata needed to cook
+    # DLC against this build later, but it is incompatible with the -iterate below and is not needed
+    # for adding a level to a loose package.
     COMMAND
       ${CARLA_UE_UAT_COMMAND_PREFIX}
       BuildCookRun
