@@ -144,7 +144,17 @@ class TrafficController:
         else:
             logger.info("mode: ASYNCHRONOUS (server free-running)")
 
-    def __init__(self, world: carla.World, tm, args, staging: dict | None, blueprints: list, ring_sps: list, spawn_pool: list, floor_z: float):
+    def __init__(
+        self,
+        world: carla.World,
+        tm,
+        args,
+        staging: dict | None,
+        blueprints: list,
+        ring_sps: list,
+        spawn_pool: list,
+        floor_z: float,
+    ):
         self.world = world
         self.tm = tm
         self.args = args
@@ -172,9 +182,31 @@ class TrafficController:
         self.reconcile_ms = 0.0
         self.stuck_travel = []
         self.stalled_models = {}
-        
+        # Destinations beyond the entry ring, and the ones already known to route from a
+        # given entry point. See destination_candidates for why the ring alone is not
+        # enough to keep a sparse network populated.
+        try:
+            self.map_sps = list(world.get_map().get_spawn_points())
+        except Exception as e:  # the ring alone still works, just less well
+            self.logger.debug(f"failed to read map spawn points: {e}")
+            self.map_sps = []
+        self.reached_from = {}
+        # Same-side routes, and everything they are rated against. A vehicle is meant to
+        # cross the scene, so leaving by the side it entered from is a last resort and its
+        # share of all routes is held to --same-side-exit-rate. Counted since traffic was
+        # last switched on, so the rate describes this session rather than the process.
+        self.routes_session = 0
+        self.routes_same_side = 0
+        self.same_side_refused = set()
+        # Destinations already proven not to route from an entry. Without this every
+        # spawn re-tests the same failures, which is what made a cap on attempts
+        # necessary in the first place.
+        self.unreachable_from = {}
+
         if staging is not None:
-            self.logger.info(f"traffic controller initialized: {len(blueprints)} blueprints, {len(spawn_pool)} spawn points")
+            self.logger.info(
+                f"traffic controller initialized: {len(blueprints)} blueprints, {len(spawn_pool)} spawn points"
+            )
 
     def apply_want(self) -> None:
         """Reconcile actual on/off with the hotkey's desired state."""
@@ -218,8 +250,10 @@ class TrafficController:
             stub.available = False
             stub.reason = "no staging bounds (this world was loaded, not built from an OSM area)"
             return stub
-        
-        logger.info(f"staging bounds retrieved: {staging['max_x'] - staging['min_x']:.0f}x{staging['max_y'] - staging['min_y']:.0f}m, margin={staging['margin']:.0f}m")
+
+        logger.info(
+            f"staging bounds retrieved: {staging['max_x'] - staging['min_x']:.0f}x{staging['max_y'] - staging['min_y']:.0f}m, margin={staging['margin']:.0f}m"
+        )
 
         bp_lib = world.get_blueprint_library()
         blueprints = list(bp_lib.filter(args.filter))
@@ -227,7 +261,9 @@ class TrafficController:
         cars = [b for b in blueprints if not cls.is_two_wheeled(b)]
         if cars:
             blueprints = cars
-            logger.info(f"excluded two-wheeled vehicles: {len(blueprints)} car blueprints remaining")
+            logger.info(
+                f"excluded two-wheeled vehicles: {len(blueprints)} car blueprints remaining"
+            )
         if args.generation != "all":
             try:
                 gen = int(args.generation)
@@ -270,7 +306,9 @@ class TrafficController:
             )
         ]
         if len(spawn_pool) < 8:
-            logger.info(f"spawn pool too small ({len(spawn_pool)}), using all {len(ring_sps)} ring spawn points")
+            logger.info(
+                f"spawn pool too small ({len(spawn_pool)}), using all {len(ring_sps)} ring spawn points"
+            )
             spawn_pool = ring_sps
 
         cx, cy = cls.scene_center(staging)
@@ -290,7 +328,7 @@ class TrafficController:
             )
             return ctl
         logger.info("fade selftest passed: set_actor_fade available")
-            
+
         sw = staging["max_x"] - staging["min_x"]
         sh = staging["max_y"] - staging["min_y"]
         m = staging["margin"]
@@ -343,12 +381,16 @@ class TrafficController:
                 )
             else:
                 recovery = "keep replanning indefinitely"
-            logger.info("traffic: routes are planned before spawn; off-route recovery = %s", recovery)
+            logger.info(
+                "traffic: routes are planned before spawn; off-route recovery = %s", recovery
+            )
 
         if args.start_traffic:
             ctl.want_enabled = True
-        
-        logger.info(f"traffic controller ready: {len(blueprints)} blueprints, {len(spawn_pool)} spawn points, max={args.max} vehicles")
+
+        logger.info(
+            f"traffic controller ready: {len(blueprints)} blueprints, {len(spawn_pool)} spawn points, max={args.max} vehicles"
+        )
 
         return ctl
 
@@ -388,15 +430,81 @@ class TrafficController:
             pass
         return ok
 
-    def pick_destination(self, spawn_tf):
-        s_edge = self.edge_of(spawn_tf.location.x, spawn_tf.location.y, self.b)
-        cands = [
+    @staticmethod
+    def _place_key(location):
+        return (round(location.x, 1), round(location.y, 1))
+
+    def destination_candidates(self, spawn_tf):
+        """Destinations to try from this entry point, best first.
+
+        Traffic is meant to cross the scene, so a ring point on another edge comes first
+        and the far ones before the near.
+
+        The ring alone is not enough. Where a network is sparse, most pairs of entry
+        points have no route between them: on the Hormuz trunk highway the ring is three
+        distinct points, and 14 of the 20 ordered pairs between them cannot be routed,
+        because a divided highway clipped to a box offers no way to turn from one
+        carriageway to the other. Drawing only from that set left the map with no ambient
+        traffic at all, every spawn being skipped as unreachable. The same shape of
+        failure keeps vehicles off a motorway that crosses a denser map.
+
+        So the map's own spawn points follow the ring. A vehicle then still gets a route
+        across the scene rather than none, even if it ends inside the scene rather than
+        at the far edge.
+        """
+        spawn_edge = self.edge_of(spawn_tf.location.x, spawn_tf.location.y, self.b)
+        far_first = sorted(self.ring_sps, key=lambda sp: -spawn_tf.location.distance(sp.location))
+        other_edge = [
             sp
-            for sp in self.ring_sps
-            if self.edge_of(sp.location.x, sp.location.y, self.b) != s_edge
-        ] or self.ring_sps
-        cands.sort(key=lambda sp: -spawn_tf.location.distance(sp.location))
-        return random.choice(cands[: max(1, len(cands) // 2)])
+            for sp in far_first
+            if self.edge_of(sp.location.x, sp.location.y, self.b) != spawn_edge
+        ]
+        same_edge = [sp for sp in far_first if sp not in other_edge]
+        elsewhere = sorted(self.map_sps, key=lambda sp: -spawn_tf.location.distance(sp.location))
+
+        ordered, seen = [], {self._place_key(spawn_tf.location)}
+        for sp in other_edge + same_edge + elsewhere:
+            key = self._place_key(sp.location)
+            if key in seen:
+                continue
+            seen.add(key)
+            ordered.append(sp)
+        # Furthest first, across the ring and the map together. Preferring any ring point
+        # over any other destination sends a vehicle to the nearest edge rather than
+        # across the scene: entering at the west of the Hormuz highway, the far entry is
+        # unreachable because it is an entry, and the next ring point along is 2.0 km away
+        # on the same side, where the east exit it should be heading for is 4.9 km off.
+        # Distance says what the ring was standing in for, and the sort is stable, so a
+        # ring point still wins against anything equally far.
+        ordered.sort(key=lambda sp: -spawn_tf.location.distance(sp.location))
+        return ordered
+
+    def pick_destination(self, spawn_tf):
+        candidates = self.destination_candidates(spawn_tf)
+        if not candidates:
+            return spawn_tf
+        head = candidates[: max(1, min(len(candidates), self._ROUTE_DESTINATION_TRIES) // 2)]
+        return random.choice(head)
+
+    def same_side(self, spawn_tf, destination_tf):
+        """True when a destination lies on the same side of the area as the entry."""
+        return self.edge_of(
+            destination_tf.location.x, destination_tf.location.y, self.b
+        ) == self.edge_of(spawn_tf.location.x, spawn_tf.location.y, self.b)
+
+    def same_side_allowed(self):
+        """Whether a same-side exit may be used at all.
+
+        Only reached once every crossing has been tried and none could be routed, so by
+        the time this is asked a same-side exit is the only route there is. Rationing it
+        against a share of the session's routes would then be rationing against itself:
+        if the only routes available are same-side, their share is one, and any rate below
+        one refuses forever. The rate says whether doubling back is permitted; the search
+        order is what keeps it rare.
+
+        Zero means zero. An entry that can only reach its own side spawns nothing.
+        """
+        return float(getattr(self.args, "same_side_exit_rate", 0.0) or 0.0) > 0.0
 
     @staticmethod
     def safe_fade(v, hide):
@@ -441,12 +549,71 @@ class TrafficController:
         return residual <= 1e-3
 
     def plan_route_from(self, spawn_tf):
-        """Plan a route from a spawn point before spawning, skipping unreachable destinations."""
-        for _ in range(self._ROUTE_DESTINATION_TRIES):
-            destination = self.pick_destination(spawn_tf).location
+        """Plan a route from an entry point, walking candidates until one is reachable.
+
+        Re-drawing at random from a handful of ring points cannot find the route that
+        exists: with three distinct entry points, four draws keep asking about the same
+        two unreachable destinations. The candidates are walked instead.
+
+        They are biased to the far half, so a vehicle crosses the scene rather than
+        leaving by the nearest edge, but shuffled within it. Taking the single furthest
+        every time sends every vehicle from an entry down one line -- measured, eight
+        successive spawns from the west entry all chose the same destination -- when
+        several of the reachable ones are equally good exits.
+
+        A destination that routed from this entry is remembered and usually reused, since
+        each search is an A* over the road graph and repeating the failures every spawn is
+        expensive as well as fruitless. Some spawns look for a new one anyway, so the set
+        of known destinations grows instead of freezing on whichever was found first.
+        """
+        entry = self._place_key(spawn_tf.location)
+        known = self.reached_from.setdefault(entry, [])
+        dead = self.unreachable_from.setdefault(entry, set())
+        known_keys = {self._place_key(sp.location) for sp in known}
+
+        fresh = [
+            sp
+            for sp in self.destination_candidates(spawn_tf)
+            if self._place_key(sp.location) not in known_keys
+            and self._place_key(sp.location) not in dead
+        ]
+        far = fresh[: max(1, len(fresh) // 2)]
+        random.shuffle(far)
+        fresh = far + fresh[len(far) :]
+
+        exploring = not known or random.random() < self._DESTINATION_EXPLORE_CHANCE
+        remembered = random.sample(known, len(known))
+        order = fresh + remembered if exploring else remembered + fresh
+
+        # A same-side exit is considered only once every crossing has been proven not to
+        # route -- proven, not merely tried this once, which is what remembering the
+        # failures buys. Until then the crossings are the only candidates.
+        crossing = [sp for sp in order if not self.same_side(spawn_tf, sp)]
+        same_side = [sp for sp in order if self.same_side(spawn_tf, sp)]
+        if crossing:
+            candidates = crossing
+        elif same_side and self.same_side_allowed():
+            candidates = same_side
+        else:
+            candidates = []
+            if same_side and entry not in self.same_side_refused:
+                self.same_side_refused.add(entry)
+                self.logger.warning(
+                    "the entry at (%.0f, %.0f) can only reach destinations on the %s side "
+                    "it came in on, and --same-side-exit-rate is 0, so it spawns nothing. "
+                    "Give the rate a non-zero value to let traffic double back here.",
+                    spawn_tf.location.x,
+                    spawn_tf.location.y,
+                    self.edge_of(spawn_tf.location.x, spawn_tf.location.y, self.b),
+                )
+
+        deadline = time.perf_counter() + self._ROUTE_SEARCH_BUDGET_MS / 1000.0
+        for destination_tf in candidates:
+            if time.perf_counter() >= deadline:
+                break
             t0 = time.perf_counter()
             try:
-                route = self.tm.plan_route(spawn_tf.location, destination)
+                route = self.tm.plan_route(spawn_tf.location, destination_tf.location)
             except Exception as e:
                 self.logger.warning("route planning unavailable: %r", e)
                 return None
@@ -454,7 +621,28 @@ class TrafficController:
             self.route_searches += 1
             self.route_plan_ms_total += elapsed_ms
             self.route_plan_ms_max = max(self.route_plan_ms_max, elapsed_ms)
+            if route is None:
+                dead.add(self._place_key(destination_tf.location))
+                continue
             if route is not None:
+                key = self._place_key(destination_tf.location)
+                if key not in known_keys and len(known) < self._REMEMBERED_DESTINATIONS:
+                    known.append(destination_tf)
+                self.routes_session += 1
+                if self.same_side(spawn_tf, destination_tf):
+                    self.routes_same_side += 1
+                    if entry not in self.same_side_refused:
+                        self.same_side_refused.add(entry)
+                        self.logger.warning(
+                            "the entry at (%.0f, %.0f) has no route to another side, so "
+                            "its traffic leaves by the %s side it came in on. Permitted "
+                            "because --same-side-exit-rate is %g; set it to 0 to leave "
+                            "this entry unused instead.",
+                            spawn_tf.location.x,
+                            spawn_tf.location.y,
+                            self.edge_of(spawn_tf.location.x, spawn_tf.location.y, self.b),
+                            float(getattr(self.args, "same_side_exit_rate", 0.0) or 0.0),
+                        )
                 return route
         return None
 
@@ -476,6 +664,23 @@ class TrafficController:
     _SPAWN_CLEAR_PAD = 1.0
     _ASSUMED_EXTENT = (3.5, 1.1)
     _ROUTE_DESTINATION_TRIES = 4
+    # Destinations beyond the entry ring to try when no ring point can be reached. A
+    # sparse network needs this: the ring is where traffic should ideally end, not the
+    # only place it can.
+    # How long one spawn may spend searching for a route before giving up and letting the
+    # next frame carry on. A search costs about 10 ms on the networks measured and the
+    # synchronous tick is 50 ms at 20 fps, so this is roughly two searches: enough to
+    # place a vehicle whose destination is already known, small enough not to cost a
+    # frame. Nothing is lost by stopping, because both the successes and the failures are
+    # remembered -- an entry works through its candidates across successive spawns rather
+    # than re-testing them, so the cost of a cold entry is paid once and not per spawn.
+    _ROUTE_SEARCH_BUDGET_MS = 25.0
+    # How often a spawn looks for a destination it has not used from this entry before,
+    # rather than reusing one already known to route. Enough that the set keeps growing,
+    # rare enough that most spawns cost one search.
+    _DESTINATION_EXPLORE_CHANCE = 0.25
+    # How many known-good destinations to keep per entry point.
+    _REMEMBERED_DESTINATIONS = 8
 
     def occupied(self, x, y):
         """True if any tracked vehicle's footprint is close enough to (x, y) that spawning there would overlap it."""
@@ -627,6 +832,12 @@ class TrafficController:
         if not self.enabled:
             self.enabled = True
             self.last_spawn = 0.0
+            # A new session: the same-side share is rated against this session's routes.
+            # routes_planned is a lifetime count of routes applied and is left alone.
+            self.routes_session = 0
+            self.routes_same_side = 0
+            self.same_side_refused.clear()
+            self.unreachable_from.clear()
             self.logger.info(
                 f"traffic ON (up to {self.args.max}, "
                 f"{'routed' if self.args.route else 'autopilot'})"

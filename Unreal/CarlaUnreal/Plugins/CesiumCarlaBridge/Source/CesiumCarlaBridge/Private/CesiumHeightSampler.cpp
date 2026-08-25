@@ -16,6 +16,7 @@
 #include "Components/LightComponent.h"
 #include "Components/SkyLightComponent.h"
 #include "EngineUtils.h" // TActorIterator
+#include "HAL/PlatformTime.h" // FPlatformTime (sampling cost)
 #include "UObject/UnrealType.h" // FDoubleProperty (reflection read of CesiumSunSky angles)
 
 // Process-global sample state. One sample at a time, which is all the pipeline
@@ -27,6 +28,19 @@ namespace
 	TArray<FCesiumSampleHeightResult> GResults;
 	TArray<FString> GWarnings;
 	FString GStatus;
+
+	// What the sampling costs. A drape grid is issued one batch at a time, so a build
+	// that takes an hour gives no sign of whether it is sampling slowly or simply
+	// sampling a great many points -- 2,664,983 of them for a 10.7 km2 area at 2 m.
+	// The per-batch rate separates the two, and the running total is what to compare
+	// against the wall-clock the client reports for the whole build.
+	//
+	// Totals cover one map: ConfigureCesiumForOrigin resets them, and it runs once per
+	// build. The Cesium callback fires on the game thread, so no locking is required.
+	double GBatchStartSeconds = 0.0;
+	double GSampleSeconds = 0.0;
+	int64 GSampledPoints = 0;
+	int32 GBatchCount = 0;
 
 	void HandleHeightsSampled(
 		ACesium3DTileset* /*Tileset*/,
@@ -50,13 +64,55 @@ namespace
 			InResults.Num(), Ok, InWarnings.Num());
 		UE_LOG(LogTemp, Display, TEXT("[CesiumCarlaBridge] %s"), *GStatus);
 
+		const double BatchSeconds = FPlatformTime::Seconds() - GBatchStartSeconds;
+		GSampleSeconds += BatchSeconds;
+		GSampledPoints += InResults.Num();
+		++GBatchCount;
+		UE_LOG(LogTemp, Display,
+			TEXT("[CesiumCarlaBridge]   batch %d: %.3f s (%.0f point/s); "
+				 "%lld point(s) in %.1f s for this map"),
+			GBatchCount, BatchSeconds,
+			BatchSeconds > 0.0 ? InResults.Num() / BatchSeconds : 0.0,
+			GSampledPoints, GSampleSeconds);
+
+		// Per point, at Verbose. A drape grid is one point per cell over the whole map
+		// area, so this loop runs millions of times on a large one: 2,664,983 points for
+		// a 10.7 km2 area at 2 m, which at Display wrote 3.7 million lines and a 463 MB
+		// log. The formatting and synchronous file write per point dominated the sample,
+		// making a build that was progressing normally look like a hang.
+		//
+		// Enable with -LogCmds="LogTemp Verbose" when a specific point needs inspecting.
 		for (int32 i = 0; i < InResults.Num(); ++i)
 		{
 			const FCesiumSampleHeightResult& R = InResults[i];
-			UE_LOG(LogTemp, Display,
+			UE_LOG(LogTemp, Verbose,
 				TEXT("[CesiumCarlaBridge]   [%d] lon=%.7f lat=%.7f h=%.3f m ok=%d"),
 				i, R.LongitudeLatitudeHeight.X, R.LongitudeLatitudeHeight.Y,
 				R.LongitudeLatitudeHeight.Z, R.SampleSuccess ? 1 : 0);
+		}
+
+		// The points that failed are worth seeing without turning the rest on, since a
+		// height that did not sample is a hole in the drape. Capped, because a tileset
+		// that covers none of the area fails every point and would spam just as badly.
+		constexpr int32 MaxFailuresLogged = 20;
+		int32 Reported = 0;
+		for (int32 i = 0; i < InResults.Num(); ++i)
+		{
+			const FCesiumSampleHeightResult& R = InResults[i];
+			if (R.SampleSuccess)
+			{
+				continue;
+			}
+			if (Reported++ >= MaxFailuresLogged)
+			{
+				UE_LOG(LogTemp, Warning,
+					TEXT("[CesiumCarlaBridge]   ... and %d more points that did not sample"),
+					InResults.Num() - Ok - MaxFailuresLogged);
+				break;
+			}
+			UE_LOG(LogTemp, Warning,
+				TEXT("[CesiumCarlaBridge]   [%d] did not sample: lon=%.7f lat=%.7f"),
+				i, R.LongitudeLatitudeHeight.X, R.LongitudeLatitudeHeight.Y);
 		}
 		for (const FString& W : InWarnings)
 		{
@@ -179,6 +235,7 @@ bool UCesiumHeightSampler::RequestSample(
 
 	FCesiumSampleHeightMostDetailedCallback Callback;
 	Callback.BindStatic(&HandleHeightsSampled);
+	GBatchStartSeconds = FPlatformTime::Seconds();
 	Tileset->SampleHeightMostDetailed(LonLatHeight, Callback);
 	return true;
 }
@@ -231,6 +288,11 @@ bool UCesiumHeightSampler::ConfigureCesiumForOrigin(
 	int64 GroundIonAssetId,
 	bool bRefreshTileset)
 {
+	// One map's worth of sampling cost. This runs once per build, before any sampling.
+	GSampleSeconds = 0.0;
+	GSampledPoints = 0;
+	GBatchCount = 0;
+
 	UWorld* World = GEngine
 		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
 		: nullptr;

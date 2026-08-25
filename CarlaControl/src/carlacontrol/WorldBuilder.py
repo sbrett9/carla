@@ -6,6 +6,7 @@ import time
 from datetime import datetime
 
 from CarlaNet.Map import OsmConversionOptions
+from CarlaNet.Types.Rpc.Environment import OpendriveGenerationParameters
 from System.Collections.Generic import List
 
 from carlacontrol.OsmClipper import OsmClipper
@@ -21,6 +22,24 @@ class WorldBuilder:
         self.logger.info(f"world builder initialized: netconvert={netconvert_path}")
 
 
+    def make_opendrive_parameters(self, args):
+        """Road-mesh parameters for the generated world.
+
+        Matches the OSM defaults carlanet would otherwise apply — opposing lanes arrive as
+        separate roads, so walls are disabled to stop them colliding, and a larger maximum
+        road length keeps the mesh less fragmented — while exposing the two that govern
+        how junction surfaces are built.
+        """
+        return OpendriveGenerationParameters(
+            2.0,                      # vertex distance
+            500.0,                    # maximum road length before a road is split
+            0.0,                      # wall height
+            0.0,                      # extra width per side on junction driving lanes
+            True,                     # resolve the drivable network into one surface
+            True,                     # mesh visibility
+            True,                     # pedestrian navigation
+        )
+
     def make_osm_conversion_options(self, args):
         opts = OsmConversionOptions()
         opts.NetconvertPath = self.netconvert_path
@@ -32,8 +51,8 @@ class WorldBuilder:
         opts.GenerateTrafficLights = True
         opts.OriginLatitude = args.lat
         opts.OriginLongitude = args.lon
+        extra = List[str]()
         if not args.no_road_filter:
-            extra = List[str]()
             for a in [
                 "--keep-edges.by-vclass",
                 "passenger",
@@ -43,7 +62,21 @@ class WorldBuilder:
                 "true",
             ]:
                 extra.Add(a)
-            opts.ExtraArgs = extra
+        # Slide the road network sideways to sit on the roadway in the photoreal imagery, for a map
+        # whose road data is drawn beside it. netconvert shifts the projected coordinates and leaves
+        # the .xodr geoReference alone, so the Cesium georeference -- and every latitude/longitude
+        # the telemetry derives from it -- stays pinned; only the drivable surface moves. Elevation
+        # is then sampled at the shifted position, so the roads seat on the imagery they now cover.
+        # netconvert's y axis is northing, which the OpenDRIVE reader flips into CARLA's -Y = north.
+        if args.road_offset_east or args.road_offset_north:
+            for a in [
+                "--offset.x",
+                f"{args.road_offset_east:.6f}",
+                "--offset.y",
+                f"{args.road_offset_north:.6f}",
+            ]:
+                extra.Add(a)
+        opts.ExtraArgs = extra
         return opts
 
     def build_world(self, client, args) -> bool:
@@ -70,6 +103,12 @@ class WorldBuilder:
             f"  step       : {args.step} m   road-filter: "
             f"{'OFF' if args.no_road_filter else 'ON (drivable only)'}   height-align: {args.height_align}"
         )
+        if args.road_offset_east or args.road_offset_north:
+            self.logger.info(
+                f"  road offset: {args.road_offset_east:+.2f} m east, "
+                f"{args.road_offset_north:+.2f} m north "
+                "(moves the drivable surface only; imagery and telemetry stay pinned)"
+            )
         self.logger.info(
             f"  ion asset  : {args.ion_asset_id} (photoreal)  ground: {args.ground_asset_id}  "
             f"token: {'set' if args.ion_token else 'MISSING'}"
@@ -113,6 +152,7 @@ class WorldBuilder:
             args.ion_asset_id,
             ground_ion_asset_id=args.ground_asset_id,
             osm_options=self.make_osm_conversion_options(args),
+            parameters=self.make_opendrive_parameters(args),
             sample_step_meters=args.step,
             origin_height=args.origin_height,
             height_align=args.height_align,

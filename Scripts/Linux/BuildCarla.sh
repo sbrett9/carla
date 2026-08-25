@@ -22,6 +22,7 @@ script_dir="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")" && pwd)"
 carla_root="$(cd "$script_dir/../.." && pwd)"
 repo_parent="$(cd "$carla_root/.." && pwd)"
 
+skip_libcarla=0
 skip_unreal=0
 skip_carlanet=0
 skip_carlacontrol=0
@@ -38,6 +39,7 @@ Usage: BuildCarla.sh [options]
 Build CarlaUnrealEditor (C++) and/or CarlaNet (.NET) + the carlanet & carlacontrol Python wheels.
 
 Options:
+  --skip-libcarla            Skip the LibCarla (C++) build the Carla plugin links.
   --skip-unreal              Skip the CarlaUnrealEditor C++ build.
   --clean-unreal, --rebuild  Wipe editor + plugin Intermediate/Binaries first for a full
                              from-scratch rebuild (keeps the built cesium-native ThirdParty).
@@ -63,6 +65,7 @@ EOF
 # ── Parse arguments ─────────────────────────────────────────────────────────
 while [ $# -gt 0 ]; do
     case "$1" in
+        --skip-libcarla)        skip_libcarla=1 ;;
         --skip-unreal)          skip_unreal=1 ;;
         --clean-unreal|--rebuild) clean_unreal=1 ;;
         --skip-carlanet)        skip_carlanet=1 ;;
@@ -125,7 +128,39 @@ net_result=0
 ctl_result=0
 
 # ============================================================================
-#  1) Unreal — CarlaUnrealEditor (C++: Carla plugin, CesiumCarlaBridge, etc.)
+#  1) LibCarla — the C++ the Carla plugin links against
+# ============================================================================
+# The Carla plugin links Build/LibCarla/libcarla-server.a, listed in the plugin's
+# Libraries.def. That library holds the server-side road model — OpenDriveParser, Map,
+# Lane and MeshFactory — which is what turns an .xodr into the road mesh inside the
+# engine. It is CARLA's own source, not a third-party dependency, so an edit to it has
+# to be compiled here: without this the Unreal step below happily relinks the plugin
+# against whatever carla-server was last produced, and a C++ change appears to have had
+# no effect at all.
+lib_result=0
+if [ "$skip_libcarla" -eq 0 ]; then
+    echo "============================================================"
+    echo " Building LibCarla (carla-server)"
+    echo "============================================================"
+    if [ ! -f "$carla_root/Build/CMakeCache.txt" ]; then
+        echo "No CMake cache in Build/ — run CarlaSetup.sh first to configure it." | tee -a "$log_file"
+        exit 1
+    fi
+    cmake --build "$carla_root/Build" --target carla-server 2>&1 | tee -a "$log_file"
+    lib_result=${PIPESTATUS[0]}
+    if [ "$lib_result" -ne 0 ]; then
+        echo "" | tee -a "$log_file"
+        echo "LIBCARLA BUILD FAILED" | tee -a "$log_file"
+        exit "$lib_result"
+    fi
+    echo "" | tee -a "$log_file"
+    echo "LIBCARLA BUILD SUCCEEDED" | tee -a "$log_file"
+else
+    echo "Skipping LibCarla build (--skip-libcarla)."
+fi
+
+# ============================================================================
+#  2) Unreal — CarlaUnrealEditor (C++: Carla plugin, CesiumCarlaBridge, etc.)
 # ============================================================================
 if [ "$skip_unreal" -eq 0 ]; then
     echo "============================================================"
@@ -218,7 +253,7 @@ else
 fi
 
 # ============================================================================
-#  2) CarlaNet — .NET publish into the python shim, then build/install wheel.
+#  3) CarlaNet — .NET publish into the python shim, then build/install wheel.
 #     Delegates to CarlaNet/python/build_wheel.sh (the Linux peer of build_wheel.ps1),
 #     so the wheel logic stays in one place. Runs even if the Unreal build failed.
 # ============================================================================
@@ -251,7 +286,7 @@ else
 fi
 
 # ============================================================================
-#  3) CarlaControl — carlacontrol Python wheel (the run_SCTMV.py client package).
+#  4) CarlaControl — carlacontrol Python wheel (the run_SCTMV.py client package).
 #     Delegates to CarlaControl/build_wheel.sh. Pure Python (no .NET/native step),
 #     independent of both builds above.
 # ============================================================================

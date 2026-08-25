@@ -6,6 +6,13 @@
 
 #include <carla/road/MeshFactory.h>
 
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstdint>
+#include <limits>
+#include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include <carla/geom/Vector3D.h>
@@ -1128,6 +1135,665 @@ std::map<road::Lane::LaneType , std::vector<std::unique_ptr<Mesh>>> MeshFactory:
     }
 
     return std::make_unique<Mesh>(out_mesh);
+  }
+
+
+namespace {
+
+  /// A cell of the junction height field, addressed by integer grid coordinates.
+  struct Cell {
+    int col;
+    int row;
+    bool operator==(const Cell &rhs) const { return col == rhs.col && row == rhs.row; }
+  };
+
+  struct CellHash {
+    size_t operator()(const Cell &c) const {
+      return (static_cast<size_t>(static_cast<uint32_t>(c.col)) << 32) ^
+             static_cast<uint32_t>(c.row);
+    }
+  };
+
+  /// True when a point lies inside a convex quad given in order.
+  bool InsideQuad(const std::array<geom::Vector2D, 4> &quad, float x, float y) {
+    int sign = 0;
+    for (size_t i = 0; i < quad.size(); ++i) {
+      const auto &a = quad[i];
+      const auto &b = quad[(i + 1) % quad.size()];
+      const float cross = (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x);
+      if (std::abs(cross) < 1e-9f) {
+        continue;
+      }
+      const int side = cross > 0.0f ? 1 : -1;
+      if (sign == 0) {
+        sign = side;
+      } else if (side != sign) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+
+  /// How many workers to split a piece of work of this size across.
+  size_t WorkerCount(const size_t count) {
+    if (count < 2u) {
+      return 1u;
+    }
+    unsigned int available = std::thread::hardware_concurrency();
+    if (available == 0u) {
+      available = 1u;
+    }
+    return std::min<size_t>(available, count);
+  }
+
+  /// Run `body(begin, end)` over [0, count), split into one contiguous range per worker
+  /// and run on this thread together with the others.
+  ///
+  /// Resolving the surface is the part of building a road network that scales with the
+  /// ground the network covers rather than with the roads on it, so it is where a large
+  /// map spends its time. The layer split is the one stage that cannot be divided --
+  /// growth claims cells in an order that decides which sheet they land in -- but the
+  /// stages around it are per-cell stencils and per-item builds, and those are what this
+  /// splits. Measured on the resolve as a whole, the sequential split holds the ceiling
+  /// near three times regardless of how many cores are thrown at the rest.
+  ///
+  /// Ranges are contiguous and fixed, so every worker sees the same items on every run
+  /// and a float sum is always accumulated in the same order: the surface a build
+  /// produces does not depend on how many cores it had.
+  template <typename Body>
+  void ParallelRanges(const size_t count, const Body &body) {
+    if (count == 0u) {
+      return;
+    }
+    const size_t workers = WorkerCount(count);
+    const size_t chunk = (count + workers - 1u) / workers;
+    if (workers <= 1u) {
+      body(size_t(0u), count);
+      return;
+    }
+    std::vector<std::thread> threads;
+    threads.reserve(workers - 1u);
+    for (size_t worker = 1u; worker < workers; ++worker) {
+      const size_t begin = std::min(count, chunk * worker);
+      const size_t end = std::min(count, begin + chunk);
+      if (begin >= end) {
+        break;
+      }
+      threads.emplace_back([&body, begin, end] { body(begin, end); });
+    }
+    body(size_t(0u), std::min(count, chunk));
+    for (auto &thread : threads) {
+      thread.join();
+    }
+  }
+
+  /// True when a height fits every neighbour the layer already holds, diagonals
+  /// included — those share a corner vertex just as edge neighbours do.
+  bool AgreesWithNeighbours(
+      const std::unordered_map<Cell, float, CellHash> &layer,
+      const Cell &cell,
+      const float height,
+      const float separation) {
+    for (int dc = -1; dc <= 1; ++dc) {
+      for (int dr = -1; dr <= 1; ++dr) {
+        if (dc == 0 && dr == 0) {
+          continue;
+        }
+        const auto held = layer.find(Cell{cell.col + dc, cell.row + dr});
+        if (held != layer.end() && std::abs(held->second - height) > separation) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  /// Pave the slivers left where two lane quads meet.
+  ///
+  /// Adjacent lanes derive their shared boundary independently, from different reference
+  /// lines, so the two edges disagree by a fraction of a millimetre. A cell centre landing
+  /// inside that sliver is claimed by neither quad and the surface is left with a crack
+  /// through it. Measured on Arapahoe_I25: 663 cells map-wide, 166 m2, pinched between
+  /// paving on opposite sides — narrower than a wheel and directly in the road.
+  ///
+  /// A cell is paved when paving lies close on two opposite sides and the two agree in
+  /// height. That is what makes this safe to run over the whole network rather than inside
+  /// junctions: it can only bridge a crack narrower than `crack_span`, and only where both
+  /// sides already sit at the same height, so it cannot close the space between a deck and
+  /// the road beneath it, nor round off the end of a road.
+  void PaveNarrowCracks(
+      std::unordered_map<Cell, float, CellHash> &layer,
+      const float cell,
+      const float crack_span,
+      const float fill_tolerance) {
+    const int reach = std::max(1, static_cast<int>(std::lround(crack_span / cell)));
+    const std::array<Cell, 4> steps = {Cell{1, 0}, Cell{-1, 0}, Cell{0, 1}, Cell{0, -1}};
+    const std::array<Cell, 2> axes = {Cell{1, 0}, Cell{0, 1}};
+
+    for (int pass = 0; pass < reach; ++pass) {
+      std::unordered_map<Cell, bool, CellHash> candidates;
+      for (const auto &entry : layer) {
+        for (const auto &step : steps) {
+          const Cell key{entry.first.col + step.col, entry.first.row + step.row};
+          if (layer.count(key) == 0) {
+            candidates[key] = true;
+          }
+        }
+      }
+
+      // Every candidate is read-only against `layer`, so they can be tested at once and
+      // the results merged before any of them is paved.
+      std::vector<Cell> pending;
+      pending.reserve(candidates.size());
+      for (const auto &candidate : candidates) {
+        pending.push_back(candidate.first);
+      }
+      const size_t crack_workers = WorkerCount(pending.size());
+      std::vector<std::vector<std::pair<Cell, float>>> discovered(crack_workers);
+      const size_t crack_chunk = (pending.size() + crack_workers - 1u) / crack_workers;
+      ParallelRanges(pending.size(), [&](const size_t begin, const size_t end) {
+      auto &into =
+          discovered[std::min(crack_workers - 1u, begin / std::max<size_t>(1u, crack_chunk))];
+      for (size_t c = begin; c < end; ++c) {
+        const Cell &key = pending[c];
+        for (const auto &axis : axes) {
+          const float *near_side = nullptr;
+          const float *far_side = nullptr;
+          for (int distance = 1; distance <= reach; ++distance) {
+            if (near_side == nullptr) {
+              const auto found = layer.find(
+                  Cell{key.col + axis.col * distance, key.row + axis.row * distance});
+              if (found != layer.end()) {
+                near_side = &found->second;
+              }
+            }
+            if (far_side == nullptr) {
+              const auto found = layer.find(
+                  Cell{key.col - axis.col * distance, key.row - axis.row * distance});
+              if (found != layer.end()) {
+                far_side = &found->second;
+              }
+            }
+          }
+          if (near_side == nullptr || far_side == nullptr ||
+              std::abs(*near_side - *far_side) > fill_tolerance) {
+            continue;
+          }
+          const float height = (*near_side + *far_side) * 0.5f;
+          // The two sides agreeing does not mean the height suits what else the cell
+          // touches: a crack running along the lip of a deck has the deck on one diagonal
+          // and the road below on the other, and bridging it there leaves a step standing
+          // in the surface.
+          if (!AgreesWithNeighbours(layer, key, height, fill_tolerance)) {
+            continue;
+          }
+          into.emplace_back(key, height);
+          break;
+        }
+      }
+      });
+
+      bool added = false;
+      for (const auto &batch : discovered) {
+        for (const auto &addition : batch) {
+          layer[addition.first] = addition.second;
+          added = true;
+        }
+      }
+      if (!added) {
+        break;
+      }
+    }
+  }
+
+  /// Pave the gaps a junction's turning paths leave between them.
+  ///
+  /// OpenDRIVE models a junction as turning paths — a u-turn, some left turns, the
+  /// straight-throughs, the rights — and between them sits asphalt no lane ever covers.
+  /// A vehicle drops through it, since collision uses these triangles directly.
+  ///
+  /// A gap counts as interior when paving lies within reach in all four directions. That
+  /// separates an intersection from a median: the interior of a junction is ringed by
+  /// turning paths so every ray hits one, while a median between two approach
+  /// carriageways runs away down the road and the ray along it finds nothing. A convex
+  /// hull of the junction cannot tell them apart — measured on Arapahoe_I25, the median
+  /// beside junction 114 lies inside that junction's own hull.
+  ///
+  /// The test is local, costing a bounded ray rather than a flood across the empty space
+  /// around the network, which is most of a road map's bounding box.
+  ///
+  /// Filling uses its own tolerance rather than the layer separation. That asks whether
+  /// two cells belong to one sheet, which a deck and the ramp beside it can, while this
+  /// asks whether bridging a gap would invent a slope.
+  void PaveEnclosedGaps(
+      std::unordered_map<Cell, float, CellHash> &layer,
+      const float cell,
+      const float max_gap_area,
+      const float fill_tolerance) {
+    const size_t limit = static_cast<size_t>(
+        std::max(1.0f, max_gap_area / (cell * cell)));
+    const std::array<Cell, 4> steps = {Cell{1, 0}, Cell{-1, 0}, Cell{0, 1}, Cell{0, -1}};
+
+    // Flood each gap, and keep it only if it closes under the cap.
+    //
+    // A gap the paving closes around is a hole a wheel drops into. A gap that reaches the
+    // outside is the space beside the road — a median between two approach carriageways,
+    // the verge, the space between a road and the ramp beside it — and paving those is
+    // what raised islands and spikes standing in the scene.
+    //
+    // Flooding answers that directly, where casting a ray in a few directions could not:
+    // rays report what a gap is near, not whether it is closed, so a median that happens
+    // to run past a junction reads the same as the junction's interior. Measured on
+    // Arapahoe_I25, the median, the jut and the spike are not enclosed at all, so this
+    // excludes them without needing to know which paving belongs to a junction.
+    //
+    // The cap is what stops the open ground outside the network counting as one enormous
+    // gap, and what keeps this bounded: a flood that reaches the cap is abandoned, and
+    // every cell it reached is abandoned with it so the next boundary cell does not walk
+    // the same ground again.
+    std::unordered_map<Cell, bool, CellHash> done;
+    std::vector<Cell> interior;
+    for (const auto &entry : layer) {
+      for (const auto &step : steps) {
+        const Cell seed{entry.first.col + step.col, entry.first.row + step.row};
+        if (layer.count(seed) != 0 || done.count(seed) != 0) {
+          continue;
+        }
+        std::unordered_map<Cell, bool, CellHash> region;
+        std::vector<Cell> frontier{seed};
+        region[seed] = true;
+        bool overflowed = false;
+        while (!frontier.empty()) {
+          if (region.size() > limit) {
+            overflowed = true;
+            break;
+          }
+          const Cell current = frontier.back();
+          frontier.pop_back();
+          for (const auto &edge : steps) {
+            const Cell key{current.col + edge.col, current.row + edge.row};
+            if (layer.count(key) == 0 && region.count(key) == 0) {
+              region[key] = true;
+              frontier.push_back(key);
+            }
+          }
+        }
+        for (const auto &held : region) {
+          done[held.first] = true;
+          if (!overflowed) {
+            interior.push_back(held.first);
+          }
+        }
+      }
+    }
+
+    // Work inwards from the surface around each gap, so every cell takes the height of
+    // what it already touches.
+    std::vector<Cell> remaining = std::move(interior);
+    while (!remaining.empty()) {
+      std::vector<Cell> still_open;
+      bool progressed = false;
+      for (const auto &key : remaining) {
+        float total = 0.0f;
+        int count = 0;
+        for (const auto &step : steps) {
+          const auto found = layer.find(Cell{key.col + step.col, key.row + step.row});
+          if (found != layer.end()) {
+            total += found->second;
+            ++count;
+          }
+        }
+        if (count == 0) {
+          still_open.push_back(key);
+          continue;
+        }
+        progressed = true;
+        const float height = total / static_cast<float>(count);
+        if (AgreesWithNeighbours(layer, key, height, fill_tolerance)) {
+          layer[key] = height;
+        }
+      }
+      if (!progressed) {
+        break;
+      }
+      remaining.swap(still_open);
+    }
+  }
+
+  /// Take the flips out of the resolved height field.
+  ///
+  /// Where two connectors overlap and disagree, the lower of the two wins, and which one
+  /// is lower can change from cell to cell — leaving a field that jumps by the amount the
+  /// two disagreed, measured at up to 0.47 m across a single 0.5 m cell. Averaging each
+  /// cell against its neighbours removes those flips.
+  ///
+  /// This is not the junction smoothing it replaces. That one blended separate
+  /// overlapping ribbons into each other and left the mesh disagreeing with the profile
+  /// the waypoints follow. This runs inside one already single-valued surface, so it
+  /// cannot reintroduce a stack, and it stays within a layer, so a deck is never pulled
+  /// towards the road beneath it.
+  void RelaxLayer(
+      std::unordered_map<Cell, float, CellHash> &layer,
+      const int passes) {
+    if (passes <= 0 || layer.empty()) {
+      return;
+    }
+    // Resolve the neighbourhood once into indices, then run the passes over plain
+    // arrays. Relaxing moves heights but never changes which cells exist, so walking
+    // the map by hash on every pass re-answers a question whose answer cannot have
+    // changed -- four lookups per cell per pass, fourteen million of them on a
+    // map-wide sheet. Indices also make each pass a flat loop over contiguous memory,
+    // which is what allows it to be split across workers at all.
+    std::vector<Cell> keys;
+    std::vector<float> height;
+    keys.reserve(layer.size());
+    height.reserve(layer.size());
+    std::unordered_map<Cell, size_t, CellHash> index_of;
+    index_of.reserve(layer.size());
+    for (const auto &entry : layer) {
+      index_of[entry.first] = keys.size();
+      keys.push_back(entry.first);
+      height.push_back(entry.second);
+    }
+
+    const std::array<Cell, 4> neighbours = {
+        Cell{1, 0}, Cell{-1, 0}, Cell{0, 1}, Cell{0, -1}};
+    const size_t absent = ~static_cast<size_t>(0u);
+    std::vector<std::array<size_t, 4>> around(keys.size());
+    ParallelRanges(keys.size(), [&](const size_t begin, const size_t end) {
+      for (size_t i = begin; i < end; ++i) {
+        for (size_t n = 0u; n < neighbours.size(); ++n) {
+          const auto found = index_of.find(
+              Cell{keys[i].col + neighbours[n].col, keys[i].row + neighbours[n].row});
+          around[i][n] = found == index_of.end() ? absent : found->second;
+        }
+      }
+    });
+
+    std::vector<float> next(height.size());
+    for (int pass = 0; pass < passes; ++pass) {
+      ParallelRanges(height.size(), [&](const size_t begin, const size_t end) {
+        for (size_t i = begin; i < end; ++i) {
+          float total = height[i];
+          int count = 1;
+          for (const size_t neighbour : around[i]) {
+            if (neighbour != absent) {
+              total += height[neighbour];
+              ++count;
+            }
+          }
+          next[i] = total / static_cast<float>(count);
+        }
+      });
+      height.swap(next);
+    }
+
+    for (size_t i = 0u; i < keys.size(); ++i) {
+      layer[keys[i]] = height[i];
+    }
+  }
+
+  /// Emit one layer as tiles of two triangles per cell.
+  ///
+  /// Corner heights are resolved across the whole layer before any tile is built, and
+  /// each corner averages the cells meeting there. Neighbouring tiles therefore compute
+  /// an identical position and height for every vertex on their shared edge, so the
+  /// tiling introduces no seam — and within a tile, neighbouring quads share the vertex
+  /// itself, so the surface is continuous by construction.
+  void AppendLayerTiles(
+      std::vector<std::unique_ptr<Mesh>> &out_tiles,
+      const std::unordered_map<Cell, float, CellHash> &layer,
+      const float cell,
+      const float tile_size) {
+    std::unordered_map<Cell, std::pair<float, int>, CellHash> corners;
+    const std::array<Cell, 4> offsets = {Cell{0, 0}, Cell{1, 0}, Cell{0, 1}, Cell{1, 1}};
+    for (const auto &entry : layer) {
+      for (const auto &offset : offsets) {
+        auto &corner = corners[Cell{entry.first.col + offset.col, entry.first.row + offset.row}];
+        corner.first += entry.second;
+        corner.second += 1;
+      }
+    }
+
+    const int cells_per_tile = std::max(1, static_cast<int>(std::lround(tile_size / cell)));
+    std::unordered_map<Cell, std::vector<Cell>, CellHash> tiles;
+    for (const auto &entry : layer) {
+      tiles[Cell{
+          static_cast<int>(std::floor(static_cast<float>(entry.first.col) / cells_per_tile)),
+          static_cast<int>(std::floor(static_cast<float>(entry.first.row) / cells_per_tile))}]
+          .push_back(entry.first);
+    }
+
+    // A tile shares its edge vertices with its neighbours through `corners`, which is
+    // already resolved across the whole layer, so no tile needs to see another and they
+    // can be built at once.
+    std::vector<const std::vector<Cell> *> ordered;
+    ordered.reserve(tiles.size());
+    for (const auto &tile : tiles) {
+      ordered.push_back(&tile.second);
+    }
+    std::vector<std::unique_ptr<Mesh>> built(ordered.size());
+    ParallelRanges(ordered.size(), [&](const size_t begin, const size_t end) {
+    for (size_t t = begin; t < end; ++t) {
+      const std::vector<Cell> &tile_cells = *ordered[t];
+      Mesh mesh;
+      mesh.AddMaterial("road");
+      std::unordered_map<Cell, size_t, CellHash> index_of;
+      for (const auto &key : tile_cells) {
+        for (const auto &offset : offsets) {
+          const Cell corner{key.col + offset.col, key.row + offset.row};
+          if (index_of.count(corner) != 0) {
+            continue;
+          }
+          const size_t next = index_of.size();
+          index_of[corner] = next;
+          const auto &sum = corners.at(corner);
+          mesh.AddVertex(Mesh::vertex_type(
+              corner.col * cell,
+              corner.row * cell,
+              sum.first / static_cast<float>(sum.second)));
+        }
+      }
+      for (const auto &key : tile_cells) {
+        const auto a = index_of.at(key);
+        const auto b = index_of.at(Cell{key.col + 1, key.row});
+        const auto c = index_of.at(Cell{key.col + 1, key.row + 1});
+        const auto d = index_of.at(Cell{key.col, key.row + 1});
+        mesh.AddIndex(static_cast<Mesh::index_type>(a + 1));
+        mesh.AddIndex(static_cast<Mesh::index_type>(b + 1));
+        mesh.AddIndex(static_cast<Mesh::index_type>(c + 1));
+        mesh.AddIndex(static_cast<Mesh::index_type>(a + 1));
+        mesh.AddIndex(static_cast<Mesh::index_type>(c + 1));
+        mesh.AddIndex(static_cast<Mesh::index_type>(d + 1));
+      }
+      mesh.EndMaterial();
+      built[t] = std::make_unique<Mesh>(std::move(mesh));
+    }
+    });
+    for (auto &mesh : built) {
+      out_tiles.push_back(std::move(mesh));
+    }
+  }
+
+} // namespace
+
+
+  std::vector<std::unique_ptr<Mesh>> MeshFactory::ResolveDrivableSurface(
+      const std::vector<std::unique_ptr<Mesh>> &lane_meshes,
+      const float tile_size) const {
+    const float cell = road_param.junction_cell_size;
+    const float separation = road_param.junction_layer_separation;
+
+    // 1. Sample every lane strip into the height field. A lane mesh stores its
+    //    vertices as consecutive right/left pairs along the lane, so each pair of
+    //    stations is one quad.
+    // Rasterised across workers into a height field each, then merged. A worker takes a
+    // run of lane meshes and never looks at another's, so nothing is shared while the
+    // quads are being tested; the merge that follows costs one move per cell touched.
+    // Order does not matter to the result: the clustering below sorts each cell's
+    // heights before reducing them.
+    const size_t sample_workers = WorkerCount(lane_meshes.size());
+    std::vector<std::unordered_map<Cell, std::vector<float>, CellHash>> partials(
+        sample_workers);
+    const size_t sample_chunk = (lane_meshes.size() + sample_workers - 1u) / sample_workers;
+    ParallelRanges(lane_meshes.size(), [&](const size_t begin, const size_t end) {
+    auto &into = partials[std::min(sample_workers - 1u, begin / std::max<size_t>(1u, sample_chunk))];
+    for (size_t mesh_index = begin; mesh_index < end; ++mesh_index) {
+      const auto &mesh = lane_meshes[mesh_index];
+      const auto &vertices = mesh->GetVertices();
+      for (size_t i = 0; i + 3 < vertices.size(); i += 2) {
+        const std::array<geom::Vector2D, 4> quad = {
+            geom::Vector2D(vertices[i].x, vertices[i].y),
+            geom::Vector2D(vertices[i + 1].x, vertices[i + 1].y),
+            geom::Vector2D(vertices[i + 3].x, vertices[i + 3].y),
+            geom::Vector2D(vertices[i + 2].x, vertices[i + 2].y)};
+        const float height =
+            (vertices[i].z + vertices[i + 1].z + vertices[i + 2].z + vertices[i + 3].z) / 4.0f;
+
+        float min_x = quad[0].x, max_x = quad[0].x, min_y = quad[0].y, max_y = quad[0].y;
+        for (const auto &v : quad) {
+          min_x = std::min(min_x, v.x); max_x = std::max(max_x, v.x);
+          min_y = std::min(min_y, v.y); max_y = std::max(max_y, v.y);
+        }
+        for (int col = static_cast<int>(std::floor(min_x / cell)) - 1;
+             col <= static_cast<int>(std::floor(max_x / cell)) + 1; ++col) {
+          for (int row = static_cast<int>(std::floor(min_y / cell)) - 1;
+               row <= static_cast<int>(std::floor(max_y / cell)) + 1; ++row) {
+            if (InsideQuad(quad, col * cell, row * cell)) {
+              into[Cell{col, row}].push_back(height);
+            }
+          }
+        }
+      }
+    }
+    });
+
+    std::unordered_map<Cell, std::vector<float>, CellHash> samples;
+    for (auto &partial : partials) {
+      for (auto &entry : partial) {
+        auto &into = samples[entry.first];
+        if (into.empty()) {
+          into = std::move(entry.second);
+        } else {
+          into.insert(into.end(), entry.second.begin(), entry.second.end());
+        }
+      }
+    }
+    std::vector<std::unique_ptr<Mesh>> out_tiles;
+    if (samples.empty()) {
+      return out_tiles;
+    }
+
+    // 2. Reduce each cell to one height per layer. A surface model can place a
+    //    sample above the ground but never below it, so a cluster is represented by
+    //    its lowest sample.
+    std::unordered_map<Cell, std::vector<float>, CellHash> clustered;
+    for (auto &entry : samples) {
+      auto heights = entry.second;
+      std::sort(heights.begin(), heights.end());
+      std::vector<float> representatives;
+      float lowest = heights.front();
+      float previous = heights.front();
+      for (size_t i = 1; i < heights.size(); ++i) {
+        if (heights[i] - previous > separation) {
+          representatives.push_back(lowest);
+          lowest = heights[i];
+        }
+        previous = heights[i];
+      }
+      representatives.push_back(lowest);
+      clustered[entry.first] = std::move(representatives);
+    }
+
+    // 3. Grow layers across neighbouring cells, so a ramp climbing away from the
+    //    ground stays attached to the deck it leads to rather than the road it crosses.
+    std::unordered_map<Cell, std::vector<char>, CellHash> claimed;
+    // Claiming a cell when it is queued rather than when it is placed loses every cell
+    // the two tests below reject: it belongs to no layer, and no later seed can pick it
+    // up. That left 217 cells map-wide (54 m2) missing from the surface, in one-cell
+    // cracks along the line where two growth branches meet — a wheel drops through them.
+    // A cell is claimed only once it is actually placed, so a rejected one is still free
+    // to seed a layer of its own. Queueing is tracked separately, per layer, by stamping
+    // the layer's number rather than clearing a set each time.
+    std::unordered_map<Cell, std::vector<uint32_t>, CellHash> queued;
+    for (const auto &entry : clustered) {
+      claimed[entry.first].assign(entry.second.size(), 0);
+      queued[entry.first].assign(entry.second.size(), 0u);
+    }
+    uint32_t layer_number = 0u;
+    const std::array<Cell, 4> neighbours = {
+        Cell{1, 0}, Cell{-1, 0}, Cell{0, 1}, Cell{0, -1}};
+
+    // A cell rejected while one layer grows is left unclaimed so it can seed a layer of
+    // its own, but a single sweep only reaches the ones that sit later in iteration order.
+    // Sweeping until a pass finds nothing unclaimed is what makes "every sampled cell ends
+    // up in some layer" hold whatever order the cells come in. Each pass that finds an
+    // unclaimed cell claims at least that one, so this terminates.
+    bool sweeping = true;
+    while (sweeping) {
+      sweeping = false;
+      for (const auto &seed : clustered) {
+        for (size_t index = 0; index < seed.second.size(); ++index) {
+          if (claimed.at(seed.first)[index] != 0) {
+            continue;
+          }
+          sweeping = true;
+          std::unordered_map<Cell, float, CellHash> layer;
+          std::vector<std::pair<Cell, size_t>> frontier{{seed.first, index}};
+          ++layer_number;
+          queued.at(seed.first)[index] = layer_number;
+          while (!frontier.empty()) {
+            const auto current = frontier.back();
+            frontier.pop_back();
+            const float height = clustered.at(current.first).at(current.second);
+            // A layer is a height function of plan position: one value per cell. A ramp
+            // climbing to a deck is continuously connected to the road it crosses, so
+            // growing purely by connectivity would claim both and the crossing cell could
+            // keep only one of them, burying the underpass. Reaching a cell this layer
+            // already holds means the surface has passed over itself, so it stops there.
+            if (layer.count(current.first) != 0) {
+              continue;
+            }
+            // Growth is checked against the cell it came from, but two branches — one along
+            // the ground, one climbing a ramp — can meet as neighbours without ever being
+            // compared. A cell joins only if it agrees with every neighbour already held.
+            //
+            // All eight, not just the four edges: every cell touching a corner shares that
+            // corner's vertex, so two cells that are only diagonal neighbours still share
+            // one. Comparing edges alone lets a deck cell sit diagonally against a road
+            // cell, and their shared corner then averages between the two while the
+            // triangles stretch from one height to the other — a vertical fin in the road.
+            if (!AgreesWithNeighbours(layer, current.first, height, separation)) {
+              continue;
+            }
+            claimed.at(current.first)[current.second] = 1;
+            layer[current.first] = height;
+            for (const auto &step : neighbours) {
+              const Cell key{current.first.col + step.col, current.first.row + step.row};
+              const auto found = clustered.find(key);
+              if (found == clustered.end()) {
+                continue;
+              }
+              for (size_t other = 0; other < found->second.size(); ++other) {
+                if (claimed.at(key)[other] == 0 && queued.at(key)[other] != layer_number &&
+                    std::abs(found->second[other] - height) <= separation) {
+                  queued.at(key)[other] = layer_number;
+                  frontier.push_back({key, other});
+                }
+              }
+            }
+          }
+          PaveNarrowCracks(layer, cell, road_param.junction_crack_span,
+                           road_param.junction_fill_tolerance);
+          PaveEnclosedGaps(layer, cell, road_param.junction_max_gap_area,
+                           road_param.junction_fill_tolerance);
+          RelaxLayer(layer, road_param.junction_relax_passes);
+          AppendLayerTiles(out_tiles, layer, cell, tile_size);
+        }
+      }
+    }
+    return out_tiles;
   }
 
 

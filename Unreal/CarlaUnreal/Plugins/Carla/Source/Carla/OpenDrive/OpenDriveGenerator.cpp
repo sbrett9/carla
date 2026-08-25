@@ -14,6 +14,7 @@
 #include <carla/opendrive/OpenDriveParser.h>
 #include <carla/rpc/String.h>
 #include <util/enable-ue4-macros.h>
+#include "HAL/PlatformTime.h" // FPlatformTime (mesh cost)
 
 // #include "Engine/Classes/Interfaces/Interface_CollisionDataProvider.h"
 // #include "PhysicsCore/Public/BodySetupEnums.h"
@@ -78,7 +79,25 @@ void AOpenDriveGenerator::GenerateRoadMesh()
   }
 
   auto& CarlaMap = UCarlaStatics::GetGameMode(GetWorld())->GetMap();
+
+  // What the road mesh costs, separately from the height sampling that precedes it.
+  // A build reports one wall-clock for convert, sample, inject and mesh together, which
+  // says nothing about which of them a slow build is spending its time in.
+  const double MeshStartSeconds = FPlatformTime::Seconds();
   const auto Meshes = CarlaMap->GenerateChunkedMesh(Parameters);
+  const double MeshSeconds = FPlatformTime::Seconds() - MeshStartSeconds;
+  size_t MeshVertices = 0u;
+  size_t MeshTriangles = 0u;
+  for (const auto &Mesh : Meshes) {
+    MeshVertices += Mesh->GetVertices().size();
+    MeshTriangles += Mesh->GetIndexes().size() / 3u;
+  }
+  UE_LOG(LogCarla, Display,
+      TEXT("[OpenDriveGenerator] road mesh: %d piece(s), %llu vertices, %llu triangles "
+           "in %.1f s"),
+      static_cast<int32>(Meshes.size()), static_cast<uint64>(MeshVertices),
+      static_cast<uint64>(MeshTriangles), MeshSeconds);
+
   for (const auto &Mesh : Meshes) {
     if (!Mesh->GetVertices().size())
     {

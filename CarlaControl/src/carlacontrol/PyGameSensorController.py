@@ -25,6 +25,9 @@ class PyGameSensorController(SensorController):
     # Slowest the mouse wheel will wind the camera down to, in m/s.
     MIN_SPEED_MPS = 2.0
 
+    #: Height the dedicated descend key will not take the camera below, in local Z.
+    DESCEND_FLOOR_M = 2.0
+
     # Each wheel notch scales the speed by this rather than adding a fixed amount, so one notch is
     # worth the same proportion whether creeping along a street or crossing the map.
     WHEEL_SPEED_FACTOR = 1.2
@@ -161,7 +164,7 @@ class PyGameSensorController(SensorController):
         if events["mouse_look_delta"]:
             dx, dy = events["mouse_look_delta"]
             self.pose.yaw += dx
-            self.pose.pitch = max(-89.0, min(89.0, self.pose.pitch - dy))
+            self.pose.pitch = max(-89.9, min(89.9, self.pose.pitch - dy))
             moved = True
 
         # update speed from mouse wheel
@@ -178,7 +181,14 @@ class PyGameSensorController(SensorController):
         if movement["dx"] or movement["dy"] or movement["dz"]:
             self.pose.x += movement["dx"]
             self.pose.y += movement["dy"]
-            self.pose.z = max(2.0, self.pose.z + movement["dz"])
+            self.pose.z += movement["dz"]
+            moved = True
+
+        # Only the dedicated descend key refuses to go under DESCEND_FLOOR_M. Flying down by
+        # pitching the camera and moving forward is deliberately unrestricted, so the view can be
+        # taken below the road surface to inspect it from beneath.
+        if movement["descend"]:
+            self.pose.z = max(self.DESCEND_FLOOR_M, self.pose.z - movement["descend"])
             moved = True
 
         return moved, (self.pose.x, self.pose.y, self.pose.z)
@@ -191,7 +201,8 @@ class PyGameSensorController(SensorController):
             keys: Pygame keys dict
 
         Returns:
-            Dictionary with dx, dy, dz movement deltas
+            Dictionary with dx, dy, dz movement deltas, and the descend key's step separately —
+            it is the only one with a floor under it, so it is applied after the rest.
         """
         boost = self.boost_multiplier if (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]) else 1.0
         step = self.speed * boost * dt
@@ -222,10 +233,8 @@ class PyGameSensorController(SensorController):
             dy -= right[1] * step
         if keys[pygame.K_e]:
             dz += step
-        if keys[pygame.K_q]:
-            dz -= step
 
-        return {"dx": dx, "dy": dy, "dz": dz}
+        return {"dx": dx, "dy": dy, "dz": dz, "descend": step if keys[pygame.K_q] else 0.0}
 
     def apply_transform_sync(self):
         """Apply current pose transform immediately (sync mode)."""

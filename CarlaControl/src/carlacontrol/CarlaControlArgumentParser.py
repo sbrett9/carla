@@ -147,6 +147,42 @@ class CarlaControlArgumentParser:
             "the slow re-sampling",
         )
         build.add_argument(
+            "--road-offset-east",
+            type=float,
+            default=0.0,
+            metavar="METRES",
+            help="slide the whole generated road network this many metres east of where the "
+            "map data puts it (negative = west). For when the roads come out beside the "
+            "roadway in the photoreal imagery rather than on it: the imagery and every "
+            "latitude/longitude the telemetry reports stay pinned where they are, only the "
+            "drivable surface moves, so vehicles drive on the pavement you can see. This "
+            "corrects one shift across the whole map, not a single mis-drawn street. Measure "
+            "the error first: pick (Ctrl+LMB) a point on the road mesh with it shown (R), then "
+            "the matching lane in the imagery with it hidden. Keep it under about 10 m — past "
+            "that the roads no longer line up with the bridge and underpass records read from "
+            "the same map data.",
+        )
+        build.add_argument(
+            "--road-offset-north",
+            type=float,
+            default=0.0,
+            metavar="METRES",
+            help="slide the whole generated road network this many metres north (negative = "
+            "south). See --road-offset-east.",
+        )
+        build.add_argument(
+            "--same-side-exit-rate",
+            type=float,
+            default=0.0,
+            metavar="FRACTION",
+            help="how often ambient traffic may leave by the same side of the area it "
+            "entered from, as a fraction of all routes planned since traffic was last "
+            "switched on: 0.0002 is one in five thousand. Traffic is meant to cross the "
+            "scene, so this is a last resort, tried only when nothing on another side can "
+            "be reached. The default of 0 forbids it outright, and an entry point with no "
+            "route to another side then spawns nothing and says so once",
+        )
+        build.add_argument(
             "--no-ground-collision",
             dest="ground_collision",
             action="store_false",
