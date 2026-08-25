@@ -9,6 +9,7 @@
 
 #include <util/ue-header-guard-begin.h>
 #include "Interfaces/IPluginManager.h"
+#include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
 #include "HAL/FileManagerGeneric.h"
@@ -56,14 +57,53 @@ TArray<FString> UCarlaStatics::GetAllMapNames()
       return Name.Contains("TestMaps") || Name.Contains("OpenDriveMap") || Name.Contains("Sublevels");
   });
 
-  for (int i = 0; i < MapNameList.Num(); i++) {
-    MapNameList[i] = FPaths::GetBaseFilename(*MapNameList[i]);
+  // Report long package names rather than bare file names. A bare name can only be resolved through
+  // the asset registry, which is written when the game is cooked, so any level added afterwards --
+  // every exported world -- is invisible to it. A long package name bypasses the registry and loads
+  // directly, and it is what clients already expect: the shipped utilities and smoke tests match
+  // against paths like /Game/Carla/Maps/BaseMap/BaseMap.
+  TArray<FString> PackageNames;
+  PackageNames.Reserve(MapNameList.Num());
+  for (const FString& MapFile : MapNameList) {
+    FString LongPackageName;
+    if (FPackageName::TryConvertFilenameToLongPackageName(MapFile, LongPackageName)) {
+      PackageNames.Add(MoveTemp(LongPackageName));
+    }
+    else {
+      // A map outside every mounted content root cannot be loaded by name at all. Name it here
+      // rather than dropping it silently, so a staging mistake is visible.
+      UE_LOG(LogCarla, Warning,
+          TEXT("Map '%s' is not under a mounted content root, so it cannot be loaded by name."),
+          *MapFile);
+    }
   }
-  return MapNameList;
+  return PackageNames;
 }
 
 FString UCarlaStatics::FindMapPath(const FString &MapName)
 {
+  // A long package name identifies exactly one file, so resolve it directly rather than searching for
+  // something with a matching base name. This is the form GetAllMapNames reports, so listing the maps
+  // and then loading one has to work; it is also the only form that can reach a level staged after the
+  // game was cooked, including one mounted from its own plugin at /<Name>/.
+  if (MapName.StartsWith(TEXT("/")))
+  {
+    FString Filename;
+    if (FPackageName::TryConvertLongPackageNameToFilename(
+            MapName, Filename, FPackageName::GetMapPackageExtension())
+        && FPaths::FileExists(Filename))
+    {
+      return Filename;
+    }
+    // Not a mounted package path. Fall through and try the base name, so a caller passing something
+    // path-shaped that happens to name a real map still finds it.
+  }
+
+  // Anything else is matched on base name, which is what clients passing a bare map name rely on.
+  const FString SearchName = MapName.StartsWith(TEXT("/"))
+      ? FPaths::GetBaseFilename(MapName)
+      : MapName;
+
   TArray<FString> ContentPaths;
 
   ContentPaths.Add(FPaths::ProjectContentDir());
@@ -78,7 +118,7 @@ FString UCarlaStatics::FindMapPath(const FString &MapName)
       for (const FString& FilePath : FoundFiles)
       {
           FString FileName = FPaths::GetBaseFilename(FilePath); // just "MyMap", no path, no extension
-          if (FileName.Equals(MapName, ESearchCase::IgnoreCase))
+          if (FileName.Equals(SearchName, ESearchCase::IgnoreCase))
           {
               return FilePath; // Return the full path of the first matching map. Only one map is expected.
           }

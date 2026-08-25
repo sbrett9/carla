@@ -26,6 +26,7 @@
 #include "EngineUtils.h"
 #include "GameFramework/SpectatorPawn.h"
 #include "GenericPlatform/GenericPlatformProcess.h"
+#include "Misc/PackageName.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialParameterCollection.h"
 #include "Materials/MaterialParameterCollectionInstance.h"
@@ -94,12 +95,33 @@ bool UCarlaEpisode::LoadNewEpisode(const FString &MapString, bool ResetSettings)
 {
   bool bIsFileFound = false;
 
+  // MapString may be a bare name, a long package name, or anything a client typed. Resolve it to a
+  // file, then load it by LONG PACKAGE NAME rather than by the name that was asked for.
+  //
+  // This distinction decides whether an added level can be loaded at all. FURL resolves a short map
+  // name through the asset registry alone, and on failure silently reverts to the default map -- so a
+  // level staged after the game was cooked, which is every exported world, fails in a way that looks
+  // nothing like its cause. A long package name bypasses the registry and loads the file that was
+  // just resolved.
   FString FinalPath = UCarlaStatics::FindMapPath(MapString);
 
   if(FPaths::FileExists(FinalPath))
   {
     bIsFileFound = true;
-    FinalPath = MapString;
+    FString LongPackageName;
+    if (FPackageName::TryConvertFilenameToLongPackageName(FinalPath, LongPackageName))
+    {
+      FinalPath = MoveTemp(LongPackageName);
+    }
+    else
+    {
+      // Outside every mounted content root there is nothing to convert to, so fall back to what was
+      // asked for. That path still works for maps the asset registry knows about.
+      UE_LOG(LogCarla, Warning,
+          TEXT("Map '%s' resolved to '%s', which is not under a mounted content root; "
+               "loading by name instead."), *MapString, *FinalPath);
+      FinalPath = MapString;
+    }
   }
 
   if (bIsFileFound)
