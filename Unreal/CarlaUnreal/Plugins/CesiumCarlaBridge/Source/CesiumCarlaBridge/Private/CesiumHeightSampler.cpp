@@ -379,6 +379,30 @@ bool UCesiumHeightSampler::ConfigureCesiumForOrigin(
 	return true;
 }
 
+int32 UCesiumHeightSampler::CountLayersWithoutIonToken(UObject* WorldContextObject)
+{
+	UWorld* World = GEngine
+		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
+		: nullptr;
+	if (!World)
+	{
+		return -1;
+	}
+	int32 Missing = 0;
+	for (TActorIterator<ACesium3DTileset> It(World); It; ++It)
+	{
+		ACesium3DTileset* Tileset = *It;
+		if (!IsValid(Tileset)) continue;
+		// Only ion-backed tilesets need a token; one serving tiles from a URL does not.
+		if (Tileset->GetIonAssetID() <= 0) continue;
+		if (Tileset->GetIonAccessToken().IsEmpty())
+		{
+			++Missing;
+		}
+	}
+	return Missing;
+}
+
 int32 UCesiumHeightSampler::SetLayerHiddenInEditor(
 	UObject* WorldContextObject, const FString& LayerTag, bool bHidden)
 {

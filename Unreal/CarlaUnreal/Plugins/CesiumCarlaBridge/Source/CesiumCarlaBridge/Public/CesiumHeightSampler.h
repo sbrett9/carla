@@ -117,6 +117,16 @@ public:
 	 * Returns the number of tilesets changed (-1 when there is no world). Does nothing outside the
 	 * editor, where the flag has no meaning.
 	 */
+	/**
+	 * How many ion-backed tilesets in this world have no access token of their own.
+	 *
+	 * A tileset streams on the token it carries, on the project's token, or not at all. This reports
+	 * the first of those, so a caller can tell the difference between a world that will stream and one
+	 * that will silently show nothing, and say so while there is still someone reading the log.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
+	static int32 CountLayersWithoutIonToken(UObject* WorldContextObject);
+
 	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
 	static int32 SetLayerHiddenInEditor(
 		UObject* WorldContextObject, const FString& LayerTag, bool bHidden);

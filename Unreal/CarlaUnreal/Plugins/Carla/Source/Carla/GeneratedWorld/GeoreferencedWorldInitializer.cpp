@@ -68,13 +68,11 @@ bool AGeoreferencedWorldInitializer::ApplyWorldSettings()
 	// 1. The datum and the streamed layers. Everything below depends on this having run, and it must
 	//    run before any per-layer offset: it reassigns tilesets to the default georeference, which
 	//    would otherwise undo them.
+	// The environment takes precedence over anything the level carries: a token supplied here is
+	// written onto the layers, replacing a token saved with the level, while an empty one leaves the
+	// level's own token in place. That ordering is what lets a level be imported with a working token
+	// and still be pointed at a different ion account per run, without editing the level.
 	const FString IonToken = IonAccessTokenFromEnvironment();
-	if (IonToken.IsEmpty())
-	{
-		UE_LOG(LogCarla, Warning,
-			TEXT("[GeneratedWorld] no CESIUM_ION_TOKEN in the environment: the world is placed "
-			     "correctly but its imagery layers will not stream."));
-	}
 	UCesiumHeightSampler::ConfigureCesiumForOrigin(
 		World,
 		WorldSettings->OriginLatitude,
@@ -84,6 +82,25 @@ bool AGeoreferencedWorldInitializer::ApplyWorldSettings()
 		WorldSettings->PhotorealIonAssetId,
 		WorldSettings->GroundIonAssetId,
 		/*bRefreshTileset=*/true);
+
+	// Say which token is actually in play, and say it loudly when there is none. Imagery that fails
+	// to stream looks like a broken world rather than a missing credential, and by the time anyone
+	// notices, the reason is far from the symptom.
+	const int32 LayersWithoutToken = UCesiumHeightSampler::CountLayersWithoutIonToken(World);
+	if (LayersWithoutToken > 0)
+	{
+		UE_LOG(LogCarla, Error,
+			TEXT("[GeneratedWorld] %d imagery layer(s) have no Cesium ion token, so this world will "
+			     "render no imagery. Set CESIUM_ION_TOKEN in the environment before launching, or "
+			     "import the world package with a token so the level carries its own."),
+			LayersWithoutToken);
+	}
+	else if (IonToken.IsEmpty())
+	{
+		UE_LOG(LogCarla, Display,
+			TEXT("[GeneratedWorld] no CESIUM_ION_TOKEN in the environment; the imagery layers are "
+			     "streaming on the token saved with this level."));
+	}
 
 	// 2. Per-layer vertical offsets, then presentation.
 	for (const FGeoreferencedWorldLayer& Layer : WorldSettings->Layers)
