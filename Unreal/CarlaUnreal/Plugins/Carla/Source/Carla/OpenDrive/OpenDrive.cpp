@@ -13,6 +13,7 @@
 #include "GenericPlatform/GenericPlatformProcess.h"
 #include "Misc/FileHelper.h"
 #include "HAL/FileManagerGeneric.h"
+#include "Interfaces/IPluginManager.h"
 #include "Misc/FileHelper.h"
 #include <util/ue-header-guard-end.h>
 
@@ -106,7 +107,25 @@ FString UOpenDrive::GetXODR(const UWorld *World)
 
   if (!Files.Num())
   {
-    FString PluginFolder = FPaths::ProjectDir() + TEXT("Plugins/") + MapName + TEXT("/Content/Maps/OpenDrive/");
+    // A map hosted by a plugin of its own keeps its road network in that plugin's content. Ask the
+    // plugin manager where the plugin is rather than assuming it sits directly under Plugins/: a
+    // plugin's location is not fixed by its name, and worlds exported from a world package are
+    // grouped in a subfolder. Getting this wrong does not fail loudly -- the level still loads and
+    // still looks correct, with no road graph behind it, so no waypoints, no traffic and no
+    // telemetry.
+    if (const TSharedPtr<IPlugin> MapPlugin = IPluginManager::Get().FindPlugin(MapName))
+    {
+      const FString PluginFolder = MapPlugin->GetContentDir() / TEXT("Maps") / TEXT("OpenDrive");
+      IFileManager::Get().FindFilesRecursive(
+          Files, *PluginFolder, *FString(FileName + ".xodr"), true, false, false);
+    }
+  }
+
+  if (!Files.Num())
+  {
+    // Kept for a plugin that is present but not registered, which the lookup above cannot see.
+    const FString PluginFolder =
+        FPaths::ProjectDir() + TEXT("Plugins/") + MapName + TEXT("/Content/Maps/OpenDrive/");
     IFileManager::Get().FindFilesRecursive(Files, *PluginFolder, *FString(FileName + ".xodr"), true, false, false);
   }
 

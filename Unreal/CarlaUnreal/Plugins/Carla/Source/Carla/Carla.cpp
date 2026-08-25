@@ -7,6 +7,7 @@
 #include "Developer/Settings/Public/ISettingsModule.h"
 #include "Developer/Settings/Public/ISettingsSection.h"
 #include "Developer/Settings/Public/ISettingsContainer.h"
+#include "Interfaces/IPluginManager.h"
 #include <util/ue-header-guard-end.h>
 
 #define LOCTEXT_NAMESPACE "FCarlaModule"
@@ -18,6 +19,57 @@ void FCarlaModule::StartupModule()
 {
 	RegisterSettings();
 	LoadChronoDll();
+	MountExportedWorlds();
+}
+
+void FCarlaModule::MountExportedWorlds()
+{
+	// A world exported as its own plugin is marked ExplicitlyLoaded, so the engine finds it but does
+	// not mount it: a package holding many worlds should not pay for all of them, and a world is
+	// wanted only when it is asked for. Nothing else mounts them, though, and until a plugin is
+	// mounted its content root does not exist -- so /<World>/Maps/<World> resolves to nothing and the
+	// engine offers to load the default map instead, which looks like the wrong world rather than a
+	// missing one.
+	//
+	// Mounting only registers the content root; it does not load a level. Doing it here, before the
+	// startup map is browsed, makes an exported world reachable both from -map= at launch and from
+	// load_world once running.
+	IPluginManager& Plugins = IPluginManager::Get();
+	int32 Mounted = 0;
+	const TArray<TSharedRef<IPlugin>> Discovered = Plugins.GetDiscoveredPlugins();
+	UE_LOG(LogCarla, Display, TEXT("Looking for exported worlds among %d discovered plugin(s)."),
+		Discovered.Num());
+	for (const TSharedRef<IPlugin>& Plugin : Discovered)
+	{
+		const FPluginDescriptor& Descriptor = Plugin->GetDescriptor();
+		// The category is what the exporter writes to mark its own output, so this cannot mount an
+		// unrelated plugin the project happens to ship.
+		if (Descriptor.Category != TEXT("Generated Worlds")
+			|| !Descriptor.bExplicitlyLoaded
+			|| !Plugin->CanContainContent())
+		{
+			UE_LOG(LogCarla, VeryVerbose,
+				TEXT("Plugin '%s': category '%s', explicitly loaded %d, content %d -- not an exported world."),
+				*Plugin->GetName(), *Descriptor.Category,
+				Descriptor.bExplicitlyLoaded ? 1 : 0, Plugin->CanContainContent() ? 1 : 0);
+			continue;
+		}
+		if (Plugins.MountExplicitlyLoadedPlugin(Plugin->GetName()))
+		{
+			++Mounted;
+			UE_LOG(LogCarla, Display, TEXT("Mounted exported world '%s'."), *Plugin->GetName());
+		}
+		else
+		{
+			UE_LOG(LogCarla, Warning,
+				TEXT("Exported world '%s' could not be mounted; it cannot be loaded by name."),
+				*Plugin->GetName());
+		}
+	}
+	if (Mounted > 0)
+	{
+		UE_LOG(LogCarla, Display, TEXT("Mounted %d exported world(s)."), Mounted);
+	}
 }
 
 void FCarlaModule::LoadChronoDll()

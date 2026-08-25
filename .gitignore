@@ -47,3 +47,6 @@ cesium-request-cache.sqlite*
 # VibeUE editor MCP plugin — fetched + pinned by CarlaSetup from a private mirror
 # (sbrett9/VibeUE), not vendored in this repo. See CarlaSetup.{bat,sh} --vibeue-ssh-key.
 /Unreal/CarlaUnreal/Plugins/VibeUE/
+# Worlds exported from a world package. Generated content: rebuild them from the
+# package with the world package importer rather than tracking the cooked output.
+/Unreal/CarlaUnreal/Plugins/GeneratedWorlds/
