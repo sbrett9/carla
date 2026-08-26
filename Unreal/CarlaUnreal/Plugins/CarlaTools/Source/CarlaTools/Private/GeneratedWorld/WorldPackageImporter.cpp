@@ -15,6 +15,7 @@
 #include "EditorAssetLibrary.h"
 #include "EditorScriptingHelpers.h"
 #include "Engine/World.h"
+#include "Engine/PostProcessVolume.h"
 #include "EngineUtils.h"
 #include "FileHelpers.h"
 #include "HAL/FileManager.h"
@@ -392,6 +393,73 @@ void ConfigureGlobeAsLevelContent(
 	// is opened -- see FGeneratedWorldEditorPresentation.
 }
 
+/** Tags the volume this tool maintains, so re-importing replaces it rather than stacking another. */
+const FName GeneratedWorldExposureTag(TEXT("generated_world_exposure"));
+
+/**
+ * Give the level an exposure it can be looked at with.
+ *
+ * A generated world is lit by CesiumSunSky, whose sun carries a physically real intensity -- about
+ * 111,000 lux at midday. The project disables automatic exposure (r.DefaultFeature.AutoExposure) so
+ * that camera sensors decide their own exposure and produce repeatable images, which leaves nothing
+ * to map that intensity into a displayable range: the level opens correct in every respect and
+ * renders as flat white, which reads as a broken import rather than an unexposed one.
+ *
+ * An unbound volume fixing exposure at a daylight value solves it for anyone opening the level, and
+ * cannot disturb the sensors: every exposure property it sets is one that ASceneCaptureSensor
+ * overrides on its own capture component, and a component's settings apply over any volume in the
+ * scene.
+ */
+void EnsureExposureVolume(UWorld* World)
+{
+	if (!World || !World->PersistentLevel)
+	{
+		return;
+	}
+
+	for (int32 Index = World->PersistentLevel->Actors.Num() - 1; Index >= 0; --Index)
+	{
+		AActor* Existing = World->PersistentLevel->Actors[Index];
+		if (IsValid(Existing) && Existing->ActorHasTag(GeneratedWorldExposureTag))
+		{
+			Existing->Destroy();
+		}
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	SpawnParams.OverrideLevel = World->PersistentLevel;
+	APostProcessVolume* Volume = World->SpawnActor<APostProcessVolume>(
+		APostProcessVolume::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!Volume)
+	{
+		UE_LOG(LogCarlaTools, Warning,
+			TEXT("[WorldPackageImporter] could not add an exposure volume; the level will open "
+			     "correct but overexposed."));
+		return;
+	}
+
+	// Unbound, so it applies wherever the camera is rather than inside a box the world outgrows.
+	Volume->bUnbound = true;
+	Volume->BlendWeight = 1.0f;
+
+	// Fixed rather than adaptive: a generated world is looked at from ground level and from altitude
+	// in the same session, and an adapting exposure would change what the imagery looks like as the
+	// camera moves. The values are the photographer's sunny-16 rule -- f/16 at 1/125 s, ISO 100 --
+	// which is roughly EV100 15 and is what a clear midday sun actually meters at.
+	Volume->Settings.bOverride_AutoExposureMethod = true;
+	Volume->Settings.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
+	Volume->Settings.bOverride_CameraISO = true;
+	Volume->Settings.CameraISO = 100.0f;
+	Volume->Settings.bOverride_CameraShutterSpeed = true;
+	Volume->Settings.CameraShutterSpeed = 125.0f;
+	Volume->Settings.bOverride_DepthOfFieldFstop = true;
+	Volume->Settings.DepthOfFieldFstop = 16.0f;
+
+	Volume->Tags.Add(GeneratedWorldExposureTag);
+	Volume->SetActorLabel(TEXT("GeneratedWorldExposure"));
+}
+
 } // namespace
 
 FWorldPackageImportResult UWorldPackageImporter::ImportWorldPackage(
@@ -568,6 +636,7 @@ FWorldPackageImportResult UWorldPackageImporter::ImportWorldPackage(
 
 	// Put the globe in the level itself, so opening it shows the world rather than bare geometry.
 	ConfigureGlobeAsLevelContent(World, Settings, IonAccessToken);
+	EnsureExposureVolume(World);
 
 	// Save the level package directly. SaveCurrentLevel would act on whatever the editor has open,
 	// which is deliberately not this level.

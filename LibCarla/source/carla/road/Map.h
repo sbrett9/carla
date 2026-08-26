@@ -166,6 +166,23 @@ namespace road {
                                              const geom::Vector3D& minpos,
                                              const geom::Vector3D& maxpos) const;
 
+    /// Per-lane meshes for every road in the box, with junctions built from the lanes that cross
+    /// them.
+    ///
+    /// This differs from GenerateOrderedChunkedMeshInLocations in one respect, and it is the reason
+    /// it exists: that function reconstructs each junction of more than two connections from a
+    /// signed distance field, on a half-metre grid, discarding the lane geometry entirely. The
+    /// result neither meets the roads it joins nor carries usable texture coordinates. Junctions
+    /// here are the merged meshes of the connecting roads' own lanes, which is how
+    /// GenerateChunkedMesh -- the surface the simulation drives on -- has always built them.
+    ///
+    /// Roads keep one mesh per lane rather than being merged into tiles, so a surface saved from
+    /// this can be selected and adjusted lane by lane.
+    std::map<road::Lane::LaneType , std::vector<std::unique_ptr<geom::Mesh>>>
+      GenerateOrderedMeshWithLaneJunctions( const rpc::OpendriveGenerationParameters& params,
+                                            const geom::Vector3D& minpos,
+                                            const geom::Vector3D& maxpos) const;
+
     /// Buids a mesh of all crosswalks based on the OpenDRIVE
     geom::Mesh GetAllCrosswalkMesh() const;
 

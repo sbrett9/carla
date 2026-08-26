@@ -9,6 +9,7 @@
 
 #include <util/ue-header-guard-begin.h>
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "EditorAssetLibrary.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
@@ -47,7 +48,9 @@ namespace
 	const FLaneTypeBake DrivingBake{
 		TEXT("Road"),
 		TEXT("/Game/Carla/Static/GenericMaterials/Roads/MI_Road_Asphalt_A"),
-		TEXT("SM_DrivingLane") };
+		// Not "DrivingLane": a piece of driving surface is a lane along a road or the whole of a
+		// junction, and naming every piece a lane made junctions hard to recognise in the outliner.
+		TEXT("SM_RoadSurface") };
 
 	const FLaneTypeBake SidewalkBake{
 		TEXT("SideWalk"),
@@ -209,8 +212,14 @@ FRoadSurfaceBakeResult URoadSurfaceBaker::BakeIntoWorld(
 	const carla::geom::Vector3D MinPosition(MinX, HigherY, -1.0e5f);
 	const carla::geom::Vector3D MaxPosition(MaxX, LowerY, 1.0e5f);
 
+	// Deliberately NOT GenerateOrderedChunkedMeshInLocations, which rebuilds every junction of more
+	// than two connections from a signed distance field on a half-metre grid. That discards the lane
+	// geometry, so the junction neither meets the roads it joins -- a metre out, typically -- nor
+	// carries texture coordinates the road material can use. The simulation has never used it; it
+	// builds junctions by merging the connecting roads' lanes, and this asks for the same thing, so
+	// that a level shows the surface the simulation would drive on.
 	const auto MeshesByLaneType =
-		ParsedMap->GenerateOrderedChunkedMeshInLocations(Params, MinPosition, MaxPosition);
+		ParsedMap->GenerateOrderedMeshWithLaneJunctions(Params, MinPosition, MaxPosition);
 
 	// Replace any surface a previous bake left behind, so re-importing does not stack road on road.
 	for (int32 Index = World->PersistentLevel->Actors.Num() - 1; Index >= 0; --Index)
@@ -220,6 +229,19 @@ FRoadSurfaceBakeResult URoadSurfaceBaker::BakeIntoWorld(
 			&& Existing->ActorHasTag(AOpenDriveGenerator::RoadSurfaceTag))
 		{
 			Existing->Destroy();
+		}
+	}
+
+	// Clear the meshes a previous generation left, rather than writing over the ones whose names
+	// happen to repeat. The piece count varies with the road network and with how the surface is
+	// built, so anything not overwritten would stay behind unreferenced: a stale copy of an older
+	// surface, indistinguishable in the content browser from the current one.
+	for (const FLaneTypeBake* Bake : { &DrivingBake, &SidewalkBake })
+	{
+		const FString Folder = AssetRootFolder / Bake->Folder / MapName;
+		if (UEditorAssetLibrary::DoesDirectoryExist(Folder))
+		{
+			UEditorAssetLibrary::DeleteDirectory(Folder);
 		}
 	}
 
