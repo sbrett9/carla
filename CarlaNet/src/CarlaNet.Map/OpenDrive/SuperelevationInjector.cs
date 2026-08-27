@@ -189,6 +189,21 @@ public static class SuperelevationInjector
 
     // ── P4: fit a roll angle per station ────────────────────────────────────
 
+    /// <summary>Why stations were kept or dropped, for diagnosing a fit that came out thin.</summary>
+    public readonly record struct CrossSectionFitSummary(
+        int StationsSeen, int Fitted, int TooFewProbes, int SpanTooShort, int NotPlanar, int Clamped);
+
+    /// <inheritdoc cref="FitCrossSections(IReadOnlyList{CrossSectionSample}, IReadOnlyList{double}, out CrossSectionFitSummary, double, double, double, double)"/>
+    public static IReadOnlyList<CrossSectionFit> FitCrossSections(
+        IReadOnlyList<CrossSectionSample> samples,
+        IReadOnlyList<double> ellipsoidalHeights,
+        double maxSlope = 0.10,
+        double residualFloorMeters = 0.05,
+        double residualFractionOfSpan = 0.01,
+        double minSpanMeters = 2.0)
+        => FitCrossSections(samples, ellipsoidalHeights, out _,
+            maxSlope, residualFloorMeters, residualFractionOfSpan, minSpanMeters);
+
     /// <summary>
     /// Least-squares fits height against lateral offset at each station.
     /// <paramref name="samples"/> and <paramref name="ellipsoidalHeights"/> are index-aligned,
@@ -196,12 +211,24 @@ public static class SuperelevationInjector
     /// when they have too few usable probes, when the probes are too close together to
     /// resolve a slope, or when the residual says the cross-section is not a straight line —
     /// a crown, a kerb or a bridge edge is better left flat than modelled as a roll.
+    ///
+    /// The planarity tolerance scales with the probe span rather than being a fixed distance.
+    /// An absolute threshold is not comparable across roads: the same crossfall produces a few
+    /// centimetres of relief across a 3 m connector and tens of centimetres across a 20 m
+    /// carriageway, so a fixed tolerance is permissive on narrow roads and punishing on wide
+    /// ones — which are the roads where crossfall matters most. The threshold is
+    /// <paramref name="residualFractionOfSpan"/> of the span, with
+    /// <paramref name="residualFloorMeters"/> as a floor so short spans keep a usable margin.
+    /// The floor is set where a fixed threshold used to sit, so narrow roads are judged exactly
+    /// as before and only wide ones are given the room their span warrants.
     /// </summary>
     public static IReadOnlyList<CrossSectionFit> FitCrossSections(
         IReadOnlyList<CrossSectionSample> samples,
         IReadOnlyList<double> ellipsoidalHeights,
+        out CrossSectionFitSummary summary,
         double maxSlope = 0.10,
-        double maxResidualMeters = 0.05,
+        double residualFloorMeters = 0.05,
+        double residualFractionOfSpan = 0.01,
         double minSpanMeters = 2.0)
     {
         ArgumentNullException.ThrowIfNull(samples);
@@ -212,9 +239,11 @@ public static class SuperelevationInjector
                 nameof(ellipsoidalHeights));
 
         var fits = new List<CrossSectionFit>();
+        int seen = 0, tooFew = 0, shortSpan = 0, notPlanar = 0, clamped = 0;
         int i = 0;
         while (i < samples.Count)
         {
+            ++seen;
             var roadId = samples[i].RoadId;
             double s = samples[i].S;
             int start = i;
@@ -233,17 +262,30 @@ public static class SuperelevationInjector
             }
 
             if (ts.Count < 3)
+            {
+                ++tooFew;
                 continue;
-            if (ts.Max() - ts.Min() < minSpanMeters)
+            }
+            double span = ts.Max() - ts.Min();
+            if (span < minSpanMeters)
+            {
+                ++shortSpan;
                 continue;
+            }
 
             var (slope, residual) = LineFit(ts, zs);
-            if (residual > maxResidualMeters)
+            if (residual > Math.Max(residualFloorMeters, residualFractionOfSpan * span))
+            {
+                ++notPlanar;
                 continue;
+            }
 
+            if (Math.Abs(slope) > maxSlope)
+                ++clamped;
             slope = Math.Clamp(slope, -maxSlope, maxSlope);
             fits.Add(new CrossSectionFit(roadId, s, Math.Atan(slope), residual, ts.Count));
         }
+        summary = new CrossSectionFitSummary(seen, fits.Count, tooFew, shortSpan, notPlanar, clamped);
         return fits;
     }
 

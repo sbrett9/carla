@@ -178,8 +178,52 @@ public class SuperelevationInjectorTests
         var map = Load(TwoSidedXodr);
         var samples = SuperelevationInjector.ExtractCrossSectionSamples(map, 100.0);
         var heights = samples.Select(s => 100.0 + s.T * 0.5).ToList(); // 50% crossfall
-        var fits = SuperelevationInjector.FitCrossSections(samples, heights, maxSlope: 0.10, maxResidualMeters: 1.0);
+        var fits = SuperelevationInjector.FitCrossSections(samples, heights, out var summary, maxSlope: 0.10);
         Assert.Equal(Math.Atan(0.10), fits[0].SuperelevationRadians, 9);
+        Assert.Equal(fits.Count, summary.Clamped);
+    }
+
+    /// <summary>Probes straight out from the reference line, as a one-way carriageway gets.</summary>
+    private static List<CrossSectionSample> Probes(params double[] offsets)
+        => offsets.Select(t => new CrossSectionSample(1u, 0.0, t, 0.0, 0.0)).ToList();
+
+    [Fact]
+    public void PlanarityTolerance_ScalesWithSpan_SoWideRoadsAreNotHeldToATighterStandard()
+    {
+        // The same shape at two widths: a 1% sag relative to the span. Physically the same
+        // departure from planar, so both should be judged the same way.
+        double Sag(double t, double span) => 100.0 + t * 0.02 + 0.01 * span * (1.0 - Math.Pow(2.0 * t / span + 1.0, 2));
+
+        var narrow = Probes(0.0, -1.5, -3.0);
+        var wide = Probes(0.0, -6.45, -12.9);
+        var narrowZ = narrow.Select(p => Sag(p.T, 3.0)).ToList();
+        var wideZ = wide.Select(p => Sag(p.T, 12.9)).ToList();
+
+        // Span-scaled: both accepted.
+        Assert.Single(SuperelevationInjector.FitCrossSections(narrow, narrowZ));
+        Assert.Single(SuperelevationInjector.FitCrossSections(wide, wideZ));
+
+        // A fixed absolute tolerance accepts the narrow one and rejects the wide one, which is
+        // the bias this scaling exists to remove.
+        Assert.Single(SuperelevationInjector.FitCrossSections(
+            narrow, narrowZ, residualFloorMeters: 0.05, residualFractionOfSpan: 0.0));
+        Assert.Empty(SuperelevationInjector.FitCrossSections(
+            wide, wideZ, residualFloorMeters: 0.05, residualFractionOfSpan: 0.0));
+    }
+
+    [Fact]
+    public void Summary_AccountsForEveryStation()
+    {
+        var map = Load(TwoSidedXodr);
+        var samples = SuperelevationInjector.ExtractCrossSectionSamples(map, 50.0);
+        var heights = samples.Select(s => s.T < -2.0 ? 101.0 : 100.0).ToList();
+        SuperelevationInjector.FitCrossSections(samples, heights, out var summary);
+
+        Assert.Equal(3, summary.StationsSeen);
+        Assert.Equal(0, summary.Fitted);
+        Assert.Equal(3, summary.NotPlanar);
+        Assert.Equal(summary.StationsSeen,
+            summary.Fitted + summary.TooFewProbes + summary.SpanTooShort + summary.NotPlanar);
     }
 
     [Fact]

@@ -740,10 +740,11 @@ public sealed class CarlaClient : IAsyncDisposable
         }
 
         var crossFits = CarlaNet.Map.OpenDrive.SuperelevationInjector
-            .FitCrossSections(crossSamples, crossEllipsoidal);
-        Console.WriteLine($"[superelevation] {crossFits.Count} of "
-            + $"{crossSamples.Select(c => (c.RoadId, c.S)).Distinct().Count()} stations fitted "
-            + $"from {crossSamples.Count} probes");
+            .FitCrossSections(crossSamples, crossEllipsoidal, out var crossSummary);
+        Console.WriteLine($"[superelevation] {crossSummary.Fitted} of {crossSummary.StationsSeen} "
+            + $"stations fitted from {crossSamples.Count} probes "
+            + $"(rejected: {crossSummary.NotPlanar} not planar, {crossSummary.TooFewProbes} too few "
+            + $"probes, {crossSummary.SpanTooShort} too narrow; {crossSummary.Clamped} clamped)");
         elevatedXodr = CarlaNet.Map.OpenDrive.SuperelevationInjector
             .InjectSuperelevation(elevatedXodr, crossFits, crossSamples);
 
