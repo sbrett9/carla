@@ -43,6 +43,17 @@ public sealed record OsmConversionOptions
     /// <summary>Guess and emit traffic lights (<c>--tls.guess</c>).</summary>
     public bool GenerateTrafficLights { get; init; } = true;
 
+    /// <summary>
+    /// Honour OSM <c>turn:lanes</c> arrows when building lane-to-lane connections
+    /// (<c>--osm.turn-lanes</c>). netconvert defaults this OFF and then guesses every
+    /// connection from junction geometry alone, which mis-assigns turn lanes wherever a
+    /// road is mapped as a dual carriageway: dedicated left-turn lanes get demoted to
+    /// U-turns and through movements fan out across the whole approach. With it on,
+    /// netconvert reproduces the painted arrows and falls back to the geometric guess only
+    /// on edges whose tagging it cannot apply.
+    /// </summary>
+    public bool ImportTurnLanes { get; init; } = true;
+
     /// <summary>Centre the generated map about the origin (netconvert auto-normalizes so the
     /// map's min corner sits at 0,0). Ignored when <see cref="OriginLatitude"/> /
     /// <see cref="OriginLongitude"/> are set (a pinned origin forces normalization OFF).</summary>
@@ -255,6 +266,11 @@ public sealed class OsmConverter
             "--geometry.remove",
             "--roundabouts.guess",
         };
+
+        // Build lane connections from the painted turn arrows rather than from junction
+        // geometry alone. Only add the flag when enabled — netconvert's own default is OFF.
+        if (_options.ImportTurnLanes)
+            args.Add("--osm.turn-lanes");
 
         // A pinned origin must not be shifted; otherwise honour CenterMap.
         if (disableNormalization)

@@ -16856,7 +16856,7 @@
   <tag k="tiger:name_base" v="Caley"/>
   <tag k="tiger:name_direction_prefix" v="E"/>
   <tag k="tiger:name_type" v="Ave"/>
-  <tag k="turn:lanes" v="left|left|"/>
+  <tag k="turn:lanes" v="left|left|through;right"/>
  </way>
  <way id="45806432" visible="true" version="10" changeset="156238077" timestamp="2024-09-05T15:56:56Z" user="PizzaTreeIsland" uid="17308617">
   <nd ref="176228994"/>
@@ -21627,7 +21627,7 @@
   <tag k="ref" v="CR 42"/>
   <tag k="source:hgv:national_network" v="https://www.ecfr.gov/current/title-23/chapter-I/subchapter-G/part-658;https://hepgis-usdot.hub.arcgis.com/apps/usdot::national-network-conventional-combination-trucks-map"/>
   <tag k="surface" v="asphalt"/>
-  <tag k="turn:lanes" v="left|left||||"/>
+  <tag k="turn:lanes" v="left|left||||right"/>
  </way>
  <way id="427819538" visible="true" version="8" changeset="167884265" timestamp="2025-06-20T18:44:22Z" user="KarlaIbrahić" uid="22101303">
   <nd ref="4269958398"/>
@@ -21947,7 +21947,7 @@
   <tag k="maxspeed:type" v="sign"/>
   <tag k="name" v="South Yosemite Street"/>
   <tag k="surface" v="asphalt"/>
-  <tag k="turn:lanes:forward" v="left|left||"/>
+  <tag k="turn:lanes:forward" v="left|left||right"/>
  </way>
  <way id="427819559" visible="true" version="7" changeset="156238077" timestamp="2024-09-05T15:56:56Z" user="PizzaTreeIsland" uid="17308617">
   <nd ref="9456938684"/>
@@ -21960,7 +21960,7 @@
   <tag k="name" v="South Yosemite Street"/>
   <tag k="oneway" v="yes"/>
   <tag k="surface" v="asphalt"/>
-  <tag k="turn:lanes" v="left|left||"/>
+  <tag k="turn:lanes" v="left|left||right"/>
  </way>
  <way id="427819560" visible="true" version="3" changeset="63108656" timestamp="2018-10-01T22:34:47Z" user="spuddy93" uid="8600365">
   <nd ref="4269958415"/>
@@ -29090,7 +29090,7 @@
   <tag k="name" v="East Peakview Avenue"/>
   <tag k="oneway" v="yes"/>
   <tag k="surface" v="asphalt"/>
-  <tag k="turn:lanes" v="left|through"/>
+  <tag k="turn:lanes" v="left|through;right"/>
  </way>
  <way id="629634757" visible="true" version="4" changeset="128090143" timestamp="2022-10-26T15:22:20Z" user="pkoby" uid="999995">
   <nd ref="582790799"/>
@@ -29198,7 +29198,7 @@
   <tag k="tiger:name_base" v="Boston"/>
   <tag k="tiger:name_direction_prefix" v="S"/>
   <tag k="tiger:name_type" v="St"/>
-  <tag k="turn:lanes" v="left|left||"/>
+  <tag k="turn:lanes" v="left|left||right"/>
  </way>
  <way id="629634765" visible="true" version="4" changeset="157649172" timestamp="2024-10-09T00:06:57Z" user="driabwb" uid="22040067">
   <nd ref="9602518754"/>
@@ -29215,7 +29215,7 @@
   <tag k="tiger:name_base" v="Boston"/>
   <tag k="tiger:name_direction_prefix" v="S"/>
   <tag k="tiger:name_type" v="St"/>
-  <tag k="turn:lanes" v="left||"/>
+  <tag k="turn:lanes" v="left||through;right"/>
  </way>
  <way id="629634766" visible="true" version="3" changeset="157649172" timestamp="2024-10-09T00:07:20Z" user="driabwb" uid="22040067">
   <nd ref="582792565"/>
@@ -29395,7 +29395,7 @@
   <tag k="name" v="South Clinton Street"/>
   <tag k="oneway" v="yes"/>
   <tag k="surface" v="asphalt"/>
-  <tag k="turn:lanes" v="left|left||"/>
+  <tag k="turn:lanes" v="left|left||right"/>
  </way>
  <way id="629634782" visible="true" version="4" changeset="156238077" timestamp="2024-09-05T15:56:56Z" user="PizzaTreeIsland" uid="17308617">
   <nd ref="176177508"/>
@@ -29508,7 +29508,7 @@
   <tag k="name" v="South Yosemite Street"/>
   <tag k="source:hgv" v="https://centennial.maps.arcgis.com/apps/instant/basic/index.html?appid=3ee65ae01a144f5b9e2c1e6c7fae2ab6"/>
   <tag k="surface" v="asphalt"/>
-  <tag k="turn:lanes:backward" v="left||"/>
+  <tag k="turn:lanes:backward" v="left||through;right"/>
  </way>
  <way id="629653818" visible="true" version="2" changeset="171135885" timestamp="2025-08-28T13:31:56Z" user="IvicaBanovac" uid="22101314">
   <nd ref="176228747"/>
@@ -29651,7 +29651,7 @@
   <tag k="tiger:name_base" v="Caley"/>
   <tag k="tiger:name_direction_prefix" v="E"/>
   <tag k="tiger:name_type" v="Ave"/>
-  <tag k="turn:lanes" v="left|"/>
+  <tag k="turn:lanes" v="left|through;right"/>
  </way>
  <way id="629653921" visible="true" version="3" changeset="120328510" timestamp="2022-04-29T03:01:29Z" user="Your Village Maps" uid="227972">
   <nd ref="583090157"/>
@@ -29677,7 +29677,7 @@
   <tag k="tiger:name_base" v="Caley"/>
   <tag k="tiger:name_direction_prefix" v="E"/>
   <tag k="tiger:name_type" v="Ave"/>
-  <tag k="turn:lanes" v="left||"/>
+  <tag k="turn:lanes" v="left||through;right"/>
  </way>
  <way id="629653933" visible="true" version="2" changeset="120328510" timestamp="2022-04-29T03:01:29Z" user="Your Village Maps" uid="227972">
   <nd ref="176194389"/>
@@ -30225,7 +30225,7 @@
   <tag k="name" v="South Yosemite Street"/>
   <tag k="oneway" v="no"/>
   <tag k="surface" v="asphalt"/>
-  <tag k="turn:lanes:forward" v="left|left||"/>
+  <tag k="turn:lanes:forward" v="left|left||right"/>
  </way>
  <way id="737508780" visible="true" version="6" changeset="120017319" timestamp="2022-04-21T19:51:51Z" user="Your Village Maps" uid="227972">
   <nd ref="2322021761"/>
