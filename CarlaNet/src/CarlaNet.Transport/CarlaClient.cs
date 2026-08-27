@@ -430,6 +430,19 @@ public sealed class CarlaClient : IAsyncDisposable
         var (flatXodr, sumoNet) = await new CarlaNet.Map.OsmConverter(osmOptions)
             .ConvertFileWithNetworkAsync(osmPath, ct).ConfigureAwait(false);
 
+        // 1a) Join up the junctions that offer no choice of route. netconvert wraps every
+        //     surviving OSM node in a junction, so a node that exists only because two ways
+        //     meet with a differing lane count becomes a "junction" holding one connector: one
+        //     continuous carriageway arrives as three roads with two artificial seams, and the
+        //     connector's reference line sits a lane width off the road it continues. Running
+        //     this before anything samples terrain means the drape, the elevation profile and
+        //     the crossfall all see one road instead of three.
+        flatXodr = CarlaNet.Map.OpenDrive.RedundantJunctionCollapser
+            .Collapse(flatXodr, out var collapseSummary);
+        Console.WriteLine($"[junctions] collapsed {collapseSummary.Collapsed} of "
+            + $"{collapseSummary.JunctionsExamined} junctions offering no choice of route "
+            + $"({collapseSummary.SkippedLaneMismatch} skipped on unresolved lane links)");
+
         // 2) Parse + extract reference-line samples + reproject (all offline). The origin
         //    is the .xodr geoReference (pinned by osmOptions).
         var map = CarlaNet.Map.OpenDrive.OpenDriveParser.Load(flatXodr)
