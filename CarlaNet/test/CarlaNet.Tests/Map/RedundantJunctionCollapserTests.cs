@@ -111,6 +111,47 @@ public class RedundantJunctionCollapserTests
     }
 
     [Fact]
+    public void ASignalisedPassThroughJunctionIsKept()
+    {
+        // Shape-wise this junction is collapsible, but it drives traffic lights. Removing it would
+        // take the phase program with it and orphan the heads.
+        string signalised = PassThroughMap.Replace(
+            @"<junction name=""n"" id=""900"">",
+            @"<junction name=""n"" id=""900"">
+    <controller id=""900_p0"" type=""0""/>");
+
+        var result = RedundantJunctionCollapser.Collapse(signalised, out var summary);
+        Assert.Equal(0, summary.Collapsed);
+        Assert.Equal(1, summary.SkippedSignalised);
+        var root = Parse(result);
+        Assert.Equal(3, root.Elements("road").Count());
+        Assert.Single(root.Elements("junction")
+            .Single(j => (string?)j.Attribute("id") == "900").Elements("controller"));
+    }
+
+    [Fact]
+    public void SignalHeadsRideOntoTheMergedRoad()
+    {
+        // A signal on the road that gets absorbed must reappear on the merged road, at the station
+        // the merge moved it to, or the junction it belongs to loses a head.
+        var doc = XDocument.Parse(PassThroughMap);
+        var absorbed = doc.Root!.Elements("road").Single(r => (string)r.Attribute("id")! == "3");
+        absorbed.Element("signals")!.Add(new XElement("signal",
+            new XAttribute("s", "20"), new XAttribute("t", "-5"), new XAttribute("id", "sig1"),
+            new XAttribute("dynamic", "yes"), new XAttribute("orientation", "-")));
+
+        var root = Parse(RedundantJunctionCollapser.Collapse(doc.ToString(), out var summary));
+        Assert.Equal(1, summary.Collapsed);
+
+        var merged = root.Elements("road").Single();
+        var signal = Assert.Single(merged.Element("signals")!.Elements("signal"));
+        Assert.Equal("sig1", (string)signal.Attribute("id")!);
+        // Road 3 began 110 m along the merged road, so its 20 m mark is now at 130 m.
+        Assert.Equal(130.0, double.Parse((string)signal.Attribute("s")!, CultureInfo.InvariantCulture), 6);
+    }
+
+
+    [Fact]
     public void AJunctionOfferingAChoiceIsLeftAlone()
     {
         // A second connector out of the same junction makes it a real fork.

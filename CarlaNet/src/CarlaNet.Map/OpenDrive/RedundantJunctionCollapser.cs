@@ -27,7 +27,8 @@ namespace CarlaNet.Map.OpenDrive;
 
 /// <summary>What a collapse pass did, for the build log.</summary>
 public readonly record struct JunctionCollapseSummary(
-    int JunctionsExamined, int Collapsed, int SkippedNotSimple, int SkippedLaneMismatch);
+    int JunctionsExamined, int Collapsed, int SkippedNotSimple, int SkippedLaneMismatch,
+    int SkippedSignalised);
 
 public static class RedundantJunctionCollapser
 {
@@ -64,7 +65,14 @@ public static class RedundantJunctionCollapser
         var doc = XDocument.Parse(openDriveXml.TrimStart('﻿'));
         var root = doc.Root ?? throw new ArgumentException("not an OpenDRIVE document", nameof(openDriveXml));
 
-        int examined = 0, collapsed = 0, notSimple = 0, laneMismatch = 0;
+        // Counted up front so the post-condition can prove nothing to do with traffic control was
+        // lost. Signal heads ride onto the merged road with the rest of a road's records, and a
+        // signalised junction is never collapsed, so both totals must come out unchanged.
+        int signalsBefore = root.Descendants("signal").Count();
+        int controllersBefore = root.Elements("controller").Count();
+        int junctionControllersBefore = root.Elements("junction").Elements("controller").Count();
+
+        int examined = 0, collapsed = 0, notSimple = 0, laneMismatch = 0, signalised = 0;
         bool progressed = true;
         while (progressed)
         {
@@ -72,11 +80,23 @@ public static class RedundantJunctionCollapser
             examined = 0;
             notSimple = 0;
             laneMismatch = 0;
+            signalised = 0;
             var roads = root.Elements("road").ToDictionary(x => (string)x.Attribute("id")!);
 
             foreach (var junction in root.Elements("junction").ToList())
             {
                 ++examined;
+                // A junction that controls traffic lights must survive: its <controller> children
+                // carry the phase programs and the link binding the signal heads to this junction,
+                // and deleting it orphans every light it drives even though the heads themselves
+                // move safely onto the merged road. On Arapahoe_I25 five of the shortest
+                // pass-through junctions are signalised, so this is not a hypothetical.
+                if (junction.Elements("controller").Any())
+                {
+                    ++signalised;
+                    continue;
+                }
+
                 var connections = junction.Elements("connection").ToList();
                 var incoming = connections.Select(c => (string?)c.Attribute("incomingRoad")).Distinct().ToList();
                 var connecting = connections.Select(c => (string?)c.Attribute("connectingRoad")).Distinct().ToList();
@@ -128,10 +148,34 @@ public static class RedundantJunctionCollapser
             }
         }
 
-        summary = new JunctionCollapseSummary(examined, collapsed, notSimple, laneMismatch);
+        summary = new JunctionCollapseSummary(examined, collapsed, notSimple, laneMismatch, signalised);
         if (collapsed > 0)
+        {
             AssertReferencesResolve(root);
+            AssertTrafficControlIntact(root, signalsBefore, controllersBefore, junctionControllersBefore);
+        }
         return doc.ToString(SaveOptions.DisableFormatting);
+    }
+
+    /// <summary>
+    /// Nothing that drives a traffic light may be lost. Signal heads move with the road records
+    /// they sit on, and a junction carrying a controller is never collapsed, so all three totals
+    /// must survive a merge; a shortfall means a signalised junction was dropped and its lights
+    /// orphaned, which parses cleanly and then flashes a whole intersection green.
+    /// </summary>
+    private static void AssertTrafficControlIntact(
+        XElement root, int signalsBefore, int controllersBefore, int junctionControllersBefore)
+    {
+        int signals = root.Descendants("signal").Count();
+        int controllers = root.Elements("controller").Count();
+        int junctionControllers = root.Elements("junction").Elements("controller").Count();
+        if (signals >= signalsBefore && controllers >= controllersBefore
+            && junctionControllers >= junctionControllersBefore)
+            return;
+        throw new InvalidOperationException(
+            $"collapsing redundant junctions lost traffic control: signals {signalsBefore} -> {signals}, "
+            + $"controllers {controllersBefore} -> {controllers}, "
+            + $"junction controller links {junctionControllersBefore} -> {junctionControllers}");
     }
 
     /// <summary>

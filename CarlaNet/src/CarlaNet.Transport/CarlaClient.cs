@@ -441,7 +441,8 @@ public sealed class CarlaClient : IAsyncDisposable
             .Collapse(flatXodr, out var collapseSummary);
         Console.WriteLine($"[junctions] collapsed {collapseSummary.Collapsed} of "
             + $"{collapseSummary.JunctionsExamined} junctions offering no choice of route "
-            + $"({collapseSummary.SkippedLaneMismatch} skipped on unresolved lane links)");
+            + $"({collapseSummary.SkippedLaneMismatch} skipped on unresolved lane links, "
+            + $"{collapseSummary.SkippedSignalised} kept because they control traffic lights)");
 
         // 2) Parse + extract reference-line samples + reproject (all offline). The origin
         //    is the .xodr geoReference (pinned by osmOptions).
