@@ -15,6 +15,10 @@
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/EditableTextBox.h"
+#include "Framework/Application/SlateApplication.h"
+#include "IDesktopPlatform.h"
+#include "DesktopPlatformModule.h"
+#include "Components/CheckBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
@@ -75,12 +79,12 @@ void UWorldPackageImporterWidget::ApplyLayoutAndStyle()
 		{
 			Description->SetText(FText::FromString(
 				TEXT("Turns a generated world into a level you can open and edit.\n\n"
-				     "A build run with --emit-world-package writes a folder describing the world it "
-				     "made: the road network, the grids that relate the driven surface to true "
-				     "ground, and where on the Earth it sits. Importing one produces a level plus "
-				     "its settings assets, which configure themselves when the level is loaded - no "
-				     "client needed.\n\n"
-				     "Re-importing the same world replaces what a previous import produced.")));
+				     "A build run with --emit-world-package writes one .cwp file per world: the road "
+				     "network, the grids that relate the driven surface to true ground, and where on the "
+				     "Earth it sits. Importing one produces a level plus its settings assets, which "
+				     "configure themselves when the level is loaded - no client needed.\n\n"
+				     "Re-importing the same world replaces what a previous import produced. A package "
+				     "built from different source data is refused unless you allow it below.")));
 			Description->SetAutoWrapText(true);
 			// A text block built in code carries the class default font, which is far larger than the
 			// field labels placed in the layout asset. Match those instead, so the explanation reads as
@@ -95,9 +99,81 @@ void UWorldPackageImporterWidget::ApplyLayoutAndStyle()
 		}
 	}
 
-	// An optional place to put a Cesium ion token. Built here and slotted in after the world name, so
-	// a panel authored before this field existed keeps working without being edited.
-	if (Layout && WidgetTree && MapName && !IonAccessToken)
+	// A world is one file, so the panel asks for one. The folder-and-name fields an older layout may
+	// still carry are hidden rather than removed, so that layout keeps compiling.
+	for (UWidget* Legacy : { static_cast<UWidget*>(PackageDirectory), static_cast<UWidget*>(MapName) })
+	{
+		if (Legacy)
+		{
+			Legacy->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+
+	if (Layout && WidgetTree && !PackagePath)
+	{
+		PackagePathLabel = WidgetTree->ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(), TEXT("PackagePathLabel"));
+		PackagePath = WidgetTree->ConstructWidget<UEditableTextBox>(
+			UEditableTextBox::StaticClass(), TEXT("PackagePath"));
+		BrowseButton = WidgetTree->ConstructWidget<UButton>(
+			UButton::StaticClass(), TEXT("BrowseButton"));
+		UTextBlock* BrowseLabel = WidgetTree->ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(), TEXT("BrowseButtonLabel"));
+
+		if (PackagePathLabel && PackagePath && BrowseButton && BrowseLabel)
+		{
+			PackagePathLabel->SetText(FText::FromString(
+				TEXT("World package (the .cwp a build wrote with --emit-world-package)")));
+			FSlateFontInfo LabelFont = PackagePathLabel->GetFont();
+			LabelFont.Size = 10;
+			PackagePathLabel->SetFont(LabelFont);
+
+			PackagePath->SetHintText(FText::FromString(
+				TEXT("choose a world package, or paste its full path")));
+
+			BrowseLabel->SetText(FText::FromString(TEXT("Choose...")));
+			BrowseButton->AddChild(BrowseLabel);
+			BrowseButton->OnClicked.AddDynamic(this, &UWorldPackageImporterWidget::OnBrowseClicked);
+
+			Layout->AddChildToVerticalBox(PackagePathLabel);
+			Layout->AddChildToVerticalBox(PackagePath);
+			Layout->AddChildToVerticalBox(BrowseButton);
+			Layout->ShiftChild(0, PackagePathLabel);
+			Layout->ShiftChild(1, PackagePath);
+			Layout->ShiftChild(2, BrowseButton);
+			if (UVerticalBoxSlot* BrowseSlot = Cast<UVerticalBoxSlot>(BrowseButton->Slot))
+			{
+				BrowseSlot->SetHorizontalAlignment(HAlign_Left);
+			}
+		}
+	}
+
+	// The one way past the guard that refuses to overwrite a level built from different source data.
+	// Without it the refusal names a remedy the panel cannot offer.
+	if (Layout && WidgetTree && !ReplaceDifferentSource)
+	{
+		ReplaceDifferentSource = WidgetTree->ConstructWidget<UCheckBox>(
+			UCheckBox::StaticClass(), TEXT("ReplaceDifferentSource"));
+		ReplaceDifferentSourceLabel = WidgetTree->ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(), TEXT("ReplaceDifferentSourceLabel"));
+		if (ReplaceDifferentSource && ReplaceDifferentSourceLabel)
+		{
+			ReplaceDifferentSourceLabel->SetText(FText::FromString(
+				TEXT("Replace a level built from a different source (discards edits made to it)")));
+			FSlateFontInfo CheckFont = ReplaceDifferentSourceLabel->GetFont();
+			CheckFont.Size = 10;
+			ReplaceDifferentSourceLabel->SetFont(CheckFont);
+			ReplaceDifferentSource->AddChild(ReplaceDifferentSourceLabel);
+			Layout->AddChildToVerticalBox(ReplaceDifferentSource);
+			if (ImportButton)
+			{
+				Layout->ShiftChild(Layout->GetChildIndex(ImportButton), ReplaceDifferentSource);
+			}
+		}
+	}
+
+	// An optional place to put a Cesium ion token.
+	if (Layout && WidgetTree && !IonAccessToken)
 	{
 		IonAccessTokenLabel = WidgetTree->ConstructWidget<UTextBlock>(
 			UTextBlock::StaticClass(), TEXT("IonAccessTokenLabel"));
@@ -118,9 +194,11 @@ void UWorldPackageImporterWidget::ApplyLayoutAndStyle()
 			Layout->AddChildToVerticalBox(IonAccessToken);
 			// AddChild appends, which would put these after the button. Put them directly below the
 			// world name, which is the field they follow on the panel.
-			const int32 AfterMapName = Layout->GetChildIndex(MapName) + 1;
-			Layout->ShiftChild(AfterMapName, IonAccessTokenLabel);
-			Layout->ShiftChild(AfterMapName + 1, IonAccessToken);
+			// Below the package it applies to, and above the action it affects.
+			const int32 BeforeImport = ImportButton
+				? FMath::Max(0, Layout->GetChildIndex(ImportButton)) : Layout->GetChildrenCount();
+			Layout->ShiftChild(BeforeImport, IonAccessTokenLabel);
+			Layout->ShiftChild(BeforeImport + 1, IonAccessToken);
 		}
 	}
 
@@ -146,7 +224,7 @@ void UWorldPackageImporterWidget::ApplyLayoutAndStyle()
 		Style.SetPressed(FSlateRoundedBoxBrush(ImportBluePressed, ImportButtonCornerRadius));
 		ImportButton->SetStyle(Style);
 		ImportButton->SetToolTipText(FText::FromString(
-			TEXT("Read the named world from the folder above and write it out as a level, together "
+			TEXT("Read the chosen world package and write it out as a level, together "
 			     "with the assets describing its origin, its imagery layers and its ground, and the "
 			     "road network placed where the simulator looks for it.\n\n"
 			     "The level is written but not opened. Importing over the level you currently have "
@@ -174,24 +252,47 @@ void UWorldPackageImporterWidget::ApplyLayoutAndStyle()
 
 void UWorldPackageImporterWidget::SuggestFirstWorld()
 {
-	if (!PackageDirectory || !MapName || !MapName->GetText().IsEmpty())
+	if (!PackagePath || !PackagePath->GetText().IsEmpty())
 	{
 		return;
 	}
-	const FString Directory = PackageDirectory->GetText().ToString().TrimStartAndEnd();
-	if (Directory.IsEmpty())
-	{
-		return;
-	}
-	const TArray<FString> Worlds = UWorldPackageImporter::ListWorldPackages(Directory);
+	// Offer whatever the last build left in the usual place, so the common case needs no typing at
+	// all and the file dialog is there for everything else.
+	const FString Usual = FPaths::ConvertRelativePathToFull(
+		FPaths::ProjectDir() / TEXT("..") / TEXT("..") / TEXT("Build") / TEXT("world-packages"));
+	const TArray<FString> Worlds = UWorldPackageImporter::ListWorldPackages(Usual);
 	if (Worlds.Num() > 0)
 	{
-		MapName->SetText(FText::FromString(Worlds[0]));
-		Report(FString::Printf(TEXT("%d world(s) in this folder."), Worlds.Num()), false);
+		PackagePath->SetText(FText::FromString(Usual / (Worlds[0] + TEXT(".cwp"))));
+		Report(FString::Printf(TEXT("%d world package(s) where builds put them."), Worlds.Num()), false);
 	}
-	else
+}
+
+void UWorldPackageImporterWidget::OnBrowseClicked()
+{
+	IDesktopPlatform* Desktop = FDesktopPlatformModule::Get();
+	if (!Desktop || !PackagePath)
 	{
-		Report(TEXT("No worlds in this folder. Build one with --emit-world-package first."), false);
+		return;
+	}
+	const void* ParentWindow = FSlateApplication::IsInitialized()
+		? FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr) : nullptr;
+
+	FString StartIn = FPaths::GetPath(PackagePath->GetText().ToString());
+	if (StartIn.IsEmpty() || !FPaths::DirectoryExists(StartIn))
+	{
+		StartIn = FPaths::ConvertRelativePathToFull(
+			FPaths::ProjectDir() / TEXT("..") / TEXT("..") / TEXT("Build") / TEXT("world-packages"));
+	}
+
+	TArray<FString> Chosen;
+	if (Desktop->OpenFileDialog(ParentWindow, TEXT("Choose a world package"), StartIn, FString(),
+			TEXT("World package (*.cwp)|*.cwp|Zip archive (*.zip)|*.zip"),
+			EFileDialogFlags::None, Chosen)
+		&& Chosen.Num() > 0)
+	{
+		PackagePath->SetText(FText::FromString(FPaths::ConvertRelativePathToFull(Chosen[0])));
+		Report(FString::Printf(TEXT("Chose %s."), *FPaths::GetCleanFilename(Chosen[0])), false);
 	}
 }
 
@@ -202,28 +303,30 @@ void UWorldPackageImporterWidget::HandleImportClicked()
 
 FString UWorldPackageImporterWidget::ImportFromFields()
 {
-	if (!PackageDirectory || !MapName)
+	if (!PackagePath)
 	{
-		const FString Message = TEXT("The panel is missing its input fields.");
+		const FString Message = TEXT("The panel is missing its input field.");
 		Report(Message, true);
 		return Message;
 	}
 
-	const FString Directory = PackageDirectory->GetText().ToString().TrimStartAndEnd();
-	const FString World = MapName->GetText().ToString().TrimStartAndEnd();
-	if (Directory.IsEmpty() || World.IsEmpty())
+	const FString Chosen = PackagePath->GetText().ToString().TrimStartAndEnd();
+	if (Chosen.IsEmpty())
 	{
-		const FString Message = TEXT("Give both a world package folder and a world name.");
+		const FString Message = TEXT("Choose a world package to import.");
 		Report(Message, true);
 		return Message;
 	}
-	if (!UWorldPackageImporter::IsWorldPackagePresent(Directory, World))
+	if (!FPaths::FileExists(Chosen))
 	{
-		const FString Message = FString::Printf(
-			TEXT("No world called '%s' in that folder."), *World);
+		const FString Message = FString::Printf(TEXT("There is no file at %s."), *Chosen);
 		Report(Message, true);
 		return Message;
 	}
+
+	// The world is named by the package that carries it, so there is nothing to keep in step.
+	const FString Directory = FPaths::GetPath(Chosen);
+	const FString World = FPaths::GetBaseFilename(Chosen);
 
 	// Say what is about to be replaced, if anything, so the outcome is not a surprise.
 	const FString Existing = UWorldPackageImporter::DescribeExistingImport(World, DestinationFolder);
@@ -236,7 +339,10 @@ FString UWorldPackageImporterWidget::ImportFromFields()
 		IonAccessToken ? IonAccessToken->GetText().ToString().TrimStartAndEnd() : FString();
 
 	const FWorldPackageImportResult Result = UWorldPackageImporter::ImportWorldPackage(
-		Directory, World, DestinationFolder, bReplaceLevelBuiltFromADifferentSource, Token);
+		Directory, World, DestinationFolder,
+		ReplaceDifferentSource ? ReplaceDifferentSource->IsChecked()
+		                       : bReplaceLevelBuiltFromADifferentSource,
+		Token);
 	if (!Result.bSucceeded)
 	{
 		const FString Message = FString::Printf(TEXT("Import failed: %s"), *Result.FailureReason);

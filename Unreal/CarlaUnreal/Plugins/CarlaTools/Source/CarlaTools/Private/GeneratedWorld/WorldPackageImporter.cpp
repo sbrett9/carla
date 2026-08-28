@@ -13,6 +13,7 @@
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Editor.h"
 #include "EditorAssetLibrary.h"
+#include "FileUtilities/ZipArchiveReader.h"
 #include "EditorScriptingHelpers.h"
 #include "Engine/World.h"
 #include "Engine/PostProcessVolume.h"
@@ -38,29 +39,68 @@ namespace
 	/** The level a generated world is cloned from: a road generator, a player start and lighting. */
 	const TCHAR* GeneratedWorldTemplate = TEXT("/Game/Carla/Maps/OpenDriveMap");
 
-	FString ManifestFile(const FString& Dir, const FString& MapName)
+	// A world package is one file: a zip holding the manifest, the road network and, when the world
+	// was reconciled cell by cell, the grids. The entries are named for their role rather than for
+	// the world, since the file itself already carries the name.
+	const TCHAR* const ManifestEntry = TEXT("world.json");
+	const TCHAR* const OpenDriveEntry = TEXT("map.xodr");
+	const TCHAR* const GridEntry = TEXT("bareearth.bin");
+	const TCHAR* const PackageExtension = TEXT(".cwp");
+
+	/** The package a world of this name occupies inside a directory. */
+	FString PackageFile(const FString& Dir, const FString& MapName)
 	{
-		return FPaths::Combine(Dir, MapName + TEXT(".world.json"));
+		return FPaths::Combine(Dir, MapName + PackageExtension);
 	}
 
-	FString OpenDriveFile(const FString& Dir, const FString& MapName)
+	/**
+	 * Open a package for reading, or return null with a reason.
+	 *
+	 * The archive is deliberately uncompressed: FZipArchiveReader reads stored entries only, and the
+	 * writer stores rather than deflates for exactly this reason.
+	 */
+	TUniquePtr<FZipArchiveReader> OpenPackage(const FString& PackagePath, FString& OutError)
 	{
-		return FPaths::Combine(Dir, MapName + TEXT(".xodr"));
+		if (!FPaths::FileExists(PackagePath))
+		{
+			OutError = FString::Printf(TEXT("no world package at %s"), *PackagePath);
+			return nullptr;
+		}
+		IFileHandle* Handle = FPlatformFileManager::Get().GetPlatformFile().OpenRead(*PackagePath);
+		if (!Handle)
+		{
+			OutError = FString::Printf(TEXT("could not open %s"), *PackagePath);
+			return nullptr;
+		}
+		// The reader takes ownership of the handle, including when the archive turns out to be corrupt.
+		TUniquePtr<FZipArchiveReader> Reader = MakeUnique<FZipArchiveReader>(Handle);
+		if (!Reader->IsValid())
+		{
+			OutError = FString::Printf(TEXT("%s is not a readable world package"), *PackagePath);
+			return nullptr;
+		}
+		return Reader;
 	}
 
-	FString GridFile(const FString& Dir, const FString& MapName)
+	/** Read one entry as text. */
+	bool ReadPackageText(const FZipArchiveReader& Reader, const TCHAR* Entry, FString& OutText)
 	{
-		return FPaths::Combine(Dir, MapName + TEXT(".bareearth.bin"));
+		TArray<uint8> Bytes;
+		if (!Reader.TryReadFile(Entry, Bytes))
+		{
+			return false;
+		}
+		FFileHelper::BufferToString(OutText, Bytes.GetData(), Bytes.Num());
+		return true;
 	}
 
 	/** Load and parse a world manifest. Returns null and fills OutError when it cannot be read. */
-	TSharedPtr<FJsonObject> LoadManifestJson(
-		const FString& Dir, const FString& MapName, FString& OutError)
+	TSharedPtr<FJsonObject> LoadManifestJson(const FZipArchiveReader& Package, FString& OutError)
 	{
 		FString Text;
-		if (!FFileHelper::LoadFileToString(Text, *ManifestFile(Dir, MapName)))
+		if (!ReadPackageText(Package, ManifestEntry, Text))
 		{
-			OutError = FString::Printf(TEXT("no world manifest at %s"), *ManifestFile(Dir, MapName));
+			OutError = TEXT("the world package carries no manifest");
 			return nullptr;
 		}
 		TSharedPtr<FJsonObject> Json;
@@ -135,18 +175,19 @@ namespace
 
 bool UWorldPackageImporter::IsWorldPackagePresent(const FString& PackageDirectory, const FString& MapName)
 {
-	return FPaths::FileExists(ManifestFile(PackageDirectory, MapName));
+	return FPaths::FileExists(PackageFile(PackageDirectory, MapName));
 }
 
 TArray<FString> UWorldPackageImporter::ListWorldPackages(const FString& PackageDirectory)
 {
 	TArray<FString> Found;
-	IFileManager::Get().FindFiles(Found, *FPaths::Combine(PackageDirectory, TEXT("*.world.json")), true, false);
+	IFileManager::Get().FindFiles(
+		Found, *FPaths::Combine(PackageDirectory, FString(TEXT("*")) + PackageExtension), true, false);
 	TArray<FString> Names;
 	Names.Reserve(Found.Num());
 	for (const FString& File : Found)
 	{
-		Names.Add(File.LeftChop(FString(TEXT(".world.json")).Len()));
+		Names.Add(FPaths::GetBaseFilename(File));
 	}
 	Names.Sort();
 	return Names;
@@ -165,7 +206,14 @@ UGeoreferencedWorldSettings* UWorldPackageImporter::CreateWorldSettingsAssets(
 		return nullptr;
 	}
 
-	TSharedPtr<FJsonObject> Json = LoadManifestJson(PackageDirectory, MapName, OutFailureReason);
+	TUniquePtr<FZipArchiveReader> Package =
+		OpenPackage(PackageFile(PackageDirectory, MapName), OutFailureReason);
+	if (!Package)
+	{
+		return nullptr;
+	}
+
+	TSharedPtr<FJsonObject> Json = LoadManifestJson(*Package, OutFailureReason);
 	if (!Json.IsValid())
 	{
 		return nullptr;
@@ -191,11 +239,10 @@ UGeoreferencedWorldSettings* UWorldPackageImporter::CreateWorldSettingsAssets(
 	if (bDrapeActive)
 	{
 		TArray<uint8> Blob;
-		if (!FFileHelper::LoadFileToArray(Blob, *GridFile(PackageDirectory, MapName)))
+		if (!Package->TryReadFile(GridEntry, Blob))
 		{
-			OutFailureReason = FString::Printf(
-				TEXT("this world was reconciled point by point but its field file is missing: %s"),
-				*GridFile(PackageDirectory, MapName));
+			OutFailureReason = TEXT(
+				"this world was reconciled point by point but the package carries no field");
 			return nullptr;
 		}
 
@@ -205,7 +252,7 @@ UGeoreferencedWorldSettings* UWorldPackageImporter::CreateWorldSettingsAssets(
 		if (Blob.Num() != Expected)
 		{
 			OutFailureReason = FString::Printf(
-				TEXT("field file is %lld bytes, expected %lld for a %dx%d grid"),
+				TEXT("the field is %lld bytes, expected %lld for a %dx%d grid"),
 				static_cast<int64>(Blob.Num()), Expected, NumCols, NumRows);
 			return nullptr;
 		}
@@ -477,8 +524,14 @@ FWorldPackageImportResult UWorldPackageImporter::ImportWorldPackage(
 	// refused unless the caller has said to replace it.
 	{
 		FString ManifestError;
-		const TSharedPtr<FJsonObject> Incoming =
-			LoadManifestJson(PackageDirectory, MapName, ManifestError);
+		TUniquePtr<FZipArchiveReader> Package =
+			OpenPackage(PackageFile(PackageDirectory, MapName), ManifestError);
+		if (!Package)
+		{
+			Result.FailureReason = ManifestError;
+			return Result;
+		}
+		const TSharedPtr<FJsonObject> Incoming = LoadManifestJson(*Package, ManifestError);
 		if (!Incoming.IsValid())
 		{
 			Result.FailureReason = ManifestError;
@@ -499,16 +552,25 @@ FWorldPackageImportResult UWorldPackageImporter::ImportWorldPackage(
 				const bool bDifferent = bKnownSources && IncomingHash != Existing->SourceOsmSha256;
 				if (bDifferent && !bReplaceDifferentSource)
 				{
+					// Report the hashes, not the file names: the comparison is on content, and both
+					// sides usually carry the same name, so naming them read as "built from X, but
+					// built from X".
+					auto ShortHash = [](const FString& Hash)
+					{
+						return Hash.IsEmpty() ? FString(TEXT("an unrecorded source")) : Hash.Left(12);
+					};
 					Result.FailureReason = FString::Printf(
-						TEXT("%s already exists and was built from '%s', but this package was built "
-						     "from '%s'. Importing would replace that level and any editing done to "
-						     "it. Import under a different name, or allow replacing a level built "
-						     "from a different source."),
+						TEXT("%s already exists and was built from %s (%s), but this package was "
+						     "built from %s (%s). Importing would replace that level and any editing "
+						     "done to it. Tick 'replace a level built from a different source' to "
+						     "go ahead."),
 						*(DestinationFolder / MapName),
 						*(Existing->SourceOsmFileName.IsEmpty()
 							? FString(TEXT("an unrecorded source")) : Existing->SourceOsmFileName),
+						*ShortHash(Existing->SourceOsmSha256),
 						*(IncomingSource.IsEmpty()
-							? FString(TEXT("an unrecorded source")) : IncomingSource));
+							? FString(TEXT("an unrecorded source")) : IncomingSource),
+						*ShortHash(IncomingHash));
 					return Result;
 				}
 				UE_LOG(LogCarlaTools, Display,
@@ -552,6 +614,27 @@ FWorldPackageImportResult UWorldPackageImporter::ImportWorldPackage(
 	{
 		UEditorAssetLibrary::DeleteAsset(LevelPackageName);
 	}
+
+	// Deleting a level does not free its name. UEditorAssetLibrary::DeleteAsset loads the World to
+	// delete it, tears it down and removes the file, but leaves the UPackage resident -- so the next
+	// import finds nothing on disk, nothing in the asset registry, and the name still taken. The
+	// clone is then refused with "an asset already exists" while the delete reports "not a valid
+	// asset": two contradictory errors describing the same residue.
+	//
+	// Collecting garbage does not reliably reclaim it, so the residue is renamed aside instead, which
+	// frees the name outright. The renamed package is unreferenced and goes when the editor next
+	// collects.
+	if (UPackage* Stale = FindPackage(nullptr, *LevelPackageName))
+	{
+		const FName Aside = MakeUniqueObjectName(
+			nullptr, UPackage::StaticClass(), FName(*(LevelPackageName + TEXT("_Replaced"))));
+		Stale->Rename(*Aside.ToString(), nullptr,
+			REN_DontCreateRedirectors | REN_NonTransactional | REN_DoNotDirty);
+		UE_LOG(LogCarlaTools, Verbose,
+			TEXT("[WorldPackageImporter] moved a resident %s aside as %s so it could be replaced."),
+			*LevelPackageName, *Aside.ToString());
+	}
+
 	if (!UEditorAssetLibrary::DuplicateAsset(GeneratedWorldTemplate, LevelPackageName))
 	{
 		Result.FailureReason = FString::Printf(
@@ -601,18 +684,29 @@ FWorldPackageImportResult UWorldPackageImporter::ImportWorldPackage(
 	const FString MapContentDir = FPaths::ConvertRelativePathToFull(FPaths::ProjectContentDir())
 		/ DestinationFolder.RightChop(FString(TEXT("/Game/")).Len());
 	Result.OpenDriveFilePath = MapContentDir / TEXT("OpenDrive") / (MapName + TEXT(".xodr"));
-	if (IFileManager::Get().Copy(*Result.OpenDriveFilePath,
-			*OpenDriveFile(PackageDirectory, MapName), true, true) != COPY_OK)
+
+	FString OpenDriveText;
+	{
+		FString PackageError;
+		TUniquePtr<FZipArchiveReader> Package =
+			OpenPackage(PackageFile(PackageDirectory, MapName), PackageError);
+		if (!Package || !ReadPackageText(*Package, OpenDriveEntry, OpenDriveText))
+		{
+			Result.FailureReason = PackageError.IsEmpty()
+				? TEXT("the world package carries no road network") : PackageError;
+			return Result;
+		}
+	}
+	if (!FFileHelper::SaveStringToFile(OpenDriveText, *Result.OpenDriveFilePath,
+			FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
 	{
 		Result.FailureReason = FString::Printf(
 			TEXT("could not place the road network at %s"), *Result.OpenDriveFilePath);
 		return Result;
 	}
 
-	// Bake the road surface into the level, so opening it shows the world rather than an empty map,
-	// and tell the generator not to build a second surface over the top at play time.
-	FString OpenDriveText;
-	if (FFileHelper::LoadFileToString(OpenDriveText, *OpenDriveFile(PackageDirectory, MapName)))
+	// Generate the road surface into the level, so opening it shows the world rather than an empty
+	// map, and tell the generator not to build a second surface over the top at play time.
 	{
 		const FRoadSurfaceBakeResult Bake =
 			URoadSurfaceBaker::BakeIntoWorld(World, OpenDriveText, MapName, Settings);

@@ -609,6 +609,7 @@ public sealed class CarlaClient : IAsyncDisposable
         //     reproduces the previous behaviour exactly.
         double atGradeOffset = drape ? drapeSystematicOffset : heightOffset;
         var gradeLift = new double[samples.Count];
+        int[] matchedWayIndex = [];
         var raisedSamples = new bool[samples.Count];
         IReadOnlyList<CarlaNet.Map.OpenDrive.OsmRoadWay> elevatedStructures = [];
         // One description of a deck's footprint, shared by the road elevation (which spans it on the
@@ -655,6 +656,7 @@ public sealed class CarlaClient : IAsyncDisposable
                 separationOptions, atGradeAtSample);
             gradeLift = separation.Lift;
             elevatedStructures = separation.ElevatedWays;
+            matchedWayIndex = separation.MatchedWayIndex;
             for (int i = 0; i < samples.Count; i++) raisedSamples[i] = gradeLift[i] != 0.0;
         }
         else if (anyLayeredWays)
@@ -710,6 +712,19 @@ public sealed class CarlaClient : IAsyncDisposable
         {
             for (int i = 0; i < samples.Count; i++)
                 roadEllipsoidal[i] = heights[i + 1].Altitude + heightOffset + gradeLift[i];
+        }
+
+        // 4c) Give each bridge the shape a bridge has. A surveyed surface cannot describe a deck
+        //     -- over one it returns either the ground beneath it or a blob of deck, parapet and
+        //     whatever traffic was crossing -- and the lift that raises the deck fades out
+        //     algebraically rather than where the structure ends. Both ends of the structure sit on
+        //     ground the survey can see, so the run between them is replaced by the three straight
+        //     pieces a bridge is built from.
+        if (matchedWayIndex.Length == samples.Count && elevatedStructures.Count > 0)
+        {
+            int shaped = CarlaNet.Map.OpenDrive.BridgeProfileShaper.Shape(
+                samples, roadEllipsoidal, gradeLift, matchedWayIndex, osmLayers.Ways);
+            Console.WriteLine($"[bridges] shaped {shaped} road(s) as ramp-deck-ramp");
         }
 
         // 5) Inject the sampled heights into the .xodr <elevationProfile>.
@@ -1103,7 +1118,7 @@ public sealed class CarlaClient : IAsyncDisposable
             directory, manifest, elevatedXodr,
             LastDrapeActive ? ToFloatGrid(LastDrapedOffsetBytes) : [],
             LastDrapeActive ? ToFloatGrid(LastDrapedDtmBytes) : []);
-        return WorldPackage.ManifestPath(directory, mapName);
+        return WorldPackage.PackagePath(directory, mapName);
     }
 
     /// The OpenDRIVE geoReference projection string, or empty when the document carries none.

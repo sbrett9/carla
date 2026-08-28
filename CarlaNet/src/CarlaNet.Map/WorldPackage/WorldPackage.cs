@@ -6,17 +6,28 @@
 // can be rebuilt, inspected, or turned into an editable level later, by something that was not
 // present when it was generated.
 //
-// Three files per world, named after the map:
-//   <name>.xodr             the elevated OpenDRIVE, exactly as the server received it
-//   <name>.bareearth.bin    the per-cell surface reconciliation grids, float32 (see the format below)
-//   <name>.world.json       the manifest: datum, height reconciliation, layers, sandbox, provenance
+// One file per world -- <name>.cwp -- which is a zip archive holding three entries:
+//   world.json      the manifest: datum, height reconciliation, layers, sandbox, provenance
+//   map.xodr        the elevated OpenDRIVE, exactly as the server received it
+//   bareearth.bin   the per-cell surface reconciliation grids, float32 (see the format below)
+//
+// One file rather than three loose ones because a world is a thing you move, keep, and hand to
+// someone: it can be copied, archived and versioned without a folder convention to preserve, and
+// importing it is choosing a file rather than naming a directory and a world within it. The entries
+// are named for their role rather than for the map, since the archive already carries the name.
 //
 // The grids are binary rather than JSON because they run to hundreds of thousands of cells. The
 // manifest is JSON because it is small, and because a human resolving "why is this world wrong"
-// should be able to read it without a tool.
+// should be able to read it without a tool -- renaming the package to .zip opens it in anything.
+//
+// Entries are STORED, never deflated. The editor reads packages with FZipArchiveReader, which
+// handles uncompressed archives only, so compressing here would produce a package the importer
+// cannot open. It costs perhaps three times the bytes on disk; the alternative is a package that
+// writes cleanly and fails to import, which is a far worse trade.
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -115,14 +126,16 @@ public static class WorldPackage
         DefaultIgnoreCondition = JsonIgnoreCondition.Never,
     };
 
-    public static string ManifestPath(string directory, string mapName)
-        => Path.Combine(directory, mapName + ".world.json");
+    /// <summary>Extension of a world package. A zip, so anything can open it once renamed.</summary>
+    public const string Extension = ".cwp";
 
-    public static string OpenDrivePath(string directory, string mapName)
-        => Path.Combine(directory, mapName + ".xodr");
+    private const string ManifestEntry = "world.json";
+    private const string OpenDriveEntry = "map.xodr";
+    private const string GridEntry = "bareearth.bin";
 
-    public static string GridPath(string directory, string mapName)
-        => Path.Combine(directory, mapName + ".bareearth.bin");
+    /// <summary>The package a world of this name occupies inside a directory.</summary>
+    public static string PackagePath(string directory, string mapName)
+        => Path.Combine(directory, mapName + Extension);
 
     /// <summary>
     /// Write a complete package. <paramref name="offsetMeters"/> and <paramref name="bareEarthDtmMeters"/>
@@ -158,42 +171,84 @@ public static class WorldPackage
         }
 
         Directory.CreateDirectory(Path.GetFullPath(directory));
+        string package = PackagePath(directory, manifest.MapName);
 
-        File.WriteAllText(OpenDrivePath(directory, manifest.MapName), elevatedXodr, new UTF8Encoding(false));
-        File.WriteAllText(
-            ManifestPath(directory, manifest.MapName),
-            JsonSerializer.Serialize(manifest, ManifestJson),
-            new UTF8Encoding(false));
+        // Written whole and moved into place, so a package that exists is always complete: an import
+        // reading one while a build is part-way through writing it would otherwise see a manifest
+        // describing grids that are not there yet.
+        string staging = package + ".partial";
+        File.Delete(staging);
 
-        if (!manifest.DrapeActive)
+        using (var archive = ZipFile.Open(staging, ZipArchiveMode.Create))
         {
-            // A constant shift is fully described by the manifest, so no grid file is written at all.
-            // Its absence is the signal, which keeps "no drape" from looking like "grid went missing".
-            File.Delete(GridPath(directory, manifest.MapName));
-            return;
+            WriteTextEntry(archive, ManifestEntry, JsonSerializer.Serialize(manifest, ManifestJson));
+            WriteTextEntry(archive, OpenDriveEntry, elevatedXodr);
+
+            // A constant shift is fully described by the manifest, so no grid entry is written at
+            // all. Its absence is the signal, which keeps "no drape" from looking like "the grids
+            // went missing".
+            if (manifest.DrapeActive)
+            {
+                using Stream grid = archive.CreateEntry(GridEntry, CompressionLevel.NoCompression).Open();
+                using var writer = new BinaryWriter(grid, new UTF8Encoding(false), leaveOpen: false);
+                writer.Write(GridMagic);
+                writer.Write(manifest.OriginLatitude);
+                writer.Write(manifest.OriginLongitude);
+                writer.Write(manifest.OriginHeightMeters);
+                writer.Write(manifest.GridMinXMeters);
+                writer.Write(manifest.GridMinYMeters);
+                writer.Write(manifest.GridCellSizeMeters);
+                writer.Write(manifest.GridNumCols);
+                writer.Write(manifest.GridNumRows);
+                foreach (float v in offsetMeters) { writer.Write(v); }
+                foreach (float v in bareEarthDtmMeters) { writer.Write(v); }
+            }
         }
 
-        using var stream = File.Create(GridPath(directory, manifest.MapName));
-        using var writer = new BinaryWriter(stream, new UTF8Encoding(false), leaveOpen: false);
-        writer.Write(GridMagic);
-        writer.Write(manifest.OriginLatitude);
-        writer.Write(manifest.OriginLongitude);
-        writer.Write(manifest.OriginHeightMeters);
-        writer.Write(manifest.GridMinXMeters);
-        writer.Write(manifest.GridMinYMeters);
-        writer.Write(manifest.GridCellSizeMeters);
-        writer.Write(manifest.GridNumCols);
-        writer.Write(manifest.GridNumRows);
-        foreach (float v in offsetMeters) { writer.Write(v); }
-        foreach (float v in bareEarthDtmMeters) { writer.Write(v); }
+        File.Move(staging, package, overwrite: true);
+    }
+
+    private static void WriteTextEntry(ZipArchive archive, string name, string content)
+    {
+        using Stream entry = archive.CreateEntry(name, CompressionLevel.NoCompression).Open();
+        using var writer = new StreamWriter(entry, new UTF8Encoding(false));
+        writer.Write(content);
     }
 
     /// <summary>Read a package's manifest. Throws if it is absent or unparseable.</summary>
-    public static WorldPackageManifest ReadManifest(string directory, string mapName)
+    public static WorldPackageManifest ReadManifest(string packagePath)
     {
-        string json = File.ReadAllText(ManifestPath(directory, mapName));
-        return JsonSerializer.Deserialize<WorldPackageManifest>(json, ManifestJson)
-            ?? throw new InvalidDataException($"empty world manifest: {ManifestPath(directory, mapName)}");
+        using var archive = ZipFile.OpenRead(packagePath);
+        ZipArchiveEntry entry = archive.GetEntry(ManifestEntry)
+            ?? throw new InvalidDataException($"not a world package, no {ManifestEntry}: {packagePath}");
+        using var reader = new StreamReader(entry.Open(), new UTF8Encoding(false));
+        return JsonSerializer.Deserialize<WorldPackageManifest>(reader.ReadToEnd(), ManifestJson)
+            ?? throw new InvalidDataException($"empty world manifest: {packagePath}");
+    }
+
+    /// <summary>The road network a package carries, as the server produced it.</summary>
+    public static string ReadOpenDrive(string packagePath)
+    {
+        using var archive = ZipFile.OpenRead(packagePath);
+        ZipArchiveEntry entry = archive.GetEntry(OpenDriveEntry)
+            ?? throw new InvalidDataException($"world package has no road network: {packagePath}");
+        using var reader = new StreamReader(entry.Open(), new UTF8Encoding(false));
+        return reader.ReadToEnd();
+    }
+
+    /// <summary>Every world a directory holds, by name, for a caller offering a choice.</summary>
+    public static IReadOnlyList<string> ListPackages(string directory)
+    {
+        if (!Directory.Exists(directory))
+        {
+            return [];
+        }
+        return Directory.GetFiles(directory, "*" + Extension)
+            .Select(Path.GetFileNameWithoutExtension)
+            .Where(n => !string.IsNullOrEmpty(n))
+            .Select(n => n!)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     /// <summary>
@@ -201,21 +256,25 @@ public static class WorldPackage
     /// which is the normal case for a world reconciled by a constant shift.
     /// </summary>
     public static bool TryReadGrids(
-        string directory, string mapName, out float[] offsetMeters, out float[] bareEarthDtmMeters)
+        string packagePath, out float[] offsetMeters, out float[] bareEarthDtmMeters)
     {
         offsetMeters = [];
         bareEarthDtmMeters = [];
-        string path = GridPath(directory, mapName);
-        if (!File.Exists(path))
+
+        using var archive = ZipFile.OpenRead(packagePath);
+        ZipArchiveEntry? grid = archive.GetEntry(GridEntry);
+        if (grid is null)
         {
             return false;
         }
 
-        using var stream = File.OpenRead(path);
+        // Zip entries are not seekable, and the reader below only ever moves forward, so the stream
+        // is consumed as it comes.
+        using var stream = grid.Open();
         using var reader = new BinaryReader(stream, new UTF8Encoding(false), leaveOpen: false);
         if (reader.ReadInt32() != GridMagic)
         {
-            throw new InvalidDataException($"not a world-package grid file: {path}");
+            throw new InvalidDataException($"not a world-package grid: {packagePath}");
         }
         reader.ReadDouble();   // origin latitude, carried for self-description
         reader.ReadDouble();   // origin longitude
@@ -228,7 +287,7 @@ public static class WorldPackage
         int count = numCols * numRows;
         if (numCols < 2 || numRows < 2)
         {
-            throw new InvalidDataException($"degenerate grid {numCols}x{numRows} in {path}");
+            throw new InvalidDataException($"degenerate grid {numCols}x{numRows} in {packagePath}");
         }
 
         offsetMeters = new float[count];

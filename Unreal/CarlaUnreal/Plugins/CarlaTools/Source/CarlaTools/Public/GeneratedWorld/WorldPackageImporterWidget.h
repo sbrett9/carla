@@ -84,6 +84,10 @@ private:
 	 */
 	void ApplyLayoutAndStyle();
 
+	/** Choose a package with a file dialog. */
+	UFUNCTION()
+	void OnBrowseClicked();
+
 	// Bound by name to widgets of the same name in the Blueprint. A Blueprint missing any of these
 	// fails to compile, which is the intended contract: the panel's layout has to provide them.
 	UPROPERTY(meta = (BindWidget))
@@ -96,11 +100,35 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UTextBlock> Description;
 
-	UPROPERTY(meta = (BindWidget))
+	/**
+	 * The folder-and-name pair an earlier panel used to ask for.
+	 *
+	 * A world is one file now, so these are optional and hidden when present: a layout authored
+	 * against the old panel still compiles, and can have them deleted at leisure.
+	 */
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UEditableTextBox> PackageDirectory;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UEditableTextBox> MapName;
+
+	/** Full path of the .cwp package to import. */
+	UPROPERTY(Transient)
+	TObjectPtr<UEditableTextBox> PackagePath;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> PackagePathLabel;
+
+	/** Opens a file dialog, so a package can be picked rather than typed. */
+	UPROPERTY(Transient)
+	TObjectPtr<UButton> BrowseButton;
+
+	/** Allows an import to replace a level built from different source data. */
+	UPROPERTY(Transient)
+	TObjectPtr<class UCheckBox> ReplaceDifferentSource;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> ReplaceDifferentSourceLabel;
 
 	/**
 	 * Optional Cesium ion token to write into the level's imagery layers.

@@ -50,3 +50,6 @@ cesium-request-cache.sqlite*
 # Worlds exported from a world package. Generated content: rebuild them from the
 # package with the world package importer rather than tracking the cooked output.
 /Unreal/CarlaUnreal/Plugins/GeneratedWorlds/
+
+# Cesium for Unreal is source-built by CarlaSetup.ps1, not vendored (2.6 GB).
+/Unreal/CarlaUnreal/Plugins/CesiumForUnreal/

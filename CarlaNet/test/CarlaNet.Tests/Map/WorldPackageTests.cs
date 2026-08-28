@@ -13,6 +13,9 @@ namespace CarlaNet.Tests.Map;
 
 public class WorldPackageTests : IDisposable
 {
+    /// The package these tests write and read back.
+    private string Pkg => WorldPackage.PackagePath(_dir, "TestArea");
+
     private readonly string _dir;
 
     public WorldPackageTests()
@@ -78,7 +81,7 @@ public class WorldPackageTests : IDisposable
 
         WorldPackage.Write(_dir, manifest, Xodr, offset, ground);
 
-        Assert.True(WorldPackage.TryReadGrids(_dir, "TestArea", out var readOffset, out var readGround));
+        Assert.True(WorldPackage.TryReadGrids(Pkg, out var readOffset, out var readGround));
         Assert.Equal(offset, readOffset);
         Assert.Equal(ground, readGround);
     }
@@ -99,7 +102,7 @@ public class WorldPackageTests : IDisposable
         var (offset, ground) = MakeGrids(4, 4);
 
         WorldPackage.Write(_dir, manifest, Xodr, offset, ground);
-        var read = WorldPackage.ReadManifest(_dir, "TestArea");
+        var read = WorldPackage.ReadManifest(Pkg);
 
         Assert.True(manifest.ValueEquals(read),
                     "manifest did not survive the JSON round trip unchanged");
@@ -113,9 +116,9 @@ public class WorldPackageTests : IDisposable
 
         WorldPackage.Write(_dir, manifest, Xodr, offset, ground);
 
-        Assert.Equal(Xodr, File.ReadAllText(WorldPackage.OpenDrivePath(_dir, "TestArea")));
+        Assert.Equal(Xodr, WorldPackage.ReadOpenDrive(Pkg));
         Assert.Equal(WorldPackage.HashText(Xodr),
-                     WorldPackage.HashFile(WorldPackage.OpenDrivePath(_dir, "TestArea")));
+                     WorldPackage.HashText(WorldPackage.ReadOpenDrive(Pkg)));
     }
 
     [Fact]
@@ -133,12 +136,12 @@ public class WorldPackageTests : IDisposable
 
         WorldPackage.Write(_dir, manifest, Xodr, [], []);
 
-        Assert.False(File.Exists(WorldPackage.GridPath(_dir, "TestArea")));
-        Assert.False(WorldPackage.TryReadGrids(_dir, "TestArea", out var offset, out var ground));
+        // A constant shift writes no grid entry at all, so its absence is what says "no drape".
+        Assert.False(WorldPackage.TryReadGrids(Pkg, out var offset, out var ground));
         Assert.Empty(offset);
         Assert.Empty(ground);
         // The scalar shift is the whole reconciliation in this mode, so it must survive exactly.
-        Assert.Equal(-1.0938002549446537, WorldPackage.ReadManifest(_dir, "TestArea").HeightAlignOffsetMeters);
+        Assert.Equal(-1.0938002549446537, WorldPackage.ReadManifest(Pkg).HeightAlignOffsetMeters);
     }
 
     [Fact]
@@ -147,14 +150,14 @@ public class WorldPackageTests : IDisposable
         var draped = DrapedManifest(cols: 6, rows: 5);
         var (offset, ground) = MakeGrids(6, 5);
         WorldPackage.Write(_dir, draped, Xodr, offset, ground);
-        Assert.True(File.Exists(WorldPackage.GridPath(_dir, "TestArea")));
+        Assert.True(WorldPackage.TryReadGrids(Pkg, out _, out _));
 
         // Rebuilding the same area with a constant shift must not leave the previous per-cell field
         // behind, or a reader would apply a grid that no longer describes the world.
         var constant = draped with { HeightAlignMode = "origin", DrapeActive = false, GridNumCols = 0, GridNumRows = 0 };
         WorldPackage.Write(_dir, constant, Xodr, [], []);
 
-        Assert.False(File.Exists(WorldPackage.GridPath(_dir, "TestArea")));
+        Assert.False(WorldPackage.TryReadGrids(Pkg, out _, out _));
     }
 
     [Fact]
