@@ -64,7 +64,8 @@ public static class SuperelevationInjector
         Road.Map map,
         double stepMeters,
         int probesPerSide = 2,
-        double edgeMarginMeters = 0.5)
+        double edgeMarginMeters = 0.5,
+        double maxProbeSpacingMeters = 4.0)
     {
         ArgumentNullException.ThrowIfNull(map);
         if (stepMeters <= 0.0)
@@ -86,7 +87,7 @@ public static class SuperelevationInjector
             foreach (var s in StationsAlong(road.Length, stepMeters))
             {
                 var (leftExtent, rightExtent) = DrivingExtent(road, s);
-                foreach (var t in ProbeOffsets(leftExtent, rightExtent, probesPerSide, edgeMarginMeters))
+                foreach (var t in ProbeOffsets(leftExtent, rightExtent, probesPerSide, edgeMarginMeters, maxProbeSpacingMeters))
                 {
                     var dp = Road.Map.GetDirectedPointInNoLaneOffset(road, s);
                     dp.ApplyLateralOffset((float)(-t)); // t is left-positive; the helper moves right
@@ -159,7 +160,8 @@ public static class SuperelevationInjector
 
     /// <summary>Reference line, then probes spread out to just inside each pavement edge.</summary>
     public static IEnumerable<double> ProbeOffsets(
-        double leftExtent, double rightExtent, int probesPerSide, double edgeMargin)
+        double leftExtent, double rightExtent, int probesPerSide, double edgeMargin,
+        double maxProbeSpacingMeters = 4.0)
     {
         yield return 0.0;
         foreach (var (extent, sign) in new[] { (leftExtent, 1.0), (rightExtent, -1.0) })
@@ -167,8 +169,13 @@ public static class SuperelevationInjector
             if (extent < edgeMargin * 2.0)
                 continue; // too narrow to say anything about a slope
             double outer = extent - edgeMargin;
-            for (int k = 1; k <= probesPerSide; ++k)
-                yield return sign * outer * k / probesPerSide;
+            // A fixed probe count leaves a wide carriageway resting on as few points as a narrow
+            // connector, so one probe landing on a kerb or a drape artefact tilts the whole fit.
+            // Holding the spacing instead keeps the fit as well supported on a six-lane road as on
+            // a single lane.
+            int perSide = Math.Max(probesPerSide, (int)Math.Ceiling(outer / maxProbeSpacingMeters));
+            for (int k = 1; k <= perSide; ++k)
+                yield return sign * outer * k / perSide;
         }
     }
 

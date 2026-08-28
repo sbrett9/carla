@@ -117,6 +117,19 @@ public class SuperelevationInjectorTests
     }
 
     [Fact]
+    public void WideCarriagewayGetsMoreProbes_SoOneBadSampleCannotTiltTheFit()
+    {
+        // A single lane: two probes a side is already denser than the spacing limit.
+        Assert.Equal(3, SuperelevationInjector.ProbeOffsets(0.0, 3.5, 2, 0.5).Count());
+
+        // A six-lane carriageway: 19.6 m of pavement held to 4 m spacing needs five a side.
+        var wide = SuperelevationInjector.ProbeOffsets(0.0, 20.1, 2, 0.5).ToList();
+        Assert.Equal(6, wide.Count);
+        var gaps = wide.OrderBy(t => t).Zip(wide.OrderBy(t => t).Skip(1), (a, b) => b - a);
+        Assert.All(gaps, g => Assert.True(g <= 4.0 + 1e-9, $"probe spacing {g:F2} m exceeds the limit"));
+    }
+
+    [Fact]
     public void Fit_RecoversAKnownCrossfall()
     {
         var map = Load(TwoSidedXodr);

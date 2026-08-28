@@ -72,7 +72,7 @@ public static class ElevationInjector
             if (!road.Info.All.OfType<RoadInfoGeometry>().Any())
                 continue; // no planView geometry -> can't place it
 
-            foreach (var s in StationsAlong(road.Length, stepMeters))
+            foreach (var s in StationsAlong(road, stepMeters))
             {
                 var dp = Road.Map.GetDirectedPointInNoLaneOffset(road, s);
                 // planView is +Y=North; CARLA world is -Y=North -> flip Y.
@@ -83,13 +83,28 @@ public static class ElevationInjector
         return samples;
     }
 
-    /// <summary>s = 0, step, 2·step, … (strictly &lt; length), then exactly length.</summary>
-    private static IEnumerable<double> StationsAlong(double length, double step)
+    /// <summary>
+    /// s = 0, step, 2·step, … (strictly &lt; length), then exactly length, plus every lane-section
+    /// boundary.
+    ///
+    /// The boundaries matter because elevation is interpolated between samples. A netconvert road
+    /// carries one lane section, so its ends are the only boundaries and this is the plain step.
+    /// Once <see cref="RedundantJunctionCollapser"/> has joined roads that netconvert split at a
+    /// pass-through node, the joins survive as lane-section boundaries — and those are exactly the
+    /// places a road changes character, such as an approach meeting a bridge deck. Without a sample
+    /// pinned there the profile cuts the corner across up to a full step.
+    /// </summary>
+    private static IEnumerable<double> StationsAlong(Road.Road road, double step)
     {
         const double eps = 1e-6;
-        for (double s = 0.0; s < length - eps; s += step)
-            yield return s;
-        yield return length;
+        var stations = new SortedSet<double>();
+        for (double s = 0.0; s < road.Length - eps; s += step)
+            stations.Add(s);
+        stations.Add(road.Length);
+        foreach (var section in road.LaneSections)
+            if (section.S > eps && section.S < road.Length - eps)
+                stations.Add(section.S);
+        return stations;
     }
 
     // ── P3: reproject to WGS84 via the Track-B ellipsoidal transform ─────────

@@ -188,7 +188,7 @@ public static class GradeSeparation
         var matchedWay = new int[samples.Count];
         var matchedStation = new double[samples.Count];
         MatchSamplesToWays(map, samples, ways, opt, matchedWay, matchedStation);
-        RestrictToConnectedWays(samples, ways, matchedWay);
+        RestrictToConnectedWays(map, samples, ways, matchedWay);
 
         int matchedCount = 0;
         foreach (int w in matchedWay) if (w >= 0) matchedCount++;
@@ -374,21 +374,46 @@ public static class GradeSeparation
     // reachable from the way it mostly follows through shared nodes. Anything else near it — above
     // all the way it crosses at a grade separation, which shares no node with it by definition — is
     // dropped, so no road can inherit the layer of a structure it merely passes beneath.
+    /// <summary>
+    /// The stretch a sample belongs to for the purpose of the connectivity rule: its road and the
+    /// lane section it falls in. A netconvert road carries a single lane section, so this is the
+    /// road itself; once <see cref="RedundantJunctionCollapser"/> has joined roads that netconvert
+    /// split at a pass-through node, each original road survives as one section. Keying on the
+    /// section keeps the rule scoped to a stretch that really does follow one connected run of OSM
+    /// ways — widening it to a merged road lets a deck's way stay reachable from samples that are
+    /// nowhere near the deck, which lifts road either side of the structure.
+    /// </summary>
+    private static (RoadId Road, int Section) StretchOf(Road.Map map, CenterlineSample sample)
+    {
+        if (!map.Roads.TryGetValue(sample.RoadId, out var road))
+            return (sample.RoadId, 0);
+        int index = 0;
+        for (int i = 0; i < road.LaneSections.Count; ++i)
+        {
+            if (road.LaneSections[i].S <= sample.S + 1e-9) index = i;
+            else break;
+        }
+        return (sample.RoadId, index);
+    }
+
     private static void RestrictToConnectedWays(
+        Road.Map map,
         IReadOnlyList<CenterlineSample> samples,
         IReadOnlyList<OsmRoadWay> ways,
         int[] matchedWay)
     {
-        var perRoad = new Dictionary<RoadId, Dictionary<int, int>>();
+        var stretch = new (RoadId Road, int Section)[samples.Count];
+        var perRoad = new Dictionary<(RoadId, int), Dictionary<int, int>>();
         for (int i = 0; i < samples.Count; ++i)
         {
+            stretch[i] = StretchOf(map, samples[i]);
             if (matchedWay[i] < 0) continue;
-            if (!perRoad.TryGetValue(samples[i].RoadId, out var hits))
-                perRoad[samples[i].RoadId] = hits = new Dictionary<int, int>();
+            if (!perRoad.TryGetValue(stretch[i], out var hits))
+                perRoad[stretch[i]] = hits = new Dictionary<int, int>();
             hits[matchedWay[i]] = hits.GetValueOrDefault(matchedWay[i]) + 1;
         }
 
-        var keep = new Dictionary<RoadId, HashSet<int>>();
+        var keep = new Dictionary<(RoadId, int), HashSet<int>>();
         foreach (var (roadId, hits) in perRoad)
         {
             int primary = -1, bestHits = 0;
@@ -413,7 +438,7 @@ public static class GradeSeparation
         }
 
         for (int i = 0; i < samples.Count; ++i)
-            if (matchedWay[i] >= 0 && !keep[samples[i].RoadId].Contains(matchedWay[i]))
+            if (matchedWay[i] >= 0 && !keep[stretch[i]].Contains(matchedWay[i]))
                 matchedWay[i] = -1;
     }
 
