@@ -731,7 +731,7 @@ public sealed class CarlaClient : IAsyncDisposable
         // 5) Inject the sampled heights into the .xodr <elevationProfile>.
         var elevatedXodr = CarlaNet.Map.OpenDrive.ElevationInjector.InjectElevation(
             flatXodr, samples, roadEllipsoidal, originHeight,
-            CarlaNet.Map.OpenDrive.ElevationFitMode.PiecewiseLinear, outlierThresholdMeters,
+            CarlaNet.Map.OpenDrive.ElevationFitMode.ShapePreservingCubic, outlierThresholdMeters,
             raisedSamples);
 
         // 5a) Fit the crossfall from the probes and write it as <superelevation>, so a road's

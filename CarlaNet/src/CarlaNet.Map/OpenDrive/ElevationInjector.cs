@@ -43,7 +43,19 @@ public enum ElevationFitMode
     PiecewiseConstant,
 
     /// <summary>Each record ramps linearly to the next sample (a=z, b=slope, c=d=0). Continuous.</summary>
-    PiecewiseLinear
+    PiecewiseLinear,
+
+    /// <summary>
+    /// Each record is a cubic meeting its neighbours with a matching gradient, so the road has no
+    /// corner at a sample. Tangents follow Fritsch-Carlson, which keeps the curve inside the data:
+    /// where consecutive samples change direction the tangent is flattened to zero, so a noisy
+    /// terrain reading cannot make the profile overshoot into a hump the ground never had.
+    ///
+    /// Terrain is sampled every few metres and carries the noise of the surface it came from.
+    /// Joining those readings with straight lines makes every sample a gradient discontinuity, which
+    /// a driver and a camera both read as a bumpy road even when the samples themselves are good.
+    /// </summary>
+    ShapePreservingCubic
 }
 
 public static class ElevationInjector
@@ -101,9 +113,21 @@ public static class ElevationInjector
         for (double s = 0.0; s < road.Length - eps; s += step)
             stations.Add(s);
         stations.Add(road.Length);
+
+        // A boundary that lands close to a regular station replaces it rather than joining it.
+        // The profile is a chain of records between consecutive samples, so two samples a couple of
+        // metres apart turn the difference between two independent terrain readings into a short,
+        // steep segment — a kink exactly where the pinning was meant to improve fidelity.
         foreach (var section in road.LaneSections)
-            if (section.S > eps && section.S < road.Length - eps)
-                stations.Add(section.S);
+        {
+            double boundary = section.S;
+            if (boundary <= eps || boundary >= road.Length - eps)
+                continue;
+            foreach (var near in stations.GetViewBetween(boundary - step * 0.5, boundary + step * 0.5).ToList())
+                if (near > eps && near < road.Length - eps)
+                    stations.Remove(near);
+            stations.Add(boundary);
+        }
         return stations;
     }
 
@@ -206,25 +230,85 @@ public static class ElevationInjector
     private static XElement BuildElevationProfile(List<(double S, double Z, bool Raised)> profile, ElevationFitMode mode)
     {
         var elevationProfile = new XElement("elevationProfile");
+        double[]? tangents = mode == ElevationFitMode.ShapePreservingCubic
+            ? ShapePreservingTangents(profile)
+            : null;
+
         for (int i = 0; i < profile.Count; ++i)
         {
             double s = profile[i].S;
             double a = profile[i].Z;
-            double b = 0.0;
-            if (mode == ElevationFitMode.PiecewiseLinear && i + 1 < profile.Count)
+            double b = 0.0, c = 0.0, d = 0.0;
+            double ds = i + 1 < profile.Count ? profile[i + 1].S - s : 0.0;
+
+            if (ds > 1e-9)
             {
-                double ds = profile[i + 1].S - s;
-                if (ds > 1e-9)
-                    b = (profile[i + 1].Z - a) / ds;
+                double secant = (profile[i + 1].Z - a) / ds;
+                if (mode == ElevationFitMode.PiecewiseLinear)
+                {
+                    b = secant;
+                }
+                else if (tangents != null)
+                {
+                    // Hermite cubic through (z, tangent) at both ends of the interval.
+                    b = tangents[i];
+                    c = (3.0 * secant - 2.0 * tangents[i] - tangents[i + 1]) / ds;
+                    d = (tangents[i] + tangents[i + 1] - 2.0 * secant) / (ds * ds);
+                }
             }
+            else if (tangents != null && i > 0)
+            {
+                // The closing record carries the gradient the road arrives with.
+                b = tangents[i];
+            }
+
             elevationProfile.Add(new XElement("elevation",
                 new XAttribute("s", F(s)),
                 new XAttribute("a", F(a)),
                 new XAttribute("b", F(b)),
-                new XAttribute("c", F(0.0)),
-                new XAttribute("d", F(0.0))));
+                new XAttribute("c", F(c)),
+                new XAttribute("d", F(d))));
         }
         return elevationProfile;
+    }
+
+    /// <summary>
+    /// Fritsch-Carlson tangents: the steepest slope at each sample that still keeps the curve
+    /// between its neighbours. Where consecutive secants disagree in sign the sample is a turning
+    /// point and the tangent is zero, which is what stops a noisy reading being smoothed into an
+    /// overshoot the ground never had.
+    /// </summary>
+    private static double[] ShapePreservingTangents(List<(double S, double Z, bool Raised)> profile)
+    {
+        int n = profile.Count;
+        var tangents = new double[n];
+        if (n < 2)
+            return tangents;
+
+        var h = new double[n - 1];
+        var secant = new double[n - 1];
+        for (int i = 0; i < n - 1; ++i)
+        {
+            h[i] = profile[i + 1].S - profile[i].S;
+            secant[i] = h[i] > 1e-9 ? (profile[i + 1].Z - profile[i].Z) / h[i] : 0.0;
+        }
+
+        tangents[0] = secant[0];
+        tangents[n - 1] = secant[n - 2];
+        for (int i = 1; i < n - 1; ++i)
+        {
+            if (secant[i - 1] * secant[i] <= 0.0)
+            {
+                tangents[i] = 0.0; // a turning point: flat here keeps the curve inside the data
+            }
+            else
+            {
+                double w1 = 2.0 * h[i] + h[i - 1];
+                double w2 = h[i] + 2.0 * h[i - 1];
+                tangents[i] = (w1 + w2) / (w1 / secant[i - 1] + w2 / secant[i]);
+            }
+        }
+        return tangents;
     }
 
     // <road> child order per OpenDRIVE: link, type, planView, elevationProfile, …
