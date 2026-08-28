@@ -348,10 +348,15 @@ public static class SuperelevationInjector
         // How many stations were attempted per road, so coverage is measured against the
         // sampling that was requested rather than against the fits that survived.
         var attempted = new Dictionary<RoadId, int>();
+        var attemptedStations = new Dictionary<RoadId, List<double>>();
         if (samples != null)
         {
             foreach (var group in samples.GroupBy(x => x.RoadId))
-                attempted[group.Key] = group.Select(x => x.S).Distinct().Count();
+            {
+                var stations = group.Select(x => x.S).Distinct().OrderBy(x => x).ToList();
+                attempted[group.Key] = stations.Count;
+                attemptedStations[group.Key] = stations;
+            }
         }
 
         foreach (var group in fits.GroupBy(f => f.RoadId))
@@ -366,6 +371,21 @@ public static class SuperelevationInjector
                                      == group.Key.ToString(CultureInfo.InvariantCulture));
             if (road == null)
                 continue;
+
+            // A station that was probed and rejected is a stretch we declined to measure, so the
+            // roll must fall back to flat across it rather than holding the last measured value.
+            // The final record carries b=0, so without this an end station that failed the
+            // planarity test inherits its neighbour's crossfall — and a station fails precisely
+            // where the surface stops behaving like a road, next to an embankment or a structure,
+            // which is where that value is least defensible and often where a connector attaches.
+            if (attemptedStations.TryGetValue(group.Key, out var probedStations) && probedStations.Count > 0)
+            {
+                double firstProbed = probedStations[0], lastProbed = probedStations[^1];
+                if (ordered[0].S > firstProbed + 1e-6)
+                    ordered.Insert(0, new CrossSectionFit(group.Key, firstProbed, 0.0, 0.0, 0));
+                if (ordered[^1].S < lastProbed - 1e-6)
+                    ordered.Add(new CrossSectionFit(group.Key, lastProbed, 0.0, 0.0, 0));
+            }
 
             var profile = new XElement("lateralProfile");
             for (int k = 0; k < ordered.Count; ++k)

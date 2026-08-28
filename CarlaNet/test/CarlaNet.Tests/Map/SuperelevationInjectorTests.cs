@@ -266,6 +266,30 @@ public class SuperelevationInjectorTests
     }
 
     [Fact]
+    public void CrossfallFallsBackToFlatWhereAStationWasRejected()
+    {
+        var map = Load(RightOnlyXodr);
+        var samples = SuperelevationInjector.ExtractCrossSectionSamples(map, 50.0); // s = 0, 50, 100
+        // Planar at the first two stations; a kerb-like step at the road end, which is rejected.
+        var heights = samples.Select(s => s.S >= 99.0
+            ? (s.T < -2.0 ? 101.0 : 100.0)
+            : 100.0 + s.T * 0.02).ToList();
+        var fits = SuperelevationInjector.FitCrossSections(samples, heights);
+        Assert.Equal(new[] { 0.0, 50.0 }, fits.Select(f => f.S));
+
+        var road = XDocument.Parse(SuperelevationInjector.InjectSuperelevation(RightOnlyXodr, fits, samples))
+            .Root!.Elements("road").Single();
+        var records = road.Element("lateralProfile")!.Elements("superelevation").ToList();
+        double A(int i) => double.Parse((string)records[i].Attribute("a")!, System.Globalization.CultureInfo.InvariantCulture);
+
+        // A record is added at the rejected station so the roll returns to flat rather than
+        // holding the last measured value across a stretch that was deliberately not trusted.
+        Assert.Equal(new[] { "0", "50", "100" }, records.Select(r => (string)r.Attribute("s")!));
+        Assert.Equal(Math.Atan(0.02), A(0), 9);
+        Assert.Equal(0.0, A(2));
+    }
+
+    [Fact]
     public void Inject_SkipsARoadMeasuredInTooFewPlaces()
     {
         var map = Load(RightOnlyXodr);
