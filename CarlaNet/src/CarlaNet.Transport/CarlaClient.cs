@@ -452,17 +452,6 @@ public sealed class CarlaClient : IAsyncDisposable
             .ExtractCenterlineSamples(map, sampleStepMeters);
         var geo = CarlaNet.Map.OpenDrive.ElevationInjector.ToGeo(samples, origin);
 
-        // 2b) Probe points ACROSS each road as well as along it. The reference-line samples above
-        //     give every road a height but no crossfall, so a consumer draws each road flat across
-        //     its width and two roads that overlap in plan disagree wherever their reference lines
-        //     are laterally apart — at a junction, every connecting road. These probes measure the
-        //     surface at the pavement edges so the roll can be fitted and written as
-        //     <superelevation>. Only differences within a station matter, so the vertical datum,
-        //     the height-align offset and any grade-separation lift all cancel.
-        var crossSamples = CarlaNet.Map.OpenDrive.SuperelevationInjector
-            .ExtractCrossSectionSamples(map, sampleStepMeters);
-        var crossGeo = CarlaNet.Map.OpenDrive.SuperelevationInjector.ToGeo(crossSamples, origin);
-
         // 2a) Read the vertical structure out of the OSM. netconvert discards `layer`/`bridge`, so
         //     without this the .xodr has no record of which road passes over which and a sampled
         //     surface gives a deck and the road beneath it the same height. Projected against the
@@ -496,12 +485,6 @@ public sealed class CarlaClient : IAsyncDisposable
             new GeoLocation(origin.Latitude, origin.Longitude, 0.0)
         };
         foreach (var g in geo)
-            points.Add(new GeoLocation(g.Latitude, g.Longitude, 0.0));
-
-        // Cross-section probes ride along on the same request, appended AFTER the centreline block
-        // so the heights[i + 1] indexing below is untouched.
-        int crossProbeBase = points.Count;
-        foreach (var g in crossGeo)
             points.Add(new GeoLocation(g.Latitude, g.Longitude, 0.0));
 
         var heights = await SampleTerrainHeightsAsync(points, sampleSelector, ct: ct).ConfigureAwait(false);
@@ -734,32 +717,24 @@ public sealed class CarlaClient : IAsyncDisposable
             CarlaNet.Map.OpenDrive.ElevationFitMode.ShapePreservingCubic, outlierThresholdMeters,
             raisedSamples);
 
-        // 5a) Fit the crossfall from the probes and write it as <superelevation>, so a road's
-        //     surface is modelled across its width and not just along its reference line. The fit
-        //     rejects any station whose cross-section is not a straight line (a kerb, a crown, a
-        //     bridge edge), and a road measured in too few places is left alone, so this is a
-        //     no-op wherever the evidence is thin rather than a guess.
-        var crossEllipsoidal = new double[crossSamples.Count];
-        if (drape)
-        {
-            for (int i = 0; i < crossSamples.Count; i++)
-                crossEllipsoidal[i] = CarlaNet.Map.OpenDrive.DrapeTerrain.SampleBilinear(
-                    drapeRes.DrapedZ, sandboxSpec, crossSamples[i].X, crossSamples[i].Y);
-        }
-        else
-        {
-            for (int i = 0; i < crossSamples.Count; i++)
-                crossEllipsoidal[i] = heights[crossProbeBase + i].Altitude;
-        }
-
-        var crossFits = CarlaNet.Map.OpenDrive.SuperelevationInjector
-            .FitCrossSections(crossSamples, crossEllipsoidal, out var crossSummary);
-        Console.WriteLine($"[superelevation] {crossSummary.Fitted} of {crossSummary.StationsSeen} "
-            + $"stations fitted from {crossSamples.Count} probes "
-            + $"(rejected: {crossSummary.NotPlanar} not planar, {crossSummary.TooFewProbes} too few "
-            + $"probes, {crossSummary.SpanTooShort} too narrow; {crossSummary.Clamped} clamped)");
-        elevatedXodr = CarlaNet.Map.OpenDrive.SuperelevationInjector
-            .InjectSuperelevation(elevatedXodr, crossFits, crossSamples);
+        // 5a) Make roads meet at the height of the road they join. Elevation is sampled along
+        //     each road's own reference line, and netconvert puts a connector's reference line on
+        //     the lanes it serves, so a contact that is topologically shared is up to six lanes off
+        //     to the side and the two roads honestly report the ground at two different places.
+        //     Bending the connectors onto the roads they link removes the tear.
+        //
+        //     This works because a road is flat across its width, so making the reference lines
+        //     agree makes the surfaces agree. SuperelevationInjector models crossfall instead,
+        //     which makes the reference-line difference meaningful rather than an error, so the two
+        //     are alternatives and must not both run: measured on Arapahoe_I25, contacts left
+        //     disagreeing by more than 2 cm are 0 with this pass, 224 with crossfall alone, and 346
+        //     with both. Cross-section probing is therefore not run: SuperelevationInjector still
+        //     provides it for whenever a crossfall model earns its place.
+        elevatedXodr = CarlaNet.Map.OpenDrive.ElevationContinuityInjector
+            .Reconcile(elevatedXodr, out var continuitySummary);
+        Console.WriteLine($"[elevation] reconciled {continuitySummary.Constraints} road contacts in "
+            + $"{continuitySummary.Iterations} iteration(s); bent {continuitySummary.RoadsBent} road(s), "
+            + $"largest remaining disagreement {continuitySummary.MaxResidualMeters:F4} m");
 
         // 5b) Inject stop/give-way signs from the OSM (netconvert never emits them). Placement is
         //     by road/s + a shoulder offset, unaffected by the elevation just added, and uses the
