@@ -1,0 +1,118 @@
+// Copyright (c) 2026 CARLA-Cesium digital-twin project.
+//
+// Turns a world package on disk into a level that can be opened, edited by hand, and loaded by name.
+//
+// A world package is what a build writes out: the road network, the per-cell fields relating the
+// driven surface to bare earth, and a manifest describing the datum, the imagery layers and the
+// sandbox. This reads one and produces the level equivalent -- the two data assets, a level carrying
+// an initializer that applies them, and the road network placed where the runtime looks for it.
+//
+// Every entry point is BlueprintCallable and static, so the editor utility widget a person uses and
+// the headless script that tests it drive exactly the same code.
+
+#pragma once
+
+#include <util/ue-header-guard-begin.h>
+#include "CoreMinimal.h"
+#include "Kismet/BlueprintFunctionLibrary.h"
+#include <util/ue-header-guard-end.h>
+
+#include "WorldPackageImporter.generated.h"
+
+class UGeoreferencedWorldSettings;
+
+/** What an import produced, so a caller can report or verify it without re-deriving anything. */
+USTRUCT(BlueprintType)
+struct CARLATOOLS_API FWorldPackageImportResult
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Import")
+	bool bSucceeded = false;
+
+	/** Long package name of the level that was written, e.g. /Game/Carla/Maps/Generated/Area. */
+	UPROPERTY(BlueprintReadOnly, Category = "Import")
+	FString LevelPackageName;
+
+	/** Long package name of the settings asset the level's initializer points at. */
+	UPROPERTY(BlueprintReadOnly, Category = "Import")
+	FString SettingsPackageName;
+
+	/** Long package name of the per-cell field asset, empty when the world has no per-cell field. */
+	UPROPERTY(BlueprintReadOnly, Category = "Import")
+	FString OffsetFieldPackageName;
+
+	/** Where the road network was placed, which is where the runtime looks for it. */
+	UPROPERTY(BlueprintReadOnly, Category = "Import")
+	FString OpenDriveFilePath;
+
+	/** Road surface pieces baked into the level as static meshes. Zero means the level builds its
+	 *  surface at play time instead, which still drives correctly but shows nothing in the editor. */
+	UPROPERTY(BlueprintReadOnly, Category = "Import")
+	int32 RoadPiecesBaked = 0;
+
+	/** Empty on success; on failure, what went wrong in terms a person can act on. */
+	UPROPERTY(BlueprintReadOnly, Category = "Import")
+	FString FailureReason;
+};
+
+UCLASS()
+class CARLATOOLS_API UWorldPackageImporter : public UBlueprintFunctionLibrary
+{
+	GENERATED_BODY()
+
+public:
+	/**
+	 * Import a world package into a saved, editable level.
+	 *
+	 * PackageDirectory is the folder a build wrote with --emit-world-package. MapName selects which
+	 * world in it. DestinationFolder is a content path such as /Game/Carla/Maps/Generated; the level
+	 * is written inside it under MapName, with its assets beside it.
+	 *
+	 * Re-importing the same world overwrites what it produced before, so a rebuilt area can be
+	 * refreshed in place.
+	 *
+	 * IonAccessToken is optional. Supplied, it is written onto the level's imagery layers and saved
+	 * with the level, which makes it editable afterwards through each layer's own Ion Access Token
+	 * but also means it travels with the level wherever the level goes. Left empty, no token is
+	 * written and the usual fallbacks apply: the project's token while editing, and CESIUM_ION_TOKEN
+	 * from the environment when the level is played.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Generated World")
+	static FWorldPackageImportResult ImportWorldPackage(
+		const FString& PackageDirectory,
+		const FString& MapName,
+		const FString& DestinationFolder = TEXT("/Game/Carla/Maps/Generated"),
+		bool bReplaceDifferentSource = false,
+		const FString& IonAccessToken = TEXT(""));
+
+	/**
+	 * What a level at this destination was built from, or an empty string if there is none.
+	 *
+	 * Lets a caller tell a refresh of the same area from a replacement of it before anything is
+	 * overwritten.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Generated World")
+	static FString DescribeExistingImport(const FString& MapName, const FString& DestinationFolder);
+
+	/**
+	 * Create just the settings and per-cell field assets, without touching any level.
+	 *
+	 * Useful on its own to refresh the description of a world whose level already exists, and it is
+	 * the half that can be checked without opening a map.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Generated World")
+	static UGeoreferencedWorldSettings* CreateWorldSettingsAssets(
+		const FString& PackageDirectory,
+		const FString& MapName,
+		const FString& DestinationFolder,
+		FString& OutFailureReason);
+
+	/** True when the folder holds a readable manifest for MapName. Cheap; for a widget to gate on. */
+	UFUNCTION(BlueprintCallable, Category = "Generated World")
+	static bool IsWorldPackagePresent(const FString& PackageDirectory, const FString& MapName);
+
+	/** Every world name a package folder holds, for a widget to offer as a choice. */
+	UFUNCTION(BlueprintCallable, Category = "Generated World")
+	static TArray<FString> ListWorldPackages(const FString& PackageDirectory);
+};

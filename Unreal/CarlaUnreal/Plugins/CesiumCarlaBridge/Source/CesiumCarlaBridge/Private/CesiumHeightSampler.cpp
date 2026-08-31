@@ -441,6 +441,59 @@ bool UCesiumHeightSampler::ConfigureCesiumForOrigin(
 	return true;
 }
 
+int32 UCesiumHeightSampler::CountLayersWithoutIonToken(UObject* WorldContextObject)
+{
+	UWorld* World = GEngine
+		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
+		: nullptr;
+	if (!World)
+	{
+		return -1;
+	}
+	int32 Missing = 0;
+	for (TActorIterator<ACesium3DTileset> It(World); It; ++It)
+	{
+		ACesium3DTileset* Tileset = *It;
+		if (!IsValid(Tileset)) continue;
+		// Only ion-backed tilesets need a token; one serving tiles from a URL does not.
+		if (Tileset->GetIonAssetID() <= 0) continue;
+		if (Tileset->GetIonAccessToken().IsEmpty())
+		{
+			++Missing;
+		}
+	}
+	return Missing;
+}
+
+int32 UCesiumHeightSampler::SetLayerHiddenInEditor(
+	UObject* WorldContextObject, const FString& LayerTag, bool bHidden)
+{
+#if WITH_EDITOR
+	UWorld* World = GEngine
+		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
+		: nullptr;
+	if (!World)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] SetLayerHiddenInEditor: no world."));
+		return -1;
+	}
+	const FName TagName(*LayerTag);
+	int32 Count = 0;
+	for (TActorIterator<ACesium3DTileset> It(World); It; ++It)
+	{
+		ACesium3DTileset* Tileset = *It;
+		if (!IsValid(Tileset)) continue;
+		if (!LayerTag.IsEmpty() && !Tileset->ActorHasTag(TagName)) continue;
+		Tileset->SetIsTemporarilyHiddenInEditor(bHidden);
+		++Count;
+	}
+	return Count;
+#else
+	(void)WorldContextObject; (void)LayerTag; (void)bHidden;
+	return 0;
+#endif
+}
+
 int32 UCesiumHeightSampler::SetLayerVisible(UObject* WorldContextObject, const FString& LayerTag, bool bVisible)
 {
 	UWorld* World = GEngine

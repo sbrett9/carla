@@ -45,6 +45,9 @@ class FCarlaModule : public IModuleInterface
 	bool HandleSettingsSaved();
 	void LoadChronoDll();
 
+	/** Mount worlds exported as their own plugins, so they can be loaded by name. */
+	void MountExportedWorlds();
+
 public:
 
 	/** IModuleInterface implementation */

@@ -3,7 +3,9 @@
 // Default port: 2000.
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Reflection;
+using CarlaNet.Map.WorldPackage;
 using CarlaNet.Transport.MsgPackRpc;
 using CarlaNet.Transport.Streaming;
 using CarlaNet.Transport.TrafficManager;
@@ -175,6 +177,16 @@ public sealed class CarlaClient : IAsyncDisposable
     public double LastHeightAlignOffset { get; private set; }
     public IReadOnlyList<GeoLocation> LastGroundDtmSamples { get; private set; } = [];
 
+    // True once this client knows how to convert a physical height into bare-earth truth for the
+    // loaded world — either because it generated the world itself, or because EnsureBareEarthReference
+    // pulled the record the generating client published to the server.
+    //
+    // This flag is what separates "the surface shift is zero" from "the surface shift is unknown".
+    // Both leave LastHeightAlignOffset at 0.0, but only the first justifies reporting hae = physical.
+    // A client that reports bare-earth truth without it is reporting the shifted, photoreal-referenced
+    // height instead, and nothing about the numbers reveals the error.
+    public bool HasBareEarthReference { get; private set; }
+
     // ── Per-point drape state (set by GenerateWorldFromOsmWithElevationAsync in "drape" mode) ──
     // When LastDrapeActive, telemetry recovers bare-earth HAE per-vehicle from a PER-CELL offset
     // field (DrapedZ − DTM) over the OSM sandbox, instead of the single LastHeightAlignOffset.
@@ -286,8 +298,13 @@ public sealed class CarlaClient : IAsyncDisposable
 
     // ── §8.2 Episode Management ───────────────────────────────────────────────
 
-    public Task LoadEpisodeAsync(string mapName, bool resetSettings = true, MapLayer layer = MapLayer.All)
-        => _rpc.CallVoidAsync("load_new_episode", mapName, resetSettings, layer);
+    public async Task LoadEpisodeAsync(string mapName, bool resetSettings = true, MapLayer layer = MapLayer.All)
+    {
+        await _rpc.CallVoidAsync("load_new_episode", mapName, resetSettings, layer).ConfigureAwait(false);
+        // A new world carries its own surface shift, so anything cached for the previous one is now
+        // wrong. Clearing the fetch memo as well lets EnsureBareEarthReference query the new world.
+        InvalidateBareEarthReference();
+    }
 
     public Task LoadLevelLayerAsync(MapLayer layer)
         => _rpc.CallVoidAsync("load_map_layer", layer);
@@ -412,6 +429,20 @@ public sealed class CarlaClient : IAsyncDisposable
         //    traffic-light generation is on — its <tlLogic> phase programs drive TrafficLightInjector.
         var (flatXodr, sumoNet) = await new CarlaNet.Map.OsmConverter(osmOptions)
             .ConvertFileWithNetworkAsync(osmPath, ct).ConfigureAwait(false);
+
+        // 1a) Join up the junctions that offer no choice of route. netconvert wraps every
+        //     surviving OSM node in a junction, so a node that exists only because two ways
+        //     meet with a differing lane count becomes a "junction" holding one connector: one
+        //     continuous carriageway arrives as three roads with two artificial seams, and the
+        //     connector's reference line sits a lane width off the road it continues. Running
+        //     this before anything samples terrain means the drape, the elevation profile and
+        //     the crossfall all see one road instead of three.
+        flatXodr = CarlaNet.Map.OpenDrive.RedundantJunctionCollapser
+            .Collapse(flatXodr, out var collapseSummary);
+        Console.WriteLine($"[junctions] collapsed {collapseSummary.Collapsed} of "
+            + $"{collapseSummary.JunctionsExamined} junctions offering no choice of route "
+            + $"({collapseSummary.SkippedLaneMismatch} skipped on unresolved lane links, "
+            + $"{collapseSummary.SkippedSignalised} kept because they control traffic lights)");
 
         // 2) Parse + extract reference-line samples + reproject (all offline). The origin
         //    is the .xodr geoReference (pinned by osmOptions).
@@ -578,6 +609,7 @@ public sealed class CarlaClient : IAsyncDisposable
         //     reproduces the previous behaviour exactly.
         double atGradeOffset = drape ? drapeSystematicOffset : heightOffset;
         var gradeLift = new double[samples.Count];
+        int[] matchedWayIndex = [];
         var raisedSamples = new bool[samples.Count];
         IReadOnlyList<CarlaNet.Map.OpenDrive.OsmRoadWay> elevatedStructures = [];
         // One description of a deck's footprint, shared by the road elevation (which spans it on the
@@ -624,6 +656,7 @@ public sealed class CarlaClient : IAsyncDisposable
                 separationOptions, atGradeAtSample);
             gradeLift = separation.Lift;
             elevatedStructures = separation.ElevatedWays;
+            matchedWayIndex = separation.MatchedWayIndex;
             for (int i = 0; i < samples.Count; i++) raisedSamples[i] = gradeLift[i] != 0.0;
         }
         else if (anyLayeredWays)
@@ -681,18 +714,69 @@ public sealed class CarlaClient : IAsyncDisposable
                 roadEllipsoidal[i] = heights[i + 1].Altitude + heightOffset + gradeLift[i];
         }
 
+        // 4c) Give each bridge the shape a bridge has. A surveyed surface cannot describe a deck
+        //     -- over one it returns either the ground beneath it or a blob of deck, parapet and
+        //     whatever traffic was crossing -- and the lift that raises the deck fades out
+        //     algebraically rather than where the structure ends. Both ends of the structure sit on
+        //     ground the survey can see, so the run between them is replaced by the three straight
+        //     pieces a bridge is built from.
+        if (matchedWayIndex.Length == samples.Count && elevatedStructures.Count > 0)
+        {
+            int shaped = CarlaNet.Map.OpenDrive.BridgeProfileShaper.Shape(
+                samples, roadEllipsoidal, gradeLift, matchedWayIndex, osmLayers.Ways);
+            Console.WriteLine($"[bridges] shaped {shaped} road(s) as ramp-deck-ramp");
+        }
+
         // 5) Inject the sampled heights into the .xodr <elevationProfile>.
         var elevatedXodr = CarlaNet.Map.OpenDrive.ElevationInjector.InjectElevation(
             flatXodr, samples, roadEllipsoidal, originHeight,
-            CarlaNet.Map.OpenDrive.ElevationFitMode.PiecewiseLinear, outlierThresholdMeters,
+            CarlaNet.Map.OpenDrive.ElevationFitMode.ShapePreservingCubic, outlierThresholdMeters,
             raisedSamples);
 
-        // 5b) Inject stop/give-way signs from the OSM (netconvert never emits them). Placement is
+        // 5a) Make roads meet at the height of the road they join. Elevation is sampled along
+        //     each road's own reference line, and netconvert puts a connector's reference line on
+        //     the lanes it serves, so a contact that is topologically shared is up to six lanes off
+        //     to the side and the two roads honestly report the ground at two different places.
+        //     Bending the connectors onto the roads they link removes the tear.
+        //
+        //     This works because a road is flat across its width, so making the reference lines
+        //     agree makes the surfaces agree. SuperelevationInjector models crossfall instead,
+        //     which makes the reference-line difference meaningful rather than an error, so the two
+        //     are alternatives and must not both run: measured on Arapahoe_I25, contacts left
+        //     disagreeing by more than 2 cm are 0 with this pass, 224 with crossfall alone, and 346
+        //     with both. Cross-section probing is therefore not run: SuperelevationInjector still
+        //     provides it for whenever a crossfall model earns its place.
+        elevatedXodr = CarlaNet.Map.OpenDrive.ElevationContinuityInjector
+            .Reconcile(elevatedXodr, out var continuitySummary);
+        Console.WriteLine($"[elevation] reconciled {continuitySummary.Constraints} road contacts in "
+            + $"{continuitySummary.Iterations} iteration(s); bent {continuitySummary.RoadsBent} road(s), "
+            + $"largest remaining disagreement {continuitySummary.MaxResidualMeters:F4} m");
+
+        // 5b) Give each junction one surface. Reconciling contacts only constrains road ends that
+        //     a <link> declares shared; inside a junction the connecting roads CROSS instead, so
+        //     nothing related their heights and each carried the terrain under its own reference
+        //     line. The mesh draws every connector's full width, so the same pavement was covered
+        //     several times at several heights. This solves the connector heights per junction so
+        //     overlapping surfaces agree, holding the ends where the pass above put them so no
+        //     reconciled contact is disturbed.
+        elevatedXodr = CarlaNet.Map.OpenDrive.JunctionSurfaceReconciler
+            .Reconcile(elevatedXodr, map, out var junctionSummary);
+        Console.WriteLine($"[elevation] resolved {junctionSummary.Overlaps} overlapping junction "
+            + $"surfaces across {junctionSummary.Junctions} junction(s), "
+            + $"{junctionSummary.Connectors} connector(s): median disagreement "
+            + $"{junctionSummary.MedianBeforeMeters:F4} -> {junctionSummary.MedianAfterMeters:F4} m, "
+            + $"worst {junctionSummary.MaxBeforeMeters:F3} -> {junctionSummary.MaxAfterMeters:F3} m; "
+            + $"junction boundary moved at most {junctionSummary.MaxBoundaryShiftMeters:F4} m"
+            + (junctionSummary.JunctionsHeld > 0
+                ? $"; {junctionSummary.JunctionsHeld} junction(s) left alone to protect a contact"
+                : string.Empty));
+
+        // 5c) Inject stop/give-way signs from the OSM (netconvert never emits them). Placement is
         //     by road/s + a shoulder offset, unaffected by the elevation just added, and uses the
         //     same geoReference origin; a no-op when the OSM carries no such nodes.
         elevatedXodr = CarlaNet.Map.OpenDrive.SignInjector.InjectSigns(elevatedXodr, osmPath, map);
 
-        // 5c) Group the netconvert traffic lights per phase and link them to their junctions.
+        // 5d) Group the netconvert traffic lights per phase and link them to their junctions.
         //     netconvert emits the light <signal>s and one all-heads <controller> per junction but
         //     no <junction><controller> link and no phase split, so CARLA orphans every light
         //     (issue #1) and would flash whole junctions green. TrafficLightInjector rebuilds the
@@ -768,6 +852,19 @@ public sealed class CarlaClient : IAsyncDisposable
             // giving on-road seating + off-road support. eo_observer's V key still toggles it.
             await SetLayerCollisionAsync("ground", groundCollision).ConfigureAwait(false);
         }
+
+        // Publish the surface shift to the server so a client that did NOT build this world can still
+        // report bare-earth truth. Deliberately outside the height-align branches: every mode has a
+        // shift to describe, including the bare-earth case where it is zero, and "zero" has to be
+        // told apart from "unknown" by whoever reads it later. Without this record a second client
+        // reports the physical (photoreal-referenced) height as bare earth, and the numbers give no
+        // sign of it.
+        await SetBareEarthReferenceAsync(
+            LastHeightAlignOffset, LastDrapeActive,
+            LastDrapeMinX, LastDrapeMinY, LastDrapeCellSize, LastDrapeNumCols, LastDrapeNumRows,
+            LastDrapeActive ? ToFloatGrid(LastDrapedOffsetBytes) : [],
+            LastDrapeActive ? ToFloatGrid(LastDrapedDtmBytes) : []).ConfigureAwait(false);
+        HasBareEarthReference = true;
 
         // Record the sandbox extent + inward staging ring for boundary-aware traffic. Deliberately
         // outside the height-align branches: the ring is a property of the OSM area, and every mode
@@ -887,6 +984,192 @@ public sealed class CarlaClient : IAsyncDisposable
     /// by the margin.
     public Task<IReadOnlyList<double>> GetStagingBoundsAsync()
         => _rpc.CallAsync<IReadOnlyList<double>>("get_staging_bounds");
+
+    // ── Bare-earth reference (how to turn a physical height into bare-earth truth) ──────────
+    // The generating client publishes this to the server so that any OTHER client — one that
+    // reconnects, or that opens a world persisted as a level — can recover the same truth instead of
+    // silently reporting the shifted, photoreal-referenced height as bare earth.
+
+    /// Publish the surface shift for the loaded world. Pass drapeActive=false with empty grids when
+    /// the shift is a single constant; the grids are row-major, metres, on the drape terrain grid.
+    public Task<bool> SetBareEarthReferenceAsync(
+        double offsetMeters, bool drapeActive,
+        double minX, double minY, double cellSize, int numCols, int numRows,
+        float[] offsetGrid, float[] groundGrid)
+        => _rpc.CallAsync<bool>("set_bare_earth_reference",
+               offsetMeters, drapeActive, minX, minY, cellSize, numCols, numRows, offsetGrid, groundGrid);
+
+    /// [offsetMeters, drapeActive, minX, minY, cellSize, numCols, numRows]; empty when the loaded
+    /// world has no record, in which case bare-earth truth is unknown rather than zero.
+    public Task<IReadOnlyList<double>> GetBareEarthReferenceAsync()
+        => _rpc.CallAsync<IReadOnlyList<double>>("get_bare_earth_reference");
+
+    /// Per-cell surface shift, row-major metres. Empty unless the world was generated draped.
+    public Task<IReadOnlyList<float>> GetBareEarthOffsetGridAsync()
+        => _rpc.CallAsync<IReadOnlyList<float>>("get_bare_earth_offset_grid");
+
+    /// Per-cell bare-earth ground height, row-major ellipsoidal metres. Empty unless draped.
+    public Task<IReadOnlyList<float>> GetBareEarthDtmGridAsync()
+        => _rpc.CallAsync<IReadOnlyList<float>>("get_bare_earth_dtm_grid");
+
+    // Set once a fetch has been tried for the loaded world, so a telemetry loop running at 5 Hz does
+    // not re-query a world that genuinely has no record.
+    private bool _bareEarthFetchAttempted;
+
+    /// <summary>
+    /// Make sure this client can convert a physical height into bare-earth truth for the loaded
+    /// world, fetching the record from the server when this client did not generate it. Cheap and
+    /// idempotent: returns immediately once known, and queries the server at most once per world.
+    /// Returns false when the world carries no record — the caller must then report the height as
+    /// unknown rather than assume the surface was never shifted.
+    /// </summary>
+    public bool EnsureBareEarthReference()
+    {
+        if (HasBareEarthReference) return true;
+        if (_bareEarthFetchAttempted) return false;
+        _bareEarthFetchAttempted = true;
+
+        try
+        {
+            var scalars = GetBareEarthReferenceAsync().GetAwaiter().GetResult();
+            if (scalars is null || scalars.Count < 7) return false;   // world has no record
+
+            bool drape = scalars[1] != 0.0;
+            if (!drape)
+            {
+                LastHeightAlignOffset = scalars[0];
+                LastDrapeActive = false;
+                HasBareEarthReference = true;
+                return true;
+            }
+
+            int numCols = (int)scalars[5];
+            int numRows = (int)scalars[6];
+            var offsets = GetBareEarthOffsetGridAsync().GetAwaiter().GetResult();
+            var ground = GetBareEarthDtmGridAsync().GetAwaiter().GetResult();
+            int need = numCols * numRows;
+            if (offsets is null || ground is null || offsets.Count != need || ground.Count != need)
+                return false;
+
+            LastDrapeMinX = scalars[2];
+            LastDrapeMinY = scalars[3];
+            LastDrapeCellSize = scalars[4];
+            LastDrapeNumCols = numCols;
+            LastDrapeNumRows = numRows;
+            LastDrapedOffsetBytes = ToFloatBytes(offsets);
+            LastDrapedDtmBytes = ToFloatBytes(ground);
+            LastHeightAlignOffset = 0.0;   // the per-cell field is authoritative when draped
+            LastDrapeActive = true;
+            HasBareEarthReference = true;
+            return true;
+        }
+        catch
+        {
+            // An older server without these handlers, or a transport failure. Truth stays unknown,
+            // which the caller reports as such; it must not degrade into an assumed zero shift.
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Write the world just built to <paramref name="directory"/> as a world package: the elevated
+    /// OpenDRIVE, the per-cell surface reconciliation grids, and a manifest describing the datum,
+    /// the height reconciliation, the streamed layers and the sandbox.
+    ///
+    /// The datum and sandbox are read back from the server rather than remembered here, so the
+    /// package records what the world actually ended up with rather than what was requested. The
+    /// provenance arguments are the things only the caller knows: which extract was used, and the
+    /// sampling settings it was built with.
+    ///
+    /// Returns the path of the manifest that was written.
+    /// </summary>
+    public async Task<string> WriteWorldPackageAsync(
+        string directory,
+        string mapName,
+        string elevatedXodr,
+        string heightAlignMode,
+        string sourceOsmPath,
+        long photorealIonAssetId,
+        long groundIonAssetId,
+        double sampleStepMeters,
+        double terrainResolutionMeters,
+        double terrainMarginMeters,
+        IReadOnlyList<string>? netconvertExtraArgs = null)
+    {
+        GeoLocation origin = await GetCesiumOriginAsync().ConfigureAwait(false);
+        IReadOnlyList<double> staging = await GetStagingBoundsAsync().ConfigureAwait(false);
+        bool haveStaging = staging is { Count: >= 5 };
+
+        var manifest = new WorldPackageManifest
+        {
+            MapName = mapName,
+            OriginLatitude = origin.Latitude,
+            OriginLongitude = origin.Longitude,
+            OriginHeightMeters = origin.Altitude,
+            GeoReferenceString = ExtractGeoReference(elevatedXodr),
+            HeightAlignMode = heightAlignMode,
+            DrapeActive = LastDrapeActive,
+            HeightAlignOffsetMeters = LastHeightAlignOffset,
+            GridMinXMeters = LastDrapeMinX,
+            GridMinYMeters = LastDrapeMinY,
+            GridCellSizeMeters = LastDrapeCellSize,
+            GridNumCols = LastDrapeNumCols,
+            GridNumRows = LastDrapeNumRows,
+            PhotorealIonAssetId = photorealIonAssetId,
+            GroundIonAssetId = groundIonAssetId,
+            StagingMinXMeters = haveStaging ? staging[0] : 0.0,
+            StagingMinYMeters = haveStaging ? staging[1] : 0.0,
+            StagingMaxXMeters = haveStaging ? staging[2] : 0.0,
+            StagingMaxYMeters = haveStaging ? staging[3] : 0.0,
+            StagingMarginMeters = haveStaging ? staging[4] : 0.0,
+            SourceOsmFileName = Path.GetFileName(sourceOsmPath) ?? string.Empty,
+            SourceOsmSha256 = WorldPackage.HashFile(sourceOsmPath),
+            OpenDriveSha256 = WorldPackage.HashText(elevatedXodr),
+            SampleStepMeters = sampleStepMeters,
+            TerrainResolutionMeters = terrainResolutionMeters,
+            TerrainMarginMeters = terrainMarginMeters,
+            GeneratedAtUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+            GeneratorVersion = typeof(CarlaClient).Assembly.GetName().Version?.ToString() ?? string.Empty,
+            NetconvertExtraArgs = netconvertExtraArgs is null ? [] : [.. netconvertExtraArgs],
+        };
+
+        WorldPackage.Write(
+            directory, manifest, elevatedXodr,
+            LastDrapeActive ? ToFloatGrid(LastDrapedOffsetBytes) : [],
+            LastDrapeActive ? ToFloatGrid(LastDrapedDtmBytes) : []);
+        return WorldPackage.PackagePath(directory, mapName);
+    }
+
+    /// The OpenDRIVE geoReference projection string, or empty when the document carries none.
+    private static string ExtractGeoReference(string xodr)
+    {
+        const string Open = "<geoReference";
+        int start = xodr.IndexOf(Open, StringComparison.Ordinal);
+        if (start < 0) return string.Empty;
+        // The projection sits inside a CDATA section in every document this pipeline produces.
+        int cdata = xodr.IndexOf("<![CDATA[", start, StringComparison.Ordinal);
+        int close = xodr.IndexOf("</geoReference>", start, StringComparison.Ordinal);
+        if (cdata < 0 || close < 0 || cdata > close) return string.Empty;
+        int from = cdata + "<![CDATA[".Length;
+        int to = xodr.IndexOf("]]>", from, StringComparison.Ordinal);
+        if (to < 0 || to > close) return string.Empty;
+        return xodr[from..to].Trim();
+    }
+
+    /// Forget the bare-earth reference for the previous world and allow a fresh fetch.
+    private void InvalidateBareEarthReference()
+    {
+        HasBareEarthReference = false;
+        _bareEarthFetchAttempted = false;
+    }
+
+    private static byte[] ToFloatBytes(IReadOnlyList<float> values)
+    {
+        var f = values as float[] ?? [.. values];
+        var b = new byte[f.Length * sizeof(float)];
+        Buffer.BlockCopy(f, 0, b, 0, b.Length);   // row-major float32, little-endian host
+        return b;
+    }
 
     /// The Cesium georeference origin as GeoLocation(latitude, longitude, ellipsoidal height m).
     /// True elevation of a local Unreal point = this height + the point's local Z.

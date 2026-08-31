@@ -92,7 +92,10 @@ private:
   UPROPERTY()
   TMap<FString, USignComponent *> TrafficSignComponents;
 
-  // Mapped references to TrafficSigns
+  // Mapped references to TrafficSigns. UPROPERTY so the entries are reachable by the garbage
+  // collector and survive a level save: RemoveGeneratedSignalsAndTrafficLights iterates this array
+  // and destroys what it finds, so an unrooted entry is a dangling pointer waiting to be walked.
+  UPROPERTY()
   TArray<ATrafficSignBase*> TrafficSigns;
 
   // Signal actors generated from OpenDRIVE. Signals that matched a hand-placed actor are

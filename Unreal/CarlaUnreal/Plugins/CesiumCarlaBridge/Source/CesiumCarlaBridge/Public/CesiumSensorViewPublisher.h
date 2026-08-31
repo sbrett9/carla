@@ -80,7 +80,10 @@ private:
 	 * Weak so that a destroyed sensor drops out on the next republish without any bookkeeping: an
 	 * unresolvable entry is skipped, the rebuilt list omits it, and its frustum stops pinning tiles.
 	 */
-	UPROPERTY()
+	// Transient: this list is rebuilt by sweeping the world on a timer, so it describes the sensors
+	// that happened to exist at one moment. Serializing it into a saved level would persist a
+	// snapshot of weak references to actors that no longer exist when the level is reopened.
+	UPROPERTY(Transient)
 	TArray<TWeakObjectPtr<USceneCaptureComponent2D>> TrackedCaptures;
 
 	/** Seconds accumulated since the last sweep; compared against RescanIntervalSeconds. */

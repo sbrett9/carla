@@ -210,6 +210,14 @@ class CarlaControlArgumentParser:
             default=None,
             help="output elevated .xodr (default: Build/sumo-smoketest/<osm>_elevated.xodr)",
         )
+        build.add_argument(
+            "--emit-world-package",
+            default=None,
+            metavar="DIR",
+            help="also write a durable record of the built world to DIR: the road network, the "
+            "per-cell grids that convert driven height to true ground height, and a manifest "
+            "describing the origin, the imagery layers and how it was built",
+        )
         build.add_argument("--timeout", type=float, default=300.0, help="build RPC timeout (s)")
 
     def _add_view_args(self, ap: argparse.ArgumentParser) -> None:

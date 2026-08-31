@@ -524,9 +524,14 @@ std::map<road::Lane::LaneType , std::vector<std::unique_ptr<Mesh>>> MeshFactory:
     std::map<road::Lane::LaneType , std::vector<std::unique_ptr<Mesh>>> mesh_uptr_list;
     for (auto &&lane_section : road.GetLaneSections()) {
       std::map<road::Lane::LaneType , std::vector<std::unique_ptr<Mesh>>> section_uptr_list = GenerateOrderedWithMaxLen(lane_section);
-      mesh_uptr_list.insert(
-        std::make_move_iterator(section_uptr_list.begin()),
-        std::make_move_iterator(section_uptr_list.end()));
+      // Append per lane type rather than map-inserting the section's map wholesale. std::map::insert
+      // keeps the existing entry for a key it already holds, so every lane section after the first
+      // was discarded: a road of three sections rendered only its first third. That went unnoticed
+      // while every road had exactly one lane section, and appears the moment one has more.
+      for (auto &&pair_map : section_uptr_list) {
+        std::vector<std::unique_ptr<Mesh>>& destination = mesh_uptr_list[pair_map.first];
+        std::move(pair_map.second.begin(), pair_map.second.end(), std::back_inserter(destination));
+      }
     }
     return mesh_uptr_list;
   }

@@ -1697,6 +1697,37 @@ class World:
         else:          # upper-left triangle (v00, v11, v10)
             return v00 + (v11 - v10) * tx + (v10 - v00) * ty
 
+    def _ensure_bare_earth_reference(self):
+        """Make sure this client can convert a vehicle's physical height into bare-earth truth for the
+        loaded world, fetching the record from the server when this client did not build the world —
+        a client that reconnected to a running server, or one that opened a persisted world. Cheap
+        and idempotent: it queries at most once per world. Returns True when truth is recoverable.
+
+        Returning False is not always a problem. A world that was never built from an OSM area has no
+        surface shift to undo, so the height a vehicle drives at IS bare earth and False is the
+        correct, harmless answer. The dangerous case is a world that WAS built from an OSM area and
+        yet carries no record: there the shift is real and its size is unknowable, so the reported
+        height is the photoreal-referenced one and nothing in the numbers reveals it. That case warns
+        (once), because a silently wrong altitude is worse than a missing one."""
+        try:
+            if self._client.EnsureBareEarthReference():
+                return True
+        except Exception:
+            pass                       # server predates the record, or the call failed
+        if not getattr(self, "_bare_earth_unknown_warned", False):
+            self._bare_earth_unknown_warned = True
+            try:
+                built_from_osm = self.get_staging_bounds() is not None
+            except Exception:
+                built_from_osm = False
+            if built_from_osm:
+                print("[carlanet] this world was built from an OSM area but carries no bare-earth "
+                      "reference, so the surface shift that seats it on the photoreal imagery cannot "
+                      "be undone. Reported 'hae' is the height vehicles physically drive at, NOT "
+                      "bare-earth truth. Re-run the world build against a server that records the "
+                      "reference.", file=sys.stderr)
+        return False
+
     def get_vehicle_telemetry(self, origin=None):
         """Pull per-vehicle TRUTH telemetry for every vehicle in the world as plain dicts (the
         09_Telemetry_CoT_Contract field set). Cheap — positions/velocities are world-observer cache
@@ -1726,6 +1757,9 @@ class World:
         Each dict: id, type_id, base_type, special_type, color, role_name, lat, lon, hae, hae_dtm,
         speed_mps, course_deg, vx, vy, vz, length_m, width_m, height_m. Heights are ELLIPSOIDAL
         WGS84 (HAE)."""
+        # Recover the surface shift before either path reads it, so a client that did not build this
+        # world reports the same bare-earth truth as the one that did.
+        self._ensure_bare_earth_reference()
         if _CARLANET_RECORDING_AVAILABLE:
             # Single source of truth: the C# VehicleTelemetryService (also used by the native recorder).
             return self._vehicle_telemetry_native(origin)
@@ -2284,6 +2318,26 @@ class Client:
             float(drape_max_drape), (None if drape_cache_dir is None else str(drape_cache_dir)),
             CancellationToken(False)))
         return str(xodr)
+
+    def write_world_package(self, directory, map_name, elevated_xodr, height_align_mode,
+                            source_osm_path, photoreal_ion_asset_id, ground_ion_asset_id,
+                            sample_step_meters, terrain_resolution_meters, terrain_margin_meters,
+                            netconvert_extra_args=None):
+        """Write the world this client just built to `directory` as a world package: the elevated
+        .xodr, the per-cell grids that recover true ground height from the height vehicles drive at,
+        and a manifest describing the origin, the imagery layers, the sandbox and how it was built.
+
+        Only meaningful straight after generate_world_from_osm_with_elevation on the SAME client —
+        the per-cell grids live on it. The origin and sandbox are read back from the server, so the
+        record describes the world that actually resulted rather than what was asked for. The Cesium
+        ion access token is deliberately not recorded.
+
+        Returns the path of the manifest written."""
+        return str(_sync(self._inner.WriteWorldPackageAsync(
+            str(directory), str(map_name), str(elevated_xodr), str(height_align_mode),
+            str(source_osm_path), int(photoreal_ion_asset_id), int(ground_ion_asset_id),
+            float(sample_step_meters), float(terrain_resolution_meters),
+            float(terrain_margin_meters), netconvert_extra_args)))
 
     def get_trafficmanager(self, port: int = 8000):
         """Return an in-process TrafficManager bound to the given port.

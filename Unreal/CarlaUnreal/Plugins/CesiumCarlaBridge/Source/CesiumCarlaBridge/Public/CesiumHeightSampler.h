@@ -105,6 +105,33 @@ public:
 	static int32 SetLayerVisible(UObject* WorldContextObject, const FString& LayerTag, bool bVisible);
 
 	/**
+	 * Per-layer visibility in the EDITOR viewport, which is a separate flag from the one
+	 * SetLayerVisible drives. A layer hidden in the simulation is still drawn while editing, and the
+	 * bare-earth ground layer occupies the same space as the photoreal imagery, so left drawn it
+	 * hides the surface being edited.
+	 *
+	 * This drives the same flag as the eye icon in the outliner, so a person can always reveal a
+	 * hidden layer while editing. That flag lasts for the editor session rather than being saved,
+	 * which is why hiding is applied each time the level is opened rather than once at import.
+	 *
+	 * Returns the number of tilesets changed (-1 when there is no world). Does nothing outside the
+	 * editor, where the flag has no meaning.
+	 */
+	/**
+	 * How many ion-backed tilesets in this world have no access token of their own.
+	 *
+	 * A tileset streams on the token it carries, on the project's token, or not at all. This reports
+	 * the first of those, so a caller can tell the difference between a world that will stream and one
+	 * that will silently show nothing, and say so while there is still someone reading the log.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
+	static int32 CountLayersWithoutIonToken(UObject* WorldContextObject);
+
+	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
+	static int32 SetLayerHiddenInEditor(
+		UObject* WorldContextObject, const FString& LayerTag, bool bHidden);
+
+	/**
 	 * Per-layer physics: enable/disable collision on every ACesium3DTileset tagged LayerTag
 	 * (empty = all). Calls SetCreatePhysicsMeshes then RefreshTileset. Independent of
 	 * visibility. Returns the number changed (-1 no world).

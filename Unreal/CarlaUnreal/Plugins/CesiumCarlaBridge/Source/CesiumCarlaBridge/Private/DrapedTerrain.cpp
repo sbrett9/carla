@@ -44,7 +44,11 @@ void UDrapedTerrainComponent::SetGrid(double InOriginXCm, double InOriginYCm, do
 	NumCols = InNumCols;
 	NumRows = InNumRows;
 	HeightsCm = MoveTemp(InHeightsCm);
+	RecomputeLocalBounds();
+}
 
+void UDrapedTerrainComponent::RecomputeLocalBounds()
+{
 	// World-space AABB (the actor sits at the world origin, so local == world here).
 	LocalBox = FBox(ForceInit);
 	if (NumCols >= 2 && NumRows >= 2 && HeightsCm.Num() == NumCols * NumRows)
@@ -55,6 +59,15 @@ void UDrapedTerrainComponent::SetGrid(double InOriginXCm, double InOriginYCm, do
 			FVector(OriginXCm, OriginYCm, MinZ),
 			FVector(OriginXCm + (NumCols - 1) * CellSizeCm, OriginYCm + (NumRows - 1) * CellSizeCm, MaxZ));
 	}
+}
+
+void UDrapedTerrainComponent::PostLoad()
+{
+	Super::PostLoad();
+	// The grid deserialized with the component; the bounds it implies did not. Registration builds
+	// the heightfield from these same members straight after this, so nothing else is needed to
+	// bring a saved world's ground back.
+	RecomputeLocalBounds();
 }
 
 void UDrapedTerrainComponent::OnCreatePhysicsState()

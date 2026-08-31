@@ -43,14 +43,24 @@ public:
 	virtual void OnCreatePhysicsState() override;
 	virtual void OnDestroyPhysicsState() override;
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
+	virtual void PostLoad() override;
 
 private:
-	double OriginXCm = 0.0;
-	double OriginYCm = 0.0;
-	double CellSizeCm = 200.0;
-	int32 NumCols = 0;
-	int32 NumRows = 0;
-	TArray<double> HeightsCm;      // row-major, world Z (cm)
+	/** Recompute the world-space bounds from the current grid. Cheap; derived, never serialized. */
+	void RecomputeLocalBounds();
+
+	// The grid is UPROPERTY so it survives a level save. Without that, a saved level reloads an actor
+	// with the right tag, the right collision profile and NO heightfield -- OnCreatePhysicsState sees
+	// NumCols == 0 and returns early, leaving a world whose ground silently does not exist.
+	UPROPERTY() double OriginXCm = 0.0;
+	UPROPERTY() double OriginYCm = 0.0;
+	UPROPERTY() double CellSizeCm = 200.0;
+	UPROPERTY() int32 NumCols = 0;
+	UPROPERTY() int32 NumRows = 0;
+	UPROPERTY() TArray<double> HeightsCm;      // row-major, world Z (cm)
+
+	// Derived from the grid, so it is recomputed on load rather than stored: a serialized copy could
+	// disagree with the heights it is supposed to bound.
 	FBox LocalBox = FBox(ForceInit);
 };
 

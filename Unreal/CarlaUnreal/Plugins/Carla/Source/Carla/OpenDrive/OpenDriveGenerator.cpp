@@ -26,6 +26,8 @@ AProceduralMeshActor::AProceduralMeshActor()
   RootComponent = MeshComponent;
 }
 
+const FName AOpenDriveGenerator::RoadSurfaceTag(TEXT("road"));
+
 AOpenDriveGenerator::AOpenDriveGenerator(const FObjectInitializer &ObjectInitializer)
   : Super(ObjectInitializer)
 {
@@ -115,11 +117,12 @@ void AOpenDriveGenerator::GenerateRoadMesh()
         MeshData.Vertices,
         MeshData.Triangles,
         MeshData.Normals,
-        TArray<FVector2D>(), // UV0
+        MeshData.UV0,
         TArray<FLinearColor>(), // VertexColor
         TArray<FProcMeshTangent>(), // Tangents
         true); // Create collision
 
+    TempActor->Tags.Add(AOpenDriveGenerator::RoadSurfaceTag);
     ActorMeshList.Add(TempActor);
   }
 
@@ -191,7 +194,19 @@ void AOpenDriveGenerator::BeginPlay()
   const FString XodrContent = UOpenDrive::GetXODR(GetWorld());
   LoadOpenDrive(XodrContent);
 
-  GenerateAll();
+  // The road graph is always parsed -- waypoints, the traffic manager and telemetry all need it,
+  // whether or not the geometry is already present. Only the geometry generation is skipped.
+  if (bGeometryBaked)
+  {
+    UE_LOG(LogCarla, Display,
+        TEXT("[OpenDriveGenerator] road geometry is baked into the level; skipping generation "
+             "(%d mesh actor(s), %d spawn point(s) already present)."),
+        ActorMeshList.Num(), VehicleSpawners.Num());
+  }
+  else
+  {
+    GenerateAll();
+  }
 
   auto World = GetWorld();
   check(World != nullptr);

@@ -39,6 +39,18 @@ class CARLA_API AOpenDriveGenerator : public AActor
 
 public:
 
+  /// Tag carried by every actor forming the generated road surface, whatever its representation:
+  /// AProceduralMeshActor while the road is generated at runtime, AStaticMeshActor once it is baked
+  /// into a saved level. Layer operations select on this tag rather than on a concrete class, so
+  /// changing the representation does not silently take the road out of their reach.
+  static const FName RoadSurfaceTag;
+
+  /// Record that this level already contains its road surface, so BeginPlay does not build a second
+  /// one over the top. Set by whatever baked the geometry in.
+  UFUNCTION(BlueprintCallable, Category = "OpenDrive")
+  void SetGeometryBaked(bool bBaked) { bGeometryBaked = bBaked; }
+
+
   AOpenDriveGenerator(const FObjectInitializer &ObjectInitializer);
 
   /// Set the OpenDRIVE information as string and generates the
@@ -79,5 +91,15 @@ protected:
 
   UPROPERTY(EditAnywhere)
   TArray<AActor *> ActorMeshList;
+
+  /// Set once the road geometry for this world has been produced and saved as level content, so
+  /// BeginPlay does not generate a second copy on top of it.
+  ///
+  /// The generated actors and spawn points are UPROPERTY, so a world persisted as a level reloads
+  /// already carrying them. Regenerating would append a duplicate road surface -- a second set of
+  /// collision geometry occupying the same space -- and duplicate spawn points, while the map looks
+  /// superficially correct.
+  UPROPERTY(EditAnywhere)
+  bool bGeometryBaked = false;
 
 };
