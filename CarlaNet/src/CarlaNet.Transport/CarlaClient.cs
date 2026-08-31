@@ -681,12 +681,10 @@ public sealed class CarlaClient : IAsyncDisposable
                 roadEllipsoidal[i] = heights[i + 1].Altitude + heightOffset + gradeLift[i];
         }
 
-        // 5) Inject the sampled heights into the .xodr <elevationProfile>. The C1 fit removes the
-        //    crease the piecewise-linear ramps left at every sample boundary, and carries height
-        //    and slope through junction connectors so the surface does not step at intersections.
+        // 5) Inject the sampled heights into the .xodr <elevationProfile>.
         var elevatedXodr = CarlaNet.Map.OpenDrive.ElevationInjector.InjectElevation(
             flatXodr, samples, roadEllipsoidal, originHeight,
-            CarlaNet.Map.OpenDrive.ElevationFitMode.MonotoneCubicHermite, outlierThresholdMeters,
+            CarlaNet.Map.OpenDrive.ElevationFitMode.PiecewiseLinear, outlierThresholdMeters,
             raisedSamples);
 
         // 5b) Inject stop/give-way signs from the OSM (netconvert never emits them). Placement is
