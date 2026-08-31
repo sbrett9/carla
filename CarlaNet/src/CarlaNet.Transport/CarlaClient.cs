@@ -752,12 +752,31 @@ public sealed class CarlaClient : IAsyncDisposable
             + $"{continuitySummary.Iterations} iteration(s); bent {continuitySummary.RoadsBent} road(s), "
             + $"largest remaining disagreement {continuitySummary.MaxResidualMeters:F4} m");
 
-        // 5b) Inject stop/give-way signs from the OSM (netconvert never emits them). Placement is
+        // 5b) Give each junction one surface. Reconciling contacts only constrains road ends that
+        //     a <link> declares shared; inside a junction the connecting roads CROSS instead, so
+        //     nothing related their heights and each carried the terrain under its own reference
+        //     line. The mesh draws every connector's full width, so the same pavement was covered
+        //     several times at several heights. This solves the connector heights per junction so
+        //     overlapping surfaces agree, holding the ends where the pass above put them so no
+        //     reconciled contact is disturbed.
+        elevatedXodr = CarlaNet.Map.OpenDrive.JunctionSurfaceReconciler
+            .Reconcile(elevatedXodr, map, out var junctionSummary);
+        Console.WriteLine($"[elevation] resolved {junctionSummary.Overlaps} overlapping junction "
+            + $"surfaces across {junctionSummary.Junctions} junction(s), "
+            + $"{junctionSummary.Connectors} connector(s): median disagreement "
+            + $"{junctionSummary.MedianBeforeMeters:F4} -> {junctionSummary.MedianAfterMeters:F4} m, "
+            + $"worst {junctionSummary.MaxBeforeMeters:F3} -> {junctionSummary.MaxAfterMeters:F3} m; "
+            + $"junction boundary moved at most {junctionSummary.MaxBoundaryShiftMeters:F4} m"
+            + (junctionSummary.JunctionsHeld > 0
+                ? $"; {junctionSummary.JunctionsHeld} junction(s) left alone to protect a contact"
+                : string.Empty));
+
+        // 5c) Inject stop/give-way signs from the OSM (netconvert never emits them). Placement is
         //     by road/s + a shoulder offset, unaffected by the elevation just added, and uses the
         //     same geoReference origin; a no-op when the OSM carries no such nodes.
         elevatedXodr = CarlaNet.Map.OpenDrive.SignInjector.InjectSigns(elevatedXodr, osmPath, map);
 
-        // 5c) Group the netconvert traffic lights per phase and link them to their junctions.
+        // 5d) Group the netconvert traffic lights per phase and link them to their junctions.
         //     netconvert emits the light <signal>s and one all-heads <controller> per junction but
         //     no <junction><controller> link and no phase split, so CARLA orphans every light
         //     (issue #1) and would flash whole junctions green. TrafficLightInjector rebuilds the

@@ -226,8 +226,11 @@ public static class ElevationInjector
         return doc.ToString(SaveOptions.None);
     }
 
-    /// <summary>Convenience: extract → (caller samples heights) is external, so this is for tests/symmetry.</summary>
-    private static XElement BuildElevationProfile(List<(double S, double Z, bool Raised)> profile, ElevationFitMode mode)
+    /// <summary>
+    /// Builds an &lt;elevationProfile&gt; through sampled heights. Public so a pass that derives
+    /// heights some other way than sampling terrain emits the same curve shape as this one does.
+    /// </summary>
+    public static XElement BuildElevationProfile(List<(double S, double Z, bool Raised)> profile, ElevationFitMode mode)
     {
         var elevationProfile = new XElement("elevationProfile");
         double[]? tangents = mode == ElevationFitMode.ShapePreservingCubic
@@ -309,6 +312,14 @@ public static class ElevationInjector
             }
         }
         return tangents;
+    }
+
+    /// <summary>Swaps a road's elevation profile for another, keeping the document schema-valid.</summary>
+    public static void ReplaceElevationProfile(XElement roadNode, XElement elevationProfile)
+    {
+        ArgumentNullException.ThrowIfNull(roadNode);
+        roadNode.Elements("elevationProfile").Remove();
+        InsertElevationProfile(roadNode, elevationProfile);
     }
 
     // <road> child order per OpenDRIVE: link, type, planView, elevationProfile, …
