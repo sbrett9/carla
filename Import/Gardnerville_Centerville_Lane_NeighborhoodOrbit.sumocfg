@@ -17,7 +17,9 @@
              ambient stream fall, and so whether the marked vehicle gets a clear run on its way
              out; this value was measured to give it one. -->
         <seed value="42"/>
-        <!-- A teleport cannot be mirrored by a CARLA actor, so let a jam stay a jam instead. -->
+        <!-- A teleport is a vehicle jumping position, which nothing downstream can reproduce
+             faithfully, so the default of -1 forbids it and lets a jam stay a jam. Raise it only
+             where breaking a deadlock matters more than every track being continuous. -->
         <time-to-teleport value="-1"/>
         <max-depart-delay value="900"/>
         <collision.action value="warn"/>

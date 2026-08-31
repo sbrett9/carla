@@ -46,6 +46,19 @@ class NetconvertSettings:
     lane_width: float = 3.35
     sidewalk_width: float = 2.80
     traffic_lights: bool = True
+    # netconvert's guessed signals are fixed-time programs on a 90 s cycle. Real arterials run
+    # vehicle-actuated signals that hold green while traffic is still arriving, which is worth a
+    # great deal of throughput at a junction carrying freeway ramp traffic.
+    traffic_light_type: str = "static"
+    # Distance within which netconvert merges neighbouring junctions. Where two sit closer than
+    # this the edge between them is trimmed away to a fraction of a metre while still spanning
+    # tens of metres of geometry, and nothing can merge across it -- a ramp built that way
+    # stands still. None keeps netconvert's own default of 10 m.
+    junction_join_distance: float | None = None
+    # Let vehicles overtake a stopped vehicle by crossing the centre line, the way a driver on a
+    # two-way road does. netconvert's own guess almost never succeeds; see
+    # SumoScenarioBuilder.allow_opposite_overtaking for naming the pairs instead.
+    guess_opposite_lanes: bool = False
     drivable_edges_only: bool = True
 
     def to_arguments(self, osm_path: Path, out_path: Path) -> list[str]:
@@ -69,6 +82,12 @@ class NetconvertSettings:
             "--output.original-names", "true",
         ]
         args += ["--junctions.join"] if self.traffic_lights else ["--tls.discard-loaded"]
+        if self.traffic_lights and self.traffic_light_type != "static":
+            args += ["--tls.default-type", self.traffic_light_type]
+        if self.junction_join_distance is not None:
+            args += ["--junctions.join-dist", str(self.junction_join_distance)]
+        if self.guess_opposite_lanes:
+            args += ["--opposites.guess", "true", "--opposites.guess.fix-lengths", "true"]
         if self.drivable_edges_only:
             args += [
                 "--keep-edges.by-vclass", "passenger",
@@ -417,7 +436,8 @@ class SumoScenarioBuilder:
 
     def write_config(self, out_path: str | Path, network_name: str, routes_name: str,
                      end_time: int, step_length: float = 0.05, seed: int = 42,
-                     additional_names: tuple[str, ...] = ()) -> Path:
+                     additional_names: tuple[str, ...] = (),
+                     time_to_teleport: float = -1) -> Path:
         """Write the .sumocfg that ties the network and routes together."""
         out_path = Path(out_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -440,8 +460,10 @@ class SumoScenarioBuilder:
              ambient stream fall, and so whether the marked vehicle gets a clear run on its way
              out; this value was measured to give it one. -->
         <seed value="{seed}"/>
-        <!-- A teleport cannot be mirrored by a CARLA actor, so let a jam stay a jam instead. -->
-        <time-to-teleport value="-1"/>
+        <!-- A teleport is a vehicle jumping position, which nothing downstream can reproduce
+             faithfully, so the default of -1 forbids it and lets a jam stay a jam. Raise it only
+             where breaking a deadlock matters more than every track being continuous. -->
+        <time-to-teleport value="{time_to_teleport:g}"/>
         <max-depart-delay value="900"/>
         <collision.action value="warn"/>
     </processing>
@@ -452,6 +474,45 @@ class SumoScenarioBuilder:
 </configuration>
 """, encoding="utf-8")
         return out_path
+
+    def allow_opposite_overtaking(self, network_path: str | Path,
+                                  edge_pairs: tuple[tuple[str, str], ...]) -> int:
+        """Mark pairs of edges as each other's opposing carriageway, in place.
+
+        On a two-way road with one lane each way, a driver who meets a stopped vehicle checks that
+        the way is clear and goes round it on the other side of the centre line. SUMO models exactly
+        that, but only for lanes that know their opposite, and netconvert's `--opposites.guess`
+        infers the relationship from junction-trimmed lane shapes and declines wherever the two
+        directions were trimmed differently -- which is most places. Naming the pairs is reliable
+        where guessing is not.
+
+        Returns the number of lanes that gained an opposite.
+        """
+        network_path = Path(network_path)
+        tree = ET.parse(network_path)
+        root = tree.getroot()
+        lanes_by_edge = {edge.get("id"): edge.findall("lane")
+                         for edge in root if edge.tag == "edge" and edge.get("function") != "internal"}
+
+        marked = 0
+        for left, right in edge_pairs:
+            for near, far in ((left, right), (right, left)):
+                if near not in lanes_by_edge or far not in lanes_by_edge:
+                    raise ValueError(f"cannot pair {left} with {right}: {near if near not in lanes_by_edge else far} "
+                                     "is not in this network")
+                # SUMO reads the relationship from the leftmost lane of each direction, which is the
+                # last one in the file: that is the lane a vehicle crosses the centre line from.
+                lane = lanes_by_edge[near][-1]
+                opposite = lanes_by_edge[far][-1].get("id")
+                if lane.get("opposite") != opposite:
+                    lane.set("opposite", opposite)
+                    marked += 1
+
+        if marked:
+            tree.write(network_path, encoding="UTF-8", xml_declaration=True)
+        self.logger.info("opposite-lane overtaking enabled on %d lanes across %d road(s)",
+                         marked, len(edge_pairs))
+        return marked
 
     def write_additional(self, out_path: str | Path, closure: LaneClosure) -> Path:
         """Write the additional file carrying a scenario's lane closure."""

@@ -53,142 +53,151 @@
           vehsPerHour="3000" from="472478085" to="908324823"
           departLane="free" departSpeed="max"/>
     <flow id="i25_north_to_arapahoe_east" type="freeway_mix" begin="0" end="2700"
-          vehsPerHour="420" from="37722905" to="427819527"
+          vehsPerHour="150" from="37722905" to="427819527"
           departLane="free" departSpeed="max"/>
     <flow id="i25_north_to_arapahoe_west" type="freeway_mix" begin="0" end="2700"
-          vehsPerHour="380" from="37722905" to="427819541#0"
+          vehsPerHour="130" from="37722905" to="427819541#0"
           departLane="free" departSpeed="max"/>
     <flow id="i25_south_to_arapahoe_east" type="freeway_mix" begin="0" end="2700"
-          vehsPerHour="360" from="472478085" to="427819527"
+          vehsPerHour="130" from="472478085" to="427819527"
           departLane="free" departSpeed="max"/>
     <flow id="i25_south_to_arapahoe_west" type="freeway_mix" begin="0" end="2700"
-          vehsPerHour="340" from="472478085" to="427819541#0"
+          vehsPerHour="120" from="472478085" to="427819541#0"
           departLane="free" departSpeed="max"/>
     <flow id="arapahoe_east_to_i25_north" type="freeway_mix" begin="0" end="2700"
-          vehsPerHour="400" from="131933384" to="106308386"
+          vehsPerHour="140" from="131933384" to="106308386"
           departLane="free" departSpeed="max"/>
     <flow id="arapahoe_west_to_i25_north" type="freeway_mix" begin="0" end="2700"
-          vehsPerHour="360" from="427819540#0" to="106308386"
+          vehsPerHour="130" from="427819540#0" to="106308386"
           departLane="free" departSpeed="max"/>
     <flow id="arapahoe_east_to_i25_south" type="freeway_mix" begin="0" end="2700"
-          vehsPerHour="340" from="131933384" to="908324823"
+          vehsPerHour="120" from="131933384" to="908324823"
           departLane="free" departSpeed="max"/>
     <flow id="arapahoe_west_to_i25_south" type="freeway_mix" begin="0" end="2700"
-          vehsPerHour="320" from="427819540#0" to="908324823"
+          vehsPerHour="110" from="427819540#0" to="908324823"
           departLane="free" departSpeed="max"/>
     <flow id="arapahoe_east_to_west" type="arterial_mix" begin="0" end="2700"
-          vehsPerHour="700" from="131933384" to="427819541#0"
+          vehsPerHour="350" from="131933384" to="427819541#0"
           departLane="free" departSpeed="max"/>
     <flow id="arapahoe_west_to_east" type="arterial_mix" begin="0" end="2700"
-          vehsPerHour="680" from="427819540#0" to="427819527"
+          vehsPerHour="330" from="427819540#0" to="427819527"
           departLane="free" departSpeed="max"/>
     <flow id="yosemite_north_to_south" type="arterial_mix" begin="0" end="2700"
-          vehsPerHour="260" from="427819547" to="629629570"
+          vehsPerHour="130" from="427819547" to="629629570"
           departLane="free" departSpeed="max"/>
     <flow id="yosemite_south_to_north" type="arterial_mix" begin="0" end="2700"
-          vehsPerHour="240" from="-629629570" to="-427819547"
+          vehsPerHour="120" from="-629629570" to="-427819547"
           departLane="free" departSpeed="max"/>
     <flow id="yosemite_north_to_arapahoe_east" type="arterial_mix" begin="0" end="2700"
-          vehsPerHour="180" from="427819547" to="427819527"
+          vehsPerHour="90" from="427819547" to="427819527"
           departLane="free" departSpeed="max"/>
     <flow id="arapahoe_east_to_yosemite_north" type="arterial_mix" begin="0" end="2700"
-          vehsPerHour="170" from="131933384" to="-427819547"
+          vehsPerHour="85" from="131933384" to="-427819547"
           departLane="free" departSpeed="max"/>
     <flow id="clinton_to_arapahoe_west" type="arterial_mix" begin="0" end="2700"
-          vehsPerHour="150" from="-629634784" to="427819541#0"
+          vehsPerHour="75" from="-629634784" to="427819541#0"
           departLane="free" departSpeed="max"/>
     <flow id="arapahoe_west_to_clinton" type="arterial_mix" begin="0" end="2700"
-          vehsPerHour="140" from="427819540#0" to="629634784"
+          vehsPerHour="70" from="427819540#0" to="629634784"
           departLane="free" departSpeed="max"/>
     <flow id="caley_to_arapahoe_east" type="arterial_mix" begin="0" end="2700"
-          vehsPerHour="130" from="132833790" to="427819527"
+          vehsPerHour="65" from="132833790" to="427819527"
           departLane="free" departSpeed="max"/>
     <flow id="arapahoe_east_to_caley" type="arterial_mix" begin="0" end="2700"
-          vehsPerHour="120" from="131933384" to="629653938"
+          vehsPerHour="60" from="131933384" to="629653938"
           departLane="free" departSpeed="max"/>
     <flow id="peakview_west_to_east" type="arterial_mix" begin="0" end="2700"
-          vehsPerHour="150" from="16999218" to="292396861#1"
+          vehsPerHour="75" from="16999218" to="292396861#1"
           departLane="free" departSpeed="max"/>
     <flow id="peakview_east_to_west" type="arterial_mix" begin="0" end="2700"
-          vehsPerHour="140" from="633447921" to="46107902#0"
+          vehsPerHour="70" from="633447921" to="46107902#0"
           departLane="free" departSpeed="max"/>
     <flow id="boston_court_to_arapahoe_east" type="arterial_mix" begin="0" end="2700"
-          vehsPerHour="90" from="17000739" to="427819527"
+          vehsPerHour="45" from="17000739" to="427819527"
           departLane="free" departSpeed="max"/>
     <flow id="arbor_to_arapahoe_east" type="arterial_mix" begin="0" end="2700"
-          vehsPerHour="80" from="16998684#0" to="427819527"
+          vehsPerHour="40" from="16998684#0" to="427819527"
           departLane="free" departSpeed="max"/>
     <flow id="willow_to_yosemite_south" type="arterial_mix" begin="0" end="2700"
-          vehsPerHour="90" from="550665536#0" to="629629570"
+          vehsPerHour="45" from="550665536#0" to="629629570"
           departLane="free" departSpeed="max"/>
     <flow id="wabash_to_arapahoe_west" type="arterial_mix" begin="0" end="2700"
-          vehsPerHour="80" from="427479206" to="427819541#0"
+          vehsPerHour="40" from="427479206" to="427819541#0"
+          departLane="free" departSpeed="max"/>
+    <flow id="underpass_north_to_south" type="arterial_mix" begin="0" end="2700"
+          vehsPerHour="120" from="427819547" to="629629570" via="218965860#0"
+          departLane="free" departSpeed="max"/>
+    <flow id="underpass_south_to_north" type="arterial_mix" begin="0" end="2700"
+          vehsPerHour="110" from="-629629570" to="-427819547" via="-223315781"
+          departLane="free" departSpeed="max"/>
+    <flow id="underpass_caley_to_yosemite" type="arterial_mix" begin="0" end="2700"
+          vehsPerHour="80" from="132833790" to="629629570" via="218965860#0"
           departLane="free" departSpeed="max"/>
     <flow id="davies_avenue_to_i25_north" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="70" from="16993828#0" to="106308386"
+          vehsPerHour="32" from="16993828#0" to="106308386"
           departLane="free" departSpeed="max"/>
     <flow id="i25_south_to_davies_avenue" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="65" from="472478085" to="-16993828#0"
+          vehsPerHour="30" from="472478085" to="-16993828#0"
           departLane="free" departSpeed="max"/>
     <flow id="costilla_place_to_i25_north" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="60" from="16996647" to="106308386"
+          vehsPerHour="27" from="16996647" to="106308386"
           departLane="free" departSpeed="max"/>
     <flow id="i25_south_to_costilla_place" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="55" from="472478085" to="-16996647"
+          vehsPerHour="25" from="472478085" to="-16996647"
           departLane="free" departSpeed="max"/>
     <flow id="costilla_avenue_to_i25_south" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="60" from="16996898" to="908324823"
+          vehsPerHour="27" from="16996898" to="908324823"
           departLane="free" departSpeed="max"/>
     <flow id="i25_north_to_costilla_avenue" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="55" from="37722905" to="-16996898"
+          vehsPerHour="25" from="37722905" to="-16996898"
           departLane="free" departSpeed="max"/>
     <flow id="davies_place_to_i25_north" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="55" from="17001552#0" to="106308386"
+          vehsPerHour="25" from="17001552#0" to="106308386"
           departLane="free" departSpeed="max"/>
     <flow id="i25_south_to_davies_place" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="50" from="472478085" to="-17001552#1"
+          vehsPerHour="22" from="472478085" to="-17001552#1"
           departLane="free" departSpeed="max"/>
     <flow id="briarwood_place_to_i25_north" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="60" from="17003522" to="106308386"
+          vehsPerHour="27" from="17003522" to="106308386"
           departLane="free" departSpeed="max"/>
     <flow id="i25_south_to_briarwood_place" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="55" from="472478085" to="-17003522"
+          vehsPerHour="25" from="472478085" to="-17003522"
           departLane="free" departSpeed="max"/>
     <flow id="briarwood_boulevard_to_i25_south" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="60" from="17007347#0" to="908324823"
+          vehsPerHour="27" from="17007347#0" to="908324823"
           departLane="free" departSpeed="max"/>
     <flow id="i25_north_to_briarwood_boulevard" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="55" from="37722905" to="-17007347#0"
+          vehsPerHour="25" from="37722905" to="-17007347#0"
           departLane="free" departSpeed="max"/>
     <flow id="briarwood_avenue_to_arapahoe_east" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="70" from="224876698" to="427819527"
+          vehsPerHour="32" from="224876698" to="427819527"
           departLane="free" departSpeed="max"/>
     <flow id="arapahoe_east_to_briarwood_avenue" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="65" from="131933384" to="-224876698"
+          vehsPerHour="30" from="131933384" to="-224876698"
           departLane="free" departSpeed="max"/>
     <flow id="easter_place_to_i25_north" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="50" from="17006662#0" to="106308386"
+          vehsPerHour="22" from="17006662#0" to="106308386"
           departLane="free" departSpeed="max"/>
     <flow id="i25_south_to_easter_place" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="45" from="472478085" to="-17006662#0"
+          vehsPerHour="20" from="472478085" to="-17006662#0"
           departLane="free" departSpeed="max"/>
     <flow id="fremont_circle_to_i25_north" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="55" from="-16991914" to="106308386"
+          vehsPerHour="25" from="-16991914" to="106308386"
           departLane="free" departSpeed="max"/>
     <flow id="i25_south_to_fremont_circle" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="50" from="472478085" to="16991914"
+          vehsPerHour="22" from="472478085" to="16991914"
           departLane="free" departSpeed="max"/>
     <flow id="xanthia_street_to_arapahoe_east" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="50" from="-17003598#2" to="427819527"
+          vehsPerHour="22" from="-17003598#2" to="427819527"
           departLane="free" departSpeed="max"/>
     <flow id="xanthia_way_to_i25_north" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="45" from="-17006541" to="106308386"
+          vehsPerHour="20" from="-17006541" to="106308386"
           departLane="free" departSpeed="max"/>
     <flow id="alton_way_to_arapahoe_east" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="55" from="-17003147#17" to="427819527"
+          vehsPerHour="25" from="-17003147#17" to="427819527"
           departLane="free" departSpeed="max"/>
     <flow id="arapahoe_east_to_alton_way" type="residential_mix" begin="0" end="2700"
-          vehsPerHour="50" from="131933384" to="17003147#12"
+          vehsPerHour="22" from="131933384" to="17003147#12"
           departLane="free" departSpeed="max"/>
 
     <!-- The marked vehicle. It drives at the posted limit throughout: what makes it an outlier
@@ -202,7 +211,7 @@
           from="37722905" to="106308386" via="629675735 427819537#1 1026993839#0 218965860#0"
           departLane="best" departSpeed="max" arrivalSpeed="current">
         <stop lane="218965860#0_0" endPos="87.93" duration="1800.00"
-              parking="false"/>
+              parking="true"/>
     </trip>
 
 </routes>

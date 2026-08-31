@@ -10,12 +10,12 @@ north from Arapahoe up the west side.
 The scenario this writes:
 
   * one marked vehicle enters at the southern end of I-25 heading north, leaves at the Arapahoe
-    interchange, runs west along Arapahoe Road, turns north up South Yosemite Street and stops
-    under the Yosemite Street road bridge, where it waits 30 minutes before returning to I-25 and
-    leaving at the northern end of the map,
+    interchange, runs west along Arapahoe Road, turns north up South Yosemite Street and pulls off
+    the roadway under the Yosemite Street road bridge, where it waits 30 minutes before returning
+    to I-25 and leaving at the northern end of the map,
   * heavy freeway traffic in both directions with a wide spread of speeds, so faster vehicles work
     their way to the left and slower ones sit right,
-  * an incident that closes four of the six northbound lanes for four minutes, which backs traffic
+  * an incident that closes five of the six northbound lanes for three minutes, which backs traffic
     up behind it and lets it drain again once the lanes reopen,
   * dense traffic on Arapahoe Road carrying a much larger share of vans and trucks than the freeway,
   * residential streets on the west and south edges feeding commuters onto the freeway and taking
@@ -35,6 +35,7 @@ import math
 import os
 import sys
 import zipfile
+from dataclasses import replace
 
 _THIS = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.normpath(os.path.join(_THIS, "..", ".."))
@@ -61,7 +62,14 @@ WORLD_PACKAGE = os.path.join(_REPO, "Build", "world-packages", f"{MAP_NAME}.cwp"
 
 # Origin from that world package. Pinning it puts the centre of the extract at (0,0); the map then
 # spans x -476.8..476.7 and y -969.3..969.3, which matches the CARLA map's OpenDRIVE header exactly.
-NETCONVERT_SETTINGS = NetconvertSettings(origin_lat=39.59431, origin_lon=-104.88449)
+NETCONVERT_SETTINGS = NetconvertSettings(origin_lat=39.59431, origin_lon=-104.88449,
+                                        traffic_light_type="actuated",
+                                        junction_join_distance=25)
+
+# Two-way roads where a driver would cross the centre line to get past something stopped. The
+# roadway under the Yosemite Street bridge is one lane each way, so without this the marked
+# vehicle's halt would simply block everything behind it for half an hour.
+OPPOSITE_PAIRS = (("218965860#0", "-223315781"),)
 
 # Where the marked vehicle waits: 39.600357 N, 104.886490 W, which is x=-171.8, y=+671.4 in the
 # map's metres. Nothing there is tagged as a tunnel -- South Yosemite Street is carried over on a
@@ -131,62 +139,75 @@ VEHICLE_TYPES = """\
 # Ambient traffic. Gateways are the fringe edges where a road leaves the extract.
 AMBIENT_FLOWS = [
     # Interstate 25 through traffic, the bulk of the map's movement. Six lanes northbound and five
-    # southbound at 65 mph, so these rates are busy rather than congested until the incident hits.
+    # southbound at 65 mph carry this comfortably: it is the signalised Arapahoe Road corridor
+    # that limits this map, not the freeway, so the freeway is where the volume goes.
     AmbientFlow("i25_north_through", I25_NORTHBOUND_IN, I25_NORTHBOUND_OUT, 3300,
                 via=(I25_NORTHBOUND_MIDDLE,), vehicle_type="freeway_mix"),
     AmbientFlow("i25_south_through", I25_SOUTHBOUND_IN, I25_SOUTHBOUND_OUT, 3000, vehicle_type="freeway_mix"),
-    # Freeway traffic that uses the Arapahoe Road interchange rather than passing straight through.
-    AmbientFlow("i25_north_to_arapahoe_east", I25_NORTHBOUND_IN, "427819527", 420, vehicle_type="freeway_mix"),
-    AmbientFlow("i25_north_to_arapahoe_west", I25_NORTHBOUND_IN, "427819541#0", 380, vehicle_type="freeway_mix"),
-    AmbientFlow("i25_south_to_arapahoe_east", I25_SOUTHBOUND_IN, "427819527", 360, vehicle_type="freeway_mix"),
-    AmbientFlow("i25_south_to_arapahoe_west", I25_SOUTHBOUND_IN, "427819541#0", 340, vehicle_type="freeway_mix"),
-    AmbientFlow("arapahoe_east_to_i25_north", "131933384", I25_NORTHBOUND_OUT, 400, vehicle_type="freeway_mix"),
-    AmbientFlow("arapahoe_west_to_i25_north", "427819540#0", I25_NORTHBOUND_OUT, 360, vehicle_type="freeway_mix"),
-    AmbientFlow("arapahoe_east_to_i25_south", "131933384", I25_SOUTHBOUND_OUT, 340, vehicle_type="freeway_mix"),
-    AmbientFlow("arapahoe_west_to_i25_south", "427819540#0", I25_SOUTHBOUND_OUT, 320, vehicle_type="freeway_mix"),
+    # Freeway traffic that turns at the Arapahoe Road interchange rather than passing straight
+    # through. Everything here has to clear a signal, so these rates are what the junctions can
+    # actually discharge; set much above this the corridor fills up and never recovers.
+    AmbientFlow("i25_north_to_arapahoe_east", I25_NORTHBOUND_IN, "427819527", 150, vehicle_type="freeway_mix"),
+    AmbientFlow("i25_north_to_arapahoe_west", I25_NORTHBOUND_IN, "427819541#0", 130, vehicle_type="freeway_mix"),
+    AmbientFlow("i25_south_to_arapahoe_east", I25_SOUTHBOUND_IN, "427819527", 130, vehicle_type="freeway_mix"),
+    AmbientFlow("i25_south_to_arapahoe_west", I25_SOUTHBOUND_IN, "427819541#0", 120, vehicle_type="freeway_mix"),
+    AmbientFlow("arapahoe_east_to_i25_north", "131933384", I25_NORTHBOUND_OUT, 140, vehicle_type="freeway_mix"),
+    AmbientFlow("arapahoe_west_to_i25_north", "427819540#0", I25_NORTHBOUND_OUT, 130, vehicle_type="freeway_mix"),
+    AmbientFlow("arapahoe_east_to_i25_south", "131933384", I25_SOUTHBOUND_OUT, 120, vehicle_type="freeway_mix"),
+    AmbientFlow("arapahoe_west_to_i25_south", "427819540#0", I25_SOUTHBOUND_OUT, 110, vehicle_type="freeway_mix"),
     # East Arapahoe Road, crossing the map under the freeway.
-    AmbientFlow("arapahoe_east_to_west", "131933384", "427819541#0", 700, vehicle_type="arterial_mix"),
-    AmbientFlow("arapahoe_west_to_east", "427819540#0", "427819527", 680, vehicle_type="arterial_mix"),
+    AmbientFlow("arapahoe_east_to_west", "131933384", "427819541#0", 350, vehicle_type="arterial_mix"),
+    AmbientFlow("arapahoe_west_to_east", "427819540#0", "427819527", 330, vehicle_type="arterial_mix"),
     # South Yosemite Street, the north-south arterial on the west side.
-    AmbientFlow("yosemite_north_to_south", "427819547", "629629570", 260, vehicle_type="arterial_mix"),
-    AmbientFlow("yosemite_south_to_north", "-629629570", "-427819547", 240, vehicle_type="arterial_mix"),
-    AmbientFlow("yosemite_north_to_arapahoe_east", "427819547", "427819527", 180, vehicle_type="arterial_mix"),
-    AmbientFlow("arapahoe_east_to_yosemite_north", "131933384", "-427819547", 170, vehicle_type="arterial_mix"),
+    AmbientFlow("yosemite_north_to_south", "427819547", "629629570", 130, vehicle_type="arterial_mix"),
+    AmbientFlow("yosemite_south_to_north", "-629629570", "-427819547", 120, vehicle_type="arterial_mix"),
+    AmbientFlow("yosemite_north_to_arapahoe_east", "427819547", "427819527", 90, vehicle_type="arterial_mix"),
+    AmbientFlow("arapahoe_east_to_yosemite_north", "131933384", "-427819547", 85, vehicle_type="arterial_mix"),
     # The surrounding street grid: Boston, Clinton, Caley, Peakview, Willow, Wabash.
-    AmbientFlow("clinton_to_arapahoe_west", "-629634784", "427819541#0", 150, vehicle_type="arterial_mix"),
-    AmbientFlow("arapahoe_west_to_clinton", "427819540#0", "629634784", 140, vehicle_type="arterial_mix"),
-    AmbientFlow("caley_to_arapahoe_east", "132833790", "427819527", 130, vehicle_type="arterial_mix"),
-    AmbientFlow("arapahoe_east_to_caley", "131933384", "629653938", 120, vehicle_type="arterial_mix"),
-    AmbientFlow("peakview_west_to_east", "16999218", "292396861#1", 150, vehicle_type="arterial_mix"),
-    AmbientFlow("peakview_east_to_west", "633447921", "46107902#0", 140, vehicle_type="arterial_mix"),
-    AmbientFlow("boston_court_to_arapahoe_east", "17000739", "427819527", 90, vehicle_type="arterial_mix"),
-    AmbientFlow("arbor_to_arapahoe_east", "16998684#0", "427819527", 80, vehicle_type="arterial_mix"),
-    AmbientFlow("willow_to_yosemite_south", "550665536#0", "629629570", 90, vehicle_type="arterial_mix"),
-    AmbientFlow("wabash_to_arapahoe_west", "427479206", "427819541#0", 80, vehicle_type="arterial_mix"),
+    AmbientFlow("clinton_to_arapahoe_west", "-629634784", "427819541#0", 75, vehicle_type="arterial_mix"),
+    AmbientFlow("arapahoe_west_to_clinton", "427819540#0", "629634784", 70, vehicle_type="arterial_mix"),
+    AmbientFlow("caley_to_arapahoe_east", "132833790", "427819527", 65, vehicle_type="arterial_mix"),
+    AmbientFlow("arapahoe_east_to_caley", "131933384", "629653938", 60, vehicle_type="arterial_mix"),
+    AmbientFlow("peakview_west_to_east", "16999218", "292396861#1", 75, vehicle_type="arterial_mix"),
+    AmbientFlow("peakview_east_to_west", "633447921", "46107902#0", 70, vehicle_type="arterial_mix"),
+    AmbientFlow("boston_court_to_arapahoe_east", "17000739", "427819527", 45, vehicle_type="arterial_mix"),
+    AmbientFlow("arbor_to_arapahoe_east", "16998684#0", "427819527", 40, vehicle_type="arterial_mix"),
+    AmbientFlow("willow_to_yosemite_south", "550665536#0", "629629570", 45, vehicle_type="arterial_mix"),
+    AmbientFlow("wabash_to_arapahoe_west", "427479206", "427819541#0", 40, vehicle_type="arterial_mix"),
+    # Local traffic that uses the roadway under the Yosemite Street bridge -- the same stretch the
+    # marked vehicle stops on. Without these the underpass carries nothing, the parked vehicle
+    # obstructs no one, and it is an outlier with nothing to be an outlier among. With them, drivers
+    # meeting it have to cross the centre line to get past, which is what OPPOSITE_PAIRS enables.
+    AmbientFlow("underpass_north_to_south", "427819547", "629629570", 120,
+                via=("218965860#0",), vehicle_type="arterial_mix"),
+    AmbientFlow("underpass_south_to_north", "-629629570", "-427819547", 110,
+                via=("-223315781",), vehicle_type="arterial_mix"),
+    AmbientFlow("underpass_caley_to_yosemite", "132833790", "629629570", 80,
+                via=("218965860#0",), vehicle_type="arterial_mix"),
     # Commuters: out of the residential streets on the west and south edges and onto the freeway,
     # and the same trips in reverse coming home.
-    AmbientFlow("davies_avenue_to_i25_north", "16993828#0", I25_NORTHBOUND_OUT, 70, vehicle_type="residential_mix"),
-    AmbientFlow("i25_south_to_davies_avenue", I25_SOUTHBOUND_IN, "-16993828#0", 65, vehicle_type="residential_mix"),
-    AmbientFlow("costilla_place_to_i25_north", "16996647", I25_NORTHBOUND_OUT, 60, vehicle_type="residential_mix"),
-    AmbientFlow("i25_south_to_costilla_place", I25_SOUTHBOUND_IN, "-16996647", 55, vehicle_type="residential_mix"),
-    AmbientFlow("costilla_avenue_to_i25_south", "16996898", I25_SOUTHBOUND_OUT, 60, vehicle_type="residential_mix"),
-    AmbientFlow("i25_north_to_costilla_avenue", I25_NORTHBOUND_IN, "-16996898", 55, vehicle_type="residential_mix"),
-    AmbientFlow("davies_place_to_i25_north", "17001552#0", I25_NORTHBOUND_OUT, 55, vehicle_type="residential_mix"),
-    AmbientFlow("i25_south_to_davies_place", I25_SOUTHBOUND_IN, "-17001552#1", 50, vehicle_type="residential_mix"),
-    AmbientFlow("briarwood_place_to_i25_north", "17003522", I25_NORTHBOUND_OUT, 60, vehicle_type="residential_mix"),
-    AmbientFlow("i25_south_to_briarwood_place", I25_SOUTHBOUND_IN, "-17003522", 55, vehicle_type="residential_mix"),
-    AmbientFlow("briarwood_boulevard_to_i25_south", "17007347#0", I25_SOUTHBOUND_OUT, 60, vehicle_type="residential_mix"),
-    AmbientFlow("i25_north_to_briarwood_boulevard", I25_NORTHBOUND_IN, "-17007347#0", 55, vehicle_type="residential_mix"),
-    AmbientFlow("briarwood_avenue_to_arapahoe_east", "224876698", "427819527", 70, vehicle_type="residential_mix"),
-    AmbientFlow("arapahoe_east_to_briarwood_avenue", "131933384", "-224876698", 65, vehicle_type="residential_mix"),
-    AmbientFlow("easter_place_to_i25_north", "17006662#0", I25_NORTHBOUND_OUT, 50, vehicle_type="residential_mix"),
-    AmbientFlow("i25_south_to_easter_place", I25_SOUTHBOUND_IN, "-17006662#0", 45, vehicle_type="residential_mix"),
-    AmbientFlow("fremont_circle_to_i25_north", "-16991914", I25_NORTHBOUND_OUT, 55, vehicle_type="residential_mix"),
-    AmbientFlow("i25_south_to_fremont_circle", I25_SOUTHBOUND_IN, "16991914", 50, vehicle_type="residential_mix"),
-    AmbientFlow("xanthia_street_to_arapahoe_east", "-17003598#2", "427819527", 50, vehicle_type="residential_mix"),
-    AmbientFlow("xanthia_way_to_i25_north", "-17006541", I25_NORTHBOUND_OUT, 45, vehicle_type="residential_mix"),
-    AmbientFlow("alton_way_to_arapahoe_east", "-17003147#17", "427819527", 55, vehicle_type="residential_mix"),
-    AmbientFlow("arapahoe_east_to_alton_way", "131933384", "17003147#12", 50, vehicle_type="residential_mix"),
+    AmbientFlow("davies_avenue_to_i25_north", "16993828#0", I25_NORTHBOUND_OUT, 32, vehicle_type="residential_mix"),
+    AmbientFlow("i25_south_to_davies_avenue", I25_SOUTHBOUND_IN, "-16993828#0", 30, vehicle_type="residential_mix"),
+    AmbientFlow("costilla_place_to_i25_north", "16996647", I25_NORTHBOUND_OUT, 27, vehicle_type="residential_mix"),
+    AmbientFlow("i25_south_to_costilla_place", I25_SOUTHBOUND_IN, "-16996647", 25, vehicle_type="residential_mix"),
+    AmbientFlow("costilla_avenue_to_i25_south", "16996898", I25_SOUTHBOUND_OUT, 27, vehicle_type="residential_mix"),
+    AmbientFlow("i25_north_to_costilla_avenue", I25_NORTHBOUND_IN, "-16996898", 25, vehicle_type="residential_mix"),
+    AmbientFlow("davies_place_to_i25_north", "17001552#0", I25_NORTHBOUND_OUT, 25, vehicle_type="residential_mix"),
+    AmbientFlow("i25_south_to_davies_place", I25_SOUTHBOUND_IN, "-17001552#1", 22, vehicle_type="residential_mix"),
+    AmbientFlow("briarwood_place_to_i25_north", "17003522", I25_NORTHBOUND_OUT, 27, vehicle_type="residential_mix"),
+    AmbientFlow("i25_south_to_briarwood_place", I25_SOUTHBOUND_IN, "-17003522", 25, vehicle_type="residential_mix"),
+    AmbientFlow("briarwood_boulevard_to_i25_south", "17007347#0", I25_SOUTHBOUND_OUT, 27, vehicle_type="residential_mix"),
+    AmbientFlow("i25_north_to_briarwood_boulevard", I25_NORTHBOUND_IN, "-17007347#0", 25, vehicle_type="residential_mix"),
+    AmbientFlow("briarwood_avenue_to_arapahoe_east", "224876698", "427819527", 32, vehicle_type="residential_mix"),
+    AmbientFlow("arapahoe_east_to_briarwood_avenue", "131933384", "-224876698", 30, vehicle_type="residential_mix"),
+    AmbientFlow("easter_place_to_i25_north", "17006662#0", I25_NORTHBOUND_OUT, 22, vehicle_type="residential_mix"),
+    AmbientFlow("i25_south_to_easter_place", I25_SOUTHBOUND_IN, "-17006662#0", 20, vehicle_type="residential_mix"),
+    AmbientFlow("fremont_circle_to_i25_north", "-16991914", I25_NORTHBOUND_OUT, 25, vehicle_type="residential_mix"),
+    AmbientFlow("i25_south_to_fremont_circle", I25_SOUTHBOUND_IN, "16991914", 22, vehicle_type="residential_mix"),
+    AmbientFlow("xanthia_street_to_arapahoe_east", "-17003598#2", "427819527", 22, vehicle_type="residential_mix"),
+    AmbientFlow("xanthia_way_to_i25_north", "-17006541", I25_NORTHBOUND_OUT, 20, vehicle_type="residential_mix"),
+    AmbientFlow("alton_way_to_arapahoe_east", "-17003147#17", "427819527", 25, vehicle_type="residential_mix"),
+    AmbientFlow("arapahoe_east_to_alton_way", "131933384", "17003147#12", 22, vehicle_type="residential_mix"),
 ]
 
 
@@ -213,17 +234,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--depart", type=int, default=120,
                         help="second the marked vehicle enters, after the traffic has filled the "
                              "map (default 120)")
-    parser.add_argument("--parking", action="store_true",
-                        help="take the marked vehicle off the carriageway while it waits. Off by "
-                             "default because a parked vehicle stops being reported, and being "
-                             "reported for the whole dwell is the point")
+    parser.add_argument("--stop-in-lane", action="store_true",
+                        help="leave the marked vehicle standing in the running lane instead of "
+                             "pulling off it. Measured: doing so blocks the underpass completely "
+                             "for the whole dwell -- traffic drops from 12.9 m/s to 0.6 and queues "
+                             "in both directions -- because a driver will not cross the centre "
+                             "line while anything is coming the other way, and once both "
+                             "directions queue something always is")
     parser.add_argument("--incident-start", type=float, default=900.0,
                         help="second the northbound lane closure begins (default 900)")
-    parser.add_argument("--incident-seconds", type=float, default=240.0,
-                        help="how long the closure lasts (default 240)")
-    parser.add_argument("--incident-lanes", type=int, default=4,
-                        help="how many of the six northbound lanes to close (default 4)")
+    parser.add_argument("--incident-seconds", type=float, default=180.0,
+                        help="how long the closure lasts (default 180)")
+    parser.add_argument("--incident-lanes", type=int, default=5,
+                        help="how many of the six northbound lanes to close. Four still leaves "
+                             "more capacity than the freeway is carrying, so it produces no queue "
+                             "worth seeing (default 5)")
     parser.add_argument("--no-incident", action="store_true", help="leave the freeway clear")
+    parser.add_argument("--traffic-scale", type=float, default=1.0,
+                        help="multiply every ambient flow rate. The rates below are set so the "
+                             "network runs at a steady population; raising this past the point "
+                             "where arrivals exceed what the junctions discharge makes the map "
+                             "fill up and never recover (default 1.0)")
     parser.add_argument("--end", type=int, default=0,
                         help="simulation end in seconds (default: sized to the marked vehicle)")
     parser.add_argument("--step-length", type=float, default=0.05,
@@ -269,13 +300,14 @@ def main() -> int:
         logging.info("reusing network %s", network_path)
     else:
         builder.build_network(args.osm, network_path, NETCONVERT_SETTINGS)
+    builder.allow_opposite_overtaking(network_path, OPPOSITE_PAIRS)
     network = RoadNetwork.from_file(network_path)
 
     dwell_seconds = args.dwell_minutes * 60.0
     trip = DwellTrip(from_edge=I25_NORTHBOUND_IN, to_edge=I25_NORTHBOUND_OUT,
                      dwell_lane=DWELL_LANE, dwell_seconds=dwell_seconds, via=DWELL_VIA,
                      depart_time=args.depart, dwell_position=DWELL_POSITION,
-                     parking=args.parking)
+                     parking=not args.stop_in_lane)
 
     # The marked vehicle drives about 5.6 km either side of its wait; the wait dominates. Round up
     # to the next minute with room for the queue it may sit in.
@@ -292,8 +324,12 @@ def main() -> int:
         logging.info("incident: %d of 6 northbound lanes closed from %.0f s to %.0f s",
                      len(lanes), closure.begin, closure.end)
 
+    flows = AMBIENT_FLOWS
+    if args.traffic_scale != 1.0:
+        flows = [replace(f, vehicles_per_hour=max(1, round(f.vehicles_per_hour * args.traffic_scale)))
+                 for f in AMBIENT_FLOWS]
     routes_path = builder.write_dwell_routes(os.path.join(out_dir, routes_name), network, trip,
-                                             AMBIENT_FLOWS, end_time, title=MAP_NAME,
+                                             flows, end_time, title=MAP_NAME,
                                              vehicle_types=VEHICLE_TYPES)
     config_path = builder.write_config(os.path.join(out_dir, f"{SCENARIO_NAME}.sumocfg"),
                                        network_name, routes_name, end_time, args.step_length,
@@ -307,7 +343,7 @@ def main() -> int:
     logging.info("         marked vehicle waits %.0f minutes on %s at %.1f m along the lane",
                  args.dwell_minutes, network.street_name.get("218965860#0"), DWELL_POSITION)
     logging.info("         ambient %d flows, %d vehicles/hour",
-                 len(AMBIENT_FLOWS), sum(f.vehicles_per_hour for f in AMBIENT_FLOWS))
+                 len(flows), sum(f.vehicles_per_hour for f in flows))
     logging.info("config   %s  (ends at %d s)", config_path, end_time)
     return 0
 
