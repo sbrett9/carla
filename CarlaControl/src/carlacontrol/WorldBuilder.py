@@ -6,7 +6,6 @@ import time
 from datetime import datetime
 
 from CarlaNet.Map import OsmConversionOptions
-from CarlaNet.Types.Rpc.Environment import OpendriveGenerationParameters
 from System.Collections.Generic import List
 
 from carlacontrol.OsmClipper import OsmClipper
@@ -21,24 +20,6 @@ class WorldBuilder:
         
         self.logger.info(f"world builder initialized: netconvert={netconvert_path}")
 
-
-    def make_opendrive_parameters(self, args):
-        """Road-mesh parameters for the generated world.
-
-        Matches the OSM defaults carlanet would otherwise apply — opposing lanes arrive as
-        separate roads, so walls are disabled to stop them colliding, and a larger maximum
-        road length keeps the mesh less fragmented — while exposing the two that govern
-        how junction surfaces are built.
-        """
-        return OpendriveGenerationParameters(
-            2.0,                      # vertex distance
-            500.0,                    # maximum road length before a road is split
-            0.0,                      # wall height
-            0.0,                      # extra width per side on junction driving lanes
-            True,                     # resolve the drivable network into one surface
-            True,                     # mesh visibility
-            True,                     # pedestrian navigation
-        )
 
     def make_osm_conversion_options(self, args):
         opts = OsmConversionOptions()
@@ -152,7 +133,6 @@ class WorldBuilder:
             args.ion_asset_id,
             ground_ion_asset_id=args.ground_asset_id,
             osm_options=self.make_osm_conversion_options(args),
-            parameters=self.make_opendrive_parameters(args),
             sample_step_meters=args.step,
             origin_height=args.origin_height,
             height_align=args.height_align,
