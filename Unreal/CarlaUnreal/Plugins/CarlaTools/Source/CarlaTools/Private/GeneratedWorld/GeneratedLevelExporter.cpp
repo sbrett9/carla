@@ -3,13 +3,16 @@
 #include "GeneratedWorld/GeneratedLevelExporter.h"
 
 #include "CarlaTools.h"
+#include "GeneratedWorld/GeoreferencedWorldSettings.h"
 
 #include <util/ue-header-guard-begin.h>
+#include "AssetRegistry/AssetRegistryModule.h"
 #include "EditorAssetLibrary.h"
 #include "HAL/FileManager.h"
 #include "Interfaces/IPluginManager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"
+#include "UObject/Package.h"
 #include "Misc/Paths.h"
 #include <util/ue-header-guard-end.h>
 
@@ -125,6 +128,14 @@ FGeneratedLevelExportResult UGeneratedLevelExporter::ExportLevelAsPlugin(
 		return Result;
 	}
 
+	// Mounting makes the plugin's content addressable; it does not tell the asset registry what is
+	// already in there. Without this scan a re-export sees an empty namespace, skips deleting what a
+	// previous export left, and is then refused by a file it did not know existed -- so the first
+	// export of a world succeeds and every one after it fails.
+	FAssetRegistryModule& Registry =
+		FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
+	Registry.Get().ScanPathsSynchronous({ FString::Printf(TEXT("/%s"), *Name) }, /*bForceRescan=*/true);
+
 	// Copy the level and everything it needs into the plugin's own namespace. Duplicating rather than
 	// moving leaves the imported world in place to keep editing; the copy is what ships.
 	const FString SourceFolder = FPackageName::GetLongPackagePath(SourceLevelPackageName);
@@ -138,6 +149,10 @@ FGeneratedLevelExportResult UGeneratedLevelExporter::ExportLevelAsPlugin(
 		  FString::Printf(TEXT("/%s/%s_WorldSettings"), *Name, *Name), true },
 		{ SourceFolder / (ShortName + TEXT("_BareEarthField")),
 		  FString::Printf(TEXT("/%s/%s_BareEarthField"), *Name, *Name), false },
+		// Required: a world without its road network loads and looks correct while offering no
+		// waypoints, no traffic manager and no telemetry, which is worse than failing to export.
+		{ SourceFolder / (ShortName + TEXT("_RoadNetwork")),
+		  FString::Printf(TEXT("/%s/%s_RoadNetwork"), *Name, *Name), true },
 	};
 
 	for (const FExportItem& Item : Items)
@@ -157,6 +172,19 @@ FGeneratedLevelExportResult UGeneratedLevelExporter::ExportLevelAsPlugin(
 		{
 			UEditorAssetLibrary::DeleteAsset(Item.Destination);
 		}
+
+		// Deleting a level does not free its name: DeleteAsset loads the World to delete it, tears it
+		// down and removes the file, but leaves the UPackage resident, so the copy below is refused
+		// with "an asset already exists" over a name nothing on disk holds. Move the residue aside,
+		// which frees the name outright; garbage collection does not reliably reclaim it.
+		if (UPackage* Stale = FindPackage(nullptr, *Item.Destination))
+		{
+			const FName Aside = MakeUniqueObjectName(
+				nullptr, UPackage::StaticClass(), FName(*(Item.Destination + TEXT("_Replaced"))));
+			Stale->Rename(*Aside.ToString(), nullptr,
+				REN_DontCreateRedirectors | REN_NonTransactional | REN_DoNotDirty);
+		}
+
 		if (!UEditorAssetLibrary::DuplicateAsset(Item.Source, Item.Destination))
 		{
 			Result.FailureReason = FString::Printf(
@@ -164,6 +192,32 @@ FGeneratedLevelExportResult UGeneratedLevelExporter::ExportLevelAsPlugin(
 			return Result;
 		}
 		++Result.AssetsExported;
+	}
+
+	// Duplicating assets one at a time does not rewire the references between them: the copied
+	// settings still name the originals under /Game. That reads as working here, where both exist,
+	// and produces a plugin that is not self-contained -- shipped on its own it would resolve its
+	// road network and its field to assets that are not present. Repoint them at the copies.
+	{
+		const FString SettingsCopy = FString::Printf(TEXT("/%s/%s_WorldSettings"), *Name, *Name);
+		if (UGeoreferencedWorldSettings* Copied =
+				Cast<UGeoreferencedWorldSettings>(UEditorAssetLibrary::LoadAsset(SettingsCopy)))
+		{
+			const FString NetworkCopy = FString::Printf(TEXT("/%s/%s_RoadNetwork"), *Name, *Name);
+			if (URoadNetworkAsset* Network =
+					Cast<URoadNetworkAsset>(UEditorAssetLibrary::LoadAsset(NetworkCopy)))
+			{
+				Copied->RoadNetwork = Network;
+			}
+
+			const FString FieldCopy = FString::Printf(TEXT("/%s/%s_BareEarthField"), *Name, *Name);
+			if (UEditorAssetLibrary::DoesAssetExist(FieldCopy))
+			{
+				Copied->OffsetField = TSoftObjectPtr<UBareEarthOffsetField>(FSoftObjectPath(FieldCopy));
+			}
+
+			UEditorAssetLibrary::SaveAsset(SettingsCopy, false);
+		}
 	}
 
 	// The road network is a loose file the simulator reads from disk, so it is copied rather than

@@ -8,8 +8,11 @@
 #include "Carla.h"
 #include "Carla/Game/CarlaGameModeBase.h"
 #include "Carla/Game/CarlaStatics.h"
+#include "Carla/GeneratedWorld/GeoreferencedWorldSettings.h"
+#include "Carla/GeneratedWorld/GeoreferencedWorldInitializer.h"
 
 #include <util/ue-header-guard-begin.h>
+#include "EngineUtils.h"
 #include "GenericPlatform/GenericPlatformProcess.h"
 #include "Misc/FileHelper.h"
 #include "HAL/FileManagerGeneric.h"
@@ -96,6 +99,29 @@ FString UOpenDrive::GetXODR(const UWorld *World)
     MapName = CorrectedMapName;
   }
   #endif // WITH_EDITOR
+
+  // A generated world carries its network as an asset, referenced by the initializer's settings, so
+  // it is cooked and travels with the level. Prefer it: the file lookup below finds a network only
+  // where one happens to sit beside the map or inside a plugin named for it, which is a convention a
+  // world stops honouring as soon as it is packaged and moved. A world that reaches its destination
+  // without its network still loads and still looks right, and has no waypoints, no traffic manager
+  // and no telemetry -- so this is worth trying first and saying plainly when it is what answered.
+  for (TActorIterator<AGeoreferencedWorldInitializer> It(const_cast<UWorld*>(World)); It; ++It)
+  {
+    const AGeoreferencedWorldInitializer* Initializer = *It;
+    if (!IsValid(Initializer))
+    {
+      continue;
+    }
+    const UGeoreferencedWorldSettings* Settings = Initializer->Settings.LoadSynchronous();
+    if (Settings && Settings->RoadNetwork && Settings->RoadNetwork->IsWellFormed())
+    {
+      UE_LOG(LogCarla, Log,
+          TEXT("Loaded the road network of '%s' from the level's own asset (%d characters)."),
+          *MapName, Settings->RoadNetwork->OpenDrive.Len());
+      return Settings->RoadNetwork->OpenDrive;
+    }
+  }
 
   ACarlaGameModeBase* GameMode = UCarlaStatics::GetGameMode(World);
   auto MapDir = GameMode->GetFullMapPath();

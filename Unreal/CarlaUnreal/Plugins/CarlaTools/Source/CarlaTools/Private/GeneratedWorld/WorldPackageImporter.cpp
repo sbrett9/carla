@@ -322,6 +322,30 @@ UGeoreferencedWorldSettings* UWorldPackageImporter::CreateWorldSettingsAssets(
 	Settings->bDrapeActive = bDrapeActive;
 	Settings->HeightAlignOffsetMeters = NumberOr(Json, TEXT("HeightAlignOffsetMeters"), 0.0);
 	Settings->OffsetField = Field;
+
+	// The road network becomes an asset the settings hold onto, so it is cooked because something
+	// references it and travels wherever the level travels. Left as a loose file beside the map it
+	// reaches a packaged world as nothing at all: the level loads, looks right, and has no road graph.
+	{
+		FString OpenDriveText;
+		if (!ReadPackageText(*Package, OpenDriveEntry, OpenDriveText) || OpenDriveText.IsEmpty())
+		{
+			OutFailureReason = TEXT("the world package carries no road network");
+			return nullptr;
+		}
+		const FString NetworkName = MapName + TEXT("_RoadNetwork");
+		URoadNetworkAsset* Network = CreateAsset<URoadNetworkAsset>(
+			DestinationFolder / NetworkName, NetworkName);
+		if (!Network)
+		{
+			OutFailureReason = TEXT("could not create the road network asset");
+			return nullptr;
+		}
+		Network->OpenDrive = MoveTemp(OpenDriveText);
+		Network->MapName = MapName;
+		SaveAsset(Network);
+		Settings->RoadNetwork = Network;
+	}
 	Settings->PhotorealIonAssetId = static_cast<int64>(NumberOr(Json, TEXT("PhotorealIonAssetId"), 0.0));
 	Settings->GroundIonAssetId = static_cast<int64>(NumberOr(Json, TEXT("GroundIonAssetId"), 0.0));
 	Settings->StagingMinXMeters = NumberOr(Json, TEXT("StagingMinXMeters"), 0.0);

@@ -86,6 +86,45 @@ struct CARLA_API FGeneratedRoadMeshParameters
  * data - hundreds of thousands of cells - and because a world reconciled by a single constant shift
  * has none of it.
  */
+/**
+ * A world's road network, held as an asset rather than as a file beside the level.
+ *
+ * OpenDRIVE reaches the simulator as text, and for the maps that ship with CARLA it lives as a loose
+ * .xodr that UOpenDrive::GetXODR finds by convention: an OpenDrive folder beside the map, or inside a
+ * plugin named for the map. That works while a world stays where it was authored, and stops working
+ * the moment one travels. A cooked, plugin-hosted world reached its destination with geometry,
+ * datum and bare-earth field intact and no road network at all -- the level loaded, looked entirely
+ * correct, and had no waypoints, no traffic manager and no telemetry, because a loose file is not
+ * cooked and no staging rule reaches inside a plugin's content.
+ *
+ * Held as an asset, the network is a hard reference from the world's settings. It is cooked because
+ * something references it and it travels wherever the level travels, with no convention to honour and
+ * no staging rule to write.
+ */
+UCLASS(BlueprintType)
+class CARLA_API URoadNetworkAsset : public UDataAsset
+{
+	GENERATED_BODY()
+
+public:
+	/**
+	 * The OpenDRIVE document, exactly as the server received it.
+	 *
+	 * Not EditAnywhere: these run to megabytes of XML, and a details panel that tries to render one
+	 * as an editable string is unusable. Edit the world it came from and import again.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Road Network")
+	FString OpenDrive;
+
+	/** Name of the world this network was generated for, for identification in the editor. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Road Network")
+	FString MapName;
+
+	/** True when this carries a document worth parsing. */
+	UFUNCTION(BlueprintPure, Category = "Road Network")
+	bool IsWellFormed() const { return !OpenDrive.IsEmpty(); }
+};
+
 UCLASS(BlueprintType)
 class CARLA_API UBareEarthOffsetField : public UDataAsset
 {
@@ -171,6 +210,15 @@ public:
 	/** The per-cell fields, when this world was reconciled point by point. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Surface")
 	TSoftObjectPtr<UBareEarthOffsetField> OffsetField;
+
+	/**
+	 * The road network this world drives on.
+	 *
+	 * A hard reference, unlike the fields above: it must be cooked and packaged with the level, and a
+	 * soft reference would let a world ship without the network that makes it drivable.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Road Network")
+	TObjectPtr<URoadNetworkAsset> RoadNetwork;
 
 	// ── Streamed layers ──────────────────────────────────────────────────────
 
