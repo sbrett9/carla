@@ -53,6 +53,20 @@ public:
 	bool bOpenLevelAfterImport = false;
 
 	/**
+	 * Also write the imported world out as a plugin, so a packaged build can ship it.
+	 *
+	 * On by default: a world is imported in order to be used, and the cook reaches a world only
+	 * through the plugin an export writes -- an imported level alone is cooked, but as project
+	 * content the packaged server has no way to address by name. The cost is a copy of the level's
+	 * assets, not a rebuild, so leaving it on while iterating is cheap.
+	 *
+	 * Turning it off is for the case where a world is being imported to look at rather than to
+	 * ship. Exporting later is the same operation and loses nothing.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generated World")
+	bool bMakeAvailableToPackagedBuilds = true;
+
+	/**
 	 * Run the import described by the panel's fields and report the outcome in it.
 	 *
 	 * Exposed so the panel can be driven without a person clicking, which is how it is tested.
@@ -129,6 +143,13 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UTextBlock> ReplaceDifferentSourceLabel;
+
+	/** Exports the imported world as a plugin, which is what makes a cook able to reach it. */
+	UPROPERTY(Transient)
+	TObjectPtr<class UCheckBox> MakeAvailableToPackagedBuilds;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> MakeAvailableToPackagedBuildsLabel;
 
 	/**
 	 * Optional Cesium ion token to write into the level's imagery layers.

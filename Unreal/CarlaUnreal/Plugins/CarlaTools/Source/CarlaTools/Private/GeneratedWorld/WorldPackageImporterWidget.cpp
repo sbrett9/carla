@@ -3,6 +3,7 @@
 #include "GeneratedWorld/WorldPackageImporterWidget.h"
 
 #include "CarlaTools.h"
+#include "GeneratedWorld/GeneratedLevelExporter.h"
 #include "GeneratedWorld/WorldPackageImporter.h"
 
 #include <util/ue-header-guard-begin.h>
@@ -168,6 +169,32 @@ void UWorldPackageImporterWidget::ApplyLayoutAndStyle()
 			if (ImportButton)
 			{
 				Layout->ShiftChild(Layout->GetChildIndex(ImportButton), ReplaceDifferentSource);
+			}
+		}
+	}
+
+	// Whether the world is also written out as a plugin. On by default, because a world that cannot
+	// be cooked is a world that only exists in this editor, and the step is easy to forget when it
+	// is separate -- it used to be reachable only by calling the exporter from the Python console.
+	if (Layout && WidgetTree && !MakeAvailableToPackagedBuilds)
+	{
+		MakeAvailableToPackagedBuilds = WidgetTree->ConstructWidget<UCheckBox>(
+			UCheckBox::StaticClass(), TEXT("MakeAvailableToPackagedBuilds"));
+		MakeAvailableToPackagedBuildsLabel = WidgetTree->ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(), TEXT("MakeAvailableToPackagedBuildsLabel"));
+		if (MakeAvailableToPackagedBuilds && MakeAvailableToPackagedBuildsLabel)
+		{
+			MakeAvailableToPackagedBuildsLabel->SetText(FText::FromString(
+				TEXT("Make this world available to packaged builds (writes it to Plugins/GeneratedWorlds)")));
+			FSlateFontInfo ExportFont = MakeAvailableToPackagedBuildsLabel->GetFont();
+			ExportFont.Size = 10;
+			MakeAvailableToPackagedBuildsLabel->SetFont(ExportFont);
+			MakeAvailableToPackagedBuilds->AddChild(MakeAvailableToPackagedBuildsLabel);
+			MakeAvailableToPackagedBuilds->SetIsChecked(bMakeAvailableToPackagedBuilds);
+			Layout->AddChildToVerticalBox(MakeAvailableToPackagedBuilds);
+			if (ImportButton)
+			{
+				Layout->ShiftChild(Layout->GetChildIndex(ImportButton), MakeAvailableToPackagedBuilds);
 			}
 		}
 	}
@@ -350,9 +377,39 @@ FString UWorldPackageImporterWidget::ImportFromFields()
 		return Message;
 	}
 
+	// Write the world out as a plugin, which is what a cook can reach. Deliberately AFTER the import
+	// has been declared a success and deliberately not able to undo it: an export that fails leaves a
+	// perfectly good level behind, and discarding that because it cannot be packaged yet would be a
+	// far worse outcome than saying so and carrying on. Exporting again later is the same operation.
+	FString ExportNote;
+	const bool bExportRequested = MakeAvailableToPackagedBuilds
+		? MakeAvailableToPackagedBuilds->IsChecked()
+		: bMakeAvailableToPackagedBuilds;
+	if (bExportRequested)
+	{
+		const FGeneratedLevelExportResult Export =
+			UGeneratedLevelExporter::ExportLevelAsPlugin(Result.LevelPackageName, World);
+		if (Export.bSucceeded)
+		{
+			ExportNote = FString::Printf(
+				TEXT(" Packaged builds will include it (%d asset(s) in %s)."),
+				Export.AssetsExported, *Export.PluginDirectory);
+		}
+		else
+		{
+			// Reported at Warning rather than folded into the status line, so it is not read as the
+			// import having failed.
+			UE_LOG(LogCarlaTools, Warning,
+				TEXT("[WorldPackageImporter] imported '%s' but could not export it for packaging: %s"),
+				*World, *Export.FailureReason);
+			ExportNote = FString::Printf(
+				TEXT(" NOT available to packaged builds: %s"), *Export.FailureReason);
+		}
+	}
+
 	const FString Message = FString::Printf(
-		TEXT("Imported to %s. Open it, or load it by name with -map=%s"),
-		*Result.LevelPackageName, *Result.LevelPackageName);
+		TEXT("Imported to %s. Open it, or load it by name with -map=%s.%s"),
+		*Result.LevelPackageName, *Result.LevelPackageName, *ExportNote);
 	Report(Message, false);
 
 	if (bOpenLevelAfterImport)
