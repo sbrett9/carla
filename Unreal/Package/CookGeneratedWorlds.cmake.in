@@ -1,0 +1,128 @@
+# Cook and stage the CARLA package, including every world exported since this build was configured.
+#
+# Generated from CookGeneratedWorlds.cmake.in at configure time. Everything the cook needs is known
+# then EXCEPT which worlds exist: a world imported from a package and exported into
+# Plugins/GeneratedWorlds/ after configuring must still be cooked, and a configure-time glob would
+# miss exactly that case. So the fixed arguments are baked in here and the world list is discovered
+# when this runs.
+#
+# This replaces naming worlds in DefaultGame.ini, which could only ever describe worlds that already
+# existed when that file was last edited -- the case a generated world is least likely to be.
+#
+# Three engine behaviours shape this, each easy to get wrong and none of them loud about it:
+#
+#   * A cook directory is scanned for *.uasset ONLY. CookOnTheFlyServer.cpp walks it with
+#     FPackageName::GetAssetPackageExtension(), so a directory brings in a world's settings, road
+#     network and bare-earth field but never its .umap. The level has to be named as a map in its
+#     own right, which is why both -cookdir and -MapsToCook are passed below.
+#   * Naming ANY map on the command line makes the cooker IGNORE the project's own MapsToCook list
+#     (bFoundMapsToCook short-circuits it). The list passed here therefore has to be the whole list,
+#     base maps included -- hence reading the project config back rather than restating it, so the
+#     base maps keep one home.
+#   * -cookdir takes a path on disk, while the ini setting takes a long package path. They are not
+#     interchangeable even though they end up in the same list.
+#
+# With no exported worlds present, this runs the cook with exactly the arguments it would otherwise
+# have had, and passes no map list at all.
+
+set (UAT_COMMAND          "@CARLA_UE_UAT_COMMAND_PREFIX@")
+set (COOK_ARGS            "@CARLA_COOK_UAT_ARGS@")
+set (GENERATED_WORLDS_DIR "@CARLA_GENERATED_WORLDS_PATH@")
+set (PROJECT_GAME_CONFIG  "@CARLA_PROJECT_GAME_CONFIG_PATH@")
+
+# ---------------------------------------------------------------------------
+# Find the worlds that have been exported as plugins.
+# ---------------------------------------------------------------------------
+
+set (WORLD_MAPS)
+set (WORLD_CONTENT_DIRS)
+
+if (IS_DIRECTORY "${GENERATED_WORLDS_DIR}")
+  file (GLOB WORLD_DIRS LIST_DIRECTORIES true "${GENERATED_WORLDS_DIR}/*")
+  foreach (WORLD_DIR IN LISTS WORLD_DIRS)
+    if (NOT IS_DIRECTORY "${WORLD_DIR}/Content")
+      continue ()
+    endif ()
+    get_filename_component (WORLD_NAME "${WORLD_DIR}" NAME)
+    file (GLOB WORLD_UMAPS "${WORLD_DIR}/Content/Maps/*.umap")
+    if (NOT WORLD_UMAPS)
+      # A plugin directory with no level in it is a half-written export, not a world. Cooking its
+      # loose assets would succeed and produce a package that cannot load them.
+      message (STATUS "[cook] skipping '${WORLD_NAME}': no level under Content/Maps")
+      continue ()
+    endif ()
+    foreach (WORLD_UMAP IN LISTS WORLD_UMAPS)
+      get_filename_component (MAP_NAME "${WORLD_UMAP}" NAME_WE)
+      list (APPEND WORLD_MAPS "/${WORLD_NAME}/Maps/${MAP_NAME}")
+    endforeach ()
+    list (APPEND WORLD_CONTENT_DIRS "${WORLD_DIR}/Content")
+  endforeach ()
+endif ()
+
+# ---------------------------------------------------------------------------
+# Build the extra arguments, if there is anything to add.
+# ---------------------------------------------------------------------------
+
+set (EXTRA_ARGS)
+
+if (WORLD_MAPS)
+  # The project's own maps, read back from the config that owns them. Without these the command-line
+  # map list would be the only list the cooker sees and the stock maps would silently not ship.
+  set (BASE_MAPS)
+  if (EXISTS "${PROJECT_GAME_CONFIG}")
+    file (STRINGS "${PROJECT_GAME_CONFIG}" MAP_LINES REGEX "^\\+MapsToCook=")
+    foreach (MAP_LINE IN LISTS MAP_LINES)
+      string (REGEX MATCH "FilePath=\"([^\"]+)\"" MATCHED "${MAP_LINE}")
+      if (CMAKE_MATCH_1)
+        list (APPEND BASE_MAPS "${CMAKE_MATCH_1}")
+      endif ()
+    endforeach ()
+  endif ()
+
+  if (NOT BASE_MAPS)
+    # Refusing is the safe answer: cooking the generated worlds alone would produce a package that
+    # builds, stages and archives without complaint and has no stock map in it at all.
+    message (FATAL_ERROR
+      "[cook] found exported worlds but no +MapsToCook entries in '${PROJECT_GAME_CONFIG}'. "
+      "Passing a map list would suppress the project's own maps, so this build would ship without "
+      "them. Fix the config, or remove the worlds under '${GENERATED_WORLDS_DIR}' to cook without.")
+  endif ()
+
+  set (ALL_MAPS ${BASE_MAPS} ${WORLD_MAPS})
+  list (REMOVE_DUPLICATES ALL_MAPS)
+  string (REPLACE ";" "+" MAPS_ARG "${ALL_MAPS}")
+  string (REPLACE ";" "+" DIRS_ARG "${WORLD_CONTENT_DIRS}")
+
+  list (APPEND EXTRA_ARGS "-MapsToCook=${MAPS_ARG}" "-cookdir=${DIRS_ARG}")
+
+  list (LENGTH WORLD_MAPS WORLD_COUNT)
+  list (LENGTH BASE_MAPS BASE_COUNT)
+  message (STATUS "[cook] including ${WORLD_COUNT} exported world(s) alongside ${BASE_COUNT} project map(s):")
+  foreach (WORLD_MAP IN LISTS WORLD_MAPS)
+    message (STATUS "[cook]   ${WORLD_MAP}")
+  endforeach ()
+else ()
+  message (STATUS "[cook] no exported worlds under '${GENERATED_WORLDS_DIR}'; cooking the project as configured")
+endif ()
+
+# ---------------------------------------------------------------------------
+# Run it.
+# ---------------------------------------------------------------------------
+
+if (CARLA_COOK_DRY_RUN)
+  message (STATUS "[cook] DRY RUN, would run:")
+  message (STATUS "[cook]   ${UAT_COMMAND}")
+  foreach (COOK_ARG IN LISTS COOK_ARGS EXTRA_ARGS)
+    message (STATUS "[cook]     ${COOK_ARG}")
+  endforeach ()
+  return ()
+endif ()
+
+execute_process (
+  COMMAND "${UAT_COMMAND}" ${COOK_ARGS} ${EXTRA_ARGS}
+  RESULT_VARIABLE COOK_RESULT
+)
+
+if (NOT COOK_RESULT EQUAL 0)
+  message (FATAL_ERROR "[cook] BuildCookRun failed with ${COOK_RESULT}")
+endif ()

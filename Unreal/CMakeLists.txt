@@ -435,29 +435,18 @@ function (
   set (TARGET_NAME_SHORT package${TARGET_NAME_SUFFIX})
   set (TARGET_NAME carla-unreal-${TARGET_NAME_SHORT})
 
-  carla_add_custom_target (
-    ${TARGET_NAME}
-    "Create a CARLA package in ${PACKAGE_CONFIGURATION} mode."
-    COMMAND
-      ${CARLA_UE_BUILD_COMMAND_PREFIX}
-      CarlaUnreal
-      ${UE_SYSTEM_NAME}
-      ${UE_BUILD_CONFIGURATION}
-      -project=${CARLA_UE_PROJECT_PATH}
-      -game
-      -buildscw
-    # Deliberately packaged as LOOSE COOKED FILES: neither -pak nor -iostore is passed, which is what
-    # actually decides the output -- UAT ignores the UsePakFile / bGenerateChunks values in
-    # DefaultGame.ini, which say the opposite. Loose files are what let a world exported after the
-    # build be added by copying a directory into the package. Adding -pak or -iostore here would
-    # silently invalidate every already-exported level, so treat this as a decision rather than an
-    # oversight and change it together with those ini values, or not at all.
-    #
-    # -CreateReleaseVersion is deliberately absent too. It would archive the metadata needed to cook
-    # DLC against this build later, but it is incompatible with the -iterate below and is not needed
-    # for adding a level to a loose package.
-    COMMAND
-      ${CARLA_UE_UAT_COMMAND_PREFIX}
+  # Deliberately packaged as LOOSE COOKED FILES: neither -pak nor -iostore is passed, which is what
+  # actually decides the output -- UAT ignores the UsePakFile / bGenerateChunks values in
+  # DefaultGame.ini, which say the opposite. Loose files are what let a world exported after the
+  # build be added by copying a directory into the package. Adding -pak or -iostore here would
+  # silently invalidate every already-exported level, so treat this as a decision rather than an
+  # oversight and change it together with those ini values, or not at all.
+  #
+  # -CreateReleaseVersion is deliberately absent too. It would archive the metadata needed to cook
+  # DLC against this build later, but it is incompatible with the -iterate below and is not needed
+  # for adding a level to a loose package.
+  set (
+    CARLA_COOK_UAT_ARGS
       BuildCookRun
       -project=${CARLA_UE_PROJECT_PATH}
       -nocompileeditor
@@ -474,6 +463,38 @@ function (
       -build
       -stagingdirectory=${CARLA_PACKAGE_STAGING_PATH}
       -archivedirectory=${CARLA_PACKAGE_ARCHIVE_PATH}
+  )
+
+  # The cook runs through a generated script rather than directly, so that worlds exported AFTER this
+  # project was configured are still cooked. The arguments above are the whole of what it runs; the
+  # script adds the exported worlds it finds and nothing else, and with none present it runs exactly
+  # this command. See Package/CookGeneratedWorlds.cmake.in for why a world needs naming both as a
+  # map and as a directory.
+  set (CARLA_GENERATED_WORLDS_PATH ${CARLA_WORKSPACE_PATH}/Unreal/CarlaUnreal/Plugins/GeneratedWorlds)
+  set (CARLA_PROJECT_GAME_CONFIG_PATH ${CARLA_WORKSPACE_PATH}/Unreal/CarlaUnreal/Config/DefaultGame.ini)
+  set (
+    CARLA_COOK_SCRIPT_PATH
+      ${CMAKE_CURRENT_BINARY_DIR}/CookGeneratedWorlds${TARGET_NAME_SUFFIX}.cmake
+  )
+  configure_file (
+    ${CMAKE_CURRENT_SOURCE_DIR}/Package/CookGeneratedWorlds.cmake.in
+    ${CARLA_COOK_SCRIPT_PATH}
+    @ONLY
+  )
+
+  carla_add_custom_target (
+    ${TARGET_NAME}
+    "Create a CARLA package in ${PACKAGE_CONFIGURATION} mode."
+    COMMAND
+      ${CARLA_UE_BUILD_COMMAND_PREFIX}
+      CarlaUnreal
+      ${UE_SYSTEM_NAME}
+      ${UE_BUILD_CONFIGURATION}
+      -project=${CARLA_UE_PROJECT_PATH}
+      -game
+      -buildscw
+    COMMAND
+      ${CMAKE_COMMAND} -P ${CARLA_COOK_SCRIPT_PATH}
     USES_TERMINAL
     VERBATIM
   )
