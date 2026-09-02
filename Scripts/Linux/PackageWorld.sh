@@ -50,7 +50,7 @@ Cook one generated world and package it as a single deliverable file.
 Options:
   --world <name>             Exported world to package (required).
   --based-on-release <name>  Release to cook against (default: current short Carla commit).
-  --output-dir <path>        Where to write the .zip (default: Build/WorldPackages).
+  --output-directory <path>  Where to write the .zip (default: Build/WorldPackages).
   --config <cfg>             Development (default) | Shipping | Debug.
   --skip-cook                Package an existing cook without re-cooking.
   --unreal-engine-root <p>   Engine root (default: $CARLA_UNREAL_ENGINE_PATH, else <repo-parent>/UE_5_7_4).
@@ -67,8 +67,8 @@ while [ $# -gt 0 ]; do
         --world=*)            world="${1#*=}" ;;
         --based-on-release)   based_on_release="$2"; shift ;;
         --based-on-release=*) based_on_release="${1#*=}" ;;
-        --output-dir)         output_dir="$2"; shift ;;
-        --output-dir=*)       output_dir="${1#*=}" ;;
+        --output-directory)   output_dir="$2"; shift ;;
+        --output-directory=*) output_dir="${1#*=}" ;;
         --config)             config="$2"; shift ;;
         --config=*)           config="${1#*=}" ;;
         --skip-cook)          skip_cook=1 ;;
