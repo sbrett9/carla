@@ -145,8 +145,22 @@ Component tags *would* survive — `TagActor` appends (`Tagger.cpp:136`) while
 `GetTagOfTaggedComponent` reads index 0 (`:182`), so a baker-written tag stays authoritative — but
 that channel feeds only the CPU-side consumers (semantic lidar, bounding boxes,
 `get_environment_objects`, `actor.semantic_tags`), not the cameras. A principled fix therefore needs a
-`Tagger` change as well: fall back to `ComponentTags[0]` when the path yields `None`, which is
-strictly additive because it fires only where the current code already produces no label.
+`Tagger` change as well: fall back to `ComponentTags[0]` when the path yields `None`.
+
+That fallback is **gated to components that are currently unlabelled**, not strictly a no-op. Where it
+fires it makes the render channel agree with what `GetTagOfTaggedComponent` (`Tagger.cpp:181-182`) and
+semantic lidar (`RayCastSemanticLidar.cpp:232`) already report for that same component, so consistency
+is the likely outcome — but on a map with authored component tags it is a possible visible change in
+the rendered segmentation image, not a provable no-op. A byte census of all 330 `.umap` files under
+`Content/Carla/Maps` found the `ComponentTags` property name absent from `Town10HD_Opt`, `Town01`-`Town07`,
+`Mine_01`, `Town12` and `OpenDriveMap`, and present once in `Town15` (which *is* shipped, per
+`DefaultGame.ini`) and in 25 of the 49 `Town13` tiles (which are not). The census cannot distinguish an
+authored tag from a mere reflected-property-name reference, so a zero is meaningful and a one is not.
+
+**Settle it in the editor before implementing**, not from bytes: load Town15, iterate every
+`UStaticMeshComponent`, and list those with a non-empty `ComponentTags` whose
+`GetLabelByPath(GetStaticMesh())` is `None`. That is exactly the set the change would alter, it takes
+minutes, and an empty set closes the question. Regression-test **Town15 as well as Town10HD_Opt**.
 
 **Implementation note: do not bulk-copy the meshes.** `UEditorAssetLibrary::DuplicateAsset` does not
 rewire references, and `DuplicateDirectory` just loops it (`EditorAssetSubsystem.cpp:961-1005`); the
