@@ -301,12 +301,12 @@ public sealed class CarlaClient : IAsyncDisposable
     // restart; mounting is what makes its map loadable by name.
 
     /// <summary>Worlds this server can see, each marked "(mounted)" when its map can be loaded.</summary>
-    public Task<IReadOnlyList<string>> ListWorldsAsync()
-        => _rpc.CallAsync<IReadOnlyList<string>>("list_worlds");
+    public Task<IReadOnlyList<string>> ListDeliveredWorldsAsync()
+        => _rpc.CallAsync<IReadOnlyList<string>>("list_delivered_worlds");
 
     /// <summary>Mount a delivered world if needed and load its map.</summary>
-    public Task LoadWorldAsync(string worldName)
-        => _rpc.CallVoidAsync("load_world", worldName);
+    public Task LoadDeliveredWorldAsync(string worldName)
+        => _rpc.CallVoidAsync("load_delivered_world", worldName);
 
     /// <summary>
     /// Release a delivered world's content.
@@ -314,8 +314,8 @@ public sealed class CarlaClient : IAsyncDisposable
     /// Fails while that world is the one loaded: unmounting it would leave the running map's packages
     /// behind as leaks. Load a different map first — only the caller knows which.
     /// </summary>
-    public Task UnloadWorldAsync(string worldName)
-        => _rpc.CallVoidAsync("unload_world", worldName);
+    public Task UnloadDeliveredWorldAsync(string worldName)
+        => _rpc.CallVoidAsync("unload_delivered_world", worldName);
 
     public Task<bool> IsTrafficManagerRunningAsync(ushort port)
         => _rpc.CallAsync<bool>("is_traffic_manager_running", port);

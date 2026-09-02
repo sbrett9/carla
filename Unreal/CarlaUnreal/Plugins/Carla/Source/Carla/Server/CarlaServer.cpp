@@ -347,7 +347,7 @@ void FCarlaServer::FPimpl::BindActions()
   // discovers it from its directory, so one added while the server is running is listed here without
   // a restart; mounting is what makes /<Name>/Maps/<Name> resolvable.
 
-  BIND_ASYNC(list_worlds) << [] () -> R<std::vector<std::string>>
+  BIND_ASYNC(list_delivered_worlds) << [] () -> R<std::vector<std::string>>
   {
     std::vector<std::string> Names;
     for (const FString& Name : GetDiscoveredWorlds())
@@ -359,7 +359,7 @@ void FCarlaServer::FPimpl::BindActions()
     return Names;
   };
 
-  BIND_SYNC(load_world) << [this](const std::string &world_name) -> R<void>
+  BIND_SYNC(load_delivered_world) << [this](const std::string &world_name) -> R<void>
   {
     REQUIRE_CARLA_EPISODE();
     const FString Name = cr::ToFString(world_name);
@@ -378,7 +378,7 @@ void FCarlaServer::FPimpl::BindActions()
     return R<void>::Success();
   };
 
-  BIND_SYNC(unload_world) << [](const std::string &world_name) -> R<void>
+  BIND_SYNC(unload_delivered_world) << [](const std::string &world_name) -> R<void>
   {
     FString Reason;
     if (!UnmountWorld(cr::ToFString(world_name), Reason))

@@ -89,14 +89,27 @@ FString UCarlaStatics::FindMapPath(const FString &MapName)
   if (MapName.StartsWith(TEXT("/")))
   {
     FString Filename;
-    if (FPackageName::TryConvertLongPackageNameToFilename(
-            MapName, Filename, FPackageName::GetMapPackageExtension())
-        && FPaths::FileExists(Filename))
+    const bool bConverted = FPackageName::TryConvertLongPackageNameToFilename(
+        MapName, Filename, FPackageName::GetMapPackageExtension());
+    if (bConverted && FPaths::FileExists(Filename))
     {
       return Filename;
     }
-    // Not a mounted package path. Fall through and try the base name, so a caller passing something
-    // path-shaped that happens to name a real map still finds it.
+
+    // A caller who names a full package path means THAT package. Falling through to a base-name
+    // search would quietly load a different map that happens to share the last component, which is
+    // easy to do here: an imported world exists at /Game/Carla/Maps/Generated/<Name> and again at
+    // /<Name>/Maps/<Name> once its plugin is mounted, and the base-name search finds project content
+    // first. Loading the wrong one of those looks like success and differs only in what is actually
+    // in the level.
+    //
+    // The one exception is a path under a root that is not mounted at all, which cannot be resolved
+    // by anybody: say so rather than substituting.
+    UE_LOG(LogCarla, Warning,
+        TEXT("Map '%s' names a package that %s; not falling back to a name search."),
+        *MapName,
+        bConverted ? TEXT("has no file on disk") : TEXT("is not under a mounted content root"));
+    return FString();
   }
 
   // Anything else is matched on base name, which is what clients passing a bare map name rely on.
