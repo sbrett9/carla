@@ -157,10 +157,26 @@ the rendered segmentation image, not a provable no-op. A byte census of all 330 
 `DefaultGame.ini`) and in 25 of the 49 `Town13` tiles (which are not). The census cannot distinguish an
 authored tag from a mere reflected-property-name reference, so a zero is meaningful and a one is not.
 
-**Settle it in the editor before implementing**, not from bytes: load Town15, iterate every
-`UStaticMeshComponent`, and list those with a non-empty `ComponentTags` whose
-`GetLabelByPath(GetStaticMesh())` is `None`. That is exactly the set the change would alter, it takes
-minutes, and an empty set closes the question. Regression-test **Town15 as well as Town10HD_Opt**.
+**Settled in the editor**, 2026-09-01, by loading Town15 and listing every `UStaticMeshComponent`
+with a non-empty `ComponentTags` whose `GetLabelByPath(GetStaticMesh())` is `None` — the exact set the
+change would alter:
+
+| | |
+|---|---|
+| affected components | 62,225 (of 73,549 static mesh components, 27,039 actors) |
+| distinct `ComponentTags[0]` | `PCG` (59,146), `PCG Generated Component` (3,079) — nothing else |
+| what `GetTagFromString` returns for those | `None`, for all 62,225 |
+| of the affected set, components with no static mesh at all | 62,225 — i.e. all of them |
+
+The set is large but the fallback is a no-op on it: these are PCG bookkeeping tags, and none of
+`GetTagFromString`'s 29 substring tests matches `"PCG"`. The `ComponentTags` hit the byte census found
+in `Town15.umap` is accounted for and is not an authored semantic label. Regression-test **Town15 as
+well as Town10HD_Opt** anyway, since the argument above is about tag *values* and a camera pass is
+cheap next to being wrong.
+
+Noted while measuring: `Tagger.cpp:129` calls `GetLabelByPath(Component->GetStaticMesh())` with no
+null check, and Town15 passes it a null mesh 62,225 times on every tag pass — at `BeginPlay`, on every
+stream-in and on every spawn. It does not crash today; nothing in that line says it should not.
 
 **Implementation note: do not bulk-copy the meshes.** `UEditorAssetLibrary::DuplicateAsset` does not
 rewire references, and `DuplicateDirectory` just loops it (`EditorAssetSubsystem.cpp:961-1005`); the
