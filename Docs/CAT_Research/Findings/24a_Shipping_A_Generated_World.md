@@ -198,10 +198,23 @@ land **before** any DLC work, because it makes most of that work unnecessary.
 
 ---
 
-## 5. DLC cooking: only for worlds created after a package ships
+## 5. DLC cooking: what decouples a world from the base package
 
 Worlds that exist when the package is cooked already ship, through the discovery script added in
-`dd447d0d7`. DLC cooking serves exactly one case: a world built *after* a package was shipped.
+`dd447d0d7`. What that does **not** do is let a world be delivered on its own.
+
+Measured on the cooked package, one world costs ~112 MB: 92 MB of road meshes, 7 MB of world plugin,
+13 MB of settings and bare-earth field, against a 31.9 GB base. Size is therefore not the pressing
+argument — 0.35% per world — and `-iterate` means an unchanged world does not recook, so ongoing cook
+time is not either.
+
+The cost that matters is distribution. **Today, adding one world means re-cooking and redistributing
+the whole 31.9 GB package.** With a DLC cook it means cooking one world and shipping 112 MB. That is
+the "too big to manage" problem, and it is the reason to do this; it is independent of runtime
+load/unload (§3), which is why the mount/unmount finding does not address it.
+
+A pak is still not wanted (§2). DLC cooking and pak mounting are separable, and only the second one
+was cargo.
 
 **The content-scope rule.** `Cooker/CookRequestCluster.cpp:2842-2883` suppresses any package whose
 path does not start with `<DLCPlugin>/Content`, unconditionally setting `bOutCookable = false`
@@ -268,19 +281,28 @@ see a later-added level (`Game/CarlaStatics.cpp:40-103`, `Game/CarlaEpisode.cpp:
 
 ## 7. Revised plan
 
-Ordered so that each step is useful on its own and none blocks on the next.
+Two independent capabilities are wanted, and it is worth keeping them apart because the research
+collapsed one of them and left the other untouched:
+
+- **Ship a world without reshipping the base** — the reason `-CreateReleaseVersion` was to be
+  un-deferred. Needs DLC cooking (§5). Not affected by anything in §3.
+- **Load and unload a world in a running server** — needs neither DLC nor paks, just the mount API
+  (§3).
+
+Ordered so each step is useful on its own:
 
 1. **Move road meshes into the world plugin** under `Content/Carla/Static/Road/…` (§4). Makes a world
-   self-contained; no tagger change.
-2. **Load / unload RPC** via `MountExplicitlyLoadedPlugin` / `UnmountExplicitlyLoadedPlugin`, with
-   travel-away-first ordering (§3). No cook or packaging change.
-3. **`--level <name>` on `RunCarlaServer`**, resolving through the same mount path.
-4. **`-CreateReleaseVersion` on the base cook**, whenever post-ship worlds are actually wanted (§5).
-   One full recook, then iteration resumes.
-5. **Per-world DLC cook target**, output staged loose and copied in as a directory (§5).
+   self-contained with no tagger change, and is a **prerequisite for step 3**: with the meshes outside
+   the plugin a DLC cook fails outright, roughly one error per mesh.
+2. **`-CreateReleaseVersion` on the base cook** (§5). One full recook, then iteration resumes.
+3. **Per-world DLC cook target**, output staged loose and copied in as a directory (§5). This is what
+   makes a world deliverable on its own — the primary goal.
+4. **Load / unload RPC** via `MountExplicitlyLoadedPlugin` / `UnmountExplicitlyLoadedPlugin`, with
+   travel-away-first ordering (§3). No cook or packaging change; independent of 1–3.
+5. **`--level <name>` on `RunCarlaServer`**, resolving through the same mount path.
 
-Steps 1–3 deliver the capability doc 24 was aiming at. Steps 4–5 are only for worlds built after a
-package ships.
+Steps 1–3 are the distribution goal. Steps 4–5 are the runtime goal and can be done in either order
+relative to them.
 
 ### Defects found along the way
 
