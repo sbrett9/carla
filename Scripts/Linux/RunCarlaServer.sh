@@ -25,6 +25,8 @@ carla_root="$(cd "$script_dir/../.." && pwd)"
 repo_parent="$(cd "$carla_root/.." && pwd)"
 
 map="/Game/Carla/Maps/Town10HD_Opt"
+level=""            # a delivered world by name; expands to /<name>/Maps/<name>
+show_version=0
 rpc_port=2000
 with_window=0
 extra_args=""
@@ -41,6 +43,8 @@ Ctrl+C stops the server.
 
 Options:
   --map <path>               Startup map. Default /Game/Carla/Maps/Town10HD_Opt.
+  --level <name>             Load a delivered world by name (e.g. Arapahoe_I25).
+  --version                  Print CARLA and world interface versions, then exit.
   --rpc-port <n>             CARLA RPC port. Default 2000.
   --with-window              Show a window instead of -RenderOffScreen (eyeball Cesium streaming).
   --extra-args "<args>"      Extra arguments appended to the UnrealEditor command line.
@@ -61,6 +65,9 @@ EOF
 # ── Parse arguments ─────────────────────────────────────────────────────────
 while [ $# -gt 0 ]; do
     case "$1" in
+        --level)                level="$2"; shift ;;
+        --level=*)              level="${1#*=}" ;;
+        --version)              show_version=1 ;;
         --map)                  map="$2"; shift ;;
         --map=*)                map="${1#*=}" ;;
         --rpc-port)             rpc_port="$2"; shift ;;
@@ -77,6 +84,48 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
+
+# ── --version: answer without starting anything ─────────────────────────────
+#
+# Read from the sources that ship with the build rather than by booting it. Unreal's own precedent is
+# to state versions in the startup log, and the server does that too -- but asking whether a world can
+# be installed should not cost a server start, and the answer is a file either way. A running server
+# reports the same value over the get_world_interface_version RPC.
+if [ "$show_version" -eq 1 ]; then
+    ver_header="$carla_root/LibCarla/source/carla/Version.h"
+    if [ -f "$ver_header" ]; then
+        v="$(sed -n 's/.*return[[:space:]]*"\([^"]*\)".*/\1/p' "$ver_header" | head -1)"
+        [ -n "$v" ] && echo "carla version           : $v"
+    fi
+    iface="$carla_root/Unreal/CarlaUnreal/Config/DefaultWorldInterface.ini"
+    if [ -f "$iface" ]; then
+        maj="$(sed -n 's/^[[:space:]]*Major[[:space:]]*=[[:space:]]*\([0-9]\+\).*/\1/p' "$iface" | head -1)"
+        min="$(sed -n 's/^[[:space:]]*Minor[[:space:]]*=[[:space:]]*\([0-9]\+\).*/\1/p' "$iface" | head -1)"
+        echo "world interface version : ${maj:-?}.${min:-?}"
+        echo "  a delivered world installs when its major matches and this minor is at least the world's."
+    else
+        echo "world interface version : not declared ($iface is missing)"
+    fi
+    dist_version="$carla_root/Build/Package/Carla-0.10.0-Linux-Development/VERSION"
+    if [ -f "$dist_version" ]; then
+        echo ""
+        echo "build identity (informational only, never used to decide compatibility):"
+        sed 's/^/  /' "$dist_version"
+    fi
+    exit 0
+fi
+
+# --level names a delivered world; --map takes a full package path. A world's map always sits at
+# /<Name>/Maps/<Name>, which the exporter guarantees, so the short form is worth having: it is what a
+# person knows after installing one.
+if [ -n "$level" ]; then
+    case "$level" in
+        /*) echo "ERROR: --level takes a world name, not a path. Use --map for a full package path." >&2
+            exit 1 ;;
+    esac
+    map="/$level/Maps/$level"
+    echo "level    : $level  ->  $map"
+fi
 
 # ── Resolve engine path (flag > env > default) ──────────────────────────────
 [ -n "$unreal_engine_root" ] || unreal_engine_root="$repo_parent/UE_5_7_4"

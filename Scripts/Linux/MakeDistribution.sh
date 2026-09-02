@@ -88,6 +88,19 @@ mkdir -p "$dist"/{CarlaServer,wheels,scripts,osm,tools/sumo/lib}
 # 1. Cooked server.
 cp -a "$pkg_parent/." "$dist/CarlaServer/"
 
+# 1b. What this build is. The cook writes VERSION at the archive root, one level above the platform
+# directory copied above, so without this the distribution -- the thing actually handed to someone --
+# carries no statement of which CARLA it is or which worlds it accepts. InstallWorld.sh reads it to
+# name both sides when a world and a package disagree.
+version_src="$(dirname "$pkg_parent")/VERSION"
+if [ -f "$version_src" ]; then
+    cp -a "$version_src" "$dist/VERSION"
+    echo "[dist] VERSION: $(head -2 "$version_src" | tr '
+' '; ')"
+else
+    echo "[dist] WARNING: no VERSION at $version_src; the distribution will not state its build." >&2
+fi
+
 # 2. Python client wheels (newest of each): carlanet (the .NET bridge) and carlacontrol (the
 #    run_SCTMV client package). carlacontrol depends on carlanet, so both must be bundled.
 copy_newest_wheel() {   # <dist-dir>
