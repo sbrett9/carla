@@ -1,7 +1,8 @@
 # 24a — Shipping a generated world after the package is built
 
 Addendum to `24_Generated_World_As_Editable_Level.md`. Researched 2026-09-01 against UE 5.7.4
-(`UE_5_7_4/Engine`) and the state of `ue5-dev` at `2cadbf8c2`.
+(`UE_5_7_4/Engine`) and the state of `ue5-dev` at `2cadbf8c2`. **Built and verified 2026-09-02**; the
+plan in section 7 is implemented, and what it got right and wrong is recorded at the end.
 
 Doc 24 §7 deferred `-CreateReleaseVersion` and recorded the intent to reach DLC cooking and pak
 mounting. This addendum settles what that would actually take. The short answer is that most of it
@@ -361,16 +362,39 @@ path and existing scripts are unaffected. Tracked as issue #31; do not let it bl
   (`Tagger.cpp:136`, `:155`, appended never cleared). Index 0 stays stable — which is what makes the
   component-tag fallback viable — but the array grows on every level load and every stream-in.
 
-### Not established
+### Settled by building it, 2026-09-02
 
-- Whether a DLC cook can see `/<World>/` at all. The plugin is `ExplicitlyLoaded`, so
-  `MountContentPlugins` skips it (`PluginManager.cpp:1990`), and it is `FCarlaModule::StartupModule`
-  that mounts these by category (`Carla.cpp:42-68`). The DLC cook therefore depends on module load
-  order, and no engine code force-mounts a DLC plugin by name. Verify empirically before committing to
-  step 5.
-- Whether `CollectFilesToCook`'s `RegisterMountPoint("/Game/", …)` fallback
-  (`CookOnTheFlyServer.cpp:8600-8607`) ever fires for our `-cookdir` entries. If it does it would
-  create a second `/Game` root pointing at plugin content and change observed package names — which is
-  exactly what the tagger reads. Check a cook log before relying on §4.
-- That `-CreateReleaseVersion` costs only one recook. Derived from the settings-comparison code, not
-  observed. Cheap to confirm: cook twice and check the second logs `INCREMENTAL COOK:`.
+- **A DLC cook CAN see an `ExplicitlyLoaded` plugin.** This was the largest open risk and it is not a
+  risk: `FCarlaModule::StartupModule` mounts the world before the cooker scans, and the cook log shows
+  the ordering plainly — `Mounted exported world 'Arapahoe_I25'` precedes `ModifyDLCCook` by forty
+  lines. No load-order workaround is needed.
+- **Unmounting is clean.** Unloading a world you are not standing in produces no leak trace and no
+  ensure. **Load → unload → reload works within one session**, so unload is a real capability rather
+  than a one-shot.
+- **`-CreateReleaseVersion` costs one full recook**, as derived; later cooks are incremental.
+- The `RegisterMountPoint("/Game/", …)` fallback did not fire: cooked meshes land at
+  `/<World>/Carla/Static/Road/<Name>/` and token 4 reads `Road`, verified in a live editor.
+
+### Learned the expensive way
+
+- **A cook only adds.** The cook sandbox (`Saved/Cooked/`), the archive (`Build/Package/…`) and the
+  distribution assembled from it all accumulate output no cook still produces, and none of them
+  complains. Three times in one day "it is in the package" was taken as evidence about what a cook had
+  produced, and three times it was stale from a previous run. **Timestamps are the only reliable test.**
+  A world that has moved, or been excluded, keeps appearing until something overwrites it.
+- **A world must declare which way it ships.** Cooking a world into the base *and* cooking it separately
+  is not additive: everything in the base release is already-cooked, so the separate cook correctly
+  produces nothing and yields a plugin descriptor with no content. That failure is silent — UAT reports
+  success. `DeliverSeparately.txt` in the plugin directory is the declaration, the base cook skips a
+  marked world, and `PackageWorld.ps1` refuses an unmarked one and refuses any package with no level.
+
+### Still open
+
+- **Non-destructive re-import** (doc 24 step 8). Re-importing a world regenerates the whole road
+  surface, so a pipeline improvement costs every hand fix. This is now the sharpest gap, because
+  editing is the point of the feature.
+- **`-Level` on `RunCarlaServer.ps1` is untested** — syntax-checked only.
+- **`DeliverSeparately.txt` is not tracked**: it lives under the gitignored `Plugins/GeneratedWorlds/`,
+  so which way a world ships is a local decision that does not travel with the repository.
+- Pre-existing log noise on a delivered world: `Missing weather class!` and per-tick
+  `TrafficLightComponent doesn't have any Group assigned`. Neither is new; both predate this work.

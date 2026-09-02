@@ -1,6 +1,24 @@
 # Saving a generated world as an editable Unreal level
 
-**Date:** 2026-08-23 · **Status:** research complete, no code changed. Development plan in §11.
+**Date:** 2026-08-23 · **Status:** **BUILT.** Steps 1–7 of §11 are implemented and verified end to end;
+step 8 (sublevel split) is the one substantial piece still open. The research below stands as written
+except where marked "Corrected as built" — those corrections are kept in place rather than edited away,
+because each one shaped a decision. Distribution is covered by its own addendum,
+[24a_Shipping_A_Generated_World.md](24a_Shipping_A_Generated_World.md).
+
+**What works now**, proven on Arapahoe_I25 rather than reasoned about:
+
+| | |
+|---|---|
+| emit → import → edit | a world package imports to an editable level with 870 road-surface meshes |
+| export | the world becomes a self-contained content plugin, meshes included |
+| cook | 874 packages in 25 s, cooked against an archived base release |
+| deliver | a **115.4 MB** zip, against a 32 GB base package |
+| install | into a package that never contained the world, with a version check |
+| load | the packaged server mounts it and loads it by name |
+| load / unload / reload | at runtime over RPC, no leak trace from the engine's unmount |
+
+**Date of that verification:** 2026-09-02.
 **Question:** the world `run_SCTMV.py` builds is ephemeral — generated per run from an OSM extract and
 discarded. Can it be persisted as an Unreal level that a person opens in the editor, edits by hand, and
 then loads back into the simulator by name? And what artifact would that level be?
@@ -288,10 +306,21 @@ path:**
     Content/DA_<MapName>_OffsetField.uasset
 ```
 
-It needs no mounting (the base is loose), no AssetRegistry entry (long path), gets its own `/<MapName>/`
-namespace so it is trivially removable and versionable, matches CARLA's existing `.xodr` convention, and
-survives a future move to paks unchanged. Launch with
-`-map=/<MapName>/Maps/<MapName>`.
+It needs no AssetRegistry entry (long path), gets its own `/<MapName>/` namespace so it is trivially
+removable and versionable, matches CARLA's existing `.xodr` convention, and survives a future move to
+paks unchanged. Launch with `-map=/<MapName>/Maps/<MapName>`.
+
+> **Corrected as built.** "It needs no mounting" is wrong, and was wrong when written. Loose files mean
+> there is no *pak* to mount, but a plugin's CONTENT ROOT still must be registered or `/<MapName>/…`
+> resolves to nothing and the engine quietly offers the default map instead — which looks like the wrong
+> world rather than a missing one. `FCarlaModule::MountExportedWorlds` does this at startup, and
+> `load_delivered_world` does it on demand. See 24a §3.
+>
+> Two further things the build settled that this section could not: the `.xodr` no longer travels as a
+> loose file — it is a `URoadNetworkAsset` hard-referenced by the level, so it is cooked by construction
+> rather than by a file-lookup convention a world stops honouring once moved. And the road meshes now
+> live *inside* the plugin at `Content/Carla/Static/Road/<Name>/`, which the semantic tagger tolerates
+> because it reads path token 4, not a `/Game` prefix (24a §4).
 
 Rejected: **chunking via `PrimaryAssetLabel`** — it partitions a single cook and cannot add a level
 afterwards at all; **patch paks** — wrong shape, they replace base content; **dropping files straight
@@ -309,8 +338,15 @@ every added level and makes `get_available_maps` and `load_world` work for plugi
 
 1. **Retain release metadata for every published build.** If DLC-style cooking is ever wanted,
    `-CreateReleaseVersion` must be on the cook *at base-build time*. It archives only two files, but
-   without them UAT refuses to cook DLC against that build permanently. Note it is incompatible with
-   `-iterate`, so this needs a decision about whether the published cook is a separate non-iterative pass.
+   without them UAT refuses to cook DLC against that build permanently.
+
+   > **Corrected as built.** The claim that it is incompatible with `-iterate` was wrong, and the
+   > deferral it justified has been reversed. `ProjectParams.cs:3323` guards `-BasedOnReleaseVersion`
+   > with iteration, not `-CreateReleaseVersion`; the message mentions "creating a release" and the
+   > condition does not. The real cost is **one** full recook when the flag is first added, because it
+   > introduces a settings key the previous cook's file lacks; every cook after that is incremental.
+   > It is now on by default (`CARLA_COOK_CREATE_RELEASE_VERSION`), because a package cooked without it
+   > cannot host a world cooked later and the refusal arrives long after that package has shipped.
 2. **Lock the mount namespace now** — `/<MapName>/`, not `/Game/…`. The mount root is baked into cooked
    package references, so changing it later invalidates every already-exported level.
 3. **Decide loose versus paked deliberately, and write it down.** Today the base is loose *by omission*
@@ -478,11 +514,21 @@ That single experiment exercises plugin discovery without a manifest, long-path 
 Move generated content into the four sublevels, implement delete-and-recreate re-bake, and surface the
 preservation limits of §8 in the tool.
 
-### Decide before Step 7 lands
+**Still open, and now the sharpest gap.** Steps 1–7 are built, so the editable phase is real: a person
+imports a world, fixes a mesh, and exports it for delivery. Re-importing that world still deletes and
+regenerates the whole road surface, so picking up a pipeline improvement costs every hand fix made
+since. That was tolerable while nothing shipped; it is the main friction now that editing is the point.
 
-- Whether the published cook gains `-CreateReleaseVersion` (irreversible per build, §7).
-- Whether the base stays loose or moves to paks — and comment the decision at the cook invocation so the
-  ini mismatch is not "fixed" by accident.
+### Decisions that were pending here — both settled
+
+- **`-CreateReleaseVersion` is on by default.** See the correction in §7: the `-iterate` incompatibility
+  that justified deferring it does not exist.
+- **The base stays loose, and the reason is stronger than it looked.** Paking writes a
+  `.upluginmanifest`, and a cooked build that finds one stops scanning directories for plugins
+  (`PluginManager.cpp:792`) — so a world copied in afterwards would never be discovered. Mounting a pak
+  into a loose base is worse still: `EXCLUDE_NONPAK_UE_EXTENSIONS` hides every loose `.uasset`, `.umap`
+  and `.uexp` the moment any pak mounts, taking the base package with it. The decision is commented at
+  the cook invocation. See 24a §2.
 
 ---
 
