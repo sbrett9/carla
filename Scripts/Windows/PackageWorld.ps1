@@ -97,7 +97,12 @@ $CarlaRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $ProjectDir = Join-Path $CarlaRoot 'Unreal\CarlaUnreal'
 $UProject = Join-Path $ProjectDir 'CarlaUnreal.uproject'
 $PluginDir = Join-Path $ProjectDir "Plugins\GeneratedWorlds\$World"
-$Platform = 'Windows'
+# Two different names for the same target, and they are not interchangeable. UAT's -Platform and
+# -TargetPlatform want the TARGET name (Win64); the directories a cook writes -- Releases\ and
+# Saved\StagedBuilds\ -- are named for the COOK PLATFORM (Windows). Passing 'Windows' as the target
+# fails with "The platform name Windows is not a valid platform name".
+$Platform = 'Win64'
+$CookPlatform = 'Windows'
 
 if (-not $UnrealEngineRoot) {
     $UnrealEngineRoot = $env:CARLA_UNREAL_ENGINE_PATH
@@ -128,6 +133,25 @@ if (-not (Test-Path $UPluginFile)) {
     exit 1
 }
 
+# A world ships one way or the other. Left unmarked it is cooked into the base package, and cooking
+# it separately against that same base yields nothing, because every one of its packages is already
+# there. Checking up front means saying that plainly instead of producing an empty package or an
+# unexplained one.
+$MarkerFile = Join-Path $PluginDir 'DeliverSeparately.txt'
+if (-not (Test-Path $MarkerFile)) {
+    Write-Fail "'$World' is not marked for separate delivery, so it is cooked into the base package."
+    Write-Fail "Packaging it as an addition to that base would produce an empty world."
+    Write-Fail ""
+    Write-Fail "To deliver it separately instead:"
+    Write-Fail "  1. create $MarkerFile"
+    Write-Fail "  2. re-cook the base so it no longer contains the world:"
+    Write-Fail "     .\Scripts\Windows\MakeDistribution.ps1 -Build"
+    Write-Fail "  3. run this again"
+    Write-Fail ""
+    Write-Fail "Or leave it as it is and deliver the base package, which already contains the world."
+    exit 1
+}
+
 if (-not $BasedOnRelease) {
     $BasedOnRelease = (& git -C $CarlaRoot log -1 --format=%h 2>$null)
     if ($LASTEXITCODE -ne 0 -or -not $BasedOnRelease) {
@@ -138,7 +162,7 @@ if (-not $BasedOnRelease) {
 
 # The base cook writes this. Its absence means the package this world would be installed into was
 # cooked without -CreateReleaseVersion, and cannot host a separately cooked world at all.
-$ReleaseDir = Join-Path $ProjectDir "Releases\$BasedOnRelease\$Platform"
+$ReleaseDir = Join-Path $ProjectDir "Releases\$BasedOnRelease\$CookPlatform"
 if (-not (Test-Path $ReleaseDir)) {
     Write-Fail "No release '$BasedOnRelease' to cook against."
     Write-Fail "  Looked in: $ReleaseDir"
@@ -163,7 +187,7 @@ Write-Info "output       : $OutputDirectory"
 # -stagingdirectory is left unset on purpose. With -DLCName, UAT stages into the plugin's own
 # Saved\StagedBuilds; naming the base package's directory instead would stage this world on top of it.
 
-$StageRoot = Join-Path $PluginDir "Saved\StagedBuilds\$Platform"
+$StageRoot = Join-Path $PluginDir "Saved\StagedBuilds\$CookPlatform"
 
 if (-not $SkipCook) {
     Write-Info "`n[world] cooking $World against release $BasedOnRelease"
@@ -204,6 +228,24 @@ $Payload = Get-ChildItem -Path $StageRoot -Recurse -Directory -Filter $World |
     Select-Object -First 1
 if (-not $Payload) {
     Write-Fail "Could not find the cooked $World plugin under $StageRoot."
+    exit 1
+}
+
+# A DLC cook that produces only a descriptor and a registry SUCCEEDS. The commonest cause is that the
+# world is already in the base release, so every one of its packages is correctly treated as already
+# cooked and there is nothing left to add. Packaging that would hand somebody a world that installs
+# and then fails to load, so refuse here: an empty world package is worse than a failed cook, because
+# it fails at the recipient instead of at the person who made it.
+$CookedMap = Get-ChildItem -Path $Payload.FullName -Recurse -File -Filter '*.umap' -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+$CookedAssets = @(Get-ChildItem -Path $Payload.FullName -Recurse -File -Include '*.uasset', '*.uexp' -ErrorAction SilentlyContinue)
+if (-not $CookedMap -or $CookedAssets.Count -eq 0) {
+    Write-Fail "`nThe cook produced no content for '$World' -- $($CookedAssets.Count) asset file(s), no level."
+    Write-Fail "The world is almost certainly already part of release '$BasedOnRelease', so cooking it"
+    Write-Fail "again as an addition to that release correctly yields nothing."
+    Write-Fail ""
+    Write-Fail "A world ships one way or the other, not both. Either cook a base that excludes it and"
+    Write-Fail "package it against that, or leave it baked into the base and deliver the base."
     exit 1
 }
 

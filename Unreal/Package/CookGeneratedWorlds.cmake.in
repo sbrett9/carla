@@ -46,6 +46,17 @@ if (IS_DIRECTORY "${GENERATED_WORLDS_DIR}")
       continue ()
     endif ()
     get_filename_component (WORLD_NAME "${WORLD_DIR}" NAME)
+
+    # A world ships one way or the other. Cooking it into the base AND cooking it separately is not
+    # additive: everything in the base release is treated as already cooked, so the separate cook
+    # correctly produces nothing and hands somebody an empty world package. This marker is how a
+    # world says it is delivered on its own, and PackageWorld.ps1 refuses to package a world without
+    # one for the same reason.
+    if (EXISTS "${WORLD_DIR}/DeliverSeparately.txt")
+      message (STATUS "[cook] skipping '${WORLD_NAME}': marked for separate delivery")
+      continue ()
+    endif ()
+
     file (GLOB WORLD_UMAPS "${WORLD_DIR}/Content/Maps/*.umap")
     if (NOT WORLD_UMAPS)
       # A plugin directory with no level in it is a half-written export, not a world. Cooking its
