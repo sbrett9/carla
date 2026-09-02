@@ -216,6 +216,17 @@ foreach ($d in 'CarlaServer', 'wheels', 'scripts', 'osm', 'tools\sumo') {
 Write-Info "[dist] copying cooked server (this is the large step)..."
 Copy-Item -Recurse -Force -Path (Join-Path $pkgServer '*') -Destination (Join-Path $dist 'CarlaServer')
 
+# 1b. What this build is. The cook writes VERSION at the archive root, one level above the platform
+# directory copied above, so without this the distribution -- the thing actually handed to someone --
+# carries no statement of which CARLA it is or which worlds it accepts.
+$versionSrc = Join-Path (Split-Path $pkgServer -Parent) 'VERSION'
+if (Test-Path $versionSrc) {
+    Copy-Item -Force $versionSrc (Join-Path $dist 'VERSION')
+    Write-Info "[dist] VERSION: $((Get-Content $versionSrc | Select-Object -First 2) -join '; ')"
+} else {
+    Write-Warn "[dist] no VERSION at $versionSrc; the distribution will not state its build."
+}
+
 # 2. carlanet wheel (newest).
 $whl = Get-ChildItem (Join-Path $CarlaRoot 'CarlaNet\python\dist\*.whl') -ErrorAction SilentlyContinue |
        Sort-Object LastWriteTime -Descending | Select-Object -First 1
