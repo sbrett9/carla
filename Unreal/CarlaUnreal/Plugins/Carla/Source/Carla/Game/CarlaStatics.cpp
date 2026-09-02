@@ -120,6 +120,19 @@ FString UCarlaStatics::FindMapPath(const FString &MapName)
           FString FileName = FPaths::GetBaseFilename(FilePath); // just "MyMap", no path, no extension
           if (FileName.Equals(SearchName, ESearchCase::IgnoreCase))
           {
+              // A file on disk is not the same as a loadable map. This search walks the content
+              // directory of every DISCOVERED plugin, and a world that has been unmounted -- or was
+              // never mounted -- still has its files there while its content root does not exist, so
+              // the name cannot be resolved and loading it would fail after the caller was told it
+              // had been found. Skip it and keep looking.
+              FString LongPackageName;
+              if (!FPackageName::TryConvertFilenameToLongPackageName(FilePath, LongPackageName))
+              {
+                  UE_LOG(LogCarla, Verbose,
+                      TEXT("Map '%s' matches '%s' but is not under a mounted content root; skipping."),
+                      *FilePath, *SearchName);
+                  continue;
+              }
               return FilePath; // Return the full path of the first matching map. Only one map is expected.
           }
       }

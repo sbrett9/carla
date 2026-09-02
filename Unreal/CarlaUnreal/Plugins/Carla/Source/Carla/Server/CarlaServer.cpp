@@ -341,6 +341,53 @@ void FCarlaServer::FPimpl::BindActions()
     return carla::rpc::FromFString(GetCarlaWorldInterfaceVersion());
   };
 
+  // ~~ Delivered worlds ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  //
+  // A world delivered on its own arrives as a content plugin copied into the package. The engine
+  // discovers it from its directory, so one added while the server is running is listed here without
+  // a restart; mounting is what makes /<Name>/Maps/<Name> resolvable.
+
+  BIND_ASYNC(list_worlds) << [] () -> R<std::vector<std::string>>
+  {
+    std::vector<std::string> Names;
+    for (const FString& Name : GetDiscoveredWorlds())
+    {
+      // Mounted worlds are marked, because the difference decides whether a name can be loaded.
+      Names.push_back(carla::rpc::FromFString(
+          IsWorldMounted(Name) ? Name + TEXT(" (mounted)") : Name));
+    }
+    return Names;
+  };
+
+  BIND_SYNC(load_world) << [this](const std::string &world_name) -> R<void>
+  {
+    REQUIRE_CARLA_EPISODE();
+    const FString Name = cr::ToFString(world_name);
+    if (!MountWorld(Name))
+    {
+      RESPOND_ERROR("no delivered world by that name, or it could not be mounted");
+    }
+    // Mounting only registers the content root; the level still has to be loaded, and by long package
+    // name -- a bare name is resolved through the asset registry, which was written when the game was
+    // cooked and cannot see a world delivered afterwards.
+    const FString MapPackage = FString::Printf(TEXT("/%s/Maps/%s"), *Name, *Name);
+    if (!Episode->LoadNewEpisode(MapPackage, true))
+    {
+      RESPOND_ERROR("the world mounted but its map could not be loaded");
+    }
+    return R<void>::Success();
+  };
+
+  BIND_SYNC(unload_world) << [](const std::string &world_name) -> R<void>
+  {
+    FString Reason;
+    if (!UnmountWorld(cr::ToFString(world_name), Reason))
+    {
+      RESPOND_ERROR_FSTRING(Reason);
+    }
+    return R<void>::Success();
+  };
+
   // ~~ Tick ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
   BIND_SYNC(tick_cue) << [this]() -> R<uint64_t>

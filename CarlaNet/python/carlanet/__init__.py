@@ -2214,6 +2214,26 @@ class Client:
         """
         return str(_sync(self._inner.GetWorldInterfaceVersionAsync()))
 
+    def list_worlds(self) -> list[str]:
+        """Worlds delivered into this server's package, each marked "(mounted)" when loadable.
+
+        A world is discovered from its directory, so one installed while the server runs appears
+        here without a restart.
+        """
+        return [str(w) for w in _sync(self._inner.ListWorldsAsync())]
+
+    def load_world(self, world_name: str) -> None:
+        """Mount a delivered world if needed and load its map."""
+        _sync(self._inner.LoadWorldAsync(world_name))
+
+    def unload_world(self, world_name: str) -> None:
+        """Release a delivered world's content.
+
+        Fails while that world is the one loaded, because unmounting it would leave the running
+        map's packages behind as leaks. Load a different map first.
+        """
+        _sync(self._inner.UnloadWorldAsync(world_name))
+
     def get_world(self) -> World:
         # Auto-start the world observer stream so that actor transforms,
         # velocities, on_tick events, and wait_for_tick all function out

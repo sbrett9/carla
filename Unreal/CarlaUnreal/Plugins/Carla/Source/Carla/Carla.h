@@ -51,6 +51,33 @@ DECLARE_CYCLE_STAT(TEXT("Stream Send"), STAT_CarlaSensorStreamSend, STATGROUP_Ca
  */
 CARLA_API FString GetCarlaWorldInterfaceVersion();
 
+/**
+ * Names of the exported worlds this build can see, whether or not they are currently mounted.
+ *
+ * A world is an ExplicitlyLoaded content plugin the exporter marked "Generated Worlds"; the engine
+ * discovers one as soon as its directory is present, which is what lets a world be added to a
+ * packaged build by copying it in.
+ */
+CARLA_API TArray<FString> GetDiscoveredWorlds();
+
+/** True when this world's content root exists, so /<Name>/Maps/<Name> can be resolved. */
+CARLA_API bool IsWorldMounted(const FString& WorldName);
+
+/**
+ * Mount a discovered world so its levels can be loaded by name. Idempotent; returns false only when
+ * there is no such world or the mount itself fails.
+ */
+CARLA_API bool MountWorld(const FString& WorldName);
+
+/**
+ * Unmount a world, releasing its content root and the packages loaded from it.
+ *
+ * The caller must not be standing in it: unmounting the live world makes every one of its packages a
+ * leak, which the engine reports by ensuring and marking them garbage under a running world. Load a
+ * different map first. OutReason explains any refusal.
+ */
+CARLA_API bool UnmountWorld(const FString& WorldName, FString& OutReason);
+
 class FCarlaModule : public IModuleInterface
 {
 	void RegisterSettings();

@@ -295,6 +295,28 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<string> GetWorldInterfaceVersionAsync()
         => _rpc.CallAsync<string>("get_world_interface_version");
 
+    // ── Delivered worlds ──────────────────────────────────────────────────────
+    // A world delivered on its own is a directory copied into the server's package. The engine
+    // discovers it from that directory, so one added while the server runs is listed without a
+    // restart; mounting is what makes its map loadable by name.
+
+    /// <summary>Worlds this server can see, each marked "(mounted)" when its map can be loaded.</summary>
+    public Task<IReadOnlyList<string>> ListWorldsAsync()
+        => _rpc.CallAsync<IReadOnlyList<string>>("list_worlds");
+
+    /// <summary>Mount a delivered world if needed and load its map.</summary>
+    public Task LoadWorldAsync(string worldName)
+        => _rpc.CallVoidAsync("load_world", worldName);
+
+    /// <summary>
+    /// Release a delivered world's content.
+    ///
+    /// Fails while that world is the one loaded: unmounting it would leave the running map's packages
+    /// behind as leaks. Load a different map first — only the caller knows which.
+    /// </summary>
+    public Task UnloadWorldAsync(string worldName)
+        => _rpc.CallVoidAsync("unload_world", worldName);
+
     public Task<bool> IsTrafficManagerRunningAsync(ushort port)
         => _rpc.CallAsync<bool>("is_traffic_manager_running", port);
 

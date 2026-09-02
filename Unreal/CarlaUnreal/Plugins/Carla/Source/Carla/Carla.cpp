@@ -8,8 +8,11 @@
 #include "Developer/Settings/Public/ISettingsSection.h"
 #include "Developer/Settings/Public/ISettingsContainer.h"
 #include "Interfaces/IPluginManager.h"
+#include "Engine/World.h"        // GWorld, when refusing to unmount the live world
 #include "Misc/ConfigCacheIni.h" // GConfig
+#include "Misc/PackageName.h"    // FPackageName::MountPointExists
 #include "Misc/Paths.h"          // FPaths::ProjectConfigDir
+#include "UObject/Package.h"     // UWorld::GetOutermost
 #include <util/ue-header-guard-end.h>
 
 #define LOCTEXT_NAMESPACE "FCarlaModule"
@@ -39,6 +42,102 @@ FString GetCarlaWorldInterfaceVersion()
 		return TEXT("0.0");
 	}
 	return FString::Printf(TEXT("%d.%d"), Major, Minor);
+}
+
+namespace
+{
+	/** The exporter marks its own output with this category, so nothing else can be mistaken for a world. */
+	bool IsExportedWorld(const TSharedRef<IPlugin>& Plugin)
+	{
+		const FPluginDescriptor& Descriptor = Plugin->GetDescriptor();
+		return Descriptor.Category == TEXT("Generated Worlds")
+			&& Descriptor.bExplicitlyLoaded
+			&& Plugin->CanContainContent();
+	}
+
+	TSharedPtr<IPlugin> FindExportedWorld(const FString& WorldName)
+	{
+		TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(WorldName);
+		if (Plugin.IsValid() && IsExportedWorld(Plugin.ToSharedRef()))
+		{
+			return Plugin;
+		}
+		return nullptr;
+	}
+}
+
+TArray<FString> GetDiscoveredWorlds()
+{
+	TArray<FString> Names;
+	for (const TSharedRef<IPlugin>& Plugin : IPluginManager::Get().GetDiscoveredPlugins())
+	{
+		if (IsExportedWorld(Plugin))
+		{
+			Names.Add(Plugin->GetName());
+		}
+	}
+	return Names;
+}
+
+bool IsWorldMounted(const FString& WorldName)
+{
+	// Asking the package system rather than the plugin's own flag: what callers care about is whether
+	// /<Name>/... resolves, and that is exactly what a registered mount root means.
+	return FPackageName::MountPointExists(FString::Printf(TEXT("/%s/"), *WorldName));
+}
+
+bool MountWorld(const FString& WorldName)
+{
+	if (IsWorldMounted(WorldName))
+	{
+		return true;
+	}
+	if (!FindExportedWorld(WorldName))
+	{
+		return false;
+	}
+	return IPluginManager::Get().MountExplicitlyLoadedPlugin(WorldName);
+}
+
+bool UnmountWorld(const FString& WorldName, FString& OutReason)
+{
+	if (!FindExportedWorld(WorldName))
+	{
+		OutReason = FString::Printf(TEXT("there is no exported world named '%s'"), *WorldName);
+		return false;
+	}
+	if (!IsWorldMounted(WorldName))
+	{
+		return true;   // already gone; asking again is not an error
+	}
+
+	// Refusing beats unmounting the world underfoot. UnmountExplicitlyLoadedPlugin collects garbage
+	// and then treats every surviving package under /<Name>/ as leaked -- ensuring, tracing the
+	// references and marking the packages garbage -- which for the live world means doing that to the
+	// map currently being played. Travelling away first is the caller's job, because only the caller
+	// knows where to go.
+	if (const UWorld* World = GWorld)
+	{
+		const FString Current = World->GetOutermost()->GetName();
+		if (Current.StartsWith(FString::Printf(TEXT("/%s/"), *WorldName)))
+		{
+			OutReason = FString::Printf(
+				TEXT("'%s' is the world currently loaded; load a different map before unmounting it"),
+				*WorldName);
+			return false;
+		}
+	}
+
+	FText Reason;
+	if (!IPluginManager::Get().UnmountExplicitlyLoadedPlugin(WorldName, &Reason))
+	{
+		OutReason = Reason.IsEmpty()
+			? FString::Printf(TEXT("the engine refused to unmount '%s'"), *WorldName)
+			: Reason.ToString();
+		return false;
+	}
+	UE_LOG(LogCarla, Display, TEXT("Unmounted world '%s'."), *WorldName);
+	return true;
 }
 
 void FCarlaModule::StartupModule()

@@ -43,6 +43,7 @@ param(
     [switch]$WithWindow,
     [string]$ExtraArgs = "",
     [string]$UnrealEngineRoot,   # UE 5.7.4 root; env CARLA_UNREAL_ENGINE_PATH
+    [string]$Level,              # a delivered world by name, e.g. Arapahoe_I25 (expands to its map path)
     [switch]$Version,            # print what this build supports and exit, without starting it
     [int]$CesiumCacheItems = 0,  # >0 overrides Cesium's tile request-cache size (MaxCacheItems) for this run; 0 = engine default (4096)
 
@@ -70,6 +71,7 @@ OPTIONS (PowerShell-native | legacy alias):
   -ExtraArgs <str>           --extra-args=<str>          Extra args appended to the UnrealEditor command line.
   -CesiumCacheItems <n>      --cesium-cache-items=<n>    Override Cesium tile request-cache size (MaxCacheItems) for this run; 0/omit = engine default (4096).
   -UnrealEngineRoot <dir>    --unreal-engine-root=<dir>  UE 5.7.4 root (else CARLA_UNREAL_ENGINE_PATH, else <repo-parent>\UE_5_7_4).
+  -Level <name>              --level=<name>              Load a delivered world by name (e.g. Arapahoe_I25).
   -Version                   --version                   Print CARLA and world interface versions, then exit.
   -Help               / -h   --help                      Show this help.
 
@@ -96,6 +98,7 @@ if ($Remaining) {
             '^(--extra-args)$'                   { if ($null -eq $next) { throw "Argument '$key' requires a value." } $ExtraArgs = $next;       if ($null -eq $val) { $idx++ } }
             '^(--cesium-cache-items|--max-cache-items)$' { if ($null -eq $next) { throw "Argument '$key' requires a value." } $CesiumCacheItems = [int]$next; if ($null -eq $val) { $idx++ } }
             '^(--unreal-engine-root|--ue-root)$' { if ($null -eq $next) { throw "Argument '$key' requires a value." } $UnrealEngineRoot = $next; if ($null -eq $val) { $idx++ } }
+            '^(--level)$'                        { if ($null -eq $next) { throw "Argument '$key' requires a value." } $Level = $next; if ($null -eq $val) { $idx++ } }
             '^(--version)$'                      { $Version = $true }
             default { Show-Usage; throw "Unknown argument '$arg'." }
         }
@@ -103,6 +106,18 @@ if ($Remaining) {
 }
 
 if ($Help) { Show-Usage; return }
+
+# -Level names a delivered world; -Map takes a full package path. A world's map always sits at
+# /<Name>/Maps/<Name>, which the exporter guarantees, so the short form is worth having: it is what a
+# person knows after installing one, and it saves repeating the name three times.
+if ($Level) {
+    if ($Level.StartsWith('/')) {
+        Write-Host "-Level takes a world name, not a path. Use -Map for a full package path." -ForegroundColor Red
+        exit 1
+    }
+    $Map = "/$Level/Maps/$Level"
+    Write-Host "level    : $Level  ->  $Map"
+}
 
 # Paths: the CARLA repo root is two dirs up from this script (carla/Scripts/Windows), derived by
 # LOCATION (not hard-coded). The UE engine: -UnrealEngineRoot > $env:CARLA_UNREAL_ENGINE_PATH >
