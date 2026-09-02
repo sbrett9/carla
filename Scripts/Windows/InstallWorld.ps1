@@ -87,31 +87,47 @@ try {
     }
 
     Write-Info "world   : $($m.world)"
-    Write-Info "needs   : Carla commit $($m.basedOnRelease), $($m.config), $($m.platform)"
+    Write-Info "needs   : world interface $($m.worldInterfaceMajor).x, minor $($m.worldInterfaceMinor) or later"
 
-    # Compare against what this package reports about itself. The three hashes move independently:
-    # source, the content repository and the engine, so all three have to agree.
-    $problems = @()
-    if (Test-Path $VersionFile) {
-        $version = Get-Content $VersionFile -Raw
-        function Test-Hash([string]$Label, [string]$Expected) {
-            if (-not $Expected) { return $null }   # not recorded; nothing to check against
-            if ($version -match [regex]::Escape($Expected)) { return $null }
-            return "$Label does not match this package"
+    # What this package promises, read from the package itself rather than from anything derived.
+    # A version says what a build supports; a hash could only say whether two builds are identical,
+    # which refuses compatible pairs and still cannot confirm an incompatible one.
+    $InterfaceIni = Join-Path $Into 'CarlaUnreal\Config\DefaultWorldInterface.ini'
+    $baseMajor = $null; $baseMinor = $null
+    if (Test-Path $InterfaceIni) {
+        $text = Get-Content $InterfaceIni -Raw
+        if ($text -match '(?ms)^\s*\[WorldInterface\](.*?)(^\s*\[|\z)') {
+            $body = $Matches[1]
+            if ($body -match '(?m)^\s*Major\s*=\s*(\d+)') { $baseMajor = [int]$Matches[1] }
+            if ($body -match '(?m)^\s*Minor\s*=\s*(\d+)') { $baseMinor = [int]$Matches[1] }
         }
-        $problems += @(
-            (Test-Hash 'Carla source'   $m.carlaGitHash),
-            (Test-Hash 'CARLA content'  $m.contentGitHash),
-            (Test-Hash 'Unreal Engine'  $m.unrealGitHash)
-        ) | Where-Object { $_ }
+    }
+
+    $problems = @()
+    if ($null -eq $baseMajor -or $null -eq $baseMinor) {
+        $problems += "this package does not declare a world interface version, so what it supports is unknown"
     }
     else {
-        $problems += "this package has no VERSION file, so its build cannot be identified"
+        Write-Info "package : world interface $baseMajor.$baseMinor"
+        # Major is the break; minor is additive, so the base may run ahead but not behind.
+        if ($baseMajor -ne $m.worldInterfaceMajor) {
+            $problems += "this package is world interface $baseMajor.x, the world needs $($m.worldInterfaceMajor).x"
+        }
+        elseif ($baseMinor -lt $m.worldInterfaceMinor) {
+            $problems += "this package is minor $baseMinor, the world needs $($m.worldInterfaceMinor) or later"
+        }
     }
-
     if ($problems.Count -gt 0) {
         Write-Fail "`nThis world was not built for this package:"
         foreach ($p in $problems) { Write-Fail "  - $p" }
+        # Identification, so both sides can be named when someone has to work out which is wrong.
+        if ($m.carlaGitHash) {
+            Write-Fail "  world  built from Carla commit $($m.carlaGitHash.Substring(0, [Math]::Min(9, $m.carlaGitHash.Length)))"
+        }
+        if (Test-Path $VersionFile) {
+            $line = (Get-Content $VersionFile | Where-Object { $_ -match 'Carla git hash' } | Select-Object -First 1)
+            if ($line) { Write-Fail "  package $($line.Trim())" }
+        }
         Write-Fail "`nInstalling it anyway would most likely fail to load rather than misbehave subtly."
         if (-not $Force) {
             Write-Fail "Re-package the world against this build, or pass -Force if you know they are compatible."

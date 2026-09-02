@@ -281,6 +281,20 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<string> GetServerVersionAsync()
         => _rpc.CallAsync<string>("version");
 
+    /// <summary>
+    /// What a separately delivered world can rely on this server providing, as "Major.Minor".
+    ///
+    /// Distinct from <see cref="GetServerVersionAsync"/>, which reports what CARLA this is. A world
+    /// records the version it was packaged against and is installable where the major matches and
+    /// the server's minor is at least the world's, so a client can tell whether a world it holds
+    /// will load rather than discovering it as a load failure.
+    ///
+    /// A server reporting "0.0" could not read its own declaration; nothing should be installed
+    /// into it.
+    /// </summary>
+    public Task<string> GetWorldInterfaceVersionAsync()
+        => _rpc.CallAsync<string>("get_world_interface_version");
+
     public Task<bool> IsTrafficManagerRunningAsync(ushort port)
         => _rpc.CallAsync<bool>("is_traffic_manager_running", port);
 

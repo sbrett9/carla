@@ -38,6 +38,19 @@ DECLARE_CYCLE_STAT(TEXT("Stream Send"), STAT_CarlaSensorStreamSend, STATGROUP_Ca
 // #define CARLA_WEATHER_EXTRA_LOG
 #endif // WITH_EDITOR
 
+/**
+ * What a separately delivered world can rely on this build providing, as "Major.Minor".
+ *
+ * Declared in Config/DefaultWorldInterface.ini and edited by hand: it states what this build
+ * promises, which a commit hash or a build number cannot, since those only ever answer whether two
+ * builds are identical. A world records the version it was packaged against, and installs where
+ * Major matches and the base's Minor is at least the world's.
+ *
+ * Returns "0.0" if the declaration is missing or unreadable, which no world matches -- an
+ * unidentifiable build is one nothing should be installed into.
+ */
+CARLA_API FString GetCarlaWorldInterfaceVersion();
+
 class FCarlaModule : public IModuleInterface
 {
 	void RegisterSettings();

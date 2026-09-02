@@ -333,6 +333,14 @@ void FCarlaServer::FPimpl::BindActions()
     return carla::version();
   };
 
+  // Distinct from `version`, which reports what CARLA this is. This reports what a separately
+  // delivered world can rely on the build providing, so a client can tell whether a world it holds
+  // is installable without trying it and reading a load failure.
+  BIND_ASYNC(get_world_interface_version) << [] () -> R<std::string>
+  {
+    return carla::rpc::FromFString(GetCarlaWorldInterfaceVersion());
+  };
+
   // ~~ Tick ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
   BIND_SYNC(tick_cue) << [this]() -> R<uint64_t>

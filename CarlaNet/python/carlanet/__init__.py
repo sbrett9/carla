@@ -2202,6 +2202,18 @@ class Client:
     def get_server_version(self) -> str:
         return str(_sync(self._inner.GetServerVersionAsync()))
 
+    def get_world_interface_version(self) -> str:
+        """What a separately delivered world can rely on this server providing, as "Major.Minor".
+
+        Distinct from get_server_version, which reports what CARLA this is. A world records the
+        version it was packaged against and installs where the major matches and the server's minor
+        is at least the world's, so this answers "will that world load here?" without trying it.
+
+        "0.0" means the server could not read its own declaration; nothing should be installed
+        into it.
+        """
+        return str(_sync(self._inner.GetWorldInterfaceVersionAsync()))
+
     def get_world(self) -> World:
         # Auto-start the world observer stream so that actor transforms,
         # velocities, on_tick events, and wait_for_tick all function out

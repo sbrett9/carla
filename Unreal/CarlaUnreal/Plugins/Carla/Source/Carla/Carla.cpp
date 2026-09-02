@@ -8,6 +8,8 @@
 #include "Developer/Settings/Public/ISettingsSection.h"
 #include "Developer/Settings/Public/ISettingsContainer.h"
 #include "Interfaces/IPluginManager.h"
+#include "Misc/ConfigCacheIni.h" // GConfig
+#include "Misc/Paths.h"          // FPaths::ProjectConfigDir
 #include <util/ue-header-guard-end.h>
 
 #define LOCTEXT_NAMESPACE "FCarlaModule"
@@ -15,11 +17,40 @@
 DEFINE_LOG_CATEGORY(LogCarla);
 DEFINE_LOG_CATEGORY(LogCarlaServer);
 
+FString GetCarlaWorldInterfaceVersion()
+{
+	// Its own file rather than a section of DefaultGame.ini, so that changing what this build
+	// promises is a visible one-line commit instead of a line lost among cook settings. Read on
+	// demand rather than cached: it is asked for once at startup and over RPC, and a stale cache
+	// would be a way to report a promise the build is no longer making.
+	const FString ConfigPath =
+		FPaths::ProjectConfigDir() / TEXT("DefaultWorldInterface.ini");
+
+	int32 Major = 0;
+	int32 Minor = 0;
+	if (!GConfig || !GConfig->GetInt(TEXT("WorldInterface"), TEXT("Major"), Major, ConfigPath)
+		|| !GConfig->GetInt(TEXT("WorldInterface"), TEXT("Minor"), Minor, ConfigPath))
+	{
+		// Deliberately not a usable version. A build that cannot say what it supports must not have
+		// worlds installed into it on the strength of a guess.
+		UE_LOG(LogCarla, Warning,
+			TEXT("[Carla] no world interface version declared in %s; reporting 0.0, which no "
+				 "delivered world will match."), *ConfigPath);
+		return TEXT("0.0");
+	}
+	return FString::Printf(TEXT("%d.%d"), Major, Minor);
+}
+
 void FCarlaModule::StartupModule()
 {
 	RegisterSettings();
 	LoadChronoDll();
 	MountExportedWorlds();
+
+	// Logged at startup because that is where Unreal states versions, and because a packaged server
+	// that will not accept a world should say what it does accept without being asked.
+	UE_LOG(LogCarla, Display,
+		TEXT("[Carla] world interface version %s"), *GetCarlaWorldInterfaceVersion());
 }
 
 void FCarlaModule::MountExportedWorlds()

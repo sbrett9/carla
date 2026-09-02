@@ -209,9 +209,33 @@ if (-not $Payload) {
 
 # ── Describe what this is, so an installer can refuse the wrong package ──────
 #
-# A world cooked against one base will not load against another: cooked files carry package versions
-# and name base content by id. Recording all three hashes the package's own VERSION file reports lets
-# the installer say which build a world needs, instead of the recipient meeting a load failure.
+# What decides installability is the declared world interface version, not a hash. A hash only ever
+# answers "identical?", so it refuses builds that differ in ways no world can observe -- a
+# documentation commit, say -- while saying nothing about whether two builds are actually compatible.
+# The declaration states what a build promises; see Config\DefaultWorldInterface.ini.
+#
+# The commit hashes are recorded too, but only so a person can identify exactly which build produced
+# a world. Nothing compares them.
+
+function Get-WorldInterfaceVersion([string]$IniPath) {
+    if (-not (Test-Path $IniPath)) { return $null }
+    $text = Get-Content $IniPath -Raw
+    if ($text -match '(?ms)^\s*\[WorldInterface\](.*?)(^\s*\[|\z)') {
+        $body = $Matches[1]
+        $maj = if ($body -match '(?m)^\s*Major\s*=\s*(\d+)') { [int]$Matches[1] } else { $null }
+        $min = if ($body -match '(?m)^\s*Minor\s*=\s*(\d+)') { [int]$Matches[1] } else { $null }
+        if ($null -ne $maj -and $null -ne $min) { return @{ Major = $maj; Minor = $min } }
+    }
+    return $null
+}
+
+$InterfaceIni = Join-Path $ProjectDir 'Config\DefaultWorldInterface.ini'
+$Interface = Get-WorldInterfaceVersion $InterfaceIni
+if (-not $Interface) {
+    Write-Fail "Could not read the world interface version from $InterfaceIni."
+    Write-Fail "Without it there is nothing to record for an installer to check against."
+    exit 1
+}
 
 function Get-GitHash([string]$Path) {
     if (-not (Test-Path $Path)) { return '' }
@@ -221,16 +245,19 @@ function Get-GitHash([string]$Path) {
 }
 
 $manifest = [ordered]@{
-    formatVersion      = 1
-    world              = $World
-    mapPackage         = "/$World/Maps/$World"
-    basedOnRelease     = $BasedOnRelease
-    config             = $Config
-    platform           = $Platform
-    carlaGitHash       = Get-GitHash $CarlaRoot
-    contentGitHash     = Get-GitHash (Join-Path $ProjectDir 'Content\Carla')
-    unrealGitHash      = Get-GitHash $UnrealEngineRoot
-    packagedAtUtc      = (Get-Date).ToUniversalTime().ToString('o')
+    formatVersion         = 1
+    world                 = $World
+    mapPackage            = "/$World/Maps/$World"
+    worldInterfaceMajor   = $Interface.Major
+    worldInterfaceMinor   = $Interface.Minor
+    basedOnRelease        = $BasedOnRelease
+    config                = $Config
+    platform              = $Platform
+    # Identification only. Never compared -- see the note above.
+    carlaGitHash          = Get-GitHash $CarlaRoot
+    contentGitHash        = Get-GitHash (Join-Path $ProjectDir 'Content\Carla')
+    unrealGitHash         = Get-GitHash $UnrealEngineRoot
+    packagedAtUtc         = (Get-Date).ToUniversalTime().ToString('o')
 }
 
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
@@ -253,6 +280,6 @@ $SizeMB = [math]::Round((Get-Item $ZipPath).Length / 1MB, 1)
 Write-Info "`nPackaged $World"
 Write-Info "  file    : $ZipPath"
 Write-Info "  size    : $SizeMB MB"
-Write-Info "  needs   : a CARLA package built from Carla commit $BasedOnRelease, $Config, $Platform"
+Write-Info "  needs   : world interface $($Interface.Major).x, minor $($Interface.Minor) or later; $Config, $Platform"
 Write-Info "`nInstall it with:"
 Write-Info "  .\Scripts\Windows\InstallWorld.ps1 -Package '$ZipPath' -Into <package directory>"

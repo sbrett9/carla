@@ -43,6 +43,7 @@ param(
     [switch]$WithWindow,
     [string]$ExtraArgs = "",
     [string]$UnrealEngineRoot,   # UE 5.7.4 root; env CARLA_UNREAL_ENGINE_PATH
+    [switch]$Version,            # print what this build supports and exit, without starting it
     [int]$CesiumCacheItems = 0,  # >0 overrides Cesium's tile request-cache size (MaxCacheItems) for this run; 0 = engine default (4096)
 
     [Alias('h')]
@@ -69,6 +70,7 @@ OPTIONS (PowerShell-native | legacy alias):
   -ExtraArgs <str>           --extra-args=<str>          Extra args appended to the UnrealEditor command line.
   -CesiumCacheItems <n>      --cesium-cache-items=<n>    Override Cesium tile request-cache size (MaxCacheItems) for this run; 0/omit = engine default (4096).
   -UnrealEngineRoot <dir>    --unreal-engine-root=<dir>  UE 5.7.4 root (else CARLA_UNREAL_ENGINE_PATH, else <repo-parent>\UE_5_7_4).
+  -Version                   --version                   Print CARLA and world interface versions, then exit.
   -Help               / -h   --help                      Show this help.
 
 EXAMPLES:
@@ -94,6 +96,7 @@ if ($Remaining) {
             '^(--extra-args)$'                   { if ($null -eq $next) { throw "Argument '$key' requires a value." } $ExtraArgs = $next;       if ($null -eq $val) { $idx++ } }
             '^(--cesium-cache-items|--max-cache-items)$' { if ($null -eq $next) { throw "Argument '$key' requires a value." } $CesiumCacheItems = [int]$next; if ($null -eq $val) { $idx++ } }
             '^(--unreal-engine-root|--ue-root)$' { if ($null -eq $next) { throw "Argument '$key' requires a value." } $UnrealEngineRoot = $next; if ($null -eq $val) { $idx++ } }
+            '^(--version)$'                      { $Version = $true }
             default { Show-Usage; throw "Unknown argument '$arg'." }
         }
     }
@@ -114,6 +117,34 @@ if (-not $UnrealEngineRoot) { $UnrealEngineRoot = Join-Path $RepoParent "UE_5_7_
 # report it nicely. $CarlaRoot is always a real, resolved path so Join-Path is fine there.
 $UE       = [System.IO.Path]::Combine($UnrealEngineRoot, "Engine\Binaries\Win64\UnrealEditor.exe")
 $Uproject = Join-Path $CarlaRoot "Unreal\CarlaUnreal\CarlaUnreal.uproject"
+
+# ── -Version: answer without starting anything ───────────────────────────────
+#
+# Read from the config that ships with the build rather than by booting it. Unreal's own precedent is
+# to state versions in the startup log, and the server does that too -- but a question about whether a
+# world can be installed should not cost a server start, and the answer is a file either way.
+# A running server reports the same value over the get_world_interface_version RPC.
+if ($Version) {
+    $configIni = Join-Path $CarlaRoot "Unreal\CarlaUnreal\Config\DefaultWorldInterface.ini"
+    $versionFile = Join-Path $CarlaRoot "Build\Package\Carla-0.10.0-Win64-Development\VERSION"
+
+    if (Test-Path $configIni) {
+        $t = Get-Content $configIni -Raw
+        $maj = if ($t -match '(?m)^\s*Major\s*=\s*(\d+)') { $Matches[1] } else { '?' }
+        $min = if ($t -match '(?m)^\s*Minor\s*=\s*(\d+)') { $Matches[1] } else { '?' }
+        Write-Host "world interface version : $maj.$min"
+        Write-Host "  a delivered world installs when its major matches and this minor is at least the world's."
+    }
+    else {
+        Write-Host "world interface version : not declared ($configIni is missing)" -ForegroundColor Yellow
+    }
+
+    if (Test-Path $versionFile) {
+        Write-Host "`nbuild identity (informational only, never used to decide compatibility):"
+        Get-Content $versionFile | ForEach-Object { Write-Host "  $_" }
+    }
+    return
+}
 
 # [IO.File]::Exists returns $false for a missing path -- including a non-existent DRIVE -- without
 # throwing, so a bad -UnrealEngineRoot yields our message instead of "Cannot find drive".
