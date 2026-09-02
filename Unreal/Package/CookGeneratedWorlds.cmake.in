@@ -29,6 +29,8 @@ set (UAT_COMMAND          "@CARLA_UE_UAT_COMMAND_PREFIX@")
 set (COOK_ARGS            "@CARLA_COOK_UAT_ARGS@")
 set (GENERATED_WORLDS_DIR "@CARLA_GENERATED_WORLDS_PATH@")
 set (PROJECT_GAME_CONFIG  "@CARLA_PROJECT_GAME_CONFIG_PATH@")
+set (WORKSPACE_PATH       "@CARLA_WORKSPACE_PATH@")
+set (CREATE_RELEASE       "@CARLA_COOK_CREATE_RELEASE_VERSION@")
 
 # ---------------------------------------------------------------------------
 # Find the worlds that have been exported as plugins.
@@ -64,6 +66,49 @@ endif ()
 # ---------------------------------------------------------------------------
 
 set (EXTRA_ARGS)
+
+# ---------------------------------------------------------------------------
+# Archive this cook as a release, so worlds can be cooked against it later.
+# ---------------------------------------------------------------------------
+#
+# -CreateReleaseVersion copies the cook's asset registries into
+# <Project>/Releases/<name>/<Platform>/. A later per-world cook passes
+# -BasedOnReleaseVersion=<name>, reads those registries, and treats everything already in the base as
+# cooked -- which is what makes a world's own cook produce just the world.
+#
+# The name is the short Carla commit hash, and is deliberately not recorded anywhere new: the package
+# already ships a VERSION file naming the Carla, Content and UnrealEngine commits, so a delivered
+# world can cite the base it was built against and an installer can check it against the package it is
+# being installed into. Three hashes is a stricter test than one version string, because content and
+# engine move independently of the source.
+#
+# Computed here rather than at configure time so it cannot go stale between configuring and cooking.
+#
+# It is NOT incompatible with -iterate: the guard in ProjectParams.cs tests -BasedOnReleaseVersion,
+# not this. Adding it does force one full recook, because it introduces a BasedOnReleaseVersion key
+# into CookedSettings.txt that the previous cook's file lacks; every cook after that is incremental
+# again.
+if (CREATE_RELEASE)
+  execute_process (
+    COMMAND git log -1 --format=%h
+    WORKING_DIRECTORY "${WORKSPACE_PATH}"
+    OUTPUT_VARIABLE RELEASE_NAME
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE GIT_RESULT
+    ERROR_QUIET
+  )
+  if (NOT GIT_RESULT EQUAL 0 OR RELEASE_NAME STREQUAL "")
+    # Refusing beats cooking an unnamed release: a world cooked against a base whose identity nobody
+    # can state is a world nobody can tell is installable.
+    message (FATAL_ERROR
+      "[cook] cannot name this release -- 'git log' in '${WORKSPACE_PATH}' produced nothing. "
+      "Configure with -DCARLA_COOK_CREATE_RELEASE_VERSION=OFF to cook without a release version, "
+      "accepting that no world can be cooked as DLC against the result.")
+  endif ()
+  list (APPEND EXTRA_ARGS "-CreateReleaseVersion=${RELEASE_NAME}")
+  message (STATUS "[cook] release version '${RELEASE_NAME}'; worlds cooked against it will need "
+                  "-BasedOnReleaseVersion=${RELEASE_NAME}")
+endif ()
 
 if (WORLD_MAPS)
   # The project's own maps, read back from the config that owns them. Without these the command-line

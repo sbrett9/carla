@@ -472,6 +472,15 @@ function (
   # map and as a directory.
   set (CARLA_GENERATED_WORLDS_PATH ${CARLA_WORKSPACE_PATH}/Unreal/CarlaUnreal/Plugins/GeneratedWorlds)
   set (CARLA_PROJECT_GAME_CONFIG_PATH ${CARLA_WORKSPACE_PATH}/Unreal/CarlaUnreal/Config/DefaultGame.ini)
+
+  # On by default: a package that was not cooked as a release cannot host a world cooked later, and
+  # the cooker's refusal comes at DLC time rather than here, long after the base has been shipped.
+  # The cost is one full recook when this is first turned on. Turn it off only for a throwaway build.
+  option (
+    CARLA_COOK_CREATE_RELEASE_VERSION
+    "Archive this cook's asset registries so worlds can later be cooked as DLC against it."
+    ON
+  )
   set (
     CARLA_COOK_SCRIPT_PATH
       ${CMAKE_CURRENT_BINARY_DIR}/CookGeneratedWorlds${TARGET_NAME_SUFFIX}.cmake

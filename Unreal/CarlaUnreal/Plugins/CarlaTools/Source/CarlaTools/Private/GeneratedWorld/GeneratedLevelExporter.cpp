@@ -7,7 +7,11 @@
 
 #include <util/ue-header-guard-begin.h>
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "Components/StaticMeshComponent.h"
 #include "EditorAssetLibrary.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
+#include "Engine/World.h"
 #include "HAL/FileManager.h"
 #include "Interfaces/IPluginManager.h"
 #include "Misc/FileHelper.h"
@@ -217,6 +221,83 @@ FGeneratedLevelExportResult UGeneratedLevelExporter::ExportLevelAsPlugin(
 			}
 
 			UEditorAssetLibrary::SaveAsset(SettingsCopy, false);
+		}
+	}
+
+	// Bring the road surface into the plugin as well, so the world is a complete unit rather than a
+	// level pointing at meshes elsewhere. Shipped on its own, a plugin whose actors still name
+	// /Game/Carla/Static/Road would load with no visible road; and a world cannot be cooked as DLC at
+	// all while its geometry sits outside the plugin, because the cooker suppresses any package
+	// outside the DLC's own content and errors once per asset.
+	//
+	// The semantic label survives the move because ATagger reads a POSITION in the path, not a
+	// prefix: it splits on '/' and takes token 4, so /<World>/Carla/Static/Road/<Map>/SM_x gives
+	// "Road" exactly as /Game/Carla/Static/Road/<Map>/SM_x does. The two folder levels between the
+	// mount root and the lane-type folder are load-bearing for that reason and must not be flattened.
+	{
+		// Re-exporting: clear the previous copy in one pass. Deleting assets one at a time walks the
+		// whole UObject graph per call, so 870 deletes cost far more than one directory delete does.
+		const FString MeshRoot = FString::Printf(TEXT("/%s/Carla"), *Name);
+		if (UEditorAssetLibrary::DoesDirectoryExist(MeshRoot))
+		{
+			UEditorAssetLibrary::DeleteDirectory(MeshRoot);
+		}
+
+		UWorld* CopiedWorld = Cast<UWorld>(UEditorAssetLibrary::LoadAsset(Result.LevelPackageName));
+		if (!CopiedWorld || !CopiedWorld->PersistentLevel)
+		{
+			Result.FailureReason = TEXT("could not open the copied level to bring its road surface across");
+			return Result;
+		}
+
+		// Keyed on the source package so a mesh shared by several actors is copied once.
+		TMap<FString, UStaticMesh*> Copied;
+		int32 Repointed = 0;
+		for (AActor* Actor : CopiedWorld->PersistentLevel->Actors)
+		{
+			AStaticMeshActor* MeshActor = Cast<AStaticMeshActor>(Actor);
+			if (!IsValid(MeshActor)) continue;
+			UStaticMeshComponent* Component = MeshActor->GetStaticMeshComponent();
+			if (!Component) continue;
+			UStaticMesh* Mesh = Component->GetStaticMesh();
+			if (!Mesh) continue;
+
+			// Driven off what the level actually references rather than off a folder listing: this
+			// copies exactly the meshes in use, whatever root they were baked under, and leaves
+			// nothing orphaned behind. Anything already inside the plugin is left alone.
+			const FString Source = Mesh->GetOutermost()->GetName();
+			if (!Source.StartsWith(TEXT("/Game/"))) continue;
+
+			UStaticMesh** Already = Copied.Find(Source);
+			if (!Already)
+			{
+				const FString Destination = FString::Printf(
+					TEXT("/%s/%s"), *Name, *Source.RightChop(FString(TEXT("/Game/")).Len()));
+				UObject* Duplicate = UEditorAssetLibrary::DuplicateAsset(Source, Destination);
+				UStaticMesh* DuplicatedMesh = Cast<UStaticMesh>(Duplicate);
+				if (!DuplicatedMesh)
+				{
+					Result.FailureReason = FString::Printf(
+						TEXT("could not copy the road surface mesh %s into the plugin"), *Source);
+					return Result;
+				}
+				Already = &Copied.Add(Source, DuplicatedMesh);
+				++Result.AssetsExported;
+			}
+
+			Component->SetStaticMesh(*Already);
+			++Repointed;
+		}
+
+		if (Copied.Num() > 0)
+		{
+			// The level now names the copies, so it has to be written back; without this the plugin
+			// holds the meshes and the level still points outside it.
+			UEditorAssetLibrary::SaveAsset(Result.LevelPackageName, false);
+			UE_LOG(LogCarlaTools, Display,
+				TEXT("[GeneratedLevelExporter] brought %d road surface mesh(es) into %s, "
+					 "repointing %d actor(s)"),
+				Copied.Num(), *Name, Repointed);
 		}
 	}
 
