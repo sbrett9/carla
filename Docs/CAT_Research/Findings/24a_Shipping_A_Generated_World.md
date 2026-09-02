@@ -281,8 +281,39 @@ see a later-added level (`Game/CarlaStatics.cpp:40-103`, `Game/CarlaEpisode.cpp:
 
 ## 7. Revised plan
 
-Two independent capabilities are wanted, and it is worth keeping them apart because the research
-collapsed one of them and left the other untouched:
+### The delivery artifact
+
+Single-file delivery to a third party is a firm requirement; an installation step on arrival is
+acceptable. Those two together settle the format without any change to how the game is packaged.
+
+**The artifact is a zip.** A world DLC-cooks to a directory (§5); that directory is zipped with a
+manifest and delivered as one file. Installation unpacks it into the recipient's
+`CarlaUnreal/Plugins/GeneratedWorlds/`. `.cwp` already establishes the pattern one stage earlier in
+this pipeline — a zip an importer unpacks — and this is the same trick applied to the cooked product
+rather than the recipe.
+
+This is what retires the pak question (§2). A pak would buy a single compressed file that the engine
+mounts natively, which is real; but a zip is also a single compressed file, and the install step
+supplies the unpacking that mounting would otherwise do. Paking the base to get it would be a one-way
+decision that invalidates every already-exported world, and would cost the `ExplicitlyLoaded` flag that
+runtime unload depends on (§3). Recorded as considered and rejected, not overlooked: if delivery ever
+has to be drop-in with no install step, the paked-everywhere configuration is coherent and is described
+in §2.
+
+**The manifest is what makes third-party delivery work rather than nominally work.** A world cooked
+against base release `X` will not load in a package built from `Y`: cooked assets carry package
+versions and reference base content by id, so a mismatch is a load failure, not a degrade. The manifest
+must therefore carry at least the base release name, the engine version, the target platform, and the
+world name; and **the installer must verify them and refuse in plain language**. Without that check the
+failure surfaces later as an unexplained crash in someone else's build, which is the worst place for it.
+
+The `VersionName` in an exported `.uplugin` is currently `"1.0"` for every world and carries no such
+information (`GeneratedLevelExporter.cpp:31-45`). It is the obvious place to put it, or the manifest can
+sit beside the plugin in the zip.
+
+### Two capabilities, kept apart
+
+The research collapsed one of these and left the other untouched, so they are worth separating:
 
 - **Ship a world without reshipping the base** — the reason `-CreateReleaseVersion` was to be
   un-deferred. Needs DLC cooking (§5). Not affected by anything in §3.
@@ -294,15 +325,24 @@ Ordered so each step is useful on its own:
 1. **Move road meshes into the world plugin** under `Content/Carla/Static/Road/…` (§4). Makes a world
    self-contained with no tagger change, and is a **prerequisite for step 3**: with the meshes outside
    the plugin a DLC cook fails outright, roughly one error per mesh.
-2. **`-CreateReleaseVersion` on the base cook** (§5). One full recook, then iteration resumes.
-3. **Per-world DLC cook target**, output staged loose and copied in as a directory (§5). This is what
-   makes a world deliverable on its own — the primary goal.
-4. **Load / unload RPC** via `MountExplicitlyLoadedPlugin` / `UnmountExplicitlyLoadedPlugin`, with
-   travel-away-first ordering (§3). No cook or packaging change; independent of 1–3.
-5. **`--level <name>` on `RunCarlaServer`**, resolving through the same mount path.
+2. **`-CreateReleaseVersion` on the base cook** (§5). One full recook, then iteration resumes. The
+   release name has to be recorded somewhere a delivered world can name it.
+3. **Per-world DLC cook target**, output staged loose (§5).
+4. **Package and install** — zip the cooked directory with a manifest, and an installer that verifies
+   base release, engine version and platform before unpacking, refusing clearly when they disagree.
+   This is the deliverable; steps 1–3 exist to produce its contents.
+5. **Load / unload RPC** via `MountExplicitlyLoadedPlugin` / `UnmountExplicitlyLoadedPlugin`, with
+   travel-away-first ordering (§3). No cook or packaging change; independent of 1–4.
+6. **`--level <name>` on `RunCarlaServer`**, resolving through the same mount path.
 
-Steps 1–3 are the distribution goal. Steps 4–5 are the runtime goal and can be done in either order
-relative to them.
+Steps 1–4 are the distribution goal and should be proven end to end — cook a world, hand the zip to a
+second machine, install it, load it — before anything is built on top. Steps 5–6 are the runtime goal
+and can be done in either order relative to them.
+
+**Deferred deliberately:** a lobby level offering a menu of cooked base maps and installed worlds. It
+is a consumer of the enumeration in step 5 rather than a prerequisite for it, and the lightweight map
+the unload sequence must travel to anyway is the same map. Opt-in via a launch flag so the default boot
+path and existing scripts are unaffected. Tracked as issue #31; do not let it block steps 1–4.
 
 ### Defects found along the way
 
