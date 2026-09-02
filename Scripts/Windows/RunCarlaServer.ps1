@@ -128,6 +128,13 @@ if ($Version) {
     $configIni = Join-Path $CarlaRoot "Unreal\CarlaUnreal\Config\DefaultWorldInterface.ini"
     $versionFile = Join-Path $CarlaRoot "Build\Package\Carla-0.10.0-Win64-Development\VERSION"
 
+    # Two independent numbers: which CARLA release this is, and what a delivered world can rely on.
+    $verHeader = Join-Path $CarlaRoot "LibCarla\source\carla\Version.h"
+    if (Test-Path $verHeader) {
+        $vt = Get-Content $verHeader -Raw
+        if ($vt -match 'return\s+"([^"]+)"') { Write-Host "carla version           : $($Matches[1])" }
+    }
+
     if (Test-Path $configIni) {
         $t = Get-Content $configIni -Raw
         $maj = if ($t -match '(?m)^\s*Major\s*=\s*(\d+)') { $Matches[1] } else { '?' }
