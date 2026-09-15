@@ -97,6 +97,10 @@ internal sealed class ALSM
     private readonly Dictionary<ActorId, double> _idleTime = new();
     private readonly Dictionary<ActorId, Actor> _heroActors = new();
     private readonly Dictionary<ActorId, bool> _hasPhysicsEnabled = new();
+    // Consecutive updates a registered vehicle has been missing from the world snapshot. A vehicle
+    // is only treated as destroyed once it has been absent for several in a row: see
+    // IdentifyDestroyedActors for why a single absence does not mean the vehicle is gone.
+    private readonly Dictionary<ActorId, int> _absentUpdates = new();
 
     private double _elapsedLastActorDestruction;
     private double _currentTimestamp;
@@ -266,6 +270,37 @@ internal sealed class ALSM
         }
     }
 
+    /// <summary>
+    /// Adds to <paramref name="deletedRegistered"/> every registered vehicle that has now been
+    /// missing from the world snapshot for <see cref="Constants.VehicleRemoval.MISSES_BEFORE_DESTROYED"/>
+    /// consecutive updates, keeping the running count in <paramref name="absentUpdates"/>. A vehicle
+    /// seen again at any point has its count cleared and starts over.
+    /// </summary>
+    internal static void CollectDestroyedRegistered(
+        IReadOnlyList<ActorId> registeredIds,
+        HashSet<ActorId> currentActors,
+        Dictionary<ActorId, int> absentUpdates,
+        HashSet<ActorId> deletedRegistered)
+    {
+        for (int i = 0; i < registeredIds.Count; i++)
+        {
+            ActorId actorId = registeredIds[i];
+            if (currentActors.Contains(actorId))
+            {
+                absentUpdates.Remove(actorId);
+                continue;
+            }
+            absentUpdates.TryGetValue(actorId, out int absent);
+            if (++absent < Constants.VehicleRemoval.MISSES_BEFORE_DESTROYED)
+            {
+                absentUpdates[actorId] = absent;
+                continue;
+            }
+            absentUpdates.Remove(actorId);
+            deletedRegistered.Add(actorId);
+        }
+    }
+
     private (HashSet<ActorId> Registered, HashSet<ActorId> Unregistered) IdentifyDestroyedActors(
         IReadOnlyList<Actor> worldActors)
     {
@@ -278,13 +313,19 @@ internal sealed class ALSM
             currentActors.Add(worldActors[i].Id);
 
         // Registered vehicles no longer in the world.
-        IReadOnlyList<ActorId> registeredIds = _registeredVehicles.GetIDList();
-        for (int i = 0; i < registeredIds.Count; i++)
-        {
-            ActorId actorId = registeredIds[i];
-            if (!currentActors.Contains(actorId))
-                deletedRegistered.Add(actorId);
-        }
+        //
+        // Absence from ONE snapshot does not mean the vehicle is gone. The snapshot comes from the
+        // world observer's streamed actor cache, and a vehicle created moments ago has not
+        // necessarily been published into it yet — markedly so under a synchronous world, where the
+        // stream only advances when the host ticks. Treating a single absence as destruction drops
+        // a live vehicle out of the traffic manager for good: it is never driven, never re-added
+        // (registration is the client's call, and the client already made it), and simply sits
+        // where it was created until something else removes it.
+        //
+        // So require several consecutive absences, the same way a client tracking the actor cache
+        // has to. A vehicle that really was destroyed still goes within a few updates.
+        CollectDestroyedRegistered(_registeredVehicles.GetIDList(), currentActors,
+                                   _absentUpdates, deletedRegistered);
 
         // Unregistered actors that are gone OR have since been registered.
         foreach (var kv in _unregisteredActors)
@@ -614,6 +655,7 @@ internal sealed class ALSM
         if (registeredActor)
         {
             _registeredVehicles.Remove(new[] { actorId });
+            _absentUpdates.Remove(actorId);
             _bufferMap.Remove(actorId);
             _idleTime.Remove(actorId);
             _localizationStage.RemoveActor(actorId);

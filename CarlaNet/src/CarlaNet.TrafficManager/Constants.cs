@@ -38,6 +38,10 @@ internal static class Constants
     {
         public const float STOPPED_VELOCITY_THRESHOLD = 0.8f;
         public const double BLOCKED_TIME_THRESHOLD = 90.0;
+        // Consecutive world snapshots a registered vehicle must be missing from before it is
+        // treated as destroyed. One absence is not evidence: the snapshot is a streamed cache and a
+        // freshly created vehicle may not have reached it yet.
+        public const int MISSES_BEFORE_DESTROYED = 5;
         public const double RED_TL_BLOCKED_TIME_THRESHOLD = 180.0;
         public const double DELTA_TIME_BETWEEN_DESTRUCTIONS = 10.0;
     }
