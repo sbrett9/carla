@@ -163,6 +163,33 @@ class TrafficController:
         self.blueprints = blueprints
         self.ring_sps = ring_sps
         self.spawn_pool = spawn_pool
+        # Per-site draw weights aligned with spawn_pool, or None for a uniform draw.
+        # Filled in by create once the pool is final.
+        self.spawn_weights = None
+        # Posted speed limit per pool site, aligned with spawn_pool, and how many vehicles each
+        # site has successfully placed. Together these answer whether the sites on the fastest
+        # road are actually being drawn, which the stuck tally alone cannot show.
+        self.spawn_limits = None
+        self.spawn_counts = {}
+        self.spawns_total = 0
+        self.last_site_report = 0.0
+        self.stuck_models = {}
+        # Vehicles whose real footprint still pokes past the red edge once placed. The pool is
+        # filtered with an assumed footprint and the nudge cannot help a lane that runs along the
+        # edge, so whether a given vehicle actually landed wholly inside is a thing to measure.
+        self.placed_outside = {}
+        self.placed_outside_worst = 0.0
+        # Seconds from creation to the first movement, for every vehicle that ever moved. The
+        # question this answers is whether STUCK_S sits outside that distribution or inside it.
+        # Did the traffic manager actually take the vehicle when it was handed over, and did it
+        # still have it when the vehicle was given up on? Aggregate counts cannot answer either:
+        # they show a standing gap without saying which vehicles it is made of.
+        self.reg_at_spawn = [0, 0]      # [took it, did not]
+        self.stuck_registered = [0, 0]  # [held at cull, not held]
+        try:
+            self.STUCK_S = float(getattr(args, "stuck_timeout", self.STUCK_S) or self.STUCK_S)
+        except Exception:
+            pass
         self.floor_z = floor_z
         self.available = True
         self.reason = ""
@@ -181,6 +208,10 @@ class TrafficController:
         self.spawn_ms = 0.0
         self.reconcile_ms = 0.0
         self.stuck_travel = []
+        # Cumulative count of stuck despawns per spawn site, keyed by rounded spawn position.
+        # Never cleared: one five-second window holds too few to tell a bad site from bad luck,
+        # so the offenders only stand out once the counts accumulate over a run.
+        self.stuck_sites = {}
         self.stalled_models = {}
         # Destinations beyond the entry ring, and the ones already known to route from a
         # given entry point. See destination_candidates for why the ring alone is not
@@ -280,11 +311,21 @@ class TrafficController:
             stub.reason = "no vehicle blueprints matched --filter / --generation"
             return stub
 
-        ring_sps = [
-            sp
-            for sp in world.get_map().get_spawn_points()
-            if cls.in_ring(sp.location.x, sp.location.y, staging) and cls.is_inward(sp, staging)
-        ]
+        # A site belongs to the entry ring if the ring holds either the spawn point itself or the
+        # pose the vehicle will actually occupy once nudged forward off the edge. Accepting either
+        # keeps every site the raw test already accepted and adds back the lanes whose entry the
+        # map edge happens to cut: a multi-lane carriageway meeting the boundary at an angle fans
+        # its lane centres across that boundary, so the lanes nearest the road's reference line
+        # fall outside it while the rest of the same road lies well inside.
+        ring_sps = []
+        for sp in world.get_map().get_spawn_points():
+            if not cls.is_inward(sp, staging):
+                continue
+            sx, sy = cls.staged_xy(
+                sp.location.x, sp.location.y, sp.rotation.yaw, cls._ASSUMED_EXTENT, staging
+            )
+            if cls.in_ring(sp.location.x, sp.location.y, staging) or cls.in_ring(sx, sy, staging):
+                ring_sps.append(sp)
         logger.info(f"found {len(ring_sps)} inward edge-ring spawn points")
         if len(ring_sps) < 2:
             stub.available = False
@@ -319,7 +360,18 @@ class TrafficController:
             logger.debug(f"failed to get floor z: {e}")
             floor_z = -1000.0
 
+        lane_sites, spawn_pool = cls.ring_lane_sites(tm, staging, args, logger, spawn_pool)
+        spawn_pool = spawn_pool + lane_sites
+        if lane_sites:
+            logger.info(
+                f"spawn pool: {len(spawn_pool)} sites "
+                f"({len(spawn_pool) - len(lane_sites)} road entries + {len(lane_sites)} along lanes)"
+            )
+
         ctl = cls(world, tm, args, staging, blueprints, ring_sps, spawn_pool, floor_z)
+        ctl.spawn_weights, ctl.spawn_limits = cls.speed_limit_weights(
+            tm, spawn_pool, args, logger
+        )
         if not ctl.fade_selftest():
             ctl.available = False
             ctl.reason = (
@@ -354,8 +406,16 @@ class TrafficController:
         except Exception as e:
             logger.warning("traffic: diagnostics switch unavailable (%r)", e)
         if args.log:
+            # The traffic manager writes its event lines itself, through its own handle on the
+            # file. Pointing it at the path the Python logger already holds open gives two writers
+            # each tracking their own offset into one file, so they overwrite one another's bytes
+            # and the log ends up shorter than what was written to it. Give it a sibling file
+            # instead: both sets of lines survive, and each is parseable.
+            base, ext = os.path.splitext(os.path.abspath(args.log))
+            tm_log = f"{base}.trafficmanager{ext or '.txt'}"
             try:
-                tm.set_event_log_path(os.path.abspath(args.log))
+                tm.set_event_log_path(tm_log)
+                logger.info(f"traffic: traffic-manager event lines -> {tm_log}")
             except Exception as e:
                 logger.warning("traffic: traffic-manager lines will not reach the log (%r)", e)
         if args.speed_scale != 100.0:
@@ -513,6 +573,124 @@ class TrafficController:
         except Exception:
             pass
 
+    # Height CARLA raises its own spawn points to above the carriageway
+    # (AOpenDriveGenerator::SpawnersHeight, 300 cm). Lane sites are raised to match so a vehicle
+    # drops onto the road the same way from either kind of site.
+    _SPAWN_HEIGHT_M = 3.0
+
+    # Two spawn sites closer together than this are the same place, and keeping both would just
+    # double the draw weight of that spot. About one vehicle length: far enough that a road entry
+    # sitting on top of a lane site is dropped, close enough that an entry whose lane the dense
+    # graph does not cover is kept rather than silently lost.
+    _SITE_DUPLICATE_M = 6.0
+
+    # A footprint is only "over the edge" once it is past it by more than this. The fit test lands
+    # a nudged vehicle exactly on the boundary, so without a tolerance every such placement reports
+    # a rounding crumb as an overhang.
+    OVERHANG_TOL = 0.02
+
+    # How long a newly created vehicle may sit motionless before it is given up on. Named rather
+    # than buried so it can be read against the measured time-to-first-movement below: a cull that
+    # falls inside the distribution of legitimate starts removes vehicles that were about to drive.
+    STUCK_S = 6.0  # default; --stuck-timeout overrides it per run
+
+    @classmethod
+    def ring_lane_sites(cls, tm, staging, args, logger, entry_sites):
+        """Spawn sites spread along every drivable lane that passes through the staging ring.
+
+        CARLA places one spawn point per lane at each road entry and none in between, so a road
+        clipped by the sandbox boundary offers only the few metres at its entry however much of the
+        same carriageway lies inside the ring. The Traffic Manager keeps a waypoint every few metres
+        along every driving lane to plan routes with, so those sites already exist; this asks for the
+        ones inside the band. Entry points within one spacing of a lane site are dropped, so the
+        density stays even rather than doubling up where the two kinds meet.
+
+        Returns (sites, kept_entry_sites).
+        """
+        spacing = float(getattr(args, "lane_spawn_spacing", 0.0) or 0.0)
+        if spacing <= 0.0 or staging is None:
+            return [], entry_sites
+        try:
+            raw = tm.get_ring_lane_spawn_points(
+                staging["min_x"], staging["min_y"], staging["max_x"], staging["max_y"],
+                staging["margin"], spacing, 0.0, cls._SPAWN_HEIGHT_M,
+            )
+        except Exception as e:
+            logger.info(
+                f"lane spawn sites unavailable ({e!r}); using road-entry points only. "
+                "Rebuild the server and wheel to pick them up."
+            )
+            return [], entry_sites
+        sites = [
+            sp
+            for sp in raw
+            if cls.is_inward(sp, staging)
+            and cls.inward_min(sp.location.x, sp.location.y, staging) <= -2.0
+            and cls.fits_inside_red_edge(
+                sp.location.x, sp.location.y, sp.rotation.yaw, cls._ASSUMED_EXTENT, staging
+            )
+        ]
+        near = cls._SITE_DUPLICATE_M * cls._SITE_DUPLICATE_M
+        kept = [
+            e
+            for e in entry_sites
+            if not any(
+                (e.location.x - s.location.x) ** 2 + (e.location.y - s.location.y) ** 2 < near
+                for s in sites
+            )
+        ]
+        logger.info(
+            f"lane spawn sites: {len(raw)} in the ring, {len(sites)} usable after the inward and "
+            f"fit tests, at {spacing:.0f} m spacing; {len(entry_sites) - len(kept)} of "
+            f"{len(entry_sites)} road-entry points dropped as duplicates"
+        )
+        return sites, kept
+
+    @staticmethod
+    def speed_limit_weights(tm, spawn_pool, args, logger):
+        """Draw weights for the spawn pool, one per site, biased toward the faster roads.
+
+        CARLA offers one spawn point per lane at each road entry and none in between, so a map's
+        site count follows how many streets it has rather than how much traffic they carry. On
+        Arapahoe the six lanes of I-25 are six sites out of 204, and a uniform draw therefore puts
+        under 3% of all traffic on the one road that should carry most of it.
+
+        The posted speed limit separates a motorway from a residential street without needing the
+        lane or road-class data the client cannot see, and the Traffic Manager already answers for
+        it per location -- the same figure it governs the vehicle by once it is driving. Returns
+        None for a uniform draw.
+        """
+        bias = float(getattr(args, "speed_bias", 0.0) or 0.0)
+        if bias <= 0.0 or not spawn_pool:
+            return None, None
+        limits = []
+        for sp in spawn_pool:
+            try:
+                limits.append(float(tm.get_speed_limit_kph_at(sp.location)))
+            except Exception:
+                limits.append(0.0)
+        known = sorted(v for v in limits if v > 0.0)
+        if not known:
+            logger.info("no spawn point reports a speed limit; spawn draw stays uniform")
+            return None, None
+        median = known[len(known) // 2]
+        # A site whose road declares no limit is treated as typical rather than as slow, so an
+        # unposted road is neither favoured nor starved by the absence of data.
+        limits = [v if v > 0.0 else median for v in limits]
+        weights = [max(v / median, 0.05) ** bias for v in limits]
+        total = sum(weights)
+        fastest = max(limits)
+        fast = [i for i, v in enumerate(limits) if v >= fastest - 1.0]
+        share = sum(weights[i] for i in fast) / total
+        logger.info(
+            f"spawn draw weighted by speed limit (--speed-bias {bias:g}): "
+            f"{known[0]:.0f}..{known[-1]:.0f} km/h across {len(spawn_pool)} sites, "
+            f"median {median:.0f}; the {len(fast)} site(s) at {fastest:.0f} km/h now draw "
+            f"{100.0 * share:.1f}% of spawns against {100.0 * len(fast) / len(spawn_pool):.1f}% "
+            f"when drawn uniformly"
+        )
+        return weights, limits
+
     @staticmethod
     def red_edge_deficit(x, y, yaw_deg, ext, b, pad=0.6):
         """How far a vehicle footprint pokes past the nearest red edge, plus that edge's inward normal."""
@@ -547,6 +725,24 @@ class TrafficController:
         ny = y + uy * distance
         residual, _ = cls.red_edge_deficit(nx, ny, yaw_deg, ext, b, pad)
         return residual <= 1e-3
+
+    @classmethod
+    def staged_xy(cls, x, y, yaw_deg, ext, b, pad=0.6):
+        """Where a vehicle spawned at this point actually comes to rest: the spawn point plus the
+        forward nudge applied before it is placed. Ring membership is decided on this rather than
+        on the raw spawn point, because CARLA puts a spawn point at the upstream end of each lane,
+        and a map clipped mid-road can leave that end a metre or two OUTSIDE the sandbox while the
+        lane it belongs to runs hundreds of metres inside."""
+        deficit, normal = cls.red_edge_deficit(x, y, yaw_deg, ext, b, pad)
+        if deficit <= 0:
+            return (x, y)
+        yaw = math.radians(yaw_deg)
+        ux, uy = math.cos(yaw), math.sin(yaw)
+        dot = ux * normal[0] + uy * normal[1]
+        if dot < 0.2:
+            return (x, y)
+        distance = min(deficit / dot, b["margin"])
+        return (x + ux * distance, y + uy * distance)
 
     def plan_route_from(self, spawn_tf):
         """Plan a route from an entry point, walking candidates until one is reachable.
@@ -649,16 +845,8 @@ class TrafficController:
     def clear_shift(self, loc, yaw_deg, ext, pad=0.6):
         """Offset (dx, dy) to move a vehicle FORWARD along its lane just far enough that its whole
         footprint clears the nearest red (sandbox) edge."""
-        deficit, normal = self.red_edge_deficit(loc.x, loc.y, yaw_deg, ext, self.b, pad)
-        if deficit <= 0:
-            return (0.0, 0.0)
-        yaw = math.radians(yaw_deg)
-        ux, uy = math.cos(yaw), math.sin(yaw)
-        dot = ux * normal[0] + uy * normal[1]
-        if dot < 0.2:
-            return (0.0, 0.0)
-        distance = min(deficit / dot, self.b["margin"])
-        return (ux * distance, uy * distance)
+        sx, sy = self.staged_xy(loc.x, loc.y, yaw_deg, ext, self.b, pad)
+        return (sx - loc.x, sy - loc.y)
 
     _NEW_VEHICLE_RADIUS = 3.7
     _SPAWN_CLEAR_PAD = 1.0
@@ -695,9 +883,20 @@ class TrafficController:
         return False
 
     def spawn_one(self, now):
-        pool = list(self.spawn_pool)
-        random.shuffle(pool)
-        for sp in pool:
+        if self.spawn_weights:
+            # A weighted random ORDER, not a weighted pick: scale one exponential draw per site
+            # by that site's weight and visit the smallest first. That biases which site is tried
+            # first without ever excluding one, so the walk below still falls through to a slower
+            # road when the fast ones are occupied, unroutable or already taken.
+            order = sorted(
+                range(len(self.spawn_pool)),
+                key=lambda i: random.expovariate(1.0) / self.spawn_weights[i],
+            )
+        else:
+            order = list(range(len(self.spawn_pool)))
+            random.shuffle(order)
+        for site_index in order:
+            sp = self.spawn_pool[site_index]
             ex, ey = self.clear_shift(sp.location, sp.rotation.yaw, self._ASSUMED_EXTENT)
             if self.occupied(sp.location.x, sp.location.y):
                 continue
@@ -714,6 +913,13 @@ class TrafficController:
                 v = self.world.spawn_actor(bp, sp)
             except Exception:
                 continue
+            # Hide it before it can be drawn. Reading the bounding box, placing the vehicle and
+            # setting its real opacity below each cost a server round-trip, and the world keeps
+            # ticking on the main thread while those are in flight -- so a vehicle left visible
+            # here renders fully opaque for those frames, at the un-nudged spawn point and still
+            # hovering above the carriageway. One round-trip now replaces three of flicker.
+            if self.args.fade:
+                self.safe_fade(v, 1.0)
             try:
                 bb = v.bounding_box
                 ext = (float(bb.extent.x), float(bb.extent.y))
@@ -771,6 +977,10 @@ class TrafficController:
                 if route is not None:
                     self.tm.apply_route(v, route)
                     self.routes_planned += 1
+                try:
+                    self.reg_at_spawn[0 if self.tm.is_vehicle_registered(v.id) else 1] += 1
+                except Exception:
+                    pass
             except Exception as e:
                 self.logger.warning(f"setup failed for {v.id}: {e!r}")
                 try:
@@ -792,6 +1002,13 @@ class TrafficController:
                 "misses": 0,
                 "speed": 0.0,
             }
+            overhang, _ = self.red_edge_deficit(sx, sy, syaw, ext, self.b)
+            if overhang > self.OVERHANG_TOL:
+                model = str(getattr(bp, "id", "?")).split(".", 1)[-1]
+                self.placed_outside[model] = self.placed_outside.get(model, 0) + 1
+                self.placed_outside_worst = max(self.placed_outside_worst, overhang)
+            self.spawn_counts[site_index] = self.spawn_counts.get(site_index, 0) + 1
+            self.spawns_total += 1
             if len(self.actors) == 1:
                 self.logger.info(f"first vehicle spawned: id={v.id}")
             return True
@@ -809,7 +1026,17 @@ class TrafficController:
             if rec and rec.get("spawn_xy") and rec.get("xy"):
                 sx, sy = rec["spawn_xy"]
                 cx, cy = rec["xy"]
-                self.stuck_travel.append((math.hypot(cx - sx, cy - sy), rec.get("routed", False)))
+                self.stuck_travel.append(
+                    (math.hypot(cx - sx, cy - sy), rec.get("routed", False), (sx, sy))
+                )
+                site = (round(sx), round(sy))
+                self.stuck_sites[site] = self.stuck_sites.get(site, 0) + 1
+                model = rec.get("bp", "?").split(".", 1)[-1]
+                self.stuck_models[model] = self.stuck_models.get(model, 0) + 1
+                try:
+                    self.stuck_registered[0 if self.tm.is_vehicle_registered(vid) else 1] += 1
+                except Exception:
+                    pass
         if self.args.fade:
             try:
                 actor.set_fade(1.0)
@@ -893,6 +1120,7 @@ class TrafficController:
                 continue
             loc = tf.location
             yaw = tf.rotation.yaw
+            rec["yaw"] = yaw
             armed = (now - rec["born"]) >= self.SPAWN_GRACE
 
             xy = rec["xy"]
@@ -928,7 +1156,7 @@ class TrafficController:
                     rec["stalled"] = 0.0
                 elif not rec["entered"]:
                     rec["stuck"] += self.CHECK_S
-                    if rec["stuck"] >= 6.0:
+                    if rec["stuck"] >= self.STUCK_S:
                         self.despawn(vid, a, "stuck")
                         continue
                 else:
@@ -968,19 +1196,112 @@ class TrafficController:
             )
             self.spawn_ms = 0.0
             self.reconcile_ms = 0.0
+            # Everything below the pre-existing stuck/stalled counts is diagnostic: it was added
+            # to find out why spawned vehicles were not being driven, and it answered that. Kept
+            # because the same questions recur, but printed only when asked for -- ']' toggles it
+            # at runtime, so read the live setting rather than the flag the run started with.
+            try:
+                diag = bool(self.tm.get_traffic_diagnostics())
+            except Exception:
+                diag = bool(getattr(self.args, "traffic_diagnostics", False))
+
             if self.stuck_travel:
-                travelled = [d for d, _ in self.stuck_travel]
+                travelled = [d for d, _, _ in self.stuck_travel]
                 never = sum(1 for d in travelled if d < 1.0)
-                routed = sum(1 for _, routed_flag in self.stuck_travel if routed_flag)
+                routed = sum(1 for _, routed_flag, _ in self.stuck_travel if routed_flag)
                 cost += (
                     f" | stuck: {never}/{len(travelled)} never moved at all, "
                     f"furthest got {max(travelled):.1f} m, {routed} had a route"
                 )
+                if diag:
+                    # Sites the widened ring gate admitted (spawn point outside the sandbox, so red
+                    # clearance is negative) against the ones the narrower gate already accepted.
+                    clear = [self.red_clearance(sx, sy, self.b)
+                             for _, _, (sx, sy) in self.stuck_travel]
+                    outside = sum(1 for c in clear if c < 0.0)
+                    cost += (
+                        f", {outside} outside the edge "
+                        f"(red clearance {min(clear):.1f}..{max(clear):.1f} m)"
+                    )
                 self.stuck_travel.clear()
             if self.stalled_models:
                 worst = sorted(self.stalled_models.items(), key=lambda kv: -kv[1])[:3]
                 cost += " | stalled: " + ", ".join(f"{m}x{n}" for m, n in worst)
                 self.stalled_models.clear()
+
+            if diag:
+                if self.stuck_sites:
+                    worst = sorted(self.stuck_sites.items(), key=lambda kv: -kv[1])[:4]
+                    cost += (
+                        f" | worst stuck sites ({len(self.stuck_sites)} distinct): "
+                        + ", ".join(
+                            f"({x},{y}) rc{self.red_clearance(x, y, self.b):.0f}m x{n}"
+                            for (x, y), n in worst
+                        )
+                    )
+                if self.stuck_models:
+                    # An asset-specific pattern here would point at the blueprint rather than at
+                    # the placement or the traffic manager.
+                    worst = sorted(self.stuck_models.items(), key=lambda kv: -kv[1])[:3]
+                    cost += (
+                        f" | stuck models ({len(self.stuck_models)} distinct): "
+                        + ", ".join(f"{m}x{n}" for m, n in worst)
+                    )
+                if self.placed_outside:
+                    n = sum(self.placed_outside.values())
+                    worst = sorted(self.placed_outside.items(), key=lambda kv: -kv[1])[:3]
+                    cost += (
+                        f" | placed poking out: {n}/{self.spawns_total} spawns, worst "
+                        f"{self.placed_outside_worst:.2f} m: "
+                        + ", ".join(f"{m}x{c}" for m, c in worst)
+                    )
+                outside_now = 0
+                for r in self.actors.values():
+                    if r["xy"] is None or "yaw" not in r:
+                        continue
+                    if self.red_edge_deficit(r["xy"][0], r["xy"][1], r["yaw"], r["ext"],
+                                             self.b)[0] > self.OVERHANG_TOL:
+                        outside_now += 1
+                if outside_now:
+                    cost += f" | {outside_now}/{len(self.actors)} alive are over the edge right now"
+                took, missed = self.reg_at_spawn
+                if took or missed:
+                    cost += f" | TM took {took}/{took + missed} at spawn"
+                held, lost = self.stuck_registered
+                if held or lost:
+                    cost += f", still held at cull {held}/{held + lost}"
+                # What the traffic manager itself holds. A count below the number alive says the
+                # vehicles never reached it, which nothing measured at the spawn site would show.
+                try:
+                    routed_now = self.tm.get_routed_vehicle_count()
+                    try:
+                        cost += (f" | TM holds {self.tm.get_registered_vehicle_count()} of "
+                                 f"{len(self.actors)}, routing {routed_now}")
+                    except Exception:
+                        cost += f" | TM routing {routed_now}"
+                except Exception:
+                    pass
+                if self.spawn_limits and self.spawns_total:
+                    fastest = max(self.spawn_limits)
+                    fast = [i for i, v in enumerate(self.spawn_limits) if v >= fastest - 1.0]
+                    used = sum(1 for i in fast if self.spawn_counts.get(i))
+                    drawn = sum(self.spawn_counts.get(i, 0) for i in fast)
+                    cost += (
+                        f" | fast sites: {used}/{len(fast)} used, "
+                        f"{drawn}/{self.spawns_total} spawns "
+                        f"({100.0 * drawn / self.spawns_total:.0f}%)"
+                    )
+                    if now - self.last_site_report >= 30.0:
+                        self.last_site_report = now
+                        self.logger.info(
+                            f"fast-road spawn sites ({fastest:.0f} km/h): "
+                            + " ".join(
+                                f"({self.spawn_pool[i].location.x:.0f},"
+                                f"{self.spawn_pool[i].location.y:.0f})"
+                                f"x{self.spawn_counts.get(i, 0)}"
+                                for i in fast
+                            )
+                        )
             self.logger.info(
                 f"traffic: {len(self.actors)} alive ({entered} entered, "
                 f"speed avg {avg:.1f} max {mx:.1f} m/s) | despawns/{self.SUMMARY_S:.0f}s: "

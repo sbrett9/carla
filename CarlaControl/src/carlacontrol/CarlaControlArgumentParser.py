@@ -343,6 +343,39 @@ class CarlaControlArgumentParser:
             "which leaves a stalled vehicle blocking its lane for the rest of the run.",
         )
         traf.add_argument(
+            "--stuck-timeout",
+            type=float,
+            default=6.0,
+            metavar="SECONDS",
+            help="how long a newly created vehicle may sit motionless before it is given up on "
+            "and removed. Raising it says whether vehicles that look stuck were about to drive: "
+            "the cull censors its own evidence, because a vehicle removed at 6 s can never be "
+            "seen starting at 9.",
+        )
+        traf.add_argument(
+            "--lane-spawn-spacing",
+            type=float,
+            default=15.0,
+            metavar="METRES",
+            help="place spawn sites this far apart along every drivable lane that passes through "
+            "the staging ring, instead of relying only on the one point CARLA puts at each road "
+            "entry. A road clipped by the map edge otherwise offers just the few metres at its "
+            "entry, however much of the same carriageway lies inside the ring. 0 uses road-entry "
+            "points only.",
+        )
+        traf.add_argument(
+            "--speed-bias",
+            type=float,
+            default=2.0,
+            metavar="POWER",
+            help="bias the spawn draw toward faster roads, as a power of each site's posted "
+            "speed limit relative to the median: 2.0 makes a 100 km/h site about four times as "
+            "likely to be drawn as a 50 km/h one. CARLA places one spawn point per lane at each "
+            "road entry and none in between, so sites follow how many streets a map has rather "
+            "than how much traffic they carry, and a uniform draw leaves motorways nearly empty. "
+            "0 restores the uniform draw.",
+        )
+        traf.add_argument(
             "--spawn-at-speed",
             action="store_true",
             help="give each vehicle its road speed the instant it is created, instead of "

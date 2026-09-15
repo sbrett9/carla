@@ -93,6 +93,17 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
     /// <summary>The dense road graph, for facade queries about a place on the map.</summary>
     internal InMemoryMap LocalMap => _localMap;
 
+    /// <summary>
+    /// How many vehicles the traffic manager has been handed to drive. Distinct from
+    /// <c>RoutedVehicleCount</c>, which counts only those currently following a planned route: a
+    /// vehicle that is registered but not routed is still driven, whereas one that never registered
+    /// is not driven at all. Telling those two apart is the whole point of exposing this.
+    /// </summary>
+    internal int RegisteredVehicleCount => _registeredVehicles.Size;
+
+    /// <summary>Whether this one vehicle is in the set the traffic manager drives.</summary>
+    internal bool IsVehicleRegistered(ActorId actorId) => _registeredVehicles.Contains(actorId);
+
     /// <summary>Route bookkeeping and recovery, for the facade's route-assignment surface.</summary>
     internal RouteSupervisor RouteSupervisor => _routeSupervisor;
 
