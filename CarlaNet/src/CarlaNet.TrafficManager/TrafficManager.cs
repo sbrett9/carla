@@ -283,6 +283,82 @@ public sealed class TrafficManager : IAsyncDisposable
         => _local.LocalMap.GetWaypoint(location).SpeedLimitKph;
 
     /// <summary>
+    /// Drivable lane points lying in the staging ring — the band one <paramref name="margin"/> deep
+    /// just inside the sandbox rectangle — as spawn transforms.
+    /// </summary>
+    /// <remarks>
+    /// CARLA offers one spawn point per lane at each road ENTRY and none in between, so a
+    /// carriageway that crosses the sandbox boundary presents its lanes bunched within a few metres
+    /// of the edge and offers nothing along the rest of the same road that also lies inside the
+    /// ring. The traffic manager already holds a waypoint every <c>MAP_RESOLUTION</c> metres along
+    /// every driving lane in order to plan routes, so those sites exist and are simply never
+    /// offered to a caller. This hands them over, filtered to the ring, thinned so that no two sites
+    /// on the same lane are closer than <paramref name="spacing"/> metres along it, and raised by <paramref name="zOffset"/>
+    /// to sit at the height CARLA's own spawn points do.
+    ///
+    /// Junction waypoints are excluded: a vehicle created inside an intersection blocks it for
+    /// everything else trying to cross.
+    ///
+    /// <paramref name="minSpeedKph"/> restricts the result to roads at or above a posted limit,
+    /// which is how a caller asks for motorway sites without needing road-class data.
+    /// </remarks>
+    public IReadOnlyList<Transform> GetRingLaneSpawnPoints(
+        double minX, double minY, double maxX, double maxY,
+        double margin, double spacing, double minSpeedKph, double zOffset)
+    {
+        var result = new List<Transform>();
+        if (margin <= 0.0 || maxX <= minX || maxY <= minY) return result;
+
+        // Group the candidates by the lane they sit on. Thinning has to run ALONG each lane rather
+        // than by distance in the plane: neighbouring lanes are only a lane width apart, so a plain
+        // spatial filter at any useful spacing would keep one lane of a carriageway and throw away
+        // the other five — the opposite of what a multi-lane road needs.
+        var byLane = new Dictionary<(uint Road, uint Section, int Lane), List<SimpleWaypoint>>();
+        foreach (var wp in _local.LocalMap.GetDenseTopology())
+        {
+            if (wp.IsJunction) continue;
+            if (wp.SpeedLimitKph < minSpeedKph) continue;
+
+            Location p = wp.GetLocation();
+            if (p.X < minX || p.X > maxX || p.Y < minY || p.Y > maxY) continue;
+            bool interior = p.X >= minX + margin && p.X <= maxX - margin
+                         && p.Y >= minY + margin && p.Y <= maxY - margin;
+            if (interior) continue;
+
+            var w = wp.GetWaypoint();
+            var key = (w.RoadId, w.SectionId, w.LaneId);
+            if (!byLane.TryGetValue(key, out var lane))
+            {
+                lane = new List<SimpleWaypoint>();
+                byLane[key] = lane;
+            }
+            lane.Add(wp);
+        }
+
+        foreach (var lane in byLane.Values)
+        {
+            lane.Sort((a, b) => a.GetWaypoint().S.CompareTo(b.GetWaypoint().S));
+            double lastS = double.NegativeInfinity;
+            foreach (var wp in lane)
+            {
+                double s = wp.GetWaypoint().S;
+                if (s - lastS < spacing) continue;
+                lastS = s;
+
+                Location p = wp.GetLocation();
+                Vector3D fv = wp.GetForwardVector();
+                double flat = Math.Sqrt(fv.X * fv.X + fv.Y * fv.Y);
+                double yaw = Math.Atan2(fv.Y, fv.X) * 180.0 / Math.PI;
+                double pitch = flat > 1e-6 ? Math.Atan2(fv.Z, flat) * 180.0 / Math.PI : 0.0;
+                result.Add(new Transform(
+                    new Location(p.X, p.Y, (float)(p.Z + zOffset)),
+                    new Rotation((float)pitch, (float)yaw, 0f)));
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
     /// Also append the traffic manager's event lines — removals, route departures, junction
     /// commitments — to <paramref name="path"/>, or stop doing so when it is null.
     /// </summary>
@@ -310,6 +386,16 @@ public sealed class TrafficManager : IAsyncDisposable
 
     /// <summary>Number of vehicles currently following a planned route.</summary>
     public int RoutedVehicleCount => _local.RouteSupervisor.RoutedVehicleCount;
+
+    /// <summary>How many vehicles the traffic manager holds to drive, routed or not.</summary>
+    public int RegisteredVehicleCount => _local.RegisteredVehicleCount;
+
+    /// <summary>
+    /// Whether this one vehicle is in the set the traffic manager drives. Asked immediately after
+    /// registering it, this says whether the registration took; asked of a vehicle that never
+    /// moved, it says whether the traffic manager ever had it to drive in the first place.
+    /// </summary>
+    public bool IsVehicleRegistered(ActorId actorId) => _local.IsVehicleRegistered(actorId);
 
     /// <summary>
     /// How many consecutive failed replans a vehicle may accumulate before

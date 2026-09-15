@@ -1308,9 +1308,36 @@ class TrafficManager:
         loc = location._to_cs() if hasattr(location, "_to_cs") else location
         return float(self._tm.GetSpeedLimitKphAt(loc))
 
+    def get_ring_lane_spawn_points(self, min_x, min_y, max_x, max_y, margin,
+                                   spacing=15.0, min_speed_kph=0.0, z_offset=3.0):
+        """Drivable lane points inside the staging ring — the band one `margin` deep just inside the
+        sandbox rectangle — as spawn Transforms.
+
+        CARLA's own spawn points sit one per lane at each road ENTRY and nowhere else, so a road
+        clipped by the sandbox boundary offers only the handful at its entry and nothing along the
+        rest of the same carriageway, however much of it lies inside the ring. These come from the
+        Traffic Manager's dense lane graph instead, so they run the length of every lane passing
+        through the band. Thinned so no two sites are closer than `spacing` metres, restricted to
+        roads posting at least `min_speed_kph`, raised `z_offset` metres to sit where CARLA's own
+        spawn points do, and with junction waypoints left out."""
+        pts = self._tm.GetRingLaneSpawnPoints(
+            float(min_x), float(min_y), float(max_x), float(max_y),
+            float(margin), float(spacing), float(min_speed_kph), float(z_offset))
+        return [Transform(pts[i].location, pts[i].rotation) for i in range(pts.Count)]
+
     def get_routed_vehicle_count(self) -> int:
         """How many vehicles are currently following a planned route."""
         return int(self._tm.RoutedVehicleCount)
+
+    def get_registered_vehicle_count(self) -> int:
+        """How many vehicles the Traffic Manager holds to drive, routed or not. A vehicle that is
+        registered but unrouted is still driven; one that never registered is not driven at all,
+        which is the difference this answers and get_routed_vehicle_count does not."""
+        return int(self._tm.RegisteredVehicleCount)
+
+    def is_vehicle_registered(self, actor_id) -> bool:
+        """Whether this one vehicle is in the set the Traffic Manager drives."""
+        return bool(self._tm.IsVehicleRegistered(int(actor_id)))
 
     def set_route_replan_attempt_limit(self, limit: int):
         """How many consecutive failed replans a vehicle may accumulate before the greedy fallback
