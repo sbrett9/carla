@@ -28,6 +28,8 @@
 
 #include <util/ue-header-guard-begin.h>
 #include "Misc/App.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "PhysicsEngine/PhysicsSettings.h"
 #include <util/ue-header-guard-end.h>
 
@@ -43,6 +45,36 @@ uint64_t FCarlaEngine::FrameCounter = 0;
 static uint32 FCarlaEngine_GetNumberOfThreadsForRPCServer()
 {
   return std::max(std::thread::hardware_concurrency(), 4u) - 2u;
+}
+
+// Game-thread time granted per frame, in milliseconds, to the queue every BIND_SYNC handler runs
+// on. It applies only when the simulator is free-running; under synchronous mode the pump below
+// keeps draining until the client's tick cue arrives, so the queue is emptied whatever it holds.
+//
+// One millisecond a frame was the standing value, and it is a tight budget for a queue every
+// connected client shares: at 60 fps that is 60 ms of service per second of simulation, spread
+// across camera placement, sensor configuration, actor queries and whatever the traffic manager
+// needs. The traffic manager is the one that suffers, because it must complete several round
+// trips in sequence before it can command a vehicle, and a round trip that misses its slice waits
+// a whole frame -- so its control loop slows to a fraction of the rate its controller is written
+// for while the world carries on in real time.
+//
+// Raising it is close to free when nothing is queued: the io_context has no work guard, so the
+// run_for behind this returns as soon as the queue empties rather than waiting out the duration.
+// It is still bounded, so a client that floods the server costs frame rate rather than taking the
+// game thread outright. -RPCBudgetMs= overrides it, alongside the existing -RPCThreads=.
+static uint32 FCarlaEngine_GetAsyncRPCBudgetMs()
+{
+  static const uint32 BudgetMs = []
+  {
+    int32 Configured = 0;
+    if (FParse::Value(FCommandLine::Get(), TEXT("-RPCBudgetMs="), Configured) && Configured > 0)
+    {
+      return static_cast<uint32>(Configured);
+    }
+    return 5u;
+  }();
+  return BudgetMs;
 }
 
 static TOptional<double> FCarlaEngine_GetFixedDeltaSeconds()
@@ -298,11 +330,21 @@ void FCarlaEngine::OnPreTick(UWorld *, ELevelTick TickType, float DeltaSeconds)
       }
 
       // process RPC commands
-      do
+      if (bSynchronousMode)
       {
-        Server.RunSome(1u);
+        // The world cannot advance until the client says so, and every RPC still waiting is work
+        // the client may be blocked on, so drain until the cue arrives.
+        do
+        {
+          Server.RunSome(1u);
+        }
+        while (!Server.TickCueReceived());
       }
-      while (bSynchronousMode && !Server.TickCueReceived());
+      else
+      {
+        // Free-running: one bounded slice per frame. See FCarlaEngine_GetAsyncRPCBudgetMs.
+        Server.RunSome(FCarlaEngine_GetAsyncRPCBudgetMs());
+      }
     }
     else
     {

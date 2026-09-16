@@ -37,10 +37,25 @@ internal sealed class VehicleLightStage : IStageWithRemoveActor
     /// </summary>
     private readonly List<Command> _controlFrame;
 
-    // ── Per-tick world snapshot (refreshed by UpdateWorldInfo) ──────────
+    // ── World snapshot (refreshed by UpdateWorldInfo) ───────────────────
     private IReadOnlyList<(ActorId Id, VehicleLightStateFlags Flags)> _allLightStates;
     private WeatherParameters _weather;
     private bool _isWeatherEnabled;
+    private long _lightStatesReadAtTicks = long.MinValue;
+    private long _weatherReadAtTicks = long.MinValue;
+
+    // How stale each of these may get. Upstream re-reads both every tick, which costs three
+    // blocking round trips before a single vehicle has been looked at; the traffic manager needs
+    // several in a row before it can command anything, and in asynchronous mode the simulator
+    // serves them one per rendered frame, so each one is a frame on the control loop's period.
+    //
+    // Neither reading justifies that. Weather is a scene setting that changes on an operator's
+    // command, if at all, and is consulted only for thresholds on sun altitude, precipitation and
+    // fog -- whether it is dark enough for headlights, wet enough for fog lights. The light states
+    // are this stage's own feedback, used to avoid re-sending a value a vehicle already has; a
+    // quarter-second-old answer at worst re-sends one command.
+    private const long WeatherRefreshIntervalMs = 1000;
+    private const long LightStateRefreshIntervalMs = 250;
 
     // ── Output collection (drained by orchestrator) ─────────────────────
     /// <summary>
@@ -76,20 +91,31 @@ internal sealed class VehicleLightStage : IStageWithRemoveActor
     /// per tick before any <see cref="Update"/> invocation.
     /// </summary>
     /// <remarks>
-    /// Performs two RPCs: <c>get_vehicles_light_states</c> and (if weather
-    /// is enabled) <c>get_weather_parameters</c>. Matches upstream's
-    /// <c>VehicleLightStage::UpdateWorldInfo</c>.
+    /// Upstream's <c>VehicleLightStage::UpdateWorldInfo</c> issues
+    /// <c>get_vehicles_light_states</c>, <c>is_weather_enabled</c> and
+    /// <c>get_weather_parameters</c> on every tick. Here each is on its own
+    /// interval instead — see the constants above for why neither reading
+    /// needs to be tick-fresh, and what the round trips cost.
     /// </remarks>
     public void UpdateWorldInfo()
     {
-        try
+        long now = Environment.TickCount64;
+
+        if (now - _lightStatesReadAtTicks >= LightStateRefreshIntervalMs)
         {
-            _allLightStates = _client.GetVehiclesLightStatesAsync().GetAwaiter().GetResult();
+            _lightStatesReadAtTicks = now;
+            try
+            {
+                _allLightStates = _client.GetVehiclesLightStatesAsync().GetAwaiter().GetResult();
+            }
+            catch (Exception)
+            {
+                _allLightStates = Array.Empty<(ActorId, VehicleLightStateFlags)>();
+            }
         }
-        catch (Exception)
-        {
-            _allLightStates = Array.Empty<(ActorId, VehicleLightStateFlags)>();
-        }
+
+        if (now - _weatherReadAtTicks < WeatherRefreshIntervalMs) return;
+        _weatherReadAtTicks = now;
         try
         {
             _isWeatherEnabled = _client.IsWeatherEnabledAsync().GetAwaiter().GetResult();
@@ -124,6 +150,11 @@ internal sealed class VehicleLightStage : IStageWithRemoveActor
         _allLightStates = allLightStates;
         _weather = weather;
         _isWeatherEnabled = isWeatherEnabled;
+        // Supplied from outside counts as read: a caller feeding this stage should not then have
+        // it go behind their back and fetch the same thing again.
+        long now = Environment.TickCount64;
+        _lightStatesReadAtTicks = now;
+        _weatherReadAtTicks = now;
     }
 
     // ── Per-vehicle update (orchestrator calls in a tight loop) ─────────
@@ -292,6 +323,10 @@ internal sealed class VehicleLightStage : IStageWithRemoveActor
         _pendingUpdates.Clear();
         _allLightStates = Array.Empty<(ActorId, VehicleLightStateFlags)>();
         _isWeatherEnabled = false;
+        // A new episode is a new world: re-read both on the next tick rather than waiting out an
+        // interval against readings that belong to the previous one.
+        _lightStatesReadAtTicks = long.MinValue;
+        _weatherReadAtTicks = long.MinValue;
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────

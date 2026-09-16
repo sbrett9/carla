@@ -333,8 +333,26 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
                 }
                 else if (!synchronousMode)
                 {
-                    // Async non-hybrid: still throttle to ~33 ms to keep CPU sane.
-                    Thread.Sleep(33);
+                    // Async non-hybrid: hold the loop to the rate the controller is written for.
+                    //
+                    // MotionPlanStage's PID does not measure how much time has passed; it scales
+                    // its integral term by Constants.PID.DT and its derivative by the reciprocal,
+                    // so the loop running at some other rate does not slow the response down, it
+                    // mis-weights it -- most sharply the derivative, which is the term damping the
+                    // steering. Running at the rate those constants name is what makes them the
+                    // upstream-tuned gains they are.
+                    //
+                    // This is also a deadline rather than a flat sleep. A flat sleep is added to
+                    // however long the tick itself took, so the period was the sleep plus the work
+                    // and moved with the work; sleeping only the remainder holds the period at the
+                    // target whenever the work fits inside it, and degrades to running flat out
+                    // when it does not. The hybrid branch above already does this.
+                    long nowTicks = Environment.TickCount64;
+                    int targetMs = (int)(Constants.PID.DT * 1000f);
+                    int sleepMs = targetMs - (int)(nowTicks - _previousUpdateInstanceTicks);
+                    if (sleepMs > 0)
+                        Thread.Sleep(sleepMs);
+                    _previousUpdateInstanceTicks = Environment.TickCount64;
                 }
 
                 RunOneTick();
