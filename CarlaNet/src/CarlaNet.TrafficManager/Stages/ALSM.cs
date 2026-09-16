@@ -213,14 +213,14 @@ internal sealed class ALSM
         // A vehicle handed straight to the traffic manager on spawn never appears as an unseen id:
         // its record arrives with the registration, so the scan above cannot see it. Cover the
         // registered set too, from the records it already holds -- no round trip, and each actor is
-        // looked at once.
+        // looked at once. The snapshot is taken here and handed on below, because GetList copies.
         IReadOnlyList<Actor> registeredActors = _registeredVehicles.GetList();
         for (int i = 0; i < registeredActors.Count; i++)
             NoteIfHero(registeredActors[i]);
 
         // ── 5. Update dynamic state for registered vehicles ─────────────
         var maxIdleTime = new IdleInfo(0u, _currentTimestamp);
-        UpdateRegisteredActorsData(hybridPhysicsMode, ref maxIdleTime);
+        UpdateRegisteredActorsData(registeredActors, hybridPhysicsMode, ref maxIdleTime);
 
         // ── 6. Cull stuck registered vehicles ───────────────────────────
         if (IsVehicleStuck(maxIdleTime.ActorId)
@@ -374,9 +374,9 @@ internal sealed class ALSM
 
     private readonly record struct IdleInfo(ActorId ActorId, double Time);
 
-    private void UpdateRegisteredActorsData(bool hybridPhysicsMode, ref IdleInfo maxIdleTime)
+    private void UpdateRegisteredActorsData(
+        IReadOnlyList<Actor> vehicleList, bool hybridPhysicsMode, ref IdleInfo maxIdleTime)
     {
-        IReadOnlyList<Actor> vehicleList = _registeredVehicles.GetList();
         bool heroActorPresent = _heroActors.Count != 0;
         float physicsRadius = _parameters.GetHybridPhysicsRadius();
         float physicsRadiusSquare = physicsRadius * physicsRadius;
