@@ -7,7 +7,8 @@ and telemetry output in a single process with synchronous tick control.
 Components:
   1. BUILD     — OSM-to-OpenDRIVE world generation with Cesium terrain alignment
   2. VIEW      — Interactive RGB camera with Unreal-style flight controls
-  3. TRAFFIC   — Boundary-aware traffic with margin-based fade spawning/despawning
+  3. TRAFFIC   — Boundary-aware traffic entering and leaving through the staging margin
+                 (--fade additionally dissolves vehicles in and out across it)
   4. TELEMETRY — Cursor-on-Target vehicle truth over UDP to TAK endpoints
   5. RECORDING — Frame capture with CoT-XML sidecar files
 
