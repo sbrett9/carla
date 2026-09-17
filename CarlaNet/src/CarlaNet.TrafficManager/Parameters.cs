@@ -86,7 +86,14 @@ internal sealed class Parameters
 
     // Synchronous-mode timeout (milliseconds). Stored as bits of double for
     // Interlocked.Exchange64 semantics; default 10 ms.
-    private long _synchronousTimeOutMsBits = BitConverter.DoubleToInt64Bits(10.0);
+    // How long a world tick will wait for the traffic manager's step to finish. Upstream defaults
+    // to 10 ms, which suits a step that is pure in-process computation; ours ends in a batch of
+    // vehicle commands sent to the simulator, and that round trip alone was measured at about
+    // 20 ms against a free-running server. A budget shorter than the work means the tick gives up
+    // and advances the world with the step still running, which is both a torn frame and the end
+    // of any repeatability -- so the budget is a safety valve against a wedged worker, not a
+    // pacing device, and is set well clear of the work.
+    private long _synchronousTimeOutMsBits = BitConverter.DoubleToInt64Bits(1000.0);
 
     public Parameters()
     {

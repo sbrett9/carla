@@ -28,6 +28,10 @@ class TrafficController:
     MISS_LIMIT = 5  # consecutive cache-misses before treating a vehicle as gone
     SPAWN_GRACE = 4.0  # a fresh vehicle is exempt from the stuck/out-of-bounds guards this long
     SUMMARY_S = 5.0  # how often to print the alive/despawn-reason summary while enabled
+    # Smallest opacity step worth a round-trip. The fade is a dithered dissolve driven by a single
+    # custom-primitive float, so a change below one 8-bit step cannot be seen; sending it anyway
+    # costs a blocking RPC that the server can only service inside its per-frame budget.
+    FADE_EPSILON = 1.0 / 255.0
 
     _TWO_WHEELED = (
         "harley",
@@ -124,12 +128,17 @@ class TrafficController:
             seed: Random seed for TM (optional)
         """
         logger = logging.getLogger(__name__)
+        # Match the traffic manager to the world. Under a synchronous world it is now stepped once
+        # per tick, by the thread that ticked, after the frame it will read has arrived -- so it
+        # sees exactly the frames the world produced, in order, and its own clock is the world's.
+        # It was pinned free-running before only because nothing stepped it, which parked it on
+        # the first tick and left no vehicle moving.
         try:
-            tm.set_synchronous_mode(False)
+            tm.set_synchronous_mode(sync)
         except Exception as e:
             logger.debug(f"failed to set TM synchronous mode: {e}")
 
-        if sync and seed is not None:
+        if seed is not None:
             try:
                 tm.set_random_device_seed(seed)
             except Exception as e:
@@ -137,12 +146,16 @@ class TrafficController:
 
         if sync:
             logger.info(
-                f"mode: SYNCHRONOUS world + free-running Traffic Manager "
-                f"(fixed_delta {fixed_delta}s -> ~{1.0 / fixed_delta:.0f} fps, real-time; "
-                "traffic is not deterministic)"
+                f"mode: SYNCHRONOUS world + Traffic Manager stepped on the tick "
+                f"(fixed_delta {fixed_delta}s -> {1.0 / fixed_delta:.0f} simulated fps"
+                + (f", seed {seed}: repeatable)" if seed is not None
+                   else "; pass --seed for a repeatable run)")
             )
         else:
-            logger.info("mode: ASYNCHRONOUS (server free-running)")
+            logger.info(
+                "mode: ASYNCHRONOUS (server and Traffic Manager both free-running; "
+                "wall-clock paced, so runs are not repeatable)"
+            )
 
     def __init__(
         self,
@@ -261,7 +274,7 @@ class TrafficController:
 
     @classmethod
     def create(cls, world: carla.World, client: carla.Client, tm, args):
-        """Build the controller, computing the spawn pool and verifying set_actor_fade.
+        """Build the controller and compute the spawn pool.
 
         Args:
             world: CARLA world instance
@@ -372,14 +385,17 @@ class TrafficController:
         ctl.spawn_weights, ctl.spawn_limits = cls.speed_limit_weights(
             tm, spawn_pool, args, logger
         )
-        if not ctl.fade_selftest():
-            ctl.available = False
-            ctl.reason = (
-                "set_actor_fade not available — rebuild server + wheel "
-                "(BuildCarla.ps1 -Vs 2026 -InstallWheel)"
-            )
-            return ctl
-        logger.info("fade selftest passed: set_actor_fade available")
+        # Only a run that asked for the fade needs the server to support it. Traffic itself does
+        # not, so an unavailable set_actor_fade is no longer a reason to refuse to run at all.
+        if args.fade:
+            if not ctl.fade_selftest():
+                ctl.available = False
+                ctl.reason = (
+                    "--fade given but set_actor_fade is not available — rebuild server + wheel "
+                    "(BuildCarla.ps1 -Vs 2026 -InstallWheel), or drop --fade"
+                )
+                return ctl
+            logger.info("fade selftest passed: set_actor_fade available")
 
         sw = staging["max_x"] - staging["min_x"]
         sh = staging["max_y"] - staging["min_y"]
@@ -396,7 +412,7 @@ class TrafficController:
         )
         logger.info(
             f"traffic: {len(ring_sps)} inward edge-ring spawn points; "
-            f"{len(spawn_pool)} usable in-margin spawn points (set_actor_fade OK)"
+            f"{len(spawn_pool)} usable in-margin spawn points"
         )
 
         try:
@@ -567,11 +583,32 @@ class TrafficController:
         return float(getattr(self.args, "same_side_exit_rate", 0.0) or 0.0) > 0.0
 
     @staticmethod
-    def safe_fade(v, hide):
+    def safe_fade(v, hide) -> bool:
+        """Push an opacity to the server. Returns whether it landed, so a caller tracking the
+        last value it set does not record one the server never received."""
         try:
             v.set_fade(hide)
+            return True
         except Exception:
-            pass
+            return False
+
+    def apply_fade(self, rec, v, hide: float) -> None:
+        """Set this vehicle's staging opacity, but only when it actually changed.
+
+        Every call is a blocking round-trip whose handler walks each primitive component on the
+        vehicle, and a vehicle anywhere inside the interior sits at exactly 0.0 for its whole
+        life. Re-sending that on every reconcile was the heaviest single load this client put on
+        the server, so a round-trip is spent only on a step the dissolve can actually show --
+        plus the two endpoints, which are always sent exactly rather than approached to within
+        FADE_EPSILON and left there."""
+        last = rec.get("fade")
+        if last is not None:
+            if hide == last:
+                return
+            if hide not in (0.0, 1.0) and abs(hide - last) < self.FADE_EPSILON:
+                return
+        if self.safe_fade(v, hide):
+            rec["fade"] = hide
 
     # Height CARLA raises its own spawn points to above the carriageway
     # (AOpenDriveGenerator::SpawnersHeight, 300 cm). Lane sites are raised to match so a vehicle
@@ -943,8 +980,9 @@ class TrafficController:
                     sx, sy = sp.location.x, sp.location.y
             try:
                 op = self.interior_opacity(sx, sy, syaw, ext[0], ext[1], self.b)
-                if self.args.fade:
-                    self.safe_fade(v, 1.0 - op)
+                spawn_hide = None
+                if self.args.fade and self.safe_fade(v, 1.0 - op):
+                    spawn_hide = 1.0 - op
                 v.set_autopilot(True, self.args.tm_port)
                 difference = 0.0
                 if self.args.speed_spread > 0:
@@ -1001,6 +1039,9 @@ class TrafficController:
                 "stalled": 0.0,
                 "misses": 0,
                 "speed": 0.0,
+                # Last opacity the server acknowledged, so the reconcile can tell a real change
+                # from the same value being sent again. None until one has landed.
+                "fade": spawn_hide,
             }
             overhang, _ = self.red_edge_deficit(sx, sy, syaw, ext, self.b)
             if overhang > self.OVERHANG_TOL:
@@ -1096,13 +1137,21 @@ class TrafficController:
         ids = list(self.actors.keys())
         live_ids = set()
         if ids:
+            # Which of ours are still alive, straight off the world-observer snapshot. Asking the
+            # server instead would be a blocking RPC returning a full description and bounding box
+            # for every vehicle, every 0.1 s, when all that is wanted is the set of ids.
             try:
-                live_ids = {a.id for a in self.world.get_actors(ids)}
+                snapshot = self.world.get_actor_ids()
             except Exception as e:
-                self.logger.debug(f"get_actors failed: {e}")
+                self.logger.debug(f"get_actor_ids failed: {e}")
+                snapshot = None
+            if not snapshot:
+                # No snapshot yet (or the read failed) is not evidence of death — the observer
+                # simply has not spoken. Skip the culling this pass rather than charge every
+                # tracked vehicle with a miss.
                 live_ids = set(ids)
-            if not live_ids:
-                live_ids = set(ids)
+            else:
+                live_ids = {vid for vid in ids if vid in snapshot}
         for vid in ids:
             rec = self.actors[vid]
             if vid not in live_ids:
@@ -1130,7 +1179,7 @@ class TrafficController:
 
             op = self.interior_opacity(loc.x, loc.y, yaw, rec["ext"][0], rec["ext"][1], b)
             if self.args.fade:
-                self.safe_fade(a, 1.0 - op)
+                self.apply_fade(rec, a, 1.0 - op)
 
             if (
                 loc.x < mnx - self.OOB_PAD

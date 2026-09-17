@@ -133,6 +133,31 @@ public sealed class CarlaClient : IAsyncDisposable
     private readonly List<SensorStream> _streams = [];
     private readonly ConcurrentDictionary<ActorId, ActorSnapshot> _actorCache = new();
     // Ids seen in the current world-observer snapshot; reused each frame to evict destroyed actors.
+    // Latest frame the world observer has delivered, and the simulated clock that came with it.
+    // Read under _frameGate, which the observer pulses so a caller can wait for a given frame
+    // rather than poll for it.
+    private readonly object _frameGate = new();
+    private ulong _latestObservedFrame;
+    private double _latestElapsedSeconds;
+    private double _latestDeltaSeconds;
+    private double _latestPlatformTimestamp;
+
+    /// <summary>Simulated seconds carried by the most recent world-observer frame.</summary>
+    public double LatestElapsedSeconds { get { lock (_frameGate) return _latestElapsedSeconds; } }
+
+    /// <summary>The most recent frame number the world observer has delivered.</summary>
+    public ulong LatestObservedFrame { get { lock (_frameGate) return _latestObservedFrame; } }
+
+    /// <summary>
+    /// Raised once a tick cue has been acknowledged AND the frame it produced has been observed.
+    /// Mirrors what upstream does inside <c>Simulator::SynchronizeFrame</c>, which calls
+    /// <c>TrafficManager::Tick()</c> at exactly this point: the traffic manager is stepped by the
+    /// thread that ticked the world, after the state it is about to read has actually arrived.
+    /// Handlers run on that thread and block it, which is the point -- the tick is not complete
+    /// until everything stepping off it has stepped.
+    /// </summary>
+    public event Action<TickTimestamp>? OnWorldTickCompleted;
+
     // Touched only on the single world-observer stream-reader thread (see OnWorldObserverFrame).
     private readonly HashSet<ActorId> _observedIds = new();
     private IDisposable? _worldObserver;
@@ -264,7 +289,13 @@ public sealed class CarlaClient : IAsyncDisposable
     }
 
     /// Update the per-call RPC timeout. Affects subsequent calls only.
-    public void SetTimeout(TimeSpan timeout) => _rpc.SetTimeout(timeout);
+    public void SetTimeout(TimeSpan timeout)
+    {
+        _rpc.SetTimeout(timeout);
+        // A tick waits for its frame; that wait is part of the tick, so it answers to the same
+        // timeout the caller set rather than to a separate one they cannot see.
+        _frameWaitTimeout = timeout;
+    }
 
     // ── §9.3 world.on_tick — fired once per world-observer frame ─────────────
     // Subscribers receive a TickTimestamp built from the SensorFrame header
@@ -357,8 +388,67 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<ulong> SetEpisodeSettingsAsync(EpisodeSettings settings)
         => _rpc.CallAsync<ulong>("set_episode_settings", settings);
 
-    public Task<ulong> SendTickCueAsync()
-        => _rpc.CallAsync<ulong>("tick_cue");
+    /// <summary>
+    /// Ask the simulator to advance one frame, wait until that frame has been observed, then step
+    /// everything registered on <see cref="OnWorldTickCompleted"/>.
+    /// </summary>
+    /// <remarks>
+    /// The wait is what makes a synchronous run mean anything. Without it the call returns as soon
+    /// as the simulator acknowledges the cue, so a caller that ticks and then reads the world can
+    /// be looking at the frame before the one it just asked for; and anything stepping off the
+    /// tick would run against a snapshot that has not arrived. Upstream does the same in
+    /// <c>Simulator::Tick</c> -> <c>SynchronizeFrame</c>, and only calls <c>TrafficManager::Tick()</c>
+    /// once the frame is in.
+    /// </remarks>
+    public async Task<ulong> SendTickCueAsync()
+    {
+        ulong frame = await _rpc.CallAsync<ulong>("tick_cue").ConfigureAwait(false);
+        TickTimestamp? observed = WaitForFrame(frame);
+        if (observed is not null)
+        {
+            var handlers = OnWorldTickCompleted;
+            if (handlers is not null)
+            {
+                try { handlers(observed); }
+                catch (Exception ex) { _log?.LogWarning(ex, "World-tick handler threw"); }
+            }
+        }
+        return frame;
+    }
+
+    /// <summary>
+    /// Block until the world observer has delivered <paramref name="frame"/> or later, and return
+    /// the simulated clock that came with it. Null if the observer is not running or the wait
+    /// timed out -- callers carry on rather than fail, because a tick that outran its stream is
+    /// recoverable and a deadlocked client is not.
+    /// </summary>
+    private TickTimestamp? WaitForFrame(ulong frame)
+    {
+        if (_worldObserver is null) return null;
+        var deadline = DateTime.UtcNow + _frameWaitTimeout;
+        lock (_frameGate)
+        {
+            while (_latestObservedFrame < frame)
+            {
+                var remaining = deadline - DateTime.UtcNow;
+                if (remaining <= TimeSpan.Zero)
+                {
+                    _log?.LogWarning(
+                        "Timed out waiting for frame {Frame}; observer is at {Observed}",
+                        frame, _latestObservedFrame);
+                    return null;
+                }
+                Monitor.Wait(_frameGate, remaining);
+            }
+            // The whole timestamp, not just the two fields the current subscriber happens to
+            // read. A partially-filled record is a trap for the next one.
+            return new TickTimestamp(_latestObservedFrame, _latestElapsedSeconds,
+                                     _latestDeltaSeconds, _latestPlatformTimestamp);
+        }
+    }
+
+    // How long a tick waits for its frame before giving up on it. Follows SetTimeout.
+    private TimeSpan _frameWaitTimeout = TimeSpan.FromSeconds(10);
 
     // ── §8.3 Map and World Data ───────────────────────────────────────────────
 
@@ -1720,6 +1810,14 @@ public sealed class CarlaClient : IAsyncDisposable
             double platformTs = 0;
             float deltaS = 0;
             ParseEpisodeState(frame.Payload.Span, out platformTs, out deltaS);
+            lock (_frameGate)
+            {
+                _latestObservedFrame = frame.Header.Frame;
+                _latestElapsedSeconds = frame.Header.Timestamp;
+                _latestDeltaSeconds = deltaS;
+                _latestPlatformTimestamp = platformTs;
+                Monitor.PulseAll(_frameGate);
+            }
             // Emit a tick event so Python world.on_tick(callback) can fire.
             var handlers = OnTick;
             if (handlers is not null)

@@ -101,6 +101,10 @@ internal sealed class ALSM
     // is only treated as destroyed once it has been absent for several in a row: see
     // IdentifyDestroyedActors for why a single absence does not mean the vehicle is gone.
     private readonly Dictionary<ActorId, int> _absentUpdates = new();
+    // Actors already checked for role_name == "hero". The attribute is fixed at spawn, so one look
+    // settles it; the set exists because an actor is only looked at once, from whichever store
+    // holds its record, and both stores have to be covered.
+    private readonly HashSet<ActorId> _heroScanned = new();
 
     private double _elapsedLastActorDestruction;
     private double _currentTimestamp;
@@ -145,13 +149,14 @@ internal sealed class ALSM
     {
         bool hybridPhysicsMode = _parameters.GetHybridPhysicsMode();
 
-        // ── 1. Pull world state (single RPC) ────────────────────────────
+        // ── 1. Pull world state (no RPC in the steady state) ────────────
         // Upstream calls world.GetSnapshot() + world.GetActors(). The .NET
         // world observer already streams snapshots continuously into
-        // CarlaClient's actor cache, so we can read elapsed time and the
-        // actor id list for free. We still need the full Actor records
-        // (attributes + bounding box) for newly-discovered actors so we
-        // issue ONE RPC: GetActorsByIdAsync against the cached id list.
+        // CarlaClient's actor cache, so the elapsed time and the actor id
+        // list are free. The full Actor record is only wanted for an actor
+        // we have not seen before: what it carries -- description,
+        // attributes, bounding box -- is fixed at spawn, and every value
+        // that changes per tick is read from the cache further down.
         IReadOnlyList<ActorId> worldActorIds = _client.GetCachedActorIds();
         // Elapsed seconds: derived from snapshot count. The observer fires
         // OnTick with the latest timestamp; the orchestrator (Wave 4) will
@@ -160,12 +165,28 @@ internal sealed class ALSM
         // compares deltas).
         _currentTimestamp = GetCurrentElapsedSeconds();
 
-        IReadOnlyList<Actor> worldActors = _client
-            .GetActorsByIdAsync(worldActorIds)
-            .GetAwaiter().GetResult();
+        // Ask only for the records we are missing. A registered vehicle carries its record in the
+        // actor set and an unregistered one in _unregisteredActors, so in a settled world this list
+        // is empty and the tick costs no round trip at all -- against one per tick that serialised
+        // a description and bounding box for every actor in the map, signals and props included,
+        // and threw all but a handful away. The traffic manager needs several round trips in a row
+        // before it can command a vehicle, and in asynchronous mode the simulator serves them one
+        // per rendered frame, so each one removed is a frame off the control loop's period.
+        List<ActorId>? unseenIds = null;
+        for (int i = 0; i < worldActorIds.Count; i++)
+        {
+            ActorId actorId = worldActorIds[i];
+            if (_registeredVehicles.Contains(actorId) || _unregisteredActors.ContainsKey(actorId))
+                continue;
+            (unseenIds ??= new List<ActorId>()).Add(actorId);
+        }
+
+        IReadOnlyList<Actor> newlySeenActors = unseenIds is null
+            ? Array.Empty<Actor>()
+            : _client.GetActorsByIdAsync(unseenIds).GetAwaiter().GetResult();
 
         // ── 2. Find destroyed actors and propagate ──────────────────────
-        var (destroyedRegistered, destroyedUnregistered) = IdentifyDestroyedActors(worldActors);
+        var (destroyedRegistered, destroyedUnregistered) = IdentifyDestroyedActors(worldActorIds);
 
         foreach (var deletionId in destroyedRegistered)
             RemoveActor(deletionId, registeredActor: true);
@@ -187,11 +208,19 @@ internal sealed class ALSM
         }
 
         // ── 4. Scan for newly-spawned actors ────────────────────────────
-        IdentifyNewActors(worldActors);
+        IdentifyNewActors(newlySeenActors);
+
+        // A vehicle handed straight to the traffic manager on spawn never appears as an unseen id:
+        // its record arrives with the registration, so the scan above cannot see it. Cover the
+        // registered set too, from the records it already holds -- no round trip, and each actor is
+        // looked at once. The snapshot is taken here and handed on below, because GetList copies.
+        IReadOnlyList<Actor> registeredActors = _registeredVehicles.GetList();
+        for (int i = 0; i < registeredActors.Count; i++)
+            NoteIfHero(registeredActors[i]);
 
         // ── 5. Update dynamic state for registered vehicles ─────────────
         var maxIdleTime = new IdleInfo(0u, _currentTimestamp);
-        UpdateRegisteredActorsData(hybridPhysicsMode, ref maxIdleTime);
+        UpdateRegisteredActorsData(registeredActors, hybridPhysicsMode, ref maxIdleTime);
 
         // ── 6. Cull stuck registered vehicles ───────────────────────────
         if (IsVehicleStuck(maxIdleTime.ActorId)
@@ -228,13 +257,41 @@ internal sealed class ALSM
     //                       Private helpers
     // ─────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Simulated seconds for this tick, pushed by the orchestrator from the world's own clock.
+    /// Zero until a world tick has reported one.
+    /// </summary>
+    internal void SetElapsedSeconds(double seconds) => _pushedElapsedSeconds = seconds;
+
+    private double _pushedElapsedSeconds;
+
     private double GetCurrentElapsedSeconds()
     {
-        // Use Environment.TickCount64-derived monotonic clock. This is
-        // close enough for ALSM's idle-time comparisons; the orchestrator
-        // (Wave 4) will inject the real cc::Timestamp via a setter once
-        // it threads timestamps through the world-observer callback.
-        return Environment.TickCount64 / 1000.0;
+        // Simulated time where the world has reported it, so that how long a vehicle has been
+        // idle -- and therefore when it is culled as stuck -- measures the world's progress and
+        // not the host's. Under a free-running world there is no such clock and none is needed,
+        // so fall back to the monotonic wall clock.
+        return _pushedElapsedSeconds > 0.0 ? _pushedElapsedSeconds : Environment.TickCount64 / 1000.0;
+    }
+
+    /// <summary>
+    /// Record this actor as a hero if its role_name says so, once per actor.
+    /// </summary>
+    private void NoteIfHero(Actor actor)
+    {
+        if (!_heroScanned.Add(actor.Id)) return;
+        string typeId = actor.Description.Id;
+        if (typeId.Length == 0 || typeId[0] != 'v') return;
+        var attributes = actor.Description.Attributes;
+        for (int j = 0; j < attributes.Count; j++)
+        {
+            var attr = attributes[j];
+            if (attr.Id == "role_name" && attr.Value == "hero")
+            {
+                _heroActors[actor.Id] = actor;
+                return;
+            }
+        }
     }
 
     private void IdentifyNewActors(IReadOnlyList<Actor> worldActors)
@@ -243,24 +300,7 @@ internal sealed class ALSM
         {
             Actor actor = worldActors[i];
             ActorId actorId = actor.Id;
-            string typeId = actor.Description.Id;
-            // Identify hero vehicles by scanning role_name attribute.
-            if (typeId.Length > 0 && typeId[0] == 'v')
-            {
-                if (_heroActors.Count == 0 || !_heroActors.ContainsKey(actorId))
-                {
-                    var attributes = actor.Description.Attributes;
-                    for (int j = 0; j < attributes.Count; j++)
-                    {
-                        var attr = attributes[j];
-                        if (attr.Id == "role_name" && attr.Value == "hero")
-                        {
-                            _heroActors[actorId] = actor;
-                            break;
-                        }
-                    }
-                }
-            }
+            NoteIfHero(actor);
 
             if (!_registeredVehicles.Contains(actorId)
                 && !_unregisteredActors.ContainsKey(actorId))
@@ -302,15 +342,17 @@ internal sealed class ALSM
     }
 
     private (HashSet<ActorId> Registered, HashSet<ActorId> Unregistered) IdentifyDestroyedActors(
-        IReadOnlyList<Actor> worldActors)
+        IReadOnlyList<ActorId> worldActorIds)
     {
         var deletedRegistered = new HashSet<ActorId>();
         var deletedUnregistered = new HashSet<ActorId>();
 
-        // Snapshot current actor set.
-        var currentActors = new HashSet<ActorId>(worldActors.Count);
-        for (int i = 0; i < worldActors.Count; i++)
-            currentActors.Add(worldActors[i].Id);
+        // Who is alive, from the observer's own id list. Reading it here rather than from a set of
+        // fetched records also closes a gap: an actor destroyed between the cache read and the
+        // reply came back missing from the reply and was counted as absent a tick early.
+        var currentActors = new HashSet<ActorId>(worldActorIds.Count);
+        for (int i = 0; i < worldActorIds.Count; i++)
+            currentActors.Add(worldActorIds[i]);
 
         // Registered vehicles no longer in the world.
         //
@@ -340,9 +382,9 @@ internal sealed class ALSM
 
     private readonly record struct IdleInfo(ActorId ActorId, double Time);
 
-    private void UpdateRegisteredActorsData(bool hybridPhysicsMode, ref IdleInfo maxIdleTime)
+    private void UpdateRegisteredActorsData(
+        IReadOnlyList<Actor> vehicleList, bool hybridPhysicsMode, ref IdleInfo maxIdleTime)
     {
-        IReadOnlyList<Actor> vehicleList = _registeredVehicles.GetList();
         bool heroActorPresent = _heroActors.Count != 0;
         float physicsRadius = _parameters.GetHybridPhysicsRadius();
         float physicsRadiusSquare = physicsRadius * physicsRadius;
@@ -670,6 +712,7 @@ internal sealed class ALSM
             _heroActors.Remove(actorId);
         }
 
+        _heroScanned.Remove(actorId);
         _trackTraffic.DeleteActor(actorId);
         _simulationState.RemoveActor(actorId);
     }
@@ -679,6 +722,7 @@ internal sealed class ALSM
         _unregisteredActors.Clear();
         _idleTime.Clear();
         _heroActors.Clear();
+        _heroScanned.Clear();
         _elapsedLastActorDestruction = 0.0;
         _currentTimestamp = GetCurrentElapsedSeconds();
     }

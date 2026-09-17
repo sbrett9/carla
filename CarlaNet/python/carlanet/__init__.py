@@ -2014,6 +2014,27 @@ class World:
                 best_d2, best_i = d2, i
         return float(alts[best_i]), _m.sqrt(best_d2) * 111320.0
 
+    def get_sim_time(self) -> float:
+        """Simulated seconds carried by the most recent world-observer frame.
+
+        A cache read. After `world.tick()` returns this is that tick's own clock, because the
+        frame is published before the tick is released -- so a synchronous client can schedule
+        against the world's progress instead of against the wall, which is what lets two runs of
+        the same seed line up.
+        """
+        return float(self._client.LatestElapsedSeconds)
+
+    def get_actor_ids(self) -> set:
+        """Ids of every actor in the latest world-observer snapshot.
+
+        A cache read, not a round-trip: the observer already streams a full actor list every
+        tick. Use this wherever only the identities are wanted -- asking `get_actors` and then
+        reading `.id` off the results costs a blocking RPC whose handler serialises a full
+        description and bounding box for every actor, all of it discarded.
+        """
+        cached = self._client.GetCachedActorIds()
+        return {int(cached[i]) for i in range(cached.Count)}
+
     def get_actors(self, actor_ids=None):
         from System import UInt32
         if actor_ids is None:

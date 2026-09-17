@@ -231,6 +231,12 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
                 lastError);
         }
 
+        // Step off the world tick, the way upstream's Simulator::SynchronizeFrame does. In
+        // synchronous mode this is the only thing that releases the worker; without it, setting
+        // the traffic manager synchronous parks it on _stepBegin forever and no vehicle moves,
+        // which is why every launcher so far has had to leave it free-running.
+        _client.OnWorldTickCompleted += OnWorldTickCompleted;
+
         _running = true;
         _workerThread = new Thread(WorkerLoop)
         {
@@ -248,6 +254,7 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
     public void Stop()
     {
         if (!_running) return;
+        _client.OnWorldTickCompleted -= OnWorldTickCompleted;
         _running = false;
         // Unblock the worker if it's in the sync-mode wait.
         _stepBegin.Set();
@@ -301,6 +308,45 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
     //                          Worker loop
     // ─────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// One world tick has completed and its state has arrived: step the pipeline against it.
+    /// Runs on the thread that ticked the world and blocks it until the step is done, so the
+    /// vehicle commands for this frame are in before the next one is asked for.
+    /// </summary>
+    private void OnWorldTickCompleted(TickTimestamp timestamp)
+    {
+        // The simulated clock, so the stages measure the world's progress rather than the wall's.
+        // This is what makes a synchronous run repeatable: every interval the controller and the
+        // idle timers work from now advances in lockstep with fixed_delta_seconds instead of with
+        // however long the host happened to take.
+        Interlocked.Exchange(ref _simulatedElapsedSeconds, timestamp.ElapsedSeconds);
+        if (!_parameters.GetSynchronousMode()) return;
+        if (!SynchronousTick())
+        {
+            // The world is about to advance with this step unfinished. Say so: it is the one
+            // thing that silently turns a repeatable run back into an unrepeatable one.
+            _logger?.LogWarning(
+                "Traffic manager did not finish its step within the synchronous timeout; "
+                + "frame {Frame} advances without it", timestamp.Frame);
+        }
+    }
+
+    // Latest simulated timestamp, published by the world tick. Zero until one has arrived, which
+    // is the signal to fall back to the wall clock (a free-running traffic manager under a
+    // free-running world has no other clock, and does not need one).
+    private double _simulatedElapsedSeconds;
+
+    /// <summary>
+    /// Seconds for the time-sensitive stages. Simulated time once the world has reported any, so
+    /// that a synchronous run does not depend on how fast the host got through it; the monotonic
+    /// wall clock before that.
+    /// </summary>
+    private double CurrentElapsedSeconds()
+    {
+        double simulated = Interlocked.CompareExchange(ref _simulatedElapsedSeconds, 0.0, 0.0);
+        return simulated > 0.0 ? simulated : Environment.TickCount64 / 1000.0;
+    }
+
     private void WorkerLoop()
     {
         _previousUpdateInstanceTicks = Environment.TickCount64;
@@ -333,8 +379,26 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
                 }
                 else if (!synchronousMode)
                 {
-                    // Async non-hybrid: still throttle to ~33 ms to keep CPU sane.
-                    Thread.Sleep(33);
+                    // Async non-hybrid: hold the loop to the rate the controller is written for.
+                    //
+                    // MotionPlanStage's PID does not measure how much time has passed; it scales
+                    // its integral term by Constants.PID.DT and its derivative by the reciprocal,
+                    // so the loop running at some other rate does not slow the response down, it
+                    // mis-weights it -- most sharply the derivative, which is the term damping the
+                    // steering. Running at the rate those constants name is what makes them the
+                    // upstream-tuned gains they are.
+                    //
+                    // This is also a deadline rather than a flat sleep. A flat sleep is added to
+                    // however long the tick itself took, so the period was the sleep plus the work
+                    // and moved with the work; sleeping only the remainder holds the period at the
+                    // target whenever the work fits inside it, and degrades to running flat out
+                    // when it does not. The hybrid branch above already does this.
+                    long nowTicks = Environment.TickCount64;
+                    int targetMs = (int)(Constants.PID.DT * 1000f);
+                    int sleepMs = targetMs - (int)(nowTicks - _previousUpdateInstanceTicks);
+                    if (sleepMs > 0)
+                        Thread.Sleep(sleepMs);
+                    _previousUpdateInstanceTicks = Environment.TickCount64;
                 }
 
                 RunOneTick();
@@ -365,6 +429,7 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
             _tickCounter++;
 
             // ── 1. Update actor lifecycle + per-vehicle world state ──
+            _alsm.SetElapsedSeconds(CurrentElapsedSeconds());
             try { _alsm.Update(); }
             catch (Exception ex)
             {
@@ -418,7 +483,7 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
             }
 
             // Update simulator time on the time-sensitive stages.
-            double elapsedSeconds = Environment.TickCount64 / 1000.0;
+            double elapsedSeconds = CurrentElapsedSeconds();
             _trafficLightStage.SetCurrentTimestamp(elapsedSeconds);
             _trafficLightStage.RefreshSignalStates();
             _motionPlanStage.UpdateCurrentTimestamp(elapsedSeconds);
@@ -796,7 +861,9 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
     public void SetRandomDeviceSeed(ulong seed)
     {
         _seed = seed;
-        _randomDevice = new RandomGenerator(seed);
+        // Reseed the generator the stages hold, rather than pointing this field at a new one they
+        // will never see. See RandomGenerator.Reseed.
+        _randomDevice.Reseed(seed);
         try { _client.ResetAllTrafficLightsAsync().GetAwaiter().GetResult(); }
         catch (Exception ex) { _logger?.LogDebug(ex, "ResetAllTrafficLights failed"); }
     }

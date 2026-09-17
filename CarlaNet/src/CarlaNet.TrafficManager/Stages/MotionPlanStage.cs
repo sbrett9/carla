@@ -337,8 +337,19 @@ internal sealed class MotionPlanStage : IStageWithRemoveActor
             }
 
             var currentState = new StateEntry(_currentTimestamp, angularDeviation, velocityDeviation, 0f);
+
+            // Measured controller period, in simulation time. Under a synchronous world this is
+            // fixed_delta_seconds; free-running it is however long the loop actually took, which
+            // render load can stretch well past the period the gains were tuned at. RunStep
+            // compensates. A non-positive value means there is nothing to measure yet -- the first
+            // tick after registration, or a reseed where both states carry the same timestamp --
+            // so fall back to the nominal period.
+            float controlDt = (float)(_currentTimestamp - prevState.TimeInstance);
+            if (controlDt <= 0f)
+                controlDt = Constants.PID.DT;
+
             ActuationSignal actuation = PIDController.RunStep(
-                currentState, prevState, longitudinal, lateral);
+                currentState, prevState, longitudinal, lateral, controlDt);
 
             if (emergencyStop)
             {

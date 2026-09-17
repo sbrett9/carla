@@ -195,6 +195,46 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
         => _signalStates = states;
 
     /// <summary>
+    /// Which signal governs this vehicle's approach: the one its horizon buffer's leading waypoint
+    /// names, or, where that names none, the one the vehicle is already being held for.
+    /// </summary>
+    /// <remarks>
+    /// A waypoint names a signal only while that signal is still ahead of it — the search that fills
+    /// the field in discards any signal already passed, which is correct for the map and wrong as a
+    /// test of whether a light still applies. The buffer head loses the signal at the moment it
+    /// reaches the stop line, and with waypoints 5 m apart a vehicle that began braking two of them
+    /// out gets there within a tick or two.
+    /// <para>
+    /// Releasing the hold at that point says the light has stopped applying, when what actually
+    /// happened is that it stopped being visible. The consequence is not just that the vehicle rolls
+    /// on: junction commitment is granted to any vehicle nothing is holding back, so the release
+    /// immediately qualifies it, and commitment exempts it from the very light it was stopping for.
+    /// Measured before this test existed, over two minutes of hundred-vehicle traffic: 137 approach
+    /// holds, 69 of them ending within three seconds against a signal cycle of about twenty and the
+    /// shortest after 0.06 s; and of 46 junction commitments granted against a red or yellow, 43
+    /// followed a release within three seconds, most of them in the same tick.
+    /// </para>
+    /// <para>
+    /// So the held signal carries over while the vehicle is still heading into a junction. One that
+    /// has been rerouted away from the approach has no junction ahead of it and drops the hold as
+    /// before, rather than waiting forever on a light it is no longer facing. Only the signal's
+    /// identity is carried; its state is still read live, so the vehicle waits exactly as long as
+    /// that signal stays red and is released the moment it turns green. Carrying the last-seen
+    /// state over instead would strand it there for good.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// Whether the vehicle is still short of the stop line of the signal it is being held for,
+    /// and so cannot have entered that signal's junction whatever its position snaps to.
+    /// </summary>
+    internal static bool IsShortOfItsSignal(string? namedByBufferHead, string? alreadyHeldFor)
+        => alreadyHeldFor is not null && namedByBufferHead == alreadyHeldFor;
+
+    internal static string? GoverningSignalForApproach(
+        string? namedByBufferHead, string? alreadyHeldFor, bool headingIntoJunction)
+        => namedByBufferHead ?? (headingIntoJunction ? alreadyHeldFor : null);
+
+    /// <summary>
     /// Decide whether the supplied vehicle should brake for a TL / stop /
     /// non-signalised-junction this tick. Result is written to the output
     /// map keyed by <paramref name="egoActorId"/>.
@@ -292,25 +332,58 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             // how far ahead the stop line is; the state comes from the light itself rather than from
             // whichever box the vehicle happens to be standing in. A vehicle already committed to its
             // manoeuvre is exempt, as it is for the box-based decision below.
-            string? governingSignalId =
-                egoBuffer is { Count: > 0 } ? egoBuffer[0].GoverningSignalId : null;
+            _heldOnApproach.TryGetValue(egoActorId, out string? alreadyHeldFor);
+
+            string? signalNamedAhead = egoBuffer is { Count: > 0 }
+                ? egoBuffer[0].GoverningSignalId
+                : null;
+
+            string? governingSignalId = GoverningSignalForApproach(
+                signalNamedAhead, alreadyHeldFor, headingIntoJunction);
+
+            // A vehicle cannot be inside the junction it is still approaching. The position test
+            // below asks the road graph which waypoint the vehicle is nearest to, and with almost
+            // every signal sitting exactly at its road's end the stop line IS the junction
+            // boundary — so a vehicle still short of the line snaps onto the junction side of it
+            // and is judged to have entered. Measured: of the holds ended by that test, the median
+            // vehicle was doing 12 m/s and not one of them was at rest, against a median of 0 m/s
+            // with 103 of 119 at rest for holds ended by their signal turning green. They are
+            // arrivals, not crossings.
+            //
+            // While the leading waypoint still names the signal the vehicle is being held for,
+            // that signal's stop line is ahead of it and it has crossed nothing, whatever the
+            // nearest-waypoint snap says. This guard is deliberately confined to the release
+            // decision: the same test also exempts a vehicle from the stop it is standing at and
+            // maintains the crossing commitment, and those two are what stop a vehicle caught by a
+            // change of light from blocking the intersection until its own light cycles.
+            bool stillShortOfItsSignal = IsShortOfItsSignal(signalNamedAhead, alreadyHeldFor);
+
             bool signalAheadIsStopping =
                 governingSignalId is not null
                 && _signalStates.TryGetValue(governingSignalId, out TLS approachingState)
                 && approachingState != TLS.Green
                 && approachingState != TLS.Off;
 
-            _heldOnApproach.TryGetValue(egoActorId, out string? alreadyHeldFor);
-
             // Whether the vehicle is stopping for the signal ahead. Distinct from whether it brakes
             // this tick: a vehicle stopped short of the line is still stopping for the signal while
             // it edges up to it.
             bool stoppingForSignal = false;
-            if (committedToJunction || insideJunction || !signalAheadIsStopping)
+            // Which of the three exits below was taken, for the release line further down. A hold
+            // that ends because its signal went green is the system working; one that ends because
+            // the signal stopped being found, or because the vehicle was judged to be in the
+            // junction already, is not -- and the three are indistinguishable from the outside.
+            string releaseCause = "";
+            if (committedToJunction || (insideJunction && !stillShortOfItsSignal)
+                || !signalAheadIsStopping)
             {
                 // Nothing ahead to stop for: either the signal has changed to permit this vehicle, it
                 // is no longer the signal governing the lane, or the vehicle is already crossing.
                 stoppingForSignal = false;
+                releaseCause =
+                    committedToJunction ? "committed to the junction"
+                    : insideJunction && !stillShortOfItsSignal ? "judged already inside the junction"
+                    : governingSignalId is null ? "no signal found governing its lane"
+                    : "its signal permits it";
             }
             else if (alreadyHeldFor == governingSignalId)
             {
@@ -344,6 +417,12 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             // from the vehicle ahead, which is the constraint that should govern a queue. It stays
             // marked as stopping for the signal throughout, and the minimum-approach distance brings
             // the brake back as it reaches the line, so it creeps up and holds rather than easing over.
+            //
+            // Once the buffer head is past the signal the waypoint reports no distance to it, which
+            // reads as zero and so never counts as resting short — the vehicle holds the brake where
+            // it is rather than creeping on across the line. The head is at most one waypoint ahead
+            // of the vehicle, so that can only happen within 5 m of the line, which is already inside
+            // the minimum approach distance where the brake is meant to be back on.
             bool restingShortOfTheLine =
                 stoppingForSignal
                 && approachSpeed < CreepSpeedMetresPerSecond
@@ -368,9 +447,13 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             {
                 _heldOnApproach.Remove(egoActorId);
                 if (TrafficReport.DiagnosticsEnabled)
+                {
+                    Location releasedAt = _simulationState.GetLocation(egoActorId);
                     TrafficReport.Writer.WriteLine(
-                    $"{DateTime.Now:HH:mm:ss.fff} [traffic] vehicle {egoActorId} released by signal "
-                    + $"{alreadyHeldFor}.");
+                        $"{DateTime.Now:HH:mm:ss.fff} [traffic] vehicle {egoActorId} released by signal "
+                        + $"{alreadyHeldFor}: {releaseCause}, at "
+                        + $"({releasedAt.X:F1}, {releasedAt.Y:F1}) doing {approachSpeed:F1} m/s.");
+                }
             }
 
             // Case 1: at a signalised junction with a red/yellow light.
@@ -475,6 +558,12 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             _vehicleLastJunction.Remove(actorId);
         }
         _committedToJunction.Remove(actorId);
+        // Both of these are keyed by actor and were never cleared here, so they grew for the life
+        // of the run as staging traffic cycled through. That now matters beyond the memory: a hold
+        // outlives the vehicle it belonged to, and the approach latch above would hand it to
+        // whatever actor next carried the id.
+        _heldOnApproach.Remove(actorId);
+        _lastReportedLight.Remove(actorId);
         _output.Remove(actorId);
     }
 
