@@ -25,7 +25,7 @@ namespace CarlaNet.TrafficManager;
 /// </summary>
 internal sealed class RandomGenerator
 {
-    private readonly Random _random;
+    private Random _random;
 
     /// <summary>
     /// Construct with the supplied 64-bit seed. .NET's <see cref="Random"/>
@@ -37,6 +37,23 @@ internal sealed class RandomGenerator
         // Fold 64 → 32 bits. Mirrors what most TM seeding paths feed (an
         // ActorId XOR'd with the global TM seed — both 32-bit quantities —
         // so the upper bits are usually zero anyway).
+        int seed32 = unchecked((int)((uint)seed ^ (uint)(seed >> 32)));
+        _random = new Random(seed32);
+    }
+
+    /// <summary>
+    /// Restart the sequence from a new seed, in place.
+    /// </summary>
+    /// <remarks>
+    /// In place, because every stage is handed this object once when it is constructed and keeps
+    /// the reference. Replacing the field that points at it -- which is what setting the traffic
+    /// manager's seed used to do -- leaves all of them drawing from the generator they were built
+    /// with, so the seed reached nothing and runs stayed unrepeatable whatever was asked for.
+    /// Call it before traffic exists: it is not safe against a tick in progress, and reseeding
+    /// mid-run has no meaning anyway.
+    /// </remarks>
+    public void Reseed(ulong seed)
+    {
         int seed32 = unchecked((int)((uint)seed ^ (uint)(seed >> 32)));
         _random = new Random(seed32);
     }

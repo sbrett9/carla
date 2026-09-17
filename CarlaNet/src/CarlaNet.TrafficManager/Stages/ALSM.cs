@@ -257,13 +257,21 @@ internal sealed class ALSM
     //                       Private helpers
     // ─────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Simulated seconds for this tick, pushed by the orchestrator from the world's own clock.
+    /// Zero until a world tick has reported one.
+    /// </summary>
+    internal void SetElapsedSeconds(double seconds) => _pushedElapsedSeconds = seconds;
+
+    private double _pushedElapsedSeconds;
+
     private double GetCurrentElapsedSeconds()
     {
-        // Use Environment.TickCount64-derived monotonic clock. This is
-        // close enough for ALSM's idle-time comparisons; the orchestrator
-        // (Wave 4) will inject the real cc::Timestamp via a setter once
-        // it threads timestamps through the world-observer callback.
-        return Environment.TickCount64 / 1000.0;
+        // Simulated time where the world has reported it, so that how long a vehicle has been
+        // idle -- and therefore when it is culled as stuck -- measures the world's progress and
+        // not the host's. Under a free-running world there is no such clock and none is needed,
+        // so fall back to the monotonic wall clock.
+        return _pushedElapsedSeconds > 0.0 ? _pushedElapsedSeconds : Environment.TickCount64 / 1000.0;
     }
 
     /// <summary>

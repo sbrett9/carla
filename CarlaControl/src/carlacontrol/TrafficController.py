@@ -128,12 +128,17 @@ class TrafficController:
             seed: Random seed for TM (optional)
         """
         logger = logging.getLogger(__name__)
+        # Match the traffic manager to the world. Under a synchronous world it is now stepped once
+        # per tick, by the thread that ticked, after the frame it will read has arrived -- so it
+        # sees exactly the frames the world produced, in order, and its own clock is the world's.
+        # It was pinned free-running before only because nothing stepped it, which parked it on
+        # the first tick and left no vehicle moving.
         try:
-            tm.set_synchronous_mode(False)
+            tm.set_synchronous_mode(sync)
         except Exception as e:
             logger.debug(f"failed to set TM synchronous mode: {e}")
 
-        if sync and seed is not None:
+        if seed is not None:
             try:
                 tm.set_random_device_seed(seed)
             except Exception as e:
@@ -141,12 +146,16 @@ class TrafficController:
 
         if sync:
             logger.info(
-                f"mode: SYNCHRONOUS world + free-running Traffic Manager "
-                f"(fixed_delta {fixed_delta}s -> ~{1.0 / fixed_delta:.0f} fps, real-time; "
-                "traffic is not deterministic)"
+                f"mode: SYNCHRONOUS world + Traffic Manager stepped on the tick "
+                f"(fixed_delta {fixed_delta}s -> {1.0 / fixed_delta:.0f} simulated fps"
+                + (f", seed {seed}: repeatable)" if seed is not None
+                   else "; pass --seed for a repeatable run)")
             )
         else:
-            logger.info("mode: ASYNCHRONOUS (server free-running)")
+            logger.info(
+                "mode: ASYNCHRONOUS (server and Traffic Manager both free-running; "
+                "wall-clock paced, so runs are not repeatable)"
+            )
 
     def __init__(
         self,
