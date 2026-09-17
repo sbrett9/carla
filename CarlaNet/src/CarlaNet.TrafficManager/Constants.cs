@@ -217,8 +217,22 @@ internal static class Constants
         public const float MAX_BRAKE = 0.7f;
         public const float MAX_STEERING = 0.8f;
         public const float MAX_STEERING_DIFF = 0.15f;
+        // Nominal controller period: the synchronous-mode fixed_delta_seconds the gains were tuned
+        // at. It is the design point and the fallback when no valid measurement exists (the first
+        // tick after registration, or a state reseed where both states share a timestamp) -- not
+        // an assertion about the rate the loop actually runs at. RunStep takes the measured period
+        // and compensates.
         public const float DT = 0.05f;
         public const float INV_DT = 1.0f / DT;
+        // Valid range for that measured period. Below MIN the derivative division gets noisy;
+        // above MAX the simulation is hitching so badly that reacting to the whole elapsed time
+        // would command enormous one-tick corrections.
+        public const float MIN_CONTROL_DT = 0.01f;
+        public const float MAX_CONTROL_DT = 0.2f;
+        // Steering slew budget per second of simulated time, rather than per tick (0.15 per 0.05 s
+        // at the design rate). Expressed as a rate, the physical steering speed stays the same
+        // when the tick rate changes.
+        public const float MAX_STEERING_RATE = MAX_STEERING_DIFF / DT;
 
         // The four PID parameter vectors. Upstream stores them as
         // `std::vector<float>{Kp, Ki, Kd}`; ports use `float[3]` to keep the
