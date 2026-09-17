@@ -223,6 +223,13 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
     /// state over instead would strand it there for good.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Whether the vehicle is still short of the stop line of the signal it is being held for,
+    /// and so cannot have entered that signal's junction whatever its position snaps to.
+    /// </summary>
+    internal static bool IsShortOfItsSignal(string? namedByBufferHead, string? alreadyHeldFor)
+        => alreadyHeldFor is not null && namedByBufferHead == alreadyHeldFor;
+
     internal static string? GoverningSignalForApproach(
         string? namedByBufferHead, string? alreadyHeldFor, bool headingIntoJunction)
         => namedByBufferHead ?? (headingIntoJunction ? alreadyHeldFor : null);
@@ -327,10 +334,29 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             // manoeuvre is exempt, as it is for the box-based decision below.
             _heldOnApproach.TryGetValue(egoActorId, out string? alreadyHeldFor);
 
+            string? signalNamedAhead = egoBuffer is { Count: > 0 }
+                ? egoBuffer[0].GoverningSignalId
+                : null;
+
             string? governingSignalId = GoverningSignalForApproach(
-                egoBuffer is { Count: > 0 } ? egoBuffer[0].GoverningSignalId : null,
-                alreadyHeldFor,
-                headingIntoJunction);
+                signalNamedAhead, alreadyHeldFor, headingIntoJunction);
+
+            // A vehicle cannot be inside the junction it is still approaching. The position test
+            // below asks the road graph which waypoint the vehicle is nearest to, and with almost
+            // every signal sitting exactly at its road's end the stop line IS the junction
+            // boundary — so a vehicle still short of the line snaps onto the junction side of it
+            // and is judged to have entered. Measured: of the holds ended by that test, the median
+            // vehicle was doing 12 m/s and not one of them was at rest, against a median of 0 m/s
+            // with 103 of 119 at rest for holds ended by their signal turning green. They are
+            // arrivals, not crossings.
+            //
+            // While the leading waypoint still names the signal the vehicle is being held for,
+            // that signal's stop line is ahead of it and it has crossed nothing, whatever the
+            // nearest-waypoint snap says. This guard is deliberately confined to the release
+            // decision: the same test also exempts a vehicle from the stop it is standing at and
+            // maintains the crossing commitment, and those two are what stop a vehicle caught by a
+            // change of light from blocking the intersection until its own light cycles.
+            bool stillShortOfItsSignal = IsShortOfItsSignal(signalNamedAhead, alreadyHeldFor);
 
             bool signalAheadIsStopping =
                 governingSignalId is not null
@@ -347,14 +373,15 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             // the signal stopped being found, or because the vehicle was judged to be in the
             // junction already, is not -- and the three are indistinguishable from the outside.
             string releaseCause = "";
-            if (committedToJunction || insideJunction || !signalAheadIsStopping)
+            if (committedToJunction || (insideJunction && !stillShortOfItsSignal)
+                || !signalAheadIsStopping)
             {
                 // Nothing ahead to stop for: either the signal has changed to permit this vehicle, it
                 // is no longer the signal governing the lane, or the vehicle is already crossing.
                 stoppingForSignal = false;
                 releaseCause =
                     committedToJunction ? "committed to the junction"
-                    : insideJunction ? "judged already inside the junction"
+                    : insideJunction && !stillShortOfItsSignal ? "judged already inside the junction"
                     : governingSignalId is null ? "no signal found governing its lane"
                     : "its signal permits it";
             }

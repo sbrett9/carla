@@ -56,6 +56,22 @@ public class SignalApproachHoldTests
             namedByBufferHead: Elsewhere, alreadyHeldFor: Approaching, headingIntoJunction: true));
     }
 
+    [Theory]
+    // Still short of the line: the leading waypoint names the very signal the vehicle is held
+    // for, so the position test must not be trusted however near the boundary it has snapped.
+    [InlineData(Approaching, Approaching, true)]
+    // Past the line, or approaching a different signal: the position test means what it says.
+    [InlineData(null, Approaching, false)]
+    [InlineData(Elsewhere, Approaching, false)]
+    // Not held for anything, so there is no approach for the position test to be wrong about.
+    [InlineData(Approaching, null, false)]
+    [InlineData(null, null, false)]
+    public void A_vehicle_short_of_its_own_stop_line_has_not_entered_the_junction(
+        string? namedByBufferHead, string? alreadyHeldFor, bool expected)
+    {
+        Assert.Equal(expected, TrafficLightStage.IsShortOfItsSignal(namedByBufferHead, alreadyHeldFor));
+    }
+
     [Fact]
     public void A_vehicle_holding_for_nothing_is_governed_by_nothing()
     {
