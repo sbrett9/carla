@@ -266,7 +266,16 @@ def main() -> int:
                     pygame_controller.apply_transform_sync()
 
                 # Sync mode owns everything on the tick thread: step traffic + telemetry inline.
-                now = time.time()
+                #
+                # On the world's clock, not the wall's. Everything these subsystems schedule
+                # against -- the spawn interval, the reconcile cadence, the grace period a fresh
+                # vehicle gets, the telemetry and recording rates -- is a duration in seconds, and
+                # under a synchronous world a wall-clock second is however long the host took.
+                # Two runs of the same seed then spawn on different frames and diverge from there:
+                # measured across a pair of them, the nth vehicle appeared up to 558 frames apart
+                # by the end, while the traffic manager itself drove the early vehicles
+                # bit-identically for over a thousand frames.
+                now = world.get_sim_time()
                 for system in worker_systems:
                     try:
                         system.apply_want()
