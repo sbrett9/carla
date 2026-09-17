@@ -234,10 +234,14 @@ These are passed to the simulator executable, not set through the Python API.
 | `-StreamingThreads=<n>` | as above | Worker threads serving sensor streams. |
 | `-SecondaryThreads=<n>` | as above | Worker threads for the secondary-server (multi-GPU) connection. |
 
-When launching through `RunCarlaServer.ps1`, pass them with `--extra-args`:
+When launching through the repository's server scripts, pass them with `--extra-args`:
 
 ```sh
+# Windows
 .\Scripts\Windows\RunCarlaServer.ps1 --extra-args "-RPCBudgetMs=10"
+
+# Linux
+./Scripts/Linux/RunCarlaServer.sh --extra-args "-RPCBudgetMs=10"
 ```
 
 ---
