@@ -342,11 +342,21 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             // this tick: a vehicle stopped short of the line is still stopping for the signal while
             // it edges up to it.
             bool stoppingForSignal = false;
+            // Which of the three exits below was taken, for the release line further down. A hold
+            // that ends because its signal went green is the system working; one that ends because
+            // the signal stopped being found, or because the vehicle was judged to be in the
+            // junction already, is not -- and the three are indistinguishable from the outside.
+            string releaseCause = "";
             if (committedToJunction || insideJunction || !signalAheadIsStopping)
             {
                 // Nothing ahead to stop for: either the signal has changed to permit this vehicle, it
                 // is no longer the signal governing the lane, or the vehicle is already crossing.
                 stoppingForSignal = false;
+                releaseCause =
+                    committedToJunction ? "committed to the junction"
+                    : insideJunction ? "judged already inside the junction"
+                    : governingSignalId is null ? "no signal found governing its lane"
+                    : "its signal permits it";
             }
             else if (alreadyHeldFor == governingSignalId)
             {
@@ -410,9 +420,13 @@ internal sealed class TrafficLightStage : IStageWithRemoveActor
             {
                 _heldOnApproach.Remove(egoActorId);
                 if (TrafficReport.DiagnosticsEnabled)
+                {
+                    Location releasedAt = _simulationState.GetLocation(egoActorId);
                     TrafficReport.Writer.WriteLine(
-                    $"{DateTime.Now:HH:mm:ss.fff} [traffic] vehicle {egoActorId} released by signal "
-                    + $"{alreadyHeldFor}.");
+                        $"{DateTime.Now:HH:mm:ss.fff} [traffic] vehicle {egoActorId} released by signal "
+                        + $"{alreadyHeldFor}: {releaseCause}, at "
+                        + $"({releasedAt.X:F1}, {releasedAt.Y:F1}) doing {approachSpeed:F1} m/s.");
+                }
             }
 
             // Case 1: at a signalised junction with a red/yellow light.
