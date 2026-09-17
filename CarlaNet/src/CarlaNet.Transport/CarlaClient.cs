@@ -139,6 +139,8 @@ public sealed class CarlaClient : IAsyncDisposable
     private readonly object _frameGate = new();
     private ulong _latestObservedFrame;
     private double _latestElapsedSeconds;
+    private double _latestDeltaSeconds;
+    private double _latestPlatformTimestamp;
 
     /// <summary>Simulated seconds carried by the most recent world-observer frame.</summary>
     public double LatestElapsedSeconds { get { lock (_frameGate) return _latestElapsedSeconds; } }
@@ -438,7 +440,10 @@ public sealed class CarlaClient : IAsyncDisposable
                 }
                 Monitor.Wait(_frameGate, remaining);
             }
-            return new TickTimestamp(_latestObservedFrame, _latestElapsedSeconds, 0.0, 0.0);
+            // The whole timestamp, not just the two fields the current subscriber happens to
+            // read. A partially-filled record is a trap for the next one.
+            return new TickTimestamp(_latestObservedFrame, _latestElapsedSeconds,
+                                     _latestDeltaSeconds, _latestPlatformTimestamp);
         }
     }
 
@@ -1809,6 +1814,8 @@ public sealed class CarlaClient : IAsyncDisposable
             {
                 _latestObservedFrame = frame.Header.Frame;
                 _latestElapsedSeconds = frame.Header.Timestamp;
+                _latestDeltaSeconds = deltaS;
+                _latestPlatformTimestamp = platformTs;
                 Monitor.PulseAll(_frameGate);
             }
             // Emit a tick event so Python world.on_tick(callback) can fire.
