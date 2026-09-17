@@ -47,7 +47,28 @@ Options:
   --version                  Print CARLA and world interface versions, then exit.
   --rpc-port <n>             CARLA RPC port. Default 2000.
   --with-window              Show a window instead of -RenderOffScreen (eyeball Cesium streaming).
-  --extra-args "<args>"      Extra arguments appended to the UnrealEditor command line.
+  --extra-args "<args>"      Extra arguments appended to the UnrealEditor command line. Simulator
+                             tuning lives here, because these are read by the executable rather
+                             than set through the Python API:
+                               -RPCBudgetMs=<n>  game-thread milliseconds given to the client-
+                                                 request queue each frame while free-running
+                                                 (default 5). Every connected client shares it,
+                                                 and a request that misses a frame's slice waits
+                                                 for the next one, so raise it if clients report
+                                                 latencies of several frames. Ignored under
+                                                 synchronous mode, where the queue is drained
+                                                 until the client's tick arrives.
+                               -RPCThreads=<n>   worker threads receiving client requests off the
+                                                 network (default max(4, cores)/3). They hand work
+                                                 needing the game thread to the queue above rather
+                                                 than running it, so this helps with many clients
+                                                 at once, not with one client waiting on the
+                                                 simulation.
+                               -StreamingThreads=<n>, -SecondaryThreads=<n>
+                                                 the same, for sensor streams and the multi-GPU
+                                                 secondary connection.
+                             See Docs/adv_synchrony_timestep.md, "How the server serves client
+                             requests".
   --cesium-cache-items <n>   Override Cesium tile request-cache size (MaxCacheItems) for this run;
                              0/omit = engine default (4096).
   --unreal-engine-root <path>
@@ -58,6 +79,7 @@ Options:
 Examples:
   ./RunCarlaServer.sh
   ./RunCarlaServer.sh --rpc-port 3000 --map /Game/Carla/Maps/Town01
+  ./RunCarlaServer.sh --extra-args "-RPCBudgetMs=10"
   CARLA_UNREAL_ENGINE_PATH=/opt/UE_5_7_4 ./RunCarlaServer.sh
 EOF
 }

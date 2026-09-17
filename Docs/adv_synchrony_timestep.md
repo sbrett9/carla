@@ -198,6 +198,54 @@ The configuration of time-step and synchrony, leads for different settings. Here
 
 ---
 
+## How the server serves client requests
+
+Most of the client API is answered on the simulator's game thread rather than on a worker, because
+the answer has to be consistent with a single simulation frame. Those calls queue, and how quickly
+the queue is drained depends on the mode:
+
+* __Synchronous mode.__ The simulator cannot advance until the client sends its tick, and anything
+still queued may be work the client is blocked on, so the queue is drained until the tick arrives.
+In practice a call is answered within a millisecond of being made.
+
+* __Asynchronous mode.__ The simulator is not waiting for anybody, so it grants the queue a bounded
+slice of game thread each rendered frame and carries on. A call that arrives after its frame's slice
+has closed waits for the next one.
+
+That budget is shared by every connected client and every thread within them — camera placement,
+sensor configuration, actor queries, and the batches the Traffic Manager sends. It matters most to
+anything that has to complete several requests in sequence before it can act: each one that misses
+a slice costs a whole frame, so a loop needing five of them runs no faster than a fifth of the frame
+rate however cheap the requests themselves are.
+
+The default budget is 5 ms per frame. Raising it is close to free when the queue is empty — the
+service call returns as soon as there is nothing left to run, rather than waiting out the duration —
+and it stays bounded, so a client flooding the simulator costs frame rate rather than taking the
+game thread outright.
+
+### Command-line options
+
+These are passed to the simulator executable, not set through the Python API.
+
+| Option | Default | Effect |
+| ------ | ------- | ------ |
+| `-RPCBudgetMs=<n>` | `5` | Milliseconds of game thread given to the client-request queue each frame, in asynchronous mode only. Raise it if clients are seeing request latencies of several frames; lower it if a busy client is costing more frame rate than it is worth. Ignored in synchronous mode, where the queue is drained to the tick instead. |
+| `-RPCThreads=<n>` | `max(4, cores) / 3` | Worker threads receiving client requests off the network. These do not execute the requests that need the game thread; they hand them to the queue above. Raising this helps when many clients are connected at once, not when one client is waiting on the simulation. |
+| `-StreamingThreads=<n>` | as above | Worker threads serving sensor streams. |
+| `-SecondaryThreads=<n>` | as above | Worker threads for the secondary-server (multi-GPU) connection. |
+
+When launching through the repository's server scripts, pass them with `--extra-args`:
+
+```sh
+# Windows
+.\Scripts\Windows\RunCarlaServer.ps1 --extra-args "-RPCBudgetMs=10"
+
+# Linux
+./Scripts/Linux/RunCarlaServer.sh --extra-args "-RPCBudgetMs=10"
+```
+
+---
+
 ## Physics determinism
 
 CARLA supports physics and collision determinism under specific circumstances:

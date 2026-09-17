@@ -21,7 +21,20 @@
 .PARAMETER WithWindow
     Show a window instead of -RenderOffScreen (useful to eyeball Cesium streaming).
 .PARAMETER ExtraArgs
-    Extra arguments appended verbatim to the UnrealEditor command line.
+    Extra arguments appended verbatim to the UnrealEditor command line. Simulator tuning options
+    live here because they are read by the executable rather than set through the Python API:
+      -RPCBudgetMs=<n>   game-thread milliseconds given to the client-request queue each frame
+                         while free-running (default 5). Every connected client shares it, and a
+                         request that misses a frame's slice waits for the next one, so raise it
+                         if clients report latencies of several frames. Ignored under synchronous
+                         mode, where the queue is drained until the client's tick arrives.
+      -RPCThreads=<n>    worker threads receiving client requests off the network (default
+                         max(4, cores)/3). They hand work needing the game thread to the queue
+                         above rather than running it, so this helps with many clients at once,
+                         not with one client waiting on the simulation.
+      -StreamingThreads=<n>, -SecondaryThreads=<n>   the same, for sensor streams and the
+                         multi-GPU secondary connection.
+    See Docs/adv_synchrony_timestep.md, "How the server serves client requests".
 .PARAMETER UnrealEngineRoot
     UE 5.7.4 engine root. Resolution order: -UnrealEngineRoot > $env:CARLA_UNREAL_ENGINE_PATH
     > <repo-parent>\UE_5_7_4. The CARLA project is found relative to this script's location.
@@ -68,7 +81,10 @@ OPTIONS (PowerShell-native | legacy alias):
   -Map <path>                --map=<path>                Startup map (default /Game/Carla/Maps/Town10HD_Opt).
   -RpcPort <n>               --rpc-port=<n>              CARLA RPC port (default 2000).
   -WithWindow                --with-window               Show a window instead of -RenderOffScreen.
-  -ExtraArgs <str>           --extra-args=<str>          Extra args appended to the UnrealEditor command line.
+  -ExtraArgs <str>           --extra-args=<str>          Extra args appended to the UnrealEditor command line. Simulator
+                                                         tuning lives here, e.g. -RPCBudgetMs=<n> (per-frame budget for
+                                                         client requests while free-running, default 5) and
+                                                         -RPCThreads=<n>. Get-Help this script for the full list.
   -CesiumCacheItems <n>      --cesium-cache-items=<n>    Override Cesium tile request-cache size (MaxCacheItems) for this run; 0/omit = engine default (4096).
   -UnrealEngineRoot <dir>    --unreal-engine-root=<dir>  UE 5.7.4 root (else CARLA_UNREAL_ENGINE_PATH, else <repo-parent>\UE_5_7_4).
   -Level <name>              --level=<name>              Load a delivered world by name (e.g. Arapahoe_I25).
