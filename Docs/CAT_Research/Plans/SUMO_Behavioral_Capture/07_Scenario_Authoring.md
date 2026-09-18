@@ -4,7 +4,7 @@
 ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3a). Source audit against the working tree plus read-only
 measurement of the shipped world packages, networks and route files. No code changed, no build run,
 no engine started.
-**Date:** 2026-09-18 (first draft 2026-09-17)
+**Date:** 2026-09-18
 **Scope:** How a SUMO-driven behavioural-capture scenario comes into existence — what an author is
 given, what they write, how a described place becomes an edge, **what civil instant a simulated
 second means**, and what is checked before a capture run is spent. Covers the authoring bundle, the

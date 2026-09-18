@@ -2,17 +2,17 @@
 
 **Status:** Plan section. Design against a read of the working tree and against measurements taken from
 the real scenario artifacts. No code changed, no build run.
-**Date:** 2026-09-18. Redrafted twice. The first redraft brought **simulated time of day and scene
-illumination** into the truth model (§2.7, §4.5, §5.4, §7.3, the solar block of §8.4, decisions
-D6.20–D6.25). The second redraft applies the scope boundary of
-[`_TEAM_BRIEF.md` §3b](_TEAM_BRIEF.md): **this pipeline produces imagery, truth and labels, and scores
-nothing.** The detect-and-track model and the estimated-pattern-of-life model are external to this
-effort. That redraft changed **framing, not findings**. Every measurement in both earlier drafts is
-carried forward unchanged and nothing measured was deleted; what changed is §10 in full, the
-observability accounting's justifications in §5.1 and §5.2, the sequence diagram of §8.5, and wording
-throughout wherever a statement about *our data* had been written as a statement about *a model*. One
-decision is added (**D6.26**). **No decision was renumbered** — D6.1 to D6.25 keep their numbers and
-their subjects, so sibling citations remain valid.
+**Date:** 2026-09-18.
+
+| Revision | Change |
+|---|---|
+| 1 · 2026-09-17 | Doc 20's supervision model re-seated on a SUMO authoring surface. |
+| 2 · 2026-09-18 | Simulated time of day and scene illumination brought into the truth model. |
+| 3 · 2026-09-18 | Scope boundary applied: imagery, truth and labels are produced; nothing is scored. |
+
+**This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
+and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
+field. Decisions are numbered D6.1 to D6.26 and are stable — sibling documents cite them.
 **Scope:** How an author's assertion about what a vehicle is doing reaches the truth record when the
 authoring surface is a SUMO scenario rather than an OpenSCENARIO storyboard; how positional truth,
 behavioural truth and **the illumination the frame was rendered under** are produced by different
@@ -45,8 +45,8 @@ measured; anything else that is not cited is labelled as an inference.
   nothing designed here runs a detector, a tracker or a model; associates model output to truth in
   order to measure that model; computes precision, recall, F1, temporal-localisation figures or a
   confusion matrix; or produces a scoreboard, a model comparison or a verdict on a model. There is no
-  "score" artifact root. §10 is where that boundary is drawn field by field, and §10.1 says what
-  replaces the association step earlier drafts assigned to this pipeline.
+  "score" artifact root. §10 is where that boundary is drawn field by field, and §10.1 publishes the
+  transfer rule in place of performing the association.
 - **Quality gates on the *data* are not scoring and remain in scope in full.** Whether the corpus is
   internally consistent, leak-free, complete, and honest about what it does not contain is this
   section's whole subject. Where a statement below reads as a judgement, check what its subject is: an
@@ -944,8 +944,8 @@ Practical requirements on the reconciler:
 
 ### 4.4 Three vehicle states, and what truth says about each
 
-**There were four, and one of them existed only because of vehicle fade.** An earlier draft of this
-section carried a *rendered, arriving* state: an actor that existed but was mid-dissolve, excluded
+**There are three, and there is deliberately no fourth.** A *rendered, arriving* state would be an
+actor that existed but was mid-dissolve, excluded
 from the capture sidecar because [09 §5.2](../../Findings/09_Telemetry_CoT_Contract.md) fixes that a
 half-dissolved car is not something a sensor should be told is there. **That state is gone.** [01 D1.11](01_Architecture.md) designs no fade behaviour, and the user
 has demoted fade for this mode — it is a client-side computation pushed one blocking RPC per vehicle
@@ -1030,7 +1030,7 @@ so a reader does not merely learn that something is wrong but what.
 
 | Signature | Diagnosis |
 |---|---|
-| Residual of several **hours**, constant across the whole window, achieved `solar_time` exactly `12.0` | The sun was never set. The world is at its spawn default of local solar noon (`CesiumHeightSampler.cpp:409`). **This is the silent failure the redraft exists to catch** — it is the 23:00-window-in-daylight case, and it is now a number in the manifest rather than something a human has to notice by looking at a picture |
+| Residual of several **hours**, constant across the whole window, achieved `solar_time` exactly `12.0` | The sun was never set. The world is at its spawn default of local solar noon (`CesiumHeightSampler.cpp:409`). **This is the silent failure this residual exists to catch** — it is the 23:00-window-in-daylight case, and it is now a number in the manifest rather than something a human has to notice by looking at a picture |
 | Constant residual of **14 min 43 s** at the sizing scenario (in general, `lon/15 − civil_offset`) | The declared civil time was passed straight into `set_solar_time` without the civil-to-solar conversion. Measured in §2.7; the value is site-specific and is exactly the arithmetic above |
 | Residual **zero in time**, achieved `date` **not equal to** `declared_civil_date`, and an elevation residual that grows across a multi-day run | The advancing clock wrapped at midnight without advancing the date (`CesiumTimeOfDayController.cpp:34-36`), so declination is frozen at the anchor date. The date comparison catches it directly and needs no arithmetic; the elevation residual says how much it cost. A defect [11](11_Time_And_Illumination.md) owns; the manifest records `date_rollover_applied: false` so that a reader is never left inferring it |
 | Residual **growing linearly** under a `frozen` policy, or **static** under an `advancing` one | The policy that was asserted is not the policy in force. Under `frozen` the achieved `solar_time` must be constant across every capture in the window; under `advancing` it must move at `rate` per simulated second |
@@ -2307,8 +2307,7 @@ Not new policy — these are the measured confounders of §2.4 turned into check
 
 ## 10. What the corpus contains, the transfer rule it publishes, and the anti-leak boundary
 
-**Rewritten against [`_TEAM_BRIEF.md` §3b](_TEAM_BRIEF.md).** Earlier drafts of this section had this
-pipeline *perform* the association of detector tracks to truth and *write* an evaluation export for a
+This pipeline does not *perform* the association of detector tracks to truth, and writes no export for a
 scoring step. Both are removed. What survives — and survives in full — is the part that was always
 about our own data: the format in which truth is emitted, the rule by which supervision would be
 carried onto detector tracks, the partition of the corpus into a model-readable half and a withheld
@@ -2429,8 +2428,8 @@ design.
 ### 10.3 The two exports, and why the split survives the scope narrowing
 
 **The split survives, as a held-back partition of our own data.** It was worth asking whether it
-should, because earlier drafts justified it as "training versus evaluation" and evaluation of a model
-is no longer in scope. The answer is that the split was never a measurement — it is a statement about
+should, because "training versus evaluation" would justify it on a basis — evaluating a model — that
+is not in scope. The answer is that the split was never a measurement — it is a statement about
 which of our own rows go where, and it survives on exactly those terms. What changes is the second
 artifact's **name and its stated purpose**: it is no longer "the evaluation export", because nothing
 here evaluates. It is the **full-truth export**, named for what it contains.
@@ -2550,7 +2549,7 @@ of the fifteen rows above changes on their account beyond rows 3 and 15.
 - The detector, the tracker and the model service, all of which are **external to this effort**
   ([`_TEAM_BRIEF.md` §3b](_TEAM_BRIEF.md)) — [08](08_Collection_And_EPoL.md) owns the interfaces to
   them. There is **no scoring harness anywhere in this plan**, in this section or in any other; §10.1
-  replaces the association step an earlier draft placed here with a published rule.
+  publishes the transfer rule rather than applying it.
 - The cost of computing area relations and reconciliation residuals per vehicle per capture —
   [10](10_Scale_And_Performance.md).
 - Area-of-interest file format, build-time validation, the world-scoped actor and the RPC pair —

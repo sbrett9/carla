@@ -1,7 +1,7 @@
 # 01 — System architecture
 
 **Status:** Plan section. Design, not implementation. No code was changed and no build was run.
-**Date:** 2026-09-18 (revision 4). First drafted 2026-09-17.
+**Date:** 2026-09-18.
 **Owner role:** Systems architect. Companion section: [02 — Use cases](02_Use_Cases.md).
 **Scope:** The component decomposition, the process topology, the authority model, the mode matrix, the
 ownership of simulated civil time and of the world's illumination, the ownership of real-time pacing for
@@ -15,55 +15,14 @@ on 2026-09-17 or 2026-09-18, or carried forward from a Findings document and mar
 Measurements taken for this section are marked **measured** and say how. Everything else that is not
 cited is marked **inference**.
 
-**What changed in revision 2.** The first draft specified windowed capture in simulated time and never
-connected it to the sun. A window that opens at 23:00 would have rendered under whatever light the world
-was spawned in, which is local solar noon by construction
-(`Unreal/CarlaUnreal/Plugins/CesiumCarlaBridge/Source/CesiumCarlaBridge/Private/CesiumHeightSampler.cpp:409`).
-This revision gives simulated civil time, the solar policy and the world's illumination named owners in
-§4, adds the components that resolve and actuate them in §2.3, re-examines the mode matrix in §5 and the
-cost ledgers in §8 and §11, and makes the illumination consequence of window placement explicit in §9.
-**Decision numbers D1.1–D1.18 are unchanged and keep their meanings**; the new decisions are D1.19–D1.25,
-and several existing decisions gained a clause, which is marked in the decision table. Two section
-numbers moved: the old §4.4 is now §4.5, and the old §9.3 is now §9.4. No sibling section cited either.
+**Change history.**
 
-**What changed in revision 3.** The user narrowed the effort: the detect-and-track stage and the
-estimated-pattern-of-life (EPoL) model are external to this pipeline, and no part of this pipeline or
-tool suite scores anything. Revision 2's `EvaluationJoin` and `SupervisionTransfer` — a join that scored
-model assessments against supervision, and the harness that would have performed truth-to-track
-association — are **removed as components this architecture builds** (§2.4, renamed but not
-renumbered). What replaces them is
-a handover: the corpus is an artifact this pipeline produces, complete and closed, and
-`DetectAndTrackStage` and `EPoLModelService` are external systems that consume it, exactly as the context
-diagram (§1.1) already labelled them — this revision makes that unambiguous by removing the join that
-sat between them and this system's own boxes. The context diagram (§1.1) and the process topology diagram
-(§3.2) are redrawn so nothing downstream of the corpus is drawn as ours; `CorpusAudit`, which checks our
-own labels against our own derived area relations and needs no external model output, stays and is now
-drawn on its own. Four sentences that argued from a hypothetical model's score (§4.3, §7, §8.5.3, §10)
-are reworded to argue from the property of the corpus they were actually establishing — leakage, or
-completeness — because that is the assertion the measurement actually supports. **No decision is removed
-or renumbered**; D1.1–D1.25 keep their numbers and their meanings, none of them assigned ownership of an
-evaluation artifact, and the authority table (§4.1) is unchanged. The truth path, the supervision path
-and the anti-leak boundary are unchanged throughout.
-
-**What changed in revision 4.** The user elevated the live exercise from a tolerated case to a **primary
-use case** and added a pacing requirement (team brief §3c): synthetic imagery goes to an external
-detect-and-track stage, whose tracks go to an external EPoL model service, which produces anomaly reports
-live, and the architecture must stay generic past that boundary. Three changes follow, none of them a
-redesign. **First**, real-time pacing is given a named owner and a place in the authority model —
-`PlaybackClock`'s own contract gains a real-time-factor policy, not a second clock and not a governor in
-front of it (new §4.6, D1.26); this section fixes only where the lever sits, and
-[08](08_Collection_And_EPoL.md) rules on what `PlaybackClock` does with it when a live consumer falls
-behind. **Second**, §1.1's and §3.2's diagrams gain a dashed, optional edge for material an attached
-consumer pushes back, confirming it lands as a received, opaque transcript and never as an input to
-anything this pipeline computes (D1.28); `DetectAndTrackStage` and `EPoLModelService` were already drawn
-External and stay External, in both diagrams, in both directions. **Third**, the mode matrix is confirmed
-unaffected: live exercise is a property of the collection, not a fifth mode, and changes no row of §5.1
-or §5.2 beyond the pacing row D1.26 adds to §4.1 (new §5.6, D1.27). A short new §2.7 confirms unattended,
-scheduled regeneration needs no component beyond `CaptureSession` and `RunManifestWriter`, already
-specified (D1.29). **No decision is removed or renumbered**; D1.1–D1.25 keep their numbers and meanings,
-D1.1 gains a clause, and D1.26–D1.29 are new. Nothing above changes the truth path, the supervision path,
-the anti-leak boundary, or revision 3's removal of `EvaluationJoin`/`SupervisionTransfer` — going live
-does not reopen either.
+| Revision | What changed |
+|---|---|
+| 1 — 2026-09-17 | First draft: components, topology, authority model, mode matrix, doc 23 reconciliation, sizing. |
+| 2 — 2026-09-18 | Simulated civil time, solar policy and illumination given named owners. Adds D1.19–D1.25. |
+| 3 — 2026-09-18 | Detect-and-track and EPoL model fixed as external; no evaluation or association component. |
+| 4 — 2026-09-18 | Live exercise a primary use case; real-time pacing owned by `PlaybackClock`. Adds D1.26–D1.29. |
 
 **Out of scope, deliberately.** The per-tick mechanism of the co-simulation loop
 ([03](03_CoSimulation_Runtime.md)), the wire-level shape of any contract
@@ -158,18 +117,17 @@ flowchart TB
     EPOL -. "optional transcript<br/>opaque, tick-stamped,<br/>received only — never an input" .-> CS
 ```
 
-**`EvaluationJoin` and `SupervisionTransfer` are gone from this diagram**, not renamed or moved — this
-architecture does not build a component that reads `DetectAndTrackStage` or `EPoLModelService` output
-back in. `DetectAndTrackStage` and `EPoLModelService` were always drawn inside `ext`, the external
-systems subgraph, and stay there under a live exercise exactly as under a stored corpus — nothing inside
-`sys` draws either as its own. Everything `sys` sends them is a one-way handover, batched or live
-(§4.6); nothing inside `sys` reads an edge from either of them for meaning. `CorpusAudit`
-stays, because it checks this pipeline's own labels against this pipeline's own derived area relations
+**This architecture builds no component that reads `DetectAndTrackStage` or `EPoLModelService` output
+back in.** Both are drawn inside `ext`, the external-systems subgraph, under a live exercise exactly as
+under a stored corpus — nothing inside `sys` draws either as its own. Everything `sys` sends them is a
+one-way handover, batched or live (§4.6); nothing inside `sys` reads an edge from either of them for
+meaning. `CorpusAudit` is inside `sys`, because it checks this pipeline's own labels against this
+pipeline's own derived area relations
 ([20 §2.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)) and needs no external
 model's output to do it.
 
-**The two dashed edges are new in revision 4, and they are the only edges this architecture draws
-returning from `ext` into `sys`.** They exist because team brief §3c permits, but does not require, an
+**The two dashed edges are the only edges this architecture draws returning from `ext` into `sys`.**
+They exist because team brief §3c permits, but does not require, an
 attached consumer to push material back — tracks, reports, or anything else. What lands at `CS` is
 received as an **opaque, tick-stamped transcript with its own provenance**, not parsed for meaning, not
 merged into truth or supervision, and not read by anything this pipeline computes (D1.28); its container
@@ -290,13 +248,12 @@ design (D1.28) — they are none of this plan's business, live or offline. Where
 helps a reader, it is one illustrative adapter, marked as such; sketching one is
 [02](02_Use_Cases.md)'s and [08](08_Collection_And_EPoL.md)'s to do, not this section's.
 
-**Two components in revision 2 do not survive this boundary, and neither is replaced by anything.**
-`EvaluationJoin` joined `EPoLModelService`'s assessments to supervision and scored them — that is the
-evaluation this effort does not perform. `SupervisionTransfer` would have associated
-`DetectAndTrackStage`'s tracks to truth — that requires reading an external system's output back in,
-which is the one thing the handover forecloses. Neither is downgraded to a stub; both are removed. What
-survives of them is a contract, not a component: this pipeline still publishes truth that is
-*associable* — per tick, positioned, timed, boxed — and still documents the rule by which supervision
+**Two components this architecture deliberately does not contain.** There is no join of
+`EPoLModelService`'s assessments to supervision — that is the evaluation this effort does not perform —
+and no harness associating `DetectAndTrackStage`'s tracks to truth, because that requires reading an
+external system's output back in, which is the one thing the handover forecloses. What stands in their
+place is a contract, not a component: this pipeline publishes truth that is
+*associable* — per tick, positioned, timed, boxed — and documents the rule by which supervision
 *would* transfer onto a detector's tracks ([20 §7.6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)),
 so that an external consumer can perform that association itself. [04](04_Contracts.md) and
 [06](06_Truth_And_Annotation.md) own that contract's wire shape; this section owns only the fact that no
@@ -389,15 +346,25 @@ against §2.2's and §2.3's tables, that requirement is already met by what exis
 - `CaptureSession` (§2.3) already assigns a stable identity from run inputs — session id, scenario id,
   seed — so two unattended invocations with the same inputs are identifiable as the same run and two with
   different seeds are identifiable as different ones.
-- `RunManifestWriter` (§2.3) already produces a closed, machine-readable result recording what was
-  produced, every admission and refusal (§9.2), and — from §4.6 on — the pacing policy actually achieved.
-  That is exactly the "did this run produce something fit to use" verdict an automated cadence needs to
-  read back, without a human watching it run.
+- `RunManifestWriter` (§2.3) already produces a machine-readable record of what was produced, every
+  admission and refusal (§9.2), and — from §4.6 on — the pacing policy actually achieved. It states
+  **facts**, and an external caller decides what they mean: this architecture publishes no aggregate
+  verdict on whether a run is fit for a purpose it does not know (team brief §3d;
+  [04](04_Contracts.md) owns the record's contract).
+
+Two properties matter more than any of the above, and both follow from the caller — not this system —
+owning termination. **A deliberate kill at an arbitrary instant is a normal operating mode**, so the
+manifest must be **written incrementally and be valid at every instant**, never readable only once
+closed; an interrupted run yields a shorter record, not a corrupt one. And because the caller decides
+when it has enough by **querying while the run is in progress**, the observable surface during a run
+matters more than anything read back at the end — the existing client RPC and stream surfaces are that
+interface, and [04](04_Contracts.md) specifies what they expose.
 
 So an unattended regeneration is a script that invokes the same entry point non-interactively with a new
-seed, date or window and reads the resulting manifest — a parameter surface and a scheduling detail,
-neither of them architectural. [12](12_Operator_Control_Surface.md) owns the parameter surface; no
-scheduler, training loop or model lifecycle is any part of this architecture (D1.29).
+seed, date or window, watches through surfaces that already exist, and stops the run when it decides to.
+That is a parameter surface and an external control loop, neither of them architectural.
+[12](12_Operator_Control_Surface.md) owns the parameter surface; no cadence, scheduler, run-length
+policy, training loop or model lifecycle is any part of this architecture (D1.29).
 
 ---
 
@@ -426,12 +393,12 @@ And there are **two** process-local registries, not one, each of which a second 
 That is one failure mode with two instances, and it is the reason the topology decision below is what it
 is rather than a matter of taste.
 
-**A third instance was here and has been withdrawn, deliberately rather than by renumbering.** The
+**A third instance does not arise, and the reason is worth recording.** The
 staging fade table is also client-local — `CarlaClient._fade`, held there because "the server keeps no
 readable copy of it" (`CarlaNet.Transport/CarlaClient.cs:1545-1556`) — and it gates truth, because
 `VehicleTelemetryService.cs:73` skips any vehicle that has not been established. Two processes disagreeing
-about which vehicles had arrived would have been a real third instance of the same failure. **It is not,
-because fade is off.** `--fade` now carries `default=False`, and its help text gives the reason: the
+about which vehicles had arrived would be a real third instance of the same failure. **It is not one,
+because fade is off.** `--fade` carries `default=False`, and its help text gives the reason: the
 opacity is computed client-side and pushed to the server as one blocking RPC per vehicle per reconcile,
 which is the heaviest load this client puts on the server's per-frame RPC budget
 (`CarlaControl/src/carlacontrol/CarlaControlArgumentParser.py:318-328`, read 2026-09-17; `--no-fade` is
@@ -492,14 +459,13 @@ flowchart TB
     EPOL -.->|"optional transcript, opaque,<br/>received only — never an input"| p1
 ```
 
-**`EvaluationJoin` is gone from this diagram too, and nothing replaces it.** No process on this host
-reads `DetectAndTrackStage`'s tracks or `EPoLModelService`'s assessments back in for meaning; the only
-edges leaving `p1`/`p2` toward `off` are the corpus handover and the diagnostic CoT stream. `DAT --> EPOL`
-and `EPOL --> TAK` are drawn because they are true of the external world this pipeline hands its corpus
-into, not because this architecture builds or owns either arrow. The two dashed edges back into `p1` are
-new in revision 4 and carry only the optional transcript of §1.1; they cross the same filesystem or
-socket boundary as the handover, whichever the external system chooses, and this architecture states
-nothing further about that transport (D1.28).
+**No process on this host reads `DetectAndTrackStage`'s tracks or `EPoLModelService`'s assessments back
+in for meaning**; the only edges leaving `p1`/`p2` toward `off` are the corpus handover and the
+diagnostic CoT stream. `DAT --> EPOL` and `EPOL --> TAK` are drawn because they are true of the external
+world this pipeline hands its corpus into, not because this architecture builds or owns either arrow. The
+two dashed edges back into `p1` carry only the optional transcript of §1.1; they cross the same
+filesystem or socket boundary as the handover, whichever the external system chooses, and this
+architecture states nothing further about that transport (D1.28).
 
 ### 3.3 What crosses a boundary and by what transport
 
@@ -513,7 +479,8 @@ nothing further about that transport (D1.28).
 | CARLA server | Any client | Solar state, **on the world-observer snapshot header** — eleven doubles appended at offset 36 (`Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Sensor/WorldObserver.cpp:322-339`; cached at `CarlaClient.cs:1850-1855`, exposed at `:1991`) | **No RPC at all**, tick-paired, lock-free. The read path costs nothing and is already consumed by the recorder (`FrameRecorder.cs:160-162`) |
 | `FrameRecorder` | Disk | PNG + CoT XML sidecar pairs, per camera | |
 | Truth producer | TAK client | CoT over UDP | Diagnostic; the sidecar is authoritative ([20 §7.4](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)) |
-| Capture corpus | `DetectAndTrackStage` | Filesystem | |
+| Capture corpus | `DetectAndTrackStage` | Filesystem, or a live transport the external system chooses | The transport past this boundary is `DetectAndTrackStage`'s choice, not this architecture's. For a live exercise the handover is **continuous rather than deferred**: the same frame and sidecar `FrameRecorder` already produces become available as they are produced, at the pace `PlaybackClock` is pacing to (§4.6) — what crosses the boundary is unchanged, only the timing of the handover differs, and how a consumer is notified or polled is [08](08_Collection_And_EPoL.md)'s to define |
+| `DetectAndTrackStage` / `EPoLModelService` | `CaptureSessionHost` | Whatever the external system offers, if anything; opaque to this architecture | **Optional, and one-way in only.** Recorded verbatim and tick-stamped as a transcript with a source id and a content type; never parsed for meaning and never fed into truth, supervision or the clock (D1.28). [04](04_Contracts.md) and [08 §11.6](08_Collection_And_EPoL.md) own the container shape |
 
 ### 3.4 The topology decision
 
@@ -550,6 +517,7 @@ applies it, or is forbidden from touching it.
 | Concern | Sole owner | What every other component does |
 |---|---|---|
 | **Simulated time** | `PlaybackClock` | `sumo` steps only when stepped; the CARLA world advances only on a tick cue from the clock; recorders decimate against the frame timestamp they are given and never against wall clock; camera-follower processes never cue; the .NET traffic manager does not run at all |
+| **Pacing against a wall clock** (a live exercise's tick-cue cadence) | `PlaybackClock`, as a real-time-factor run input — not a governor, and not a second clock | Nothing else decides when a tick cue is issued or compares simulated time to wall time. A stored-corpus capture's factor is unconstrained (today's default, every mode, §6.1); a live exercise's factor locks the cue cadence to wall time. Every other §2.3 component reacts only to "the clock has advanced by one step" and is unaware pacing exists. What `PlaybackClock` does when the target cannot be met is [08](08_Collection_And_EPoL.md)'s ruling; this row fixes only that the lever is the clock's (§4.6) |
 | **Simulated civil time** (what o'clock it is in the scenario) | `PlaybackClock`, **as a projection of simulated elapsed time through the session's resolved epoch** — not a second clock, and not a second authority to keep in step. See §4.4 | Nothing else computes a civil instant. A component that needs one asks the clock; a component that needs the *achieved* one reads the published solar state. `sumo` has no notion of civil time and is never asked for one |
 | **The epoch and the solar policy** (what civil instant `t = 0` is; frozen or advancing, and at what rate) | `ScenarioEpochResolver`, once at session start, from the scenario package's declaration and the run input. **Immutable for the session** | Nothing changes either mid-session. A capture that wants a different sun is a different run, so that the manifest's single recorded value is true for every frame in it. [12](12_Operator_Control_Surface.md) owns how an operator expresses the choice; [11](11_Time_And_Illumination.md) owns the declaration's grammar |
 | **Illumination — the world's sun** | `PlaybackClock`, actuated by `SolarStateActuator`. The mechanism is `CesiumSunSky`, which the server binding names the single sun and lighting authority for the georeferenced world (`CarlaServer.cpp:611-612`) | Nothing else calls `set_solar_time`, `set_solar_date` or `set_time_advance` during a session. Every other component **reads** the published solar state from the world-observer snapshot at no cost. CARLA's own weather is inert in this world and is not an alternative route to the sun |
@@ -626,7 +594,7 @@ formality. [04](04_Contracts.md) owns the tolerance and the fallback.
 
 ### 4.4 Simulated civil time is a projection, not a second clock
 
-This is the decision the first draft never took, so it is argued rather than asserted.
+Two plausible owners exist for this job, so the choice between them is argued rather than asserted.
 
 #### 4.4.1 The question
 
@@ -751,6 +719,92 @@ authority therefore needs no lease of its own; it follows the population-authori
 Whoever holds population authority over a world is the only component permitted to command its sun. That
 costs no new mechanism and it resolves the one real conflict, which is `StoryboardExecution` — see §5.5.
 
+### 4.6 Real-time pacing under a live exercise
+
+Team brief §3c makes the live
+exercise a primary use case and names pacing as **"the one genuinely new engineering question"**: a
+stored-corpus capture runs as fast as the machine allows; a live exercise runs against a wall clock with
+an external chain, and possibly a human, watching. Something has to decide when the next tick cue goes
+out, and the brief asks this section to say where that decision sits — as a property of `PlaybackClock`
+itself, as a governor in front of it, or as an operator-set rate.
+
+#### 4.6.1 The three candidates are one candidate
+
+**A governor is rejected on the same structural argument §4.4.2 already made against a `SolarClock`.** A
+governor sitting in front of `PlaybackClock`, gating its cues from outside, would have to know the same
+simulated instant D1.1 already assigns to one owner in order to decide whether to hold a cue back. That
+is a second component deciding about state that is the clock's alone to hold — the identical shape of
+disagreement risk that made a second solar accumulator unacceptable (§4.4.2), now recurring one level up
+the same clock. It is rejected for the same reason, not a new one.
+
+**An operator-set rate is not a competing design — it is the simplest value the clock's own contract can
+take.** The pattern already exists in this tree and needs no invention: `SumoCotBridge.run` paces a
+scenario against the wall clock through a single `real_time_factor` argument, documented as "1.0 makes a
+second of simulation take a second, 2.0 runs at twice that, and 0 — the default — steps as fast as the
+machine allows" (`CarlaControl/src/carlacontrol/SumoCotBridge.py:184-194`), implemented as a comparison
+against an **absolute** wall-clock target rather than a per-step sleep, specifically so "a step that
+overruns is absorbed by the next one instead of accumulating drift over a long run"
+(`SumoCotBridge.py:243-248`). That idiom is not part of the capture path today — `SumoCotBridge` is
+retained unchanged as the standalone, CARLA-free telemetry path (D1.18) — but it is exactly the shape a
+run input to `PlaybackClock` should take, because it already solves the long-run drift problem a live
+exercise would otherwise hit fresh.
+
+So: **real-time pacing is a property of `PlaybackClock`'s own contract, carried as a run input — a
+real-time factor, the same shape as `SolarPolicy` (D1.22): declared once at session start, immutable for
+the session, and echoed to the operator and the manifest (§10.2).** A factor of zero (or the policy's
+absence) is unconstrained, which is what every mode already gets today (§6.1); a positive factor locks
+the cue cadence to wall time at that ratio. `PlaybackClock` is the only component that ever reads wall-clock
+time under this policy, for the same reason it is the only component that ever projects a civil instant
+(§4.4): it is the only component holding the simulated instant the comparison needs.
+
+#### 4.6.2 The useful property, and what is deliberately not decided here
+
+**Truth is stamped in simulated time, not wall time — D1.3 and D1.4 already establish this, for pose and
+for kinematics, and §6.1's step-ratio contract establishes it for the SUMO/world/capture relationship.**
+Nothing above changes under a real-time factor: `CaptureIdentity` and the decimation gate are both keyed
+to the simulated instant, the sun is a projection of simulated elapsed time (§4.4), and the SUMO step, the
+world tick and the capture rate stay in the same integer ratio regardless of how fast or slowly wall time
+is passing. **A world that ticks slower than real time is therefore still internally exact** — every
+frame's pose, kinematics and solar state are exactly what the simulated instant says, whatever the wall
+clock did to reach it. That is what makes "let simulated time fall behind wall time" a nearly free
+response to a downstream stall, unlike dropping a frame, which is a permanent gap in what was captured.
+
+**What this section does not decide, and says so rather than guessing.** Whether `PlaybackClock` actually
+slows, drops, or does something else when a live consumer cannot keep the declared rate — and what an
+operator sees when it happens — is [08 §11](08_Collection_And_EPoL.md)'s ruling, per the team brief's own
+division of labour. This section's claim is narrower and does not depend on which way that ruling falls:
+**whatever the response is, it attaches to `PlaybackClock`, because it is the only component that knows
+the current simulated instant and the only one that issues a tick cue.** Nothing downstream — `SumoStateReader`,
+`RenderSetSelector`, `SumoPoseProjector`, `SolarStateActuator`, `FrameRecorder` — needs to know a live
+exercise is even running; each still reacts only to "the clock has advanced by one step."
+
+```mermaid
+flowchart LR
+    RF["real-time factor<br/>run input: 0 = unconstrained,<br/>or wall-clock-locked at a rate<br/>(operator surface, 12)"] --> PC["PlaybackClock"]
+    WC["wall clock"] -.->|"read only when<br/>a factor is set"| PC
+    PC -->|"tick_cue, paced or unconstrained"| SRV["CARLA server"]
+    PC -->|"simulationStep()"| SUM["sumo"]
+    SRV -->|"frame + truth,<br/>stamped in simulated time (D1.3, D1.4)"| OUT["capture corpus,<br/>or live handover (§3.3)"]
+    PC -.->|"target rate not met"| LAG{"response: 08's ruling<br/>(§11), not this section's"}
+```
+
+#### 4.6.3 What this needs from elsewhere
+
+**From [03 — Co-simulation runtime](03_CoSimulation_Runtime.md):** the mechanism, in the manner of
+`SumoCotBridge.py:243-248` — a real-time factor evaluated against an absolute wall-clock target on the
+world tick, not a per-step sleep, so drift does not accumulate over a long exercise, with the achieved
+factor **measured per wall-clock interval and reported, not merely targeted** — because a run that did
+not hold its declared rate is a fact about that run, not something to hide (echoing the defect already
+visible in the unmodified pattern: it sleeps only when ahead of schedule and records nothing when it
+falls behind, `SumoCotBridge.py:247-248`).
+
+**From [08 — Collection and EPoL](08_Collection_And_EPoL.md):** the ruling on what `PlaybackClock` does
+when the declared rate cannot be sustained, and what the operator sees while it happens (§4.6.2).
+
+**From [12 — Operator control surface](12_Operator_Control_Surface.md):** where the real-time factor is
+expressed, alongside the epoch and `SolarPolicy` this section already asks it for (§10.2) — one surface,
+not a live-only flag.
+
 ---
 
 ## 5. Modes
@@ -787,8 +841,8 @@ Solar command authority follows the population lease (§4.5), so every combinati
 permits has exactly one commander of the sun and every combination it already forbids was forbidden for
 a reason that covers the sun too. What *does* change is the `StoryboardExecution` row, because it is the
 one mode that holds no population authority and could therefore command a sun nobody else is commanding
-— or, worse, command one somebody else is. §5.5 states that rule, and §5.5 also states the new
-obligation `RecordedReplay` acquires, which is the only genuinely new constraint in this revision.
+— or, worse, command one somebody else is. §5.5 states that rule, and §5.5 also states the
+obligation `RecordedReplay` acquires.
 
 ### 5.3 The lockout, as a structural property
 
@@ -916,13 +970,35 @@ illumination requirement gives that rule a second, independent reason to exist.
 replay without anything being re-derived. The sun is the only half of illumination that has to be
 re-established.
 
+### 5.6 Live exercise is a property of the collection, not a mode
+
+**Checked against §5.1's table and §4.1's authority table, as the clarification asks.** Live exercise
+does not change what drives ambient vehicles, who holds population authority, or who holds motion
+authority — so it is not a fifth row of §5.1 and it adds no cell to §5.2's coexistence matrix.
+
+Every mode of §5.1 can run against a stored corpus or live, unchanged: `SumoDrivenPlayback` is the mode
+the sizing scenario uses either way; `TrafficManagerAmbient` and `StoryboardExecution` are equally able to
+feed a live exercise, subject to the same coexistence rules §5.2 already states; `RecordedReplay` can be
+run live to rehearse against a fixed, reproducible scene. **Exactly one thing changes under a live
+exercise, and it is orthogonal to the mode matrix**: `PlaybackClock`'s pacing policy (§4.6), and,
+downstream of the clock, whether the corpus handover is continuous or deferred (§3.3). Neither of those
+is a row of §5.1 or a cell of §5.2: `SumoDrivenPlayback` × `TrafficManagerAmbient` remains exclusive
+whether or not either is live, `StoryboardExecution`'s conditional coexistence with `SumoDrivenPlayback`
+is unaffected, and `RecordedReplay`'s exclusivity against everything else is unaffected. **The matrix is
+unchanged** (D1.27).
+
+One consequence worth naming because it is easy to miss: solar command authority still follows the
+population-authority lease exactly as §4.5 and §5.3 state, live or not — a live exercise does not create
+a second reason to touch the sun, and `StoryboardExecution`'s guard rail against setting it while
+coexisting (§5.5) applies identically whether the session is being watched live or recorded to disk.
+
 ---
 
 ## 6. One simulated instant, end to end
 
 ### 6.1 The clock contract
 
-Four rates meet here and their relationship is a contract, not a setting:
+Five rates meet here and their relationship is a contract, not a setting:
 
 | Rate | Value in the sizing case | Source |
 |---|---|---|
@@ -930,12 +1006,15 @@ Four rates meet here and their relationship is a contract, not a setting:
 | CARLA fixed delta | 0.05 s typical | `--fixed-delta`, `WorldBuilder.configure_sync_mode` (`run_SCTMV.py:141`) |
 | Capture rate | 2 Hz typical | `FrameRecorder` decimation (`FrameRecorder.cs:131-133`) |
 | **Solar rate** | **1.0 sun-second per simulated second**, or frozen | `set_time_advance(enabled, rate)`, advancing on the world tick by `DeltaSeconds × rate` (`CesiumTimeOfDayController.cpp:34`); see §4.4.4 |
+| **Real-time factor** (live exercise only) | **0 — unconstrained**, today's default for every mode; a positive value locks the tick-cue cadence to wall time at that ratio | `PlaybackClock`'s pacing run input, in the manner of the existing `real_time_factor` idiom (`SumoCotBridge.py:184-194`); see §4.6 |
 
 So twenty world ticks fall inside one SUMO step, a capture lands every tenth world tick, and at
-`rate = 1.0` each world tick moves the sun by 0.05 s of solar time. The solar rate is the one rate here
-that is **a run input rather than a derived contract** — the other three have to divide into one another,
-while the sun is free to be stopped. Two consequences the architecture fixes rather than leaves to
-configuration:
+`rate = 1.0` each world tick moves the sun by 0.05 s of solar time. The solar rate and the real-time
+factor are the two rates here that are **run inputs rather than a derived contract** — the other three
+have to divide into one another, while the sun is free to be stopped and the tick-cue cadence is free to
+be paced against wall time. Unlike the solar rate, the real-time factor changes nothing about *what* any
+tick contains — it only changes *when* the cue that produces it is issued (§4.6). Two consequences the
+architecture fixes rather than leaves to configuration:
 
 - **The step ratio must be an exact integer and is validated at session start.** A non-integer ratio makes
   the phase between SUMO steps and captures drift across a run, so two captures the same nominal interval
@@ -955,13 +1034,23 @@ projection can supply — so even the frozen case needs the epoch, and a run wit
 frozen instant either. This is why §4.4 makes the epoch a precondition of the mode rather than a
 precondition of the advancing policy.
 
+**A fourth consequence, from the real-time factor.** Because the factor changes only *when* a tick cue is
+issued and not what any tick contains (§4.6), it composes with the first three consequences rather than
+interacting with them: the step-ratio integrality requirement, the sub-step interpolation, and the solar
+epoch precondition all hold exactly as stated whether the factor is zero or positive. The one thing that
+changes downstream of the clock is how promptly the corpus handover reaches an external consumer (§3.3),
+not the content of a single tick.
+
 **What happens when one side stalls.** The clock owns both, so neither can run away from the other. If a
 SUMO step exceeds its budget the world simply is not cued until it returns — the capture slows, the
 content does not change, and `tick` remains the time base ([18
 D3](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md)). If the world does not deliver the cued
 frame, `WaitForFrame` times out and returns null rather than deadlocking (`CarlaClient.cs:425-433`); the
 clock must treat that as a session fault and stop, because a capture that silently drops frames produces a
-corpus whose tick spacing is not what the manifest says it is.
+corpus whose tick spacing is not what the manifest says it is. **That is the stored-corpus case, where
+there is no external consumer to wait for.** Under a real-time factor, a slower-than-declared rate is not
+automatically a fault — whether it is treated as one, or absorbed as the pacing response of §4.6, is
+[08](08_Collection_And_EPoL.md)'s ruling, not a variant of this paragraph's rule.
 
 ### 6.2 The sequence
 
@@ -994,6 +1083,14 @@ sequenceDiagram
     CLK->>ACT: pose for instant k, interpolated from steps n and n+1
     CLK->>ACT: light state for instant k (SumoSignalProjector, changed entries only)
     ACT->>SRV: apply_batch(set_transform + set_vehicle_light_state per changed vehicle)
+
+    opt real-time factor > 0 (live exercise, §4.6)
+        CLK->>CLK: hold until wall clock reaches instant k's paced target
+        opt declared rate cannot be met
+            Note over CLK: response is 08's ruling (§11), not this diagram's
+        end
+    end
+
     CLK->>SRV: tick_cue
     SRV-->>CLK: frame number
     SRV-->>REC: camera frame k (sensor stream)
@@ -1027,12 +1124,16 @@ sequenceDiagram
     end
 ```
 
-Three properties of that sequence are worth reading off it, because they are the reason the coupling is
+Four properties of that sequence are worth reading off it, because they are the reason the coupling is
 cheap. **The solar write path is outside the per-tick loop** — three RPCs at session start, one more per
 date rollover, and nothing else. **The solar read path costs nothing** — it arrives on a stream the
-recorder is already consuming, so the check and the record are both free. And **the light commands ride
+recorder is already consuming, so the check and the record are both free. **The light commands ride
 the batch that already exists**, so the per-tick round-trip count of [03 D3.3](03_CoSimulation_Runtime.md)
-is unchanged: one batch, one tick cue.
+is unchanged: one batch, one tick cue. **And the pacing gate is the same shape as the other three.** It
+sits entirely inside `PlaybackClock`, is evaluated *before* the cue is issued rather than after, and
+touches nothing downstream — `ACT`, `SRV`, `REC` and every other participant in this diagram run
+identically whether the real-time factor is zero or positive, because pacing decides only *when* the next
+line of this diagram executes, never *what* it does (§4.6).
 
 **A defect this mode makes visible, and the property it needs.** The recorder takes the capture's tick
 from the image frame header (`FrameRecorder.cs:179`) but takes its vehicle truth from whatever the
@@ -1044,7 +1145,7 @@ is a whole frame of motion arriving in one step. **[03](03_CoSimulation_Runtime.
 capture's truth is the snapshot of the frame its pixels came from**, matched the way occlusion already
 matches.
 
-**The solar block is in the same defect, and the redraft should say so rather than inherit it quietly.**
+**The solar block is in the same defect.**
 The recorder attaches solar state by calling `GetCachedSolarState()` (`FrameRecorder.cs:162`), which
 returns the *latest* snapshot's block rather than frame *k*'s — the identical rule that produces the
 vehicle-truth mismatch above. At `rate = 1.0` the consequence is trivial: one frame is 0.05 s of sun, far
@@ -1132,8 +1233,8 @@ is waved away.
 | **Truth telemetry velocity reads zero.** `WorldObserver.cpp:373` serialises `GetActor()->GetVelocity()`, which a transform on a non-simulating body does not update | **Yes, verified at that exact line 2026-09-17** | Fully compensated, and arguably improved. `SumoMotionStateSource` carries SUMO's own speed and angle into the truth record, and the record says the kinematics came from the simulation rather than from the body. SUMO's angle is additionally *better* than a velocity-derived course for the case that matters most: a stationary vehicle has no course, and [18 §6.3](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md) measured two stationary vehicles broadcasting `course="271.8"` and `course="299.3"` as pure noise. `SumoCotBridge.py:302-303` already relies on exactly this property |
 | **Seating on the draped terrain** — SUMO poses arrive with no usable Z | Yes; the SUMO network is flat, zero distinct `z` (carried forward from [23 §2](../../Findings/23_SUMO_Traffic_Integration.md)) | Fully compensated, and cheaply. `CarlaClient.SampleDrapeGroundElevation` (`CarlaClient.cs:241-263`) is a **client-side bilinear lookup with no RPC and no raycast**, already used to resolve ground height in .NET. The projector samples it per vehicle per tick. [23 §6.5](../../Findings/23_SUMO_Traffic_Integration.md) names this same call for the same purpose |
 | **Suspension, pitch and wheel rotation** | Partly | **Partly compensated, partly a stated loss.** Terrain-following pitch and roll are recoverable from the gradient of the same drape grid along the heading, which is the visible part at EO altitude, and the projector owns them. Suspension travel and load transfer are **gone and stay gone**. Wheel rotation is already dead in this fork's record and replay path — `#if 0 // @CARLAUE5` at `Recorder/CarlaRecorder.cpp:209` and `Recorder/CarlaReplayerHelper.cpp:348`, carried forward from [18 §5.2](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md) — and is sub-pixel at the altitudes [09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md) measured, where a vehicle is about three pixels long at 1.1 km |
-| **Vehicle light state**, which under the traffic manager is computed by a stage that does not run when the traffic manager does not run. **This is a fifth cost doc 23 §4 did not enumerate**, found while redrafting this section | **No — there is nothing to lose, measured** | **A gain, not a cost, and the ledger should say so.** The only component with automatic vehicle lights is the .NET traffic manager's `VehicleLightStage`, and in a georeferenced world it cannot work: it is **off per actor by default** (`Parameters.cs:437-438` returns false for any actor nobody enabled), and its entire night branch is wrapped in `if (_isWeatherEnabled)` with the sun read from `_weather.SunAltitudeAngle` (`Stages/VehicleLightStage.cs:228-241`) — CARLA weather, which `CarlaServer.cpp:611-612` records as inert in this world. So **no existing mode turns a headlight on at night in a generated world.** SUMO-sourced signals plus solar-derived lamps are new capability over a baseline of none. See §8.5 |
-| **Vehicle fade and the staging ring** are built around a client-side registry keyed to vehicles the staging controller owns | The staging ring, yes. The fade, **no longer** | **The staging ring is replaced; the fade is already withdrawn independently of this plan.** The ring exists to solve a spawn-model problem that SUMO's insertion model solves better and directly — [23 §3.1](../../Findings/23_SUMO_Traffic_Integration.md) sets that out at length, including that exactly two of Arapahoe's 212 fringe entries are freeway — so `RenderSetSelector` supersedes it for this mode while the staging controller itself is untouched and remains the `TrafficManagerAmbient` mode's mechanism. The fade is a different matter and is **not** inherited: `--fade` is off by default in the working tree because the opacity is computed client-side and pushed one blocking RPC per vehicle per reconcile (`CarlaControlArgumentParser.py:318-328`). `RenderedVehicleRegistry` therefore owns existence and not appearance — an admitted vehicle appears at full opacity and a released one disappears, and the admission and release ticks are recorded (§7). Doc 23 §4 counted the fade as a capability a teleport shape would cost; it is no longer a capability in use, so there is nothing here to cost |
+| **Vehicle light state**, which under the traffic manager is computed by a stage that does not run when the traffic manager does not run. **This is a fifth cost doc 23 §4 did not enumerate** | **No — there is nothing to lose, measured** | **A gain, not a cost, and the ledger should say so.** The only component with automatic vehicle lights is the .NET traffic manager's `VehicleLightStage`, and in a georeferenced world it cannot work: it is **off per actor by default** (`Parameters.cs:437-438` returns false for any actor nobody enabled), and its entire night branch is wrapped in `if (_isWeatherEnabled)` with the sun read from `_weather.SunAltitudeAngle` (`Stages/VehicleLightStage.cs:228-241`) — CARLA weather, which `CarlaServer.cpp:611-612` records as inert in this world. So **no existing mode turns a headlight on at night in a generated world.** SUMO-sourced signals plus solar-derived lamps are new capability over a baseline of none. See §8.5 |
+| **Vehicle fade and the staging ring** are built around a client-side registry keyed to vehicles the staging controller owns | The staging ring, yes. The fade, no | **The staging ring is replaced; the fade is already off in the working tree, independently of this plan.** The ring exists to solve a spawn-model problem that SUMO's insertion model solves better and directly — [23 §3.1](../../Findings/23_SUMO_Traffic_Integration.md) sets that out at length, including that exactly two of Arapahoe's 212 fringe entries are freeway — so `RenderSetSelector` supersedes it for this mode while the staging controller itself is untouched and remains the `TrafficManagerAmbient` mode's mechanism. The fade is a different matter: `--fade` is off by default in the working tree because the opacity is computed client-side and pushed one blocking RPC per vehicle per reconcile (`CarlaControlArgumentParser.py:318-328`). `RenderedVehicleRegistry` therefore owns existence and not appearance — an admitted vehicle appears at full opacity and a released one disappears, and the admission and release ticks are recorded (§7). Doc 23 §4 counted the fade as a capability a teleport shape would cost; it is no longer a capability in use, so there is nothing here to cost |
 
 ### 8.3 What is genuinely lost, and stays lost
 
@@ -1206,9 +1307,8 @@ that follow from the light level** — it has no notion of a sun. So:
 > **Motion-derived signals come from SUMO. Illumination-derived lamps come from the published solar
 > state.** `SumoSignalProjector` composes the two into one `VehicleLightStateFlags` value.
 
-This is the same authority argument as D1.4 (kinematics from SUMO, because SUMO computed them exactly)
-and as [03 D3.16](03_CoSimulation_Runtime.md) (traffic-light state from SUMO, because SUMO's vehicles are
-obeying it), extended to the one channel where SUMO is *not* the better source and the sun is.
+This is the same authority argument as D1.4 — kinematics come from SUMO because SUMO computed them
+exactly — extended to the one channel where SUMO is *not* the better source and the sun is.
 
 #### 8.5.2 It costs no round trips, which is why it is worth mandating
 
@@ -1292,8 +1392,8 @@ two independent reductions and one priority rule.
 **Temporal reduction — the capture window.** A capture covers a window of simulated time, not the whole
 authored span. The `PlaybackClock` reaches the window by stepping SUMO with nothing rendered at all, then
 begins cueing the world. That is how a seven-day pattern of life yields a twenty-minute capture at 08:15
-on the fourth day. **The phrase "at 08:15 on the fourth day" is doing real work and the first draft let
-it pass unexamined**: the window is chosen in civil time because that is what a pattern of life is
+on the fourth day. **The phrase "at 08:15 on the fourth day" is doing real work**: the window is chosen
+in civil time because that is what a pattern of life is
 organised around, and choosing it therefore chooses an illumination. §9.3 makes that consequence
 explicit. This is cheap because SUMO steps a network this size far faster than real time —
 `SumoCotBridge` already reports an achieved real-time factor for exactly this reason
@@ -1406,16 +1506,16 @@ Stated as properties, not as a design:
 
 | Needed from | Property required |
 |---|---|
-| [03 — Co-simulation runtime](03_CoSimulation_Runtime.md) | A capture's truth is the snapshot of the frame its pixels came from — **the whole snapshot, solar block included, not only the actor rows** (§6.2). Sub-step pose interpolation follows the lane, not the chord (§6.1). The per-tick batch of D3.3 carries the light commands of §8.5 alongside the pose writes, so the round-trip count stays at one batch and one cue |
+| [03 — Co-simulation runtime](03_CoSimulation_Runtime.md) | A capture's truth is the snapshot of the frame its pixels came from — **the whole snapshot, solar block included, not only the actor rows** (§6.2). Sub-step pose interpolation follows the lane, not the chord (§6.1). The per-tick batch of D3.3 carries the light commands of §8.5 alongside the pose writes, so the round-trip count stays at one batch and one cue. **A real-time factor on the world tick**, evaluated against an absolute wall-clock target rather than a per-step sleep, with the achieved factor measured per wall-clock interval and reported rather than merely targeted (§4.6) |
 | [04 — Contracts](04_Contracts.md) | The vType-to-blueprint dimension tolerance and its fallback (§4.3). The render-set contract's wire shape (§7). The kinematics provenance field in truth (§4.3). The wire shape of the epoch declaration and of `SolarPolicy` as a run input, and the tolerance for the projection-versus-record check of §4.4.3 |
 | [05 — Capability audit](05_CarlaNet_Capability_Audit.md) | Whether `set_transform`, `set_simulate_physics` and `apply_batch` are implemented end to end through `CarlaNet.Transport` to the server, at batch sizes this mode uses; add `SetVehicleLightStateCommand` in batch form to that list (§8.5). `set_actor_fade` is deliberately **not** on this list — nothing here calls it (§3.1, §8.2) |
 | [06 — Truth and annotation](06_Truth_And_Annotation.md) | The rendered span gate upstream of the observed span (§7). Where kinematics provenance is carried. **That the run manifest carries the declared epoch and the `SolarPolicy`**, because the sidecar's `<_solar>` records local solar time and the engine's longitude-derived zone (`CotWriter.cs:52-66`) and nothing in it states the *civil* offset the scenario declared — so without the manifest a consumer cannot convert a recorded frame back to scenario civil time, and a replay cannot re-establish the sun (§5.5) |
 | [07 — Scenario authoring](07_Scenario_Authoring.md) | How [20 §2.4](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s three interval onsets are produced on a SUMO surface, where there is no authored speed-action ramp to separate them. That the validator rejects a package with no epoch declaration, and rejects an author-declared lamp that would breach §8.5.3 |
-| [08 — Collection and EPoL](08_Collection_And_EPoL.md) | That truth never reaches the model service — it consumes tracks only, and this pipeline reads nothing it emits back in. That solar state remains an available covariate for stratifying a corpus; this pipeline does not train or judge any model against it |
+| [08 — Collection and EPoL](08_Collection_And_EPoL.md) | That truth never reaches the model service — it consumes tracks only, and this pipeline reads nothing it emits back in. That solar state remains an available covariate for stratifying a corpus; this pipeline does not train or judge any model against it. **The ruling on what `PlaybackClock` does when a live external chain cannot sustain the declared real-time factor** — hold, slow, or drop — and what the operator sees while it happens (§4.6); this section fixes only that the lever is the clock's |
 | [09 — Toolchain and packaging](09_Toolchain_And_Packaging.md) | `sumo`, `duarouter` and `libtracics` staged and shipped, `SUMO_HOME` set ([23 §6.1, §6.2, §6.12](../../Findings/23_SUMO_Traffic_Integration.md)) |
 | [10 — Scale and performance](10_Scale_And_Performance.md) | The seven properties of §9.4 |
 | [11 — Time and illumination](11_Time_And_Illumination.md) | Five properties, stated in §10.1 below |
-| [12 — Operator control surface](12_Operator_Control_Surface.md) | Three properties, stated in §10.2 below |
+| [12 — Operator control surface](12_Operator_Control_Surface.md) | Four properties, stated in §10.2 below |
 | [13 — Work breakdown](13_Work_Breakdown.md) | That the epoch declaration and `ScenarioEpochResolver` are sequenced **before** the first windowed capture, not after it. A corpus captured before the coupling exists is internally contradictory (§4.4.3) and is not repairable after the fact, because the contradiction is in the pixels |
 
 ### 10.1 What this section needs from [11 — Time and illumination](11_Time_And_Illumination.md)
@@ -1462,6 +1562,10 @@ designs none of them.**
    instant and the sun elevation its first frame will be captured under, before it starts. This
    architecture supplies the numbers — the projection and `get_solar_state` both already exist — and
    asks 12 only to put them in front of a human.
+4. **The same surface expresses the real-time factor**, alongside the epoch and `SolarPolicy` rather than
+   as a separate live-only flag, because a live exercise needs exactly the same three properties above —
+   one place to declare it, the choice recorded verbatim in the manifest, and an echo of the declared
+   factor before a long exercise commits (§4.6).
 
 ## 11. The capability changes this mode makes, in both directions
 
@@ -1514,12 +1618,19 @@ chunk (`SolarMetadata.cs:16-20`), read from the world-observer cache with no RPC
 precisely why the failure would have been silent — the record would have been accurate and contradictory
 at the same time — and why the divergence check of §4.4.3 is the piece that closes it.
 
+**Gained: a live exercise is served by the same clock, not a second one.** `PlaybackClock` already owns
+the sole advance of simulated time (D1.1) and already projects the sun from it (§4.4); the real-time
+factor (§4.6) is one more run input on the same component rather than a parallel timing mechanism that
+would have to be kept synchronised with it. Nothing regresses for a stored-corpus capture, which keeps
+the unconstrained pacing it already had — the factor's default is exactly today's behaviour, not a new
+mode it has to opt out of.
+
 **Lost, and bounded to this mode:** collision response, suspension dynamics, and the staging controller's
 own spawn model (§8.3). The first is a real hazard and is mitigated by recording SUMO's collision warnings
 into the manifest; the other two are deliberate trades confined to `SumoDrivenPlayback`, with the
 `TrafficManagerAmbient` and `StoryboardExecution` modes retaining all three unchanged.
 
-**Named, not lost: two engine limitations this revision depends on and does not remove.** Neither is a
+**Named, not lost: two engine limitations this architecture depends on and does not remove.** Neither is a
 regression — both are pre-existing and both are compensated in §4.4.3 and §5.5 — but they are the two
 places where the coupling rests on something the engine does not do, so they are recorded here rather
 than left to be rediscovered:
@@ -1541,23 +1652,22 @@ on opacity.
 
 ## 12. Decisions
 
-**Numbering.** D1.1–D1.18 keep the numbers and the meanings they had in revision 1, because
+**Numbering.** Decision numbers are stable and are never reused or reassigned, because
 [00](00_Overview.md), [02](02_Use_Cases.md), [06](06_Truth_And_Annotation.md) and
-[08](08_Collection_And_EPoL.md) cite them. Three of them gained a clause, marked **[extended]**; the
-original text of each is intact and the addition is additive. New decisions are D1.19–D1.25.
+[08](08_Collection_And_EPoL.md) cite them by number.
 
 | # | Decision |
 |---|---|
-| D1.1 | **`PlaybackClock` is the sole owner of simulated time.** It cues the CARLA world and steps SUMO; nothing else advances either. A camera-follower process never cues. A failure to deliver a cued frame is a session fault, not a dropped frame (§4.1, §6.1). **[extended]** Because simulated civil time and the sun are projections of simulated time, this ownership extends to both without a second clock — see D1.19 |
+| D1.1 | **`PlaybackClock` is the sole owner of simulated time.** It cues the CARLA world and steps SUMO; nothing else advances either. A camera-follower process never cues. A failure to deliver a cued frame is a session fault, not a dropped frame (§4.1, §6.1). Because simulated civil time, the sun, and — for a live exercise — pacing against a wall clock are all projections of, or run-input policies attached to, simulated time, this ownership extends to each without a second clock or a governor — see D1.19 and D1.26 |
 | D1.2 | **SUMO owns vehicle existence in the simulation; `RenderedVehicleRegistry` owns existence in the world.** These are different questions with different answers, and truth must be able to say that a vehicle exists in one and not the other (§4.1, §7) |
 | D1.3 | **SUMO's pose is the command; CARLA's applied pose is the record.** Positional truth is CARLA's because the pixels were rendered from it, and a measurable divergence between the two is a bridge defect to report (§4.2) |
 | D1.4 | **Kinematic truth comes from SUMO, not from the CARLA body.** `Actor.GetVelocity` is zero for a pose-applied body (`WorldObserver.cpp:373`); the record carries SUMO's speed and angle and says so (§4.3, §8.2) |
 | D1.5 | **Z, pitch and roll come from the drape**, sampled client-side with no RPC (`CarlaClient.cs:241-263`). SUMO contributes no height and is never asked for one (§4.1, §8.2) |
-| D1.6 | **A `vType`'s colour never reaches a blueprint.** Appearance is drawn from the world's vehicle catalogue by the run seed; `vType` dimensions are respected because they change car-following behaviour, `vType` colour is display metadata and carrying it would make colour the label (§4.3). **[extended]** The same rule governs the light channel, which reopens the same hazard by a different route — see D1.24 |
+| D1.6 | **A `vType`'s colour never reaches a blueprint.** Appearance is drawn from the world's vehicle catalogue by the run seed; `vType` dimensions are respected because they change car-following behaviour, `vType` colour is display metadata and carrying it would make colour the label (§4.3). The same rule governs the light channel, which reopens the same hazard by a different route — see D1.24 |
 | D1.7 | **Population authority is an exclusive, engine-held, world-scoped lease**, in the manner of staging bounds. Ambient traffic and SUMO-driven playback both acquire it, so the lockout is a failed session start naming the current holder, never a runtime warning (§5.3) |
 | D1.8 | **Motion authority is per actor and is distinct from population authority.** This is what lets storyboard execution coexist with an ambient mode, and what lets the actuated shape of §8.4 exist without contradicting D1.7 (§5.3) |
 | D1.9 | **While a population-authority holder exists, every vehicle any component creates must be announced to it.** A placement that cannot be announced is refused. This is what makes SUMO-plus-storyboard safe rather than merely discouraged (§5.2, §5.3) |
-| D1.10 | **World-scoped facts are published to the server, not held in a client process.** Two of them: supervision state and the render set, alongside drive authority and the area table which are world-scoped by construction. This resolves [20 decision 11](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) in favour of publication and dissolves both process-local registry failures of §3.1 together. Fade and arrival state are **not** published, because there is none to publish: `--fade` is off by default in the working tree and the arrival gate is inert with nothing fading, so no truth is lost and no replacement is owed (§3.1, §3.4). **[extended]** **Solar state is a third published world-scoped fact, and it is already implemented.** Eleven doubles ride the world-observer snapshot header (`WorldObserver.cpp:322-339`), the client exposes them as a lock-free tick-paired cache read with **no RPC** (`CarlaClient.cs:1850-1855`, `:1991`), and the recorder already consumes them (`FrameRecorder.cs:160-162`). This is the same mechanism [08 D8.3](08_Collection_And_EPoL.md) chose for the other two — and the precedent D8.3 cited for choosing it was `_solar` itself, so publishing solar state costs nothing and introduces nothing new (§4.1) |
+| D1.10 | **World-scoped facts are published to the server, not held in a client process.** Two of them: supervision state and the render set, alongside drive authority and the area table which are world-scoped by construction. This resolves [20 decision 11](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) in favour of publication and dissolves both process-local registry failures of §3.1 together. Fade and arrival state are **not** published, because there is none to publish: `--fade` is off by default in the working tree and the arrival gate is inert with nothing fading, so no truth is lost and no replacement is owed (§3.1, §3.4). **Solar state is a third published world-scoped fact, and it is already implemented.** Eleven doubles ride the world-observer snapshot header (`WorldObserver.cpp:322-339`), the client exposes them as a lock-free tick-paired cache read with **no RPC** (`CarlaClient.cs:1850-1855`, `:1991`), and the recorder already consumes them (`FrameRecorder.cs:160-162`). This is the same mechanism [08 D8.3](08_Collection_And_EPoL.md) chose for the other two — and the precedent D8.3 cited for choosing it was `_solar` itself, so publishing solar state costs nothing and introduces nothing new (§4.1) |
 | D1.11 | **This architecture designs no fade behaviour.** A vehicle admitted to the render set appears at full opacity and a released one disappears. `RenderedVehicleRegistry` owns existence, not appearance. What the capture records is the admission and release **tick**, which delimits the rendered span of D1.15; it is an instant, not a visual transition (§7, §8.2, §11) |
 | D1.12 | **The default deployment is one `CaptureSessionHost` process holding the clock, the bridge and every camera's recorder.** Extra camera processes are permitted and are tick followers. The shim's one-recorder-per-`World` limit (`carlanet/__init__.py:1908,1924`) is a defect to fix, not a reason to fan out (§3.4) |
 | D1.13 | **The SUMO step, the world delta and the capture rate are an integer-ratio contract validated at session start**, and the bridge runs SUMO one step ahead so sub-step pose is interpolated rather than stepped (§6.1) |
@@ -1573,6 +1683,10 @@ original text of each is intact and the addition is additive. New decisions are 
 | D1.23 | **Solar command authority follows the population-authority lease; it is not a third lease.** Whoever holds population authority over a world is the only component permitted to command its sun. `StoryboardExecution`, which holds none, must not set the sun while a holder exists, and a storyboard whose environment action would do so is refused at session start rather than warned about. `RecordedReplay` re-establishes the original run's epoch and policy **from the run manifest**, because the engine recorder carries no solar packet at all (`CarlaRecorder.h:48-74`) and a 23:00 capture replayed today would render at solar noon (§4.5, §5.3, §5.5) |
 | D1.24 | **Vehicle light state is mandated, split by source: motion-derived lamps from SUMO, illumination-derived lamps from the published solar state.** SUMO models brake lights and blinkers in its core microsim and models headlights not at all (**read**, §8.5.1), so neither source alone is sufficient. It costs no round trips — the signals ride the existing subscription and the commands ride the existing batch — and without it the recommended 23:00 window captures unlit vehicles against a 38°-to-78°-below-the-horizon sun. **The guard rail of D1.6 extends to lamps**: a lamp computed from motion or light level is carried, a lamp that is a declared attribute of a vehicle reaches the world only as a property of its catalogue *class*, never of its annotation status (§8.5) |
 | D1.25 | **Illumination is derived context and never a supervision signal.** It is computed identically for every vehicle in a capture, it is a legitimate covariate for stratifying a corpus and a legitimate input to a fielded system that knows the time and its own location, and a scenario must never encode its annotation in the lighting. This is the standing supervision rule applied to a new channel, and D1.24's guard rail is its enforcement (§8.5.3) |
+| D1.26 | **Real-time pacing is a policy carried by `PlaybackClock` itself, not a governor and not a second clock.** A real-time-factor run input — the same shape as `SolarPolicy` (D1.22) and the same idiom `SumoCotBridge.run` already uses (`SumoCotBridge.py:184-194`) — is zero (unconstrained, today's default for every mode) or a positive value that locks the tick-cue cadence to wall time at that ratio. A governor in front of the clock would be a second component deciding about the same simulated instant D1.1 already assigns to one owner, which is the identical disagreement risk §4.4.2 rejected for the sun. Because truth is stamped in simulated time (D1.3, D1.4), a world that ticks slower than real time under this policy is still internally exact — a nearly free way to answer a downstream stall. What `PlaybackClock` actually does when the declared rate cannot be met — hold, slow, or drop — is [08](08_Collection_And_EPoL.md)'s ruling; this decision fixes only that the lever is the clock's (§4.6) |
+| D1.27 | **Live exercise is a property of the collection, not a fifth mode.** It changes no row of the mode matrix (§5.2) and no cell of the authority table (§4.1) beyond the pacing row D1.26 adds. Every mode of §5.1 can run against a stored corpus or live, unchanged (§5.6) |
+| D1.28 | **`DetectAndTrackStage` and `EPoLModelService` remain external and unowned by this architecture whether the exercise is live or offline.** The path to them is one-way out, batched or live (§4.6); any tracks or reports that come back are received as an opaque, tick-stamped transcript with its own provenance, recorded but never parsed for meaning and never fed into truth, supervision or the clock (§1.1, §2.4, §3.2, §3.3). This architecture specifies nothing about either external system's API, format, transport or latency, by design |
+| D1.29 | **Unattended regeneration needs no new architectural component.** `CaptureSession`'s stable identity and `RunManifestWriter`'s closed, machine-readable manifest (§2.3, §4.1) already give a non-interactive, parameterised, reproducible invocation a result an automated cadence can read to tell what was produced and whether it is fit to use (§2.7). The scheduler, and any model lifecycle around it, are outside this architecture entirely |
 
 ## 13. Open questions
 
@@ -1587,8 +1701,8 @@ original text of each is intact and the addition is additive. New decisions are 
    has to keep an appearance out of frame, so it is derived from approach speed and settle time rather
    than from a dissolve duration. Options: a fixed margin sized for the fastest road class in the network,
    or a per-vehicle lead time computed from that vehicle's own speed. Recommend the second — it is no
-   harder and it does not pay freeway margin for a service road. Note the answer is now smaller than it
-   would have been with a dissolve, which is a second way the fade's withdrawal buys actor slots.
+   harder and it does not pay freeway margin for a service road. Note the answer is smaller than it
+   would be with a dissolve, which is a second way the fade being off buys actor slots.
 3. **Where does the capture window come from?** Either the author declares it in the scenario package, or
    the capture operator chooses it at session start. Both are wanted for different reasons: an annotated
    pattern instance implies a window, and an operator wants to capture an arbitrary hour of ambient life.
@@ -1642,3 +1756,10 @@ original text of each is intact and the addition is additive. New decisions are 
     epoch declaration it becomes an assertion the whole corpus rests on. The check is cheap — declare the
     epoch, re-derive the peak hours, compare — and it is worth doing once rather than trusting a naming
     convention.
+12. **What exact parameters does the real-time-factor run input carry, beyond the single scalar this
+    section relies on?** §4.6 fixes only that it is a run input to `PlaybackClock`, structurally like
+    `SolarPolicy`. Whether it needs a tolerance band, a minimum sustainable value below which the session
+    refuses to start, or nothing beyond the scalar itself is [08](08_Collection_And_EPoL.md)'s ruling to
+    make and [12](12_Operator_Control_Surface.md)'s surface to expose; 11's precedent for the grammar of a
+    run-input policy (`SolarPolicy`'s own open questions, §13 item 8 above) is the natural model to reuse
+    rather than inventing a second shape.

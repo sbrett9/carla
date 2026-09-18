@@ -9,10 +9,10 @@ the rule that illumination is a covariate and never a label.
 **Audience:** Engineers building the capture path, and anyone deciding whether a night product is
 possible. Assumes familiarity with the fork but not with the conversation that produced this plan.
 
-This section exists because the first draft of the plan specified windowed capture in simulated time
-and never connected it to the sun — the omission recorded in [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3a.
-It is the anchor the other sections integrate against, so it states its conclusions in a form the
-others can consume without re-deriving them.
+Capture windows are placed in simulated time, and the sun must be bound to them. This section owns the
+epoch that maps simulated seconds to civil time, the policy governing whether the sun is frozen or
+advancing, the verdict on what is renderable at each illumination regime, and the mapping from SUMO's
+vehicle signals to CARLA's lamps.
 
 ---
 

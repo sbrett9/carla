@@ -1,20 +1,16 @@
 # 00 — SUMO-driven behavioural capture: overview
 
-**Status:** Plan, revision 3. No code changed and no build run in producing it. Every section is
-grounded in the working tree as it stood on 2026-09-18, with claims cited to `path:line`,
-measurements distinguished from inferences, and inferences labelled.
-**Revision 3 narrows the scope: this pipeline labels, and never scores.** The detect-and-track model
-and the EPoL model are external to this effort. The plan produces synthetic imagery plus the truth and
-labels used to train and validate them downstream; it runs no model, associates no model output to
-truth, and emits no metric, comparison or verdict. Three things that sat near that line were kept and
-reframed rather than deleted — the corpus fitness probe, the illumination leakage probe, and the
-published supervision-transfer rule — because each measures a property of *the data* (§7,
-`_TEAM_BRIEF.md` §3b).
-**Revision 2 folded in a requirement the first revision missed**: the simulated time of day must be
-driven in tandem with the network playback, its advancement must be toggleable per run, and the tool
-suite needs a coherent surface over both. That is not an amendment — it changed the authority model,
-the tick loop, the scenario format, the truth record, the collection design and the capture plan, so
-every section was redrafted rather than patched, and two new sections were added.
+**Status:** Plan. No code changed and no build run in producing it. Every section is grounded in the
+working tree as it stood on 2026-09-18, with claims cited to `path:line`, measurements distinguished
+from inferences, and inferences labelled.
+
+| Revision | Change |
+|---|---|
+| 1 · 2026-09-17 | First draft: the SUMO-driven capture system end to end. |
+| 2 · 2026-09-18 | Simulated time of day bound to playback; adds time, illumination and the operator surface. |
+| 3 · 2026-09-18 | Scope narrowed: the pipeline labels and never scores. |
+| 4 · 2026-09-18 | Live exercise made primary and generic past our boundary; cyclic generation driven externally. |
+
 **Scope:** Realising, as one system, the supervision model of
 [`Findings/20`](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) and the SUMO
 integration of [`Findings/23`](../../Findings/23_SUMO_Traffic_Integration.md) — a SUMO traffic
@@ -79,7 +75,7 @@ skew to reconcile.
 | **Actuation** | Not addressed | "SUMO decides, CARLA physics executes"; teleporting regresses capabilities | Pose application, with doc 23's shape retained as a second **actuation strategy behind the same bridge** ([01](01_Architecture.md) D1.15) |
 | **Truth producer** | CARLA's `VehicleTelemetryService` | Notes a teleported body reports zero velocity | Authority settled **field by field**, not producer by producer ([06](06_Truth_And_Annotation.md) D6.9) |
 | **Scale** | Hand-sited scenarios | Ordinary ambient traffic | Windowed capture over a simulation far larger than the rendered set ([10](10_Scale_And_Performance.md)) |
-| **Time of day** | Not addressed | Not addressed | **The gap that forced revision 2.** A scenario declares an epoch; the clock owner projects civil time through it; the sun is bound per window and the policy is asserted, never defaulted ([11](11_Time_And_Illumination.md), [04](04_Contracts.md) C9) |
+| **Time of day** | Not addressed | Not addressed | A scenario declares an epoch; the clock owner projects civil time through it; the sun is bound per window and the policy is asserted, never defaulted ([11](11_Time_And_Illumination.md), [04](04_Contracts.md) C9) |
 
 **Doc 23 is not overturned.** Its recommendation was made for believable ambient background at
 ordinary scale, where body dynamics are most of the point. It remains right for that, and for oblique
@@ -138,7 +134,7 @@ Listed here rather than buried, because several affect data that exists now.
 | **Three ground-truth leaks put the answer inside the label channel** | `special_type="marked"`; anomaly affiliation `u` readable off the CoT type; conspicuous anomaly colours | A corpus built with the current bridge scores models on reading the answer key |
 | **Two leaks inside PNG metadata** | `carla:solar` embeds `advancing`/`rate`; `carla:capture` embeds `scenario_id`/`seed` | Memorisation handles that are neither truth nor observer-derivable. The anti-leak validator must read tEXt chunks, not just file trees |
 | **A sunless world publishes a convincing lie** | The stream header cannot express "no sun", so the cache returns **midnight of year 0 at lat 0, lon 0**, and `CotWriter` writes it as fact | Live today on stock content |
-| **A client RPC name mismatch, silently swallowed** | `CarlaClient.cs:1631` sends `get_vehicles_light_states`; the server and LibCarla use the singular. The sole caller catches without logging | Latent only because `update_vehicle_lights` defaults false. **This corrects revision 1's claim that the client RPC diff was empty** |
+| **A client RPC name mismatch, silently swallowed** | `CarlaClient.cs:1631` sends `get_vehicles_light_states`; the server and LibCarla use the singular. The sole caller catches without logging | Latent only because `update_vehicle_lights` defaults false. The C# and C++ clients otherwise agree on the RPC surface |
 | **Every capture ever made is noon on the host's date** | `run_SCTMV.py:138` calls `setup_solar_time` unconditionally; with no `--time` it forces 12:00 on the host clock | Illumination has never been a controlled variable, and the seasonal sun in existing captures is an artifact of when the run happened |
 | **A loaded world inherits the previous session's sun** | The defaults block is guarded by `if (!bHasSunSky)` | Illumination is non-deterministic across runs unless explicitly bound |
 | **The advancing sun never rolls the date** | `Fmod(…, 24.0)`; `Day` untouched | Six of seven days would render under day 0's seasonal sun and record day 0's date |

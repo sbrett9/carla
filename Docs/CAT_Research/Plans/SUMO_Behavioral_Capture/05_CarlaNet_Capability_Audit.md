@@ -2,26 +2,18 @@
 
 | | |
 |---|---|
-| **Status** | Audit complete, second draft. First draft read from source 2026-09-17; the time-of-day, vehicle-light and weather surfaces added 2026-09-18. Both drafts read against `carla` branch `ue5-dev` at `b39ffe338`. |
+| **Status** | Audit complete. Read from source 2026-09-17 and 2026-09-18, both against `carla` branch `ue5-dev` at `b39ffe338`. |
 | **Question answered** | Does the .NET client (`CarlaNet`) — and the engine beneath it — carry everything a SUMO-driven playback mode needs, including one that renders at the time of day the scenario asserts? Where it does not, what exactly is missing and at which layer? |
 | **Audience** | Engineers implementing the co-simulation runtime ([`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md)), the contracts ([`04_Contracts.md`](04_Contracts.md)), the time-and-illumination coupling ([`11_Time_And_Illumination.md`](11_Time_And_Illumination.md)) and the operator surface ([`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md)). Assumes no knowledge of the conversation that produced this plan. |
 | **Method** | Every capability traced Python shim → C# client → RPC method name → server binding → engine implementation. Nothing is concluded from a name match in the shim, and no layer is assumed from the layer above it. |
 
-### What this draft adds to the first
+### Change history
 
-The first draft audited actuation, sensing and truth. It did not audit **illumination**, because the
-first draft of the plan never connected capture windows to the sun.
-[`_TEAM_BRIEF.md` §3a](_TEAM_BRIEF.md) now makes simulated time of day a first-class requirement, so
-this draft audits that surface to the same standard: §14 (the solar control surface), §15 (vehicle
-light state) and §16 (whether CARLA's own weather is genuinely inert). Every verdict, citation and
-gap from the first draft is carried forward unchanged; the gap register (§17) and the decision table
-(§19) are **extended, not renumbered**, so `G5.1`–`G5.12` and `D5.1`–`D5.12` still mean what siblings
-already cite them as meaning.
-
-One first-draft conclusion is **corrected** rather than extended. The first draft's headline was that
-nothing in the gap register sat in the C# client's RPC coverage. That is no longer true: §15.5 finds
-one RPC the C# client sends under a name **no server binds**. It is the audit's first and only true
-port defect, and it is in the vehicle-light surface the new requirement depends on.
+| Revision | What changed |
+|---|---|
+| 1 — 2026-09-17 | First audit: actuation, sensing, truth, spawn, recorder, traffic lights, RPC budget. |
+| 2 — 2026-09-18 | Adds §14 solar surface, §15 vehicle lights, §16 weather; gaps G5.13–G5.22, decisions D5.13–D5.20. |
+| 3 — 2026-09-18 | Traffic-light findings marked present, audited, not required by this plan; vehicle lights unaffected. |
 
 ## What this section does **not** cover
 
@@ -50,8 +42,8 @@ Per the team brief's "measure, do not theorise" rule, every claim below is marke
 - **Measured** — produced by running something read-only; the method is stated.
 - **Inferred** — a conclusion drawn from read facts; the reasoning is shown.
 
-The first draft needed no measurement: every question resolved by reading. This draft needed two,
-both byte-level searches of content packages for a reference that source code cannot answer — §16
+Nearly every question here resolves by reading. Exactly two do not, and both are byte-level searches
+of content packages for a reference that source code cannot answer — §16
 settles whether any shipped map places a weather actor, and §15.4 settles which vehicle blueprints
 implement the light-refresh event. Both state their method. Where a question can only be settled by
 running the simulator, it is in the open questions (§20) rather than asserted.
@@ -61,7 +53,7 @@ running the simulator, it is in the open questions (§20) rather than asserted.
 ## 1. The answer, before the evidence
 
 **CarlaNet's C# client is at parity with LibCarla's C++ client on every RPC a SUMO-driven playback
-mode needs, with one exception found in this draft.** The batch-command path carries all twenty-two
+mode needs, with one exception.** The batch-command path carries all twenty-two
 command types the server understands — `ApplyTransform`, `ApplyTargetVelocity`, `SetSimulatePhysics`,
 `SetEnableGravity`, `SpawnActor`, `DestroyActor`, `ApplyVehicleControl`, `SetVehicleLightState` and
 `SetTrafficLightState` among them — so a per-step teleport of *N* vehicles, with their lights, is
@@ -99,6 +91,15 @@ above (§15.5).
 (§16, measured). Nothing is regressed by treating CesiumSunSky as the sole lighting authority,
 because there is no other authority to regress.
 
+**Traffic lights are present, audited, and not required by this plan.** CARLA renders no
+traffic-light or sign actors and drives no light state from SUMO
+([`_TEAM_BRIEF.md` §3e](_TEAM_BRIEF.md)); SUMO's `tlLogic` continues to govern SUMO's own vehicles
+directly, off the CARLA client entirely. Every traffic-light finding below — the ten bound RPCs
+(§12.2), the shim's `TrafficLight` no-op, the OpenDRIVE `sign_id` gap (§12.4) — stands as a fact
+about the client and engine, useful to other work in this fork, but nothing here depends on it. This
+is unrelated to vehicle light state (§15), which the plan still needs and which this audit finds
+intact end to end except one RPC-name defect (§15.5).
+
 The gaps are real. In order of consequence:
 
 1. **Truth velocity for a non-simulating body is structurally zero**, not merely un-updated. The
@@ -106,8 +107,10 @@ The gaps are real. In order of consequence:
    (§7). No client-side call can fix it.
 2. **One RPC name in the C# client matches no server binding**, so the bulk vehicle-light read always
    fails and the failure is always swallowed (§15.5).
-3. **The Python shim exposes 8 of the 22 batch commands and none of the traffic-light surface.**
-   Everything missing exists one layer down in C# (§4.3, §12).
+3. **The Python shim exposes 8 of the 22 batch commands.** Everything missing exists one layer down
+   in C# (§4.3). The shim's traffic-light surface is equally absent, but that surface is present,
+   audited, and not required by this plan (§12.2) — it is listed here for completeness, not as a
+   consequence.
 4. **The solar surface cannot express a civil time zone, cannot roll the calendar date, and cannot
    report its own absence** (§14.6) — three small engine-side omissions that together decide whether
    a multi-day scenario at a half-hour-offset site can be rendered under the right sun at all.
@@ -184,6 +187,9 @@ Read the colours as consequence, not effort: the dark red gaps change what the t
 or make a call silently do nothing; the amber gaps change what an author can express; the blue gaps
 change what one process can do.
 
+GAP B's traffic-light half is present, audited, and **not required** by this plan
+([`_TEAM_BRIEF.md` §3e](_TEAM_BRIEF.md)) — only its batch-command half is a live concern here.
+
 ---
 
 ## 3. Capability matrix
@@ -237,6 +243,12 @@ change what one process can do.
 | 14 | Light state on the episode-state stream | — | — | n/a | — | **Absent** | engine — the vehicle union carries no light field (§15.5) |
 | 14 | Automatic (weather-driven) vehicle lighting | — | p | n/a | — | **Absent in practice** | three independent causes (§15.7) |
 | 15 | CARLA weather set / read / enabled | P | P | `set_weather_parameters`, `get_weather_parameters`, `is_weather_enabled` | — | **Absent in practice** | engine + content — no map places an `AWeather` actor (§16) |
+
+**Capability 11's four rows above are present, audited, and not required by this plan**
+([`_TEAM_BRIEF.md` §3e](_TEAM_BRIEF.md)): CARLA renders no traffic-light or sign actors and drives no
+light state from SUMO, so nothing here waits on the shim's empty `TrafficLight`, the discarded phase
+times, the unexposed `sign_id`, or the absent waypoint lookup. Capability 14 (vehicle light state,
+below) is a different capability — the plan still needs it, and its audit is unaffected.
 
 ---
 
@@ -510,7 +522,7 @@ From C# there is no gate at all: `BlueprintChooser.Describe` already builds the 
 (`CarlaNet/src/CarlaNet.Scenario/BlueprintChooser.cs:33-39`) and an extra
 `ActorAttributeValue(id, type, value)` can simply be appended.
 
-One asymmetry found on the way, not previously recorded: the shim caches each attribute's
+One asymmetry found on the way: the shim caches each attribute's
 `modifiable` flag (`:592`) and never consults it, and does not cache `RestrictToRecommended` at all,
 while upstream enforces both (`LibCarla/source/carla/client/ActorAttribute.cpp:22-32`). The shim is
 *stricter* than upstream about unknown keys and *laxer* about read-only ones. Harmless on the wire;
@@ -868,7 +880,11 @@ server.
 
 ### 12.2 Traffic lights — the C# client is at parity; Python has nothing
 
-This matters because a SUMO-driven world must be able to drive CARLA's lights from SUMO's `tlLogic`.
+**This capability is present, audited, and not required by this plan.** CARLA renders no
+traffic-light or sign actors and drives no light state from SUMO
+([`_TEAM_BRIEF.md` §3e](_TEAM_BRIEF.md)); SUMO's `tlLogic` keeps governing SUMO's own vehicles
+without ever reaching the CARLA client. The findings below are recorded because they are facts about
+the client and engine, useful to other work in this fork, independent of this plan's use of them.
 
 **Read.** Ten traffic-light RPCs in C# (`CarlaClient.cs:1659-1689`): `set_traffic_light_state`,
 `set_traffic_light_green_time`, `set_traffic_light_yellow_time`, `set_traffic_light_red_time`,
@@ -906,15 +922,18 @@ Above the RPC layer there are three gaps:
    (`Map` is name plus spawn points, `__init__.py:666-685`). **Not found** after searching the whole
    `CarlaNet` tree.
 
-**Inferred, and it matters for how expensive gap 3 is.** A SUMO bridge does not need the waypoint
-query. This fork's `TrafficLightInjector` already establishes the `tlLogic` ↔ OpenDRIVE `sign_id`
-correspondence at world-build time — one `<controller>` per green phase, with the xodr signal id
-`{tlLogicId}_{k}` matching tlLogic link index *k* and the controller id matching the junction name
+**Inferred, and recorded for the case where a future design needs it.** This fork's
+`TrafficLightInjector` already establishes the `tlLogic` ↔ OpenDRIVE `sign_id` correspondence at
+world-build time — one `<controller>` per green phase, with the xodr signal id `{tlLogicId}_{k}`
+matching tlLogic link index *k* and the controller id matching the junction name
 ([doc 10 §Implementation status](../../Findings/10_Intersection_Navigation_Traffic_Control.md), `:60-74`).
-A bridge can key off `sign_id` directly, which is also how `GetTrafficLightStatesBySignId` reads
-state back. **Gap 3 is sidesteppable for this use case; gaps 1 and 2 are not.**
+A client keying off `sign_id` directly would sidestep gap 3; gaps 1 and 2 would not be sidestepped
+the same way. **None of this is required by this plan:** CARLA renders no traffic-light or sign
+actors and drives no light state from SUMO ([`_TEAM_BRIEF.md` §3e](_TEAM_BRIEF.md)), so gaps 1, 2 and
+3 are all present, audited, and not required here.
 
-Two related facts from doc 10 that a SUMO design must know:
+Two related facts from doc 10, kept for completeness though neither is required by this plan
+(§3e):
 
 - Signal timing currently uses CARLA's defaults — 10 s green, 3 s yellow, 2 s red per controller —
   and does **not** reproduce netconvert's per-phase durations (`:115-116`). Driving real SUMO phase
@@ -922,7 +941,8 @@ Two related facts from doc 10 that a SUMO design must know:
   the surface not bound in Python.
 - CARLA builds one stop-line trigger box **per lane listed in a signal's `<validity>`**, so
   collapsing heads without merging validity leaves lanes with no trigger box and vehicles drive
-  through (`:95-104`). Any change to light placement for SUMO has to preserve that.
+  through (`:95-104`). This governs CARLA's own signal-triggered behaviour, which this plan does not
+  invoke.
 
 ### 12.3 Upstream's `Co-Simulation/Sumo`, reconstructed and checked call by call
 
@@ -948,8 +968,8 @@ the following. Everything in the right-hand column **is** read from our tree and
 | `actor.set_light_state()` | mirror SUMO's signals/brake lights | **Present**, batchable (§4.1) |
 | `world.get_blueprint_library()` + `.filter()` | resolve a `vType` to a blueprint | **Present** (§6.3) |
 | **an actor's bounding-box extent** | `BridgeHelper` shifts every pose by half the vehicle length, because SUMO's reference point is the front bumper centre and CARLA's is the body centre | **Post-spawn only.** Gap G5.4. Upstream sidesteps this by shipping `data/vtypes.json` with dimensions baked in; our blueprint set differs, so ours is new work and belongs in the build-time catalogue (D5.6) |
-| `traffic_light.set_state()` / `.freeze()` | drive CARLA's lights from SUMO's `tlLogic` | **Present in C#**, absent from Python. Gap G5.3 (§12.2) |
-| `world.get_traffic_lights_from_waypoint()` | find which lights an edge's stop line carries | **Absent.** Gap G5.11 — sidesteppable here via the injector's `tlLogic` ↔ `sign_id` correspondence (§12.2, D5.10) |
+| `traffic_light.set_state()` / `.freeze()` | drive CARLA's lights from SUMO's `tlLogic` | **Present in C#**, absent from Python. Gap G5.3. **Not required by this plan** — CARLA drives no light state from SUMO (§3e, §12.2) |
+| `world.get_traffic_lights_from_waypoint()` | find which lights an edge's stop line carries | **Absent.** Gap G5.11. **Not required by this plan** (§3e); would be sidesteppable via the injector's `tlLogic` ↔ `sign_id` correspondence if ever needed (§12.2, D5.10) |
 | `world.get_actor(id)` | fetch one actor by id | **Present in substance**: our shim has `get_actors([id])` and `ActorList.find()` (`__init__.py:2038-2049`, `:1043-1048`), not a singular `get_actor` |
 | `world.get_snapshot()` / `WorldSnapshot` | read all actor poses for one frame | **Not found in the Python shim.** The equivalent exists one layer down as the C# observer cache — `GetCachedActorIds`, `GetActorTransform`, `GetActorVelocity`, `GetActorSnapshot` (`CarlaClient.cs:1915-1919`, `:1985`) — which is a better primitive for this purpose because it costs no RPC. A shim `get_snapshot` over it would be a thin wrapper |
 | Pose arithmetic: Y negation, `yaw = sumoAngle − 90`, half-length shift | `BridgeHelper.get_carla_transform` / `get_sumo_transform` | **Client-side arithmetic, no CARLA dependency.** New code in `CarlaNet.CoSim`; doc 23 §6.7 already names all three conversions |
@@ -958,13 +978,17 @@ the following. Everything in the right-hand column **is** read from our tree and
 missing from our C# client except the pre-spawn extent, and that is missing from upstream's client
 too — upstream works around it with a shipped dimension table rather than an API. The two items that
 are genuinely absent from *our* stack relative to upstream's *Python* client are the traffic-light
-methods (G5.3, one layer down and reachable) and the waypoint-based light lookup (G5.11, not needed
+methods (G5.3 — present in C#, reachable if ever needed, but not required by this plan since it does
+not drive CARLA's lights, §3e) and the waypoint-based light lookup (G5.11, likewise not needed
 here).
 
-### 12.4 The OpenDRIVE signal id has no RPC at all — re-checked, and compared with the new surfaces
+### 12.4 The OpenDRIVE signal id has no RPC at all
 
-Added in the second draft, because [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) and
-[`07_Scenario_Authoring.md`](07_Scenario_Authoring.md) both cite D5.10, which rests on this.
+**This gap is unexposed and not required by this plan.** It was recorded as blocking an
+otherwise-exact `tlLogic`-to-actor mapping; nothing in this plan needs that mapping, because CARLA
+renders no traffic-light or sign actors and drives no light state from SUMO
+([`_TEAM_BRIEF.md` §3e](_TEAM_BRIEF.md)). The finding is kept below as a fact about the client and
+engine.
 
 **Read.** The signal id lives on `USignComponent::SignId` (`Traffic/SignComponent.h:45-48`, `:80`),
 set by `TrafficLightManager` when the light is built from the map
@@ -1068,8 +1092,8 @@ magnitude matters to a design decision, it has to be measured or the issue fetch
 
 ## 14. Capability 13 — the solar control surface
 
-This capability did not exist in the first draft of this audit. It is audited here to the same
-standard as the rest: shim → C# client → RPC → server → engine, with a verdict at every layer.
+Audited to the same standard as the rest: shim → C# client → RPC → server → engine, with a verdict
+at every layer.
 
 ### 14.1 The layer stack of the solar surface
 
@@ -1290,8 +1314,8 @@ generally, so its soundness matters beyond the sun.
 map_origin` (three `int32`), `SimulationState simulation_state`, then **eleven doubles**
 (`LibCarla/source/carla/sensor/s11n/EpisodeStateSerializer.h:37-59`). That is 8 + 8 + 4 + 12 + 4 = 36
 bytes before the solar block, and 36 + 88 = **124 bytes** total — which is exactly the offset and
-header size the C# reader uses (`CarlaClient.cs:1841-1850`). The first draft's observation of
-"eleven appended solar doubles at offset 36" (§7.1) is confirmed against the struct.
+header size the C# reader uses (`CarlaClient.cs:1841-1850`). The "eleven appended solar doubles at
+offset 36" recorded in §7.1 is confirmed against the struct.
 
 **Read — who fills it.** `FWorldObserver_Serialize` calls
 `UCesiumHeightSampler::GetSolarState(Episode.GetWorld())` once per tick and copies eleven values into
@@ -1634,7 +1658,7 @@ vehicle**, and the change test `newLightStates != lightStates` at `:289` compare
 fictitious value that can never match — so a `SetVehicleLightStateCommand` is appended to the control
 frame for every managed vehicle on every tick.
 
-**This is the audit's only true port defect**, and it corrects the first draft's headline. Everything
+**This is the audit's only true port defect.** Everything
 else in the gap register is a shim omission, an engine omission, or a design consequence; this is one
 string in `CarlaClient.cs`. Gap G5.13.
 
@@ -1763,14 +1787,14 @@ inert fork-wide.** Two consequences follow, and both are good news for this plan
 
 Sizes are relative scope of change, not schedule. **A rebuild is not a cost and is not listed as
 one.** Every gap below is stated with the layer it sits in, because that is what decides who fixes it.
-`G5.1`–`G5.12` are the first draft's, unchanged in numbering and in substance; `G5.13`–`G5.22` are
-new in this draft.
+Gap numbers are stable and are never reused or reassigned, because sibling sections cite them by
+number.
 
 | # | Gap | Layer | What it blocks | Scope of fix |
 |---|---|---|---|---|
 | **G5.1** | A non-simulating (teleported) actor reports velocity **zero** in the world observer, structurally: `ComponentVelocity` is never written by the CARLA/Chaos vehicle stack (§7.3) | **Engine** | CoT truth speed, the traffic manager's collision stage, doc 17's occlusion and arrival gating. The single named cost of teleport mode. | Engine change plus, for one of the three shapes in §7.4, a new command variant moving together across `Command.h`, `Command.cs`, `CommandFormatter.cs`. Shared code — regression-test stock content. |
 | **G5.2** | Python shim exposes 8 of 22 batch command types (§4.3) | **Shim** | A Python-driven teleport loop cannot batch `SetSimulatePhysics`, `ApplyTargetVelocity`, `SetEnableGravity` or `SetTrafficLightState`; each becomes one RPC per vehicle. Does **not** block a C# runtime. | 14 wrapper classes beside the existing 8 and an import line. Shim only. |
-| **G5.3** | No traffic-light surface in Python; phase times and the frozen flag discarded in C# (§12.2) | **Shim**, then **C#** | Driving CARLA's lights from SUMO's `tlLogic` from Python; reading real phase durations from anywhere | Shim: a `TrafficLight` class over the ten existing C# methods. C#: one public accessor returning the already-decoded `TrafficLightObservedState`. No RPC, no server change. |
+| **G5.3** | No traffic-light surface in Python; phase times and the frozen flag discarded in C# (§12.2) | **Shim**, then **C#** | Driving CARLA's lights from SUMO's `tlLogic` from Python; reading real phase durations from anywhere. **Not required by this plan** — CARLA renders no traffic-light or sign actors and drives no light state from SUMO (§3e) | Shim: a `TrafficLight` class over the ten existing C# methods. C#: one public accessor returning the already-decoded `TrafficLightObservedState`. No RPC, no server change. |
 | **G5.4** | Vehicle dimensions unavailable before spawn — no size attribute on any blueprint definition, no dimension field on `FVehicleParameters` (§6.3) | **RPC / engine** | A runtime `vType` ↔ blueprint fit check. Forces the correspondence to be a build-time catalogue. | Either accept the build-time catalogue (recommended; see D5.6), or add dimensions to `FVehicleParameters` and `MakeVehicleDefinition` and carry them on `ActorDefinition`, which is an engine + LibCarla + C# type change. |
 | **G5.5** | No client-facing actor freeze/sleep; several dormant-branch writes silently dropped (§8.3, §8.2) | **Server / engine** | A cheap "instantiated but inert" state for the render-set contract; state survival across large-map dormancy | Bind `PutActorToSleep`/`WakeActorUp`, and fill the empty dormant branches in `CarlaActor.cpp`. Both engine-side. |
 | **G5.6** | `wait_for_tick` returns a synthetic `Timestamp(0, 0.0, 0.0, now)` (§5.3) | **Shim** | Any caller reading `.frame` or `.elapsed_seconds` from it | Capture the handler's timestamp in the closure. Shim only. |
@@ -1778,7 +1802,7 @@ new in this draft.
 | **G5.8** | Shim `set_attribute` refuses undeclared attributes although the server accepts them (§6.2) | **Shim** | Setting a custom identity attribute at spawn from Python | A sibling `set_attribute_unchecked`. Shim only. C# has no gate. |
 | **G5.9** | `drape_ground_elevation` does not prime the grid, so it returns `None` on a reconnected client (§10) | **Shim** | Silent null Z for any consumer that runs before telemetry | Call `EnsureBareEarthReference()` first. Shim only. |
 | **G5.10** | Three recorder/replay RPCs unwrapped in the shim; `PythonAPI/util/start_replaying.py` breaks (§12.1) | **Shim** | Replay utilities and recorder inspection from Python | Three two-line wrappers. |
-| **G5.11** | No map-side light lookup (`get_traffic_lights_from_waypoint` and siblings); no `Waypoint`/`Junction`/`Landmark` in the shim (§12.2) | **C#** | Asking "what controls this vehicle's next junction" from a client | Large — surfacing `CarlaNet.Map`'s already-parsed graph. **Sidesteppable for SUMO** by keying off `sign_id`. |
+| **G5.11** | No map-side light lookup (`get_traffic_lights_from_waypoint` and siblings); no `Waypoint`/`Junction`/`Landmark` in the shim (§12.2) | **C#** | Asking "what controls this vehicle's next junction" from a client. **Not required by this plan** (§3e); would be sidesteppable by keying off `sign_id` if ever needed | Large — surfacing `CarlaNet.Map`'s already-parsed graph. |
 | **G5.12** | `try_spawn_actor` swallows every exception, not only collision (§6.1) | **Shim** | Distinguishing "spawn point occupied" from a transport fault at scale | Catch the collision message specifically, or use the batch path, which returns per-entry errors. |
 | **G5.13** | **`CarlaClient.GetVehiclesLightStatesAsync` sends the RPC name `get_vehicles_light_states`; the server binds `get_vehicle_light_states`** (§15.5). rpclib answers "could not find function"; the client throws; the sole caller swallows it silently | **C#** | Any bulk read of vehicle light state. Latent today only because `update_vehicle_lights` defaults to false — with it on, every managed vehicle would be commanded `Reverse`+`Interior`+`Special1`+`Special2` on, and re-commanded every tick | **One string** in `CarlaClient.cs:1631`. Nothing else changes. The audit's only true port defect. |
 | **G5.14** | Vehicle light state is absent from the episode-state stream's vehicle union (`ActorDynamicState.h:59-68`), so reading it always costs an RPC (§15.5) | **Engine / wire** | A free per-tick read of who has their lights on, the way solar state and traffic-light state are free | Add a `uint32` to `VehicleData` and fill it in `FWorldObserver_GetActorState`; the union is already 54 bytes of type-dependent space. Engine + LibCarla + the C# parser move together. **Not needed** if the SUMO runtime is the sole author of lights (§15.5). |
@@ -1791,10 +1815,9 @@ new in this draft.
 | **G5.21** | `command.SetVehicleLightState` passes its argument straight to the C# enum parameter, while `Actor.set_light_state` converts explicitly (`__init__.py:1141-1147` vs `:782-783`) (§15.6) | **Shim** | Probably the batch form from Python with a plain `int` or the shim's own `VehicleLightState`. **Unconfirmed** — needs one line of measurement (open question 10) | One line: the same `VehicleLightStateFlags(int(state))` coercion. |
 | **G5.22** | `SumoCotBridge._height_at(x, y)` is called with the **raw SUMO** position (`CarlaControl/src/carlacontrol/SumoCotBridge.py:311`) and indexes a grid in the CARLA frame (`BareEarthGrid.height_at`, `:115-120`), so every off-centre height is read from the row mirrored about the grid's Y origin. Handed over by [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) §7; verified here | **Control-side Python** | Correct ellipsoidal height in the existing CARLA-free CoT datasets. Invisible in bounds terms — a mirrored row is always inside the grid — so it produces plausible wrong numbers | Negate Y at the call site, matching what the very next lines of that file already say the contract's frame is (`:314-315`). One line, plus regeneration of any dataset that depends on it. |
 
-**One gap now sits in the C# client's RPC coverage — G5.13 — and it is a single string.** The first
-draft's headline that nothing did is corrected. Everything else remains a shim omission, an engine
-omission, or a design consequence; no wire-protocol or serialisation defect was found in either
-draft.
+**Exactly one gap sits in the C# client's RPC coverage — G5.13 — and it is a single string.**
+Everything else is a shim omission, an engine omission, or a design consequence; no wire-protocol or
+serialisation defect was found anywhere in the port.
 
 ---
 
@@ -1812,9 +1835,12 @@ two places where a port of this kind usually fails both check out:
   *N*. It is not a theoretical capability either: this fork's own traffic manager already sends a
   mixed batch containing `ApplyTransform` teleports every tick.
 - **The traffic-light RPCs are all there.** The C++ client sent ten; the C# client sends the same
-  ten, all bound, all implemented in the engine. SUMO's `tlLogic` has somewhere to go.
+  ten, all bound, all implemented in the engine. This plan does not send them — CARLA renders no
+  traffic-light or sign actors and drives no light state from SUMO
+  ([`_TEAM_BRIEF.md` §3e](_TEAM_BRIEF.md)) — but the parity is a fact about the client and engine on
+  its own merits.
 
-**The one exception, found in this draft:** `get_vehicle_light_states` — the bulk read of every
+**The one exception:** `get_vehicle_light_states` — the bulk read of every
 vehicle's lights — is sent by the C# client under a name no server binds, so it always fails and the
 failure is always swallowed (§15.5, G5.13). LibCarla's C++ client sends the right name. This is the
 audit's only true port omission, it is one string in `CarlaClient.cs:1631`, and it is latent today
@@ -1822,10 +1848,12 @@ only because the sole caller is disabled by default.
 
 Where CarlaNet otherwise falls short of upstream's *Python* client, it falls short **in the Python
 shim**, not in the port. The shim exposes 8 of 22 batch commands and leaves `TrafficLight` an empty
-class. That is a real limitation and it would bite hard if the SUMO bridge were written in Python —
-which is precisely what doc 23 already rules out for an unrelated reason (no Python in the per-tick
-path). A .NET co-simulation assembly, subscribing to `OnWorldTickCompleted` the way the traffic
-manager already does, reaches all of it today.
+class — the latter present, audited, and not required by this plan in any language, now that traffic
+lights are not rendered or driven from CARLA (§3e). The batch-command gap is a real limitation and it
+would bite hard if the SUMO bridge were written in Python — which is precisely what doc 23 already
+rules out for an unrelated reason (no Python in the per-tick path). A .NET co-simulation assembly,
+subscribing to `OnWorldTickCompleted` the way the traffic manager already does, reaches all of it
+today.
 
 **On the added requirement — driving simulated time of day in tandem with playback — the answer is
 that the mechanism exists, works, and is already in production use.** Solar time, date, advancement
@@ -1842,7 +1870,7 @@ The last is the one that matters most, because it is the failure mode
 [`_TEAM_BRIEF.md` §3a](_TEAM_BRIEF.md) names as the worst available — a corpus that is internally
 consistent and wrong, with nothing to flag it.
 
-The things that are genuinely **missing rather than unexposed** are still, as in the first draft, in
+The things that are genuinely **missing rather than unexposed** are in
 the engine rather than in the port. A teleported vehicle reports zero velocity because the field
 CARLA's world observer falls back to for a non-simulating body is written by nothing (§7.3). A
 blueprint tells you nothing about a vehicle's size until you have spawned it (§6.3) — though it does
@@ -1853,12 +1881,12 @@ tell you whether it has lights (§15.4). And CARLA's own weather does nothing at
 
 ## 19. Decisions recorded
 
-`D5.1`–`D5.12` are the first draft's, unchanged. `D5.13`–`D5.20` are new in this draft and all
-concern time of day, illumination and vehicle lights.
+Decision numbers are stable and are never reused or reassigned, because sibling sections cite them by
+number. `D5.13`–`D5.20` all concern time of day, illumination and vehicle lights.
 
 | # | Decision |
 |---|---|
-| **D5.1** | **The SUMO-driven runtime is a .NET assembly, and this audit is the reason.** Only C# reaches all 22 batch commands (§4.3) and the ten traffic-light RPCs (§12.2). A Python bridge would pay one RPC per vehicle for every physics toggle and could not drive a traffic light at all. This reinforces [doc 23 §5](../../Findings/23_SUMO_Traffic_Integration.md) on independent grounds. |
+| **D5.1** | **The SUMO-driven runtime is a .NET assembly, and this audit is the reason.** Only C# reaches all 22 batch commands (§4.3); a Python bridge would pay one RPC per vehicle for every physics toggle. This reinforces [doc 23 §5](../../Findings/23_SUMO_Traffic_Integration.md) on independent grounds. The ten traffic-light RPCs (§12.2) are also C#-only, but they play no part in this decision: they are present, audited, and **not required by this plan** (§3e). |
 | **D5.2** | **Per-step actuation is exactly two RPC round trips, independent of vehicle count**: one `apply_batch` carrying spawns, transforms, velocity commands, physics toggles and destroys; then one `tick_cue` through `SendTickCueAsync`. Per-vehicle RPCs in the step loop are a defect, not a tuning choice (§4.4). |
 | **D5.3** | **Do not use `apply_batch`'s `do_tick_cue` flag in the co-simulation loop.** It ticks the server without the client waiting for the frame, so the next read can be one frame stale. `SendTickCueAsync` is the call that waits (§4.4). |
 | **D5.4** | **The co-simulation bridge subscribes to `CarlaClient.OnWorldTickCompleted`, not `OnTick`.** The former runs on the ticking thread after the frame has arrived and blocks it; the latter runs on a stream thread the tick does not wait for (§5.2). |
@@ -1867,9 +1895,9 @@ concern time of day, illumination and vehicle lights.
 | **D5.7** | **Areas of interest copy the staging-bounds pattern exactly** — flat primitives over `Response<T>`, a dedicated tagged holder actor found by `TActorIterator`, empty-result-means-absent on the getter, and no LibCarla file touched (§11). This confirms [doc 20 decision 10](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md); only its line citations need updating. |
 | **D5.8** | **Z for a teleported pose comes from `CarlaClient.SampleDrapeGroundElevation`**, which is a local bilinear lookup costing no RPC (§10). The runtime calls `EnsureBareEarthReference()` once at startup and refuses to place vehicles when `HasBareEarthReference` is false, rather than silently seating them on the shifted surface. |
 | **D5.9** | **Multi-camera capture is not blocked by the transport.** The C# client supports unbounded simultaneous sensor streams and `FrameRecorder` is instantiable N times; the single-camera limit is the shim's `self._recorder` / `self._sub` fields (§9). [doc 20 decision 11](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s premise that additional cameras force additional processes should be re-examined in [`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md) rather than inherited. |
-| **D5.10** | **SUMO traffic-light control keys off the OpenDRIVE `sign_id`, not a waypoint query.** The injector already establishes the `tlLogic` ↔ `sign_id` correspondence at build time, and `GetTrafficLightStatesBySignId` reads state back with no RPC (§12.2). G5.11 is therefore out of scope for this plan. |
+| **D5.10** | **Traffic lights are not rendered or driven from SUMO in this plan** ([`_TEAM_BRIEF.md` §3e](_TEAM_BRIEF.md)). The injector's `tlLogic` ↔ OpenDRIVE `sign_id` correspondence, established at build time, and `GetTrafficLightStatesBySignId`'s no-RPC read-back (§12.2) are retained as audited facts about the client and engine, not as a requirement: if a client ever did need to key a light to the map, it would use `sign_id` rather than a waypoint query. G5.11 and the unexposed `sign_id` RPC (§12.4) are both out of scope for this plan on that basis. |
 | **D5.11** | **The RPC budget is an asynchronous-mode concern and does not bound a synchronous SUMO run.** Under synchronous mode the engine drains the request queue until the tick cue arrives (§13). The quantity to manage is per-step latency, not calls per tick; no per-call service cost is documented anywhere and none is assumed here. |
-| **D5.12** | **Every shim gap in §17 is optional work for this plan.** G5.2, G5.3, G5.6–G5.10 and G5.12 block Python callers only. They are worth closing because the shim is the fork's public API and a silently divergent shim is a trap, but no part of the SUMO-driven mode waits on them. |
+| **D5.12** | **Every shim gap in §17 is optional work for this plan.** G5.2, G5.6–G5.10 and G5.12 block Python callers only. They are worth closing because the shim is the fork's public API and a silently divergent shim is a trap, but no part of the SUMO-driven mode waits on them. G5.3 is not merely a Python-only block here — it is not required in **any** language, because this plan drives no traffic-light state at all (§3e). |
 | **D5.13** | **A run that wants reproducible illumination sets `fixed_delta_seconds`.** The sun advances by `Σ (world frame delta × rate)` and never reads the wall clock (`CesiumTimeOfDayController.cpp:34`, §14.4). With a fixed delta the sun is a pure function of the tick count, so two runs of the same window are lit identically; without one, it is not — **in synchronous mode as well as asynchronous**. State the coupling as `fixed_delta_seconds`, never as "synchronous mode", and correct the three places that say otherwise (`__init__.py:1538-1540`, `CarlaClient.cs:1057`, `CarlaControlArgumentParser.py:255-262`). |
 | **D5.14** | **`rate = 1.0` means one sun-clock second per simulated second.** At `Δ = 0.05` that is twenty ticks per sun-second. To hold the sun to a SUMO clock of step length `L` applied every `K` CARLA ticks, the identity the runtime must satisfy is `rate = L / (K × Δ)`. [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md) owns the choice; this audit supplies the identity (§14.4). |
 | **D5.15** | **A frozen-sun capture sets the instant and leaves `set_time_advance` off; it does not set `rate = 0`.** Both work arithmetically, but `advancing` is published in the solar block (index 9) and reaches truth as a boolean (`CotWriter.cs:63`), so the state of the run is self-describing only if the flag carries the intent (§14.5). |

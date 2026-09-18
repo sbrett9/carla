@@ -1,9 +1,9 @@
 # 09 — Toolchain and Packaging
 
-**Status:** planning only, redrafted for `_TEAM_BRIEF.md` §3a. No code changed, no build/cook/engine run.
+**Status:** planning only, scoped to `_TEAM_BRIEF.md` §3a. No code changed, no build/cook/engine run.
 Every claim below is either cited to `path:line` in the tree as it stands today, or marked as measured
 with the command that produced it, or explicitly labelled an inference.
-**Date:** 2026-09-18 (redraft; the first draft was 2026-09-17 and is superseded by this file).
+**Date:** 2026-09-18.
 **Owner role:** build, toolchain and packaging engineer. This document only.
 **Reads:** [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) (binding, especially §3a — the added time-of-day and
 operator-control-surface requirement); `Findings/23_SUMO_Traffic_Integration.md` §1, 1.2, 6.1–6.3, 6.12,
@@ -26,44 +26,12 @@ authoring skill are designed elsewhere; this section only specifies what has to 
 to *ship*. Likewise the run-configuration schema and the site profile are `12`'s design; this section
 specifies only their packaging shape.
 
-**Corrections folded into the first draft, still true.** Two things changed the shape of the first draft
-after the first read of doc 23, and both remain correct today:
+**Change history**
 
-1. Doc 23's citation `SCTMV.py:102-106` for where `CARLA_NETCONVERT`/`PROJ_LIB` are set is **stale**.
-   `carla/CarlaNet/python/SCTMV.py` no longer exists — deleted 2026-09-15. The live entry point is
-   `carla/CarlaControl/scripts/run_SCTMV.py`, driving the `carlacontrol` package. §3 below re-resolves
-   this from the live tree rather than repeating the doc 23 citation.
-2. Two measurements landed mid-pass from the scenario-authoring engineer and are verified and folded
-   in at §3.3 (a live `SUMO_HOME` pointed at a different netconvert version than the one this repo
-   pins, silently preferred by `SumoInstallation.locate`) and §8.3 (a non-deterministic serialization
-   order in `OsmClipper.py` that would make a naive byte-hash reproducibility check fail spuriously).
-
-**What changed in this redraft.** [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3a added simulated time of day,
-driven with playback and toggleable per run, and promoted a coherent operator control surface to a
-first-class deliverable — after the first draft of this plan specified windowed capture in simulated
-time and never connected it to the sun. Three things follow for this document, addressed in place rather
-than as a bolted-on section:
-
-1. **The SUMO toolchain itself is unaffected.** The solar mechanisms are entirely CARLA/Cesium-side and
-   already built end to end. New §2.4 says so with citations, so a reader never has to wonder whether
-   §2's target-list change or §3's staging change owes anything to time-of-day. It does not.
-2. **One small, non-SUMO dependency becomes worth shipping**: an IANA time-zone database
-   (`tzdata`), for the scenario-authoring side. It is **optional, not required** — `07` and `11` make
-   the *numeric* UTC offset normative precisely so that civil-time resolution is arithmetic on a
-   number, and the zone name is an optional cross-check whose validator warns and skips when no
-   database is present (`07` check 35). Shipping `tzdata` upgrades that check from skipped to
-   enforced; nothing fails without it. New §4.4.
-3. **The operator control surface (`12`) is a new sibling deliverable whose distribution footprint this
-   document must specify.** `12` already exists and has already decided concrete shapes for parts of it
-   (§5.6 reads them as fact); what remains generic is only what `12` had not yet pinned down when this
-   was first asked for. Its new launcher lands on ground this document already found broken (§5.2), and
-   the two repairs are one change, not two — §5.6 and new decision `D9.11` say so plainly.
-
-This pass additionally **re-verified every disk-state finding and `path:line` citation in the first
-draft**. The substance is unchanged everywhere; three citations had drifted by a handful of lines, from
-other authors' unrelated edits elsewhere in the same files, and one was simply mis-cited from the start.
-All three are corrected in place and listed at the end of §1, and every other citation in this document
-landed on the exact line first checked.
+| Date | Change |
+|---|---|
+| 2026-09-17 | Initial: SUMO build-target guard, `SUMO_HOME` collision, C# binding design, licensing, distribution gaps. |
+| 2026-09-18 | Added time-of-day and operator-control-surface packaging scope (§2.4, §4.4, §5.6); corrected three drifted citations. |
 
 ---
 
@@ -96,23 +64,18 @@ this repo performs. Do not rely on it for the distribution path (§5) — a dist
 **Net conclusion: doc 23's disk-state table holds.** The only correction of substance is `SUMO_HOME`
 (§3.3), which changes the shape of §3 below but not §1's inventory.
 
-**Re-verified for this redraft, 2026-09-18.** Every disk-state claim in the table above, and every
-`path:line` citation anywhere in this document, was checked again against the live tree before being
-carried forward. The substance is unchanged everywhere. Three citations had moved or were wrong from the
-start; corrected here rather than left pointing at the wrong line:
-
-| Citation | First draft said | Now | Cause |
-|---|---|---|---|
-| `Findings/22_Digital_Twin_Feature_Port.md` — the `CarlaControl/` proprietary-exclusion row (§4.3) | `:522` | `:529` | Not drift — the first draft mis-cited this row from the start. The netconvert row two lines above it, quoted in full in §6, was already correctly cited at `:528` and still is |
-| `build-carla-ue5.yml` — `CONTAINER_IMAGE` (§2.3) | `:47` | `:51` | Genuine drift — the workflow file grew by a few lines elsewhere between 2026-08-21 and today, unrelated to this plan |
-| `Util/Docker/Base.alma8.Dockerfile` — `powertools` repo enabled (§2.3) | `:83` | `:94` | Genuine drift, same cause |
-
-Every other citation in this document — `CarlaSetup.ps1`/`.sh`/`.bat`, `run_SCTMV.py`,
+**Every disk-state claim in the table above, and every `path:line` citation anywhere in this document, is
+checked against the live tree as of 2026-09-18.** Two citations sit on lines that moved because the
+tracked files themselves grew: `build-carla-ue5.yml`'s `CONTAINER_IMAGE` is at `:51` (§2.3), and
+`Util/Docker/Base.alma8.Dockerfile`'s `powertools` repo enablement is at `:94` (§2.3) — both are cited at
+those lines wherever they appear below. `Findings/22_Digital_Twin_Feature_Port.md`'s `CarlaControl/`
+proprietary-exclusion row (§4.3) is at `:529`; the netconvert row two lines above it, quoted in full in
+§6, is at `:528`. Every other citation in this document — `CarlaSetup.ps1`/`.sh`/`.bat`, `run_SCTMV.py`,
 `Scripts/Windows/MakeDistribution.ps1`, `Scripts/Linux/MakeDistribution.sh`,
 `CarlaControl/src/carlacontrol/SumoInstallation.py`, `OsmClipper.py:154,219`,
-`Unreal/Package/CreateCarlaVersionFile.cmake`, the CarlaNet `.csproj` files, and the new
-`CarlaServer.cpp:611-661` / `carlanet/__init__.py` solar citations in §2.4 — landed on the exact line
-checked, with no drift.
+`Unreal/Package/CreateCarlaVersionFile.cmake`, the CarlaNet `.csproj` files, and the
+`CarlaServer.cpp:611-661` / `carlanet/__init__.py` solar citations in §2.4 — lands on the exact line
+cited.
 
 **The build and staging pipeline, source pin to staged install to distribution bundle** — current state
 (solid) and what §2/§5 add (dashed):
@@ -312,7 +275,7 @@ requirement changes nothing above, and nothing else this document is responsible
 `UCesiumHeightSampler` in `Unreal/CarlaUnreal/Plugins/CesiumCarlaBridge/Source/CesiumCarlaBridge/`, and
 exposed by the Python shim at `carlanet/__init__.py:1500` (`set_solar_time`), `:1506` (`set_solar_date`),
 `:1511` (`get_solar_state`), `:1535` (`set_time_advance`) — confirmed by grep directly against the live
-file for this redraft, matching the team brief's own citations exactly.
+file, matching the team brief's own citations exactly.
 
 Three consequences follow, all measured rather than assumed:
 
@@ -343,7 +306,7 @@ packaging one, and it is addressed at §5.6.
 
 ---
 
-## 3. `SUMO_HOME`, the data directory, and a live version collision found during this pass
+## 3. `SUMO_HOME`, the data directory, and a live version collision
 
 ### 3.1 Where `CARLA_NETCONVERT` / `PROJ_LIB` are actually set today (re-resolved, not carried from doc 23)
 
@@ -516,8 +479,6 @@ unattended CI run is the wrong tool for that job regardless). It is set:
 
 ### 3.5 Corroboration, and one interaction with the new operator control surface
 
-Two things converged on this section after the first draft, neither changing its conclusion.
-
 **Corroboration.** [`07_Scenario_Authoring.md`](07_Scenario_Authoring.md) §9.4 ("One netconvert, named")
 independently measures the same collision from the scenario-authoring side: `SumoInstallation.locate`
 preferring `$SUMO_HOME` (`G:\Sumo`, netconvert 1.27.1) over the repo-staged 1.27.0 that `run_SCTMV.py:66-71`
@@ -559,9 +520,9 @@ What a consuming .NET project needs, concretely:
    a clean, acyclic dependency: `CarlaNet.CoSim` → `CarlaNet.Sumo` + `CarlaNet.Types` + `CarlaNet.Transport`
    + `CarlaNet.Map` + `CarlaNet.TrafficManager`, mirroring the existing pattern at
    `CarlaNet.Scenario.csproj:4-7`. `TargetFramework` is `net10.0`, matching every existing CarlaNet
-   assembly (verified: `CarlaNet.Types.csproj:4`, `CarlaNet.Scenario.csproj:11`). Confirmed again for
-   this redraft: `CarlaNet/src/CarlaNet.Sumo/` does not exist yet — this remains a proposal, not a
-   description of something already built.
+   assembly (verified: `CarlaNet.Types.csproj:4`, `CarlaNet.Scenario.csproj:11`). Confirmed by directory
+   listing: `CarlaNet/src/CarlaNet.Sumo/` does not exist yet — this is a proposal, not a description of
+   something already built.
 2. **The generated sources reproducibly, from a clean clone, not from a build tree someone happens to
    have.** SUMO's own build already produces exactly the right artifact for this:
    `Build/sumo-src/bin/libtracics-sources.zip`, which contains the full `Eclipse.Sumo.Libtraci/` folder
@@ -599,9 +560,8 @@ from any external distribution.** `carlacontrol.SumoInstallation`, `SumoScenario
 `SumoPatternOfLifeBuilder` and every `make_*_scenario.py` CLI live in `CarlaControl/`. This is a
 packaging fact with teeth, addressed at §5.4 — noted here because it means **the Python SUMO path, as it
 exists today, is entirely proprietary code**, and any statement that "the Python path is the reference
-implementation" carries that qualification forward. §5.6 records that this footprint has grown again
-since the first draft, on account of the operator control surface — not because anything here changed,
-but because `12`'s new classes also live in `CarlaControl/`.
+implementation" carries that qualification forward. §5.6 records that this footprint is larger on
+account of the operator control surface: `12`'s new classes also live in `CarlaControl/`.
 
 ### 4.4 One adjacent, non-SUMO Python dependency: `tzdata`
 
@@ -616,8 +576,8 @@ civil offset against an IANA zone name (`Asia/Tehran`, for the sizing scenario's
 database, and *measured* there: on that machine, Python 3.14.4, `import tzdata` raises
 `ModuleNotFoundError`, `zoneinfo.ZoneInfo("Asia/Tehran")` raises `ZoneInfoNotFoundError`, and
 `zoneinfo.available_timezones()` returns zero entries — Windows ships no IANA database, and CPython's
-`zoneinfo` falls back to the `tzdata` wheel, which is not installed. *Confirmed here, directly, for this
-redraft:* `CarlaControl/pyproject.toml:12-15` declares exactly
+`zoneinfo` falls back to the `tzdata` wheel, which is not installed. *Confirmed here, directly:*
+`CarlaControl/pyproject.toml:12-15` declares exactly
 
 ```
 dependencies = [
@@ -686,11 +646,11 @@ toolchain work**, but it sits in the exact script section this plan already has 
 copy block a few lines below it), so it should be fixed in the same change: point the Windows copy at
 `CarlaControl\scripts\run_SCTMV.py`, matching what Linux already does correctly.
 
-**This is no longer only this document's finding.** [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md)
-§10 measures the identical defect independently, adds the second half this document's first draft did
-not fully spell out (`MakeDistribution.sh:112-113` bundles **both** wheels; the Windows script bundles
+[`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md)
+§10 measures the identical defect independently and adds the second half:
+`MakeDistribution.sh:112-113` bundles **both** wheels, while the Windows script bundles
 only `carlanet`, so even a path fix alone would leave a Windows distribution unable to `import
-carlacontrol`), and states that its own new launcher must ship "on both platforms in the same change" as
+carlacontrol`. `12` states that its own new launcher must ship "on both platforms in the same change" as
 this repair. §5.6 works out what that means for packaging.
 
 ### 5.3 Fixing 5.2 surfaces the 4.3 licensing question on both platforms uniformly
@@ -724,8 +684,10 @@ staged install:
 
 ### 5.5 The new, non-toolchain artifacts this plan introduces
 
-Per the team brief, this section states what must be shippable, not their formats. Two artifacts were
-named in the first draft; this redraft adds two more that `§3a` and its sibling sections introduced.
+Per the team brief, this section states what must be shippable, not their formats: the vehicle catalogue
+and the annotation vocabulary (doc 20), the authoring-skill bundle and the illumination reference that
+`§3a` and its sibling sections introduce, and the run-configuration schema with its site-profile
+template (`12`).
 
 - **The vehicle catalogue.** Doc 20 §5.6 already states the requirement plainly: "**Generated from a
   running server, never hand-maintained**… **Versioned and shipped with the distribution**, so a
@@ -742,23 +704,21 @@ named in the first draft; this redraft adds two more that `§3a` and its sibling
   lets a consumer refuse a corpus it does not understand" (`:702-707`). Same packaging need: a
   discoverable, versioned file shipped with the distribution (or with a captured corpus — that's `06`'s
   and `08`'s call), not embedded in code.
-- **The authoring skill — now a bundle, not a single file, and still without a repo home.**
-  `.agents/skills/sumo-traffic-scenarios/SKILL.md` was a single 14 KB file with no supporting files when
-  the first draft measured it. [`07_Scenario_Authoring.md`](07_Scenario_Authoring.md) §8 now specifies it
-  grows into a versioned bundle — `schemas/scenario.schema.json`, `schemas/sweep.schema.json`,
+- **The authoring skill — a bundle, not a single file, and still without a repo home.**
+  `.agents/skills/sumo-traffic-scenarios/SKILL.md` is a single 14 KB file with no supporting files,
+  measured directly. [`07_Scenario_Authoring.md`](07_Scenario_Authoring.md) §8 specifies it as a versioned
+  bundle — `schemas/scenario.schema.json`, `schemas/sweep.schema.json`,
   `vocabulary.json`, `checks.json`, `examples/`, `references/gotchas.md`, `references/resolution.md` —
   most of it generated from the compiler so it cannot drift from the code it describes. **`07` §8.4
-  states it lives "in the repository … where it is now."** Re-measured today, 2026-09-18, specifically
-  for this redraft: it does not. The workspace root (`G:\Projects\CarlaUE_5_7_4`) is still not a git
-  repository at all (`git rev-parse --is-inside-work-tree` fails there, exactly as the first draft
-  found), and there is no `.agents/` directory anywhere inside the `carla` repository itself — `carla`
-  *is* a git repository (confirmed), and `carla/.agents/skills/sumo-traffic-scenarios/` does not exist in
-  it. This is not a disagreement to paper over: `07`'s design for the bundle's *content* stands regardless
-  of where it lives, but the bundle cannot be given a real path for `MakeDistribution` to reference, on
-  either platform, until it is physically moved inside `carla/`, tracked, and versioned there. That move
-  is `07`'s call, exactly as the first draft already said — its finding was that no such move had
-  happened yet, not that one wasn't planned. This redraft's finding is narrower and sharper: `07`'s own
-  text now assumes the move already happened, and measurement says it has not.
+  states it lives "in the repository … where it is now."** Measured 2026-09-18: it does not. The
+  workspace root (`G:\Projects\CarlaUE_5_7_4`) is not a git repository at all (`git rev-parse
+  --is-inside-work-tree` fails there), and there is no `.agents/` directory anywhere inside the `carla`
+  repository itself — `carla` *is* a git repository (confirmed), and
+  `carla/.agents/skills/sumo-traffic-scenarios/` does not exist in it. This is not a disagreement to
+  paper over: `07`'s design for the bundle's *content* stands regardless of where it lives, but the
+  bundle cannot be given a real path for `MakeDistribution` to reference, on either platform, until it is
+  physically moved inside `carla/`, tracked, and versioned there. That move is `07`'s call. `07`'s own
+  text assumes the move already happened; measurement says it has not.
 - **The illumination reference.** [`07_Scenario_Authoring.md`](07_Scenario_Authoring.md)'s pre-authoring
   artifact list (item 12, §2.9) names a per-world, per-date sunrise/sunset/sun-elevation table and a
   night-viability verdict, computed from the world's origin and the scenario's epoch — owned by
@@ -859,7 +819,7 @@ concretely, and this document packages the answer, not a hypothetical:
 | Capture launcher (source-side tool) | new script | `Scripts/Windows/RunCapture.ps1` | `Scripts/Linux/RunCapture.sh` |
 | Distribution launcher | generated; **coexists** beside `run-sctmv.ps1`/`.sh`, does not replace it (`D12.17`: `run_SCTMV.py`'s 86 arguments and 13 hotkeys are all kept) | `run-capture.ps1` | `run-capture.sh` |
 | Run-configuration schema + site-profile template | new files, versioned with the content build the same way the vehicle catalogue is (§5.5's answer to question 4) | staged alongside the vehicle catalogue and vocabulary | same |
-| `carlacontrol` wheel | now required on **both** platforms — `run_capture` is built on the `RunConfiguration`/`SiteProfile`/`EffectiveRunConfiguration` classes `12` §3.9 places in `CarlaControl/`, so a distribution shipping the new launcher without the wheel ships a launcher that cannot import its own dependency | must be bundled — `D9.7`'s question is no longer hypothetical, see below | already bundled today |
+| `carlacontrol` wheel | required on **both** platforms — `run_capture` is built on the `RunConfiguration`/`SiteProfile`/`EffectiveRunConfiguration` classes `12` §3.9 places in `CarlaControl/`, so a distribution shipping the new launcher without the wheel ships a launcher that cannot import its own dependency | must be bundled — see `D9.7` | already bundled today |
 | `MakeDistribution` header comment | updated tree description | `:8-20` | `:9-12` |
 | Distribution README | a capture quick-start section added | — | — |
 | CI | a parity check invoking both launchers with `--help` and comparing option sets (`12` `D12.19`) | one check, exercises both platforms' generated launchers | — |
@@ -874,17 +834,15 @@ separate changes means editing the same lines twice: once to fix `run-sctmv.ps1`
 after, to add `run-capture.ps1` beside it.** One change landing both is not a convenience; it is the only
 way to avoid a second pass over code the first pass just touched.
 
-**The consequence for `D9.7`.** The internal/external distribution-mode question (§6, `D9.7`) was framed
-in the first draft as something that becomes true "the moment anyone fixes §5.2 the obvious way." It no
-longer needs that hypothetical: `12`'s new launcher makes bundling `carlacontrol` a hard requirement for
+**The consequence for `D9.7`.** The internal/external distribution-mode question (§6, `D9.7`) is not
+hypothetical: `12`'s new launcher makes bundling `carlacontrol` a hard requirement for
 the capture path to work at all, on both platforms, independent of whether §5.2 is ever fixed on its own.
-The proprietary-code footprint `D9.7` is about has grown, not merely become reachable — `12` §3.9 adds
+The proprietary-code footprint `D9.7` is about is larger than the wheel alone — `12` §3.9 adds
 `RunConfiguration.py`, `SiteProfile.py`, `RunConfigurationResolver.py`, `EffectiveRunConfiguration.py`,
 `RunConfigurationValidator.py`, `SessionMonitor.py`, `RunCloseoutReport.py` and `WorldBuildConfiguration.py`
 to `CarlaControl/`, all covered by the same `CarlaControl/LICENSE` exclusion §4.3 already names. `D9.7`'s
-recommendation is unchanged — an explicit internal/external packaging mode, not a default — but the case
-for deciding it before an external distribution is ever attempted is now concrete rather than
-speculative. See new `D9.11`.
+recommendation is an explicit internal/external packaging mode, not a default, and the case
+for deciding it before an external distribution is ever attempted is concrete. See `D9.11`.
 
 ---
 
@@ -912,8 +870,8 @@ bundled as source, and the internal/external distribution boundary around `Carla
 items worth a licensing review before this ships, stated as facts so that review has something concrete
 to look at rather than a summary.
 
-**Two additions from this redraft, both minor and both flagged rather than resolved, consistent with the
-rest of this table.** `tzdata` (§4.4) is a pure-Python data package with no native code and no
+**Two items are minor and flagged rather than resolved, consistent with the rest of this table.**
+`tzdata` (§4.4) is a pure-Python data package with no native code and no
 redistribution boundary of the kind the rest of this table addresses; it is listed here only so a
 licensing pass sees it — its own PyPI packaging terms (distinct from the public-domain IANA database it
 carries) have not been checked. And `12`'s new classes (§5.6) add source volume to the `CarlaControl/`
@@ -1083,10 +1041,10 @@ this document's scope to verify (§2.4).
 | D9.4 | `libtraci` (out-of-process) is the binding boundary for the C# path, per doc 23 §6.3, reaffirmed here on licensing grounds independently of the architecture ones (§6). `libsumo` is rejected for both reasons together. |
 | D9.5 | A new, dependency-free `CarlaNet/src/CarlaNet.Sumo` project holds only the generated bindings and native-load glue, built from `libtracics-sources.zip` staged alongside the toolchain. Any co-simulation bridge (`03`'s `CarlaNet.CoSim` or equivalent) depends on it; it depends on nothing CARLA-specific. |
 | D9.6 | `SUMO_HOME` precedence in `SumoInstallation.locate` is **not** reordered — `SUMO_HOME` continues to win, matching raw `traci`'s own convention. Instead: resolution is always logged (home + version), a `.version` property is added, and a version-mismatch between the netconvert that built a world and the SUMO installation resolved to author/run a scenario against it becomes a **hard-refusing** condition with an explicit override flag. The consumer-side refuse-vs-warn UX is `07_Scenario_Authoring.md`'s call to finalize against `SumoScenarioBuilder`. Corroborated independently by `07` §9.4 (§3.5); its interaction with `12`'s proposed site profile is answered generically in §3.5. |
-| D9.7 | Both distribution scripts must gain an explicit internal/external packaging mode. Today, fixing the broken Windows demo-client reference (§5.2) the obvious way makes both platforms bundle the SNC-proprietary `carlacontrol` wheel uniformly — correct for the one distribution channel that exists today (an internal Artifactory repo) and wrong the moment any distribution is meant to leave that boundary. No such mode exists in either script today; this document does not choose its shape, only that it must exist before an external distribution is ever produced from this pipeline (see Open Questions). **No longer hypothetical**: `12`'s new capture launcher makes bundling `carlacontrol` unavoidable on both platforms regardless of whether §5.2 is fixed on its own (§5.6). |
+| D9.7 | Both distribution scripts must gain an explicit internal/external packaging mode. Today, fixing the broken Windows demo-client reference (§5.2) the obvious way makes both platforms bundle the SNC-proprietary `carlacontrol` wheel uniformly — correct for the one distribution channel that exists today (an internal Artifactory repo) and wrong the moment any distribution is meant to leave that boundary. No such mode exists in either script today; this document does not choose its shape, only that it must exist before an external distribution is ever produced from this pipeline (see Open Questions). `12`'s new capture launcher makes bundling `carlacontrol` unavoidable on both platforms regardless of whether §5.2 is fixed on its own (§5.6). |
 | D9.8 | `carla-base:alma8`'s pull in `build-carla-ue5.yml` is by tag with no digest pin; adding `swig` (D9.1's prerequisite) means rebuilding and re-pushing that tag. Needing the rebuild is not a cost. Whether the workflow should move to a digest pin so future base-image changes can't silently ride into a build is an open question (below), independent of this rebuild. |
 | D9.9 | `CarlaControl/src/carlacontrol/OsmClipper.py:154,219`'s non-deterministic `set`-ordered node emission is a real reproducibility hazard for anything that hashes its output, but it is proprietary code outside this document's scope to change. Recorded here as a handoff: the fix is `sorted(used_orig, key=int)` (or equivalent) at the emission site; until it lands, no reproducibility or acceptance check in this plan hashes OSM-clip-derived file bytes (§7.3). |
-| D9.10 | The authoring skill (`.agents/skills/sumo-traffic-scenarios/SKILL.md`) has no reproducible, version-controlled source location today (it sits outside any git repository). It cannot be bundled into a distribution until it is given one inside `carla/`. Where is `07_Scenario_Authoring.md`'s decision; that it currently has none is this document's finding. **Re-verified 2026-09-18, still true**, and `07` §8.4 now assumes the move already happened — measurement says it has not (§5.5). |
+| D9.10 | The authoring skill (`.agents/skills/sumo-traffic-scenarios/SKILL.md`) has no reproducible, version-controlled source location today (it sits outside any git repository). It cannot be bundled into a distribution until it is given one inside `carla/`. `07_Scenario_Authoring.md`'s decision is where the skill lives; that it currently has none is this document's finding. `07` §8.4 assumes the move already happened; measurement says it has not (§5.5). |
 | D9.11 | **The operator control surface's distribution footprint is packaged generically only where `12` had not yet fixed a shape; where it has, this document packages that shape as fact.** The new capture launcher (`run-capture.ps1`/`.sh`) coexists beside `run-sctmv.ps1`/`.sh` rather than replacing it; the run-configuration schema and site-profile template stage alongside the vehicle catalogue and vocabulary (§5.5); the broken-launcher repair (§5.2) and the new launcher's introduction land as one change, not two, because they touch the same lines of the same scripts (§5.6); and `D9.7`'s internal/external packaging-mode question stops being hypothetical because `12`'s launcher makes bundling `carlacontrol` unavoidable on both platforms. |
 | D9.12 | **`tzdata` is added to `CarlaControl/pyproject.toml`'s dependencies once `07`/`11` settle whether IANA zone resolution is required or merely an optional cross-check (§4.4, Open question 5).** It needs no new packaging mechanism — it resolves through the same `pip install` step that already installs `numpy` and `pygame` for every distribution recipient — and it introduces no SUMO dependency, no native code, and no new distribution slot. |
 
@@ -1097,8 +1055,8 @@ this document's scope to verify (§2.4).
    licensing exclusion in doc 22 §14 is satisfied by the channel itself rather than by the tooling. If
    the answer is "yes, eventually," the mode needs to exist before that day, not on it. This is a
    product/distribution-strategy question, not a toolchain one — recommend deciding it explicitly rather
-   than by default. `D9.11` makes this somewhat more pressing than the first draft found it, since the
-   proprietary surface area it would gate has grown.
+   than by default. `D9.11` makes this more pressing, since the proprietary surface area it would gate
+   has grown.
 2. **Does the version-mismatch check (§3.3, `D9.6`) default to refuse or default to warn?** Recommended:
    refuse by default with an explicit override, on the grounds that a silently-divergent converter is
    worse than a blocked run — but this trades developer friction against correctness, and

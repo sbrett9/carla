@@ -1,12 +1,18 @@
 # 13 — Work breakdown
 
-**Status:** Plan, revision 2. Sequencing and dependency only — **no schedule, no effort estimates,
+**Status:** Plan. Sequencing and dependency only — **no schedule, no effort estimates,
 no calendar.** "Before" and "after" mean dependency, not time.
 **Scope:** What to build, in what order, what must be measured before committing to it, and what
 needs a decision from the user rather than from an engineer.
 
 Each stage has a descriptive name and a letter used only for the dependency graph. Items marked **⚑**
 are on the critical path.
+
+**Change history**
+
+| Date | Change |
+|---|---|
+| 2026-09-18 | Traffic-light synchronisation and its signal-id dependency dropped; fixture no longer needs a signalised junction. |
 
 ---
 
@@ -51,8 +57,8 @@ flowchart TB
 now; C's answers change what is worth building in I and K.
 
 **The epoch work in F must land before the first windowed capture.** A corpus whose imagery and truth
-disagree about what time it was is unrepairable after the fact, and revision 1's omission means
-nothing currently prevents producing one.
+disagree about what time it was is unrepairable after the fact, and nothing in the tree today
+prevents producing one.
 
 ---
 
@@ -121,7 +127,6 @@ clock rather than hours. Properties it must have, each because a measurement dep
 | Property | Why |
 |---|---|
 | A **fixed, declared** vehicle count rather than flows | The actor-ceiling sweep varies the count deliberately; ambient variance would confound it |
-| One junction with a **traffic light** | Arapahoe has them and the sizing scenario has **none**, so light synchronisation is otherwise untestable |
 | One authored dwell and one authored transit, both annotated | The smallest input that exercises the whole supervision path end to end |
 | A **declared epoch** and at least two capture windows at different sun elevations | Exercises the epoch contract, the solar audit, and the illumination axis without a seven-day run |
 | Both a rendered and a simulated-only vehicle | Exercises the render-set contract and the observability outcomes |
@@ -227,8 +232,8 @@ New `CarlaNet.CoSim` in C#, orchestrated from Python; one TraCI connection owned
 | | **Civil-to-solar conversion**, and the date rollover the engine never performs | The team recommends an engine time-zone setter over client arithmetic; see the decisions below |
 | | Windowed capture via SUMO fast-forward from t = 0 | Measured: the whole week is 140.41 s at 4,307×. `--begin` rejected — cold start 87.5% under-populated; state save/load does not compose with unrouted trips and flows |
 | | Region gate sized per scenario so the cap does not bind | The region gate is label-independent; the cap is not |
+| | **Suppress the signal layer for the session.** One `set_layer_visible("signals", false)` before the first tick, fixed off for the run, recorded in the manifest | No traffic-light or sign actor is rendered and no traffic-light state is written; vehicle lamps are unaffected. World generation is untouched — the actors are hidden, not removed, so every other mode still renders them |
 | | Failure paths: SUMO death, CARLA stall, a vehicle removed while held, route errors, collisions, a world with no sun | If either side stalls, **both** stop and the run fails — a world that ticks without SUMO produces a plausible lie |
-| | Traffic-light synchronisation from SUMO's `tlLogic` | Needs an RPC exposing a light's OpenDRIVE signal id, held server-side and unexposed. **Bahonar has zero traffic lights**, so this cannot be exercised there |
 
 ---
 
@@ -288,4 +293,3 @@ New `CarlaNet.CoSim` in C#, orchestrated from Python; one TraCI connection owned
 | **The bridge looks right and is wrong by half a car length** | Bumper shift, Y negation and yaw offset each fail plausibly | The commanded-versus-applied separation, emitted per vehicle per tick |
 | **Arapahoe-class maps yield no training data** | The cap binds always at median 336, and cap-bound spans are excluded from training | Size the region gate so the cap does not bind ([00](00_Overview.md) §6) |
 | **Doc 23's actuated strategy turns out to be necessary** | If pose-applied vehicles read wrong to a detector, the mode rests on a false premise | It is measurement 7 in stage C, and the strategy is retained behind the same bridge rather than discarded |
-| **Traffic-light synchronisation is untested where it matters** | Bahonar has zero traffic lights | Exercise it on Arapahoe or stock content; do not let the sizing scenario stand in for coverage |

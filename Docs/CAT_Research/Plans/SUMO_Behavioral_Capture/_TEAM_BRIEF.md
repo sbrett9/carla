@@ -236,6 +236,107 @@ was produced and whether it is fit to use. No scheduler, no training loop, no mo
 are outside. Where a section already specifies a run configuration and a manifest, this mostly falls
 out; say so rather than inventing machinery.
 
+## 3d. Cyclic generation is driven from outside, and we do not judge our own runs
+
+**Added by the user 2026-09-18**, correcting §3c's second half. The previous revision went too far: it
+designed a cadence, a fitness verdict and a termination policy. **None of that is ours.**
+
+The user's words: *"Cyclic generation is not for us to control. Our tools suite is used to create the
+synthetic imagery. The external processes that drive the cyclic regeneration are in full control of
+when to terminate and what to do with the data generated and what comes next. The external processes
+that control the cyclic aspects of generation have the ability to kill the SUMO and/or CARLA server at
+their leisure or use the CarlaNet and Python shim to query data so as to decide when enough is
+enough."*
+
+### What that removes
+
+- **No cadence, no scheduler, no run-length policy of ours.** Do not design `--duration` or `--frames`
+  as a requirement. If a caller wants a bounded run it can stop us; a convenience limit may exist, but
+  nothing in the plan may depend on one.
+- **No fitness verdict.** This is the same principle as §3b applied to the run itself: we do not judge
+  a model, and we do not judge a run on the caller's behalf either. **Publish the facts; the caller
+  decides.** Individual quality gates are facts about our own data and stay in full — this check ran,
+  this is what it observed, this is the threshold it compared against. An *aggregate* verdict that
+  says "therefore this corpus is fit for your purpose" presumes a purpose we do not know. Remove it.
+- **No assumption that we are asked politely to stop.**
+
+### What it requires instead — and these are real requirements
+
+1. **Abrupt external termination is a normal operating mode, not a failure mode.** The caller may kill
+   the CARLA server, the SUMO process, or our client, at any instant, deliberately. Everything we
+   write must therefore be **incrementally written, self-describing and valid at every instant** — a
+   corpus interrupted mid-window is a shorter corpus, never a corrupt one. Say what is guaranteed
+   about artifacts after a kill at an arbitrary point, per artifact. The run manifest was already
+   specified as written incrementally and closed at the end; that is no longer a nicety, it is the
+   load-bearing property, and "closed at the end" must not be what makes it readable.
+2. **Observability while running is the interface that matters.** The caller decides "when enough is
+   enough" by **querying**, through CarlaNet and the Python shim, not by reading a verdict at the end.
+   State what an external process can observe about a run in progress, through surfaces that already
+   exist, and what it would have to poll to answer questions like how many annotated intervals have
+   closed, how many frames have been written, or how much of a declared area has been covered.
+   `05_CarlaNet_Capability_Audit.md` already documents the client surface — use it rather than
+   inventing a new channel, and name any genuine gap rather than designing around it.
+3. **Non-interactive invocation still holds** (§3c), because a caller that cannot answer a question
+   still cannot answer one. Everything already recorded about no prompts, recorded configuration and
+   reproducibility stands.
+
+### The measured findings from the previous revision are still valid — reread them in this light
+
+The swallowed interrupt, the absent run-length termination, the unwritten run report and the five
+unrecorded environment variables were all measured and are all real. **What changes is why they
+matter.** The swallowed interrupt is no longer "a scheduler cannot tell success from a kill"; it is
+"a deliberate kill is the expected path, and it must leave valid artifacts and an honest record that
+the run was stopped rather than finished". Keep the measurements; re-motivate them.
+
+## 3e. Traffic lights are simulated in SUMO and never rendered in CARLA
+
+**User decision 2026-09-18.** *"Traffic lights need not be rendered for this toolchain … Semantic
+verification in imagery of traffic lights is not worth it at this stage, mostly because the limited
+traffic light meshes available and the way the traffic light models placed within the photoreal are
+often misaligned; meshed traffic lights are more of a hazard for our purposes than a benefit. The
+traffic light actors/signs need not be rendered. Also we would not have to spend compute and network
+resources sending messages relating to traffic light states."*
+
+**The distinction that must not be lost.** SUMO **does** simulate traffic lights, and its vehicles
+**do** obey them — the right-of-way table and the `tlLogic` programs are a large part of why the
+ambient behaviour is believable at all, and they are the reason the network is built with
+`traffic_light_type="actuated"` rather than netconvert's fixed-time default. **None of that changes.**
+What changes is everything on the CARLA side of the bridge:
+
+| | |
+|---|---|
+| **Stays** | SUMO's `tlLogic` programs, its right-of-way `<request>` rows, the actuated-signal netconvert setting, and every vehicle behaviour that follows from them. The scenario's own traffic-light quality still matters and is still checked at compile time |
+| **Goes** | Rendering traffic-light and sign actors in CARLA; driving CARLA's traffic-light state from SUMO; every per-tick or per-change light-state message; and any plan to make traffic-light state semantically verifiable in imagery |
+
+**Why, in the user's terms:** the available traffic-light meshes are limited, and where they are placed
+against the photoreal they are frequently misaligned. A misaligned mesh in the imagery is a **hazard**
+for this corpus, not a benefit — it is a rendered object that does not correspond to the world the
+photoreal shows, and a detector trained on it learns an artefact.
+
+**What this removes from the plan.** Be thorough; this is a simplification and should read as one:
+
+- The traffic-light synchronisation work item, and its dependency on an RPC exposing a light's
+  OpenDRIVE signal id — a gap the audit recorded as unexposed. **That blocker no longer blocks
+  anything**; record it as not required rather than as an obstacle.
+- `SetTrafficLightState` from the per-tick batch, and its share of the batch budget.
+- The concern that the sizing scenario has zero traffic lights and therefore cannot exercise
+  synchronisation. There is nothing to exercise.
+- The requirement I placed on the measurement fixture that it contain a signalised junction. It was
+  there only to test synchronisation; drop it.
+
+**What replaces it in the runtime:** this mode renders no traffic-light or sign actors. The existing
+viewer already has the toggle — `signals_visible` with an `L` hotkey
+(`CarlaControl/src/carlacontrol/PygameInterface.py:106`, `:580`) — so the mechanism exists; what this
+mode needs is for it to be **off and fixed off**, not operator-toggled mid-run, and recorded in the
+manifest so a consumer knows no signal geometry was in frame. Signals reach a world through
+`SignInjector` writing `<signal>` elements that native `SpawnSignals` turns into actors; the world
+build is shared with other modes, so **do not change world generation** — suppress at the session,
+not at the source.
+
+**The capability audit keeps its traffic-light findings.** They are facts about the client and the
+engine and remain useful to other work. What changes is their status in *this* plan: present,
+audited, **not required**. The RPC name mismatch it found stays a recorded defect on its own merits.
+
 ## 4. Standing project rules that bind this plan
 
 - **Never regress an existing capability.** Improving or replacing a capability is welcome; silently
@@ -461,6 +562,29 @@ Each author owns exactly one file and writes only that file.
 Cross-reference other sections by relative link. Do not restate another section's content; link to
 it. If you need a decision that belongs to another section, state the dependency and the property you
 need it to have.
+
+## 8a. The document states what is true; it never narrates its own history
+
+**User directive 2026-09-18.** *"'What this draft adds to the list' is useless. The draft is a draft
+and should have the information placed correctly. A change history section at the top is fine but
+should be very very concise and no more than 20 words in description of what changed between drafts."*
+
+**Forbidden anywhere in the body of a document:** "this revision adds", "the earlier draft said",
+"previously this was", "amended in place", "withdrawn", "[extended]", "I corrected my own claim",
+disposition tables recording what changed site by site, and decision rows annotated with how the
+decision changed. A reader arriving cold must never have to reconstruct a previous version in order to
+understand the current one.
+
+**Required instead:** put the information where it belongs and state it as fact. A decision's text
+states the decision, not its history. A finding states what is true, with its evidence.
+
+**Allowed, and wanted:** one change-history block at the top of each document — one line per revision,
+**at most 20 words** describing what changed. That is the only place a document may refer to its own
+past.
+
+**This is about narration, not content.** Every measurement, citation, decision and `path:line` stays.
+Where something was framed as "we used to think X, now Y", keep Y and its evidence and drop X — unless
+X is itself a measured fact about the tree, in which case it is a finding and belongs on its merits.
 
 ## 9. House style for these documents
 

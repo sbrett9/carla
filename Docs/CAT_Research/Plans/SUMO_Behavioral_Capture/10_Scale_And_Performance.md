@@ -2,30 +2,19 @@
 
 | | |
 |---|---|
-| **Status** | Plan section. Measurements taken 2026-09-17; illumination, solar-surface and vehicle-light measurements added 2026-09-18. Nothing here is implemented. |
+| **Status** | Plan section. Nothing here is implemented. |
 | **Scope** | Whether the SUMO-driven behavioural-capture mode works at the size the user actually needs, and what has to be true for it to. Sizes the scenario corpus, the render set, the RPC and TraCI budgets, the solar and vehicle-light surfaces, the capture pipeline and memory; recommends an envelope, a degradation strategy and the measurements that must precede commitment. |
 | **Audience** | An engineer implementing or reviewing the co-simulation runtime, the render-set controller or the capture path, who has not read the conversation that produced this plan. |
 | **Owns** | The *numeric values* of the render-set parameters that [`04_Contracts.md`](04_Contracts.md) §4.2 declares and defers here, and the **cost** of the time-of-day and vehicle-light surfaces. |
 | **Machine for every "this box" figure** | Windows 11, 20 logical processors, Python 3.14.4, SUMO 1.27.0 from `Build/sumo-src/bin/sumo.exe`. |
 
-### What changed in this redraft
+**Change history**
 
-The first draft placed capture windows in simulated time and never connected them to the sun
-(team brief §3a). It recommended windows at 07:00, 15:00 and **23:00** without asking what a 23:00 sun
-does to the cost or to the pixels. Every measurement in the first draft survives unchanged; what
-follows is added around it.
-
-| Added | Where |
+| Date | Change |
 |---|---|
-| Sun elevation at the three measured population regimes, across the year, at the sizing site | §3.5 |
-| The fraction of the scenario's own traffic that occurs under renderable light | §3.5 |
-| Window placement against illumination, and what replaces the 23:00 window | §4.2.4 |
-| The solar surface budgeted: what `UpdateSun` costs, whether it stalls the render thread, and what the advancing policy costs per tick | §4.7 |
-| Vehicle light state budgeted: measured SUMO signal-transition rates and the batch growth they cause | §4.8 |
-| Night rendering cost, and why the world contains no lights to pay for | §4.9 |
-| Storage and tonal cost of a dark frame | §4.6 |
-| Illumination as an envelope dimension, and the degradation path when a window cannot be lit | §6, §7 |
-| Five illumination measurements ranked against the existing register | §9 |
+| 2026-09-17 | Initial population, network, RPC/TraCI, render and storage budgets; sizing envelope and degradation strategy. |
+| 2026-09-18 | Added sun-elevation, solar-surface and vehicle-light-state measurements; replaced the 23:00 window with a truth-only demotion. |
+| 2026-09-18 | Traffic-light state carries no RPC, batch or byte cost; network signal counts kept as SUMO behaviour inputs. |
 
 ---
 
@@ -331,10 +320,11 @@ Three things worth carrying forward:
 - **The largest map is 16× the area of the smallest but carries only 3.4× the junctions and 3.1× the
   right-of-way rows.** Network size scales with *road density*, not extent, and none of these numbers is
   large. In-memory cost is negligible (§4.10).
-- **Bahonar has no traffic lights at all.** Zero `tlLogic`, zero `traffic_light` junctions. So
-  [`03`](03_CoSimulation_Runtime.md)'s `D3.16` (SUMO owns traffic-light state) is **inert on the sizing
-  case** and can only be exercised on an Arapahoe-class map. That is a gap in test coverage, not a
-  problem with the decision.
+- **Bahonar has no traffic lights at all.** Zero `tlLogic`, zero `traffic_light` junctions, so every
+  one of its 3,004 right-of-way rows resolves by priority or right-before-left rather than by a signal
+  program. Arapahoe's 23 and 45 are where SUMO's actuated programs shape the behaviour. **Neither
+  count is an RPC or batch budget line**: signals are simulated in SUMO and rendered nowhere
+  ([`03`](03_CoSimulation_Runtime.md) `D3.24`), so no traffic-light state crosses the wire on any map.
 - The flatness (`0` distinct `z`) is doc 23 §6.5 confirmed on all three, including the large one.
 
 ### 3.4 The bare-earth grid
@@ -379,9 +369,9 @@ startup are paid by every client that opens the grid, and this design adds clien
 
 ### 3.5 The sizing scenario's illumination profile
 
-**New in this redraft, and it is what the first draft was missing.** §3.1.3 measured three daily
-population regimes and §4.2.3 recommended windows on them. Those windows land at civil clock times, and a
-civil clock time plus a date plus a position is a sun elevation. Nobody computed it.
+§3.1.3 measured three daily population regimes and §4.2.3 recommends windows placed on them. Those
+windows land at civil clock times, and a civil clock time plus a date plus a position is a sun
+elevation: this section computes it.
 
 #### 3.5.1 Where and when the sun is
 
@@ -714,9 +704,8 @@ solstice, so half an hour is roughly half of that). Whether that is wanted is
 
 #### 4.2.4 Window placement, against illumination
 
-**This subsection replaces the first draft's window recommendation.** The first draft placed windows on
-the three measured population regimes — 07:00, 15:00 and 23:00 — and that was right about the
-population and silent about the light. §3.5 supplies the light.
+Window placement must account for both population and light. §3.1.3 measures three population regimes —
+07:00, 15:00 and 23:00; §3.5 supplies the sun elevation at each, so a window is placed on both together.
 
 **The 23:00 window cannot be photographed.** Sun elevation −38.1° to −79.5°, on every date. There is no
 authoring choice, no date, no render budget and no exposure setting that changes that, because §4.9
@@ -752,15 +741,14 @@ equinox**, and **18:00 carries 62.4 at +7.8° on the June solstice** — both co
 > **0.42 s of wall clock and 0 bytes** (1,800 s ÷ the measured 4,307× fast-forward), so the plan costs
 > five windows, not six:
 >
-> | Camera | This plan: 5 imagery + 1 truth-only | First draft: 6 imagery | Saving |
+> | Camera | This plan: 5 imagery + 1 truth-only | Naive: 6 imagery windows, no demotion | Saving |
 > |---|---|---|---|
 > | 1920 × 1080 ×2 | **2.5 h, 90 GB** | 3.0 h, 108 GB | one window, 17% |
 > | 2888 × 2160 ×2 | **8.3 h, 261 GB** | 10.0 h, 313 GB | one window, 17% |
 >
 > **The 17% is not the point.** The point is that the window removed was the one that would have produced
-> black frames, and that the plan now spans **+1.8° to +37.6° of sun elevation** where the first draft
-> spanned only what noon-ish daylight happened to give it — an illumination range the first draft had no
-> way to express, at no extra cost.
+> black frames, and that the plan now spans **+1.8° to +37.6° of sun elevation** — a range a
+> population-only placement has no way to express, at no extra cost.
 >
 > **What is not decided here.** Whether a window may be declared corpus-eligible at a given sun
 > elevation is [`11`](11_Time_And_Illumination.md)'s ruling, and whether an evening low-sun window is
@@ -1532,6 +1520,7 @@ One simulated second, at `fixed_delta = 0.05` (20 ticks), SUMO step 1.0 s, 128 r
 | **Interpolation** (`03` §6.4) | 20 ticks × 128 lane evaluations | not measured — **guess**: ≪ 1 ms, it is a polyline arc-length lookup | bridge thread | — |
 | **Bare-earth lookups** | 20 × 128 × 0.557 µs = **1.43 ms** (0.09 ms with `numpy`) | measured, §3.4 | bridge thread | 700× |
 | **RPC round trips** | 20 ticks × 2 = **40 round trips**, unchanged by light state | measured from source, §4.4, §4.8.2 | network + game thread | see §4.4 |
+| **Traffic-light state** | **0 round trips, 0 batch entries, 0 bytes** — none is written, on any map | [`03`](03_CoSimulation_Runtime.md) `D3.24`; signals are simulated in SUMO and rendered nowhere | — | — |
 | **`apply_batch` dispatch** | 20 × 128 = 2,560 visitor dispatches, each a no-sweep `SetActorTransform` | not measured — **M2** | **game thread** | — |
 | **`apply_batch` growth from light state** | **+35 entries on 1 tick in 20** (Bahonar) / **+9.6 every tick** (Arapahoe); **+0.34% / +1.9% of batch bytes** | measured rates §4.8.1 × derived sizes §4.8.2 | game thread | — |
 | **Vehicle light transitions, engine side** | **35 `RefreshLightState` Blueprint calls on 1 tick in 20** (Bahonar) / **9.6 per tick** (Arapahoe); a no-op write is 11 bool compares | rate measured §4.8.1; per-transition cost **not measured — M8** | **game thread** | — |
@@ -1807,8 +1796,8 @@ shipped Bahonar CoT sample mean 28.0 m/s, **max 34.98 m/s**; Arapahoe whole-run 
 
 ## 9. Measurements to take before committing
 
-Ordered by **rank**, which is what to do first. Identifiers are stable across revisions — M1–M6 keep the
-numbers the first draft gave them, and the illumination measurements are M7–M11 — so the order of the
+Ordered by **rank**, which is what to do first. Identifiers are stable: M1–M6 are the original
+measurement set and M7–M11 are the illumination measurements added alongside them, so the order of the
 table and the order of the identifiers deliberately differ.
 
 **Do the illumination measurements displace the current top three? No, and it is worth saying why
@@ -1884,7 +1873,7 @@ separately, because it needs the same actor-count sweep and would otherwise dupl
 | **D10.11** | **The live CoT feed does not run on the tick thread in a SUMO-drive session.** [Issue #14](https://github.com/sbrett9/carla/issues/14) is a prerequisite of the render cap, not an adjacent concern: at 128 vehicles and 5 Hz it puts 640 serialisations and sends per second inside the tick budget (§4.3, M4). |
 | **D10.12** | **Every window records its achieved ticks per wall-second, its `sumo_population`/`admitted` pair per admission pass, and its capture rate.** The clock ratio is measured to be non-constant (84%, 99%, 29.5% across sessions) and is recoverable today only by differencing PNG metadata against file timestamps (§7). |
 | **D10.13** | **The analytic population model of §3.1.4 is the estimator for a scenario that has not been run; a scenario that will be captured is run.** At `κ = 1.5` it is an upper bound on peak concurrency and costs seconds; the run costs 140 s and is exact (§3.1.4). |
-| **D10.14** | **The recommended window plan for the sizing scenario is five imagery windows and one truth-only window, and the date is an explicit part of each window's declaration.** The 23:00 window of the first draft is demoted to truth-only because the sun is 38–79° below the horizon there on **every** date; its imagery regime is re-placed onto 17:00 and 06:00, and the 07:00 peak is captured twice — on 21 December at +5.0° and on 21 June at +25.9° — because the date is a 21-degree illumination axis at constant population. **2.5 wall-clock hours and 90 GB at 1920 × 1080 ×2** against the first draft's 3.0 h and 108 GB at the same camera, spanning +1.8° to +37.6° of sun elevation instead of whatever noon happened to give (§4.2.4). |
+| **D10.14** | **The recommended window plan for the sizing scenario is five imagery windows and one truth-only window, and the date is an explicit part of each window's declaration.** The 23:00 population regime is demoted to truth-only because the sun is 38–79° below the horizon there on **every** date; its imagery regime is re-placed onto 17:00 and 06:00, and the 07:00 peak is captured twice — on 21 December at +5.0° and on 21 June at +25.9° — because the date is a 21-degree illumination axis at constant population. **2.5 wall-clock hours and 90 GB at 1920 × 1080 ×2**, against 3.0 h and 108 GB for six imagery windows with no truth-only demotion at the same camera, spanning +1.8° to +37.6° of sun elevation instead of whatever noon happened to give (§4.2.4). |
 | **D10.15** | **Vehicle light state rides the existing per-tick `apply_batch` as deltas, and the batch cost of doing so is negligible.** Measured: 9.6 changed vehicles per tick inside the 300 m render region at `render_cap` = 128 on the binding scenario → **+1.9% of batch bytes, zero extra round trips**, and +0.12 ms of TraCI at 128 vehicles. The per-actor RPC alternative is the vehicle-fade shape the team brief records as the heaviest client load on the server, and at 9.6 changes per tick it is 1.9 ms of a 50 ms tick spent on latency alone (§4.8). |
 | **D10.16** | **Night rendering cost is a question about light sources, and the only light sources a generated world has are vehicle headlights.** Measured: **zero** `highway=street_lamp` nodes in the Bahonar and Gardnerville OSM extracts and two in Arapahoe; **zero** `CarlaLight`, `PointLight` or `SpotLight` in the generated world's map against 140 `BP_StreetLight` references in `Town10HD_Opt`; and no moon in `ACesiumSunSky`. The per-vehicle dynamic-light count is assembled at runtime and cannot be read from the assets, so it is **M10** (§4.9). |
 | **D10.17** | **A window whose sun is below the renderable threshold is demoted to a truth-only window, not rendered at reduced quality and not silently rendered dark.** SUMO runs the span alone at the measured 4,307× real time — 0.42 s of wall clock for 1,800 simulated seconds and zero bytes — and the behavioural truth is complete while the record states that the imagery is absent. Rendering it instead costs close to a lit window (the tick is pixel-rate work) and returns a frame with 8 of 256 tonal levels (§4.6, §7.1). |

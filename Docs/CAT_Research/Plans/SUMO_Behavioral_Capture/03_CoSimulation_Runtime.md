@@ -2,9 +2,9 @@
 
 **Status:** design, ready for review · **Date:** 2026-09-18
 **Scope:** the component that takes a running SUMO simulation and makes the CARLA world show it —
-binding choice, the per-step write path, pose conversion, sub-step motion, traffic-light
-synchronisation, **the solar clock**, **vehicle light state**, vehicle lifecycle, clock ownership,
-the ambient-traffic lockout, and failure handling.
+binding choice, the per-step write path, pose conversion, sub-step motion, **the solar clock**,
+**vehicle light state**, vehicle lifecycle, clock ownership, the ambient-traffic lockout, and
+failure handling.
 **Audience:** an engineer who will implement the bridge and has not read the conversation that
 produced this plan. Familiarity with CARLA's client/server split is assumed; familiarity with SUMO
 is not.
@@ -21,6 +21,12 @@ carries), [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md) (render-s
 windows), [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md) (the scenario epoch, the
 advancement policy, the headlight predicate),
 [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md) (how a run selects any of it).
+
+**Change history**
+
+| Date | Change |
+|---|---|
+| 2026-09-18 | No traffic-light or sign actors rendered; no traffic-light state written; signal layer suppressed per session. |
 
 ---
 
@@ -62,7 +68,7 @@ connection, which:
 5. manages which SUMO vehicles hold a CARLA actor;
 6. emits a per-step record of *every* SUMO vehicle — rendered or not — for the truth path.
 
-Item 1's second clause is the reason this document was redrafted. A capture window is a span of
+Item 1's second clause is load-bearing. A capture window is a span of
 *simulated* time (`10` D10.3); the sun is a function of civil time; and nothing connected the two.
 A 23:00 window rendered under the spawn default of local solar noon
 (`Unreal/CarlaUnreal/Plugins/CesiumCarlaBridge/Source/CesiumCarlaBridge/Private/CesiumHeightSampler.cpp:409`)
@@ -92,8 +98,7 @@ flowchart LR
     RS["RenderSetManager<br/>admission and release,<br/>instants recorded, no opacity"]
     SOL["SolarClock<br/>civil time from t_render;<br/>sets the sun, audits it every tick"]
     LIGHT["VehicleLightMapper<br/>SUMO signal bits + sun elevation<br/>to VehicleLightStateFlags"]
-    WR["BatchWriter<br/>one apply_batch per world tick:<br/>poses, velocities, changed light states,<br/>changed signal states"]
-    TLS["SignalMirror<br/>SUMO tlLogic to OpenDRIVE signal J_k"]
+    WR["BatchWriter<br/>one apply_batch per world tick:<br/>poses, velocities,<br/>changed vehicle light states"]
     REC["StepRecord<br/>every SUMO vehicle, per step,<br/>plus the tick's solar state"]
   end
 
@@ -111,10 +116,8 @@ flowchart LR
   PY -->|"start / stop / config"| DRV
   DRV --> CONN --> SUMO
   CONN --> BUF --> INT --> CONV --> WR --> CC --> SRV
-  CONN --> TLS --> WR
   CONN -->|"VAR_SIGNALS,<br/>same subscription"| LIGHT --> WR
   NET --> INT
-  NET --> TLS
   DRAPE --> CONV
   DRV --> RS --> POOL --> CC
   DRV --> SOL --> CC
@@ -123,12 +126,11 @@ flowchart LR
   SUN -->|"solar block in every<br/>world-observer snapshot"| CC
   BUF --> REC
   RS --> REC
-  TLS --> REC
   SOL --> REC
   DRV --> CC
 ```
 
-`SolarClock` and `VehicleLightMapper` are the two components this redraft adds. Neither owns a
+`SolarClock` and `VehicleLightMapper` complete the component set. Neither owns a
 policy: `SolarClock` turns a simulated instant into a solar-clock write and audits the result
 (§9.1–§9.6), and `VehicleLightMapper` turns SUMO's signal word plus the tick's sun elevation into a
 `VehicleLightStateFlags` value (§3.5). The thresholds and the epoch both come from
@@ -190,9 +192,9 @@ control path."* That argument was written for §4.1's shape, where each tick run
 a motion-plan stage per vehicle in .NET. Under teleport there is no controller. The honest restatement
 of the per-tick work is: N pose conversions, one batch RPC, one tick RPC. Python can do that.
 
-So the original argument does **not** survive unchanged. Five things replace it, and they are not the
-same argument. The first two are capability gaps, not performance opinions, and they are decisive on
-their own.
+So the original argument does **not** survive unchanged. Four things replace it, and they are not the
+same argument. The first is a capability gap, not a performance opinion, and it is decisive on its
+own.
 
 1. **The whole teleport of N vehicles is one round trip — in C#. It is not expressible in Python
    today.** The wire order that defines each command's variant index is
@@ -201,7 +203,7 @@ their own.
    (`CarlaNet.Types/Formatters/CommandFormatter.cs:41-72`) and a server visitor arm
    (`Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Server/CarlaServer.cpp:3145-3194`), with
    `BIND_SYNC(apply_batch)` at `:3198-3213`. `ApplyTransform` is index 6, `ApplyTargetVelocity` 8,
-   `SetSimulatePhysics` 14, `SetEnableGravity` 15, `SetTrafficLightState` 21. **This is already
+   `SetSimulatePhysics` 14, `SetEnableGravity` 15. **This is already
    proven in this repo, not theoretical:** the .NET traffic manager sends one mixed
    `ApplyBatchSyncAsync` per tick (`CarlaNet.TrafficManager/TrafficManagerLocal.cs:568`) whose
    contents include `ApplyTransformCommand` teleports
@@ -209,41 +211,34 @@ their own.
    namespace exposes **8 of the 22** (`carlanet/__init__.py:1080-1149`: `SpawnActor`,
    `DestroyActor`, `SetAutopilot`, `ApplyVehicleControl`, `ApplyTransform`, `ApplyLocation`,
    `SetVehicleLightState`, `ConsoleCommand`) — so a Python bridge can batch the pose but **cannot
-   batch the velocity, the physics toggle, the gravity toggle or the traffic-light state**, and must
-   fall back to one RPC per actor for each of them.
-2. **A SUMO-driven world has to drive CARLA's traffic lights, and the Python path cannot.** All ten
-   traffic-light RPCs exist in C# (`CarlaNet.Transport/CarlaClient.cs:1659-1689`:
-   `SetTrafficLightStateAsync`, green/yellow/red time, freeze, reset, group, light boxes) and all are
-   bound server-side (`CarlaServer.cpp:2648-2884`). The shim's entire traffic-light surface is
-   `class TrafficLight(TrafficSign): pass` (`carlanet/__init__.py:1002-1004`) — a marker class with
-   no methods. This is not a convenience gap; §3.4 shows the light state is a per-tick write in this
-   mode, and it is one the Python path has no way to make.
-3. **The bridge runs at the world-tick rate, not the SUMO-step rate.** Sub-step motion (§6) means the
+   batch the velocity, the physics toggle or the gravity toggle**, and must fall back to one RPC per
+   actor for each of them.
+2. **The bridge runs at the world-tick rate, not the SUMO-step rate.** Sub-step motion (§6) means the
    pose arithmetic happens 20× per SUMO step at the default `--fixed-delta` of 0.05 s
    (`CarlaControl/src/carlacontrol/CarlaControlArgumentParser.py:69-75`). That work lands on the
    thread that owns the world clock. [Issue #14](https://github.com/sbrett9/carla/issues/14) is
    already open for exactly this failure mode against a *much* lighter Python loop — 5 Hz of CoT
    datagram serialisation — and records simulation time already running at roughly 84% of real time
    under ordinary load.
-4. **Subscription results are SWIG containers.** `Vehicle.getAllSubscriptionResults()` returns a
+3. **Subscription results are SWIG containers.** `Vehicle.getAllSubscriptionResults()` returns a
    `SubscriptionResults` wrapping a native map (`Vehicle.cs:1358-1362`). Consuming it from Python
    through pythonnet is a per-element marshal; consuming it from C# is not.
-5. **There is an existing, proven .NET tick-subscription pattern.** `ScenarioExecutor` subscribes to
+4. **There is an existing, proven .NET tick-subscription pattern.** `ScenarioExecutor` subscribes to
    `CarlaClient.OnTick` at `CarlaNet/src/CarlaNet.Scenario/ScenarioExecutor.cs:77-78` and unsubscribes
    at `:561`. `OnTick` is raised from the world-observer stream thread
    (`CarlaNet/src/CarlaNet.Transport/CarlaClient.cs:1821-1831`), so a C# bridge can do its work
    without ever crossing into Python.
 
-Points 1 and 2 are worth stating plainly: **the Python path is missing capability the .NET path
-already has.** Extending the shim to close that gap is worth doing on its own merits (§12 G1, G13),
-but it is work whose only beneficiary here would be a Python bridge that would then still lose on
-points 3–5. Choosing C# does not depend on the shim gap being left open.
+Point 1 is worth stating plainly: **the Python path is missing capability the .NET path already
+has.** Extending the shim to close that gap is worth doing on its own merits (§12 G1), but it is
+work whose only beneficiary here would be a Python bridge that would then still lose on points 2–4.
+Choosing C# does not depend on the shim gap being left open.
 
 **The time-of-day and light-state requirements do not add a sixth point, and this is worth saying so
 that nobody later cites them as one.** The four solar calls are fully exposed to Python
 (`carlanet/__init__.py:1500`, `:1506`, `:1511`, `:1535`) and so is `command.SetVehicleLightState`
 (imported `:487`, emitted `:1147`) — it is one of the eight the shim carries. Both new obligations are
-therefore *reachable* from either binding. What still decides the question is point 3: the solar
+therefore *reachable* from either binding. What still decides the question is point 2: the solar
 audit and the light-state diff run at the world-tick rate, on the thread that owns the world clock,
 and that is the argument that was already decisive.
 
@@ -295,7 +290,7 @@ Everything in this section was read from the source, not assumed.
 | Python shim, single actor | `Actor.set_fade` | `:806-813` | present → `SetActorFadeAsync`. **Not used by this bridge** (D3.10); listed so the audit's picture of the surface is complete. |
 | Python shim, batch | `Client.apply_batch` / `apply_batch_sync` | `:2475-2487` | present; `apply_batch_sync` returns `command.Response` per command |
 | Python shim, command types | `command.*` | `:1080-1149` | **8 of 22** — see §12 G1 |
-| Python shim, traffic lights | `class TrafficLight(TrafficSign): pass` | `:1002-1004` | marker class, **no methods** — see §12 G13 |
+| Python shim, traffic lights | `class TrafficLight(TrafficSign): pass` | `:1002-1004` | marker class, **no methods**. **Not used by this bridge** (D3.24); listed so the audit's picture of the surface is complete — see §12 G13 |
 | Python shim, vehicle lights | `Actor.set_light_state` / `Actor.get_light_state` | `:781-784`, `:786-788` | present → `SetVehicleLightStateAsync` / `GetVehicleLightStateAsync`; the setter accepts an `int`, a `VehicleLightState` wrapper or the C# flags enum |
 | Python shim, batch command | `command.SetVehicleLightState` | imported `:487`, emitted `:1147` | **exposed** — one of the 8 the shim carries, so this is the one per-tick write a Python bridge *could* also batch |
 | Python shim, solar | `set_solar_time` / `set_solar_date` / `get_solar_state` / `set_time_advance` | `:1500`, `:1506`, `:1511`, `:1535` | present → the four `CarlaClient` solar calls; `get_solar_state` prefers the observer cache (§9.4) |
@@ -305,7 +300,8 @@ Everything in this section was read from the source, not assumed.
 | C# transport | `CarlaClient.SetActorEnableGravityAsync` | `:1538` | `set_actor_enable_gravity` |
 | C# transport | `CarlaClient.SetActorFadeAsync` | `:1545-1556` | `set_actor_fade`; also maintains the client-side opacity/arrival registry |
 | C# transport | `CarlaClient.ApplyBatchAsync` / `ApplyBatchSyncAsync` | `:1779-1785` | `apply_batch`; the sync form uses the raw path because the server returns a bare vector |
-| C# transport | ten traffic-light RPCs | `:1659-1689` | `set_traffic_light_state`, green/yellow/red time, freeze, reset, group, light boxes |
+| C# transport | ten traffic-light RPCs | `:1659-1689` | `set_traffic_light_state`, green/yellow/red time, freeze, reset, group, light boxes. **None is called by this bridge** (D3.24) |
+| C# transport | `SetLayerVisibleAsync` | `:1077-1078` | `set_layer_visible`; the `signals` layer is written **once at session start** (§3.4) |
 | C# transport | `SetVehicleLightStateAsync` / `GetVehicleLightStateAsync` | `:1621-1622`, `:1615-1617` | `set_vehicle_light_state` / `get_vehicle_light_state`. **The getter is an RPC, not a cache read** — vehicle light state is *not* in the world-observer snapshot, unlike transform and velocity (§3.5). |
 | C# transport | `GetVehiclesLightStatesAsync` | `:1630-1631` | `get_vehicles_light_states` — every vehicle's light state in **one** RPC (`CarlaServer.cpp:2824`) |
 | C# transport | four solar calls | `:1043`, `:1048`, `:1053`, `:1058` | `set_solar_time`, `set_solar_date`, `get_solar_state`, `set_time_advance` |
@@ -361,13 +357,13 @@ single batch.
 | **every world tick** | `ApplyTransformCommand(actor, pose)` | yes | 1 command per rendered vehicle |
 | **every world tick** | `ApplyTargetVelocityCommand(actor, v)` | yes | 1 command per rendered vehicle — **only after D3.5 lands**; see §5 |
 | on a SUMO signal-word change only | `SetVehicleLightStateCommand(actor, flags)` | yes | **measured** on Bahonar: mean 14.44, p90 31, max 47 per *SUMO step* map-wide, all landing in one of the R sub-step batches (§3.5) |
-| on a signal transition only | `SetTrafficLightStateCommand(actor, state)` | yes | tens of commands per transition, not per tick; see §3.4 and G14 |
 | on a sun-elevation threshold crossing | `SetVehicleLightStateCommand(actor, flags)` | yes | at most \|render set\| commands, at most twice per window, and **never** under a frozen sun (§3.5) |
 | at window open, and on a civil-day rollover | `set_solar_time` / `set_solar_date` | **no — a plain RPC** | 1–2 RPCs per window (§9.3) |
+| session start, once | `set_layer_visible("signals", false)` | **no — a plain RPC** | 1 RPC per session, before the first tick (§3.4) |
 | release | pool check-in (transform to the parking pose, lights to `None`) | yes | folded into the same batch |
 
-> **D3.3 — One `apply_batch` per world tick carries every pose write *and* every light-state and
-> signal-state change due that tick, then a separate `world.tick()`.**
+> **D3.3 — One `apply_batch` per world tick carries every pose write *and* every vehicle
+> light-state change due that tick, then a separate `world.tick()`.**
 > `apply_batch`, not `apply_batch_sync`: the bridge does not need per-command responses on the steady
 > path, and `apply_batch_sync` allocates a response per command. Use `apply_batch_sync` only for the
 > admission batch, where a spawn can fail.
@@ -390,72 +386,76 @@ sun is a whole-world RPC issued once or twice per capture window and read for fr
 observer cache every tick. Neither introduces a per-vehicle round trip, which is the only thing that
 would matter.
 
-### 3.4 Traffic lights are part of the write path
+### 3.4 No traffic-light or sign actors are rendered, and no traffic-light state is sent
 
-A teleported vehicle stops when SUMO says so. If the *rendered* light does not agree, the imagery
-shows cars waiting at a green and moving on a red — and the truth record asserts it. Under teleport,
-the light state is not decoration: it is the only visible explanation for the behaviour being
-captured. So SUMO owns the signal state and CARLA renders it, exactly as SUMO owns the pose and CARLA
-renders it.
+**This mode renders no traffic-light or sign actors, and the write path carries no traffic-light
+state.** There is no `SetTrafficLightStateCommand` in any batch, no traffic-light RPC on any path,
+and no `tlLogic` subscription over TraCI. The per-tick batch is poses, velocities and changed
+*vehicle* lamp state, and nothing else (§3.3, §3.6).
 
-**The identity mapping already exists in the data, by construction.** `TrafficLightInjector` records
-it in its own header (`CarlaNet.Map/OpenDrive/TrafficLightInjector.cs:17-20`):
+**Why, and it is a property of the imagery.** The available traffic-light meshes are limited, and
+where they are placed against the photoreal they are frequently misaligned. A rendered light that
+does not correspond to the world the photoreal shows is a **hazard** in this corpus rather than a
+benefit — a detector trained on it learns an artefact (`_TEAM_BRIEF.md` §3e).
 
-> *"netconvert names the xodr signal for tlLogic J's link k `J_k`, the xodr `<controller>` id and the
-> junction `<name>` both equal J, and each `<connection tl="J" linkIndex="k">` ties link k to a
-> movement. So the green characters of a phase state string map position-for-position onto signals
-> J_0, J_1, …"*
-
-Because the `.xodr` and the `.net.xml` come from the same netconvert run, SUMO's
-`TrafficLight.getRedYellowGreenState(J)` (`TrafficLight.cs:60`) returns a state string whose character
-`k` *is* the state of OpenDRIVE signal `J_k`. No new correspondence has to be invented. The libtraci
-C# surface has everything needed and is subscribable:
-`getRedYellowGreenState` (`:60`), `getControlledLanes` (`:78`), `getProgram` (`:90`), `getPhase`
-(`:96`), `getNextSwitch` (`:114`), `getIDList` (`:174`), `subscribe` / `getAllSubscriptionResults`
-(`:203-228`).
-
-**Why it must be read every step rather than precomputed.** The netconvert settings this pipeline
-uses can produce `traffic_light_type="actuated"` programs
+**SUMO still simulates the lights, and its vehicles still obey them.** The `tlLogic` programs, the
+`<request>` right-of-way rows and the `traffic_light_type="actuated"` netconvert setting are a large
+part of why the ambient behaviour is believable, and none of that changes. An actuated program's
+phase depends on the traffic present and is only knowable at runtime
 (`.agents/skills/sumo-traffic-scenarios/SKILL.md`, "measured gotchas" — fixed-time 90 s programs
-cannot discharge a busy interchange). An actuated program's phase depends on the traffic present, so
-it is only knowable at runtime, from SUMO.
+cannot discharge a busy interchange), and SUMO resolves it every step. What arrives over the pose
+stream is already the behaviour those programs produced: a vehicle that waits at a junction waits
+because SUMO's signal held it. **What is dropped is the rendering of the signal, not the signal.**
 
-**The write.** `SetTrafficLightStateCommand` is variant index 21
-(`Command.h:284-305`; `Command.cs:35`; `CommandFormatter.cs:67`; `CarlaServer.cpp:3192`), so light
-changes ride the **same** `apply_batch` as the pose writes, at no extra round trip. Only changed
-signals are sent — measured on Bahonar there are **zero** `<tlLogic>` programs (§6.1 measurement
-basis), and on Arapahoe 45 (doc 23 §2), so this is tens of commands per *transition*, not per tick.
-CARLA's own light cycling must be frozen first, or the two authorities will fight:
-`FreezeAllTrafficLightsAsync` / `freeze_traffic_light` (`CarlaClient.cs:1675-1683`;
-`CarlaServer.cpp:2648-2884`).
+**The mechanism, and it is one RPC at session start.** `set_layer_visible("signals", false)` —
+shim `carlanet/__init__.py:1548-1555` → `CarlaClient.SetLayerVisibleAsync` (`CarlaClient.cs:1077-1078`)
+→ `BIND_SYNC(set_layer_visible)` (`CarlaServer.cpp:697`), whose `signals` arm at `:719-728` calls
+`ATrafficLightManager::SetGeneratedSignalsVisible(false)` (`TrafficLightManager.cpp:618-628`). That
+walks the registered generated signals once and clears `SetVisibility` on every non-shape primitive
+(`TrafficLightManager.cpp:589-600`). It is issued before the first world tick and never again:
+**zero per-tick cost, and it is not on the steady loop at all.**
 
-> **D3.16 — SUMO owns traffic-light state in a SUMO-drive session. CARLA's own cycling is frozen at
-> session start, and changed signal states ride the per-tick pose batch as
-> `SetTrafficLightStateCommand`.** This is the same authority argument as D3.13 applied to signals,
-> and it is the reason the generated traffic lights stay meaningful in this mode rather than becoming
-> a second, contradictory simulation.
+> **D3.24 — A SUMO-drive session renders no traffic-light or sign actors. The `signals` layer is
+> written off once at session start and is fixed off for the session's lifetime — not an operator
+> toggle — and the manifest records that no signal geometry was in frame.**
 
-**One unresolved link, and it is a real gap.** The mapping above is from a SUMO `tlLogic` id to an
-*OpenDRIVE signal id* `J_k`. Writing the state needs a CARLA **actor id**. The server holds the
-OpenDRIVE id — `USignComponent::SignId`
-(`Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Traffic/SignComponent.h:80`,
-`SignComponent.cpp:35-41`), used for lookup at `TrafficLightManager.cpp:150-155` and `:216` — but
-**no RPC exposes it**: grepping `CarlaServer.cpp` for `sign_id` / `signal_id` returns nothing. A
-client can enumerate `traffic.traffic_light` actors and call `get_group_traffic_lights`
-(`CarlaServer.cpp:2855-2884`) but cannot ask any of them which OpenDRIVE signal it is. See §12 G14.
+The viewer's `L` hotkey drives the same layer (flag `PygameInterface.py:106`, bound at `:295`, shown
+on the HUD at `:580`), and a capture session must not be able to change a recorded property of the
+corpus mid-run. Two things make it fixed. The capture launcher constructs no interactive display at
+all — `PygameInterface` is built only by `run_SCTMV.py:172`, `:198`, which a capture session does not
+run ([`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md)) — so there is no `L` key to
+press. And `set_layer_visible` must join the set of RPCs the episode drive-mode flag refuses to a
+client without the drive lease, on exactly the argument §10.2 mechanism (4) makes for the solar
+calls: what the imagery contains is world-scoped state that a capture records, so exactly one
+component may write it. Today that RPC has no ownership check at all (`CarlaServer.cpp:697`).
 
-Also relevant, and deliberately not a defect: generated lights and signs in this fork are
-**sensor-invisible by design** — they return nothing to semantic lidar or radar, as a human aid for
-judging vehicle behaviour against signal state. They still render, so they still matter for imagery
-and for a human reviewing a collect.
+**Suppression is at the session, not at the source — do not change world generation.** Signals reach
+a world because `SignInjector` writes the missing `<signal>` elements into the `.xodr`
+(`CarlaNet.Map/OpenDrive/SignInjector.cs:1-8`) and native `ATrafficLightManager::SpawnSignals`
+(`TrafficLightManager.cpp:759`) turns them into actors. **That world build is shared with every other
+mode and is untouched by this decision.** Two consequences follow, and both matter:
+
+- **The actors still exist in the level**, hidden rather than absent. Any budget line that scales with
+  the total actor count — the three per-tick `GetSolarState` actor sweeps, for instance
+  ([`10_Scale_And_Performance.md`](10_Scale_And_Performance.md) §4.7.2) — is therefore **unchanged**.
+  Hiding is not a saving there, and nothing in this plan claims one.
+- **Hiding is rendering-only.** `SetSignalMeshesVisible` skips `UShapeComponent`
+  (`TrafficLightManager.cpp:589-600`), so the stop-line trigger volumes stay live and a signal a
+  client cannot see still detects vehicles (`CarlaServer.cpp:723-725`). That costs this mode nothing,
+  because a SUMO-driven actor is teleported and consults no CARLA trigger, and the .NET traffic
+  manager — the only thing that would read one — is locked out for the session (D3.13).
+
+**What this does not touch.** Vehicle lamps are a different mechanism with a different authority and
+are specified in full in §3.5: brake and indicator bits from SUMO's own `VAR_SIGNALS` word,
+headlights from solar elevation. Nothing in this section changes them.
 
 ### 3.5 Vehicle light state is part of the write path
 
 At 23:00 a vehicle is mostly a pattern of lamps. Brake lights, indicators and headlights are, for an
 electro-optical detector at night, a larger fraction of the signal than the body is. They are also
-the same kind of thing as the traffic light in §3.4: **the only visible explanation of a behaviour
-the capture is asserting truth about.** A vehicle that stops with dark lamps and then turns with no
-indicator is rendering a lie about a manoeuvre SUMO actually modelled.
+**the only visible explanation of a behaviour the capture is asserting truth about**, and with no
+signal geometry in frame (§3.4) they are the *whole* of it. A vehicle that stops with dark lamps and
+then turns with no indicator is rendering a lie about a manoeuvre SUMO actually modelled.
 
 #### 3.5.1 What SUMO actually models — read from the source, then measured
 
@@ -636,13 +636,14 @@ Per world tick, in the steady state, for a render set of `N` vehicles:
 |---|---|---|
 | `apply_batch` | **1 RPC** | D3.3 |
 | `tick_cue` (via `SendTickCueAsync`) | **1 RPC** | §3.2 — `do_tick_cue` does not wait for the frame (G6) |
-| Commands inside that one batch | `2N` steady (pose + velocity), `+0.72` amortised for light changes, `+0` for signals on most ticks | §3.3, §3.5.3, §3.4 |
+| Commands inside that one batch | `2N` steady (pose + velocity), `+0.72` amortised for vehicle lamp changes | §3.3, §3.5.3 |
 | Solar writes | **0** on a steady tick | §9.3 — 1 `set_solar_time` at window open, plus `set_solar_date` only on a civil-day rollover |
 | Solar reads | **0 RPC** | `GetCachedSolarState` (`CarlaClient.cs:1991`) returns the block parsed at `:1855` out of the observer header the server already pushes (`WorldObserver.cpp:323-341`) |
 | Light-state reads | **0 RPC** | the bridge holds what it wrote (§3.5.3); the `get_` path is never on the steady loop |
+| Traffic-light traffic, any kind | **0 RPC, 0 commands** | §3.4 — nothing is written, read or subscribed. `set_layer_visible` is one RPC at session start and is not a steady-tick line |
 
-**So the steady-state budget is unchanged at two RPCs per world tick, and the solar and light-state
-traffic is carried entirely inside an array that already exists.** The one number that grew is the
+**So the steady-state budget is unchanged at two RPCs per world tick, and the solar and vehicle
+lamp traffic is carried entirely inside an array that already exists.** The one number that grew is the
 batch's command count, by 0.28% amortised and 18% on the worst single tick in a measured hour — against
 a mode that simultaneously deletes the fade's *one blocking RPC per vehicle per reconcile* (§8.5).
 This is not an assumption that solar is cheap; it is the arithmetic, and the inputs are cited above.
@@ -1177,14 +1178,15 @@ clear parking pose, and never spawn again during the run.
   otherwise inherit whatever its predecessor was showing — night headlights on a vehicle admitted at
   noon, or a brake light on a vehicle admitted at speed. This is one more command in the admission
   batch (§3.5.3) and it is not optional.
-- **The pool stands without qualification.** An earlier draft of this section qualified it on a defect
-  in the arrival latch — `IsActorEstablished` is cleared only when an actor id leaves the
-  world-observer snapshot (`CarlaClient.cs:1901-1908`), and a pooled actor never leaves it, so a
-  recycled actor would have inherited its predecessor's arrival state. With D3.10 removing the fade,
-  the latch is **never set in the first place**: `IsActorEstablished` returns `true` for any actor
-  with no fade record (`CarlaClient.cs:1571`) and the truth producer documents its gate as inert in
-  exactly that case (`VehicleTelemetryService.cs:66-73`). There is no interaction left between actor
-  reuse and truth reporting. See §12 G4, retained as a note rather than a blocker.
+- **The pool stands without qualification.** There is a latent defect in the arrival latch that would
+  otherwise interact with actor reuse: `IsActorEstablished` is cleared only when an actor id leaves
+  the world-observer snapshot (`CarlaClient.cs:1901-1908`), and a pooled actor never leaves it, so a
+  recycled actor would inherit its predecessor's arrival state. It is unreachable here, because under
+  D3.10 nothing fades and the latch is **never set in the first place**: `IsActorEstablished` returns
+  `true` for any actor with no fade record (`CarlaClient.cs:1571`), and the truth producer documents
+  its gate as inert in exactly that case (`VehicleTelemetryService.cs:66-73`). So no interaction
+  remains between actor reuse and truth reporting. Recorded as §12 G4 — a note for any client that
+  combines a fade with actor reuse, not a blocker here.
 - Exhaustion is a **policy** event, not an error: the render-set manager declines to admit and records
   the decline in the step record. It must never be a spawn attempt.
 
@@ -1239,7 +1241,7 @@ abnormal paths in §10 rather than a race.
 > **D3.10 — A vehicle admitted to the render set appears at full opacity and a released one
 > disappears. The bridge issues no per-vehicle opacity RPC and publishes no fade state.**
 
-This supersedes an earlier draft of this section, which proposed reusing the per-actor dissolve. The
+A per-actor dissolve is deliberately not used here. The
 mechanism exists and works — `Actor.set_fade` (`carlanet/__init__.py:806-813`) →
 `CarlaClient.SetActorFadeAsync` (`CarlaClient.cs:1545-1556`) → `set_actor_fade`
 (`CarlaServer.cpp:2217-2249`) — but its cost is wrong for this mode, and the working tree already
@@ -1670,8 +1672,7 @@ session.start():
     Vehicle.subscribe(each vehicle, [VAR_POSITION, VAR_ANGLE, VAR_SPEED,
                                      VAR_ROAD_ID, VAR_LANE_ID, VAR_LANEPOSITION,
                                      VAR_TYPE, VAR_SIGNALS])       # signals ride the same call, §3.5
-    TrafficLight.subscribe(each tlLogic, [TL_RED_YELLOW_GREEN_STATE])   # D3.16
-    client.freezeAllTrafficLights(true)                    # CARLA stops cycling on its own
+    client.setLayerVisible("signals", false)              # once; fixed off for the session, D3.24
     pool.spawnAll()                                       # one apply_batch_sync
 
     # ── SUMO fast-forward: wall clock only, no world ticks, sun untouched (§9.5) ──
@@ -1702,7 +1703,6 @@ session.run():
                 batch += ApplyTransformCommand(v.actor, poses[v].transform)
                 batch += ApplyTargetVelocityCommand(v.actor, poses[v].velocity)
             if i == 0:
-                batch += changedSignalStates()            # SetTrafficLightStateCommand, D3.16
                 batch += changedLightStates(P_next, sun.elevation)   # §3.5, mean 14.44, max 47
             client.applyBatch(batch, doTickCue = false)   # one RPC; no variable tail, §8.5
             if civilDayRolledOver(t_render):              # the engine will not do this, §9.1
@@ -1759,8 +1759,6 @@ sequenceDiagram
     SU-->>BUF: P(k+1) for every vehicle — position, angle, speed,<br/>lane, type AND signals, one call
     CLK->>SU: getDepartedIDList / getArrivedIDList / getCollisions
     SU-->>RS: lifecycle deltas for the step just simulated
-    CLK->>SU: TrafficLight.getAllSubscriptionResults
-    SU-->>CLK: red-yellow-green state per tlLogic, one call
 
     RS->>RS: evaluate ShouldRender with one step of lookahead
     RS->>CC: pool check-out: SetSimulatePhysics false, SetEnableGravity false,<br/>first pose at full opacity, LIGHT STATE RESET (predecessor's is stale)
@@ -1772,7 +1770,7 @@ sequenceDiagram
         CLK->>CLK: audit against solarTimeFor(t_render) — fault, never correct (D3.20)
         CLK->>BUF: interpolate at alpha = i/R along lane geometry
         BUF-->>CLK: pose and velocity per rendered vehicle
-        CLK->>CC: apply_batch: ApplyTransform + ApplyTargetVelocity,<br/>plus SetVehicleLightState / SetTrafficLightState on a change (i = 0)
+        CLK->>CC: apply_batch: ApplyTransform + ApplyTargetVelocity,<br/>plus SetVehicleLightState on a change (i = 0)
         CC->>SRV: one msgpack array, one RPC
         opt civil day rolled over — the engine will not do this
             CLK->>CC: set_solar_date
@@ -2052,7 +2050,7 @@ flowchart TD
   end
 
   subgraph LANE_CARLA["CarlaClient and server"]
-    E1["apply_batch:<br/>ApplyTransform + ApplyTargetVelocity<br/>+ changed SetVehicleLightState / SetTrafficLightState"]
+    E1["apply_batch:<br/>ApplyTransform + ApplyTargetVelocity<br/>+ changed SetVehicleLightState"]
     E2[tick_cue]
     E3{"Frame observed<br/>before timeout?"}
     E4["Frame n available —<br/>sun already advanced this tick"]
@@ -2109,10 +2107,10 @@ solar and light-state paths. They are handed to
 
 | # | Gap | Evidence | Why it matters here |
 |---|---|---|---|
-| **G1** | The Python shim's `command` namespace exposes **8** of the 22 command types the C# layer and the server both support. Missing: `ApplyVehicleAckermannControl`, `ApplyWalkerControl`, `ApplyVehiclePhysicsControl`, `ApplyWalkerState`, **`ApplyTargetVelocity`**, `ApplyTargetAngularVelocity`, `ApplyImpulse`, `ApplyForce`, `ApplyAngularImpulse`, `ApplyTorque`, **`SetSimulatePhysics`**, **`SetEnableGravity`**, `ShowDebugTelemetry`, **`SetTrafficLightState`**. | shim `carlanet/__init__.py:1080-1149` vs `LibCarla/source/carla/rpc/Command.h:284-305`, `Command.cs:12-35`, `CommandFormatter.cs:41-72`, `CarlaServer.cpp:3145-3194` | A Python bridge cannot batch a physics toggle, a velocity or a light state. Does not block the C# bridge; blocks any Python probe of it, and is a surface-parity defect in its own right. The .NET side already exercises the full path (`TrafficManagerLocal.cs:568`, `MotionPlanStage.cs:244`/`:424`), so the gap is purely the shim's. |
+| **G1** | The Python shim's `command` namespace exposes **8** of the 22 command types the C# layer and the server both support. Missing: `ApplyVehicleAckermannControl`, `ApplyWalkerControl`, `ApplyVehiclePhysicsControl`, `ApplyWalkerState`, **`ApplyTargetVelocity`**, `ApplyTargetAngularVelocity`, `ApplyImpulse`, `ApplyForce`, `ApplyAngularImpulse`, `ApplyTorque`, **`SetSimulatePhysics`**, **`SetEnableGravity`**, `ShowDebugTelemetry`, `SetTrafficLightState`. | shim `carlanet/__init__.py:1080-1149` vs `LibCarla/source/carla/rpc/Command.h:284-305`, `Command.cs:12-35`, `CommandFormatter.cs:41-72`, `CarlaServer.cpp:3145-3194` | A Python bridge cannot batch a physics toggle, a velocity or a vehicle light state. Does not block the C# bridge; blocks any Python probe of it, and is a surface-parity defect in its own right. The .NET side already exercises the full path (`TrafficManagerLocal.cs:568`, `MotionPlanStage.cs:244`/`:424`), so the gap is purely the shim's. |
 | **G2** *(no longer blocking — recorded for the audit, not for this mode)* | No batch command for `set_actor_fade` anywhere in the stack. | `Command.cs:12-35`; `CarlaServer.cpp:3169-3194`; handler at `CarlaServer.cpp:2217-2249` walks every primitive component | **This bridge does not call `set_actor_fade` (D3.10)**, so it is not on the critical path here. It remains a real asymmetry for any client that *does* fade — and it is a large part of why `--fade` defaults off (`CarlaControlArgumentParser.py:318-328`). If the fade is ever revived, adding the batch variant is the fix that makes it affordable. |
 | **G3** | `set_actor_target_velocity` on a non-simulating body writes the physics body, which `GetComponentVelocity()` will not read back; nothing writes `ComponentVelocity` on the CARLA vehicle path. | chain in §5.1: `CarlaActor.cpp:392-411`, `PrimitiveComponentPhysics.cpp:1328-1340`, `SceneComponent.cpp:2995-2998`, `MovementComponent.cpp:382-388`, `PrimitiveComponentPhysics.cpp:159-163` | **The zero-velocity problem.** Fix recommended as D3.5. |
-| **G4** *(demoted — latent, not reached by this design)* | The client-side arrival latch (`IsActorEstablished`) is cleared only when an actor id leaves the world-observer snapshot, and never by fading back out. A pooled actor never leaves the snapshot, so it would inherit its predecessor's arrival state. | `CarlaClient.cs:1545-1556`, `:1571`, `:1901-1908` | **Recorded rather than dropped, because it was real.** An earlier draft had it blocking the actor pool and the fade together. With D3.10 removing the fade, the latch is never set: `IsActorEstablished` returns `true` for any actor with no fade record (`:1571`) and the truth gate is documented inert in that case (`VehicleTelemetryService.cs:66-73`). **The actor pool (D3.9) is therefore unblocked.** The defect still exists for any client that combines a fade with actor reuse, which is why it stays on the list. |
+| **G4** *(latent — not reached by this design)* | The client-side arrival latch (`IsActorEstablished`) is cleared only when an actor id leaves the world-observer snapshot, and never by fading back out. A pooled actor never leaves the snapshot, so it would inherit its predecessor's arrival state. | `CarlaClient.cs:1545-1556`, `:1571`, `:1901-1908` | **Recorded rather than dropped, because it is real.** It would block the actor pool and a fade together. With D3.10 removing the fade, the latch is never set: `IsActorEstablished` returns `true` for any actor with no fade record (`:1571`) and the truth gate is documented inert in that case (`VehicleTelemetryService.cs:66-73`). **The actor pool (D3.9) is therefore unblocked.** The defect still exists for any client that combines a fade with actor reuse, which is why it stays on the list. |
 | **G5** — **a data defect in delivered artifacts, not a future risk** | `SumoCotBridge._height_at` indexes a **CARLA-frame** bare-earth grid with a **SUMO-frame** `y`. Since CARLA `y = −`SUMO `y` (`Geodesy.cs:104-108`), every lookup reads the row mirrored about the grid's Y origin. | call site `SumoCotBridge.py:311`; reader `SumoCotBridge.py:115-119`; grid frame `DrapeTerrain.cs:19-21` and `:54-68` | **Every `hae_m` in every CoT dataset already produced by this path is wrong** — the UDP feeds, the XML files, the CSV datasets, and the sample shipped inside `BahonarPatternOfLife.zip`. It is invisible in bounds terms, which is why it has survived: measured on Bahonar the grid spans y ∈ [−2108.05, +2107.95] while the road network spans y ∈ [−1914.94, +2107.82], so a mirrored row is always *inside* the grid and always returns a plausible height. Only points on the grid's Y centreline are unaffected. This is independent of the new bridge and needs correcting **and re-issuing affected datasets**, not just patching forward. |
 | **G6** | `apply_batch(do_tick_cue=True)` returns before the frame exists; only `world.tick()` waits. | `CarlaClient.cs:1779-1780` vs `:403-417`; `CarlaServer.cpp:393-399` | A caller that assumes the combined form is synchronous will capture against a frame that has not rendered. Worth a docstring at minimum. |
 | **G7** | `ActorDefinition` carries no bounding box; `BoundingBox` exists only on a spawned `Actor`. | `ActorDefinition.cs:5-9`; `Actor.cs:8-15` | The vType ↔ blueprint dimension map (§7.4, and [`04_Contracts.md`](04_Contracts.md)) needs a spawn-and-measure pass against a running server. |
@@ -2121,8 +2119,8 @@ solar and light-state paths. They are handed to
 | **G10** | There is no C# reader for a SUMO `.net.xml` lane geometry. The only one is Python (`SumoScenarioBuilder.RoadNetwork`), and `OsmConverter` returns the network as a string and then deletes the temp file without persisting it (`OsmConverter.cs:141-147`); `WorldPackage` writes `world.json`, `map.xodr` and `bareearth.bin` only (`WorldPackage.cs:132-134`). | as cited | D3.6's lane-arc interpolation needs lane shapes in C#. Also note `RedundantJunctionCollapser.Collapse` rewrites the `.xodr` *after* netconvert produced the `.net.xml` (`CarlaClient.cs:568-573`), so the two files share a frame but not junction identity. |
 | **G11** | Nothing asserts that the SUMO step is an integer multiple of the world delta, or that the `.net.xml` frame matches the `.xodr` frame. | no such check exists | §9's `R` and §7.2's frame identity are silent preconditions today. The session should assert both. |
 | **G12** | **Unverified:** whether Chaos retains a written angular velocity on a kinematic particle. `FWorldObserver_GetAngularVelocity` reads the body with no `IsSimulatingPhysics()` guard, unlike the linear path. | `WorldObserver.cpp:249-262` vs `PrimitiveComponentPhysics.cpp:1328-1340` | Decides whether D3.5 needs an angular counterpart. **Measure; do not assume either way.** |
-| **G13** | The Python shim has **no traffic-light surface at all** — `class TrafficLight(TrafficSign): pass`. All ten traffic-light RPCs exist in C# and are bound server-side. | shim `carlanet/__init__.py:1002-1004`; C# `CarlaClient.cs:1659-1689`; server `CarlaServer.cpp:2648-2884` | Under SUMO drive the light state is a per-tick write (§3.4). A Python bridge could not render a signalised junction correctly. Independent of the bridge, this is a capability the .NET path has and the Python path does not. |
-| **G14** | A CARLA traffic-light actor's **OpenDRIVE signal id is not reachable from a client**. The server holds it as `USignComponent::SignId` and uses it for lookup, but no RPC exposes it. | `Traffic/SignComponent.h:80`, `SignComponent.cpp:35-41`; `Traffic/TrafficLightManager.cpp:150-155`, `:216`; no `sign_id`/`signal_id` binding in `CarlaServer.cpp` | §3.4's SUMO `tlLogic` → `J_k` correspondence (`TrafficLightInjector.cs:17-20`) is exact, but there is no way to turn `J_k` into the actor id that `SetTrafficLightStateCommand` needs. The cheapest fix is one getter RPC returning the sign id per traffic-light actor; the alternative is a fragile spatial match. See Q3.8. |
+| **G13** *(not required by this mode — recorded for the audit)* | The Python shim has **no traffic-light surface at all** — `class TrafficLight(TrafficSign): pass`. All ten traffic-light RPCs exist in C# and are bound server-side. | shim `carlanet/__init__.py:1002-1004`; C# `CarlaClient.cs:1659-1689`; server `CarlaServer.cpp:2648-2884` | **This mode writes no traffic-light state from any binding (D3.24)**, so nothing here depends on it. It stays on the list because it is a real capability the .NET path has and the Python path does not, and it is the audit's to scope. |
+| **G14** *(not required by this mode — recorded for the audit)* | A CARLA traffic-light actor's **OpenDRIVE signal id is not reachable from a client**. The server holds it as `USignComponent::SignId` and uses it for lookup, but no RPC exposes it. | `Traffic/SignComponent.h:80`, `SignComponent.cpp:35-41`; `Traffic/TrafficLightManager.cpp:150-155`, `:216`; no `sign_id`/`signal_id` binding in `CarlaServer.cpp` | **Nothing in this mode needs to turn an OpenDRIVE signal id into an actor id**, because no client here addresses a traffic-light actor at all (D3.24) — the layer is suppressed wholesale by `set_layer_visible`, which takes a layer name and no ids. The observation is accurate and stays recorded; it is a gap for any *other* client that wants to address a signal individually, and the cheapest fix there is one getter RPC returning the sign id per traffic-light actor. |
 | **G15** | **The cached solar path cannot express "no sun", and the shim returns a plausible midnight instead of `None`.** `FWorldObserver` leaves the header's solar fields at their defaults (zeros, `solar_rate = 1.0`) when `GetSolarState` comes back empty, but `CarlaClient` unconditionally parses 11 doubles out of the header, so `GetCachedSolarState()` is never empty once the observer is running — and the shim accepts the cache on `cached.Count >= 9`. | `EpisodeStateSerializer.h:48-58`; `WorldObserver.cpp:326-328`; `CesiumHeightSampler.cpp:760-762`; `CarlaClient.cs:1851-1855`; `carlanet/__init__.py:1511-1533` | Any client that tests `get_solar_state()` for `None` to decide whether the world has a sun gets the wrong answer, and a truth record built from the cache would carry year 0 / midnight / elevation 0 as though measured. The bridge sidesteps it by probing with the **write** (D3.22), but the shim's contract is wrong as written. Cheapest fixes: have the observer write a sentinel (`solar_year = 0` is already the de-facto one — document it), or have the shim reject `year == 0` from the cache. |
 | **G16** | **There is no `set_solar_time_zone` RPC.** `ACesiumSunSky::TimeZone` is written exactly once, at spawn, as `longitude / 15.0` with no rounding to a civil zone, and is thereafter read-only to a client. | `CesiumHeightSampler.cpp:412`; `CesiumSunSky.cpp:570-573`; `get_solar_state` layout `CarlaServer.cpp:638`; no `time_zone` setter anywhere in `CarlaServer.cpp` | Rendering a declared civil time means biasing `set_solar_time` by `TimeZone_world − UTC_offset_civil` (§9.3). **Measured on Bahonar** (`lon_0 = 56.18065`, Iran `+03:30`): the bias is 0.245377 h = 14 min 43 s = 3.68° of hour angle. The bias works and costs nothing, so this is a clarity gap rather than a blocker — but it means the world's reported `time_zone` is not a civil zone and no consumer should treat it as one. |
 | **G17** | **Solar advancement wraps the clock but never rolls the date.** Both `ACesiumTimeOfDayController::Tick` and `UCesiumHeightSampler::SetSolarTime` wrap `SolarTime` with `Fmod(…, 24.0)` and neither touches `Year`, `Month` or `Day`. | `CesiumTimeOfDayController.cpp:35`; `CesiumHeightSampler.cpp:730` | A window advancing through midnight reports the pre-midnight `solar_day` in every snapshot header (`WorldObserver.cpp:332`) and therefore in the truth sidecar, while the scenario asserts the next day. Invisible in the imagery, wrong in the record. The bridge compensates (§9.3) but a second client would not, and the engine-side fix — roll the date in the controller when the clock wraps — is four lines. |
@@ -2143,7 +2141,7 @@ Per `_TEAM_BRIEF.md` §4, nothing is lost silently.
 | L5 | Vehicle fade / staging dissolve | **not used in this mode — and it is already off by default in the working tree** | `--fade` carries `default=False` (`CarlaControlArgumentParser.py:318-328`); the mechanism is untouched and still available to any other client. The mitigation here is geometric, not visual: size the render volume so admission and release fall outside every camera footprint (§8.5). Where that is impossible for a given camera geometry, the manifest records it. |
 | L5b | **Gained:** the per-frame client RPC budget the fade used to consume | **headroom** | Removing one blocking RPC per vehicle per reconcile — *"the heaviest load this client puts on the server's per-frame RPC budget"* (`CarlaControlArgumentParser.py:318-328`) — is what lets the per-tick write be a single `apply_batch` with no variable tail (§3.3). A capability table should record a gain as carefully as a loss. |
 | L6 | The .NET traffic manager and the OpenSCENARIO executor | **preserved outside this mode** | locked out only for the session's lifetime (D3.13); clears on exit and on disconnect |
-| L6b | Traffic lights that mean something | **preserved, re-owned** | D3.16 — SUMO drives them through the existing `tlLogic J` → signal `J_k` correspondence; CARLA's own cycling is frozen so the two never contradict. Needs G14. Without this the lights would keep cycling on their own schedule while teleported cars obey a different one — a visible regression against today's behaviour, where the .NET traffic manager at least reads the same lights it renders. |
+| L6b | Rendered traffic-light and sign actors | **not rendered in this mode, by decision** | D3.24, and the reason is the imagery: the available meshes are limited and are frequently misaligned against the photoreal, so a rendered signal is an object in frame that does not correspond to the world the photoreal shows (`_TEAM_BRIEF.md` §3e). **The behaviour they govern is not lost** — SUMO's `tlLogic` programs and right-of-way rows still run and its vehicles still obey them, and that behaviour is exactly what the pose stream carries (§3.4). The sensor streams do not change either: generated lights and signs in this fork are **sensor-invisible by design**, returning nothing to semantic lidar or radar, so what is withdrawn is the RGB mesh and the human view of it. The world build is untouched — the actors are hidden, not removed — so any other mode renders them as before. |
 | L7 | Suspension travel | **lost** | none. Bounded, deliberate, confined to this mode. |
 | L8 | Wheel rotation and steer angle | **lost** | none *today* — and note per G8 that steer angle is already unavailable in this port regardless of mode, so the marginal loss is wheel spin |
 | L9 | The staging ring's boundary-aware entry/exit | **replaced** | SUMO's fringe insertion and arrival, which is a strictly richer model (doc 23 §3.1); the `RED_CLEAR` despawn and its clipped-edge failure mode disappear with it |
@@ -2155,6 +2153,9 @@ Per `_TEAM_BRIEF.md` §4, nothing is lost silently.
 ---
 
 ## 14. Decisions
+
+`D3.x` numbers are stable identifiers cited from other sections of the plan. The list is never
+renumbered and a number is never reused; a new decision takes the next free number.
 
 | # | Decision |
 |---|---|
@@ -2173,7 +2174,6 @@ Per `_TEAM_BRIEF.md` §4, nothing is lost silently.
 | **D3.13** | The lockout is **four mechanisms**: per-actor server-side control authority (the one that actually stops the .NET TM, which drives via `ApplyControlToVehicle`), an episode-level drive-mode flag that refuses `set_actor_autopilot` for *any* actor (the one that stops a second process), a client-side lease for a legible error at the call site, and the same episode flag refusing **`set_solar_time` / `set_solar_date` / `set_time_advance`** to anyone but the lease holder — because illumination is world-scoped state that a capture records, and today those RPCs have no ownership check whatever. |
 | **D3.14** | A session refuses to start against a configuration with `time-to-teleport >= 0`, and carries a non-overridable runtime jump detector that releases and re-admits rather than interpolating across a discontinuity. |
 | **D3.15** | Any fault that makes the truth record unreliable — SUMO connection loss, a world-tick timeout — **stops the run**. It does not degrade, does not restart `sumo`, and does not keep ticking a frozen pose buffer. |
-| **D3.16** | **SUMO owns traffic-light state.** CARLA's own cycling is frozen at session start; changed signal states ride the per-tick pose batch as `SetTrafficLightStateCommand` (variant index 21). The `tlLogic J` → OpenDRIVE signal `J_k` correspondence is already exact by construction (`TrafficLightInjector.cs:17-20`); only the signal-id → actor-id lookup is missing (G14). Under teleport the rendered light is the only visible explanation for why a vehicle stopped, so this is not decoration. |
 | **D3.17** | **Vehicle light state rides the existing per-tick `apply_batch`** as `SetVehicleLightStateCommand` (variant **18**), emitted only on a change, with the last written flags held client-side because the getter is an RPC and the snapshot carries no light state. Brake and indicator bits come from SUMO's `VAR_SIGNALS`, read at zero extra cost in the subscription the bridge already makes; `Position` and `LowBeam` come from sun elevation, because **SUMO has no headlight model at all** (§3.5.1). Measured batching cost: mean 14.44 / p90 31 / max 47 extra commands in one of the 20 sub-step batches per SUMO step — **0.72 amortised per tick, and zero extra RPCs**. |
 | **D3.18** | **The session owns the solar clock**, because the sun is a function of simulated time and only the clock owner knows what instant a frame is. No other component in a SUMO-drive session calls `set_solar_time`, `set_solar_date` or `set_time_advance`. |
 | **D3.19** | **Solar writes go inside the RPC drain of the tick they take effect on** — after `apply_batch`, before `sendTickCue`. Established from the engine, not assumed: the drain (`CarlaEngine.cpp:333-341`) precedes the actor tick that advances the sun (`CesiumTimeOfDayController.cpp:14-39`), which precedes both the observer snapshot and the sensor capture (`CarlaEngine.cpp:424-425`). A frame therefore cannot render under the previous tick's sun. |
@@ -2181,10 +2181,13 @@ Per `_TEAM_BRIEF.md` §4, nothing is lost silently.
 | **D3.21** | **The solar clock is written from the first *ticked* instant** (`window.begin − prewarm_s`), after the SUMO fast-forward and before the first world tick, and `set_time_advance` is issued **after** the clock is set. The fast-forward itself cannot move the sun — in synchronous mode no tick cue means no actor tick, so the controller never runs (§9.5) — but that is a property of the tick loop, not of the sun, and the audit is what keeps it true if the loop ever changes. |
 | **D3.22** | **A session refuses to start when `set_solar_time` returns `false`** (no `CesiumSunSky`), non-overridably. Presence is probed with the **write**, never with a state read, because the cached read cannot express "no sun" (G15). |
 | **D3.23** | **A `SolarDisagreement` has the same consequence as a `TickFault`**: stop, park the render set, close the step record with `terminated: solar-state-disagreement`, fail the run. Same governing principle as D3.15 — a run that cannot produce honest truth must stop, not degrade. |
+| **D3.24** | **A SUMO-drive session renders no traffic-light or sign actors, and writes no traffic-light state.** No `SetTrafficLightStateCommand` in any batch, no traffic-light RPC, no `tlLogic` subscription. The `signals` layer is written off once at session start with `set_layer_visible("signals", false)` (`CarlaClient.cs:1077-1078` → `CarlaServer.cpp:697`, `:719-728` → `TrafficLightManager.cpp:618-628`) and is **fixed off for the session, not an operator toggle**; `set_layer_visible` joins the RPCs the episode drive-mode flag refuses to a client without the drive lease (§10.2 mechanism 4), and the manifest records that no signal geometry was in frame. Suppression is at the session, not at the source: `SignInjector` and native `SpawnSignals` are untouched, because the world build is shared with other modes (§3.4). SUMO's `tlLogic` programs, its right-of-way rows and the actuated netconvert setting are unaffected, and its vehicles still obey them. Vehicle lamps are a separate mechanism and are unchanged (D3.17). |
 
 ---
 
 ## 15. Open questions
+
+`Q3.x` numbers follow the same rule as the decisions: stable, never renumbered, never reused.
 
 | # | Question | Options | Recommendation |
 |---|---|---|---|
@@ -2195,7 +2198,6 @@ Per `_TEAM_BRIEF.md` §4, nothing is lost silently.
 | **Q3.5** | Should the bridge run its own `sumo` process, or attach to one started elsewhere? | (a) own it — `Simulation.start` spawns and the session owns the lifetime; (b) attach by port, so an operator can run `sumo-gui` alongside | (a) by default for determinism and clean teardown; (b) behind a flag, because watching the SUMO GUI beside the CARLA viewer is worth a great deal during bring-up. |
 | **Q3.6** | Does the angular-velocity path need the same fix as the linear one (G12)? | measure | **Measure before deciding.** `FWorldObserver_GetAngularVelocity` has no `IsSimulatingPhysics()` guard where the linear path does, so the answer is genuinely not predictable from the source. |
 | **Q3.7** | What is the right `_frameWaitTimeout` for a capture session? | inherited from the RPC timeout today (`CarlaClient.cs:293-300`), which `run_SCTMV.py` sets to 20 s | Needs a number from [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md): long enough that a heavy Cesium-streaming frame is not a fault, short enough that a real stall is caught inside one run. |
-| **Q3.8** | How does the bridge resolve OpenDRIVE signal `J_k` to a CARLA traffic-light **actor id** (G14)? | (a) a new getter RPC returning `USignComponent::SignId` per traffic-light actor; (b) extend the existing actor attributes so the sign id arrives with the actor description; (c) spatial match against the `<signal>` positions in the `.xodr` | (a) or (b) — one is a getter, the other is an attribute, and both are small. Reject (c): a spatial match at a junction with eight heads 2 m apart is exactly the kind of thing that works on the test map and fails silently elsewhere. (b) is preferable if the attribute is free at spawn, because it costs no per-run RPCs. |
 | **Q3.9** | Should the Python shim's missing command and traffic-light surface (G1, G13) be closed as part of this work? | (a) yes — surface parity is worth having regardless; (b) no — the C# bridge does not need it, so it is unrelated scope | (b) for *this* section's critical path, (a) as a separate item. Stated explicitly so nobody reads D3.1 as a reason to leave the shim gap open: the shim gap is a real defect and the binding choice does not depend on it. Owner: [`05_CarlaNet_Capability_Audit.md`](05_CarlaNet_Capability_Audit.md). |
 | **Q3.10** | Under a **frozen** sun, is the pinned instant `window.begin` or `window.begin − prewarm_s`? | (a) `window.begin` — the sun matches the first *captured* frame, and the 300 s prewarm renders under a sun 5 minutes late that nobody sees; (b) `window.begin − prewarm_s` — one rule shared with the advancing policy, and the prewarm is internally consistent | (a), narrowly. The point of freezing is that the *corpus* has one illumination, and `window.begin` is the instant the corpus is about. But it means frozen and advancing pin different instants, so the manifest must record which — and the difference is 300 simulated seconds, which is 1.25° of hour angle and not nothing at dawn. Owner: [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md). |
 | **Q3.11** | Should an **accelerated** sun (`rate` ≫ 1) be offered at all? | (a) no — only `frozen` and `rate = 1.0`; (b) yes, with the stepping named | At `rate = 3600` the one-second quantisation of `SolarTime` (§9.1) makes the sun step 0.75° per frame, which is a rendering artefact a detector would learn — the same class of problem as §6.2's held pose. Recommend (a) for corpus capture and (b) only for previews, with `rate ≠ 1.0` disqualifying a run from the corpus in the manifest. Owner: `11`, with `12` for the flag. |
