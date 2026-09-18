@@ -2583,7 +2583,7 @@ of the fifteen rows above changes on their account beyond rows 3 and 15.
 | # | Decision |
 |---|---|
 | **D6.1** | **The behavioural annotation travels in a companion supervision file beside the `.sumocfg`, and that is the only channel.** SUMO has no sanctioned vendor extension point in a route file, and route files are generated rather than hand-edited (measured). This **changes [20 decision 6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)**, which made an in-file custom action primary; everything else about that decision — one compiled representation, unknown terms are errors, name conventions never the sole carrier — stands (§3.1) |
-| **D6.2** | **Supervision has three kinds of subject: entity, cohort and slot.** A cohort names a `<flow>` and may carry only `nominal`, `unlabelled`, or a whole-life annotation; a phased annotation on a cohort is a compile error. A slot names an occasion in a recurring series and is the only subject that can be unrealised (§3.2) |
+| **D6.2** | **Supervision has three kinds of subject: entity, cohort and slot.** A cohort names a `<flow>` and may carry only `unlabelled` or a whole-life annotation. **A cohort may never be `nominal`**: `nominal` asserts that a subject is not executing any target pattern, and a flow's members are generated rather than individually reasoned about, so one blocked member can contradict the assertion silently. `nominal` is assertable only of a subject the author wrote one by one — an entity or a `<trip>`. A phased annotation on a cohort is a compile error, and so is `nominal` on one. A slot names an occasion in a recurring series and is the only subject that can be unrealised (§3.2) |
 | **D6.3** | **The three interval onsets are renamed for the authority that produces each — `declared`, `committed`, `observed` — and all three are still recorded.** [20 decision 5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) survives; its justification is replaced. The declared-to-committed gap is a measured congestion output (`getDepartDelay`, `arrival - intendedArrival`); the committed-to-observed gap is a property of the co-simulation seam and a free health check (§3.3) |
 | **D6.4** | **A declared onset may be legitimately absent.** A `duration` stop declares a length, not a time; all 338 stops in the sizing scenario are of that kind (measured). The record carries `declared_duration_s` with no `declared_start_tick`, and a consumer must distinguish absent from zero (§3.3) |
 | **D6.5** | **`RecurringSeries` and `SeriesSlot` are added above `PatternInstance`.** A cadence is a first-class record, its realisations are its members, and the 335 realised guard postings are the evidence that makes the 336th slot's vacancy meaningful (§3.4) |
@@ -2634,18 +2634,26 @@ of the fifteen rows above changes on their account beyond rows 3 and 15.
    0.2 Hz for pattern-of-life work. But the base rate of §5.3 is computed from it, and an undersampled
    track biases short-lived vehicles out of the denominator. Recommendation: full rate inside the
    capture window, reduced rate outside it, with both rates recorded.
-5. **Whether a `nominal` assertion should be sampled rather than blanket.** Declaring all 335 guard
-   postings `nominal` asserts something the author is confident of. Declaring all 68 880 flow members
-   `nominal` would not be — a flow can produce an accidental positive, which is doc 20 §2.2's whole
-   point. The line between "authored and therefore assertable" and "generated and therefore
-   unlabelled" is currently drawn at trip versus flow, which is a proxy for the real question.
-   Recommendation: keep the proxy, and treat any promotion of a cohort to `nominal` as requiring a
-   stated reason in the plan.
-6. **Where the accidental-positive audit runs, now that it is immediate.** §3.6 establishes that it
-   cannot be deferred, because SUMO has no idle cull to mask long ambient stops. The mechanism doc 20
-   sketched — a human reviewing `unlabelled` vehicles whose derived relations look like an annotated
-   pattern — needs a place to live and a threshold. Recommendation: a post-run report over the world
-   truth track and `<_aoi>`, since both exist by then and neither needs the imagery.
+5. **CLOSED — a cohort may never be `nominal`** (D6.2). `nominal` is assertable of an entity or a
+   `<trip>`, which an author wrote one by one and can be confident of; it is not assertable of a
+   `<flow>`, whose members are generated. The 335 guard postings are trips and remain assertable; the
+   68 880 flow members are `unlabelled`, which asserts nothing and therefore cannot be contradicted.
+   **The accepted cost** is that hard negatives come only from authored trips, so a corpus that wants
+   many of them must author many — doc 20 §2.7 values hard negatives highly, and this makes them
+   deliberate rather than free.
+6. **CLOSED — no accidental-positive audit is built, because it cannot be and is not ours.** Doc 20
+   sketched a human reviewing `unlabelled` vehicles "whose derived relations look like an annotated
+   pattern". **This system has no concept of a pattern to compare against, and acquiring one would be
+   the geometric predicate §3.6 forbids.** The most that could ever be offered is a sort of the
+   derived quantities an authored instance happens to be defined against — which exists only for
+   dwell-like patterns with a scalar axis, and not at all for convoy, rendezvous, revisit cadence or
+   route repetition. It is also not this system's place: the author owns labelling, and an audit that
+   hunts for things the author labelled wrongly is a judgement about their work. What we publish is
+   the derived context — area relations, continuous time inside, render state, the world truth track —
+   identically for every vehicle. Interrogating it is the author's prerogative and burden.
+   **The residual risk is bounded by D6.2**: an accidental positive can only sit in the corpus as
+   `unlabelled`, which asserts nothing, so a consumer that files it as a negative has violated the
+   three-valued contract rather than been misled by it.
 7. **Whether the reconciliation residual should gate a capture or only annotate it.** A pose
    separation beyond tolerance means the bounding boxes are wrong. Refusing the capture loses data;
    recording it and moving on ships a corrupted example. Recommendation: refuse above a hard

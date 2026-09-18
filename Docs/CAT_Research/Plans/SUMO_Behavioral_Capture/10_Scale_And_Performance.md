@@ -564,7 +564,9 @@ And the corpus, at 2 Hz on **one** recorded camera, using the measured PNG sizes
 | 2888 × 2160 | 14.46 | 1,209,600 | **17.49 TB** | 28.9 MB/s |
 | 9248 × 6944 | 112.57 | 1,209,600 | **136.16 TB** | 225.1 MB/s |
 
-> **D10.1 — Rendering seven simulated days frame-for-frame is rejected on two independent grounds.**
+> **D10.1 — Rendering a scenario frame-for-frame over its whole declared span is rejected on two
+> independent grounds.** Scenario length is the author's to set and is not bounded here; what is
+> bounded is how much of it can be rendered. Measured on the seven-day sizing case:
 > Time: 19–24 wall-clock days at the measured ratio, and 19.6 hours at a ceiling that requires no client
 > and no camera, which is to say no product. Storage: 6–17 TB for one camera at the smallest useful
 > resolution. Either alone is disqualifying. **The design renders windows of simulated time, and the

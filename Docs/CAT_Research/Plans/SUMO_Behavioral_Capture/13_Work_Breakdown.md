@@ -266,22 +266,80 @@ New `CarlaNet.CoSim` in C#, orchestrated from Python; one TraCI connection owned
 
 ---
 
-## 13. What needs a decision from the user
+## 13. Decisions taken, and what is still open
 
-| # | Question | Recommendation |
+Settled 2026-09-18. A settled row is binding on every section; where a section already reflects it,
+that is noted rather than restated.
+
+| # | Question | Outcome |
 |---|---|---|
-| 1 | **Is a night capability worth building?** Night imagery is not viable: no moon, every level light disabled, daytime radiance baked into the tiles, 8-bit tonemapped output, and 23:00 at −38° to −79°. Between a quarter and two-fifths of the sizing scenario's vehicle-hours are unphotographable | Treat 23:00 as a **truth-only window** — it costs 0.42 s of wall clock and zero bytes — and decide separately whether `Findings/13`'s lighting phases are worth funding. Low-sun capture is where the covariate excursion is largest and costs only a time setting |
-| 2 | **The time-zone correction: engine RPC or client arithmetic?** The arithmetic works, verified to 0.004°. The team still recommends an RPC, because client-side conversion moves the date boundary to civil 23:45:17 and makes the recorded solar time not the declared one | Add the RPC. A rebuild is not a cost, and it keeps the residual an identity check rather than a conversion check |
-| 3 | **Vehicle class metadata is wrong in the content.** `base_type` wrong for 7 of 17 blueprints, `special_type` empty for all 17. A sweep can measure a box but cannot curate a class | Derive from the sweep, allow a validated override, and correct `VehicleParameters.json` at the next content build |
-| 4 | **Where the capture window comes from** — author or operator | Both: declared windows as named presets, the operator free to give another, the manifest recording which |
-| 5 | **What a capture does when SUMO reports a collision** | Record and mark the span, not stop. Settle together with #6 |
-| 6 | **How an accidental positive in the ambient population is handled** — excluded, or promoted with a provenance marker. Doc 20 deferred this; it is **immediate** here, because SUMO makes a forty-five-minute ambient park possible where the idle cull made it impossible | The second is more valuable and more dangerous. Needed before the first corpus |
-| 7 | **What the annotation vocabulary contains at v1** | Settle with the model's requirements in hand; terms are cheap to add and expensive to rename once a corpus exists |
-| 8 | **One `sumo` process per session, or shared across windows** | Decide after the fast-forward cost is measured in context |
-| 9 | **Internal versus external distributions.** Repairing Windows makes it bundle the proprietary `carlacontrol` wheel, matching Linux; nothing distinguishes the cases | Make the distinction explicit in the scripts rather than implicit in which platform ran |
-| 10 | **Where the authoring skill lives.** It has no reproducible source location — the workspace root is not a git repository | Move it into the repo and ship it from there |
+| 1 | **Is a night capability worth building?** Night imagery is not viable: no moon, every level light disabled, daytime radiance baked into the tiles, 8-bit tonemapped output, and 23:00 at −38° to −79°. Between a quarter and two-fifths of the sizing scenario's vehicle-hours are unphotographable | **Settled — do not build it, and never prevent it being asked for.** No lighting work is funded, and 23:00 is captured as a truth-only window, costing 0.42 s of wall clock and zero bytes. But the *choice* stays the user's: any time of day is authorable, the compiler **warns and never refuses**, and a night window still yields complete behavioural truth and a full sidecar whatever the pixels show. The tooling states what imagery in that regime will and will not show; it does not decide whether someone wants it |
+| 2 | **The time-zone correction: engine RPC or client arithmetic?** The arithmetic works, verified to 0.004°, but client-side conversion moves the date boundary to civil 23:45:17 and makes the recorded solar time not the declared one | **Settled — add the RPC.** A rebuild is not a cost, and it keeps the solar residual an identity check rather than a conversion check |
+| 3 | **Vehicle class metadata is wrong in the content.** `base_type` wrong for 7 of 17 blueprints, `special_type` empty for all 17. A sweep can measure a box but cannot curate a class | **Settled — derive from the sweep, allow a validated override, and correct `VehicleParameters.json` at the next content build.** Where inspecting blueprints or the vehicle content is needed to curate the classes, the editor tooling is available on request |
+| 4 | **Where the capture window comes from** — author or operator | **Settled — both.** A scenario declares named windows as presets; the capture operator may give another; **the run manifest records which was used**, so a corpus never leaves it ambiguous |
+| 5 | **What a capture does when SUMO reports a collision** | **Settled — record it and mark the affected span; never stop the run.** A collision is a fact about the corpus, not a failure of the run, and the mark is what lets a consumer filter it |
+| 6 | **How an accidental positive in the ambient population is handled** | **Settled — a cohort may never be `nominal`, and no audit is built.** See §13.1 |
+| 7 | **What the annotation vocabulary contains at v1** | **Settled — fix the term list against the model's requirements before the first corpus.** Terms are cheap to add and expensive to rename once a corpus exists |
+| 8 | **One `sumo` process per capture session, or one shared across several windows** | **Settled — one SUMO process per window.** Each window starts a fresh process, fast-forwards from `t = 0`, captures, and exits. A window is then reproducible from its seed and its bounds alone, a crash costs one window rather than a sequence, and there is no long-lived state to reason about. The cost is paying the fast-forward per window, which the measurement bounds: the sizing scenario's entire seven-day span fast-forwards in **140.41 s**, and a typical window far less |
+| 9 | **The packaging scripts disagree across platforms** | **Settled — Windows and Linux are at parity, for scripts and for deliverables.** The two platforms produce the same package from the same inputs; a difference between them is a defect, never a policy. The `carlacontrol` wheel therefore ships on both, as Linux already does. If an internal-versus-external distinction is ever wanted, it is an **explicit, identical flag on both platforms** — never an accident of which machine ran the build (§13.2) |
+| 10 | **Where the authoring skill lives.** It has no reproducible source location — the workspace root is not a git repository | **Settled — move it into the repository and ship it from there**, together with the Unreal agent skills, with the workspace copies reduced to references. Done when the work starts |
 
----
+### 13.1 Ambient traffic, the idle cull, and who owns a label
+
+**Ambient traffic is unavailable while SUMO drives, and the idle cull is inactive.** If a SUMO
+scenario says a vehicle parks for forty-five minutes, it parks for forty-five minutes; no heuristic of
+ours despawns it for being idle. The SUMO network is in charge for this mode, and where establishing
+that separation requires modifying the traffic manager, it is authorised.
+
+The plan already carries this: population authority is an exclusive, engine-held lease, so starting
+ambient traffic while SUMO holds it is a **failed session start naming the holder**
+([01](01_Architecture.md) D1.7); SUMO-driven vehicles are never registered with the traffic manager,
+so the cull **cannot reach them** ([01](01_Architecture.md) §4.1); and doc 20's decision 14, which
+required the cull to be switchable, does not apply here ([06](06_Truth_And_Annotation.md) §6.1).
+Measured: a vehicle parks for 489,000 s in the sizing scenario and nothing removes it.
+
+**The author owns labelling, and a cohort may never be `nominal`.** SUMO spawns nothing unauthored —
+every vehicle comes from a `<flow>`, `<trip>` or `<vehicle>` the author wrote. What a flow authors is
+a *population*, not each member's behaviour: `vehsPerHour="200"` authors two hundred cars an hour on a
+trip, and with `time-to-teleport="-1"` one member can end up stationary for forty-five minutes because
+it was blocked rather than because anyone wrote a stop. So `nominal` — which asserts that a subject is
+**not** executing any target pattern — is assertable only of a subject the author wrote one by one, an
+entity or a `<trip>`. A `<flow>` is `unlabelled` or carries a whole-life annotation, and `nominal` on a
+cohort is a compile error ([06](06_Truth_And_Annotation.md) D6.2).
+
+That closes the contradiction rather than managing it. An `unlabelled` vehicle asserts nothing, so
+nothing about it can be contradicted by its own physics, and a consumer that files it as a negative
+has violated the three-valued contract rather than been misled by it. **The accepted cost** is that
+hard negatives come only from authored trips — doc 20 §2.7 values them highly, and this makes them
+deliberate rather than free.
+
+**No accidental-positive audit is built.** Doc 20 sketched a human reviewing unlabelled vehicles
+"whose derived relations look like an annotated pattern". This system has **no concept of a pattern to
+compare against**, and acquiring one would be exactly the geometric predicate
+[06](06_Truth_And_Annotation.md) §3.6 forbids. It is also not this system's place: the author owns
+labelling, and an audit hunting for things the author labelled wrongly is a judgement about their
+work. What the corpus publishes is the **derived context** — area relations, continuous time inside,
+render state, the world truth track — computed identically for every vehicle. If an author wants to
+distinguish blocked flow traffic from parked annotated traffic, that is theirs to declare and theirs
+to bear.
+
+### 13.2 Internal versus external distributions — what is being asked
+
+The packaging scripts bundle the server and the Python client tools. One of those tools,
+`carlacontrol`, is proprietary. **The Linux script bundles it and the Windows script does not**, and
+nothing in either says which behaviour is intended — so today the answer depends on which platform
+somebody happened to run. Repairing the broken Windows launcher makes Windows bundle it too, matching
+Linux, which is why the question has to be answered now rather than later.
+
+**Parity is the rule.** The two scripts produce the same package from the same inputs, and any
+difference between them is a defect to fix rather than a policy to preserve. That settles the
+immediate case: the `carlacontrol` wheel ships on both, because Linux already does it and the Windows
+repair brings it into line.
+
+It does not, by itself, decide whether a distribution *without* the proprietary tools should exist.
+That question stays open on its own terms, and if it is ever answered yes, the answer is a flag the
+operator sets — applied identically on both platforms, named in the package, and never inherited from
+which operating system happened to run the build.
 
 ## 14. Risks worth naming
 
