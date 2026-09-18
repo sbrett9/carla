@@ -48,6 +48,85 @@ hand. Say so plainly where you find a conflict, and resolve it — do not paper 
 6. **The `.NET` traffic-manager path and the OpenSCENARIO executor are not to be removed.** They
    remain the path for stock content and for storyboard work. SUMO drive is a *mode*.
 
+## 3a. Added requirement — simulated time of day, and an operator control surface
+
+**Added by the user 2026-09-18, after reviewing the first draft. This is why the plan is being
+redrafted rather than amended.** The first draft specified windowed capture in simulated time and
+never connected it to the sun. That was an oversight, and it is load-bearing.
+
+### What is required
+
+1. **The simulated time of day must be driven in tandem with the network playback.** A capture window
+   that begins at 23:00 on day 4 of a scenario must render under a 23:00 sun, not under whatever
+   light the world was spawned in. Today the default spawn is local solar noon, so a night window
+   would silently render in daylight.
+2. **Time-of-day advancement must be toggleable per pipeline run.** A capture may want the sun frozen
+   at the window's start instant (so illumination is a controlled constant across a sweep), or
+   advancing with simulated time (so a long window shows the light changing). Both are legitimate and
+   the choice belongs to the run, not to the code.
+3. **The tool suite needs an easy way to control all of this.** The mechanisms already exist in
+   CarlaNet; what does not exist is a coherent operator surface over them. This is now a first-class
+   deliverable, not a by-product.
+
+### Why it is load-bearing, not cosmetic
+
+- `10_Scale_And_Performance.md` already recommends capture windows at **07:00** (shift change) and
+  **23:00** (night shift) on the sizing scenario. Without the coupling, the night window is daylight.
+- It would fail **silently and in the worst possible way**: the truth sidecar records solar state, so
+  the record would faithfully report noon while the scenario asserts 23:00. A corpus would be
+  internally contradictory and nothing would flag it.
+- It makes one of doc 20's ten pattern classes unrenderable. Class 4 is *"a heavy goods vehicle in a
+  residential area at 03:00"* — a pattern defined by time of day.
+- Illumination is the single largest covariate an electro-optical detector faces. A corpus captured
+  entirely at noon cannot validate a model that must work at dusk.
+
+### Ground truth — the mechanisms exist and are complete end to end
+
+Verified 2026-09-18. **Do not plan to build these; plan to use them.**
+
+| Layer | Surface |
+|---|---|
+| Python shim | `set_solar_time(hours)`, `set_solar_date(y, m, d)`, `get_solar_state()`, `set_time_advance(enabled, rate)` — `carlanet/__init__.py:1500`, `:1506`, `:1512`, `:1535` |
+| C# client | `SetSolarTimeAsync`, `SetSolarDateAsync`, `GetSolarStateAsync`, `SetTimeAdvanceAsync` — `CarlaClient.cs:1043`, `:1049`, `:1054`, `:1059` |
+| Server RPC | `set_solar_time`, `set_solar_date`, `get_solar_state`, `set_time_advance` — `CarlaServer.cpp:614`, `:625`, `:640`, `:661` |
+| Engine | CesiumSunSky, which `CarlaServer.cpp:611-612` names **the single sun and lighting authority for the georeferenced world**, with CARLA's own weather inert there |
+
+Three properties of that surface shape the design and should be exploited rather than rediscovered:
+
+- **`set_time_advance` already does the right thing under synchronous ticking.** Its own
+  documentation states it "advances with the world tick, so it tracks wall-clock in asynchronous mode
+  and **simulation time under synchronous ticking**". Windowed capture runs synchronously, so
+  advancement is already tied to simulated time. The `rate` argument is sun-clock seconds per second;
+  pin down precisely which second it means under synchronous ticking and state it.
+- **`get_solar_state` is already free and tick-stamped.** It reads the world-observer cache paired to
+  the latest tick with **no RPC**, falling back to an RPC only before the cache is populated. It
+  returns `{solar_time, year, month, day, time_zone, lat, lon, sun_elevation_deg, sun_azimuth_deg,
+  advancing, rate}`. This is exactly the publication mechanism `08` D8.3 chose for world-scoped state,
+  already working for this payload.
+- **Vehicle light state is reachable and batchable.** `Actor.set_light_state` / `get_light_state`
+  (`carlanet/__init__.py:781`, `:786`) over `VehicleLightStateFlags`, and
+  **`SetVehicleLightStateCommand` is one of the 22 batch commands** (imported at `:487`). SUMO
+  exposes per-vehicle signals — brake lights, indicators — so a night capture can carry correct
+  brake and turn signals at no extra round trip. Whether it should is a design question; that it
+  *can* is established.
+
+### The gap this exposes in the scenario format
+
+**A scenario does not declare the civil time its simulated seconds mean.** Measured on the sizing
+scenario: guard shifts depart at 25,200 s, 54,000 s and 82,800 s — 07:00, 15:00 and 23:00 — so
+`t = 0` is midnight of day 0. That mapping exists **only inside trip identifiers**
+(`guard_d0_h7_t3`) and in the author's head. Nothing machine-readable states it, so nothing can set
+a sun from it. An epoch declaration — civil date, time zone, and the instant `t = 0` corresponds to —
+is now a required part of the scenario contract. Note the sizing scenario's site is in Iran, whose
+civil offset is **+03:30**, so a half-hour time zone is a real case and not a curiosity.
+
+### Standing constraint, inherited from the supervision rules
+
+**Illumination is derived context, never a label.** It is computed identically for every capture and
+is a legitimate covariate for stratifying a corpus — and a legitimate input to a fielded system,
+which knows the time and its own location. It must never become a supervision signal, and a
+scenario must never encode its annotation in the lighting.
+
 ## 4. Standing project rules that bind this plan
 
 - **Never regress an existing capability.** Improving or replacing a capability is welcome; silently
@@ -266,7 +345,9 @@ Each author owns exactly one file and writes only that file.
 | `08_Collection_And_EPoL.md` | Collection and EPoL integration engineer |
 | `09_Toolchain_And_Packaging.md` | Build, toolchain and packaging engineer |
 | `10_Scale_And_Performance.md` | Scale and performance engineer |
-| `11_Work_Breakdown.md` | Integration lead (written last) |
+| `11_Time_And_Illumination.md` | Time and illumination engineer |
+| `12_Operator_Control_Surface.md` | Operator control-surface engineer |
+| `13_Work_Breakdown.md` | Integration lead (written last) |
 
 Cross-reference other sections by relative link. Do not restate another section's content; link to
 it. If you need a decision that belongs to another section, state the dependency and the property you

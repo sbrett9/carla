@@ -1,13 +1,16 @@
 # 06 — Truth and annotation
 
 **Status:** Plan section. Design against a read of the working tree and against measurements taken from
-the real scenario artifacts on 2026-09-17. No code changed, no build run.
-**Date:** 2026-09-17
+the real scenario artifacts. No code changed, no build run.
+**Date:** 2026-09-18. Redrafted from the 2026-09-17 draft to bring **simulated time of day and scene
+illumination** into the truth model. Every measurement in the first draft is carried forward unchanged;
+what is new is §2.7, §4.5, §5.4, §7.3, the solar block of §8.4, and the decisions D6.20–D6.25.
 **Scope:** How an author's assertion about what a vehicle is doing reaches the truth record when the
-authoring surface is a SUMO scenario rather than an OpenSCENARIO storyboard; how positional truth and
-behavioural truth are produced by two different simulators and reconciled into one record; what the
-capture sidecar, the world truth track and the run manifest each contain; and what may and may not be
-exported to a detector or an estimated-pattern-of-life (EPoL) model.
+authoring surface is a SUMO scenario rather than an OpenSCENARIO storyboard; how positional truth,
+behavioural truth and **the illumination the frame was rendered under** are produced by different
+authorities and reconciled into one record; what the capture sidecar, the world truth track and the run
+manifest each contain; and what may and may not be exported to a detector or an estimated-pattern-of-life
+(EPoL) model.
 **Re-seats:** [20 — Behavioral Annotation of Tracks, and Areas of Interest](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md).
 Doc 20 is the source of the supervision model and remains correct; what changes here is the surface it
 sits on. §11 records, decision by decision, what survived and what did not.
@@ -15,7 +18,10 @@ sits on. §11 records, decision by decision, what survived and what did not.
 [17 — Photoreal Occlusion Metric](../../Findings/17_Photoreal_Occlusion_Metric.md) ·
 [23 — SUMO Traffic Integration](../../Findings/23_SUMO_Traffic_Integration.md) ·
 [01 — System architecture](01_Architecture.md) · [04 — Contracts](04_Contracts.md) ·
-[07 — Scenario authoring](07_Scenario_Authoring.md) · [08 — Collection and EPoL](08_Collection_And_EPoL.md)
+[07 — Scenario authoring](07_Scenario_Authoring.md) · [08 — Collection and EPoL](08_Collection_And_EPoL.md) ·
+[10 — Scale and performance](10_Scale_And_Performance.md) ·
+[11 — Time and illumination](11_Time_And_Illumination.md) ·
+[12 — Operator control surface](12_Operator_Control_Surface.md)
 
 **Audience:** an engineer building the truth path, who has read neither doc 20 nor the conversation
 that produced this plan. Every claim about existing behaviour is cited `path:line` or marked as
@@ -38,6 +44,12 @@ measured; anything else that is not cited is labelled as an inference.
   it (§10.4).
 - **Detector and model internals.** [08](08_Collection_And_EPoL.md) owns those. This section fixes the
   join and the boundary.
+- **The epoch contract, the semantics of the solar policy, and whether night capture is viable at all.**
+  [11](11_Time_And_Illumination.md) owns all three. This section owns what the truth record must say
+  about the illumination that was achieved, and states the properties 11 must deliver (§4.5, §5.4).
+- **How an operator expresses the time-of-day choice.** [12](12_Operator_Control_Surface.md) owns the
+  surface. This section owns the record of what the choice turned out to be.
+- **Sequencing and work items.** [13](13_Work_Breakdown.md) owns those.
 
 ---
 
@@ -56,14 +68,25 @@ model survives; three of its mechanisms do not.
 | **Truth has one producer**, `VehicleTelemetryService` (§4.1) | Two producers exist and neither is sufficient alone: CARLA holds the rendered pose and the camera geometry, SUMO holds the kinematics and every vehicle CARLA is not rendering | Authority is settled field by field and the disagreement is recorded rather than hidden (§4) |
 | An annotated interval is either **observed or not** (§2.5) | It can also be unobserved because the participant was *never rendered*, which is a different fact about a different thing | The observability record gains a rendered-span gate upstream of the observed-span gate ([01 §7](01_Architecture.md) states the requirement; §5 gives it shape) |
 | The **Traffic Manager's idle cull** edits the ambient distribution and must be switchable (§2.8, decision 14) | The traffic manager is locked out ([01 D1.7](01_Architecture.md)). SUMO has no idle cull — a vehicle parks indefinitely, measured at 489 000 s | Decision 14 does not apply to this mode. But SUMO has several *other* distribution-editing behaviours, three of which are on by default (§6) |
+| **Illumination is not a variable.** Doc 20 never mentions the sun, because a storyboard capture was a short scripted episode under whatever light the world was spawned in | A capture window is a span of *simulated* time, and [10 §3.1](10_Scale_And_Performance.md) recommends windows at **07:00** and **23:00** on the sizing scenario. The sun is a settable, optionally advancing world variable (`CarlaServer.cpp:611-670`), and the truth sidecar **already records its state** (`CotWriter.cs:52-65`) | Illumination becomes a recorded property of the capture with an authority of its own — neither simulator's. And because the sidecar records the *achieved* sun faithfully, an unset sun produces a record that contradicts the scenario and nothing notices (§2.7, §4.5) |
 
 Two things about doc 20 are load-bearing and are **not** changed here, because they are the design:
 
 - Supervision is **three-valued** and the state is always written (§2.2, decision 2).
 - An annotation is **authored intent**; a derived geometric relation is context and never a label
-  (§2.1, §8.5, decision 3).
+  (§2.1, §8.5, decision 3). **Illumination joins area relations as the second class of derived
+  context** — computed identically for every capture, legitimately a covariate, never a label (§3.6).
 
 Under SUMO both are at greater risk than doc 20 anticipated, and §3.1 and §3.6 say how each is held.
+
+**One new failure mode is introduced by the change of surface, and it is exactly the kind this section
+exists to prevent.** The capture window is placed in simulated time; the sun is set by a separate
+mechanism; nothing binds them. If the binding is omitted, a 23:00 window renders under the spawn
+default of local solar noon (`CesiumHeightSampler.cpp:409`, measured), and the sidecar's `_solar` block
+faithfully records noon while the scenario asserts 23:00. The corpus is then internally contradictory
+and *every artifact is individually correct*: the imagery is a faithful daylight render, the solar block is a
+true record of the sun that lit it, and the scenario is a true record of what was asserted. Nothing in
+the set is wrong on its own, so nothing can flag it. §4.5 makes the contradiction a measured number.
 
 ---
 
@@ -146,6 +169,35 @@ Note what the record has to express and `marked_ids` cannot: the escort is **one
 participants**; the two probes are **two instances of one pattern**, not one instance with two
 intervals, because the participants differ; and the no-show has no participant at all.
 
+**The same departures, read as civil times.** Measured 2026-09-18 by parsing every anomaly `<trip>`'s
+`depart` out of the route file and dividing by 86 400, under the midnight epoch the brief establishes
+from the guard shifts (25 200 / 54 000 / 82 800 s = 07:00 / 15:00 / 23:00, so `t = 0` is midnight of
+day 0):
+
+| Anomaly | `depart` (s) | Civil day and time |
+|---|---|---|
+| `escort_0`..`escort_4` | 295 200 → 295 216 | day 3, **10:00:00** → 10:00:16 |
+| `probe_d2` | 212 674 | day 2, **11:04:34** |
+| `probe_d5` | 472 285 | day 5, **11:11:25** |
+| `staybehind` | 115 200 | day 1, **08:00:00** |
+| `shadow` | 527 400 | day 6, **02:30:00** |
+| `guard_d4_h7_t3` (the absence) | 370 800 | day 4, **07:00:00** |
+
+Two things fall out of this that no other measurement in this section shows, and both are new to the
+redraft.
+
+- **Five of the six anomalies are authored into daylight and one is authored into the middle of the
+  night.** The perimeter shadow — the one whose whole character is furtiveness — transits at 02:30.
+  Under a pipeline that never sets the sun, **that transit renders at local solar noon**
+  (`CesiumHeightSampler.cpp:409`), which is not a degraded version of the intended capture but a
+  different scene entirely. This is the concrete instance, in the largest authored scenario we have, of
+  the brief's point that a pattern class defined by time of day becomes unrenderable.
+- **The distribution is lopsided, and it runs the opposite way to the obvious confound.** The
+  positives cluster between 08:00 and 11:11 with one outlier at 02:30; the hard negatives — 335 guard
+  postings — fire at exactly 07:00, 15:00 and 23:00 (measured, §2.2). So annotated and nominal
+  populations do not share a time-of-day distribution, in either direction. §9.3 rule 5 is about
+  exactly this, and §5.3's per-band prevalence is how it is caught rather than intended.
+
 ### 2.4 Where today's ground truth leaks into the comparison channel
 
 Three independent leaks, each read from source. All three put the answer inside the record a detector
@@ -196,7 +248,94 @@ plus two 300 s probe waits) against the guard postings' 335 x 28 800 = 9 648 000
 [20 §2.6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) says prevalence must be
 recorded rather than reconstructed. This measurement says something sharper: **prevalence is
 meaningless without its unit, and two defensible units differ here by more than two orders of
-magnitude.** The manifest records it in three units, over the captured span only (§8.4).
+magnitude.** The manifest records it in three units, over the captured span only (§8.4), and §5.3 adds
+a fourth axis to each of them: the illumination the capture was taken under.
+
+### 2.7 The solar record as it exists today
+
+Read from the tree on 2026-09-18. The mechanism is complete and working; what follows is what it
+records and, at the end, the four ways it can be silently wrong. Nothing here is a proposal — it is the
+baseline the rest of this section builds on.
+
+**`_solar` is written once per sidecar, before any `<event>`, as a child of the `<events>` container**
+(`CotWriter.cs:50-65`). The comment states the placement reason: "written once here, before the
+per-vehicle events, so it is present even for a vehicle-free frame" (`:50-51`). It carries **nine
+attributes**, packed from an eleven-double block:
+
+| Attribute | Source double | What it is |
+|---|---|---|
+| `solar_time` | `solar[0]` | the sun clock in **hours**, `[0, 24)`, in the world's own time zone — **not** a civil time |
+| `date` | `solar[1..3]` | `YYYY-MM-DD`, formatted from three doubles (`CotWriter.cs:56-57`); drives the seasonal sun angle |
+| `time_zone` | `solar[4]` | hours; set at world spawn to **longitude ÷ 15, unrounded** (`CesiumSunSky.cpp:570-573`, called from `CesiumHeightSampler.cpp:411-412`) |
+| `lat`, `lon` | `solar[5..6]` | the **georeference origin**, not any vehicle's position (`CesiumHeightSampler.cpp:765-772`) |
+| `sun_elevation_deg` | `solar[7]` | degrees above the horizon |
+| `sun_azimuth_deg` | `solar[8]` | degrees clockwise from North |
+| `advancing` | `solar[9]` | whether a time-of-day controller is advancing the clock |
+| `rate` | `solar[10]` | sun-clock seconds per tick-second while advancing |
+
+Four properties of the existing path are worth having in hand, because the design below relies on all
+four rather than replacing them:
+
+1. **It is already tick-paired and already free.** `FrameRecorder` reads it with
+   `_client.GetCachedSolarState()` (`FrameRecorder.cs:160-162`) — the world-observer cache, lock-free
+   and with no RPC (`CarlaClient.cs:1988-1991`), populated from eleven doubles appended to the
+   `EpisodeState` header at offset 36 (`CarlaClient.cs:1842-1855`). It is the same snapshot the
+   telemetry came from.
+2. **It is already captured into the encoding job rather than read at write time.** The solar block is
+   handed to the `Job` record alongside the telemetry, the sensor pose and the capture identity
+   (`FrameRecorder.cs:183`), and the worker writes it out later (`:227-232`). That is precisely the
+   discipline §4.3 demands of the SUMO snapshot — **already honoured here, for this payload**, which is
+   the strongest available argument that the discipline is practical.
+3. **It is already bound to the pixels.** The same block is embedded in the PNG as a `carla:solar`
+   tEXt chunk (`SolarMetadata.cs:14-20`, written between IHDR and IDAT by `PngEncoder.cs:44-47`,
+   composed at `FrameRecorder.cs:227`), so a still separated from its sidecar still carries the sun it
+   was rendered under. `SolarMetadata.HasData` requires the full eleven doubles, "so a frame is never
+   tagged with a bogus sun" (`SolarMetadata.cs:14-15`).
+4. **The world has exactly one lighting authority, and the generator enforces it.** World generation
+   disables every pre-existing `ADirectionalLight` and `ASkyLight` in the level so that CesiumSunSky is
+   the sole sun (`CesiumHeightSampler.cpp:358-381`, which logs the count), and `CarlaServer.cpp:611-612`
+   names CesiumSunSky "the single sun/lighting authority for the georeferenced world (CARLA weather is
+   inert here)". So there is no second light to reconcile — and, as §5.4 notes, no street lighting
+   either.
+
+**Four ways the record can be silently wrong.** Each is measured, and each is a reason the additions of
+§4.5 are not decoration.
+
+- **The spawn default is local solar noon.** A freshly generated world starts at `SolarTime = 12.0`
+  with daylight saving disabled (`CesiumHeightSampler.cpp:409-410`). If nothing sets the sun, every
+  window renders at noon and `_solar` records noon truthfully. This is the failure the whole redraft is
+  about.
+- **`time_zone` is a solar zone, not a civil offset, and the two differ by a real amount.** Measured
+  from the sizing scenario's own network: `projParameter="+proj=tmerc +lat_0=27.15012 +lon_0=56.18065 …"`
+  (`BahonarPatternOfLife/scenario/Shahid_Bahonar_Port.net.xml`, `<location>` element — the same element
+  also shows `netOffset="0.00,0.00"`, confirming at Bahonar what [23 §2](../../Findings/23_SUMO_Traffic_Integration.md)
+  measured at Arapahoe). So the world's time zone is 56.18065 ÷ 15 = **+3.745377 h**, while Iran's
+  civil offset is **+3.5 h**. A caller who passes a declared civil hour straight into `set_solar_time`
+  puts the sun **14 min 43 s** away from the civil time it thinks it asked for. Small, and at 23:00
+  irrelevant — but it is a units mismatch, not an approximation, and near sunrise it moves the sun
+  through a few degrees of azimuth. The conversion is arithmetic and belongs in the contract
+  ([11](11_Time_And_Illumination.md) owns it); the residual of §4.5 is what proves it was applied.
+- **The advancing clock wraps at midnight and never advances the date.** Measured:
+  `SolarTime = Fmod(Fmod(SolarTime + DeltaHours, 24.0) + 24.0, 24.0)` and nothing touches `Year`,
+  `Month` or `Day` (`CesiumTimeOfDayController.cpp:34-36`). `set_solar_time` wraps the same way
+  (`CesiumHeightSampler.cpp:730`), with a comment that callers may pass "a freely-accumulating clock".
+  So a seven-day scenario run with the sun advancing re-lives **one calendar date** seven times: the
+  time of day is right, the seasonal declination is frozen at whatever date was last set. For a
+  seven-day span the declination error is small; for a scenario whose windows span months it is not.
+  This is a defect, it belongs to [11](11_Time_And_Illumination.md), and until it is fixed the manifest
+  must record that no date roll-over occurred (§8.4) rather than let a reader assume one did.
+- **A frozen sun and an unconfigured sun are indistinguishable in the record.** `advancing` and `rate`
+  are read from the time-of-day controller actor if one exists and otherwise default to `0.0` and `1.0`
+  (`CesiumHeightSampler.cpp:784-796`). A run that deliberately froze the sun and a run where nobody ever
+  called `set_time_advance` both emit `advancing="false" rate="1.0"`. **The sidecar therefore cannot
+  express the policy — only the outcome.** That is the single strongest reason the policy must be
+  recorded separately rather than inferred from `advancing` (§4.5, D6.20).
+
+Two smaller asymmetries, noted so a later reader does not trip on them. `CotWriter` requires
+`Count >= 11` (`:52`) and writes **no `_solar` element at all** below that, so a capture can legitimately
+carry no illumination record; §4.5 makes that a session failure rather than a silent omission. And the
+Python shim accepts `Count >= 9` and substitutes `advancing=False, rate=1.0` for a short payload
+(`carlanet/__init__.py:1511-1533`), so the two readers disagree about what a short block means.
 
 ---
 
@@ -329,7 +468,7 @@ lines up with doc 20's exactly.
 3. **The committed-to-observed gap is a property of the co-simulation seam, not of the scenario, and
    nothing else is mixed into it.** It is the transport lag between a SUMO step and the CARLA tick
    that renders its result, and under the integer-ratio clock contract of
-   [01 D1.12](01_Architecture.md) it should be small and nearly constant. That makes it a free health
+   [01 D1.13](01_Architecture.md) it should be small and nearly constant. That makes it a free health
    check: a gap that drifts, or a committed stop with no observed standstill, is a bridge defect.
 
    **Vehicle fade being off makes this check sharper than it would otherwise have been.** The user has
@@ -487,7 +626,7 @@ vehicle that does not exist; that is fabricating a detection, and a viewer or a 
 have no way to know. So an absence instance is **world-scoped, never vehicle-scoped**: it lives in the
 run manifest, and its per-frame projection is a child of the sidecar's `<events>` container, not of
 any `<event>`. That placement already has a precedent in the real writer — `_solar` is written as a
-child of `<events>` (`CotWriter.cs:52-66`) and capture identity sits on the container's attributes
+child of `<events>` (`CotWriter.cs:52-65`) and capture identity sits on the container's attributes
 (`:40-48`) — so this is an established shape rather than a new one.
 
 **Four: an unobserved absence is not an observation.** A camera that never looked at tower 3 cannot
@@ -566,6 +705,41 @@ Restating the rule so it is enforceable rather than aspirational:
    area relations, where a human auditing for the accidental positives of
    [20 §2.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) will want them, and
    nowhere near `<_supervision>`.
+6. **Illumination is derived context, of exactly the same class as an area relation.** §3.6's rule was
+   written about geometry; the argument does not depend on geometry, it depends on *who computes the
+   value*. An area relation is computed identically for every vehicle from the world's own state; the
+   sun's elevation is computed identically for every capture from the world's own state. Both are
+   legitimate covariates, both are legitimate inputs to a fielded system — a real sensor knows the time
+   and its own position, and can compute the solar geometry as well as we can — and **neither is ever a
+   label**. The rule is stated operationally below.
+
+**Illumination, operationally.** Four statements, in the same enforceable form as points 1–5.
+
+| | |
+|---|---|
+| **Which element carries it** | `<_solar>`, a child of the sidecar's `<events>` container and a **sibling of world-scoped `<_supervision>`** (`CotWriter.cs:50-65`, existing). It is world-scoped, exactly like `<_supervision>`: one sun lit every vehicle in the frame, so it is written once and never per `<event>`. No `<event>`, no `<_carla>` block and no `<_supervision>` element carries a solar attribute |
+| **Where the code boundary is** | `SupervisionPlan` has **no solar field**, and the runtime component that binds interval state has **no reader for the solar cache**. The solar block travels from `CarlaClient.GetCachedSolarState()` (`CarlaClient.cs:1988-1991`) through `FrameRecorder`'s encoding job (`FrameRecorder.cs:162`, `:183`) to `SolarMetadata` and `CotWriter`, and that path touches nothing in `CarlaNet.Types`'s supervision records. The boundary is enforced by the type graph, not by a convention: a binder that wanted to read the sun would have to be given a new dependency, which is a visible change |
+| **The deletion test** | A consumer must be able to **delete every `<_solar>` element and every `carla:solar` PNG chunk from a corpus and still have complete, unambiguous supervision.** This is the same test point 4 applies to `<_aoi>`, for the same reason. If deleting the sun ever changes what the corpus asserts, illumination has become a label |
+| **The invariant it must not break** | The row-set invariant of point 2 is unaffected by illumination, and that is a property worth checking rather than assuming: two runs of one scenario under **different solar policies** must still produce manifests with identical `(instance_id, participant, phase)` triples. Only the observability spans, the illumination qualifiers and the residuals may differ. A frozen-sun run and an advancing-sun run of the same scenario are therefore a *second* free regression test for the rule, orthogonal to the same-policy repeat |
+
+**The hazard is a confounder, and it is the temporal twin of one already documented.** §2.4 measured
+that anomaly `vType`s carry conspicuous colours and distinct ids, so appearance correlates with the
+label. Time of day can do the same thing and is easier to do by accident: an author who writes every
+anomaly into the night window, or who captures the annotated instances at 23:00 and the nominal
+population at 07:00, has encoded the annotation in the lighting. A model then learns "dark means
+anomalous", scores well, and fails at noon. Worse than the colour confounder in one respect: a colour
+is per vehicle and a human reviewing the route file can see it, whereas time of day is a property of
+the *capture plan* and is invisible in every individual artifact. The countermeasures are split across
+two places, and both are cheap:
+
+- **At authoring**, §9.3 rule 5 requires an annotated instance's time of day to be drawn from the same
+  distribution as the nominal population it is a negative for, unless time of day *is* the annotated
+  pattern — which is a real case, since [20 §3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)
+  class 4 is "a heavy goods vehicle in a residential area **at 03:00**".
+- **At corpus level**, §5.3 reports prevalence per illumination band, which turns the confounder into a
+  number a reviewer can read off the manifest: if the annotated prevalence in one band is orders of
+  magnitude above another, the lighting is carrying signal. §10.2 makes that check the gate on whether
+  solar state may be exported as a model input at all.
 
 Placement: the record types and the published state belong in `CarlaNet.Types`, which references
 nothing and is the common ancestor of every assembly that needs them — doc 20 §7.3's argument,
@@ -600,6 +774,7 @@ different place.
 | Dimensions | the **spawned blueprint's** bounding box, `:103,110` | the `vType`'s declared `length`/`width`/`height`, `:323-325` |
 | Camera-relative | occlusion fraction, band, sample count, apparent size ([17 §12.1](../../Findings/17_Photoreal_Occlusion_Metric.md)); sensor pose and full pinhole intrinsics (`CotWriter.cs:101-124`) | none. There is no camera |
 | Network state | none | edge, lane, lane position, stop state, waiting time |
+| Illumination | the solar block paired to this tick, read from the world-observer cache with no RPC (`CarlaClient.cs:1988-1991`) and already emitted (`CotWriter.cs:52-65`) | **none.** SUMO has no sun, no date and no concept of illumination. It does not even know what civil time its own seconds mean (§4.5) |
 | Identity | `actor_id`, assigned at spawn, different every run | the SUMO vehicle id, which for a `<trip>` is **authored and stable across runs** |
 
 Two asymmetries decide everything below. **Only CARLA's pose is in the same frame as the pixels.**
@@ -625,6 +800,15 @@ field, because a producer-level answer is wrong in both directions.
 | Edge, lane, lane position, stop state | **SUMO** only | Network state; CARLA does not have it | none |
 | Identity | **SUMO** | §7 | `actor_id` recorded alongside |
 | Supervision | **the plan** | Neither simulator. §3.6 | — |
+| Declared civil time of a tick | **the scenario epoch** | Neither simulator holds it. SUMO counts seconds from zero and CARLA counts ticks; the civil meaning of `t = 370 800` exists only in the scenario contract ([11](11_Time_And_Illumination.md) owns its form) | — |
+| Solar clock, date, sun angles, `advancing`, `rate` | **CesiumSunSky**, read through the world-observer cache | It is the single sun and lighting authority for the georeferenced world (`CarlaServer.cpp:611-612`), and the generator disables every other level light to keep it so (`CesiumHeightSampler.cpp:358-381`). CARLA's own weather is inert here | — |
+| Solar **policy** in force | **the capture session** | It is the only component that knows what was *asked for*. The world can only report what it *is*, and §2.7 measured that a deliberately frozen sun and an unconfigured one are byte-identical in the world's answer | — |
+
+**A third authority joins the two producers, and it is asymmetric in a way neither of them is.** For
+pose and kinematics the two producers disagree and the record keeps both. For illumination there is
+only one producer of the achieved value and only one holder of the intended value, and they live on
+opposite sides of the capture: the scenario declares, the world achieves. That is why §4.5 is written
+as a declared-versus-achieved residual rather than as a producer reconciliation.
 
 **Neither producer is discarded.** The reconciled record is what reaches the corpus, and it carries
 enough to recover both inputs. This is not a compromise: it is the only arrangement in which the
@@ -636,31 +820,39 @@ flowchart TB
         ROU["route file<br/>flows, trips, stops, vTypes"]
         SUP["supervision file<br/>instances, series, slots, cohorts"]
         AOI["areas of interest<br/>GeoJSON beside the OSM"]
+        EPO["scenario epoch<br/>civil date, civil offset,<br/>the instant t = 0 means"]
     end
 
     subgraph compile["Compile — before the run"]
-        PLAN["SupervisionPlan<br/>immutable; every triple fixed here"]
+        PLAN["SupervisionPlan<br/>immutable; every triple fixed here<br/>NO solar field"]
+        TMAP["civil-time map<br/>tick to declared civil time<br/>11 owns its form"]
     end
 
     ROU --> PLAN
     SUP --> PLAN
     AOI --> PLAN
+    EPO --> TMAP
 
     subgraph runtime["Runtime — one capture session"]
         SUMO["sumo<br/>steps the demand"]
         BRIDGE["SUMO bridge<br/>pose command + kinematics<br/>+ per-step events"]
         REG["RenderedVehicleRegistry<br/>which vehicles are actors"]
+        SOLCMD["solar policy in force<br/>frozen at anchor, or advancing<br/>12 owns how it is expressed"]
         CARLA["CARLA world<br/>applied transform, drape Z,<br/>bounding box, pixels"]
+        SUN["CesiumSunSky<br/>sole lighting authority;<br/>achieved solar state per tick"]
         VTS["VehicleTelemetryService<br/>rendered-scene truth"]
         WSS["WorldSupervisionState<br/>interval state, tick-stamped"]
     end
 
     PLAN --> WSS
+    TMAP --> SOLCMD
     SUMO --> BRIDGE
     BRIDGE --> WSS
     BRIDGE --> REG
     REG --> CARLA
     BRIDGE -->|pose command| CARLA
+    SOLCMD -->|set_solar_date, set_solar_time,<br/>set_time_advance| SUN
+    SUN -->|lights the frame| CARLA
     CARLA --> VTS
 
     RECON{{"TruthReconciler<br/>joins on sumo_id<br/>per captured tick"}}
@@ -668,15 +860,24 @@ flowchart TB
     BRIDGE -->|kinematics, network state,<br/>every vehicle| RECON
     VTS -->|applied pose, box, occlusion,<br/>rendered vehicles only| RECON
     WSS -->|supervision snapshot<br/>for this tick| RECON
+    SUN -->|achieved solar block,<br/>tick-paired, no RPC| RECON
+    TMAP -->|declared civil time<br/>for this tick| RECON
 
-    RECON --> SIDE["capture truth sidecar<br/>per camera, per capture<br/>rendered vehicles only"]
+    RECON --> SIDE["capture truth sidecar<br/>per camera, per capture<br/>rendered vehicles only<br/>+ world-scoped _solar"]
     RECON --> WORLD["world truth track<br/>per run, every SUMO vehicle"]
-    RECON --> MAN["run supervision manifest<br/>per session, instance form"]
-    RECON --> DISC["discrepancy log<br/>residuals and refusals"]
+    RECON --> MAN["run supervision manifest<br/>per session, instance form<br/>+ epoch, policy, achieved sun"]
+    RECON --> DISC["discrepancy log<br/>residuals and refusals<br/>incl. declared-vs-achieved sun"]
 
     style RECON fill:#2d6a4f,color:#ffffff
     style PLAN fill:#1d3557,color:#ffffff
+    style SUN fill:#7a5c00,color:#ffffff
 ```
+
+The sun enters the diagram in two places and they are deliberately not connected to each other. The
+**policy** flows from the compiled civil-time map into the world through the three existing RPCs; the
+**achieved state** flows back out of the world into the reconciler. Nothing closes that loop at
+runtime — the reconciler does not correct the sun, it only measures the gap (§4.5). Closing it would
+make the record agree with itself by construction and destroy the oracle.
 
 ### 4.3 Reconciliation, and the discrepancies that must be reported
 
@@ -687,8 +888,9 @@ of them may be silently absorbed.
 |---|---|---|
 | `pose_separation_m` | horizontal distance between the SUMO-commanded position and the CARLA applied position, both in CARLA-local metres | Under pose application it should be at the numeric floor. Anything larger is a **seam defect**, and the three pose conventions the team brief names — CARLA's Y negated, yaw = `sumoAngle - 90`, and SUMO's front-bumper reference against CARLA's body centre — each produce a *characteristic* residual. A constant offset of half the vehicle length along the heading is the bumper shift; a residual that mirrors about the X axis is the Y negation |
 | `heading_separation_deg` | commanded yaw minus applied yaw | A constant 90 degrees is the yaw convention; anything else is a drape-induced or clamp-induced rotation |
-| `speed_separation_mps` | SUMO speed minus the speed implied by successive CARLA positions | Under pose application this is the interpolation error of [01 D1.12](01_Architecture.md); under the actuated shape of [23 §4.1](../../Findings/23_SUMO_Traffic_Integration.md) it is the **control tracking error**, which is the whole point of that shape |
+| `speed_separation_mps` | SUMO speed minus the speed implied by successive CARLA positions | Under pose application this is the interpolation error of [01 D1.13](01_Architecture.md); under the actuated shape of [23 §4.1](../../Findings/23_SUMO_Traffic_Integration.md) it is the **control tracking error**, which is the whole point of that shape |
 | `dimension_separation_m` | `vType` length/width minus the spawned blueprint's | The car-following model ran on one set of dimensions and the imagery shows another. [04](04_Contracts.md) owns the tolerance |
+| `solar_time_residual_s`, `sun_elevation_residual_deg` | the declared civil time for this tick, converted to the world's solar clock, minus the achieved `solar_time`; and the sun elevation that conversion implies minus the achieved `sun_elevation_deg` | **The sun was not set from the scenario.** Unlike the four above, this one is not a seam defect between two producers — it is a gap between what the scenario asserts and what the pixels show, and §4.5 gives it its own treatment because its failure signatures are diagnostic rather than numeric noise |
 
 **The residual is a free test oracle, and it is the reason to keep both producers rather than
 collapsing to one.** [01 §4.2](01_Architecture.md) makes the same point from the architecture side.
@@ -718,7 +920,7 @@ Practical requirements on the reconciler:
 **There were four, and one of them existed only because of vehicle fade.** An earlier draft of this
 section carried a *rendered, arriving* state: an actor that existed but was mid-dissolve, excluded
 from the capture sidecar because [09 §5.2](../../Findings/09_Telemetry_CoT_Contract.md) fixes that a
-half-dissolved car is not something a sensor should be told is there. **That state is gone.** The user
+half-dissolved car is not something a sensor should be told is there. **That state is gone.** [01 D1.11](01_Architecture.md) designs no fade behaviour, and the user
 has demoted fade for this mode — it is a client-side computation pushed one blocking RPC per vehicle
 per reconcile, and `--fade` carries `default=False`
 (`CarlaControl/src/carlacontrol/CarlaControlArgumentParser.py:317-328`, which states that cost in its
@@ -754,6 +956,85 @@ already destroy vehicles with different signals, and SUMO's arrival and removal 
 truth requirement is narrow and firm: **a CARLA-side destruction never closes a supervision interval.**
 Only a SUMO-side removal or an authored trigger does. A CARLA destruction closes the *rendered span*
 and sets `closed_by = render_released` only if the interval was still open at that moment (§3.4).
+
+### 4.5 Illumination: declared, achieved, and the residual between them
+
+`_solar` exists, works, and is written into every sidecar and every PNG today (§2.7). What it lacks is
+any relationship to the scenario. It reports the sun that lit the frame and says nothing about the sun
+the scenario asked for, because nothing in the pipeline has ever asked for one. **Bringing it into the
+authority model means adding the other two terms and the difference between them.**
+
+| Term | What it is | Where it comes from | New? |
+|---|---|---|---|
+| **Achieved** | `solar_time`, `date`, `time_zone`, `lat`, `lon`, `sun_elevation_deg`, `sun_azimuth_deg`, `advancing`, `rate` | the world-observer solar cache, tick-paired, no RPC | **no** — exists, `CotWriter.cs:52-65` |
+| **Declared** | the **civil** date and time this tick means in the scenario: `declared_civil_time`, `declared_civil_date`, `declared_utc_offset_h` | the scenario epoch, compiled into the civil-time map. [11](11_Time_And_Illumination.md) owns the epoch's form; this section requires only that a tick maps to a civil instant | **yes** |
+| **Policy** | `solar_policy` = `frozen` or `advancing`; `solar_rate`; `solar_anchor_tick` — the tick the clock was set from | the capture session, which is the only component that knows what was asked for (§4.2) | **yes** |
+| **Residual** | `solar_time_residual_s` and `sun_elevation_residual_deg` | computed at capture, from the two above | **yes** |
+
+**Why the policy cannot be inferred from `advancing`.** Measured in §2.7: `advancing` and `rate` default
+to `false` and `1.0` when no time-of-day controller actor exists (`CesiumHeightSampler.cpp:784-796`).
+A run that deliberately froze the sun so illumination would be a controlled constant across a sweep, and
+a run in which the operator surface was never wired up, emit the identical attribute. The first is a
+design choice and the second is a bug, and **the record as it stands cannot tell them apart.** `frozen`
+is therefore an asserted policy with an anchor tick, not a reading of `advancing=false`; the two
+together are what makes the assertion checkable, because a `frozen` policy whose achieved `solar_time`
+moved between two captures is a contradiction that can be caught.
+
+**The residual, precisely.** At each captured tick the recorder already holds the achieved block
+(`FrameRecorder.cs:162`). It additionally holds the declared civil instant for that tick. The residual
+is the difference after the one conversion the world requires:
+
+```
+solar_time_expected_h = declared_civil_time_h
+                      + (world.time_zone_h − declared_utc_offset_h)     -- 2.7: solar zone ≠ civil offset
+solar_time_residual_s = wrap_to_pm12h(achieved.solar_time − solar_time_expected_h) × 3600
+sun_elevation_residual_deg = achieved.sun_elevation_deg
+                           − elevation(declared_civil_date, solar_time_expected_h, lat, lon)
+```
+
+Both numbers are recorded per capture and summarised in the manifest. The second is the one that
+matters operationally, because it is the quantity a detector actually experiences: a residual of
+fifteen minutes at midnight is nothing and the same fifteen minutes at civil dawn is several degrees of
+sun elevation and a completely different image.
+
+**What each failure looks like.** This is the point of the residual: the failures have *signatures*,
+so a reader does not merely learn that something is wrong but what.
+
+| Signature | Diagnosis |
+|---|---|
+| Residual of several **hours**, constant across the whole window, achieved `solar_time` exactly `12.0` | The sun was never set. The world is at its spawn default of local solar noon (`CesiumHeightSampler.cpp:409`). **This is the silent failure the redraft exists to catch** — it is the 23:00-window-in-daylight case, and it is now a number in the manifest rather than something a human has to notice by looking at a picture |
+| Constant residual of **14 min 43 s** at the sizing scenario (in general, `lon/15 − civil_offset`) | The declared civil time was passed straight into `set_solar_time` without the civil-to-solar conversion. Measured in §2.7; the value is site-specific and is exactly the arithmetic above |
+| Residual **zero in time**, achieved `date` **not equal to** `declared_civil_date`, and an elevation residual that grows across a multi-day run | The advancing clock wrapped at midnight without advancing the date (`CesiumTimeOfDayController.cpp:34-36`), so declination is frozen at the anchor date. The date comparison catches it directly and needs no arithmetic; the elevation residual says how much it cost. A defect [11](11_Time_And_Illumination.md) owns; the manifest records `date_rollover_applied: false` so that a reader is never left inferring it |
+| Residual **growing linearly** under a `frozen` policy, or **static** under an `advancing` one | The policy that was asserted is not the policy in force. Under `frozen` the achieved `solar_time` must be constant across every capture in the window; under `advancing` it must move at `rate` per simulated second |
+| **No `_solar` element at all** | The server returned fewer than eleven doubles, so `CotWriter.cs:52` wrote nothing. A capture whose illumination is unknown cannot be reconciled with anything and cannot be replayed (§7.3) |
+
+**Three requirements follow, and none needs a new mechanism.**
+
+1. **The sun is set during prewarm, before the first captured frame.** [10 §4.2](10_Scale_And_Performance.md)
+   already runs SUMO alone up to `window.begin − prewarm_s`, after which CARLA attaches and the render
+   set fills ahead of the first capture. The solar date and time are set inside that lead-in, so no
+   frame is ever captured under a sun that is still being corrected, and the residual is checked once
+   before the window opens rather than discovered halfway through it. This costs nothing: it is three
+   existing RPCs (`CarlaServer.cpp:614`, `:625`, `:661`) once per window.
+2. **The residual is recorded, never absorbed.** Same stance as §4.3's pose, heading, speed and
+   dimension separations, and the same
+   precedent: `OcclusionEstimator` refuses a mismatched pair rather than measuring it approximately
+   ([17 §12.1](../../Findings/17_Photoreal_Occlusion_Metric.md)). A residual beyond a hard threshold
+   fails the session; between a soft and a hard threshold it is recorded and the capture ships flagged.
+   The thresholds are open question 10, and for the same reason as open question 7 — they should be set
+   from the first measured distribution, not guessed.
+3. **A capture with no `_solar` fails the session.** Not a warning. An unlit-by-record capture is one
+   whose illumination can never be recovered, and it silently corrupts the stratification of §5.3,
+   which is computed from the achieved sun.
+
+**Why this belongs in §4 rather than in a section of its own.** The declared-versus-achieved shape is
+not a new idea in this document. §4.3 already made the commanded-versus-applied pose residual a free
+test oracle, on the argument that a pose-convention bug is otherwise invisible because the imagery looks
+plausible and the truth is self-consistent. **An unset sun is the same bug in a different dimension**:
+the imagery looks plausible, the solar block is self-consistent, and only the comparison against what
+was asked for reveals it. The one asymmetry is that a pose residual is the seam between two producers
+and a solar residual is the seam between an assertion and a world, which is why the failure table above
+carries diagnoses rather than a tolerance.
 
 ---
 
@@ -798,14 +1079,66 @@ intervals are systematically `not_rendered` is broken rather than merely sparse.
 report separately:
 
 - **Collection coverage** — of the intervals whose participants were rendered, what fraction was
-  observable, per sensor and unioned. This is doc 20's honest denominator.
+  observable, per sensor and unioned — **and per illumination band**, because a coverage figure that
+  pools a daylight window and a night window describes neither. This is doc 20's honest denominator.
 - **Render coverage** — of the authored intervals, what fraction had a rendered participant at all.
   This is a quality gate on the capture, not a measure of the model.
 
 An annotated interval that is entirely `not_rendered` must be **excluded from evaluation entirely and
-reported as an exclusion**, never counted as a miss. [01 D1.13](01_Architecture.md) prioritises
+reported as an exclusion**, never counted as a miss. [01 D1.14](01_Architecture.md) prioritises
 annotated participants under the cap precisely so this is rare; §10.4 records the constraint that
 prioritisation places on the training export.
+
+**Darkness is a sixth thing that can happen to an observed interval, and it is a qualifier on the five
+rather than a sixth value.** An interval whose participant was rendered, in frustum and unoccluded, but
+lit by a sun eight degrees below the horizon, is `observed` by every test above and may be unusable. The
+question is whether to add a sixth outcome — call it `unlit` — or to carry illumination alongside the
+five. **It is a qualifier.** Four reasons, in increasing order of weight:
+
+1. **The five outcomes are mutually exclusive on geometry; illumination is orthogonal to all three
+   geometric tests.** A vehicle in darkness is still inside the rendered span, still inside a frustum,
+   still unoccluded. A sixth exclusive value would force a precedence rule against `occluded` for a
+   vehicle that is both occluded and dark, and either precedence destroys one of two independent facts.
+2. **The two existing failure classes are already split by *whose* limitation they are** — `out_of_frame`
+   and `occluded` are collection geometry, which a fielded sensor faces too and which belongs in the
+   honest denominator; `not_rendered` is a corpus-construction artifact with no field analogue, and
+   leaves the denominator entirely. Darkness is squarely in the first class: a real sensor at 23:00
+   faces exactly this. So it does not need a new outcome to keep it out of a denominator it belongs in.
+3. **The precedent in this document is that a continuous physical quantity is recorded and the cutoff
+   applied downstream.** `occluded` is not a measurement, it is the post-cutoff *name* for one:
+   `occlusion`, `occlusion_samples` and `apparent_width_px` are carried as numbers and the outcome is
+   what a threshold makes of them ([17 §7](../../Findings/17_Photoreal_Occlusion_Metric.md)). §5.2
+   takes the same stance on `site_covered_fraction`, and open question 3 leaves that cutoff downstream
+   deliberately. Sun elevation is the same kind of quantity and gets the same treatment.
+4. **Deciding `unlit` here would be pre-judging a finding this section does not own.** Whether a capture
+   below some sun elevation is resolvable at all belongs to [11](11_Time_And_Illumination.md) (§5.4).
+   Minting an outcome called `unlit` means choosing its threshold, and choosing its threshold is
+   exactly the night-viability question. A qualifier records the fact and waits.
+
+So **every `OBSERVED_SPAN` carries the illumination it was observed under**, and it costs nothing: the
+solar block is already cached per tick and already read by the recorder (`FrameRecorder.cs:162`), so the
+qualifier is two fields copied from a value that is in hand, with no extra RPC and no extra computation
+beyond a band lookup.
+
+| Field on `OBSERVED_SPAN` | Value |
+|---|---|
+| `sun_elevation_deg` | the achieved elevation at the span's midpoint, and min/max across the span when the policy is `advancing` |
+| `illumination_band` | `day`, `civil_twilight`, `nautical_twilight`, `astronomical_twilight`, `night` |
+
+The bands are the standard twilight definitions — sun elevation above 0°, 0° to −6°, −6° to −12°,
+−12° to −18°, below −18° — chosen because they are conventional and therefore need no defence, not
+because they are known to be the right cut points for an electro-optical detector. **The manifest
+records the boundaries it used** (§8.4) so that a corpus is not left asserting a classification whose
+definition a later reader has to guess, and so that a boundary set derived from a real detector
+sensitivity can replace them without silently reinterpreting old corpora.
+
+**The upgrade path is stated so the decision is reversible on evidence rather than on taste.** If
+[11](11_Time_And_Illumination.md) returns a measured elevation below which no detector can resolve a
+vehicle in this imagery, then `unlit` becomes definable exactly as `occluded` is — the post-cutoff name
+for a recorded number — and is added as a sixth outcome at that point, computed from the qualifier that
+was being recorded all along. Corpora captured before that finding lose nothing, because the number the
+cutoff would be applied to is already in them. That property is the practical reason to prefer the
+qualifier even for a reader who finds the sixth outcome tidier.
 
 Per doc 20 decision 15, supervision is world-scoped and observability is sensor-scoped: `<_supervision>`
 for a given tick is identical in every camera's sidecar, and coverage, prevalence and transferred
@@ -824,6 +1157,13 @@ An absence has no participant, so the coverage computation runs over the **area*
    about what was there, not only about what was not.
 4. An absence with `site_covered_fraction` below a stated threshold is `site_unobserved` and leaves the
    evaluation denominator, exactly as `not_rendered` does for a participant-bearing interval.
+5. `site_covered_fraction` is additionally **broken out per illumination band**, for the same reason
+   §5.1 qualifies an observed span: a guard post watched for eight hours of which six were dark is not
+   the same evidence as six hours of daylight, and an absence is the one class where the claim rests
+   entirely on having looked. The Bahonar no-show is the worked case and it is a night-adjacent one —
+   the missing posting is at 07:00 on day 4 (measured, §2.2), which at latitude 27.15 is near sunrise
+   for much of the year, so the band breakdown is load-bearing for this scenario rather than
+   hypothetical.
 
 Point 3 has a second use. If `site_occupancy_observed` contains a vehicle that looks like a relief
 arrival but is not the expected one, the absence is not what the author thought it was — which is the
@@ -844,6 +1184,43 @@ unioned, and each over the **captured** span rather than the authored one:
 
 An unlabelled number is a defect. A consumer that does not know the unit cannot use it, and at these
 magnitudes the wrong unit is not a small error.
+
+**Each of the three is additionally reported per illumination band, and that is the stratification
+axis the manifest owes its consumers.** The argument is the same one that produced three units in the
+first place, applied to a different confound. Three units exist because a prevalence without its unit
+is unusable and two defensible units differ by 372× (measured, §2.6). A prevalence without its
+illumination is unusable for a different reason: **illumination is the strongest single covariate an
+electro-optical corpus has**, and a corpus assembled from a 07:00 window and a 23:00 window
+([10 §3.1](10_Scale_And_Performance.md) recommends exactly those two) is two populations, not one. A
+consumer who pools them gets a number that describes neither.
+
+| Property | How it is recorded |
+|---|---|
+| **The band is derived from the achieved sun, never from the declared time** | If the two disagree, the declared time is a claim about a world that was not rendered, and stratifying by it would sort the corpus by an assertion rather than by what a detector saw. The residual of §4.5 is what makes the disagreement visible; the stratification is computed from `sun_elevation_deg` regardless |
+| **Every band that has any capture in it gets a row, including empty numerators** | A band with observed vehicle-seconds and zero annotated seconds is a real and important fact — it is a corpus that has ordinary traffic at that illumination and no anomalies. Suppressing the row turns "we captured nothing anomalous at night" into "we did not capture at night", which are different statements and only one of them is a gap |
+| **Per band, the same three units and the same per-sensor and unioned breakdown** | The units do not collapse under stratification. A night window can shift the per-vehicle and the per-vehicle-second prevalences in opposite directions, because the night population is small and heavily weighted towards long parked dwells — measured at Bahonar, the overnight floor is "almost entirely the 17 parked" vehicles ([10 §3.1](10_Scale_And_Performance.md)) |
+| **The band boundaries used are recorded beside the numbers** | §5.1. A stratification whose cut points are undocumented cannot be recomputed or compared across corpora |
+
+**The per-band table is also the confounder check of §3.6, at no extra cost.** If annotated prevalence
+is an order of magnitude higher in one band than another, the lighting is carrying the label. That is a
+number a reviewer reads off the manifest rather than a property somebody has to think to look for, and
+§10.2 makes passing it the condition on exporting solar state as a model input at all.
+
+### 5.4 Night capture: what this section needs from 11, and what it does not decide
+
+[11](11_Time_And_Illumination.md) owns whether night capture is viable. This section deliberately takes
+no position on it — §5.1's qualifier is designed precisely so that the answer can arrive later without
+invalidating anything captured before it. What this section needs from 11 is the following, and the
+reasons are given so 11 can weigh them against its own:
+
+| Needed | Why this section needs it |
+|---|---|
+| **A measured sun elevation (or band) below which a vehicle in this imagery is not resolvable by the detector stack**, or a statement that none exists | It is the cutoff that would turn §5.1's qualifier into a sixth `unlit` outcome. Without it, this section records the number and applies no cutoff |
+| **Whether the photoreal tileset renders usefully under a sub-horizon sun** | *Inference, not measured:* Cesium 3D Tiles carry **baked daylight photography**, so a night render darkens textures whose own shadows were captured at the imaging time of day. If that makes night imagery unrepresentative rather than merely dark, it is a corpus-validity finding and not a truth-record one — but this section would need to record it per capture, and would want a manifest field for it |
+| **Whether a generated world has any artificial illumination at all** | *Measured here:* world generation disables every pre-existing `ADirectionalLight` and `ASkyLight` so CesiumSunSky is the sole lighting authority (`CesiumHeightSampler.cpp:358-381`), and CARLA's own weather is inert in this world (`CarlaServer.cpp:611-612`). So unless something adds street lighting, a night scene is lit by sky and moon alone. That is 11's question; this section only needs to know whether a second light source exists, because if one does then `sun_elevation_deg` stops being a sufficient description of the illumination and the qualifier needs a companion field |
+| **Whether vehicle light state is driven at night, and from what** | The brief establishes that `Actor.set_light_state` exists (`carlanet/__init__.py:781`, `:786`) and that `SetVehicleLightStateCommand` is one of the batch commands (imported at `:487`), and SUMO exposes per-vehicle brake and indicator signals. If lights are driven, headlights are the dominant night-time detection cue and the truth record must carry the light state per vehicle — as **derived context sourced from SUMO's signals**, in the `_carla` block beside the other SUMO-sourced state, and never as supervision. If lights are not driven, that is itself a stated corpus limitation. Open question 11 |
+| **The epoch contract's form, and the civil-to-solar conversion** | §4.5's residual is arithmetic over whatever 11 defines. This section requires only that a tick maps to a civil instant with a stated UTC offset, and that the offset may be a half-hour one — the sizing scenario's site is at Iran's +03:30 while its world's solar zone is +3.745377 (measured, §2.7) |
+| **What `rate` means per tick under synchronous ticking** | The advancement is `DeltaSeconds × Rate / 3600` hours per actor tick (`CesiumTimeOfDayController.cpp:34`), and under synchronous ticking the world delta is the fixed delta. This section records whatever 11 pins down, and uses it only to check an `advancing` policy against the achieved clock (§4.5) |
 
 ---
 
@@ -884,7 +1261,7 @@ SUMO's housekeeping is not absent, it is different, and three of its mechanisms 
 |---|---|---|---|
 | **Jam teleport** — `time-to-teleport`, default 300 s | A vehicle jumps position. No detector track can follow it; no downstream consumer can reproduce it | **Forbid** | Session start refuses unless `time-to-teleport <= 0`. Bahonar already sets `-1` |
 | **Highway and disconnected teleport** — `time-to-teleport.highways` (default 0), `.disconnected` (default -1) | Second and third teleport paths that the main option does **not** cover | **Forbid** | Both validated at session start. This is a real trap: setting `time-to-teleport=-1` alone does not disable the highways path, which is governed by a separate global (`MSFrame.cpp:1164`) |
-| **Collision action** — default `teleport` | `teleport` jumps, `remove` destroys, both silently | **Constrain** to `warn` or `none` | Refused otherwise. Every collision recorded from `Simulation.getCollidingVehiclesIDList` (`Simulation.cs:328`) into the manifest as a corpus-affecting event, per [01 D1.16](01_Architecture.md) |
+| **Collision action** — default `teleport` | `teleport` jumps, `remove` destroys, both silently | **Constrain** to `warn` or `none` | Refused otherwise. Every collision recorded from `Simulation.getCollidingVehiclesIDList` (`Simulation.cs:328`) into the manifest as a corpus-affecting event, per [01 D1.17](01_Architecture.md) |
 | **Departure skip** — `max-depart-delay`, default `-1` (never) | A vehicle that cannot insert within the delay is **discarded**. It never exists. This is the direct SUMO analogue of doc 20 §2.8's cull | **Record, always; hard-fail for a plan subject** | Counted per flow and per trip. A discarded vehicle that the supervision plan names as an entity or a slot realisation **fails the run**, because the plan asserts something that did not happen |
 | **Insertion backlog** — `getPendingVehicles` (`Simulation.cs:412`) | Not a removal, a deferral. It moves the departure onset | **Record** | It is the declared-to-committed gap of §3.3, and it is a measurement of congestion, which is signal |
 | **Emergency braking** — `getEmergencyStoppingVehiclesIDList` (`Simulation.cs:340`) | Physically implausible deceleration that reaches both imagery and truth kinematics | **Record** | Harmless to the population, not harmless to the behaviour distribution |
@@ -960,7 +1337,8 @@ joined to captures by that field, and `scenario_id` must bind the `.sumocfg`, th
 Likewise the per-recorder run identity: `FrameRecorder` derives one from its own start instant when
 none is given, and its comment calls it "unique enough per recorder"
 (`FrameRecorder.cs:98-103`) — the wrong property when several recorders cover one scenario, as doc 20
-§7.5 notes and [01 D1.11](01_Architecture.md) resolves. `CarlaControl/scripts/run_SCTMV.py:152`
+§7.5 notes and [01 D1.12](01_Architecture.md) resolves — one `CaptureSessionHost` process holds
+every camera's recorder, so there is one session identity to derive from. `CarlaControl/scripts/run_SCTMV.py:152`
 supplies one derived from
 wall clock, which is a session identity in the right place with the wrong derivation.
 
@@ -974,7 +1352,7 @@ That condition depends on which actuation strategy is in use, and the two differ
 - **Pose application** (the accepted mode): the bridge reads SUMO and commands CARLA. Nothing flows
   back. SUMO is open-loop, `n` is reproducible, and two runs of one scenario name the same vehicles.
 - **The actuated shape** of [23 §4.1](../../Findings/23_SUMO_Traffic_Integration.md), retained as the
-  tracking oracle ([01 D1.15](01_Architecture.md)): step 1 pushes CARLA's measured pose back into SUMO
+  tracking oracle ([01 D1.16](01_Architecture.md)): step 1 pushes CARLA's measured pose back into SUMO
   with `moveToXY` every tick. **SUMO is then closed-loop and is no longer reproducible from its own
   seed**, because CARLA's control error perturbs the very state SUMO steps from. Insertion order can
   differ, and `<flow id>.<n>` can name a different vehicle in the second run.
@@ -990,6 +1368,65 @@ reason for the following rule, which costs nothing and is safe under either stra
 The manifest records which actuation strategy ran, because whether flow-member ids are comparable
 across runs depends on it, and a sweep that joins on them silently is joining the wrong vehicles.
 
+### 7.3 Replay, and the illumination it has to reproduce
+
+**"Replay" here means re-running a recorded capture session from its manifest to produce the same
+imagery** — the operation a sweep depends on, and the operation that makes a corpus defensible, because
+it is what lets somebody else obtain the frames you claim to have obtained. It is an identity question,
+which is why it sits in §7: a replay is a claim that two runs are the same run.
+
+**A replay that does not reproduce the illumination is not a replay.** Every other reproducibility
+lever in this section — the seed, the digests, the actuation strategy, the deterministic instance ids —
+protects the *content* of the scene. The sun protects its *appearance*, and appearance is the entire
+product: this is an electro-optical corpus. A re-run at the right seed under the wrong sun produces
+vehicles in the right places, a truth record that is correct in every field it inherits from SUMO, and
+imagery that no longer matches the `_solar` block of the original capture it is supposed to reproduce.
+
+**The solar state travels with the manifest, in the three parts of §4.5, and nothing else is needed.**
+
+| Part | Recorded in | Restored by |
+|---|---|---|
+| **Epoch** — civil date, civil UTC offset, the instant `t = 0` means | `solar.epoch` (§8.4) | recomputing the civil-time map; no RPC |
+| **Policy** — `frozen` or `advancing`, `rate`, the anchor tick | `solar.policy` | `set_time_advance(enabled, rate)` (`CarlaServer.cpp:661`) |
+| **Anchor state** — the date and solar clock commanded at the anchor tick | `solar.commanded` | `set_solar_date(y, m, d)` then `set_solar_time(h)` (`CarlaServer.cpp:625`, `:614`) |
+
+Three existing RPCs, issued during prewarm exactly as in the original run (§4.5). No new mechanism, no
+new artifact, and nothing that depends on the replay machinery understanding what a sun is.
+
+**The per-frame check is already there and is stronger than the manifest.** Every original capture
+carries its achieved solar block twice — in the sidecar (`CotWriter.cs:52-65`) and in the PNG itself as
+a `carla:solar` tEXt chunk (`SolarMetadata.cs:14-20`, `FrameRecorder.cs:227`). So a replay is verified
+**frame by frame** by comparing the replayed `_solar` against the original's, and the verification
+survives a corpus whose sidecars have been separated from its stills. That is a property the existing
+code already bought and that nothing in this section had to ask for. A replay whose per-frame solar
+state differs beyond the §4.5 tolerance is a **failed replay**, reported as such and not shipped — the
+same stance §4.3 takes on a reconciliation refusal, for the same reason: silently mismeasuring is worse
+than reporting nothing.
+
+**Two carried defects the replay contract has to be explicit about, because both are silent.**
+
+- **The date does not roll over.** Measured in §2.7: the advancing controller wraps `SolarTime` modulo
+  24 and never touches `Year`, `Month` or `Day` (`CesiumTimeOfDayController.cpp:34-36`). A multi-day
+  advancing run therefore *is* reproducible — the defect is deterministic — but only if the replay
+  reproduces it. A replay that helpfully advanced the date would produce different declination and
+  different shadows from the original, and would look like a corrected run rather than a failed one.
+  So the replay sets the date **explicitly at the anchor** and never assumes advancement carried it,
+  and the manifest's `date_rollover_applied` flag records which behaviour the original had. When
+  [11](11_Time_And_Illumination.md) fixes the roll-over, that flag is what distinguishes a corpus
+  captured before the fix from one captured after, and it costs one boolean to have it now.
+- **CARLA's own recorder does not record the sun.** Measured 2026-09-18: the native recorder's record
+  types include `CarlaRecorderLightScene` and `CarlaRecorderLightVehicle` — scene and vehicle *lights* —
+  but there is **no solar record type at all** (no file under
+  `Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Recorder/` mentions `Solar`). So a native record-and-
+  replay restores vehicle and scene light state and re-renders under whatever sun the replaying world
+  happens to hold. This is not a defect to fix here — the native replayer is not this mode's replay
+  path — but it is a trap worth naming, because "CARLA has a replayer" is the obvious thing for a later
+  reader to reach for, and the one thing it does not carry is the thing this section says a replay must.
+
+**A replay is therefore verifiable in three layers, cheapest first:** the manifest's epoch, policy and
+anchor tell you what should have happened; the per-capture residual of §4.5 tells you whether it did;
+and the frame-by-frame `_solar` comparison tells you exactly which frames it did not.
+
 ---
 
 ## 8. The artifacts
@@ -1000,9 +1437,9 @@ undifferentiated idea in doc 20 and the fourth did not exist.
 | Artifact | Scope | Writer | Contains |
 |---|---|---|---|
 | **Supervision plan** | one scenario | compile-time tool | Every instance, participant, series, slot and interval row. Immutable. Input to the run |
-| **Capture truth sidecar** | one camera, one capture | `FrameRecorder` / `CotWriter` | The per-tick projection: rendered vehicles, their reconciled truth, their supervision, their area relations |
+| **Capture truth sidecar** | one camera, one capture | `FrameRecorder` / `CotWriter` | The per-tick projection: rendered vehicles, their reconciled truth, their supervision, their area relations, and the world-scoped illumination the frame was rendered under |
 | **World truth track** | one run | the capture session | Every SUMO vehicle at a configured rate, rendered or not. The record of what the world contained |
-| **Run supervision manifest** | one capture session | the capture session | The instance form, the observability, the prevalence, the exclusions and the configuration actually in force |
+| **Run supervision manifest** | one capture session | the capture session | The instance form, the observability, the prevalence, the exclusions, the configuration actually in force, and the epoch, policy and achieved solar state |
 
 ### 8.1 The supervision plan
 
@@ -1097,6 +1534,8 @@ erDiagram
         int start_tick
         int end_tick
         string outcome "observed|out_of_frame|occluded|not_rendered|site_unobserved"
+        float sun_elevation_deg "qualifier, not an outcome, see 5.1"
+        string illumination_band "day|civil|nautical|astronomical|night"
     }
     SENSOR {
         string sensor_id PK
@@ -1123,6 +1562,11 @@ Three properties the plan must have, each for a reason already established:
 - **The plan is digest-bound to the four scenario files** it was compiled against. A route file is
   regenerated whenever the network is (`rou.xml:3`, measured), so a plan compiled against an older
   generation must fail loudly rather than resolve half its ids.
+- **The plan has no solar field, and its absence is the code boundary of §3.6.** The scenario's epoch
+  is compiled into a separate civil-time map (§4.2's diagram) that the capture session consumes and the
+  supervision binder does not see. This is deliberate and is worth stating in the plan's own section,
+  because the epoch *is* a compile-time scenario property and putting it on `SupervisionPlan` would be
+  the natural place for it — and would put illumination one field away from every supervision row.
 
 ### 8.2 The capture truth sidecar
 
@@ -1139,7 +1583,7 @@ set is extended. Taking the real emitted shape as the baseline (`CotWriter.cs:13
         plan_id="bahonar_supervision@7d2e10" vocabulary="1">
 
   <!-- world-scoped supervision: facts about the world, not about any one track.
-       Sibling of <_solar>, which is already written here (CotWriter.cs:52-66). -->
+       Sibling of <_solar>, which is already written here (CotWriter.cs:52-65). -->
   <_supervision scope="world" state_tick="1044000">
     <!-- an anomaly with no participant: never an <event>, because there is no object -->
     <absence instance="pi_tower_relief_d4_h7_t3_unmanned" label="post_unmanned"
@@ -1148,7 +1592,21 @@ set is extended. Taking the real emitted shape as the baseline (`CotWriter.cs:13
              expected_entity_id="guard_d4_h7_t3" phase="vacancy" state="open"/>
   </_supervision>
 
-  <_solar .../>
+  <!-- World-scoped illumination. The first nine attributes are EXISTING and unchanged
+       (CotWriter.cs:52-65); the four below the fold are added by 4.5. Derived context,
+       never supervision: a consumer must be able to delete this element and still have
+       complete supervision (3.6). -->
+  <_solar solar_time="23.2454" date="2026-03-12" time_zone="3.7454"
+          lat="27.1501200" lon="56.1806500"
+          sun_elevation_deg="-41.802" sun_azimuth_deg="356.114"
+          advancing="false" rate="1.0"
+
+          declared_civil_time="23:00:00" declared_civil_date="2026-03-12"
+          declared_utc_offset_h="3.5"
+          solar_policy="frozen" solar_anchor_tick="1044000"
+          solar_time_residual_s="0.4" sun_elevation_residual_deg="0.01"
+          illumination_band="night"/>
+
   <event uid="CARLA-SENSOR-OVERWATCH-1" .../>   <!-- the collection platform, unchanged -->
 
   <event version="2.0" uid="CARLA-TRUTH-412" type="a-n-G-E-V" how="m-g"
@@ -1241,14 +1699,29 @@ Notes, each carrying a decision:
   anomaly types to `u` is removed (§9). Doc 20 decision 9, enforced rather than restated.
 - **`<_aoi>` is emitted for every vehicle**, capped to areas containing the vehicle plus those within
   a configured radius with the nearest always present, per doc 20 §7.4.
+- **`<_solar>` is world-scoped and is extended, not restructured.** The nine existing attributes keep
+  their names, their formats and their source, because they are already written into shipped corpora
+  and into PNG chunks (§2.7) and renaming them would strand every capture taken so far. The four
+  additions are the declared civil instant, the policy, the residual and the band — the terms §4.5
+  needs to make the silent failure loud. Like `<_supervision>`, it is **identical in every camera's
+  sidecar for a given tick**, because one sun lit every camera; a disagreement between two sidecars at
+  one tick is a defect of the same kind and the same severity.
+- **A sidecar with no `<_solar>` element is a failed capture, not a capture with unknown lighting.**
+  `CotWriter.cs:52` writes nothing below eleven doubles (§2.7). Under this section that condition fails
+  the session at the first capture rather than producing a corpus whose stratification (§5.3) silently
+  omits an unknown fraction of its frames.
 - **`<_supervision>` is identical in every camera's sidecar for a given tick**; only the sensor block
   and anything derived from it differs. A disagreement between two sidecars at one tick is a defect
   (doc 20 decision 15), which is why the snapshot is tick-stamped and captured into the encoding job
   alongside `CaptureIdentity` (`FrameRecorder.cs:179-183`) rather than read at write time.
 
 The PNG already carries `carla:capture` so a still is self-describing when separated from its sidecar
-(`CaptureMetadata.cs:31-36`). A compact `carla:supervision` chunk listing annotated actor ids and
-labels extends that property to the annotation, with the sidecar authoritative on any disagreement.
+(`CaptureMetadata.cs:31-36`), and **already carries `carla:solar`** for the same reason
+(`SolarMetadata.cs:14-20`, composed into the chunk set at `FrameRecorder.cs:227`). A compact
+`carla:supervision` chunk listing annotated actor ids and labels extends that property to the
+annotation, with the sidecar authoritative on any disagreement. The solar chunk gains the four added
+attributes alongside the nine it already carries, which is what makes the frame-by-frame replay check
+of §7.3 work on stills alone.
 
 ### 8.3 The world truth track
 
@@ -1262,7 +1735,21 @@ leaked ones. Keeping the shape identical is deliberate: it makes the standalone 
 the capture path produce comparable datasets, which is the same reason the `_carla` block keeps its
 name.
 
-`SumoCotBridge` itself stays what [01 D1.17](01_Architecture.md) says it is — the standalone,
+**It also carries the illumination, and for a reason specific to this artifact.** §5.3 stratifies
+prevalence by band, and the *denominator* of the base rate is computed from this track rather than from
+the sidecars — that is the whole point of the track existing (§8.3's opening). If the track has no
+band, the numerator can be stratified and the denominator cannot, which produces a per-band prevalence
+whose two halves are measured over different populations. So each sample carries `sun_elevation_deg`
+and `illumination_band` from the same solar block the sidecars use. Two notes on how, because it is not
+symmetric with the sidecar. The band is a **world fact, not a per-vehicle one**, so it is written once
+per sample instant rather than on every row when the track is stored in a form that allows it. And when
+the track runs at a reduced rate outside the capture window (open question 4), the band still applies
+to the instant it was sampled at — but a **frozen** solar policy means the band is only meaningful
+*inside* the window, since outside it the world's sun was never asked to correspond to anything. The
+track therefore also carries whether each sample was inside a capture window, which it needs for open
+question 4's rate accounting anyway.
+
+`SumoCotBridge` itself stays what [01 D1.18](01_Architecture.md) says it is — the standalone,
 CARLA-free telemetry path, reference material rather than a component of the capture path. **One
 amendment to that decision is needed and is narrow:** the two label leaks of §2.4 must be fixed
 wherever that code produces ground truth, including in the standalone path, because a corpus produced
@@ -1297,6 +1784,61 @@ supervision rather than keeping every capture and losing the thing that explains
     "simulated_span_s": [0, 604800],
     "captured_window_s": [370500, 371700],    // what this session actually rendered
     "sensors": [ { "sensor_id": "OVERWATCH-1", "platform_uid": "CARLA-SENSOR-OVERWATCH-1" } ]
+  },
+
+  // 4.5: the epoch, the policy and the achieved sun. Enough to re-run the window (7.3) and
+  // enough to detect after the fact that the sun was never connected to the scenario.
+  "solar": {
+    // What the scenario asserts its seconds mean. 11 owns the contract; this is its resolved form.
+    "epoch": {
+      "civil_date_at_t0": "2026-03-08", "civil_time_at_t0": "00:00:00",
+      "civil_utc_offset_h": 3.5,                 // Iran; a half-hour offset is a real case
+      "declared_at_window_start": "2026-03-12T23:00:00+03:30",
+      "source": "scenario epoch declaration"
+    },
+    // What was asked for. NOT inferrable from `advancing`, which defaults to false when nothing
+    // ever configured the sun (2.7) — frozen-by-choice and never-configured are byte-identical.
+    "policy": {
+      "mode": "frozen",                          // frozen | advancing
+      "rate_sun_s_per_sim_s": 1.0,               // meaningful only when advancing
+      "anchor_tick": 1044000, "anchor_sim_time_s": 370800,
+      "set_during_prewarm": true                 // 4.5: no frame captured under a sun still settling
+    },
+    // Properties of the world that the conversion depends on. Read, not chosen.
+    "world": {
+      "time_zone_h": 3.745377,                   // longitude / 15, unrounded (CesiumSunSky.cpp:570-573)
+      "time_zone_source": "longitude/15 at world spawn (CesiumHeightSampler.cpp:411-412)",
+      "origin_lat": 27.15012, "origin_lon": 56.18065,
+      "daylight_saving": false,                  // CesiumHeightSampler.cpp:410
+      "lighting_authority": "CesiumSunSky",      // sole; level lights disabled (CesiumHeightSampler.cpp:358-381)
+      "civil_to_solar_offset_h": 0.245377        // time_zone_h − civil_utc_offset_h; 14 min 43 s here
+    },
+    "commanded": { "date": "2026-03-12", "solar_time_h": 23.245377 },
+    "achieved": {
+      "first_capture": { "tick": 1044000, "solar_time": 23.2454, "date": "2026-03-12",
+                         "sun_elevation_deg": -41.802, "sun_azimuth_deg": 356.114 },
+      "last_capture":  { "tick": 1068000, "solar_time": 23.2454, "date": "2026-03-12",
+                         "sun_elevation_deg": -41.802, "sun_azimuth_deg": 356.114 },
+      "sun_elevation_deg": { "min": -41.802, "max": -41.802 },
+      "solar_time_moved": false                  // must be false under a frozen policy
+    },
+    "residual": {
+      "solar_time_s":           { "p50": 0.4, "p95": 0.4, "max": 0.4 },
+      "sun_elevation_deg":      { "p50": 0.01, "p95": 0.01, "max": 0.01 },
+      "captures_over_soft_threshold": 0, "captures_over_hard_threshold": 0
+    },
+    // 2.7: the advancing clock wraps mod 24 and never touches the date
+    // (CesiumTimeOfDayController.cpp:34-36). Recorded so a reader never has to infer it, and so a
+    // corpus captured before 11 fixes it is distinguishable from one captured after.
+    "date_rollover_applied": false,
+    "illumination_bands": {
+      "definition": "standard twilight boundaries by sun elevation",
+      "boundaries_deg": { "day": 0.0, "civil_twilight": -6.0,
+                          "nautical_twilight": -12.0, "astronomical_twilight": -18.0 },
+      "captures_by_band": { "day": 0, "civil_twilight": 0, "nautical_twilight": 0,
+                            "astronomical_twilight": 0, "night": 2400 }
+    },
+    "sidecars_missing_solar": 0                  // 4.5: nonzero fails the session
   },
 
   // The configuration actually in force, not the file. Session start validated it (6.2).
@@ -1335,6 +1877,9 @@ supervision rather than keeping every capture and losing the thing that explains
       "site_observability": {
         "union": { "covered_fraction": 0.41, "covered_ticks": [1044000, 1056000] },
         "per_sensor": { "OVERWATCH-1": { "covered_fraction": 0.41 } },
+        // 5.2 point 5: an absence rests entirely on having looked, so how well it was lit
+        // while being looked at is part of the evidence
+        "covered_fraction_by_band": { "night": 0.28, "civil_twilight": 0.09, "day": 0.04 },
         "site_occupancy_observed": []
       }
     },
@@ -1355,8 +1900,12 @@ supervision rather than keeping every capture and losing the thing that explains
           "observed_start_tick": 5904058, "observed_end_tick": 5911400,
           "closed_by": "entity_arrived",
           "observability": {
-            "union":      { "outcome": "observed", "spans": [[5904058, 5906900]] },
-            "per_sensor": { "OVERWATCH-1": { "outcome": "observed", "spans": [[5904058, 5906900]] } }
+            // 5.1: illumination is a QUALIFIER on the outcome, never a sixth outcome value
+            "union":      { "outcome": "observed", "spans": [[5904058, 5906900]],
+                            "illumination_band": "day", "sun_elevation_deg": 34.9 },
+            "per_sensor": { "OVERWATCH-1": { "outcome": "observed", "spans": [[5904058, 5906900]],
+                                             "illumination_band": "day",
+                                             "sun_elevation_deg": 34.9 } }
           } }
       ]
     }
@@ -1369,6 +1918,18 @@ supervision rather than keeping every capture and losing the thing that explains
     "per_vehicle":        { "union": 0.0009, "per_sensor": { "OVERWATCH-1": 0.0009 } },
     "per_vehicle_second": { "union": 0.0421, "per_sensor": { "OVERWATCH-1": 0.0421 } },
     "per_interval":       { "union": 0.0130, "per_sensor": { "OVERWATCH-1": 0.0130 } }
+  },
+
+  // 5.3: the same three units, stratified by the band the sun ACHIEVED (never by the declared
+  // time). A band with captures and no annotated seconds keeps its row — "nothing anomalous at
+  // night" and "we did not capture at night" are different facts and only one is a gap.
+  "prevalence_by_illumination": {
+    "night": { "observed_vehicles": 41, "observed_vehicle_seconds": 28900,
+               "annotated_intervals": 1,
+               "per_vehicle": 0.0244, "per_vehicle_second": 0.0421, "per_interval": 0.0130 },
+    "day":   { "observed_vehicles": 0, "observed_vehicle_seconds": 0,
+               "annotated_intervals": 0,
+               "per_vehicle": null, "per_vehicle_second": null, "per_interval": null }
   },
 
   "render_accounting": {
@@ -1406,6 +1967,21 @@ The manifest, not the sidecar, is the authoritative supervision artifact — doc
 unchanged. The sidecar is a per-tick projection and cannot express an instance, an unclosed interval,
 or a tick that was not captured; and it cannot express an absence at all in vehicle-scoped form.
 
+**Four checks become possible from the manifest alone, and each of them catches a failure that is
+otherwise invisible.** They are listed here rather than in §4.5 because they are properties of the
+recorded artifact, and because a reader auditing a corpus somebody else produced has the manifest and
+nothing else.
+
+| Check | Fails when |
+|---|---|
+| `solar.residual.captures_over_hard_threshold == 0` | the sun was not set from the scenario at all, or was set in the wrong units (§4.5's signature table diagnoses which) |
+| `solar.achieved.solar_time_moved == (policy.mode == "advancing")` | the asserted policy was not the policy in force |
+| `solar.sidecars_missing_solar == 0` | some captures carry no illumination record and cannot be stratified or replayed |
+| `prevalence_by_illumination` has annotated mass in more than one band, or the scenario states that time of day *is* the pattern | the corpus has encoded its annotation in the lighting (§3.6). This is the gate §10.2 puts on exporting solar state as a model input |
+
+None of the four needs the imagery, the sidecars or the scenario package. That is the property worth
+having: **a corpus can be audited for the silent failure after the fact, by someone who was not there.**
+
 ### 8.5 From an authored annotation to a supervised detector track
 
 ```mermaid
@@ -1417,6 +1993,7 @@ sequenceDiagram
     participant Bridge as SUMO bridge
     participant Sumo as sumo
     participant Registry as RenderedVehicleRegistry
+    participant Sun as CesiumSunSky
     participant Carla as CARLA world
     participant Recorder as FrameRecorder / CotWriter
     participant Manifest as Run manifest
@@ -1424,14 +2001,24 @@ sequenceDiagram
     participant Model as EPoL model
 
     Author->>Builder: flows, trips, stops, series, annotations
+    Author->>Builder: scenario epoch: civil date, civil offset, what t = 0 means
     Builder->>Builder: emit .rou.xml, .sumocfg (generated; never hand-edited)
     Builder->>Compiler: emit .supervision.json (the authored intent)
     Note over Builder: the skipped slot is emitted as an<br/>unrealised SeriesSlot, not discarded
 
     Compiler->>Compiler: resolve entities, flows, areas, vocabulary
     Compiler->>Compiler: assign deterministic instance ids
+    Compiler->>Compiler: compile the civil-time map from the epoch<br/>(SEPARATE from the plan; 3.6, 8.1)
     Compiler-->>Author: report what resolved; fail on any unresolved reference
     Compiler->>Bridge: SupervisionPlan (immutable) + digests
+
+    rect rgb(60, 48, 12)
+        Note over Bridge,Sun: PREWARM — before the first captured frame (10 section 4.2)
+        Bridge->>Sun: set_solar_date(declared civil date)
+        Bridge->>Sun: set_solar_time(civil time + time_zone − civil offset)
+        Bridge->>Sun: set_time_advance(policy.mode == advancing, rate)
+        Sun-->>Bridge: achieved state; residual checked once before capture opens
+    end
 
     loop every SUMO step in the capture window
         Bridge->>Sumo: simulationStep()
@@ -1448,20 +2035,25 @@ sequenceDiagram
         Carla-->>Recorder: frame + tick + sensor transform
         Recorder->>Carla: VehicleTelemetryService.Compute (every rendered vehicle)
         Recorder->>Bridge: SUMO snapshot for THIS tick
+        Recorder->>Sun: GetCachedSolarState for THIS tick (cache read, no RPC)
         Recorder->>Recorder: reconcile; fill observed onsets; measure occlusion
+        Recorder->>Recorder: declared vs achieved sun; residual + illumination band
         Recorder->>Recorder: read WorldSupervisionState snapshot for THIS tick
-        Recorder->>Recorder: write PNG + capture truth sidecar
-        Recorder->>Manifest: observed spans, residuals, refusals (incremental)
+        Recorder->>Recorder: write PNG (carla:solar chunk) + capture truth sidecar
+        Recorder->>Manifest: observed spans (band-qualified), residuals, refusals (incremental)
     end
 
     Bridge->>Manifest: close open intervals with closed_by
-    Manifest->>Manifest: prevalence, render accounting, corpus-affecting events
+    Manifest->>Manifest: prevalence (three units) and prevalence by illumination band
+    Manifest->>Manifest: render accounting, corpus-affecting events
+    Manifest->>Manifest: epoch, policy, achieved sun, residual summary
 
     Post->>Manifest: read instances and intervals
     Post->>Post: associate detector tracks to truth by position and time,<br/>never by uid (09 section 9)
     Post->>Post: clip each detector track at interval bounds;<br/>record association quality
+    Post->>Post: check prevalence by band before exporting solar as an input (10.2)
     Post->>Model: supervised detector tracks ONLY
-    Note over Post,Model: truth positions, entity ids, instance ids,<br/>occlusion, area relations and render-set<br/>membership do not cross this line
+    Note over Post,Model: truth positions, entity ids, instance ids,<br/>occlusion, area relations and render-set<br/>membership do not cross this line.<br/>Sun angle and declared civil time MAY,<br/>but only if the band check passes.
 ```
 
 ### 8.6 Producing one capture's truth, by component
@@ -1489,6 +2081,11 @@ flowchart TB
         D2 --> D3["render frame at tick T"]
     end
 
+    subgraph L4b["CesiumSunSky — sole lighting authority"]
+        S1["set at prewarm from the<br/>declared civil instant"] --> S2["frozen at the anchor,<br/>or advancing at rate"]
+        S2 --> S3["achieved solar block<br/>on the EpisodeState header,<br/>tick-paired, no RPC"]
+    end
+
     subgraph L5["VehicleTelemetryService"]
         E1["enumerate every<br/>rendered vehicle"] --> E2["applied pose, bare-earth hae,<br/>spawned bounding box"]
     end
@@ -1503,6 +2100,7 @@ flowchart TB
         G2 --> G3["compute separations"]
         G3 --> G4["fill observed onsets"]
         G4 --> G5["compute area relations<br/>for EVERY vehicle"]
+        G5 --> G6["declared vs achieved sun:<br/>residual + illumination band<br/>for the WHOLE frame"]
     end
 
     subgraph L8["CotWriter and the manifest"]
@@ -1510,6 +2108,7 @@ flowchart TB
         H2["world-scoped supervision<br/>incl. open absences"]
         H3["world truth track<br/>every SUMO vehicle"]
         H4["manifest: observed spans,<br/>residuals, refusals, exclusions"]
+        H5["world-scoped _solar<br/>+ carla:solar PNG chunk"]
     end
 
     A3 --> B1
@@ -1519,6 +2118,8 @@ flowchart TB
     B1 --> C1
     C2 --> D1
     C3 --> H4
+    S1 --> D3
+    S3 --> G1
     D3 --> E1
     D3 --> F1
     E2 --> G1
@@ -1529,14 +2130,26 @@ flowchart TB
     B3 --> H2
     G3 --> H4
     G4 --> H4
+    G6 --> H5
+    G6 --> H4
 
     style L7 fill:#1d3557,color:#ffffff
     style L2 fill:#2d6a4f,color:#ffffff
+    style L4b fill:#7a5c00,color:#ffffff
 ```
 
 The partition is the point. **Only the bridge touches supervision state, and it can only bind rows the
 plan already holds** (§3.6). The reconciler computes area relations for every vehicle and never writes
 a label. `CotWriter` serialises and decides nothing.
+
+**The sun lane is the newest partition and the one most likely to be collapsed by a later
+implementer, so it is worth saying why it is separate.** CesiumSunSky is upstream of the pixels and
+downstream of the policy, and it reports its achieved state on the same tick-paired path as everything
+else. It has no participant, no id, and no row in the plan — it is a property of the frame, not of any
+object in it. A component that folded it into `VehicleTelemetryService`, or that attached sun angle to
+each `<event>`, would make a world fact look like a vehicle fact and would tempt a consumer to treat it
+as a per-vehicle feature. It is per frame, it is written once, and it is world-scoped for the same
+reason `<_supervision>` is.
 
 ---
 
@@ -1607,6 +2220,28 @@ Not new policy — these are the measured confounders of §2.4 turned into check
    departSpeed="max"` (measured, both used in the shipped file) are different insertion behaviours,
    and if every annotated vehicle uses one and every ambient vehicle uses the other, insertion style
    is the label.
+5. **An annotated instance's time of day must be drawn from the same distribution as the nominal
+   population it is a negative for — unless time of day *is* the annotated pattern.** This is rule 1
+   in the temporal dimension, and it has the same exception for the same reason. `anomaly_shadow`'s
+   `speedFactor="0.45"` is legitimate because the crawl *is* the pattern; a 03:00 heavy goods vehicle
+   in a residential area is legitimate because the hour *is* the pattern
+   ([20 §3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) class 4). What is not
+   legitimate is annotating five anomalies that have nothing to do with darkness and capturing all
+   five in the night window while every hard negative is captured at 07:00 — that is the
+   `anomaly_escort` dimension mistake with hours instead of metres.
+
+   Two things make this rule harder to keep than the other four, and both are worth stating because
+   they change where it has to be enforced. First, **it is not a property of the route file.** Rules 1
+   to 4 are checkable by reading the scenario; this one depends on which windows the capture plan
+   selects, which is a run-time choice made by an operator ([12](12_Operator_Control_Surface.md))
+   possibly long after authoring — so the compiler can warn on the authored distribution but only the
+   manifest can settle it. Second, **the sizing scenario already violates it in both directions**
+   (measured, §2.3): five of six anomalies depart between 08:00 and 11:11 and one at 02:30, while the
+   335 hard negatives fire at exactly 07:00, 15:00 and 23:00. Whichever window a capture selects, the
+   annotated and nominal populations will not share an illumination distribution unless somebody
+   arranges it. That is not a defect in a scenario written before any of this existed; it is the reason
+   the check has to be a number in the manifest (§5.3) rather than an authoring guideline that anyone
+   can satisfy by intending to.
 
 ---
 
@@ -1642,11 +2277,41 @@ already correct and is restated only because the manifest has to support it:
 | `role_name`, `provenance`, `vtype_id`, `producer` | **no** | no | yes | — |
 | `pose_separation_m` and the other residuals | no | no | yes (corpus QA) | — |
 | Render-set membership and refusals | no | no | yes (corpus QA) | **yes — see §10.4** |
+| `_solar` achieved sun angles and the declared civil instant | **conditionally yes — see below** | **never** | yes (stratification, auditing) | — |
+| `_solar` residual, policy, anchor tick | no | no | yes (corpus QA, replay verification §7.3) | — |
 | The supervision plan itself | no | compile-time only | yes | — |
 
 The rule behind the table: **truth may define the target and may filter the corpus, and may never be
 an input the model can read.** Everything in the "never" column would let a model score well by
 reading how the corpus was made.
+
+**Illumination is the one row where that rule does not settle the question by itself, and it is worth
+being explicit about why.** Every other candidate input is rejected because a fielded system could not
+obtain it: nothing in the field knows an `instance_id`, a truth position, an occlusion fraction or
+whether our render set was capped. **A fielded system does know the time and its own location**, and
+can compute the solar geometry from them exactly as we do. Sun elevation is therefore not privileged
+information — it is a covariate the deployed model is entitled to, and withholding it makes the corpus
+*less* representative rather than safer. That is the brief's own position, and this section adopts it.
+
+But it is only true when the corpus's illumination is independent of its labels. If the annotated
+instances are concentrated in one band (§3.6's confounder, which the sizing scenario already exhibits —
+§2.3, measured), then sun elevation is a label proxy, and exporting it as an input is exporting the
+answer by a different route. So the export is **gated on a number that is already being computed**:
+
+> Solar state is exported to the training export **only when `prevalence_by_illumination` (§8.4) shows
+> annotated mass in more than one band, or the supervision plan declares that time of day is itself the
+> annotated pattern** (as [20 §3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)
+> class 4 does). Otherwise it is evaluation-only, and the training export carries no solar fields.
+
+Three properties make this the right shape rather than a compromise. It is **auditable from the
+manifest alone**, by someone who has neither the imagery nor the scenario. It **fails closed** — the
+default for a single-window corpus, which is the common case, is no solar input. And it **names the
+remedy**: a corpus that fails the gate does not need a policy change, it needs a second capture window
+in a different band, which the mechanisms of [11](11_Time_And_Illumination.md) and
+[12](12_Operator_Control_Surface.md) make cheap.
+
+This is the same shape as §10.4's `cap_bound_ticks` rule, and deliberately so: an invisible confound is
+turned into a recorded quantity, and the quantity gates an export rather than a design.
 
 ### 10.3 The bright line
 
@@ -1661,7 +2326,7 @@ view is one configuration mistake away from being the wrong view.
 
 This is the one genuinely new leak SUMO introduces, and it is not obvious.
 
-[01 D1.13](01_Architecture.md) has `RenderSetSelector` prioritise participants of an annotated pattern
+[01 D1.14](01_Architecture.md) has `RenderSetSelector` prioritise participants of an annotated pattern
 instance above ambient vehicles when the concurrent-actor cap binds. That is correct for coverage —
 without it a busy hour silently drops the vehicles the capture exists to record, and §5.1's
 `not_rendered` exclusion would eat the evaluation. But it has a consequence for training:
@@ -1673,7 +2338,7 @@ without it a busy hour silently drops the vehicles the capture exists to record,
 
 Three ways out; the third is the one to take.
 
-- Make the selector annotation-blind. Rejected: it reintroduces the coverage failure D1.13 exists to
+- Make the selector annotation-blind. Rejected: it reintroduces the coverage failure D1.14 exists to
   prevent, and coverage is the scarcer resource.
 - Render everything. Rejected: not available at Bahonar scale, which is the sizing case.
 - **Record when the cap bound, and exclude those spans from the training export while keeping them in
@@ -1697,7 +2362,7 @@ from the SUMO surface and the section is given.
 |---|---|---|
 | 1 — scenario membership is not an annotation | **Survives, and matters more** | 356 of 365 scheduled vehicles here are deliberately ordinary. Treating scenario membership as a positive would poison the best hard negatives available (§3.1) |
 | 2 — supervision is three-valued, always written | **Survives unchanged** | Today's `marked` bool is the binary collapse doc 20 warned about, measured (§3.1) |
-| 3 — authored intent versus derived context | **Survives, restated operationally** | SUMO hands the runtime a one-line label, so the rule gains a testable invariant: the triple set is identical across runs (§3.6) |
+| 3 — authored intent versus derived context | **Survives, restated operationally, and extended to a second class of context** | SUMO hands the runtime a one-line label, so the rule gains a testable invariant: the triple set is identical across runs (§3.6). Illumination joins area relations as derived context — a legitimate covariate, a legitimate input to a fielded system that knows the time and its own location, and never a label. The invariant extends with it: two runs under *different solar policies* must still produce identical triples (§3.6) |
 | 4 — the unit is the pattern instance; the manifest is authoritative | **Survives unchanged** | §3.4, §8.4 |
 | 5 — record all three onsets | **Survives; onsets renamed and one made optional** | `declared` / `committed` / `observed`. `declared_start_tick` is absent for a `duration` stop — all 338 stops here (§3.3). The justification inverts: one gap is a measured congestion output, the other a seam property |
 | 6 — `CustomCommandAction` primary, companion file equal-status | **Changed** | SUMO has no vendor extension point and route files are generated. The companion file becomes the sole channel (§3.1) |
@@ -1709,11 +2374,17 @@ from the SUMO surface and the section is given.
 | 12 — catalogue reference versus category-to-a-set | **Survives, re-seated** | The selection surface is the `vType`, not `vehicleCategory`. [04](04_Contracts.md) owns the binding; §9.3 owns the confounder rules |
 | 13 — text authoring primary, canvas is preview | **Survives** | The SUMO authoring path is already text and code, with no canvas |
 | 14 — idle cull switchable, detection separable | **Does not apply to this mode** | The traffic manager is locked out and SUMO has no idle cull; a vehicle parks for 489 000 s, measured. SUMO's own distribution edits are on **insertion and jam resolution** instead and are enumerated separately (§6) |
-| 15 — supervision world-scoped, observability sensor-scoped | **Survives, extended** | Observability gains a rendered-span gate upstream of the observed-span gate, and `not_rendered` is accounted separately from `out_of_frame` and `occluded` (§5.1) |
+| 15 — supervision world-scoped, observability sensor-scoped | **Survives, extended twice** | Observability gains a rendered-span gate upstream of the observed-span gate, and `not_rendered` is accounted separately from `out_of_frame` and `occluded` (§5.1). It also gains an illumination qualifier, which is **world-scoped like supervision** rather than sensor-scoped like the outcomes — one sun lit every camera, so `<_solar>` is identical in every sidecar for a tick and a disagreement is a defect of the same kind as a `<_supervision>` disagreement (§8.2) |
 
 Doc 20's open questions 1, 2, 3, 4, 6, 7, 8 and 9 all remain open and are unaffected by the change of
 surface. Question 5 (what to do with an accidental positive) becomes **immediate** rather than
 deferrable, because the regime it was coupled to is now the only regime (§3.6, §6.1).
+
+**Doc 20 has no decision about illumination, and that is not an omission on its part.** Its authoring
+surface was an OpenSCENARIO storyboard executed as a short scripted episode in a world whose lighting
+nobody varied; there was no window to place in simulated time and therefore no sun to bind it to. The
+decisions D6.20–D6.25 are additions to the model rather than amendments to doc 20's, which is why none
+of the fifteen rows above changes on their account beyond rows 3 and 15.
 
 ---
 
@@ -1732,18 +2403,27 @@ deferrable, because the regime it was coupled to is now the only regime (§3.6, 
   [10](10_Scale_And_Performance.md).
 - Area-of-interest file format, build-time validation, the world-scoped actor and the RPC pair —
   [20 §8](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md), adopted unchanged.
+- **The scenario epoch contract**, the semantics of the solar policy under synchronous ticking, the
+  fix for the date that never rolls over, and **whether night capture produces usable imagery at
+  all** — [11](11_Time_And_Illumination.md). This section consumes all four and pre-judges none of
+  them; §5.4 states what it needs and why.
+- **How an operator selects a window, a policy and a rate** — [12](12_Operator_Control_Surface.md).
+  This section owns only the record of what was selected and what was achieved.
+- **Sequencing, dependencies and work items** — [13](13_Work_Breakdown.md).
 
 ## 13. What this section needs from others
 
 | Needed from | Property required |
 |---|---|
-| [01](01_Architecture.md) | `RenderedVehicleRegistry` records an **admission tick and a release tick per vehicle**, exposed to the manifest — this is what §5.1's `not_rendered` boundary keys on, and it replaces the arrival/opacity notion that fade used to supply (§4.4). `RenderSetSelector` reports **when** the cap bound, not only which vehicles it refused (§10.4). `WorldSupervisionState` is tick-stamped and published on change (already D1.10, D1.13) |
+| [01](01_Architecture.md) | `RenderedVehicleRegistry` records an **admission tick and a release tick per vehicle**, exposed to the manifest — this is what §5.1's `not_rendered` boundary keys on, and it replaces the arrival/opacity notion that fade used to supply (§4.4). `RenderSetSelector` reports **when** the cap bound, not only which vehicles it refused (§10.4). `WorldSupervisionState` is tick-stamped and published on change (already D1.10, D1.14) |
 | [03](03_CoSimulation_Runtime.md) | The SUMO snapshot used for reconciliation is of the **same tick** as the frame, and is captured into the encoding job rather than read at write time (§4.3) |
 | [04](04_Contracts.md) | `scenario_id`, `session_id` and a stable `sensor_id` are supplied, not derived from a start instant (§7.1). The `vType`-to-blueprint dimension tolerance, so `dimension_separation_m` has a threshold |
 | [07](07_Scenario_Authoring.md) | The supervision file is emitted by the builder beside the routes, an unrealised slot is emitted rather than discarded (§2.2, §3.5), and the confounder rules of §9.3 are enforced at authoring |
 | [08](08_Collection_And_EPoL.md) | The training export and the evaluation export are separate artifacts, and the model service has a path only to the first (§10.3) |
 | [09](09_Toolchain_And_Packaging.md) | Session start can read SUMO's effective configuration in order to validate §6.2 |
-| [10](10_Scale_And_Performance.md) | A measured cost for per-vehicle area relations and reconciliation at the capture rate, so §8.2's per-vehicle elements have a budget |
+| [10](10_Scale_And_Performance.md) | A measured cost for per-vehicle area relations and reconciliation at the capture rate, so §8.2's per-vehicle elements have a budget. The solar state itself costs nothing to record — it is a cache read (`CarlaClient.cs:1988-1991`) — but the prewarm lead-in must be long enough for the three solar RPCs to land before the first captured frame (§4.5) |
+| [11](11_Time_And_Illumination.md) | **A tick maps to a declared civil instant** with a stated UTC offset that may be a half-hour one, so §4.5's residual is computable. **The policy is an assertion, not a reading** — `frozen` or `advancing` with a rate and an anchor tick — because a frozen sun and an unconfigured one are byte-identical in the world's answer (§2.7, measured). The civil-to-solar conversion is defined once, since the world's zone is longitude ÷ 15 and not the civil offset (measured: +3.745377 against +3.5 at the sizing site). A statement on **night viability**, and on whether a resolvability cutoff exists, so §5.1's qualifier can become a sixth outcome if one does. Whether the date roll-over is fixed, so the manifest's `date_rollover_applied` means something. Full list and reasoning in §5.4 |
+| [12](12_Operator_Control_Surface.md) | Whatever the operator selects — window, policy, rate, date — reaches the capture session **as data the manifest can record verbatim** (§8.4's `solar.epoch` and `solar.policy`), not as a side effect of a command line that is gone by the time the manifest is written. A run whose solar policy cannot be written down is a run that cannot be replayed (§7.3) |
 
 ---
 
@@ -1768,8 +2448,14 @@ deferrable, because the regime it was coupled to is now the only regime (§3.6, 
 | **D6.15** | **The training export and the evaluation export are separate artifacts written by the supervision transfer**, and the model service is given a path only to the first. Truth may define the target and filter the corpus; it may never be an input the model can read (§10.2, §10.3) |
 | **D6.16** | **A span in which the render-set cap bound is excluded from the training export and kept in the evaluation export.** Prioritising annotated participants under the cap makes scene density a function of the label; recording `cap_bound_ticks` turns that from an invisible confound into an auditable one (§10.4) |
 | **D6.17** | **Four artifacts, one writer each**: the supervision plan (compile time), the capture truth sidecar (per camera per capture), the world truth track (per run, every SUMO vehicle), and the run supervision manifest (per session, authoritative). The world truth track is new and is what keeps the base rate from being computed over a render-filtered population (§8) |
-| **D6.18** | **The two label leaks in the existing producer are defects and are fixed wherever that code produces ground truth**, including the standalone CARLA-free path: `special_type = "marked"` (`SumoCotBridge.py:321-322`) and the anomaly-to-`u` affiliation mapping. This is a narrow amendment to [01 D1.17](01_Architecture.md)'s "retained unchanged" — unchanged in role, corrected in these two places (§2.4, §8.3, §9.1) |
+| **D6.18** | **The two label leaks in the existing producer are defects and are fixed wherever that code produces ground truth**, including the standalone CARLA-free path: `special_type = "marked"` (`SumoCotBridge.py:321-322`) and the anomaly-to-`u` affiliation mapping. This is a narrow amendment to [01 D1.18](01_Architecture.md)'s "retained unchanged" — unchanged in role, corrected in these two places (§2.4, §8.3, §9.1) |
 | **D6.19** | **Vehicle fade is not designed around, and the rendered span replaces it.** The user has demoted fade for this mode — it is a client-side computation pushed one blocking RPC per vehicle per reconcile, and `--fade` carries `default=False` (`CarlaControl/src/carlacontrol/CarlaControlArgumentParser.py:317-328`). Vehicles spawn fully opaque, so `VehicleTelemetryService.cs:73`'s arrival gate is inert (`CarlaClient.cs:1571`), there is no *arriving* vehicle state, and `VehicleTelemetry.Opacity` is a constant 1.0 (`VehicleTelemetryService.cs:112`, `CarlaClient.cs:1562`) and is **not emitted**. What truth records instead is the **admission and release instant per vehicle**, which is exact because there is no ramp. This is a simplification of the onset model, not a loss: the committed-to-observed gap becomes purely the co-simulation seam, with no fade duration mixed into it (§3.3, §4.4, §5.1, §8.2) |
+| **D6.20** | **Illumination is part of the truth record, and the record carries the declared civil instant, the asserted policy and the residual — not only the achieved sun.** `_solar` already carries nine achieved attributes in every sidecar and every PNG (`CotWriter.cs:52-65`, `SolarMetadata.cs:14-20`, measured). Four are added: `declared_civil_time` / `declared_civil_date` / `declared_utc_offset_h`, `solar_policy` with its rate and anchor tick, `solar_time_residual_s` with `sun_elevation_residual_deg`, and `illumination_band`. **The policy is asserted rather than read**, because `advancing` defaults to `false` when nothing ever configured the sun (`CesiumHeightSampler.cpp:784-796`, measured), so a deliberately frozen run and a never-configured run are otherwise indistinguishable. The residual is what makes the silent failure loud: an unset sun shows up as a multi-hour residual against an achieved `solar_time` of exactly `12.0`, the spawn default (§2.7, §4.5) |
+| **D6.21** | **Illumination is derived context of the same class as an area relation, and never supervision.** It is carried by the world-scoped `<_solar>` element, a sibling of world-scoped `<_supervision>`, and by no `<event>`, no `<_carla>` block and no supervision row. The code boundary is the type graph: `SupervisionPlan` has no solar field, the interval binder has no reader for the solar cache, and the scenario epoch compiles into a **separate** civil-time map consumed by the capture session. The deletion test is the enforcement — a consumer must be able to delete every `<_solar>` element and every `carla:solar` chunk and still have complete supervision, exactly as for `<_aoi>` (§3.6, §8.1) |
+| **D6.22** | **Darkness is a qualifier on the five observability outcomes, not a sixth outcome.** Every `OBSERVED_SPAN` carries `sun_elevation_deg` and `illumination_band`; the five outcomes are unchanged. Illumination is orthogonal to all three geometric tests, so a sixth exclusive value would force a precedence rule against `occluded` and destroy one of two independent facts; and minting an `unlit` outcome would mean choosing its threshold, which is the night-viability question [11](11_Time_And_Illumination.md) owns. The precedent is `occluded` itself, which is the post-cutoff name for a recorded number. **If 11 returns a measured resolvability cutoff, `unlit` becomes a sixth outcome at that point**, computed from a qualifier already present in every corpus captured before the finding (§5.1, §5.4) |
+| **D6.23** | **Prevalence and site coverage are reported per illumination band, and the band comes from the achieved sun.** All three prevalence units (§5.3) and `site_covered_fraction` (§5.2) gain a per-band breakdown, per sensor and unioned, over the captured span. The band is derived from `sun_elevation_deg` and never from the declared time, because stratifying by a declaration would sort the corpus by an assertion rather than by what a detector saw. Bands with captures and no annotated mass keep their rows. The **boundaries used are recorded in the manifest**, since they are a convention (standard twilight elevations) rather than a measured detector property (§5.1, §5.3, §8.4) |
+| **D6.24** | **Solar state travels with the manifest as epoch, policy and anchor, and a replay is verified frame by frame.** Restoring it is three existing RPCs during prewarm (`CarlaServer.cpp:614`, `:625`, `:661`); verifying it is a comparison against the original's `_solar` and `carla:solar`, which every capture already carries. A replay outside the §4.5 tolerance is a **failed replay** and is reported rather than shipped. Two carried defects are made explicit rather than silently reproduced: the advancing clock never rolls the date (`CesiumTimeOfDayController.cpp:34-36`, measured), so a replay sets the date explicitly at the anchor and the manifest records `date_rollover_applied`; and **CARLA's native recorder has no solar record type at all** (measured: nothing under `Carla/Source/Carla/Recorder/` mentions `Solar`, though it records scene and vehicle lights), so it is not a replay path for this mode (§7.3) |
+| **D6.25** | **The time-of-day confounder is an authoring rule and an export gate, not a warning.** §9.3 rule 5 requires an annotated instance's time of day to match the nominal population's unless time of day *is* the pattern. Because the capture window is chosen at run time and not at authoring, the compiler can only warn; the manifest settles it. So solar state is exported to the **training** export only when `prevalence_by_illumination` shows annotated mass in more than one band, or the plan declares time of day as the pattern; otherwise it is evaluation-only. This fails closed, is auditable from the manifest alone, and names its own remedy — a second window in another band. Measured motivation: in the sizing scenario five of six anomalies depart between 08:00 and 11:11 and one at 02:30, while all 335 hard negatives fire at 07:00, 15:00 and 23:00 (§2.3, §5.3, §10.2) |
 
 ---
 
@@ -1819,6 +2505,42 @@ deferrable, because the regime it was coupled to is now the only regime (§3.6, 
    plan, the manifest and the sidecar elements are not SUMO-specific; only the compiler's front end
    is. Making the artifacts shared would let a storyboard capture and a SUMO capture land in one
    corpus. Not required by anything here, which is why it is a question.
+10. **The solar residual's soft and hard thresholds.** Question 7 with a different quantity, and the
+    same recommendation for the same reason: set both from the first measured distribution rather than
+    by guess. Two things make this one easier than question 7, and worth saying. The failure *modes*
+    are discrete and diagnosable (§4.5's signature table) rather than a continuum, so a threshold does
+    not have to separate "slightly wrong" from "acceptable" — it has to separate "the conversion ran"
+    from "it did not". And the natural unit is `sun_elevation_residual_deg` rather than seconds,
+    because a fifteen-minute error is nothing at midnight and several degrees of elevation at civil
+    dawn. Recommendation: express both thresholds in degrees of elevation, and record the seconds
+    alongside for diagnosis.
+11. **Whether vehicle light state is driven at night, and whether it belongs in the truth record.** The
+    mechanism exists and is batchable — `Actor.set_light_state` / `get_light_state`
+    (`carlanet/__init__.py:781`, `:786`) and `SetVehicleLightStateCommand` among the batch commands
+    (imported at `:487`) — and SUMO exposes per-vehicle brake and indicator signals, so correct lights
+    at night cost no extra round trip. The truth question is separate from the rendering one: if
+    headlights are the dominant night-time detection cue, then light state is a *cause* of whether a
+    vehicle is detectable and belongs in the record beside occlusion and apparent size. It is derived
+    context sourced from SUMO, never supervision. [11](11_Time_And_Illumination.md) owns whether to
+    drive them. Recommendation: if they are driven, record the state per vehicle in the `_carla` block
+    with `kinematics_source="sumo"`'s sibling provenance; if they are not, record that fact once in the
+    manifest so a corpus's night imagery is not silently missing its strongest cue.
+12. **Whether the illumination bands should stay the standard twilight boundaries.** They were chosen
+    because they are conventional and need no defence (§5.1), not because they are known to be the
+    right cut points for this imagery and this detector stack. A sensor-derived set would stratify
+    better and would be arbitrary in a different way. Recommendation: keep the standard boundaries,
+    record them in every manifest so a later set can be applied retroactively to the recorded elevation
+    numbers, and revisit only if [11](11_Time_And_Illumination.md) produces a measured sensitivity
+    curve.
+13. **Whether a capture window should ever straddle a band boundary.** An `advancing` policy across a
+    dawn window is the most realistic capture this system can produce and the hardest to stratify: a
+    single interval can be observed across three bands. §5.1's span-wise record handles it — the spans
+    already carry an outcome each and now carry a band each — but the prevalence units of §5.3 have to
+    apportion a straddling interval to bands somehow, and the obvious choices (by vehicle-seconds, by
+    midpoint, by any-overlap) give different answers. Recommendation: apportion by observed
+    vehicle-seconds, which is the only unit that is additive across bands, and record the other two
+    units per band as "any overlap" with that stated. Not urgent: the windows [10 §3.1](10_Scale_And_Performance.md)
+    recommends are short enough that a frozen policy is the likely default.
 
 
 
