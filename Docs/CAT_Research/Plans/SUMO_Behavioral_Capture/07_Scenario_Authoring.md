@@ -467,11 +467,14 @@ running server** — a file in or beside the world package, not an RPC.
    rather than degrees: the boundary elevations for night, astronomical/nautical/civil twilight, low
    sun, and high sun. This section uses them as opaque labels; it must not invent them, because doc 8
    and doc 6 will stratify a corpus on the same labels.
-3. **The night viability verdict — does the world render usable EO imagery at night at all?** This is
-   the one answer this section cannot work around. If the verdict is no, then the sizing scenario's
-   23:00 night shift is not an authorable capture window and check 42 must refuse rather than warn;
-   if it is yes-with-conditions, the conditions are authoring inputs (street lighting present or
-   absent, whether vehicle headlights are driven, what sensor configuration is required). *Read,* the
+3. **The night viability verdict — does the world render usable EO imagery at night at all?** The
+   verdict informs the author; it never forbids them. **Any time of day is authorable, including one
+   the renderer serves poorly** — the tooling's job is to say what the imagery will look like, not to
+   decide which parameters a user may explore, and a night window still produces complete behavioural
+   truth and a sidecar whatever the pixels show. So check 42 **warns and records the regime, and
+   never refuses**. Where the verdict is yes-with-conditions, the conditions are authoring inputs
+   (street lighting present or absent, whether vehicle headlights are driven, what sensor
+   configuration is required). *Read,* the
    reason this cannot be assumed either way: the only existing sun-driven headlight rule is
    `VehicleLightStage.cs:228-236`, which switches beams and position lamps from
    `_weather.SunAltitudeAngle` — but that is a **.NET traffic-manager** stage, and the brief's decision
@@ -1281,7 +1284,7 @@ prevents. "Refuse" means the compile fails and nothing is emitted.
 | 39 | `illumination` is well-formed if declared: `mode` in {`frozen`, `advancing`}; `rate` present and positive only with `advancing`; `rate` absent with `frozen` | the specification | **refuse** malformed; **warn** when `mode × rate × window length` sweeps the sun through more than a stated arc, naming the arc | A window authored as a controlled constant that is not one, and a `rate` silently ignored because the mode is `frozen`. The units are sun-clock seconds per **simulated** second (§2.9 item 5) |
 | 40 | The site's civil offset against the world's spawned `TimeZone` | `epoch.utc_offset` vs `world.json` origin longitude ÷ 15 | **warn**, with the derived elevation error at each declared window | *Measured:* the Bahonar origin's `lon / 15` is **3.745377 h**, **14 min 43 s** from Iran's +03:30 — and at the equinox that flips the sun across the horizon at 06:00 (**+1.74°** correct, **−1.53°** as spawned) and at 18:00. Warn, not refuse: the conversion of §2.8 makes it correctable at run time without an engine change, and the warning is how the author learns the correction is needed |
 | 41 | **Illumination–label association** across the entries a declared window will capture | the resolved instants, the supervision labels, and the ephemeris | **warn, always, and never refuse** | §5.6. *Measured on the shipped sizing scenario:* `I(hour; label) / H(label) = 0.600`, and two hours are **100 % annotated**. In a pattern of life this correlation exists by construction; the failure is discovering it after training |
-| 42 | Each declared capture window's illumination regime is one doc 11 certifies as renderable | the night viability verdict (§2.9 item 3) | **refuse** if the verdict is that the regime produces no usable imagery; **warn** if it is usable only under stated conditions, naming them | Doc 10 recommends a **23:00** window on the sizing scenario (`10_Scale_And_Performance.md:175`). *Measured,* sun elevation at that instant at the Bahonar origin is **−59.6°** at the equinox, **−38.1°** in June, **−79.5°** in December — deep night on every date. Whether that is imagery is not this section's call, and this check is where doc 11's answer binds |
+| 42 | Each declared capture window's illumination regime is reported, and named against doc 11's viability verdict | the night viability verdict (§2.9 item 3) | **warn, never refuse** — naming the regime, the computed sun elevation, and what doc 11 says imagery in that regime will and will not show. An author may capture any regime deliberately; the warning exists so nobody captures one *accidentally*, and so the manifest records that the regime was chosen with its consequences stated | Doc 10 recommends a **23:00** window on the sizing scenario (`10_Scale_And_Performance.md:175`). *Measured,* sun elevation at that instant at the Bahonar origin is **−59.6°** at the equinox, **−38.1°** in June, **−79.5°** in December — deep night on every date. Whether that is imagery is not this section's call, and this check is where doc 11's answer binds |
 | 43 | A sweep member's `epoch` and `illumination` equal its base's, unless illumination is a declared sweep axis | the sweep (§7.2) | **refuse** | §7.4. A behaviour sweep whose members were captured under different light is not a comparison |
 | **Emission** ||||
 | 29 | Route file is departure-sorted across flows and actors | the emitted file | **refuse** (it is a compiler bug if it fires) | *Carried forward,* `SKILL.md:155-157`: SUMO drops out-of-order entries with only a warning |

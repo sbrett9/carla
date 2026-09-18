@@ -106,6 +106,32 @@ For framing: holding a vehicle at ten pixels fixes the ground sample distance at
 swath at 576 × 324 m **whatever the altitude**, so one detector-usable channel covers **0.64%** of
 the Bahonar map. Coverage, not population, is the likely constraint on corpus yield.
 
+### 4.1 The test fixture — a small scenario authored for the purpose
+
+**None of these measurements needs a large scenario, and using one makes them slower and harder to
+read.** The shipped scenarios are *measurement inputs* that place the sizing envelope on a curve —
+Gardnerville at peak 51, Bahonar at 139, Arapahoe at 437 — not requirements the design is beholden
+to. Scenario scale is a **lever the plan can pull**, not a fixed constraint it must absorb.
+
+So stage C runs against a purpose-built fixture: **a five-minute SUMO network sited in Arapahoe with a
+small, fixed vehicle population.** Five simulated minutes at a 0.05 s delta is 6,000 ticks — long
+enough to hold a dwell, a turn and a lane change, short enough that a full run is minutes of wall
+clock rather than hours. Properties it must have, each because a measurement depends on it:
+
+| Property | Why |
+|---|---|
+| A **fixed, declared** vehicle count rather than flows | The actor-ceiling sweep varies the count deliberately; ambient variance would confound it |
+| One junction with a **traffic light** | Arapahoe has them and the sizing scenario has **none**, so light synchronisation is otherwise untestable |
+| One authored dwell and one authored transit, both annotated | The smallest input that exercises the whole supervision path end to end |
+| A **declared epoch** and at least two capture windows at different sun elevations | Exercises the epoch contract, the solar audit, and the illumination axis without a seven-day run |
+| Both a rendered and a simulated-only vehicle | Exercises the render-set contract and the observability outcomes |
+| Runs in **under a minute** of SUMO wall clock | So a failed measurement is cheap to repeat |
+
+It is authored once, versioned with the plan, and becomes the regression fixture every later stage
+runs against. **It is not a substitute for the sizing measurements already taken** — the envelope
+still rests on the three real scenarios — but nothing in stage C, and nothing in the first corpus,
+needs to wait on a seven-day port to be useful.
+
 ---
 
 ## 5. Stage D — Finish and ship the SUMO toolchain
