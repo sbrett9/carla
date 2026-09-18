@@ -127,6 +127,60 @@ is a legitimate covariate for stratifying a corpus — and a legitimate input to
 which knows the time and its own location. It must never become a supervision signal, and a
 scenario must never encode its annotation in the lighting.
 
+## 3b. Scope boundary — this pipeline labels; it never scores
+
+**Added by the user 2026-09-18.** The detect-and-track model and the estimated-pattern-of-life model
+are both **external to this effort**. This body of work exists to create synthetic imagery and the
+truth and label data that can be used to train and validate those models downstream. **No part of
+this pipeline or tool suite scores anything.**
+
+This is narrower than [`Findings/20`](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s
+existing exclusion, which rejected scoring only in the ScenarioRunner sense of driving-quality
+criteria. It now also excludes measuring the performance of the external models.
+
+**In scope — produce, and label as richly as we can:**
+
+- imagery, and every per-frame truth attribute: pose, kinematics, dimensions, class, occlusion,
+  visibility, apparent size, solar state, lamp state;
+- labels for supervised training: two- and three-dimensional boxes, segmentation, and the
+  three-valued supervision with its pattern instances, participants and intervals;
+- corpus metadata that describes the data honestly: observability spans, rendered spans, prevalence
+  in its several units, illumination bands, render states and refusals, what was captured and what
+  was not;
+- the contracts by which an external consumer reads all of the above, and the rule by which
+  supervision *would* be transferred onto detector tracks;
+- quality gates on **the data**: is it internally consistent, is it leak-free, is it complete, does
+  it say what it does not contain.
+
+**Out of scope — do not design, build or specify:**
+
+- running a detector, a tracker or an EPoL model as part of the pipeline;
+- associating external model output to truth in order to measure that model;
+- precision, recall, F1, temporal-localisation scores, confusion matrices, or any model metric;
+- evaluation harnesses, scoreboards, model comparison, or any pass/fail verdict on a model;
+- a "score" artifact root. There are artifacts we produce and artifacts we consume; model output is
+  neither.
+
+**Three things sit near the line and stay in, reframed. Do not delete them.**
+
+1. **"Does an annotated interval survive contact with a detector?"** This asks whether *our corpus* is
+   fit for purpose, not whether a model is good. It stays as a **corpus fitness probe** that uses a
+   stock detector as an *instrument* — the way a thermometer checks an oven. Its output is "our data
+   does or does not yield trackable targets", never a figure of merit for the detector. It must not
+   emit model metrics.
+2. **The illumination-only predictor.** Predicting the label from illumination with no imagery at all
+   measures a property of *the dataset* — whether the label has leaked into a covariate. It stays as a
+   **leakage probe**, not as a baseline for a model to beat.
+3. **Truth-to-track association.** We publish truth that is *associable* — per tick, positioned, timed,
+   boxed — and we document the rule by which supervision transfers. **We do not perform the
+   association**, because that requires model output this pipeline never sees. Keep the contract and
+   the format; drop the harness and anything that measures association as model performance.
+
+When you find scoring language, ask which of these it is: an assertion about the **data** (keep,
+reword so it cannot be read as model evaluation) or an assertion about a **model** (remove, and say in
+one line what an external consumer would do instead). Do not silently delete a measured finding —
+if a measurement is real but its framing was evaluative, keep the measurement and re-frame it.
+
 ## 4. Standing project rules that bind this plan
 
 - **Never regress an existing capability.** Improving or replacing a capability is welcome; silently

@@ -1887,7 +1887,7 @@ concern time of day, illumination and vehicle lights.
    truth record is allowed to claim, not in effort. Writing `ComponentVelocity` from
    `SetActorTargetVelocity` makes the existing API honest but changes behaviour for every client; a
    separate asserted-velocity field keeps teleported speed distinguishable from measured speed,
-   which the EPoL scoring path may well want; a client-side finite difference needs no engine change
+   which a downstream consumer of the corpus may well want; a client-side finite difference needs no engine change
    but is a different quantity. **Recommendation:** the asserted-velocity field, because the truth
    record's whole purpose is to be unambiguous about provenance, and because the same field would
    serve any future mode that moves a body without simulating it. This needs the user's decision, not

@@ -1,9 +1,16 @@
 # 00 — SUMO-driven behavioural capture: overview
 
-**Status:** Plan, revision 2. No code changed and no build run in producing it. Every section is
+**Status:** Plan, revision 3. No code changed and no build run in producing it. Every section is
 grounded in the working tree as it stood on 2026-09-18, with claims cited to `path:line`,
 measurements distinguished from inferences, and inferences labelled.
-**Revision 2 folds in a requirement the first revision missed**: the simulated time of day must be
+**Revision 3 narrows the scope: this pipeline labels, and never scores.** The detect-and-track model
+and the EPoL model are external to this effort. The plan produces synthetic imagery plus the truth and
+labels used to train and validate them downstream; it runs no model, associates no model output to
+truth, and emits no metric, comparison or verdict. Three things that sat near that line were kept and
+reframed rather than deleted — the corpus fitness probe, the illumination leakage probe, and the
+published supervision-transfer rule — because each measures a property of *the data* (§7,
+`_TEAM_BRIEF.md` §3b).
+**Revision 2 folded in a requirement the first revision missed**: the simulated time of day must be
 driven in tandem with the network playback, its advancement must be toggleable per run, and the tool
 suite needs a coherent surface over both. That is not an amendment — it changed the authority model,
 the tick loop, the scenario format, the truth record, the collection design and the capture plan, so
@@ -47,8 +54,7 @@ flowchart TB
     SS --> SIDE
     SOL --> SIDE
 
-    EPOL --> EV["Evaluation join"]
-    SIDE --> EV
+    SIDE -.->|"handover: the corpus is the deliverable"| DT
     EPOL -.->|"truth never crosses this line"| SIDE
 
     classDef truth fill:#1f3a5f,stroke:#5b9bd5,color:#fff
@@ -95,6 +101,7 @@ a reader must hold in mind.
 | **The illumination policy is asserted, never defaulted** | A frozen run and an unconfigured run are byte-identical today, so absence is indistinguishable from intent. A corpus-eligible run without a declared policy is **refused**; `freeze_at_window_start` is the recommended value, not a silent one (§6) | [11](11_Time_And_Illumination.md), [04](04_Contracts.md) D4.24 |
 | **Annotations are authored intent; area relations and illumination are derived context** | No geometric or photometric predicate ever writes supervision. Enforced by the type graph, not by discipline | [06](06_Truth_And_Annotation.md) §3.6, D6.21 |
 | **Observer-derivability governs the model boundary** | An input may reach the model iff a fielded system with the same sensor, navigation solution, clock and public reference data could compute it **without observing the scene's contents**. Solar state passes; `advancing`, `rate`, policy and residual do not | [08](08_Collection_And_EPoL.md), [04](04_Contracts.md) D4.20 |
+| **The pipeline labels; it never scores** | The external models are trained and validated downstream. What stays is everything that describes *our own* data honestly — observability, prevalence, illumination bands, render states, and an explicit statement of what the corpus does **not** contain | [04](04_Contracts.md) C8, D4.26 · [02](02_Use_Cases.md) UC-10 |
 | **Seven simulated days cannot be rendered** | 19–24 days of wall clock and 6–17 TB for one camera. Capture is windowed, with SUMO fast-forwarded from t = 0 | [10](10_Scale_And_Performance.md) D10.2 |
 | **Night imagery is not viable; night truth is free** | The 23:00 window is 38–79° below the horizon on every date. It becomes a **truth-only window** — SUMO runs it alone at 4,307× real time, costing 0.42 s of wall clock and zero bytes (§5) | [10](10_Scale_And_Performance.md) D10.14, [11](11_Time_And_Illumination.md), [08](08_Collection_And_EPoL.md) D8.29 |
 
@@ -114,7 +121,7 @@ wrong here. These are the load-bearing numbers.
 | Vehicle light-state traffic, inside the render region | **7.54%** of vehicles per step ≈ **9.6 commands/tick** at cap 128; +1.9% of batch bytes on Arapahoe | Lamps ride the existing batch; zero extra round trips |
 | Sun elevation at the recommended windows | 07:00 spans **+3.97° to +25.92°** by date alone; 23:00 is **−38.1° to −79.5°** on every date | The date is a free 21° illumination axis; 23:00 is unphotographable |
 | Renderable share of the sizing scenario | only **59–77%** of daily vehicle-hours have the sun above −6° | A quarter to two-fifths of the traffic cannot be photographed at any price |
-| Hour-to-label mutual information, Bahonar | **I(hour; label)/H(label) = 0.600** | Hour carries 60% of the label; a corpus needs an illumination-only baseline to detect it |
+| Hour-to-label mutual information, Bahonar | **I(hour; label)/H(label) = 0.600** | Hour carries 60% of the label; a corpus needs an illumination-only **leakage probe** to detect it |
 | Prevalence, two defensible units | **0.013%** per vehicle vs **4.8%** per stationary vehicle-second | A factor of **372**; prevalence is meaningless without its unit |
 | OSM relations surviving the clip | **42 relations, 22 turn restrictions → 0** | Issue #12 is a hard prerequisite and an *authoring* trap |
 | Named-edge coverage | 91% on the US maps, **5% on Bahonar** | Street names are one place form, never the mechanism |
@@ -128,7 +135,7 @@ Listed here rather than buried, because several affect data that exists now.
 |---|---|---|
 | **Bare-earth heights read the mirrored grid row** | `.xodr` header `north/south` matches the SUMO `convBoundary` exactly, so `.xodr` y ≡ SUMO y and CARLA y = −SUMO y. Indexing with CARLA y tracks road elevation at **1.81 m** scatter against **5.15 m**; the shipped sample reproduces under SUMO y to 0.003 m | Median **9.8 m**, mean 11.2 m, max 38.0 m error in every Cursor-on-Target dataset from that path; 96.2% of rows over a metre. **Re-issue, not a forward patch** |
 | **The scenario and its own telemetry disagree about `t = 0` by 3.5 h** | 335 of 335 guard trips satisfy `depart == D×86400 + H×3600` with hours in {7,15,23}, asserting local midnight; `SumoCotBridge.py:149-151` is UTC-only and the shipped CSV pins t = 0 to `2026-01-01T00:00:00Z` | The epoch convention is perfectly consistent and reaches nothing that can read it |
-| **Three ground-truth leaks put the answer in the scored channel** | `special_type="marked"`; anomaly affiliation `u` readable off the CoT type; conspicuous anomaly colours | A corpus built with the current bridge scores models on reading the answer key |
+| **Three ground-truth leaks put the answer inside the label channel** | `special_type="marked"`; anomaly affiliation `u` readable off the CoT type; conspicuous anomaly colours | A corpus built with the current bridge scores models on reading the answer key |
 | **Two leaks inside PNG metadata** | `carla:solar` embeds `advancing`/`rate`; `carla:capture` embeds `scenario_id`/`seed` | Memorisation handles that are neither truth nor observer-derivable. The anti-leak validator must read tEXt chunks, not just file trees |
 | **A sunless world publishes a convincing lie** | The stream header cannot express "no sun", so the cache returns **midnight of year 0 at lat 0, lon 0**, and `CotWriter` writes it as fact | Live today on stock content |
 | **A client RPC name mismatch, silently swallowed** | `CarlaClient.cs:1631` sends `get_vehicles_light_states`; the server and LibCarla use the singular. The sole caller catches without logging | Latent only because `update_vehicle_lights` defaults false. **This corrects revision 1's claim that the client RPC diff was empty** |
@@ -182,7 +189,13 @@ physically impossible constant sun and nothing flags it.
   elsewhere. No detector exists in the tree today.
 - **Vehicle dynamics fidelity.** Deliberately traded in this mode and bounded to it: collision
   response, suspension, and the staging spawn model.
-- **Scoring in the ScenarioRunner sense.** Rejected in doc 18 §3.2 and still rejected.
+- **Scoring anything.** The detect-and-track model and the EPoL model are **external to this
+  effort**. This pipeline produces imagery, truth and labels for training and validating them
+  downstream; it runs no model, associates no model output to truth, and emits no metric, comparison
+  or verdict. Doc 18 §3.2 already rejected scoring in the ScenarioRunner sense of driving-quality
+  criteria; this is the wider exclusion. Quality gates on **our own data** — is it consistent,
+  leak-free, complete, does it say what it lacks — are not scoring and remain in full
+  (`_TEAM_BRIEF.md` §3b).
 - **Grade-responsive speed.** Doc 23 §3.3's work, independent of which actuator is used.
 
 ## 8. How to read this plan
@@ -196,7 +209,7 @@ physically impossible constant sun and nothing flags it.
 | [05 — CarlaNet capability audit](05_CarlaNet_Capability_Audit.md) | Whether the .NET client can do this, traced shim → C# → RPC → engine |
 | [06 — Truth and annotation](06_Truth_And_Annotation.md) | Doc 20's supervision model re-seated on SUMO, and the truth producers reconciled |
 | [07 — Scenario authoring](07_Scenario_Authoring.md) | How a scenario is written, by a human or an assistant, and validated before it costs a run |
-| [08 — Collection and EPoL](08_Collection_And_EPoL.md) | Cameras, labels, detect-and-track, the model boundary, the anti-leak rule, evaluation |
+| [08 — Collection and EPoL](08_Collection_And_EPoL.md) | Cameras, labels, occlusion, the anti-leak rule, and what an external model team is handed |
 | [09 — Toolchain and packaging](09_Toolchain_And_Packaging.md) | Finishing and shipping the SUMO toolchain, both platforms |
 | [10 — Scale and performance](10_Scale_And_Performance.md) | The numbers: population, wall clock, budgets, the sizing envelope, degradation |
 | [11 — Time and illumination](11_Time_And_Illumination.md) | The epoch, the solar policy, the night verdict, the lamp mapping |

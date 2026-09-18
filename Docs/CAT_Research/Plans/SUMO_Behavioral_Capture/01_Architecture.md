@@ -1,7 +1,7 @@
 # 01 — System architecture
 
 **Status:** Plan section. Design, not implementation. No code was changed and no build was run.
-**Date:** 2026-09-18 (revision 2). First drafted 2026-09-17.
+**Date:** 2026-09-18 (revision 3). First drafted 2026-09-17.
 **Owner role:** Systems architect. Companion section: [02 — Use cases](02_Use_Cases.md).
 **Scope:** The component decomposition, the process topology, the authority model, the mode matrix, the
 ownership of simulated civil time and of the world's illumination, the resolution of the conflict
@@ -24,6 +24,25 @@ cost ledgers in §8 and §11, and makes the illumination consequence of window p
 **Decision numbers D1.1–D1.18 are unchanged and keep their meanings**; the new decisions are D1.19–D1.25,
 and several existing decisions gained a clause, which is marked in the decision table. Two section
 numbers moved: the old §4.4 is now §4.5, and the old §9.3 is now §9.4. No sibling section cited either.
+
+**What changed in revision 3.** The user narrowed the effort: the detect-and-track stage and the
+estimated-pattern-of-life (EPoL) model are external to this pipeline, and no part of this pipeline or
+tool suite scores anything. Revision 2's `EvaluationJoin` and `SupervisionTransfer` — a join that scored
+model assessments against supervision, and the harness that would have performed truth-to-track
+association — are **removed as components this architecture builds** (§2.4, renamed but not
+renumbered). What replaces them is
+a handover: the corpus is an artifact this pipeline produces, complete and closed, and
+`DetectAndTrackStage` and `EPoLModelService` are external systems that consume it, exactly as the context
+diagram (§1.1) already labelled them — this revision makes that unambiguous by removing the join that
+sat between them and this system's own boxes. The context diagram (§1.1) and the process topology diagram
+(§3.2) are redrawn so nothing downstream of the corpus is drawn as ours; `CorpusAudit`, which checks our
+own labels against our own derived area relations and needs no external model output, stays and is now
+drawn on its own. Four sentences that argued from a hypothetical model's score (§4.3, §7, §8.5.3, §10)
+are reworded to argue from the property of the corpus they were actually establishing — leakage, or
+completeness — because that is the assertion the measurement actually supports. **No decision is removed
+or renumbered**; D1.1–D1.25 keep their numbers and their meanings, none of them assigned ownership of an
+evaluation artifact, and the authority table (§4.1) is unchanged. The truth path, the supervision path
+and the anti-leak boundary are unchanged throughout.
 
 **Out of scope, deliberately.** The per-tick mechanism of the co-simulation loop
 ([03](03_CoSimulation_Runtime.md)), the wire-level shape of any contract
@@ -50,9 +69,11 @@ scenario declares, so a window that opens at 23:00 on day 4 renders at night. Co
 CARLA world write imagery plus a Cursor-on-Target truth sidecar, each frame already carrying the solar
 state it was lit by. The truth carries two things SUMO and CARLA each own half of: where a vehicle was
 and what it looked like from a particular camera (CARLA), and how fast it was going and what the author
-asserted it was doing (SUMO and the annotation set). The imagery goes to a detect-and-track stage; its
-tracks go to an estimated-pattern-of-life model service, either offline against a recorded corpus or
-live. Truth is joined to the model's output only after the fact, for scoring.
+asserted it was doing (SUMO and the annotation set). **This pipeline's product is that corpus** —
+imagery, truth and behavioural labels, produced complete and handed over. What reads it afterwards is
+external to this effort: a detect-and-track stage and an estimated-pattern-of-life model service, run
+offline against a recorded corpus or live, are both external systems this pipeline supplies and reads
+nothing back from. No part of this pipeline or tool suite scores anything.
 
 ### 1.1 Context and containers
 
@@ -83,7 +104,7 @@ flowchart TB
         SUMO["sumo process<br/>via libtraci"]
         SRV["CARLA server<br/>world, sensors, engine recorder,<br/>CesiumSunSky, world-scoped state actors"]
         CORP["Capture corpus<br/>PNG + CoT sidecar + manifest"]
-        EJ["EvaluationJoin<br/>SupervisionTransfer, CorpusAudit"]
+        CAUD["CorpusAudit<br/>accidental positives in the<br/>unlabelled population"]
     end
 
     OSM --> WB
@@ -101,14 +122,21 @@ flowchart TB
     CS <--> SRV
     CS --> CORP
     CS --> TAK
-    CORP --> DAT
+    CORP --> CAUD
+    CORP -->|"handover"| DAT
+    CORP -->|"handover"| EVAL
     DAT --> EPOL
-    DAT --> EJ
-    CORP --> EJ
-    EPOL --> EJ
-    EJ --> EVAL
     EPOL --> TAK
 ```
+
+**`EvaluationJoin` and `SupervisionTransfer` are gone from this diagram**, not renamed or moved — this
+architecture does not build a component that reads `DetectAndTrackStage` or `EPoLModelService` output
+back in. `DetectAndTrackStage` and `EPoLModelService` were always drawn inside `ext`, the external
+systems subgraph; the change is that nothing inside `sys` now points into them for anything but the
+one-way handover of the corpus, and nothing inside `sys` receives an edge from either of them. `CorpusAudit`
+stays, because it checks this pipeline's own labels against this pipeline's own derived area relations
+([20 §2.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)) and needs no external
+model's output to do it.
 
 ---
 
@@ -204,15 +232,31 @@ shim at `CarlaNet/python/carlanet/__init__.py:1589,1596`):
 | `RunManifestWriter` | **new** | The authoritative supervision artifact ([20 §7.5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)), written incrementally |
 | `SumoCotBridge` | `carlacontrol/SumoCotBridge.py` | **Retained unchanged** as the standalone, no-CARLA telemetry path. It is not in the capture path |
 
-### 2.4 Post-run
+### 2.4 Post-run — the handover, and the one check that stays ours
+
+This pipeline builds nothing past the corpus. What follows is the handover: the corpus is an artifact
+this pipeline produces, complete and closed, and external model teams consume it. `DetectAndTrackStage`
+and `EPoLModelService` are named here only to fix the boundary — they are not components this
+architecture builds, they are the two systems the corpus is handed to, offline or live, and this
+pipeline reads nothing back from either.
 
 | Component | Responsibility |
 |---|---|
-| `DetectAndTrackStage` | External. Consumes a capture directory; emits detection-sourced CoT tracks (`source="detection"`, `CARLA-DET-<track_id>`, [09 §3](../../Findings/09_Telemetry_CoT_Contract.md)) |
-| `SupervisionTransfer` | Transfers supervision from truth tracks onto detector tracks, per sensor, clipping at interval bounds ([20 §7.6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)) |
-| `EPoLModelService` | External. Consumes tracks; emits per-track assessments. **Never given truth** |
-| `EvaluationJoin` | Joins assessments to supervision after the fact and scores |
-| `CorpusAudit` | Finds accidental positives in the unlabelled population ([20 §2.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)) |
+| `DetectAndTrackStage` | **External.** Consumes the capture corpus; emits its own detection-sourced tracks. This pipeline supplies its input and reads none of its output |
+| `EPoLModelService` | **External.** Consumes tracks; emits its own per-track assessments. Never given truth, and nothing it emits is read back into this pipeline |
+| `CorpusAudit` | **Ours.** Finds accidental positives in the unlabelled population ([20 §2.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)) — a check of this pipeline's own labels against its own derived area relations, needing no output from either external system above |
+
+**Two components in revision 2 do not survive this boundary, and neither is replaced by anything.**
+`EvaluationJoin` joined `EPoLModelService`'s assessments to supervision and scored them — that is the
+evaluation this effort does not perform. `SupervisionTransfer` would have associated
+`DetectAndTrackStage`'s tracks to truth — that requires reading an external system's output back in,
+which is the one thing the handover forecloses. Neither is downgraded to a stub; both are removed. What
+survives of them is a contract, not a component: this pipeline still publishes truth that is
+*associable* — per tick, positioned, timed, boxed — and still documents the rule by which supervision
+*would* transfer onto a detector's tracks ([20 §7.6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)),
+so that an external consumer can perform that association itself. [04](04_Contracts.md) and
+[06](06_Truth_And_Annotation.md) own that contract's wire shape; this section owns only the fact that no
+runtime component here executes it.
 
 ### 2.5 Build-time pipeline
 
@@ -365,24 +409,27 @@ flowchart TB
             UE["Unreal + Carla plugin<br/>world, sensors, engine recorder,<br/>WorldDriveAuthority, WorldSupervisionState,<br/>WorldAreasOfInterest"]
         end
     end
-    subgraph off["Off-host, later"]
+    subgraph off["Off-host, later — both external systems"]
         DAT["DetectAndTrackStage"]
         EPOL["EPoLModelService"]
-        EJ["EvaluationJoin"]
         TAK["TAK client"]
     end
 
     p1 <-->|"CARLA RPC + sensor streams, TCP"| p4
     p2 <-->|"CARLA RPC + sensor streams, TCP"| p4
     p1 <-->|"TraCI over TCP via libtracics"| p3
-    p1 -->|"files"| DAT
-    p2 -->|"files"| DAT
+    p1 -->|"files: the corpus, handed over"| DAT
+    p2 -->|"files: the corpus, handed over"| DAT
     p1 -->|"CoT over UDP"| TAK
     DAT --> EPOL
-    DAT --> EJ
-    EPOL --> EJ
     EPOL --> TAK
 ```
+
+**`EvaluationJoin` is gone from this diagram too, and nothing replaces it.** No process on this host
+reads `DetectAndTrackStage`'s tracks or `EPoLModelService`'s assessments back in; the only edges leaving
+`p1`/`p2` toward `off` are the corpus handover and the diagnostic CoT stream. `DAT --> EPOL` and
+`EPOL --> TAK` are drawn because they are true of the external world this pipeline hands its corpus into,
+not because this architecture builds or owns either arrow.
 
 ### 3.3 What crosses a boundary and by what transport
 
@@ -497,8 +544,9 @@ carry deliberately conspicuous colours — `anomaly_probe` `1.00,0.45,0.00`, `an
 `1.00,0.10,0.10`, `anomaly_shadow` `1.00,0.20,0.60` — against muted civilian greys. Those colours exist to
 make the SUMO GUI readable. Carried into CARLA blueprints they would make **colour the label**, which is
 exactly the appearance confounder of
-[20 §2.6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) and would produce a corpus on
-which a trivially cheating model scores well. The binder therefore ignores `vType` colour entirely.
+[20 §2.6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md): a corpus in which the
+annotation is trivially recoverable from a covariate that has nothing to do with behaviour, whether or
+not anything downstream ever exploits it. The binder therefore ignores `vType` colour entirely.
 
 Dimensions run the other way and must be respected: a `vType`'s `length` and `width` change car-following
 gaps and therefore the behaviour itself, so the blueprint must be chosen to match the declared dimensions
@@ -966,9 +1014,10 @@ The contract this state machine encodes, stated once so the other sections can r
 - **A rendered span gate sits upstream of
   [20 §2.5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s observed span.** An
   annotated interval can now fail to be observable for two independent reasons — the participant was never
-  rendered, or it was rendered and not seen. Both must be recorded per interval or the evaluation
-  denominator is wrong in a way nothing downstream can detect. This is a requirement the render set
-  introduces and that doc 20 did not have; [06](06_Truth_And_Annotation.md) owns its shape.
+  rendered, or it was rendered and not seen. Both must be recorded per interval, or a consumer computing
+  prevalence or coverage from this corpus gets a wrong answer with nothing in the corpus to flag it. This
+  is a requirement the render set introduces and that doc 20 did not have;
+  [06](06_Truth_And_Annotation.md) owns its shape.
 - **The rendered span is delimited by two recorded instants, and those instants are the gate.** A vehicle
   appears in the world at the tick it was admitted and vanishes at the tick it was released, at full
   opacity in both directions. That abrupt appearance and disappearance is a fact about the capture, so
@@ -1121,9 +1170,10 @@ reopens exactly that hazard**, and it must be closed the same way.
 `anomaly_staybehind` (`vClass="authority"`). **No Bahonar type declares `vClass="emergency"`**, and the
 beacon fires only for that class (`MSVehicle.cpp:4802`), so on this scenario the hazard is **latent, not
 live**. But it is one `vClass` away: a scenario that gave an anomalous vehicle an emergency class would
-put a flashing blue beacon on precisely the vehicles the model is supposed to find, and a detector would
-score beautifully for the wrong reason. The rule, stated so [11](11_Time_And_Illumination.md) can
-implement it and [07](07_Scenario_Authoring.md) can validate it:
+put a flashing blue beacon on precisely the vehicles the corpus marks anomalous — a leaked covariate
+exactly like the colour of D1.6, present in the data whether or not anything downstream ever exploits it.
+The rule, stated so [11](11_Time_And_Illumination.md) can implement it and [07](07_Scenario_Authoring.md)
+can validate it:
 
 > **Lamps that are computed from a vehicle's own motion or from the world's light level are carried.
 > Lamps that are a declared attribute of a vehicle are treated the way `vType` colour is treated under
@@ -1291,7 +1341,7 @@ Stated as properties, not as a design:
 | [05 — Capability audit](05_CarlaNet_Capability_Audit.md) | Whether `set_transform`, `set_simulate_physics` and `apply_batch` are implemented end to end through `CarlaNet.Transport` to the server, at batch sizes this mode uses; add `SetVehicleLightStateCommand` in batch form to that list (§8.5). `set_actor_fade` is deliberately **not** on this list — nothing here calls it (§3.1, §8.2) |
 | [06 — Truth and annotation](06_Truth_And_Annotation.md) | The rendered span gate upstream of the observed span (§7). Where kinematics provenance is carried. **That the run manifest carries the declared epoch and the `SolarPolicy`**, because the sidecar's `<_solar>` records local solar time and the engine's longitude-derived zone (`CotWriter.cs:52-66`) and nothing in it states the *civil* offset the scenario declared — so without the manifest a consumer cannot convert a recorded frame back to scenario civil time, and a replay cannot re-establish the sun (§5.5) |
 | [07 — Scenario authoring](07_Scenario_Authoring.md) | How [20 §2.4](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s three interval onsets are produced on a SUMO surface, where there is no authored speed-action ramp to separate them. That the validator rejects a package with no epoch declaration, and rejects an author-declared lamp that would breach §8.5.3 |
-| [08 — Collection and EPoL](08_Collection_And_EPoL.md) | That truth never reaches the model service, only the evaluation join. That solar state remains an available covariate for stratifying a corpus and never an input the model is scored against |
+| [08 — Collection and EPoL](08_Collection_And_EPoL.md) | That truth never reaches the model service — it consumes tracks only, and this pipeline reads nothing it emits back in. That solar state remains an available covariate for stratifying a corpus; this pipeline does not train or judge any model against it |
 | [09 — Toolchain and packaging](09_Toolchain_And_Packaging.md) | `sumo`, `duarouter` and `libtracics` staged and shipped, `SUMO_HOME` set ([23 §6.1, §6.2, §6.12](../../Findings/23_SUMO_Traffic_Integration.md)) |
 | [10 — Scale and performance](10_Scale_And_Performance.md) | The seven properties of §9.4 |
 | [11 — Time and illumination](11_Time_And_Illumination.md) | Five properties, stated in §10.1 below |

@@ -11,7 +11,8 @@ rules, the failure mode when a rule is violated, and the versioning rule. Nine c
 conversation that produced this plan.
 
 **Binds to:** [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3 (decisions not to re-litigate), §3a (the
-simulated-time-of-day requirement) and §4 (standing rules).
+simulated-time-of-day requirement), **§3b (the scope boundary — this pipeline labels; it never scores)**
+and §4 (standing rules).
 **Depends on:** [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) (owns the tick and
 solar-clock *mechanism*; this section states the *guarantee*),
 [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) (owns the annotation payload; this section
@@ -35,6 +36,20 @@ rules on whether solar state may cross `C8`'s boundary (§10.4a), and adds measu
 `C1` (§3.2a). Every contract, field, rule and decision from the first draft that survives is unchanged
 and keeps its number.
 
+**And what changed again, after the scope decision.** [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b places the
+detect-and-track model and the EPoL model **outside** this effort: the pipeline produces synthetic
+imagery plus the truth and labels used to train and validate them downstream, and **no part of it scores
+anything**. `C8` was the contract that sat on that line, and it is rewritten — from an EPoL-facing
+boundary with an evaluation join to a **corpus handover** (§10). Three artifact roots become **two**
+(`D4.26`); supervision transfer becomes a format guarantee plus a documented rule rather than an
+operation (`D4.27`); the association-quality block is split, and the fields that describe **label**
+quality survive while the fields that describe a model's match do not (`D4.28`). The
+observer-derivability principle `D4.20` and the anti-leak isolation `D4.16` are untouched in substance,
+because both were always rules about **our own data** — they govern what may be placed in the
+`OBSERVATION` root. Elsewhere, wherever a rule was *justified* by evaluation, the rule is kept and the
+justification re-framed; every such spot is marked **re-framed** so nothing looks quietly deleted. No
+decision was renumbered: `D4.26`–`D4.28` are new, and siblings citing `D4.x` are safe.
+
 ### What this section does not cover
 
 - **Sizing.** Every cap, radius, window, budget and tolerance below is named and typed; not one is given
@@ -57,6 +72,10 @@ and keeps its number.
   policy, and what an operator sees is
   [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md)'s. `C9` says only what the
   resulting choice must look like on the wire and what the manifest must record about it.
+- **Anything a model does with the corpus.** Running a detector, a tracker or an EPoL model,
+  associating their output to truth, and any metric, harness or comparison over them are outside this
+  effort entirely ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b). `C8` ends at the handover; what happens past
+  it is the external model team's, and this document specifies none of it.
 - **Pedestrians**, out of scope by [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3.5.
 
 ---
@@ -96,7 +115,7 @@ of them, so they are named here once and used consistently below.
 | **Sun-clock** | `solar_time`, `_solar_hours` | The number `CesiumSunSky.SolarTime` holds: hours in the sun's *own* time zone, which is derived from the map longitude and is **not** the civil offset (`C9` §11.4). A conversion sits between civil and sun-clock and it is not the identity |
 
 Wall-clock time appears in exactly two places — `generated_at_utc` on build artifacts, and
-`sumo_step_timeout_wall_s` — and nothing rendered, recorded or scored may depend on it.
+`sumo_step_timeout_wall_s` — and nothing rendered or recorded may depend on it.
 
 **Digest.** Wherever this document says *digest*, it means the lowercase hex SHA-256 of the artifact's
 bytes, or — for a JSON document that carries its own digest field — of the document serialised with
@@ -149,11 +168,11 @@ flowchart TB
     MAN[/"run manifest<br/>C2 render states · C4 identity table<br/>C9 epoch · policy · solar residual"/]
   end
 
-  subgraph epol["Model path — C8"]
-    DT["detect and track"]
-    EP["EPoL service"]
-    SCORE["scoring"]
+  subgraph handover["Handover — C8"]
+    OBSR[/"OBSERVATION root<br/>imagery · collection metadata<br/>· radiometry · solar · epoch"/]
+    TRUR[/"TRUTH root<br/>CoT sidecars · labels · supervision<br/>· coverage · manifests"/]
   end
+  EXT["external model team<br/>detect-and-track · EPoL<br/>neither run nor measured here"]
 
   CONTENT --> SWEEP --> CAT
   WORLDGEN --> CWP
@@ -177,9 +196,12 @@ flowchart TB
   DRIVER --> MAN
   RSC --> MAN
   CLOCK --> MAN
-  IMG --> DT --> EP --> SCORE
-  IMG -. "solar + epoch cross as<br/>collection context (C8 D4.21)" .-> EP
-  MAN -. "never reaches inference" .-> SCORE
+  IMG --> OBSR
+  IMG --> TRUR
+  MAN --> TRUR
+  OBSR --> EXT
+  TRUR --> EXT
+  MAN -. "never enters the<br/>OBSERVATION root (C8 D4.20)" .-x OBSR
 ```
 
 **The register.** Every artifact, who writes it, who reads it, and which contract governs it.
@@ -190,20 +212,21 @@ flowchart TB
 | `VehicleCatalog.xosc` | the same sweep, same run | OpenSCENARIO executor, foreign preview player | `C1` |
 | `<name>.rou.xml` `vType` set | scenario builder, from the catalogue | SUMO, playback bridge | `C1` |
 | render-set parameters in `scenario.json` | scenario author | render-set controller | `C2` |
-| `render_states[]` in the run manifest | render-set controller | truth consumers, scoring, corpus auditor | `C2` |
+| `render_states[]` in the run manifest | render-set controller | truth consumers, corpus auditor, corpus builder | `C2` |
 | `<name>.csp` scenario package | scenario builder | co-simulation driver, validator | `C3` |
 | spawn attributes `capture:*` | playback bridge at spawn | truth producer, recorder log, replayer | `C4` |
 | `<extract>.aoi.geojson` | the author, beside the OSM | world build, scenario builder, world actor | `C5` |
-| `<name>.aoi.resolved.json` | scenario builder | SUMO route writer, truth producer, EPoL service | `C5` |
+| `<name>.aoi.resolved.json` | scenario builder | SUMO route writer, truth producer, and — for its **authored definitions only** — the observation writer (`C8` §10.4) | `C5` |
 | clock parameters in `scenario.json` | scenario author | co-simulation driver | `C6` |
 | per-actor authority | playback bridge at spawn | every subsystem that touches an actor | `C7` |
 | per-actor vehicle light state | playback bridge, every tick | the rendered scene, and nothing else — it is not published as data | `C7` |
-| detector input / detector tracks | collection and detect-and-track | EPoL service, scoring | `C8` |
-| assignment table | scoring, after inference | corpus auditor | `C8` |
-| `epoch` block in `scenario.json` | scenario author | co-simulation driver, solar clock, truth producer, corpus auditor, **and the EPoL context assembler** (`C8` §10.4a) | `C9` |
+| `OBSERVATION` root — imagery plus collection metadata | frame recorder and the collection-metadata writer | the external model team, at handover | `C8` |
+| `TRUTH` root — sidecars, labels, supervision, coverage, manifests | truth producer and manifest writer | corpus auditor, corpus builder, the external model team at handover | `C8` |
+| corpus manifest — contents, versions, declared omissions | corpus builder, at handover | the external model team | `C8` |
+| `epoch` block in `scenario.json` | scenario author | co-simulation driver, solar clock, truth producer, corpus auditor, **and the observation writer** (`C8` §10.4a) | `C9` |
 | `illumination` block in `scenario.json`, and the run override | scenario author; operator at run start | solar clock | `C9` |
-| `<_solar>` sidecar element and the `carla:solar` PNG chunk | frame recorder — **already written today** (`CotWriter.cs:52-65`, `SolarMetadata.cs:19`) | truth consumers, corpus auditor, EPoL context assembler | `C9` |
-| `epoch`, `illumination_in_force`, `solar_achieved[]`, `solar_residual` in the run manifest | the solar clock, closed at run end | corpus auditor, scoring, stratification | `C9` |
+| `<_solar>` sidecar element and the `carla:solar` PNG chunk | frame recorder — **already written today** (`CotWriter.cs:52-65`, `SolarMetadata.cs:19`) | truth consumers, corpus auditor, observation writer | `C9` |
+| `epoch`, `illumination_in_force`, `solar_achieved[]`, `solar_residual` in the run manifest | the solar clock, closed at run end | corpus auditor, corpus stratification | `C9` |
 
 ---
 
@@ -1058,15 +1081,17 @@ defaults). Under `C1` those numbers become the blueprint's real 4.55 × 2.10 × 
   occupancy in the corpus is then a claim about a vehicle that does not appear, and the truth record
   and the imagery disagree about the same object. Nothing downstream can detect this, because both
   sides are internally consistent.
-- **A systematic along-track pose bias.** `Δlength / 2` in every frame, in exactly the axis a
-  detector's along-track error is scored in. Measured worst case in the shipped artifacts: 1.00 m.
+- **A systematic along-track pose bias.** `Δlength / 2` in every frame, in exactly the axis along which
+  the label and the pixels have to agree for the label to mean anything. Measured worst case in the
+  shipped artifacts: 1.00 m.
 - **The pose conversion cannot be computed at all.** The front-bumper-centre to actor-origin shift
   needs the measured extent and box centre, and SUMO has neither (`D4.17`). Without the catalogue at
   runtime the bridge either does not render or renders at a guessed offset — and the guess is
   invisible, because both the imagery and the truth record agree with each other while both are wrong.
 - **Colour becomes the label.** Measured: the four Bahonar anomaly types are the only conspicuous
-  colours in the file and cover all nine marked vehicles. A model trained on that corpus learns
-  "orange means anomaly" and its measured skill is a property of the scenario generator.
+  colours in the file and cover all nine marked vehicles. A corpus built that way carries its own
+  supervision in a covariate — "orange means anomaly" is readable straight off the pixels — and nothing
+  in the corpus records that it does.
 - **One category, one car.** The present state (`BlueprintChooser.cs:43-63`) produces convoys of
   identical vehicles, which
   [doc 18 §8.4](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md) already records as worse
@@ -1076,11 +1101,11 @@ defaults). Under `C1` those numbers become the blueprint's real 4.55 × 2.10 × 
 - **A night corpus of dark vehicles, asserted to be lit.** `has_lights` is `true` on all 17
   (Measurement 5) and the light-state read-back returns the command rather than the vehicle
   (`CarlaWheeledVehicle.cpp:486-489`), so every layer above reports success while the imagery shows an
-  unlit body. A detector trained to find headlights at night learns whatever those seventeen blueprints
-  happen to do, and the corpus records no trace of which ones did nothing.
+  unlit body. The corpus then asserts a lit vehicle where the imagery holds a dark one, and records no
+  trace of which of the seventeen blueprints actually lit up — a label that contradicts its own frame.
 - **Lamp capability becomes the night-time label.** If the blueprints that light up cluster in the
-  classes the marked vehicles use, a model separates the positive class on illumination rather than on
-  behaviour — the same failure as `vType@color`, at a different time of day, and V1.19 is the check.
+  classes the marked vehicles use, the positive class is separable on illumination rather than on
+  behaviour — the same defect as `vType@color`, at a different time of day, and V1.19 is the check.
 
 ---
 
@@ -1211,8 +1236,11 @@ window:
 
 - A `simulated_only` vehicle contributes to any denominator computed over **behaviour** — how many
   vehicles executed a pattern, base rates of behaviour in the world.
-- It contributes **zero** to any denominator computed over **imagery** — detection recall, per-sensor
-  prevalence, the evaluation denominator of doc 20 §2.5.
+- It contributes **zero** to any denominator computed over **imagery** — per-sensor prevalence, and the
+  imagery-side denominator of doc 20 §2.5. A vehicle that was never rendered is not something the
+  imagery ever had a chance to contain. *(**Re-framed**: the first draft justified this by what a
+  detector's recall would be charged against. The rule is unchanged; it is a rule about which of our
+  own numbers is the honest one.)*
 - `observed_union_s` and the per-sensor `observed_spans` are the honest denominators. `sumo_span_s` is
   not.
 - `reason = "capped"` on **any** vehicle is a capture-quality signal; on a participant it is
@@ -1236,15 +1264,16 @@ window:
 
 ### 4.7 What breaks if C2 is violated
 
-- **Absence becomes ambiguous.** Without `render_states[]`, a vehicle missing from the imagery could
-  be one the model failed to detect, one the renderer never instantiated, or one SUMO never simulated.
-  Those three have opposite implications and no downstream consumer can separate them after the fact,
+- **Absence becomes ambiguous.** Without `render_states[]`, a vehicle missing from the imagery could be
+  one that was rendered and simply not visible, one the renderer never instantiated, or one SUMO never
+  simulated. Those three have opposite implications and no consumer can separate them after the fact,
   because the manifest and the imagery are the only artifacts.
-- **Recall is charged against vehicles no sensor ever saw**, which understates the model by exactly
-  the fraction of the simulation that was never rendered — and at the sizing case that fraction is
-  most of it.
-- **Prevalence is overstated**, and precision at low base rates is dominated by the base rate
-  (doc 20 §2.6).
+- **The corpus's own denominator is wrong by most of its mass.** Any count taken over imagery that uses
+  `sumo_span_s` instead of `observed_union_s` is charged with vehicles no sensor ever saw — at the
+  sizing case that is most of the simulation — so the corpus misdescribes itself and every consumer
+  inherits the error.
+- **Prevalence is overstated**, which bites hardest at the low base rates doc 20 §2.6 records, where a
+  small error in the denominator moves the reported rate by a large factor.
 - **The subject of a run silently disappears.** Without `D4.6` the capture is missing the one vehicle
   it was built for, and the run looks superficially fine.
 - **An abrupt appearance becomes unaccounted for.** Vehicles appear and vanish at full opacity by
@@ -1583,17 +1612,20 @@ stateDiagram-v2
   Simulated --> Rendered : C2 admits it; server assigns actor_id;\ncapture:sumo_id stamped at spawn
   Simulated --> SimulatedOnly : C2 declines\n(outside_window / outside_region / capped)
   Rendered --> Observed : projects inside a sensor frustum;\ntruth event written with both ids
-  Observed --> Detected : detector emits a track (CARLA-DET-track_id)
-  Detected --> Supervised : scoring associates by position and time,\ntransfers supervision per interval
+  Observed --> HandedOver : C8 — imagery and truth leave this system
+  HandedOver --> [*] : what a consumer does with it, including\nsupervision transfer by the documented\nrule (C8 §10.6), happens outside this system
   Observed --> Rendered : leaves frame, still rendered
-  Rendered --> Released : C2 eviction E2/E3/E4 — fade out, actor destroyed
+  Rendered --> Released : C2 eviction E2/E3/E4 — actor destroyed, release instant recorded
   Released --> Rendered : re-admitted — NEW actor_id, SAME sumo_vehicle_id
   Rendered --> Removed : SUMO removes it (E1)
   Released --> Removed : SUMO removes it while released
   SimulatedOnly --> Removed : SUMO removes it
   Removed --> [*] : render_state closed in the manifest
-  Supervised --> [*]
 ```
+
+`HandedOver` is this system's last state. Everything past it belongs to the external model team
+([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b), and `C8` §10.6 documents the transfer rule without performing
+it.
 
 ### 6.6 Join rules
 
@@ -1603,7 +1635,7 @@ stateDiagram-v2
 | truth event | truth event, across ticks | `actor_id` | Intra-run, within one rendering only |
 | truth event | annotation set | `entity_id`, then `instance_id` | Cross-run comparison rests on `entity_id`; `actor_id` cannot |
 | capture | capture, across sensors | `tick` | **Not filenames.** The recorder's file stem is local wall-clock time to the millisecond and two cameras sample on their own phase, so the same simulated instant carries different names in different directories (doc 20 §7.5; the tick is on every capture) |
-| detector track | truth | position and time gate, **never uid** | [doc 09 §9](../../Findings/09_Telemetry_CoT_Contract.md) fixes this, and `C8` depends on it |
+| an external consumer's track | truth | position and time, **never uid** | The rule `C8` §10.6 *documents* and this pipeline does not perform. [doc 09 §9](../../Findings/09_Telemetry_CoT_Contract.md) fixes it; `C8` §10.8 is why the corpus keeps an identifier join unavailable |
 | run manifest | captures | `run_id` + `scenario_id` | Both must be supplied — §5.6 |
 | render state | truth | `sumo_vehicle_id`, then `rendered_spans[].actor_id` | The only way to recover which actor was which rendering |
 
@@ -2053,7 +2085,8 @@ The truth record reads `snap.Velocity` from the world-observer cache
 (`CarlaNet.Recording/VehicleTelemetryService.cs:77,88`) and derives both `speed` and — above 0.5 m/s —
 `course` from it (`:89-98`). So a teleported body reports zero speed *and* falls back to yaw for
 course, which then also reaches the CoT `track` element (`CotWriter.cs`), the occlusion and arrival
-gating of [doc 17](../../Findings/17_Photoreal_Occlusion_Metric.md), and any consumer scoring speed.
+gating of [doc 17](../../Findings/17_Photoreal_Occlusion_Metric.md), and every consumer that reads speed
+out of the truth record.
 
 > **D4.13 — truth velocity for a SUMO-driven actor is a contract obligation of the producer, not a
 > property recovered from the engine.** The truth record's `speed`, `course`, `vx`, `vy`, `vz` for an
@@ -2164,7 +2197,7 @@ real sun and the owner is the bridge.
    is harmless, but the bridge holds the last written value rather than polling, because the readback
    is the command and not the vehicle (§3.2a) and a poll would cost a round trip per vehicle per tick.
 5. **The written bitmask is recorded nowhere as data.** Light state is a rendering input, not truth. It
-   does not enter the sidecar, the run manifest or the EPoL boundary. If a consumer needs to know
+   does not enter the sidecar, the run manifest or either handover root (`C8`). If a consumer needs to know
    whether a vehicle was braking, the answer is SUMO's behavioural record, which is where the fact
    originated.
 
@@ -2227,7 +2260,8 @@ explicitly rather than lost silently. In this mode:
 
 - **Every truth speed is zero and every course is a yaw** — the measured consequence of
   `WorldObserver.cpp:373`. A corpus whose truth says nothing moves is not a corpus, and downstream
-  consumers that gate on speed (occlusion, arrival, scoring) all mis-fire.
+  consumers that gate on speed — occlusion, arrival, and anything downstream reading the truth record —
+  all mis-fire.
 - **Vehicles float or sink.** SUMO's network is flat; taking Z from it puts every vehicle at the
   world's Z = 0 plane regardless of terrain.
 - **Two controllers write one actor's pose**, and it jitters between them at tick rate.
@@ -2244,47 +2278,97 @@ explicitly rather than lost silently. In this mode:
   would write `Position` and `LowBeam` from different sun sources — one inert, one real — and the lights
   would flicker at tick rate with no record of why. I13 is the check.
 - **A conspicuity lamp becomes a label.** If `Position`/`LowBeam` were derived per vehicle rather than
-  per scene, or if a class's `lamps_expected` tracked supervision state, the positive class would be
-  separable on lighting. The guarantee in §9.4 item 3 and `C1` V1.19 are the two halves that prevent it.
+  per scene, or if a class's `lamps_expected` tracked supervision state, the corpus's positive class
+  would be separable on lighting rather than on behaviour. The guarantee in §9.4 item 3 and `C1` V1.19 are the two halves that prevent it.
 
 ---
 
-## 10. C8 — The EPoL-facing boundary
+## 10. C8 — The corpus handover
 
-[`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md) owns the design. `C8` fixes only the shape of
-the boundary and the rule that keeps truth out of the model's input.
+**Rewritten in this redraft.** [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b narrows the scope of this whole
+body of work: the detect-and-track model and the estimated-pattern-of-life model are **external to it**,
+and **no part of this pipeline or tool suite scores anything**. `C8` was drafted as the boundary at
+which those models are fed and at which their output is joined to truth. It is now the boundary at
+which **this system ends and a corpus is handed over** — what an external model team is given, in what
+form, with what guarantees, and what the corpus deliberately does not contain.
 
-### 10.1 The three stages and what crosses between them
+What survived the rewrite is every assertion about **our own data**: the artifact roots, the
+observer-derivability principle (`D4.20`), the anti-leak isolation (`D4.16`), the corpus-description
+rules, and every measurement. What went is every assertion about a **model**: the association harness,
+the metrics it fed, and the artifact that carried them. Where a rule was *justified* by evaluation, the
+rule is kept and the justification re-framed; each such case is marked **re-framed** in place, so a
+reader of the first draft can see that nothing checkable was dropped.
+
+[`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md) owns the collection rationale — what a camera
+can see, what a capture session is, and why a root is laid out the way it is. `C8` owns the contract:
+the roots, the field sets, the guarantees, and the refusals.
+
+### 10.1 Where this system ends
 
 ```mermaid
 flowchart LR
-  subgraph capture["Capture output"]
-    IMG[("imagery frames")]
-    SC[("sidecars: sensor pose + intrinsics")]
-    TRUTH[("sidecars: truth events")]
-    MAN[("run manifest")]
+  subgraph ours["This system — everything it produces"]
+    direction TB
+    subgraph obs["OBSERVATION root — travels with the pixels"]
+      IMG[("imagery frames")]
+      COL[("collection metadata:<br/>sensor pose · intrinsics · radiometry<br/>· achieved solar · epoch context")]
+    end
+    subgraph tru["TRUTH root — the supervision side"]
+      SID[("CoT truth sidecars")]
+      LAB[("per-image labels:<br/>2D + 3D boxes · segmentation<br/>· occlusion · signature · apparent size")]
+      SUP[("supervision, areas, coverage")]
+      MAN[("run and corpus manifest")]
+    end
   end
-  ASM["inference-input assembler<br/>holds no reference to truth artifacts"]
-  DT["detect and track"]
-  TRK[("detector tracks")]
-  EP["EPoL service"]
-  OUT[("EPoL output")]
-  SCORE["scoring<br/>reads both, writes neither back"]
-  ASSIGN[("assignment table")]
+  HAND{{"C8 handover<br/>both roots, one declared corpus"}}
+  EXT["external model team<br/>detect-and-track · EPoL<br/>neither run nor measured here"]
 
-  IMG --> ASM
-  SC --> ASM
-  ASM --> DT --> TRK --> EP --> OUT
-  TRK --> SCORE
-  OUT --> SCORE
-  TRUTH --> SCORE
-  MAN --> SCORE
-  SCORE --> ASSIGN
-  TRUTH -. "forbidden" .-x ASM
-  MAN -. "forbidden" .-x EP
+  IMG --> HAND
+  COL --> HAND
+  SID --> HAND
+  LAB --> HAND
+  SUP --> HAND
+  MAN --> HAND
+  HAND --> EXT
+  MAN -. "never enters the<br/>OBSERVATION root (D4.20 test 4)" .-x COL
+  SUP -. "never enters the<br/>OBSERVATION root (D4.16)" .-x IMG
+  EXT -. "no output of this box is<br/>produced, consumed or<br/>validated by this system" .-x HAND
 ```
 
-### 10.2 What detect-and-track consumes
+The single arrow out is the whole of `C8`'s runtime behaviour. There is no arrow back.
+
+### 10.2 The artifact roots — the ruling
+
+The first draft specified **three** roots: `OBSERVATION`, `TRUTH` and a third for associations and
+reports. Under [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b the third root has no writer in this system and
+no reader in it either. Associations and reports are computed from model output, which this pipeline
+never produces and never receives.
+
+> **D4.26 — this system owns exactly two artifact roots, `OBSERVATION` and `TRUTH`. There is no third.
+> Model output — detections, tracks, model assessments, associations, reports — is neither produced,
+> consumed, stored, validated nor versioned here, and no artifact of this pipeline may be written into
+> a location that holds it.** The structural value the three-root split carried is entirely in the
+> *first two*: the separation that keeps truth out of the model's input is the `OBSERVATION`/`TRUTH`
+> boundary, and it is unaffected by the third root's removal.
+
+| Root | Written by | Contents | Guarantee it carries |
+|---|---|---|---|
+| `OBSERVATION` | the frame recorder and the collection-metadata writer, in the same call that writes the frame | imagery; sensor pose and intrinsics; radiometry; achieved solar state; the scenario epoch; the capture identity attributes `tick`, `sim_time_s`, `run_id`, `scenario_id`, `sensor_id` | **Observer-derivable in full.** Every field in it satisfies all four tests of `D4.20`. It can be put in front of a model with nothing removed, because nothing was ever added |
+| `TRUTH` | the truth producer and the manifest writer | CoT truth sidecars; per-image label records; segmentation; `<_supervision>`; `<_aoi>`; coverage; the render-state accounting of `C2` §4.5; the run manifest and the corpus manifest | **Complete and self-describing.** It states what it contains, in what units, over what spans, and — `C2` `D4.7` — what it does *not* contain and why |
+
+**Coordination with [`08`](08_Collection_And_EPoL.md).** The two documents reached this independently
+and agree: `08` §3.5 withdraws the third root and lays the session directory out over two, and `08`
+§9.4 restates the anti-leak mechanisms over two writers. The division of labour is that `08` owns the
+collection rationale — how the two roots are laid out, named and sessioned, and why — while `C8` owns
+the contract, and `D4.26` is the ruling a later reader should cite. The properties this contract needs
+from `08` are exactly two roots with one writer each, and the split performed at the writer rather than
+by a later stripping step, which is `08`'s own second mechanism and is unaffected by the removal.
+Where any residual text in the folder still names a third root, `D4.26` is what it is measured against.
+
+### 10.3 What the `OBSERVATION` root contains, exhaustively
+
+Every field that travels with the pixels. **Adding a field to this list is a contract change**, and the
+allow-list of V8.8 is the mechanical form of that sentence.
 
 | Field | Type | Unit | Req. | Source |
 |---|---|---|---|---|
@@ -2293,57 +2377,53 @@ flowchart LR
 | `tick` | integer | — | yes | The sidecar container's `tick` (`CotWriter.cs:42`) |
 | `sim_time_s` | number | s | yes | Container's `sim_time_s` (`:43`) |
 | `run_id` | string | — | yes | Container's `run_id` (`:44`) |
+| `scenario_id` | string | — | yes | Container's `scenario_id` (`:45`) — §5.6 is why it must actually be supplied |
 | `sensor_pose` | object | — | yes | `latitude`, `longitude`, `hae_m`, `azimuth`, `elevation`, `roll` — the platform event's `<point>` and `<sensor>` elements |
 | `intrinsics` | object | — | yes | `width`, `height`, `fx`, `fy`, `cx`, `cy`, `hfov_deg`, `vfov_deg`, `model`, `distortion` — the `<_carla_intrinsics>` element |
+| `radiometry` | object | — | yes | The camera's exposure and response record. The field set is [`08`](08_Collection_And_EPoL.md) §4.8's; `C8` requires only that it is present and is on this side |
+| `solar` | object | — | yes | The frozen field set of §10.4a, from `<_solar>` and the `carla:solar` PNG chunk |
+| `epoch` | object | — | yes | `civil_datetime`, `utc_offset_hours`, `utc_datetime` from `C9` §11.3, copied from the scenario package |
 
-**It consumes nothing else.** In particular it is not given the sidecar's per-vehicle `<event>`
-elements, `<_carla>`, `<_supervision>`, `<_aoi>`, or the run manifest.
+**It contains nothing else.** In particular it does not contain the sidecar's per-vehicle `<event>`
+elements, `<_carla>`, `<_supervision>`, `<_aoi>`, the label records, the coverage file, the render-state
+accounting, or any field reachable only from a manifest.
 
-### 10.3 What detect-and-track emits
+### 10.4 What is excluded from the `OBSERVATION` root, and where it lives instead
 
-The same CoT shape as truth, so the two are directly comparable —
-[doc 09 §1](../../Findings/09_Telemetry_CoT_Contract.md)'s whole purpose:
+This table was headed *given* and *withheld* in the first draft, as though a model were being fed across
+it. It is the same table, and it is a statement about **where our own fields live**. An external model
+team receives **both** roots — it must, to train and to validate — and the separation exists so that the
+team can put the observation root in front of a model without having to trust that something was
+stripped out of it first.
 
-| Field | Value |
+| In the `OBSERVATION` root | In the `TRUTH` root, and only there |
 |---|---|
-| `uid` | `CARLA-DET-<track_id>` |
-| `how` | `m-f` (machine/fused), so provenance differs from truth's `m-g` |
-| `point.ce`, `point.le` | **estimated**, not zero. Truth's zeros are the marker of truth |
-| `_carla@source` | `detection` |
-| `_carla@track_id` | The detector's track identifier, stable within a sensor |
-| `_carla@class` | The predicted class |
-| `_carla@confidence` | 0–1 |
-| `_carla@bbox_px` | `x,y,w,h` in the frame |
-
-Track identity is **per sensor**: one truth entity maps to a track set per sensor, because each camera
-feeds its own detector (doc 20 §7.6).
-
-### 10.4 What the EPoL service is given
-
-| Given | Withheld |
-|---|---|
-| The detector track stream of §10.3 | `sumo_vehicle_id`, `entity_id`, `instance_id`, `actor_id` |
-| `sensor_id`, and the sensor's pose per frame | `_supervision` in any form |
-| The **authored** area table — `id`, `name`, `kind`, geometry (`C5` §7.1) | `_aoi` derived relations, which are computed from truth positions |
+| Imagery, sensor pose per frame, intrinsics, radiometry | `sumo_vehicle_id`, `entity_id`, `instance_id`, `actor_id` |
+| `sensor_id`, `tick`, `sim_time_s`, `run_id`, `scenario_id` | `<_supervision>` in any form |
+| The **authored** area table — `id`, `name`, `kind`, geometry (`C5` §7.1), which an author wrote and no truth derived | `<_aoi>` derived relations, which are computed from truth positions |
 | The world's georeference and the bare-earth grid, for height | `_carla` truth extras: `type_id`, `base_type`, `special_type`, true dimensions, `color`, `role_name`, `capture:*` |
-| **The scenario epoch and the per-frame solar state**, in the exact field set of §10.4a | `render_states[]`, the run manifest, `marked` |
-| | `illumination`, the policy in force, and the solar residual — these are *statements about the capture*, not about the world, and they live in the manifest |
+| **The scenario epoch and the per-frame solar state**, in the exact field set of §10.4a | `render_states[]`, the run manifest, the corpus manifest, `marked` |
+| | `illumination`, the policy in force, and the solar residual — these are *statements about the capture*, not about the world |
+| | The per-label quality block: occlusion, visible signature, apparent size, truncation, label crowding (§10.7) |
 
-> **D4.15 — area *relations* the model uses must be recomputed from the model's own track positions.
-> Only the area *definitions* cross the boundary.** `<_aoi>` is derived from truth and is therefore
-> truth; handing it to the model would let it read exact containment it could not have measured.
+> **D4.15 — only the area *definitions* may be placed in the `OBSERVATION` root. Area *relations* are
+> derived from truth positions and are therefore truth, and live in the `TRUTH` root.** *(Unchanged in
+> substance; the first draft phrased it as what may cross to a model. **Re-framed**: it is a rule about
+> where our own fields go.)* An observation-side `<_aoi>` would state exact containment that no observer
+> measured, so anything reading it would be reading a rule evaluated on noiseless inputs — the failure
+> doc 20 §2.1 exists to prevent.
 
-### 10.4a Solar state, the epoch, and the general principle for inputs that are neither truth nor pixels
+### 10.4a Observer-derivability: what may be placed in the `OBSERVATION` root
 
 **The question.** Solar state is not truth about the scene — a fielded system knows the time and knows
 where it is standing — but it is produced by the simulator and it is recorded beside truth. `C8` has to
-say whether it crosses, and it has to say it precisely enough that an implementer cannot get it wrong
-in either direction: withholding it would cripple a model that is entitled to it, and admitting the
-wrong neighbouring field would leak.
+say which root it belongs in, precisely enough that an implementer cannot get it wrong in either
+direction: putting it on the truth side would withhold from a model something it is entitled to, and
+admitting the wrong neighbouring field would leak.
 
-> **D4.20 — the general principle. An input that is neither truth about the scene nor pixels crosses
-> the EPoL boundary if and only if it passes all four of these tests. Failing any one is disqualifying,
-> and no argument from usefulness overrides a failure.**
+> **D4.20 — the general principle. An input that is neither truth about the scene nor pixels may be
+> placed in the `OBSERVATION` root if and only if it passes all four of these tests. Failing any one is
+> disqualifying, and no argument from usefulness overrides a failure.**
 >
 > 1. **Fieldable.** A real system at the same place and time, with no access to the simulator, could
 >    obtain it — from its own instruments, its own configuration, or public reference data.
@@ -2351,10 +2431,15 @@ wrong neighbouring field would leak.
 >    delete them all, change every annotation: the value is unchanged.
 > 3. **Supervision-blind.** It is computed identically for every capture, by a rule fixed before the
 >    run, that takes no supervision state as input.
-> 4. **Sourceable from the observation side.** It is reachable from an artifact the inference-input
->    assembler is already permitted to open, without opening a truth artifact. A field that is only in
->    the run manifest fails this test *even if it passes the other three*, because reaching it would
->    breach `D4.16`'s structural isolation.
+> 4. **Sourceable from the observation side.** It is reachable from an artifact the observation writer
+>    is already permitted to open, without opening a truth artifact. A field that is only in the run
+>    manifest fails this test *even if it passes the other three*, because reaching it would breach
+>    `D4.16`'s structural isolation.
+
+*(`D4.20` is unchanged, and [`00_Overview.md`](00_Overview.md) cites it. Its wording moves from
+"crosses the EPoL boundary" to "may be placed in the `OBSERVATION` root", which states the same rule as
+what it always was — a question about our own data — rather than as a permission granted to an external
+model.)*
 
 Test 4 is the one that is easy to miss and it is why this is a contract clause rather than a policy
 note. Tests 1–3 are about the *value*; test 4 is about the *path*. A field can be perfectly legitimate
@@ -2369,123 +2454,220 @@ exists:
 | Fieldable | A fielded sensor knows its clock and its own georeferenced pose; solar elevation and azimuth follow from an almanac. This is arithmetic, not privileged information |
 | Scene-independent | The value is a function of date, time, latitude and longitude only (`USunPositionFunctionLibrary::GetSunPosition`, called from `CesiumSunSky.cpp:422-434`). No actor, no annotation and no supervision state is an input |
 | Supervision-blind | It is scene-scoped: one value per tick, identical for every actor and every sensor (`C4` §6.2). A scalar that is the same for every object in a frame cannot separate objects within it |
-| Sourceable | It is already on the **observation** side. `<_solar>` is written into every sidecar (`CotWriter.cs:50-65`) and `carla:solar` into every PNG (`SolarMetadata.cs:14-19`, `PngEncoder.cs:44`, `FrameRecorder.cs:227`). The assembler reads the same container attributes it already reads for `tick` and `sim_time_s` |
+| Sourceable | It is already on the **observation** side. `<_solar>` is written into every sidecar (`CotWriter.cs:50-65`) and `carla:solar` into every PNG (`SolarMetadata.cs:14-19`, `PngEncoder.cs:44`, `FrameRecorder.cs:227`). The writer reads the same container attributes it already reads for `tick` and `sim_time_s` |
 
-> **D4.21 — solar state and the scenario epoch cross the EPoL boundary as *collection context*, in a
-> named and frozen field set, read from the capture sidecar's `<_solar>` element and the PNG's
-> `carla:solar` chunk — never from the run manifest.** `08_Collection_And_EPoL.md` §8.2 already places
-> `solar` and `epoch` in `EpolRequest.context`; `C8` fixes which fields, and from where.
+> **D4.21 — solar state and the scenario epoch are placed in the `OBSERVATION` root as *collection
+> context*, in a named and frozen field set, written from the capture's `<_solar>` element and the PNG's
+> `carla:solar` chunk — never copied from the run manifest.** *(Unchanged in substance; **re-framed**
+> from "cross the EPoL boundary" to "are placed in the observation root".)*
+> [`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md) §8.2 already places `solar` and `epoch` in
+> the context block that travels with the imagery; `C8` fixes which fields, and from where.
 
 **The field set, exhaustively. Adding a field to this list is a contract change.**
 
-| Field | Crosses | Source |
+| Field | In `OBSERVATION` | Source |
 |---|---|---|
 | `solar_time` | **yes** | `<_solar>@solar_time` (`CotWriter.cs:55`) |
 | `date` (`YYYY-MM-DD`) | **yes** | `<_solar>@date` (`:56-57`) |
 | `time_zone` | **yes** | `<_solar>@time_zone` (`:58`) — the sun's zone, needed to interpret `solar_time` |
 | `sun_elevation_deg`, `sun_azimuth_deg` | **yes** | `<_solar>@sun_elevation_deg`, `@sun_azimuth_deg` (`:61-62`) |
 | `lat`, `lon` | **yes** | `<_solar>@lat`, `@lon` (`:59-60`). These are the **georeference origin**, not any vehicle's position. A fielded sensor knows where it is |
-| `epoch.civil_datetime`, `epoch.utc_offset_hours`, `epoch.utc_datetime` | **yes** | the `epoch` block, copied by the assembler from the scenario package, not from the manifest |
-| `advancing`, `rate` | **no** | `<_solar>@advancing`, `@rate` are present in the sidecar but are statements about *how the capture was produced*, not about the world. They fail test 2: two corpora of identical scenes differ in them. The assembler strips them |
+| `epoch.civil_datetime`, `epoch.utc_offset_hours`, `epoch.utc_datetime` | **yes** | the `epoch` block, copied by the observation writer from the scenario package, not from the manifest |
+| `advancing`, `rate` | **no** | `<_solar>@advancing`, `@rate` are present in the sidecar but are statements about *how the capture was produced*, not about the world. They fail test 2: two corpora of identical scenes differ in them. The observation writer strips them |
 | `illumination.policy`, `solar_residual`, `lamp_gaps[]`, `lamp_probe` | **no** | manifest-only; they fail test 4 and, for the residual, test 2 |
 
 **Why `advancing` and `rate` are excluded even though they sit in the same element.** They describe the
 experiment, not the scene. A model that learned "frozen sun means this is a sweep" would be reading the
 capture plan, and capture plans correlate with what a run was built to show. It costs nothing to strip
-two attributes, and the exclusion is where the precision this clause was asked for actually bites: the
-element crosses, but not all of it.
+two attributes, and the exclusion is where this clause's precision actually bites: the element goes into
+the observation root, but not all of it does.
 
 **The one thing that can still go wrong, and the check for it.** Solar state cannot separate two
-vehicles in a frame, but it can separate *frames*. A scenario that placed every annotated interval at
-night and every nominal one at noon would make illumination a perfect between-frame separator, and the
-model would learn the capture plan rather than the behaviour. That is the standing constraint of
-[`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3a — illumination is derived context, never a label — expressed as
-something checkable: V8.6 below requires supervision prevalence to be reported per solar bin, which is
-the number that makes the correlation visible before a model is trained on it.
+vehicles in a frame, but it can separate *frames*. A corpus that placed every annotated interval at
+night and every nominal one at noon would have made illumination a perfect between-frame separator of
+its own supervision — a defect in **the data**, present whether or not anything is ever trained on it.
+That is the standing constraint of [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3a — illumination is derived
+context, never a label — expressed as something checkable: V8.6 requires supervision prevalence to be
+reported per solar bin, which is the number that makes the correlation visible in the corpus's own
+description.
 
-### 10.5 The anti-leak rule, as a structural property
+### 10.5 The anti-leak isolation, as a structural property
 
-A policy that says "do not pass truth" is enforced by discipline. A structure that makes truth
-unavailable is enforced by the build.
+A policy that says "keep truth out of the observation root" is enforced by discipline. A structure that
+makes truth unreachable from the observation writer is enforced by the build.
 
-> **D4.16 — the inference input is assembled by a component that holds no reference to any truth
-> artifact, and the truth-to-model join is produced only *after* inference, from the model's own
-> output.**
+> **D4.16 — the `OBSERVATION` root is written by a component that holds no reference to any truth
+> artifact, and the two roots are written as separate files by separate writers from the first byte.**
+> *(The first draft added a second clause — that the truth-to-model join is produced only after
+> inference. **That clause is removed**, because no join is produced here at all; §10.6 is what replaces
+> it. The isolation clause is unchanged, and it is the half that was doing the work.)*
 
 Three properties, each checkable:
 
-1. **Assembly isolation.** The inference-input assembler reads the imagery directory and the sidecar's
-   `<sensor>`, `<_carla_intrinsics>` and container attributes. It must refuse to open the run manifest
-   or to parse any `<event>` element. In C# terms that is an assembly with no reference to
-   `CarlaNet.Recording`'s truth types; in Python terms, a module that does not import the truth reader.
-2. **The join does not exist at inference time.** The association from a detector track to a truth
-   entity is computed by the scoring component from the detector's own positions, by the position-and-
-   time gate [doc 09 §9](../../Findings/09_Telemetry_CoT_Contract.md) fixes, **never by uid**. It
-   therefore cannot be consulted during inference, because it is a function of inference's output.
-   This is stronger than a rule, because breaking it requires inverting causality.
-3. **Scoring writes nothing back.** The assignment table is an output of scoring and is never an input
-   to inference or to the assembler. A pipeline that feeds it back is doing training-on-test, and the
-   directionality is what makes that visible.
+1. **Writer isolation.** The observation writer reads the frame, the camera's own configuration, the
+   container attributes of §10.3 and the `<_solar>` element. It must be *incapable* of opening a truth
+   artifact — in C# terms an assembly with no reference to `CarlaNet.Recording`'s truth types; in Python
+   terms a module that does not import the truth reader. A validator can assert a reference graph; it
+   cannot assert good intentions. V8.10 makes this a build-time check rather than a run-time one.
+2. **The split happens at the writer, never at a copy step.** Today one `CotWriter` call produces one
+   file holding both the sensor block and the truth events (`CotWriter.cs:71-198`). A single file that
+   holds both forces a "strip the truth out" step to be invented later, and a stripping step is a thing
+   that gets forgotten or gets a bug. The two roots must be separate files from the start, so that
+   nothing is ever stripped because nothing was ever combined. This is
+   [`08`](08_Collection_And_EPoL.md) `D8.17` mechanism 2, and `C8` depends on it.
+3. **The handover is one-directional, and the roots are immutable after it.** Nothing outside this
+   system writes into either root, and nothing this system produces is re-derived from anything an
+   external consumer returns. There is no feedback path because there is no inbound path at all — which
+   is a stronger guarantee than the first draft's, since it does not depend on any later stage behaving
+   itself.
 
-### 10.6 The assignment table
+### 10.6 Supervision transfer — a format guarantee and a documented rule, never an operation
 
-Written by scoring, after inference. The artifact that makes a mis-associated label findable later
-rather than an unexplained hard example.
+Doc 20 §7.6 requires that supervision be transferable from truth onto a consumer's tracks. Performing
+that transfer needs model output, which this pipeline never sees. The obligation therefore splits
+cleanly, and `C8` takes only the half that is about our artifacts.
 
-| Field | Type | Unit | Req. | Meaning |
-|---|---|---|---|---|
-| `sensor_id` | string | — | yes | Which sensor's detector produced the track |
-| `track_id` | string | — | yes | The detector track |
-| `t_begin_s`, `t_end_s` | number | s | yes | The span of this assignment. A track crossing an interval boundary is **clipped**, not labelled wholesale |
-| `sumo_vehicle_id` | string | — | yes | The truth entity assigned |
-| `entity_id` | string | — | no | When the truth entity is authored |
-| `instance_id` | string | — | no | When the span falls inside an annotated interval |
-| `supervision` | string | — | yes | `annotated` \| `nominal` \| `unlabelled`, transferred from truth |
-| `association_quality` | number | — | yes | The gate's residual — positional error, or a normalised score |
-| `association_ambiguous` | boolean | — | yes | True when a second truth entity was within the gate |
+> **D4.27 — this contract guarantees that truth is emitted in an *associable form*, and documents the
+> rule by which supervision would transfer. It does not perform the association, ship a harness for it,
+> or produce any artifact derived from a consumer's output.** The format is normative for us; the rule
+> is documentation for the consumer.
 
-One truth entity can map to several detector tracks (identity switches, re-acquisitions), so the
-exported supervision is per `(detector track, interval)`, never per entity. With several sensors it is
-per `(sensor, detector track, interval)`.
+**The format guarantee — normative, checkable, ours.** For every capture tick, for every rendered
+vehicle, the `TRUTH` root carries:
 
-### 10.7 Validation, failure, versioning
+| Guaranteed property | Where it is | Why a transfer rule needs it |
+|---|---|---|
+| **Per tick** | one sidecar per `(sensor_id, tick)`; the tick is on the container (`CotWriter.cs:42`) and is the cross-sensor join key (`C4` §6.6) | a consumer's track is a time series, and can only be matched instant by instant |
+| **Positioned** | `<point>` with `lat`, `lon`, `hae` per vehicle, in the same frame and datum as the imagery's own georeference | the rule gates on position |
+| **Timed** | `sim_time_s` on the container (`:43`), and interval bounds `t_begin_s` / `t_end_s` in the manifest, in the same simulated-seconds clock | clipping a track at an interval boundary needs the boundary |
+| **Boxed** | the 2D and 3D boxes on the per-image label record, in the frame's own pixel coordinates and in world coordinates | image space is where a detector's error actually lives, so the box has to exist there too |
+| **Identified, stably** | `sumo_vehicle_id` and `entity_id` on every truth event (`C4`), so transferred supervision names something that survives across runs | `actor_id` alone cannot support cross-run comparison (`C4` §6.8) |
+| **Supervised, with bounds** | `<_supervision>` per tick, and the interval bounds in the manifest — the per-frame element alone cannot support clipping (doc 20 §7.6) | the manifest is the authoritative artifact for interval extent |
+| **Honestly scoped** | `observed_spans[]` and `observed_union_s` per sensor (`C2` §4.5) | a transfer over a span nothing observed is a transfer onto nothing, and the corpus says which spans those are |
+
+**The documented rule — not performed here, and the reason it is written down at all.** A consumer who
+wants supervision on their own tracks applies this rule. Nothing in this pipeline implements it, and no
+artifact here is derived from having applied it.
+
+1. Match a track to a truth vehicle **by position and time, never by identifier**. Doc 09 §3 and §9 fix
+   this: truth uids are `CARLA-TRUTH-<actor_id>` (`CotWriter.cs:134`) and a non-truth source uses a
+   different prefix, so an identifier join is not merely discouraged — it is not available, and §10.8
+   records that the corpus keeps it unavailable deliberately.
+2. Transfer supervision **per `(sensor_id, track, interval)`**, never per entity. One truth vehicle maps
+   to several tracks — identity switches, re-acquisitions — and with N sensors there are N independent
+   track sets, so one truth interval yields up to N supervised spans that overlap in time and differ in
+   coverage (doc 20 decision 15).
+3. **Clip** a track that spans an interval boundary; never label it wholesale. The bounds come from the
+   manifest, not from the per-frame element.
+4. Where the corpus reports a label as crowded, ambiguous, heavily occluded, truncated, or of
+   `visible_signature = none` (§10.7), the supervision transferred onto that label is correspondingly
+   uncertain — and the corpus said so before anyone asked.
+
+**What this contract therefore does not contain, and will not grow:** an assignment step, a gate radius,
+a cost function, a bipartite solver, an adjudication table, or any artifact holding the result of
+running one. Those belong to the consumer, outside the scope [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b
+sets.
+
+### 10.7 Label quality versus model performance — the ruling, field by field
+
+The first draft carried an association-quality block. Some of those fields describe **how good our label
+is**; the rest describe **how well a model matched it**. Only the first kind is ours — and the first
+kind turns out not to need a model at all. Every surviving field is computable from truth and the
+rendered frame alone, before any consumer exists.
+
+> **D4.28 — a quality field survives in the corpus if and only if it is computable from this system's
+> own truth and imagery with no model output as an input. Surviving fields attach to the *label*, per
+> `(sensor_id, tick, vehicle)`, in the `TRUTH` root — not to an assignment, because there are no
+> assignments here.**
+
+| Field in the first draft | Ruling | The form it takes now |
+|---|---|---|
+| `occlusion_at_assignment` | **label quality — survives.** Computed by the occlusion measurement already built ([doc 17](../../Findings/17_Photoreal_Occlusion_Metric.md)) from our own render, with no detector in sight | `occlusion` on the per-image label record. A label on a 90 %-hidden vehicle is a weak label, and the corpus says which ones they are |
+| `signature_at_assignment` | **label quality — survives.** `visible_signature` ([`08`](08_Collection_And_EPoL.md) §5.8) is derived from our own imagery and our own lamp state | `visible_signature` on the label record. At night a box may enclose two lamps and no vehicle; that is a fact about the label |
+| `truth_density` | **label quality — survives, re-framed.** It was defined as "truth vehicles inside the detection's gate", which needs a detection. The quantity that made it useful is truth-only: how crowded this label is by *other labels* | `label_crowding` — the number of other truth vehicles whose projected boxes fall within a declared radius of this one — and `nearest_label_px`, the distance to the closest. Both from truth projections only. The radius is a declared parameter, valued in [`10`](10_Scale_And_Performance.md) |
+| `margin` — distance to the next-best truth candidate for a detection | **split.** The margin itself needs a detection and is model performance: **does not survive.** What made a margin small is a property of the labels — two of them were close together | subsumed by `nearest_label_px`. How separable two labels are is ours; how well something resolved them is not |
+| `association_ambiguous` | **label quality — survives, re-framed.** It was already almost truth-only: it fired when *a second truth entity* was within the gate | `supervision_transfer_ambiguous` — true when `label_crowding > 0` within the declared radius **and** the neighbouring labels carry different supervision. That is exactly the case in which any transfer rule, run by anyone, could put the wrong supervision on a target, and it is decidable from truth alone |
+| `association_quality` — the gate residual | **model performance — does not survive.** A residual between a detection and a label is a statement about the detection | not produced. A consumer computing it has the label-quality block to interpret it against, which is the whole reason the block exists |
+| `residual_px`, `residual_norm` | **model performance — do not survive** | not produced |
+| `assigned_fraction`, `dominant_truth_fraction`, `switch_count` | **model performance — do not survive.** All three are properties of a track | not produced |
+
+**Apparent size and truncation** were never association fields and are unaffected: they are per-label
+descriptors of what the corpus contains, they stay, and `C2` §4.5's `observed_spans[]` is their
+per-vehicle counterpart over time.
+
+The net effect is that the requirement doc 20 §7.6 actually raised — *"the association quality per
+assignment should be recorded, so a mis-associated label is findable later rather than being an
+unexplained hard example"* — is met **better** on this side of the line than on the other. A consumer
+who finds a hard example looks the label up and reads that it was crowded by two differently-supervised
+neighbours at 4 px separation under `visible_signature = lamps`. The example stops being unexplained,
+and nobody measured a model to get there.
+
+### 10.8 What the corpus deliberately does not contain
+
+Stated positively, because a consumer who does not know an omission is deliberate will read it as a bug.
+
+| Not in the corpus | Why |
+|---|---|
+| Model output of any kind — detections, tracks, assessments | Not produced here, and `D4.26`: there is no root for it |
+| An assignment or association table | `D4.27`: the rule is documented, the operation is not performed |
+| Any model metric, score, confusion matrix or model comparison | [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b |
+| Any identifier by which a consumer's track could be joined to truth without measuring position and time | Deliberate. Truth's uid grammar is `CARLA-TRUTH-<actor_id>` (`CotWriter.cs:134`), truth's container is marked `source="truth"` (`:34`), truth's `how` is `m-g` (`:136`) and truth's `ce`/`le` are exactly `0.0` (`:145-146`). Those markers exist so that truth is **self-identifying** and can never be mistaken for, or silently merged with, something a consumer produced |
+| Imagery-side truth for a `simulated_only` vehicle | `C2` `D4.7`. The vehicle's behaviour is in the corpus; no sensor ever saw it, and `render_state` says so explicitly rather than by absence |
+| Truth for any partition the corpus declares as reserved | If [`08`](08_Collection_And_EPoL.md) reserves a partition whose truth is not released, `C8` requires only that the corpus manifest **declares** the partition and the fact of the omission. Whether to reserve one at all is `08`'s call; an undeclared omission is a defect either way (V8.9) |
+| Pedestrians | [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3.5 |
+
+### 10.9 Validation, failure, versioning
+
+Every rule is a check on **our own artifacts**, run by us, before a corpus is handed over. The response
+column names what this system does; none of them is a verdict on anything outside it.
 
 | # | Rule | Response |
 |---|---|---|
-| V8.1 | The inference input contains no field listed in §10.4's "withheld" column | refuse to run inference |
-| V8.2 | Every detector track has `source = "detection"` and non-zero `ce`/`le` | refuse at scoring — a track with `ce = 0` is truth wearing a detector's uid |
-| V8.3 | No assignment is made by uid | assertion in the scoring component |
-| V8.4 | Every assignment records `association_quality` | refuse |
+| V8.1 | The `OBSERVATION` root contains no field listed in §10.4's right-hand column | refuse to publish the handover |
+| V8.2 | Every truth event carries `source="truth"` on its container (`CotWriter.cs:34`), a `CARLA-TRUTH-` uid (`:134`), `how="m-g"` (`:136`) and `ce`/`le` of exactly `0.0` (`:145-146`); the truth writer never mints a uid with any other prefix | refuse to publish the truth root. **Re-framed**: the first draft checked an *incoming* detector track for these markers at scoring time. The checkable half is that *our* writer always emits them, which is what makes truth self-identifying in the first place |
+| V8.3 | The handover exposes no identifier by which a consumer's track could be joined to truth; the documented rule (§10.6) names position and time and nothing else | assertion at corpus build. **Re-framed** from "no assignment is made by uid", which was a rule about an operation this system no longer performs |
+| V8.4 | Every truth event in the `TRUTH` root carries the label-quality block of §10.7 — `occlusion`, `visible_signature`, `label_crowding`, `nearest_label_px`, `supervision_transfer_ambiguous` | refuse to publish. **Re-framed** from "every assignment records `association_quality`": the same requirement, moved from the assignment to the label, where it is computable without a model |
 | V8.5 | Prevalence is reported per sensor **and** unioned, never as one unlabelled number | refuse to publish a corpus summary without both |
-| V8.6 | A corpus summary reports supervision prevalence **per solar bin** as well as per sensor. The bin edges are a declared parameter, valued in [`10`](10_Scale_And_Performance.md); solar elevation is the binning variable, because it is what an electro-optical sensor actually experiences | refuse to publish a summary without it. This is the check that makes an illumination-supervision correlation visible before it is trained on (§10.4a) |
-| V8.7 | The inference input contains `advancing`, `rate`, any `illumination.*` field, any residual, or any field read from the run manifest | refuse to run inference — §10.4a's excluded list, and test 4 of `D4.20` |
-| V8.8 | Every field in the inference input's `context.solar` and `context.epoch` appears in §10.4a's "crosses: yes" list | refuse to run inference. An allow-list, not a deny-list: a new field is withheld until the contract admits it |
+| V8.6 | A corpus summary reports supervision prevalence **per solar bin** as well as per sensor. The bin edges are a declared parameter, valued in [`10`](10_Scale_And_Performance.md); solar elevation is the binning variable, because it is what an electro-optical sensor actually experiences | refuse to publish a summary without it. This is the check that makes an illumination–supervision correlation visible **in the corpus's own description** (§10.4a) |
+| V8.7 | The `OBSERVATION` root contains `advancing`, `rate`, any `illumination.*` field, any residual, or any field read from the run manifest | refuse to publish — §10.4a's excluded list, and test 4 of `D4.20` |
+| V8.8 | Every field in the observation root's `solar` and `epoch` blocks appears in §10.4a's "in `OBSERVATION`: yes" list | refuse to publish. An allow-list, not a deny-list: a new field stays out until the contract admits it |
+| V8.9 | The corpus manifest declares every partition whose truth is not released, and every capture window, sensor and vehicle the corpus does not cover | refuse to publish. An undeclared omission is indistinguishable from data loss |
+| V8.10 | The observation writer's build carries no reference to any truth type (`D4.16` property 1) | fail the build, not the run |
 
-Each of the three streams carries its own integer version; a consumer that does not implement one
-refuses.
+**Versioning.** Each root carries its own integer version, declared in the corpus manifest alongside the
+`scenario_package_version` the run was produced from. A consumer that does not implement a root's
+version refuses to read that root. The two roots version independently, because a change to the label
+record should not invalidate imagery already captured.
 
-### 10.8 What breaks if C8 is violated
+### 10.10 What breaks if C8 is violated
 
-- **The model's measured skill is the simulator's.** A leak of `base_type` or true dimensions into the
-  input makes classification trivial; a leak of truth position makes localisation trivial. Neither is
-  visible in the output — the model simply performs well, and keeps performing well until it is
-  fielded.
-- **The rule-derived label failure returns.** If `<_aoi>` reaches the model, the model learns the
-  containment predicate evaluated on noiseless inputs, which is the failure doc 20 §2.1 exists to
-  prevent.
-- **Mis-associations become unexplained hard examples.** Without `association_quality` and
-  `association_ambiguous`, a label transferred to the wrong track is indistinguishable from a genuinely
-  difficult example, and it will be "fixed" by making the model worse.
-- **Recall is computed against a denominator no sensor could see** — `C2` §4.5 exists to prevent this,
-  and `C8` is where it is consumed.
-- **A model is denied context it is entitled to, and is scored as though it had it.** The mirror of the
-  leak, and no less expensive. A pattern-of-life model with no notion of time of day cannot represent
-  "a heavy goods vehicle in a residential area at 03:00" — one of doc 20's ten pattern classes — and a
-  corpus built to exercise it then measures something else. `D4.20` exists so this is decided by a rule
-  rather than by whoever is nervous that day.
-- **The capture plan leaks through the lighting.** If `advancing` and `rate` cross, or if supervision
-  correlates with the solar bin and nobody looks, the model learns when the run was interesting rather
-  than what happened in it. V8.6 is cheap and is the only thing that would ever notice.
+- **The corpus teaches the simulator instead of the world.** If `base_type` or true dimensions reach the
+  `OBSERVATION` root, class is readable straight off the input; if a truth position reaches it, position
+  is. Neither is visible afterwards — the data looks ordinary, and everything anyone concludes from it
+  is a fact about our renderer. This is a defect in the corpus the moment it is written, whether or not
+  anything is ever trained on it.
+- **The rule-derived label failure returns.** If `<_aoi>` reaches the observation root, the containment
+  predicate — evaluated on noiseless inputs — is in the input, which is the failure doc 20 §2.1 exists
+  to prevent.
+- **A hard example stays unexplained.** Without the label-quality block of §10.7, a label that was
+  crowded, half-occluded or lamp-only is indistinguishable from a clean one, and the corpus cannot tell
+  anyone which of its labels were weak. Doc 20 §7.6 asked for exactly this, and `D4.28` is where it
+  lands now that there is no assignment to hang it on.
+- **The corpus's own denominators are wrong.** `C2` §4.5 exists so that counts taken over imagery use
+  `observed_union_s` and not `sumo_span_s`; `C8` is where those numbers are published. Publishing the
+  wrong one makes every prevalence figure in the corpus description a misstatement about the corpus, and
+  at the sizing case the error is most of the simulation.
+- **A corpus is handed over that cannot support the context the data was built to exercise, and nothing
+  says so.** A pattern-of-life model cannot represent "a heavy goods vehicle in a residential area at
+  03:00" — one of doc 20's ten pattern classes — if the observation root carries no notion of time of
+  day. `D4.20` exists so this is settled by a rule rather than by whoever is most nervous on the day,
+  and §10.4a is the worked application of it.
+- **The capture plan leaks through the lighting.** If `advancing` and `rate` reach the observation root,
+  or if supervision correlates with the solar bin and nobody looks, the corpus encodes when the run was
+  interesting rather than what happened in it. V8.6 is cheap and is the only thing that would notice.
+- **A deliberate absence is read as a bug, or a bug is read as a deliberate absence.** §10.8 and V8.9
+  exist because a consumer who cannot tell the two apart will either work around data that is fine or
+  trust data that is not.
 
 ---
 
@@ -2564,7 +2746,7 @@ whatever date the run happened, and the sidecar records that faithfully.
 |---|---|
 | **Artifact** | Two JSON objects, `epoch` and `illumination`, inside `scenario.json` in the scenario package (`C3` §5.3). Plus an `illumination` override supplied at run start, and the achieved state written into the run manifest (§11.8) |
 | **Written by** | `epoch` and `illumination` by the scenario package builder, from what the author declared. The override by the operator surface ([`12`](12_Operator_Control_Surface.md)). The manifest block by the solar clock, closed at run end |
-| **Read by** | The co-simulation driver and its solar clock at run start and every tick; the validator at package build and at run start; the corpus auditor; and — for the epoch and the per-frame solar state only — the EPoL context assembler (`C8` §10.4a) |
+| **Read by** | The co-simulation driver and its solar clock at run start and every tick; the validator at package build and at run start; the corpus auditor; and — for the epoch and the per-frame solar state only — the observation writer (`C8` §10.4a) |
 | **Format** | UTF-8 JSON, canonicalised per §1 so `epoch_block_sha256` is well defined. Civil times are ISO-8601 with an **explicit numeric offset**; `Z` is permitted only where the offset genuinely is zero |
 | **Bound by** | `epoch_block_sha256` in `scenario.json`, at the refuse tier (`C3` §5.4 V3.11) |
 
@@ -3042,7 +3224,7 @@ Stated as properties needed, not as requests.
 | [`05_CarlaNet_Capability_Audit.md`](05_CarlaNet_Capability_Audit.md) | Whether the Python shim exposes a spawned actor's bounding box (needed by the sweep, §3.2); whether `set_actor_transform`, `set_actor_simulate_physics` and `apply_batch_sync` are implemented end to end. For `C9`: the solar surface is present and complete end to end (`carlanet/__init__.py:1500`, `:1506`, `:1511`, `:1535`; `CarlaClient.cs:1043`, `:1049`, `:1053`, `:1058`, `GetCachedSolarState` at `:1991`; `CarlaServer.cpp:614`, `:625`, `:640`, `:661`) — what is needed is confirmation that **no time-zone setter exists** and a view on adding one (open question 9). For `C7`: `SetVehicleLightStateCommand` is present at every layer — C# record (`Command.cs:94`), formatter (`CommandFormatter.cs:64`), client methods (`CarlaClient.cs:1615`, `:1621`), shim command wrapper (`carlanet/__init__.py:1141-1147`), shim actor methods (`:781`, `:786`) — so §9.4 needs nothing built on the transport side. What is needed is confirmation that nothing else in the engine writes light state for an actor the bridge owns |
 | [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) | An `AnnotationSet` payload whose `entity_id` and `instance_id` match `C4`'s grammars; `<_supervision>` identical across sensors at one tick; the sidecar carrying `sumo_id` and `entity_id` on `_carla`. The `<_solar>` element already exists (`CotWriter.cs:52-65`) and needs no change; what is needed is the container additionally carrying the scenario's `epoch` so a sidecar states its own civil time without the manifest |
 | [`07_Scenario_Authoring.md`](07_Scenario_Authoring.md) | An authoring surface that emits only catalogue classes, never bare vTypes; area references rather than raw edge ids where an area exists; and an `epoch` that is **authored**, not defaulted — the authoring surface is where the 3.5-hour contradiction of Measurement 7 gets fixed at source |
-| [`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md) | An inference-input assembler with no reference to truth artifacts (`D4.16`); per-sensor track streams; and a `context` block whose `solar` and `epoch` fields are exactly §10.4a's allow-list, assembled from the sidecar and the PNG chunk rather than from the run manifest (`D4.21`) |
+| [`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md) | **Two** artifact roots, not three (`D4.26`) — `08` owns the collection rationale for how they are laid out, named and sessioned; `C8` owns the ruling that there is no third. An observation writer with no reference to truth artifacts, and the split performed at the writer rather than by a stripping step (`D4.16`, and `08`'s own `D8.17` mechanism 2). A `context` block whose `solar` and `epoch` fields are exactly §10.4a's allow-list, taken from the sidecar and the PNG chunk rather than from the run manifest (`D4.21`). The per-label quality fields of `D4.28` — `occlusion`, `visible_signature`, `label_crowding`, `nearest_label_px`, `supervision_transfer_ambiguous` — computed from truth and the rendered frame alone and written onto the label record. If `08` reserves a partition whose truth is not released, that the corpus manifest declares it (V8.9) |
 | [`09_Toolchain_And_Packaging.md`](09_Toolchain_And_Packaging.md) | `vehicles.catalogue.json` and `VehicleCatalog.xosc` shipped in the distribution under `catalogue/`; `sumo`, `duarouter` and `libtracics` staged with `SUMO_HOME` set |
 | [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md) | Values for `render_cap`, `render_cap_hard`, `prewarm_s`, `entry_lead_m`, `exit_lag_m`, `exit_lag_s`, `aoi_halo_m`, `frustum_lead_s`, `near_m`, `sumo_step_timeout_wall_s`, **`solar_audit_tolerance_s`, `solar_audit_tolerance_elev_deg`, `solar_audit_every_n_ticks`, the bound on a per-scenario tolerance override, and the solar-bin edges `C8` V8.6 stratifies on** |
 | [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md) | The five properties listed in §11.13: a recommended default policy, the headlight thresholds in the `sun_elevation_deg` convention, the `freeze_date_advances` default, whether illumination is a declared stratifier, and a view on a time-zone setter. `C9` carries and checks whatever `11` decides; it does not decide any of them |
@@ -3068,17 +3250,20 @@ Stated as properties needed, not as requests.
 | **D4.12** | **If either side stalls, the driver stops advancing both and fails the run.** A world that ticks without SUMO produces a plausible lie (§8.5) |
 | **D4.13** | **Truth velocity for a SUMO-driven actor is SUMO's, converted to the CARLA frame — never `GetActor()->GetVelocity()`.** Verified: the observer reads the physics velocity (`WorldObserver.cpp:373`) and `SetActorTargetVelocity` writes `SetPhysicsLinearVelocity` (`CarlaActor.cpp:392-411`), which is inert with simulation off, so the obvious workaround does not work either (§9.2) |
 | **D4.14** | **Authority is written at spawn and is immutable; a handover is destroy-and-respawn, never a mutation** (§9.3) |
-| **D4.15** | **Only area *definitions* cross the EPoL boundary; area *relations* must be recomputed from the model's own positions**, because `<_aoi>` is derived from truth (§10.4) |
-| **D4.16** | **The inference-input assembler holds no reference to any truth artifact, and the truth-to-model join is produced only after inference from the model's own output.** A structural guarantee, not a policy (§10.5) |
+| **D4.15** | **Only area *definitions* may be placed in the `OBSERVATION` root; area *relations* are derived from truth positions and live in the `TRUTH` root** (§10.4). *Unchanged in substance; **re-framed** from "what crosses to a model" to "where our own fields go"* |
+| **D4.16** | **The `OBSERVATION` root is written by a component that holds no reference to any truth artifact, and the two roots are written as separate files by separate writers from the first byte.** A structural guarantee, not a policy (§10.5). *The first draft's second clause — that the truth-to-model join is produced only after inference — is **removed**, because no join is produced here at all; `D4.27` replaces it* |
 | **D4.17** | **The catalogue is a runtime dependency of the co-simulation bridge, not only an authoring aid.** SUMO's reference point is the front bumper centre and CARLA's is the actor origin, so the pose conversion needs the measured `length_m` and `bbox_centre_m`; SUMO has neither. A vehicle whose extent is unknown is **not rendered** and is recorded as `simulated_only` with reason `unknown_extent`. The bridge must never substitute SUMO's declared length (§3.2) |
 | **D4.18** | **A scenario declares the civil instant `t = 0` corresponds to, with an explicit UTC offset, carried in the scenario package.** Never inferred from identifiers, never defaulted from the host clock, never left to a run setting. Measured: 335 of 335 `guard_dD_hH_tN` trips satisfy `depart == D×86400 + H×3600` exactly, so the mapping is asserted perfectly consistently — and **only inside identifiers**, while the one epoch that does exist is UTC-only, defaults to `datetime.now(UTC)` (`SumoCotBridge.py:197`) and contradicts those identifiers by 3.5 hours (§11.1) |
 | **D4.19** | **The sun-clock write is derived from the declared civil time and the *observed* sun time zone, never from either alone.** `set_solar_time` takes hours in a zone equal to `longitude / 15` (`CesiumSunSky.cpp:570-572`, cancelling the longitude terms at `SunPosition.cpp:97`), not the civil offset. Measured on the sizing site: the correction is **+14.72 minutes, 3.68° of hour angle**. `sun_time_zone_hours` is read at run start and recorded, so the arithmetic is auditable from the manifest (§11.4) |
-| **D4.20** | **The general admission rule for an input that is neither truth about the scene nor pixels: it crosses the EPoL boundary only if it is fieldable, scene-independent, supervision-blind, *and* reachable from the observation side without opening a truth artifact.** The fourth test is about the path rather than the value, and it is the one that is easy to miss: a legitimate field that lives only in the run manifest is still withheld, because reaching it would breach `D4.16` (§10.4a) |
-| **D4.21** | **Solar state and the scenario epoch cross the EPoL boundary as collection context, in the frozen field set of §10.4a, read from the sidecar's `<_solar>` and the PNG's `carla:solar` chunk — never from the run manifest.** `advancing`, `rate`, the policy and the residual do **not** cross: they describe the experiment, not the world. The element crosses; not all of it does (§10.4a) |
+| **D4.20** | **The general admission rule for an input that is neither truth about the scene nor pixels: it may be placed in the `OBSERVATION` root only if it is fieldable, scene-independent, supervision-blind, *and* reachable from the observation side without opening a truth artifact.** The fourth test is about the path rather than the value, and it is the one that is easy to miss: a legitimate field that lives only in the run manifest still stays out, because reaching it would breach `D4.16` (§10.4a). *Unaffected by the scope decision — it always governed our own data* |
+| **D4.21** | **Solar state and the scenario epoch are placed in the `OBSERVATION` root as collection context, in the frozen field set of §10.4a, written from the sidecar's `<_solar>` and the PNG's `carla:solar` chunk — never copied from the run manifest.** `advancing`, `rate`, the policy and the residual stay out: they describe the experiment, not the world. The element goes in; not all of it does (§10.4a) |
 | **D4.22** | **The bridge owns a SUMO-driven vehicle's light state, in two disjoint halves** — SUMO owns brake and indicators because they are consequences of the driving it simulated; the illumination policy owns position and low beam because SUMO has no headlight model. Measured: `VEH_SIGNAL_FRONTLIGHT`, `FOGLIGHT`, `HIGHBEAM` and `BACKDRIVE` appear only in the enum declaration (`MSVehicle.h:1110-1138`) and are never set anywhere in SUMO. Everything else is **undefined and must be left alone** (§9.4) |
 | **D4.23** | **Lamp capability is measured optically per blueprint per lamp and carried in the catalogue; `has_lights` is recorded verbatim and used for nothing.** Measured `true` on all 17, so it discriminates nothing; and the read-back returns the command rather than the vehicle (`CarlaWheeledVehicle.cpp:486-489`) because illumination is a `BlueprintImplementableEvent` (`CarlaWheeledVehicle.h:310-311`), so a set-and-read probe cannot substitute for an optical one (§3.2a) |
 | **D4.24** | **A consumer that finds no epoch does not invent one.** It refuses, or runs with `policy = "ignore"` and records `epoch_declared: false`, `corpus_eligible: false`. Defaulting to noon, to the host date, or to `t = 0` being UTC midnight is prohibited — all three exist in the tree today and all three are silent (§11.7) |
 | **D4.25** | **The clock owner owns civil time too, because civil time is a function of the tick and of nothing else.** No component may read the host clock, host time zone or host locale to decide what time the scene is, and no component but the owner may write the sun. A second writer of the sun is a second owner of time (§8.1, §8.3a) |
+| **D4.26** | **This system owns exactly two artifact roots, `OBSERVATION` and `TRUTH`. There is no third.** Model output — detections, tracks, assessments, associations, reports — is neither produced, consumed, stored, validated nor versioned here, and no artifact of this pipeline may be written into a location that holds it. The structural value of the first draft's three-root split lived entirely in the first two roots, and removing the third leaves the anti-leak separation intact (§10.2) |
+| **D4.27** | **Supervision transfer is a format guarantee plus a documented rule, never an operation performed here.** Truth is emitted in an associable form — per tick, positioned, timed, boxed, stably identified, with interval bounds in the manifest — and the rule by which supervision would transfer is written down. No association is performed, no harness ships, and no artifact is derived from a consumer's output (§10.6) |
+| **D4.28** | **A quality field survives in the corpus if and only if it is computable from this system's own truth and imagery with no model output as an input, and it attaches to the *label* rather than to an assignment.** Surviving: `occlusion`, `visible_signature`, `label_crowding`, `nearest_label_px`, `supervision_transfer_ambiguous`. Not produced: the gate residual, the match margin, and every track-level rate. Doc 20 §7.6's requirement — that a mis-associated label be findable rather than an unexplained hard example — is met on the label side, without measuring anything (§10.7) |
 
 ---
 
@@ -3177,10 +3362,30 @@ Each carries the options and a recommendation; none is decided here.
     `lamp_gaps[]` as the filter a corpus builder applies — but if [`11`](11_Time_And_Illumination.md)
     decides illumination is a declared stratifier, the third option becomes the consistent one.
 12. **Whether a supervision–illumination correlation should block a corpus or only be reported.**
-    `C8` V8.6 requires prevalence per solar bin and refuses a summary without it, but does not refuse on
-    the correlation itself. A threshold would be arbitrary and gameable; no threshold means someone has
-    to look. Options: report only (current); report plus a declared maximum correlation that fails the
-    summary; report plus an automatic re-weighting recommendation. **Recommend report only for now**,
-    because the bin edges themselves are not yet valued
+    `C8` V8.6 requires prevalence per solar bin and refuses a corpus summary without it, but does not
+    refuse on the correlation itself. This is a question about the corpus describing itself honestly,
+    not about anything downstream: a corpus whose supervision is separable on illumination is defective
+    the moment it is written. A threshold would be arbitrary and gameable; no threshold means someone
+    has to look. Options: report only (current); report plus a declared maximum correlation that fails
+    the summary; report plus an automatic re-weighting recommendation. **Recommend report only for
+    now**, because the bin edges themselves are not yet valued
     ([`10`](10_Scale_And_Performance.md)) and a threshold over undecided bins would be noise. Revisit
     once one corpus exists to measure the natural correlation on.
+13. **Where the label-quality radius of `D4.28` is fixed, and whether `label_crowding` is per sensor or
+    per frame.** `C8` §10.7 names `label_crowding` and `nearest_label_px` and declares the radius a
+    parameter without valuing it, as this section does with every number. Two things are genuinely
+    open. First, the radius is in pixels and apparent size varies across a frame by a large factor at
+    these look angles ([`08`](08_Collection_And_EPoL.md) §8.2 records the geometry), so a constant
+    radius is wrong at the corners — options are a constant, a radius normalised by the subject's own
+    apparent size, or both recorded. **Recommend both recorded**, since the normalised one is the
+    meaningful field and the raw one costs nothing and makes the normalisation auditable. Second,
+    whether a label crowded only in *another* sensor's frame is crowded: `C4`'s `sensor_id` rule assumes
+    several sensors and the fields are per `(sensor_id, tick, vehicle)`, so **recommend per sensor**,
+    with the union left to a corpus summary. Belongs jointly to
+    [`08`](08_Collection_And_EPoL.md) and [`10`](10_Scale_And_Performance.md).
+14. **Whether a reserved partition exists at all, and who declares it.** [`08`](08_Collection_And_EPoL.md)
+    `D8.17` names a held-back split whose truth is never released. `C8` V8.9 requires only that any such
+    omission is **declared** in the corpus manifest, because an undeclared omission is indistinguishable
+    from data loss. Whether to reserve one, and at what granularity, is a corpus-construction judgement
+    and is [`08`](08_Collection_And_EPoL.md)'s — recorded here so the two documents do not each assume
+    the other decided it.

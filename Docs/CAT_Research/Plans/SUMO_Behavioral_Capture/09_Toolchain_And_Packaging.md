@@ -802,7 +802,7 @@ flowchart TD
         SCB[SumoCotBridge - telemetry]
         AUTH[Scenario-authoring workflow]
         OPCTRL["run_capture / operator\ncontrol surface (12)"]
-        EPOL["EPoL scoring (08)"]
+        EPOL["Corpus handover (08)"]
     end
     NC2 --> OSMC
     NC2 --> SSB

@@ -2,11 +2,17 @@
 
 **Status:** Plan section. Behavioural specification, not implementation. No code was changed and no build
 was run.
-**Date:** 2026-09-18. Redrafted against the added requirement recorded in
-[`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3a — simulated time of day driven in tandem with the network
-playback, toggleable advancement, and a coherent operator surface. The first draft specified windowed
-capture in simulated time and never connected it to the sun; that omission reaches eight of the eleven
-original use cases, so this section was rewritten rather than amended.
+**Date:** 2026-09-18, redrafted twice on the same day against two user decisions.
+The first redraft answered the added requirement in [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3a — simulated
+time of day driven in tandem with the network playback, toggleable advancement, and a coherent operator
+surface. The first draft had specified windowed capture in simulated time and never connected it to the
+sun, and that omission reached eight of the eleven original use cases.
+The second redraft, which is this one, answers the scope boundary in
+[`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b — **this pipeline labels; it never scores.** The
+detect-and-track model and the estimated-pattern-of-life model are external to this effort. What is
+built here produces synthetic imagery, truth and labels for them, and measures neither. That boundary
+reached nineteen places in this section, one of which was an entire use case. §0 is the complete
+disposition.
 **Owner role:** Systems architect. Companion section: [01 — Architecture](01_Architecture.md), whose
 component names, modes and authority model this section uses without restating them.
 **Scope:** The actors, the use cases each one drives, and the two flows that carry the most risk drawn as
@@ -25,12 +31,75 @@ surface](12_Operator_Control_Surface.md) owns the design of the surface: what ki
 it looks like, and what its commands are called. This section owns only the **actor-facing flow** over
 both — what an actor must be able to do, in what order, and what must refuse. Where a use case needs a
 property from either, the dependency is stated as a property, not as a design.
+[06 — Truth and annotation](06_Truth_And_Annotation.md) owns the supervision-transfer rule, the export
+split and the manifest's schema; [08 — Collection and EPoL](08_Collection_And_EPoL.md) owns what the
+external detect-and-track stage consumes and emits, and the format of an association-quality record.
+This section owns only **who hands what to whom, and what must refuse**.
 [13 — Work breakdown](13_Work_Breakdown.md) sequences the build.
 
 **Out of scope, deliberately.** Command-line syntax, screen layouts, file formats, and the internals of
 any step. A step that says "validate every route" does not say how; [07](07_Scenario_Authoring.md) and
 [04](04_Contracts.md) own that. Likewise a step that says "derive the civil time" does not say how;
 [11](11_Time_And_Illumination.md) owns that.
+
+**Out of scope by decision, which is different.** Nothing here scores a model. There is no use case for
+running a detector, a tracker or an estimated-pattern-of-life model in order to measure it, no actor
+whose job is to produce such a measurement, and no artifact that is one. Where a model appears it is
+either a **live consumer being fed** (UC-8) or an **instrument used on our own data** (UC-11), and in
+neither case is it the subject. The boundary and its reasoning are in
+[`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b; its consequences for this section are §0 and D2.23.
+
+---
+
+## 0. What the scope boundary changed, site by site
+
+The scope decision flagged **nineteen occurrences of scoring or evaluation language** in this section,
+including one whole use case. The table below is the complete disposition of all of them, plus the few
+adjacent sites of the same kind that turned up while resolving them. The test applied at each site is
+the one [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b gives: is this an assertion about **the data** — keep it,
+and reword it so it cannot be read as model evaluation — or an assertion about **a model** — remove it,
+and say what an external consumer does instead. No measured finding was deleted; the two that were
+framed evaluatively were re-framed and kept, numbers and all.
+
+| Site | What it said | Disposition |
+|---|---|---|
+| §1 actor table, **Model evaluator** | "Score a model against a corpus, honestly" | **Actor removed.** §1.3 |
+| §1 actor table, **Model trainer** | A human actor inside the actor list | **Reframed as external.** Merged with the above into one external actor, **External model team**. §1.3 |
+| §1 actor table, detect-and-track stage and model service | "Never given truth", and nothing else | Kept and sharpened: each now says *where it appears and in what role* — live consumer, or instrument |
+| §2 diagram, `EVL` actor node | Drawn in the actor column, associated with UC-10 and UC-11 | Removed. The recipient is drawn outside, with the external systems |
+| §2 diagram, `TRN` actor node | Drawn in the actor column | Redrawn as `MTEAM`, outside the boundary, associated with UC-10 only |
+| §2 diagram, UC-10 node | "Evaluate a model against a corpus" | Renamed **"Hand a corpus to an external model team"** |
+| §2 diagram, `UC7 --> DAT` and `DAT --> UC10` | Captured imagery flowing into a detector and on into an evaluation stage | Both edges removed. The detector now appears on UC-8 (live consumer) and UC-11 (instrument) and nowhere else |
+| §6a table, third row | "UC-10 cannot stratify what the run list did not record" | Reworded to *a consumer* cannot. The requirement on the run list is unchanged |
+| **UC-10** title, actor and all seven main-flow steps | An evaluation case end to end: transfer, join, denominator, base rate, stratified scores, detector performance against truth | **Replaced entirely** by the handoff case; the number is kept because siblings cite it. Step-by-step disposition in UC-10's own "What replaced what" |
+| UC-10 step 1, `SupervisionTransfer` run by us | We associate detector tracks to truth | **Removed — this pipeline never sees a detector track.** We publish the rule and the format; the recipient applies them (UC-10 step 6; brief §3b item 3) |
+| UC-10 step 3, `EvaluationJoin` | A pipeline component joining assessments to supervision | Gone from this section's flow. Whether the component survives anywhere is [01](01_Architecture.md)'s to say; no use case here calls it |
+| UC-10 step 4, the denominator | "an interval whose participant was never instantiated is not a miss" | **Requirement kept, framing changed.** The corpus publishes observed intervals gated on rendered spans; "miss" is the recipient's word (D2.8) |
+| UC-10 step 5, base rate and precision | "precision at low prevalence is dominated by it" | Prevalence stays, published in three units per illumination band ([06 §5.3](06_Truth_And_Annotation.md)); the word precision goes |
+| UC-10 steps 6 and 7, stratified scores and detector performance against truth | Model metrics, per illumination stratum | **Removed.** The strata stay as published metadata (D2.19) — which is exactly what lets a recipient compute those figures without us |
+| UC-10 alternate flows | "a fused evaluation", "a model scored only at noon" | Reworded as statements about what the corpus does and does not contain |
+| UC-10 failure flows | "refuse to score", "a vocabulary version the evaluator does not understand" | Refusals kept and re-pointed at the **handoff**: same conditions, different verb |
+| UC-10 postcondition and artifacts | "A score that charges the model…", "an evaluation report" | Replaced by the corpus statement, the two exports and the handoff record |
+| **UC-11** primary actor | "Model evaluator, with the model trainer" | **Capture operator, with the scenario author.** Our own data-quality gate had been handed to someone outside the boundary who holds neither the scenario nor the unlabelled population's provenance. §1.3 |
+| UC-11 §11a | "can learn bright-and-busy versus dark-and-empty and **score well**" | Reworded to separability of the annotated class on illumination alone — which is what the test actually measures, and it needs no model in the room |
+| UC-11 §11a | "so that a **score** is read in the light of it"; "make an **evaluation** meaningless" | Reworded to what a recipient must read before training, and to a corpus that would teach the hour instead of the behaviour |
+| **UC-8** throughout | A live model in the loop with the pipeline around it | Redrafted so the pipeline **feeds and records** and the models are **observed, not measured**. The case stays; what it must not do is now a failure flow (D2.24) |
+| D2.8, D2.10, D2.19 | "evaluation denominator", "not scoreable", "Evaluation is stratified by illumination" | **Rewritten in place, numbers unchanged** — siblings cite `D2.x`. See the numbering note above §7's table |
+| D2.11 | Auditing for accidental positives is required | Extended rather than replaced: it is *our* audit, it runs before handover, and its report ships with the corpus |
+| Open question 11 | "an evaluator stratifying by illumination" | "a consumer conditioning on the published strata" |
+
+**Three things sat near the line and stayed, reframed rather than deleted**, as brief §3b requires: the
+**illumination leakage probe** (UC-11 step 3 — a property of the dataset, measurable with no model in
+the room), the **corpus fitness probe** that uses a stock detector as an instrument (UC-11 alternate
+flow; [08 §12](08_Collection_And_EPoL.md) owns its design), and the **supervision-transfer contract**
+(UC-10 step 6 — the rule and the format, without the harness).
+
+**What did not change at all.** UC-1 to UC-7, UC-9 and UC-12 — world building, the authoring reference
+set, authoring, annotation, validation, run-list expansion, capture, replay and run configuration — are
+untouched by this decision, as are §4 and §5, the two activity diagrams. Nothing was renumbered: §0 was
+added ahead of §1, and the new §6 activity diagram moved the decisions and open questions to §7 and §8.
+No sibling cites this section by section number (checked across the folder, 2026-09-18); several cite
+`D2.x`, UC-7, UC-10 and the open-question numbers, and every one of those is preserved.
 
 ---
 
@@ -46,19 +115,20 @@ preconditions differ.
 | **Authoring assistant** | Software agent, acting for the author | Turn a description in ordinary terms — street names, times, who goes where — into a scenario package that resolves | Needs machine-readable inputs and loud failures. It is fluent in SUMO and OpenSCENARIO and cannot know this fork's conventions unless they are written down and validated ([20 §5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) preamble) |
 | **World-builder operator** | Human | Turn an OSM extract into a world and its authoring reference set | Needs a GPU, a running server and a Cesium ion token; the only actor with that precondition |
 | **Capture operator** | Human | Produce a corpus from a scenario and a world | Owns the session: mode, window, cameras, seed, and **illumination policy** — see §1.1 |
-| **Model trainer** | Human | Train an EPoL model on a corpus | Consumes; never runs the simulator. Needs the corpus's illumination strata to know what the training set is balanced over |
-| **Model evaluator** | Human | Score a model against a corpus, honestly | Must be able to compute a denominator the capture cannot silently distort, **per illumination stratum as well as per sensor** |
 | **Live exercise operator** | Human | Drive an end-to-end demonstration with a live model and a live feed | Real-time pacing and a live consumer; nothing is written for training |
 | **TAK / CoT consumer** | External system | Display tracks | Receives CoT over UDP; ignores unknown `<detail>` children ([09 §5](../../Findings/09_Telemetry_CoT_Contract.md)) |
-| **Detect-and-track stage** | External system | Turn imagery into tracks | Never given truth |
-| **EPoL model service** | External system | Assess tracks | Never given truth |
-| **Solar authority (`CesiumSunSky`)** | In-world system | Hold the sun's clock, date, time zone and resulting angles, and light the world from them | **New in this draft.** `CarlaServer.cpp:611-612` names it *the single sun and lighting authority for the georeferenced world*, with CARLA's own weather inert there. It is a distinct actor because it holds **state that outlives a session** (§1.2) and because it can refuse — every solar call returns false when no `CesiumSunSky` exists in the world (`CesiumHeightSampler.cpp:726`, `:830`) |
+| **Detect-and-track stage** | External system | Turn imagery into tracks | Never given truth. It appears in exactly two places, in two different roles: a **live consumer being fed** (UC-8), and an **instrument** used on our own data (UC-11's corpus fitness probe) — the way a thermometer checks an oven. It is never the subject of a measurement ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b) |
+| **EPoL model service** | External system | Assess tracks | Never given truth. Its output is recorded **as received** and is never compared against the truth the same session is holding (UC-8, D2.24) |
+| **External model team** | External consumer, outside the boundary | Train and validate detect-and-track and EPoL models on a corpus we hand them | **Added in the §3b redraft, replacing two former human actors** (§1.3). It receives a corpus at UC-10 and interacts with the pipeline in no other way — no session, no server, no configuration, no call. Everything it would otherwise have had to ask us must therefore travel **in writing** with the corpus: what it contains, what it does not, in what light, and the rule by which supervision transfers onto its own tracks |
+| **Solar authority (`CesiumSunSky`)** | In-world system | Hold the sun's clock, date, time zone and resulting angles, and light the world from them | **Added in the §3a redraft.** `CarlaServer.cpp:611-612` names it *the single sun and lighting authority for the georeferenced world*, with CARLA's own weather inert there. It is a distinct actor because it holds **state that outlives a session** (§1.2) and because it can refuse — every solar call returns false when no `CesiumSunSky` exists in the world (`CesiumHeightSampler.cpp:726`, `:830`) |
 | **OpenStreetMap** | External data source | Supplies the extract | |
 | **Cesium ion** | External data source | Supplies photoreal imagery and world terrain | |
 
-No new *human* actor was added. A separate "illumination owner" was considered and rejected: it would be
-a role nobody occupies, and it would put two people in the launch path for one decision that has to be
-made once per run. The re-examination instead sharpened what two existing actors own, which is §1.1.
+**Two changes to this list, one from each redraft.** The §3a redraft added no *human* actor. A separate
+"illumination owner" was considered and rejected: it would be a role nobody occupies, and it would put
+two people in the launch path for one decision that has to be made once per run. It sharpened what two
+existing actors already own instead, which is §1.1. The §3b redraft **removed** two human actors and
+added one external one, which is §1.3.
 
 ### 1.1 Who owns illumination policy
 
@@ -88,7 +158,7 @@ meaning at launch. The measured state of the sizing scenario is exactly this fai
 its civil hours exist only in the generator's source and in identifier text (§3, UC-3), so any operator
 today would be guessing.
 
-This is the same shape as open question 2 (who chooses the capture *window*), and §7 now recommends they
+This is the same shape as open question 2 (who chooses the capture *window*), and §8 now recommends they
 be answered identically: **the scenario declares, the operator selects, the manifest records.**
 
 ### 1.2 One property of the solar authority that changes several use cases
@@ -109,8 +179,55 @@ A second reading, with the same consequence: the advancing controller wraps the 
 started on, and the date is what drives the seasonal sun angle and what the truth sidecar records
 (`CotUdpEmitter.py:160` writes `date` into the `<_solar>` element). Over a seven-day scenario the
 declination error is small; the *recorded* date being wrong is not small, because it is the same class of
-internally contradictory record the whole requirement exists to prevent. Named as an open question in §7
+internally contradictory record the whole requirement exists to prevent. Named as an open question in §8
 for [11](11_Time_And_Illumination.md), and as a postcondition obligation in UC-7.
+
+### 1.3 The model actors are outside the boundary
+
+The first draft had two human actors on the model side — a **model trainer** and a **model evaluator** —
+sitting in the same column as the operators and the author. Against the scope boundary
+([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b) neither survives in that position, and the re-examination the
+decision asked for produced one answer for both.
+
+**The decision.** "Model evaluator" is **not an actor of this system**. "Model trainer" is not an actor
+of this system either. Both are represented by a single external actor, the **External model team**,
+drawn outside the boundary and associated with **exactly one** use case — UC-10, the handoff — and with
+no other. It never starts a session, configures a run, loads a world, or calls anything.
+
+**Three reasons, in increasing order of force.**
+
+1. **Neither ever interacted with the pipeline, even in the first draft.** Read the first draft's own
+   flows back: both actors only ever received artifacts. An actor with no interaction with the system is
+   a stakeholder drawn inside the boundary, which is the standard way a use-case model acquires scope it
+   does not have.
+2. **The pipeline cannot tell them apart, and must not try.** The same corpus serves training and
+   validation; the only thing that differs between the two is *which export* is read, and that is a
+   property of the artifact ([06 §10.2–10.3](06_Truth_And_Annotation.md)'s training export and full
+   export, written as two separate artifacts rather than two views) and not of who is reading. A boundary
+   drawn on the artifact holds; a boundary drawn on the reader's intention does not.
+3. **Keeping "evaluator" as an actor keeps an evaluation use case.** An actor exists to drive a use case.
+   Retaining this one would retain a case whose entire content is a model metric, which is the thing the
+   scope decision removes. The actor and the use case had to go together, and they did.
+
+**What did *not* go anywhere: their requirements on the corpus.** Both actor rows carried a real
+obligation, and deleting the actor must not delete the obligation. Each moved to where it can be
+enforced:
+
+| The requirement, as the first draft stated it | Where it now lives |
+|---|---|
+| The trainer "needs the corpus's illumination strata to know what the training set is balanced over" | Published corpus metadata: prevalence in three units **per illumination band**, with the band cut points recorded beside the numbers ([06 §5.3](06_Truth_And_Annotation.md)); handed over at UC-10 step 4; D2.19 |
+| The evaluator "must be able to compute a denominator the capture cannot silently distort" | Observability accounting: observed intervals gated first on rendered spans, published per sensor and unioned, with admissions, releases, refusals and cap-bound spans alongside ([06 §5.1](06_Truth_And_Annotation.md), [§10.4](06_Truth_And_Annotation.md)); handed over at UC-10 steps 4 and 5; D2.8 |
+| The evaluator needs it "per illumination stratum as well as per sensor" | Both breakdowns are published, and both are refused as a pooled aggregate (UC-10 failure flows) |
+
+The pattern is the same in all three rows and is the whole shape of the redraft: **we compute and publish
+the quantity a score would need; we do not compute the score.**
+
+**One more actor moved, in the other direction.** UC-11, the corpus audit, had "model evaluator" as its
+primary actor. That was wrong independently of the scope decision: the audit is a data-quality gate on
+**our own** data, and the person best placed to adjudicate an accidental positive is the one who wrote
+the annotations. Its actors are now the **capture operator**, who owns the corpus, with the **scenario
+author**, who owns what was and was not asserted. Nobody outside the boundary runs it, and its report is
+an input to the handoff rather than something the recipient is left to reconstruct (UC-10 step 2).
 
 ## 2. The use-case diagram
 
@@ -120,8 +237,6 @@ flowchart LR
     ASSIST["Authoring<br/>assistant"]
     WOP["World-builder<br/>operator"]
     COP["Capture<br/>operator"]
-    TRN["Model<br/>trainer"]
-    EVL["Model<br/>evaluator"]
     LOP["Live exercise<br/>operator"]
 
     OSM["OpenStreetMap"]
@@ -130,6 +245,7 @@ flowchart LR
     TAK["TAK / CoT<br/>consumer"]
     DAT["Detect-and-track<br/>stage"]
     EPOL["EPoL model<br/>service"]
+    MTEAM["External<br/>model team"]
 
     subgraph SYS["SUMO behavioural capture system"]
         direction TB
@@ -141,10 +257,10 @@ flowchart LR
         UC6(["UC-6 Expand a scenario<br/>into a run list"])
         UC12(["UC-12 Configure and<br/>launch a run"])
         UC7(["UC-7 Run a captured<br/>dataset collection"])
-        UC8(["UC-8 Run a live<br/>EPoL exercise"])
+        UC8(["UC-8 Run a live exercise<br/>with external models<br/>in the loop"])
         UC9(["UC-9 Replay a<br/>recorded run"])
-        UC10(["UC-10 Evaluate a model<br/>against a corpus"])
-        UC11(["UC-11 Audit a corpus for<br/>accidental positives"])
+        UC11(["UC-11 Audit a corpus for<br/>accidental positives and<br/>illumination leakage"])
+        UC10(["UC-10 Hand a corpus to an<br/>external model team"])
     end
 
     WOP --- UC1
@@ -180,23 +296,43 @@ flowchart LR
     UC9 --- SUN
 
     UC8 --- TAK
-    UC8 --- EPOL
     UC7 --- TAK
+    UC8 -->|"feeds collection frames"| DAT
+    DAT -->|"tracks"| EPOL
+    EPOL -.->|"assessments, recorded<br/>as received"| UC8
 
-    UC7 --> DAT
-    DAT --> UC10
-    EPOL --- UC10
-    TRN --- UC10
-    EVL --- UC10
-    EVL --- UC11
-    TRN --- UC11
+    COP --- UC10
+    COP --- UC11
+    AUTH --- UC11
+    UC7 -.->|"produces a corpus for"| UC10
+    UC9 -.->|"produces a corpus for"| UC10
     UC10 -.->|"includes"| UC11
+    UC11 -.->|"uses a stock detector<br/>as an instrument"| DAT
+    UC10 ==>|"corpus, its statement<br/>of contents, its audit,<br/>and the transfer rule"| MTEAM
 ```
 
+**The boundary is the point of this diagram, so read the model-side edges carefully.** There are exactly
+three, and no fourth is permitted.
+
+- **UC-8 → `DAT` → `EPOL`, and one dashed edge back.** The pipeline *feeds* the external chain in real
+  time and *records* what comes back, as received. Nothing in the system compares the returned
+  assessments with the truth the same session holds (UC-8, D2.24).
+- **UC-11 --- `DAT`, labelled as an instrument.** The corpus fitness probe runs a stock detector over
+  *our* data to ask whether *our* data yields trackable targets. The detector is the thermometer, not the
+  oven (brief §3b item 1; [08 §12](08_Collection_And_EPoL.md) owns the probe's design).
+- **UC-10 ⇒ `MTEAM`, one way.** The corpus and its guarantees leave; nothing comes back into the system.
+  A recipient's findings about a model are theirs, and there is no edge on this diagram for them to
+  arrive on.
+
+The first draft had two further edges — captured imagery flowing into `DAT`, and `DAT` flowing on into
+UC-10 — which together drew a detector as a **stage of this pipeline**. Both are gone.
+
 **On the numbering.** UC-12 is the entry point to UC-7 and UC-8 and belongs before them in reading order,
-but it is numbered last on purpose: UC-1 through UC-11 are cited by number from nine other sections in
-this folder, and renumbering them to make the diagram read left to right would invalidate every one of
-those citations for a cosmetic gain.
+but it is numbered last on purpose: UC-1 through UC-11 are cited by number from other sections in this
+folder, and renumbering them to make the diagram read left to right would invalidate every one of those
+citations for a cosmetic gain. **UC-10 keeps its number although its content changed completely**, for
+the same reason — [01](01_Architecture.md) cites `02 UC-10` in its open question 8 — and UC-11 is drawn
+above it here because the audit is now *included by* the handoff rather than by an evaluation.
 
 ---
 
@@ -493,7 +629,7 @@ hour-defined instances handed to UC-11.
    standing offset of ≈ **0.245 h, or 14.7 minutes**, equivalent to ≈ 3.7° of solar hour angle. At a night
    window that is invisible; at the 07:00 window [10 §3.1.3](10_Scale_And_Performance.md) recommends it is
    a materially different sun. Whether the fix is a conversion in the run path or a settable time zone on
-   the server is [11](11_Time_And_Illumination.md)'s decision and §7's open question 8; this case only
+   the server is [11](11_Time_And_Illumination.md)'s decision and §8's open question 8; this case only
    insists the quantity exists and is never zero by assumption.
 6. **Window sanity.** Each declared named window lies inside `[0, end]`, and its derived civil date and
    time are printed. A window whose derived civil time places the sun below the horizon is **not** an
@@ -574,7 +710,7 @@ separate them. The rule and its consequences:
 |---|---|---|
 | Vary behaviour (which pattern fires, which parameter) | **Constant and frozen** | A frozen sun makes illumination identical frame-for-frame across the arm, so the only difference is the one being studied |
 | Vary illumination (the appearance axis) | **The swept variable**, behaviour held by seed and window | This is the valid use of the axis, and it is nearly free |
-| Both, deliberately | **Marked per entry** so the two can be stratified apart downstream | UC-10 cannot stratify what the run list did not record |
+| Both, deliberately | **Marked per entry** so the two can be stratified apart downstream | A consumer cannot stratify what the run list did not record, and the run list is the only place the two axes are still separable |
 
 **Why "frozen" and not merely "the same policy".** An *advancing* sun is constant only if the two arms
 occupy identical simulated spans and start identically. A behavioural variation that shifts a departure
@@ -746,15 +882,23 @@ manifest including the solar record, the session log, and optionally the engine 
 
 ---
 
-### UC-8 — Run a live EPoL exercise
+### UC-8 — Run a live exercise with external models in the loop
 
 | | |
 |---|---|
 | **Primary actor** | Live exercise operator |
-| **Supporting** | Detect-and-track stage, EPoL model service, TAK consumer, solar authority |
+| **Supporting** | Detect-and-track stage (external), EPoL model service (external), TAK consumer, solar authority |
+
+**What this case is, and what it is not.** It is a **demonstration and integration** case: a live world,
+live imagery, an external detector and an external model service, running end to end in front of
+somebody, with truth held alongside. That is legitimate and stays. What the pipeline does here is
+**feed** and **record**. What it must never do is **measure**: no association of model output to truth,
+no residual, no count of hits and misses, no verdict — those are the external team's work and this
+pipeline never sees a detector track it is entitled to judge ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b,
+D2.24). The redraft changed the verbs in this case and nothing else about it.
 
 **Preconditions.** As UC-7 — including the epoch and the illumination policy — plus a reachable
-detect-and-track stage and model service, and a consumer for the output.
+detect-and-track stage and model service, and a consumer for their output.
 
 **Main flow.**
 1. Session starts as UC-7, paced against the wall clock rather than run as fast as the machine allows.
@@ -765,14 +909,30 @@ detect-and-track stage and model service, and a consumer for the output.
    factor of 1, an advancing sun at rate 1.0 moves in step with both simulated and wall-clock time, and
    the two coincide for the duration — which is the one case where the distinction the controller draws
    (`CesiumTimeOfDayController.h`, header comment) has no observable consequence.
-3. Imagery streams to the detect-and-track stage; its tracks stream to the model service; the model's
-   assessments stream to the consumer.
-4. Truth streams to the consumer on a **separate** track source so an observer can see both, and the model
-   service receives none of it.
+3. **Feeding.** Collection frames — imagery plus the metadata a real exploitation chain would have
+   ([08 §7.2](08_Collection_And_EPoL.md)) — stream to the external detect-and-track stage, whose tracks
+   stream on to the external model service. The interface is the one a fielded chain would use, which is
+   the whole reason the exercise is worth running.
+4. **Recording, on our side of the boundary.** The session records what it **sent** (frame identity,
+   tick, simulated time, sensor id, wall time) and what came **back** (tracks and assessments, verbatim,
+   each stamped with the tick current when it arrived and its own wall time). This is a **transcript**,
+   not a comparison: it asserts what crossed the interface and when, and nothing about whether any of it
+   was right.
+5. **Truth travels alongside, on a separate track source**, so an observer can watch both at once. The
+   model service receives none of it, and the separation is structural rather than configured (D2.9).
+6. Nothing in the session computes agreement between the two streams. The comparing is done by the people
+   watching, which is what a demonstration is for.
 
 **Alternate flows.**
 - *Demonstration without a model* — truth only, which is the existing live telemetry behaviour and must
   keep working.
+- *Integration test rather than demonstration* — the same flow run for shape rather than for an audience:
+  does the stage accept our collection frame, does the service accept the stage's tracks, is the tick
+  preserved end to end, does latency stay inside the pacing budget. Every one of those is an assertion
+  about an **interface**, not about a model, and they are a large part of why this case exists.
+- *The transcript handed on* — step 4's transcript is a legitimate thing to give the external model team,
+  because it is *their* output beside *our* truth on a common tick base. Handing it over is UC-10; what
+  anyone concludes from it is theirs.
 - *Illumination as legitimate context for the model* — a live exercise is the natural place to demonstrate
   that a fielded system knows the time and its own location and is entitled to use them, which the
   standing constraint permits explicitly (brief §3a). The boundary is unchanged: the model may be told the
@@ -787,11 +947,25 @@ detect-and-track stage and model service, and a consumer for the output.
   falling behind the exercise's own clock.
 - *Truth reaching the model service* — a configuration error that must be impossible by construction, not
   caught by review. The model service's input is a track stream with no truth-sourced fields in it.
+- *A figure of merit for the model is asked for, live* — **refuse; it is not a capability this system
+  has.** Stating this as a failure flow is deliberate rather than pedantic: this is the one place in the
+  whole plan where scoring would be added by accident, because both streams are already in one process,
+  on one tick base, with a common frame identity, and the join is a few lines away. An observer who wants
+  a number takes the transcript and computes it outside, with the transfer rule UC-10 step 6 ships.
+- *The transcript treated as truth, or merged into one* — refused. Received model output is **received
+  data**: it lives in its own artifact with its own provenance and is never written into a truth sidecar,
+  a supervision record or a run manifest's supervision block. A stream that is both an input and a record
+  of what a model said about it is one refactor away from being a label.
+- *Anything else UC-7 refuses* — population authority held, no epoch, a solar authority that refuses, a
+  readback that disagrees. A live exercise gets no relief from any of them; an exercise in unknown light
+  is a demonstration of nothing in particular.
 
-**Postconditions.** Nothing training-grade is produced. A session log records what was shown, including
-the illumination policy it was shown under.
+**Postconditions.** Nothing training-grade is produced, and **nothing about either model has been
+measured**. A session log records what was shown and under which illumination policy; the transcript
+records what was sent and what came back, on a common tick base, alongside the truth of the same session.
 
-**Artifacts.** Session log; optionally a recorded CoT stream for later review.
+**Artifacts.** Session log; the exercise transcript (what was sent, what was received, as received);
+optionally a recorded CoT truth stream for later review.
 
 ---
 
@@ -855,7 +1029,7 @@ not a neutral default; it is a random one.
   ([18 §5.3](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md)).
 - *Kinematics in a replayed capture* — the SUMO bridge is not running, so the compensation of
   [01 §4.3](01_Architecture.md) is unavailable and replayed bodies are moved by the replayer. Whether
-  replayed truth can carry speed at all is an open question, recorded in §7.
+  replayed truth can carry speed at all is an open question, recorded in §8.
 
 **Postconditions.** A second corpus of the same behaviour, under the same illumination as the first or
 under a stated different one, joinable to the first by `entity_id` and normalised tick.
@@ -865,67 +1039,151 @@ illumination reproduced or departed from it.
 
 ---
 
-### UC-10 — Evaluate a model against a captured corpus
+### UC-10 — Hand a corpus to an external model team
 
 | | |
 |---|---|
-| **Primary actor** | Model evaluator |
-| **Supporting** | Model trainer, detect-and-track stage, EPoL model service |
+| **Primary actor** | Capture operator, as the corpus's producer |
+| **Supporting** | Scenario author (the annotations' author), external model team (recipient, outside the boundary) |
 
-**Preconditions.** A corpus with its manifest **including its solar record**; a trained model; detector
-tracks for the corpus.
+**What replaced what.** The first draft's UC-10 was *Evaluate a model against a captured corpus*, and
+every one of its seven steps measured a model: transfer supervision onto detector tracks, join
+assessments to supervision, compute a denominator, report a base rate, stratify the scores, score the
+detector against truth. That case is out of scope
+([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b). What **is** ours is the step immediately before it: putting a
+corpus into a state where somebody else can do that work **without having to ask us anything**. The
+number is unchanged because siblings cite it, and §0 lists the disposition of each removed step.
+
+The test for whether this case is doing its job is a blunt one. *Could the recipient, holding only what
+UC-10 handed them, compute a figure and know what it means — the denominator, the strata, what is
+missing and why, and the rule for attaching our labels to their tracks?* If yes, the corpus is complete
+and nothing here has scored anything.
+
+**Preconditions.** A closed corpus from UC-7 or UC-9, with its manifest **closed** (D2.10); UC-11's
+audit run against it and its report in hand; the vocabulary version, manifest spec version and validator
+version recorded; a named recipient.
 
 **Main flow.**
-1. `SupervisionTransfer` transfers supervision from truth onto detector tracks, **per sensor**, clipping
-   any track that spans an interval boundary rather than labelling it wholesale, and recording the
-   association quality per assignment ([20 §7.6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)).
-2. The model is run over the tracks. It is given no truth.
-3. `EvaluationJoin` joins assessments to supervision.
-4. The denominator is computed over **observed** intervals, not authored ones, and the render-set gate is
-   applied first: an interval whose participant was never instantiated is not a miss
-   ([01 §7](01_Architecture.md), [20 §2.5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)).
-5. Base rate is reported per sensor and unioned, because precision at low prevalence is dominated by it
-   ([20 §2.6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)).
-6. **Every reported figure is also reported stratified by illumination.** The stratum is derived from the
-   manifest's solar record and the per-frame `<_solar>` elements — at minimum by sun elevation band
-   (daylight, civil twilight, night), and by the run's policy, since a frozen run occupies one stratum and
-   an advancing run can cross several. The denominator, the base rate and the detector scores are each
-   computed per stratum as well as in aggregate. The reason is not statistical hygiene in the abstract:
-   illumination is the single largest covariate an electro-optical detector faces (brief §3a), so an
-   aggregate figure over a corpus that spans strata is a weighted average whose weights are an artifact of
-   the capture plan rather than of anything about the model.
-7. Detector performance is scored separately against truth: position error, height error, class confusion,
-   missed and false tracks ([09 §9](../../Findings/09_Telemetry_CoT_Contract.md)) — per illumination
-   stratum, for the same reason, and because this is where the effect will be largest.
+1. **Close and freeze the identity.** The manifest is closed and digested; the corpus's identity is the
+   tuple the manifest already carries — world digest, network, routes and configuration digests,
+   `scenario_id`, `plan_id`, `session_id`, seed
+   ([06 §8.4](06_Truth_And_Annotation.md)'s session block). A corpus is handed over as a named,
+   immutable thing or not at all; an unnamed pile of PNGs and sidecars is the thing nobody can join to
+   anything later.
+2. **Audit it first.** UC-11 runs, and its report is part of the package rather than a separate errand.
+   Handing over an unaudited corpus hands over unreviewed accidental positives and an unquantified
+   illumination confound, and the recipient can find **neither**: they hold no scenario, no unlabelled
+   population's provenance, and no record of what the author did and did not assert.
+3. **Split the export.** Two artifacts, not two views of one: a **training export** carrying only what a
+   fielded system could also have, and a **full export** carrying everything including truth. The split,
+   its table and the conditional gate on solar fields are
+   [06 §10.2–10.3](06_Truth_And_Annotation.md)'s, and this case does not restate them. Two properties it
+   *does* require of that split: the recipient is told which artifact is which and why, and the
+   supervision that ships is keyed to **truth** entities and intervals, because detector tracks are the
+   one thing this pipeline never sees.
+4. **State what the corpus contains**, in the units the manifest already carries, so that the recipient
+   computes rather than estimates:
+   - observability spans per sensor and unioned, and the five outcomes an interval can have
+     ([06 §5.1](06_Truth_And_Annotation.md));
+   - prevalence in **three** units — per vehicle, per vehicle-second, per interval — which differ by a
+     factor of 372 on the sizing scenario, so an unlabelled number is a defect rather than a rounding
+     matter (measured, carried forward from [06 §2.6 and §5.3](06_Truth_And_Annotation.md));
+   - every one of those three **per illumination band**, with the band cut points recorded beside them,
+     and with empty-numerator rows kept rather than suppressed — "we captured nothing anomalous at night"
+     and "we did not capture at night" are different statements and only one of them is a gap
+     ([06 §5.3](06_Truth_And_Annotation.md));
+   - the run's solar record: the epoch, the derived civil date and time, the policy and rate, the
+     solar-frame offset, any override, and the achieved sun (UC-7 step 10);
+   - the render-set accounting: admissions, releases, refusals and the spans in which the actor cap bound
+     ([06 §10.4](06_Truth_And_Annotation.md)).
+5. **State what it does not contain**, as explicit rows rather than as an absence. This is the half a
+   recipient cannot reconstruct and the half that decides whether their denominator is honest:
+   - **intervals whose participants were never instantiated.** They are `not_rendered`, they are in the
+     manifest, and they are not something anyone may count against a model. Only we can know which they
+     were (D2.8);
+   - **spans where the actor cap bound.** While the cap binds, "was rendered" correlates with "is
+     annotated", so those spans are excluded from the training export and kept in the full one
+     ([06 §10.4](06_Truth_And_Annotation.md));
+   - **windows retained as truth-only.** The sizing scenario's 23:00 window is exactly this case: the sun
+     there is 38.1° to 79.5° below the horizon at 23:00 **on every date of the year**, so the window is
+     kept for truth and the imagery regime it was meant to sample is re-placed onto 17:00–18:00
+     (measured by [10 §4.2.4](10_Scale_And_Performance.md), carried forward). A recipient who does not
+     know this reads a hole in the corpus as a hole in reality;
+   - **pedestrians**, which the world-generation pipeline cannot render believably and which are out of
+     scope for the whole effort (brief §3, decision 5);
+   - **vehicle dynamics**, and what was done about them: a pose-applied body's velocity is not the
+     engine's ([01 §4.3](01_Architecture.md), [06 §4.2](06_Truth_And_Annotation.md)), and the truth record
+     says which producer each kinematic field came from;
+   - **any model output at all.** No corpus we hand over contains a detection, a track, an assessment or
+     a score, except where UC-8's transcript is shipped explicitly and labelled as received data.
+6. **Ship the rule, not the result.** The supervision-transfer rule travels with the corpus as a written
+   contract the recipient applies to their own tracks: associate by position and time and **never by
+   uid**; one truth entity maps to many tracks, so transfer is per (track, interval) and not per entity;
+   transfer once **per sensor**; **clip** a track that spans an interval boundary rather than labelling it
+   wholesale; record association quality per assignment ([06 §10.1](06_Truth_And_Annotation.md), whose
+   rule this is; [08 §8.2–8.3](08_Collection_And_EPoL.md) for the assignment and the quality block's
+   format). **We publish the rule and the format; we do not run them**, because running them requires
+   detector tracks this pipeline never sees (brief §3b item 3). What the corpus must therefore be is
+   *associable*: per tick, positioned, timed, boxed, and joinable on a tick base the recipient also holds.
+7. **Name the version of everything.** Vocabulary version, manifest spec version, validator version,
+   catalogue version, world digest, scenario digests, and the transfer-contract version. A recipient who
+   cannot tell two corpora apart will pool them, and pooling is the failure the refusals below exist to
+   prevent.
+8. **Record the handoff.** Who received which corpus identity, which exports, which audit report, and
+   which contract version. The record lives with the corpus, so a second recipient is given the same
+   statement rather than a differently-remembered one.
 
 **Alternate flows.**
-- *Fused tracks* — if the model consumes tracks fused across sensors, "observed" means the union; without
-  fusion it is per sensor. The manifest carries both so the choice is made downstream rather than baked in
-  at capture time. Illumination is world-scoped, so it stratifies a fused evaluation exactly as it does a
-  per-sensor one.
-- *A corpus captured entirely in one stratum* — legitimate, common, and the stratified report degenerates
-  to the aggregate one. What must not degenerate is the **statement** of which stratum it was, because a
-  model scored only at noon has not been shown to work at dusk and the report is where that is visible.
+- *A corpus assembled from several runs* — permitted only where every run shares world digest, scenario
+  id and vocabulary version, and where the assembled metadata is **stratified rather than pooled**. A
+  07:00 window and a 17:00 window are two populations; a number pooled over them describes neither
+  (carried forward from [06 §5.3](06_Truth_And_Annotation.md)).
+- *A truth-only corpus* — a window captured for truth with no viable imagery is a legitimate deliverable
+  ([10 §4.2.4](10_Scale_And_Performance.md)'s 23:00 case), provided it is labelled as one and no
+  imagery-derived metadata pretends to exist for it.
+- *An unannotated corpus* — ordinary movement with an empty `AnnotationSet` (open question 3). It is the
+  cleanest control a recipient can be given, and it must be shippable. What it needs is a statement that
+  the set is empty **by intent** rather than by failure, which is a distinction only the author can make.
+- *A recipient who wants different light, or the same behaviour again* — the answer is a **capture, not an
+  edit**: UC-6's illumination-only sweep or UC-9's replay under a different appearance. This is what makes
+  "it did not work at dusk" an actionable request without this pipeline ever scoring anything.
+- *A recipient who wants the live exercise's transcript* — UC-8's artifact, shipped as received data with
+  its own provenance, never merged into the truth.
 
 **Failure flows.**
-- *A corpus whose manifest is absent or was not closed* — refuse to score. Supervision in interval form is
-  the only thing a detector track can be clipped against
-  ([20 §7.6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)).
-- *A corpus whose manifest carries no solar record* — refuse to report an aggregate figure; a stratified
-  figure cannot be computed and an unstratified one would be presented as if it could have been. Report
-  what is computable and say plainly that the illumination is unknown.
-- *Corpora with different illumination combined into one figure without stratifying* — refuse, in the same
-  family as the world-digest refusal below and for the same reason: the combined figure is not a property
-  of the model.
-- *A vocabulary version the evaluator does not understand* — refuse.
-- *Corpora from different worlds combined without saying so* — refuse; the world digest is part of the
-  corpus identity.
+- *The manifest is absent or was never closed* — refuse the handoff. Supervision in interval form is the
+  only thing a detector track can be clipped against, and the recipient is the one who will do the
+  clipping (D2.10).
+- *No audit report* — refuse. An unaudited corpus is one whose accidental positives and illumination
+  confound are invisible to everyone who will ever hold it (UC-11, D2.11).
+- *No solar record* — refuse to hand it over as an **imagery** corpus; permit it as a truth-only one,
+  labelled. Without the record the recipient cannot stratify, so they will pool, and they will not know
+  they did.
+- *A vocabulary version the recipient's tooling does not understand* — refuse until it is resolved. A
+  corpus assembled from scenarios that each spelled `loiter` differently is not a corpus
+  ([20 §6.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)), and the boundary is the
+  cheapest place left to catch it.
+- *Corpora from different worlds or different scenarios bundled without saying so* — refuse; the world
+  digest is part of the corpus identity.
+- *Truth reaching a training input by the back door* — refuse. The export split is a **process** boundary
+  and not a convention ([06 §10.3](06_Truth_And_Annotation.md)); the one conditional row is solar state,
+  which is exported as a training input only when the corpus has annotated mass in more than one
+  illumination band, or when the time of day *is* the annotated pattern
+  ([06 §10.2](06_Truth_And_Annotation.md)).
+- *A request for a score, a baseline, a model comparison or a pass/fail verdict* — **not a capability this
+  system has, and the answer is not "later".** What the recipient gets instead is steps 4, 5 and 6: a
+  denominator they can compute, strata they can condition on, an honest statement of what is missing, and
+  the transfer rule they apply themselves. This failure flow exists to be cited, because this is the
+  request that will arrive.
 
-**Postconditions.** A score that charges the model only for what a sensor could have seen, reported so
-that what it could have seen *in what light* is visible rather than averaged away.
+**Postconditions.** The recipient holds a corpus they can train on and validate against without asking us
+a question; the statement of what it contains, what it omits and in what light travels with it; the
+handoff is recorded on our side. **Nothing about any model has been measured, here or anywhere upstream
+of here.**
 
-**Artifacts.** Transferred supervision per sensor; an evaluation report carrying the denominators, base
-rates and illumination strata it used.
+**Artifacts.** The training export; the full export; the corpus statement (contents and omissions, in the
+manifest's own units); the audit report from UC-11; the supervision-transfer rule and the
+association-quality format, shipped as versioned contracts; the handoff record.
 
 ---
 
@@ -933,7 +1191,16 @@ rates and illumination strata it used.
 
 | | |
 |---|---|
-| **Primary actor** | Model evaluator, with the model trainer |
+| **Primary actor** | Capture operator, who owns the corpus |
+| **Supporting** | Scenario author, who owns what was and was not asserted; a stock detector, **as an instrument only**, in the alternate flow |
+
+**This is a data-quality use case, and it stays.** Auditing our own data for accidental positives and for
+illumination leakage is an assertion about **the corpus**, never about a model, and it survives the scope
+boundary untouched in substance ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b items 1 and 2). What changed is
+its **actor**. The first draft gave it to a "model evaluator", which put our own data-quality gate in the
+hands of someone outside the boundary who holds neither the scenario, nor the unlabelled population's
+provenance, nor any record of what the author chose not to assert. It is ours, it runs **before** a
+corpus leaves (UC-10 step 2), and its report ships with the corpus.
 
 **Preconditions.** A corpus with its manifest, its solar record and derived area relations.
 
@@ -985,16 +1252,20 @@ that is the point.
 - **The ordinary population is itself hour-shaped.** Ferry sailings are restricted to daylight by an
   explicit authoring decision — `# Ferry sailings (local hours) -- daylight only, none overnight.`
   (`make_bahonar_scenario.py:161-162`) — and guard shifts sit at 07:00, 15:00 and 23:00 (`:164`). A
-  detector trained on this corpus can learn "bright and busy" versus "dark and empty" and score well
-  without learning any behaviour at all.
+  model trained on this corpus can separate the annotated class from the rest on "bright and busy" versus
+  "dark and empty" alone, without learning any behaviour. That is a property of **the corpus**, and step
+  3 measures it with no model in the room at all: the separability test needs the labels and the sun and
+  nothing else.
 
 **What the audit does about it, and what it must not do.** It does not remove the correlation: the
 correlation is *real*, a fielded system sees it, and illumination is a legitimate input to one that knows
 the time and its own location (brief §3a). It **measures** the correlation and records it with the corpus,
-so that a score is read in the light of it. Where the leakage is strong enough to make an evaluation
-meaningless, the remedy is a capture, not an edit — UC-6's illumination-only sweep or UC-9's replay under
-a different appearance gives the same behaviour in different light, and a model that only worked in the
-original light is then visibly the model it always was.
+so that a recipient reads it **before** training on the data rather than discovering it afterwards.
+Where the leakage is strong enough that the corpus would teach the hour instead of the behaviour, the
+remedy is a capture, not an edit — UC-6's illumination-only sweep or UC-9's replay under a different
+appearance gives the same behaviour in different light, and the pair is what makes the corpus fit for the
+purpose it was built for. Whether a model trained on the unpaired corpus turns out to have learned the
+hour is the recipient's finding to make; the audit's job is to make sure nobody is surprised by it.
 
 **Alternate flows.**
 - *Audit a run list rather than one run* — the same test across a sweep finds a class of accidental
@@ -1002,6 +1273,14 @@ original light is then visibly the model it always was.
   because a single frozen run has no illumination variance to test against.
 - *Audit across an illumination pair* — where UC-6 or UC-9 produced the same behaviour under two suns,
   the leakage test has a genuine control and becomes a measurement rather than an estimate.
+- *Probe the corpus with a stock detector, as an instrument* — the corpus fitness question, *does an
+  annotated interval survive contact with a detector at all?*, is an assertion about our data and not
+  about the detector: a thermometer checking an oven. Its only admissible output is "this corpus does or
+  does not yield trackable targets over the annotated intervals", which feeds camera altitude, field of
+  view and channel count. It must emit **no** model metric (brief §3b item 1). The probe's design, its
+  tiers and its illumination handling are [08 §12](08_Collection_And_EPoL.md)'s and
+  [13](13_Work_Breakdown.md)'s; what this case owns is that its result is recorded as a property of the
+  corpus and travels with it.
 
 **Failure flows.**
 - *The audit's output used as a label* — prohibited. A derived predicate never writes into supervision
@@ -1016,6 +1295,9 @@ original light is then visibly the model it always was.
   tool, and the second is the likelier of the two.
 - *A corpus with no solar record* — the leakage test cannot run. Report that it could not run rather than
   reporting a pass.
+- *The audit's output reported as a result about a model* — prohibited, including in the alternate flow
+  where a detector is the instrument. The audit's subject is the corpus in every branch; it emits no
+  figure of merit for a detector or an EPoL model, and no pass/fail verdict on either (brief §3b, D2.23).
 
 **Note on why this case matters more under this system than it did.** The traffic manager's idle cull
 truncates the ambient stationary distribution at ninety seconds, which is also what suppresses accidental
@@ -1027,7 +1309,8 @@ arrives by the same route: correct time of day is a realism gain that simultaneo
 channel, and the same rule applies — they ship together.
 
 **Postconditions.** Candidates identified; illumination leakage quantified and recorded; the corpus is
-either accepted, corrected, has spans excluded, or is paired with a counter-illumination capture.
+either accepted, corrected, has spans excluded, or is paired with a counter-illumination capture. The
+report is an artifact of the corpus and an input to UC-10, not a document that stops here.
 
 **Artifacts.** Audit report, including the per-class illumination distributions and the separability
 result.
@@ -1342,7 +1625,99 @@ Six things this diagram is asserting:
 
 ---
 
-## 6. Decisions
+## 6. Activity diagram — handing a corpus to an external model team
+
+This is UC-10 with UC-11 inlined, because a corpus is audited on its way out rather than as a separate
+errand. It is drawn because the scope boundary is the whole point of the redraft, and a swimlane is the
+only view that shows **where our partition stops**. The last partition is outside this system; it is
+drawn to show what the recipient does with what we shipped, and nothing in it is ours to build.
+
+```mermaid
+flowchart TB
+    subgraph OP["Capture operator"]
+        direction TB
+        P1["Close the manifest;<br/>digest the corpus identity"]
+        P2["Name the recipient and<br/>the contract version"]
+        P3["Read the refusal"]
+        P4["Record the handoff"]
+    end
+
+    subgraph AUD["UC-11 audit, operator with the scenario author"]
+        direction TB
+        A1["Surface unlabelled vehicles that<br/>look like an annotated pattern"]
+        A2["Measure separability of each annotated<br/>class on sun elevation alone"]
+        A3["Quantify the hour-defined instances<br/>UC-4 flagged"]
+        A4["Audit report, carrying<br/>its own criteria"]
+    end
+
+    subgraph GATE["Handoff gate"]
+        direction TB
+        G1{"Manifest closed?"}
+        G2{"Audit report present?"}
+        G3{"Solar record present?"}
+        G4{"One world digest, one scenario,<br/>one vocabulary version?"}
+    end
+
+    subgraph PKG["The package"]
+        direction TB
+        E1["Training export:<br/>nothing a fielded system<br/>could not also have"]
+        E2["Full export: truth, residuals,<br/>render-set accounting"]
+        E3["Contents: observability spans,<br/>prevalence in 3 units per band,<br/>band cut points, solar record,<br/>admissions and refusals"]
+        E4["Omissions: not_rendered intervals,<br/>cap-bound spans, truth-only windows,<br/>no pedestrians, the kinematics caveat"]
+        E5["The transfer rule and the<br/>association-quality format,<br/>as versioned contracts"]
+    end
+
+    subgraph EXT["External model team — outside this system"]
+        direction TB
+        X1["Runs its own detector<br/>on the imagery"]
+        X2["Applies the shipped transfer rule<br/>to its own tracks, per sensor,<br/>clipping at interval bounds"]
+        X3["Trains, validates, and computes<br/>whatever figures it needs"]
+    end
+
+    P1 --> G1
+    G1 -->|"no: refuse"| P3
+    G1 -->|"yes"| A1
+    A1 --> A2 --> A3 --> A4 --> G2
+    G2 -->|"no: refuse"| P3
+    G2 -->|"yes"| G3
+    G3 -->|"no: refuse as an imagery corpus,<br/>permit as truth-only and labelled"| P3
+    G3 -->|"yes"| G4
+    G4 -->|"no: refuse to pool"| P3
+    G4 -->|"yes"| E1
+    E1 --> E2 --> E3 --> E4 --> E5 --> P2 --> P4
+    P4 ==>|"one way: corpus, statement,<br/>audit, contracts"| X1
+    X1 --> X2 --> X3
+```
+
+Five things this diagram is asserting:
+
+- **The audit is inside the flow, not beside it.** `G1` gates on the manifest and then routes straight
+  into UC-11, and `G2` will not let an unaudited corpus past. An audit that is a separate errand is an
+  audit that does not happen on the run that most needs it.
+- **Every gate is a refusal to *hand over*, not a refusal to score.** The four conditions are the first
+  draft's four refusals with their verb corrected; the conditions themselves were already right.
+- **Contents and omissions are two artifacts, not two paragraphs of an email.** `E3` is what the manifest
+  already carries; `E4` is the half nobody can reconstruct — `not_rendered` intervals, cap-bound spans, a
+  window kept as truth-only because the imagery was not viable. A recipient without `E4` reads a hole in
+  the corpus as a hole in reality.
+- **The boundary is a single arrow and it points one way.** Nothing returns. There is no edge on which a
+  recipient's findings about a model could arrive, which is the structural form of
+  [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b.
+- **The transfer happens in the last partition, not in ours.** `X2` applies our rule to *their* tracks.
+  We ship the rule and the format at `E5` and we never run them, because running them needs a detector
+  track this pipeline never sees. The one thing that makes `X2` possible is that the corpus is
+  **associable** — per tick, positioned, timed, boxed — and that is a property of what we produce.
+
+---
+
+## 7. Decisions
+
+**Numbering.** **No decision was renumbered**, because siblings cite `D2.x` by number
+([01](01_Architecture.md) cites D2.10 twice; [12](12_Operator_Control_Surface.md) cites D2.2 and D2.6).
+**D2.8, D2.10 and D2.19 were rewritten in place** against the scope boundary and keep their numbers and
+their subject; the claim [01](01_Architecture.md) quotes from D2.10 — that a corpus without a closed
+manifest is not replayable — is still asserted by it. **D2.11 was extended**, not replaced. **D2.23 to D2.25 are new.** Everything else is unchanged
+from the §3a redraft.
 
 | # | Decision |
 |---|---|
@@ -1353,10 +1728,10 @@ Six things this diagram is asserting:
 | D2.5 | **The author accepts a resolution report, not a file.** The compile step reports what every name bound to — and what every window and interval means in civil time — because a preview cannot check an annotation and a silent nearest match is the failure mode that costs the most later (UC-5 step 13) |
 | D2.6 | **Population authority is acquired at session start, and a denial fails the session naming the holder.** It is the first thing that happens in UC-7, and there is no path that proceeds past it with a warning (UC-7, §5) |
 | D2.7 | **One capture session, one identity.** The session assigns the run identity, the scenario id and a stable `sensor_id` per camera, replacing the recorder's own wall-clock default and closing the never-supplied `scenario_id` gap at its current location (UC-7 step 5) |
-| D2.8 | **The evaluation denominator is observed intervals, gated first on rendered spans.** An annotated interval whose participant was never instantiated is not a model miss, and only the manifest can say which those were (UC-10 step 4) |
-| D2.9 | **The model service is never given truth, in any mode.** Live and offline alike, its input is a track stream with no truth-sourced field in it, and that is a structural property of the interface rather than a configuration to get right (UC-8, UC-10) |
-| D2.10 | **A corpus without a closed manifest is not scoreable and not replayable.** Both UC-9 and UC-10 refuse it rather than degrading, because supervision in interval form is the only thing a detector track can be clipped against (UC-9, UC-10) |
-| D2.11 | **Auditing for accidental positives is a required use case, not an optional one**, because this system removes the mechanism that was suppressing them. The realism gain and the audit ship together (UC-11) |
+| D2.8 | **The corpus publishes the denominator; it never applies it.** Observability is accounted as observed intervals, gated first on rendered spans, per sensor and unioned. An annotated interval whose participant was never instantiated is not something anyone may count against a model, and **only the manifest can say which those were** — which is why we compute and publish it and why an external consumer could not. What is divided by it happens outside this system (UC-10 steps 4 and 5) |
+| D2.9 | **The model service is never given truth, in any mode.** Live (UC-8) and by export (UC-10) alike, its input carries no truth-sourced field, and that is a structural property — two separate artifacts rather than two views of one ([06 §10.3](06_Truth_And_Annotation.md)) — not a configuration to get right |
+| D2.10 | **A corpus without a closed manifest is not handed over and not replayable.** Both UC-9 and UC-10 refuse it rather than degrading, because supervision in interval form is the only thing a detector track can be clipped against — and the recipient is the one who will do the clipping (UC-9, UC-10) |
+| D2.11 | **Auditing for accidental positives is a required use case, not an optional one**, because this system removes the mechanism that was suppressing them. The realism gain and the audit ship together. It is **our** audit — the capture operator with the scenario author, never an external consumer — it runs before a corpus leaves, and its report ships with the corpus (UC-11, UC-10 step 2, §1.3) |
 | D2.12 | **A live exercise degrades visibly rather than silently slowing the world.** An observer who cannot tell that the pipeline is behind is being shown something other than what they think (UC-8 failure flow) |
 | D2.13 | **The scenario author owns the epoch; the capture operator owns the illumination policy.** The epoch — civil date, civil UTC offset, the civil instant `t = 0` means — is scenario-scoped and a required part of the scenario contract. Freeze-or-advance, the rate, and any override are run-scoped. Neither actor can perform the other's part: the operator cannot invent what a scenario's hours mean, and the author cannot know the sweep (§1.1) |
 | D2.14 | **A window's civil time is derived, never chosen.** An operator who wants a different light records an **override**, which marks the corpus. The difference between a derived time and an override is a fact a later reader needs, and a silently different time is indistinguishable from a bug (§1.1, UC-7 alternate flow) |
@@ -1364,12 +1739,15 @@ Six things this diagram is asserting:
 | D2.16 | **A run that cannot derive, set or verify its illumination fails rather than captures.** No epoch, a solar authority that refuses, or a readback that disagrees each stop the session. The alternative is a corpus whose imagery and truth disagree while both are well-formed, which nothing downstream detects (UC-7 failure flows) |
 | D2.17 | **Illumination is an appearance axis and a confounding one.** A sweep that varies behaviour holds illumination constant *and frozen*; a sweep that varies both marks every entry with its illumination stratum or is refused. A counterfactual pair whose arms have different suns is worth nothing (UC-6 §6a) |
 | D2.18 | **A replay reproduces the original illumination by default; departing from it is an explicit, recorded override.** A manifest with no solar record is replayable for review and not for capture, because the new corpus could not state its relationship to the old one (UC-9) |
-| D2.19 | **Evaluation is stratified by illumination.** Denominator, base rate and detector scores are reported per stratum as well as in aggregate, because an aggregate over a corpus spanning strata is a weighted average whose weights belong to the capture plan rather than to the model (UC-10 step 6) |
+| D2.19 | **Illumination stratification is corpus metadata, produced here and conditioned on elsewhere.** Observability, prevalence in all three units, and the band cut points are published **per illumination band** as well as unioned, and a pooled aggregate that hides the bands is refused at handover. A corpus spanning bands is two populations, and anything pooled over it describes neither ([06 §5.3](06_Truth_And_Annotation.md)). The pipeline stratifies its own data; it does not stratify anybody's results (UC-10 step 4) |
 | D2.20 | **The audit tests whether the annotated class is separable by illumination alone, and records the result with the corpus.** In a pattern of life the label correlates with the hour by construction, so this is the default state and not an exceptional one. The remedy is a counter-illumination capture, never an edit to the labels (UC-11 §11a) |
 | D2.21 | **Illumination is derived context and never a label.** No annotation may name a light state (UC-4 failure flow), and no audit output or stratum may be written into supervision (UC-11 failure flow). It is a legitimate covariate and a legitimate input to a fielded system that knows the time and its location; it is never a supervision signal (brief §3a, standing constraint) |
 | D2.22 | **Every field of a run configuration has an explicit value, composed and validated in one place.** There is no field that falls back to "whatever the world happened to be in". A scripted launch composes and validates the same configuration through the same path; the requirement is that the step cannot be bypassed, not that a human performs it (UC-12) |
+| D2.23 | **This pipeline labels; it never scores.** No component runs a detector, a tracker or an EPoL model in order to measure one, and no artifact it produces is a model metric, a baseline, a comparison or a verdict. Where a model appears it is a **live consumer being fed** (UC-8) or an **instrument used on our own data** (UC-11), and in neither role is it the subject. The positive form of the rule is the one to build to: **compute and publish everything a score would need; compute no score** ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b, §0) |
+| D2.24 | **A live exercise feeds and records; it does not judge.** The session streams collection frames out, records what comes back verbatim and tick-stamped, and holds truth on a separate channel for a human observer. It computes no agreement between the two — no association, no residual, no count, no verdict — and the transcript is received data with its own provenance, never merged into truth or supervision. This is stated as a decision because both streams are already in one process on one tick base, and the join is a few lines away (UC-8) |
+| D2.25 | **The external model team is an actor outside the boundary, associated with exactly one use case.** The first draft's "model trainer" and "model evaluator" are replaced by one external actor who receives a corpus at UC-10 and interacts with the pipeline in no other way. Their requirements on the corpus did not disappear with them: each became an obligation on the handoff and on the manifest — the strata, the denominator, and the statement of what is missing (§1.3, D2.8, D2.19) |
 
-## 7. Open questions
+## 8. Open questions
 
 1. **Can a replayed capture carry speed?** UC-9 replays bodies the replayer moves, with no SUMO session
    running, so [01 §4.3](01_Architecture.md)'s kinematic compensation is unavailable and the replayed
@@ -1388,7 +1766,9 @@ Six things this diagram is asserting:
 3. **Is there a use case for capturing a window with no annotations at all?** A corpus of purely ordinary
    movement is what an EPoL model most needs, and nothing above requires an `AnnotationSet` to be
    non-empty. If that is a first-class case it should be named, because it changes what UC-5 can insist on
-   and what UC-10's base rate means when the numerator is zero. It interacts with UC-11 §11a: an
+   and what the corpus's published prevalence means when the numerator is zero — a real case, and one the
+   manifest must state rather than omit ([06 §5.3](06_Truth_And_Annotation.md) already requires
+   empty-numerator rows to be kept). It interacts with UC-11 §11a: an
    unannotated corpus is also the cleanest available control for an illumination-leakage test, because it
    has no labels for illumination to correlate with.
 4. **How does an author preview a SUMO scenario?** [18 §8.3](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md)'s
@@ -1404,9 +1784,9 @@ Six things this diagram is asserting:
    [10](10_Scale_And_Performance.md)'s instrumentation and [12](12_Operator_Control_Surface.md)'s
    presentation, and the note here exists only so neither assumes the other owns it. The solar readback is
    the one figure already known to be free (`carlanet/__init__.py:1511-1533`).
-6. **Is UC-6's counterfactual pairing worth building?** It is the strongest validation signal available for
-   an EPoL detector and is nearly free here, but it doubles the run list and its value depends on a
-   modelling question outside this plan. Carried forward unresolved from
+6. **Is UC-6's counterfactual pairing worth building?** It is the strongest **control** a corpus can carry
+   — the same seed, the same ambient population, one instance's behaviour switched off — and it is nearly
+   free here, but it doubles the run list and its value depends on a modelling question outside this plan. Carried forward unresolved from
    [20 open question 7](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md). Note that
    §6a adds a hard precondition to it: both arms must share a frozen sun, or the pairing measures two
    things at once.
@@ -1457,6 +1837,24 @@ Six things this diagram is asserting:
     across the corpus, which is its own confound. The viewer already exposes `--ev`
     (`CarlaControlArgumentParser.py:238-242`), so the control exists. This is
     [08](08_Collection_And_EPoL.md)'s to decide; whichever way, the choice must be in the manifest, because
-    an evaluator stratifying by illumination (D2.19) needs to know whether the sensor changed too.
+    a consumer conditioning on the published illumination strata (D2.19) needs to know whether the sensor
+    changed too.
+
+12. **What does a corpus handoff actually ship as?** UC-10 now exists and nothing in this folder names the
+    package. Three parts are open. **(a) The container:** a directory tree whose manifest names relative
+    paths, an archive with a digest over its contents, or a manifest plus a content-addressed store.
+    Recommend the **directory tree with a digest manifest**, because it is what a world package already
+    does (`WorldPackage` writes `world.json` beside its files) and because a corpus at sizing scale is
+    large enough that re-archiving it to add an audit report would be the operation nobody performs.
+    **(b) The transfer rule's form:** prose in a contract document, or a versioned machine-readable
+    specification the recipient's tooling implements. Recommend the **versioned specification**, because
+    the rule has five clauses that each change a number (association by position and time, per-sensor
+    transfer, one-to-many, clipping at bounds, quality per assignment) and a prose clause that is
+    implemented slightly differently is exactly the silent divergence the vocabulary-version refusal
+    exists to prevent elsewhere. **(c) Whether the handoff record is a contract or a courtesy** — that is,
+    whether a second recipient may be given a corpus that has changed since the first handoff, or whether
+    corpus identity is frozen at first handover. Recommend **frozen**, consistent with D2.10 and with
+    UC-12's immutable run configuration. [04](04_Contracts.md) owns (a) and (b);
+    [09](09_Toolchain_And_Packaging.md) owns how it is built and staged.
 </content>
 </invoke>

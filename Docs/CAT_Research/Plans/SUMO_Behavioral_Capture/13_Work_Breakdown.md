@@ -254,9 +254,9 @@ New `CarlaNet.CoSim` in C#, orchestrated from Python; one TraCI connection owned
 | Per-image labelling and occlusion, reusing the depth-based metric | |
 | **Exposure made controllable and recorded.** `post_process_profile` **is** published and carries four profiles spanning EV100 +12.32 to −1.06; `exposure_compensation` is absent | Spawn-time only, nothing recorded today, and a case-sensitivity hazard that differs between Windows and Linux |
 | Truth-to-track association: per sensor, per frame, **position and time only**, cost in image space normalised by apparent size, with the **margin to the runner-up** recorded | A 3 px residual means nothing if the runner-up was 3.1 px |
-| **The anti-leak boundary**: three roots, one writer each, split **at the writer**, a validator in CI that reads tEXt chunks, and a held-back split at session granularity | Governed by observer-derivability: fieldable, scene-independent, supervision-blind, and sourceable without opening a truth artifact |
-| **The illumination-only baseline** — a model shown no imagery, whose score is the floor any real model must beat | How the hour-to-label correlation is caught rather than argued about |
-| Evaluation with prevalence and coverage per sensor and unioned, scoring parameterised by which onset defines the interval, stratified by illumination | |
+| **The anti-leak boundary**: **two** roots, one writer each, split **at the writer**, a validator in CI that reads tEXt chunks, and a held-back split recorded as a **release property** rather than a directory | Governed by observer-derivability: fieldable, scene-independent, supervision-blind, and sourceable without opening a truth artifact. There is no third root — model output is neither produced nor consumed here, and a named shelf for it would only invite it into the tree |
+| **The illumination-only leakage probe** — can the label be predicted from light alone, with no imagery? A property of the dataset, not a floor for a model to beat | How the hour-to-label correlation at 0.600 is caught rather than argued about |
+| **The corpus handover**: prevalence and coverage per sensor and unioned, stratified by illumination, plus an explicit statement of what the corpus does **not** contain — and the published supervision-transfer rule a downstream team applies to its own tracks. This pipeline performs no association and emits no metric | |
 | The live exercise: pacing, latency budget, operator view | An EPoL assessment can ride the existing Cursor-on-Target feed as a `<detail>` child |
 
 ---

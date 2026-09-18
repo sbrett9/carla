@@ -739,7 +739,7 @@ marked **cond.** are conditional requirements (§3.5).
 
 | Toggle | Default | Class | Source |
 |---|---|---|---|
-| `roots.observation` / `roots.truth` / `roots.score` | derived from the site profile's base + session id; **—** if any two resolve equal or nested | Session-fixed | [`08`](08_Collection_And_EPoL.md) D8.17 |
+| `roots.observation` / `roots.truth` | derived from the site profile's base + session id; **—** if the two resolve equal or nested | Session-fixed | [`08`](08_Collection_And_EPoL.md) D8.17, [`04`](04_Contracts.md) D4.26 — **two roots, not three**: model output is neither produced nor consumed here, so no root holds it |
 | `seeds.sumo` / `seeds.appearance` / `seeds.admission` | **—** (explicit; no nondeterministic default) | Session-fixed | [`07`](07_Scenario_Authoring.md) D7.11 |
 | `log_path` | `<session_root>/session.log` | Session-fixed | today's `--log` (`:493-499`) |
 | `diagnostics` | `off` | **Run-mutable** | today's `]` hotkey; `:439-449` |
@@ -813,7 +813,7 @@ laptop.
 | 14 | If the window's sun elevation falls below −6°, `solar.vehicle_lights` is stated | refuse | `window night_shift is dark (sun elevation −37.2° to −41.8°). 'solar.vehicle_lights' has no default in a dark window: state 'from_sumo' or 'off'.` |
 | 15 | `solar.policy` is not `accelerated` | refuse | `solar.policy 'accelerated' is not permitted in a capture run: a rate other than 1.0 makes recorded solar time disagree with the scenario's clock. Use the interactive viewer for look development.` |
 | 16 | `exposure` is not requested | refuse | `camera exposure is not available on this build: sensor.camera.rgb declares no exposure attribute (ActorBlueprintFunctionLibrary.cpp:313-410).` — this is §1.3's dead flag made loud |
-| 17 | The three export roots are distinct and none contains another | refuse | `roots.truth '/data/run7' contains roots.observation '/data/run7/obs'. The anti-leak split requires three disjoint roots (08 D8.17).` |
+| 17 | The two export roots are distinct and neither contains the other | refuse | `roots.truth '/data/run7' contains roots.observation '/data/run7/obs'. The anti-leak split requires two disjoint roots (08 D8.17, 04 D4.26).` — there is no third root: model output is neither produced nor consumed here, and a named shelf for it would only invite it into the tree |
 | 18 | Every seed has an explicit value or `random` | refuse | `seeds.sumo is unset. Give a value, or 'random' to draw and record one.` |
 | 19 | Predicted corpus size fits the free space under `roots.observation` | refuse | `window needs ~52 GB at 2 Hz × 2 channels × 6.2 Mpx; 31 GB free at /data.` — derived from [`10`](10_Scale_And_Performance.md) §4.2.3's measured per-frame sizes |
 | 20 | `render_region` is present and sized | refuse | `capture.render_region has no value; it is never defaulted (10 D10.5). The scenario's radial population profile suggests 300 m.` |
@@ -1069,7 +1069,6 @@ flowchart TB
         direction TB
         P1[("OBSERVATION root<br/>imagery + collect.json")]
         P2[("TRUTH root<br/>sidecars + labels + depth<br/>+ manifest + coverage")]
-        P3[("SCORE root<br/>NOT written by a capture run;<br/>written later, by the evaluation join")]
     end
 
     O1 --> O2 --> O3 --> O4
@@ -1106,9 +1105,10 @@ Three things the diagram asserts:
   nothing was acquired.
 - **The darkness branch is in the operator's lane, before the launch.** It is a conditional
   requirement (§4.4), so it is a decision the operator makes rather than a default they inherit.
-- **The `SCORE` root is drawn and explicitly not written.** A capture run touches two of
-  [`08`](08_Collection_And_EPoL.md) D8.17's three roots, and the third is written by the evaluation
-  join in a different process — which is the anti-leak boundary's physical form.
+- **A capture run writes exactly two roots, and there is no third.** Model output is neither
+  produced nor consumed by this pipeline, so nothing here holds it
+  ([`04`](04_Contracts.md) D4.26). The `OBSERVATION`/`TRUTH` separation is the whole of the
+  anti-leak boundary's physical form, and it is unaffected by the removal.
 
 ---
 
