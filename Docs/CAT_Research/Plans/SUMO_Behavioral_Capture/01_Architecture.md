@@ -1,12 +1,13 @@
 # 01 — System architecture
 
 **Status:** Plan section. Design, not implementation. No code was changed and no build was run.
-**Date:** 2026-09-18 (revision 3). First drafted 2026-09-17.
+**Date:** 2026-09-18 (revision 4). First drafted 2026-09-17.
 **Owner role:** Systems architect. Companion section: [02 — Use cases](02_Use_Cases.md).
 **Scope:** The component decomposition, the process topology, the authority model, the mode matrix, the
-ownership of simulated civil time and of the world's illumination, the resolution of the conflict
-between [23](../../Findings/23_SUMO_Traffic_Integration.md) §4 and the accepted teleport decision, and
-the architectural answer to a simulation vastly larger than the renderable set.
+ownership of simulated civil time and of the world's illumination, the ownership of real-time pacing for
+a live exercise, the resolution of the conflict between
+[23](../../Findings/23_SUMO_Traffic_Integration.md) §4 and the accepted teleport decision, and the
+architectural answer to a simulation vastly larger than the renderable set.
 **Audience:** An engineer who has not read the conversation that produced this plan, and who will
 implement or review one of the other sections in this folder.
 **Grounding:** Every claim about existing behaviour is cited `path:line` against the working tree as read
@@ -44,16 +45,38 @@ or renumbered**; D1.1–D1.25 keep their numbers and their meanings, none of the
 evaluation artifact, and the authority table (§4.1) is unchanged. The truth path, the supervision path
 and the anti-leak boundary are unchanged throughout.
 
+**What changed in revision 4.** The user elevated the live exercise from a tolerated case to a **primary
+use case** and added a pacing requirement (team brief §3c): synthetic imagery goes to an external
+detect-and-track stage, whose tracks go to an external EPoL model service, which produces anomaly reports
+live, and the architecture must stay generic past that boundary. Three changes follow, none of them a
+redesign. **First**, real-time pacing is given a named owner and a place in the authority model —
+`PlaybackClock`'s own contract gains a real-time-factor policy, not a second clock and not a governor in
+front of it (new §4.6, D1.26); this section fixes only where the lever sits, and
+[08](08_Collection_And_EPoL.md) rules on what `PlaybackClock` does with it when a live consumer falls
+behind. **Second**, §1.1's and §3.2's diagrams gain a dashed, optional edge for material an attached
+consumer pushes back, confirming it lands as a received, opaque transcript and never as an input to
+anything this pipeline computes (D1.28); `DetectAndTrackStage` and `EPoLModelService` were already drawn
+External and stay External, in both diagrams, in both directions. **Third**, the mode matrix is confirmed
+unaffected: live exercise is a property of the collection, not a fifth mode, and changes no row of §5.1
+or §5.2 beyond the pacing row D1.26 adds to §4.1 (new §5.6, D1.27). A short new §2.7 confirms unattended,
+scheduled regeneration needs no component beyond `CaptureSession` and `RunManifestWriter`, already
+specified (D1.29). **No decision is removed or renumbered**; D1.1–D1.25 keep their numbers and meanings,
+D1.1 gains a clause, and D1.26–D1.29 are new. Nothing above changes the truth path, the supervision path,
+the anti-leak boundary, or revision 3's removal of `EvaluationJoin`/`SupervisionTransfer` — going live
+does not reopen either.
+
 **Out of scope, deliberately.** The per-tick mechanism of the co-simulation loop
 ([03](03_CoSimulation_Runtime.md)), the wire-level shape of any contract
 ([04](04_Contracts.md)), whether a given shim or transport call is implemented end to end
 ([05](05_CarlaNet_Capability_Audit.md)), the annotation schema
 ([06](06_Truth_And_Annotation.md)), the authoring surface's grammar ([07](07_Scenario_Authoring.md)),
-the detector and model interfaces in detail ([08](08_Collection_And_EPoL.md)), packaging
+the detector and model interfaces in detail, and the ruling on what happens when a live external consumer
+cannot keep pace with the clock ([08](08_Collection_And_EPoL.md)), packaging
 ([09](09_Toolchain_And_Packaging.md)), the measured performance envelope
 ([10](10_Scale_And_Performance.md)), the epoch contract's grammar and the night-viability and
-vehicle-light mapping ([11](11_Time_And_Illumination.md)), the operator's surface over any of it
-([12](12_Operator_Control_Surface.md)), and the order things are built in
+vehicle-light mapping ([11](11_Time_And_Illumination.md)), the operator's surface over any of it,
+including how a real-time factor or an unattended cadence is expressed ([12](12_Operator_Control_Surface.md)),
+and the order things are built in
 ([13](13_Work_Breakdown.md)). Where this section needs a property from one of those, it states the
 property and names the section rather than designing it.
 
@@ -70,10 +93,14 @@ CARLA world write imagery plus a Cursor-on-Target truth sidecar, each frame alre
 state it was lit by. The truth carries two things SUMO and CARLA each own half of: where a vehicle was
 and what it looked like from a particular camera (CARLA), and how fast it was going and what the author
 asserted it was doing (SUMO and the annotation set). **This pipeline's product is that corpus** —
-imagery, truth and behavioural labels, produced complete and handed over. What reads it afterwards is
-external to this effort: a detect-and-track stage and an estimated-pattern-of-life model service, run
-offline against a recorded corpus or live, are both external systems this pipeline supplies and reads
-nothing back from. No part of this pipeline or tool suite scores anything.
+imagery, truth and behavioural labels, produced complete and handed over, or, in a **live exercise —
+wanted at least as much as the stored corpus, and designed to the same standard (§5.6)** — the same
+records leaving continuously, paced against a wall clock rather than produced as fast as the machine
+allows (§4.6). What reads either form is external to this effort: a detect-and-track stage and an
+estimated-pattern-of-life model service, run offline against a recorded corpus or live against a paced
+stream, are both external systems this pipeline supplies and reads nothing back from for meaning — we
+know nothing about their APIs, formats, transports or latencies, and this architecture specifies none of
+them (D1.28). No part of this pipeline or tool suite scores anything.
 
 ### 1.1 Context and containers
 
@@ -123,20 +150,32 @@ flowchart TB
     CS --> CORP
     CS --> TAK
     CORP --> CAUD
-    CORP -->|"handover"| DAT
+    CORP -->|"handover: files, or live<br/>and continuous (§4.6)"| DAT
     CORP -->|"handover"| EVAL
     DAT --> EPOL
     EPOL --> TAK
+    DAT -. "optional transcript<br/>opaque, tick-stamped,<br/>received only — never an input" .-> CS
+    EPOL -. "optional transcript<br/>opaque, tick-stamped,<br/>received only — never an input" .-> CS
 ```
 
 **`EvaluationJoin` and `SupervisionTransfer` are gone from this diagram**, not renamed or moved — this
 architecture does not build a component that reads `DetectAndTrackStage` or `EPoLModelService` output
 back in. `DetectAndTrackStage` and `EPoLModelService` were always drawn inside `ext`, the external
-systems subgraph; the change is that nothing inside `sys` now points into them for anything but the
-one-way handover of the corpus, and nothing inside `sys` receives an edge from either of them. `CorpusAudit`
+systems subgraph, and stay there under a live exercise exactly as under a stored corpus — nothing inside
+`sys` draws either as its own. Everything `sys` sends them is a one-way handover, batched or live
+(§4.6); nothing inside `sys` reads an edge from either of them for meaning. `CorpusAudit`
 stays, because it checks this pipeline's own labels against this pipeline's own derived area relations
 ([20 §2.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)) and needs no external
 model's output to do it.
+
+**The two dashed edges are new in revision 4, and they are the only edges this architecture draws
+returning from `ext` into `sys`.** They exist because team brief §3c permits, but does not require, an
+attached consumer to push material back — tracks, reports, or anything else. What lands at `CS` is
+received as an **opaque, tick-stamped transcript with its own provenance**, not parsed for meaning, not
+merged into truth or supervision, and not read by anything this pipeline computes (D1.28); its container
+shape belongs to [08 §11.6](08_Collection_And_EPoL.md). The edge is dashed for the same reason the
+author-to-assistant edge is: it is real, but it is not a control-flow dependency anything here waits on —
+`CS` runs identically whether or not either edge ever fires.
 
 ---
 
@@ -242,9 +281,14 @@ pipeline reads nothing back from either.
 
 | Component | Responsibility |
 |---|---|
-| `DetectAndTrackStage` | **External.** Consumes the capture corpus; emits its own detection-sourced tracks. This pipeline supplies its input and reads none of its output |
-| `EPoLModelService` | **External.** Consumes tracks; emits its own per-track assessments. Never given truth, and nothing it emits is read back into this pipeline |
+| `DetectAndTrackStage` | **External.** Consumes the capture corpus, batched or live; emits its own detection-sourced tracks. This pipeline supplies its input and reads none of its output for meaning; anything it pushes back is, at most, optionally received as an opaque transcript (D1.28) |
+| `EPoLModelService` | **External.** Consumes tracks; emits its own per-track assessments, live or offline. Never given truth, and nothing it emits is read back into this pipeline for meaning; anything it pushes back is, at most, optionally received as an opaque transcript (D1.28) |
 | `CorpusAudit` | **Ours.** Finds accidental positives in the unlabelled population ([20 §2.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)) — a check of this pipeline's own labels against its own derived area relations, needing no output from either external system above |
+
+This architecture specifies nothing about either external system's API, format, transport or latency, by
+design (D1.28) — they are none of this plan's business, live or offline. Where a concrete integration
+helps a reader, it is one illustrative adapter, marked as such; sketching one is
+[02](02_Use_Cases.md)'s and [08](08_Collection_And_EPoL.md)'s to do, not this section's.
 
 **Two components in revision 2 do not survive this boundary, and neither is replaced by anything.**
 `EvaluationJoin` joined `EPoLModelService`'s assessments to supervision and scored them — that is the
@@ -334,6 +378,27 @@ flowchart LR
     MS --> UDP
 ```
 
+### 2.7 Unattended regeneration needs no new component
+
+The second half of the clarification asks for a corpus that can be **regenerated on a cadence by an
+automated process** — nothing trains here, and nothing schedules here either (team brief §3c). Checked
+against §2.2's and §2.3's tables, that requirement is already met by what exists:
+
+- `ScenarioPackage` (§2.2) and its epoch declaration are already a versioned, machine-readable input a
+  script can select without a human choosing anything interactively.
+- `CaptureSession` (§2.3) already assigns a stable identity from run inputs — session id, scenario id,
+  seed — so two unattended invocations with the same inputs are identifiable as the same run and two with
+  different seeds are identifiable as different ones.
+- `RunManifestWriter` (§2.3) already produces a closed, machine-readable result recording what was
+  produced, every admission and refusal (§9.2), and — from §4.6 on — the pacing policy actually achieved.
+  That is exactly the "did this run produce something fit to use" verdict an automated cadence needs to
+  read back, without a human watching it run.
+
+So an unattended regeneration is a script that invokes the same entry point non-interactively with a new
+seed, date or window and reads the resulting manifest — a parameter surface and a scheduling detail,
+neither of them architectural. [12](12_Operator_Control_Surface.md) owns the parameter surface; no
+scheduler, training loop or model lifecycle is any part of this architecture (D1.29).
+
 ---
 
 ## 3. Process and deployment topology
@@ -418,18 +483,23 @@ flowchart TB
     p1 <-->|"CARLA RPC + sensor streams, TCP"| p4
     p2 <-->|"CARLA RPC + sensor streams, TCP"| p4
     p1 <-->|"TraCI over TCP via libtracics"| p3
-    p1 -->|"files: the corpus, handed over"| DAT
-    p2 -->|"files: the corpus, handed over"| DAT
+    p1 -->|"files, or a live paced stream (§4.6):<br/>the corpus, handed over"| DAT
+    p2 -->|"files, or a live paced stream (§4.6):<br/>the corpus, handed over"| DAT
     p1 -->|"CoT over UDP"| TAK
     DAT --> EPOL
     EPOL --> TAK
+    DAT -.->|"optional transcript, opaque,<br/>received only — never an input"| p1
+    EPOL -.->|"optional transcript, opaque,<br/>received only — never an input"| p1
 ```
 
 **`EvaluationJoin` is gone from this diagram too, and nothing replaces it.** No process on this host
-reads `DetectAndTrackStage`'s tracks or `EPoLModelService`'s assessments back in; the only edges leaving
-`p1`/`p2` toward `off` are the corpus handover and the diagnostic CoT stream. `DAT --> EPOL` and
-`EPOL --> TAK` are drawn because they are true of the external world this pipeline hands its corpus into,
-not because this architecture builds or owns either arrow.
+reads `DetectAndTrackStage`'s tracks or `EPoLModelService`'s assessments back in for meaning; the only
+edges leaving `p1`/`p2` toward `off` are the corpus handover and the diagnostic CoT stream. `DAT --> EPOL`
+and `EPOL --> TAK` are drawn because they are true of the external world this pipeline hands its corpus
+into, not because this architecture builds or owns either arrow. The two dashed edges back into `p1` are
+new in revision 4 and carry only the optional transcript of §1.1; they cross the same filesystem or
+socket boundary as the handover, whichever the external system chooses, and this architecture states
+nothing further about that transport (D1.28).
 
 ### 3.3 What crosses a boundary and by what transport
 

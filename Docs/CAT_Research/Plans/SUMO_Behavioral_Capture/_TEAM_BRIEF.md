@@ -181,6 +181,61 @@ reword so it cannot be read as model evaluation) or an assertion about a **model
 one line what an external consumer would do instead). Do not silently delete a measured finding —
 if a measurement is real but its framing was evaluative, keep the measurement and re-frame it.
 
+## 3c. The live exercise is a primary use case, and it is generic past our boundary
+
+**Added by the user 2026-09-18**, clarifying §3b. Narrowing the scope removed *scoring*; it did not
+remove *running the chain*. Two things are wanted, and the first is wanted far more than the second.
+
+### The live exercise — wanted, and first class
+
+```
+synthetic imagery generation  ->  Detect & Track consumes  ->  sends tracks to the EPoL model service
+                                                          ->  the model performs its anomaly detection
+                                                          ->  and produces reports, live
+```
+
+Treat this as a **primary use case**, not one that survives on sufferance. Everything up to and
+including "synthetic imagery generation" is ours. Everything after it is not.
+
+**We know nothing about the external projects, and the plan must not pretend otherwise.** Their APIs,
+their formats, their transports, their report schemas, their latencies and their failure modes are all
+unknown to us and are none of this plan's business. So:
+
+- **Specify what we emit and how it can be consumed.** Do not specify what consumes it. Frames, truth
+  sidecars, and their timing and identity guarantees are contracts we own; a detector's input format
+  is not.
+- **Assume an adapter, and keep it thin and outside.** Where a concrete integration is needed to make
+  a use case readable, present it as *one possible adapter*, clearly marked as illustrative, never as
+  the interface. A reader must be able to substitute a completely different detector without any part
+  of this plan changing.
+- **Anything that comes back is received data, with its own provenance.** If the external chain
+  offers tracks or reports, we may record them verbatim and tick-stamped as a transcript, because a
+  transcript is a record of what happened. We do not parse them for meaning we then act on, we do not
+  merge them into truth or supervision, and — per §3b — we do not measure them.
+- **Do not design a fusion stage, a normaliser, or a schema for their outputs.** If a transcript needs
+  a container, it is an opaque blob with a timestamp, a source id and a content type.
+
+**Pacing is the one genuinely new engineering question.** A captured corpus runs as fast as the
+machine allows; a live exercise runs against a wall clock with a human watching. Decide, with the
+clock ownership already established, what happens when the external chain cannot keep up — the
+candidates are dropping frames and recording the drop, letting simulated time advance more slowly in
+wall-clock terms, or running ahead and buffering. Note that the second is nearly free here and costs
+no truth, because truth is stamped in simulated time: a world that ticks slower is still internally
+exact. Say which, and what the operator sees.
+
+### Cyclic self-training — wanted, second, and explicitly not dynamic
+
+The user's words: *"potentially self training (done cyclically via an automated process, not
+dynamically during execution)"*. Nothing trains during a run, and nothing in this pipeline trains at
+all. What is wanted is that a corpus can be **regenerated on a cadence by an automated process** that
+something outside then trains on.
+
+The requirement that places on us is modest and is entirely about the operator surface: **unattended,
+parameterised, reproducible, non-interactive invocation**, with a machine-readable result saying what
+was produced and whether it is fit to use. No scheduler, no training loop, no model lifecycle — those
+are outside. Where a section already specifies a run configuration and a manifest, this mostly falls
+out; say so rather than inventing machinery.
+
 ## 4. Standing project rules that bind this plan
 
 - **Never regress an existing capability.** Improving or replacing a capability is welcome; silently

@@ -2,21 +2,28 @@
 
 **Status:** Plan section. Behavioural specification, not implementation. No code was changed and no build
 was run.
-**Date:** 2026-09-18, redrafted twice on the same day against two user decisions.
+**Date:** 2026-09-18, redrafted three times on the same day against three user decisions.
 The first redraft answered the added requirement in [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3a — simulated
 time of day driven in tandem with the network playback, toggleable advancement, and a coherent operator
 surface. The first draft had specified windowed capture in simulated time and never connected it to the
 sun, and that omission reached eight of the eleven original use cases.
-The second redraft, which is this one, answers the scope boundary in
+The second redraft answered the scope boundary in
 [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b — **this pipeline labels; it never scores.** The
 detect-and-track model and the estimated-pattern-of-life model are external to this effort. What is
 built here produces synthetic imagery, truth and labels for them, and measures neither. That boundary
 reached nineteen places in this section, one of which was an entire use case. §0 is the complete
 disposition.
+The third redraft, which is this one, answers [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c, which **refines
+§3b rather than reversing it**: narrowing the scope removed *scoring*, not *running the chain*. The
+**live exercise is a primary use case** and is restored to full depth, written entirely on our side of
+the boundary, with the external chain appearing as one actor whose composition we do not specify; and a
+use case is added for **unattended, cyclic corpus regeneration**. The scoring boundary is unchanged and
+§0 stands. §0a is the complete disposition of this redraft.
 **Owner role:** Systems architect. Companion section: [01 — Architecture](01_Architecture.md), whose
 component names, modes and authority model this section uses without restating them.
-**Scope:** The actors, the use cases each one drives, and the two flows that carry the most risk drawn as
-activity diagrams with partitions.
+**Scope:** The actors, the use cases each one drives, and the four flows that carry the most risk drawn as
+activity diagrams with partitions — authoring (§4), capture (§5), the live exercise (§5a), the unattended
+cycle (§5b) — plus the handover (§6).
 **Audience:** An engineer implementing any section in this folder, and anyone deciding what the tooling's
 command surface should be. A use case here is a contract about *what must be possible and what must fail
 loudly*; it is not a user manual.
@@ -32,9 +39,13 @@ it looks like, and what its commands are called. This section owns only the **ac
 both — what an actor must be able to do, in what order, and what must refuse. Where a use case needs a
 property from either, the dependency is stated as a property, not as a design.
 [06 — Truth and annotation](06_Truth_And_Annotation.md) owns the supervision-transfer rule, the export
-split and the manifest's schema; [08 — Collection and EPoL](08_Collection_And_EPoL.md) owns what the
-external detect-and-track stage consumes and emits, and the format of an association-quality record.
-This section owns only **who hands what to whom, and what must refuse**.
+split and the manifest's schema. [08 — Collection and EPoL](08_Collection_And_EPoL.md) owns **what we
+emit and the guarantees on it** — the collection frame ([08 §7.2](08_Collection_And_EPoL.md)), the live
+pacing property and the drop policy ([08 §11](08_Collection_And_EPoL.md)) — and the format of an
+association-quality record. This section owns only **who hands what to whom, and what must refuse**.
+For UC-13, [12](12_Operator_Control_Surface.md) owns the surface a non-interactive caller invokes and the
+closeout report it reads; this section owns the **actor-facing flow** over it, and what an unattended
+invocation must refuse. The dependency is stated in UC-13 as a set of properties, not as a design.
 [13 — Work breakdown](13_Work_Breakdown.md) sequences the build.
 
 **Out of scope, deliberately.** Command-line syntax, screen layouts, file formats, and the internals of
@@ -48,6 +59,13 @@ whose job is to produce such a measurement, and no artifact that is one. Where a
 either a **live consumer being fed** (UC-8) or an **instrument used on our own data** (UC-11), and in
 neither case is it the subject. The boundary and its reasoning are in
 [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b; its consequences for this section are §0 and D2.23.
+
+**Also out of scope by decision, and newly stated.** Nothing here specifies what *consumes* our output.
+UC-8 emits to an attached chain and records what comes back; it does not describe that chain's
+interfaces, formats, transports, report schemas or failure modes, and it designs no fusion stage, no
+normaliser and no schema for anything the chain returns ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c, D2.26).
+Nothing here trains anything, either: UC-13 regenerates a corpus on a cadence and stops. The scheduler
+that drives the cadence and whatever trains on the output are both outside (D2.29).
 
 ---
 
@@ -103,6 +121,46 @@ No sibling cites this section by section number (checked across the folder, 2026
 
 ---
 
+## 0a. What the live-exercise clarification changed
+
+[`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c refines §3b instead of reversing it, and it does two things.
+It **elevates the live exercise to a primary use case** — wanted far more than the handover — while
+insisting it be written *generically past our boundary*, because the external projects' interfaces,
+formats, transports, report schemas, latencies and failure modes are all unknown to us. And it adds a
+second, smaller want: that a corpus can be **regenerated on a cadence by an automated process**, which
+is not training and does not happen during a run.
+
+**The scoring boundary did not move.** Everything §0 records stands. The test at each site below was
+different from §0's: *is this step on our side of the boundary, and would it still read correctly if a
+completely different detector and a completely different model service were substituted?*
+
+| Site | What it said | Disposition |
+|---|---|---|
+| UC-8, standing | A case that survived the scope boundary, three paragraphs of framing and six main-flow steps | **Primary use case, restored to full detail** — preconditions, main flow, alternates, failures, postconditions, artifacts — at the same depth as UC-7, because it is wanted at the same depth |
+| UC-8 title | "…with external models in the loop" | "…against an **attached exploitation chain**". "In the loop" describes a topology we do not know; "attached" describes the only thing we do know — that something is connected while the world runs |
+| UC-8 step 3 | "frames … stream to the external detect-and-track stage, whose tracks stream on to the external model service" | **One emission step to one attached consumer.** The two-stage picture is kept as *one illustrative adapter*, marked as such, and no step depends on it |
+| UC-8 step 3, "The interface is the one a fielded chain would use" | An assertion about *their* interface | Replaced by an assertion about **ours**: what we emit is the collection frame of [08 §7.2](08_Collection_And_EPoL.md), with its three guarantees, and a consumer's input format is not ours to state |
+| UC-8 step 4, the transcript | Recorded "tracks and assessments, verbatim … stamped with the tick" | Kept and **tightened to an opaque blob**: bytes, arrival tick and wall time, a source id we assign, and a content type we record and do not validate. **The two kinds are no longer named**, because telling them apart needs parsing ([08 §11.6](08_Collection_And_EPoL.md)). Listener off by default; no transcript is the normal case |
+| UC-8 pacing | A real-time factor named in passing, in step 1 | **Ruled on, in §8a**, which **adopts [08 §11.3](08_Collection_And_EPoL.md) D8.40** — landed in parallel and owning the mechanism. Declared **band** (target and floor) versus undeclared stall; slowing first, drop-oldest at the floor; nothing a consumer sends reaching the clock. Two statements from this section's own earlier draft are withdrawn there by name rather than quietly dropped |
+| UC-8, how a consumer attaches | An endpoint we dial out to, whose unreachability refused the session | **Corrected against [08 §11.5](08_Collection_And_EPoL.md), which owns it.** Consumers attach to **us**; the precondition is that the endpoint can be *opened*, not that anyone is listening. **Zero consumers is a normal state**, late join and detach are legal, and only our own end failing refuses |
+| UC-8 failure flows | Five | Twelve, and every one of them names something **we** do. New: an endpoint *we* cannot open, a chain that vanishes mid-exercise, a transcript parsed for meaning we act on, a normaliser designed for their output, pacing driven by anything the consumer sends, and an undeclared pacing band. Also new is an explicit **non**-failure: nothing attached |
+| UC-8, the refusal of a live figure of merit | A failure flow with its reasoning | **Kept verbatim, and marked as kept verbatim.** Its reasoning — both streams already in one process on one tick base with the join a few lines away — is the most load-bearing sentence in the case (D2.24) |
+| §1 actor table, **Detect-and-track stage** | One actor in two roles, live consumer and instrument | **Narrowed to the instrument role** it genuinely occupies on our side (UC-11). Its live role moves inside the attached chain, where it is illustrative |
+| §1 actor table, **EPoL model service** | An actor associated with UC-8 | **Marked illustrative.** Nothing associates with it directly; it appears only inside a chain whose composition we do not specify |
+| §1 actor table | — | **Two actors added:** the **Attached exploitation chain** (§1.4) and the **Automation process** (UC-13) |
+| §2 diagram, `UC8 --> DAT --> EPOL` | Two external systems in a fixed order, drawn as a topology | **One actor node,** with the two-stage adapter drawn once as a labelled note that associates with nothing |
+| §2 diagram | — | UC-13 and the automation actor added; the result edge back to the automation process drawn, because it is the whole point of the case |
+| §5, §6 activity diagrams | — | Unchanged. **§5a** (the live exercise) and **§5b** (the unattended cycle) are added after §5, so §6, §7 and §8 keep their numbers |
+| Decisions | D2.1–D2.25 | **D2.9 and D2.12 rewritten in place**, numbers and subjects unchanged; **D2.26–D2.30 are new.** Nothing renumbered |
+| Open questions | 1–12 | **13, 14 and 15 added.** 1–12 unchanged, which matters because [12](12_Operator_Control_Surface.md) D12.4 closes open question 2 by number |
+
+**What did not change at all.** UC-1 to UC-7 and UC-9 to UC-12 are untouched by this clarification, as
+are §0, §1.1, §1.2, §1.3, §4, §5 and §6. UC-10's handoff case is unchanged: §3c adds a use case beside
+it and does not reduce it, and the fact that the live exercise is wanted *more* is a statement about
+priority, not about scope. **Nothing was renumbered.**
+
+---
+
 ## 1. The actors
 
 Derived from the workflow as it actually runs, not from roles invented for the diagram. Two of these are
@@ -115,20 +173,25 @@ preconditions differ.
 | **Authoring assistant** | Software agent, acting for the author | Turn a description in ordinary terms — street names, times, who goes where — into a scenario package that resolves | Needs machine-readable inputs and loud failures. It is fluent in SUMO and OpenSCENARIO and cannot know this fork's conventions unless they are written down and validated ([20 §5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) preamble) |
 | **World-builder operator** | Human | Turn an OSM extract into a world and its authoring reference set | Needs a GPU, a running server and a Cesium ion token; the only actor with that precondition |
 | **Capture operator** | Human | Produce a corpus from a scenario and a world | Owns the session: mode, window, cameras, seed, and **illumination policy** — see §1.1 |
-| **Live exercise operator** | Human | Drive an end-to-end demonstration with a live model and a live feed | Real-time pacing and a live consumer; nothing is written for training |
+| **Live exercise operator** | Human | Drive an end-to-end demonstration: a live world, live imagery, an attached chain consuming it, and truth held alongside for the observers | Owns a session paced against a **wall clock** rather than run as fast as the machine allows, with an audience and an attached consumer — so a declared pacing band, an emission endpoint and a truth-feed decision are theirs, and nobody else's session has them (UC-8, §8a). **Promoted in the §3c redraft**: UC-8 is a primary use case, not one that survives on sufferance |
 | **TAK / CoT consumer** | External system | Display tracks | Receives CoT over UDP; ignores unknown `<detail>` children ([09 §5](../../Findings/09_Telemetry_CoT_Contract.md)) |
-| **Detect-and-track stage** | External system | Turn imagery into tracks | Never given truth. It appears in exactly two places, in two different roles: a **live consumer being fed** (UC-8), and an **instrument** used on our own data (UC-11's corpus fitness probe) — the way a thermometer checks an oven. It is never the subject of a measurement ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b) |
-| **EPoL model service** | External system | Assess tracks | Never given truth. Its output is recorded **as received** and is never compared against the truth the same session is holding (UC-8, D2.24) |
+| **Attached exploitation chain** | External system, attached to a live session | Consume what we emit while the world is running, and — if it chooses to — return something | **Added in the §3c redraft.** The single actor UC-8 associates with, and the only thing we honestly know about the far side: that something is connected. Its **internal composition is unspecified.** The brief's own picture of it — a detect-and-track stage feeding an EPoL model service that produces reports — is *one illustrative adapter*, and no step of UC-8 depends on it. Distinct from the external model team for the reason in §1.4: **its state is an input to our control flow.** Never given truth (D2.9) |
+| **Detect-and-track stage** | External system, in the one role that is ours | Turn imagery into tracks | Named because the brief names it, and kept for the role we genuinely occupy with it: an **instrument** run on our own data in UC-11's corpus fitness probe, the way a thermometer checks an oven. Its other role — a stage inside an attached exploitation chain — is illustrative only, and nothing associates with it there. It is never the subject of a measurement ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b) |
+| **EPoL model service** | External system, illustrative | Assess tracks and produce reports, live | Named because the brief names it. **Nothing in this section associates with it directly.** It appears only inside an attached exploitation chain, and a chain that has no separate model service — one monolith, ten stages, a human analyst — changes no step of UC-8. Never given truth; anything it returns is recorded **as received** and is never compared against the truth the same session is holding (UC-8, D2.24) |
+| **Automation process** | External software agent, non-interactive | Invoke a run with a parameter set, read a machine-readable result saying what was produced and whether it is fit to use, and repeat on a cadence with varied parameters | **Added in the §3c redraft.** The primary actor of UC-13. Distinct from the capture operator by the same test §1.4 applies to the chain: **it cannot answer a question.** A prompt is a hang rather than a dialogue, and a default it did not choose is a silent corruption nobody is watching for — so its preconditions are *stricter* than a human operator's, not looser. The cadence that drives it, and whatever trains on what it produced, are outside (brief §3c) |
 | **External model team** | External consumer, outside the boundary | Train and validate detect-and-track and EPoL models on a corpus we hand them | **Added in the §3b redraft, replacing two former human actors** (§1.3). It receives a corpus at UC-10 and interacts with the pipeline in no other way — no session, no server, no configuration, no call. Everything it would otherwise have had to ask us must therefore travel **in writing** with the corpus: what it contains, what it does not, in what light, and the rule by which supervision transfers onto its own tracks |
 | **Solar authority (`CesiumSunSky`)** | In-world system | Hold the sun's clock, date, time zone and resulting angles, and light the world from them | **Added in the §3a redraft.** `CarlaServer.cpp:611-612` names it *the single sun and lighting authority for the georeferenced world*, with CARLA's own weather inert there. It is a distinct actor because it holds **state that outlives a session** (§1.2) and because it can refuse — every solar call returns false when no `CesiumSunSky` exists in the world (`CesiumHeightSampler.cpp:726`, `:830`) |
 | **OpenStreetMap** | External data source | Supplies the extract | |
 | **Cesium ion** | External data source | Supplies photoreal imagery and world terrain | |
 
-**Two changes to this list, one from each redraft.** The §3a redraft added no *human* actor. A separate
+**Three changes to this list, one from each redraft.** The §3a redraft added no *human* actor. A separate
 "illumination owner" was considered and rejected: it would be a role nobody occupies, and it would put
 two people in the launch path for one decision that has to be made once per run. It sharpened what two
 existing actors already own instead, which is §1.1. The §3b redraft **removed** two human actors and
-added one external one, which is §1.3.
+added one external one, which is §1.3. The §3c redraft **added two** — the attached exploitation chain
+and the automation process — and narrowed two existing rows so that nothing on the far side of the
+boundary is drawn as a topology we cannot see. That is §1.4, and its ruling is the one the brief asked
+for.
 
 ### 1.1 Who owns illumination policy
 
@@ -229,6 +292,52 @@ the annotations. Its actors are now the **capture operator**, who owns the corpu
 author**, who owns what was and was not asserted. Nobody outside the boundary runs it, and its report is
 an input to the handoff rather than something the recipient is left to reconstruct (UC-10 step 2).
 
+### 1.4 The attached chain and the handover recipient are different actors
+
+[`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c poses the question directly. The **External model team** §1.3
+introduced is right for the *handover*: it receives a corpus and interacts with the pipeline in no other
+way. A live exercise is a different relationship — **the chain is running, attached, and returning
+data**. Is that the same actor in another role, or a distinct actor?
+
+**The ruling: a distinct actor.** The deciding test is not who they are — it may well be the same people
+— but **whether the system's own behaviour depends on them.**
+
+| | External model team (UC-10) | Attached exploitation chain (UC-8) |
+|---|---|---|
+| When it exists, relative to a session | after it, and only after | during it |
+| Direction of interaction | receives, one way | receives a stream; may return data |
+| Can it make the system refuse or degrade? | **No.** Every obligation to it is discharged before it appears | **Yes.** Unreachable is a session precondition failure; slow triggers the drop policy and changes what the coverage record says |
+| Does anything it produces become an artifact we hold? | Nothing comes back | Yes — the exercise transcript, as received (UC-8 step 7) |
+| What the system has to know about it | its name, for the handoff record | its reachability, and whether it is keeping up |
+| Where its failure is written | nowhere; there is no run to fail | the session's failure flows, the drop counter, the coverage record |
+
+**An actor whose state is an input to our control flow and an actor that is a pure downstream sink
+cannot be one actor.** They carry different preconditions, different failure flows and different
+lifetimes. Merging them would attach UC-8's session-level failures to an actor associated with UC-10
+only — the mirror image of the mistake §1.3 corrected, and misleading in the same way: it would draw the
+boundary on *who is reading* rather than on *what the system must do*.
+
+**That the same organisation may occupy both roles is irrelevant, and this section already holds the
+rule that says so.** §1's own preamble: *"Two of these are the same person wearing different hats on
+different days, and they are kept apart because their preconditions differ."* An actor is a role, not a
+party. The scenario author and the capture operator are separated on exactly that basis; so are the
+live chain and the handover recipient. The same test, applied a third time, is why the **automation
+process** is not the capture operator either: it cannot answer a question, so a prompt that is a
+courtesy to one is a hang to the other.
+
+**What this ruling does *not* license: drawing the chain's internals.** §1.3's finding — that a model is
+never an actor *of this system* in any role where it is the subject — stands untouched, and §3c sharpens
+it in a second direction. The chain is **one** actor because one is all we can honestly claim to know.
+Associating UC-8 with a detector *and* a model service, in that order, would assert a two-stage external
+topology this plan has no basis for and the brief explicitly forbids: *"We know nothing about the
+external projects, and the plan must not pretend otherwise."* Both remain in the actor table, named
+because the brief names them, and marked as the composition of *one illustrative adapter* (D2.26).
+
+**The falsifiable form of the rule, which is how to check this case is written correctly.** Substitute a
+completely different detector and a completely different model service — or a single monolithic service,
+or a chain of ten, or a human analyst, or a consumer that returns nothing at all. **No step of UC-8 may
+change.** If a reader finds one that would have to, the step is wrong and UC-8 is the thing to fix.
+
 ## 2. The use-case diagram
 
 ```mermaid
@@ -238,13 +347,15 @@ flowchart LR
     WOP["World-builder<br/>operator"]
     COP["Capture<br/>operator"]
     LOP["Live exercise<br/>operator"]
+    AUTO["Automation<br/>process"]
 
     OSM["OpenStreetMap"]
     ION["Cesium ion"]
     SUN["Solar authority<br/>CesiumSunSky"]
     TAK["TAK / CoT<br/>consumer"]
-    DAT["Detect-and-track<br/>stage"]
-    EPOL["EPoL model<br/>service"]
+    CHAIN["Attached exploitation chain<br/>composition unspecified"]
+    ADPT["ONE ILLUSTRATIVE ADAPTER,<br/>not a specification:<br/>detect-and-track ➜ EPoL service ➜ reports.<br/>Substitute any other chain —<br/>no step of UC-8 changes"]
+    INSTR["Stock detect-and-track,<br/>as an instrument"]
     MTEAM["External<br/>model team"]
 
     subgraph SYS["SUMO behavioural capture system"]
@@ -257,8 +368,9 @@ flowchart LR
         UC6(["UC-6 Expand a scenario<br/>into a run list"])
         UC12(["UC-12 Configure and<br/>launch a run"])
         UC7(["UC-7 Run a captured<br/>dataset collection"])
-        UC8(["UC-8 Run a live exercise<br/>with external models<br/>in the loop"])
+        UC8(["UC-8 Run a live exercise against<br/>an attached exploitation chain"])
         UC9(["UC-9 Replay a<br/>recorded run"])
+        UC13(["UC-13 Regenerate a corpus<br/>unattended, on a cadence"])
         UC11(["UC-11 Audit a corpus for<br/>accidental positives and<br/>illumination leakage"])
         UC10(["UC-10 Hand a corpus to an<br/>external model team"])
     end
@@ -291,15 +403,20 @@ flowchart LR
     UC7 -.->|"includes"| UC5
     UC9 -.->|"extends"| UC7
 
+    AUTO --- UC13
+    UC13 -.->|"includes, invoked<br/>non-interactively with<br/>a parameter set"| UC12
+    UC13 ==>|"machine-readable result:<br/>what was produced,<br/>whether it is fit to use"| AUTO
+    UC6 -.->|"varied parameters<br/>are an input to"| UC13
+
     UC7 --- SUN
     UC8 --- SUN
     UC9 --- SUN
 
     UC8 --- TAK
     UC7 --- TAK
-    UC8 -->|"feeds collection frames"| DAT
-    DAT -->|"tracks"| EPOL
-    EPOL -.->|"assessments, recorded<br/>as received"| UC8
+    UC8 ==>|"collection frames, live,<br/>paced against the wall clock"| CHAIN
+    CHAIN -.->|"anything it returns, recorded<br/>verbatim as an opaque transcript"| UC8
+    CHAIN -.- ADPT
 
     COP --- UC10
     COP --- UC11
@@ -307,32 +424,50 @@ flowchart LR
     UC7 -.->|"produces a corpus for"| UC10
     UC9 -.->|"produces a corpus for"| UC10
     UC10 -.->|"includes"| UC11
-    UC11 -.->|"uses a stock detector<br/>as an instrument"| DAT
+    UC11 -.->|"uses a stock detector<br/>as an instrument"| INSTR
     UC10 ==>|"corpus, its statement<br/>of contents, its audit,<br/>and the transfer rule"| MTEAM
+
+    style ADPT stroke-dasharray: 5 5
 ```
 
 **The boundary is the point of this diagram, so read the model-side edges carefully.** There are exactly
-three, and no fourth is permitted.
+four, and no fifth is permitted.
 
-- **UC-8 → `DAT` → `EPOL`, and one dashed edge back.** The pipeline *feeds* the external chain in real
-  time and *records* what comes back, as received. Nothing in the system compares the returned
-  assessments with the truth the same session holds (UC-8, D2.24).
-- **UC-11 --- `DAT`, labelled as an instrument.** The corpus fitness probe runs a stock detector over
+- **UC-8 ⇒ `CHAIN`, and one dashed edge back.** The session *feeds* whatever is attached, in real time,
+  and *records* what comes back as received. **`CHAIN` is one node on purpose.** The §3b draft drew
+  `UC8 --> DAT --> EPOL`, which asserted a two-stage external topology; §3c forbids that, because we know
+  nothing about the external projects' composition (§1.4, D2.26). Nothing in the system compares the
+  returned material with the truth the same session holds (UC-8, D2.24).
+- **`CHAIN` --- `ADPT`, dashed, associated with no use case.** The detector-then-model-service picture is
+  drawn **once**, as a note, so a reader has something concrete to hold — and it is drawn outside every
+  association so that it cannot be mistaken for the interface. Substitute a different chain and no edge
+  in this diagram moves.
+- **UC-11 --- `INSTR`, labelled as an instrument.** The corpus fitness probe runs a stock detector over
   *our* data to ask whether *our* data yields trackable targets. The detector is the thermometer, not the
   oven (brief §3b item 1; [08 §12](08_Collection_And_EPoL.md) owns the probe's design).
 - **UC-10 ⇒ `MTEAM`, one way.** The corpus and its guarantees leave; nothing comes back into the system.
   A recipient's findings about a model are theirs, and there is no edge on this diagram for them to
   arrive on.
 
-The first draft had two further edges — captured imagery flowing into `DAT`, and `DAT` flowing on into
-UC-10 — which together drew a detector as a **stage of this pipeline**. Both are gone.
+**The automation edges are the other thing to read.** `AUTO --- UC13` and `UC13 ⇒ AUTO` are a pair: an
+invocation and a result. The result edge is drawn as heavily as UC-10's handoff edge because it carries
+the same weight — it is the *only* thing an unattended caller learns about a run, and a cycle whose
+result is missing is a cycle that hands whatever happened to be on disk to whatever consumes it
+next (UC-13, D2.29).
+Note that UC-13 goes **through** UC-12 rather than around it: an unattended run is composed and validated
+by the same path a human uses, which is D2.22 and [12](12_Operator_Control_Surface.md) D12.5, and is why
+UC-13 needs no second validator.
+
+The §3b draft removed two edges — captured imagery flowing into a detector, and a detector flowing on
+into UC-10 — which together drew a detector as a **stage of this pipeline**. Both stay gone.
 
 **On the numbering.** UC-12 is the entry point to UC-7 and UC-8 and belongs before them in reading order,
-but it is numbered last on purpose: UC-1 through UC-11 are cited by number from other sections in this
-folder, and renumbering them to make the diagram read left to right would invalidate every one of those
-citations for a cosmetic gain. **UC-10 keeps its number although its content changed completely**, for
-the same reason — [01](01_Architecture.md) cites `02 UC-10` in its open question 8 — and UC-11 is drawn
-above it here because the audit is now *included by* the handoff rather than by an evaluation.
+but it is numbered last-but-one on purpose: UC-1 through UC-11 are cited by number from other sections in
+this folder, and renumbering them to make the diagram read left to right would invalidate every one of
+those citations for a cosmetic gain. **UC-10 keeps its number although its content changed completely**
+in the §3b redraft, for the same reason — [01](01_Architecture.md) cites `02 UC-10` in its open question
+8 — and UC-11 is drawn above it because the audit is *included by* the handoff. **UC-13 is new and is
+numbered after every existing case**, for the same reason again.
 
 ---
 
@@ -882,71 +1017,287 @@ manifest including the solar record, the session log, and optionally the engine 
 
 ---
 
-### UC-8 — Run a live exercise with external models in the loop
+### UC-8 — Run a live exercise against an attached exploitation chain
 
 | | |
 |---|---|
 | **Primary actor** | Live exercise operator |
-| **Supporting** | Detect-and-track stage (external), EPoL model service (external), TAK consumer, solar authority |
+| **Supporting** | Attached exploitation chain (external), CARLA server, solar authority (`CesiumSunSky`), `sumo`, TAK / CoT consumer (optional) |
 
-**What this case is, and what it is not.** It is a **demonstration and integration** case: a live world,
-live imagery, an external detector and an external model service, running end to end in front of
-somebody, with truth held alongside. That is legitimate and stays. What the pipeline does here is
-**feed** and **record**. What it must never do is **measure**: no association of model output to truth,
-no residual, no count of hits and misses, no verdict — those are the external team's work and this
-pipeline never sees a detector track it is entitled to judge ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b,
-D2.24). The redraft changed the verbs in this case and nothing else about it.
+**This is a primary use case.** [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c: narrowing the scope in §3b
+removed *scoring*, not *running the chain*, and the live exercise is wanted **far more** than the
+handover (UC-10). It is written here at the same depth as UC-7 because it is wanted at the same depth,
+and it is entered from UC-12 by the same composition and the same validation.
 
-**Preconditions.** As UC-7 — including the epoch and the illumination policy — plus a reachable
-detect-and-track stage and model service, and a consumer for their output.
+**The chain being exercised, and where our side of it stops.**
 
-**Main flow.**
-1. Session starts as UC-7, paced against the wall clock rather than run as fast as the machine allows.
-   `SumoCotBridge` already implements exactly this distinction — a real-time factor of 0 for datasets and
-   1 for a live feed, with absolute targets so an overrunning step is absorbed rather than accumulating
-   drift (`carlacontrol/SumoCotBridge.py:243-248`) — and the same rule applies here.
-2. The solar clock is bound exactly as in UC-7 step 4. Because a live exercise is paced at a real-time
-   factor of 1, an advancing sun at rate 1.0 moves in step with both simulated and wall-clock time, and
-   the two coincide for the duration — which is the one case where the distinction the controller draws
-   (`CesiumTimeOfDayController.h`, header comment) has no observable consequence.
-3. **Feeding.** Collection frames — imagery plus the metadata a real exploitation chain would have
-   ([08 §7.2](08_Collection_And_EPoL.md)) — stream to the external detect-and-track stage, whose tracks
-   stream on to the external model service. The interface is the one a fielded chain would use, which is
-   the whole reason the exercise is worth running.
-4. **Recording, on our side of the boundary.** The session records what it **sent** (frame identity,
-   tick, simulated time, sensor id, wall time) and what came **back** (tracks and assessments, verbatim,
-   each stamped with the tick current when it arrived and its own wall time). This is a **transcript**,
-   not a comparison: it asserts what crossed the interface and when, and nothing about whether any of it
-   was right.
-5. **Truth travels alongside, on a separate track source**, so an observer can watch both at once. The
-   model service receives none of it, and the separation is structural rather than configured (D2.9).
-6. Nothing in the session computes agreement between the two streams. The comparing is done by the people
-   watching, which is what a demonstration is for.
+```
+synthetic imagery generation  ->  something consumes it  ->  something assesses what that produced
+                                                         ->  reports come out, live
+```
+
+Everything up to and including *synthetic imagery generation* is ours. **Everything after it is external
+and unknown to us** — its interfaces, its formats, its transports, its report schemas, its latencies and
+its failure modes. So this case specifies **what we emit, and the guarantees on it**, and specifies
+nothing about what consumes it. Every numbered step below names an action **we** perform. The chain
+appears exactly once, as an actor that consumes and may return.
+
+**One illustrative adapter, and it is illustrative.** A concrete picture helps a reader hold the case: an
+adapter subscribes to our emission, hands each frame to a detect-and-track implementation, forwards its
+tracks to an EPoL model service, and puts that service's reports on a display beside the world. *That is
+one possible adapter and it is not the interface.* Substitute a single monolithic service, a chain of ten
+stages, a human analyst, or a consumer that returns nothing at all — **no step below changes.** That
+substitution is the test this case is written to pass (§1.4, D2.26); it is also an alternate flow, so
+that it is checkable rather than merely asserted.
+
+**What the pipeline does here is feed and record. What it must never do is measure** — no association of
+returned material to truth, no residual, no count of hits and misses, no verdict. Those are somebody
+else's work and this pipeline never sees a track it is entitled to judge
+([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b, D2.24).
+
+**Preconditions.** Everything UC-7 requires — a running server with the named world loaded, a validated
+`ScenarioPackage` carrying an epoch, the toolchain staged, cameras configured, a window, a seed, and an
+explicit illumination policy — and, in addition:
+
+- **a declared pacing band for the run** — a target factor and a floor factor, both session-fixed
+  (§8a; [08 §11.3](08_Collection_And_EPoL.md) D8.40) — because a live exercise runs against a wall clock
+  with a human watching rather than as fast as the machine allows. They are run-configuration fields like
+  any other and have no fallback to host behaviour (D2.22);
+- **an emission endpoint this session can open.** Consumers attach to us; we do not dial out and we
+  require no handshake beyond a connection ([08 §11.5](08_Collection_And_EPoL.md)). So the precondition is
+  that the endpoint can be **opened**, not that anyone is listening on it — **zero consumers is a normal
+  state**, late join is legal, and detach and re-attach are unremarkable;
+- **a recorded decision on the truth feed** — whether it runs at all, and to which endpoint. In a live
+  exercise it is off by default, because truth on a feed an exercised operator sees is a leak
+  ([08 §11.4](08_Collection_And_EPoL.md), [08](08_Collection_And_EPoL.md) D8.23);
+- **a transcript sink, if anything the chain returns is to be kept.** Optional: a chain that returns
+  nothing, or a run that keeps nothing, is an ordinary exercise.
+
+**Main flow.** Every step is on our side of the boundary.
+
+1. **Start the session exactly as UC-7 does.** Population authority is acquired and a denial fails the
+   session naming the holder (D2.6); the world goes synchronous at the fixed delta and the clock ratio is
+   re-checked; the solar clock is bound to the window with a verified readback (UC-7 step 4, all four of
+   its properties, D2.15 and D2.16); one session identity and a stable `sensor_id` per camera are
+   assigned (D2.7); `sumo` is launched and the `AnnotationSet` is published as `WorldSupervisionState`.
+   **A live exercise gets no relief from any of it.** An exercise in unknown light is a demonstration of
+   nothing in particular.
+2. **Pace the world against the wall clock, inside the run's declared band.** This is the one respect in which
+   the session differs from UC-7, which runs as fast as the machine allows. The pattern to copy already
+   exists and is not to be reinvented: `SumoCotBridge.run`'s `real_time_factor`, where "1.0 makes a second
+   of simulation take a second, 2.0 runs at twice that, and 0 — the default — steps as fast as the machine
+   allows" (`CarlaControl/src/carlacontrol/SumoCotBridge.py:184-194`), with the sleep target computed
+   **absolutely** as `started_at + (now - sim_start)/factor - monotonic()` so that "a step that overruns is
+   absorbed by the next one instead of accumulating drift over a long run" (`SumoCotBridge.py:243-248`).
+   That code paces SUMO alone with no CARLA in the loop; the property needed here — a real-time factor on
+   the **world** tick, implemented against an absolute target in that manner, with the **achieved** factor
+   reported — is [03](03_CoSimulation_Runtime.md)'s to provide and [08 §11.1](08_Collection_And_EPoL.md)
+   states it as a dependency. This case needs only that the declared band and the achieved factor are both
+   recorded, and that §8a's two properties hold of whatever moves the clock inside it.
+3. **Run the window as UC-7 step 9 does.** Per rendered instant, poses are applied, the world is cued,
+   cameras deliver, recorders write; per SUMO step, the render set is reconciled and interval state
+   changes are published; solar state travels with every capture from the same tick-paired cache. Under an
+   advancing policy at rate 1.0 and a pacing factor of 1.0, the sun moves in step with both simulated and
+   wall-clock time, which is the one case where the distinction the controller draws between them
+   (`CesiumTimeOfDayController.h`, header comment) has no observable consequence. Under a pacing factor
+   *below* 1.0 the sun still tracks **simulated** time, because it advances on the world tick
+   (`CesiumTimeOfDayController.cpp:34-36`) — so a deliberately slowed exercise does not desynchronise the
+   sun from the scenario (carried forward from [08 §11.1](08_Collection_And_EPoL.md)).
+4. **Emit one self-describing record per captured frame, to the configured endpoint.** The record is the
+   **collection frame** of [08 §7.2](08_Collection_And_EPoL.md) — image, session and sensor identity, tick
+   and simulated time, platform pose, pointing, motion, intrinsics, radiometry and achieved solar state.
+   Three properties of it are the contract and nothing else is:
+   - **every frame is self-describing**, so an image is interpretable without reference to any other file;
+   - **the tick is the only join key**; filenames are local wall-clock stems and must never be used to pair
+     anything (`FrameRecorder.cs:223-232`, `:179`);
+   - **channels are frame-coherent**, because every channel of a session reads one world-observer snapshot
+     per tick, so two channels stamping the same tick cannot disagree about the sun or the supervision
+     state ([08](08_Collection_And_EPoL.md) D8.3a).
+
+   Nothing in the record is derived from the scene ([08](08_Collection_And_EPoL.md) D8.12, D8.17). **The
+   same record serves the corpus and the live feed** — [08](08_Collection_And_EPoL.md) D8.1 defines the
+   handover as *a record, never a directory* — so an exercise emits exactly what a corpus writes, differing
+   only in transport, and a consumer writes one reader for both. **What a consumer's input format is, we do
+   not say**; the adapter that converts is thin and is theirs.
+
+   **How a consumer attaches is stated entirely as properties of our own end**, which is what keeps the
+   case generic ([08 §11.5](08_Collection_And_EPoL.md) owns them): one endpoint per capture session
+   carrying every channel, each record tagged with its `sensor_id`; push, one direction, no
+   acknowledgement, no request, no handshake beyond connecting; **late join is legal** and delivers from
+   the moment of attachment; **detach and re-attach are legal and unremarkable**; **zero consumers is a
+   normal state**; and there is no content negotiation, because we emit one record shape and that is our
+   whole position. Every additional requirement placed on a consumer is one a substitute consumer might
+   not meet.
+5. **Never block the world on the chain.** If our own outbound queue deepens, the clock owner may slow
+   within the declared band; **at the floor factor the policy switches to drop-oldest** and the oldest
+   pending frame is dropped and counted per sensor. The world does not stall at any factor, and nothing a
+   consumer *sends* is ever an input to the decision — only the depth of our own socket, which needs no
+   cooperation from anybody (§8a; [08 §11.3](08_Collection_And_EPoL.md) D8.40 clauses 2 and 3). This is the policy `FrameRecorder` already applies to its own encode queue
+   (`FrameRecorder.cs:118`, counter at `:46`, `:184-185`), and it is
+   [08](08_Collection_And_EPoL.md) D8.22. The consequence is recorded rather than absorbed: the tick is
+   marked in the coverage record as **covered but not delivered** — the camera saw it, the consumer never
+   got it — which is a two-valued fact about the link and a judgement about nobody. §8a is the ruling and
+   what the operator sees.
+6. **Keep truth on its own channel, off by default.** Truth travels so an observer can watch both streams
+   at once, on a separate endpoint from the emission, and in a live exercise it is off unless someone
+   turned it on and the choice was recorded. The separation is structural rather than configured: two
+   artifact roots with one writer each and no path between them ([06 §10.3](06_Truth_And_Annotation.md),
+   [08](08_Collection_And_EPoL.md) D8.17 and D8.23, D2.9). If the operator is part of what is being
+   exercised, truth on their feed is a leak; if they are not, it is still two events for one vehicle, one
+   exact and one estimated.
+7. **Record what came back, as received, or not at all.** If anything is pushed back to us, the session
+   may keep it as a **transcript**. A transcript entry is an **opaque blob** and carries exactly four
+   things beside the bytes: the **tick current when it arrived** and the wall time, a **source id** —
+   which endpoint it came from, **assigned by us and never claimed by the sender** — and a **content
+   type**, as declared by the sender, **recorded and not validated**. We do not parse it, normalise it,
+   schematise it, index it by anything inside it, merge it, or act on it
+   ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c; [08 §11.6](08_Collection_And_EPoL.md) fixes the shape).
+
+   **We do not classify what arrives, either.** An earlier draft of this step said "tracks and
+   assessments, verbatim". *Verbatim* was right; naming the two kinds is one step further than we are
+   entitled to go, **because we cannot tell them apart without parsing them**. A transcript full of blobs
+   we cannot interpret is a complete and successful transcript, not a degraded one. Counting arrivals is
+   not reading them — how many blobs turned up per source and when the last one did needs no blob opened,
+   and the prohibition is on counting what is *inside* one.
+
+   **The listener is off by default**, and the endpoint exists only when a run enables it. Receiving
+   anything at all would otherwise require the far side to push to us, which is a protocol
+   [08 §11.5](08_Collection_And_EPoL.md) declines to demand of anyone. **An exercise with no transcript is
+   the normal case**, and the run is otherwise identical — which is itself a useful property, because it
+   means the transcript is a convenience and never a dependency.
+8. **Compute no agreement between the two streams.** Nothing in the session associates, differences,
+   scores or summarises. The comparing is done by the people watching, which is what a demonstration is
+   for.
+9. **Close as UC-7 step 11 does.** Recorders flush, rendered vehicles are released, **advancement is
+   disabled** because it is world state that outlives the session, the manifest is closed, the lease is
+   released, and the world is restored to asynchronous mode so a headless server is never left waiting for
+   a tick (`run_SCTMV.py:329-335` already does this on shutdown). The transcript sink is closed and
+   digested with the rest of the session's artifacts.
+
+#### 8a. When the chain cannot keep up — the actor-facing ruling
+
+[`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c names this "the one genuinely new engineering question" and asks
+for a decision and for what the operator sees. **[08 §11.3](08_Collection_And_EPoL.md) answered it as
+D8.40 while this section was being redrafted, and it owns the mechanism.** This sub-section states the
+**actor-facing** half — what the operator declares, what they see, and what must refuse — and adopts
+D8.40 rather than restating it. Where an earlier draft of this section and D8.40 differed, D8.40 wins and
+the difference is recorded below rather than smoothed over.
+
+**The ruling, as adopted.** A run declares a **target factor** and a **floor factor**, both session-fixed,
+both defaulting to 1.0 — so *no slowing unless somebody asked for it*. Between them the clock owner may
+slow, and **the only input to that choice is the depth of our own outbound queue**. At the floor the
+policy switches to drop-oldest at the emission socket with a per-sensor counter, and the tick is recorded
+in coverage as **covered but not delivered**. Running ahead and buffering is refused, and back-pressuring
+the world is refused absolutely. [08 §11.3](08_Collection_And_EPoL.md) has the five clauses and the
+clause-by-clause argument that slowing costs no truth.
+
+**The two properties this case needs from that ruling, stated as properties:**
+
+| Property | Why this case needs it |
+|---|---|
+| **The band is declared before the run and both its bounds are recorded** | An operator who wanted a real-time answer and got a slowed one has been shown a different exercise. Declaring target *and* floor is what makes "did it hold real time?" a question with an answer instead of a shrug |
+| **Nothing a consumer *sends* is an input to our clock** | This is the one that makes the case generic. The moment the world's rate is a function of a consumer's acknowledgement, heartbeat or advertised rate, an external project's latency is an input to our simulation, the run stops being reproducible, and this plan has a protocol with a party it knows nothing about. Observing our own socket's queue depth requires no cooperation from anybody, which is exactly what makes an arbitrary consumer substitutable ([08 §11.3](08_Collection_And_EPoL.md) clause 2, [08 §11.5](08_Collection_And_EPoL.md)) |
+
+**Where the earlier draft of this section was wrong, said plainly.** Two statements are withdrawn:
+
+- *"The pacing rate is a single session-fixed constant, and a run does not adapt its own pacing."* The
+  first half survives as *the band* being session-fixed; the second half was too strong. Adapting inside a
+  **declared band** on **our own queue depth** is not the hazard — adapting on **anything the far side
+  says** is, and that is the refusal that was actually worth making. It is now a failure flow in those
+  terms.
+- *"A live exercise that silently slows the world is worse than one that visibly drops frames."* The
+  operative word was always **silently**, and [08 §11.3](08_Collection_And_EPoL.md) clause 5 removes the
+  silence rather than contradicting the objection: the slowing is declared in advance, bounded by a floor,
+  displayed while it happens, and recorded afterwards. The objection stands against *undeclared* slowing
+  and only against that. D2.12 is rewritten to say so.
+
+**What the operator sees**, all of which already exist or fall out:
+
+| Indicator | Where it comes from | Why it is the right one |
+|---|---|---|
+| **Achieved factor against target and floor**, plus cumulative simulated-versus-wall slip and time spent below target | the achieved factor the clock owner reports; `RunReport.achieved_real_time_factor` is the existing precedent (`SumoCotBridge.py:165-168`) | It distinguishes "the consumer is behind" from "we are behind", which are different problems with different remedies — and it is the figure that says whether a real-time claim survived |
+| **Drop count per channel**, live and cumulative | `FrameRecorder.Dropped` is already incremented and, as [12 §7.3](12_Operator_Control_Surface.md) measures, **read nowhere** | It is the direct measure of what the chain missed, per channel, because a multi-channel exercise can starve one link and not another |
+| **What is attached, and since when** | observation of our own socket — a connection exists or it does not — which needs no protocol ([08 §11.5](08_Collection_And_EPoL.md)) | Zero consumers is a *normal* state, so an operator needs to be told it is the state rather than left to infer it from a quiet display |
+| **The sun falling behind the exercise's own wall clock**, under an advancing policy | free: `get_solar_state` reads the tick-paired world-observer cache with no RPC (`carlanet/__init__.py:1511-1533`) | It is the one indicator an observer reads **without instrumentation**, in the imagery itself, which is why an advancing sun makes a slowed exercise visible for nothing |
+
+A coordination note rather than a decision: [12](12_Operator_Control_Surface.md) D12.15 makes a non-zero
+`Dropped` on any channel one of exactly three conditions that **interrupt** the operator. In a captured
+collection that is right. In a live exercise at the floor factor, drops are the *expected* degradation and
+an interrupt per drop is noise. That tension is open question 13, and it is
+[12](12_Operator_Control_Surface.md)'s to settle.
 
 **Alternate flows.**
-- *Demonstration without a model* — truth only, which is the existing live telemetry behaviour and must
-  keep working.
-- *Integration test rather than demonstration* — the same flow run for shape rather than for an audience:
-  does the stage accept our collection frame, does the service accept the stage's tracks, is the tick
-  preserved end to end, does latency stay inside the pacing budget. Every one of those is an assertion
-  about an **interface**, not about a model, and they are a large part of why this case exists.
-- *The transcript handed on* — step 4's transcript is a legitimate thing to give the external model team,
-  because it is *their* output beside *our* truth on a common tick base. Handing it over is UC-10; what
-  anyone concludes from it is theirs.
-- *Illumination as legitimate context for the model* — a live exercise is the natural place to demonstrate
-  that a fielded system knows the time and its own location and is entitled to use them, which the
-  standing constraint permits explicitly (brief §3a). The boundary is unchanged: the model may be told the
-  civil time and the site; it is never told a *label*, and the solar state it is given is the same derived
+
+- *A different chain, swapped in* — **the defining alternate flow of this case, stated as one so that it is
+  testable.** Point the emission endpoint somewhere else and the case runs unchanged: a different detector,
+  a different model service, both replaced at once, a single monolith, ten stages, or a human analyst
+  reading frames. The only thing that changes is a configured endpoint. If any step above would have to
+  change, that step is wrong (§1.4, D2.26).
+- *No chain attached* — truth-only live telemetry. This is the existing behaviour and must keep working; it
+  is chosen deliberately, not arrived at by a failed connection (see the failure flows).
+- *A chain that returns nothing* — the ordinary case, and it needs no transcript sink. The exercise is the
+  demonstration that our imagery drives somebody's chain; what their chain says is theirs to show.
+- *Integration test rather than demonstration* — the same flow run for shape rather than for an audience.
+  Does the endpoint accept our collection frame at the offered rate; is the tick preserved end to end; does
+  the round trip stay inside the pacing budget; does the drop counter stay at zero. **Every one of those is
+  an assertion about an interface, not about a model**, and they are a large part of why this case is worth
+  having.
+- *Capture a corpus during the exercise* — permitted. It is UC-7's recorder running alongside, and what it
+  produces is a corpus like any other, subject to UC-10's gates. The only thing that differs is pacing, and
+  the manifest records the declared and achieved rates so a consumer knows the captures are evenly spaced
+  in *simulated* time and not in wall clock.
+- *Several channels* — extra cameras run in the default single process, or in tick-follower processes that
+  never cue. Either way they read supervision, the render set, session identity and solar state from the
+  server, so their emitted records agree at each tick ([01 §3.4](01_Architecture.md)). Whether a consumer
+  fuses per-sensor streams before displaying them is their design problem; what is ours is that coverage is
+  published both per sensor and unioned, so their choice does not change what our record means
+  ([08](08_Collection_And_EPoL.md) D8.24).
+- *The transcript handed on* — step 7's transcript is a legitimate thing to give the external model team,
+  because it is *their* output beside *our* truth on a common tick base. Handing it over is UC-10, where it
+  ships labelled as received data with its own provenance; what anyone concludes from it is theirs.
+- *Illumination as legitimate context for the chain* — a live exercise is the natural place to demonstrate
+  that a fielded system knows the time and its own location and is entitled to use them, which the standing
+  constraint permits explicitly (brief §3a). The boundary is unchanged: the chain may be told the civil
+  time and the site; it is never told a *label*, and the solar state it is given is the same derived
   quantity every capture computes, not a truth-sourced field.
+- *A live TAK feed for the observers* — CoT to a TAK consumer as it is written, on the truth endpoint and
+  therefore subject to step 6's default. It is diagnostic; the sidecar is authoritative
+  ([20 §7.4](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)).
 
 **Failure flows.**
-- *The pipeline cannot keep up* — the exercise degrades rather than stalls: captures are dropped, and the
-  fact is displayed. A live exercise that silently slows the world is worse than one that visibly drops
-  frames, because the observer cannot tell. **An advancing sun makes this visible for free**: under
-  synchronous ticking the sun tracks simulated time, so a world falling behind wall clock shows a sun
-  falling behind the exercise's own clock.
-- *Truth reaching the model service* — a configuration error that must be impossible by construction, not
-  caught by review. The model service's input is a track stream with no truth-sourced fields in it.
+
+- *The emission endpoint cannot be opened* — a port already in use, a permission refused, a host binding
+  that does not exist. **Refuse at session start, naming the endpoint.** This is a failure of *our* end and
+  is the only endpoint condition that refuses.
+- *Nothing is attached* — **not a failure.** Zero consumers is a normal state, late join is legal, and the
+  world does not notice ([08 §11.5](08_Collection_And_EPoL.md)). **Earlier drafts of this case refused a
+  session whose consumer was not reachable; that was wrong**, because it assumed we dial out to them, and
+  under the attachment model we do not. What the operator needs is not a refusal but a **display**: what
+  is attached and since when, read from our own socket, so that a demonstration with nothing on the far
+  end is visibly that rather than quietly that (§8a).
+- *The chain goes away mid-exercise* — **do not stall and do not fail.** Keep running, count the
+  undelivered frames, mark them in coverage as covered-but-not-delivered, and show that the attachment
+  dropped. A live world stopping because a consumer crashed is a worse demonstration than a live world
+  visibly running with nothing on the far end, and the second is at least honest about which half broke.
+- *The chain cannot keep up* — the exercise degrades rather than stalls, per §8a: frames are dropped, the
+  drop is counted and displayed, and the world keeps its declared pacing. **An advancing sun makes this
+  visible for free**: under synchronous ticking the sun tracks simulated time, so a world falling behind
+  wall clock shows a sun falling behind the exercise's own clock.
+- *The world is stalled to wait for a consumer* — refused. It corrupts the run's own premise, it changes the
+  relationship between simulated and wall-clock time that the declared band exists to control, and it moves
+  the sun ([08](08_Collection_And_EPoL.md) D8.22).
+- *Pacing driven by anything the consumer sends* — refused, and this is the refusal that matters rather
+  than the blanket one an earlier draft made. An acknowledgement, a heartbeat, a back-off request or an
+  advertised rate must never reach the clock owner. The moment the world's rate is a function of something
+  the far side says, an external project's latency is an input to our simulation, the run stops being
+  reproducible, and this plan has acquired a protocol with a party it knows nothing about. Slowing within
+  the **declared band** on **our own queue depth** is permitted and is D8.40's first-choice response
+  (§8a).
+- *A pacing band that is not declared, or a floor that is not recorded* — refused. Undeclared slowing is
+  the condition D2.12 objects to, and it is indistinguishable afterwards from a fast run.
+- *Truth reaching the chain* — a configuration error that must be impossible by construction, not caught by
+  review. What the chain is given is the collection frame of step 4, which carries no truth-sourced field,
+  and the split is enforced at the writer ([08](08_Collection_And_EPoL.md) D8.17, D2.9).
 - *A figure of merit for the model is asked for, live* — **refuse; it is not a capability this system
   has.** Stating this as a failure flow is deliberate rather than pedantic: this is the one place in the
   whole plan where scoring would be added by accident, because both streams are already in one process,
@@ -956,16 +1307,30 @@ detect-and-track stage and model service, and a consumer for their output.
   data**: it lives in its own artifact with its own provenance and is never written into a truth sidecar,
   a supervision record or a run manifest's supervision block. A stream that is both an input and a record
   of what a model said about it is one refactor away from being a label.
-- *Anything else UC-7 refuses* — population authority held, no epoch, a solar authority that refuses, a
-  readback that disagrees. A live exercise gets no relief from any of them; an exercise in unknown light
-  is a demonstration of nothing in particular.
+- *The transcript parsed for meaning the session then acts on* — refused, and this is the sharper form of
+  the flow above it. Reading a returned report to decide what to render, what to annotate, when to stop, or
+  where to point a camera closes a loop from a model's output back into the data that model is looking at.
+  That is the fastest available route to a corpus that is a model's own opinion, and it would be invisible
+  afterwards, because every artifact would still be well-formed.
+- *A normaliser, a fusion stage, or a schema designed for the chain's output* — refused
+  ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c). A container with a timestamp, a source id and a content type is
+  the whole design. Anything more is a claim about formats we do not know, and it would go stale the first
+  time a different chain was attached.
+- *Anything else UC-7 refuses* — population authority held, no epoch declared, a solar authority that
+  refuses, a readback that disagrees, an advancement rate the window cannot support, a window outside the
+  scenario's end, an undelivered cued frame. **A live exercise gets no relief from any of them.**
 
-**Postconditions.** Nothing training-grade is produced, and **nothing about either model has been
-measured**. A session log records what was shown and under which illumination policy; the transcript
-records what was sent and what came back, on a common tick base, alongside the truth of the same session.
+**Postconditions.** A demonstration happened, and **nothing about the chain, or anything inside it, was
+measured.** A session log records what was shown, under which illumination policy, at which declared and
+achieved pacing factor, against the band that was declared. The emitted record stream is exactly what a corpus would have written, so what was
+shown is reproducible. If a transcript sink was configured, a transcript records what was sent and what
+came back on a common tick base, as received. If the run also captured, a corpus exists and is an ordinary
+corpus. Coverage distinguishes, per sensor and per tick, what the camera saw from what the link delivered.
 
-**Artifacts.** Session log; the exercise transcript (what was sent, what was received, as received);
-optionally a recorded CoT truth stream for later review.
+**Artifacts.** Session log; the emitted collection-frame stream (the same record a corpus writes); the
+exercise transcript, if a sink was configured, as opaque received data with its own provenance; the
+per-sensor drop counts and the coverage record that carries them; optionally a recorded CoT truth stream
+for later review; optionally a corpus and its manifest.
 
 ---
 
@@ -1415,6 +1780,202 @@ an artifact but is part of the contract.
 
 ---
 
+### UC-13 — Regenerate a corpus unattended, on a cadence
+
+| | |
+|---|---|
+| **Primary actor** | Automation process (external software agent, non-interactive) |
+| **Supporting** | Capture operator (who authored the parameter set), CARLA server, solar authority (`CesiumSunSky`), `sumo` |
+
+**New in this draft, and numbered after every existing case so that every sibling citation holds**
+(§0a; [01](01_Architecture.md) cites `02 UC-10`, [12](12_Operator_Control_Surface.md) cites open question
+2, and nothing cites a number above 12).
+
+**What this case is, and — emphatically — what it is not.** The user's words are
+*"potentially self training (done cyclically via an automated process, not dynamically during
+execution)"* ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c). **Nothing trains during a run, and nothing in this
+pipeline trains at all.** What is wanted is that a corpus can be **regenerated on a cadence by an
+automated process** that something outside then trains on. The part that is ours is exactly three things:
+
+1. **the invocation** — a run can be started by something that is not a person, with a parameter set, and
+   without anything on the path that expects a person;
+2. **the determinism** — the same parameter set describes the same run, and a varied one varies only what
+   was varied;
+3. **the result** — one machine-readable statement of **what was produced** and **whether it is fit to
+   use**, sufficient to decide without opening the corpus.
+
+The cadence itself, the scheduler that drives it, the decision to start another cycle, the retention of
+old corpora, and whatever trains on any of it are **all outside** (D2.29). There is no training loop here,
+no model lifecycle, and no feedback of any kind from a model back into what is generated — which would be
+UC-8's refused transcript-acting flow one level up, and is refused here for the same reason.
+
+#### 13a. Most of this already exists, and saying so is the point
+
+[`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c: *"Where a section already specifies a run configuration and a
+manifest, this mostly falls out; say so rather than inventing machinery."* It does. **Three of the five
+requirements are already carried whole** by decisions taken for other reasons. The remaining two each need
+one addition, and only one of those is a gap in the design rather than in the surface.
+
+| What unattended cycling needs | What already provides it | What is still missing |
+|---|---|---|
+| **A parameter set that fully determines a run** | UC-12's run configuration, every field explicit, composed and validated in one place, with no field falling back to "whatever the world happened to be in" (D2.22); [12](12_Operator_Control_Surface.md) D12.3's `EffectiveRunConfiguration`, whose manifest copy *is itself a valid run configuration* | Nothing at the design level |
+| **Varied parameters across cycles** | UC-6's run list: entries individually runnable, collectively joinable, each carrying a seed, a window, a camera set, the instance ids the variation touched and an illumination stratum | Nothing. §6a's marking rule applies unchanged, and it is *more* important unattended, because nobody is watching the arms diverge |
+| **Reproducibility** | D2.15 (the sun is positioned explicitly and never inherited); D2.22 (no host-state fallback); [12](12_Operator_Control_Surface.md) D12.11 (seeds have no nondeterministic default — today `--seed` defaults to `None`, documented "nondeterministic", `CarlaControl/src/carlacontrol/CarlaControlArgumentParser.py:310-316`); [08](08_Collection_And_EPoL.md) D8.30 (a session never takes its illumination from the host clock) | Nothing at the design level. One measured hazard is in 13b |
+| **A statement of fitness** | [12 §7.2](12_Operator_Control_Surface.md)'s `RunCloseoutReport` and its quality gate, with a failed gate **labelling** the run rather than discarding it ([12](12_Operator_Control_Surface.md) D12.16) | It is specified as a *rendering* of the closed manifest for a human. This case additionally requires it be **written as a record**, and that the process exit code agree with it |
+| **Non-interactive invocation** | [12 §3.8](12_Operator_Control_Surface.md)'s short command line and UC-12's scripted-launch alternate flow, which requires that the composition step cannot be bypassed rather than that a person perform it | **A termination condition.** See 13b — measured, and it is the real gap |
+
+#### 13b. What is measured, and what it establishes
+
+Read from the tree on 2026-09-18.
+
+| Reading | Where | What it establishes |
+|---|---|---|
+| The entry point's loop is `while pg.running and not stop["flag"]`, and its only other exit is `KeyboardInterrupt` | `CarlaControl/scripts/run_SCTMV.py:251`, `:291-292` | **There is no run-length termination condition today.** An unattended caller has nothing with which to end a run |
+| No `--duration`, `--frames`, `--until` or headless switch exists among the parser's options | `CarlaControl/src/carlacontrol/CarlaControlArgumentParser.py` (enumerated 2026-09-18; the nearest thing is `--settle` at `:193`, which bounds a build and not a session) | The gap is in the surface, not in the session. [12](12_Operator_Control_Surface.md) owns closing it; this case owns that it must close |
+| `main` has exactly two return paths: `return 1` when the world build fails, and `return 0` at the end | `run_SCTMV.py:113`, `:130`, `:339`, with `sys.exit(main())` at `:343` | An unattended caller can learn "the world build failed" and **nothing else**. Every other outcome — a run that captured nothing, a run whose sun readback disagreed, a run that dropped every frame — is indistinguishable from success |
+| `RunReport` exists and is the closest thing to a machine-readable result in the tree: `events`, `updates`, `vehicles`, `sim_seconds`, `wall_seconds`, `sinks`, and a derived `achieved_real_time_factor` | `CarlaControl/src/carlacontrol/SumoCotBridge.py:155-168` | The *shape* is already right and is not to be reinvented |
+| That report is logged as prose and written nowhere: `logging.info("wrote %d events across %d updates for %d vehicles", …)` | `CarlaControl/scripts/sumo_cot_telemetry.py:165-166` | **The result exists in memory and dies there.** Making it an artifact is the whole of this case's new machinery |
+| Subsystem scheduling was deliberately moved onto the world's clock rather than the wall's, because "two runs of the same seed then spawn on different frames and diverge from there: measured across a pair of them, the nth vehicle appeared up to 558 frames apart by the end, while the traffic manager itself drove the early vehicles bit-identically for over a thousand frames" | `run_SCTMV.py:270-277` (comment), fix at `:278` | **Determinism under unattended repetition is a solved class of bug with a measured precedent.** Anything a cycle schedules must be a duration in *simulated* seconds. Under an unattended cadence there is nobody to notice two cycles drifting apart |
+
+**Inference**, labelled as such: the 558-frame divergence was measured on the ambient traffic manager,
+which is locked out under `SumoDrivenPlayback` (brief §3, decision 4), so that specific defect cannot
+recur here. What generalises is the *rule* — schedule on the world's clock — and it binds every new
+component a cycle touches.
+
+**Preconditions.**
+
+- A validated `ScenarioPackage` carrying an epoch, and a world package, both bound and digested (UC-5
+  step 1's two-tier gate).
+- **A stored parameter set**: a run configuration composed and validated earlier (UC-12's compose-offline
+  alternate flow), a run-list entry (UC-6), or a stored configuration plus a named set of fields to vary.
+  The automation process **does not compose one interactively**, because it cannot.
+- **Every field explicit** (D2.22). This is a precondition a human operator effectively satisfies by being
+  present; an automation process does not, which is why the rule is load-bearing here rather than merely
+  tidy.
+- **A seed that is an explicit value, or an explicit request to draw one that is then recorded**
+  ([12](12_Operator_Control_Surface.md) D12.11).
+- **A reachable server, or a stated way to obtain one.** Whether the automation process starts a server or
+  attaches to a standing one is [09](09_Toolchain_And_Packaging.md)'s and
+  [12](12_Operator_Control_Surface.md)'s; this case requires only that it is a stated property of the
+  invocation and not a local habit.
+- **Nothing on the invocation path that expects a person**: no prompt, no confirmation, no display, no
+  hotkey, no terminal.
+
+**Main flow.**
+
+1. **The automation process names a parameter set.** A stored run configuration, a run-list entry, or a
+   stored configuration with a small set of overrides — window, seed, illumination stratum, camera set.
+   Overrides go through the same composition and the same validation a human's would; there is no
+   unattended shortcut past UC-12 (D2.22; [12](12_Operator_Control_Surface.md) D12.5).
+2. **The invocation is non-interactive, and the surface is the same one.** Anything that would ask a
+   question refuses instead, naming the field. An unattended run that blocks on a prompt is
+   indistinguishable, from outside, from one that is merely slow — and the cadence will start the next one
+   on top of it.
+3. **The run executes as UC-7** (or UC-9 for a replay). **Every refusal UC-7 makes, this case makes.** An
+   unattended run gets no relaxation of the epoch check, the solar readback, the authority gate, the clock
+   ratio, or the window bounds. It gets *more* scrutiny, not less, because nobody will read a warning.
+4. **The run is bounded.** It ends at the window's end instant, or at a stated bound, and never because a
+   person closed a window. What that bound is called and where it lives is
+   [12](12_Operator_Control_Surface.md)'s; that one must exist is this case's (13b, first row).
+5. **The run closes and writes its result**, as one record. It says two things and they are separable:
+   - **what was produced** — the corpus identity (world digest, network, route and configuration digests,
+     `scenario_id`, `plan_id`, `session_id`, seed; [06 §8.4](06_Truth_And_Annotation.md)), where it was
+     written, the window in both simulated and civil time, frames per channel, and the declared and
+     achieved clock figures;
+   - **whether it is fit to use** — the quality gate of [12 §7.2](12_Operator_Control_Surface.md), pass or
+     fail, with **each failing check named**. A failed gate labels the run `quality_gate: "failed"` and
+     does not discard it ([12](12_Operator_Control_Surface.md) D12.16), so the automation process can keep
+     it, skip it, or quarantine it on its own terms.
+6. **The process exit code agrees with the record.** A caller that reads only the exit code learns the same
+   verdict as one that reads the record, coarser but never contradictory. Two readers of one run must not
+   disagree.
+7. **The automation process repeats with varied parameters.** Each cycle is a fresh run with its own
+   session identity and its own corpus identity; the scenario and world digests are shared, so cycles are
+   joinable, and instance ids are stable across an expansion, so one authored pattern's variants can be
+   diffed across cycles exactly as within a sweep (UC-6 step 3).
+8. **What happens next is outside.** Archiving, promotion, retention, and whatever trains on the output are
+   the automation process's own business, and nothing in the result is a statement about a model.
+
+**Alternate flows.**
+
+- *Walk a whole run list* — one session per entry, which is
+  [12 open question 1](12_Operator_Control_Surface.md)'s recommendation, stopping on the first failed
+  quality gate so that a broken parameter set costs one window rather than twelve. Whether the walker
+  exists is [12](12_Operator_Control_Surface.md)'s; what this case owns is that **each entry still produces
+  its own result and its own corpus identity**, so a stopped list is legible rather than a partial
+  something.
+- *Regenerate the same parameter set on a cadence* — the literal "cyclic" case. Each cycle produces a **new
+  corpus**, with a new session identity and the same scenario and world digests. **Nothing is appended to,
+  merged into, or edited in a previous corpus**: a closed corpus is immutable (D2.10; UC-10 open question
+  12(c)'s frozen identity). Two cycles of one parameter set are two joinable populations, not one growing
+  one.
+- *Vary parameters across cycles* — behaviour, appearance, or both. §6a's rule is unchanged and binds
+  harder here: an expansion that varies behaviour and illumination together without marking the stratum is
+  refused, because an unmarked entry is unstratifiable later and there is no operator in the room to
+  remember which cycle was which.
+- *A composition-only cycle* — compose and validate with no server, no GPU and no SUMO (D2.2;
+  [12](12_Operator_Control_Surface.md) D12.5's phase 0 covers 21 of 33 checks). Cheap enough to run every
+  cycle ahead of the expensive one, and it catches a parameter set broken by a changed scenario before a
+  world is loaded.
+- *A cycle that captures nothing by design* — a validation-only or dry-composition cycle is a legitimate
+  cycle. It still writes a result, and the result says a corpus was not produced **and that this was
+  intended**. "Produced nothing on purpose" and "produced nothing" must not look alike.
+- *An operator inspecting a cycle's output afterwards* — ordinary UC-11 and UC-10 work. An unattended
+  corpus is not exempt from the audit; if anything the audit matters more, because no human saw the run.
+
+**Failure flows.**
+
+- *Anything on the path would prompt, confirm or wait for input* — **refuse immediately with a named
+  reason and a non-zero exit; never wait.** This is the failure mode unattended invocation creates and it
+  has no analogue in any other case in this section.
+- *A field is unset* — refused at composition (D2.22). Stated again here because unattended invocation is
+  what makes it acute: there is nobody to notice that a default was taken, and a default that changes
+  between cycles silently changes the corpus.
+- *A nondeterministic seed* — refused, or resolved to a drawn value that is then recorded
+  ([12](12_Operator_Control_Surface.md) D12.11). A cadence of runs that cannot be reproduced individually
+  is a cadence of runs nobody can explain afterwards.
+- *The run produced nothing, or failed its quality gate* — **this is a result, not a crash.** The record
+  says what happened and the exit code agrees. A cycle that fails loudly and legibly is working correctly;
+  a cycle that fails silently is the thing this case exists to prevent.
+- *No result was written at all* — **the worst outcome available, and the one to design against.** An
+  automation process that cannot tell a finished run from a crashed one will hand whatever is on disk to
+  whatever consumes it. Therefore: **the result record is written even when the run fails, including when
+  it fails at composition, before a server is touched.** The measured state of the tree is exactly the
+  failure being designed out — `main` distinguishes only a failed world build (`run_SCTMV.py:130`, `:339`),
+  and the one report object that exists is logged as prose and written nowhere
+  (`SumoCotBridge.py:155-168`; `sumo_cot_telemetry.py:165-166`).
+- *A cycle overwriting its predecessor's corpus* — refused. Each cycle's corpus identity is distinct, or
+  the run refuses to open a manifest. A cadence that overwrites is a cadence with one corpus and no
+  history, and the joinability that makes cycles worth having would be gone.
+- *Two cycles of one parameter set that are not reproducible* — a defect, not a tolerance. The recorded
+  parameter set is the run's description ([12](12_Operator_Control_Surface.md) D12.3), and anything
+  scheduled against wall-clock time rather than the world's clock breaks that description silently
+  (`run_SCTMV.py:270-277`, measured).
+- *Population authority is held by something left running from a previous cycle* — the session fails naming
+  the holder (D2.6), and the result says so. Worth naming separately because a cadence makes it likely:
+  the most probable holder is the previous cycle that did not shut down.
+- *The automation process asks for a model metric, a training verdict, or whether this cycle's corpus is
+  "better" than the last* — **not a capability this system has** (D2.23). What a cycle emits is a corpus
+  and a statement about that corpus, in the corpus's own units. Comparing two corpora against a model is
+  the work of whoever trains, and it happens outside.
+- *Feedback from a model into what the next cycle generates* — refused, and this is UC-8's
+  transcript-acting refusal one level up. A cadence that chooses its next parameters from a model's opinion
+  of the last corpus is a training loop wearing a scheduler's clothes, and it produces data whose
+  distribution is a function of the model it will be used to train. Nothing here reads model output at all,
+  so the refusal is structural rather than a rule to remember.
+
+**Postconditions.** Either a corpus exists, complete and identified, or it does not and a named reason
+says why — and **in both cases a machine-readable result records which**, with a fitness verdict the
+process exit code agrees with. The result is sufficient to decide whether to use the corpus without
+opening it. The parameter set that produced it is recorded with it and is itself a valid parameter set, so
+the cycle is repeatable. **Nothing trained, and nothing about any model was measured.**
+
+**Artifacts.** The effective run configuration; the closed manifest; the corpus, if one was produced; the
+**run result record** — what was produced and whether it is fit to use — and the process exit code that
+agrees with it.
+
+---
+
 ## 4. Activity diagram — authoring a scenario
 
 Partitions are actors and system components. This is UC-3 and UC-4 with UC-5 inlined, because in practice
@@ -1623,12 +2184,202 @@ Six things this diagram is asserting:
   ([20 §7.5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)). The solar record is
   written at `T6` at the start and completed at the end, for the same reason.
 
+**This diagram also serves UC-13, with two substitutions and no structural change.** Replace the
+`Capture operator, through UC-12` partition with an **automation process**, and append the closeout of
+§5b to `S5`. Every other node and every edge is identical, which is the point: an unattended run is the
+same run. The two things that differ are both at the ends — how it was entered, and what is written when
+it closes — and §5b draws exactly those.
+
+---
+
+## 5a. Activity diagram — running a live exercise
+
+This is UC-8, entered from UC-12. It is drawn because the live exercise is now a primary use case and
+because **the boundary is the thing a reader most needs to see**: the last partition is outside this
+system, it contains no step of ours, and the two arrows that cross into and out of it are the only
+contact. Partitions are the components of [01 §2.3](01_Architecture.md), plus the **solar clock binding**
+and the **emission boundary** — both roles, not component names.
+
+Everything that UC-7's §5 diagram does before the window opens is elided here as one node (`L2`), because
+it is identical and repeating it would suggest it is not. What differs starts at `L3`.
+
+```mermaid
+flowchart TB
+    subgraph OP["Live exercise operator, through UC-12"]
+        direction TB
+        O1["Launch a validated run configuration:<br/>mode, package, window, cameras, seed,<br/>illumination policy, PACING BAND<br/>(target and floor), emission endpoint,<br/>truth-feed choice"]
+        O2["Read the refusal"]
+        O3["Watch: achieved factor vs target and floor,<br/>drop count per channel, what is attached<br/>and since when, the sun against the wall clock"]
+        O4["Stop the exercise"]
+    end
+
+    subgraph SESSION["CaptureSession and solar clock binding"]
+        direction TB
+        L2["Everything UC-7 does before the window:<br/>authority, synchronous mode, clock ratio,<br/>epoch, sun set and READ BACK,<br/>session and sensor identity,<br/>SUMO connect, supervision published"]
+        L3{"Emission endpoint<br/>can be OPENED?<br/>(not: is anyone listening)"}
+        L4["Apply the illumination policy;<br/>open the window"]
+        L9["Close: flush, release vehicles,<br/>disable advancement, close the manifest,<br/>release the lease, restore async mode,<br/>close and digest the transcript sink"]
+    end
+
+    subgraph CLOCK["PlaybackClock — paced"]
+        direction TB
+        P1["Step to the next instant against an<br/>ABSOLUTE wall-clock target, within the<br/>DECLARED BAND (never a per-step sleep).<br/>Only input: OUR OWN queue depth"]
+        P2["Apply poses; cue the world"]
+        P3{"Window ended?"}
+    end
+
+    subgraph CH["Collection channel, per sensor"]
+        direction TB
+        C1["Capture; decimate; decode"]
+        C2["Compose ONE collection frame:<br/>image + pose + intrinsics + radiometry<br/>+ achieved solar. No scene-derived field"]
+        C3["Write coverage for this (sensor, tick)"]
+    end
+
+    subgraph EMIT["Emission boundary — ours"]
+        direction TB
+        E1{"Our outbound queue<br/>draining, or are we<br/>at the FLOOR factor?"}
+        E2["Send the frame"]
+        E3["At the floor: DROP OLDEST;<br/>count per sensor; mark the tick<br/>COVERED BUT NOT DELIVERED"]
+        E4{"Anything returned?"}
+        E5{"Transcript sink<br/>configured?"}
+        E6["Append an OPAQUE entry:<br/>payload, arrival wall time, arrival tick,<br/>source id, content type. Nothing else"]
+        E7["Discard"]
+    end
+
+    subgraph TRUTHCH["Truth channel — separate, OFF by default"]
+        direction TB
+        T1["Truth sidecars and CoT<br/>to their own endpoint"]
+    end
+
+    subgraph EXT["Attached exploitation chain — OUTSIDE this system"]
+        direction TB
+        X1["Attaches, consumes frames.<br/>Composition unspecified:<br/>one illustrative adapter is<br/>detect-and-track ➜ EPoL ➜ reports.<br/>Late join legal. Detach legal.<br/>ZERO consumers is a normal state"]
+        X2["May push something back.<br/>May push nothing.<br/>Either is a normal exercise"]
+    end
+
+    O1 --> L2 --> L3
+    L3 -->|"no: REFUSE, name the endpoint.<br/>This is OUR end failing"| O2
+    L3 -->|"yes"| L4 --> P1 --> P2 --> C1 --> C2 --> C3
+    C3 --> E1
+    C3 --> T1
+    T1 --> O3
+    E1 -->|"draining"| E2
+    E1 -->|"at the floor"| E3 --> O3
+    E1 -.->|"deepening, above the floor:<br/>slow within the band.<br/>NEVER on anything they send"| P1
+    E2 ==>|"one arrow out"| X1
+    X1 --> X2
+    X2 -.->|"one arrow back"| E4
+    E4 -->|"no"| P3
+    E4 -->|"yes"| E5
+    E5 -->|"yes"| E6 --> P3
+    E5 -->|"no"| E7 --> P3
+    E2 --> O3
+    P3 -->|"no"| P1
+    P3 -->|"yes"| L9
+    O4 --> L9
+```
+
+Six things this diagram is asserting, each of which is a refusal somewhere in UC-8:
+
+- **The external partition contains no step of ours, and exactly two arrows cross it.** `E2 ⇒ X1` and
+  `X2 ⇢ E4`. There is no third. Nothing in the diagram reads inside `X1`, and `X1`'s own text says its
+  composition is unspecified — the illustrative adapter is named there and nowhere else, so substituting a
+  different chain redraws one node's label and no edge (§1.4, D2.26).
+- **The reachability check is before the window, not inside it.** `L3` sits between the pre-roll and the
+  first cued frame, so an unreachable endpoint costs a world load and not an audience. It is a **refusal**
+  rather than a silent fall-back to the no-chain alternate, because the two look identical once running.
+- **Nothing flows from `E4` back into `P1`, `C2` or `L4`.** The path from what came back goes only to a
+  transcript or to a bin. A returned report never influences what is rendered, captured, annotated or
+  stopped; if it did, there would be an edge here and there is not (UC-8 failure flow).
+- **One edge reaches the clock, and it starts inside our own partition.** `E1 ⇢ P1` carries *our* queue
+  depth and nothing else; there is no edge from `X1` or `X2` to `P1`, and its **absence** is the decision
+  (§8a; [08 §11.3](08_Collection_And_EPoL.md) D8.40 clause 2). `P1` stays inside the band `O1` declared,
+  and at the floor the response moves to `E3` rather than to the clock — so the world never blocks on a
+  consumer at any factor.
+- **Coverage is written by the channel, before the emission is attempted.** `C3` precedes `E1`, which is
+  what makes a live exercise's coverage record trustworthy when the link was not: the camera's knowledge of
+  what it saw does not depend on whether anybody received it ([08 §11.3](08_Collection_And_EPoL.md)).
+- **Truth leaves on its own edge, to its own endpoint, and reaches only the operator.** `C3 → T1 → O3`
+  never touches `EMIT`. The separation is two writers and two roots, not a filter
+  ([08](08_Collection_And_EPoL.md) D8.17, D8.23, D2.9).
+
+---
+
+## 5b. Activity diagram — an unattended regeneration cycle
+
+This is UC-13. It is drawn small on purpose: the run itself is UC-7 unchanged (§5), and everything this
+case adds is at the two ends — how a run is entered without a person, and what a machine reads afterwards.
+The loop back is the cadence, and **the cadence is outside**; it is drawn as a dashed edge into a
+partition that contains nothing of ours.
+
+```mermaid
+flowchart TB
+    subgraph AUTO["Automation process — OUTSIDE this system"]
+        direction TB
+        N1["Choose a parameter set:<br/>a stored run configuration,<br/>a run-list entry, or one plus overrides"]
+        N2["Read the result record<br/>and the exit code"]
+        N3["Keep, skip, or quarantine<br/>the corpus — its own business"]
+        N4["Next cycle, varied parameters.<br/>The cadence is OUTSIDE.<br/>Nothing here trains"]
+    end
+
+    subgraph COMPOSE["UC-12 composition and validation — the SAME path a human uses"]
+        direction TB
+        V1["Compose the effective configuration:<br/>every field explicit, every value's layer<br/>and tool default recorded"]
+        V2{"Any field unset,<br/>or a seed with no<br/>recorded value?"}
+        V3{"Would anything<br/>prompt or wait<br/>for input?"}
+        V4["Validate as a whole:<br/>epoch, reach, solar frame,<br/>window bounds, clock ratio"]
+    end
+
+    subgraph RUN["UC-7, unchanged"]
+        direction TB
+        R1["Run the window.<br/>Every UC-7 refusal applies.<br/>Bounded by the window's end<br/>or a stated bound — NEVER by a person"]
+    end
+
+    subgraph CLOSE["Closeout"]
+        direction TB
+        Z1["Close and digest the manifest"]
+        Z2["Apply the quality gate;<br/>name every failing check;<br/>LABEL, do not discard"]
+        Z3["Write ONE result record:<br/>what was produced (corpus identity,<br/>window in sim and civil time,<br/>frames per channel, clock figures)<br/>+ whether it is fit to use"]
+        Z4["Exit code AGREES with the record"]
+    end
+
+    N1 --> V1 --> V2
+    V2 -->|"yes: REFUSE"| Z3
+    V2 -->|"no"| V3
+    V3 -->|"yes: REFUSE, never wait"| Z3
+    V3 -->|"no"| V4
+    V4 -->|"refused"| Z3
+    V4 -->|"accepted"| R1
+    R1 -->|"completed"| Z1 --> Z2 --> Z3 --> Z4 --> N2
+    R1 -->|"failed"| Z3
+    N2 --> N3 --> N4
+    N4 -.->|"the cadence: outside,<br/>and it is not a training loop"| N1
+```
+
+Four things this diagram is asserting:
+
+- **Every path reaches `Z3`.** A refused composition, a refused validation, a failed run and a successful
+  run all write a result record. **There is no edge that leaves the system without one**, because the
+  outcome an unattended caller cannot recover from is silence — it will hand whatever is on disk to
+  whatever consumes it (UC-13 failure flows; measured today at `run_SCTMV.py:130`, `:339`, where the one
+  distinguishable failure is a failed world build).
+- **The entry goes through UC-12 and not around it.** `N1 → V1` and never `N1 → R1`. An unattended run is
+  composed and validated by the same path a human's is, which is D2.22 and
+  [12](12_Operator_Control_Surface.md) D12.5, and is why this case needs no second validator and adds no
+  second set of checks.
+- **`V3` is the only genuinely new gate**, and it is a gate on *the invocation*, not on the run. Anything
+  that would ask a question refuses instead. A prompt is not a slower success; it is a hang that the next
+  cycle will start on top of.
+- **The cadence edge is dashed, outside, and returns to the outside partition.** `N4 ⇢ N1` never enters
+  this system. Nothing about what the next cycle asks for is computed from what the last cycle produced by
+  anything we build, and no model output exists anywhere in this diagram to compute it from (D2.29).
+
 ---
 
 ## 6. Activity diagram — handing a corpus to an external model team
 
 This is UC-10 with UC-11 inlined, because a corpus is audited on its way out rather than as a separate
-errand. It is drawn because the scope boundary is the whole point of the redraft, and a swimlane is the
+errand. It is drawn because the scope boundary was the whole point of the §3b redraft, and a swimlane is the
 only view that shows **where our partition stops**. The last partition is outside this system; it is
 drawn to show what the recipient does with what we shipped, and nothing in it is ours to build.
 
@@ -1716,8 +2467,17 @@ Five things this diagram is asserting:
 ([01](01_Architecture.md) cites D2.10 twice; [12](12_Operator_Control_Surface.md) cites D2.2 and D2.6).
 **D2.8, D2.10 and D2.19 were rewritten in place** against the scope boundary and keep their numbers and
 their subject; the claim [01](01_Architecture.md) quotes from D2.10 — that a corpus without a closed
-manifest is not replayable — is still asserted by it. **D2.11 was extended**, not replaced. **D2.23 to D2.25 are new.** Everything else is unchanged
-from the §3a redraft.
+manifest is not replayable — is still asserted by it. **D2.11 was extended**, not replaced. **D2.23 to
+D2.25 are new.** Everything else was unchanged from the §3a redraft.
+
+**The §3c redraft adds D2.26 to D2.30 and renumbers nothing.** **D2.9 and D2.12 are rewritten in place**,
+keeping their numbers and their subjects: D2.9 because the far side of the boundary is now one actor whose
+composition we do not specify, so "the model service" was too specific a name for a rule that must cover
+whatever is attached; D2.12 because §3c asked for the pacing question to be settled, and the distinction it
+turns on — a declared rate against an undeclared stall — belongs in the decision that already owned
+"degrades visibly rather than silently slowing the world". Neither rewrite weakens what the decision
+asserted, and neither is cited by number from another section
+(checked across the folder, 2026-09-18: siblings cite D2.2, D2.6 and D2.10 only).
 
 | # | Decision |
 |---|---|
@@ -1729,10 +2489,10 @@ from the §3a redraft.
 | D2.6 | **Population authority is acquired at session start, and a denial fails the session naming the holder.** It is the first thing that happens in UC-7, and there is no path that proceeds past it with a warning (UC-7, §5) |
 | D2.7 | **One capture session, one identity.** The session assigns the run identity, the scenario id and a stable `sensor_id` per camera, replacing the recorder's own wall-clock default and closing the never-supplied `scenario_id` gap at its current location (UC-7 step 5) |
 | D2.8 | **The corpus publishes the denominator; it never applies it.** Observability is accounted as observed intervals, gated first on rendered spans, per sensor and unioned. An annotated interval whose participant was never instantiated is not something anyone may count against a model, and **only the manifest can say which those were** — which is why we compute and publish it and why an external consumer could not. What is divided by it happens outside this system (UC-10 steps 4 and 5) |
-| D2.9 | **The model service is never given truth, in any mode.** Live (UC-8) and by export (UC-10) alike, its input carries no truth-sourced field, and that is a structural property — two separate artifacts rather than two views of one ([06 §10.3](06_Truth_And_Annotation.md)) — not a configuration to get right |
+| D2.9 | **Nothing on the far side of the boundary is ever given truth, in any mode.** *(Rewritten in place in the §3c redraft — same number, same subject, a name that no longer assumes a topology.)* Live (UC-8) and by export (UC-10) alike, what leaves carries no truth-sourced field, and that is a structural property — two artifact roots with one writer each, two separate artifacts rather than two views of one ([06 §10.3](06_Truth_And_Annotation.md), [08](08_Collection_And_EPoL.md) D8.17) — not a configuration to get right. In a live exercise truth additionally rides its own endpoint and is off by default, because truth on a feed an exercised operator sees is a leak ([08](08_Collection_And_EPoL.md) D8.23) |
 | D2.10 | **A corpus without a closed manifest is not handed over and not replayable.** Both UC-9 and UC-10 refuse it rather than degrading, because supervision in interval form is the only thing a detector track can be clipped against — and the recipient is the one who will do the clipping (UC-9, UC-10) |
 | D2.11 | **Auditing for accidental positives is a required use case, not an optional one**, because this system removes the mechanism that was suppressing them. The realism gain and the audit ship together. It is **our** audit — the capture operator with the scenario author, never an external consumer — it runs before a corpus leaves, and its report ships with the corpus (UC-11, UC-10 step 2, §1.3) |
-| D2.12 | **A live exercise degrades visibly rather than silently slowing the world.** An observer who cannot tell that the pipeline is behind is being shown something other than what they think (UC-8 failure flow) |
+| D2.12 | **A live exercise degrades visibly rather than silently slowing the world.** *(Rewritten in place in the §3c redraft — same number, same subject, now carrying the distinction §3c asked to be settled.)* An observer who cannot tell that the pipeline is behind is being shown something other than what they think. The operative word is **silently**. A slower world is legitimate — it costs no truth, because truth is stamped in simulated time — **when somebody declared the band it may slow within, and the slip is displayed and recorded**; an undeclared stall never is, because nothing distinguishes it afterwards from a fast run. The visible degradations are the achieved factor against target and floor, and, at the floor, **dropped frames counted per channel and recorded in coverage**. D2.27 and [08 §11.3](08_Collection_And_EPoL.md) D8.40 are the full ruling (UC-8 §8a) |
 | D2.13 | **The scenario author owns the epoch; the capture operator owns the illumination policy.** The epoch — civil date, civil UTC offset, the civil instant `t = 0` means — is scenario-scoped and a required part of the scenario contract. Freeze-or-advance, the rate, and any override are run-scoped. Neither actor can perform the other's part: the operator cannot invent what a scenario's hours mean, and the author cannot know the sweep (§1.1) |
 | D2.14 | **A window's civil time is derived, never chosen.** An operator who wants a different light records an **override**, which marks the corpus. The difference between a derived time and an override is a fact a later reader needs, and a silently different time is indistinguishable from a bug (§1.1, UC-7 alternate flow) |
 | D2.15 | **The sun is positioned explicitly at every session start and never inherited.** The noon default is applied only when no `CesiumSunSky` exists (`CesiumHeightSampler.cpp:396-402`), so a loaded world keeps the previous session's sun. The date is set as well as the time, because the advancing controller never touches the date (`CesiumTimeOfDayController.cpp:34-35`) (§1.2, UC-7 step 4, UC-9 step 3) |
@@ -1746,6 +2506,11 @@ from the §3a redraft.
 | D2.23 | **This pipeline labels; it never scores.** No component runs a detector, a tracker or an EPoL model in order to measure one, and no artifact it produces is a model metric, a baseline, a comparison or a verdict. Where a model appears it is a **live consumer being fed** (UC-8) or an **instrument used on our own data** (UC-11), and in neither role is it the subject. The positive form of the rule is the one to build to: **compute and publish everything a score would need; compute no score** ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b, §0) |
 | D2.24 | **A live exercise feeds and records; it does not judge.** The session streams collection frames out, records what comes back verbatim and tick-stamped, and holds truth on a separate channel for a human observer. It computes no agreement between the two — no association, no residual, no count, no verdict — and the transcript is received data with its own provenance, never merged into truth or supervision. This is stated as a decision because both streams are already in one process on one tick base, and the join is a few lines away (UC-8) |
 | D2.25 | **The external model team is an actor outside the boundary, associated with exactly one use case.** The first draft's "model trainer" and "model evaluator" are replaced by one external actor who receives a corpus at UC-10 and interacts with the pipeline in no other way. Their requirements on the corpus did not disappear with them: each became an obligation on the handoff and on the manifest — the strata, the denominator, and the statement of what is missing (§1.3, D2.8, D2.19) |
+| D2.26 | **The live exercise is a primary use case, and it is generic past our boundary.** UC-8 specifies **what we emit and the guarantees on it** — one self-describing collection frame per capture, the tick as the only join key, channels frame-coherent, nothing derived from the scene — and specifies nothing about what consumes it. The far side is **one actor**, the attached exploitation chain, whose composition is unspecified; the detector-then-model-service picture is *one illustrative adapter* and is marked as such wherever it appears. The falsifiable form of the rule is the test to build to: **substitute an entirely different detector and an entirely different model service, and no step of UC-8 may change** ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c, §1.4, UC-8) |
+| D2.27 | **The pacing band is declared and session-fixed; within it, only our own queue depth may move the clock; at its floor the stream drops; the world never stalls.** This section adopts [08 §11.3](08_Collection_And_EPoL.md) **D8.40**, which owns the mechanism, and states the actor-facing half: a run declares a **target** and a **floor** factor, both recorded; slowing between them costs no truth, because truth is stamped in simulated time and the sun advances on the world tick; at the floor, drop-oldest with a per-sensor counter marks the tick *covered but not delivered* ([08](08_Collection_And_EPoL.md) D8.22). **Nothing a consumer sends is ever an input to our clock** — an acknowledgement, heartbeat or advertised rate reaching the clock owner would make an external project's latency an input to our simulation and end the run's reproducibility. Two statements from an earlier draft of this section are withdrawn in §8a and named there rather than quietly dropped. The operator sees the achieved factor against target and floor, the per-channel drop count, what is attached and since when, and — under an advancing sun — the sun itself falling behind (UC-8 §8a) |
+| D2.28 | **The attached exploitation chain and the external model team are distinct actors, and the discriminator is control flow, not identity.** The chain's state is an input to ours — it can be unreachable, it can be slow, and what it returns becomes an artifact we hold — while the model team's never is, because every obligation to it is discharged before it appears. That the same organisation may occupy both roles is irrelevant: an actor is a role, and this section already separates the scenario author from the capture operator on exactly that basis. The same test makes the **automation process** distinct from the capture operator: it cannot answer a question (§1.4) |
+| D2.29 | **Unattended invocation is a use case, and its deliverable is a result, not a corpus.** A run can be started by something that is not a person, with a fully explicit parameter set, through the same composition and validation a human uses; it is bounded by the window or a stated bound and never by a person; and it writes **one machine-readable record of what was produced and whether it is fit to use, on every path including failure**, with the process exit code agreeing. Anything that would prompt refuses instead. The cadence, the scheduler, retention, and whatever trains on the output are all outside, and nothing here trains or reads model output at all (UC-13, §5b) |
+| D2.30 | **A cycle produces a new corpus; it never edits an old one.** Each regeneration has its own session and corpus identity and shares the scenario and world digests, so cycles are joinable and distinguishable. Nothing is appended to, merged into or rewritten in a closed corpus (D2.10), and a cycle that would overwrite its predecessor refuses to open a manifest. Two cycles of one parameter set are two populations, not one growing one (UC-13 alternate flows) |
 
 ## 8. Open questions
 
@@ -1856,5 +2621,51 @@ from the §3a redraft.
     corpus identity is frozen at first handover. Recommend **frozen**, consistent with D2.10 and with
     UC-12's immutable run configuration. [04](04_Contracts.md) owns (a) and (b);
     [09](09_Toolchain_And_Packaging.md) owns how it is built and staged.
-</content>
-</invoke>
+
+13. **In a live exercise, is a dropped frame an interruption or a column?**
+    [12](12_Operator_Control_Surface.md) D12.15 makes a non-zero `FrameRecorder.Dropped` on any channel
+    one of exactly three conditions that interrupt the operator, and everything else a column. For a
+    captured collection that is right: a thin corpus that looks normal is the failure it exists to catch.
+    For a live exercise it is inverted — drops are the **expected** degradation when a consumer is slower
+    than the world (UC-8 §8a), and an interrupt per drop is noise an operator learns to dismiss, which
+    destroys the interrupt's value for the other two conditions as well. Options: **(a)** keep D12.15 as
+    written and accept the noise; **(b)** make drops a column in the live mode and an interrupt in the
+    capture mode, which is a mode-dependent rule and therefore something to be suspicious of; **(c)**
+    interrupt **once**, on the first drop of a session, and carry a persistent counter thereafter.
+    **Recommend (c)**: the first drop is the news, the hundredth is a statistic, and it is the same shape
+    as the drop policy itself — record every one, announce the transition. This is
+    [12](12_Operator_Control_Surface.md)'s to settle, and it should be settled with
+    [12 open question 7](12_Operator_Control_Surface.md), which asks where the monitor lives.
+
+14. **Where does a received transcript live, given there are exactly two artifact roots?**
+    **Raised here and answered concurrently by [08 §11.6](08_Collection_And_EPoL.md); recorded rather than
+    left open, because the reasoning is worth keeping and because the two sections reached it
+    independently.** UC-8 step 7 may keep what an attached chain pushes back, as an opaque blob. But
+    [08](08_Collection_And_EPoL.md) D8.17 fixes **two** roots — `OBSERVATION` and `TRUTH`, one writer
+    each, non-nested — and a third, `roots.score`, was deliberately removed by the integration lead on
+    2026-09-18 ([04](04_Contracts.md) D4.26). A transcript is neither: it is not our observation, and it
+    is certainly not truth. The options were **(a)** a third root, which resurrects exactly what was
+    removed and would invite everything else that was removed with it; **(b)** inside `OBSERVATION`, which
+    is wrong in the most dangerous direction — it would put a model's output where a model's *input* is
+    drawn from, and one careless glob later a chain would be reading its own previous opinions; and
+    **(c)** a received-data artifact **outside both roots**. This section recommended (c);
+    [08 §11.6](08_Collection_And_EPoL.md) decided (c), on the same grounds and with the same placement as
+    its probe workspace. **What remains open is only the container's form**, which is
+    [04](04_Contracts.md)'s. What this section asserts either way is unchanged: a transcript is **not**
+    truth, **not** supervision, and **not** an observation.
+
+15. **Does unattended invocation need its own entry point, or a flag on the operator surface?**
+    UC-13 requires a run that can be started by something that is not a person, bounded without one, and
+    closed with a machine-readable result — and [12 §3.8](12_Operator_Control_Surface.md)'s `run_capture`
+    line, [12](12_Operator_Control_Surface.md) D12.3's effective configuration and
+    [12 §7.2](12_Operator_Control_Surface.md)'s closeout report already provide most of it. Options:
+    **(a)** one entry point, with the result record written on every invocation whether or not anyone is
+    watching, and the termination bound an ordinary configuration field; **(b)** a separate non-interactive
+    entry point, which duplicates the composition path and is exactly what
+    [12](12_Operator_Control_Surface.md) D12.17 and §9.3 warn against — *measured*, three `getattr`
+    fallbacks already disagree with the parser because a second caller exists.
+    **Recommend (a).** The result record is cheap, it is useful to a human too, and a second front end over
+    the same shared definitions is how defaults diverge. This is closely tied to
+    [12 open question 1](12_Operator_Control_Surface.md) — whether a run-list runner exists at all — and
+    the two should be answered together: a run-list runner **is** an automation process wearing our own
+    clothes, and if it exists, UC-13's requirements fall out of it rather than needing anything new.

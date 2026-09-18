@@ -4,18 +4,21 @@
 `BahonarPatternOfLife.zip`, against the camera geometry, against the shipped post-process profiles and
 against the solar geometry of the sizing site, each marked as measured where it appears. No code
 changed, no build run.
-**Date:** 2026-09-18. **Redrafted twice.** The first redraft, from the 2026-09-17 draft, made
-**illumination a first-class collection parameter**. This second redraft applies the user's scope
-decision recorded in **team brief §3b**: *the detect-and-track model and the EPoL model are external to
-this effort; this pipeline produces imagery, truth and labels for them, and no part of it scores
-anything.* **Every measurement from both earlier drafts is carried forward unchanged**; where a
-measurement was framed evaluatively, the number is kept and the sentence is re-framed.
+**Date:** 2026-09-18. **Redrafted three times.** The first redraft, from the 2026-09-17 draft, made
+**illumination a first-class collection parameter**. The second applies the user's scope decision
+recorded in **team brief §3b**: *the detect-and-track model and the EPoL model are external to this
+effort; this pipeline produces imagery, truth and labels for them, and no part of it scores anything.*
+The third applies **team brief §3c**, which clarifies §3b: narrowing the scope removed *scoring*, it did
+not remove *running the chain*. **The live exercise is a primary use case**, and it is designed here on
+our side of the boundary only. **Every measurement from all three earlier drafts is carried forward
+unchanged**; where a measurement was framed evaluatively, the number is kept and the sentence is
+re-framed.
 **Owner role:** collection and external-model handover engineer.
 **Scope:** everything between photons and the **handover** — the camera rig, the light the scene is
 captured under, the capture, the per-image labels, the observability accounting, the corpus's own
 metadata, and the contracts by which an external detect-and-track team and an external
 estimated-pattern-of-life (EPoL) team read all of it. Covers both products: a **recorded corpus** and a
-**live handover** of the same records over a socket.
+**live exercise** in which the same records leave the process over a socket while the world runs.
 **Audience:** an engineer who has read neither the conversation that produced this plan nor the whole
 Findings set. Every external claim is cited.
 
@@ -26,6 +29,15 @@ Findings set. Every external claim is cited.
 > labels, and an honest account of what the corpus contains and what it does not. Quality gates in this
 > section are gates on **the data** — is it internally consistent, is it leak-free, is it complete, does
 > it say what it lacks. **D8.37** states this as a decision so it can be cited.
+>
+> **And the boundary is a line, not a wall.** The chain *is* run — synthetic imagery generation feeds a
+> detect-and-track stage, whose tracks feed an EPoL model service, which produces its reports live
+> (team brief §3c). Everything up to and including the imagery is ours and is designed here.
+> **Everything after it is not, and we know nothing about it**: their APIs, formats, transports, report
+> schemas, latencies and failure modes are unknown to us and are none of this plan's business. **A
+> reader must be able to substitute a completely different detector and a completely different EPoL
+> service without any part of this plan changing.** That is the test every paragraph of §7 and §11 is
+> written to pass, and **D8.39** states it as a decision.
 
 **Reads from:**
 [20 — Behavioral Annotation and Areas of Interest](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) ·
@@ -61,16 +73,25 @@ citability. What moved is what several sections *are*.
 | §8 | "truth-to-track association" — a harness that assigns and measures | **associable truth**: the format guarantee, the *published* transfer rule we do not execute, and the part of the old quality block that survives as **label quality** (§8.3) |
 | §9 | "the EPoL model service boundary", including what a model emits | **what the corpus hands an external model team.** `EpolAssessment` is withdrawn — model output is neither produced nor consumed here. The observer-derivability principle (§9.7) is unchanged and is now more load-bearing |
 | §10 | "the evaluation join", with a metrics catalogue | **corpus metadata**: observability accounting, prevalence, onsets, illumination strata. The metric families of the old §10.3 are removed; the label-semantics table that sat with them stays |
-| §11 | "the live exercise", with a detector, tracker and model in the sequence diagram | **the live handover.** The pacing, drop policy and feed-separation rules are ours and stay; the three model lanes leave the diagram |
+| §11 | a minimal "live handover" — the residue left after the model lanes were cut out of it | **a designed section again, on our side of the line only** (team brief §3c). What we emit, when, with what timing and identity guarantees (§11.0); the **pacing ruling** with a sustainable rate computed from the measured numbers (§11.1, §11.3); how an arbitrary consumer attaches, with **one illustrative adapter** marked as such (§11.5); the dumb transcript (§11.6); and what the operator sees (§11.4) |
 | §12 | "does the annotated interval survive contact with the detector" | **the corpus fitness probe.** Same two tiers, same three sun settings, same numbers — the instrument is a stock detector and the output is a statement about *our data*, never a figure of merit for the detector (**D8.25**, **D8.38**) |
 | §10.5 test 2 | "the illumination-only baseline… the floor any real model must beat" | **the leakage probe.** Same trivial predictor, same three prevalence units, same conclusion — it measures whether the label has leaked into a covariate, and it is not a floor for anything |
 | §13, §14 | diagrams containing an evaluation join and an "Evaluator" who scores models | redrawn: a release-and-validate stage, and a downstream consumer who is handed a corpus |
 | §15 | D8.1–D8.36 | **same numbers.** Twelve are amended in place and marked; one (D8.23) is narrowed to the half that was ours; **D8.37** and **D8.38** are new |
 
-**Nothing measured was deleted.** The EV100 table, the shadow table, the solar-elevation table, the
-geometry tables, the margin tables, the sizing-scenario measurements, the blueprint probe, the lamp
-offset and the night verdict are all here, re-framed where their sentences implied a model was being
-measured.
+**The third redraft (team brief §3c) changes four more things, and three of them are cuts.**
+
+| Section | Was | Is now |
+|---|---|---|
+| §7.3 | a `Detection` and `Track` **record schema** for a consumer's output, plus a recommended wire format for it | **three properties the published transfer rule needs**, and nothing else. The schema is cut: a track format is an external interface and §3c forbids specifying one. An example survives only as **one illustrative adapter**, explicitly outside the boundary |
+| §9.6 | "Back-channel: **none**" in both columns | still no back-channel *into the pipeline*, with the transcript named as what it is — an inbound record that terminates at a file and is never read back into anything (§11.6) |
+| §11 | one page of residue | a designed section, per the table above |
+| §11.6 | the transcript existed only in [`02_Use_Cases.md`](02_Use_Cases.md) UC-8; this section gave it no shape | **the shape is fixed here and it is deliberately dumb**: an opaque blob with a receive timestamp, a source id and a content type, recorded verbatim, never parsed for meaning we act on, never merged into truth or supervision, never measured (**D8.41**) |
+
+**Nothing measured was deleted, in any redraft.** The EV100 table, the shadow table, the solar-elevation
+table, the geometry tables, the margin tables, the sizing-scenario measurements, the blueprint probe,
+the lamp offset and the night verdict are all here, re-framed where their sentences implied a model was
+being measured. The third redraft adds numbers (the wire-volume arithmetic of §11.1) and removes none.
 
 ### What this section does *not* cover
 
@@ -80,6 +101,13 @@ measured.
 - **Any model metric, evaluation harness, scoreboard or model verdict** (team brief §3b). Where the
   earlier drafts specified one, the section now says in a line what an external consumer would do
   instead, and stops there.
+- **Any external interface past synthetic imagery generation** (team brief §3c). No detector input
+  schema, no track format, no report format, no fusion stage, no normaliser, and no assumption about
+  anybody's transport, latency or failure modes. **Where a concrete integration is needed to make a use
+  case readable it appears once, in §11.5, marked as one illustrative adapter sitting outside the
+  boundary.** The section is written so that substituting a different detector and a different EPoL
+  service changes nothing in it (**D8.39**); the live exercise itself *is* covered, in §11, because
+  everything up to and including the imagery is ours.
 - The behavioural annotation format itself — that is [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md).
   This section says what the collection chain must carry and how a consumer reads it.
 - **The epoch contract** — what civil instant `t = 0` means, its grammar, and the civil-to-solar-zone
@@ -106,25 +134,46 @@ measured.
 
 ## 1. Two products, one chain
 
-The user's stated purpose names two things, and they are not variants of each other. Both are
-**handovers**: in one the corpus is handed over as files, in the other the same records are handed over
-as a stream. **Neither ends in a score, because scoring is not ours** (team brief §3b).
+The user's stated purpose names two things, and they are not variants of each other. **Both are primary,
+and the live exercise is the one wanted most** (team brief §3c). Both are **handovers**: in one the
+corpus is handed over as files, in the other the same records are handed over as a stream while the
+world is still running. **Neither ends in a score, because scoring is not ours** (team brief §3b).
 
-| | **Recorded corpus** | **Live handover** |
+| | **Recorded corpus** | **Live exercise** |
 |---|---|---|
-| Purpose | Supply imagery, truth and labels for training and validating external models | Supply the same records to an external consumer while the world is running |
-| Product | Imagery + truth sidecars + per-image labels + coverage + a run manifest | The same records on a socket, plus an operator picture of our own truth or of a consumer's output |
-| Pacing | As fast as the machine allows; simulated time is the clock | Paced against the wall clock (§11.1) |
+| Purpose | Supply imagery, truth and labels for training and validating external models | Drive the whole chain end to end against a wall clock: our imagery in, somebody's reports out, live |
+| Product | Imagery + truth sidecars + per-image labels + coverage + a run manifest | The same records on a socket, an operator picture of the run, and — optionally — a transcript of whatever came back (§11.6) |
+| Pacing | As fast as the machine allows; simulated time is the clock | Paced against the wall clock at a declared factor, with a declared floor (§11.1, §11.3) |
 | Truth | Written beside the imagery in a separate root, complete, retained, released under a stated partition | Written to a separate sink and off the consumer's feed by default (§11.4) |
 | Who runs a detector | An external team, offline, after the fact, as often as they like | An external team, in the loop, under a latency budget that is theirs to meet |
-| Illumination | A **controlled variable**: frozen per window, stratified across windows (§4.7, §10.5) | A **condition**: whatever the run's scenario time implies, and it may move |
-| What our failure costs | A corpus that misdescribes itself | A handover that drops frames — recorded as dropped (§11.3) |
+| Illumination | A **controlled variable**: frozen per window, stratified across windows (§4.7, §10.5) | A **condition**: whatever the run's scenario time implies, and it may move (§4.7) |
+| What our failure costs | A corpus that misdescribes itself | A run that silently slipped its rate, or dropped frames without saying so (§11.3) |
 
 They share everything from photons to the handover record. They diverge at exactly three points:
 **transport** (files versus a stream), **pacing** (free-running versus wall-clock), and **what
 illumination is for** (a stratification axis versus a condition of the run). That shared middle is why
 one design covers both, and why the handover must be defined as a **record** rather than as a directory
 of files (§7.2).
+
+**The live exercise's shape, in the user's own terms** (team brief §3c), with the line marked:
+
+```
+              OURS                  |          NOT OURS, AND UNKNOWN TO US
+                                    |
+  synthetic imagery generation  ---->  Detect & Track consumes
+                                    |    -> sends tracks to the EPoL model service
+                                    |    -> the model performs its anomaly detection
+                                    |    -> and produces reports, live
+                                    |
+   designed in §7 and §11           |   specified nowhere in this plan (D8.39)
+                              the boundary
+```
+
+Everything left of the line is designed in this section. Everything right of it is unknown to us and
+stays unknown: **no detector input schema, no track format, no report format, no fusion stage and no
+normaliser appears anywhere in this plan** (**D8.39**). What we owe the right-hand side is a stated
+emission contract, a stated attachment, a stated rate and a stated behaviour when it cannot keep up —
+all four of which are things we can promise without knowing anything at all about who is listening.
 
 ```mermaid
 flowchart TB
@@ -154,11 +203,13 @@ flowchart TB
         MAN["run manifest: instances, intervals,<br/>coverage, prevalence, illumination strata"]
     end
 
-    REL["RELEASE: validate, partition, digest, publish<br/>(§3.5, §9.4) — the last thing this pipeline does"]
+    REL["RELEASE: validate, partition, digest, publish<br/>(§3.5, §9.4) — the last thing this pipeline does<br/>for the CORPUS product"]
+    LIVE["LIVE EMISSION: the same CollectionFrame records<br/>on a socket, paced to the wall clock<br/>(§11) — the last thing this pipeline does<br/>for the LIVE EXERCISE"]
+    TRANS["TRANSCRIPT (optional): whatever came back,<br/>opaque, stamped, verbatim — §11.6"]
 
-    subgraph EXT["EXTERNAL — not built, not run, not measured here"]
-        DT["detect-and-track team"]
-        EPOL["EPoL model team"]
+    subgraph EXT["EXTERNAL — not built, not run, not measured here.<br/>Substitutable in whole: D8.39"]
+        DT["detect-and-track service"]
+        EPOL["EPoL model service<br/>— produces its reports, live,<br/>to whoever they are for"]
     end
 
     SUN --> PH
@@ -179,21 +230,30 @@ flowchart TB
 
     OBS --> REL
     TRUTHART --> REL
+    OBS --> LIVE
     REL -->|"imagery + collection metadata + context<br/>(§7.2 CollectionFrame)"| DT
     REL -->|"labels + supervision + coverage + manifest<br/>(§7.5, §9.2), under the release partition"| DT
     REL -->|"context + supervision vocabulary<br/>+ the transfer rule (§8.5)"| EPOL
+    LIVE -->|"the same CollectionFrame, live<br/>(§7.2, §11.5)"| DT
     DT -.->|"their tracks, their business.<br/>This pipeline never reads them back."| EPOL
+    EXT -.->|"IF anything is pushed back to us:<br/>recorded verbatim, never acted on (§11.6)"| TRANS
 
     TRUTHART -.->|"NO PATH into a model's INPUT: the anti-leak boundary, D8.17"| OBS
+    TRANS -.->|"NO PATH back into anything: D8.41"| TRUTHART
 ```
 
-Three things the diagram is drawn to say. **First**, there is no `SCORE` box, and there is no edge
-returning from `DT` or `EPOL` into this pipeline: model output is neither produced nor consumed here,
-which is why §3.5 rules that a third artifact root would be a directory for files we never write.
-**Second**, the dashed anti-leak edge now runs *between our own two roots* rather than from truth to a
-model, because that is where the rule actually bites — it is entirely about what we put in the data, and
-it is enforced at the writer (§9.4). **Third**, `SOL` sits in the `OBSERVATION` root; §9.7 is the
-argument for why the achieved solar state may be placed there when almost nothing else may.
+Five things the diagram is drawn to say. **First**, there is no `SCORE` box, and there is no edge
+returning from `DT` or `EPOL` into this pipeline that reaches anything but a transcript file: model
+output is neither produced nor consumed here, which is why §3.5 rules that a third artifact root would
+be a directory for files we never write. **Second**, the dashed anti-leak edge now runs *between our own
+two roots* rather than from truth to a model, because that is where the rule actually bites — it is
+entirely about what we put in the data, and it is enforced at the writer (§9.4). **Third**, `SOL` sits
+in the `OBSERVATION` root; §9.7 is the argument for why the achieved solar state may be placed there
+when almost nothing else may. **Fourth**, `LIVE` hangs off `OBSERVATION` and not off `REL`: the live
+exercise emits the *same record*, and it does not wait on release, validation or partitioning, because
+none of those is a per-frame operation. **Fifth**, `TRANS` has exactly one inbound edge and one dashed
+refusal — it is a sink, and the crossed edge into `TRUTHART` is the rule that a transcript is never
+merged into truth or supervision (**D8.41**).
 
 ---
 
@@ -537,7 +597,7 @@ Two things follow for collection.
 
 The camera is a pinhole with square pixels and a centred principal point (doc 16 §4.4), so
 `fx = W / (2·tan(hfov/2))`. At the defaults — 1280×720, 90° (`CarlaControlArgumentParser.py:236`,
-`:272-273`) — `fx = 640 px` exactly, and the ground sample distance at slant range `R` is `R/640` metres
+`:274-275`) — `fx = 640 px` exactly, and the ground sample distance at slant range `R` is `R/640` metres
 per pixel. Computed here; it reproduces doc 17 §12.3's measured figures (a 4.5 m vehicle at 555 m is
 about 5 px, at 914 m about 3 px) to within a tenth of a pixel, so the model and the measurement agree.
 
@@ -588,7 +648,7 @@ A "camera" in this rig is three co-posed sensors, of which the first is the prod
 | Sensor | Role | Required? |
 |---|---|---|
 | `sensor.camera.rgb` | the imagery — the only product a consumer ever sees | yes |
-| `sensor.camera.depth` | the occlusion measurement (doc 17 §12.1) and, with it, the honest observability accounting | yes for a corpus; optional for a live handover |
+| `sensor.camera.depth` | the occlusion measurement (doc 17 §12.1) and, with it, the honest observability accounting | yes for a corpus; optional for a live exercise |
 | `sensor.camera.instance_segmentation` | modal (visible-region) vehicle masks, the doc 17 §5.2 upgrade | optional |
 
 The depth camera **must** be held at the RGB camera's pose and field of view: `OcclusionEstimator`
@@ -675,7 +735,7 @@ Reasons, in order of weight:
    scenario is running in another process", because both produce an empty registry, and doc 20 decision
    2 makes `unlabelled` a legitimate written state. A corpus silently collected unsupervised is
    indistinguishable from a corpus legitimately collected unsupervised.
-2. **(b) is incompatible with the live handover, which is one of the two products.** A live handover
+2. **(b) is incompatible with the live exercise, which is one of the two products.** A live exercise
    places the consumer outside the simulator process by construction, and the truth writer — which must
    keep recording supervision and coverage while that happens — has to run somewhere. Under (b) it must
    be in the co-simulation process.
@@ -720,7 +780,7 @@ premise changes the recommendation here even though it changes nothing above:
 
 **These two decisions are deliberately independent, and that is the point.** Publication means that
 moving a channel into its own process — for throughput, or because a detector wants to sit beside it, or
-because a live handover puts a consumer on another machine — is a deployment choice with no correctness
+because a live exercise puts a consumer on another machine — is a deployment choice with no correctness
 consequence. Under doc 20's option (b) the same move would silently produce an unsupervised corpus.
 **Correctness must not depend on which process a recorder is in; performance may.**
 
@@ -997,7 +1057,7 @@ determinism side — "prefer scheduled fixed `--ev` over auto-exposure when gene
 frames" — and that is adopted here for a second, independent reason.
 
 **Decision (D8.26): the corpus uses a fixed, manual, per-window exposure, chosen from a named EO
-profile set, and recorded per capture. Auto-exposure is permitted only in a live handover and only when
+profile set, and recorded per capture. Auto-exposure is permitted only in a live exercise and only when
 recorded as such**, because there the product is an operator's picture rather than a comparable
 measurement.
 
@@ -1259,7 +1319,7 @@ Four reasons, in order of weight:
 - **A transition is the phenomenon under study** — a window deliberately spanning dawn, dusk, or the
   elevation at which lamps switch on. Here the moving light *is* the experiment, and freezing it would
   destroy the thing being measured.
-- **A live handover long enough that a frozen sun would be visibly wrong to an operator.** The live
+- **A live exercise long enough that a frozen sun would be visibly wrong to an operator.** The live
   product is a picture for a human, not a comparable measurement, so the trade runs the other way.
 
 **Three supporting rules that make the default workable:**
@@ -1625,7 +1685,7 @@ exclusion to the claim the artefact actually damages rather than throwing away t
   *participant* breaks that sensor's observed span at that tick rather than bridging it (§10.2), because
   the span is meant to describe what could have been followed continuously.
 - **Forbid the avoidable case.** A camera is not re-aimed during an annotated interval it is covering.
-  If a session plan requires it, the plan is wrong; if an operator does it during a live handover, the
+  If a session plan requires it, the plan is wrong; if an operator does it during a live exercise, the
   coverage record shows it and the interval is reported as broken rather than as covered.
 
 None of this needs the fade back. It needs the admission and release ticks, which are recorded anyway,
@@ -1893,37 +1953,36 @@ as much as the contents: no depth, no truth position, no actor or entity identit
 no supervision, no `scenario_id` and no `seed` (§9.7 consequence 2), no `advancing`/`rate`, and no
 simulator configuration of any kind.
 
-### 7.3 What a consumer's own output must look like for our supervision-transfer rule to apply
+### 7.3 The three properties our published transfer rule assumes about a consumer's output
 
-**This is not a specification of a stage we run.** The pipeline never sees these records. They are
-written down for one reason: §8.5 publishes a rule for transferring our supervision onto a consumer's
-tracks, and a rule is useless unless it states the shape it applies to. A consumer whose output does not
-fit this shape can still use the corpus — they simply cannot use our transfer rule unmodified.
+**The earlier drafts specified a `Detection` and a `Track` record here, with fields and a recommended
+wire format. That is cut.** A track format is an external interface, and team brief §3c forbids this
+plan from specifying one: their formats are unknown to us and are none of our business. Nothing in this
+plan reads a consumer's output, so nothing in this plan is entitled to a schema for it.
 
-```
-Detection                         # minimum shape the transfer rule assumes
-  session_id, sensor_id, tick     # ours, echoed back, so the rule can find the frame
-  bbox_px                         # axis-aligned or oriented, stated
-  class, confidence
-  geo: lat, lon, hae, ce, le      # optional; the rule works in image space
-  kind                            # body | lamp | unknown  (§8.7)
+What remains is the minimum that must be *true* of any output for §8.5's published transfer rule to be
+applicable to it. These are properties, not fields, and they are stated because a rule is useless
+without them:
 
-Track
-  session_id, sensor_id, track_id # unique within (session, sensor)
-  frames[]                        # tick -> bbox_px, kind
-  first_tick, last_tick
-```
+1. **It can name one of our frames** — some way of getting back to a `(session_id, sensor_id, tick)` we
+   emitted. The tick is the join key for everything in this plan (D8.4), and a consumer who discards it
+   and keeps only their own wall clock cannot use the rule, because filenames and wall clock pair
+   nothing (`FrameRecorder.cs:223-232`, `CaptureMetadata.cs:9-14`).
+2. **It has a position in that frame's image space.** §8.2 compares in pixels, so an output that is
+   geodetic only must be projected back through the pose and `K` we published before the rule applies.
+3. **It says, or does not say, which point on the vehicle it refers to.** At low light an output may be
+   a lamp rather than a body, and the ±5 px front-to-rear offset measured in §8.7 is the difference
+   between the two. An output that does not distinguish them is treated by §8.5 as ambiguous rather than
+   silently compared against the wrong point. **This is a property of the rule, not a field we require.**
 
-`kind` is there because at low light a consumer's output may be a lamp rather than a body, and the ±5 px
-front-to-rear offset measured in §8.7 is the difference between the two. A consumer that does not
-distinguish them emits `unknown`, and §8.5's rule then treats the residual as ambiguous rather than
-silently applying the wrong comparison point. **A consumer is free to emit anything else besides; the
-pipeline neither reads it nor cares.**
+**A consumer whose output lacks any of the three can still use the corpus** — they simply cannot apply
+our transfer rule unmodified, and that is their choice to make, not a defect in either side.
 
-Format, recommended for the same reason the corpus uses it: **line-delimited JSON, one record per line,
-appended** — streamable and truncation-tolerant. CoT is a *projection* for display (doc 09 §3 fixes
-detection uids as `CARLA-DET-<track_id>` and `how="m-f"`), not an interchange format: a CoT event cannot
-carry a track's history.
+**On CoT, because it will be assumed.** Doc 09 §3 fixes detection uids as `CARLA-DET-<track_id>` and
+`how="m-f"`, and that identity exists for anyone who wants to put their output on a TAK feed beside
+ours. It is a **display projection and not an interchange format** — a CoT event cannot carry a track's
+history — and this plan neither requires it nor reads it. What our *own* stream uses is stated in §11
+and in D8.13; what theirs uses is theirs.
 
 ### 7.4 Geolocation: what ground surface the corpus is entitled to publish
 
@@ -2423,12 +2482,12 @@ Two properties that are easy to omit and expensive to omit:
 
 It is a **handover**, not an exchange — one direction, from us to a consumer:
 
-| | Corpus | Live handover |
+| | Corpus | Live exercise |
 |---|---|---|
-| Direction | files: the consumer reads a released tree | push: the collection chain streams `CollectionFrame` records (§7.2) |
+| Direction | files: the consumer reads a released tree | push, one way, no acknowledgement: the collection chain streams `CollectionFrame` records (§7.2, §11.5) |
 | Shape | the on-disk layout of §3.5 plus a release attestation (§9.4) | a persistent connection carrying the same records, line-delimited |
-| Back-channel | **none.** Nothing comes back into this pipeline | **none.** A consumer's output goes wherever they send it; not here (§11.4) |
-| Failure | a failed read is the consumer's retry | drop-oldest at our end, counted and recorded (§11.3) |
+| Back-channel | **none.** Nothing comes back into this pipeline | **none into the pipeline.** A consumer's output goes wherever they send it. *If* they also push something to us, it lands in the transcript — an opaque blob that terminates at a file and is never read back into truth, supervision, coverage, a manifest or a decision (§11.6, D8.41) |
+| Failure | a failed read is the consumer's retry | slow within the declared floor first, then drop-oldest at our end, counted and recorded (§11.3, D8.40) |
 
 The record is the contract; the transport is not. Writing the same record for both products is what
 keeps a corpus consumer and a live consumer from having to build two readers.
@@ -2503,7 +2562,7 @@ plan:
    one that catches a whole class of leak that "is it truth?" would wave through, and it catches two
    live cases below.
 4. **The value must be knowable at the moment the frame is exploited.** Solar state is computable from
-   the frame's own metadata, so it passes for the live handover as well as the corpus. A quantity that
+   the frame's own metadata, so it passes for the live exercise as well as the corpus. A quantity that
    is only knowable after the run — an end-of-session summary, a manifest digest — does not pass, even
    if it is otherwise innocuous.
 
@@ -2556,10 +2615,13 @@ pile of pictures.**
 | `context.json` | the session, once — the §9.2 bundle | OBSERVATION |
 | `vocabulary.json` | the session, once — §9.5 | TRUTH |
 | `release.json` | the release step — digests, partition, validator verdict (§9.4) | beside both, in neither |
+| the **transcript** (live exercise only, listener off by default) | the receiving endpoint, appended as blobs arrive | **neither root**, and never released with a corpus (§11.6, D8.41) |
 
-The three artifacts the earlier draft listed and this one does not — `tracks.jsonl`,
-`assessments.jsonl`, `association.jsonl` and `report.json` — are all either external model output or
-derived from it. **Nothing writes them here and no root holds them** (§3.5).
+The artifacts the earlier draft listed and this one does not — `tracks.jsonl`, `assessments.jsonl`,
+`association.jsonl` and `report.json` — are all either external model output or derived from it.
+**Nothing writes them here and no root holds them** (§3.5). Note that the transcript is *not* a
+reinstatement of them: those four were **parsed and structured** forms of received output, and a
+transcript is an undifferentiated blob we never open (§11.6).
 
 `coverage.jsonl` is the artifact doc 20 §2.5 asks for and nothing writes today. One row per
 `(sensor_id, tick, actor_id)` for every vehicle that projected into that sensor's frame, carrying the
@@ -2825,98 +2887,235 @@ set of strata it occurs in.
 
 ---
 
-## 11. The live handover
+## 11. The live exercise
 
-**What this section is now.** The earlier drafts described a live exercise in which a detector, a
-tracker and an EPoL service ran inside the loop and were scored at the end. Under team brief §3b none of
-those is ours. What remains is the half of it that always was: **the world runs, the collection channels
-capture, and the same records defined in §7.2 leave the process over a socket instead of landing in
-files.** Whether anybody is on the other end, and what they do with it, is outside this plan.
+**Restored to first class.** The previous redraft left this section as a minimal "live handover" — the
+residue after the detector, tracker and model lanes were cut out of it. Team brief §3c corrects that:
+narrowing the scope removed *scoring*, not *running the chain*. The live exercise is a **primary use
+case**, wanted more than the corpus, and it is designed here rather than merely tolerated — **on our
+side of the line only.**
 
-Four things in the earlier §11 were genuinely ours and all four survive: the pacing, the drop policy
-when a consumer is slower than the world, the separation of truth from any feed a consumer or an
-operator sees, and the consequence of running several channels at once.
+**The obligation, in one paragraph.** A live exercise runs the world, captures its channels, and emits
+the same `CollectionFrame` records §7.2 already defines onto a socket instead of into files, paced
+against a wall clock. Something attaches and consumes them; that something detects and tracks; its
+tracks go to an EPoL model service; the service performs its anomaly detection and produces reports,
+live. **We own the first clause and nothing after it.** Our whole obligation is to emit records that are
+self-describing, correctly stamped, correctly identified and correctly paced; to say what we do when the
+far side cannot keep up; and to show an operator what is happening. **A completely different detector
+and a completely different EPoL service can be substituted without one word of this plan changing**
+(D8.39) — and if any paragraph below would need editing to accommodate such a substitution, that
+paragraph is a defect.
 
-### 11.1 Pacing
+| Ours, and specified here | Not ours, and specified nowhere in this plan |
+|---|---|
+| What leaves the process, field by field (§7.2) | What a detector takes as input |
+| When it leaves, and at what rate (§11.1) | What a track looks like |
+| What happens when the far side is slower (§11.3) | What a report looks like |
+| How something attaches, and what it may assume (§11.5) | Their transport, their API, their latency budget, their failure modes |
+| What is recorded about the run, including what came back (§11.6) | Whether any of it was any good (§3b, D8.37) |
+| What the operator sees (§11.4) | Whether a consumer fuses channels before displaying (D8.24) |
 
-`SumoCotBridge.run` already carries the right idea, and it is the pattern to copy rather than reinvent.
-`real_time_factor` paces a run against the wall clock: "1.0 makes a second of simulation take a second,
-2.0 runs at twice that, and 0 — the default — steps as fast as the machine allows"
+### 11.0 What we emit, and the guarantees that attach to it
+
+**The record is the one §7.2 defines, unchanged.** That is the point of D8.1: the corpus writes a
+`.collect.json` beside each PNG and the live exercise puts the same record on a socket, so a consumer
+writes one reader for both products. Nothing is added for the live case and nothing is removed.
+
+Six guarantees travel with it. The first five are §7.2's and hold identically live; **the sixth is
+live-only and is stated because the drop policy of §11.3 makes it non-obvious:**
+
+| Guarantee | What backs it |
+|---|---|
+| **Every frame is self-describing** — pose, intrinsics, radiometry and achieved solar state travel with the pixels | §2.4, §4.8, D8.28 |
+| **The tick is the only join key**, taken from the sensor frame that produced the pixels (`FrameRecorder.cs:179`); `wall_time_utc` exists for the far side's own latency accounting and is never a join key; filenames pair nothing (`CaptureMetadata.cs:9-14`) | §2.4, D8.4 |
+| **Identity is stable for the whole session** — the session id is assigned once and handed to every channel, and `sensor_id` is authored and validated unique for any multi-channel session, so a consumer's keying never changes mid-run | §3.5, D8.4 |
+| **Channels are frame-coherent** — all channels read one world-observer snapshot per tick, so two channels stamping one tick cannot disagree about the sun | §3.4, D8.3a |
+| **Nothing in the emission is derived from the scene**, enforced at the writer and checked mechanically, including inside PNG tEXt chunks | §9.4, D8.17 |
+| **Per sensor, ticks are strictly increasing, never repeated and never re-sent.** Dropping under §11.3 produces a **gap** — never a reorder, never a duplicate, never a retry. Across sensors no ordering is promised at all: two channels' frames for one tick may arrive in either order, and a consumer that assumes otherwise has assumed something we did not say | §11.3, and D8.40 |
+
+**One timing promise, and one deliberate refusal.** We state the **nominal capture interval in simulated
+time** (`1/--record-hz`, default 0.5 s — `CarlaControlArgumentParser.py:512-518`) and the **declared
+real-time factor** (§11.1), so a consumer can compute the nominal wall-clock interval as
+`1 / (record_hz · f)` and size their own budget against it. **We promise no jitter bound**, because none
+has been measured, and publishing an unmeasured bound is the same mistake §5.3 refuses to make with
+`w_min`. What we publish instead is the *achieved* rate, after the fact and while it runs (§11.4).
+
+### 11.1 Pacing: what rate a live exercise can actually sustain
+
+**The clock has one owner and it is not collection.** Team brief §6.3 fixes that, and
+[`01_Architecture.md`](01_Architecture.md) names the owner `PlaybackClock` and gives it the sun as well.
+Collection **observes** the rate and **records** it; it does not set it.
+
+**The pattern to copy already exists.** `SumoCotBridge.run` paces a run against the wall clock:
+`real_time_factor` is documented as "1.0 makes a second of simulation take a second, 2.0 runs at twice
+that, and 0 — the default — steps as fast as the machine allows"
 (`CarlaControl/src/carlacontrol/SumoCotBridge.py:184-194`), exposed as `--real-time-factor`
-(`CarlaControl/scripts/sumo_cot_telemetry.py:83`, used at `:160`). The implementation is the important
-part: the sleep target is **absolute**, computed as
-`started_at + (now − sim_start)/factor − monotonic()`, with the comment that "a step that overruns is
-absorbed by the next one instead of accumulating drift over a long run"
-(`SumoCotBridge.py:243-248`). A per-step sleep would drift over seven days.
+(`CarlaControl/scripts/sumo_cot_telemetry.py:83`, used at `:160`). Two properties of the implementation
+matter here and both are read from the source:
 
-That code paces **SUMO alone, with no CARLA in the loop**. Under co-simulation the clock has exactly one
-owner (team brief §6.3), and [`01_Architecture.md`](01_Architecture.md) names it `PlaybackClock` and
-gives it the sun as well.
+- **The factor is a divisor**, `behind = (started_at + (now − sim_start) / real_time_factor) −
+  monotonic()` (`SumoCotBridge.py:246`), so **`f < 1` is the "let simulated time advance more slowly"
+  candidate, already expressible in the existing idiom.** Slowing needs no new mechanism, only a
+  parameter below one.
+- **The sleep target is absolute, not per step**, with the source's own reason: "a step that overruns is
+  absorbed by the next one instead of accumulating drift over a long run" (`SumoCotBridge.py:243-248`).
+  A per-step sleep would drift over seven days.
+
+**A measured defect in that pattern, which matters far more here than where it lives.** The pacer sleeps
+only when it is *ahead*: `if behind > 0: time.sleep(behind)` (`SumoCotBridge.py:247-248`). When the
+machine is behind it neither sleeps nor records the shortfall, so a run that slipped its rate is
+byte-for-byte indistinguishable from a run that held it. For a dataset, where the factor is 0 anyway,
+that is harmless. **For a live exercise it is the failure mode**, because the whole product is a
+wall-clock claim.
 
 **Property needed from [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md):** a real-time factor
 on the *world* tick, implemented against an absolute target in the manner of `SumoCotBridge.py:243-248`,
-with the achieved factor reported. Collection needs only to observe it, and needs the achieved factor
-recorded per session so the manifest can state whether the run held its rate — which matters because a
-run that did not is a run whose captures are unevenly spaced in wall-clock time, a fact about the data.
-**One illumination
-consequence:** because `ACesiumTimeOfDayController::Tick` advances the solar clock by
-`DeltaSeconds · Rate / 3600` hours (`CesiumTimeOfDayController.cpp:34-36`), the sun advances with the
-*world tick's* delta. Under synchronous ticking that is simulated time, which is what the team brief
-requires; under a real-time factor below 1.0 it is still simulated time, so a slowed exercise does not
-desynchronise the sun from the scenario. That is the correct behaviour and it is worth recording that it
-comes for free rather than needing a design.
+with **the achieved factor measured per wall-clock interval and reported, not merely targeted**.
+Collection needs only to observe it and to record it per session, because a run that did not hold its
+rate is a run whose captures are unevenly spaced in wall-clock time — a fact about the data, and the one
+thing an exercise must never hide.
+
+**One illumination consequence, and it comes for free.** `ACesiumTimeOfDayController::Tick` advances the
+solar clock by `DeltaSeconds · Rate / 3600` hours (`CesiumTimeOfDayController.cpp:34-36`), so the sun
+advances with the *world tick's* delta. Under synchronous ticking that is simulated time, which is what
+team brief §3a requires; under a real-time factor below 1.0 it is still simulated time, so **a slowed
+exercise does not desynchronise the sun from the scenario.** That is the correct behaviour and it is
+worth recording that it arrives without a design.
+
+#### What a channel costs on the wire, computed
+
+Every figure below is **computed from defaults read in the tree**, and is marked as computed rather than
+measured:
+
+- `--fixed-delta` defaults to 0.05 s and its help text reads "ticks are paced to wall-clock at this rate
+  (default 0.05 = ~20 fps / real time)" (`CarlaControlArgumentParser.py:68-74`) — **20 world ticks per
+  simulated second**, and the wall-clock pacing of ticks is already the tool's stated behaviour.
+- The server renders and streams every camera every tick; the client decimates **after
+  deserialisation**, dropping frames until `sim_time − last_capture ≥ 1/hz` (`FrameRecorder.cs:129-133`)
+  with `--record-hz` defaulting to 2.0 (`CarlaControlArgumentParser.py:512-518`). **Nineteen frames in
+  twenty cross the wire to be discarded** (§2.3).
+- A frame at the default 1280×720 (`CarlaControlArgumentParser.py:274-275`) is BGRA — the recorder
+  rejects a payload shorter than `w · h · 4` (`FrameRecorder.cs:140`) — so **3 686 400 bytes = 3.686 MB
+  per frame per camera** (computed).
+- A **channel** is RGB plus depth, both full-frame and co-posed (§3.2), so a channel carries two such
+  streams.
+
+Per wall-clock second, at real-time factor `f`:
+
+| | frames/s/camera | wire load per channel | captures/s/channel |
+|---|---|---|---|
+| **Today** — decimation is client-side | 20·f | **147.5·f MB/s** | 2·f |
+| **With `sensor_tick` set to the capture rate** (§2.3 — the engine exposes it, `SensorRig` never sets it, and whether it composes with synchronous ticking is **unmeasured**) | 2·f | **14.7·f MB/s** | 2·f |
+
+#### The one saturation measurement in the tree, and what it bounds
+
+The only saturation figure in the tree is a source comment, and it is a measurement: "With two camera
+streams saturating the connection each of those RPCs stalls for ~100-200 ms; left on the main loop they
+collapse it to ~1 fps" (`run_SCTMV.py:215-219`). **Two camera streams is one channel** (§3.2). So the
+single measurement we have says **one channel at `f = 1.0` already saturates the connection**, and the
+arithmetic above says that channel is putting 147.5 MB/s on it.
+
+**Inference, labelled as an inference:** take 147.5 MB/s at these defaults as *the measured saturating
+load* for this transport on this host, and budget in multiples of it. The absolute number is
+host-specific and the resolution scales it — at 1920×1080 a frame is 8.29 MB and every figure below
+multiplies by 2.25 — so **the ratio is what travels between hosts, not the megabytes.**
+
+| Configuration | wire load, as a multiple of the measured saturating load |
+|---|---|
+| 1 channel, `f = 1.0`, today | **1.0** — measured as saturating |
+| 2 channels, `f = 1.0`, today | 2.0 |
+| 2 channels, `f = 0.5`, today | **1.0** |
+| 4 channels, `f = 0.25`, today | **1.0** |
+| 1 channel, `f = 1.0`, with `sensor_tick` | 0.1 |
+| 4 channels, `f = 1.0`, with `sensor_tick` | 0.4 |
+| 10 channels, `f = 1.0`, with `sensor_tick` | **1.0** |
+
+#### The answer: what rate is sustainable, and with how many channels
+
+1. **Today, a live exercise at real time is one channel**, and one channel at detector-usable resolution
+   covers a 576 × 324 m swath — **0.64 % of the measured 29.0 km² sizing world** (§3.1) — whatever the
+   altitude. So a real-time exercise observes one site, and it must be *designed* around that: the
+   channel is placed on a declared area of interest at planning time exactly as a corpus channel is
+   (D8.5), and an exercise that expects the chain to notice something happening elsewhere is an exercise
+   that will fail for a reason that has nothing to do with anybody's model.
+2. **Channel count and rate trade linearly against each other through `f`**, and the trade costs no
+   truth (§11.3). Two channels at `f = 0.5`, or four at `f = 0.25`, sit on exactly the load one channel
+   at real time already occupies. That is the whole substance of the pacing ruling: **wall-clock rate is
+   the only currency a live exercise can spend to buy coverage.**
+3. **The caveat is worth ten times everything above.** Ninety per cent of the wire load exists only
+   because the decimation is client-side (§2.3). If `sensor_tick` composes with synchronous ticking, the
+   same connection carries **ten channels at real time instead of one** — 6.4 % of the sizing world
+   rather than 0.64 %. **That promotes §12.4 measurement 1 from a corpus-throughput question to the
+   gating measurement for the live exercise**, and it costs one spawn and one comparison of
+   `OcclusionEstimator`'s five pairing counters (`FrameRecorder.cs:53-69`).
+
+**One rate question that is not a wire question.** At 2 Hz on an orbiting channel, §3.3 measures that
+every static ground feature translates about **10.7 px between consecutive captures** — nearly two
+vehicle lengths at 518 m — because the boresight yaws at 1.5 °/s at the default 240 s revolution
+(`CarlaControlArgumentParser.py:610-614`). That is a property of the orbit and not of the pacing, and a
+**staring** channel does not pay it. An exercise that wants a higher effective live rate should consider
+staring before it considers spending wall clock, because it costs nothing and removes the dominant
+image-space motion.
 
 ### 11.2 The budget, photon to handover
 
-**The diagram is redrawn.** The earlier version carried a Detector, a Tracker and an EPoL service as
-participants, with an assessment returning to a viewer and a scoring sink at the end. Those lanes are
-outside this plan; what is drawn now ends where our obligation ends, at the handover, and the external
-side appears once as a boundary with nothing measured on it.
+**What is drawn ends where our obligation ends.** The earlier version carried a Detector, a Tracker and
+an EPoL service as participants, with an assessment returning to a viewer and a scoring sink at the end.
+Those lanes are outside this plan. The external side appears once, as a boundary with nothing measured
+on it, and the return path appears once, as a blob going into a file.
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant W as CARLA world (server)
-    participant B as Co-sim bridge
+    participant B as Co-sim bridge (owns the clock)
     participant R as Collection channel
-    participant H as Handover socket (OBSERVATION)
+    participant H as Emission socket (OBSERVATION)
     participant X as Truth writer (TRUTH root)
-    participant V as TAK viewer (operator)
-    participant C as External consumer
+    participant V as Operator picture (run operator)
+    participant C as External consumer (unknown)
+    participant T as Transcript sink (NEITHER root)
 
     Note over W,B: window opens: the sun is set during prewarm,<br/>before the camera is spawned (§4.7)
     B->>W: set_solar_date / set_solar_time / set_time_advance<br/>[once per window, never per tick]
     B->>W: spawn channels with the window's exposure profile
 
-    Note over W,B: tick N begins; the bridge owns the clock
+    Note over W,B: tick N begins; the bridge owns the clock and the<br/>real-time factor f, target and floor declared (§11.1)
     B->>W: apply poses for tick N
     B->>W: apply composed light state for tick N<br/>[same batch, no extra round trip — §4.5]
     W->>W: render RGB + depth (~1 frame)
     W-->>R: sensor frame, header carries pose + tick<br/>[t0]
     W-->>X: world-observer snapshot (poses, annotation state, solar block)
 
-    R->>R: decimate against sim time (FrameRecorder.cs:129-133)<br/>decode BGRA [~1-3 ms]
+    R->>R: decimate against SIMULATED time (FrameRecorder.cs:129-133)<br/>decode BGRA [~1-3 ms, estimated]
     R-->>X: truth sidecar + labels + coverage + solar policy/residual<br/>(TRUTH root — no path to H, D8.17)
     R->>H: CollectionFrame: image + pose + intrinsics<br/>+ radiometry + achieved solar [t1 = t0 + decode + transport]
-    H->>H: drop-oldest if the reader is behind;<br/>count the drop (§11.3)
-    R-->>V: OUR truth CoT, uid CARLA-TRUTH-<actor_id>, how="m-g"<br/>[separate endpoint, OFF by default in a handover — §11.4]
+    H->>H: outbound queue depth is the ONLY pacing input (§11.3);<br/>below the floor factor, drop-oldest and count it
+    H-->>B: queue depth [our own socket — no protocol with C]
+    R-->>V: pacing, per-channel drops, attachment state,<br/>coverage footprint, solar state (§11.4)
 
     Note over H,C: ===== THE BOUNDARY OF THIS PLAN =====
-    H-->>C: frames leave the process. What happens next<br/>is not built, not run and not measured here.
+    H-->>C: frames leave the process. Detect, track, model and report<br/>are not built, not run and not measured here.
+    C-->>T: IF anything is pushed back: an opaque blob,<br/>stamped and stored verbatim, never read (§11.6)
+    Note over T: T has NO outbound edge at all. A transcript is never<br/>merged into truth, supervision or coverage (D8.41).
 
     Note over W,H: our budget = t1 − t0, and every term in it is ours.<br/>Nothing downstream is timed, because nothing downstream is ours.
 ```
 
 **The measured terms are ours and they are small.** The recorder's decode and job hand-off happen on the
 stream thread with the encode moved to a bounded channel whose full mode is `DropWrite` so the stream
-reader never blocks (`FrameRecorder.cs:116-121`); at defaults nineteen of twenty frames are discarded
-before any of that (§2.3); and the solar read at capture time costs nothing, because it is a lock-free
-read of the world-observer cache (`FrameRecorder.cs:160-162`).
+reader never blocks (`FrameRecorder.cs:116-121`); the queue is sized `max(4, workers · 2)` with
+`workers = max(2, ProcessorCount / 2)` by default and every refused write is counted
+(`FrameRecorder.cs:115-121`, `:184-185`) — **the house pattern the emission socket copies**. At defaults
+nineteen of twenty frames are discarded before any of that (§2.3), and the solar read at capture time
+costs nothing, because it is a lock-free read of the world-observer cache (`FrameRecorder.cs:160-162`).
+The `~1-3 ms` decode figure is an **estimate, not a measurement**, and it is marked as such in the
+diagram.
 
-**What the earlier draft listed as "unmeasured — the dominant term" is now simply out of scope.**
-Detector inference time and model assessment time are a consumer's budget against a consumer's hardware.
-The only thing this plan owes them is a **stated capture interval and a stated drop policy**, so they
-know what rate they must meet and what happens if they do not (§11.3).
+**What the earlier draft listed as "unmeasured — the dominant term" is simply out of scope.** Detector
+inference time and model assessment time are a consumer's budget against a consumer's hardware. The only
+things this plan owes them are a **stated capture interval, a stated real-time factor and a stated drop
+policy** (§11.0, §11.1, §11.3), so they know what rate they must meet and what happens if they do not.
 
 **The light-state batch is the one new per-tick cost and it is bounded by design.**
 `SetVehicleLightStateCommand` rides the same `apply_batch` as the poses (§4.5), and
@@ -2926,28 +3125,127 @@ signal actually changes. The pattern to copy is `VehicleLightStage`'s, which emi
 on difference (`VehicleLightStage.cs:288-295`). This is the budget released by the fade's demotion
 (§2.6) being spent on something cheaper than what it replaced.
 
-### 11.3 When the consumer is slower than the world
+### 11.3 When the external chain cannot keep up — the ruling
 
-Three policies, and only one is right:
+**This is the genuinely new engineering question** (team brief §3c), and it is this section's to answer.
+Four candidates, and the brief names three of them; the fourth is the one the earlier draft had already
+refused and it is kept here so the comparison is complete.
 
-| Policy | Effect | Verdict |
+| Candidate | What it costs | Verdict |
 |---|---|---|
-| Back-pressure the world | the simulation stalls until the consumer catches up | **No.** It corrupts the run's own premise — the world is meant to be running — and under a synchronous world it silently changes the relationship between simulated and wall-clock time that §11.1 exists to control. **And it would move the sun**, since the solar clock advances on the world tick, so a stall would change the illumination as well as the pacing |
-| Drop the oldest pending frame | the consumer sees a sparser stream; the world is unaffected | **Yes**, with the drop counted |
-| Decouple with an unbounded queue | latency grows without bound; the consumer is reading a world that has moved on | No |
+| **Back-pressure the world** on the consumer | corrupts the run's own premise — the world is meant to be running; under a synchronous world it silently changes the relationship between simulated and wall-clock time that §11.1 exists to control; **and it moves the sun**, since the solar clock advances on the world tick (`CesiumTimeOfDayController.cpp:34-36`), so a stall changes the illumination as well as the pacing | **No, absolutely** |
+| **Let simulated time advance more slowly in wall-clock terms** (`f < 1`) | **no truth at all** — see below — and one thing that is not truth: wall-clock realism | **Yes, and first** |
+| **Drop the oldest pending frame** | the consumer sees a sparser stream; the world is unaffected; coverage records the gap | **Yes, second** |
+| **Run ahead and buffer** | latency grows without bound; the consumer is looking at a world that has moved on | **No** |
 
-**Decision: drop-oldest at the handover socket, with a per-sensor drop counter recorded in the session
-manifest.** This is the policy `FrameRecorder` already applies to its own encode queue
-(`FrameRecorder.cs:118`, counter at `:46`, `:184-185`), so it is the house pattern.
+#### Why slowing costs no truth, clause by clause
 
-**The consequence is recorded as a fact about the data rather than absorbed silently.** A dropped frame
-is a tick at which the sensor *was* covering a vehicle and the handover carried nothing. The coverage
-record therefore marks that (sensor, tick) as **covered but not delivered** — the camera saw it, the
-consumer never got it — which is a two-valued fact, not a judgement about anybody. It is only possible
-to record because coverage is written by the recorder, independently of whatever is downstream (§10.1),
-and it is the reason a live handover's coverage is still trustworthy when the link was not.
+The brief says this is "nearly free because truth is stamped in simulated time". That is right, and it is
+worth backing rather than asserting, because the whole ruling rests on it:
+
+- **Capture identity is simulated time.** `CaptureIdentity(Tick, SimTimeSeconds, RunId, ScenarioId,
+  Seed)` (`CaptureMetadata.cs:24-29`) is taken from the very sensor frame that produced the pixels
+  (`FrameRecorder.cs:179`), and the record's own doc comment explains why wall clock cannot serve
+  (`CaptureMetadata.cs:9-14`).
+- **The capture interval is simulated time.** The decimation gate is `t − _lastCaptureSimTime <
+  _periodSeconds` against the frame's own timestamp (`FrameRecorder.cs:129-133`), so the *simulated*
+  spacing of captures is invariant under `f`. A corpus collected at `f = 0.25` is the same corpus.
+- **The sun is simulated time.** `DeltaHours = DeltaSeconds · Rate / 3600`
+  (`CesiumTimeOfDayController.cpp:34-36`) under synchronous ticking, so a slowed world's sun stays
+  exactly where the scenario put it and 06 §4.5's declared-versus-achieved residual check is unaffected.
+- **The step ratios are simulated time.** The SUMO step, the world step and the capture rate are a fixed
+  ratio (team brief §5), and `f` does not appear in it.
+- **The only wall-clock quantities we emit are two, and neither is load-bearing**: `wall_time_utc`,
+  which §7.2 already marks as for the far side's latency accounting only and never as a join key, and
+  the filename stem, which is a local wall-clock string that nothing may pair on
+  (`FrameRecorder.cs:223-232`, D8.4).
+
+**A world that ticks slower is internally exact.** There is no truth field, no label, no coverage row
+and no manifest figure whose *value* differs between `f = 1.0` and `f = 0.25`. This is the property that
+makes slowing the first-choice response and it is why the response is nearly free.
+
+#### What slowing does cost, named plainly
+
+**Wall-clock realism, and nothing else.** If part of what an exercise is for is to see whether the chain
+keeps up at real time, a world that quietly slowed to let it has answered a different question. So
+slowing must be **bounded** and **visible**; unbounded and invisible, it would be the worst option on the
+list rather than the best.
+
+#### The ruling (D8.40)
+
+1. **A live exercise declares a target factor and a floor factor.** The target defaults to 1.0. The
+   floor defaults to 1.0 as well — that is, **no slowing unless somebody asked for it** — so an exercise
+   that is about real-time behaviour gets real-time behaviour by default and an exercise that would
+   rather keep every frame says so.
+2. **Between target and floor, the clock owner may slow, and the only input is the depth of our own
+   outbound queue.** Not a message from the consumer, not a rate they advertise, not an acknowledgement,
+   not a heartbeat. This is not fastidiousness. The moment the world's rate is a function of something a
+   consumer *sends*, an external project's latency becomes an input to our simulation, the run stops
+   being reproducible, and this plan has acquired a protocol with a party it knows nothing about.
+   **Observing the depth of our own socket requires no cooperation and no protocol, and that is exactly
+   what makes an arbitrary consumer substitutable** (D8.39).
+3. **At the floor, the policy switches to drop-oldest at the emission socket, with a per-sensor drop
+   counter recorded in the session manifest.** D8.22 is unchanged and this is the pattern `FrameRecorder`
+   already applies to its own encode queue (`FrameRecorder.cs:118`, counter at `:46`, `:184-185`), so it
+   is the house pattern. **The world never blocks on a consumer, at any factor.**
+4. **Running ahead and buffering is refused**, and for three separate reasons. First, it converts "live"
+   into "delayed by an amount we chose and did not state": the operator's picture and the consumer's
+   picture then differ by the buffer depth, and **end-to-end latency is one of the things an exercise
+   exists to observe**, so a buffer hides our own contribution to it inside a number we picked. Second,
+   the world's sun moves on while the consumer is still holding an older frame — the frame's own solar
+   record is still correct, but any report about it arrives about a scene the world has already left,
+   and an operator watching both cannot tell a slow chain from a deep buffer. Third, **a bounded buffer
+   is just the drop policy with extra latency in front of it**, which is strictly worse than the drop
+   policy alone; an unbounded one is the unbounded-queue option the earlier draft already refused.
+5. **Nothing is silent.** The achieved factor per wall-clock interval, the cumulative simulated-versus-
+   wall slip, the time spent below target, and the per-sensor drop count are all recorded in the session
+   record and all on the operator's picture while it runs (§11.4). **The silent-slip defect measured in
+   `SumoCotBridge.py:247-248` is the thing this clause exists to prevent.**
+
+#### Reconciling with `02_Use_Cases.md` UC-8, which appears to say the opposite
+
+UC-8's failure flow states that "a live exercise that silently slows the world is worse than one that
+visibly drops frames, because the observer cannot tell". **The operative word is *silently*, and clause
+5 is the removal of the silence rather than a contradiction of the objection**: the slowing is declared
+in advance, bounded by a floor, displayed while it happens and recorded afterwards. UC-8 also supplies
+the free confirmation, and it is worth keeping: under an advancing sun the solar clock tracks simulated
+time (`CesiumTimeOfDayController.cpp:34-36`), so **a world running below `f = 1.0` shows a sun visibly
+behind the exercise's own wall clock**, with no instrumentation whatsoever.
+
+#### What a drop is recorded as
+
+**A fact about the data rather than something absorbed silently.** A dropped frame is a tick at which
+the sensor *was* covering a vehicle and the emission carried nothing. The coverage record marks that
+(sensor, tick) as **covered but not delivered** — the camera saw it, the consumer never got it — which is
+a two-valued fact, not a judgement about anybody. It is only possible to record because coverage is
+written by the recorder, independently of whatever is downstream (§10.1), **and it is the reason a live
+exercise's coverage is still trustworthy when the link was not.**
 
 ### 11.4 The operator picture, and keeping truth off any feed a consumer sees
+
+**Two operator roles, and they must not share a surface.** The **run operator** drives the simulation and
+needs to see everything about it, including things no fielded system would know. The **exercised
+operator**, if there is one, is part of what the chain is producing reports *for* and must see only what
+a fielded operator would. Everything in the truth-separation rules below is about the second; the pacing
+picture is for the first.
+
+#### What the run operator sees while it runs
+
+| Panel | Contents | Why it is there |
+|---|---|---|
+| **Pacing** | target factor, floor factor, achieved factor over the last wall-clock interval, cumulative simulated-versus-wall slip | these are the numbers that say whether the exercise running is the exercise that was asked for (§11.1, §11.3 clause 5) |
+| **Per channel** | captures emitted, captures dropped at the socket, outbound queue depth as a fraction of capacity, last emitted tick | the drop policy is the second stage and must never be discovered after the fact (§11.3) |
+| **Attachment** | attached / not attached / detached at tick N, per connection — **derived from our own socket alone, with no protocol** | §11.5: we learn this without asking the far side anything |
+| **Illumination** | solar time, sun elevation, `advancing` and `rate` | the run operator owns the sun (§4.7). **These last two must never reach an exercised operator, the observation root or the PNG** (§9.7, D8.35) |
+| **Coverage** | the channel footprint drawn against the declared areas of interest, with §3.1's swath made concrete for this rig | a real-time exercise is one channel today (§11.1), and the operator must be able to see what it is *not* looking at |
+| **Transcript** | per source id: count of blobs received, total bytes, last receive time. **Never the content** | §11.6: we record it, we do not read it |
+| **Deliberately absent** | any figure of merit, any count of hits and misses, any agreement between a transcript and truth, any "the model found N of M" | D8.37. **This is the one place in the whole plan where a score would be added by accident**, because both streams are already in one process on a common tick base and the join is a few lines away |
+
+That last row is a design constraint on the operator surface, not a note: a panel that displays truth
+beside received output, side by side, with a common tick, has built the comparison whether or not it
+computes a number. **The operator picture shows our run; the reports are on the reports.**
+
+#### Keeping truth off any feed a consumer or an exercised operator sees
 
 Existing facts: the live feed is one CoT event per UDP datagram (`CotUdpEmitter.py:38-44`), truth events
 are built by `vehicle_telemetry_to_cot` with `uid_prefix="CARLA-TRUTH"` and `how="m-g"`
@@ -2956,18 +3254,19 @@ are built by `vehicle_telemetry_to_cot` with `uid_prefix="CARLA-TRUTH"` and `how
 ignores unknown detail children", which is why `_carla`, `_solar` and `_capture` already ride the feed
 (`CotUdpEmitter.py:131-167`).
 
-**The earlier draft's ruling that an EPoL assessment should ride the feed as a `<_epol>` detail child is
-withdrawn**, because this pipeline emits no assessments. If an external consumer wants their output on a
-TAK feed, doc 09 §3's `CARLA-DET-<track_id>` / `how="m-f"` identity and doc 09 §5's unknown-detail-child
-extension point are there for them to use, and doc 20 decision 9's refusal to overload the CoT
-affiliation applies to their output as it does to ours. **That is a note for them, not a stage for us.**
+**The earlier draft's ruling that an EPoL assessment should ride the feed as a `<_epol>` detail child
+remains withdrawn**, because this pipeline emits no assessments and does not re-broadcast anyone else's.
+If an external consumer wants their output on a TAK feed, doc 09 §3's `CARLA-DET-<track_id>` /
+`how="m-f"` identity and doc 09 §5's unknown-detail-child extension point are there for them to use, and
+doc 20 decision 9's refusal to overload the CoT affiliation applies to their output as it does to ours.
+**That is a note for them, not a stage for us.**
 
 What *is* ours, and survives unchanged:
 
 - **Truth does not ride any feed a consumer or an exercised operator sees.** Truth on that feed is a
   leak if the operator is part of what is being exercised, and it is a confusion even when they are not:
   two events for one vehicle, one exact and one estimated. **Decision: truth goes to its own endpoint;
-  in a live handover the truth feed is off by default and turning it on is a recorded choice.** The
+  in a live exercise the truth feed is off by default and turning it on is a recorded choice.** The
   switch is the same `--tak-host`/`--tak-port` mechanism, pointed elsewhere. This is the half of the
   earlier D8.23 that is about our data, and it is the half
   [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md) cites for `telemetry.truth_endpoint`.
@@ -2986,6 +3285,89 @@ What *is* ours, and survives unchanged:
   fusion, per-sensor without it), so the corpus publishes coverage **both ways**, per sensor and unioned
   (doc 20 decision 15), and a consumer picks the one matching what they did. That removes the earlier
   draft's blocking dependency: nothing we ship has to wait for a fusion stage that was never ours.
+
+### 11.5 How an arbitrary consumer attaches, and one illustrative adapter
+
+**The attachment is specified as properties of what our side offers, and nothing is required of the far
+side beyond reading bytes.** That is the whole design, and it is short on purpose: every additional
+requirement we place on a consumer is a requirement a substitute consumer might not meet.
+
+| Property | What it means | Why |
+|---|---|---|
+| **One emission endpoint per capture session**, carrying every channel, each record tagged with its `sensor_id` | a consumer opens one connection, not one per channel | otherwise the attachment becomes a function of the rig, and the rig changes per run (§3.3) |
+| **Push, one direction, no acknowledgement, no request, no handshake beyond connecting** | we never wait for the far side to say anything | anything else is a protocol with a party we know nothing about (team brief §3c) |
+| **Late join is legal**, and delivers from the moment of attachment | a consumer attaching at tick N receives from tick N and nothing before it | an exercise that has to be restarted because somebody connected late is an exercise nobody will run twice |
+| **Detach and re-attach are legal, recorded, and unremarkable** | the world does not notice and does not pause | the world never blocks on a consumer at any factor (D8.22, §11.3) |
+| **Zero consumers is a normal state** | an exercise with nothing attached is a valid run that produces a valid session record and valid coverage | the truth writer and the coverage writer are independent of anything downstream (§10.1) — the same property that makes a live exercise's coverage trustworthy when the link was not |
+| **The record is the one the corpus writes** (§7.2), line-delimited | one reader serves both products | D8.1, D8.13 |
+| **No content negotiation** | we emit one record shape, and that is our whole position | a consumer that wants another shape writes an adapter, which is outside the boundary |
+
+**How we know the attachment state without a protocol.** From our own socket: a connection exists or it
+does not, and the outbound queue is draining or it is not. Both are observations of our own end, and
+neither requires the far side to tell us anything — which is the same principle as §11.3 clause 2 and the
+reason the operator's Attachment panel can be populated for a consumer we know nothing about.
+
+**One illustrative adapter, outside the boundary, and not part of this design.** It is here purely so the
+section reads concretely. It is an example of *somebody else's* work, it is not a deliverable, nothing in
+this plan depends on it existing, and a completely different one would change nothing above:
+
+> **Illustrative only — outside the boundary of this plan.** A small process attaches to the session
+> endpoint, decodes each record's image, hands the pixels to whatever the detector's own API happens to
+> want, and forwards whatever the detector returns to whatever the model service's own API happens to
+> want — carrying our `(session_id, sensor_id, tick)` through untouched as an opaque token, so that
+> §8.5's supervision-transfer rule stays applicable downstream (§7.3 property 1). It belongs to whoever
+> owns the detector. **The moment it acquires a specified schema in a document of ours, it has been
+> over-specified.**
+
+The three things such an adapter needs from us are the three §7.2 already guarantees: a self-describing
+frame, a stable identity, and a stated interval. Nothing else about it is our business.
+
+### 11.6 The transcript: an opaque blob, recorded and never read
+
+[`02_Use_Cases.md`](02_Use_Cases.md) UC-8 establishes the transcript as a use case and its **D2.24** as a
+decision — a live exercise feeds and records; it does not judge. **This section fixes its shape, and the
+shape is deliberately dumb** (team brief §3c).
+
+| | |
+|---|---|
+| **What it is** | a record that something arrived, and exactly what arrived |
+| **Container** | an **opaque blob**, carrying a **receive timestamp** (the tick current when it arrived, plus wall time), a **source id** (which endpoint it came from — assigned by us, never claimed by the sender), and a **content type** (as declared by the sender, recorded and *not* validated) |
+| **What we do with the bytes** | **store them verbatim, and nothing else.** We do not parse them, we do not validate them against a schema, we do not count what is inside them, we do not index them by anything inside them, and we do not act on them |
+| **Where it lives** | its own artifact, in **neither root** — the same placement as §12's probe workspace and for the same reason: it is not corpus content, and its provenance is not ours to attest |
+| **What it may never do** | enter a truth sidecar, a label record, a coverage row or a manifest's supervision block; be joined to truth; be counted; be compared; be scored (§3b, D8.37, D8.41) |
+
+**Counting arrivals is not reading them.** §11.4's transcript panel shows, per source id, how many
+blobs arrived, how many bytes, and when the last one did. None of that requires opening one, and the
+prohibition above is on counting *what is inside* a blob — detections, tracks, findings, anything — not
+on noticing that bytes turned up.
+
+**Why "content type, recorded and not validated".** Validating it would mean having an opinion about
+their formats, which is exactly the thing we do not have. **Recording an unrecognised content type
+verbatim is correct behaviour and not a degraded mode**, and a transcript full of blobs we cannot
+interpret is a complete and successful transcript.
+
+**Confirming the existing design against that rule, as the clarification asks.** Three things were
+already right; one needed simplifying:
+
+- **Already right:** D8.23's withdrawal of the `<_epol>` CoT detail child stands — we emit no
+  assessments and we re-broadcast nobody else's.
+- **Already right:** §9.6's "no back-channel" holds for *the pipeline* — the transcript terminates at a
+  file and nothing reads it back. Its cell is amended to say that explicitly rather than to imply that
+  nothing may arrive.
+- **Already right:** §10.1's artifact table already excludes `tracks.jsonl`, `assessments.jsonl`,
+  `association.jsonl` and `report.json`. Those were *parsed, structured* forms of received output, which
+  is precisely what §3c forbids. **The transcript replaces all four with one opaque sink** — and that is
+  a simplification, not an addition.
+- **Simplified:** [`02_Use_Cases.md`](02_Use_Cases.md) UC-8 step 4 describes the return side as "tracks
+  and assessments, verbatim". *Verbatim* is right; naming the two kinds is one step further than we are
+  entitled to go, **because we cannot tell them apart without parsing them.** The transcript records
+  blobs and does not classify them. The distinction would matter only to somebody who later writes a
+  reader, and that somebody is not us.
+
+**The listener is off by default.** Receiving anything at all requires the far side to push to us, which
+requires a protocol, which §11.5 declines to demand of anyone. The transcript endpoint therefore exists
+only when a run enables it, and **an exercise with no transcript is the normal case, not a degraded
+one.**
 
 ---
 
@@ -3156,7 +3538,12 @@ carried forward from the first draft; the rest are new and every one of them is 
    `sensor_tick`, record, and compare `OcclusionEstimator`'s five pairing counters
    (`FrameRecorder.cs:53-69`) against a run without it. If pairing degrades, server-side decimation is
    unavailable and the multi-channel throughput budget is set by the world tick rate, which
-   [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md) needs to know.
+   [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md) needs to know. **Promoted by the third
+   redraft: this is now the gating measurement for the live exercise, not only a corpus-throughput
+   question.** §11.1's arithmetic says it is worth a factor of ten in channels at real time — one
+   channel or ten on the same connection, 0.64 % or 6.4 % of the sizing world — because ninety per cent
+   of the wire load exists only because the decimation is client-side (§2.3). It remains one spawn and
+   one comparison of counters that already exist.
 2. **Does a teleported vehicle blur?** (§6.5.) Method: capture the same vehicle at the same speed under
    physics drive and under per-tick `set_transform`, at the same pose, and difference the images. The
    prediction to test against is now specific: `motionBlurMax = 5` caps the smear at 64 px at 1280 px
@@ -3328,6 +3715,9 @@ flowchart LR
         U16(["run the CORPUS FITNESS PROBE<br/>before collecting at scale (§12)"])
         U17(["publish what the corpus<br/>does NOT contain (§10.2)"])
         U18(["run the anti-leak validator<br/>and sign the release (§9.4)"])
+        U19(["watch the PACING: target, floor,<br/>achieved factor, slip (§11.1, §11.3)"])
+        U20(["watch per-channel DROPS,<br/>queue depth and attachment (§11.4)"])
+        U21(["enable the TRANSCRIPT and see<br/>that blobs arrive — never what<br/>is in them (§11.6)"])
     end
 
     CONSUMER --> U1
@@ -3347,6 +3737,10 @@ flowchart LR
     STEWARD --> U12
     OPERATOR --> U10
     OPERATOR --> U15
+    OPERATOR --> U19
+    OPERATOR --> U20
+    OPERATOR --> U21
+    U19 --> U20
     AUTHOR --> U11
     AUTHOR --> U8
     AUTHOR --> U14
@@ -3363,6 +3757,14 @@ flowchart LR
 as a diagram. The steward's four use cases (U13, U16, U17, U18) are all gates on the data, and not one
 of them touches a model: a leakage probe on the dataset, a fitness probe with a pinned instrument, a
 statement of absences, and a mechanical leak check.
+
+**U19, U20 and U21 are the live exercise's operator surface, and they belong to the run operator alone**
+— not to the exercised operator, who must see only what a fielded operator would (§11.4). All three are
+observations of *our own* run: the rate we are holding, the frames we emitted or dropped, and the fact
+that blobs arrived. **None of them shows what a consumer concluded**, and U21 deliberately stops at a
+count and a timestamp: the operator sees *that* a transcript is filling, never what is in it (§11.6,
+D8.41). `U19 --> U20` because the two are read together — a run below its target factor and a run
+dropping frames are the two halves of one question, and D8.40 orders them.
 
 **U4 stays with the consumer alone**, and that is doc 20 decision 5's practical consequence: the onset
 is not a property of the corpus, so the corpus publishes all three (§10.4) and whoever builds a training
@@ -3381,11 +3783,19 @@ after.
 
 ## 15. Decisions
 
-**No decision is renumbered.** `01`, `02`, `11` and `12` cite `D8.3`, `D8.4`, `D8.17`, `D8.19`, `D8.23`
-and `D8.29` by number, and `00` cites `D8.29`, so every number keeps its identity. Four rows carry an
-*(Amended — illumination)* mark from the previous redraft; **twelve now carry an *(Amended — scope)*
-mark**, and the amendment is written inside the row so a reader holding an earlier citation can see
-exactly what moved and why. **D8.37 and D8.38 are new.**
+**No decision is renumbered, in any redraft.** `01`, `02`, `11` and `12` cite `D8.3`, `D8.4`, `D8.17`,
+`D8.19`, `D8.23` and `D8.29` by number, and `00` cites `D8.29`, so every number keeps its identity. Four
+rows carry an *(Amended — illumination)* mark from the first redraft; twelve carry an *(Amended —
+scope)* mark from the second; **D8.13 and D8.22 now carry a second amendment from the third redraft
+(team brief §3c)**, written inside the row so a reader holding an earlier citation can see exactly what
+moved and why. **D8.37 and D8.38 were new in the second redraft; D8.39, D8.40 and D8.41 are new in the
+third**, and no existing decision was replaced by any of them.
+
+**§11 gained subsections and renumbered none.** `§11.1` is still pacing, `§11.2` still the budget,
+`§11.3` still the behaviour when the far side is slower, and `§11.4` still the operator picture and the
+truth separation. `§11.0` is inserted ahead of them because the emission guarantees needed a citable
+anchor, and `§11.5` and `§11.6` are appended. Nothing that was numbered before has a different number
+now.
 
 **Two consequences for sibling sections, stated here because they are the only places a sibling's text
 is now wrong:**
@@ -3394,10 +3804,13 @@ is now wrong:**
 |---|---|---|
 | [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md) `roots.score` and validation rule 17 | three export roots, none containing another | **two** roots, `roots.observation` and `roots.truth`, still required distinct and non-nested. **Closed by the integration lead 2026-09-18**: `roots.score` removed from the toggle table, the third root removed from the artifact diagram and its accompanying note, and rule 17's message now cites two roots (§3.5, D8.17, [`04`](04_Contracts.md) D4.26) |
 | [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md) `:1110` | "the third is written by the evaluation…" | there is no third root; the equivalent surface is the **release partition** and the held-back manifest digest (§3.5, §9.4 mechanism 4) |
+| [`02_Use_Cases.md`](02_Use_Cases.md) UC-8 step 4 | the return side records "tracks and assessments, verbatim" | **"blobs, verbatim."** *Verbatim* is right and stays; naming the two kinds is one step past what we are entitled to, because we cannot tell them apart without parsing them, which D8.41 refuses. A container with a timestamp, a source id and a content type, and no classification |
+| [`02_Use_Cases.md`](02_Use_Cases.md) UC-8 failure flow | "a live exercise that **silently** slows the world is worse than one that visibly drops frames" | **still true, and now satisfied rather than contradicted.** D8.40 slows only between a declared target and a declared floor, displays the achieved factor and the slip while it runs, and records both — so the slow is never silent. The ordering is slow-then-drop, not drop-only (§11.3) |
+| [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md) | it has no pacing controls | a live exercise needs **three**: a target real-time factor, a floor real-time factor, and a transcript endpoint that is **off by default**. §11.4's panel list is what the surface has to be able to show. Stated as a dependency, not designed here (§11.1, §11.3, §11.6) |
 
 | # | Decision |
 |---|---|
-| **D8.1** | **The corpus and the live handover are one chain with two ends.** *(Amended — scope.)* Everything from photons to the handover record is shared; they differ only in transport, pacing and what illumination is for. **The handover is defined as a record, never as a directory**, so one contract serves both products and a consumer writes one reader. The earlier wording, which made this a property of a detect-and-track *stage*, is replaced: there is no such stage here (§1, §7.2) |
+| **D8.1** | **The corpus and the live exercise are one chain with two ends.** *(Amended — scope.)* Everything from photons to the handover record is shared; they differ only in transport, pacing and what illumination is for. **The handover is defined as a record, never as a directory**, so one contract serves both products and a consumer writes one reader. The earlier wording, which made this a property of a detect-and-track *stage*, is replaced: there is no such stage here (§1, §7.2) |
 | **D8.2** | **The unit of collection is a channel, not a camera** — `(sensor_id, rgb, depth?, seg?)`, co-posed. The depth camera is mandatory for a corpus because the observability accounting depends on it, and its captures are **truth artifacts** (§3.2, §7.4) |
 | **D8.3** | **Multi-camera decision, part one — where world-scoped state lives: published to the server, taking doc 20 decision 11's first branch, and specifically on the world-observer snapshot** — tick-stamped, lock-free, snapshot-swapped, zero-RPC, in the manner `_solar` already is (`CarlaClient.cs:169, 1855, 1991`). Consistent with [`01_Architecture.md`](01_Architecture.md) D1.10. **Correctness must not depend on which process a recorder runs in** (§3.4) |
 | **D8.3a** | **Multi-camera decision, part two — how many processes: one, by default.** Doc 20 §7.3's premise that a second camera needs a second client process is wrong: a recorder already opens two streams (`FrameRecorder.cs:112-113, 125-126`), the transport holds an unbounded list (`CarlaClient.cs:1748-1754`), and the limit is the shim's `World._recorder` field over a `Client` that returns a fresh `World` per call (`carlanet/__init__.py:1908, 1924, 2285, 2295`). One process gives every channel the same world-observer snapshot, so a per-camera `<_supervision>` **or `_solar`** disagreement at one tick becomes impossible rather than merely prohibited. Moving a channel out is then a throughput decision, not a correctness one (§2.2, §3.4) |
@@ -3410,7 +3823,7 @@ is now wrong:**
 | **D8.10** | **Fabricated motion is labelled.** *(Amended — scope.)* Every vehicle carries `pose_source` ∈ `simulated` \| `interpolated` \| `held` per capture. This is a **label-accuracy declaration**: only a `simulated` pose is exact, and the corpus publishes the interpolation rule and a stated positional bound for the others, so a consumer knows the precision of each label rather than assuming they are all equal (§6.4) |
 | **D8.11** | **Recorded truth speed must describe the motion in the pixels.** [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) **D3.5** fixes zero velocity at source and this section depends on it; what this section adds is the consistency requirement, because D3.5 reports SUMO's interpolated speed while D3.6 derives the pose from linear along-lane interpolation. Reported speed and rendered pose must agree to a stated tolerance; failing that the recorder derives speed from the pose using the pattern it already applies to the platform (`FrameRecorder.cs:166-174`); and both figures are carried so a disagreement is visible. Truth acceleration is not trustworthy at SUMO-step boundaries (`WorldObserver.cpp:264-277`), so those frames are flagged and the corpus documents the limitation rather than shipping a field that is silently wrong one frame in twenty (§6.4) |
 | **D8.12** | **The observation handover carries imagery plus collection metadata and never truth.** *(Amended — scope.)* The corpus may publish a bare-earth surface beside the imagery — a legitimate prior a real exploitation chain has — and may never publish the simulator's depth capture there, because it is a per-frame measurement of the scene's contents. What a consumer does with the ray is theirs (§7.2, §7.4) |
-| **D8.13** | **Line-delimited JSON, one record per line, is the recommended handover shape, and CoT is a display projection rather than an interchange** — a CoT event cannot carry a track's history or its coast state. *(Amended — scope: this is now a recommendation to a consumer and the shape our own stream uses, not a specification of a stage we run)* (§7.3) |
+| **D8.13** | **Line-delimited JSON, one record per line, is the shape *our own* stream uses, and CoT is a display projection rather than an interchange** — a CoT event cannot carry a track's history or its coast state. *(Amended twice — scope, then §3c: it is no longer offered as a recommendation for a consumer's output either. We state what we emit; their shape is theirs, and §7.3's `Detection`/`Track` schema is cut for the same reason)* (§7.3, §11.0, §11.5) |
 | **D8.14** | **Truth is emitted so that it is associable, and the association rule is published rather than executed.** *(Amended — scope.)* We guarantee the format: per tick, positioned, timed, boxed, in the frame's own geometry, projected by the label writer, with no identity a track could borrow (§8.1). We publish the rule — compare in image space, gate on a radius scaled by apparent size, assign globally and not greedily, record the residual and the runner-up margin per transferred label (§8.2). **We do not perform the association**, because it needs model output this pipeline never sees (§8.1, §8.2, §8.5) |
 | **D8.15** | **What survives of the association-quality block is label quality, and four of its fields are now ours and need no detector.** *(Amended — scope.)* `truth_density` → **`truth_neighbour_count`** and `margin` → **`truth_separation_px` / `truth_separation_norm`** are re-derived against the nearest *other truth vehicle* and computed at write time from the label record alone, so **the corpus can flag its own ambiguous labels before release**; `occlusion_at_assignment` and `signature_at_assignment` were always label attributes and revert to plain `occlusion` and `visible_signature`. `residual_px`/`residual_norm` and `dominant_truth_fraction` survive as **published rules** with stated thresholds, computed by whoever transfers supervision. **`assigned_fraction` and `switch_count` are removed** — they are per-track recall and tracker performance, which are model metrics (§8.3) |
 | **D8.16** | **Every truth row states why it is not in the pixels, and the corpus never charges anybody for anything.** *(Amended — scope.)* Each row carries `observability_level` and `visible_signature`, which between them distinguish out of frame, too small, hidden past the cutoff, truncated, and **present but unlit** (§8.4). The unlit case is not a corner case: the sizing scenario's overnight population is dominated by 17 parked guards (10 §3.1.3, measured). The corpus also records `shadow_px` per vehicle, so a displacement along the sun's azimuth is legible rather than mysterious. **What the earlier decision called adjudication — deciding what to charge a detector for — is removed** (§2.6, §8.4) |
@@ -3420,16 +3833,16 @@ is now wrong:**
 | **D8.19** | **Observability is accounted at nested levels, published per sensor and unioned**, per doc 20 §2.5 and decision 15. *(Amended — illumination, then scope.)* There are **five** levels: rendered, in-frustum, resolvable, unoccluded, **illuminated**. The first four are illumination-independent by construction and the fifth is not, which is why they are separated. A capture whose occlusion could not be paired is excluded from the unoccluded count entirely, and a capture with no solar or radiometric record is excluded from the illuminated count — never counted as lit. **The corpus publishes this accounting as a description of itself**, including the count of authored intervals with an empty span and the level at which each was lost; what anybody computes over it is theirs (§10.2) |
 | **D8.20** | **`unlabelled` is not a negative; `nominal` is an asserted negative; and the corpus says so in the artifact.** *(Amended — scope.)* `annotated` asserts the behaviour occurred, `nominal` asserts it did not — the hard negatives doc 20 §2.7 calls the scenario system's unique product — and `unlabelled` asserts nothing at all. Collapsing the last two manufactures false labels out of silence, which is why the distinction is published in `vocabulary.json` rather than only in this plan (§9.5, §10.3) |
 | **D8.21** | **The corpus emits all three interval onsets and picks none.** *(Amended — scope.)* Declared, committed and observed — the three names survive the change of authoring surface from OpenSCENARIO to SUMO with re-seated definitions (06 §3.3). An absent onset is recorded as absent with a stated reason and is **never silently substituted**, since a quiet fallback mixes two labelling conventions inside one field. The manifest carries the SUMO step, so the quantisation floor on every temporal label is visible in the artifact (§10.4) |
-| **D8.22** | **In a live handover the world never blocks on the consumer.** *(Amended — scope.)* Drop-oldest at the handover socket with a recorded per-sensor drop count — the pattern `FrameRecorder` already uses for its own encode queue. A dropped frame is recorded in coverage as **covered but not delivered**, which is a two-valued fact about the link and not a judgement about anybody; it is recordable only because coverage is written by the recorder, independently of anything downstream. Back-pressuring the world would also move the sun, since the solar clock advances on the world tick (§11.3) |
-| **D8.23** | **Truth rides its own endpoint and is off by default in a live handover; the CoT affiliation is never overloaded.** *(Amended — scope: narrowed to the half that is ours.)* The earlier ruling that an EPoL assessment should ride the feed as a `<_epol>` detail child is **withdrawn**, because this pipeline emits no assessments. What stands is the separation — truth on a viewer's feed is a leak when the operator is part of what is being exercised and a confusion when they are not — and doc 20 decision 9's refusal to encode a label in the CoT type, which §5.6 measures being violated today by `affiliation_by_type` in the largest authored scenario. `_solar` on the feed is fine; `advancing` and `rate` are not (§11.4) |
-| **D8.24** | **Coverage is published both per sensor and unioned, so a consumer's fusion choice does not change what our record means.** *(Amended — scope.)* The earlier decision made a multi-channel live handover unshippable until a fusion stage existed. Fusion is a consumer's design problem. What is ours is that fusing changes what "observed" means (doc 20 §7.6), so the corpus carries both forms per doc 20 decision 15 and the consumer picks the one matching what they did. **The blocking dependency is removed** (§11.4) |
+| **D8.22** | **In a live exercise the world never blocks on the consumer.** *(Amended twice — scope, then §3c: this decision now states only the never-block half, and **D8.40** orders the response.)* Drop-oldest at the emission socket with a recorded per-sensor drop count — the pattern `FrameRecorder` already uses for its own encode queue (`FrameRecorder.cs:118`, `:46`, `:184-185`). A dropped frame is recorded in coverage as **covered but not delivered**, which is a two-valued fact about the link and not a judgement about anybody; it is recordable only because coverage is written by the recorder, independently of anything downstream. Back-pressuring the world would also move the sun, since the solar clock advances on the world tick (§11.3) |
+| **D8.23** | **Truth rides its own endpoint and is off by default in a live exercise; the CoT affiliation is never overloaded.** *(Amended — scope: narrowed to the half that is ours.)* The earlier ruling that an EPoL assessment should ride the feed as a `<_epol>` detail child is **withdrawn**, because this pipeline emits no assessments. What stands is the separation — truth on a viewer's feed is a leak when the operator is part of what is being exercised and a confusion when they are not — and doc 20 decision 9's refusal to encode a label in the CoT type, which §5.6 measures being violated today by `affiliation_by_type` in the largest authored scenario. `_solar` on the feed is fine; `advancing` and `rate` are not (§11.4) |
+| **D8.24** | **Coverage is published both per sensor and unioned, so a consumer's fusion choice does not change what our record means.** *(Amended — scope.)* The earlier decision made a multi-channel live exercise unshippable until a fusion stage existed. Fusion is a consumer's design problem. What is ours is that fusing changes what "observed" means (doc 20 §7.6), so the corpus carries both forms per doc 20 decision 15 and the consumer picks the one matching what they did. **The blocking dependency is removed** (§11.4) |
 | **D8.25** | **Doc 20 §11 question 1 is a question about our corpus, answered by a two-tier fitness probe, and it sequences first.** *(Amended — scope.)* Tier A — the in-frustum / resolvable / unoccluded span of an annotated interval, computed by a reader over sidecars today's recorder already produces — **needs no detector, no SUMO and nothing external at all**, and bounds the answer at every illumination simultaneously. Tier B applies **one stock detector, pinned by version and weights digest, as an instrument** and reports the longest single track covering the interval, the interval's detection continuity, and the track's `dominant_truth_fraction`. **It emits no figure of merit for the detector**: no precision, no recall, no F1, no comparison between instruments. Its outputs set our altitude, our field of view and our channel count before any corpus is collected (§12) |
-| **D8.26** | **The corpus uses a fixed, manual, per-window exposure, chosen from a named EO profile set, and recorded per capture.** Auto-exposure is permitted only in a live handover and only when recorded as such. Two independent reasons: it makes the exposure a function of the scene's content, which is what is being detected; and it partially cancels the illumination covariate the corpus is stratified by, so two windows at different sun elevations can produce similar pixel statistics. Doc 13 §5 reached the same conclusion from determinism (§4.2) |
+| **D8.26** | **The corpus uses a fixed, manual, per-window exposure, chosen from a named EO profile set, and recorded per capture.** Auto-exposure is permitted only in a live exercise and only when recorded as such. Two independent reasons: it makes the exposure a function of the scene's content, which is what is being detected; and it partially cancels the illumination covariate the corpus is stratified by, so two windows at different sun elevations can produce similar pixel statistics. Doc 13 §5 reached the same conclusion from determinism (§4.2) |
 | **D8.27** | **Exposure is a published, per-run collection parameter, and the profile set is named for illumination regimes rather than for stock towns.** Today the only lever is `post_process_profile` over four files spanning EV100 +12.32 to −1.06 (measured), applied at spawn (`ActorBlueprintFunctionLibrary.cpp:1369-1381`) and unrecorded; the engine-side setters are complete and unpublished (`SceneCaptureSensor.h:237-393`). Publishing them is an additive change to one function and a rebuild is not a cost (§2.9, §4.2) |
 | **D8.28** | **Every capture records its own radiometry on the OBSERVATION side, including a digest of the profile the server actually loaded.** The name the client asked for is not evidence: a missing profile file fails silently and the return value is discarded (`ActorBlueprintFunctionLibrary.cpp:1376-1380`). **A capture with no radiometric record fails the session**, on the same principle as a capture with no `_solar` element (§4.8) |
 | **D8.29** | **Night capture is not viable today as a detector corpus, and low-sun capture is where the illumination axis is built.** The chain is broken at every link: no light below the horizon (`CesiumSunSky.cpp:59, 82, 86`), no artificial lights anywhere in the tree, tiles with daytime radiance baked in (doc 13 §4), a clear-sun exposure, and an 8-bit tonemapped product in which under-exposure is not recoverable (`PngEncoder.cs:37-38`). At the sizing site the 23:00 sun is 37° to 76° below the horizon in every season (computed). **What may be viable is a corpus of vehicle lamps against a dark field — a different task, and it must be named as one.** Doc 13's Phase 2 moon light is the first phase that makes a night vehicle detectable at all; Phase 1 alone produces a readable picture and no additional detections (§4.6) |
 | **D8.30** | **A session never takes its illumination from the host clock.** `--date` currently defaults to `datetime.now()` (`WorldBuilder.py:226-230`), and at the sizing site the seasonal spread at a fixed hour is 21.4° of sun elevation and a factor of fourteen in shadow length (computed). The epoch belongs to [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md); the collection-side requirement is that no capture's light is a function of the day somebody ran it (§2.10, §4.1) |
-| **D8.31** | **The default solar policy for a corpus is frozen at the window's opening instant, one window per run.** A sweep comparing behaviours must hold illumination constant; a twenty-minute window at rate 1.0 sweeps 4.5° of elevation at this latitude (computed), which at low sun is most of a stratum; a frozen policy makes 06 §4.5's residual check decisive rather than merely indicative; and it removes the mid-session exposure problem instead of managing it. **Advance is correct in exactly two cases** — a window whose subject *is* a transition, and a live handover long enough that a frozen sun would be visibly wrong. When advancing, the rate is bounded by the stratum width, and the arithmetic is stated rather than a number baked in (§4.7) |
+| **D8.31** | **The default solar policy for a corpus is frozen at the window's opening instant, one window per run.** A sweep comparing behaviours must hold illumination constant; a twenty-minute window at rate 1.0 sweeps 4.5° of elevation at this latitude (computed), which at low sun is most of a stratum; a frozen policy makes 06 §4.5's residual check decisive rather than merely indicative; and it removes the mid-session exposure problem instead of managing it. **Advance is correct in exactly two cases** — a window whose subject *is* a transition, and a live exercise long enough that a frozen sun would be visibly wrong. When advancing, the rate is bounded by the stratum width, and the arithmetic is stated rather than a number baked in (§4.7) |
 | **D8.32** | **Vehicle light state is composed from SUMO's motion signals and the world's illumination, and from nothing else.** SUMO sets only `BRAKELIGHT` and the blinkers (`MSVehicle.cpp:4255-4257`, `:6836-6853`) and has no notion of time of day, so headlights can only come from the solar state; the only automatic-headlight logic in the tree is gated on CARLA weather, which is inert here (`VehicleLightStage.cs:228-254`, `CarlaServer.cpp:611-612`). **The composition may never read a supervision state, an anomaly flag, an `instance_id` or a `vType` name**, and emergency lights are permitted only for a vehicle class that also occurs in the nominal population — because at night the lamp is the entire signal, so a leak there is not a bias but the whole feature (§4.5) |
 | **D8.33** | **At low light a label means something different, and the record says which.** *(Amended — scope.)* Each label carries `light_state`, `lit_face_px`, `visible_signature` ∈ `body` \| `body_and_lamps` \| `lamps` \| `none`, and `shadow_px`. A vehicle with `visible_signature = none` is **in truth and in no pixel**, and the corpus states that explicitly rather than leaving a consumer to read it as a labelling error; it is not a rare case — the sizing scenario's overnight population is dominated by 17 parked guards (10 §3.1.3, measured). **A corpus that does not say which of its truth rows are unseeable is a trap.** All four fields are **truth** and never enter the observation root (§5.1, §5.8, §9.3) |
 | **D8.34** | **When the signature is a lamp, the label's comparison point moves to the lit face and the published rule's gate scales on lamp separation.** *(Amended — scope.)* Headlamps sit at the front face and brake lamps at the rear, ±2.25 m on a 4.5 m vehicle, which is **±5 px at the working GSD with the sign flipping by aspect** — so comparing against the body centre produces a bimodal, aspect-dependent displacement that is an artefact of CARLA's truth convention. **This is a label-quality defect of ours, not a model defect**: publishing `lit_face_px` fixes our own labels instead of leaving a consumer to inherit a bias with our name on it. Both comparison points travel with the label so neither convention is ever silently mixed (§8.7) |
@@ -3437,6 +3850,9 @@ is now wrong:**
 | **D8.36** | **The corpus is stratified by illumination, and the behaviour-hour confounder is measured and published rather than assumed away.** *(Amended — scope.)* Strata are bands of `sun_elevation_deg`, `relative_sun_azimuth_deg`, `exposure_ev100` and `signature_mix`, not clock hours — because the same declared hour spans 21.4° of elevation across the year (measured). **The corpus publishes its own composition per stratum**, and a corpus describing five sun elevations with one pooled figure is describing an average of five datasets. The confounder is detected by three probes **on the dataset**: stratum-conditioned prevalence; the **leakage probe**, an illumination-only predictor that sees no imagery and measures whether the label has leaked into a covariate — **explicitly not a baseline and not a floor for anything to beat**; and a stratum-held-back release axis, which makes an out-of-stratum check possible without us performing one. It is controlled by four measures, of which the primary is **changing the declared date to move the sun while holding the behaviour exactly, since it is the same simulation at the same seed**. Telling the sun a different hour from the scenario's is permitted only in a named `illumination_ablation` partition that is never pooled. This is the same defect shape as 06 §10.4's render-cap leak and is handled by the same mechanism (§10.5) |
 | **D8.37** | **This pipeline labels; it never scores.** *(New — team brief §3b.)* The detect-and-track model and the EPoL model are external. This pipeline does not run one, does not associate external model output to truth, emits no precision, recall, F1, tIoU, confusion matrix or any other model metric, builds no evaluation harness, and issues no pass/fail verdict on a model. Every quality gate it applies is a gate on **the data**: is it internally consistent, is it leak-free, is it complete, does it say what it lacks. Where a finding in this section was measured but framed evaluatively, **the measurement is kept and the framing is corrected** — no number was removed to satisfy this decision (§1, §7, §8, §10, §12) |
 | **D8.38** | **Nothing a probe produces is a corpus artifact.** *(New.)* §12's fitness probe runs a stock detector as a pinned instrument and §10.5's leakage probe fits a trivial predictor; both write to a **probe workspace outside both roots**, never released, never digested into a manifest, never cited by a corpus artifact. Their only durable products are a line in the data-quality report — *our data does or does not yield trackable targets*, *the label is or is not recoverable from illumination alone* — and, for the fitness probe, the instrument's identity and weights digest, since **a probe run with a different instrument is not comparable with an earlier one** (§3.5, §10.5, §12) |
+| **D8.39** | **The live exercise is a primary use case, and everything past synthetic imagery generation is substitutable in whole.** *(New — team brief §3c.)* The chain is run end to end — our imagery feeds a detect-and-track service, whose tracks feed an EPoL model service, which produces its reports live. **Everything up to and including the imagery is designed here; everything after it is unknown to us and is specified nowhere in this plan**: no detector input schema, no track format, no report format, no fusion stage, no normaliser. The test this decision imposes on every paragraph of §7 and §11 is that **a completely different detector and a completely different EPoL service could be substituted without one word of this plan changing** — which is why §7.3's `Detection`/`Track` schema is cut, why §11.5 specifies only what our side offers, and why the one concrete integration that appears is marked **illustrative and outside the boundary**. Scoping this in does **not** re-open scoring: **D8.37** is unchanged and a live figure of merit remains refused (§1, §7.3, §11) |
+| **D8.40** | **Pacing ruling: slow first within a declared floor, then drop; never back-pressure the world, never run ahead.** *(New — team brief §3c, and it orders the response D8.22 only half-stated.)* A live exercise declares a **target factor** (default 1.0) and a **floor factor** (default 1.0, so nothing slows unless asked). Between them the clock owner may slow, and **the only input to the slowing is the depth of our own outbound queue** — never a message, rate or acknowledgement from a consumer, because the moment the world's rate is a function of something they send, their latency is an input to our simulation and this plan has a protocol with a party it knows nothing about. At the floor the policy becomes drop-oldest (D8.22) and the world never blocks. **Running ahead and buffering is refused**: it converts "live" into "delayed by an unstated amount", the sun keeps moving while the consumer looks at an older sun, and a bounded buffer is the drop policy with extra latency in front of it. **Slowing costs no truth**, and that is cited rather than asserted — capture identity (`CaptureMetadata.cs:24-29`, `FrameRecorder.cs:179`), the capture interval (`FrameRecorder.cs:129-133`), the sun (`CesiumTimeOfDayController.cpp:34-36`) and the step ratios are all in simulated time, and the only wall-clock quantities emitted are `wall_time_utc` and a filename stem that nothing may pair on. **What slowing does cost is wall-clock realism, so it is bounded and visible**: the achieved factor, the slip, the time below target and the per-sensor drop count are recorded and displayed, which is the removal of the silent-slip defect measured at `SumoCotBridge.py:247-248` and the reconciliation with [`02_Use_Cases.md`](02_Use_Cases.md) UC-8's objection to a *silent* slow (§11.1, §11.3, §11.4) |
+| **D8.41** | **The transcript is an opaque blob, recorded and never read.** *(New — team brief §3c; fixes the shape of the artifact [`02_Use_Cases.md`](02_Use_Cases.md) UC-8 and its D2.24 established as a use case.)* If the external chain pushes anything back, it is stored as bytes with a **receive timestamp** (the current tick plus wall time), a **source id** assigned by us rather than claimed by the sender, and a **content type declared by the sender, recorded and not validated** — validating it would require an opinion about their formats, which we do not have. **It is never parsed for meaning we act on, never counted, never indexed by anything inside it, never merged into truth, supervision, coverage or a manifest, and never measured** (D8.37). It lives in its own artifact in **neither root**, the same placement as §12's probe workspace and for the same reason. The listener is **off by default**, because receiving anything requires a protocol §11.5 declines to demand. This *simplifies* rather than adds: it replaces the four parsed artifacts (`tracks.jsonl`, `assessments.jsonl`, `association.jsonl`, `report.json`) the earlier drafts named with one opaque sink, and it narrows UC-8 step 4's "tracks and assessments" to "blobs", because we cannot tell those apart without parsing them (§9.6, §11.6) |
 
 ---
 
@@ -3500,13 +3916,16 @@ is now wrong:**
    whose own description is short. That is a data-completeness gate, and it is the same discipline as
    §4.8's refusal of a capture with no radiometry.
 
-7. **Whether a live handover should also record to disk.** Recording costs the encode budget in the
-   handover path and produces a corpus of exactly the frames a consumer was given live — which is the
+7. **Whether a live exercise should also record to disk.** Recording costs the encode budget in the
+   emission path and produces a corpus of exactly the frames a consumer was given live — which is the
    most valuable corpus available and also the one most likely to be handed straight back to whoever
    was on the other end of the socket. **Recommendation:** record, and assign the session to the
    **held-back partition** of §3.5 by default, so it is available for analysis and is not released
    alongside training data by accident. The default is a release-hygiene choice, and an operator can
-   override it as a recorded decision.
+   override it as a recorded decision. **Sharpened by §11.1's arithmetic:** recording does not add wire
+   load — the frames have already crossed the connection — so the cost is the encode queue and the disk,
+   not the 147.5 MB/s that binds the channel count. Recording a live exercise is therefore cheaper
+   relative to its constraint than recording a corpus is relative to its own.
 
 8. **~~Exposure and motion blur as collection parameters.~~ Resolved, and replaced by a narrower
    question.** The first draft asked whether their absence was a domain gap worth closing. §2.9
@@ -3548,3 +3967,25 @@ is now wrong:**
     distribution with the first corpora, choose a threshold once there is a distribution to choose it
     from, and only then make it a refusal — because a gate set from an unmeasured number is exactly the
     mistake §5.3 refuses to make with `w_min`.
+
+12. **Whether a live exercise's channel count should be allowed to trade against the real-time factor
+    automatically, or only by declaration.** §11.1 measures the trade — two channels at `f = 0.5` sit on
+    the load one channel at `f = 1.0` already occupies — and D8.40 permits slowing between a declared
+    target and a declared floor. What is *not* settled is whether an operator who asks for four channels
+    at a floor of 1.0 should be **refused at planning time** (the load is computable before the run
+    starts, from §11.1's arithmetic and the rig's resolution) or allowed to start and left to watch the
+    drops. **Recommendation:** refuse at planning time with the computed figure in the message, for the
+    same reason §4.8 fails a session with no radiometry rather than shipping one — a run that was
+    arithmetically impossible before it began should not consume an exercise slot to prove it. This
+    needs [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md) to own the threshold, since the
+    saturating load is host-specific (§11.1) and only that section is measuring hosts.
+
+13. **Whether the transcript listener should exist at all in a default build.** §11.6 and **D8.41** put
+    it off by default, because receiving anything requires the far side to push to us and §11.5 declines
+    to demand a protocol of anyone. The residual question is whether "off by default" is enough or
+    whether it should be absent unless a run asks for it: an always-present inbound socket is a surface
+    that nothing in the corpus product needs. **Recommendation:** present but disabled, because an
+    exercise that discovers mid-run that it cannot record what came back has lost the one artifact the
+    exercise produces — and because a disabled listener is auditable in the session record while an
+    absent one is not. **This is a genuine trade and it belongs to whoever owns deployment
+    ([`09_Toolchain_And_Packaging.md`](09_Toolchain_And_Packaging.md)), not to collection.**

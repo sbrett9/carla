@@ -2,14 +2,20 @@
 
 **Status:** Plan section. Specification of a control surface, not an implementation. No code was
 changed, no build, cook or engine run. Every measurement in §1 was taken read-only by introspecting
-the live parser object and grepping the live source tree on 2026-09-18.
+the live parser object and grepping the live source tree on 2026-09-18; the further measurements in
+§3.5, §3.10.1 and §5.2 were taken the same way in the same pass, and each says where.
 **Date:** 2026-09-18
 **Owner role:** Operator control-surface engineer. Added to the team by
 [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3a item 3, which makes the surface a first-class deliverable
 rather than a by-product.
-**Scope:** How an operator expresses, validates, launches, watches and records a capture run; the
+**Scope:** How a caller expresses, validates, launches, watches and records a capture run; the
 complete inventory of what is switchable and what is not; how the new surface coexists with
 `run_SCTMV.py` without losing a capability; and how the time-of-day choice reaches the record.
+**There are two callers, and both are first class:** a human at a terminal, and an **unattended
+caller** — an automated process that regenerates a corpus on a cadence
+([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c). §3.10 and §6.4 are the machine's half; everything else
+serves both unless it says otherwise. The surface also carries the **live exercise**'s pacing and
+live picture (§7.4).
 **Audience:** An engineer implementing the launcher and the run-configuration schema, and a reviewer
 deciding whether the shape recommended in §3 is the right one. It assumes the fork but not the
 conversation that produced this plan.
@@ -25,6 +31,16 @@ it needs from that section. Also out of scope: the scenario specification's own 
 ([`06`](06_Truth_And_Annotation.md) §8.4), the sensor rig's optics ([`08`](08_Collection_And_EPoL.md)
 §3), and the parameter *values* in [`10`](10_Scale_And_Performance.md) §8 — this section decides where
 each value is set and how it is recorded, not what it should be.
+
+**Three more things are out of scope and are named because the live and unattended cases invite them
+in.** The **pacing ruling** — what a live run does when the external chain cannot keep up — is
+[`08`](08_Collection_And_EPoL.md) §11.1 and §11.3's; this section owns how the choice is *expressed*
+and what is *shown*, and §7.5 states the five properties it needs back. **The cadence itself** — what
+decides that a corpus should be regenerated, and what trains on it afterwards — is entirely outside
+this plan; there is no scheduler here, and §3.10 designs an invocation, not a loop. And **the external
+detect-and-track and model services**: this section specifies a socket a run writes to and a blob store
+a transcript lands in, and nothing about what is on the other end
+([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c).
 
 ---
 
@@ -246,15 +262,20 @@ argument list would have to express.
 | **Clock** | SUMO step, world delta, capture rate — an integer-ratio contract | [`01`](01_Architecture.md) D1.13 |
 | **Solar epoch and policy** | The civil instant `t = 0` means, and whether the sun freezes or advances | [`11`](11_Time_And_Illumination.md); this section for expression |
 | **Seeds** | Four of them, separately | [`07`](07_Scenario_Authoring.md) D7.11 |
-| **Supervision and export roots** | Three roots, one writer each | [`08`](08_Collection_And_EPoL.md) D8.17 |
+| **Supervision and export roots** | Two roots, one writer each | [`08`](08_Collection_And_EPoL.md) D8.17 |
 | **Telemetry sinks** | Whether, where, and on which thread | [`10`](10_Scale_And_Performance.md) D10.11; [`08`](08_Collection_And_EPoL.md) D8.23 |
-| **Occlusion estimator** | On/off, margin, sample density | [`08`](08_Collection_And_EPoL.md) §4.4, open question 1 |
+| **Occlusion estimator** | On/off, margin, sample density | [`08`](08_Collection_And_EPoL.md) §5.4, open question 1 |
+| **Radiometry** | Which post-process profile each channel spawns with, and the digest of the one the server actually loaded | [`08`](08_Collection_And_EPoL.md) §2.9, D8.27, D8.28 |
+| **Pacing** | As fast as the machine allows, or against a wall clock at a stated factor | [`08`](08_Collection_And_EPoL.md) §11.1; this section for expression |
+| **Handover and transcript** | Whether frames leave the process live, on which channels, and whether what comes back is recorded | [`08`](08_Collection_And_EPoL.md) §11.2, §11.3; [`02`](02_Use_Cases.md) UC-8 |
+| **Caller** | Attended or unattended, and — if unattended — how each warning is adjudicated in advance | §3.10, §6.4 |
 
-Twelve axes, of which four are *bindings to artifacts* (world, scenario, epoch, supervision plan),
-three are *contracts between numbers* (clock ratio, render sizing, seeds), and five are *choices*. A
-flat argument list can express the choices. It cannot express a binding — there is nothing for a flag
-to bind *to* — and it cannot validate a contract between three numbers that live in three different
-groups.
+Sixteen axes, of which four are *bindings to artifacts* (world, scenario, epoch, supervision plan),
+three are *contracts between numbers* (clock ratio, render sizing, seeds), eight are *choices*, and one
+— the caller — decides **who is allowed to adjudicate the other fifteen**. A flat argument list can
+express the choices. It cannot express a binding — there is nothing for a flag to bind *to* — it cannot
+validate a contract between three numbers that live in three different groups, and it has no place to
+put an adjudication that has to survive the run that used it.
 
 ---
 
@@ -264,6 +285,10 @@ groups.
 
 The brief states five. Each is restated here as something a candidate either passes or fails, so §3.3
 is an evaluation rather than a preference.
+
+**These five were written for a human at a terminal**, and §3.10 adds the five a machine needs. They
+are deliberately kept as separate lists rather than merged: three of the machine's five turn out to be
+already satisfied by what R1–R5 forced, and that is worth being able to see rather than asserting.
 
 | | Requirement | Test |
 |---|---|---|
@@ -336,18 +361,25 @@ Strictly increasing precedence. Every layer is optional except the first and the
 | # | Layer | What it supplies | Override by a higher layer |
 |---|---|---|---|
 | 1 | **Tool defaults** | Values compiled into the schema and versioned with the tool. Every one is materialised into the effective configuration with `provenance: "tool_default"` and the tool version | Permitted |
-| 2 | **Site profile** | Facts about *this machine*, not about the science: server host and port, SUMO install, Cesium ion token, the three export roots' base paths. Separated so a run configuration is portable between machines unedited | Permitted |
+| 2 | **Site profile** | Facts about *this machine*, not about the science: server host and port, SUMO install, Cesium ion token, the two export roots' base paths. Separated so a run configuration is portable between machines unedited | Permitted |
 | 3 | **World package binding** | Origin latitude/longitude, staging rectangle, netconvert argument vector and version, world digest, network fingerprint | **Refused.** These are bindings, not defaults; an operator override here is a check failure naming both values |
 | 4 | **Scenario package declaration** | Solar epoch, named capture windows, SUMO step, the supervision plan, the scenario's own seeds, its `render_region` and its rendered-fraction floor | Permitted, and every override is recorded against the value it replaced |
 | 5 | **Run configuration** | The run's choices: mode, window selection, rig, caps, solar policy, sinks, roots, seeds | Permitted |
 | 6 | **Operator override** | One command-line flag per field, in `--set <path>=<value>` form plus short aliases for the handful in §3.8 | — |
 
-Two properties make the layering safe rather than merely convenient:
+Three properties make the layering safe rather than merely convenient:
 
 - **A field that no layer supplies and that has no tool default is a refusal.** This is R5's mechanism.
 - **A field whose correct value depends on a condition has no default under that condition.** Named
   the **conditional requirement**, it is what lets the file stay short in the ordinary case while
   still forbidding an important implicit choice. §4.4 and §5.2 use it twice; both uses are stated.
+- **Layer 2 is materialised exactly like every other layer, and a field it resolved from the host
+  environment names the variable it read.** A site profile is where host dependence is *allowed* to
+  live; it is not where host dependence is allowed to hide. *Measured:* five environment variables
+  already reach a run's behaviour — `CESIUM_ION_TOKEN` (`CarlaControlArgumentParser.py:105`),
+  `SUMO_HOME` (`SumoInstallation.py:36`), and `CARLA_NETCONVERT` / `PROJ_LIB` / `PROJ_DATA`
+  (`run_SCTMV.py:66-78`) — and none of them is written into any artifact a run produces. §3.10
+  requirement M2 is what turns that into a rule.
 
 ### 3.6 Configuration resolution
 
@@ -450,6 +482,20 @@ There is deliberately **no** `--dry-run`. Validation is not optional and not a m
 on every launch, and a `--validate-only` flag stops after it. The difference matters because a
 `--dry-run` that people forget to use is theatre.
 
+**The unattended forms are the same line with the caller declared and a result path given**, because
+the machine's needs are two fields and a contract, not a second program (§3.10):
+
+```
+run_capture --run configs/bahonar_night.run.json --caller unattended \
+            --cycle 2026-W38 --result out/bahonar_night.result.json
+run_capture --run-list sweeps/bahonar_illumination.sweep.json --caller unattended \
+            --cycle 2026-W38 --result out/bahonar_illumination.result.json
+```
+
+`--caller unattended` is not a convenience: it changes what the tool is allowed to do without being
+told (§3.10 M1, §6.4), and it is recorded in the corpus (§5.2), because a corpus whose warnings were
+adjudicated by a file rather than by a person is a different thing from one that was watched.
+
 ### 3.9 The classes
 
 Under [`AGENTS.md`](../../../../AGENTS.md): one public class per file, the file named for the class in
@@ -463,14 +509,168 @@ PascalCase, modern union hints, absolute imports outside the package, all import
 | `RunConfigurationResolver.py` | `RunConfigurationResolver` | Applies layers 1–6 in order, records provenance per field, refuses an override of a binding |
 | `EffectiveRunConfiguration.py` | `EffectiveRunConfiguration` | The resolved, immutable object of §3.7. Serialises itself; is re-readable as layer 5 |
 | `RunConfigurationValidator.py` | `RunConfigurationValidator` | §6's checks, split by phase; emits refusals and warnings in [`07`](07_Scenario_Authoring.md) §5.2's vocabulary |
-| `SessionMonitor.py` | `SessionMonitor` | §7.1's live view; reads only fields the manifest also carries |
+| `LaunchEcho.py` | `LaunchEcho` | §6.4's pre-commit statement: computes the block, renders it for a human, and serialises it into the resolution report for a machine. One computation, two renderings |
+| `SessionMonitor.py` | `SessionMonitor` | §7.1's live view and §7.4's live-run variant; reads only fields the manifest also carries, and degrades to line-oriented logging when standard output is not a terminal |
 | `RunCloseoutReport.py` | `RunCloseoutReport` | §7.2's end-of-run report and quality gate |
+| `RunResult.py` | `RunResult` | §3.10's result artifact. Written in **every** terminal outcome, including a refusal that produced no session; the process exit status is read from it rather than computed beside it |
 | `WorldBuildConfiguration.py` | `WorldBuildConfiguration` | §9.2's single definition of the 23 world-build inputs, produced by both front ends |
 | `scripts/run_capture.py` | — | Thin `main`: resolve, validate, construct `CaptureSession`, run, close out |
 
 `CaptureSession`, `PlaybackClock`, `RenderSetSelector`, `RunManifestWriter` and `SumoSession` are
 [`01`](01_Architecture.md) §2.3's components and are not redefined here; this section constructs them
 and hands them one object.
+
+### 3.10 The second caller: an unattended process
+
+[`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c adds a consumer §3.1–§3.9 did not design for. A corpus is to be
+**regenerated on a cadence by an automated process**; nothing trains here and there is no scheduler in
+this plan. What lands on this surface is one thing: **unattended, parameterised, reproducible,
+non-interactive invocation, with a machine-readable result saying what was produced and whether it is
+fit to use.**
+
+[`02`](02_Use_Cases.md) UC-12's *scripted launch* alternate flow already states the governing rule —
+"the composition step cannot be bypassed, not that a person must sit in front of it" — so the machine
+is not a second surface. It is the same surface with a caller that cannot be asked a question.
+
+#### 3.10.1 Five machine requirements, checked against what already exists
+
+The brief says this "mostly falls out; say so rather than inventing machinery". It does, for three of
+the five. Each row states the requirement, whether the design of §3.1–§3.9 already meets it, and the
+evidence either way.
+
+| | Requirement | Already holds? | Evidence, and what is added |
+|---|---|---|---|
+| **M1** | **No interactive prompt, ever** | **Yes, and it was never at risk** | *Measured:* there is no `input()`, `getpass` or console prompt anywhere in `CarlaControl/src/carlacontrol` or `CarlaControl/scripts` — the two textual matches are `SumoScenarioBuilder.py:461` and `:632`, both the string `_additional_input`. §3.8 already refuses a `--dry-run` on the grounds that an optional step people forget is theatre, and §6 makes validation a phase rather than a question. **The one blocking construct this section does specify is §6.4's echo, and §6.4 resolves it.** Two properties are *added*: `run_capture` constructs no display — `run_SCTMV.py:172, :198` build `PyGameSensorController` and `PygameInterface`, and the latter calls `pygame.init()` and `pygame.display.set_mode` at `PygameInterface.py:75, :79`, so a capture launcher that reused it would need a window server — and `SessionMonitor` degrades to line-oriented logging when standard output is not a terminal |
+| **M2** | **No hidden host-dependent default** | **Partly** | The *mechanism* holds: layer 2 exists precisely to separate machine facts from the science (§3.5), and D12.3 makes every field carry the layer that set it. What does not hold is coverage. *Measured:* five environment variables reach behaviour today and none is recorded (§3.5); `--ion-token` defaults to the **empty string** when `CESIUM_ION_TOKEN` is unset (`CarlaControlArgumentParser.py:105`), which is a silent misconfiguration rather than an absence; `--date` defaults to `datetime.now()` on the **host** (`WorldBuilder.py:226-230`, §1.6); and `--osm` defaults to a path under the repository root (`:87-89`). **Added:** every layer-2 field names the variable it resolved from, an empty secret is a refusal rather than an empty string, and under `caller: unattended` a field resolving from an environment variable the site profile does not name is a refusal (checks 36 and 37) |
+| **M3** | **An exit status that means something precise** | **No. This is the real gap** | *Measured:* `run_SCTMV.py` has exactly two statuses — `1` when the world build fails (`:130`) and `0` otherwise (`:339`) — and `KeyboardInterrupt` is swallowed at `:291-292`, so **a run killed halfway through exits 0 and is indistinguishable from one that finished**. The plan has already been bitten by a coarse exit code once: [`07`](07_Scenario_Authoring.md) §5.5 measured `duarouter` exiting `0` regardless under `--ignore-errors`, and concluded "exit code alone is a gate that stops at the first error". **Added:** §3.10.2's named status set |
+| **M4** | **A machine-readable result artifact** | **Mostly** | §3.6 already emits `<run>.resolution.json` and `<run>.lock.json` on every path including a refusal, in [`07`](07_Scenario_Authoring.md) §5.2's vocabulary; §7.2's closeout already applies a quality gate; D12.16 already writes `quality_gate: "failed"` with the failing checks named rather than discarding the corpus. **What is missing is only that the closeout was specified as a rendering for a human, and that a phase-0 refusal produces no session and therefore no manifest to read.** Added: §3.10.3's `RunResult`, which is a small object over artifacts that already exist, written at a path the caller gave |
+| **M5** | **The same configuration produces the same corpus** | **Mostly, and the residue is worth naming** | R1's test *is* this requirement, and D12.3 (every field materialised with its provenance) and D12.11 (no nondeterministic seed default) are its mechanism. Three residues are named and closed in §3.10.4: a drawn seed, a rebuilt world, and a tool whose defaults moved |
+
+**Nothing above is a new subsystem.** M1 is a property to preserve and two small refusals to add; M2 is
+coverage over a layer that already exists; M4 is a serialisation of objects already specified. Only M3
+is genuinely new, and it is nine names and a rule.
+
+#### 3.10.2 Exit status: nine outcomes, named
+
+Numbers alone would be conversational jargon ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §4), so each status
+carries a name that stands alone, and the name is what appears in the result artifact. **The process
+exit status is read from `RunResult.outcome`, never computed alongside it** — the same rule D12.14
+applies to the monitor, and for the same reason: two computations of one fact eventually disagree, and
+the automated caller believes the cheaper one.
+
+| Status | Name | Meaning | Is re-running the identical configuration worth anything? |
+|---:|---|---|---|
+| 0 | `corpus_produced` | The window ran to its end and the quality gate passed | — |
+| 1 | `usage_error` | The invocation itself was malformed: unknown key, unreadable file, an override of a binding. Nothing was resolved | **No.** The command is wrong |
+| 2 | `refused_offline` | Phase 0 refused (checks 1–21, 34–42). No server was contacted | **No.** The configuration is wrong and will be refused identically |
+| 3 | `refused_server` | Phase 1 refused (checks 22–27, 43). Nothing was acquired, nothing spawned | **Only if the server changes** — a different world is loaded, a blueprint appears |
+| 4 | `refused_authority` | Phase 2 refused (checks 28, 29): an authority is held by someone else, named in the result | **Yes. This is the only status a cadence should retry**, because the configuration is right and the world is busy |
+| 5 | `refused_preroll` | Phase 3 refused (checks 30–33, 44, 45). The lease was acquired and released; the manifest is closed as `aborted_at_preroll` | Sometimes — a pre-roll refusal can be a SUMO error (never) or a channel that delivered no frame (perhaps) |
+| 6 | `gate_failed` | The window ran to its end, **the corpus exists**, and §7.2's quality gate failed. The manifest carries `quality_gate: "failed"` with the failing checks named | **No**, but the corpus is usable and labelled — D12.16. An automated consumer must not treat this as 0 |
+| 7 | `truncated` | The run was stopped inside the window — an operator stop, a signal, or one of §7.1's loud conditions. The manifest is closed with the short window and a `closed_by` reason | Depends on the reason, which is in the result |
+| 8 | `internal_error` | An unhandled fault. The manifest may be unclosed, which [`08`](08_Collection_And_EPoL.md) open question 6 makes a release refusal | Report it |
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Invoked
+    Invoked --> Resolve : argv + layers 1..6
+    Resolve --> usage_error : malformed / override of a binding
+    Resolve --> Phase0
+    Phase0 --> refused_offline : checks 1-21, 34-42
+    Phase0 --> Phase1
+    Phase1 --> refused_server : checks 22-27, 43
+    Phase1 --> Phase2
+    Phase2 --> refused_authority : world is busy
+    Phase2 --> Phase3 : lease held - first irreversible step
+    Phase3 --> refused_preroll : checks 30-33, 44, 45
+    Phase3 --> Window
+    Window --> truncated : stop, signal, loud condition
+    Window --> internal_error : unhandled fault
+    Window --> Closeout
+    Closeout --> gate_failed : quality gate failed, corpus kept
+    Closeout --> corpus_produced
+
+    refused_authority --> [*] : RETRYABLE
+    usage_error --> [*]
+    refused_offline --> [*]
+    refused_server --> [*]
+    refused_preroll --> [*]
+    gate_failed --> [*] : corpus exists, labelled
+    truncated --> [*] : corpus exists, short
+    internal_error --> [*]
+    corpus_produced --> [*]
+
+    note right of refused_authority
+        The one distinction an automated
+        caller actually needs: the
+        configuration is right and the
+        world is busy.
+    end note
+```
+
+**The set is small on purpose.** Its whole job is the distinction between *your configuration is
+wrong*, *the world is busy*, *a corpus exists and is good*, and *a corpus exists and is labelled
+failed*. A finer taxonomy would be a second copy of the refusal list, and the refusal list is already
+in the result artifact where it can name the field and the candidates.
+
+#### 3.10.3 The result artifact
+
+`RunResult` is written **in every terminal outcome**, to the path `--result` names. It has to be a
+separate path rather than one derived from the session identity, because a phase-0 refusal never
+reaches [`08`](08_Collection_And_EPoL.md) D8.4's session assignment and therefore has no session root
+to be written under.
+
+```jsonc
+{
+  "spec_version": 1,
+  "outcome": "gate_failed",              // the name from §3.10.2; the exit status is its index
+  "exit_status": 6,
+  "caller": "unattended",
+  "cycle": "2026-W38",
+  "tool_version": "…", "schema_version": 3,
+  "effective_configuration_digest": "…", // the same digest the lock carries
+  "resolution_report": "out/bahonar_night.resolution.json",
+  "lock": "out/bahonar_night.lock.json",
+  "launch_echo": { … },                  // §6.4 — the same block a human would have read
+  "refusals":  [ { "check": 14, "field": "solar.vehicle_lights", "message": "…" } ],
+  "warnings":  [ { "code": "render_cap_binds", "message": "…",
+                   "adjudication": "proceed", "adjudicated_by": "configs/bahonar_night.run.json" } ],
+  "produced": {
+    "manifest": "/data/truth/cap-20260308-2300/manifest.json",   // null on a refusal
+    "roots": { "observation": "/data/obs/cap-…", "truth": "/data/truth/cap-…" },
+    "window": { "begin_s": 371700, "end_s": 373500,
+                "civil": ["2026-03-08T23:00:00+03:30", "2026-03-08T23:30:00+03:30"] },
+    "channels": [ { "sensor_id": "OVERWATCH-1", "frames": 3600, "recorder_dropped": 0 } ],
+    "quality_gate": "failed",
+    "failing_gates": ["render_accounting.rendered_fraction_below_floor"]
+  }
+}
+```
+
+Three properties, each of which is the machine's version of something §7.2 already does for a human:
+
+- **`produced` is a pointer set, not a copy.** The corpus's own description is the manifest
+  ([`06`](06_Truth_And_Annotation.md) §8.4) and stays there; `RunResult` says where it is and whether
+  it is fit to use. A second copy of the corpus description is a second thing that can be stale.
+- **`warnings[]` carries its adjudication and the artifact that granted it** (§6.4). "Which warnings
+  were accepted, and on whose authority" is the question [`07`](07_Scenario_Authoring.md) §5.3 says
+  warnings exist to raise, and for an unattended run it is the only answer available.
+- **`quality_gate` is repeated here from the manifest** because outcome `gate_failed` and outcome
+  `corpus_produced` differ in nothing else, and a caller that reads only the result must not have to
+  open the corpus to find out which it got.
+
+#### 3.10.4 What "the same configuration produces the same corpus" costs, precisely
+
+R1's test already holds for a *replay*: the manifest's effective configuration is itself a valid run
+configuration (D12.3), so reading it back reproduces the run. A **cadence** is a different question,
+and three residues are worth naming rather than assuming away.
+
+| Residue | What it is | Ruling |
+|---|---|---|
+| **A drawn seed** | D12.11 keeps `random`, resolving to a drawn value that is then recorded — which makes a run reproducible *afterwards* and a cycle unreproducible *in advance*. Both are wanted: a cadence that pins its seeds regenerates a byte-identical corpus every cycle, which is useless for growing a training set; one that draws freely cannot be re-run without its manifest | **Under `caller: unattended`, `random` is refused without `--cycle`** (check 39). With one, the drawn value is a deterministic function of the effective-configuration digest and the cycle label, so cycle *N* is reproducible from its identifier alone and cycle *N+1* is a different corpus by construction |
+| **A rebuilt world** | World build carries nondeterminism no seed covers: [`09`](09_Toolchain_And_Packaging.md) D9.9 records `OsmClipper.py:154, :219` emitting nodes in `set` iteration order, which is a reproducibility hazard for anything that hashes the output (*carried forward from `09`, not re-measured here*). [`02`](02_Use_Cases.md) UC-6 already refuses a swept parameter that changes the network, on the same grounds | **A capture run does not build a world** (check 38). The world package is an input bound by digest at layer 3, exactly as it already is. World building stays where it is — `run_SCTMV.py --build`, §9.1 — and is a separate, attended act |
+| **A tool whose defaults moved** | D12.3 already carries `tool_default` beside every value precisely so a default change shows in a diff, and the lock carries the tool version | **The tool reports; it never compares cycles.** `RunResult` states `tool_version` and `schema_version`; deciding that cycle 12 is not comparable with cycle 11 is the outside process's judgement, and building a cross-cycle comparator here would be the scheduler the brief says is not ours |
 
 ---
 
@@ -640,7 +840,7 @@ Named descriptively, because "static" and "dynamic" do not say what is at stake.
 
 | Class | Meaning | Recorded as |
 |---|---|---|
-| **Bound** | Fixed by an artifact. Not the operator's to set; an attempt is a refusal naming both values | A binding in the effective configuration and the lock file |
+| **Bound** | Fixed by an artifact, **or by a ruling in a sibling section that this surface expresses rather than re-offers.** Not the caller's to set; an attempt is a refusal naming both values | A binding in the effective configuration and the lock file |
 | **Session-fixed** | The operator sets it; it is then fixed for the session's life. Changing it mid-run would make the corpus's own description of itself false | A field in the effective configuration, written once |
 | **Degradation-only** | Never set by the operator. Changed only by [`10`](10_Scale_And_Performance.md) §7's shedding ladder, and always recorded at the instant it changes | A timestamped entry in the manifest, per window |
 | **Run-mutable** | May change mid-run because it does not change what the corpus *is* | A `control_events[]` entry in the manifest: tick, field, old value, new value |
@@ -651,6 +851,25 @@ occlusion estimator is the instructive case: it looks like a toggle (it is one t
 `--no-occlusion` at `:542-552`), but [`08`](08_Collection_And_EPoL.md) D8.19 makes a capture whose
 occlusion could not be paired *excluded from the unoccluded denominator entirely* — so turning it off
 mid-run silently changes the meaning of the denominator. Session-fixed.
+
+**Widening Bound is a correction, not an extension.** The table already relied on it before it was
+written down: `synchronous` is listed Bound citing [`10`](10_Scale_And_Performance.md) D10.10 and
+`telemetry.on_tick_thread` Bound citing D10.11, and neither is fixed by an artifact. The live run adds
+the sharpest case — the drop policy when the external chain falls behind is **ruled** by
+[`08`](08_Collection_And_EPoL.md) §11.3 and D8.23 as drop-oldest-and-count, so this surface must express
+it and must not re-offer it as a choice. A toggle for a decision another section has taken is a way to
+contradict that section from a configuration file.
+
+**The live and unattended axes earn no fifth class**, and that is worth stating because they look as
+though they should. `caller`, `on_warning.*`, `cycle` and `expect.*` never reach the world and describe
+the *launch decision* rather than the corpus, which is a genuinely different kind of thing. But the
+governing question decides them anyway: a consumer reading a corpus **would** be wrong not to know that
+its warnings were adjudicated by a file rather than by a person, and that it was produced by a cadence
+rather than by someone watching — so `caller` and `on_warning.*` are Session-fixed on the existing test,
+with no new machinery. `cycle` and `expect.*` answer *no* to the question, and they are recorded anyway,
+in the lock rather than in the corpus's description, because they are the only surviving evidence of
+what the caller believed it was running. Inventing a class to hold two fields that the existing test
+already places would be exactly the duplication §3.10 was told to avoid.
 
 ### 5.2 The inventory
 
@@ -664,7 +883,27 @@ marked **cond.** are conditional requirements (§3.5).
 | `mode` | `sumo_driven_playback` \| `traffic_manager_ambient` \| `storyboard_execution` \| `recorded_replay` | **—** | Session-fixed | [`01`](01_Architecture.md) §5.1 |
 | `ambient_traffic` | *not a field in `sumo_driven_playback`* | n/a | Bound | [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3 item 4 |
 | `storyboard` | path \| null | `null` | Session-fixed; refused with `sumo_driven_playback` until SUMO mirroring exists | [`01`](01_Architecture.md) §5.2 |
-| `pacing` | `as_available` \| `wall_clock` | `as_available` for a corpus, `wall_clock` for a live exercise | Session-fixed | [`08`](08_Collection_And_EPoL.md) §10.1 |
+| `caller` | `attended` \| `unattended` | `attended` | Session-fixed — a corpus whose warnings were adjudicated by a file is not the same object as one that was watched (§5.1) | §3.10, §6.4 |
+| `cycle` | a caller-supplied label | `null`; **—** under `caller: unattended` when any seed is `random` | Session-fixed, recorded in the lock | §3.10.4 |
+| `world_build` | *not a field in a capture run* | n/a | **Bound** — a capture run binds a world package, it does not build one | §3.10.4; [`09`](09_Toolchain_And_Packaging.md) D9.9; [`02`](02_Use_Cases.md) UC-6 |
+
+#### Pacing, live handover and transcript
+
+The drop policy is deliberately absent from this table as a choice: it is Bound (§5.1).
+
+| Toggle | Values | Default | Class | Source |
+|---|---|---|---|---|
+| `pacing.mode` | `as_available` \| `wall_clock` | `as_available` for a corpus, `wall_clock` for a live exercise | Session-fixed | [`08`](08_Collection_And_EPoL.md) §11.1 |
+| `pacing.real_time_factor` | float > 0; sun-and-world simulated seconds per wall-clock second | `1.0`; not a field under `as_available` | Session-fixed — an unevenly-paced run is a fact about the data ([`08`](08_Collection_And_EPoL.md) §11.1) | `SumoCotBridge.py:184-194`'s `real_time_factor`, exposed at `sumo_cot_telemetry.py:83` |
+| `pacing.min_achieved_factor` | float | **—** under `wall_clock` (§7.5 property L3) | Session-fixed | [`08`](08_Collection_And_EPoL.md) §11.1 |
+| `pacing.on_consumer_slow` | *not a field* | n/a | **Bound** to drop-oldest-and-count | [`08`](08_Collection_And_EPoL.md) §11.3, D8.23 |
+| `handover.enabled` | bool | `false` | Session-fixed — coverage's *covered but not delivered* flag ([`08`](08_Collection_And_EPoL.md) §11.3) is uninterpretable if the socket came and went mid-run | [`02`](02_Use_Cases.md) UC-8 |
+| `handover.endpoint` / `handover.transport` | address; transport name | **—** when `handover.enabled` | Session-fixed | [`08`](08_Collection_And_EPoL.md) §11.2 |
+| `handover.channels[]` | declared `sensor_id`s | all declared channels | Session-fixed | [`08`](08_Collection_And_EPoL.md) §11.2 |
+| `handover.queue_depth` | int | `1`, which makes drop-oldest immediate | Session-fixed — it sets the drop rate, and the drop rate is in the coverage record | [`08`](08_Collection_And_EPoL.md) §11.3 |
+| `transcript.enabled` | bool | `false` | Session-fixed — a gap in a transcript must mean *they said nothing*, never *we stopped listening* | [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c; [`02`](02_Use_Cases.md) UC-8 step 4, D2.24 |
+| `transcript.root` | path | **—** when enabled; **refused inside either corpus root** | Session-fixed | §7.4.3; [`08`](08_Collection_And_EPoL.md) D8.38's precedent |
+| `transcript.sources[]` | `{source_id, listen, content_type}` | **—** when enabled | Session-fixed | [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c — an opaque blob with a timestamp, a source id and a content type, and nothing else |
 
 #### Bindings
 
@@ -711,8 +950,38 @@ marked **cond.** are conditional requirements (§3.5).
 | `capture_segmentation` | `false` | Session-fixed | [`08`](08_Collection_And_EPoL.md) OQ2 |
 | `depth_max_range_m` | `20000.0` | Session-fixed | `:274-285`; and see §1.5's divergent second default |
 | `sensor_tick` | `1 / capture_hz`, gated on measurement M1 | Session-fixed | set nowhere today; `ActorBlueprintFunctionLibrary.cpp:248` |
-| `exposure` | **not offered** — the attribute does not exist (§1.3) | — | measured |
+| `post_process_profile` | `Default` (EV100 +12.32, measured by [`08`](08_Collection_And_EPoL.md) §2.9) | Session-fixed, and **recorded as the digest of the JSON the server actually loaded**, not as the name that was asked for | [`08`](08_Collection_And_EPoL.md) D8.27, D8.28; see the correction below |
+| `exposure` (a numeric exposure value) | **not offered** — no exposure attribute exists on any camera blueprint (§1.3) | — | measured; check 16 now names `post_process_profile` as the candidate |
 | `orbit_radius_m`, `orbit_altitude_m`, `orbit_period_s` | `200.0`, `518.2`, `240.0` | Session-fixed | today's `:598-615`, **converted to metres** (§1.5) |
+
+**A correction to §1.3, and it is a hidden host-dependent default of exactly the kind M2 forbids.**
+§1.3 measured that no camera blueprint publishes an exposure attribute and concluded the operator has
+no exposure control. The first half stands; the conclusion does not.
+[`08`](08_Collection_And_EPoL.md) §2.9 followed the attribute that *is* there and found that exposure is
+already selectable at spawn through `post_process_profile`, over four shipped profiles spanning EV100
++12.32 to −1.06. Re-verified here, and the verification found a second defect:
+
+- The attribute's default is the **lowercase literal** `"default"`
+  (`ActorBlueprintFunctionLibrary.cpp:1376`), and the path built from it is
+  `Content/Carla/Config/PostProcess/<name>.json` (`PostProcessJsonUtils.h:49-52`) — *read*.
+- *Measured,* the only content directory in the tree holds exactly four files, and the one that name
+  must match is `Default.json`, with a capital D.
+- `LoadAllPostProcessFromJsonToSceneCapture` returns `false` when the file does not load
+  (`PostProcessJsonUtils.cpp:86-101`), and **the call site discards the return value**
+  (`ActorBlueprintFunctionLibrary.cpp:1377-1380`) — *read*.
+- *Inference, labelled, because this fork has not been run on Linux for this purpose:* the default name
+  resolves on a case-insensitive Windows file system and does not resolve on a case-sensitive Linux one,
+  so **the same run configuration produces a differently-exposed camera on the two platforms**, with no
+  error on either. That is M5 broken by the host, and §10's whole premise is that the two platforms run
+  the same program.
+
+Three consequences for this section, all small because
+[`08`](08_Collection_And_EPoL.md) D8.27 and D8.28 already own the collection side. `post_process_profile`
+becomes a real toggle in the table above rather than an absence; check 16's refusal changes from *no
+exposure control exists* to *no numeric exposure exists, and here is the field that does*; and phase 1
+gains check 43, which reads the loaded profile's digest back from the server — the same
+request-then-confirm shape §4.5 uses for the sun, and for the same reason: a subsystem that reports what
+it was asked for rather than what it did will eventually be asked for something it cannot do.
 
 #### Solar
 
@@ -742,13 +1011,18 @@ marked **cond.** are conditional requirements (§3.5).
 | `roots.observation` / `roots.truth` | derived from the site profile's base + session id; **—** if the two resolve equal or nested | Session-fixed | [`08`](08_Collection_And_EPoL.md) D8.17, [`04`](04_Contracts.md) D4.26 — **two roots, not three**: model output is neither produced nor consumed here, so no root holds it |
 | `seeds.sumo` / `seeds.appearance` / `seeds.admission` | **—** (explicit; no nondeterministic default) | Session-fixed | [`07`](07_Scenario_Authoring.md) D7.11 |
 | `log_path` | `<session_root>/session.log` | Session-fixed | today's `--log` (`:493-499`) |
+| `result_path` | `<session_root>/run.result.json`; **—** under `caller: unattended`, and refused inside either corpus root | Session-fixed, written once at the terminal outcome | §3.10.3 |
+| `on_warning.<code>` | `proceed` in an attended run once the echo is acknowledged; **—** under `caller: unattended` for every code actually raised | Session-fixed — which warnings a corpus proceeded past is a fact a consumer needs (§5.1) | §6.4 |
+| `expect.<path>` | none declared | Session-fixed; recorded in the lock, never in the corpus description | §6.4 |
 | `diagnostics` | `off` | **Run-mutable** | today's `]` hotkey; `:439-449` |
-| `monitor` | `on` | **Run-mutable** | §7.1 |
+| `monitor` | `on`; line-oriented rather than a panel when standard output is not a terminal | **Run-mutable** | §7.1, §3.10.1 M1 |
 
 `seeds.*` having no default is a deliberate change from today, where `--seed` defaults to `None` and
 is documented "default: nondeterministic" (`:310-316`). A nondeterministic default is incompatible
 with R1. Today's behaviour is preserved by `--set seeds.sumo=random`, which resolves to a drawn value
-**and records the drawn value**, so the run is still reproducible afterwards.
+**and records the drawn value**, so the run is still reproducible afterwards — and under
+`caller: unattended` the draw is derived from the effective-configuration digest and `cycle`, so a
+cycle is reproducible from its identifier without first reading its manifest back (§3.10.4).
 
 ### 5.3 The structural exclusions
 
@@ -812,7 +1086,7 @@ laptop.
 | 13 | The window's civil span is computable from the epoch | refuse | `epoch time zone '+3:3' is not a valid offset.` |
 | 14 | If the window's sun elevation falls below −6°, `solar.vehicle_lights` is stated | refuse | `window night_shift is dark (sun elevation −37.2° to −41.8°). 'solar.vehicle_lights' has no default in a dark window: state 'from_sumo' or 'off'.` |
 | 15 | `solar.policy` is not `accelerated` | refuse | `solar.policy 'accelerated' is not permitted in a capture run: a rate other than 1.0 makes recorded solar time disagree with the scenario's clock. Use the interactive viewer for look development.` |
-| 16 | `exposure` is not requested | refuse | `camera exposure is not available on this build: sensor.camera.rgb declares no exposure attribute (ActorBlueprintFunctionLibrary.cpp:313-410).` — this is §1.3's dead flag made loud |
+| 16 | A numeric `exposure` is not requested | refuse, **naming the field that does exist** | `a numeric camera exposure is not settable on this build: sensor.camera.rgb declares no exposure attribute (ActorBlueprintFunctionLibrary.cpp:313-410). Exposure is chosen per channel by 'post_process_profile': Default, GoPro, Town10HD_Opt, Town_C.` — §1.3's dead flag made loud, corrected by §5.2 so the refusal names candidates rather than only a wall (R4) |
 | 17 | The two export roots are distinct and neither contains the other | refuse | `roots.truth '/data/run7' contains roots.observation '/data/run7/obs'. The anti-leak split requires two disjoint roots (08 D8.17, 04 D4.26).` — there is no third root: model output is neither produced nor consumed here, and a named shelf for it would only invite it into the tree |
 | 18 | Every seed has an explicit value or `random` | refuse | `seeds.sumo is unset. Give a value, or 'random' to draw and record one.` |
 | 19 | Predicted corpus size fits the free space under `roots.observation` | refuse | `window needs ~52 GB at 2 Hz × 2 channels × 6.2 Mpx; 31 GB free at /data.` — derived from [`10`](10_Scale_And_Performance.md) §4.2.3's measured per-frame sizes |
@@ -852,6 +1126,32 @@ captured is run), so the population inside a candidate region at every step is a
 | 31 | Applied solar state matches the requested one, read back from `get_solar_state()` | refuse | `requested solar_time 23.00, world reports 12.00.` — §4.5's `confirmed` |
 | 32 | The first cued tick delivers a frame on every channel | refuse | `channel OVERWATCH-2 delivered no frame within 5 cues.` — [`02`](02_Use_Cases.md) UC-7's session fault, applied before the window rather than during it |
 | 33 | Actual in-region population at `window.begin_s` against `render_cap` | warn, with the number | closes the loop on check 21 with the real figure |
+
+#### Checks added for the unattended caller and the live run
+
+**Appended, never inserted.** Checks 1–33 keep their numbers because siblings cite them by number —
+[`08`](08_Collection_And_EPoL.md) §15 cites rule 17 specifically — so the twelve added below continue
+the sequence and each states its own phase rather than sitting inside a phase's table.
+
+| # | Phase | Check | Outcome | Message shape |
+|---:|---|---|---|---|
+| 34 | 0 | Under `caller: unattended`, every warning code actually raised has an `on_warning` adjudication | refuse | `warning 'render_cap_binds' was raised and the caller is unattended. Set capture.on_warning.render_cap_binds to 'proceed' — which is recorded against this configuration — or change render_region. An unattended run does not proceed past an unadjudicated warning (§6.4).` |
+| 35 | 0 | Every declared `expect.<path>` holds against the resolved value | refuse, naming both | `expect.solar.window_civil_begin was '23:00:00+03:30'; the configuration resolved '12:00:00+03:30'. The scenario's epoch is bahonar…@a91c3f and the window is night_shift.` — §6.4's substitute for a human reading the echo |
+| 36 | 0 | Under `caller: unattended`, no field resolved from an environment variable the site profile does not name | refuse | `'sumo.install' resolved from SUMO_HOME='G:\Sumo', which this site profile does not declare. An unattended run does not inherit host state it was not given (§3.10 M2; 09 D9.6).` |
+| 37 | 0 | No site-profile secret or path resolves to the empty string | refuse | `'cesium.ion_token' is empty: CESIUM_ION_TOKEN is unset and the parser's default is the empty string (CarlaControlArgumentParser.py:105). An absent token is a refusal, not a blank.` |
+| 38 | 0 | No `world_build` block is present | refuse | `a capture run binds a world package; it does not build one. Build with run_SCTMV.py --build and name the resulting package (§3.10.4; 09 D9.9).` |
+| 39 | 0 | Under `caller: unattended`, a `random` seed is accompanied by `cycle` | refuse | `seeds.sumo is 'random' and no --cycle was given. An unattended draw must be reproducible from its cycle label alone (§3.10.4).` |
+| 40 | 0 | `result_path` is writable and lies outside both corpus roots | refuse | `result_path '/data/truth/run7/run.result.json' is inside roots.truth. The result must survive a refusal that produces no corpus.` |
+| 41 | 0 | Pacing fields are consistent with `pacing.mode` | refuse | `pacing.mode is 'as_available'; 'pacing.real_time_factor' is not valid in that mode.` and `pacing.min_achieved_factor 1.2 exceeds pacing.real_time_factor 1.0.` |
+| 42 | 0 | `handover.channels[]` names only declared channels, and `transcript.root` lies outside both corpus roots | refuse | `transcript.root '/data/obs/cap-…/transcript' is inside roots.observation. Received data is not a corpus artifact (08 D8.38's precedent, team brief §3c).` |
+| 43 | 1 | Each channel's `post_process_profile` loaded on the server, confirmed by digest | refuse | `channel OVERWATCH-1 asked for profile 'default'; the server loaded nothing and kept the component's construction-time settings. The load's return value is discarded (ActorBlueprintFunctionLibrary.cpp:1377-1380), so a name that does not resolve is silent. Profiles present: Default, GoPro, Town10HD_Opt, Town_C.` — §5.2's correction, and the platform case mismatch it measured |
+| 44 | 3 | Under `pacing.mode: wall_clock`, the pre-roll's achieved real-time factor is measured and compared against `min_achieved_factor` | refuse | `pre-roll held 0.31 of real time against a requested 1.0 and a floor of 0.8. A live exercise that cannot hold its rate should not open its window.` — the live analogue of check 21: predict before spending, not after |
+| 45 | 3 | Under `handover.enabled`, the handover transport opens, and every `transcript.sources[]` listener binds | refuse | `handover transport could not open tcp://…: connection refused. Nothing has been captured.` |
+
+Checks 34, 35 and 44 are the three that earn their place. **34 and 35 are §6.4's whole mechanism** —
+the machine's replacement for a human reading an echo — and **44 moves the live run's dominant failure
+from minute forty to the pre-roll**, using a measurement that already has to be taken because
+[`08`](08_Collection_And_EPoL.md) §11.1 requires the achieved factor to be recorded per session anyway.
 
 ### 6.3 Launch, from command to first capture
 
@@ -896,6 +1196,8 @@ sequenceDiagram
     end
     end
 
+    CLI->>OP: LAUNCH ECHO - civil span, sun elevation, cost,<br/>roots, warnings (6.4.1). Attended: blocks only if a<br/>warning was raised. Unattended: the same block is<br/>serialised to the result, warnings were adjudicated in<br/>the configuration and expectations checked in phase 0.
+
     rect rgb(30,45,70)
     note over CLI,AUT: PHASE 2 - authority. The first irreversible step.
     CLI->>AUT: acquire population authority (mode, session_id)
@@ -935,6 +1237,107 @@ The ordering is the substance. **Everything that can be checked without a server
 server; everything that can be checked before acquiring authority is checked before acquiring
 authority; and the sun is applied and read back before the first capture, not after.** Phase 2 is
 marked as the first irreversible step because it is the first one another operator can notice.
+
+### 6.4 The echo before commit, and what replaces it for a machine
+
+[`01`](01_Architecture.md) §10.2 item 3 asks this section for "an echo before a long run commits" —
+the run telling the operator the civil instant and the sun elevation its first frame will be captured
+under, before it starts — on the grounds that
+[`10`](10_Scale_And_Performance.md) §4.2.3 sizes a capture plan at ten hours of wall clock and 313 GB,
+and discovering afterwards that the sun was wrong is the most expensive failure available here.
+[`02`](02_Use_Cases.md) UC-12 step 4 asks for the same thing from the actor's side, and
+[`13`](13_Work_Breakdown.md) §8 carries it as a work item. It is specified here.
+
+#### 6.4.1 What it is
+
+`LaunchEcho` computes one block after phase 0 and before phase 2 — after everything checkable offline
+has passed, and before the first irreversible step. It contains what a reader would have to be told to
+notice that the run is not the run they meant:
+
+```
+bahonar_pattern_of_life @ a91c3f  ::  window night_shift        caller: attended
+  simulated   371 700 - 373 500 s      (1 800 s, 3 600 captures at 2.0 Hz)
+  civil       2026-03-08 23:00:00 +03:30  ->  23:30:00 +03:30    epoch: scenario
+  sun         elevation -37.2 deg -> -41.8 deg   azimuth 12.4 -> 31.0    policy: advance, rate 1.0
+              DARK for 1 800 s of 1 800.  solar.vehicle_lights = from_sumo  (stated, check 14)
+  world       Bahonar@3f91ac   net@88b1de   origin 30.2891, 56.3421
+  render      region 300 m   cap 128   predicted median in-region population 96
+  cost        ~52 GB under /data/obs      predicted 2 h 10 m wall at the measured tick rate
+  roots       observation /data/obs/cap-20260308-2300     truth /data/truth/cap-20260308-2300
+  warnings    1   (render_cap_binds: cap binds for 6% of the window)
+```
+
+Every figure in it already exists: the civil span and sun angles come from
+[`11`](11_Time_And_Illumination.md)'s N2 and N4 functions that check 12 and check 14 already evaluate;
+the population from check 21's lookup; the size from check 19; the roots from the resolved layer 2. **The
+echo is a rendering of a block, not a computation** — the same rule D12.14 applies to the monitor, one
+layer earlier, and the block is serialised as `launch_echo` in `<run>.resolution.json` and in
+`RunResult` (§3.10.3) whether anybody reads it or not.
+
+#### 6.4.2 When it blocks, for a human
+
+**It prints on every attended launch, and it blocks on exactly one condition: a phase-0 warning was
+raised.** With no warnings it prints and the run proceeds.
+
+The rule is not arbitrary. [`07`](07_Scenario_Authoring.md) §5.3 states the principle this section
+inherits — warnings appear in the report in full "because warnings are the failures that a human has to
+adjudicate". A refusal needs no human; it already stopped. A clean resolution needs no human; nothing is
+in question. A warning is by construction the case where the tool has said *this is probably wrong and
+I am not entitled to refuse it*, and that is precisely a judgement. Blocking there, and only there, is
+what stops the echo from becoming the thing §3.8 rejects: an affordance people learn to scroll past.
+
+#### 6.4.3 What the unattended path does instead
+
+A machine cannot be blocked, and silently starting a multi-hour run on a misresolved configuration is
+the failure the echo existed to prevent. The resolution is that **the two things the echo does get
+separated, and each is given a mechanism a machine can satisfy.**
+
+| What the echo does for a human | Attended | Unattended |
+|---|---|---|
+| **Shows the numbers** | printed to the terminal | the identical `launch_echo` block in `<run>.resolution.json` and `RunResult`. Nothing is lost; only the blocking is |
+| **Collects a judgement on a warning** | the run blocks until the operator accepts, and the acceptance is recorded in the lock | **the judgement is made in advance, per warning code**: `on_warning.<code>` is `refuse` or `proceed`, an unadjudicated raised code is a phase-0 refusal (check 34), and the lock records the adjudication **and the artifact that granted it** |
+| **Catches a configuration that resolved legally but not as intended** | the operator reads "civil 23:00, sun −37°" and knows whether that is the run they meant | **declared expectations**: `expect.<path>` states what the caller believed the field would resolve to, and a disagreement is a phase-0 refusal naming both values (check 35) |
+
+**The third row is the one that matters, and it is the one an adjudication mechanism alone does not
+cover.** A misresolved configuration need raise no warning at all. §1.6's measured defect is exactly
+that shape: `setup_solar_time` sets the sun to 12:00 on the host's date, every value is legal, nothing
+warns, the truth record faithfully reports noon, and the corpus contradicts its own scenario. A human
+catches it by reading one line and applying knowledge that is nowhere in the configuration — *this
+scenario is about the night shift*. **A machine has no such knowledge unless someone wrote it down, so
+`expect` is the written-down form of the operator's raised eyebrow.** It costs one line in the run
+configuration, it is checked offline with no server, and it reuses the refusal vocabulary whole:
+
+```jsonc
+"expect": {
+  "solar.window_civil_begin": "2026-03-08T23:00:00+03:30",
+  "solar.sun_elevation_deg_max": -6.0,
+  "world.digest": "Bahonar@3f91ac",
+  "capture.frames_total": 3600
+}
+```
+
+Three properties keep this from being decoration:
+
+- **An expectation is never a value.** It cannot supply a field, only disagree with one, so it can
+  never become a seventh layer or a way to smuggle a default in. A failed expectation refuses; a passed
+  one changes nothing.
+- **Expectations are declared, not inferred.** The tool never generates them from a previous run, which
+  would make cycle *N+1* silently assert cycle *N*'s numbers — the cross-cycle comparison §3.10.4 keeps
+  outside.
+- **An attended run may declare them too**, and should whenever the configuration is a template a
+  cadence will later run unattended, because that is the moment the human's knowledge is still present
+  and can be written down.
+
+#### 6.4.4 Two shapes that were considered and refused
+
+- **Block with a timeout, then proceed.** It is the worst of both: an unattended caller waits for
+  nothing, and an operator who stepped away gets exactly the silent start the echo exists to prevent.
+  A guard whose failure mode is "proceed anyway" is not a guard.
+- **`--yes` as a blanket acceptance.** One flag that accepts every warning, present and future, records
+  nothing about *which* warnings were accepted, and would be pasted into every cadence invocation on
+  the first day. The per-code adjudication costs one line per warning class that actually fires, and it
+  is the thing §13 open question 6 was reaching for: an acknowledgement that is attributable rather than
+  ceremonial.
 
 ---
 
@@ -977,12 +1380,21 @@ the corpus is no longer what was asked for:
 
 1. A participant in an open annotated interval could not be admitted →
    [`04`](04_Contracts.md) D4.6 fails the run at that tick.
-2. `Dropped` becomes non-zero on any channel → [`10`](10_Scale_And_Performance.md) D10.7.
+2. The **recorder's** `Dropped` becomes non-zero on any channel →
+   [`10`](10_Scale_And_Performance.md) D10.7. §7.4 names the second, unrelated drop counter that a live
+   run introduces and explains why it is not loud.
 3. The rendered fraction falls below the declared floor → [`10`](10_Scale_And_Performance.md) §7.
 
 Nothing else interrupts. Diagnostics verbosity stays Run-mutable (§5.2) precisely so that the loud
 conditions are not buried, which is the reason `--traffic-diagnostics` is off by default today
 (`:439-449`).
+
+**Under `caller: unattended` there is nobody to interrupt, and the conditions do not become
+advisory.** A loud condition ends the run: the session closes with the short window, the manifest
+carries its `closed_by` reason, the outcome is `truncated` (exit 7), and the condition is named in
+`RunResult.produced`. The alternative — an unattended run continuing past a condition that would have
+stopped an attended one — would make the corpus a function of who was watching, which is the one thing
+§5.1's governing question exists to forbid.
 
 ### 7.2 At the end
 
@@ -997,6 +1409,10 @@ it is a rendering of one — for the same reason the monitor is not a second com
 | **Capture** | frames per channel; `Dropped` per channel; capture rate per window including any degradation step; occlusion pairing | **fail** if `Dropped ≠ 0` (D10.7); **fail** if the capture rate changed and was not recorded |
 | **Render accounting** | simulated / rendered / never rendered; admissions; refusals by reason; `cap_bound_ticks`; median rendered fraction | **fail** below the floor; **fail** if any annotated interval was never rendered |
 | **Solar** | requested policy, epoch, applied state, confirmed state, closing state | **fail** if `applied` and `confirmed` disagree |
+| **Radiometry** | per channel: the profile asked for and the digest of the profile the server loaded | **fail** if a channel has no profile digest, per [`08`](08_Collection_And_EPoL.md) D8.28 |
+| **Pacing** | requested mode and real-time factor; achieved factor per window against `min_achieved_factor` | **fail** under `wall_clock` if the achieved factor was not recorded; **warn** if it fell below the floor and the run was not stopped |
+| **Handover** | per channel: frames offered, handover drops, last delivered tick; transcript sources, blobs received, last stamp | **no gate.** A handover drop is expected by design ([`08`](08_Collection_And_EPoL.md) §11.3) and the coverage record already carries it as *covered but not delivered* |
+| **Launch provenance** | caller, cycle, every warning with its adjudication and the artifact that granted it, every declared expectation and that it held | **fail** if a warning is recorded with no adjudication — that combination can only arise from a bug in §6.4 |
 | **Supervision** | instances, intervals, per-interval observability, prevalence in all three units | **fail** if the manifest is not closed |
 | **Corpus-affecting events** | SUMO collisions, teleports, emergency stops, reconciliation refusals | **warn**, per [`01`](01_Architecture.md) OQ6 |
 
@@ -1017,6 +1433,95 @@ readers for values that already exist.
   non-constant across sessions — 84%, 99%, 29.5% — so a window that ran at 15% produced the same
   imagery as one that ran at 90% at six times the cost, and nothing in the corpus says which. The
   monitor shows it live and the manifest records it per window.
+
+### 7.4 The live run: how pacing is expressed, and what is shown while it runs
+
+A live exercise is paced against a wall clock with a human watching
+([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c). **The pacing ruling is not this section's** —
+[`08`](08_Collection_And_EPoL.md) §11.1 fixes the mechanism (a real-time factor on the world tick,
+against an absolute target in the manner of `SumoCotBridge.py:243-248`, so an overrunning step is
+absorbed rather than accumulating drift) and §11.3 fixes what happens when the consumer falls behind
+(drop the oldest pending frame and count it; never back-pressure the world, because that would move the
+sun). This section owns two things: the expression, which is §5.2's `pacing.*` block and its one Bound
+row, and the picture.
+
+#### 7.4.1 The panel
+
+It is §7.1's monitor with four rows replaced, not a second display. Everything D12.14 requires still
+holds: every field shown is a field the manifest carries, read from the same source.
+
+```
+bahonar_pattern_of_life :: night_shift          exr-20260308-2300     [ADVANCING]
+sim   t=371 240 / 371 700   window  61.7%   |  civil 23:12:20 +03:30  sun -39.1 deg
+pace  requested 1.00  achieved 0.97  floor 0.80   |  sim clock 4.1 s behind wall clock
+sumo  population 139   eligible 96   admitted 96   shed 0        cap 128
+chan  OVERWATCH-1  captured 1 482  recorder-dropped 0  |  offered 1 482  handover-dropped 37
+chan  OVERWATCH-2  captured 1 482  recorder-dropped 0  |  offered 1 482  handover-dropped 41
+recv  DETECT-A  last 0.4 s ago  312 blobs  application/octet-stream   (not parsed)
+      EPOL-1    last 6.1 s ago   18 blobs  application/octet-stream   (not parsed)
+truth manifest flushed t=371 238 (2 s ago)   truth feed OFF (08 D8.23)
+```
+
+| Row | Why it is there | Manifest field |
+|---|---|---|
+| **`pace`** — requested factor, achieved factor, floor, and how far simulated time has fallen behind wall clock | The one number a live operator is there to watch. [`02`](02_Use_Cases.md) UC-8's failure flow requires the degradation to be *displayed* rather than silent | `pacing.achieved_factor` per window ([`08`](08_Collection_And_EPoL.md) §11.1) |
+| **Two drop counters per channel, side by side and never summed** | §7.4.2 | recorder: `FrameRecorder.Dropped`; handover: [`08`](08_Collection_And_EPoL.md) §11.3's per-sensor counter |
+| **`recv`** — per transcript source: last-received age, blob count, content type, and the words *not parsed* | The operator must be able to see that the external chain is alive without the display implying we understood anything it said | `transcript.sources[].last_tick`, `.count` |
+| **`truth feed OFF`** | [`08`](08_Collection_And_EPoL.md) D8.23 makes truth's own endpoint off by default in a live handover and turning it on a recorded choice. Showing the state stops it from being discovered afterwards | `telemetry.truth_endpoint` |
+
+**Two displays, two audiences, and they must not be merged.** This panel is the *capture* operator's:
+it shows the sun's elevation and the `ADVANCING` flag because those are how §1.6's defect is made
+visible. The *exercised* operator's picture is [`08`](08_Collection_And_EPoL.md) §11.4's, and D8.23
+specifically forbids `advancing` and `rate` from riding a feed an exercised operator sees, for the same
+reason truth does not: they describe the simulation's configuration, and an exercise is not supposed to
+show its own scaffolding. A single merged display would have to satisfy both rules and could not.
+
+**A fourth loud condition, in a live run only:** the achieved real-time factor falls below
+`pacing.min_achieved_factor`. It is loud rather than a column because a live exercise that has stopped
+keeping time is no longer the thing anybody is watching, and check 44 has already proved at pre-roll
+that the machine *could* hold the rate — so a shortfall inside the window is a change, not a
+misconfiguration.
+
+#### 7.4.2 Two drop counters, and why summing them would be a lie
+
+They count different losses and they have different verdicts.
+
+| | Recorder drop | Handover drop |
+|---|---|---|
+| What was lost | a frame that never reached disk | a frame that reached disk but not the consumer |
+| Where | the encode queue's `DropWrite` channel, counter incremented at `FrameRecorder.cs:184-185` (declared at `:46`), which §7.3 measures as having **no reader anywhere in the tree** | the handover socket's drop-oldest queue, per sensor ([`08`](08_Collection_And_EPoL.md) §11.3) |
+| What it does to the corpus | **a hole.** The imagery is short and the coverage record says the camera saw something that no file holds | **nothing.** The corpus is complete; the coverage record marks that `(sensor, tick)` *covered but not delivered* |
+| Verdict | **loud** — §7.1 condition 2, and D10.7 fails the quality gate on a non-zero value | **a counted column.** [`08`](08_Collection_And_EPoL.md) §11.3 rules it the correct behaviour, so interrupting on it would be interrupting on the design working |
+
+A single "dropped" figure would be a number that is neither: non-zero on a healthy live run, and unable
+to distinguish a corpus with holes from a consumer that reads slowly. They are separate fields in the
+manifest, separate columns on the panel, and separate rows in the closeout.
+
+#### 7.4.3 The transcript is stored, never interpreted
+
+[`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c and [`02`](02_Use_Cases.md) UC-8 step 4 fix what a transcript is:
+what crossed the interface and when, recorded verbatim and tick-stamped, "an opaque blob with a
+timestamp, a source id and a content type". This section adds only where it goes and how it is switched
+on: `transcript.root`, which **is refused inside either corpus root** (check 42).
+
+That is not a third corpus root. It is the same ruling
+[`08`](08_Collection_And_EPoL.md) D8.38 makes for a probe's workspace — outside both roots, never
+released with the corpus, never digested into a manifest, never cited by a corpus artifact. The reason
+here is the one D8.17 gives for the two-root split in the first place: a directory inside the corpus
+that holds somebody else's model output is one refactor away from being read as a label. There are two
+roots, and received data is not in either of them.
+
+### 7.5 What this section needs from `08_Collection_And_EPoL.md`
+
+Stated as properties, in the manner of §4.6.
+
+| # | Property needed | Why this section needs it |
+|---|---|---|
+| **L1** | **The handover drop counter's identity and scope** — per sensor, per session, incremented at the socket — and a statement that it is a distinct field from `FrameRecorder.Dropped`, with distinct names in the manifest | §7.4.2. If the two land in one field, the closeout's gate on a recorder drop (D10.7) fires on a healthy live run, and the first thing anybody does about that is switch the gate off |
+| **L2** | **At what granularity the achieved real-time factor is published** — per tick, per window, or per session — and by which component | D12.14 forbids the monitor from computing its own figures, so the `pace` row can only show a field something else already publishes. §11.1 says the achieved factor must be recorded per session; the panel needs it at least per window and ideally as a rolling value |
+| **L3** | **A ruling on the pacing floor**: below what fraction of the requested real-time factor has a live exercise failed, or an explicit statement that there is no such number and the operator supplies one | §5.2 gives `pacing.min_achieved_factor` no tool default on the assumption the answer is *the operator supplies it*. If `08` fixes a number, it becomes a tool default and check 44's message changes |
+| **L4** | **Confirmation that a transcript is not a corpus artifact** and belongs outside both roots on D8.38's precedent, or a ruling that overrules it | §7.4.3. `08` owns the root structure and the release attestation (D8.17); this section should not place a new directory near it without that section agreeing |
+| **L5** | **Whether a live handover session also records to disk**, which §16 open question 7 recommends with the session assigned to the held-back release partition by default | It decides whether `pacing.mode: wall_clock` implies a corpus at all, and therefore whether §7.2's quality gate and §3.10.3's `produced` block apply to a live run or are empty for it |
 
 ---
 
@@ -1108,7 +1613,16 @@ Three things the diagram asserts:
 - **A capture run writes exactly two roots, and there is no third.** Model output is neither
   produced nor consumed by this pipeline, so nothing here holds it
   ([`04`](04_Contracts.md) D4.26). The `OBSERVATION`/`TRUTH` separation is the whole of the
-  anti-leak boundary's physical form, and it is unaffected by the removal.
+  anti-leak boundary's physical form, and it is unaffected by the removal. A live run's transcript and
+  a run's `RunResult` are written **outside both**, and neither is a corpus artifact (§7.4.3, §3.10.3).
+
+**The same diagram is the unattended traversal with one lane replaced.** Every decision in the operator
+lane is made in advance and in writing: the window is named in the run configuration, the darkness
+branch is answered by `solar.vehicle_lights` before launch, a refusal is returned as an exit status and
+a named field in `RunResult` rather than read on a screen, the loud-condition branch terminates the run
+instead of asking, and the quality-gate branch is the difference between exit 0 and exit 6. **The
+control-surface and capture-session lanes are unchanged**, which is the whole claim of §3.10: the
+machine is the same surface with a caller that cannot be asked a question.
 
 ---
 
@@ -1172,6 +1686,14 @@ These are not migration work; they are defects §1 measured, and they should be 
    (§1.2).
 6. **`parse` and `parse_args` behave identically**; the RNG side effect at `:640-641` moves to the
    caller.
+7. **The post-process profile default resolves on both platforms, and a profile that did not load is
+   not silent** (§5.2). The interactive viewer spawns its RGB camera through the same
+   `UActorBlueprintFunctionLibrary::SetCamera` path, so the case mismatch between the default name
+   `"default"` (`ActorBlueprintFunctionLibrary.cpp:1376`) and the file `Default.json` reaches it too:
+   its own imagery is exposed differently on Windows and on Linux with no message either way. The
+   engine-side half — publishing the setters — is
+   [`08`](08_Collection_And_EPoL.md) D8.27's; the half owed here is that a discarded `false`
+   (`:1377-1380`) stops being discarded.
 
 ### 9.5 The conversion, stated as a property
 
@@ -1207,12 +1729,19 @@ What this section's work requires, on both platforms in the same change:
 | `MakeDistribution` header comment describing the tree | `:8-20` updated | `:9-12` updated |
 | Distribution README | the capture quick-start | the capture quick-start |
 
-Two properties are required of the launchers, both because the underlying tool is the same program:
+Three properties are required of the launchers, all because the underlying tool is the same program:
 
 - **The `--help` output is generated from the schema, not hand-written**, so the two platforms cannot
   drift and an assistant reading `--help` gets the same field names the schema validates.
 - **A parity check runs in CI**: the two launchers are invoked with `--help` and their option sets
   compared. The measured break above survived because nothing compared them.
+- **The process exit status propagates identically through both launchers**, and the CI parity check
+  compares that too: each launcher is invoked with a configuration that refuses in phase 0 and the
+  status compared against D12.22's table. This is new with the unattended caller and it is exactly the
+  kind of thing a wrapper script loses silently — the whole value of the status set is that a machine
+  can act on it, and a launcher that returns 0 for a refusal is worse than one that returns nothing.
+  The `run-capture` launchers must also pass `--result` through unchanged, since it is the only path on
+  which a refusal leaves a readable artifact.
 
 The site profile (§3.5 layer 2) is what keeps the run configuration itself platform-neutral: paths,
 the SUMO install, the ion token and the export root bases live there, so a run configuration authored
@@ -1233,15 +1762,37 @@ on Windows runs unedited on Linux.
 - **The optics and coverage of the rig.** [`08`](08_Collection_And_EPoL.md) §3 owns them.
 - **A graphical interface.** Nothing above needs one. If one is built it is a producer of run
   configurations and a reader of manifests, and it changes nothing in §3 or §6.
-- **The live exercise's operator picture.** [`08`](08_Collection_And_EPoL.md) §10.4 owns it; §7.1 is
-  the capture monitor and the two are different displays for different jobs.
-- **Exposure control.** Measured absent (§1.3). Making it exist is engine plumbing with the setters
-  already present (`SceneCaptureSensor.h:237-378`); it belongs with whoever captures the first night
-  window, and §6 check 16 makes its absence loud until then.
+- **The live exercise's operator picture.** [`08`](08_Collection_And_EPoL.md) §11.4 owns it; §7.1 and
+  §7.4.1 are the capture monitor and the three are different displays for different jobs — and D8.23
+  makes two of them structurally incompatible with a merge.
+- **The pacing ruling and the drop policy.** [`08`](08_Collection_And_EPoL.md) §11.1 and §11.3 own them.
+  This section expresses them (§5.2), shows them (§7.4.1) and states in §7.5 what it needs back. The one
+  place it declines to offer a toggle at all is the drop policy, because that section has already ruled.
+- **Numeric exposure control.** Measured absent (§1.3), and the conclusion drawn from it corrected in
+  §5.2: exposure *is* selectable at spawn through `post_process_profile`. Publishing the engine-side
+  setters (`SceneCaptureSensor.h:237-393`) is [`08`](08_Collection_And_EPoL.md) D8.27's; §6 check 16
+  refuses a numeric exposure and names the field that works, and check 43 makes a profile that did not
+  load loud.
+- **The cadence, the training and the models.** What decides that a corpus should be regenerated, what
+  trains on it, and what any of it is worth are all outside this plan
+  ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b, §3c). §3.10 specifies an invocation with a precise exit
+  status and a machine-readable result; it does not schedule, does not loop, does not compare one cycle
+  with another, and does not judge a corpus by anything but its own consistency.
+- **The external chain's formats, transports and failure modes.** A handover endpoint and a transcript
+  source are configuration fields whose values this section never interprets. A reader must be able to
+  substitute a completely different detector without any field above changing
+  ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c).
 
 ---
 
 ## 12. Decisions
+
+**No decision is renumbered.** D12.1–D12.20 keep their identities and their text; **D12.21–D12.32 are
+new**, added for the unattended caller ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c) and the live exercise.
+Two earlier decisions are amended in place and the amendment is written inside the row so a reader
+holding an earlier citation can see what moved: **D12.13** (the mutability classes) gains the widened
+definition of *Bound*, and **D12.18** gains one repair. Validation checks 1–33 also keep their numbers —
+[`08`](08_Collection_And_EPoL.md) §15 cites rule 17 — and the twelve new checks are appended as 34–45.
 
 | # | Decision |
 |---|---|
@@ -1257,14 +1808,26 @@ on Windows runs unedited on Linux.
 | **D12.10** | **A field whose correct value depends on a condition has no default under that condition** — the *conditional requirement*. Its first use: `solar.vehicle_lights` defaults to `off`, but in a window whose sun elevation falls below −6° it has no default and the run is refused until it is stated. This is how the surface stays short in the ordinary case without letting an important choice be implicit (§3.5, §4.4) |
 | **D12.11** | **Seeds have no nondeterministic default.** Today `--seed` defaults to `None`, documented "nondeterministic" (`:310-316`), which is incompatible with reproducing a run from its record. `random` is still available and resolves to a drawn value that is then recorded (§5.2) |
 | **D12.12** | **The solar state is read back from the world and recorded before the first capture, and a disagreement with what was requested refuses the run.** Today `WorldBuilder.py:238-247` logs what it asked for and never reads back, and a world with no CesiumSunSky produces a warning and a run that continues (`:244-245`) (§4.5, §6.2 checks 23 and 31) |
-| **D12.13** | **Four mutability classes — Bound, Session-fixed, Degradation-only, Run-mutable — decided by one question: would a consumer reading the corpus be wrong if this changed and they did not know?** The occlusion estimator is Session-fixed rather than Run-mutable for exactly this reason, although it is a runtime toggle today (§5.1, §5.2) |
+| **D12.13** | **Four mutability classes — Bound, Session-fixed, Degradation-only, Run-mutable — decided by one question: would a consumer reading the corpus be wrong if this changed and they did not know?** The occlusion estimator is Session-fixed rather than Run-mutable for exactly this reason, although it is a runtime toggle today. *(Amended — live and unattended callers.)* **Bound** now reads *fixed by an artifact, or by a ruling in a sibling section that this surface expresses rather than re-offers*, which is what the table already relied on for `synchronous` (D10.10) and `telemetry.on_tick_thread` (D10.11) and what the drop policy now requires ([`08`](08_Collection_And_EPoL.md) §11.3). **No fifth class was added**: `caller` and `on_warning.*` are placed Session-fixed by the existing question, and `cycle` and `expect.*` are recorded in the lock as launch provenance rather than given a class of their own (§5.1, §5.2) |
 | **D12.14** | **The live monitor displays only fields the manifest also carries, read from the same source.** A monitor that computes its own numbers can disagree with the record, and the operator believes the screen (§7.1) |
 | **D12.15** | **Three conditions interrupt the operator and nothing else does:** a participant in an open annotated interval refused admission, a non-zero `Dropped` on any channel, and the rendered fraction falling below the declared floor. Everything else is a column (§7.1) |
 | **D12.16** | **A failed quality gate labels the run, it does not discard it.** `quality_gate: "failed"` with the failing checks named, so the corpus is usable and honest rather than silently trusted or thrown away (§7.2) |
 | **D12.17** | **`run_SCTMV.py` and its parser keep every one of their 86 arguments and all thirteen hotkeys.** The new surface is a second front end over shared definitions — `WorldBuildConfiguration`, the channel description, the capture description, and one solar application path — with **defaults defined exactly once in the schema**. *Measured justification:* three `getattr` fallbacks already disagree with the parser and exist precisely to survive a caller that is not this parser (§9.2, §9.3, §1.5) |
-| **D12.18** | **Six repairs to the interactive surface are owed regardless of whether the new one is built:** refuse or remove `--ev`; reconcile the three divergent defaults; warn on `--time-rate` without `--time-advance`; stop overwriting the sun in attach mode; document the four undocumented hotkeys; and make `parse` and `parse_args` behave identically (§9.4) |
+| **D12.18** | **Seven repairs to the interactive surface are owed regardless of whether the new one is built:** refuse or remove `--ev`; reconcile the three divergent defaults; warn on `--time-rate` without `--time-advance`; stop overwriting the sun in attach mode; document the four undocumented hotkeys; make `parse` and `parse_args` behave identically; and *(added)* fix the post-process profile default, whose name is the lowercase literal `"default"` (`ActorBlueprintFunctionLibrary.cpp:1376`) against a file named `Default.json` — so it resolves on a case-insensitive file system and silently does not on a case-sensitive one, with the failure discarded at `:1377-1380` (§9.4) |
 | **D12.19** | **The launcher ships on both platforms in the same change, its `--help` generated from the schema, with a CI parity check comparing the two option sets.** *Measured:* the existing parity break survived because nothing compared them — `MakeDistribution.ps1:237` copies a file deleted in `d2c666c23` and only warns, `:301` then writes a launcher that runs it, and the Windows script additionally omits the `carlacontrol` wheel that `MakeDistribution.sh:112-113` bundles (§10) |
 | **D12.20** | **The predicted in-region population is checked against `render_cap` at launch**, using the scenario's already-run population profile, and a region that makes the cap bind produces a warning with the numbers. This moves [`00_Overview.md`](00_Overview.md) §6's cross-section conflict — label-dependent shedding excluding a corpus from training — from something discovered in a manifest to something named before the run starts (§6.2 check 21) |
+| **D12.21** | **An unattended caller is a first-class consumer of this surface, not a scripted human.** *(New — brief §3c.)* It is declared (`caller: unattended`), it is recorded in the corpus, and it changes what the tool may do without being told. **Three of its five requirements already hold and are not rebuilt:** no interactive prompt (*measured:* no `input()` anywhere in `CarlaControl/src/carlacontrol` or `CarlaControl/scripts`), a provenance-carrying effective configuration (D12.3), and a reproducible artifact (R1, D12.11). Two are added: a meaningful exit status (D12.22) and a result artifact written in every outcome (D12.23). What is *not* added is a scheduler, a loop, a cadence or a cross-cycle comparison — those are outside (§3.10) |
+| **D12.22** | **Nine named terminal outcomes, and the process exit status is read from the result artifact rather than computed beside it.** *Measured justification:* `run_SCTMV.py` has two statuses — `1` on a failed world build (`:130`), `0` otherwise (`:339`) — and swallows `KeyboardInterrupt` at `:291-292`, so a run killed halfway is indistinguishable from one that finished; and [`07`](07_Scenario_Authoring.md) §5.5 already measured `duarouter` exiting 0 regardless under `--ignore-errors`. The set is small on purpose: its job is to separate *your configuration is wrong* from *the world is busy* from *a corpus exists and is good* from *a corpus exists and is labelled failed*. **`refused_authority` (4) is the only status worth retrying unchanged**, and `gate_failed` (6) must never be read as `corpus_produced` (0) (§3.10.2) |
+| **D12.23** | **`RunResult` is written in every terminal outcome, at a path the caller gives, outside both corpus roots.** It carries the outcome and its status, the launch echo, every refusal, every warning with its adjudication, the effective-configuration digest, and a pointer to the manifest or `null`. The path is separate because a phase-0 refusal never reaches [`08`](08_Collection_And_EPoL.md) D8.4's session assignment and so has no session root to write under. It is a pointer set over artifacts §3.6 and §7.2 already produce, not a second description of the corpus (§3.10.3) |
+| **D12.24** | **The echo before commit is specified, and it blocks on exactly one condition: a phase-0 warning was raised.** [`01`](01_Architecture.md) §10.2 item 3 asked for it and [`13`](13_Work_Breakdown.md) §8 carries it. It prints on every attended launch; with no warnings it prints and proceeds. The rule follows [`07`](07_Scenario_Authoring.md) §5.3 — a refusal needs no human because it already stopped, a clean resolution needs no human because nothing is in question, and a warning *is* by construction the case the tool is not entitled to decide. **The echo is a rendering of a `launch_echo` block, not a computation**, so the block exists on both paths (D12.14's rule, one layer earlier) (§6.4.1, §6.4.2) |
+| **D12.25** | **For an unattended caller the echo's two jobs are separated, and each gets a mechanism a machine can satisfy.** The judgement on a warning is made **in advance and per warning code** — `on_warning.<code>`, an unadjudicated raised code is a refusal (check 34), and the lock records the adjudication *and the artifact that granted it*. The catch on a configuration that resolved legally but not as intended is **declared expectations** — `expect.<path>`, checked offline, a disagreement refused naming both values (check 35). **Refused: block-with-timeout-then-proceed** (an unattended caller waits for nothing and an absent human gets the silent start the echo existed to prevent) and **a blanket `--yes`** (it records nothing about which warnings were accepted and would be pasted into every invocation on the first day) (§6.4.3, §6.4.4) |
+| **D12.26** | **`expect` is the written-down form of the knowledge a human applies when reading the echo, and it can never supply a value.** §1.6's measured defect is the shape that motivates it: every value legal, nothing warning, the sun at noon, the corpus contradicting its own scenario. A human catches it by knowing the scenario is about the night shift; a machine cannot unless someone wrote that down. An expectation only ever disagrees — it is never a seventh resolution layer, it is never generated from a previous run, and a passing one changes nothing (§6.4.3) |
+| **D12.27** | **An unattended capture run never builds a world, and a drawn seed requires a cycle label.** World build carries nondeterminism no seed covers ([`09`](09_Toolchain_And_Packaging.md) D9.9's `set`-ordered node emission, carried forward) and the world is already a layer-3 binding, so `world_build` is refused in a capture run (check 38) and building stays where it is, attended, in `run_SCTMV.py --build`. `random` seeds stay available and, under `caller: unattended`, require `--cycle` (check 39); the draw is then a deterministic function of the effective-configuration digest and the cycle label, so cycle *N* is reproducible from its identifier alone and cycle *N+1* is a different corpus by construction (§3.10.4) |
+| **D12.28** | **Layer 2 is where host dependence is allowed to live, not where it is allowed to hide.** Every layer-2 field is materialised like any other and names the environment variable it resolved from; a secret or path that resolves empty is a refusal rather than a blank (*measured:* `--ion-token` defaults to `""` at `CarlaControlArgumentParser.py:105`); and under `caller: unattended` a field resolved from an environment variable the site profile does not declare is a refusal (checks 36, 37). *Measured:* five variables reach behaviour today — `CESIUM_ION_TOKEN`, `SUMO_HOME`, `CARLA_NETCONVERT`, `PROJ_LIB`, `PROJ_DATA` — and none is recorded in anything a run produces (§3.5, §3.10.1) |
+| **D12.29** | **Pacing is expressed here and ruled elsewhere.** `pacing.mode` and `pacing.real_time_factor` are Session-fixed and recorded, `pacing.min_achieved_factor` has no tool default pending [`08`](08_Collection_And_EPoL.md)'s ruling, and **`pacing.on_consumer_slow` is not a field at all** — [`08`](08_Collection_And_EPoL.md) §11.3 and D8.23 rule it drop-oldest-and-count, so this surface expresses that and does not re-offer it. A toggle for a decision another section has taken is a way to contradict that section from a configuration file. Check 44 moves the live run's dominant failure to the pre-roll, using a measurement §11.1 already requires (§5.2, §7.4) |
+| **D12.30** | **Two drop counters, displayed side by side and never summed.** The recorder's (`FrameRecorder.cs:46, :184-185`) counts a frame that never reached disk — a hole in the corpus, loud, and D10.7 fails the gate on it. The handover socket's counts a frame that reached disk but not the consumer — no hole, expected by design, and the coverage record already carries it as *covered but not delivered*. A single figure would be non-zero on a healthy live run and unable to distinguish the two (§7.4.2) |
+| **D12.31** | **The capture monitor and the exercised operator's picture are different displays and cannot be merged.** §7.1 and §7.4.1 show sun elevation and the advancing flag because that is how §1.6's defect is made visible; [`08`](08_Collection_And_EPoL.md) D8.23 forbids `advancing` and `rate` — and truth — from any feed an exercised operator sees. One display cannot satisfy both rules. The live panel additionally shows the truth feed's own state, so its being off is a visible fact rather than one discovered afterwards (§7.4.1) |
+| **D12.32** | **A transcript is stored and never interpreted, and it is not a third corpus root.** `transcript.root` is refused inside either corpus root (check 42) on exactly [`08`](08_Collection_And_EPoL.md) D8.38's precedent for a probe workspace: outside both roots, never released, never digested into a manifest, never cited by a corpus artifact. A source is `{source_id, listen, content_type}` and a record is an opaque blob with a timestamp — the brief's §3c wording, adopted verbatim because widening it is how a schema for somebody else's output gets designed by accident. **There are still two roots** (§7.4.3) |
 
 ---
 
@@ -1279,6 +1842,18 @@ on Windows runs unedited on Linux.
    stopping on the first failure is the difference between one wasted window and twelve. What is
    genuinely unsettled is whether a run list should share one `sumo` process across its windows —
    which is [`01`](01_Architecture.md) open question 5 and should be answered with it, not separately.
+
+   ***Amended for the unattended caller.*** The first half of this question is now settled by
+   [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c: a cadence regenerates a corpus without a human, so
+   `--run-list` is required rather than preferred, and §3.8 shows the invocation. **A second half opens
+   in its place: should an unattended run list stop on the first failed quality gate, or complete and
+   report?** The attended argument for stopping — one wasted window instead of twelve — inverts
+   unattended, because a cadence that stops on entry 1 of 16 produces nothing at all and the cycle is
+   lost until somebody notices. Options: stop always; complete always; or `on_gate_failure: stop |
+   continue` with `stop` the attended default and `continue` the unattended one. **Recommend the third**,
+   with `RunResult` carrying one entry per member so a partially-failed cycle is still a usable cycle
+   with named holes — which is D12.16's reasoning applied to a list instead of a run. **Needs the user**
+   only if they would rather a cadence fail fast than produce a partial corpus.
 
 2. **Where does the site profile live, and who writes it?** It is the layer that makes a run
    configuration portable, and it is also the layer nobody will maintain. Options: a file beside the
@@ -1322,6 +1897,12 @@ on Windows runs unedited on Linux.
    theatre, and whether this one would be enforced is a question about how the team works rather than
    about the tool.
 
+   ***Half-answered by D12.25.*** That field now exists and is enforced on one path: `on_warning.<code>`
+   records the adjudication *and the artifact that granted it*, and check 34 refuses an unattended run
+   with an unadjudicated warning. So for a machine the acknowledgement is neither optional nor
+   ceremonial — it is a field without which the run does not start. **What remains open is the attended
+   half**, where the acknowledgement is a keystroke at §6.4.2's block and the recorded actor is whatever
+   identity the launcher can obtain. That is still a question about how the team works.
 7. **Does the monitor belong in the same process as the capture session?** §7.1 assumes it does,
    which is simplest and guarantees it reads the same fields. But [`10`](10_Scale_And_Performance.md)
    D10.10 requires no other polling client in synchronous mode, and a separate monitor process would
@@ -1330,3 +1911,22 @@ on Windows runs unedited on Linux.
    the default single-process deployment ([`01`](01_Architecture.md) D1.12), and a manifest-tailing
    monitor as the remote option**, because the manifest is already the single source and tailing it
    costs the server nothing.
+
+8. **Should `caller: unattended` be permitted together with `pacing.mode: wall_clock`?** A live exercise
+   has a human watching by definition ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c), which argues for
+   refusing the combination outright. But [`02`](02_Use_Cases.md) UC-8's *integration test rather than
+   demonstration* alternate flow is precisely an unattended live run — does the stage accept our frame,
+   is the tick preserved, does latency stay inside the budget — and refusing it would delete a named use
+   case to enforce a tidiness rule. **Recommend permitting it**, with two conditions: `handover.enabled`
+   must be true (an unattended live run with nothing on the other end is a corpus run paced slowly for
+   no reason), and §7.1's loud conditions terminate rather than merely display, which D12.21's unattended
+   rule already requires. **Needs the user** only if they consider an unwatched live run a contradiction
+   in terms.
+
+9. **Should `expect` be mandatory under `caller: unattended`?** §6.4.3 argues that without a declared
+   expectation a cadence has no guard at all against the one failure mode checks cannot reach — a
+   configuration that resolves legally and not as intended. Mandating it would close that. Against:
+   a mandatory field gets filled in mechanically, and a guard people satisfy without thinking is exactly
+   what §3.8 refuses to build. **Recommend not mandatory, but visible**: the closeout and `RunResult`
+   report the count of declared expectations, so `expectations declared: 0` is a line somebody reads
+   rather than an absence nobody notices — and revisit once one cadence has actually run.

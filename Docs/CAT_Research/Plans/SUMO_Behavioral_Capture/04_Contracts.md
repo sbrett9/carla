@@ -6,13 +6,14 @@ is used), or explicitly labelled an inference. No code was changed, no build was
 **Date:** 2026-09-18
 **Scope:** Every interface between two components of the SUMO-driven behavioural-capture system: the
 artifact's name and location, its format, its complete field table, a worked example, the validation
-rules, the failure mode when a rule is violated, and the versioning rule. Nine contracts, `C1`–`C9`.
+rules, the failure mode when a rule is violated, and the versioning rule. Ten contracts, `C1`–`C10`.
 **Audience:** an engineer implementing one side of one of these interfaces who has not read the
 conversation that produced this plan.
 
 **Binds to:** [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3 (decisions not to re-litigate), §3a (the
-simulated-time-of-day requirement), **§3b (the scope boundary — this pipeline labels; it never scores)**
-and §4 (standing rules).
+simulated-time-of-day requirement), **§3b (the scope boundary — this pipeline labels; it never scores)**,
+**§3c (the live exercise is a primary use case, and it is generic past our boundary)** and §4 (standing
+rules).
 **Depends on:** [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) (owns the tick and
 solar-clock *mechanism*; this section states the *guarantee*),
 [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) (owns the annotation payload; this section
@@ -50,6 +51,23 @@ because both were always rules about **our own data** — they govern what may b
 justification re-framed; every such spot is marked **re-framed** so nothing looks quietly deleted. No
 decision was renumbered: `D4.26`–`D4.28` are new, and siblings citing `D4.x` are safe.
 
+**And what changed in this revision, after the clarification.**
+[`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c clarifies §3b: narrowing the scope removed **scoring**, not
+**running the chain**. The **live exercise is a primary use case** — our imagery generation feeds an
+external detect-and-track stage, which sends tracks to an external model service, which produces its
+reports live — and everything past our imagery and truth is external and unknown to us. Separately, a
+corpus must be regenerable on a cadence by an automated process, which something outside then trains on;
+nothing trains here and nothing trains during a run. Two things follow. **`C8` is rewritten again, from a
+corpus handover into one contract with two delivery modes** — a *deferred* handover, which is the corpus
+already specified, and a *live* handover, which emits the same records as they are produced (§10, and
+`D4.29`–`D4.32`, `D4.34`). **And `C10` is added** (§12): the machine-readable result an unattended caller
+reads to decide whether to use what a run produced (`D4.33`, `D4.35`). Everything the external side does
+is now *unspecified on purpose* and the omission is checkable — `D4.34`'s substitution test — and one
+piece of existing over-specification was found and cut, the `DETECTOR_TRACK` entity in `C4`'s
+cardinality diagram (§6.2). `D4.20`, `D4.26`, `D4.27`, `D4.28` and the corpus-description contracts are
+unaffected, and each is confirmed in one line where it lives. No decision is renumbered: `D4.29`–`D4.35`
+are new.
+
 ### What this section does not cover
 
 - **Sizing.** Every cap, radius, window, budget and tolerance below is named and typed; not one is given
@@ -72,10 +90,19 @@ decision was renumbered: `D4.26`–`D4.28` are new, and siblings citing `D4.x` a
   policy, and what an operator sees is
   [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md)'s. `C9` says only what the
   resulting choice must look like on the wire and what the manifest must record about it.
-- **Anything a model does with the corpus.** Running a detector, a tracker or an EPoL model,
-  associating their output to truth, and any metric, harness or comparison over them are outside this
-  effort entirely ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b). `C8` ends at the handover; what happens past
-  it is the external model team's, and this document specifies none of it.
+- **Anything a model does with what we emit, and anything about the external chain itself.** Running a
+  detector, a tracker or a model service, associating their output to truth, and any metric, harness or
+  comparison over them are outside this effort entirely
+  ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b). So — per §3c — are **a detector's input schema, a track
+  format, a report schema, a fusion or normalisation stage, and any latency, retry or error semantics
+  past our emission**. `C8` specifies what we emit, in what form, with what timing and identity
+  guarantees, and how an arbitrary consumer attaches and detaches; it specifies nothing that consumes
+  it, and `D4.34`'s substitution test is how a reader checks that claim (§10.11).
+- **How a run is invoked, attended or unattended.** The flags, the configuration layering and its
+  resolution, the live monitor and the closeout rendering are
+  [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md)'s. `C10` (§12) owns only the
+  **result** an automated caller reads afterwards. There is no scheduler, no training loop and no model
+  lifecycle anywhere in this plan.
 - **Pedestrians**, out of scope by [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3.5.
 
 ---
@@ -114,8 +141,12 @@ of them, so they are named here once and used consistently below.
 | **Civil** | `_civil`, or a full ISO-8601 string with an explicit offset | Wall-clock time at the site, of the form `2026-03-21T23:00:00+03:30`. What a human means by "the night shift". **A civil time without an explicit offset is not a civil time** and is rejected (`C9` V9.2) |
 | **Sun-clock** | `solar_time`, `_solar_hours` | The number `CesiumSunSky.SolarTime` holds: hours in the sun's *own* time zone, which is derived from the map longitude and is **not** the civil offset (`C9` §11.4). A conversion sits between civil and sun-clock and it is not the identity |
 
-Wall-clock time appears in exactly two places — `generated_at_utc` on build artifacts, and
-`sumo_step_timeout_wall_s` — and nothing rendered or recorded may depend on it.
+Wall-clock time appears in five places and nowhere else: `generated_at_utc` on build artifacts;
+`sumo_step_timeout_wall_s`; the live delivery envelope's `emitted_wall_utc` and the stream header's two
+stamps (§10.9.2); the transcript's `received_wall_utc` (§10.10); and the run result's `started_wall_utc`
+and `ended_wall_utc` (§12.3). The last three are **delivery and bookkeeping, never data** — nothing
+rendered, recorded or joined may depend on any of them, and `C8`'s guarantee L3 says so explicitly for
+the one case where somebody might be tempted, which is pairing frames by their arrival time.
 
 **Digest.** Wherever this document says *digest*, it means the lowercase hex SHA-256 of the artifact's
 bytes, or — for a JSON document that carries its own digest field — of the document serialised with
@@ -168,11 +199,16 @@ flowchart TB
     MAN[/"run manifest<br/>C2 render states · C4 identity table<br/>C9 epoch · policy · solar residual"/]
   end
 
-  subgraph handover["Handover — C8"]
-    OBSR[/"OBSERVATION root<br/>imagery · collection metadata<br/>· radiometry · solar · epoch"/]
-    TRUR[/"TRUTH root<br/>CoT sidecars · labels · supervision<br/>· coverage · manifests"/]
+  subgraph handover["Handover — C8, one contract in two delivery modes"]
+    OBSR[/"OBSERVATION records<br/>imagery · collection metadata<br/>· radiometry · solar · epoch"/]
+    TRUR[/"TRUTH records<br/>CoT sidecars · labels · supervision<br/>· coverage · manifests"/]
+    DEFD["deferred delivery<br/>files under the two roots"]
+    LIVED["live delivery<br/>the same records, as produced"]
+    TRX[/"transcript — opaque, verbatim<br/>neither root (C8 §10.10)"/]
   end
-  EXT["external model team<br/>detect-and-track · EPoL<br/>neither run nor measured here"]
+  RES[/"C10 run result<br/>one field: fitness"/]
+  EXT["an arbitrary external consumer<br/>API, formats and transport unknown here"]
+  AUTO["an automated caller<br/>regenerates on a cadence"]
 
   CONTENT --> SWEEP --> CAT
   WORLDGEN --> CWP
@@ -199,8 +235,14 @@ flowchart TB
   IMG --> OBSR
   IMG --> TRUR
   MAN --> TRUR
-  OBSR --> EXT
-  TRUR --> EXT
+  OBSR --> DEFD
+  TRUR --> DEFD
+  OBSR --> LIVED
+  DEFD --> EXT
+  LIVED --> EXT
+  EXT -. "whatever it returns, if anything" .-> TRX
+  MAN --> RES
+  RES --> AUTO
   MAN -. "never enters the<br/>OBSERVATION root (C8 D4.20)" .-x OBSR
 ```
 
@@ -220,9 +262,12 @@ flowchart TB
 | clock parameters in `scenario.json` | scenario author | co-simulation driver | `C6` |
 | per-actor authority | playback bridge at spawn | every subsystem that touches an actor | `C7` |
 | per-actor vehicle light state | playback bridge, every tick | the rendered scene, and nothing else — it is not published as data | `C7` |
-| `OBSERVATION` root — imagery plus collection metadata | frame recorder and the collection-metadata writer | the external model team, at handover | `C8` |
-| `TRUTH` root — sidecars, labels, supervision, coverage, manifests | truth producer and manifest writer | corpus auditor, corpus builder, the external model team at handover | `C8` |
-| corpus manifest — contents, versions, declared omissions | corpus builder, at handover | the external model team | `C8` |
+| `OBSERVATION` root — imagery plus collection metadata | frame recorder and the collection-metadata writer | an external consumer, at handover — deferred or live (`D4.29`) | `C8` |
+| `TRUTH` root — sidecars, labels, supervision, coverage, manifests | truth producer and manifest writer | corpus auditor, corpus builder, and an external consumer at handover | `C8` |
+| corpus manifest — contents, versions, declared omissions | corpus builder, at handover | an external consumer | `C8` |
+| the live handover streams — the **same** `OBSERVATION` and `TRUTH` records, emitted as produced | the handover emitter | an arbitrary external consumer, about which this document assumes nothing | `C8` §10.9 |
+| transcript index and blobs — bytes an external chain returned | the transcript recorder | **nothing in this system** (`D4.32`); a human, or an external team if the transcript is released | `C8` §10.10 |
+| `run_result.json` — identity, what was produced, the gate record, and `fitness` | the component that closes the run manifest | an automated caller; an operator; a corpus builder | `C10` |
 | `epoch` block in `scenario.json` | scenario author | co-simulation driver, solar clock, truth producer, corpus auditor, **and the observation writer** (`C8` §10.4a) | `C9` |
 | `illumination` block in `scenario.json`, and the run override | scenario author; operator at run start | solar clock | `C9` |
 | `<_solar>` sidecar element and the `carla:solar` PNG chunk | frame recorder — **already written today** (`CotWriter.cs:52-65`, `SolarMetadata.cs:19`) | truth consumers, corpus auditor, observation writer | `C9` |
@@ -1513,11 +1558,17 @@ erDiagram
   SENSOR ||--o{ CAPTURE : produces
   CAPTURE ||--|| SOLAR_STATE : "stamped with the tick's sun"
   CAPTURE ||--|{ TRUTH_EVENT : contains
-  CAPTURE ||--o{ DETECTOR_TRACK : yields
-  DETECTOR_TRACK }o--o{ TRUTH_EVENT : "associated by position and time"
   RUN_MANIFEST ||--|{ RENDER_STATE : records
   RENDER_STATE }o--|| SUMO_VEHICLE : "sumo_vehicle_id"
 ```
+
+**What this diagram deliberately no longer contains — cut in this revision.** Earlier drafts carried a
+`DETECTOR_TRACK` entity, produced by `CAPTURE`, with an association edge to `TRUTH_EVENT` labelled *"by
+position and time"*. Both are gone. A consumer's track is **not an entity of this identity model**: we
+never see one, we form no such relation (`D4.27`), and asserting a cardinality for something outside the
+system is exactly the over-specification `D4.34` forbids — it would also have to change the moment the
+external chain was replaced. The rule by which supervision *would* be carried onto such a track is
+documented at `C8` §10.6 and performed nowhere.
 
 > **D4.8 — `sumo_vehicle_id` → `actor_id` is one-to-many, not one-to-one.** A vehicle released by `C2`
 > and later re-admitted is a **new CARLA actor with a new `actor_id`** and the **same**
@@ -1623,9 +1674,11 @@ stateDiagram-v2
   Removed --> [*] : render_state closed in the manifest
 ```
 
-`HandedOver` is this system's last state. Everything past it belongs to the external model team
-([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b), and `C8` §10.6 documents the transfer rule without performing
-it.
+`HandedOver` is this system's last state, and a vehicle reaches it identically whether the records were
+written to a corpus or emitted live — the state machine has no delivery-mode branch, which is `D4.29`
+seen from the identity side. Everything past `HandedOver` belongs to whoever received it
+([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b, §3c), and `C8` §10.6 documents the transfer rule without
+performing it.
 
 ### 6.6 Join rules
 
@@ -2283,59 +2336,132 @@ explicitly rather than lost silently. In this mode:
 
 ---
 
-## 10. C8 — The corpus handover
+## 10. C8 — The handover, in two delivery modes
 
-**Rewritten in this redraft.** [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b narrows the scope of this whole
-body of work: the detect-and-track model and the estimated-pattern-of-life model are **external to it**,
-and **no part of this pipeline or tool suite scores anything**. `C8` was drafted as the boundary at
-which those models are fed and at which their output is joined to truth. It is now the boundary at
-which **this system ends and a corpus is handed over** — what an external model team is given, in what
-form, with what guarantees, and what the corpus deliberately does not contain.
+**Rewritten again in this revision.** The previous revision rewrote `C8` from an EPoL-facing boundary
+into a **corpus handover**, because [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b put the detect-and-track model
+and the estimated-pattern-of-life model outside this effort and forbade scoring. §3c now says what §3b
+did not: narrowing the scope removed **scoring**, not **running the chain**. The **live exercise is a
+primary use case** — our synthetic imagery generation feeds an external detect-and-track stage, which
+sends tracks to an external model service, which performs its anomaly detection and produces its reports
+live — and *everything past our imagery and truth is external and unknown to us*.
 
-What survived the rewrite is every assertion about **our own data**: the artifact roots, the
-observer-derivability principle (`D4.20`), the anti-leak isolation (`D4.16`), the corpus-description
-rules, and every measurement. What went is every assertion about a **model**: the association harness,
-the metrics it fed, and the artifact that carried them. Where a rule was *justified* by evaluation, the
-rule is kept and the justification re-framed; each such case is marked **re-framed** in place, so a
-reader of the first draft can see that nothing checkable was dropped.
+So `C8` is not a corpus contract with a live afterthought bolted to it. It is **one contract with two
+delivery modes**:
+
+| Mode | What it is |
+|---|---|
+| **Deferred handover** | The records are written to files under the two artifact roots and published once the corpus is complete and has passed its checks. This is the corpus the previous revision specified, unchanged |
+| **Live handover** | The *same records* are emitted as they are produced, over a transport, to whatever is listening — with stated timing and identity guarantees, and no assumption whatever about the listener |
+
+The records are the same records. What differs is the **carrier, the timing, the loss behaviour and the
+closure** — and nothing else. A reader who has understood one mode has understood the other, and a
+consumer writes one reader. §10.1a states the difference and the identity in full, and the rest of this
+section is written once and applies to both unless it says otherwise.
+
+Three consequences organise the rest of the section:
+
+1. Everything **identical** across the modes is specified once — the identity keys, the observation
+   field set, the truth content, the observer-derivability rule and the anti-leak split (§10.1a).
+2. Everything the **external side** does is unspecified, deliberately, and the omission is checkable by
+   the substitution test of §10.11. If a clause of this contract would have to change when the external
+   chain is replaced wholesale, that clause is a defect in this contract.
+3. Anything that **comes back** is received data with its own provenance: an opaque blob in a minimal
+   container, recorded verbatim and never parsed for meaning we act on (§10.10).
+
+What survived the §3b rewrite survives this one untouched: the two artifact roots (`D4.26`), the
+observer-derivability principle (`D4.20`), the anti-leak isolation (`D4.16`), the supervision-transfer
+rule as published-but-not-performed (`D4.27`), the label-quality ruling (`D4.28`) and every measurement.
+No decision is renumbered; `D4.29`–`D4.35` are new.
 
 [`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md) owns the collection rationale — what a camera
-can see, what a capture session is, and why a root is laid out the way it is. `C8` owns the contract:
-the roots, the field sets, the guarantees, and the refusals.
+can see, what a capture session is, how the roots are laid out and which transport a stream is bound to.
+`C8` owns the contract: the records, the field sets, the guarantees, the refusals and the validation.
+[`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md) owns how a run is *invoked*; `C10`
+(§12) owns what an unattended caller is *told at the end*.
 
 ### 10.1 Where this system ends
 
 ```mermaid
 flowchart LR
-  subgraph ours["This system — everything it produces"]
-    direction TB
-    subgraph obs["OBSERVATION root — travels with the pixels"]
-      IMG[("imagery frames")]
-      COL[("collection metadata:<br/>sensor pose · intrinsics · radiometry<br/>· achieved solar · epoch context")]
-    end
-    subgraph tru["TRUTH root — the supervision side"]
-      SID[("CoT truth sidecars")]
-      LAB[("per-image labels:<br/>2D + 3D boxes · segmentation<br/>· occlusion · signature · apparent size")]
-      SUP[("supervision, areas, coverage")]
-      MAN[("run and corpus manifest")]
-    end
+  subgraph ours["This system — one set of records, two ways of delivering them"]
+    OBSR[("OBSERVATION record<br/>imagery · sensor pose · intrinsics<br/>· radiometry · achieved solar · epoch")]
+    TRUR[("TRUTH record<br/>CoT sidecars · labels · segmentation<br/>· supervision · coverage · manifests")]
+    DEF["deferred delivery<br/>files under the two roots,<br/>published when complete"]
+    LIVE["live delivery<br/>the same records, emitted<br/>after the tick that produced them"]
+    TRX[("transcript store<br/>opaque · verbatim · write-only<br/>neither root — §10.10")]
+    RES[/"run result — C10<br/>one field: fitness"/]
   end
-  HAND{{"C8 handover<br/>both roots, one declared corpus"}}
-  EXT["external model team<br/>detect-and-track · EPoL<br/>neither run nor measured here"]
+  CONS["an arbitrary external consumer<br/>its API, formats, transport, latency<br/>and failure modes are unknown here"]
+  AUTO["an automated caller<br/>regenerates a corpus on a cadence"]
 
-  IMG --> HAND
-  COL --> HAND
-  SID --> HAND
-  LAB --> HAND
-  SUP --> HAND
-  MAN --> HAND
-  HAND --> EXT
-  MAN -. "never enters the<br/>OBSERVATION root (D4.20 test 4)" .-x COL
-  SUP -. "never enters the<br/>OBSERVATION root (D4.16)" .-x IMG
-  EXT -. "no output of this box is<br/>produced, consumed or<br/>validated by this system" .-x HAND
+  OBSR --> DEF
+  TRUR --> DEF
+  OBSR --> LIVE
+  TRUR -. "separate endpoint, off by default<br/>in a live handover (08 §11.4)" .-> LIVE
+  DEF --> CONS
+  LIVE --> CONS
+  CONS -. "whatever it returns, if anything" .-> TRX
+  TRX -. "never read by any artifact<br/>this system produces (D4.32)" .-x TRUR
+  RES --> AUTO
+  AUTO -. "invokes the run<br/>(surface owned by 12)" .-> ours
 ```
 
-The single arrow out is the whole of `C8`'s runtime behaviour. There is no arrow back.
+The arrows out are the whole of `C8`'s runtime behaviour. **Exactly one arrow carries data in** — the
+transcript's — and it lands in a store that nothing of ours reads, which is why §10.10 is the precise
+statement of the one-directional guarantee rather than an exception to it. The dotted arrow from the
+automated caller carries an *invocation*, not data, and the surface it uses is
+[`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md)'s; what comes back to it is the `C10`
+result (§12).
+
+### 10.1a One contract, two delivery modes
+
+> **D4.29 — the `OBSERVATION` record and the `TRUTH` record are identical in both delivery modes. Only
+> the carrier, the timing, the loss behaviour and the closure differ, and the two modes are *additive*
+> rather than alternative — a live run may write the deferred roots as well, and when it does, the
+> record a consumer received on the stream and the record in the corpus are the same record.** The test
+> of this decision is that a consumer writes **one** reader. [`08`](08_Collection_And_EPoL.md) §7.2
+> reached the same conclusion from the collection side — "the handover is defined as the record, not as
+> a directory" — and `C8` is the ruling a later reader should cite.
+
+**What is identical, field for field and rule for rule.** This is the list a reader should check a
+proposed change against: a change that makes any row differ between the modes is a change that splits
+one contract into two.
+
+| Identical in both modes | Specified at | Why it must not differ |
+|---|---|---|
+| **The identity keys on every record** — `sensor_id`, `tick`, `sim_time_s`, `run_id` (and `scenario_id`, subject to §10.3's open conflict) | `C4` §6.1, §6.6; §10.3 | The tick is the only join key in either mode (`C4` §6.6; [`08`](08_Collection_And_EPoL.md) `D8.4`). A live consumer and a corpus consumer must be able to name the same frame, and a live exercise that is also recorded must yield one frame with one name, not two |
+| **The `OBSERVATION` record's field set** | §10.3, §10.4 | It is an allow-list, and it is enforced at the file writer and at the stream emitter alike (V8.8, V8.14). A field that is unsafe in a corpus is unsafe on a wire |
+| **The truth content** — sidecars, per-image labels, segmentation, `<_supervision>`, `<_aoi>`, coverage, the label-quality block | §10.6, §10.7 | Truth does not become less exact because it is delivered sooner |
+| **The observer-derivability rule and the solar/epoch allow-list** | `D4.20`, `D4.21`, §10.4a | Both are rules about *our own data*. A delivery mode is not an argument for admitting a field |
+| **The anti-leak split** — truth and observation written by separate components from the first byte, neither holding a reference to the other's artifacts | `D4.16`, §10.5 | In the live mode the same rule binds the *emitter*: one endpoint per root, never one stream carrying both |
+| **Two artifact roots, and no third** | `D4.26` | The transcript is not a root (§10.10) and neither is a stream |
+| **The supervision-transfer rule, published and never performed** | `D4.27`, §10.6 | Unaffected by delivery. A live exercise is the one place where performing it would be a few lines away, which is exactly why the rule is stated rather than implemented |
+| **The obligation to declare what is not contained** | V8.9 (corpus manifest), V8.17 (stream close record) | A gap a consumer cannot see is indistinguishable from data that never existed, in either mode |
+
+**What differs, exhaustively.** Everything not in this table is the same in both modes.
+
+| | Deferred handover | Live handover |
+|---|---|---|
+| **Carrier** | files under the two roots; one `OBSERVATION` metadata document beside each frame, one `TRUTH` sidecar per `(sensor_id, tick)` | records on a transport, framed; the binding is [`08`](08_Collection_And_EPoL.md)'s and this contract requires only the three transport properties of §10.9.1 |
+| **The pixels** | the image is a file; the record names it | the image rides inline as bytes in the same record |
+| **When a record leaves** | at publication, after the run has closed and passed its checks | after the tick that produced it has completed, and never before (L1) |
+| **Completeness** | complete by construction, validated before publication | necessarily partial while the run is in progress; gaps are legal, counted and recoverable (L2) |
+| **Ordering** | none required — random access by `(sensor_id, tick)` | per stream: `tick` non-decreasing, `seq` strictly increasing, never reordered, never duplicated (L2) |
+| **Loss** | none. A missing file is a defect, not a policy | drop-oldest at the emitter, counted, and written into coverage as *covered but not delivered* ([`08`](08_Collection_And_EPoL.md) §11.3) |
+| **Pacing** | as fast as the machine allows | a **declared** real-time factor, never negotiated with the consumer (`D4.30`) |
+| **Attachment** | a consumer copies what exists, whenever it likes | attach and detach at any time; a stream header on attach, no handshake, no acknowledgement, no replay (`D4.31`) |
+| **Closure** | the corpus manifest, then the run result (`C10`) | a stream close record, then the run result (`C10`) |
+| **Truth delivery** | the whole `TRUTH` root, for sessions in the release partition | a separate stream on a separate endpoint, **off by default**, and turning it on is a recorded choice ([`08`](08_Collection_And_EPoL.md) §11.4, V8.15) |
+| **What a consumer's absence costs** | nothing | nothing. Zero consumers is a legal state and the default (`D4.31`) |
+
+**Why the modes are additive and not alternative.** A live exercise that also writes the roots costs one
+extra writer and yields a corpus as a by-product; a live exercise that *cannot* write them would make
+the most expensive kind of run — one with an audience — the only kind that produces nothing reusable.
+`D4.29` therefore makes the two independent switches rather than one selector, and the coverage record
+distinguishes them: a frame that was captured, written to the corpus and dropped by the link is
+`covered` in the corpus and `covered but not delivered` on the stream, which is two facts about one
+tick and not a contradiction.
 
 ### 10.2 The artifact roots — the ruling
 
@@ -2365,19 +2491,38 @@ from `08` are exactly two roots with one writer each, and the split performed at
 by a later stripping step, which is `08`'s own second mechanism and is unaffected by the removal.
 Where any residual text in the folder still names a third root, `D4.26` is what it is measured against.
 
+**Two roots, and two things that are not roots.** A **stream** is not a root — it is a delivery of the
+same records (`D4.29`) — and the **transcript** is not a root either. The transcript holds bytes an
+external chain returned; it is not an artifact of this pipeline, it is not corpus content, it is never
+validated against a schema of ours and it is never versioned by us beyond its own container. `D4.26`'s
+location clause — *no artifact of this pipeline may be written into a location that holds model output*
+— is precisely what forces the transcript into a location of its own, beside the roots rather than
+inside either. The clause is honoured by §10.10, not weakened by it; `D4.32` states the one respect in
+which §3c refines `D4.26`'s word *stored*, and says so in place rather than quietly.
+
 ### 10.3 What the `OBSERVATION` root contains, exhaustively
 
 Every field that travels with the pixels. **Adding a field to this list is a contract change**, and the
 allow-list of V8.8 is the mechanical form of that sentence.
 
+**This table is the record in both delivery modes** (`D4.29`). The only difference is how the pixels are
+carried: in the deferred mode `frame` is a file the record names, and in the live mode it is inline
+bytes in the same record. `image_sha256` is added by this revision so the two are provably the same
+image — a live consumer can check the frame it received against the one the corpus later publishes, and
+an auditor can check that a corpus frame was not re-encoded after emission. A digest of the pixels is
+**not** an admission under `D4.20`: that rule governs inputs that are *neither truth nor pixels*, and a
+hash of the pixels is a function of the pixels a consumer already holds, computable by anyone with the
+image and telling them nothing they could not compute.
+
 | Field | Type | Unit | Req. | Source |
 |---|---|---|---|---|
-| `frame` | image | — | yes | The capture PNG |
+| `frame` | image | — | yes | The capture PNG. A path in the deferred mode, inline bytes in the live mode — the only field whose *carrier* differs between modes |
+| `image_sha256` | string | — | yes | Lowercase hex SHA-256 of the encoded image bytes, so one frame delivered twice is provably one frame. **New in this revision** |
 | `sensor_id` | string | — | yes | `C4` |
 | `tick` | integer | — | yes | The sidecar container's `tick` (`CotWriter.cs:42`) |
 | `sim_time_s` | number | s | yes | Container's `sim_time_s` (`:43`) |
 | `run_id` | string | — | yes | Container's `run_id` (`:44`) |
-| `scenario_id` | string | — | yes | Container's `scenario_id` (`:45`) — §5.6 is why it must actually be supplied |
+| `scenario_id` | — | — | **no — excluded** | **Resolved by the integration lead, 2026-09-18, in favour of [`08`](08_Collection_And_EPoL.md) §9.7 consequence 2.** `scenario_id` and `seed` are excluded from the `OBSERVATION` record and from the live stream header, in both delivery modes. They fail `D4.20` on two of its four clauses at once: no fielded observer can derive a simulator's scenario identifier or its seed from a sensor, a navigation solution, a clock and public reference data; and because every frame of one scenario carries the same value, the field indexes a *set of scenes* rather than describing one — which is a memorisation handle, not context. That is the same defect already recorded against the PNG's `carla:capture` chunk, and it would be worse in the live mode, where the value would ride a stream header to a consumer we know nothing about. Both fields remain **required in the `TRUTH` root and in the run manifest**, where §5.6's requirement that `scenario_id` actually be supplied still binds. Open question 15 is closed |
 | `sensor_pose` | object | — | yes | `latitude`, `longitude`, `hae_m`, `azimuth`, `elevation`, `roll` — the platform event's `<point>` and `<sensor>` elements |
 | `intrinsics` | object | — | yes | `width`, `height`, `fx`, `fy`, `cx`, `cy`, `hfov_deg`, `vfov_deg`, `model`, `distortion` — the `<_carla_intrinsics>` element |
 | `radiometry` | object | — | yes | The camera's exposure and response record. The field set is [`08`](08_Collection_And_EPoL.md) §4.8's; `C8` requires only that it is present and is on this side |
@@ -2395,6 +2540,13 @@ it. It is the same table, and it is a statement about **where our own fields liv
 team receives **both** roots — it must, to train and to validate — and the separation exists so that the
 team can put the observation root in front of a model without having to trust that something was
 stripped out of it first.
+
+**The same table binds the live emitter.** Every field in the right-hand column is as excluded from an
+observation *stream* as it is from the observation root, and the exclusion is checked at the emitter
+rather than assumed from the writer (V8.14). In a live handover the truth side is not merely a different
+file but a different endpoint, off by default and enabled only by a recorded choice
+([`08`](08_Collection_And_EPoL.md) §11.4, V8.15) — because on a live feed the audience may itself be
+part of what is being exercised, which a file on disk cannot be.
 
 | In the `OBSERVATION` root | In the `TRUTH` root, and only there |
 |---|---|
@@ -2440,6 +2592,14 @@ admitting the wrong neighbouring field would leak.
 "crosses the EPoL boundary" to "may be placed in the `OBSERVATION` root", which states the same rule as
 what it always was — a question about our own data — rather than as a permission granted to an external
 model.)*
+
+**The rule is delivery-blind, and the delivery is not a field.** `D4.20` admits or refuses a value; it
+never asks how the value will travel. Nothing in §10.9's envelope — sequence numbers, drop counters,
+emission wall time — is part of the record, none of it is admitted to the `OBSERVATION` field set, and
+V8.13 requires that no envelope field be derived from truth, supervision or scene content. The envelope
+describes the *link*; the record describes the *collection*; and the reason the distinction is written
+down is the same reason `advancing` and `rate` are excluded below — a consumer that could read the
+experiment off the delivery would be reading the capture plan.
 
 Test 4 is the one that is easy to miss and it is why this is a contract clause rather than a policy
 note. Tests 1–3 are about the *value*; test 4 is about the *path*. A field can be perfectly legitimate
@@ -2515,11 +2675,18 @@ Three properties, each checkable:
    that gets forgotten or gets a bug. The two roots must be separate files from the start, so that
    nothing is ever stripped because nothing was ever combined. This is
    [`08`](08_Collection_And_EPoL.md) `D8.17` mechanism 2, and `C8` depends on it.
-3. **The handover is one-directional, and the roots are immutable after it.** Nothing outside this
-   system writes into either root, and nothing this system produces is re-derived from anything an
-   external consumer returns. There is no feedback path because there is no inbound path at all — which
-   is a stronger guarantee than the first draft's, since it does not depend on any later stage behaving
-   itself.
+3. **The handover is one-directional into every artifact, and the roots are immutable after it.**
+   Nothing outside this system writes into either root, and nothing this system produces is derived from
+   anything an external consumer returns. The live mode makes this sentence carry more weight rather
+   than less, because bytes genuinely can arrive: a live exercise may receive tracks or reports. The
+   guarantee is therefore stated over **artifacts**, not over sockets — *no artifact this system
+   produces has any inbound path* — and the one place inbound bytes may land is a store that no producer
+   of ours reads (§10.10, `D4.32`). A feedback path needs a reader; there is none, and V8.20 is the
+   build-time check that keeps it that way.
+4. **In the live mode the same isolation binds the emitter.** One endpoint per root, never one stream
+   carrying both; the observation emitter's build carries no truth reference exactly as the observation
+   writer's does (V8.10 covers both); and the envelope writer can no more reach truth than the record
+   writer can (V8.13). A socket is not a loophole in a structural rule.
 
 ### 10.6 Supervision transfer — a format guarantee and a documented rule, never an operation
 
@@ -2531,6 +2698,12 @@ cleanly, and `C8` takes only the half that is about our artifacts.
 > rule by which supervision would transfer. It does not perform the association, ship a harness for it,
 > or produce any artifact derived from a consumer's output.** The format is normative for us; the rule
 > is documentation for the consumer.
+
+**`D4.27` is unaffected by the live mode and is confirmed here in one line:** the transfer rule is
+published, never performed, in either delivery mode — and the live mode is the single place in this plan
+where performing it would be easy, since both streams exist in one process on one tick base, which is
+why the prohibition is restated rather than assumed ([`02`](02_Use_Cases.md) `D2.24` reaches the same
+conclusion from the use-case side).
 
 **The format guarantee — normative, checkable, ours.** For every capture tick, for every rendered
 vehicle, the `TRUTH` root carries:
@@ -2602,13 +2775,19 @@ who finds a hard example looks the label up and reads that it was crowded by two
 neighbours at 4 px separation under `visible_signature = lamps`. The example stops being unexplained,
 and nobody measured a model to get there.
 
+**`D4.28` is unaffected by the live mode and is confirmed here in one line:** every surviving field is
+computable from our own truth and our own render before any consumer exists, so the label-quality block
+rides the truth side in both modes and needs nothing from anybody.
+
 ### 10.8 What the corpus deliberately does not contain
 
 Stated positively, because a consumer who does not know an omission is deliberate will read it as a bug.
 
 | Not in the corpus | Why |
 |---|---|
-| Model output of any kind — detections, tracks, assessments | Not produced here, and `D4.26`: there is no root for it |
+| Model output of any kind — detections, tracks, assessments, reports | Not produced here, and `D4.26`: there is no root for it. A live exercise may **record** what came back, verbatim, outside both roots (§10.10) — recorded is not contained, and the transcript is excluded from the corpus unless releasing it is an explicit, recorded choice |
+| A schema, a format or a transport for anything the external chain produces or consumes | §10.11. This contract specifies what *we* emit; the transcript's **container** is ours and its **content** is not our schema |
+| Any field derived from the transcript | `D4.32`. The bytes are recorded; nothing is computed from them, and no field of any artifact specified here is a function of them |
 | An assignment or association table | `D4.27`: the rule is documented, the operation is not performed |
 | Any model metric, score, confusion matrix or model comparison | [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b |
 | Any identifier by which a consumer's track could be joined to truth without measuring position and time | Deliberate. Truth's uid grammar is `CARLA-TRUTH-<actor_id>` (`CotWriter.cs:134`), truth's container is marked `source="truth"` (`:34`), truth's `how` is `m-g` (`:136`) and truth's `ce`/`le` are exactly `0.0` (`:145-146`). Those markers exist so that truth is **self-identifying** and can never be mistaken for, or silently merged with, something a consumer produced |
@@ -2616,10 +2795,368 @@ Stated positively, because a consumer who does not know an omission is deliberat
 | Truth for any partition the corpus declares as reserved | If [`08`](08_Collection_And_EPoL.md) reserves a partition whose truth is not released, `C8` requires only that the corpus manifest **declares** the partition and the fact of the omission. Whether to reserve one at all is `08`'s call; an undeclared omission is a defect either way (V8.9) |
 | Pedestrians | [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3.5 |
 
-### 10.9 Validation, failure, versioning
+### 10.9 The live delivery mode — timing, identity, attachment and detachment
 
-Every rule is a check on **our own artifacts**, run by us, before a corpus is handed over. The response
-column names what this system does; none of them is a verdict on anything outside it.
+A **live handover** emits the records of §10.3 and §10.6 as they are produced, to whatever is listening.
+The emitter is ours and is fully specified here. The listener is not ours and is not specified anywhere
+in this plan (§10.11). Everything below is a statement about what leaves this process and when; nothing
+below is a statement about what receives it.
+
+#### 10.9.1 The transport, as three properties and nothing more
+
+`C8` does not name a socket, a framing, a broker or a wire format. It names the three properties any
+binding must have, and [`08`](08_Collection_And_EPoL.md) picks the binding.
+
+| # | Property | Why it is required rather than preferred |
+|---|---|---|
+| **P1** | **Record boundaries are preserved.** A consumer can tell where one record ends and the next begins without parsing the payload | A consumer that has to parse to find the end has to understand the format to receive it, which couples receipt to schema |
+| **P2** | **Order is preserved within one stream to one consumer.** Records are never delivered out of order | L2's monotonicity is what lets a consumer detect loss by arithmetic instead of by bookkeeping we would otherwise have to send |
+| **P3** | **The emitter never blocks on the consumer.** A transport whose only delivery mode is to block the producer is not admissible | `D4.30`. A blocking transport hands the clock to the consumer |
+
+A transport may of course offer more — reliability, ordering across streams, authentication. This
+contract neither requires nor forbids any of it. *(Carried forward from
+[`08`](08_Collection_And_EPoL.md) §11.4, which records that today's live CoT feed is one event per UDP
+datagram, `CotUdpEmitter.py:38-44` — one admissible binding of P1–P3, cited as precedent and not as a
+requirement.)*
+
+#### 10.9.2 Three record kinds, and the envelope that is not part of the record
+
+A stream carries exactly three kinds of record. The **envelope** is delivery bookkeeping; the
+**record** is the §10.3 observation record or the truth record, byte-identical to the deferred mode's
+(`D4.29`). Nothing in the envelope is part of either, and nothing in the envelope may be derived from
+truth, supervision or scene content (V8.13).
+
+**`stream_header` — written once to every consumer at the moment it attaches.** It exists so that a
+consumer that joined halfway through a seven-day run is as well equipped as one that was there at the
+start: everything needed to interpret every later record on this stream is in it.
+
+| Field | Type | Unit | Req. | Meaning |
+|---|---|---|---|---|
+| `record_kind` | string | — | yes | `stream_header` |
+| `handover_contract_version` | integer | — | yes | The `C8` version this stream speaks. A consumer that does not implement it stops reading (§10.12) |
+| `stream_kind` | string | — | yes | `observation` or `truth`. **One kind per stream, never both** — the live form of `D4.16` |
+| `root_version` | integer | — | yes | The version of the root whose records travel here, so a stream and a corpus are comparable |
+| `run_id` | string | — | yes | `C4`. Provenance for one execution |
+| `session_id` | string | — | yes | The capture session ([`08`](08_Collection_And_EPoL.md) §3.5) |
+| `scenario_id` | string | — | on a truth stream, yes | On an observation stream, exactly as §10.3 rules — which is the open conflict recorded at open question 15 and must be closed before either mode ships |
+| `sensor_ids[]` | array of string | — | yes | Every sensor whose records may appear on this stream (`C4` §6.1) |
+| `epoch` | object | — | yes on an observation stream | The `C9` epoch block, so a late attacher can turn `sim_time_s` into civil time with no other artifact. Admitted by `D4.21` |
+| `capture_interval_sim_s` | number | s | yes | The declared spacing of captures per sensor, in simulated seconds — **the rate a consumer must meet** |
+| `declared_real_time_factor` | number | — | yes | Simulated seconds per wall-clock second the run is paced at; `0` means as fast as the machine allows |
+| `drop_policy` | string | — | yes | `drop_oldest` — the only value this contract defines ([`08`](08_Collection_And_EPoL.md) §11.3) |
+| `queue_depth_frames` | integer | — | yes | The emitter's per-consumer buffer depth. Stating it is what makes L4's staleness bound a number rather than a hope. Valued in [`10`](10_Scale_And_Performance.md) |
+| `identity_keys[]` | array of string | — | yes | The join keys on this stream, in order — `["sensor_id", "tick"]`. Stated rather than assumed, so a consumer never guesses (`C4` §6.6) |
+| `image_encoding` | string | — | yes on an observation stream | The encoding of the inline image bytes. A statement about **our** bytes, not a requirement on their decoder |
+| `stream_opened_tick`, `stream_opened_sim_time_s` | integer, number | —, s | yes | Where this consumer joined, in the run's own clock |
+| `run_started_wall_utc`, `stream_opened_wall_utc` | string | — | yes | Delivery bookkeeping only. Nothing rendered or recorded depends on it (§1) |
+
+**`observation_frame` / `truth_frame` — the envelope.**
+
+| Field | Type | Unit | Req. | Meaning |
+|---|---|---|---|---|
+| `record_kind` | string | — | yes | `observation_frame` or `truth_frame` |
+| `seq` | integer | — | yes | Assigned **at capture**, strictly increasing by one per `(stream_kind, sensor_id)`. It numbers the *capture*, not the delivery, so two consumers receiving one frame see one `seq`. A gap **after a consumer's first record** is exactly a drop, so loss is detected by arithmetic and needs nothing from us; a consumer that attached mid-run simply starts at whatever number the run had reached, and `stream_opened_tick` in its header is what says so |
+| `dropped_cumulative` | integer | — | yes | Drops on this stream so far. A cross-check that survives a burst of drops at the very end of a run, when there is no later `seq` to reveal the gap |
+| `emitted_wall_utc` | string | — | yes | When the emitter handed it to the transport. Delivery bookkeeping; **never a join key** (L3) |
+| `record` | object | — | yes | The §10.3 observation record, or the truth record of §10.6 — identical to the deferred mode's, with `frame` carried as inline bytes and `image_sha256` covering them |
+
+**`stream_close` — written once when the stream ends, for every stream that was opened.**
+
+| Field | Type | Unit | Req. | Meaning |
+|---|---|---|---|---|
+| `record_kind` | string | — | yes | `stream_close` |
+| `closed_reason` | string | — | yes | `run_complete` \| `run_failed` \| `operator_stopped` \| `emitter_shutdown` |
+| `last_tick`, `last_sim_time_s` | integer, number | —, s | yes | The last record emitted on this stream |
+| `per_sensor[]` | array | — | yes | `{ sensor_id, frames_emitted, frames_dropped, first_tick, last_tick }`. Empty counts are written, never omitted |
+| `not_delivered_recorded` | boolean | — | yes | True when every dropped `(sensor_id, tick)` has been written into coverage as *covered but not delivered* ([`08`](08_Collection_And_EPoL.md) §11.3). This is the stream's form of V8.9: an undeclared gap is indistinguishable from data that never existed |
+| `fitness` | string | — | yes | The `C10` verdict if the run result is already closed, else `unknown`. **A close record is a courtesy; the run result (`C10`, §12) is the authority**, and a consumer that needs a verdict reads that |
+| `run_result_uri` | string | — | no | Where the authoritative result will be found, when the deployment makes it reachable |
+
+#### 10.9.2a Worked example — one attach, one frame, one close
+
+The sizing scenario's night window, on the epoch of `C9` §11.9. **The numeric values below are
+illustrative and are [`10`](10_Scale_And_Performance.md)'s to fix; the shape is this contract's.** The
+`record` is elided because it is §10.3's table and is identical to the corpus's — which is the whole
+point of `D4.29`.
+
+```json
+{ "record_kind": "stream_header",
+  "handover_contract_version": 1,
+  "stream_kind": "observation",
+  "root_version": 1,
+  "run_id": "cap-20260321-2300",
+  "session_id": "bahonar-night-01",
+  "sensor_ids": ["OVERWATCH-1", "OVERWATCH-2"],
+  "epoch": { "civil_datetime": "2026-03-21T00:00:00+03:30", "utc_offset_hours": 3.5,
+             "utc_datetime": "2026-03-20T20:30:00Z" },
+  "capture_interval_sim_s": 0.2,
+  "declared_real_time_factor": 1.0,
+  "drop_policy": "drop_oldest",
+  "queue_depth_frames": 8,
+  "identity_keys": ["sensor_id", "tick"],
+  "image_encoding": "image/png",
+  "stream_opened_tick": 1656000, "stream_opened_sim_time_s": 82800.0,
+  "run_started_wall_utc": "2026-03-21T17:02:11Z", "stream_opened_wall_utc": "2026-03-21T17:04:03Z" }
+
+{ "record_kind": "observation_frame",
+  "seq": 561, "dropped_cumulative": 0,
+  "emitted_wall_utc": "2026-03-21T17:04:05.214Z",
+  "record": { "sensor_id": "OVERWATCH-1", "tick": 1656004, "sim_time_s": 82800.8,
+              "run_id": "cap-20260321-2300", "image_sha256": "9f1c…", "frame": "<bytes>",
+              "sensor_pose": { "…": "§10.3" }, "intrinsics": { "…": "§10.3" },
+              "radiometry": { "…": "§10.3" },
+              "solar": { "solar_time": 23.245377, "date": "2026-03-21", "time_zone": 3.7453767,
+                         "lat": 27.15012, "lon": 56.18065,
+                         "sun_elevation_deg": -39.1, "sun_azimuth_deg": 22.4 },
+              "epoch": { "civil_datetime": "2026-03-21T00:00:00+03:30", "utc_offset_hours": 3.5,
+                         "utc_datetime": "2026-03-20T20:30:00Z" } } }
+
+{ "record_kind": "stream_close",
+  "closed_reason": "run_complete",
+  "last_tick": 1665000, "last_sim_time_s": 84600.0,
+  "per_sensor": [ { "sensor_id": "OVERWATCH-1", "frames_emitted": 8994, "frames_dropped": 6,
+                    "first_tick": 1656004, "last_tick": 1665000 },
+                  { "sensor_id": "OVERWATCH-2", "frames_emitted": 9000, "frames_dropped": 0,
+                    "first_tick": 1656004, "last_tick": 1665000 } ],
+  "not_delivered_recorded": true,
+  "fitness": "fit_with_warnings",
+  "run_result_uri": "…/cap-20260321-2300/run_result.json" }
+```
+
+**Three things to read off it.** The record carries `solar` **without** `advancing` and `rate`, because
+§10.4a strips them on the observation side and a stream is no exception (V8.14). The envelope carries
+`seq` and `dropped_cumulative` and nothing about the scene (V8.13). And `frames_dropped: 6` on one sensor
+is not a defect in the corpus — it is six ticks the link did not carry, recorded in coverage as covered
+but not delivered (V8.16), with the corpus itself complete.
+
+#### 10.9.3 The guarantees — seven, each checkable
+
+| # | Guarantee | What it rules out |
+|---|---|---|
+| **L1 — emission follows the tick** | A record is emitted only after the tick that produced it has completed (`C6` §8.3). No record ever describes a tick the world has not finished | A consumer seeing a half-applied world: poses from tick *n*, sun from tick *n−1* |
+| **L2 — monotone, gappy, never reordered, never duplicated** | Within a stream, `tick` is non-decreasing and `seq` increases by one per `(stream_kind, sensor_id)` from the consumer's first record onward. Gaps in `tick` are legal — capture is decimated and frames may be dropped. A gap in `seq` after the first record is a drop and nothing else; a duplicate `seq` is never legal | A consumer having to de-duplicate, and a consumer unable to distinguish decimation from loss |
+| **L3 — the tick is the only join key** | `seq`, `emitted_wall_utc` and the record's arrival order are delivery bookkeeping and must never be used to pair anything, across sensors or across streams (`C4` §6.6; [`08`](08_Collection_And_EPoL.md) `D8.4`) | Two sensors paired by arrival order, which is a race, not a fact |
+| **L4 — staleness is bounded and the bound is published** | The emitter holds at most `queue_depth_frames` per consumer and drops the oldest rather than delaying the newest, so the newest record on a stream is never more than `queue_depth_frames × capture_interval_sim_s` of simulated time behind the world | A consumer reading an hour-old world because a queue grew without bound |
+| **L5 — the link never owns the clock** | No consumer, transport or transcript peer can stall, pace, rewind or otherwise influence the advance of simulated time (`D4.30`, and `D4.11`'s single owner) | A slow consumer silently changing the illumination, since the sun advances on the world tick (`D4.25`) |
+| **L6 — streams are frame-coherent** | Every stream of a session emits records built from **one** world-observer snapshot per tick, so two streams stamping one tick cannot disagree about the sun or the supervision state ([`08`](08_Collection_And_EPoL.md) §3.4) | Two channels of one exercise showing two different skies |
+| **L7 — truth is a separate stream on a separate endpoint, off by default** | The observation emitter holds no truth reference (`D4.16`, V8.10), and in a live handover the truth stream is enabled only by an explicit recorded choice (V8.15) | Truth reaching an audience that is itself part of what is being exercised |
+
+#### 10.9.4 Attachment and detachment
+
+> **D4.31 — a consumer attaches and detaches at will, and the run is indifferent to both.** Every stream
+> opens with a `stream_header` and ends with a `stream_close`. There is no handshake, no
+> acknowledgement, no replay of history and no request channel. **Zero consumers is a legal state and is
+> the default**, and neither the absence, the arrival, nor the departure of a consumer changes a single
+> byte of what the run produces.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant W as World + collection (ours)
+  participant E as Handover emitter (ours)
+  participant C1 as Consumer A (unknown)
+  participant C2 as Consumer B (unknown)
+
+  Note over W,E: the run is already going; nobody is listening, and that is normal
+  W->>E: record for tick n
+  E->>E: no consumers — nothing is queued, nothing is an error
+
+  C1->>E: attach
+  E-->>C1: stream_header (identity, epoch, capture interval,<br/>drop policy, queue depth, join keys)
+  W->>E: record for tick n+1
+  E-->>C1: observation_frame seq=1
+
+  C2->>E: attach (mid-run)
+  E-->>C2: stream_header — a late joiner is fully equipped
+  W->>E: record for tick n+2
+  E-->>C1: observation_frame seq=2
+  E-->>C2: observation_frame seq=2
+
+  Note over E,C1: Consumer A falls behind; its queue is full
+  W->>E: record for tick n+3
+  E->>E: drop oldest for A, count it,<br/>write coverage: covered but not delivered
+  E-->>C2: observation_frame seq=3
+  Note over W,E: the world does not slow down (L5) and B is unaffected
+
+  C1--xE: detach, without warning
+  E->>E: count, continue. The run neither fails nor changes
+  W->>E: last record
+  E-->>C2: stream_close (counters, reason, fitness if known)
+```
+
+**The rules the diagram encodes:**
+
+1. **Attach at any time.** A new consumer receives a fresh `stream_header` and then the *next* record.
+   The stream is not a queue and history is not replayed: a live handover is a window onto a running
+   world, and a consumer that wants the past reads the corpus, which is the same records (`D4.29`).
+2. **Detach at any time, without notice.** The emitter counts what it could not deliver and continues.
+   A consumer that vanishes is not a failure; it is a fact recorded in `per_sensor[].frames_dropped` and
+   in coverage.
+3. **Several consumers are independent.** Each has its own queue and its own drop accounting. **One slow
+   consumer must not affect another, and neither may affect the world** (L5). A shared queue would make
+   the slowest consumer the pacer, which is `D4.30` by the back door.
+4. **No consumer state reaches any artifact.** Counters of what *we* could not deliver are ours and are
+   recorded; nothing a consumer says about itself is recorded anywhere except, as opaque bytes, in the
+   transcript (§10.10).
+
+#### 10.9.5 Pacing — the answer to the brief's open engineering question
+
+[`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c asks what happens when the external chain cannot keep up, and
+names three candidates: dropping frames and recording the drop, letting simulated time advance more
+slowly in wall-clock terms, or running ahead and buffering. **The answer is two of them, and they are
+different knobs at different times — and neither is under the consumer's control.**
+
+| When | What happens | Why |
+|---|---|---|
+| **Before the run** | The operator **declares** a real-time factor. Running the world slower in wall-clock terms is legitimate and **costs no truth at all**, because every truth field is stamped in *simulated* time: a world that ticks slower is still internally exact, and the sun still advances on the world tick, so the scene stays consistent with the scenario ([`08`](08_Collection_And_EPoL.md) §11.1, carried forward, which cites `CesiumTimeOfDayController.cpp:34-36`) | This is §3c's second candidate, taken deliberately and in advance. If the chain is known to be slow, the honest response is to run the exercise slower, not to show it a sparser world |
+| **During the run** | The world does **not** slow down in response to the link. The emitter drops the oldest queued frame, counts it, and coverage records that `(sensor, tick)` as *covered but not delivered* ([`08`](08_Collection_And_EPoL.md) §11.3) | This is §3c's first candidate. It is the only one that can be applied without the consumer becoming an owner of simulated time (`D4.11`, `D4.30`) and without the illumination changing under everyone (`D4.25`) |
+| **Never** | Running ahead into an unbounded buffer | Latency would grow without bound and the consumer would be reasoning about a world that has moved on — and nothing would say so. L4's bounded depth is the explicit refusal |
+
+> **D4.30 — the link never owns the clock. Pacing is declared before the run and never negotiated during
+> it; no consumer, transport or transcript peer may stall, pace or otherwise influence the advance of
+> simulated time.** A consumer that cannot keep up loses frames, the loss is counted, and the coverage
+> record states it. Back-pressure is refused not because it is hard but because it would make the
+> consumer a second owner of time (`D4.11`) and would move the sun (`D4.25`), which would change the
+> illumination of an exercise in response to how fast somebody else's software happened to run.
+
+**What the operator sees** is [`12`](12_Operator_Control_Surface.md) §7.1's monitor, and it already has
+the right fields: frames written and `Dropped` per channel, with a non-zero `Dropped` as one of its
+three loud conditions. Two facts make that surface cheap rather than new: `FrameRecorder` already
+applies drop-oldest to its own encode queue and already counts it — the channel is created with
+`FullMode = BoundedChannelFullMode.DropWrite` and the comment *"never block the stream-reader thread"*
+(`CarlaNet/src/CarlaNet.Recording/FrameRecorder.cs:116-118`), the counter is incremented at `:185` and
+exposed at `:49` — **and it has no reader anywhere in the tree**, which is
+[`12`](12_Operator_Control_Surface.md) §7.3's first silent failure. The live mode needs the same counter
+for a second queue, so one reader closes both. *(Read from the source at the lines cited, 2026-09-18.)*
+
+**The property this needs from [`03`](03_CoSimulation_Runtime.md):** a real-time factor on the *world*
+tick, computed against an absolute target rather than a per-step sleep, and the **achieved** factor
+reported per window. The pattern exists and is worth copying rather than reinventing: `SumoCotBridge`
+paces SUMO alone with an absolute target — `behind = (started_at + (now - sim_start) / real_time_factor)
+- time.monotonic()` — under the comment *"a step that overruns is absorbed by the next one instead of
+accumulating drift over a long run"*
+(`CarlaControl/src/carlacontrol/SumoCotBridge.py:243-246`). *(Read from the source, 2026-09-18.)* Over
+seven simulated days a per-step sleep would drift; that is why the detail is in the contract and not
+left to an implementer.
+
+If a deployment makes the factor adjustable while a run is in progress, the adjustment goes **through
+the clock owner** and is recorded per window like any other declared quantity — it is an input to the
+owner, not a second owner — and it is never a function of consumer state. Whether the factor is mutable
+at all is [`12`](12_Operator_Control_Surface.md)'s call.
+
+### 10.10 The transcript — an opaque container for whatever comes back
+
+[`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c: *"Anything that comes back is received data, with its own
+provenance… we may record them verbatim and tick-stamped as a transcript, because a transcript is a
+record of what happened."* [`02`](02_Use_Cases.md) UC-8 step 4 is the use case, and
+[`02`](02_Use_Cases.md) `D2.24` is the same ruling from the use-case side.
+
+**What the transcript is:** a record that certain bytes arrived from a certain source at a certain
+instant of simulated time. That is the entire claim it makes.
+
+**What the transcript is not:** truth, supervision, a label, an input, a measurement, a denominator, a
+corpus artifact, or a schema of ours.
+
+> **D4.32 — anything an external chain returns is recorded, if it is recorded at all, as an opaque blob
+> with a timestamp, a source id and a content type: verbatim, never parsed for meaning we act on, never
+> merged into truth or supervision, never measured, and never inside either artifact root.** We define
+> and version the **container**; **its content is not our schema**. The transcript is write-only from
+> this system's point of view — nothing we produce reads it — and releasing it is an explicit, recorded
+> choice rather than a default.
+>
+> *This refines [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b's and `D4.26`'s word **stored** in exactly one
+> respect — verbatim retention of received bytes, outside both roots — and in no other. `D4.26`'s
+> two-root ruling stands, its prohibition on **consuming**, **validating** and **versioning** model
+> output stands, and its location clause is what puts the transcript in a location of its own rather
+> than being weakened by it.*
+
+**Artifact.** One directory per run, beside the two roots and inside neither:
+`<run>/transcript/index.jsonl` with one row per received record, and `<run>/transcript/blobs/<seq>.bin`
+holding the bytes. Written by a transcript recorder that holds a reference to neither root's types, and
+read by nothing in this system.
+
+**Fields — the whole container, and there is deliberately nothing else in it.**
+
+| Field | Type | Unit | Req. | Meaning |
+|---|---|---|---|---|
+| `transcript_version` | integer | — | yes | Versions **the container**. It says nothing about the content and never will |
+| `transcript_seq` | integer | — | yes | Strictly increasing per run; also the blob's file name |
+| `received_tick` | integer | — | yes | The simulated tick current when the bytes arrived (`C6`). This is the tick-stamp §3c asks for, and it is *our* clock reading, not anything the sender claimed |
+| `received_sim_time_s` | number | s | yes | The same instant in simulated seconds |
+| `received_wall_utc` | string | — | yes | Wall-clock receipt. The **third and last** place wall-clock time appears in this contract (§1) |
+| `source_id` | string | — | yes | Which configured peer it came from. **Minted by us at configuration time**, never a name a peer chose for itself, so two peers cannot collide and no peer can assert its own provenance |
+| `content_type` | string | — | yes | Exactly as the sender declared it; `application/octet-stream` when it declared none. **Recorded, never used to select a parser** |
+| `byte_count` | integer | — | yes | Length of the blob |
+| `sha256` | string | — | yes | Digest of the blob, so a released transcript is provably the one that was recorded |
+| `blob_path` | string | — | yes | Relative path to the bytes |
+| `truncated` | boolean | — | yes | True when a cap below cut this record. Never omitted — a silent truncation is a lie about what arrived |
+| `run_id`, `session_id` | string | — | yes | So one transcript row is self-locating without the manifest |
+
+**The rules, each checkable:**
+
+1. **Verbatim.** The bytes are written as received. Nothing is decoded, re-encoded, pretty-printed,
+   normalised, re-serialised or re-ordered. A transcript that has been through a formatter is not a
+   transcript.
+2. **No parser.** `content_type` is recorded and never dispatched on. No component in this system may
+   contain a decoder selected by a transcript's content type — which is a code-review rule with teeth,
+   because the decoder is the thing that would later grow a field somebody reads.
+3. **Nothing is derived from the content** except `byte_count` and `sha256`, both of which are
+   properties of the bytes rather than of their meaning.
+4. **Nothing reads it.** No truth record, supervision record, coverage row, manifest field, corpus
+   summary, quality gate or `C10` verdict is a function of any transcript row (V8.20). The run result
+   may *report* that a transcript exists and how large it is; it may never **gate** on it, because a
+   gate on received data would make somebody else's software a determinant of whether our data is fit.
+5. **Caps, declared and never fatal.** A per-record byte cap and a per-run byte cap, valued in
+   [`10`](10_Scale_And_Performance.md). Exceeding either sets `truncated` or stops recording, records
+   the fact, and **never stops the run** — the exercise does not fail because the far end became
+   talkative.
+6. **Outside both roots, and outside the corpus by default.** Releasing a transcript is legitimate
+   ([`02`](02_Use_Cases.md) UC-8 alternate flow: it is *their* output beside *our* truth on a common
+   tick base) and it is an explicit, recorded choice, declared in the corpus manifest like any other
+   inclusion.
+7. **Not a feed.** A transcript peer is a receiver of nothing from us beyond what §10.9 already emits;
+   opening a transcript endpoint grants no additional access to any artifact.
+
+**Stated plainly, because it is the point of the whole section: the content is not our schema.** We do
+not define it, validate it, migrate it, document it or promise anything about it. If the external chain
+changes its report format tomorrow, or is replaced by a different chain with a different format, **not
+one field above changes** — which is the substitution test of §10.11 applied to the one place where
+bytes come back.
+
+### 10.11 What this contract does not specify about the external side
+
+> **D4.34 — the substitution test. No clause of this contract may become false, ambiguous or
+> unimplementable if the entire external chain is replaced by a different one.** Any clause that names a
+> consumer's format, schema, transport, stage, latency or behaviour is a defect in this contract and is
+> removed on sight. What we owe is: **what we emit, in what form, with what timing and identity
+> guarantees, and how an arbitrary consumer attaches and detaches.** Nothing more — and those four
+> obligations live in §10.3 (what we emit and in what form), §10.6 (the truth we emit and the guarantees
+> on it) and §10.9 (the timing, the identity, and attaching and detaching).
+
+| Not specified here, deliberately | Why | What a reader might mistake for it |
+|---|---|---|
+| A detector's or a model service's **input schema** | It is theirs. We publish a record (§10.3); how anybody maps it into their own inputs is their design | [`08`](08_Collection_And_EPoL.md) §7.2 defines **our** record. It is not a detector's input schema and does not become one by being read by a detector |
+| A **track format** | Ditto | [`08`](08_Collection_And_EPoL.md) §7.3 writes down a *minimum shape* for one reason only: the transfer rule of §10.6 has to state the shape it applies to. It is **illustrative**, it is `08`'s, and `C8` does not import it, does not validate against it and does not break if no consumer ever matches it |
+| A **report or assessment schema** | Never ours. §10.10's container is the only thing we define, and it holds bytes, not fields | An `<_epol>` detail child on a CoT feed — an idea [`08`](08_Collection_And_EPoL.md) §11.4 explicitly **withdrew**, because this pipeline emits no assessments |
+| A **fusion or normalisation stage** for consumer output | None exists here. Coverage is published **both** per sensor and unioned ([`08`](08_Collection_And_EPoL.md) §11.4), so a consumer picks whichever matches what they did, and nothing of ours waits on a stage that was never ours | The multi-channel question, which is ours only insofar as it changes what *our* coverage record means |
+| **Latency, retry or error semantics past our emission** | Our budget ends at emit. §10.9's header states the capture interval and the drop policy, which is the whole of what a consumer needs from us in order to size themselves | [`08`](08_Collection_And_EPoL.md) §11.2's budget diagram, which deliberately ends at the boundary and times nothing beyond it |
+| An **identity for a consumer's output** | We mint none. §10.8's "no identifier join" row is deliberate: truth is self-identifying so that it can never be silently merged with something a consumer produced | Doc 09 §3's `CARLA-DET-<track_id>` grammar, which exists for **their** use on a TAK feed and is not a contract of ours |
+| An **acknowledgement, request or control channel** | `D4.31`. A consumer that could ask us for something would be a consumer that could change what we produce | The transcript, which is inbound **bytes** and never inbound **requests** (§10.10 rule 7) |
+
+**Where a concrete integration appears anywhere in this plan, it is one possible adapter, thin and
+outside.** [`02`](02_Use_Cases.md) UC-8's narrative chain and [`08`](08_Collection_And_EPoL.md) §11.2's
+sequence diagram both name a detect-and-track stage and a model service because a use case is
+unreadable without a concrete reader on the far end. Neither is normative, neither is a dependency of
+this contract, and `C8` is written so that substituting a completely different chain — or no chain at
+all — changes nothing in it.
+
+### 10.12 Validation, failure, versioning
+
+Every rule is a check on **our own artifacts**, run by us — before a corpus is handed over (V8.1–V8.10),
+at the emitter or at build time for the live mode (V8.11–V8.17), and over the container of what came
+back (V8.18–V8.20). The response column names what this system does; **none of them is a verdict on
+anything outside it**, and V8.18 is the one to read twice: a malformed arrival from a system we do not
+own is refused and recorded, and never fails our run.
 
 | # | Rule | Response |
 |---|---|---|
@@ -2633,13 +3170,30 @@ column names what this system does; none of them is a verdict on anything outsid
 | V8.8 | Every field in the observation root's `solar` and `epoch` blocks appears in §10.4a's "in `OBSERVATION`: yes" list | refuse to publish. An allow-list, not a deny-list: a new field stays out until the contract admits it |
 | V8.9 | The corpus manifest declares every partition whose truth is not released, and every capture window, sensor and vehicle the corpus does not cover | refuse to publish. An undeclared omission is indistinguishable from data loss |
 | V8.10 | The observation writer's build carries no reference to any truth type (`D4.16` property 1) | fail the build, not the run |
+| V8.11 | Every stream record carries the identity keys of `C4` — `sensor_id` and `tick` always, with `sim_time_s` and `run_id` on every record. A record that cannot be named is not emitted | refuse to emit, and fail the run at that tick. The alternative is a consumer holding pixels it cannot place |
+| V8.12 | `seq` increases by exactly one per `(stream_kind, sensor_id)` over a stream's life, and `dropped_cumulative` is non-decreasing and equals the count of skipped `seq` values | assertion in the emitter (L2) |
+| V8.13 | No envelope field is derived from truth, supervision or any scene content, and the envelope writer's build carries no reference to any truth type | fail the build, not the run — the same kind of check as V8.10 |
+| V8.14 | An observation **stream** record satisfies V8.1, V8.7 and V8.8 unchanged, checked **at the emitter** rather than inherited from the corpus writer | refuse to open the stream. A field that is unsafe in a corpus is unsafe on a wire |
+| V8.15 | A truth stream is opened in a live handover only when the choice to open it was explicitly recorded, in the run manifest and in the `C10` result | refuse to open the stream. Off by default; on by record (L7) |
+| V8.16 | Every dropped frame is counted, every dropped `(sensor_id, tick)` appears in coverage as *covered but not delivered*, and the two counts agree | a run whose counters and coverage disagree is marked invalid — one of them is wrong and neither can then be trusted |
+| V8.17 | A `stream_close` is written for every stream that was opened, with `not_delivered_recorded` true | assertion. If the process died there is no close record, and its absence is the signal; `C10`'s result is the authority either way |
+| V8.18 | Every transcript row carries `received_tick`, `source_id`, `content_type`, `byte_count` and `sha256`, and `source_id` is one of the configured peers | refuse the row and record the refusal. **Never stop the run** — a malformed arrival from outside is not a fault in the capture |
+| V8.19 | Every transcript blob's digest and length match its row | mark the transcript untrusted at corpus build rather than shipping it silently |
+| V8.20 | No component that writes truth, observation, coverage, a manifest, a corpus summary or a `C10` result holds a reference to the transcript reader, and no field of any of them is a function of a transcript row | fail the build. The structural form of `D4.32` |
 
 **Versioning.** Each root carries its own integer version, declared in the corpus manifest alongside the
 `scenario_package_version` the run was produced from. A consumer that does not implement a root's
 version refuses to read that root. The two roots version independently, because a change to the label
 record should not invalidate imagery already captured.
 
-### 10.10 What breaks if C8 is violated
+**And in the live mode, the same versions, declared up front.** A stream's header carries
+`handover_contract_version` and the `root_version` of the one root it delivers, so a consumer decides
+whether it can read the stream **before** the first frame rather than on encountering a field it does
+not know. A consumer that does not implement either stops reading and says so. The transcript's
+`transcript_version` versions its container only and is independent of both — it has to be, because the
+container is ours and the content is not (`D4.32`).
+
+### 10.13 What breaks if C8 is violated
 
 - **The corpus teaches the simulator instead of the world.** If `base_type` or true dimensions reach the
   `OBSERVATION` root, class is readable straight off the input; if a truth position reaches it, position
@@ -2668,6 +3222,25 @@ record should not invalidate imagery already captured.
 - **A deliberate absence is read as a bug, or a bug is read as a deliberate absence.** §10.8 and V8.9
   exist because a consumer who cannot tell the two apart will either work around data that is fine or
   trust data that is not.
+- **The live exercise becomes a different product from the corpus.** If the record differs by mode, a
+  consumer writes two readers, the frame they saw live cannot be checked against the frame the corpus
+  published, and the two will eventually disagree about something nobody notices. `D4.29` and
+  `image_sha256` are what make them provably one thing.
+- **A slow consumer changes the experiment.** Back-pressure looks like politeness and is not: the sun
+  advances on the world tick, so a link that stalls the world changes the illumination of the exercise
+  in response to how fast somebody else's software ran, and the corpus would record the altered
+  lighting as though it had been asked for (`D4.30`, `D4.25`).
+- **A gap in the stream is read as an empty scene.** Without `seq`, the drop counters and the
+  covered-but-not-delivered coverage rows, a consumer receiving nothing for twenty ticks cannot tell a
+  quiet world from a lost one, and will conclude the wrong thing about the scene rather than about the
+  link (V8.16).
+- **The transcript becomes a label.** Received model output sitting in the same process as truth, on one
+  tick base, with a common frame identity, is one refactor away from being merged — and a merged
+  transcript is supervision derived from somebody else's model, which is neither truth nor ours
+  (`D4.32`, V8.20).
+- **The contract has to be renegotiated every time the far end changes.** If any clause here named a
+  consumer's format or transport, replacing the external chain would reopen this document. `D4.34` is
+  the test that keeps that from happening, and §10.11 is the list it was applied to.
 
 ---
 
@@ -3094,7 +3667,7 @@ where a rule is a per-tick assertion (`T`).
 
 ### 11.13 What `C9` needs from `11_Time_And_Illumination.md`
 
-Stated as properties needed, not as requests, in the style of §13.
+Stated as properties needed, not as requests, in the style of §14.
 
 | Property | Why `C9` cannot decide it |
 |---|---|
@@ -3137,7 +3710,335 @@ Stated as properties needed, not as requests, in the style of §13.
 
 ---
 
-## 12. The protocol, end to end
+## 12. C10 — The unattended run result
+
+**New in this revision.** [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c's second requirement is that a corpus be
+**regenerable on a cadence by an automated process** — unattended, parameterised, reproducible,
+non-interactive — which something outside then trains on. *Nothing trains here and nothing trains during
+a run*, so there is no training loop, no scheduler and no model lifecycle in this plan. The requirement
+that lands on us is modest, and §3c says so: *"Where a section already specifies a run configuration and
+a manifest, this mostly falls out; say so rather than inventing machinery."*
+
+It does mostly fall out, and this contract says which parts. The one thing that genuinely does not yet
+exist is the artifact an automated caller reads when the run is over: **what was produced, and whether
+it is fit to use, machine-readably, without a human reading a log.**
+
+**Division of labour, stated once.** [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md)
+owns the **invocation surface** — the flags, the configuration layering and resolution, the effective
+configuration and its digest, the live monitor, and the closeout rendering of §7.2. `C10` owns the
+**result artifact**: its identity, what it says was produced, its record of the gates, and the single
+field a caller keys on. Neither restates the other.
+
+**This contract is a projection, not a new measurement.** Every field below is copied or computed from
+an artifact this plan already specifies:
+
+| Where the result's content comes from | What it contributes |
+|---|---|
+| The **run manifest** — `C2` §4.5 (`render_states[]`, observed spans), `C6` §8.5 (`stalled`, last good tick), `C9` §11.8 (`epoch`, `illumination_in_force`, `solar_residual`, `lamp_gaps[]`, and **`corpus_eligible`**, already specified as *"the single field a corpus builder filters on"*) | Identity, what ran, and most of the gate inputs |
+| The **corpus manifest** (`C8` §10.12) | Root versions, declared omissions, partitions |
+| The **stream close records** (`C8` §10.9.2) | What a live delivery actually delivered, and what it dropped |
+| [`12`](12_Operator_Control_Surface.md) §7.2's closeout gates, and the values [`10`](10_Scale_And_Performance.md) owns | The pass/fail of each check, with its threshold |
+
+> **If a field is not derivable from an artifact this plan already specifies, it does not belong in the
+> result.** A result that measures something of its own is a second source of truth about a run, and the
+> first disagreement between it and the manifest is the one nobody can adjudicate.
+
+### 12.1 Artifact
+
+| | |
+|---|---|
+| **Artifact** | `run_result.json` — one per run, written beside the run manifest |
+| **Written by** | the component that closes the run manifest, at run end — **including a run that failed** |
+| **Read by** | an automated caller; an operator; a corpus builder deciding what to include; the `stream_close` record, which echoes one field of it |
+| **Format** | JSON, canonicalised and digested as §1 fixes |
+| **Atomicity** | written under a temporary name and renamed into place, so a caller polling a directory never reads a half-written file (V10.6). This is not a detail: an automated caller has no human to notice a truncated JSON document |
+
+### 12.2 The single field a caller keys on
+
+> **D4.33 — every run, attended or not, closes with a machine-readable result whose single field
+> `fitness` decides whether a caller uses the output. `fitness` is a pure function of the gate record,
+> so a caller may recompute it; no other field in the result may contradict it; and the absence of a
+> result means `unfit`.** An automated caller needs exactly one branch, and it needs it to be safe when
+> everything else has gone wrong — including when the process died before it could write anything.
+
+| `fitness` | Meaning | What an automated caller does |
+|---|---|---|
+| `fit` | Every gate the run was subject to passed | Use the output |
+| `fit_with_warnings` | No gate failed; one or more warn-severity checks fired, and each is named in `gates[]` | Use the output. The warnings are for a human and for the corpus's own description, not for the branch |
+| `unfit` | At least one fail-severity gate failed, or the run did not complete, or the result is `incomplete` | **Do not use the output.** It is not deleted and it is not hidden — [`12`](12_Operator_Control_Surface.md) §7.2's rule that a failed gate never deletes anything stands — it is *labelled*, so it can be diagnosed rather than silently trusted |
+| *(the file is absent)* | The run produced no result | Treat as `unfit`. Absence is never success |
+
+**A caller that implements one bit** keys on `fitness != "unfit"`. **A caller that wants only pristine
+corpora** keys on `fitness == "fit"`. Nothing else in the artifact is required reading, which is the
+property that makes it usable by something with no judgement.
+
+**Reconciliation with the two verdicts that already exist**, so three fields cannot disagree:
+
+- `C9` §11.8's **`corpus_eligible`** appears in `gates[]` as a fail-severity gate. `fitness` is therefore
+  never `fit` or `fit_with_warnings` when `corpus_eligible` is false (V10.4). The `C9` field keeps its
+  own meaning — a statement about the epoch and the sun — and `C10` does not restate it.
+- [`12`](12_Operator_Control_Surface.md) §7.2 marks the closed manifest `quality_gate: "failed"` with the
+  failing checks named. `gates[]` **is** that record, projected into the result, and `fitness` is its
+  verdict. There is one set of gates and two renderings of it, not two sets.
+
+### 12.3 Fields
+
+| Field | Type | Req. | Meaning, and where it comes from |
+|---|---|---|---|
+| `result_version` | integer | yes | Versions this artifact. A caller that does not implement it treats the run as `unfit` rather than guessing |
+| **`fitness`** | string | yes | `fit` \| `fit_with_warnings` \| `unfit` — §12.2 |
+| `run_id` | string | yes | `C4`. The run's identity |
+| `session_id` | string | yes | The capture session ([`08`](08_Collection_And_EPoL.md) §3.5) |
+| `scenario_id` | string | yes | `C4`, and §5.6 is why it must actually be supplied |
+| `invocation_id` | string | no | Supplied by the caller and **echoed verbatim**; opaque to us. This is how an automated caller correlates a result with the invocation it made, without us inventing a job model |
+| `scenario_package_sha256`, `scenario_package_version` | string, integer | yes | `C3`. Which scenario produced this |
+| `world_opendrive_sha256`, `catalogue_digest`, `blueprint_set_digest`, `epoch_block_sha256` | string | yes | `C3`, `C1`, `C9`. The bindings the run validated against at start |
+| `effective_configuration_sha256` | string | yes | The digest of the resolved configuration ([`12`](12_Operator_Control_Surface.md) §3.7 owns the resolution; `C10` carries its digest and nothing else) |
+| `seeds` | object | yes | Every seed the run consumed, by name |
+| `started_wall_utc`, `ended_wall_utc` | string | yes | Bookkeeping for a caller's own scheduling. Nothing rendered or recorded depends on them (§1) |
+| `delivery_modes[]` | array of string | yes | `deferred`, `live`, or both (`D4.29`) |
+| `produced` | object | yes | §12.3.1 |
+| `gates[]` | array | yes | §12.4 |
+| `regeneration` | object | yes | §12.5 |
+| `reproduce` | object | yes | `{ configuration_path, effective_configuration_sha256, non_interactive: true }` — what is needed to run this again. **Not a new format**: the configuration is [`12`](12_Operator_Control_Surface.md)'s and this block points at it |
+| `incomplete` | boolean | yes | True when the result was written by a crash handler or the run did not reach closeout |
+| `incomplete_reason` | string | yes when `incomplete` | Free text for a human; never parsed by a caller, which has `fitness` |
+| `manifest_digests` | object | yes | `{ run_manifest, corpus_manifest }` — so the result is provably the result *of* those manifests |
+
+#### 12.3.1 `produced` — what the run actually made
+
+| Field | Type | Req. | Meaning |
+|---|---|---|---|
+| `roots[]` | array | yes | `{ root, location, root_version, frame_count, byte_count, manifest_digest }` for each of `OBSERVATION` and `TRUTH`. A root that was not written appears with `frame_count: 0`, never by omission |
+| `sensors[]` | array | yes | `{ sensor_id, frames_written, frames_emitted, frames_dropped, observed_union_s }` — the first from the recorder, the middle two from the stream close records (`C8` §10.9.2), the last from `C2` §4.5 |
+| `windows[]` | array | yes | `{ window_index, begin_s, end_s, civil_begin, civil_end, capture_ticks, achieved_ticks_per_wall_s }` — from `C9` §11.8.1 and [`12`](12_Operator_Control_Surface.md) §7.1's clock ratio |
+| `supervision` | object | yes | `{ instances, intervals, prevalence_units_reported[] }` — counts only, from the truth manifest. **No prevalence figure is a gate**, because a corpus with few positives is not a defective corpus |
+| `transcript` | object | yes | `{ present, sources[], rows, bytes, truncated, released }` — **reported, never a gate** (§10.10 rule 4). A run whose far end said nothing is a perfectly fit run |
+| `declared_omissions[]` | array | yes | Every omission the corpus manifest declares (V8.9), echoed so a caller sees them without opening the manifest |
+
+#### 12.3.2 Worked example
+
+The same run as §10.9.2a, closed. Abbreviated where a block is a table above, and **the numeric values
+are illustrative**; what is normative is that `fitness` is recomputable from `gates[]` and that every
+other field is a projection of an artifact that already exists.
+
+```json
+{
+  "result_version": 1,
+  "fitness": "fit_with_warnings",
+  "run_id": "cap-20260321-2300",
+  "session_id": "bahonar-night-01",
+  "scenario_id": "bahonar_pattern_of_life",
+  "invocation_id": "nightly-2026-03-21T14:00Z#3",
+  "scenario_package_sha256": "4c7a…", "scenario_package_version": 1,
+  "world_opendrive_sha256": "b02f…", "catalogue_digest": "e51d…",
+  "blueprint_set_digest": "77aa…", "epoch_block_sha256": "1d3e…",
+  "effective_configuration_sha256": "aa90…",
+  "seeds": { "sumo_seed": 20260321, "render_draw_seed": 7 },
+  "started_wall_utc": "2026-03-21T17:02:11Z", "ended_wall_utc": "2026-03-21T17:34:56Z",
+  "delivery_modes": ["deferred", "live"],
+  "produced": {
+    "roots": [
+      { "root": "OBSERVATION", "location": "…/observation", "root_version": 1,
+        "frame_count": 18000, "byte_count": 41203847112, "manifest_digest": "5ab1…" },
+      { "root": "TRUTH", "location": "…/truth", "root_version": 1,
+        "frame_count": 18000, "byte_count": 2884012233, "manifest_digest": "c93f…" } ],
+    "sensors": [
+      { "sensor_id": "OVERWATCH-1", "frames_written": 9000, "frames_emitted": 8994,
+        "frames_dropped": 6, "observed_union_s": 1712.4 },
+      { "sensor_id": "OVERWATCH-2", "frames_written": 9000, "frames_emitted": 9000,
+        "frames_dropped": 0, "observed_union_s": 1680.2 } ],
+    "windows": [
+      { "window_index": 0, "begin_s": 82800, "end_s": 84600,
+        "civil_begin": "2026-03-21T23:00:00+03:30", "civil_end": "2026-03-21T23:30:00+03:30",
+        "capture_ticks": 9000, "achieved_ticks_per_wall_s": 4.9 } ],
+    "supervision": { "instances": 7, "intervals": 11,
+                     "prevalence_units_reported": ["per_vehicle", "per_interval", "per_observed_second"] },
+    "transcript": { "present": true, "sources": ["dt-stage-a"], "rows": 41822,
+                    "bytes": 91230011, "truncated": false, "released": false },
+    "declared_omissions": ["truth withheld for partition `holdback-02`"]
+  },
+  "gates": [
+    { "id": "D4.6",  "name": "every participant in an open interval was admitted",
+      "owner": "04", "severity": "fail", "status": "passed" },
+    { "id": "C9.corpus_eligible", "name": "epoch declared, sun written from it, audit passed",
+      "owner": "04", "severity": "fail", "status": "passed", "observed": true },
+    { "id": "V8.16", "name": "drop counters agree with the coverage record",
+      "owner": "04", "severity": "fail", "status": "passed", "observed": 6, "threshold": 6 },
+    { "id": "D10.7", "name": "no frame was dropped by a recorder queue",
+      "owner": "10", "severity": "fail", "status": "passed", "observed": 0, "threshold": 0 },
+    { "id": "V8.6",  "name": "supervision prevalence reported per solar bin",
+      "owner": "04", "severity": "fail", "status": "passed" },
+    { "id": "V1.18", "name": "every class in a night window has a working headlight",
+      "owner": "04", "severity": "warn", "status": "failed",
+      "detail": "lamp_gaps[]: 1 blueprint, low beam not optically confirmed" }
+  ],
+  "regeneration": {
+    "supersedes_run_id": "cap-20260314-2300",
+    "input_digests": { "scenario_package_sha256": "4c7a…", "world_opendrive_sha256": "b02f…",
+                       "catalogue_digest": "e51d…", "effective_configuration_sha256": "aa90…",
+                       "seeds": { "sumo_seed": 20260321, "render_draw_seed": 7 } },
+    "inputs_unchanged": false,
+    "declared_nondeterminism": ["render-thread frame timing affects which ticks a channel captures"]
+  },
+  "reproduce": { "configuration_path": "…/effective.json",
+                 "effective_configuration_sha256": "aa90…", "non_interactive": true },
+  "incomplete": false,
+  "manifest_digests": { "run_manifest": "d4c2…", "corpus_manifest": "5ab1…" }
+}
+```
+
+**What an automated caller does with it:** reads `fitness`, sees `fit_with_warnings`, uses the corpus.
+**What a human does with it:** reads the one failed warn-gate and learns that a blueprint's low beam was
+never optically confirmed, which is a fact about the night imagery and is also in `lamp_gaps[]` in the
+manifest. **What neither does:** read the transcript, which is reported at 41,822 rows and is not a gate
+(`D4.32`), or infer anything about the model on the far end, which nothing here measured.
+
+### 12.4 The gate record
+
+One row per check the run was subject to. The point of the row is that a caller — or a human three
+months later — can see **what was checked, what was observed, against what threshold, and who owns the
+rule**, without reading a log.
+
+| Field | Type | Req. | Meaning |
+|---|---|---|---|
+| `id` | string | yes | The rule's identifier in its owning document — `V8.16`, `V2.6`, `D4.6`, `D10.7` |
+| `name` | string | yes | A descriptive name that stands alone, so a reader who does not have the owning document open still knows what failed |
+| `owner` | string | yes | The document that owns the rule — `04`, `08`, `10`, `12` |
+| `severity` | string | yes | `fail` or `warn` |
+| `status` | string | yes | `passed` \| `failed` \| `skipped` \| `not_applicable` |
+| `observed` | any | yes when applicable | The value the run produced |
+| `threshold` | any | yes when applicable | The value it was checked against, and where a value is [`10`](10_Scale_And_Performance.md)'s, the one actually in force |
+| `detail` | string | no | One line for a human |
+
+**Three rules about the record itself:**
+
+1. **Every gate appears, including the ones that passed.** A result that lists only failures cannot be
+   distinguished from a result produced by a build that forgot to run the checks.
+2. **`skipped` is never reported as `passed`.** This is `C9` §11.8.2's `audit_skipped` principle applied
+   generally: *"the residual was 0.4 s"* and *"the residual was never measured"* must not look alike.
+   A `skipped` fail-severity gate makes the run `unfit` unless the result also says why it was not
+   applicable.
+3. **`fitness` is the function, and only the function, of this list** (V10.2).
+
+**The gates this contract requires to be present.** `C10` does not invent gates; it requires that each
+of these appears with its owner named, because these are the ones whose absence would let an unusable
+corpus look usable:
+
+| Gate | Owner | Severity |
+|---|---|---|
+| A participant in an open annotated interval was admitted, every time | `04` `D4.6` | fail |
+| `render_states[]` covers every SUMO vehicle, and no participant ended un-rendered with an open interval | `04` V2.6, V2.7 | fail |
+| Neither side stalled | `04` `D4.12`, `C6` §8.5 | fail |
+| `corpus_eligible` | `04` `C9` §11.8 | fail |
+| The solar residual stayed in tolerance, and the audit was not skipped | `04` `C9` §11.8.2 | fail |
+| The observation root contains nothing from §10.4's right-hand column | `04` V8.1, V8.7, V8.8 | fail |
+| Every declared omission is declared | `04` V8.9 | fail |
+| Drop counters and coverage agree | `04` V8.16 | fail |
+| `Dropped` is zero on every channel | `10` `D10.7` | fail |
+| The rendered fraction held its floor | `10` §7 | fail |
+| The clock ratio was recorded | `12` §7.2 | fail |
+| Corpus-affecting events — collisions, teleports, emergency stops, reconciliation refusals | `01` | warn |
+| Lamp gaps (`lamp_gaps[]` non-empty) | `04` `C1` V1.18 | warn |
+| A supervision–illumination correlation was reported per solar bin | `04` V8.6 | fail |
+
+### 12.5 Regeneration and lineage
+
+A corpus regenerated on a cadence is a **new run**, never an overwrite. The caller needs to know what
+this run supersedes and — the useful part — **whether anything actually changed**, so that a cadence
+which produces an identical corpus costs nothing downstream.
+
+| Field | Type | Req. | Meaning |
+|---|---|---|---|
+| `supersedes_run_id` | string | no | The previous run this one regenerates, when the caller supplied it. We do not infer it |
+| `input_digests` | object | yes | `{ scenario_package_sha256, world_opendrive_sha256, catalogue_digest, effective_configuration_sha256, seeds }` — the complete set of inputs that determine a run |
+| `inputs_unchanged` | boolean | no | True when every entry of `input_digests` equals the superseded run's. **Computed only when `supersedes_run_id` was supplied**, and it is a statement about the *inputs*, never about the outputs |
+| `declared_nondeterminism[]` | array of string | yes | Named sources of run-to-run variation that survive identical inputs, each with the artifact that records it. Empty is a claim, not a default, and V10.10 is why |
+
+**Why `inputs_unchanged` is a statement about inputs only.** Asserting that two corpora are identical
+would require comparing them, and two runs with identical inputs may still differ wherever
+`declared_nondeterminism[]` says they may. The honest field is the cheap one: *the inputs were the
+same*. What a caller does with that — skip, re-run for a new sample, or diff the outputs itself — is
+outside this contract.
+
+### 12.6 What unattended invocation has to be, stated as properties
+
+`C10` owns the result; [`12`](12_Operator_Control_Surface.md) owns the surface. These are the properties
+the result contract needs that surface to have, stated as properties rather than as flags:
+
+1. **Non-interactive.** A run never prompts, never requires a terminal, and never waits for a human. A
+   surface that can block on input cannot be put on a cadence.
+2. **Parameterised from artifacts only.** Everything that determines the run comes from the scenario
+   package and the resolved configuration. **Nothing may come from the host clock, host time zone or
+   host locale** — which is not a new rule, it is `D4.24` and `D4.25` already, and a cadence is exactly
+   the condition under which a host-clock default would produce a differently-lit corpus every night
+   with nothing saying so.
+3. **Reproducible.** Identical `input_digests` produce an identical corpus except where
+   `declared_nondeterminism[]` says otherwise.
+4. **Addressed by `run_id`.** A run writes into a location keyed on its own `run_id`, so a repeated
+   invocation cannot overwrite a previous corpus. A cadence that overwrites its own history is a cadence
+   that can destroy the only good corpus it ever produced.
+5. **The result is always written**, including after a failure, and **the process exit code agrees with
+   `fitness`** — but the exit code is never the only signal, because an exit code cannot say *which*
+   gate failed and a killed process has no exit code worth reading.
+
+### 12.7 Validation
+
+| # | Rule | Response |
+|---|---|---|
+| V10.1 | A `run_result.json` exists for every run, including a failed or aborted one | a run with no result is `unfit` by absence — the rule a caller implements, and the reason the writer is on the crash path |
+| V10.2 | `fitness` equals the function of `gates[]`: `unfit` if any fail-severity gate failed or was skipped without a reason, or `incomplete` is true; `fit_with_warnings` if only warn-severity checks fired; `fit` otherwise | refuse to publish the result. A verdict a caller cannot recompute is a verdict it has to trust blindly |
+| V10.3 | Every gate of §12.4's required list appears, with `owner` and `severity` | refuse to publish |
+| V10.4 | `fitness != "fit"` and `!= "fit_with_warnings"` whenever `corpus_eligible` is false | refuse to publish. Two verdicts that can disagree are worse than one |
+| V10.5 | Every identity digest present, and equal to the run manifest's | refuse to publish — a result that cannot be tied to its manifest is an assertion about nothing |
+| V10.6 | The file is created atomically | assertion at the writer; a partial read by a polling caller is the failure this prevents |
+| V10.7 | No field of the result is a function of any transcript row (`D4.32`, V8.20) | fail the build |
+| V10.8 | The result contains no model metric, score, comparison or statement about anything outside this system | refuse to publish ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b) |
+| V10.9 | No gate's `status` is `passed` when its check did not run | refuse to publish |
+| V10.10 | `declared_nondeterminism[]` is present; an empty array is written explicitly and is a claim the run is making | refuse to publish a result that omits the field, because an omitted list reads as "none" without anybody having said so |
+
+### 12.8 Failure modes
+
+| Situation | What happens |
+|---|---|
+| The run crashes mid-window | The crash path writes a result with `incomplete: true`, the gates evaluated so far, and `fitness: "unfit"`. The corpus is kept and labelled, never deleted ([`12`](12_Operator_Control_Surface.md) §7.2) |
+| The process is killed and writes nothing | The caller finds no result and treats the run as `unfit` (V10.1). This is why absence is defined rather than left undefined |
+| A gate's threshold was never valued | The gate is `skipped` with a reason, and a fail-severity skip makes the run `unfit`. A check that could not run is not a check that passed |
+| The result disagrees with the manifest | V10.5 catches the identity case at publication; anything subtler is a defect in the projection, which is why §12 forbids the result from measuring anything of its own |
+| A caller ignores `fitness` | Outside our control, and the reason the field is single, named plainly, and first in the artifact |
+
+### 12.9 Versioning
+
+`result_version` is an integer. A caller that does not implement the version treats the run as `unfit`
+rather than reading fields it may be misinterpreting — the same refusal rule the roots use, chosen for
+the same reason. Adding a field is a version bump only when a caller that ignores it would be misled;
+adding a gate to `gates[]` is **not** a version change, because the record is a list and `fitness`
+already summarises it.
+
+### 12.10 What breaks if C10 is violated
+
+- **An automated caller trains something on an unusable corpus.** Without a single machine-readable
+  verdict, a cadence has to parse a log to decide, and a log format is not a contract. The corpus that
+  ran in daylight when the scenario said 23:00 (`C9`) or lost a participant it was built around
+  (`D4.6`) looks exactly like a good one to `ls`.
+- **Or it skips a perfectly good one**, because a warning was indistinguishable from a failure. Two
+  severities exist so that a corpus with a lamp gap is still usable, and `fit_with_warnings` is what
+  stops a cadence from throwing away most of its output.
+- **A silent failure becomes a permanent one.** [`12`](12_Operator_Control_Surface.md) §7.3 records two
+  values that exist in the tree and are read by nothing — `FrameRecorder.Dropped` and the clock ratio.
+  Unattended running is exactly the condition under which nobody is watching the screen, so a value with
+  no reader is a value that is never seen at all.
+- **A cadence overwrites its own history.** Without §12.6 property 4, a regeneration that goes wrong
+  replaces the corpus that went right, and the failure is only discovered downstream.
+- **Regeneration costs full price every cycle**, because nothing says the inputs did not change.
+  `inputs_unchanged` is one comparison of digests we already compute.
+- **The transcript becomes a gate.** If any field of the result were a function of what came back, our
+  data's fitness would depend on somebody else's software being up — and a corpus would be judged
+  unusable because a service we do not own was restarting (`D4.32`, V10.7).
+
+---
+
+## 13. The protocol, end to end
 
 ```mermaid
 sequenceDiagram
@@ -3212,27 +4113,38 @@ sequenceDiagram
   end
 ```
 
+**The same protocol in the live delivery mode.** Not one message above changes. The recorder's records
+are *additionally* emitted as they are produced (`C8` §10.9), the run is paced at a declared real-time
+factor rather than as fast as the machine allows (`D4.30`), and each stream ends with a `stream_close`
+beside the manifest. That is the whole difference, and it is the point of `D4.29`: a live exercise is
+this protocol with a second delivery attached, not a second protocol.
+
+**And the same protocol unattended.** The `Operator` lane becomes an automated caller: the opening
+message carries an `invocation_id` and a resolved configuration digest instead of a typed command line
+([`12`](12_Operator_Control_Surface.md) owns that surface), and the closing message is
+`run_result.json` — one file, one `fitness` field — rather than a screen (`C10`, §12).
+
 ---
 
-## 13. Dependencies on other sections
+## 14. Dependencies on other sections
 
 Stated as properties needed, not as requests.
 
 | Section | Property this section needs it to have |
 |---|---|
-| [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) | A single advance entry point that satisfies G1–G11 and implements the stall rule `D4.12`. A mechanism by which SUMO's velocity reaches the truth producer per actor (`D4.13`). A solar clock that derives civil time from the tick alone (`D4.25`), writes the sun under whichever policy is in force, writes the **date** at every civil midnight the effective date rule of G11 calls for, and reports which advance mechanism it used. A light mapper that reads SUMO's signal bits and the tick's solar elevation and emits `SetVehicleLightStateCommand` in the pose batch (`D4.22`) |
+| [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) | A single advance entry point that satisfies G1–G11 and implements the stall rule `D4.12`. A mechanism by which SUMO's velocity reaches the truth producer per actor (`D4.13`). A solar clock that derives civil time from the tick alone (`D4.25`), writes the sun under whichever policy is in force, writes the **date** at every civil midnight the effective date rule of G11 calls for, and reports which advance mechanism it used. A light mapper that reads SUMO's signal bits and the tick's solar elevation and emits `SetVehicleLightStateCommand` in the pose batch (`D4.22`). A **real-time factor on the world tick**, computed against an absolute target in the manner of `SumoCotBridge.py:243-246` rather than as a per-step sleep, with the achieved factor reported per window — and never a function of consumer state (`D4.30`, §10.9.5) |
 | [`05_CarlaNet_Capability_Audit.md`](05_CarlaNet_Capability_Audit.md) | Whether the Python shim exposes a spawned actor's bounding box (needed by the sweep, §3.2); whether `set_actor_transform`, `set_actor_simulate_physics` and `apply_batch_sync` are implemented end to end. For `C9`: the solar surface is present and complete end to end (`carlanet/__init__.py:1500`, `:1506`, `:1511`, `:1535`; `CarlaClient.cs:1043`, `:1049`, `:1053`, `:1058`, `GetCachedSolarState` at `:1991`; `CarlaServer.cpp:614`, `:625`, `:640`, `:661`) — what is needed is confirmation that **no time-zone setter exists** and a view on adding one (open question 9). For `C7`: `SetVehicleLightStateCommand` is present at every layer — C# record (`Command.cs:94`), formatter (`CommandFormatter.cs:64`), client methods (`CarlaClient.cs:1615`, `:1621`), shim command wrapper (`carlanet/__init__.py:1141-1147`), shim actor methods (`:781`, `:786`) — so §9.4 needs nothing built on the transport side. What is needed is confirmation that nothing else in the engine writes light state for an actor the bridge owns |
 | [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) | An `AnnotationSet` payload whose `entity_id` and `instance_id` match `C4`'s grammars; `<_supervision>` identical across sensors at one tick; the sidecar carrying `sumo_id` and `entity_id` on `_carla`. The `<_solar>` element already exists (`CotWriter.cs:52-65`) and needs no change; what is needed is the container additionally carrying the scenario's `epoch` so a sidecar states its own civil time without the manifest |
 | [`07_Scenario_Authoring.md`](07_Scenario_Authoring.md) | An authoring surface that emits only catalogue classes, never bare vTypes; area references rather than raw edge ids where an area exists; and an `epoch` that is **authored**, not defaulted — the authoring surface is where the 3.5-hour contradiction of Measurement 7 gets fixed at source |
-| [`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md) | **Two** artifact roots, not three (`D4.26`) — `08` owns the collection rationale for how they are laid out, named and sessioned; `C8` owns the ruling that there is no third. An observation writer with no reference to truth artifacts, and the split performed at the writer rather than by a stripping step (`D4.16`, and `08`'s own `D8.17` mechanism 2). A `context` block whose `solar` and `epoch` fields are exactly §10.4a's allow-list, taken from the sidecar and the PNG chunk rather than from the run manifest (`D4.21`). The per-label quality fields of `D4.28` — `occlusion`, `visible_signature`, `label_crowding`, `nearest_label_px`, `supervision_transfer_ambiguous` — computed from truth and the rendered frame alone and written onto the label record. If `08` reserves a partition whose truth is not released, that the corpus manifest declares it (V8.9) |
+| [`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md) | **Two** artifact roots, not three (`D4.26`) — `08` owns the collection rationale for how they are laid out, named and sessioned; `C8` owns the ruling that there is no third. An observation writer with no reference to truth artifacts, and the split performed at the writer rather than by a stripping step (`D4.16`, and `08`'s own `D8.17` mechanism 2). A `context` block whose `solar` and `epoch` fields are exactly §10.4a's allow-list, taken from the sidecar and the PNG chunk rather than from the run manifest (`D4.21`). The per-label quality fields of `D4.28` — `occlusion`, `visible_signature`, `label_crowding`, `nearest_label_px`, `supervision_transfer_ambiguous` — computed from truth and the rendered frame alone and written onto the label record. If `08` reserves a partition whose truth is not released, that the corpus manifest declares it (V8.9). **And for the live delivery mode** (`D4.29`): a transport binding satisfying §10.9.1's three properties; one endpoint per root, with the truth endpoint off by default (`08` §11.4, guarantee L7); drop-oldest at the emitter with a per-sensor counter and the covered-but-not-delivered coverage row (`08` §11.3, V8.16); a real-time factor observed rather than owned (`08` §11.1); and one world-observer snapshot per tick behind every stream (`08` §3.4, guarantee L6) |
 | [`09_Toolchain_And_Packaging.md`](09_Toolchain_And_Packaging.md) | `vehicles.catalogue.json` and `VehicleCatalog.xosc` shipped in the distribution under `catalogue/`; `sumo`, `duarouter` and `libtracics` staged with `SUMO_HOME` set |
-| [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md) | Values for `render_cap`, `render_cap_hard`, `prewarm_s`, `entry_lead_m`, `exit_lag_m`, `exit_lag_s`, `aoi_halo_m`, `frustum_lead_s`, `near_m`, `sumo_step_timeout_wall_s`, **`solar_audit_tolerance_s`, `solar_audit_tolerance_elev_deg`, `solar_audit_every_n_ticks`, the bound on a per-scenario tolerance override, and the solar-bin edges `C8` V8.6 stratifies on** |
+| [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md) | Values for `render_cap`, `render_cap_hard`, `prewarm_s`, `entry_lead_m`, `exit_lag_m`, `exit_lag_s`, `aoi_halo_m`, `frustum_lead_s`, `near_m`, `sumo_step_timeout_wall_s`, **`solar_audit_tolerance_s`, `solar_audit_tolerance_elev_deg`, `solar_audit_every_n_ticks`, the bound on a per-scenario tolerance override, the solar-bin edges `C8` V8.6 stratifies on, the live emitter's `queue_depth_frames` (§10.9.2, guarantee L4), and the transcript's per-record and per-run byte caps (§10.10 rule 5)** |
 | [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md) | The five properties listed in §11.13: a recommended default policy, the headlight thresholds in the `sun_elevation_deg` convention, the `freeze_date_advances` default, whether illumination is a declared stratifier, and a view on a time-zone setter. `C9` carries and checks whatever `11` decides; it does not decide any of them |
-| [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md) | An override that produces exactly an `illumination` object of §11.5's shape, so the driver validates the operator's choice with the same rules as the author's; and a surface that can express the four policies without inventing a fifth. `C9` requires only that whatever an operator expresses resolves to `illumination_in_force` in the manifest (§11.8) |
+| [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md) | An override that produces exactly an `illumination` object of §11.5's shape, so the driver validates the operator's choice with the same rules as the author's; and a surface that can express the four policies without inventing a fifth. `C9` requires only that whatever an operator expresses resolves to `illumination_in_force` in the manifest (§11.8). **And for unattended invocation**: the five properties of §12.6 — non-interactive, parameterised from artifacts only, reproducible, addressed by `run_id`, and a result always written, with the process exit code agreeing with `fitness` and never being the only signal. `12` owns the surface, the configuration resolution and the closeout rendering; `C10` owns the result artifact, and its `gates[]` is `12` §7.2's gate record projected rather than a second set of gates |
 
 ---
 
-## 14. Decisions
+## 15. Decisions
 
 | # | Decision |
 |---|---|
@@ -3264,10 +4176,17 @@ Stated as properties needed, not as requests.
 | **D4.26** | **This system owns exactly two artifact roots, `OBSERVATION` and `TRUTH`. There is no third.** Model output — detections, tracks, assessments, associations, reports — is neither produced, consumed, stored, validated nor versioned here, and no artifact of this pipeline may be written into a location that holds it. The structural value of the first draft's three-root split lived entirely in the first two roots, and removing the third leaves the anti-leak separation intact (§10.2) |
 | **D4.27** | **Supervision transfer is a format guarantee plus a documented rule, never an operation performed here.** Truth is emitted in an associable form — per tick, positioned, timed, boxed, stably identified, with interval bounds in the manifest — and the rule by which supervision would transfer is written down. No association is performed, no harness ships, and no artifact is derived from a consumer's output (§10.6) |
 | **D4.28** | **A quality field survives in the corpus if and only if it is computable from this system's own truth and imagery with no model output as an input, and it attaches to the *label* rather than to an assignment.** Surviving: `occlusion`, `visible_signature`, `label_crowding`, `nearest_label_px`, `supervision_transfer_ambiguous`. Not produced: the gate residual, the match margin, and every track-level rate. Doc 20 §7.6's requirement — that a mis-associated label be findable rather than an unexplained hard example — is met on the label side, without measuring anything (§10.7) |
+| **D4.29** | **`C8` is one contract with two delivery modes, and the `OBSERVATION` and `TRUTH` records are identical in both.** Only the carrier, the timing, the loss behaviour and the closure differ, and the modes are **additive rather than alternative** — a live run may write the corpus as well, and `image_sha256` makes the record a consumer received provably the record the corpus holds. The test of the decision is that a consumer writes one reader (§10.1a) |
+| **D4.30** | **The link never owns the clock.** Pacing is declared before a run and never negotiated during it; no consumer, transport or transcript peer may stall, pace or otherwise influence the advance of simulated time. A consumer that cannot keep up loses frames, the loss is counted, and coverage records the tick as covered-but-not-delivered. Back-pressure is refused because it would make the consumer a second owner of time (`D4.11`) and would **move the sun** (`D4.25`), changing an exercise's illumination in response to how fast somebody else's software ran (§10.9.5) |
+| **D4.31** | **A consumer attaches and detaches at will, and the run is indifferent to both.** A `stream_header` on attach, a `stream_close` at the end, and in between no handshake, no acknowledgement, no replay and no request channel. Zero consumers is the default and a legal state; several consumers are independent, and one slow consumer may affect neither another consumer nor the world (§10.9.4) |
+| **D4.32** | **Anything the external chain returns is recorded, if it is recorded at all, as an opaque blob with a timestamp, a source id and a content type** — verbatim, never parsed for meaning we act on, never merged into truth or supervision, never measured, never inside either root, and never an input to any artifact we produce. We define and version the **container**; **its content is not our schema**. This refines `D4.26`'s word *stored* in exactly one respect — verbatim retention outside both roots — and in no other (§10.10) |
+| **D4.33** | **Every run, attended or not, closes with a machine-readable result whose single field `fitness` decides whether a caller uses the output.** `fitness` is a pure function of the gate record so a caller may recompute it, no other field may contradict it, and the **absence** of a result means `unfit`. The result is a projection of the run manifest and the gates that already exist: a field not derivable from an artifact this plan already specifies does not belong in it (`C10`, §12) |
+| **D4.34** | **The substitution test.** No clause of this contract may become false, ambiguous or unimplementable if the entire external chain is replaced by a different one. Any clause naming a consumer's format, schema, transport, stage, latency or behaviour is a defect in this contract and is cut — as `C4` §6.2's `DETECTOR_TRACK` entity was, in this revision. What we owe is what we emit, in what form, with what timing and identity guarantees, and how an arbitrary consumer attaches and detaches (§10.11) |
+| **D4.35** | **A regenerated corpus is a new run, never an overwrite.** A run writes into a location keyed on its own `run_id`, and the result carries the digests of every input plus — when the caller names a predecessor — whether those inputs changed. A cadence can therefore tell a fresh corpus from an identical one without comparing corpora, and cannot destroy the corpus it already had (§12.5, §12.6) |
 
 ---
 
-## 15. Open questions
+## 16. Open questions
 
 Each carries the options and a recommendation; none is decided here.
 
@@ -3389,3 +4308,49 @@ Each carries the options and a recommendation; none is decided here.
     from data loss. Whether to reserve one, and at what granularity, is a corpus-construction judgement
     and is [`08`](08_Collection_And_EPoL.md)'s — recorded here so the two documents do not each assume
     the other decided it.
+15. **CLOSED 2026-09-18 — `scenario_id` does not belong in the `OBSERVATION` record.** Resolved by
+    the integration lead in favour of [`08`](08_Collection_And_EPoL.md): both `scenario_id` and `seed`
+    are excluded from the observation side and from the live stream header, and remain required in the
+    `TRUTH` root and the run manifest. The reasoning is recorded at the field in §10.3. The original
+    statement of the disagreement follows, kept because the argument is worth reading.
+    **Whether `scenario_id` belongs in the `OBSERVATION` record — a live disagreement between two
+    sections, found while specifying the live mode.** `C8` §10.3 lists `scenario_id` as required in the
+    observation root, taken from the sidecar container where the recorder already writes it
+    (`CotWriter.cs:45`; `seed` is written beside it at `:46-47`, read from the source 2026-09-18).
+    [`08`](08_Collection_And_EPoL.md) §9.7 consequence 2 rules the opposite, and its argument is an
+    application of **our own `D4.20`**: `scenario_id` and `seed` are *"handles that index a set of
+    scenes"*, so a corpus carrying them lets a model key on the scenario rather than on the scene. The
+    live mode sharpens it, because the field would otherwise ride a stream header to an unknown
+    consumer. Options: (a) align with `08` — drop `scenario_id` and `seed` from the observation side and
+    join through `run_id` and the truth root; (b) keep it and record why `D4.20` does not bite; (c) keep
+    it in the deferred mode only, which `D4.29` forbids and which is listed only to be rejected.
+    **Recommend (a)**, because `08`'s argument is `D4.20` correctly applied and because the join a
+    consumer actually needs is the tick. It is recorded rather than changed in place because it is a
+    field-set change to a *published* allow-list and the two sections should close it together.
+    **Whichever way it goes, `D4.29` makes it one change in one place**: the modes carry the same record.
+16. **Whether a live run should also write the deferred roots by default.** `D4.29` makes the two modes
+    additive so that the most expensive kind of run — one with an audience — need not be the only kind
+    that produces nothing reusable. Whether *default-on* is right is a different question: writing the
+    corpus costs disk and a writer on the same machine that is trying to hold a real-time factor.
+    Options: both on by default; live-only by default with an opt-in; a per-session choice with the
+    result recording which. **Recommend the third**, with `delivery_modes[]` in the `C10` result already
+    carrying the answer, and the sizing of the extra writer belonging to
+    [`10`](10_Scale_And_Performance.md).
+17. **Whether `fitness` should be three-valued at all.** `C10` §12.2 defines `fit`,
+    `fit_with_warnings` and `unfit` so that a corpus with, say, a lamp gap is not thrown away by a
+    cadence that can only branch one way. The counter-argument is that three values invite a caller to
+    invent its own policy for the middle one, which is how two callers end up disagreeing about the same
+    corpus. Options: keep three; collapse to a boolean with the warnings still listed in `gates[]`; keep
+    three but require a caller to declare which it accepts. **Recommend keeping three**, because the
+    warn severity already exists in [`12`](12_Operator_Control_Surface.md) §7.2 and collapsing it here
+    would only move the judgement somewhere less visible — but this is a judgement about how the
+    automated caller is built, and that caller is outside this plan.
+18. **Whether a transcript is recorded by default, and who authorises releasing it.** `D4.32` fixes the
+    container and the prohibitions; it does not decide whether a live exercise records one unasked. The
+    case for default-on is that a transcript is a record of what happened and is unrecoverable
+    afterwards; the case for default-off is that it is the only inbound path in the system and an
+    unasked-for recording of somebody else's output may not be ours to keep. Options: off unless asked;
+    on with the release withheld by default (`released: false` in the `C10` result); on and released
+    with the corpus. **Recommend the second** — record it, do not ship it — with releasing it an
+    explicit, recorded choice as §10.10 rule 6 requires. The authorisation question is the user's, not
+    this document's.
