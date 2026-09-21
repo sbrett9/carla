@@ -80,6 +80,23 @@ public sealed record OsmConversionOptions
 }
 
 /// <summary>
+/// The output of one netconvert run, with the invocation that produced it.
+/// </summary>
+/// <param name="OpenDrive">The OpenDRIVE document.</param>
+/// <param name="Network">The SUMO network from the same run. Never reconstructable afterwards.</param>
+/// <param name="NetconvertArgv">Every argument as passed, so a later build can be compared with
+/// this one rather than with a guess at what it must have been.</param>
+/// <param name="NetconvertPath">The executable that ran, resolved.</param>
+/// <param name="NetconvertVersion">Its self-reported version, read from the executable that ran
+/// rather than inferred from a path or a pin.</param>
+public sealed record OsmConversionResult(
+    string OpenDrive,
+    string Network,
+    IReadOnlyList<string> NetconvertArgv,
+    string NetconvertPath,
+    string NetconvertVersion);
+
+/// <summary>
 /// Converts OpenStreetMap data to OpenDRIVE (.xodr) by invoking the native SUMO
 /// <c>netconvert</c> executable as a subprocess.
 /// </summary>
@@ -104,7 +121,9 @@ public sealed class OsmConverter
             $"carlanet_osm_{Guid.NewGuid():N}.xodr");
         try
         {
-            await RunNetconvertAsync(osmPath, xodrPath, ct).ConfigureAwait(false);
+            await RunNetconvertAsync(ResolveNetconvertPath(),
+                                     BuildArguments(osmPath, xodrPath), xodrPath, ct)
+                .ConfigureAwait(false);
             return await File.ReadAllTextAsync(xodrPath, ct).ConfigureAwait(false);
         }
         finally
@@ -114,12 +133,25 @@ public sealed class OsmConverter
     }
 
     /// <summary>
-    /// Convert an .osm file to OpenDRIVE and, when <see cref="OsmConversionOptions.GenerateTrafficLights"/>
-    /// is set, also return the SUMO network (<c>.net.xml</c>) netconvert produced. The network carries
-    /// the guessed traffic-light <c>&lt;tlLogic&gt;</c> phase programs that <c>TrafficLightInjector</c>
-    /// needs to build per-phase controllers; it is <c>null</c> when traffic-light generation is off.
+    /// Convert an .osm file to OpenDRIVE and return the SUMO network (<c>.net.xml</c>) from the same
+    /// netconvert run, together with the invocation that produced both.
     /// </summary>
-    public async Task<(string OpenDrive, string? Network)> ConvertFileWithNetworkAsync(
+    /// <remarks>
+    /// <para>The network is not a by-product: it is the road graph a SUMO scenario is authored
+    /// against, and it <b>cannot be reconstructed by running netconvert again, even with identical
+    /// flags</b>. Asking for OpenDRIVE output makes netconvert default <c>rectangular-lane-cut</c>
+    /// to true (<c>NWFrame::checkOptions</c>), which feeds junction shape computation: measured on
+    /// one Arapahoe extract, 743 of 4,978 canonical rows differ between a run that wrote OpenDRIVE
+    /// and one that did not, with lane lengths moving by up to 3.3 m. So the network a world is
+    /// distributed with has to come out of the invocation that built the world.</para>
+    /// <para>Measured: requesting the network alongside the OpenDRIVE does not change the OpenDRIVE.
+    /// The two documents are byte-identical either way once netconvert's timestamped header is
+    /// normalised, with and without traffic-light generation.</para>
+    /// <para>The network also carries the guessed traffic-light <c>&lt;tlLogic&gt;</c> phase programs
+    /// <c>TrafficLightInjector</c> reads to build per-phase controllers. That is why it was first
+    /// produced, and it is now produced whether or not traffic lights are generated.</para>
+    /// </remarks>
+    public async Task<OsmConversionResult> ConvertFileWithNetworkAsync(
         string osmPath, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(osmPath))
@@ -128,22 +160,29 @@ public sealed class OsmConverter
             throw new FileNotFoundException("OSM file not found.", osmPath);
 
         var xodrPath = Path.Combine(Path.GetTempPath(), $"carlanet_osm_{Guid.NewGuid():N}.xodr");
-        var netPath = _options.GenerateTrafficLights
-            ? Path.Combine(Path.GetTempPath(), $"carlanet_osm_{Guid.NewGuid():N}.net.xml")
-            : null;
+        var netPath = Path.Combine(Path.GetTempPath(), $"carlanet_osm_{Guid.NewGuid():N}.net.xml");
         try
         {
-            await RunNetconvertAsync(osmPath, xodrPath, ct, netPath).ConfigureAwait(false);
-            var xodr = await File.ReadAllTextAsync(xodrPath, ct).ConfigureAwait(false);
-            string? net = netPath != null && File.Exists(netPath)
-                ? await File.ReadAllTextAsync(netPath, ct).ConfigureAwait(false)
-                : null;
-            return (xodr, net);
+            var exe = ResolveNetconvertPath();
+            var argv = BuildArguments(osmPath, xodrPath, netPath);
+            await RunNetconvertAsync(exe, argv, xodrPath, ct).ConfigureAwait(false);
+            if (!File.Exists(netPath))
+                throw new InvalidOperationException(
+                    "netconvert reported success but produced no SUMO network at "
+                    + $"'{netPath}'. A world cannot be built without one: the network is what a "
+                    + "scenario is authored against and it cannot be reproduced afterwards.");
+
+            return new OsmConversionResult(
+                OpenDrive: await File.ReadAllTextAsync(xodrPath, ct).ConfigureAwait(false),
+                Network: await File.ReadAllTextAsync(netPath, ct).ConfigureAwait(false),
+                NetconvertArgv: argv,
+                NetconvertPath: exe,
+                NetconvertVersion: ResolveNetconvertVersion(exe));
         }
         finally
         {
             TryDelete(xodrPath);
-            if (netPath != null) TryDelete(netPath);
+            TryDelete(netPath);
         }
     }
 
@@ -171,9 +210,9 @@ public sealed class OsmConverter
 
     // ── netconvert invocation ────────────────────────────────────────────────
 
-    private async Task RunNetconvertAsync(string osmPath, string xodrPath, CancellationToken ct, string? netPath = null)
+    private async Task RunNetconvertAsync(
+        string exe, IReadOnlyList<string> argv, string xodrPath, CancellationToken ct)
     {
-        var exe = ResolveNetconvertPath();
         var psi = new ProcessStartInfo
         {
             FileName = exe,
@@ -182,7 +221,7 @@ public sealed class OsmConverter
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        foreach (var arg in BuildArguments(osmPath, xodrPath, netPath))
+        foreach (var arg in argv)
             psi.ArgumentList.Add(arg);
 
         // PROJ data discovery: libproj needs proj.db to reproject.
@@ -291,8 +330,11 @@ public sealed class OsmConverter
             args.Add("--tls.discard-loaded");
         }
 
-        // When a SUMO network path is requested, also emit it — TrafficLightInjector reads the
-        // <tlLogic> phase programs from it to build per-phase traffic-light controllers.
+        // Write the SUMO network whenever a path is given. It is not a by-product of traffic-light
+        // generation: it is the road graph a scenario is authored against, and it cannot be
+        // reproduced by a later netconvert run because asking for OpenDRIVE output changes the
+        // graph (see ConvertFileWithNetworkAsync). Measured: adding this output leaves the
+        // OpenDRIVE byte-identical.
         if (netPath != null)
         {
             args.Add("--output-file");
@@ -330,6 +372,66 @@ public sealed class OsmConverter
         // Fall back to bare name — relies on PATH; surfaces a clear failure at Start().
         return exeName;
     }
+
+    /// <summary>
+    /// The version the resolved executable reports, e.g. "Eclipse SUMO netconvert Version 1.27.0".
+    /// </summary>
+    /// <remarks>
+    /// Read from the executable that is about to run rather than inferred from its path or from a
+    /// pinned version elsewhere in the build: the pinned toolchain and whatever <c>SUMO_HOME</c>
+    /// points at have already diverged once. Cached per path, because a world build converts once
+    /// but a batch converts many times and this is a process launch.
+    /// Empty when the executable cannot be asked, which is the same signal as a package built
+    /// before the version was recorded at all.
+    /// </remarks>
+    internal static string ResolveNetconvertVersion(string exe)
+    {
+        lock (VersionsByPath)
+        {
+            if (VersionsByPath.TryGetValue(exe, out var cached))
+                return cached;
+        }
+
+        string version = string.Empty;
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = exe,
+                ArgumentList = { "--version" },
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            });
+            if (process != null)
+            {
+                var output = process.StandardOutput.ReadToEnd();
+                process.WaitForExit(VersionQueryTimeoutMs);
+                foreach (var line in output.Split('\n'))
+                {
+                    var trimmed = line.Trim();
+                    if (trimmed.Length > 0) { version = trimmed; break; }
+                }
+            }
+        }
+        catch (Exception exception) when (exception is System.ComponentModel.Win32Exception
+                                              or InvalidOperationException or IOException)
+        {
+            version = string.Empty;
+        }
+
+        lock (VersionsByPath)
+        {
+            VersionsByPath[exe] = version;
+        }
+        return version;
+    }
+
+    private const int VersionQueryTimeoutMs = 10_000;
+
+    private static readonly Dictionary<string, string> VersionsByPath =
+        new(StringComparer.OrdinalIgnoreCase);
 
     private static void TryDelete(string path)
     {

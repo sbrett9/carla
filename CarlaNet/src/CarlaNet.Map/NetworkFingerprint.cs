@@ -31,7 +31,7 @@
 //     netconvert invocation, so the signal programme is fixed when the world is built. A scenario
 //     authored against a differently-phased network is a real mismatch and should be loud.
 //
-// The canonical encoding below is a cross-language contract: `carlacontrol.NetworkFingerprint`
+// The canonical encoding (CanonicalDigest) is a cross-language contract: `carlacontrol.NetworkFingerprint`
 // implements the same thing in Python so the scenario side can check a world package without a
 // .NET runtime. Change one and the other must change with it, or a correct package starts being
 // refused.
@@ -39,8 +39,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
 using System.Xml.Linq;
 
 namespace CarlaNet.Map;
@@ -52,15 +50,6 @@ namespace CarlaNet.Map;
 /// </summary>
 public static class NetworkFingerprint
 {
-    // Field and row separators, chosen from the control range so they cannot occur in XML attribute
-    // values. The missing-attribute marker is distinct from an empty attribute, so `width=""` and no
-    // width at all do not collide.
-    private const byte FieldSeparator = 0x1F;
-    private const byte RowSeparator = 0x1E;
-    private const byte AttributeAbsent = 0x00;
-
-    private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
-
     /// <summary>The fingerprint of a network document, as lowercase hexadecimal SHA-256.</summary>
     public static string Compute(string netXml)
     {
@@ -82,11 +71,11 @@ public static class NetworkFingerprint
         // (the street name) and the lanes' <param> children (origId) are deliberately not read.
         foreach (XElement edge in SortedBy(root.Elements("edge"), e => Attribute(e, "id")))
         {
-            rows.Add(Row("E", Attribute(edge, "id"), Attribute(edge, "from"), Attribute(edge, "to"),
+            rows.Add(CanonicalDigest.Row("E", Attribute(edge, "id"), Attribute(edge, "from"), Attribute(edge, "to"),
                          Attribute(edge, "function"), Attribute(edge, "priority")));
             foreach (XElement lane in SortedBy(edge.Elements("lane"), l => Attribute(l, "id")))
             {
-                rows.Add(Row("L", Attribute(lane, "id"), Attribute(lane, "index"),
+                rows.Add(CanonicalDigest.Row("L", Attribute(lane, "id"), Attribute(lane, "index"),
                              Attribute(lane, "speed"), Attribute(lane, "length"),
                              Attribute(lane, "width"), Attribute(lane, "allow"),
                              Attribute(lane, "disallow"), Attribute(lane, "shape")));
@@ -95,7 +84,7 @@ public static class NetworkFingerprint
 
         foreach (XElement junction in SortedBy(root.Elements("junction"), j => Attribute(j, "id")))
         {
-            rows.Add(Row("J", Attribute(junction, "id"), Attribute(junction, "type"),
+            rows.Add(CanonicalDigest.Row("J", Attribute(junction, "id"), Attribute(junction, "type"),
                          Attribute(junction, "x"), Attribute(junction, "y"),
                          Attribute(junction, "incLanes"), Attribute(junction, "intLanes")));
         }
@@ -108,13 +97,14 @@ public static class NetworkFingerprint
         {
             var fields = new List<string?> { "C" };
             foreach (XAttribute attribute in connection.Attributes()
-                         .OrderBy(a => Utf8.GetBytes(a.Name.LocalName), ByteOrder.Instance))
+                         .OrderBy(a => CanonicalDigest.Utf8.GetBytes(a.Name.LocalName),
+                                  CanonicalDigest.ByteOrder.Instance))
             {
                 fields.Add(attribute.Name.LocalName + "=" + attribute.Value);
             }
-            connections.Add(Row([.. fields]));
+            connections.Add(CanonicalDigest.Row([.. fields]));
         }
-        connections.Sort(ByteOrder.Instance.Compare);
+        connections.Sort(CanonicalDigest.ByteOrder.Instance.Compare);
         rows.AddRange(connections);
 
         // Signal programmes: the junction they control, the programme's name, the control type and
@@ -132,27 +122,22 @@ public static class NetworkFingerprint
             {
                 fields.Add(Attribute(phase, "state"));
             }
-            programmes.Add(Row([.. fields]));
+            programmes.Add(CanonicalDigest.Row([.. fields]));
         }
-        programmes.Sort(ByteOrder.Instance.Compare);
+        programmes.Sort(CanonicalDigest.ByteOrder.Instance.Compare);
         rows.AddRange(programmes);
 
         // The frame the coordinates are in. Two networks with the same topology in different
         // projections are not interchangeable, and a scenario placed by coordinate would land in
         // the wrong place without noticing.
         XElement? location = root.Element("location");
-        rows.Add(Row("G",
+        rows.Add(CanonicalDigest.Row("G",
                      location is null ? null : Attribute(location, "netOffset"),
                      location is null ? null : Attribute(location, "convBoundary"),
                      location is null ? null : Attribute(location, "origBoundary"),
                      location is null ? null : Attribute(location, "projParameter")));
 
-        using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        foreach (byte[] row in rows)
-        {
-            sha.AppendData(row);
-        }
-        return Convert.ToHexStringLower(sha.GetHashAndReset());
+        return CanonicalDigest.Of(rows);
     }
 
     /// <summary>An attribute's value, or null when the element does not carry it.</summary>
@@ -161,49 +146,6 @@ public static class NetworkFingerprint
 
     private static IEnumerable<XElement> SortedBy(
         IEnumerable<XElement> elements, Func<XElement, string?> key)
-        => elements.OrderBy(e => Utf8.GetBytes(key(e) ?? string.Empty), ByteOrder.Instance);
-
-    /// <summary>One encoded row: the fields, separated, terminated by the row separator.</summary>
-    private static byte[] Row(params string?[] fields)
-    {
-        using var buffer = new MemoryStream();
-        for (int i = 0; i < fields.Length; i++)
-        {
-            if (i > 0) { buffer.WriteByte(FieldSeparator); }
-            if (fields[i] is null)
-            {
-                buffer.WriteByte(AttributeAbsent);
-            }
-            else
-            {
-                byte[] encoded = Utf8.GetBytes(fields[i]!);
-                buffer.Write(encoded, 0, encoded.Length);
-            }
-        }
-        buffer.WriteByte(RowSeparator);
-        return buffer.ToArray();
-    }
-
-    /// <summary>
-    /// Unsigned lexicographic order over raw bytes. Sorting the UTF-8 encoding rather than the
-    /// string keeps the order identical in every language that computes this fingerprint; .NET's
-    /// default string comparison is culture-aware and its ordinal comparison is over UTF-16 code
-    /// units, neither of which Python reproduces for anything outside the ASCII range.
-    /// </summary>
-    private sealed class ByteOrder : IComparer<byte[]>
-    {
-        internal static readonly ByteOrder Instance = new();
-
-        public int Compare(byte[]? left, byte[]? right)
-        {
-            if (left is null) { return right is null ? 0 : -1; }
-            if (right is null) { return 1; }
-            int shared = Math.Min(left.Length, right.Length);
-            for (int i = 0; i < shared; i++)
-            {
-                if (left[i] != right[i]) { return left[i] < right[i] ? -1 : 1; }
-            }
-            return left.Length.CompareTo(right.Length);
-        }
-    }
+        => elements.OrderBy(e => CanonicalDigest.Utf8.GetBytes(key(e) ?? string.Empty),
+                            CanonicalDigest.ByteOrder.Instance);
 }

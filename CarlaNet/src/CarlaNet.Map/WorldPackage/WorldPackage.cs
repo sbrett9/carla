@@ -6,10 +6,17 @@
 // can be rebuilt, inspected, or turned into an editable level later, by something that was not
 // present when it was generated.
 //
-// One file per world -- <name>.cwp -- which is a zip archive holding three entries:
+// One file per world -- <name>.cwp -- which is a zip archive holding four entries:
 //   world.json      the manifest: datum, height reconciliation, layers, sandbox, provenance
 //   map.xodr        the elevated OpenDRIVE, exactly as the server received it
+//   map.net.xml     the SUMO network from the SAME netconvert run as map.xodr
 //   bareearth.bin   the per-cell surface reconciliation grids, float32 (see the format below)
+//
+// map.net.xml is carried rather than regenerated because it cannot be regenerated. Asking netconvert
+// for OpenDRIVE output makes it default rectangular-lane-cut to true, which feeds junction shape
+// computation, so a second run with byte-identical flags produces a different graph -- measured, 743
+// of 4,978 canonical rows differ and lane lengths move by up to 3.3 m. A scenario authored against a
+// regenerated network binds to edges the rendered world does not have.
 //
 // One file rather than three loose ones because a world is a thing you move, keep, and hand to
 // someone: it can be copied, archived and versioned without a folder convention to preserve, and
@@ -81,10 +88,67 @@ public sealed record WorldPackageManifest
     public double StagingMaxYMeters { get; init; }
     public double StagingMarginMeters { get; init; }
 
-    // Provenance. Never read by the runtime; read by whoever asks why a world looks the way it does.
+    // Provenance. Never read by the runtime; read by whoever asks why a world looks the way it does,
+    // and by a scenario build deciding whether the network in front of it is the one this world was
+    // made from.
+
     public string SourceOsmFileName { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The canonical fingerprint of the OSM extract the world was built from
+    /// (<see cref="OsmFingerprint"/>) -- over the parsed document, not the file's bytes.
+    /// </summary>
+    /// <remarks>
+    /// A byte digest named a file that could not be reproduced: the extract is the clipped one the
+    /// pipeline writes, and the clipper emitted its nodes in set-iteration order, so the same extract
+    /// clipped twice gave two files and one graph. Packages written before this landed carry a byte
+    /// digest here instead; an empty <see cref="NetworkFingerprint"/> is what distinguishes them.
+    /// </remarks>
     public string SourceOsmSha256 { get; init; } = string.Empty;
+
+    /// <summary>
+    /// SHA-256 of the OpenDRIVE body: everything from the root element onwards, with the header's
+    /// <c>date</c> attribute blanked (<see cref="WorldPackage.HashOpenDrive"/>).
+    /// </summary>
+    /// <remarks>
+    /// netconvert writes the moment it ran into a leading comment and into the OpenDRIVE header,
+    /// and echoes its whole configuration -- including the temporary output paths -- into that same
+    /// comment, so a digest of the whole document never reproduces. Normalising both makes two
+    /// builds of one world comparable, which is the only thing this field is for.
+    /// </remarks>
     public string OpenDriveSha256 { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The canonical fingerprint of <c>map.net.xml</c> (<see cref="CarlaNet.Map.NetworkFingerprint"/>).
+    /// Empty on a package written before the network was carried at all.
+    /// </summary>
+    public string NetworkFingerprint { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Every argument netconvert was given, in order, as the world build passed them.
+    /// </summary>
+    /// <remarks>
+    /// The full list rather than a summary, because a scenario build validates its own flag set
+    /// against this one and names the difference when they disagree. Input and output paths are part
+    /// of the record but are not comparable between builds; see
+    /// <c>carlacontrol.SumoScenarioBuilder</c> for which arguments the comparison skips. Like
+    /// <see cref="NetconvertExtraArgs"/> this is a list, so it is excluded from the record's
+    /// generated equality and compared by <see cref="ValueEquals"/>.
+    /// </remarks>
+    public List<string> NetconvertArgv { get; init; } = [];
+
+    /// <summary>The netconvert executable that ran, resolved. Empty on an older package.</summary>
+    public string NetconvertPath { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The version that executable reported when asked, at the moment it converted this world.
+    /// </summary>
+    /// <remarks>
+    /// Recorded from the invocation rather than inferred later from a path or from whatever
+    /// <c>SUMO_HOME</c> now points at -- the pinned toolchain and the ambient one have already
+    /// diverged once. Empty on an older package, or when the executable could not be asked.
+    /// </remarks>
+    public string NetconvertVersion { get; init; } = string.Empty;
     public double SampleStepMeters { get; init; }
     public double TerrainResolutionMeters { get; init; }
     public double TerrainMarginMeters { get; init; }
@@ -92,7 +156,9 @@ public sealed record WorldPackageManifest
     public string GeneratorVersion { get; init; } = string.Empty;
 
     /// <summary>
-    /// Extra netconvert arguments the road network was converted with.
+    /// The extra netconvert arguments the caller supplied on top of the standard flag set -- the
+    /// road filter, an offset. <see cref="NetconvertArgv"/> is the authoritative record of what
+    /// actually ran; this says which part of it the caller chose.
     /// </summary>
     /// <remarks>
     /// Being a list, this member is compared by reference in the record's generated equality, so two
@@ -101,15 +167,17 @@ public sealed record WorldPackageManifest
     /// </remarks>
     public List<string> NetconvertExtraArgs { get; init; } = [];
 
-    /// One shared instance, so the comparison below neutralises the list member by making both
+    /// One shared instance, so the comparison below neutralises the list members by making both
     /// copies reference the same object rather than two equally-empty but distinct ones.
-    private static readonly List<string> NoExtraArgs = [];
+    private static readonly List<string> NoArguments = [];
 
-    /// <summary>Value equality including the argument list, which the record's own equality omits.</summary>
+    /// <summary>Value equality including the argument lists, which the record's own equality omits.</summary>
     public bool ValueEquals(WorldPackageManifest other)
         => other is not null
-           && (this with { NetconvertExtraArgs = NoExtraArgs }) == (other with { NetconvertExtraArgs = NoExtraArgs })
-           && NetconvertExtraArgs.SequenceEqual(other.NetconvertExtraArgs);
+           && (this with { NetconvertExtraArgs = NoArguments, NetconvertArgv = NoArguments })
+              == (other with { NetconvertExtraArgs = NoArguments, NetconvertArgv = NoArguments })
+           && NetconvertExtraArgs.SequenceEqual(other.NetconvertExtraArgs)
+           && NetconvertArgv.SequenceEqual(other.NetconvertArgv);
 }
 
 /// <summary>
@@ -131,6 +199,7 @@ public static class WorldPackage
 
     private const string ManifestEntry = "world.json";
     private const string OpenDriveEntry = "map.xodr";
+    private const string NetworkEntry = "map.net.xml";
     private const string GridEntry = "bareearth.bin";
 
     /// <summary>The package a world of this name occupies inside a directory.</summary>
@@ -138,7 +207,10 @@ public static class WorldPackage
         => Path.Combine(directory, mapName + Extension);
 
     /// <summary>
-    /// Write a complete package. <paramref name="offsetMeters"/> and <paramref name="bareEarthDtmMeters"/>
+    /// Write a complete package. <paramref name="sumoNetwork"/> is the SUMO network from the same
+    /// netconvert run as <paramref name="elevatedXodr"/>; an empty string writes no network entry,
+    /// which is how a package built before the network was carried looks.
+    /// <paramref name="offsetMeters"/> and <paramref name="bareEarthDtmMeters"/>
     /// are row-major [row * NumCols + col] and must both be NumCols*NumRows long when the manifest
     /// says a drape is active; they are ignored otherwise, since a constant shift needs no grid.
     /// </summary>
@@ -146,12 +218,14 @@ public static class WorldPackage
         string directory,
         WorldPackageManifest manifest,
         string elevatedXodr,
+        string sumoNetwork,
         ReadOnlySpan<float> offsetMeters,
         ReadOnlySpan<float> bareEarthDtmMeters)
     {
         ArgumentNullException.ThrowIfNull(directory);
         ArgumentNullException.ThrowIfNull(manifest);
         ArgumentNullException.ThrowIfNull(elevatedXodr);
+        ArgumentNullException.ThrowIfNull(sumoNetwork);
 
         if (manifest.DrapeActive)
         {
@@ -183,6 +257,14 @@ public static class WorldPackage
         {
             WriteTextEntry(archive, ManifestEntry, JsonSerializer.Serialize(manifest, ManifestJson));
             WriteTextEntry(archive, OpenDriveEntry, elevatedXodr);
+
+            // The network from the same netconvert run as the OpenDRIVE. Absent rather than empty
+            // when there is none, so "this world predates the network being carried" and "the
+            // network went missing" do not look alike, the same way the grid entry works.
+            if (sumoNetwork.Length > 0)
+            {
+                WriteTextEntry(archive, NetworkEntry, sumoNetwork);
+            }
 
             // A constant shift is fully described by the manifest, so no grid entry is written at
             // all. Its absence is the signal, which keeps "no drape" from looking like "the grids
@@ -234,6 +316,35 @@ public static class WorldPackage
             ?? throw new InvalidDataException($"world package has no road network: {packagePath}");
         using var reader = new StreamReader(entry.Open(), new UTF8Encoding(false));
         return reader.ReadToEnd();
+    }
+
+    /// <summary>
+    /// The SUMO road network a package carries, from the same netconvert run as its OpenDRIVE.
+    /// </summary>
+    /// <remarks>
+    /// Throws when the package has none. That is a package written before the network was carried,
+    /// and the right answer for a scenario build is to stop: the network cannot be reconstructed by
+    /// running netconvert again, so there is nothing to fall back to and rebuilding the world is the
+    /// only way forward.
+    /// </remarks>
+    public static string ReadNetwork(string packagePath)
+    {
+        using var archive = ZipFile.OpenRead(packagePath);
+        ZipArchiveEntry entry = archive.GetEntry(NetworkEntry)
+            ?? throw new InvalidDataException(
+                $"world package carries no {NetworkEntry}: {packagePath}. It was built before the "
+                + "SUMO network was kept, and the network cannot be regenerated -- asking netconvert "
+                + "for OpenDRIVE output changes the graph it produces. Rebuild the world from its "
+                + "original extract.");
+        using var reader = new StreamReader(entry.Open(), new UTF8Encoding(false));
+        return reader.ReadToEnd();
+    }
+
+    /// <summary>Whether a package carries a SUMO network at all.</summary>
+    public static bool HasNetwork(string packagePath)
+    {
+        using var archive = ZipFile.OpenRead(packagePath);
+        return archive.GetEntry(NetworkEntry) is not null;
     }
 
     /// <summary>Every world a directory holds, by name, for a caller offering a choice.</summary>
@@ -314,4 +425,41 @@ public static class WorldPackage
     /// <summary>Lowercase hexadecimal SHA-256 of a UTF-8 string.</summary>
     public static string HashText(string text)
         => Convert.ToHexStringLower(SHA256.HashData(new UTF8Encoding(false).GetBytes(text)));
+
+    /// <summary>
+    /// SHA-256 of an OpenDRIVE document with the parts that record the run rather than the road
+    /// removed, so two builds of one world produce the same digest.
+    /// </summary>
+    /// <remarks>
+    /// Two things vary between otherwise identical netconvert runs, and both are dropped here:
+    /// the leading comment, which carries the moment it ran and echoes the whole configuration
+    /// including the temporary output paths this pipeline generates per run; and the
+    /// <c>date</c> attribute on the OpenDRIVE header. Measured: with those two normalised, two
+    /// conversions of one extract are byte-identical, and without them they never are.
+    /// </remarks>
+    public static string HashOpenDrive(string xodr)
+        => HashText(NormaliseOpenDrive(xodr));
+
+    /// <summary>The OpenDRIVE body: from the root element, with the header date blanked.</summary>
+    internal static string NormaliseOpenDrive(string xodr)
+    {
+        ArgumentNullException.ThrowIfNull(xodr);
+
+        // Everything before the root element is the XML declaration and netconvert's comment.
+        int root = xodr.IndexOf("<OpenDRIVE", StringComparison.Ordinal);
+        string body = root < 0 ? xodr : xodr[root..];
+
+        int header = body.IndexOf("<header", StringComparison.Ordinal);
+        if (header < 0) { return body; }
+        int headerEnd = body.IndexOf('>', header);
+        if (headerEnd < 0) { return body; }
+
+        const string DateAttribute = " date=\"";
+        int date = body.IndexOf(DateAttribute, header, StringComparison.Ordinal);
+        if (date < 0 || date > headerEnd) { return body; }
+        int valueStart = date + DateAttribute.Length;
+        int valueEnd = body.IndexOf('"', valueStart);
+        if (valueEnd < 0 || valueEnd > headerEnd) { return body; }
+        return body.Remove(valueStart, valueEnd - valueStart);
+    }
 }

@@ -227,6 +227,18 @@ public sealed class CarlaClient : IAsyncDisposable
     public byte[] LastDrapedOffsetBytes { get; private set; } = [];   // row-major float32 LE, DrapedZ-DTM (m)
     public byte[] LastDrapedDtmBytes { get; private set; } = [];      // row-major float32 LE, bare-earth DTM (ellipsoidal m)
 
+    // The SUMO network the last OSM conversion produced, and the invocation that produced it.
+    //
+    // Held on the client for the same reason the drape grids are: the world package is written by a
+    // separate call, after the world has been generated, and these exist only inside the build that
+    // made them. The network in particular cannot be recovered afterwards -- asking netconvert for
+    // OpenDRIVE output changes the graph it builds, so re-running it with identical flags produces a
+    // different network from the one the rendered world was made from.
+    public string LastSumoNetwork { get; private set; } = string.Empty;
+    public IReadOnlyList<string> LastNetconvertArgv { get; private set; } = [];
+    public string LastNetconvertPath { get; private set; } = string.Empty;
+    public string LastNetconvertVersion { get; private set; } = string.Empty;
+
     // Cached parse of the drape grids for point sampling (re-parsed only when the underlying bytes change).
     private float[]? _drapeDtmGrid, _drapeOffGrid;
     private byte[]? _drapeDtmRef, _drapeOffRef;
@@ -551,10 +563,20 @@ public sealed class CarlaClient : IAsyncDisposable
         string? drapeCacheDir = null,
         CancellationToken ct = default)
     {
-        // 1) OSM -> flat .xodr (offline, native netconvert). Also capture the SUMO network when
-        //    traffic-light generation is on — its <tlLogic> phase programs drive TrafficLightInjector.
-        var (flatXodr, sumoNet) = await new CarlaNet.Map.OsmConverter(osmOptions)
+        // 1) OSM -> flat .xodr AND the SUMO network, from one netconvert run (offline, native
+        //    netconvert). Both are kept: the network's <tlLogic> phase programs drive
+        //    TrafficLightInjector below, and the network itself goes into the world package, because
+        //    it is the road graph a SUMO scenario is authored against and a later netconvert run
+        //    cannot reproduce it.
+        var conversion = await new CarlaNet.Map.OsmConverter(osmOptions)
             .ConvertFileWithNetworkAsync(osmPath, ct).ConfigureAwait(false);
+        var flatXodr = conversion.OpenDrive;
+        var sumoNet = conversion.Network;
+        LastSumoNetwork = conversion.Network;
+        LastNetconvertArgv = conversion.NetconvertArgv;
+        LastNetconvertPath = conversion.NetconvertPath;
+        LastNetconvertVersion = conversion.NetconvertVersion;
+        Console.WriteLine($"[netconvert] {conversion.NetconvertVersion} at {conversion.NetconvertPath}");
 
         // 1a) Join up the junctions that offer no choice of route. netconvert wraps every
         //     surviving OSM node in a junction, so a node that exists only because two ways
@@ -906,10 +928,9 @@ public sealed class CarlaClient : IAsyncDisposable
         //     netconvert emits the light <signal>s and one all-heads <controller> per junction but
         //     no <junction><controller> link and no phase split, so CARLA orphans every light
         //     (issue #1) and would flash whole junctions green. TrafficLightInjector rebuilds the
-        //     controllers per phase from the SUMO <tlLogic> and adds the links; a no-op when
-        //     traffic-light generation is off (sumoNet null).
-        if (sumoNet != null)
-            elevatedXodr = CarlaNet.Map.OpenDrive.TrafficLightInjector.InjectTrafficLights(elevatedXodr, sumoNet);
+        //     controllers per phase from the SUMO <tlLogic> and adds the links; a no-op when the
+        //     network carries no <tlLogic>, which is what traffic-light generation being off means.
+        elevatedXodr = CarlaNet.Map.OpenDrive.TrafficLightInjector.InjectTrafficLights(elevatedXodr, sumoNet);
 
         // 6) Generate the elevated OpenDRIVE world (builds road mesh + waypoints at correct Z).
         await GenerateOpenDriveWorldAsync(elevatedXodr, parameters).ConfigureAwait(false);
@@ -1222,6 +1243,19 @@ public sealed class CarlaClient : IAsyncDisposable
         double terrainMarginMeters,
         IReadOnlyList<string>? netconvertExtraArgs = null)
     {
+        // A package with no network is a package a scenario cannot be built against, and the network
+        // exists only inside the conversion that produced this world -- so refuse here rather than
+        // write a record that looks complete. The caller reports the refusal; the world itself is
+        // already built and is not lost by it.
+        if (LastSumoNetwork.Length == 0)
+        {
+            throw new InvalidOperationException(
+                "no SUMO network was recorded for this world, so the package would carry none. The "
+                + "network comes from the same netconvert run as the OpenDRIVE and cannot be "
+                + "reproduced afterwards; write the package on the client that generated the world, "
+                + "straight after generating it.");
+        }
+
         GeoLocation origin = await GetCesiumOriginAsync().ConfigureAwait(false);
         IReadOnlyList<double> staging = await GetStagingBoundsAsync().ConfigureAwait(false);
         bool haveStaging = staging is { Count: >= 5 };
@@ -1249,8 +1283,12 @@ public sealed class CarlaClient : IAsyncDisposable
             StagingMaxYMeters = haveStaging ? staging[3] : 0.0,
             StagingMarginMeters = haveStaging ? staging[4] : 0.0,
             SourceOsmFileName = Path.GetFileName(sourceOsmPath) ?? string.Empty,
-            SourceOsmSha256 = WorldPackage.HashFile(sourceOsmPath),
-            OpenDriveSha256 = WorldPackage.HashText(elevatedXodr),
+            SourceOsmSha256 = CarlaNet.Map.OsmFingerprint.ComputeFile(sourceOsmPath),
+            OpenDriveSha256 = WorldPackage.HashOpenDrive(elevatedXodr),
+            NetworkFingerprint = CarlaNet.Map.NetworkFingerprint.Compute(LastSumoNetwork),
+            NetconvertArgv = [.. LastNetconvertArgv],
+            NetconvertPath = LastNetconvertPath,
+            NetconvertVersion = LastNetconvertVersion,
             SampleStepMeters = sampleStepMeters,
             TerrainResolutionMeters = terrainResolutionMeters,
             TerrainMarginMeters = terrainMarginMeters,
@@ -1260,7 +1298,7 @@ public sealed class CarlaClient : IAsyncDisposable
         };
 
         WorldPackage.Write(
-            directory, manifest, elevatedXodr,
+            directory, manifest, elevatedXodr, LastSumoNetwork,
             LastDrapeActive ? ToFloatGrid(LastDrapedOffsetBytes) : [],
             LastDrapeActive ? ToFloatGrid(LastDrapedDtmBytes) : []);
         return WorldPackage.PackagePath(directory, mapName);
