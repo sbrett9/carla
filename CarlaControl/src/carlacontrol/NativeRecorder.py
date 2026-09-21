@@ -7,8 +7,11 @@ the .NET thread pool without crossing to Python or holding the GIL.
 
 import logging
 import os
+import time
 
 import carlanet as carla
+
+from carlacontrol.CaptureRunReport import CaptureRunReport
 
 
 class NativeRecorder:
@@ -72,6 +75,10 @@ class NativeRecorder:
         self.recording = False
         self.want_enabled = False
         self._handle = None  # Type is CarlaNet.Recording.FrameRecorder (C# object)
+        # Where the recording window started, on both clocks. The simulation clock is the one the
+        # captures are stamped against; the wall clock is the one an operator is waiting on.
+        self._started_sim_time = 0.0
+        self._started_wall_time = 0.0
         self.logger = logging.getLogger(__name__)
 
         self.logger.info(
@@ -139,18 +146,20 @@ class NativeRecorder:
                 return
 
             self.recording = True
+            self._started_sim_time = self._sim_time()
+            self._started_wall_time = time.monotonic()
             note = (
                 "" if self._handle.HaveTelemetryOrigin else " (PNG only; no georef origin for XML)"
             )
             self.logger.info(f"recording (native) -> {self.record_dir} @ {self.record_hz} Hz{note}")
 
         elif not self.want_enabled and self.recording:
-            n = self.saved
+            report = self.report()
             note = self._occlusion_note()
             self.world.stop_recording()
             self.recording = False
             self._handle = None
-            self.logger.info(f"recording stopped: {n} capture(s) saved{note}")
+            self._log_report(report, note)
 
     def _occlusion_note(self) -> str:
         """How many captures got a per-vehicle occlusion measurement, for the stop message."""
@@ -204,11 +213,52 @@ class NativeRecorder:
         Returns:
             Frame count, or 0 if not recording or handle unavailable
         """
+        return self._counter("Saved")
+
+    @property
+    def dropped(self) -> int:
+        """Captures the recorder reached for and could not write.
+
+        The encoder queue is bounded and never blocks the stream reader, so when every worker is
+        busy the capture is discarded rather than delaying the frames behind it. That is the right
+        trade for a viewer that has to stay smooth, but it means a recording can be short of
+        captures -- imagery and truth sidecar alike -- with nothing in the output to show it.
+        """
+        return self._counter("Dropped")
+
+    def _counter(self, name: str) -> int:
         try:
-            return int(self._handle.Saved) if self._handle is not None else 0
+            return int(getattr(self._handle, name)) if self._handle is not None else 0
         except Exception as e:
-            self.logger.info(f"exception reading saved frame count: {e}, returning 0")
+            self.logger.info(f"exception reading the {name} capture count: {e}, returning 0")
             return 0
+
+    def _sim_time(self) -> float:
+        """The world's own clock, which is what captures are stamped against."""
+        try:
+            return float(self.world.get_sim_time())
+        except Exception as e:
+            self.logger.debug(f"could not read the simulation clock: {e!r}")
+            return 0.0
+
+    def report(self) -> CaptureRunReport:
+        """What this stretch of recording produced, on both clocks. Call before releasing the handle."""
+        return CaptureRunReport(
+            saved=self.saved,
+            dropped=self.dropped,
+            sim_seconds=max(0.0, self._sim_time() - self._started_sim_time),
+            wall_seconds=max(0.0, time.monotonic() - self._started_wall_time),
+        )
+
+    def _log_report(self, report: CaptureRunReport, note: str = "") -> None:
+        """Say what the run produced and, separately and loudly, what it lost."""
+        self.logger.info(f"recording stopped: {report.describe()}{note}")
+        if report.dropped:
+            self.logger.warning(
+                f"{report.dropped} capture(s) were discarded because every encoder worker was "
+                "busy; each is a missing still AND its missing truth sidecar, so this recording "
+                "has gaps a consumer cannot see from the files alone"
+            )
 
     def stop(self) -> None:
         """Stop recording and clean up.
@@ -216,9 +266,12 @@ class NativeRecorder:
         Safe to call even if not recording. Suppresses exceptions during cleanup.
         """
         if self.recording:
+            report = self.report()
+            note = self._occlusion_note()
             try:
                 self.world.stop_recording()
             except Exception as e:
                 self.logger.info(f"exception during stop_recording: {e}")
             self.recording = False
             self._handle = None
+            self._log_report(report, note)
