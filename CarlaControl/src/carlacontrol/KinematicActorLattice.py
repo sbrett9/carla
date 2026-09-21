@@ -76,6 +76,7 @@ class KinematicActorLattice:
         self.actor_ids: list[int] = []
         self.sites: list[tuple[float, float]] = []
         self.spawn_failures = 0
+        self.configured = 0
         self._light_cursor = 0
 
     @property
@@ -122,14 +123,25 @@ class KinematicActorLattice:
         responses = client.apply_batch_sync(commands)
         self.actor_ids = [response.actor_id for response in responses if not response.has_error]
         self.spawn_failures = len(responses) - len(self.actor_ids)
+        # Counted rather than assumed: a body whose physics was never taken off falls under gravity
+        # and leaves the footprint, so a sweep that silently configured none of them would be
+        # measuring a different scene at every N. The world's bulk actor query is not used for this
+        # -- it has been seen returning nothing on a session that had spawned and destroyed many
+        # thousands of actors, while the same actors resolved by id.
+        self.configured = 0
         for actor in self.world.get_actors(self.actor_ids):
             actor.set_simulate_physics(False)
             actor.set_enable_gravity(False)
             actor.set_collisions(False)
+            self.configured += 1
+        if self.configured != len(self.actor_ids):
+            raise RuntimeError(
+                f"{self.configured} of {len(self.actor_ids)} lattice bodies had physics taken off; "
+                "the rest are falling and this is not a point on the curve")
         self.logger.info("lattice of %d on a %.0f x %.0f m footprint, %.1f m spacing, "
-                         "%d spawned, %d refused", self.count, self.footprint.width,
-                         self.footprint.height, self.spacing, len(self.actor_ids),
-                         self.spawn_failures)
+                         "%d spawned and %d held still, %d refused", self.count,
+                         self.footprint.width, self.footprint.height, self.spacing,
+                         len(self.actor_ids), self.configured, self.spawn_failures)
         if self.spacing < CELL_MARGIN:
             self.logger.warning("lattice spacing %.1f m is tighter than the %.1f m cell margin",
                                 self.spacing, CELL_MARGIN)
