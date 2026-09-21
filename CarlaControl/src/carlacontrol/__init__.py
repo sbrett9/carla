@@ -8,6 +8,7 @@ from carlacontrol.CarlaControlArgumentParser import CarlaControlArgumentParser
 from carlacontrol.CorpusLeakValidator import CorpusLeakValidator
 from carlacontrol.CotUdpEmitter import CotUdpEmitter
 from carlacontrol.NativeRecorder import NativeRecorder
+from carlacontrol.NetworkFingerprint import NetworkFingerprint
 from carlacontrol.OrbitSensorController import OrbitSensorController
 from carlacontrol.Pose import Pose
 from carlacontrol.PygameInterface import PygameInterface
@@ -31,6 +32,7 @@ __all__ = [
     "CorpusLeakValidator",
     "CotUdpEmitter",
     "NativeRecorder",
+    "NetworkFingerprint",
     "OrbitSensorController",
     "Pose",
     "PyGameSensorController",
