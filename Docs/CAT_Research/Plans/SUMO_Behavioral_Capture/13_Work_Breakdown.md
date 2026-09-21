@@ -15,6 +15,7 @@ are on the critical path.
 | 2026-09-18 | Traffic-light synchronisation and its signal-id dependency dropped; fixture no longer needs a signalised junction. |
 | 2026-09-21 | One distribution, licence manifest, `CarlaSetup.bat` retired, skill to stage A, stage B re-measured. |
 | 2026-09-21 | Netconvert flags unified on the world build; vocabulary layered into a closed core and open author terms. |
+| 2026-09-21 | Role and phase values are author space; only `subject` and `vacancy` are reserved. |
 
 ---
 
@@ -442,8 +443,18 @@ So the vocabulary splits on one test: **does the pipeline's own code branch on t
 | | Closed and versioned | Open and author-defined |
 |---|---|---|
 | **Because** | The machinery depends on it, so it must be enumerable and testable | The pipeline never inspects it, so it costs nothing to allow and everything to constrain |
-| **Contains** | Supervision state, subject kind, interval onsets, participation roles — the structure `06` already requires | What a pattern *is*, what an anomaly *means*, what a role signifies in this author's world |
+| **Contains** | Supervision state, subject kind, realisation, the three interval onsets, `closed_by`, the five observability outcomes, the illumination band, the cadence form — and two reserved words, the role `subject` and the phase `vacancy` | What a pattern *is*, what an anomaly *means*, and **every role and phase value past those two** — what a role signifies in this author's world |
 | **Failure if wrong** | The pipeline cannot be tested | The author cannot say what they meant |
+
+**Role and phase values are the author's, with one reserved word each.** Nothing in the pipeline
+branches on `lead` against `follower`, or on `approach` against `dwell`. What the records require is
+that a participant *has* a role and that the `(instance_id, participant, phase)` triple is **stable**
+across two runs of one scenario — which is enforced by diffing the two run manifests, and needs no
+opinion about the word ([`06`](06_Truth_And_Annotation.md) `D6.8`, `D6.35`). `subject` is reserved so
+that a consumer reading a one-participant instance never has to guess which track the instance is
+about; `vacancy` is reserved because the absence writer emits it, so its spelling is ours. Closing
+either list would refuse the sizing scenario's own `guard` on the day it was written (*read*,
+`CarlaControl/scripts/make_bahonar_scenario.py:238`).
 
 An author-defined term is carried **opaquely but self-describingly**: the pipeline moves it from the
 supervision plan to the truth sidecar without understanding it, and requires enough alongside it that a

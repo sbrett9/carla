@@ -58,6 +58,12 @@ choice. §3.9 draws the boundary.
   scenario purely as the authoring sizing case.
 - **Pedestrians**, excluded by the brief's decision 5.
 
+**Change history**
+
+| Date | Change |
+|---|---|
+| 2026-09-21 | Annotation vocabulary layered: core generated from types, author terms declared in the specification. |
+
 ---
 
 ## 1. What authoring costs today, measured
@@ -251,7 +257,7 @@ states where it comes from, what it guarantees, and whether it exists.
 | 6 | **Place index** | new; derived from 2 + 5 | **no** | Street name, direction and area id → edge and lane. §4 |
 | 7 | **Vehicle catalogue** | [`04_Contracts.md`](04_Contracts.md) contract 1; doc 20 §5.6 and D12 | **no** | Which vehicles exist, with real dimensions. §2.6 states what this section needs from it |
 | 8 | **Area-of-interest table** | doc 20 §8; GeoJSON beside the OSM | **no** | Named, stable places a scenario and an annotation can both reference |
-| 9 | **Annotation vocabulary** | doc 20 §6.2 | **no** | The closed term list a label must come from, with a version |
+| 9 | **Annotation vocabulary** | [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §3.7–§3.8; the core generated from `CarlaNet.Types` | **no** | What a label means. Two halves: a closed, versioned core the pipeline's own code branches on, and the author terms this scenario declares or imports, each carrying its own definition |
 | 10 | **World digest** binding 1–9 | §2.7 | partially, and **unstable as recorded** | That a scenario and a run are talking about the same world |
 | 11 | **Site civil time zone** | new; derived from `world.json`'s origin lat/lon plus a time-zone database | **no** | The candidate civil offset for the epoch, and whether the site observes daylight saving. §2.8 |
 | 12 | **Illumination reference** | new; [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md), computed from origin lat/lon and the epoch's dates | **no** | Sunrise, sunset and sun elevation for every date the scenario spans, and the **night viability verdict**. §2.9 |
@@ -632,6 +638,9 @@ actors[]           id, type, depart, route (places), stops[], params{}     — e
 network_edits[]    fence, opposite pairs, lane closures — the measured post-processors
 supervision        instances[] with participants, roles, phases, labels    — compiles to
                    <Scenario>.supervision.json; see 06_Truth_And_Annotation.md §3.1
+vocabulary         { import[], terms[] } — the author terms this scenario declares and the
+                   shared or site vocabularies it imports, each term self-describing. The
+                   core is generated and is never declared here.  06 §3.8, checks 45–46
 capture_windows[]  CANDIDATE windows, in civil time. Authored defaults the operator
                    selects from or overrides; checked here.                    §3.5.2
 illumination       the authored DEFAULT policy for those windows.               §3.5.2
@@ -1220,7 +1229,7 @@ vehicle catalogue, the annotation vocabulary, the area table, and the illuminati
 | `<Scenario>.add.xml` | rerouters, lane closures, detectors — when the specification declares any |
 | `<Scenario>.supervision.json` | the supervision record, in the form [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §3.1 defines, with instance ids assigned deterministically from the scenario id and the authored instance name. Intervals carry **both** the resolved second and the derived civil time, because *read* `make_bahonar_scenario.py:371-377` today writes only `begin_s`/`end_s` |
 | `<Scenario>.resolution.json` | **what it resolved** — §5.3 |
-| `<Scenario>.lock.json` | the `scenario_id`; digests of the `.net.xml`, the `.rou.xml`, the `.sumocfg` and the supervision file — the four-way binding [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §8.1 requires, because the plan is compiled against all four; plus the world fingerprint, the netconvert argument vector and version, the catalogue version, the vocabulary version, the seeds, the compiler version, **the epoch verbatim, the candidate capture windows with their derived civil dates and times, the authored default illumination policy, the ephemeris version, and the illumination–label association statistic of §5.6** |
+| `<Scenario>.lock.json` | the `scenario_id`; digests of the `.net.xml`, the `.rou.xml`, the `.sumocfg` and the supervision file — the four-way binding [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §8.1 requires, because the plan is compiled against all four; plus the world fingerprint, the netconvert argument vector and version, the catalogue version, the vocabulary's core version, every author namespace with its version, and the vocabulary digest `C3` binds ([`04_Contracts.md`](04_Contracts.md)), the seeds, the compiler version, **the epoch verbatim, the candidate capture windows with their derived civil dates and times, the authored default illumination policy, the ephemeris version, and the illumination–label association statistic of §5.6** |
 
 The network is **not** emitted. It is the world's, carried in the world package. Any scenario that
 would need a different network needs a different world.
@@ -1263,6 +1272,8 @@ prevents. "Refuse" means the compile fails and nothing is emitted.
 | 17 | Category-resolved appearance draws from a set, seeded | §7.1, doc 20 §2.6 | **warn** if a category resolves to one entry | Appearance becoming the label |
 | **Annotation** ||||
 | 18 | Every label is in the declared vocabulary at the declared version | the vocabulary | **refuse** | A corpus in which `loiter` is spelled three ways (doc 20 §6.2) |
+| 45 | Every label's `applies_to` includes the subject kind it was asserted of | the declared vocabulary, and the kind of the subject it is attached to | **refuse** | A per-member behavioural term attached to a `<flow>`, which asserts something about every member nobody looked at. This is how [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) D6.2 reaches a term the compiler cannot interpret; check 23 catches the phased case, this catches the term's own declaration (06 §3.8) |
+| 46 | Every namespace appearing in a label, role, phase or area kind was declared in `vocabulary.terms[]` or named in `vocabulary.import[]` | the specification | **refuse** | A term resolving against a namespace that travels in nobody's bundle, so the published vocabulary cannot define it and the corpus ships a label no consumer can read (06 §8.7) |
 | 19 | Every annotation participant names a declared actor | the specification | **refuse** | An instance with a participant that never exists |
 | 20 | Every `aoi_ref` names a validated area | the area table | **refuse** | An annotation naming a place only the author can see (doc 20 §8.1) |
 | 21 | Instance ids are deterministic and unique | scenario id + authored name, no counter, no timestamp | **refuse** on collision | Sweep members that cannot be joined (doc 20 §7.1) |
@@ -1300,12 +1311,13 @@ the labels and check 38 needs the resolved intervals. Checks 33–37 are cheap e
 resolution time and §5.4 shows them there; they are *reported* first when they fail, for the reason in
 §4.5 — one epoch error is one fix, not 610.
 
-*On numbering.* **A check id is a stable identifier, not a position.** The table is in pipeline order,
-so the new group's ids (33–43) sit between the annotation group and the emission group's ids (29–32,
-44), which is why the sequence jumps. That is deliberate: `checks.json` ships with the skill (§8.3), a
-resolution report cites check ids, and a corpus filtered on "members that warned on check 41" has to
-keep meaning the same thing a year later. Ids are assigned once and never reused; a removed check
-leaves a gap.
+*On numbering.* **A check id is a stable identifier, not a position.** The table is in pipeline order
+and an id records the order in which ids were assigned, so the two diverge wherever a check belongs to
+an earlier group than its id: the epoch-and-illumination group's ids (33–43) sit ahead of the emission
+group's (29–32, 44), and the two vocabulary checks (45–46) sit inside the annotation group. That is
+deliberate: `checks.json` ships with the skill (§8.3), a resolution report cites check ids, and a corpus
+filtered on "members that warned on check 41" has to keep meaning the same thing a year later. Ids are
+assigned once and never reused; a removed check leaves a gap.
 
 ### 5.3 Reporting what it resolved
 
@@ -2011,7 +2023,7 @@ shipped beside the skill, versioned with it:
 |---|---|---|
 | `schemas/scenario.schema.json` | JSON Schema for the traffic-scenario specification | the compiler's own schema — one source, not a copy |
 | `schemas/sweep.schema.json` | JSON Schema for a sweep | same |
-| `vocabulary.json` | the annotation term list with its version | doc 20 §6.2 |
+| `vocabulary.json` | the term document a label resolves against: the closed core, and every author namespace the scenario declares or imports, with each term's definition | **generated**, in two halves — the core from the enumerations in `CarlaNet.Types`, the author half from the compiled specification's `vocabulary` block. Never written beside the skill (§8.5; [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §8.7) |
 | `checks.json` | every check in §5.2 with its id, what it compares, and refuse/warn | generated from the compiler, so it cannot drift |
 | `examples/` | one minimal specification, one generated from a program, one with a counterfactual pair — each with its resolution report | the three shipped scenarios, re-expressed |
 | `references/gotchas.md` | the measured gotchas with the measurement that produced each, and its enforcement site | §6 |
@@ -2047,9 +2059,15 @@ Two locations, one source. The move into the repository is authorised and is a *
 This is the part that decides whether a packaged skill is an asset or a liability, so it is
 mechanism, not intention.
 
-- **The schemas and `checks.json` are generated from the compiler**, not written beside it. A check
-  added to the compiler appears in the shipped skill without anyone remembering to update it; a check
-  removed disappears.
+- **The schemas, `checks.json` and `vocabulary.json` are generated, not written beside the skill.** A
+  check added to the compiler appears in the shipped skill without anyone remembering to update it; a
+  check removed disappears. The vocabulary is generated in two halves and neither is hand-maintained:
+  the **core** comes from the enumerations in `CarlaNet.Types` that the binder and the writers switch
+  on, so a new `closed_by` value or a sixth observability outcome reaches every shipped copy on its
+  own; the **author half** comes from the compiled specification's `vocabulary` block, so a term an
+  author declared cannot be missing from the document that defines it. A stale copy here is the one
+  stale copy that misdescribes a corpus already handed over
+  ([`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §8.7).
 - **The examples are compiled in the test suite.** Every example specification in `examples/` is
   compiled against a fixture world as part of the ordinary test run, and its resolution report is
   compared against the recorded one. An example that stops compiling is a failing test, not a stale
@@ -2270,6 +2288,7 @@ doc 11's design question; that they can is established.
 | **D7.22** | **The illumination–label association is computed at compile time, reported in full, recorded in the lock file, and never refuses.** *Measured on the shipped sizing scenario:* `I(hour; label) / H(label) = 0.600`; at 02:00 and 11:00 **every** entry is annotated; and the three hours doc 10 recommends capturing carry **377 of 610 entries and zero annotations**. It warns rather than refuses because in a pattern of life the correlation is structural — doc 20's class 4 is *defined* by its hour — so a refusing threshold would forbid the requirement and be switched off. Bucketing is by **illumination regime**, not hour, because *measured* 07:00 is +5.0° in December and +25.9° in June at the sizing scenario's site (§5.6) |
 | **D7.23** | **A sweep that varies behaviour holds illumination constant, and the compiler enforces it.** `illumination: "hold"` is the default and refuses any member differing from the base in epoch, window or policy; `"vary"` forbids a behavioural axis; `"factorial"` warns and records the crossed design. An axis is an illumination axis if its path touches `epoch`, `illumination` or a window's `begin`, whether it was declared one or not. **Sweep `epoch.date`, not the window hour**, when illumination is what is wanted: the date varies the sun while holding the population and every authored behaviour fixed (§7.2.1, §7.4) |
 | **D7.24** | **A counterfactual pair inherits its base member's epoch, window and illumination policy verbatim.** `absent` and `nominal` are lit identically to their base — which is what "same timing" now means, checkably. `displaced`-in-time deliberately moves the sun, so it carries `illumination_differs: true`, records both regimes, and is never presented as an illumination-controlled comparison — while being, at the same time, the authoring remedy §5.6.3 offers for a degenerate regime (§7.3, check 43) |
+| **D7.25** | **The vocabulary is authored in two halves and generated in two halves, and the compiler enforces both.** An author declares terms in the specification's `vocabulary` block — `import[]` for a shared or site vocabulary travelling in the bundle, `terms[]` for this scenario's own — so they are reviewed and versioned with the scenario, and nothing may declare a term at run time. The shipped `vocabulary.json` is generated: its core half from the enumerations in `CarlaNet.Types`, its author half from the compiled specification, under §8.5's discipline rather than written beside the skill. Two checks in the annotation group enforce it: **45** refuses a label whose `applies_to` excludes the subject kind it was asserted of, which is what makes [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) D6.2 enforceable for a term this compiler cannot interpret, and **46** refuses a namespace the specification neither declared nor imported. The term list's *content* is 06 §3.7–§3.8's; this section owns where it is written and what refuses it (§2, §3.5, §5.2, §8.3, §8.5) |
 
 ---
 
