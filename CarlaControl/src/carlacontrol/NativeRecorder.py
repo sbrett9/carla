@@ -154,9 +154,11 @@ class NativeRecorder:
             self.logger.info(f"recording (native) -> {self.record_dir} @ {self.record_hz} Hz{note}")
 
         elif not self.want_enabled and self.recording:
+            # Counted after the stop, not before it: stopping flushes the captures still in the
+            # encoder queue, and reading first would under-report a whole queue's worth of them.
+            self.world.stop_recording()
             report = self.report()
             note = self._occlusion_note()
-            self.world.stop_recording()
             self.recording = False
             self._handle = None
             self._log_report(report, note)
@@ -266,12 +268,12 @@ class NativeRecorder:
         Safe to call even if not recording. Suppresses exceptions during cleanup.
         """
         if self.recording:
-            report = self.report()
-            note = self._occlusion_note()
             try:
                 self.world.stop_recording()
             except Exception as e:
                 self.logger.info(f"exception during stop_recording: {e}")
+            report = self.report()
+            note = self._occlusion_note()
             self.recording = False
             self._handle = None
             self._log_report(report, note)
