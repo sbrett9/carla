@@ -13,7 +13,7 @@ are on the critical path.
 | Date | Change |
 |---|---|
 | 2026-09-18 | Traffic-light synchronisation and its signal-id dependency dropped; fixture no longer needs a signalised junction. |
-| 2026-09-21 | One distribution, generated licence manifest, `CarlaSetup.bat` retired, authoring skill promoted to stage A. |
+| 2026-09-21 | One distribution, licence manifest, `CarlaSetup.bat` retired, skill to stage A, stage B re-ordered and re-measured. |
 
 ---
 
@@ -80,19 +80,26 @@ share is wrong in a way every downstream check passes.
 
 ## 3. Stage B — Repair what is already shipped
 
+Ordered. The first item is first because it is the only one with a **closing window**: the anomaly
+generator and its affiliation plumbing are uncommitted, no corpus has been produced, and nothing needs
+re-issuing. Every other item repairs damage already done; this one prevents it.
+
 | ⚑ | Item | Done when |
 |---|---|---|
-| ⚑ | **Fix the bare-earth height frame and re-issue affected datasets.** Median **9.8 m** error, max 38.0 m, 96.2% of rows over a metre | Heights match under CARLA-frame indexing; every dataset from the old path is re-issued or withdrawn |
-| ⚑ | **Stop forcing noon on the host's date.** `run_SCTMV.py:138` calls `setup_solar_time` unconditionally, including in attach mode | No run sets a sun it was not asked to set; the seasonal sun is never an artifact of when the run happened |
-| | **Close the three ground-truth leaks** — `special_type="marked"`, anomaly affiliation `u`, conspicuous vType colours — including on the standalone telemetry path | Nothing a detector-derived track could not produce carries the answer |
-| | **Close the two PNG metadata leaks** — `carla:solar` embeds `advancing`/`rate`; `carla:capture` embeds `scenario_id`/`seed` | The anti-leak validator reads tEXt chunks, and the model's input root is clean under it |
-| | **Fix the swallowed RPC name mismatch.** `get_vehicles_light_states` against the server's singular, caught without logging | The name matches and the catch logs. One string, plus the catch |
-| | **Make a sunless world say so.** The cache returns midnight of year 0 at lat 0, lon 0 rather than absent | A world with no sun is distinguishable from a world at midnight, in truth and in the shim |
-| | **Repair the Windows distribution — two parity breaks.** A deleted script packaged and launched, and the `carlacontrol` wheel omitted | A Windows distribution built from a clean tree runs its own launcher |
-| | **Supply `scenario_id`; make capture loss audible.** `FrameRecorder.Dropped` has no reader; the clock ratio is recorded nowhere | A run reports drops and its clock ratio, and cannot be mistaken for a clean one |
-| | **Stop boxing the bare-earth grid.** 60.9 MB → 243.6 MB and 5.6 s; measured fix gives 32.3 MB and 0.011 s | Load time and footprint match |
+| ⚑ | **Close the five ground-truth label leaks before the first corpus exists.** `special_type="marked"` plus a duplicate `marked` column; anomaly affiliation `u` readable off the CoT type; conspicuous anomaly colours; and the **vType ids themselves**, written verbatim as `anomaly_probe`, `anomaly_escort`, `anomaly_shadow`, `anomaly_staybehind` | Grouping a corpus by `marked`, no value of `type_id`, `color`, `cot_type`, `special_type` or `role_name` appears in one group and not the other. Anomaly types are named and coloured like the population they hide in; the behavioural signature is the only label |
+| ⚑ | **Fix the bare-earth height frame and patch the affected datasets.** Sampling the `.xodr` profile every 5 m, residual stdev is **13.05 m** under today's indexing against **0.615 m** under the fix | Heights match under CARLA-frame indexing, with a regression test asserting the road-profile residual stdev stays under 1.5 m. The four `Build/telemetry/` artifacts are rewritten from their own `sumo_x`/`sumo_y` — a forward patch, not a re-simulation |
+| ⚑ | **Stop forcing noon on the host's date.** `run_SCTMV.py:138` calls `setup_solar_time` unconditionally, including in attach mode, and `WorldBuilder.py:226-237` invents both the date and the hour | A run with no `--time`/`--date` leaves the world's sun where it was, and says so. Captures already made are not recoverable — the sun is in the pixels |
+| ⚑ | **Strip the PNG metadata leaks, and supply `scenario_id` in the same change.** `carla:solar` carries `advancing`/`rate`; `carla:capture` carries `seed`, and `scenario_id` is dormant only because nothing passes it | Sun *state* stays and sun *policy* goes; `tick` and `sim_time_s` stay and run configuration goes. The validator rejects one of today's 54 PNGs unmodified. Supplying `scenario_id` without this activates the dormant leak, so they are one change |
+| ⚑ | **Bring the Windows distribution to parity.** Four breaks, not two: the deleted script, the launcher that execs it, the missing `carlacontrol` wheel, and `setup-venv.ps1` installing one arbitrary wheel with no `--find-links` | A distribution built from a clean tree runs its own `run-sctmv.ps1 --help` and exits 0. A missing wheel fails the build instead of warning. The Linux counterpart lands in the same commit |
+| | **Supply the run's own health.** `FrameRecorder.Dropped` has no reader; the clock ratio is computed and only logged | A run reports drops and its clock ratio, and cannot be mistaken for a clean one |
+| | **Stop boxing the bare-earth grid.** 7.6 M cells: 60.9 MB on disk becomes **243.6 MB** as a tuple against **32.3 MB** as an `array('f')` | Footprint matches. The load-time saving is real but small (0.183 s → 0.018 s); the footprint is the reason |
+| | **Route or remove `anomaly_notes`.** Written by the generator, read by nothing | An absence anomaly reaches a consumer, or the field goes. A guard no-show has no vehicle, so it needs a record or it is not truth at all |
+| | **Set `sensor_tick`** — last of these, because it touches the occlusion path's frame pairing and deserves its own measurement | Sensor callbacks ≈ captures, with the depth camera on the same instants |
 
----
+Two engine-side families are grouped so they take one rebuild: the sun (a sunless world publishing
+midnight at lat 0 as fact, a loaded world inheriting the previous session's sun, an advancing sun that
+never rolls the date, and a clock that is local mean solar rather than civil) and the swallowed
+`get_vehicles_light_states` name mismatch.
 
 ## 4. Stage C — Measure the envelope
 

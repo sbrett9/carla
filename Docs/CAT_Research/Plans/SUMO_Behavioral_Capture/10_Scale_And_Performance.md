@@ -358,14 +358,19 @@ wall-second**, 0.14% of one core. **The hot path is not hot.**
 
 | Representation | Load time | Resident | Lookup |
 |---|---|---|---|
-| **As shipped** — `struct.unpack_from(f"<{n}f", …)` → tuple of boxed floats (`SumoCotBridge.py:112`) | **5.61 s** | **243.6 MB** (peak 304.5 MB) | 0.557 µs |
-| `array.array('f').frombytes(…)` | **0.011 s** | **32.3 MB** | 0.599 µs |
+| **As shipped** — `struct.unpack_from(f"<{n}f", …)` → tuple of boxed floats (`SumoCotBridge.py:112`) | **0.18–5.61 s** | **243.6 MB** (peak 304.5 MB) | 0.557 µs |
+| `array.array('f').frombytes(…)` | **0.011–0.018 s** | **32.3 MB** | 0.599 µs |
 | `numpy.frombuffer(…, dtype=float32)` — zero-copy view | **0.000025 s** | **30.4 MB** | 35 ns *(vectorised over a batch of 200,000)* |
 
-A 60.9 MB file becomes **244 MB** of process memory and costs **5.6 seconds** to open, because CPython
-boxes 7.6 million floats at ~32 bytes each. The fix is one line and changes nothing else; it is
-`D10.9`. It is worth doing not because the lookup is slow — it is not — but because 244 MB and 5.6 s of
-startup are paid by every client that opens the grid, and this design adds clients.
+A 60.9 MB file becomes **244 MB** of process memory, because CPython boxes 7.6 million floats at
+~32 bytes each. The fix is one line and changes nothing else; it is `D10.9`.
+
+**The load times are a range because two independent runs on this box disagree by a factor of 30** —
+5.61 s and 0.183 s for the same file, against 0.011 s and 0.018 s for the `array` path. The resident
+figures reproduced to the decimal in both, so it is the same grid; the load spread is almost certainly
+file-cache state, cold against warm. **The case rests on the footprint, which is not in dispute.** 244 MB
+is paid by every client that opens the grid, and this design adds clients. Anyone quoting a load-time
+saving should re-measure with a cold cache first.
 
 ### 3.5 The sizing scenario's illumination profile
 
