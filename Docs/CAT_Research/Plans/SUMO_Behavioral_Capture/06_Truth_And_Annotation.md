@@ -9,16 +9,19 @@ the real scenario artifacts. No code changed, no build run.
 | 1 · 2026-09-17 | Doc 20's supervision model re-seated on a SUMO authoring surface. |
 | 2 · 2026-09-18 | Simulated time of day and scene illumination brought into the truth model. |
 | 3 · 2026-09-18 | Scope boundary applied: imagery, truth and labels are produced; nothing is scored. |
+| 4 · 2026-09-21 | Annotation vocabulary layered: a closed core, and author terms carried opaquely to the consumer. |
+| 5 · 2026-09-21 | Training export carries supervision per image, and the vocabulary without its subject pointers. |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
-field. Decisions are numbered D6.1 to D6.26 and are stable — sibling documents cite them.
+field. Decisions are numbered D6.1 to D6.38 and are stable — sibling documents cite them.
 **Scope:** How an author's assertion about what a vehicle is doing reaches the truth record when the
 authoring surface is a SUMO scenario rather than an OpenSCENARIO storyboard; how positional truth,
 behavioural truth and **the illumination the frame was rendered under** are produced by different
 authorities and reconciled into one record; what the capture sidecar, the world truth track and the run
-manifest each contain; **what the corpus contains and what it does not**; and which of that a model may
-be allowed to read as an input.
+manifest each contain; **how the annotation vocabulary is layered so that a term this pipeline never
+understands still reaches a consumer who can read it**; **what the corpus contains and what it does
+not**; and which of that a model may be allowed to read as an input.
 **Re-seats:** [20 — Behavioral Annotation of Tracks, and Areas of Interest](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md).
 Doc 20 is the source of the supervision model and remains correct; what changes here is the surface it
 sits on. §11 records, decision by decision, what survived and what did not.
@@ -668,7 +671,7 @@ The compiled record:
 PatternInstance                       -- the absence, at Bahonar
   instance_id      pi_tower_relief_d4_h7_t3_unmanned
   supervision      annotated
-  labels           [ post_unmanned ]
+  labels           [ bahonar:post_unmanned ]   -- an author term, namespaced (3.8)
   realisation      absent                       -- present | absent
   series_ref       tower_relief
   slot_ref         d4_h7_t3
@@ -781,6 +784,305 @@ idle cull would raise the accidental-positive rate and that the relaxation and t
 Under SUMO drive the cull is simply absent (§6.1) — a vehicle parks for 489 000 s and stays reported,
 measured. So the "relaxed" regime is the only regime, and doc 20's open question 5 (what to do with an
 accidental positive) arrives with the first capture rather than with a later change.
+
+### 3.7 The vocabulary is layered, and one test decides where a term sits
+
+Two facts about this pipeline's position pull in opposite directions until the vocabulary is split.
+
+**Nothing can be fixed against the model's requirements, because none have been stated.** The
+estimated-pattern-of-life model is external to this effort
+([`_TEAM_BRIEF.md` §3b](_TEAM_BRIEF.md)) — what it is, how it is trained and what it looks for are not
+ours to know — and the team that owns it has stated no term requirements. A corpus shipped with no
+vocabulary leaves every consumer to invent their own reading of the sidecar, which is worse than a core
+we author and publish.
+
+**The terms are not ours to dictate either.** A SUMO network can express almost anything an author
+imagines, and whether a vehicle is noise or an actor in the pattern being reinforced is a statement the
+*author* makes to the *model trainer*. Neither party is this pipeline. **Labelling is a contract
+between those two, and this section's job is to convey it intact, not to write it.**
+
+The split that satisfies both: the pipeline closes and versions only the terms its own code branches
+on, and carries everything else **opaquely but self-describingly**. One test decides membership —
+**does the pipeline's own code branch on this term?** If yes it is core, and must be enumerable,
+versioned and testable, because a value outside the set is a defect the machinery cannot detect. If no
+it is author space, and the pipeline never inspects it, so allowing it costs nothing and constraining
+it costs the author the ability to say what they meant. **Passing through a term we do not understand
+is a property of this design, not a gap in it.**
+
+Stated in the form that settles an argument: **the core is the set of terms whose misspelling makes the
+pipeline behave differently; an author term is one whose misspelling only makes the corpus harder to
+read.** Equivalently, the core is exactly what §3.6's two-manifest diff compares semantically; an
+author term appears in that diff only as bytes.
+
+**The closed core.** "Branches where" names the component that misbehaves if the value is wrong.
+
+| Term family | Values | Branches where | Why it cannot be open |
+|---|---|---|---|
+| `supervision_state` | `annotated` · `nominal` · `unlabelled` | the compiler (D6.2 refuses `nominal` on a cohort); `CotWriter` (which children an element carries); the export gate (§10.2) | Three-valued supervision is the whole contract (§3.1). A fourth value is a silent corpus corruption |
+| `subject_kind` | `entity` · `cohort` · `slot` | the compiler (a phased annotation on a cohort is an error); the interval binder (only a slot may be unrealised) | D6.2 is enforceable only if the kinds are enumerable (§3.2) |
+| `realisation` | `present` · `absent` | the sidecar writer — an absence is world-scoped and never a CoT `<event>` (D6.6) | Getting this wrong fabricates a detection (§3.5) |
+| `interval_onset` | `declared` · `committed` · `observed` | three separate producers write three separate fields | Three field names with three authorities, not a list an author picks from (§3.3) |
+| `closed_by` | the nine values of §3.4 | the interval lifecycle; consumer filtering, where `render_released` must never read as `entity_arrived` | The distinction the corpus exists to preserve (§3.4) |
+| `observability_outcome` | `observed` · `out_of_frame` · `occluded` · `not_rendered` · `site_unobserved` | the export step — D6.11 excludes `not_rendered` from the corpus's contents | A sixth value changes what the corpus claims to hold; D6.22 already reserves the slot for `unlit` (§5.1) |
+| `illumination_band` | `day` · `civil` · `nautical` · `astronomical` · `night` | the manifest writer — D6.23 stratifies every prevalence unit by it | Computed by us from `sun_elevation_deg`; an author never supplies it (§5.3) |
+| `cadence` form | `enumerated`, or `period_s` + `offsets_s[]` + `span` | the slot enumerator, which has to expand a series into slots | Without it a `RecurringSeries` cannot be compiled (§3.4) |
+| reserved `role` | `subject`, and nothing else | the compiler: an instance with exactly one participant must name that participant `subject` | One handle a consumer can rely on for "the participant this instance is about" |
+| reserved `phase` | `vacancy`, and nothing else | the absence writer emits it; no author writes it | Produced by the pipeline, so its spelling is ours (§3.5) |
+
+**The open author space.**
+
+| Term family | Bahonar example | Why it is not core |
+|---|---|---|
+| `labels[]` | `bahonar:post_unmanned`, `bahonar:coordinated_group_transit` | The pipeline never inspects a label. It copies it from plan to manifest to sidecar to PNG chunk and never branches on its value |
+| `role` values beyond `subject` | `bahonar:lead`, `bahonar:follower`, `bahonar:guard` | Nothing branches on `lead`. What §3.4 needs is that a participant *has* a role and that the triple is stable; the word is the author's |
+| `phase` values beyond `vacancy` | `approach`, `wait`, `depart`, `transit`, `dwell` | [20 §6.1](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) already calls a phase "a free term within the instance". Only its **stability** matters, and §3.6's diff enforces that without knowing the word |
+| `parameters{}` keys and values | `group_size: 5`, `departure_spread_s: 16`, `dwell_s: 300` | [20 §6.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) sends magnitudes and places here precisely so they stay out of terms |
+| area-of-interest `kind` | `bahonar:guard_post`, `bahonar:gate`, `bahonar:drydock` | [20 §8.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) already calls it "a declared term, for stratification". Nothing branches on it |
+| what a series *means* | what `tower_relief` is | Only the cadence form is consumed; the meaning is carried |
+
+**Role values are author space, with one reserved term.** Closing the role list would make Bahonar's
+`guard` illegal on the day it was written (*read*, `CarlaControl/scripts/make_bahonar_scenario.py:238`,
+`vehicle_type="guard"` against a rota of sixteen posts). What the records of §3.4 and §8.1 require is
+role *presence* and *arity*, not a fixed word — with the single exception of `subject`, which exists so
+that a consumer reading a one-participant instance never has to guess which track the instance is
+about. The same argument, and the same shape, applies to `phase` and `vacancy`.
+
+**Labels are a set, and the set may mix namespaces.** [20 §3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)
+requires multi-label because its classes 2 and 4 co-occur on one vehicle; the escort of §9.2 carries two
+labels for the same reason. Nothing in the layering changes that, and a set drawn from two author
+namespaces is legal — a consumer reads each term against the namespace that defines it.
+
+### 3.8 Declaring a term, so it is readable by a consumer who never met the author
+
+A term reaches somebody who cannot ask what it means. The declaration is what makes it readable, and
+every field below is justified by naming what breaks without it. Fields not on this list were
+considered and are not published (§3.9).
+
+| Field | Required | What breaks without it |
+|---|---|---|
+| `term` — `<namespace>:<name>` | yes | Two authors mint `loiter` with different meanings and a merged corpus cannot tell. [20 §6.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) argues that one concept spelled three ways is not a corpus; one spelling covering three concepts is the worse half of the same failure, because nothing surfaces it. The prefix rule is already this plan's convention for compiled `<param>` keys ([07 §3.6](07_Scenario_Authoring.md)) |
+| `definition` — natural language, non-empty | yes | The whole requirement: a term that arrives without its meaning is an opaque string, and a consumer who has never spoken to the author has nothing to read |
+| `applies_to[]` — `entity` · `cohort` · `slot` | yes | **This is what makes D6.2 enforceable for a term the compiler does not understand.** D6.2 blocks `nominal` on a cohort, but nothing otherwise stops an author attaching a per-member behavioural term to a `<flow>`, which asserts something about 68 880 vehicles nobody looked at (§2.1, measured). The compiler can refuse that only if the term states what it applies to |
+| `realisation[]` — `present` · `absent` | yes | An absence term on a realised subject, or a transit term on an absence, is a category error the compiler can otherwise only pass through. One field, one check |
+| `since` — the namespace version the term appeared at | yes | Half of the rename rule below |
+| `status` — `active` · `deprecated`, with `superseded_by` when deprecated | yes | The other half. **Renaming is deliberately not expressible.** The only sanctioned retirement is deprecate-and-add, and `superseded_by` is what joins a corpus captured under the old name to one captured under the new. Without it the cheap operation and the expensive one look identical to an author |
+| `broader` — one parent term | no | §3.9(b) |
+| `parameters{}` — per key, `{type, unit, definition}` | no | `group_size` in one scenario and `n_vehicles` in another cannot be stratified together. [20 §6.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) sends magnitudes to `parameters` and then says nothing about what a key means; §8.4 already emits `group_size`, `departure_spread_s` and `route_length_m` undocumented |
+| `counterfactual` — `{kind, ref}` | no | §3.9(c) |
+| `contrast_with[]` — sibling terms | no | §3.9(b) |
+| `hard_negative_for[]` — terms this `nominal` term is a matched negative for | no | §3.9(d) |
+| `exemplar_instances[]` — instance ids in a shipped example scenario | no | Prose alone is unverifiable; an exemplar reference is checkable, because [07 §8.5](07_Scenario_Authoring.md) compiles every shipped example in the ordinary test run |
+
+**Three fields are deliberately absent, and their absence is load-bearing.** A term may not declare
+itself anomalous, may not carry a severity, and may not carry a confidence. A term that declares itself
+anomalous invites a consumer to read every subject without such a term as a negative, which is the
+`unlabelled`-to-negative collapse [08 D8.20](08_Collection_And_EPoL.md) names as the single easiest
+mistake a downstream consumer makes. The three-valued state is the only assertion we are entitled to
+publish and it already carries this (§3.1).
+
+**Versioning, and the asymmetry it exists to honour.** Adding a term is cheap; renaming one after a
+corpus exists is expensive, because every capture already written carries the old spelling. The scheme
+makes the cheap operation trivial and the expensive one unavailable:
+
+- **`vocabulary_version` covers the core only**, as a single integer. Adding a value — the `unlit`
+  outcome D6.22 anticipates — bumps it. Removing or renaming one bumps it and is a breaking change a
+  consumer must refuse ([02](02_Use_Cases.md) already requires that refusal).
+- **Each author namespace versions independently**, as `{namespace, version}`. A term's identity is the
+  pair `(namespace, name)`; `since` records its introduction. Adding a term bumps one namespace and
+  moves nothing else. There is no rename operation to reach for.
+
+**The declaration, in the form an author writes and the compiler emits.** JSON, matching the
+supervision file of §3.1 and the manifest of §8.4:
+
+```jsonc
+{
+  "namespace": "bahonar",
+  "version": 1,
+  "authority": "Shahid Bahonar Port pattern of life; CarlaControl/scripts/make_bahonar_scenario.py",
+  "terms": [
+    {
+      "term": "bahonar:expected_arrival_absent",
+      "since": 1, "status": "active",
+      "applies_to": ["slot"], "realisation": ["absent"],
+      "definition": "A recurring series enumerated an occasion and no vehicle realised it. The signal
+                     is the vacancy; the realised siblings of the same series are its evidence."
+    },
+    {
+      "term": "bahonar:post_unmanned",
+      "broader": "bahonar:expected_arrival_absent",
+      "since": 1, "status": "active",
+      "applies_to": ["slot"], "realisation": ["absent"],
+      "definition": "A guard tower that should have been manned at a shift change stands unmanned for
+                     the whole shift, while the other fifteen towers are relieved as usual.",
+      "counterfactual": { "kind": "series", "ref": "tower_relief" },
+      "exemplar_instances": ["pi_tower_relief_d4_h7_t3_unmanned"]
+    },
+    {
+      "term": "bahonar:standoff_dwell_at_access_point",
+      "since": 1, "status": "active",
+      "applies_to": ["entity"], "realisation": ["present"],
+      "definition": "A vehicle approaches a controlled access point from the public side, halts short
+                     of it for several minutes, and departs without transiting.",
+      "parameters": {
+        "dwell_s": { "type": "number", "unit": "s",
+                     "definition": "authored halt length at the access point" }
+      },
+      "contrast_with": ["bahonar:cleared_gate_transit"],
+      "counterfactual": { "kind": "term", "ref": "bahonar:cleared_gate_transit" },
+      "exemplar_instances": ["pi_gate_probe_d2", "pi_gate_probe_d5"]
+    },
+    {
+      "term": "bahonar:tower_posting",
+      "since": 1, "status": "active",
+      "applies_to": ["entity"], "realisation": ["present"],
+      "definition": "An eight-hour authored guard posting at a perimeter tower: a long parked dwell,
+                     in a legitimate place, for a legitimate reason.",
+      "hard_negative_for": ["bahonar:standoff_dwell_at_access_point",
+                            "bahonar:arrival_without_departure"]
+    }
+  ],
+  "roles": [ { "role": "bahonar:guard",
+               "definition": "the vehicle that mans a tower for a shift" } ],
+  "area_kinds": [ { "kind": "bahonar:guard_post" }, { "kind": "bahonar:gate" } ]
+}
+```
+
+**Core terms are unprefixed and reserved; every author term carries a namespace.** That keeps
+`state="nominal"`, `role="subject"` and `closed_by="slot_unrealised"` spelled as §8.2 and §8.4 spell
+them, and makes a namespace prefix a reliable signal that the pipeline did not author the string.
+
+**A namespace is first-come and free-form.** There is no registry, because a registry would be a
+governance surface this project has no one to staff and no way to enforce across authors it never
+meets. What replaces it is visibility: the release attestation records every namespace present in a
+corpus ([08 §9.4](08_Collection_And_EPoL.md)), so a collision between two authors is *visible* to
+whoever merges them rather than *prevented* by us. Revisit only if multi-author corpus merges become
+routine.
+
+**Where a term may be declared, and where it may not.** Terms are declared in the scenario
+specification — as a `vocabulary` block holding `import[]` and `terms[]` ([07 §3.5](07_Scenario_Authoring.md)) — so
+that they are reviewed with the scenario and versioned with it. `import[]` names a shared or site
+vocabulary travelling in the authoring bundle, which is how two scenarios on one site share terms
+without copying them. Nothing may declare a term at run time: D6.8 fixes the supervision row set before
+the run, and a label set is part of that row set.
+
+### 3.9 Conveying intent beyond a term list
+
+A flat term list conveys names. What an author actually needs to convey to a trainer they may never
+meet is *structure* — that five vehicles are one phenomenon, that this absence is measured against 335
+realisations, that these 356 ordinary vehicles are the matched negatives for those six anomalies. Six
+mechanisms were assessed against what the shipped generator already expresses. Four are published, one
+is deferred, and one is prohibited.
+
+| Mechanism | Verdict |
+|---|---|
+| (a) An executable pattern schema describing the structure of a pattern | **Prohibited**, permanently. D6.34 |
+| (b) Relationships between terms — `broader`, `contrast_with` | **Published** |
+| (c) A declared counterfactual | **Published**, as a resolved reference and never as prose |
+| (d) `hard_negative_for` on a `nominal` term | **Published**, optional and strictly narrowing |
+| (e) A statement of what the author believes carries the signal | **Deferred**; not published at v1 |
+| (f) Deriving the gates as areas of interest | **Published**, as a world-build product |
+
+**(a) An executable pattern schema is prohibited, and the prohibition is the point.** The attraction is
+real: a machine-readable description of what a convoy or a rendezvous *is* would let a consumer
+stratify by structure and generate matched negatives. It is refused because **that description is
+exactly the "concept of a pattern to compare against" whose absence is the reason §15 question 6 is
+closed.** The moment such a schema exists in the tree, running it over the `unlabelled` population is
+one afternoon's work, and the result is a geometric predicate writing supervision — the thing §3.6
+forbids in the one place it is hardest to notice, because the output would look like a helpful audit.
+It also duplicates what the plan already states: participants, roles, intervals and `RecurringSeries`
+**are** the structure of a pattern, recorded once, in the artifact that is checked.
+
+What *is* published is the narrow form — the per-term `parameters{}` declaration of §3.8. It describes
+the **record** (`group_size` is a count, `dwell_s` is seconds) and never the **trajectory**, so there is
+nothing in it to execute against a vehicle. That is the line, and it is worth stating as a rule rather
+than a verdict: **a vocabulary may describe what we wrote down; it may never describe what a vehicle
+would have to do.**
+
+**(b) Relationships between terms are published, and bounded.** A term may name one `broader` parent
+and any number of `contrast_with` siblings. The parent link is what lets a consumer who does not know
+`bahonar:post_unmanned` still stratify at `bahonar:expected_arrival_absent`, which is the whole of the
+generic-versus-specific argument and resolves it without choosing a side (§15 question 2). *For:* it
+makes adding a term cheap in the one way that matters — a new domain term arrives as a child of an
+existing parent and every consumer that knew the parent keeps working. *Against:* it invites a taxonomy
+project. Bounded accordingly — **one parent, acyclic, resolving inside the published document, and the
+pipeline never branches on it.** It is carried, not used.
+
+**(c) A counterfactual is published as a resolved reference.** The single most useful thing an author
+can tell a trainer is what the non-anomalous version of a behaviour looks like, and the sizing scenario
+is built on exactly that opposition: *read*, `make_bahonar_scenario.py:12-16` — the week of routine
+exists "so that six planted anomalies stand out against it". The counterfactuals are concrete and
+already in the file. The 335 realised postings are the counterfactual of the 336th slot
+(`:231-241`, `:236`). The 21 apron-to-ferry hauls are the counterfactual of the apron-to-drydock escort
+(`:245-253` against `:262-267`). The port-cleared ferry pulses transit the gate the probe declines to
+transit (`:183-196` against `:271-278`).
+
+*For:* it is expressible from loop state the generator already holds, and it is the one relation a
+consumer cannot recover from the corpus. *Against, as free text:* unverifiable, and unjoinable to
+anything. So it is a typed reference — `{kind: series | cohort | instance | term, ref}` — resolved by
+the compiler like every other reference in §8.1 and a compile error when it dangles. The run-level
+counterpart already exists as counterfactual pairing in a sweep ([07 §7.3](07_Scenario_Authoring.md));
+this is the plan-level form of the same idea, available to a scenario that is not part of a sweep.
+
+**One caution, because this is the edge where the mechanism could turn into a label.** A counterfactual
+reference **asserts nothing about the referenced subjects beyond what they already carry.** It is a
+pointer, never a supervision write. Naming `tower_relief` as the counterfactual of the no-show does not
+annotate the 335 postings, does not change their supervision state, and does not add a row to the plan;
+those postings carry whatever their own records say and nothing more. The row-set invariant of §3.6
+point 2 is what enforces it: resolving a counterfactual adds no triple.
+
+**(d) `hard_negative_for` is published, optional and strictly narrowing.** The three-valued model
+already declares the negative class — `nominal` **is** the asserted negative. What it cannot say is
+which negative each `nominal` subject is a negative *for*. `nominal` as defined in §3.1 is untargeted:
+not executing *any* target pattern. In the sizing scenario the 335 guard postings are matched negatives
+specifically for the dwell-shaped terms, because an eight-hour authored parked dwell, a five-minute
+standoff dwell and a 489 000 s stay-behind differ only in duration and place (§2.1, measured); the 21
+hauls are matched negatives specifically for the escort, because they are the route the escort deviates
+from. A trainer who cannot see that samples 356 negatives at random instead of building the matched set
+that [20 §2.7](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) calls this system's
+unique product.
+
+*Against:* a consumer could read an absent `hard_negative_for` as "a negative for nothing". The
+mitigation is in the artifact rather than in a plan document, in these words: **the field narrows and
+never widens, and its absence means unspecified, not none.** A `nominal` subject with no
+`hard_negative_for` still asserts everything §3.1 says `nominal` asserts.
+
+**The term is the authority and the record is a projection of it.** `hard_negative_for` is declared
+once, on the term (§3.8), and the instance in the manifest and the `<annotation>` in the sidecar carry
+a copy so that neither artifact has to be read against the vocabulary to be usable. An instance may not
+declare a different set from its term's; a disagreement is a compile error, for the same reason §8.2
+makes a disagreement between two sidecars at one tick a defect rather than a choice.
+
+**(e) A statement of what the author believes carries the signal is deferred, and is not published at
+v1.** The case for it is real and is already measured: §9.3 distinguishes `anomaly_shadow`'s
+`speedFactor="0.45"` — legitimate, because the crawl *is* the pattern — from `anomaly_escort`'s
+`length="6.0"` against `mil_jeep`'s `4.8`, which is a confounder. The author knows which property is
+the signal and nobody downstream can recover it. It is not published because the two forms it could
+take are both wrong for v1. A closed facet list would be a closed vocabulary invented in author space,
+which is the thing §3.7 exists to avoid; an open list would be prose the compiler cannot check and
+would tempt the compiler to branch on an author term in order to phrase a warning. The ground it covers
+is already covered for a human reader: the compile report prints the illumination-to-label association
+statistic beside the labels ([07 §5.6](07_Scenario_Authoring.md)), which is where an author looks to see
+whether a correlation is the one they intended. **Terms are cheap to add; a published field is not**, so
+this waits for a demand that names itself.
+
+**(f) The gates are derived as areas of interest at world build.** The sizing scenario's whole structure
+is a fence: *read*, `CarlaControl/src/carlacontrol/SumoScenarioBuilder.py:532-541` — OSM
+access-controlled roads are rewritten so that two populations "can only exchange at the junctions where
+a public road meets a private one: the gates". **No label mentions it, and a corpus consumer cannot see
+it.** Meanwhile the one place a scenario needs a gate, it uses a hand-found literal:
+`make_bahonar_scenario.py:90`, `PORT_GATE_APPROACH = "-431672573#2"`, with a three-line comment
+explaining why that edge and no other.
+
+`restrict_private_roads` already holds everything needed to fix this. It reads the OSM access tag per
+way (`SumoScenarioBuilder.py:547-551`), rewrites the permission list on every restricted edge
+(`:571-576`) and reports the count (`:582`). The junctions at which a restricted edge meets an
+unrestricted one are computable from that same pass. **They are emitted as areas of interest with
+`kind` naming a gate, at world build, in the area table [20 §8](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)
+already defines.** Three things fall out: `bahonar:standoff_dwell_at_access_point` resolves against a
+named area instead of an opaque edge literal; D6.7's hard area prerequisite is satisfied for any
+gate-sited absence at no authoring cost; and the fence becomes a fact in the corpus rather than a
+comment in a script. It is derived context of exactly the class §3.6 point 5 describes — computed
+identically for every vehicle, from the network's own state, and never a label.
 
 ---
 
@@ -1496,7 +1798,7 @@ erDiagram
     SUPERVISION_PLAN ||--o{ PATTERN_INSTANCE : declares
     SUPERVISION_PLAN ||--o{ RECURRING_SERIES : declares
     SUPERVISION_PLAN ||--o{ COHORT_SUPERVISION : declares
-    SUPERVISION_PLAN ||--|| VOCABULARY : "bound to"
+    SUPERVISION_PLAN ||--|| VOCABULARY : "resolved into"
     SUPERVISION_PLAN ||--o{ AREA_OF_INTEREST : resolves
 
     RECURRING_SERIES ||--o{ SERIES_SLOT : enumerates
@@ -1517,7 +1819,8 @@ erDiagram
     SUPERVISION_PLAN {
         string plan_id PK
         int spec_version
-        int vocabulary_version
+        int vocabulary_version "the CORE version; author namespaces version separately"
+        string vocabulary_digest "over the resolved, import-flattened term set"
         string scenario_id FK
         string routes_digest
         string network_digest
@@ -1528,8 +1831,9 @@ erDiagram
         string plan_id FK
         string supervision "annotated|nominal"
         string realisation "present|absent"
-        string labels "vocabulary terms, one or more"
+        string labels "vocabulary terms, one or more; permitted on nominal"
         string parameters "swept values"
+        string counterfactual "kind + ref; a pointer, never a supervision write"
         string series_ref FK "null unless in a series"
         string slot_ref FK "null unless in a series"
     }
@@ -1571,8 +1875,13 @@ erDiagram
     COHORT_SUPERVISION {
         string flow_id PK
         string plan_id FK
-        string supervision "nominal|unlabelled|annotated"
+        string supervision "unlabelled|annotated - NEVER nominal, see D6.2"
         string labels "whole-life only"
+    }
+    VOCABULARY {
+        int vocabulary_version PK "core"
+        string vocabulary_digest
+        string namespaces "one block per author namespace, each versioned"
     }
     OBSERVED_SPAN {
         string instance_id PK, FK
@@ -1598,8 +1907,12 @@ erDiagram
     }
 ```
 
-Three properties the plan must have, each for a reason already established:
+The properties the plan must have, each for a reason already established:
 
+- **The vocabulary is resolved into the plan, not referenced from it.** The plan carries the core term
+  set at its version plus every author namespace it uses, imports flattened, and a `vocabulary_digest`
+  over the result. A plan that named a term into a file somebody could edit afterwards is precisely the
+  drift the digest binding below exists to prevent, and a term is as load-bearing as a route.
 - **Instance ids are deterministic** — derived from the scenario id and the authored instance name,
   with no counter and no timestamp, so a sweep's runs are joinable (doc 20 §7.1).
 - **Every reference resolves or the compile fails** — unknown entity, unknown flow, unknown area,
@@ -1628,13 +1941,14 @@ set is extended. Taking the real emitted shape as the baseline (`CotWriter.cs:13
         scenario_id="bahonar_pattern_of_life@a91c3f"
         seed="42"
         session_id="cap-20260105-0700"
-        plan_id="bahonar_supervision@7d2e10" vocabulary="1">
+        plan_id="bahonar_supervision@7d2e10"
+        vocabulary="1" vocabulary_digest="vocab@3c81f7">
 
   <!-- world-scoped supervision: facts about the world, not about any one track.
        Sibling of <_solar>, which is already written here (CotWriter.cs:52-65). -->
   <_supervision scope="world" state_tick="1044000">
     <!-- an anomaly with no participant: never an <event>, because there is no object -->
-    <absence instance="pi_tower_relief_d4_h7_t3_unmanned" label="post_unmanned"
+    <absence instance="pi_tower_relief_d4_h7_t3_unmanned" label="bahonar:post_unmanned"
              series="tower_relief" slot="d4_h7_t3" aoi="tower_03"
              declared_start_tick="1044000" declared_end_tick="1125000"
              expected_entity_id="guard_d4_h7_t3" phase="vacancy" state="open"/>
@@ -1684,8 +1998,15 @@ set is extended. Taking the real emitted shape as the baseline (`CotWriter.cs:13
               pose_separation_m="0.02" heading_separation_deg="0.10"
               speed_separation_mps="0.00" dimension_separation_m="0.56"/>
 
-      <!-- asserted by the author; never derived. Empty of <annotation> is itself the assertion. -->
-      <_supervision state="nominal" vocabulary="1"/>
+      <!-- asserted by the author; never derived. The assertion is in `state`; the <annotation>
+           child says WHICH authored ordinary behaviour this is, and what it is a negative for. -->
+      <_supervision state="nominal" vocabulary="1" vocabulary_digest="vocab@3c81f7">
+        <annotation instance="pi_tower_posting_d4_h15_t3" label="bahonar:tower_posting"
+                    phase="dwell" role="bahonar:guard" aoi="tower_03"
+                    series="tower_relief" slot="d4_h15_t3"
+                    hard_negative_for="bahonar:standoff_dwell_at_access_point
+                                       bahonar:arrival_without_departure"/>
+      </_supervision>
 
       <!-- computed identically for EVERY vehicle, ambient included; never a label -->
       <_aoi>
@@ -1701,8 +2022,9 @@ set is extended. Taking the real emitted shape as the baseline (`CotWriter.cs:13
       <contact callsign="car-518"/>
       <_carla ... entity_id="shadow" sumo_id="shadow" provenance="sumo_scheduled"
               producer="reconciled" kinematics_source="sumo" .../>
-      <_supervision state="annotated" vocabulary="1">
-        <annotation instance="pi_perimeter_shadow_d6" label="perimeter_transit_off_cadence"
+      <_supervision state="annotated" vocabulary="1" vocabulary_digest="vocab@3c81f7">
+        <annotation instance="pi_perimeter_shadow_d6"
+                    label="bahonar:perimeter_transit_off_cadence"
                     phase="transit" role="subject" aoi="fence_line"
                     declared_start_tick="1489200" committed_start_tick="1489204"
                     observed_start_tick="1489261"/>
@@ -1718,9 +2040,21 @@ set is extended. Taking the real emitted shape as the baseline (`CotWriter.cs:13
 
 Notes, each carrying a decision:
 
-- **`state` is always written.** `annotated` carries one or more `<annotation>` children (labels are a
-  set); `nominal` carries none and is itself the assertion; `unlabelled` carries none and asserts
-  nothing. Absence of the element is a bug, not a negative. Unchanged from doc 20 §7.4.
+- **`state` is always written, and the assertion lives in `state` alone.** `annotated` and `nominal`
+  may each carry one or more `<annotation>` children — labels are a set — and `unlabelled` carries
+  none, because there is nothing to name. Absence of the element is a bug, not a negative. What a
+  child does **not** do is decide which of the three states applies: a `nominal` element with children
+  and one without assert exactly the same thing, and the children say only *which* authored ordinary
+  behaviour this is. That matters because a hard negative is worth nothing anonymous. A sidecar-only
+  consumer that can see `bahonar:tower_posting` can build the matched negative set of §3.9(d); one
+  that sees a bare `state="nominal"` has 356 indistinguishable vehicles and is back at the binary
+  collapse of §3.1 with one bit more information.
+- **`vocabulary` and `vocabulary_digest` are both written**, on the `<events>` container and on every
+  `<_supervision>` element. The version alone cannot detect a term redefined without a version bump;
+  the digest, taken over the resolved term set of §8.1, can. It is what makes the release check of
+  §8.7 mean something on a corpus somebody else assembled.
+- **Every label carries its namespace and every core value does not** (§3.8). A reader can therefore
+  tell at a glance which strings this pipeline authored and which it only carried.
 - **The onsets are renamed** `declared_` / `committed_` / `observed_`, and `declared_start_tick` is
   **absent** on a duration stop, with `declared_duration_s` carried on the instance in the manifest
   (§3.3). A consumer must handle absence; doc 20's shape could not produce it.
@@ -1766,8 +2100,11 @@ Notes, each carrying a decision:
 The PNG already carries `carla:capture` so a still is self-describing when separated from its sidecar
 (`CaptureMetadata.cs:31-36`), and **already carries `carla:solar`** for the same reason
 (`SolarMetadata.cs:14-20`, composed into the chunk set at `FrameRecorder.cs:227`). A compact
-`carla:supervision` chunk listing annotated actor ids and labels extends that property to the
-annotation, with the sidecar authoritative on any disagreement. The solar chunk gains the four added
+`carla:supervision` chunk listing annotated actor ids, their labels, and the `vocabulary` version and
+`vocabulary_digest` extends that property to the annotation, with the sidecar authoritative on any
+disagreement. The two vocabulary fields are what make a separated still self-describing rather than
+merely self-identifying: a label without the version and digest that pin its meaning is a string whose
+definition a reader cannot locate. The solar chunk gains the four added
 attributes alongside the nine it already carries, which is what makes the frame-by-frame replay check
 of §7.3 work on stills alone.
 
@@ -1817,7 +2154,14 @@ supervision rather than keeping every capture and losing the thing that explains
 ```jsonc
 {
   "spec_version": 1,
-  "vocabulary_version": 1,
+
+  // 3.7: the core, closed and versioned; every author namespace, versioned independently and
+  // carried whole. A consumer reads a label against the namespace that defines it.
+  "vocabulary": {
+    "vocabulary_version": 1,
+    "vocabulary_digest": "vocab@3c81f7",
+    "namespaces": [ { "namespace": "bahonar", "version": 1 } ]
+  },
 
   "session": {
     "session_id": "cap-20260105-0700",
@@ -1911,8 +2255,10 @@ supervision rather than keeping every capture and losing the thing that explains
     {
       "instance_id": "pi_tower_relief_d4_h7_t3_unmanned",
       "supervision": "annotated", "realisation": "absent",
-      "labels": ["post_unmanned"], "aoi_refs": ["tower_03"],
+      "labels": ["bahonar:post_unmanned"], "aoi_refs": ["tower_03"],
       "series_ref": "tower_relief", "slot_ref": "d4_h7_t3",
+      // 3.9(c): a pointer to the 335 realised siblings. It annotates none of them.
+      "counterfactual": { "kind": "series", "ref": "tower_relief" },
       "participants": [],
       "expected": { "role": "guard", "expected_entity_id": "guard_d4_h7_t3",
                     "site_lane": "26413459_0", "site_pos_m": 58.90,
@@ -1934,9 +2280,10 @@ supervision rather than keeping every capture and losing the thing that explains
     {
       "instance_id": "pi_escort_drydock_d3",
       "supervision": "annotated", "realisation": "present",
-      "labels": ["coordinated_group_transit", "destination_off_pattern"],
+      "labels": ["bahonar:coordinated_group_transit", "bahonar:destination_off_pattern"],
       "parameters": { "group_size": 5, "departure_spread_s": 16, "route_length_m": 10300 },
       "aoi_refs": ["drydock"],
+      "counterfactual": { "kind": "term", "ref": "bahonar:routine_freight_haul" },
       "participants": [
         { "entity_id": "escort_0", "sumo_id": "escort_0", "role": "lead",     "actor_id": 733 },
         { "entity_id": "escort_1", "sumo_id": "escort_1", "role": "follower", "actor_id": 734 }
@@ -1956,11 +2303,31 @@ supervision rather than keeping every capture and losing the thing that explains
                                              "sun_elevation_deg": 34.9 } }
           } }
       ]
+    },
+    {
+      // 3.9(d): an authored hard negative that says what it IS and what it is a negative FOR.
+      // `hard_negative_for` narrows and never widens; its absence would mean unspecified, not none.
+      "instance_id": "pi_tower_posting_d4_h15_t3",
+      "supervision": "nominal", "realisation": "present",
+      "labels": ["bahonar:tower_posting"],
+      "hard_negative_for": ["bahonar:standoff_dwell_at_access_point",
+                            "bahonar:arrival_without_departure"],
+      "aoi_refs": ["tower_03"], "series_ref": "tower_relief", "slot_ref": "d4_h15_t3",
+      "participants": [ { "entity_id": "guard_d4_h15_t3", "sumo_id": "guard_d4_h15_t3",
+                          "role": "bahonar:guard", "actor_id": 412 } ],
+      "intervals": [ { "participant": "guard_d4_h15_t3", "phase": "dwell",
+                       // D6.4: a `duration` stop declares a length, not an instant
+                       "declared_start_tick": null, "declared_duration_s": 28800,
+                       "committed_start_tick": 1015244, "observed_start_tick": 1015259,
+                       "closed_by": "trigger" } ]
     }
   ],
 
+  // D6.2: a cohort is `unlabelled` or carries a WHOLE-LIFE annotation. It is never `nominal`,
+  // because a flow's members are generated rather than reasoned about one by one.
   "cohorts": [ { "flow_id": "corridor_d3_p0_h10", "supervision": "unlabelled" },
-               { "flow_id": "ferry_out_d3_h10",   "supervision": "nominal" } ],
+               { "flow_id": "ferry_out_d3_h10",   "supervision": "annotated",
+                 "labels": ["bahonar:cleared_gate_transit"] } ],
 
   "prevalence": {
     "per_vehicle":        { "union": 0.0009, "per_sensor": { "OVERWATCH-1": 0.0009 } },
@@ -2210,6 +2577,81 @@ each `<event>`, would make a world fact look like a vehicle fact and would tempt
 as a per-vehicle feature. It is per frame, it is written once, and it is world-scoped for the same
 reason `<_supervision>` is.
 
+### 8.7 How a term reaches a consumer, and what keeps it honest
+
+**The vocabulary is not a fifth truth artifact.** The four of D6.17 are unchanged. A vocabulary is a
+*compile-time* product: it is resolved into the supervision plan (artifact one), it is quoted by
+version and digest in every sidecar and every PNG chunk (artifact two), it is summarised in the
+manifest (artifact four), and it is republished beside the corpus by the release step, which
+[08](08_Collection_And_EPoL.md) owns. Nothing new is written during a run, which is the same statement
+as D6.8 seen from the vocabulary's side: a run cannot mint a term any more than it can mint a row.
+
+| Stage | Where it lives | What it carries |
+|---|---|---|
+| Authored | the scenario specification's `vocabulary` block — `import[]` and `terms[]` ([07 §3.5](07_Scenario_Authoring.md)) | the author's declarations, reviewed and version-controlled with the scenario |
+| Compiled | `SupervisionPlan` (§8.1) | the resolved, import-flattened term set, `vocabulary_version` and `vocabulary_digest` |
+| Packaged | the scenario package (`C3`, [04](04_Contracts.md)) | the same document, digest-bound alongside the routes, the network and the annotations |
+| Per capture | `<events>`, every `<_supervision>`, the `carla:supervision` PNG chunk (§8.2) | `vocabulary` and `vocabulary_digest`, so a separated still is still readable |
+| Per session | the run supervision manifest (§8.4) | the core version, the digest, and every author namespace with its version |
+| Published | beside the corpus, in both the training export and the full-truth export (§10.3) | the whole document: core, namespaces, terms and their definitions |
+
+**The published document mirrors the code boundary of §3.6, in three sections**, because a consumer has
+to be able to apply the deletion test without reading this plan:
+
+```jsonc
+{
+  "vocabulary_version": 1,
+  "vocabulary_digest": "vocab@3c81f7",
+  "core": {
+    "supervision":     { /* supervision_state, subject_kind, realisation, interval_onset,
+                            closed_by, reserved role `subject`, reserved phase `vacancy` */ },
+    "accounting":      { /* the five observability outcomes, and what each one excludes */ },
+    "derived_context": { /* illumination_band with boundaries_deg; area relation states */ },
+    "three_valued_semantics": {
+      "annotated":  "the author asserts this subject executed the named pattern over this interval",
+      "nominal":    "the author asserts this subject executed no target pattern. An AUTHORED negative",
+      "unlabelled": "the author made no claim. NOT a negative; treating it as one manufactures a
+                     label out of silence"
+    },
+    "hard_negative_for": "narrows and never widens. Its absence means unspecified, not none",
+    "deletion_test": "Delete every derived_context value from this corpus and the supervision is
+                      still complete and unambiguous. If that stops being true, context has become
+                      a label (D6.21)",
+    "generated_from": "CarlaNet.Types"
+  },
+  "namespaces": [ /* one block per author namespace present in this corpus, whole, per 3.8 */ ]
+}
+```
+
+**The core half is generated from the code, not written beside it.** The values live in
+`CarlaNet.Types` as the enumerations the binder and the writers switch on, and the published document
+is emitted from them. A sixth `closed_by` value, or D6.22's `unlit` outcome, therefore appears in every
+shipped vocabulary without anyone remembering to update a file — the mechanism
+[07 §8.5](07_Scenario_Authoring.md) uses to keep `checks.json` true, applied to the one artifact where
+a stale copy would misdescribe a corpus that has already been handed over.
+
+**Three mechanisms keep the terms in a sidecar identical to the terms in the vocabulary**, at three
+different times, and none of them is a convention:
+
+1. **At compile.** Check 18 of [07 §5.2](07_Scenario_Authoring.md) already refuses a label outside the
+   declared vocabulary. Two clauses are required beyond it: refuse a label whose `applies_to` excludes
+   the subject kind it was asserted of — which is how D6.2's cohort rule reaches terms the compiler
+   cannot interpret — and refuse a namespace the specification neither declared nor imported.
+2. **At run time — nothing, and that is the strength.** D6.8 fixes the row set before the run and
+   permits the runtime only to *bind*. The label set of a run is therefore a subset of the plan's by
+   construction, and §3.6 point 2's two-manifest diff already tests it. There is no runtime path that
+   could introduce a term, so there is nothing to validate.
+3. **At release.** The anti-leak validator gains one check: every term appearing anywhere in the corpus
+   — sidecars, `carla:supervision` chunks, manifest — is defined in the published vocabulary at the
+   declared digest. This is what makes a corpus auditable by somebody who was not there, the same
+   property §8.4's four manifest checks have.
+
+**What a consumer may do with a term the pipeline never understood.** Read its definition, stratify by
+it, roll it up to its `broader` parent, pull its counterfactual set, or ignore it. What they cannot do
+is mistake it for something we computed: a namespace prefix is present on every author term and absent
+from every core value (§3.8), so the provenance of each string in the corpus is readable from the
+string itself.
+
 ---
 
 ## 9. Migration from the `.labels.json`
@@ -2243,12 +2685,12 @@ Each key migrates to a different place, and two of them are deleted rather than 
 
 | Instance | Participants and roles | Intervals | Labels |
 |---|---|---|---|
-| `pi_escort_drydock_d3` | `escort_0` lead; `escort_1..4` follower | one transit per participant, overlapping | `coordinated_group_transit`, `destination_off_pattern` |
-| `pi_gate_probe_d2` | `probe_d2` subject | approach, wait (300 s), depart | `standoff_dwell_at_access_point` |
-| `pi_gate_probe_d5` | `probe_d5` subject | approach, wait (300 s), depart | `standoff_dwell_at_access_point` |
-| `pi_perimeter_shadow_d6` | `shadow` subject | one transit | `perimeter_transit_off_cadence` |
-| `pi_ferry_stay_behind_d1` | `staybehind` subject | arrival, dwell (489 000 s, unclosed at scenario end) | `arrival_without_departure` |
-| `pi_tower_relief_d4_h7_t3_unmanned` | **none** | one vacancy, `closed_by = slot_unrealised` | `post_unmanned` |
+| `pi_escort_drydock_d3` | `escort_0` `bahonar:lead`; `escort_1..4` `bahonar:follower` | one transit per participant, overlapping | `bahonar:coordinated_group_transit`, `bahonar:destination_off_pattern` |
+| `pi_gate_probe_d2` | `probe_d2` `subject` | approach, wait (300 s), depart | `bahonar:standoff_dwell_at_access_point` |
+| `pi_gate_probe_d5` | `probe_d5` `subject` | approach, wait (300 s), depart | `bahonar:standoff_dwell_at_access_point` |
+| `pi_perimeter_shadow_d6` | `shadow` `subject` | one transit | `bahonar:perimeter_transit_off_cadence` |
+| `pi_ferry_stay_behind_d1` | `staybehind` `subject` | arrival, dwell (489 000 s, unclosed at scenario end) | `bahonar:arrival_without_departure` |
+| `pi_tower_relief_d4_h7_t3_unmanned` | **none** | one vacancy, `closed_by = slot_unrealised` | `bahonar:post_unmanned` |
 
 Six instances from nine ids and one note. Two facts fall out of this table that `marked_ids` cannot
 state and that a trainer needs:
@@ -2302,6 +2744,86 @@ Not new policy — these are the measured confounders of §2.4 turned into check
    arranges it. That is not a defect in a scenario written before any of this existed; it is the reason
    the check has to be a number in the manifest (§5.3) rather than an authoring guideline that anyone
    can satisfy by intending to.
+
+### 9.4 The vocabulary the sizing scenario declares
+
+The migration above resolves nine flat ids and one unread note into six instances. This is the other
+half of it: the terms those instances carry, and the state every one of the scenario's 69 245 vehicles
+ends up in. It is the proof that the layering of §3.7 carries real content, because every row is
+reconstructible from the shipped generator (*read*, `CarlaControl/scripts/make_bahonar_scenario.py`).
+
+**Where every vehicle lands.**
+
+| Population | Count | Subject kind | State | Term |
+|---|---|---|---|---|
+| Diurnal corridor, ferry and shift flows | 68 880 members over ~440 flows (`:167-212`) | cohort | `unlabelled` | — |
+| Port-cleared ferry pulses | flows (`:183-196`) | cohort | `annotated`, whole-life | `bahonar:cleared_gate_transit` |
+| Guard postings | 335 trips, each a realised `tower_relief` slot (`:215-242`) | entity | `nominal` | `bahonar:tower_posting` |
+| Routine air-freight hauls | 21 trips (`:245-253`) | entity | `nominal` | `bahonar:routine_freight_haul` |
+| Escort convoy | 1 instance, 5 participants (`:262-267`) | entity | `annotated` | `bahonar:coordinated_group_transit` + `bahonar:destination_off_pattern` |
+| Gate probes | 2 instances (`:271-278`) | entity | `annotated` | `bahonar:standoff_dwell_at_access_point` |
+| Perimeter shadow | 1 instance (`:282-286`) | entity | `annotated` | `bahonar:perimeter_transit_off_cadence` |
+| Ferry stay-behind | 1 instance (`:289-295`) | entity | `annotated` | `bahonar:arrival_without_departure` |
+| Guard no-show | 1 instance, no participant (`:236`, `:370-379`) | **slot** | `annotated`, `realisation: absent` | `bahonar:post_unmanned` |
+
+The ferry pulses are `annotated` and not `nominal` because D6.2 forbids `nominal` on a cohort, and
+because what is true of them *is* true of every member for its whole life: each one is port-cleared
+traffic that transits a checkpoint and enters. That is class-conditioned presence
+([20 §3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) class 4), which needs no
+onset and is the one annotation a cohort may carry (§3.2).
+
+**The terms, in the form §3.8 declares them.** Ten terms, three roles, one reserved role and five area
+kinds, in one namespace.
+
+| Term | `applies_to` | `realisation` | `broader` | Other fields |
+|---|---|---|---|---|
+| `bahonar:expected_arrival_absent` | slot | absent | — | — |
+| `bahonar:post_unmanned` | slot | absent | `bahonar:expected_arrival_absent` | `counterfactual: series tower_relief` |
+| `bahonar:coordinated_group_transit` | entity | present | — | `parameters: group_size, departure_spread_s`; `counterfactual: term bahonar:routine_freight_haul` |
+| `bahonar:destination_off_pattern` | entity | present | — | `parameters: destination_aoi_visits_in_baseline` |
+| `bahonar:standoff_dwell_at_access_point` | entity | present | — | `parameters: dwell_s`; `contrast_with` and `counterfactual: term bahonar:cleared_gate_transit` |
+| `bahonar:perimeter_transit_off_cadence` | entity | present | — | `parameters: speed_factor, circuit_edges` |
+| `bahonar:arrival_without_departure` | entity | present | — | `parameters: dwell_s`; note that its interval closes on `scenario_end` |
+| `bahonar:tower_posting` | entity | present | — | `hard_negative_for: standoff_dwell_at_access_point, arrival_without_departure` |
+| `bahonar:routine_freight_haul` | entity | present | — | `hard_negative_for: coordinated_group_transit, destination_off_pattern` |
+| `bahonar:cleared_gate_transit` | **cohort** | present | — | the whole-life term the ferry pulses carry |
+
+Beside the terms, in the same namespace block: three roles — `bahonar:lead`, `bahonar:follower` and
+`bahonar:guard` — alongside the reserved `subject` that the three single-participant instances use;
+and five area kinds — `bahonar:guard_post`, `bahonar:gate`, `bahonar:drydock`,
+`bahonar:ferry_terminal` and `bahonar:quay`. The sixteen tower positions (`:109-114`) become
+`bahonar:guard_post` areas and the gates come from the fence (§3.9(f)); neither is a term the
+supervision rows carry, and both are what those rows point at.
+
+**Five things this expresses that `marked_ids` and `anomaly_notes` between them could not**, each of
+them a fact the generator already holds and today discards:
+
+1. **The 356 authored ordinary vehicles say what they are.** `ScheduledVehicle.marked` is a `bool`
+   (`CarlaControl/src/carlacontrol/SumoPatternOfLifeBuilder.py:66`) and every unmarked vehicle
+   disappears from the ground truth (`:121`, measured). Under this vocabulary a guard posting is a
+   `nominal` subject carrying `bahonar:tower_posting`, readable from the manifest and — under §8.2 —
+   from a sidecar alone.
+2. **The hard negatives say what they are negatives *for*.** `bahonar:tower_posting` is the matched
+   negative for the two dwell-shaped terms; `bahonar:routine_freight_haul` for the two escort terms.
+   The trainer builds a matched set instead of sampling 356 vehicles at random (§3.9(d)).
+3. **The absence is joined to its own evidence.** `bahonar:post_unmanned` names `tower_relief` as its
+   counterfactual, and the series holds all 336 slots, so the 335 realisations that make the 336th
+   meaningful are one reference away. Today the no-show is free text that nothing reads
+   (`sumo_cot_telemetry.py:134-139`, measured).
+4. **The general case and the specific case both survive.** A consumer stratifying coarsely rolls
+   `bahonar:post_unmanned` up to `bahonar:expected_arrival_absent`, which is structurally the same
+   whether the missing thing is a guard, a delivery or a ferry; one that cares about guards reads the
+   child.
+5. **The fence is in the corpus.** `restrict_private_roads` fences the installation
+   (`SumoScenarioBuilder.py:532-541`), the gates become areas of `kind: bahonar:gate` at world build
+   (§3.9(f)), and `bahonar:standoff_dwell_at_access_point` resolves against one of them instead of
+   against `"-431672573#2"` (`make_bahonar_scenario.py:90`).
+
+**One term is not declared here, deliberately.** Nothing in the list names an hour, a date or a
+lighting condition, and no term may. The perimeter shadow runs at 02:30 (`:285`) and that is a
+`parameters` value and a `declared_start_tick`, never a term — §3.6's confounder argument and
+[07 §3.5.1](07_Scenario_Authoring.md)'s statement that the epoch gains no vocabulary term are the same
+rule read from two directions.
 
 ---
 
@@ -2373,7 +2895,10 @@ The corpus contains everything below. The question the table answers is narrower
 |---|---|---|
 | Imagery (PNG), with its `carla:capture` and `carla:solar` chunks | **yes — the model input** | yes |
 | Two- and three-dimensional boxes and class for every rendered vehicle, and the modal mask where an instance-segmentation channel ran — the per-image label set [08 §5.1](08_Collection_And_EPoL.md) specifies | **yes — the label** | yes |
-| Three-valued supervision with its pattern instances, participants, phases and interval bounds | **yes — the label** | yes |
+| Three-valued supervision, **per image and attached to the box** — the state, the labels in force, and the phase at that instant | **yes — the label** (`D6.38`) | yes |
+| The pattern-instance structure itself: participants, phase sequences, interval bounds, series and slot membership | **no** — joinable only through identifiers the export withholds; the consumer assembles supervision onto **its own** tracks through the published transfer rule (§10.1) | yes |
+| The vocabulary that defines the terms: the core, and every author namespace with its definitions, `broader` links, `contrast_with` and `hard_negative_for` (§8.7) | **yes — it is what makes the label readable.** These fields say what a term *means*, never which subject carries it | yes |
+| A term's **pointer** fields: `exemplar_instances[]`, and `counterfactual` whose `kind` is `instance`, `cohort` or `series` | **no** (`D6.37`) — they name subjects of this scenario by the very identifiers the row below withholds | yes |
 | `instance_id`, `series_id`, `slot_key`, `entity_id`, `sumo_id`, `actor_id` | **no** — build-time join keys only; they do not travel with an example | yes |
 | Truth positions, `hae`, `hae_dtm`, truth velocity, network state (edge, lane, lane position, stop state) | **no** | yes |
 | `occlusion`, `occlusion_level`, `occlusion_samples`, `apparent_*_px` | **no** — may *filter* which examples are included, never travels as a feature | yes |
@@ -2439,7 +2964,7 @@ and writes two artifacts from one corpus:
 
 | Artifact | Contains | Given to |
 |---|---|---|
-| **Training export** | Imagery; the per-image labels [08](08_Collection_And_EPoL.md) specifies — boxes, class, and the modal mask when an instance-segmentation channel ran (`sensor.camera.instance_segmentation`, 08 §3.2); the three-valued supervision with its intervals; and solar state only when §10.2's gate passes. Nothing else. Cap-bound spans are withheld from it (§10.4) | a downstream team training a model |
+| **Training export** | Imagery; the per-image labels [08](08_Collection_And_EPoL.md) specifies — boxes, class, and the modal mask when an instance-segmentation channel ran (`sensor.camera.instance_segmentation`, 08 §3.2); the three-valued supervision with its intervals; **the vocabulary that defines the terms it carries** (§8.7); and solar state only when §10.2's gate passes. Nothing else. Cap-bound spans are withheld from it (§10.4) | a downstream team training a model |
 | **Full-truth export** | Everything the corpus contains: the full truth record, the world truth track, the observability accounting, prevalence, residuals, render accounting, the supervision plan and the run manifest | a downstream team validating a model, and anyone auditing the corpus |
 
 Three properties, each load-bearing:
@@ -2448,6 +2973,11 @@ Three properties, each load-bearing:
   wrong view, and a leak that arrives through a misconfigured filter is invisible in the corpus that
   results. [08](08_Collection_And_EPoL.md) owns the consumer side; the property this section needs is
   that they are separate files with separate paths.
+- **The vocabulary is in both exports, and that is not a leak.** It defines the terms the training
+  export already carries, and a label whose definition and version a reader cannot locate is an opaque
+  string rather than a label. It holds no per-subject truth: it says what `bahonar:post_unmanned`
+  means, never which vehicle carries it. Withholding it would hand a trainer supervision they cannot
+  read while withholding nothing they could have inferred from it.
 - **The partition is by field and by span, and both senses are real.** By field: §10.2's table, of
   which the solar gate is one conditional row. By span: §10.4's cap-bound spans, which are genuinely
   held back — present in the full-truth export, absent from the training export. **It is not a
@@ -2515,9 +3045,20 @@ from the SUMO surface and the section is given.
 | 14 — idle cull switchable, detection separable | **Does not apply to this mode** | The traffic manager is locked out and SUMO has no idle cull; a vehicle parks for 489 000 s, measured. SUMO's own distribution edits are on **insertion and jam resolution** instead and are enumerated separately (§6) |
 | 15 — supervision world-scoped, observability sensor-scoped | **Survives, extended twice** | Observability gains a rendered-span gate upstream of the observed-span gate, and `not_rendered` is accounted separately from `out_of_frame` and `occluded` (§5.1). It also gains an illumination qualifier, which is **world-scoped like supervision** rather than sensor-scoped like the outcomes — one sun lit every camera, so `<_solar>` is identical in every sidecar for a tick and a disagreement is a defect of the same kind as a `<_supervision>` disagreement (§8.2) |
 
-Doc 20's open questions 1, 2, 3, 4, 6, 7, 8 and 9 all remain open and are unaffected by the change of
+Doc 20's open questions 1, 3, 4, 6, 7, 8 and 9 all remain open and are unaffected by the change of
 surface. Question 5 (what to do with an accidental positive) becomes **immediate** rather than
-deferrable, because the regime it was coupled to is now the only regime (§3.6, §6.1).
+deferrable, because the regime it was coupled to is now the only regime (§3.6, §6.1). Question 2 (what
+the vocabulary contains at v1) is **answered** by §3.7: it asked for a single list settled against the
+model's requirements, and no requirements exist to settle it against — so the list is layered instead,
+and only the part this pipeline branches on is ours to fix (§15 question 1).
+
+**Doc 20 §6.2 survives in full and is the foundation of §3.7**, which is worth saying because it is a
+section rather than a numbered decision and would otherwise be audited nowhere. Its three assertions
+all hold: terms come from a declared list rather than being invented per scenario, `vocabulary_version`
+lets a consumer refuse a corpus it does not understand, and magnitudes and places stay in `parameters`
+rather than in terms. What §3.7 adds is the answer to a question doc 20 did not face, because its
+authoring surface was a storyboard written by the same people who read the corpus: who declares the
+list when the author and the trainer are strangers.
 
 **None of doc 20's fifteen decisions is disturbed by the scope narrowing of
 [`_TEAM_BRIEF.md` §3b](_TEAM_BRIEF.md), and that is worth recording rather than assumed.** Every one of
@@ -2561,6 +3102,13 @@ of the fifteen rows above changes on their account beyond rows 3 and 15.
 - **How an operator selects a window, a policy and a rate** — [12](12_Operator_Control_Surface.md).
   This section owns only the record of what was selected and what was achieved.
 - **Sequencing, dependencies and work items** — [13](13_Work_Breakdown.md).
+- **What an author's terms should mean.** This section fixes the closed core, the declaration format
+  and the transport (§3.7, §3.8, §8.7). **What a pattern *is* in a given author's world is theirs**,
+  and the pipeline neither supplies a starting list nor reviews the one they write. The Bahonar terms
+  of §9.4 are one author's vocabulary shown working, not a recommended set.
+- **Translating between two authors' vocabularies.** Two namespaces are two namespaces. Deciding that
+  one author's term means the same as another's is a judgement about their intent, which is the same
+  class of judgement §15 question 6 refuses on the author's own labels.
 
 ## 13. What this section needs from others
 
@@ -2575,6 +3123,19 @@ of the fifteen rows above changes on their account beyond rows 3 and 15.
 | [10](10_Scale_And_Performance.md) | A measured cost for per-vehicle area relations and reconciliation at the capture rate, so §8.2's per-vehicle elements have a budget. The solar state itself costs nothing to record — it is a cache read (`CarlaClient.cs:1988-1991`) — but the prewarm lead-in must be long enough for the three solar RPCs to land before the first captured frame (§4.5) |
 | [11](11_Time_And_Illumination.md) | **A tick maps to a declared civil instant** with a stated UTC offset that may be a half-hour one, so §4.5's residual is computable. **The policy is an assertion, not a reading** — `frozen` or `advancing` with a rate and an anchor tick — because a frozen sun and an unconfigured one are byte-identical in the world's answer (§2.7, measured). The civil-to-solar conversion is defined once, since the world's zone is longitude ÷ 15 and not the civil offset (measured: +3.745377 against +3.5 at the sizing site). A statement on **night viability**, and on whether a resolvability cutoff exists, so §5.1's qualifier can become a sixth outcome if one does. Whether the date roll-over is fixed, so the manifest's `date_rollover_applied` means something. Full list and reasoning in §5.4 |
 | [12](12_Operator_Control_Surface.md) | Whatever the operator selects — window, policy, rate, date — reaches the capture session **as data the manifest can record verbatim** (§8.4's `solar.epoch` and `solar.policy`), not as a side effect of a command line that is gone by the time the manifest is written. A run whose solar policy cannot be written down is a run that cannot be replayed (§7.3) |
+
+### 13.1 What the layered vocabulary requires elsewhere
+
+The vocabulary is authored in one section, compiled in another and published by a third, so four
+documents hold a piece of it. Each item below is owned by the document named and is listed here so its
+owner acts on it rather than rediscovers it.
+
+| Document | Required |
+|---|---|
+| [04](04_Contracts.md) | `C3`'s scenario package gains an `annotations/vocabulary.json` entry and a `vocabulary_sha256` field in `scenario.json`. It carries `annotations/scenario.annotations.json` and `annotations_sha256` today, and an annotation set whose terms are not digest-bound alongside it can resolve against a term list that has since changed meaning (§8.7) |
+| [07](07_Scenario_Authoring.md) | Check 18 gains two clauses: refuse a label whose `applies_to` excludes the subject kind it was asserted of, and refuse a namespace the specification neither declared nor imported (§8.7). §8.3's `vocabulary.json` is sourced as **generated** — its core half from `CarlaNet.Types`, its author half from the compiled specification — rather than written beside the skill, per that section's own §8.5 discipline. The specification's `vocabulary` block carries `import[]` and `terms[]` (§3.8) |
+| [08](08_Collection_And_EPoL.md) | `vocabulary.json` is placed in the **training export as well as the TRUTH root**. A training export carries labels, and a label without the definition and version that pin its meaning is an opaque string; §10.3's split is of fields and spans, and the vocabulary is neither withheld truth nor a leak (§8.7, §10.3) |
+| [13](13_Work_Breakdown.md) | §13.5's core column narrows: **role values are author space with one reserved term, `subject`** (§3.7). Closing the role list would refuse Bahonar's `guard` (`make_bahonar_scenario.py:238`, measured). What the core requires of a role is presence and arity, not a fixed word |
 
 ---
 
@@ -2608,20 +3169,43 @@ of the fifteen rows above changes on their account beyond rows 3 and 15.
 | **D6.24** | **Solar state travels with the manifest as epoch, policy and anchor, and a replay is verified frame by frame.** Restoring it is three existing RPCs during prewarm (`CarlaServer.cpp:614`, `:625`, `:661`); verifying it is a comparison against the original's `_solar` and `carla:solar`, which every capture already carries. A replay outside the §4.5 tolerance is a **failed replay** and is reported rather than shipped. Two carried defects are made explicit rather than silently reproduced: the advancing clock never rolls the date (`CesiumTimeOfDayController.cpp:34-36`, measured), so a replay sets the date explicitly at the anchor and the manifest records `date_rollover_applied`; and **CARLA's native recorder has no solar record type at all** (measured: nothing under `Carla/Source/Carla/Recorder/` mentions `Solar`, though it records scene and vehicle lights), so it is not a replay path for this mode (§7.3) |
 | **D6.25** | **The time-of-day confounder is an authoring rule and an export gate, not a warning.** §9.3 rule 5 requires an annotated instance's time of day to match the nominal population's unless time of day *is* the pattern. Because the capture window is chosen at run time and not at authoring, the compiler can only warn; the manifest settles it. So solar state is exported to the **training** export only when `prevalence_by_illumination` shows annotated mass in more than one band, or the plan declares time of day as the pattern; otherwise it stays in the full-truth export only. This fails closed, is auditable from the manifest alone, and names its own remedy — a second window in another band. Measured motivation: in the sizing scenario five of six anomalies depart between 08:00 and 11:11 and one at 02:30, while all 335 hard negatives fire at 07:00, 15:00 and 23:00 (§2.3, §5.3, §10.2) |
 | **D6.26** | **This section produces truth and labels and scores nothing, and the association is a published rule rather than a step.** Per [`_TEAM_BRIEF.md` §3b](_TEAM_BRIEF.md), the detect-and-track model and the estimated-pattern-of-life model are external to this effort. What this section delivers is (a) a **format guarantee** — truth is emitted per tick, positioned, timed, boxed, identified and qualified, so that supervision *can* be carried onto detector tracks — and (b) the **five-step transfer rule** by which a downstream team would carry it, published in the corpus documentation. **This pipeline never performs the association**, because every step of it needs model output this pipeline never holds. No component here runs a detector, tracker or model; computes a model metric; or produces an association-quality report, a scoreboard or a verdict. The observability accounting, the five outcomes, the prevalence units, the illumination qualifier and the rendered-span gate all remain in full — they describe what the corpus does and does not contain, which is the one thing a consumer cannot recover from the files themselves (§10.1, §10.3, §5) |
+| **D6.27** | **The vocabulary is layered, and one test decides where a term sits: does the pipeline's own code branch on it?** If yes, the term is core — closed, versioned and testable, because a value outside the set is a defect the machinery cannot detect. If no, it is author space and is carried opaquely. The core is supervision state, subject kind, realisation, the three interval onsets, `closed_by`, the five observability outcomes, the illumination band, the cadence form, and two reserved words. Everything else — labels, role and phase values, `parameters` keys, area kinds — is the author's. **Labelling is a contract between the scenario author and the model trainer**, and neither party is this pipeline; carrying a term we do not understand is a property of the design rather than a gap in it (§3.7) |
+| **D6.28** | **An author term is self-describing or it is not published.** Required: a namespaced identifier, a natural-language definition, `applies_to` naming the subject kinds it may be asserted of, `realisation`, `since`, and `status` with `superseded_by` when deprecated. Optional: `broader`, `parameters`, `counterfactual`, `contrast_with`, `hard_negative_for`, `exemplar_instances`. `applies_to` is what makes D6.2 enforceable for a term the compiler cannot interpret. A term may **not** declare itself anomalous, nor carry a severity or a confidence — that would invite a consumer to read every subject without such a term as a negative, which is the `unlabelled`-to-negative collapse [08 D8.20](08_Collection_And_EPoL.md) names (§3.8) |
+| **D6.29** | **Core terms are unprefixed and reserved; every author term carries a namespace; a namespace is first-come and free-form.** `vocabulary_version` covers the core alone; each author namespace versions independently as `{namespace, version}` and a term's identity is the pair `(namespace, name)`. **There is no rename operation** — the only sanctioned retirement is `status: deprecated` plus `superseded_by`, which is what joins a corpus captured under the old spelling to one captured under the new. No registry governs namespaces: a collision is made **visible** by the release attestation recording every namespace present, not prevented by us (§3.8) |
+| **D6.30** | **The vocabulary is resolved into the supervision plan and is not a fifth truth artifact.** D6.17's four stand. The plan carries the import-flattened term set with a `vocabulary_digest`; `<events>`, every `<_supervision>` element and the `carla:supervision` PNG chunk carry the version **and** the digest; the manifest carries both plus every author namespace and its version; the release step republishes the whole document. **The core half is generated from the enumerations in `CarlaNet.Types`**, so a new `closed_by` value or D6.22's `unlit` outcome reaches every shipped vocabulary without anyone remembering — [07 §8.5](07_Scenario_Authoring.md)'s mechanism applied where a stale copy would misdescribe a corpus already handed over. Three enforcement points: the compiler refuses an undeclared term, the runtime cannot mint one (D6.8), and the release validator refuses a corpus containing a term the published vocabulary does not define (§8.7) |
+| **D6.31** | **`nominal` may carry labels, and the assertion lives in `state` alone.** A `nominal` instance may carry `<annotation>` children in the sidecar exactly as an `annotated` one does, and labels in the plan and the manifest; a `nominal` element with children and one without assert precisely the same thing. An anonymous hard negative is worth little: a sidecar-only consumer that can read `bahonar:tower_posting` can build the matched negative set, while one reading a bare `state="nominal"` has 356 indistinguishable vehicles and is one bit away from §3.1's binary collapse (§8.2) |
+| **D6.32** | **A `nominal` term may declare `hard_negative_for`, and the field narrows and never widens.** `nominal` as defined in §3.1 is untargeted — not executing *any* target pattern — and cannot say which negative a subject is a negative *for*. The 335 guard postings are matched negatives for the dwell-shaped terms and the 21 hauls for the escort terms, and without the field a trainer samples 356 negatives at random instead of building the matched set [20 §2.7](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) calls this system's unique product. **The published vocabulary states in these words that the field narrows, never widens, and that its absence means unspecified rather than none** (§3.9) |
+| **D6.33** | **A term may declare one `broader` parent and a resolved `counterfactual`, and a counterfactual is a pointer rather than a supervision write.** `broader` is one parent, acyclic, resolving inside the published document, never branched on — it lets a consumer roll an unknown term up to a known ancestor and makes adding a term cheap. `counterfactual` is `{kind: series \| cohort \| instance \| term, ref}`, resolved by the compiler and a compile error when it dangles; free text is refused because it joins to nothing. **A counterfactual reference asserts nothing about the referenced subjects beyond what they already carry**: naming `tower_relief` as the no-show's counterfactual annotates none of the 335 postings and adds no triple, which §3.6 point 2's row-set invariant enforces (§3.9) |
+| **D6.34** | **No executable pattern schema is built, now or later.** A machine-readable description of what a convoy or a rendezvous *is* would be **exactly the "concept of a pattern to compare against" whose absence is the reason §15 question 6 is closed**; once it exists, running it over the `unlabelled` population is an afternoon's work and the result is a geometric predicate writing supervision, disguised as a helpful audit. It also duplicates the plan, whose participants, roles, intervals and `RecurringSeries` **are** a pattern's structure. The published form is the narrow one: a per-term `parameters` declaration describing the record. The rule: **a vocabulary may describe what we wrote down; it may never describe what a vehicle would have to do** (§3.9) |
+| **D6.35** | **Role and phase values are author space, with one reserved word each.** `subject` is reserved and required of the single participant of a one-participant instance, so a consumer never guesses which track an instance is about; `vacancy` is reserved because the absence writer emits it. Every other role and phase is the author's, because nothing branches on `lead` and [20 §6.1](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) already calls a phase a free term within the instance. What the records require is role presence and arity and phase stability, and §3.6's triple diff enforces stability without knowing the word (§3.7) |
+| **D6.36** | **The gates are emitted as areas of interest at world build, derived from the private-road restriction.** `restrict_private_roads` reads the OSM access tag per way (`CarlaControl/src/carlacontrol/SumoScenarioBuilder.py:547-551`), rewrites the permission list on every restricted edge (`:571-576`) and reports the count (`:582`); the junctions where a restricted edge meets an unrestricted one fall out of the same pass and become areas whose `kind` names a gate. That converts a hand-found literal into a build artifact (`make_bahonar_scenario.py:90`, `PORT_GATE_APPROACH = "-431672573#2"`, measured), satisfies D6.7's hard area prerequisite for any gate-sited absence at no authoring cost, and puts the fence — the structure the whole sizing scenario rests on and that no label mentions — into the corpus. It is derived context of §3.6 point 5's class: computed identically for every vehicle, from the network's own state, never a label (§3.9) |
+| **D6.37** | **The training export's copy of the vocabulary carries a term's definitional fields only.** `exemplar_instances[]`, and a `counterfactual` whose `kind` is `instance`, `cohort` or `series`, name subjects of this scenario by `instance_id`, `series_id` or `slot_key` — the identifiers §10.2 withholds from the training export as build-time join keys. Publishing the document verbatim would reintroduce them through a different door. The full-truth copy carries every field; the training copy drops the pointers, and the release step checks that it did, in the mechanical style of §9.4. A `counterfactual` with `kind: term` is definitional and stays — it names another term, not a subject (§10.2) |
+| **D6.38** | **Supervision reaches the training export per image, attached to the box**: the three-valued state, the labels in force and the phase at that instant. The pattern-instance *structure* — participants, phase sequences, interval bounds, series and slot membership — does not. It is joinable only through `instance_id` and its siblings, which §10.2 withholds; shipping the structure without them yields rows that cannot be assembled, and shipping the identifiers to make them assemblable yields a handle constant across every frame of an instance — the memorisation defect [04](04_Contracts.md) D4.20 excluded `scenario_id` for. Assembling supervision onto tracks is the consumer's step, performed on **its own** tracks through the transfer rule §10.1 publishes (§10.2) |
 
 ---
 
 ## 15. Open questions
 
-1. **What the vocabulary contains at v1.** Doc 20's question 2, unchanged, and now with six worked
-   terms from the Bahonar migration (§9.2) that are proposals rather than a settled list. Terms are
-   cheap to add and expensive to rename once a corpus exists, so this wants the model's requirements
-   in hand. Recommendation: settle it with [08](08_Collection_And_EPoL.md) before the first corpus,
-   not before the first capture.
-2. **Is `post_unmanned` one term or a family?** An absence in a cadence is structurally the same
-   whether the missing thing is a guard, a delivery or a ferry. One generic term
-   (`expected_arrival_absent`) with the series in `parameters` is more stratifiable; a per-domain term
-   reads better. Leaning generic, on doc 20 §6.2's rule that places and magnitudes stay out of terms.
+1. **CLOSED — the vocabulary is layered, and only the part this pipeline branches on is ours to fix**
+   (D6.27). Doc 20's question 2 asked for a single list settled against the model's requirements. **No
+   requirements exist to settle it against**: the estimated-pattern-of-life model is external
+   ([`_TEAM_BRIEF.md` §3b](_TEAM_BRIEF.md)) and the team that owns it has stated none. Waiting is not
+   available, because a corpus shipped with no vocabulary leaves every consumer to invent their own
+   reading of the sidecar. Dictating is not available either, because a SUMO network can express
+   almost anything and the label is a statement the *author* makes to the *model trainer*. So the
+   closed core is authored here and versioned (§3.7), author terms are carried opaquely and
+   self-describingly (§3.8), and the rename asymmetry is designed out rather than documented — there
+   is no rename operation, only deprecate-and-supersede (D6.29). **The accepted cost** is that two
+   authors can mint colliding terms in different namespaces and nothing stops them; the release
+   attestation makes the collision visible to whoever merges the corpora, and that is the most a
+   pipeline that never meets either author can honestly offer.
+2. **CLOSED — both, via `broader`** (D6.33). An absence in a cadence is structurally the same whether
+   the missing thing is a guard, a delivery or a ferry, and a per-domain term still reads better. The
+   parent link makes the choice unnecessary: `bahonar:post_unmanned` declares
+   `broader: bahonar:expected_arrival_absent`, a consumer stratifying coarsely rolls every child up to
+   the parent, and one that cares about guards reads the child. Doc 20 §6.2's rule that places and
+   magnitudes stay out of terms is untouched — the series is still a `series_ref` and the site still an
+   `aoi_ref`, neither of them in the term (§3.9, §9.4).
 3. **How much of an absence window must be observed before the absence is evaluable?**
    `site_covered_fraction` is a continuous number and the cutoff is a judgement, and it is not one this
    pipeline can make: a site observed for 41 % of an eight-hour window may still be conclusive if the
@@ -2706,8 +3290,13 @@ of the fifteen rows above changes on their account beyond rows 3 and 15.
     vehicle-seconds, which is the only unit that is additive across bands, and record the other two
     units per band as "any overlap" with that stated. Not urgent: the windows [10 §3.1](10_Scale_And_Performance.md)
     recommends are short enough that a frozen policy is the likely default.
-
-
-
-
-
+14. **Whether an author should be told what carries the signal in their own annotation.** §3.9(e)
+    assessed a per-term statement of which authored property is the pattern and which is incidental —
+    `anomaly_shadow`'s `speedFactor="0.45"` is the pattern, `anomaly_escort`'s `length="6.0"` is a
+    confounder (§9.3) — and it is **not published at v1**. A closed facet list would be a closed
+    vocabulary invented in author space, which is what D6.27 exists to avoid; an open list would be
+    prose nothing checks and would tempt the compiler to branch on an author term in order to phrase a
+    warning. The ground is already covered for a human reader by the compile report's
+    illumination-to-label association statistic printed beside the labels
+    ([07 §5.6](07_Scenario_Authoring.md)). Terms are cheap to add and a published field is not, so this
+    waits for a demand that names itself rather than shipping on a guess.

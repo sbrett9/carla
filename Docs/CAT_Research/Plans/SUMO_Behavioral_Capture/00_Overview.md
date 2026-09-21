@@ -11,6 +11,7 @@ from inferences, and inferences labelled.
 | 3 · 2026-09-18 | Scope narrowed: the pipeline labels and never scores. |
 | 4 · 2026-09-18 | Live exercise made primary and generic past our boundary; cyclic generation driven externally. |
 | 5 · 2026-09-21 | One distribution; authoring skill into the repository; shipped-defect figures re-measured against the tree. |
+| 6 · 2026-09-21 | One netconvert flag set, every world regenerated; the annotation vocabulary layered. |
 
 **Scope:** Realising, as one system, the supervision model of
 [`Findings/20`](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) and the SUMO

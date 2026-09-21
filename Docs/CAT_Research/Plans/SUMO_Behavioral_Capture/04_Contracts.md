@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 6 | `C3` carries the annotation vocabulary and binds it by digest |
 | 5 | `C10` records facts, not a verdict; per-artifact crash safety; the contract for observing a live run |
 | 4 | `C8` gains a live delivery mode; `C10` added; the external side left unspecified on purpose |
 | 3 | `C8` becomes a corpus handover; three artifact roots become two; nothing scores a model |
@@ -153,7 +154,7 @@ flowchart TB
     BUILDER["SUMO scenario builder<br/>carlacontrol.SumoScenarioBuilder"]
     ANNOT["annotation compiler"]
     EPOCH[/"C9 epoch + illumination policy<br/>(a block of scenario.json)"/]
-    CSP[/"C3 scenario package .csp<br/>scenario.json · net · routes · sumocfg<br/>· catalogue · annotations · areas · clipped OSM"/]
+    CSP[/"C3 scenario package .csp<br/>scenario.json · net · routes · sumocfg<br/>· catalogue · annotations · vocabulary · areas · clipped OSM"/]
   end
 
   subgraph run["Capture run"]
@@ -1374,6 +1375,7 @@ Three findings from that measurement:
 | `catalogue/vehicles.catalogue.json` | The exact catalogue authored against (`C1`), embedded |
 | `catalogue/VehicleCatalog.xosc` | Its OpenSCENARIO projection |
 | `annotations/scenario.annotations.json` | The `AnnotationSet` of doc 20 §6.1 — payload owned by [`06`](06_Truth_And_Annotation.md) |
+| `annotations/vocabulary.json` | The document every term in the annotation set resolves against: the closed core, and each author namespace the specification declared or imported, import-flattened — payload owned by [`06`](06_Truth_And_Annotation.md) §8.7 |
 | `areas/areas.aoi.geojson` | The source area definitions (`C5`) |
 | `areas/areas.resolved.json` | Areas resolved to CARLA-local metres and to SUMO edges/lanes (`C5`) |
 | `source/clipped.osm` | The clipped OSM the network was built from — §5.1 finding 2 |
@@ -1407,6 +1409,7 @@ Three findings from that measurement:
 | `blueprint_set_digest` | string | — | yes | From the embedded catalogue |
 | `area_block_sha256` | string | — | yes | Digest of `areas/areas.aoi.geojson` alone — tiered separately, §5.4 |
 | `annotations_sha256` | string | — | yes | Digest of the annotation set |
+| `vocabulary_sha256` | string | — | yes | Digest of `annotations/vocabulary.json`. **Bound at the refuse tier**, §5.4 V3.15 |
 | `epoch_block_sha256` | string | — | yes | Digest of the `epoch` object alone, canonicalised per §1. **Bound at the refuse tier**, §5.4 V3.11 |
 | **Time and illumination** | | | | |
 | `epoch` | object | — | yes | The civil instant `t = 0` corresponds to, and everything derived from it. Shape, units and validation are `C9` §11.3 |
@@ -1441,6 +1444,7 @@ Every check runs at run start, against the world actually loaded.
 | V3.12 | `epoch` is present but fails any `C9` V9.* rule | **refuse** | The epoch is checked *as part of loading the package*, not at first use, so a run never gets as far as rendering a frame under an epoch that will not validate |
 | V3.13 | The world reports no sun — `get_solar_state` returns empty (`CesiumHeightSampler.cpp:760-763`, shim `None` at `carlanet/__init__.py:1527`) — and `illumination.require_sun` is true | **refuse** | `C9` §11.7. Running anyway would produce a corpus whose every frame is lit by something nobody declared |
 | V3.14 | The world's `OriginLongitude` differs from `world_origin_longitude` | already **refuse** by V3.3 | Restated here because `C9`'s civil-to-sun-clock conversion is a function of it (§11.4): the same digest that protects the coordinate identity also protects the sun |
+| V3.15 | `vocabulary_sha256` does not match `annotations/vocabulary.json` as carried | **refuse** | A term list edited after the annotation set was compiled against it still resolves every label, and resolves some of them to a meaning the author never wrote. The failure is invisible in both artifacts, which is the same property that puts the epoch at this tier ([`06`](06_Truth_And_Annotation.md) §8.7) |
 
 That tiering answers doc 20 §11 question 6 for this plan: **the area block is digested separately and
 an area-only difference is a warning.**
@@ -1455,10 +1459,10 @@ digested separately, and checked before the first tick.
 
 ### 5.5 Versioning
 
-`scenario_package_version` is an integer, refused when unimplemented. Because the catalogue, the areas
-and the annotation set are **embedded rather than referenced**, a scenario package is self-contained
-and reproducible from itself plus a matching world package. The only external dependency is the world,
-and that is bound by digest.
+`scenario_package_version` is an integer, refused when unimplemented. Because the catalogue, the areas,
+the annotation set and the vocabulary that defines its terms are **embedded rather than referenced**, a
+scenario package is self-contained and reproducible from itself plus a matching world package. The only
+external dependency is the world, and that is bound by digest.
 
 ### 5.6 A defect this closes
 
@@ -1482,6 +1486,12 @@ to pass.
 - **A capture cannot be reproduced.** Without the embedded catalogue, areas and clipped OSM, a package
   re-run a year later depends on four files nobody kept.
 - **Captures cannot be joined to supervision**, because `scenario_id` is absent from the sidecar.
+- **Every label in the corpus becomes an opaque string, or a differently-meaning one.** With no
+  vocabulary in the package, a consumer reading `bahonar:post_unmanned` a year later has the spelling
+  and nothing else — no definition, no `applies_to`, no `broader` parent to roll it up to. With the
+  vocabulary carried but not digest-bound, the definitions may have been edited after the annotation
+  set was compiled against them; every label still resolves, and nothing in either artifact says that
+  what it resolves to has moved ([`06`](06_Truth_And_Annotation.md) §8.7).
 - **The same scenario renders under a different sun on every machine.** Without the epoch in the
   package, the civil meaning of `t` lives in the author's head and in trip identifiers, and the sun
   falls back to whatever the world was spawned with — measured as local solar noon and the *host
@@ -4424,6 +4434,7 @@ Stated as properties needed, not as requests.
 | **D4.36** | **Every artifact this plan produces is incrementally written, self-describing without a closing record, and valid at every instant.** A kill at an arbitrary point leaves a shorter artifact, never a corrupt one, and a reader distinguishes a complete artifact from an interrupted one by the presence of a terminal record, never by whether the file parses. Abrupt external termination is a normal operating mode, so "closed at the end" may never be what makes an artifact readable. §12.7 applies this artifact by artifact, with three writer rules and two declared exceptions |
 | **D4.37** | **A caller observes a run in progress through the surfaces that already exist** — a second client on the CARLA server, the live handover stream if one is open, and the incrementally written artifacts on disk. **This plan adds no status service, no progress RPC, no completion percentage and no callback to the caller.** Where an existing surface cannot answer a question, the gap is recorded as a gap (§12.8.4) rather than designed around, because a status service would be a fourth place a run's state is asserted (§12.8) |
 | **D4.38** | **Nothing in this contract requires a run to have a declared length.** A convenience limit may exist on the invocation surface; no field, rule, gate or reader here may assume one was set, and reaching the end of a limit is one ordinary way a run can end among several. The caller stops us, so a contract that needed a duration would be a contract that only worked for callers who did not want to use it that way (§12.9) |
+| **D4.39** | **The annotation vocabulary travels inside the scenario package and is bound by digest at the refuse tier, exactly as the annotation set and the epoch are.** A package that carries terms and not their definitions is a package whose labels only the author can read, and a vocabulary bound by nothing can be edited after the annotation set was compiled against it — after which every label still resolves, to a meaning nobody declared. `annotations/vocabulary.json` is an entry, `vocabulary_sha256` is a required field, and V3.15 refuses a mismatch. The **content** of the document — what the core holds, how an author term declares itself, how a namespace is versioned — is [`06`](06_Truth_And_Annotation.md) §3.7, §3.8 and §8.7's; this contract owns only that it travels, where, and what binds it (§5.2, §5.3, §5.4) |
 
 ---
 

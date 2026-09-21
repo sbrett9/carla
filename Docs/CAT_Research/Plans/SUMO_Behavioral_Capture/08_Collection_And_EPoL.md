@@ -22,6 +22,7 @@ Findings set. Every external claim is cited.
 | 2026-09-18 | Illumination made a first-class collection parameter; radiometry recorded per capture. |
 | 2026-09-18 | Scope narrowed to labelling: no scoring, no association harness, no model metrics. |
 | 2026-09-18 | Live exercise designed as a primary use case; no external format specified. |
+| 2026-09-21 | The vocabulary is published into the training export as well as the truth root. |
 
 > **The boundary this section is written against.** This pipeline **labels; it never scores.** It does
 > not run a detector, a tracker or an EPoL model; it does not associate external model output to truth;
@@ -2415,7 +2416,8 @@ terms that define it and the version that pins them, and doc 20 §6.2 owns the v
 publishes, per session:
 
 ```
-SupervisionVocabulary              # published in the TRUTH root, beside the manifest
+SupervisionVocabulary              # written to the TRUTH root beside the manifest, and republished
+                                   #   verbatim into the training export (06 §10.3, §10.1 below)
   vocabulary_version               # pinned; a corpus and a consumer that disagree about what
                                    #   `loiter` means must be able to detect the disagreement
   terms[]                          # each with its definition, per doc 20 §6.2
@@ -2565,7 +2567,7 @@ is honest about itself; one that does not is a pile of pictures.**
 | `manifest.json` | the process holding the annotation state, incrementally, closed at end (doc 20 §7.5) | TRUTH |
 | `coverage.jsonl` | each channel's recorder, appended per capture | TRUTH |
 | `context.json` | the session, once — the §9.2 bundle | OBSERVATION |
-| `vocabulary.json` | the session, once — §9.5 | TRUTH |
+| `vocabulary.json` | the session, once — §9.5 | TRUTH, **and republished verbatim into the training export** — see below |
 | `release.json` | the release step — digests, partition, validator verdict (§9.4) | beside both, in neither |
 | the **transcript** (live exercise only, listener off by default) | the receiving endpoint, appended as blobs arrive | **neither root**, and never released with a corpus (§11.6, D8.41) |
 
@@ -2574,6 +2576,26 @@ is honest about itself; one that does not is a pile of pictures.**
 **Nothing writes them here and no root holds them** (§3.5). The transcript is not one of them under
 another name: those four would be **parsed and structured** forms of received output, and a transcript
 is an undifferentiated blob we never open (§11.6).
+
+**The vocabulary is the one truth-root artifact that is also handed to a trainer, and that is not a
+leak.** The corpus is exported as a training export and a full-truth export
+([`06`](06_Truth_And_Annotation.md) D6.15), and the training export carries labels — three-valued
+supervision, its pattern instances, participants, phases and interval bounds. **A label whose
+definition and version a reader cannot locate is an opaque string rather than a label**, and
+withholding the vocabulary would hand a trainer supervision they cannot read while withholding nothing
+they could not have inferred from it. It passes §9.3's test on its face: it says what
+`bahonar:post_unmanned` *means*, never which vehicle carries it, so it holds no row keyed by an actor,
+an entity or an instance.
+
+**Two optional term fields are the exception, and the export step resolves them out.**
+[`06`](06_Truth_And_Annotation.md) §3.8 allows a term to carry `exemplar_instances[]` and a
+`counterfactual` whose `kind` is `instance`, `cohort` or `series`. Those name *subjects*, and
+`instance_id`, `series_id` and `slot_key` are withheld from the training export by
+[`06`](06_Truth_And_Annotation.md) §10.2. So the copy written into the training export carries a term's
+definitional fields only; the pointer fields travel in the full-truth export's copy, where the
+identifiers they resolve against are also present. This is the standing rule applied rather than a new
+one — truth may define the target, and may never travel with an example as a field the model can read
+(D6.15) — and it is a release-step check of §9.4's mechanical kind, not a convention.
 
 `coverage.jsonl` is the artifact doc 20 §2.5 asks for and nothing writes today. One row per
 `(sensor_id, tick, actor_id)` for every vehicle that projected into that sensor's frame, carrying the
@@ -2675,9 +2697,10 @@ wrong training set regardless of what they later compute:
 | `unlabelled` | **the author made no claim.** This is the default state for the large majority of the population (doc 20 decision 2) | **that the behaviour was absent.** An `unlabelled` vehicle is not a negative, and treating it as one manufactures false labels out of silence |
 
 **The corpus publishes this table in `vocabulary.json`** (§9.5), not only in a plan document, because the
-artifact is what travels. The distinction between `nominal` and `unlabelled` is the single easiest thing
-for a downstream consumer to collapse, and collapsing it turns every un-annotated vehicle into an
-asserted negative that nobody ever asserted.
+artifact is what travels — **and the training export carries that same document** (§10.1), because the
+trainer is the reader in whose hands the collapse this table warns of does the damage. The distinction
+between `nominal` and `unlabelled` is the single easiest thing for a downstream consumer to collapse, and
+collapsing it turns every un-annotated vehicle into an asserted negative that nobody ever asserted.
 
 ### 10.4 The corpus publishes all three interval onsets and substitutes none
 
