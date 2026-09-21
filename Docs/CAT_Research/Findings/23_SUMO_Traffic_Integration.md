@@ -7,11 +7,11 @@ runs against — vehicles under-populate the freeway on Arapahoe, left-turners d
 traffic on a permissive green, and speed does not respond to terrain. SUMO source is already pulled
 for `netconvert`; what would it take to build the rest of the toolchain and connect it to a running
 server with a level loaded, and what stands in the way?
-**Answer in one line:** the toolchain was one `cmake --build` away — `sumo`, `duarouter` and the
-**official C# bindings** are now built and verified (§1.2), so no Python need enter the tick path — but
-the integration upstream CARLA ships would *regress* capabilities this fork depends on, so the
-recommended shape is SUMO as the **decision layer** with CARLA physics kept as the **execution layer**,
-and the real work is four data problems, not the bridge.
+**Answer in one line:** the toolchain was one `cmake --build` away — `sumo` and `duarouter` are now built
+and verified (§1.2), and **TraCI is a wire protocol over TCP** that .NET can speak directly (§1.1), so no
+Python need enter the tick path — but the integration upstream CARLA ships would *regress* capabilities
+this fork depends on, so the recommended shape is SUMO as the **decision layer** with CARLA physics kept
+as the **execution layer**, and the real work is four data problems, not the bridge.
 
 **Relates to:** [10_Intersection_Navigation_Traffic_Control.md](10_Intersection_Navigation_Traffic_Control.md)
 (the three-layer gap this supersedes for ambient behaviour),
@@ -29,6 +29,13 @@ inside junctions), [#19](https://github.com/sbrett9/carla/issues/19) (routed veh
 **Measurement basis:** `carla/Build/sumo-src` at the pinned commit; `Import/Arapahoe_I25.osm` run
 through the exact flag set `OsmConverter.BuildArguments` emits, 2026-08-21.
 
+**Change history**
+
+| Date | Change |
+|---|---|
+| 2026-08-21 | Initial scouting: toolchain, discarded network, recommended shape, hurdles, plan. |
+| 2026-09-21 | §6.3: the TraCI client is a C# socket client; SWIG binding costs measured (§6.3). |
+
 ---
 
 ## 1. What is already on disk
@@ -38,7 +45,7 @@ Everything below was verified on this machine, not inferred from the setup scrip
 | Thing | Where | State |
 |---|---|---|
 | SUMO source, **complete** | `Build/sumo-src` | v1.27.0, pinned `e238ea04b7` — `src/microsim`, `src/traci-server`, `src/libsumo`, `src/libtraci`, `src/duarouter`, … all present |
-| Windows dependency bundle | `Build/SUMOLibraries` | pinned tag `1.27.0` — includes **`swigwin-4.3.1`**, Xerces, PROJ, FOX, Boost, GDAL |
+| Windows dependency bundle | `Build/SUMOLibraries` | pinned tag `1.27.0` — Xerces, PROJ, FOX, Boost, GDAL, and `swigwin-4.3.1` |
 | CMake build tree | `Build/sumo-build` | **already configured for the whole project** — `sumo.vcxproj`, `duarouter.vcxproj`, `libtracics.vcxproj`, `libsumocs.vcxproj` all generated |
 | Staged binaries | `Build/sumo-install/bin` | **`netconvert.exe` only**, plus its DLLs and PROJ data — `sumo`/`duarouter`/`libtracics` now exist in `Build/sumo-src/bin` but are not staged (§1.2) |
 | Python tools | `Build/sumo-src/tools` | `traci/`, `sumolib/`, `randomTrips.py`, `routeSampler.py`, `tls/` — pure Python, nothing to build |
@@ -56,7 +63,28 @@ the CMake configure has to change.
 
 ### 1.1 The finding that shapes everything else
 
-`src/libsumo/CMakeLists.txt:147` and `src/libtraci/CMakeLists.txt:109`:
+**TraCI is a wire protocol, and every TraCI client is a socket client.** `sumo --remote-port N` is a
+server; a client connects over TCP and exchanges length-prefixed command and response frames. SUMO
+ships its own reference client for that protocol, in Python, under `tools/traci` — and the transport
+half of it is small:
+
+| File | Lines | What it is |
+|---|---|---|
+| `tools/traci/connection.py` | 407 | the socket, the frame header, command packing, response dispatch. `socket.socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)` at `:78`; the 4-byte big-endian length prefix at `:105-127`; the type-tagged value packer at `:154-207` |
+| `tools/traci/storage.py` | 103 | reading typed values back out of a response frame. `import struct` and nothing else |
+| `tools/traci/domain.py` | 283 | the shared getter / setter / subscription machinery every domain sits on |
+| `tools/traci/_vehicle.py` | 1 633 | the vehicle domain. Each call is one line over `domain.py` — `moveToXY` is `self._setCmd(tc.MOVE_TO_XY, …)` (`:1499`), `getPosition` is `self._getUniversal(tc.VAR_POSITION, vehID)` |
+| `tools/traci/_simulation.py` | 685 | the simulation domain — step, time, the departure and arrival lists |
+
+There is no native module anywhere in it. **The consequence is that any language with a TCP socket can
+drive SUMO**, so CarlaNet can do it in .NET, off `CarlaClient.OnTick`, with **no Python anywhere in the
+tick path** — which satisfies the architecture constraint recorded for
+[CarlaNet.Scenario](18_Scenario_Fabrication_For_EPoL_Training.md) rather than fighting it, and is the
+single biggest reason this integration is cheaper than it looks. **Which** C# client — a port of the
+reference client, or a binding to SUMO's own C++ one — is §6.3.
+
+SUMO's build also generates C# bindings, at `src/libsumo/CMakeLists.txt:147` and
+`src/libtraci/CMakeLists.txt:109`:
 
 ```cmake
 SWIG_ADD_LIBRARY(libsumocs  LANGUAGE CSharp SOURCES libsumo.i)   # namespace Eclipse.Sumo.Libsumo
@@ -64,14 +92,13 @@ SWIG_ADD_LIBRARY(libtracics LANGUAGE CSharp SOURCES libtraci.i)  # namespace Ecl
 ```
 
 `ENABLE_CS_BINDINGS` defaults **ON**, SWIG is already in the pinned bundle, and both projects are
-**already generated in our build tree**. SUMO therefore ships a first-party, maintained **C# API** —
-so CarlaNet can drive SUMO directly, in .NET, off `CarlaClient.OnTick`, with **no Python anywhere in
-the tick path**. That satisfies the architecture constraint recorded for
-[CarlaNet.Scenario](18_Scenario_Fabrication_For_EPoL_Training.md) rather than fighting it, and it is
-the single biggest reason this integration is cheaper than it looks.
+**already generated in our build tree**.
 
-`libsumo` and `libtraci` expose the **same API**: `libsumo` runs SUMO in-process, `libtraci` talks to a
-separate `sumo` process over TCP. Swapping one for the other is a namespace change.
+`libsumo` and `libtraci` expose the **same API** over **different mechanisms**: `libsumo` runs SUMO
+in-process, `libtraci` is a C++ socket client to a separate `sumo` process. That is measurable rather
+than documentary — `libtracics.dll`'s import table is the MSVC runtime, `kernel32` and **`ws2_32`**
+(Winsock), with nothing of SUMO's own in it. So `libtracics` is a wrapper around the same protocol
+`tools/traci` speaks, not an alternative to it.
 
 ### 1.2 Verified, not predicted (2026-08-21)
 
@@ -92,12 +119,16 @@ Exit 0, no errors, ~13 minutes. Produced in `Build/sumo-src/bin`:
 | `libtracics.dll` (2.1 MB) + `libtracics-sources.zip` | the native SWIG C# binding |
 | `Build/sumo-build/src/libtraci/Eclipse.Sumo.Libtraci/` | **94 generated C# files**, including `Vehicle.cs`, `Simulation.cs`, `TrafficLight.cs`, `Lane.cs`, `libtraciPINVOKE.cs` |
 
-Spot-checked in the generated API: `Vehicle.moveToXY` (8 overloads) and `Vehicle.subscribe` /
-`getAllSubscriptionResults` — the two calls §4.1 and §6.11 depend on — are present.
+`libtracics` is in that invocation because §6.3 weighs it; the toolchain the plan requires is the three
+binaries — `netconvert`, `sumo`, `duarouter`.
 
-So **Phase 0's build step carries no remaining technical risk**; what is left of Phase 0 is staging,
-`SUMO_HOME`, and a wrapper `.csproj`. Note the binaries land in the *source* tree's `bin/` (SUMO's
-convention, already handled for `netconvert` at `CarlaSetup.ps1:684`), not in the CMake build dir.
+The two calls §4.1 and §6.11 depend on are present on both clients: `moveToXY` and
+`subscribe` / `getAllSubscriptionResults` in the generated C# API, and the same two at
+`tools/traci/_vehicle.py:1485` and `tools/traci/domain.py:188,223` in the reference client.
+
+So **Phase 0's build step carries no remaining technical risk**; what is left of Phase 0 is staging and
+`SUMO_HOME`. Note the binaries land in the *source* tree's `bin/` (SUMO's convention, already handled
+for `netconvert` at `CarlaSetup.ps1:684`), not in the CMake build dir.
 
 ---
 
@@ -228,7 +259,7 @@ Two consequences worth naming:
                     build time (once per world)                 run time (per tick)
   .osm ──netconvert──┬──► .xodr ──elevation/sign/TL injection──► CARLA world
                      │
-                     └──► .net.xml ──(persist; patch z + lane speeds)──► sumo ──libtraci C#──►
+                     └──► .net.xml ──(persist; patch z + lane speeds)──► sumo ──TraCI/TCP──►
                                                                               CarlaNet.CoSim
                                                                                     │
                                      CarlaClient.OnTick ─────────────────────────────┘
@@ -247,11 +278,11 @@ Python's role stays what it is for scenarios — a toggle, never a per-tick part
 Ordered by when they bite, not by size. "Cost" is relative effort, not a schedule.
 
 ### 6.1 Build the rest of the toolchain — *low*
-Add `sumo`, `duarouter`, `libtracics` (and optionally `jtrrouter`, `polyconvert`) to the target list in
+Add `sumo` and `duarouter` (and optionally `jtrrouter`, `polyconvert`) to the target list in
 `CarlaSetup.ps1` and `CarlaSetup.sh`, and stage them into `Build/sumo-install/bin`. The idempotence
 guard currently keys on `netconvert.exe` existing; it must key on the *newest* required binary or a
-returning developer silently keeps a half-toolchain. Linux additionally needs `swig` in
-`InstallPrerequisites.sh` (the Windows bundle already carries it).
+returning developer silently keeps a half-toolchain. The build needs nothing beyond what `netconvert`
+already needs — Xerces-C and PROJ — on either platform.
 
 ### 6.2 `SUMO_HOME` and the data directory — *low, but a real trap*
 `sumo` needs `data/` (type maps, XSDs) and the Python tools need `tools/` on `PYTHONPATH`. We set
@@ -260,13 +291,43 @@ returning developer silently keeps a half-toolchain. Linux additionally needs `s
 `SUMO_HOME` in the same place `CARLA_NETCONVERT`/`PROJ_LIB` are set (`SCTMV.py:102`–`106`,
 `MakeDistribution.ps1:287`). Fixing this also lets us stop relying on the compiled-in type map.
 
-### 6.3 Language boundary — *low* (given §1.1)
-Use **`libtracics`** (out-of-process). Rationale over `libsumocs`: a SUMO assertion cannot take down
-the CarlaNet client, `sumo` can be restarted without restarting the world, and the API is identical so
-switching to in-process later for latency is a namespace swap. The generated C# lands in
-`Eclipse.Sumo.Libtraci/` and is zipped beside the native DLL by a post-build step; it needs a small
-wrapper `.csproj` and the native `libtracics.dll` on the load path. Reject the pure-Python `traci`
-client outright — it puts Python in the per-tick control path.
+### 6.3 The TraCI client — *low* (given §1.1)
+
+**`CarlaNet.Sumo` speaks the TraCI wire protocol directly, over a managed TCP socket, to an
+out-of-process `sumo` started with `--remote-port`.** It is a port of SUMO's own reference client
+(§1.1), written in C#, so nothing native is loaded and nothing is generated.
+
+**Out of process, and now structurally so.** A SUMO assertion cannot take the CarlaNet client down and
+`sumo` can be restarted without restarting the world — the properties `libsumo` (in-process) would give
+up. `libsumo` is not reachable from a socket client at all, so moving in-process later would be a
+different mechanism rather than a swap, and §9's third question is settled by that rather than left
+open.
+
+**What the port costs, measured.** `connection.py` (407 lines) and `storage.py` (103) are the whole
+transport. `domain.py` (283) is the shared getter/setter/subscription machinery, and a domain call on
+top of it is one line — `moveToXY` is `_setCmd(tc.MOVE_TO_XY, …)` (`_vehicle.py:1499`), `getPosition` is
+`_getUniversal(tc.VAR_POSITION, …)`. Only the calls §4.1 and §6.11 name have to be ported, not the
+1,633-line vehicle domain; §6.11's subscription path reaches `domain.py:188,223` and nothing deeper.
+The exchange is that the wire format becomes code in this repository — readable, steppable and
+version-checkable — and this repository owns it.
+
+**What the generated C# binding costs, also measured.** SUMO's build produces one
+(`libtracics` + `Eclipse.Sumo.Libtraci`, §1.1), and it was built and driven as far as a working
+subscription reader against the Arapahoe network before the client shape was settled, so these are
+readings rather than predictions (branch `feature/carlanet-sumo`, 2026-09-21):
+
+| | |
+|---|---|
+| **No speed to buy.** 10.43 ms per step through C# at 388 live vehicles, against **8.10 ms** for the same seven subscribed variables through Python, 1.77 ms of the C# figure spent marshalling values out of SWIG's containers | `libtraci` is itself a socket client (§1.1's `ws2_32` import), so there is no in-process saving to have. Any client pays SUMO's step and the same round trip |
+| **A version mismatch is undefined behaviour, not a divergence.** 1.27.1's `libtracics` against proxies generated from 1.27.0 loads, and the simulation steps | Entry-point names and struct layouts belong to one build. The protocol answers `CMD_GETVERSION` (0x00) with an API version and SUMO's version string, and the reference client asks on every connect (`connection.py:381-388`, called from `main.py:119`); a P/Invoke surface has nothing to ask |
+| **Subscription results carry no downcast.** SUMO's `SWIGJAVA_CAST` helpers sit inside `#ifdef SWIGJAVA`, so `(TraCIDouble)result` throws for every variable | The type-safe alternative, `getString()`, formats through `std::ostringstream` at six significant digits — for a projected coordinate, metres |
+| **Ownership varies by call site**, and SUMO's own exceptions arrive wrapped | `getAllSubscriptionResults` returns an owned map; indexing it returns a borrowed view that dies with the map; indexing one vehicle's results returns an owned copy. `FatalTraCIError` is a data class, and what is actually thrown is `ApplicationException` or `ArgumentOutOfRangeException` |
+| **35,767 lines**, 35,690 of them generated across 93 proxy files, plus a native library to resolve at runtime | Regenerable rather than maintained, but reviewed, committed and shipped all the same |
+
+**Python is out of the per-tick path either way, and that is a constraint on the language the bridge is
+written in rather than on the transport.** The reference client's own correctness is not in question
+here: `CarlaControl/src/carlacontrol/SumoCotBridge.py:267-365` drives SUMO through it in production
+today.
 
 ### 6.4 Persisting the network — *low*
 `OsmConverter.ConvertFileWithNetworkAsync` deletes the `.net.xml` (`OsmConverter.cs:135`). It must be
@@ -328,11 +389,19 @@ turn per-vehicle reads into a constant number of calls per step and are non-opti
 [issue #14](https://github.com/sbrett9/carla/issues/14) already warns the tick thread is contended by
 telemetry emission — the bridge lands in the same budget.
 
+**A subscription is charged inside `simulationStep`, whether or not the client ever reads it.** Measured
+at 388 live vehicles on Arapahoe: the step costs **3.73 ms** with nothing subscribed and **9.26 ms** with
+the seven-variable set subscribed and never read. SUMO fills the results as part of advancing; the read
+is what it costs to collect them afterwards. So **what is subscribed is a cost in its own right** — the
+set of vehicles the bridge subscribes to has to be governed, not just the set it renders — and this is a
+property of SUMO, true of any client.
+
 ### 6.12 Packaging and CI — *low*
-`MakeDistribution.ps1` already creates `tools\sumo\`; extend it to `sumo`, `duarouter`, `data/`,
-`tools/`, the `libtracics` native DLL and the wrapper assembly, and set `SUMO_HOME` in the generated
-launcher. Linux equivalent in the `.sh` path. SUMO is EPL-2.0; we already redistribute `netconvert`,
-and keeping SUMO out-of-process via `libtraci` keeps the boundary exactly where it is today.
+`MakeDistribution.ps1` already creates `tools\sumo\`; extend it to `sumo`, `duarouter`, `data/` and
+`tools/`, and set `SUMO_HOME` in the generated launcher. Linux equivalent in the `.sh` path. SUMO is
+EPL-2.0; we already redistribute `netconvert`, and keeping SUMO out of process behind the TraCI socket
+keeps the boundary exactly where it is today — the recipient gets the same compiled binaries and no
+SUMO source.
 
 ---
 
@@ -357,13 +426,13 @@ Each phase ends in something observable. Nothing after Phase 1 is worth starting
 measurement does not show the headroom it predicts.
 
 **Phase 0 — finish the toolchain (§6.1, §6.2, §6.3).**
-The build itself is **already proven** (§1.2): `sumo`, `duarouter` and `libtracics` compile clean from
-the unmodified configuration. What remains is to make it reproducible and shipped — add the targets to
+The build itself is **already proven** (§1.2): `sumo` and `duarouter` compile clean from the unmodified
+configuration. What remains is to make it reproducible and shipped — add the targets to
 `CarlaSetup.ps1`/`.sh`, re-key the idempotence guard off the newest required binary rather than
 `netconvert.exe`, stage the binaries plus `data/` and `tools/`, set `SUMO_HOME` where
-`CARLA_NETCONVERT`/`PROJ_LIB` are set today, add `swig` to the Linux prerequisites, and extend
-`MakeDistribution`. *Done when* `sumo --version` runs from the **staged install** (not the build tree)
-and a trivial C# console app steps an empty simulation through `Eclipse.Sumo.Libtraci`.
+`CARLA_NETCONVERT`/`PROJ_LIB` are set today, and extend `MakeDistribution`. *Done when* `sumo --version`
+runs from the **staged install** (not the build tree) and a C# test steps an empty simulation over
+TraCI, against a `sumo` it started itself.
 
 **Phase 1 — measure the ceiling offline, before touching the engine.**
 Persist the Arapahoe `.net.xml` (§6.4), generate fringe-weighted demand with
@@ -407,5 +476,8 @@ ownership handshake. *Done when* a `.xosc` storyboard runs with ambient traffic 
    `moveToXY` feedback push keeps SUMO honest about where cars *are*, but a car that cannot make the
    commanded gap is a car SUMO thinks is safe and physics does not. Phase 2's tracking tolerance is
    the number that decides this, and it should be measured, not assumed.
-3. **`libtraci` or `libsumo` in the end?** Start out-of-process; revisit only if Phase 3 shows the
-   round trip in the tick budget.
+3. **How much of the reference client does `CarlaNet.Sumo` carry, and how does it grow?** §6.3 ports the
+   calls §4.1 and §6.11 name. A later section wanting a domain that is not there — `trafficlight`,
+   `lane`, `person` — should find the transport already able to carry it and only a thin domain call
+   missing; whether that holds is worth confirming against the second domain added rather than assumed
+   from the first.
