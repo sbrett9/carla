@@ -1,17 +1,19 @@
 <#
 .SYNOPSIS
-    PowerShell port of CarlaSetup.bat: provisions prerequisites, fetches content,
-    builds the bundled SUMO `netconvert`, fetches the optional VibeUE plugin, then
-    configures and builds CARLA against a source UE 5.7.4.
+    The Windows setup entry point: provisions prerequisites, fetches content, builds
+    the bundled SUMO toolchain, fetches the optional VibeUE plugin, then configures
+    and builds CARLA against a source UE 5.7.4.
 
 .DESCRIPTION
-    This is a faithful but modernized rewrite of CarlaSetup.bat. Notable differences:
+    The Linux peer is CarlaSetup.sh; the two move together. This began as a rewrite of
+    a CarlaSetup.bat that has since been removed, and it carries these behaviours the
+    batch file never had:
 
       * Visual Studio is discovered with vswhere (works for installs in ANY location,
         not just %PROGRAMFILES%\Microsoft Visual Studio\...). VS2022 and VS2026 are
         both supported; MSVC toolset 14.44 is REQUIRED and enforced.
       * Sequential PowerShell control flow eliminates the cmd "caret continuation
-        inside a parenthesized block" footgun that caused the .bat to silently stop
+        inside a parenthesized block" footgun that made the batch file silently stop
         after the SUMO build on a fresh checkout.
       * Adds -Clean / -CleanAll to wipe SUMO build artifacts before rebuilding.
 
@@ -181,10 +183,10 @@ EXAMPLES:
 '@ | Write-Host
 }
 
-# -- Normalize legacy .bat-style "--flag" / "--flag=value" arguments ---------
+# -- Normalize GNU-style "--flag" / "--flag=value" arguments -----------------
 # Tokens that PowerShell couldn't bind natively arrive in $Remaining. Walk them
 # (supporting both "--key=value" and "--key value" forms) and fold them onto the
-# real parameters, so habits from CarlaSetup.bat keep working.
+# real parameters, so the same flags work here and in CarlaSetup.sh.
 if ($Remaining) {
     for ($idx = 0; $idx -lt $Remaining.Count; $idx++) {
         $arg = $Remaining[$idx]
