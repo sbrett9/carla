@@ -474,7 +474,7 @@ versioned together.
 | **Supporting** | Authoring assistant, SUMO toolchain |
 
 **Preconditions.** An `AuthoringReferenceSet` and a world package exist. No CARLA server is needed —
-authoring runs on any machine with SUMO ([`sumo-traffic-scenarios/SKILL.md`](../../../../../.agents/skills/sumo-traffic-scenarios/SKILL.md)).
+authoring runs on any machine with SUMO ([`sumo-traffic-scenarios/SKILL.md`](../../../../CarlaControl/skills/sumo-traffic-scenarios/SKILL.md)).
 
 **Main flow.**
 1. Author describes the scene in ordinary terms: where traffic comes from and goes, what the ordinary day

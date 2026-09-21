@@ -14,6 +14,7 @@
       osm\           the example OpenStreetMap maps the demo can build worlds from
       tools\sumo\    the SUMO toolchain: netconvert, sumo, duarouter, libtracics, the DLLs they
                      import, SUMO's typemap/xsd data, its traci/sumolib modules, and PROJ data
+      skills\        the authoring skills describing how to build scenarios for a generated world
       licenses\      the licence text of every third-party component in the bundle
       MANIFEST.md    what is in here, where it came from and under what terms (generated)
       setup-venv.ps1 / run-server.ps1 / run-sctmv.ps1 / README.md
@@ -353,6 +354,20 @@ Add-ManifestRow -Component 'carlacontrol (world building, scenarios, telemetry)'
 $demoClient = Join-Path $CarlaRoot 'CarlaControl\scripts\run_SCTMV.py'
 if (-not (Test-Path $demoClient)) { throw "demo client not found at $demoClient" }
 Copy-Item -Force $demoClient (Join-Path $dist 'scripts')
+
+# 3b. The authoring skills: the reference bundles that describe how to build scenarios against a
+#     world this distribution generates. They travel with the tools so the description and the tool
+#     are always the same version.
+$skillsSrc = Join-Path $CarlaRoot 'CarlaControl\skills'
+if (Test-Path $skillsSrc) {
+    New-Item -ItemType Directory -Force -Path (Join-Path $dist 'skills') | Out-Null
+    Copy-Item -Recurse -Force -Path (Join-Path $skillsSrc '*') -Destination (Join-Path $dist 'skills')
+    $skillNames = @(Get-ChildItem $skillsSrc -Directory | ForEach-Object { $_.Name })
+    Write-Info "[dist] skills: $($skillNames -join ', ')"
+    Add-ManifestRow -Component "authoring skills ($($skillNames -join ', '))" `
+                    -Provenance 'built from this repository, CarlaControl\skills\' `
+                    -License 'Sierra Nevada Corporation (licenses\CarlaControl-LICENSE.txt)' -Location 'skills\'
+} else { Write-Warning "no authoring skills under $skillsSrc" }
 
 # 4. Example OSM maps. These are OpenStreetMap extracts, so they and every .xodr derived from them
 #    carry the Open Database License; MANIFEST.md names the files that actually shipped.

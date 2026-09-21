@@ -10,6 +10,7 @@
 #   osm/           the example OpenStreetMap maps the demo can build worlds from
 #   tools/sumo/    the SUMO toolchain: netconvert, sumo, duarouter, libtracics, the shared libraries
 #                  they load, SUMO's typemap/xsd data, its traci/sumolib modules, and PROJ data
+#   skills/        the authoring skills describing how to build scenarios for a generated world
 #   licenses/      the licence text of every third-party component in the bundle
 #   MANIFEST.md    what is in here, where it came from and under what terms (generated)
 #   setup-venv.sh / run-server.sh / run-sctmv.sh / README.md
@@ -35,7 +36,9 @@ while [ $# -gt 0 ]; do
         --config=*) config="${1#*=}" ;;
         --build)    do_build=1 ;;
         -h|--help)
-            sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
+            # The header comment, however long it grows: everything from line 2 up to the first
+            # line that is not a comment, with the leading "# " stripped.
+            sed -n '2,/^[^#]/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'
             exit 0 ;;
         *) echo "Unknown argument: $1" >&2; exit 2 ;;
     esac
@@ -151,6 +154,21 @@ add_manifest_row "carlacontrol (world building, scenarios, telemetry)" \
 #    which is why no clipper script is copied beside it -- and reads its netconvert, PROJ and SUMO
 #    paths from the environment run-sctmv.sh sets.
 cp "$root/CarlaControl/scripts/run_SCTMV.py" "$dist/scripts/"
+
+# 3b. The authoring skills: the reference bundles that describe how to build scenarios against a
+#     world this distribution generates. They travel with the tools so the description and the tool
+#     are always the same version.
+if [ -d "$root/CarlaControl/skills" ]; then
+    mkdir -p "$dist/skills"
+    cp -a "$root/CarlaControl/skills/." "$dist/skills/"
+    skill_names="$(ls "$dist/skills" | tr '\n' ' ')"
+    echo "[dist] skills: $skill_names"
+    add_manifest_row "authoring skills ($skill_names)" \
+                     "built from this repository, CarlaControl/skills/" \
+                     "Sierra Nevada Corporation (licenses/CarlaControl-LICENSE.txt)" "skills/"
+else
+    echo "[dist] WARNING: no authoring skills under $root/CarlaControl/skills"
+fi
 
 # 4. Example OSM maps. These are OpenStreetMap extracts, so they and every .xodr derived from them
 #    carry the Open Database License; MANIFEST.md names the files that actually shipped.

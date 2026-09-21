@@ -1591,7 +1591,7 @@ reproducible because it is measured against wall clock.
 3. **SUMO has no equivalent.** A parked vehicle stays for as long as it was told to: measured, the
    stay-behind holds a `parking="true"` stop for 489 000 s and the 335 guards for 28 800 s each, and
    the authoring skill records "A parked vehicle is still reported by TraCI, so it stays in the
-   dataset — verified" (`.agents/skills/sumo-traffic-scenarios/SKILL.md`).
+   dataset — verified" (`CarlaControl/skills/sumo-traffic-scenarios/SKILL.md`).
 
 So the ninety-second ceiling doc 20 worried about is gone and the ambient stationary distribution is
 whatever the author wrote. That is a **capability gain**, and it should be recorded as one: the
@@ -2059,7 +2059,7 @@ Notes, each carrying a decision:
   **absent** on a duration stop, with `declared_duration_s` carried on the instance in the manifest
   (§3.3). A consumer must handle absence; doc 20's shape could not produce it.
 - **`_carla` keeps its name even when the source is SUMO**, exactly as the standalone bridge already
-  does (`.agents/skills/sumo-traffic-scenarios/SKILL.md`, "The `_carla` detail block name is kept even
+  does (`CarlaControl/skills/sumo-traffic-scenarios/SKILL.md`, "The `_carla` detail block name is kept even
   though the source is SUMO, so the two producers are directly comparable"). What is added is
   `producer`, `pose_source` and `kinematics_source`, so a consumer can tell *which* producer supplied
   *which* field rather than inferring it from the block name.

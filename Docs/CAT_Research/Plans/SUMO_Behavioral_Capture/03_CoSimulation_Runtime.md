@@ -402,7 +402,7 @@ benefit — a detector trained on it learns an artefact (`_TEAM_BRIEF.md` §3e).
 `<request>` right-of-way rows and the `traffic_light_type="actuated"` netconvert setting are a large
 part of why the ambient behaviour is believable, and none of that changes. An actuated program's
 phase depends on the traffic present and is only knowable at runtime
-(`.agents/skills/sumo-traffic-scenarios/SKILL.md`, "measured gotchas" — fixed-time 90 s programs
+(`CarlaControl/skills/sumo-traffic-scenarios/SKILL.md`, "measured gotchas" — fixed-time 90 s programs
 cannot discharge a busy interchange), and SUMO resolves it every step. What arrives over the pose
 stream is already the behaviour those programs produced: a vehicle that waits at a junction waits
 because SUMO's signal held it. **What is dropped is the rendering of the signal, not the signal.**
@@ -891,7 +891,7 @@ run is supposed to be capturing truth about. The demand (716 insertions, 6.35 km
 the dynamics are not.
 
 Also note that the authored scenario's measured behaviour — every gotcha in
-`.agents/skills/sumo-traffic-scenarios/SKILL.md` — was established at 1.0 s.
+`CarlaControl/skills/sumo-traffic-scenarios/SKILL.md` — was established at 1.0 s.
 
 **Let CARLA physics carry the vehicle between corrections.** Requires physics on, which is
 candidate (a) of §5.3, rejected there. A constant-velocity coast covers 35 m of straight line through
