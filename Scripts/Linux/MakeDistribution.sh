@@ -103,17 +103,25 @@ fi
 
 # 2. Python client wheels (newest of each): carlanet (the .NET bridge) and carlacontrol (the
 #    run_SCTMV client package). carlacontrol depends on carlanet, so both must be bundled.
+# A missing wheel is fatal rather than a warning: the distribution cannot install itself without it,
+# and a warning buried in a long cook log is how a broken bundle shipped before.
 copy_newest_wheel() {   # <dist-dir>
     local w
     w="$(ls -t "$1"/*.whl 2>/dev/null | head -1 || true)"
-    if [ -n "$w" ]; then cp "$w" "$dist/wheels/"; echo "[dist] wheel: $(basename "$w")"
-    else echo "[dist] WARNING: no wheel under $1 (run build_wheel.sh / BuildCarla.sh)"; fi
+    if [ -z "$w" ]; then
+        echo "[dist] ERROR: no wheel under $1 (run build_wheel.sh / BuildCarla.sh). A distribution missing a wheel cannot install itself." >&2
+        exit 1
+    fi
+    cp "$w" "$dist/wheels/"
+    echo "[dist] wheel: $(basename "$w")"
 }
 copy_newest_wheel "$root/CarlaNet/python/dist"
 copy_newest_wheel "$root/CarlaControl/dist"
 
 # 3. Demo client. run_SCTMV.py imports carlanet + carlacontrol (both installed from wheels/ above);
-#    it has no sibling-file imports, and reads netconvert/PROJ paths from the env set by run-sctmv.sh.
+#    it has no sibling-file imports -- it clips OSM through carlacontrol.OsmClipper from the wheel,
+#    which is why no clipper script is copied beside it -- and reads its netconvert, PROJ and SUMO
+#    paths from the environment run-sctmv.sh sets.
 cp "$root/CarlaControl/scripts/run_SCTMV.py" "$dist/scripts/"
 
 # 4. Example OSM maps.
@@ -192,6 +200,7 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$here/venv/bin/activate"
 export CARLA_NETCONVERT="$here/tools/sumo/netconvert"
+export SUMO_HOME="$here/tools/sumo"
 [ -f "$here/tools/sumo/proj/proj.db" ] && export PROJ_LIB="$here/tools/sumo/proj" PROJ_DATA="$here/tools/sumo/proj"
 exec python "$here/scripts/run_SCTMV.py" "$@"
 RUN
@@ -216,7 +225,8 @@ client packages, the run_SCTMV demo, example OSM maps, and SUMO netconvert.
 ./run-server.sh &                    # start the CARLA server (needs GPU/Vulkan)
 ./run-sctmv.sh --osm osm/Lakeview_Carson.osm   # build a world from an OSM map and run the demo
 \`\`\`
-\`run-sctmv.sh\` points carlanet at the bundled \`tools/sumo/netconvert\`; pass \`--help\` to run-sctmv for options.
+\`run-sctmv.sh\` points carlanet at the bundled \`tools/sumo/netconvert\` and sets \`SUMO_HOME\` to
+\`tools/sumo\`; pass \`--help\` to run-sctmv for options.
 README
 
 # 7. Tarball. Compressing ~30 GB with single-threaded gzip is slow; use pigz (parallel gzip) when

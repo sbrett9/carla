@@ -9,9 +9,9 @@
     needed to run the digital-twin single-client traffic-manager demo on another Windows machine:
 
       CarlaServer\   the cooked CARLA server (the packaged game; run with CarlaUnreal.exe)
-      wheels\        the carlanet Python wheel (install into a venv)
-      scripts\       SCTMV.py + osm_clip.py (the demo client + OSM clipper)
-      osm\           the example OpenStreetMap maps SCTMV can build worlds from
+      wheels\        the carlanet + carlacontrol Python wheels (install into a venv)
+      scripts\       run_SCTMV.py (the demo client; imports carlanet + carlacontrol)
+      osm\           the example OpenStreetMap maps the demo can build worlds from
       tools\sumo\    SUMO netconvert.exe + its DLLs + PROJ data (OSM -> OpenDRIVE conversion)
       setup-venv.ps1 / run-server.ps1 / run-sctmv.ps1 / README.md
 
@@ -224,21 +224,33 @@ if (Test-Path $versionSrc) {
     Copy-Item -Force $versionSrc (Join-Path $dist 'VERSION')
     Write-Info "[dist] VERSION: $((Get-Content $versionSrc | Select-Object -First 2) -join '; ')"
 } else {
-    Write-Warn "[dist] no VERSION at $versionSrc; the distribution will not state its build."
+    Write-Fail "[dist] WARNING: no VERSION at $versionSrc; the distribution will not state its build."
 }
 
-# 2. carlanet wheel (newest).
-$whl = Get-ChildItem (Join-Path $CarlaRoot 'CarlaNet\python\dist\*.whl') -ErrorAction SilentlyContinue |
-       Sort-Object LastWriteTime -Descending | Select-Object -First 1
-if ($whl) { Copy-Item -Force $whl.FullName (Join-Path $dist 'wheels'); Write-Info "[dist] wheel: $($whl.Name)" }
-else { Write-Warning "no wheel under CarlaNet\python\dist (run build_wheel.ps1 / BuildCarla.ps1)" }
-
-# 3. Demo client + its only local import.
-foreach ($f in 'SCTMV.py', 'osm_clip.py') {
-    $src = Join-Path $CarlaRoot "CarlaNet\python\$f"
-    if (Test-Path $src) { Copy-Item -Force $src (Join-Path $dist 'scripts') }
-    else { Write-Warning "missing $src" }
+# 2. Python client wheels (newest of each): carlanet (the .NET bridge) and carlacontrol (the
+#    run_SCTMV client package). carlacontrol depends on carlanet, so both must be bundled.
+#    A missing wheel is fatal rather than a warning: the distribution cannot install itself without
+#    it, and a warning buried in a long cook log is how a broken bundle shipped before.
+function Copy-NewestWheel {
+    param([Parameter(Mandatory)][string]$SourceDir)
+    $wheel = Get-ChildItem (Join-Path $SourceDir '*.whl') -ErrorAction SilentlyContinue |
+             Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (-not $wheel) {
+        throw "no wheel under $SourceDir (run BuildCarla.ps1). A distribution missing a wheel cannot install itself."
+    }
+    Copy-Item -Force $wheel.FullName (Join-Path $dist 'wheels')
+    Write-Info "[dist] wheel: $($wheel.Name)"
 }
+Copy-NewestWheel (Join-Path $CarlaRoot 'CarlaNet\python\dist')
+Copy-NewestWheel (Join-Path $CarlaRoot 'CarlaControl\dist')
+
+# 3. Demo client. run_SCTMV.py imports carlanet + carlacontrol (both installed from wheels\ above);
+#    it has no sibling-file imports -- it clips OSM through carlacontrol.OsmClipper from the wheel,
+#    which is why no clipper script is copied beside it -- and reads its netconvert, PROJ and SUMO
+#    paths from the environment run-sctmv.ps1 sets.
+$demoClient = Join-Path $CarlaRoot 'CarlaControl\scripts\run_SCTMV.py'
+if (-not (Test-Path $demoClient)) { throw "demo client not found at $demoClient" }
+Copy-Item -Force $demoClient (Join-Path $dist 'scripts')
 
 # 4. Example OSM maps.
 $osm = Get-ChildItem (Join-Path $CarlaRoot 'Import\*.osm') -ErrorAction SilentlyContinue
@@ -267,14 +279,17 @@ if (Test-Path $nc) {
 # 6. Helper scripts + README for the target machine.
 $setupVenv = @'
 #Requires -Version 5.1
-# Create a Python venv and install the carlanet wheel + the demo's Python dependencies.
+# Create a Python venv and install the carlanet + carlacontrol wheels + the demo's Python deps.
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
 python -m venv "$here\venv"
 $py = Join-Path $here 'venv\Scripts\python.exe'
 & $py -m pip install --upgrade pip
-$whl = Get-ChildItem "$here\wheels\*.whl" | Select-Object -First 1
-& $py -m pip install $whl.FullName numpy pygame
+# Every wheel is passed together (and --find-links points at wheels\) so carlacontrol's dependency
+# on the local-only carlanet wheel resolves from the bundle rather than from a package index.
+$wheels = @(Get-ChildItem "$here\wheels\*.whl" | ForEach-Object { $_.FullName })
+if ($wheels.Count -eq 0) { throw "no wheels under $here\wheels; this distribution is incomplete." }
+& $py -m pip install --find-links "$here\wheels" @wheels numpy pygame
 Write-Host "venv ready: $here\venv  (activate: $here\venv\Scripts\Activate.ps1)" -ForegroundColor Green
 '@
 Set-Content -Path (Join-Path $dist 'setup-venv.ps1') -Value $setupVenv -Encoding UTF8
@@ -296,9 +311,10 @@ $here = $PSScriptRoot
 $py = Join-Path $here 'venv\Scripts\python.exe'
 if (-not (Test-Path $py)) { throw "venv missing - run .\setup-venv.ps1 first." }
 $env:CARLA_NETCONVERT = Join-Path $here 'tools\sumo\netconvert.exe'
+$env:SUMO_HOME = Join-Path $here 'tools\sumo'
 $proj = Join-Path $here 'tools\sumo\proj'
 if (Test-Path (Join-Path $proj 'proj.db')) { $env:PROJ_LIB = $proj; $env:PROJ_DATA = $proj }
-& $py "$here\scripts\SCTMV.py" @args
+& $py "$here\scripts\run_SCTMV.py" @args
 '@
 Set-Content -Path (Join-Path $dist 'run-sctmv.ps1') -Value $runSctmv -Encoding UTF8
 
@@ -306,8 +322,8 @@ $readmeVersion = $pkgName -replace '^Carla-', ''
 $readme = @"
 # CARLA $readmeVersion distribution (Windows)
 
-Self-contained CARLA digital-twin bundle: the cooked server, the carlanet Python client, the SCTMV
-demo, example OSM maps, and SUMO netconvert.
+Self-contained CARLA digital-twin bundle: the cooked server, the carlanet + carlacontrol Python
+client packages, the run_SCTMV demo, example OSM maps, and SUMO netconvert.
 
 ## Target prerequisites
 - 64-bit Windows 10/11 with a GPU + up-to-date graphics drivers (the server renders even headless).
@@ -317,11 +333,12 @@ demo, example OSM maps, and SUMO netconvert.
 
 ## Run it (PowerShell)
 ``````powershell
-.\setup-venv.ps1                       # one-time: venv + carlanet wheel + numpy + pygame
+.\setup-venv.ps1                       # one-time: venv + carlanet & carlacontrol wheels + numpy + pygame
 .\run-server.ps1                       # start the CARLA server (new window or background job)
 .\run-sctmv.ps1 --osm osm\Lakeview_Carson.osm   # build a world from an OSM map and run the demo
 ``````
-``run-sctmv.ps1`` points carlanet at the bundled ``tools\sumo\netconvert.exe``; pass ``--help`` to SCTMV for options.
+``run-sctmv.ps1`` points carlanet at the bundled ``tools\sumo\netconvert.exe`` and sets ``SUMO_HOME``
+to ``tools\sumo``; pass ``--help`` to run-sctmv for options.
 "@
 Set-Content -Path (Join-Path $dist 'README.md') -Value $readme -Encoding UTF8
 
