@@ -71,6 +71,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--affiliation", default="n",
                         help="CoT affiliation for ambient traffic: n neutral, f friend, h hostile, "
                              "u unknown (default n)")
+    parser.add_argument("--marked-affiliation",
+                        help="show the planted vehicles with a different affiliation in the live "
+                             "feed, so an operator watching a TAK client can pick them out. It "
+                             "reaches --udp only, never --xml or --csv, because a planted vehicle "
+                             "that announces itself in the recorded data is the answer key")
     parser.add_argument("--marked-vehicle", default="orbiter",
                         help="the vehicle this scenario planted. It is counted in the run summary "
                              "and recorded in the labels sidecar; the written dataset does not "
@@ -108,6 +113,10 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+    if args.marked_affiliation and not args.udp:
+        logging.error("--marked-affiliation styles the live feed; give --udp, or drop it")
+        return 2
 
     if not (args.udp or args.xml or args.csv):
         logging.error("nothing to do: give at least one of --udp, --xml or --csv")
@@ -155,6 +164,7 @@ def main() -> int:
         xml_path=args.xml, csv_path=args.csv, rate_hz=args.rate, stale_seconds=args.stale,
         affiliation=args.affiliation, uid_prefix=args.uid_prefix,
         marked_vehicle=args.marked_vehicle,
+        marked_affiliation=args.marked_affiliation,
         marked_ids=marked_ids, affiliation_by_type=affiliation_by_type,
         epoch=epoch)
 

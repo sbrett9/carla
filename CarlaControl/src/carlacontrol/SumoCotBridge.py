@@ -187,6 +187,11 @@ class CotOutputSettings:
     # map falls back to `affiliation`. A planted vehicle takes the affiliation of the population it
     # is hiding in, exactly as its neighbours do, so the affiliation never announces it.
     affiliation_by_type: dict[str, str] = field(default_factory=dict)
+    # Give the planted vehicles a different affiliation **in the live feed only**, so an operator
+    # watching a TAK client can see which vehicle the scenario planted. It reaches the UDP stream
+    # and never the XML or CSV, because those are the corpus and a planted vehicle that announces
+    # itself there is the answer key. Leave it unset for an unmarked live feed as well.
+    marked_affiliation: str | None = None
     # Wall-clock instant that simulation time zero maps to. Pin it for a reproducible dataset;
     # leave it unset to stamp events from the clock when the run starts.
     epoch: datetime | None = None
@@ -318,7 +323,16 @@ class SumoCotBridge:
                         published, affiliation=affiliation, stale_seconds=settings.stale_seconds,
                         source="truth", uid_prefix=settings.uid_prefix, when=stamp)
                     if udp:
-                        udp.send(event)
+                        # An operator watching the live feed may be shown which vehicle was
+                        # planted; the recorded files below never are, so the distinction cannot
+                        # reach a corpus even by accident.
+                        if settings.marked_affiliation and record["marked"]:
+                            udp.send(CotUdpEmitter.vehicle_telemetry_to_cot(
+                                published, affiliation=settings.marked_affiliation,
+                                stale_seconds=settings.stale_seconds, source="truth",
+                                uid_prefix=settings.uid_prefix, when=stamp))
+                        else:
+                            udp.send(event)
                     if xml_file:
                         xml_file.write("  " + event + "\n")
                     if csv_writer:
