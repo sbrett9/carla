@@ -619,6 +619,10 @@ $sumoLibs    = Join-Path $RepoRoot 'Build\SUMOLibraries'
 $sumoSrcPin   = 'e238ea04b7150ba23a348a285d3048919fa4830b'   # SUMO v1_27_0
 $sumoLibsTag  = '1.27.0'                                      # DLR-TS/SUMOLibraries tag
 $sumoLibsPin  = 'a71441cce51dea77cabe135ce010b1863f4a4700'   # commit the tag points at
+# Windows needs no separate SWIG install for the libtracics target: the pinned bundle ships it as
+# Build\SUMOLibraries\swigwin-4.3.1 and SUMO's CMake finds it there. The Linux side installs swig
+# explicitly, in Util/SetupUtils/InstallPrerequisites.sh and Util/Docker/Base.alma8.Dockerfile.
+# Do not add a second Windows SWIG here.
 
 # -- CLEAN ------------------------------------------------------------------
 if ($Clean -or $CleanAll) {
