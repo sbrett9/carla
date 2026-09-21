@@ -260,6 +260,7 @@ Both places need it:
 
 | Path | File | Package | Consumed by |
 |---|---|---|---|
+| Windows | — **no change needed** | `swig` already ships inside the pinned `SUMOLibraries` bundle as `Build/SUMOLibraries/swigwin-4.3.1/` (`CarlaSetup.ps1:617-618`) | any Windows developer |
 | Bare-metal Ubuntu dev box | `Util/SetupUtils/InstallPrerequisites.sh` | `swig` (apt) | a developer running `CarlaSetup.sh` without `--skip-prerequisites` |
 | CI container (AlmaLinux 8 / RHEL8-compatible) | `Util/Docker/Base.alma8.Dockerfile` | `swig` (dnf; ships in AlmaLinux 8's base or PowerTools repo, already enabled at `:94`) | `build-carla-ue5.yml`'s "Build CARLA distribution" step, which always runs `--skip-prerequisites` |
 
@@ -412,8 +413,10 @@ considered:
      unconditionally — not behind a verbose flag. Silence is what let this stand unnoticed.
   3. The world-build provenance record already carries netconvert's argument set (team brief §5, ground
      truth on `world.json`); it must also carry the **resolved netconvert version string** at the time
-     the world was built. Where exactly that field lives in `world.json`'s schema is a `04_Contracts.md`
-     / `01_Architecture.md` decision, not mine — what I specify is that the *source* of that string is
+     the world was built. The field's home is `WorldPackageManifest` in
+     `CarlaNet/src/CarlaNet.Map/WorldPackage/WorldPackage.cs:48-107`, beside the existing
+     `NetconvertExtraArgs` — which records the arguments but not the converter. `04_Contracts.md` owns
+     the schema; what I specify is that the *source* of that string is
      `OsmConverter`'s own invocation of the netconvert it just ran, recorded at build time, not inferred
      later.
   4. A scenario-authoring tool that opens an existing world package reads that recorded version and
