@@ -13,7 +13,8 @@ are on the critical path.
 | Date | Change |
 |---|---|
 | 2026-09-18 | Traffic-light synchronisation and its signal-id dependency dropped; fixture no longer needs a signalised junction. |
-| 2026-09-21 | One distribution, licence manifest, `CarlaSetup.bat` retired, skill to stage A, stage B re-ordered and re-measured. |
+| 2026-09-21 | One distribution, licence manifest, `CarlaSetup.bat` retired, skill to stage A, stage B re-measured. |
+| 2026-09-21 | Netconvert flags unified on the world build; vocabulary layered into a closed core and open author terms. |
 
 ---
 
@@ -69,12 +70,23 @@ prevents producing one.
 |---|---|---|
 | ⚑ | **Carry OSM relations through the clip.** Measured: 42 relations, 22 of them turn restrictions, and **0 survive**. [Issue #12](https://github.com/sbrett9/carla/issues/12) | Restriction relations referencing surviving ways are present in the clipped OSM, and netconvert stops reporting them as ignored |
 | ⚑ | **Persist the world's `.net.xml` from the same netconvert invocation as the `.xodr`**, and refuse any other. Measured: 321 vs 317 edges and one lane of 352.19 m vs 2.60 m from the *identical* OSM, while `convBoundary` matches exactly | A scenario cannot be built against a network the world did not produce; the attempt names both fingerprints |
+| ⚑ | **Unify the netconvert flag set on the world build, and regenerate every world.** The scenario path stops invoking netconvert entirely and loads `map.net.xml` from the package; the world build adopts `--output.street-names`, `--junctions.join-dist` and `--tls.default-type` so the single invocation produces what both sides need | Every world is rebuilt from its original OSM. **`--output.street-names` must be omitted, never set `false`** — `NBEdge::expandableBy` guards on the option having been *set at all*, so `false` produces the same graph as `true` and a later attempt to turn it off fails silently |
 | ⚑ | **Pin which SUMO runs.** `SUMO_HOME` is an independent 1.27.1 and `SumoInstallation.py:36` prefers it over the pinned 1.27.0 | The resolved path and version are logged every run; a mismatch against the world's converter refuses |
 | ⚑ | **Move the authoring skill into the repository** and reduce the workspace copy to a stub; leave the third-party Unreal skills as their upstream clone (§13.3, `D9.10`) | The skill has a commit, a version and one source; `07` §8.4's assumption becomes true; it is bundled in the distribution |
 
 Under SUMO drive, traffic routed through a banned turn looks *worse* than today's and is easily
 misattributed to the bridge. A scenario authored against edge ids from a graph the world does not
 share is wrong in a way every downstream check passes.
+
+**The network cannot be reconstructed by re-running netconvert, even with byte-identical flags.**
+Requesting OpenDRIVE output flips `rectangular-lane-cut` to true (`NWFrame.cpp:171`), which feeds
+junction shape computation — measured, 743 of 4,978 canonical rows differ, with lane lengths moving up
+to 3.3 m. So the `.net.xml` must come out of the same process invocation as the `.xodr`, and there is
+then only one flag set to choose. The world build adopts the scenario's flags rather than the reverse:
+`--output.street-names` is what gives the place index its edge names, and dropping it would cost the
+91% named-edge coverage the US maps carry. The price is that every generated map changes — measured at
+1,017 → 1,021 roads and 183 → 184 junctions on Arapahoe — so every world regenerates from its original
+OSM. That cost is paid once, alongside the artifact re-issue stage B already requires.
 
 ---
 
@@ -289,7 +301,7 @@ that is noted rather than restated.
 | 4 | **Where the capture window comes from** — author or operator | **Settled — both.** A scenario declares named windows as presets; the capture operator may give another; **the run manifest records which was used**, so a corpus never leaves it ambiguous |
 | 5 | **What a capture does when SUMO reports a collision** | **Settled — record it and mark the affected span; never stop the run.** A collision is a fact about the corpus, not a failure of the run, and the mark is what lets a consumer filter it |
 | 6 | **How an accidental positive in the ambient population is handled** | **Settled — a cohort may never be `nominal`, and no audit is built.** See §13.1 |
-| 7 | **What the annotation vocabulary contains at v1** | **Settled — fix the term list against the model's requirements before the first corpus.** Terms are cheap to add and expensive to rename once a corpus exists |
+| 7 | **What the annotation vocabulary contains at v1** | **Settled — the vocabulary is layered, and we author the core rather than waiting.** The EPoL model team has stated no requirements, so there is nothing to fix a list against; inventing a usable core beats leaving consumers to stumble. But labelling is a **contract between the scenario author and the model trainer**, and the range of authorable SUMO scenarios is too wide to enumerate — so the pipeline closes and versions only the terms its own code branches on, and carries author-defined terms through **opaquely but self-describingly** to the corpus consumer. Passing a term the pipeline does not understand is a feature. Terms stay cheap to add and expensive to rename (§13.5) |
 | 8 | **One `sumo` process per capture session, or one shared across several windows** | **Settled — one SUMO process per window.** Each window starts a fresh process, fast-forwards from `t = 0`, captures, and exits. A window is then reproducible from its seed and its bounds alone, a crash costs one window rather than a sequence, and there is no long-lived state to reason about. The cost is paying the fast-forward per window, which the measurement bounds: the sizing scenario's entire seven-day span fast-forwards in **140.41 s**, and a typical window far less |
 | 9 | **The packaging scripts disagree across platforms** | **Settled — Windows and Linux are at parity, for scripts and for deliverables**, and **there is one distribution, containing all of the tools.** A difference between the platforms is a defect, never a policy; the `carlacontrol` wheel ships on both. No internal/external packaging mode is built. What the package must carry instead is a generated component-and-licence manifest — driven by third-party obligations the distribution is already failing to meet, not by anything in `CarlaControl/` (§13.2) |
 | 10 | **Where the authoring skill lives.** It has no reproducible source location — the workspace root is not a git repository | **Settled — move it into the repository and ship it from there**, with the workspace copy reduced to a stub. The 27 co-located Unreal skills are a third-party MIT clone, not ours, and stay upstream rather than being vendored. A **stage A item**, since `07` §8.4 already assumes it (§13.3) |
@@ -410,6 +422,37 @@ records. `Docs/build_windows_ue5.md` still directs a new developer to run it.
 a third copy of every build change buys nothing, and three copies are how the drift above happened.
 Retiring it means removing the script and repointing `Docs/build_windows_ue5.md` at `CarlaSetup.ps1`
 in the same commit, so no documented entry point is left dangling.
+
+### 13.5 The annotation vocabulary is a contract we carry, not one we write
+
+The EPoL model is outside this project's scope — what it is, how it is trained and what it looks for
+are not ours to know, and the team that owns it has stated no term requirements. Two things follow,
+and they pull in opposite directions until the vocabulary is layered.
+
+**We cannot wait for requirements that are not coming.** A corpus with no vocabulary at all leaves
+every consumer to invent their own reading of the sidecar, which is worse than a core we author and
+publish.
+
+**We cannot dictate the terms either.** A SUMO network can express almost anything an author imagines,
+and the label — whether a vehicle is noise or an actor in the pattern being reinforced — is a
+statement the *author* makes to the *model trainer*. Neither party is this pipeline.
+
+So the vocabulary splits on one test: **does the pipeline's own code branch on this term?**
+
+| | Closed and versioned | Open and author-defined |
+|---|---|---|
+| **Because** | The machinery depends on it, so it must be enumerable and testable | The pipeline never inspects it, so it costs nothing to allow and everything to constrain |
+| **Contains** | Supervision state, subject kind, interval onsets, participation roles — the structure `06` already requires | What a pattern *is*, what an anomaly *means*, what a role signifies in this author's world |
+| **Failure if wrong** | The pipeline cannot be tested | The author cannot say what they meant |
+
+An author-defined term is carried **opaquely but self-describingly**: the pipeline moves it from the
+supervision plan to the truth sidecar without understanding it, and requires enough alongside it that a
+consumer who has never spoken to the author can read it. Passing through a term we do not understand is
+a feature of this design, not a gap in it.
+
+What none of this changes: no geometric or photometric predicate ever writes supervision
+([`06`](06_Truth_And_Annotation.md) §3.6), a `<flow>` authors a population rather than each member's
+behaviour so `nominal` stays unassertable of a cohort (`D6.2`), and this pipeline scores nothing.
 
 ## 14. Risks worth naming
 
