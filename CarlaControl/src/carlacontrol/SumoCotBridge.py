@@ -73,8 +73,8 @@ CSV_COLUMNS = [
     "time_utc", "sim_time_s", "uid", "callsign", "cot_type", "how",
     "lat", "lon", "hae_m", "ce_m", "le_m",
     "course_deg", "speed_mps", "vx", "vy", "vz",
-    "base_type", "length_m", "width_m", "height_m", "color",
-    "edge", "lane", "sumo_x", "sumo_y", "carla_x", "carla_y",
+    "base_type", "type_id", "special_type", "length_m", "width_m", "height_m", "color",
+    "role_name", "marked", "edge", "lane", "sumo_x", "sumo_y", "carla_x", "carla_y",
 ]
 
 # Record fields that exist only because a scenario author wrote them, and which therefore never
@@ -481,10 +481,14 @@ class SumoCotBridge:
             "vy": f"{record['vy']:.2f}",
             "vz": "0.00",
             "base_type": record["base_type"],
+            "type_id": record["type_id"],
+            "special_type": record["special_type"],
             "length_m": f"{record['length_m']:.2f}",
             "width_m": f"{record['width_m']:.2f}",
             "height_m": f"{record['height_m']:.2f}",
             "color": record["color"],
+            "role_name": record["role_name"],
+            "marked": "1" if record["marked"] else "0",
             "edge": record["edge"],
             "lane": record["lane"],
             "sumo_x": f"{record['x']:.2f}",

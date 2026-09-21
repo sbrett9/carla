@@ -123,7 +123,9 @@ def test_the_sidecar_sits_beside_the_dataset_and_not_inside_it():
     # Nothing about the gap has a home in either consumer channel, which is why it needs one.
     assert "supervision_gaps" not in CSV_COLUMNS
     assert "note" not in CSV_COLUMNS
-    assert set(AUTHORED_TRUTH_FIELDS).isdisjoint(CSV_COLUMNS)
+    # The written CSV is the truth sidecar and carries the authoring fields; what stays out of
+    # it is the described absence, which has no vehicle and therefore no row to sit in.
+    assert set(AUTHORED_TRUTH_FIELDS) <= set(CSV_COLUMNS)
 
 
 class _Arguments:

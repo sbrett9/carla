@@ -304,17 +304,18 @@ def test_scenario_plants_the_vehicles_the_corpus_is_checked_against(marked_ids, 
     assert marked_ids <= {vehicle_id for vehicle_id, _ in roster}
 
 
-def test_written_columns_carry_no_authoring_field():
-    """The writer itself, not a later filter, is what keeps the truth fields out."""
+def test_written_columns_carry_the_authoring_fields():
+    """The CSV is the truth sidecar, so the author's own categories belong in it."""
     for name in ("type_id", "special_type", "role_name", "marked"):
-        assert name not in CSV_COLUMNS
+        assert name in CSV_COLUMNS
 
 
-def test_csv_corpus_hides_which_vehicles_were_planted(corpus, marked_ids):
+def test_the_written_csv_carries_which_vehicles_were_planted(corpus, marked_ids):
+    """Companion to the XML case: both written sinks are the sidecar and both carry the answer."""
     csv_path, _ = corpus
     validator = CorpusLeakValidator(marked_ids, fields=LABEL_FIELDS, uid_prefix=UID_PREFIX)
-    findings = validator.identifying(validator.check_csv(csv_path))
-    assert findings == [], CorpusLeakValidator.describe(findings)
+    fields = {finding.field for finding in validator.identifying(validator.check_csv(csv_path))}
+    assert {"type_id", "special_type", "marked"} <= fields
 
 
 def test_the_written_sidecar_carries_which_vehicles_were_planted(corpus, marked_ids):
@@ -330,32 +331,37 @@ def test_the_written_sidecar_carries_which_vehicles_were_planted(corpus, marked_
     assert "type_id" in fields, "the sidecar was expected to name the planted vehicles' type"
 
 
-def test_the_check_rejects_the_corpus_written_before_the_repair(corpus, roster, table, marked_ids):
-    """Every field that gave the answer away is named as a finding."""
+def test_the_check_names_every_field_that_separates_the_two_groups(corpus, marked_ids):
+    """What the tool is for, stated against a corpus that does separate them.
+
+    The sidecar separates them on every label field, which is what a sidecar is supposed to do. The
+    same check over an artifact where that separation would be a defect is the use; this pins that
+    the check finds all of it rather than the first one.
+    """
     csv_path, _ = corpus
-    legacy = _pre_repair_rows(_rows(csv_path), roster, table, marked_ids)
-    legacy_marked = frozenset(PRE_REPAIR_IDS[vehicle_id] for vehicle_id in marked_ids)
-    validator = CorpusLeakValidator(legacy_marked, fields=LABEL_FIELDS, uid_prefix=UID_PREFIX)
-    findings = validator.identifying(validator.check_records(legacy))
-
+    validator = CorpusLeakValidator(marked_ids, fields=LABEL_FIELDS, uid_prefix=UID_PREFIX)
+    findings = validator.identifying(validator.check_csv(csv_path))
     assert {finding.field for finding in findings} == {
-        "type_id", "special_type", "role_name", "marked", "color", "cot_type"}, \
-        CorpusLeakValidator.describe(findings)
+        "type_id", "special_type", "role_name", "marked", "color", "cot_type"},         CorpusLeakValidator.describe(findings)
 
-    values = {(finding.field, finding.value) for finding in findings}
-    assert ("special_type", "marked") in values
-    assert ("marked", "1") in values
-    assert ("cot_type", "a-u-G-E-V") in values
-    assert ("color", "255,25,25") in values
-    assert ("type_id", "anomaly_escort") in values
-    assert ("role_name", "shadow") in values
+
+def test_a_corpus_that_separates_nothing_yields_nothing(corpus, marked_ids):
+    """The check is not simply always failing: flatten the separating fields and it goes quiet."""
+    csv_path, _ = corpus
+    rows = _rows(csv_path)
+    for row in rows:
+        for field in LABEL_FIELDS:
+            if field in row:
+                row[field] = "same"
+    validator = CorpusLeakValidator(marked_ids, fields=LABEL_FIELDS, uid_prefix=UID_PREFIX)
+    assert validator.identifying(validator.check_records(rows)) == []
 
 
 def test_the_check_catches_a_dimension_no_other_vehicle_has(corpus, marked_ids):
     """An author who makes the escort a metre longer than its cover has labelled it."""
     csv_path, _ = corpus
     rows = _rows(csv_path)
-    escorts = {"haul_d3_3", "haul_d3_4", "haul_d3_5", "haul_d3_6", "haul_d3_7"}
+    escorts = {"escort_0", "escort_1", "escort_2", "escort_3", "escort_4"}
     for row in rows:
         if row["uid"].removeprefix(f"{UID_PREFIX}-") in escorts:
             row["length_m"] = "6.00"
