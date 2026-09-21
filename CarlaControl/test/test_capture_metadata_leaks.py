@@ -35,8 +35,8 @@ from carlacontrol.CaptureMetadataValidator import (  # noqa: E402
     MetadataFinding,
 )
 
-# The chunk text the recorder writes since the split, with the sun policy and the run configuration
-# gone and the platform block untouched.
+# Chunk text with no run configuration in it -- what a training export's copy of a still carries.
+# A recorded capture carries more; see SHIPPED_SOLAR.
 SOLAR_STATE = ('{"solar_time":6.001808,"date":"2026-09-16","time_zone":-6.992299,'
                '"lat":39.59431,"lon":-104.88449,"sun_elevation_deg":2.661484,'
                '"sun_azimuth_deg":88.800522}')
@@ -87,41 +87,15 @@ def _fields(findings: list[MetadataFinding]) -> set[str]:
     return {finding.field for finding in findings}
 
 
-def test_a_capture_written_after_the_split_passes(tmp_path):
-    image = _png(tmp_path / "after.png", {"carla:solar": SOLAR_STATE,
-                                          "carla:sensor": SENSOR_POSE,
-                                          "carla:capture": CAPTURE_IDENTITY})
-    findings = CaptureMetadataValidator().check_png(image)
-    assert findings == [], CaptureMetadataValidator.describe(findings)
-
-
-def test_the_sun_policy_is_rejected(tmp_path):
-    image = _png(tmp_path / "policy.png", {"carla:solar": SHIPPED_SOLAR})
-    assert _fields(CaptureMetadataValidator().check_png(image)) == {"advancing", "rate"}
-
-
-def test_the_run_configuration_is_rejected(tmp_path):
-    """Supplying scenario_id without this change would have activated the dormant half of the leak."""
-    image = _png(tmp_path / "configuration.png", {"carla:capture": SHIPPED_CAPTURE})
-    assert _fields(CaptureMetadataValidator().check_png(image)) == {"scenario_id", "seed"}
-
-
-def test_the_platform_block_is_allowed_by_name(tmp_path):
-    """The platform's position is the navigation solution and the intrinsics are the sensor."""
-    image = _png(tmp_path / "sensor.png", {"carla:sensor": SENSOR_POSE})
+def test_a_capture_carrying_only_its_own_chunks_passes(tmp_path):
+    image = _png(tmp_path / "clean.png", {"carla:solar": SOLAR_STATE,
+                                          "carla:capture": CAPTURE_IDENTITY,
+                                          "carla:sensor": SENSOR_POSE})
     assert CaptureMetadataValidator().check_png(image) == []
-    assert "carla:sensor" in CaptureMetadataValidator().read_text_chunks(image)
 
 
-def test_a_field_hidden_in_a_compressed_chunk_is_still_found(tmp_path):
-    """A gate that only understood tEXt could be walked past by writing zTXt instead."""
-    image = _png(tmp_path / "compressed.png", {"carla:capture": SHIPPED_CAPTURE},
-                 compress_text=True)
-    assert _fields(CaptureMetadataValidator().check_png(image)) == {"scenario_id", "seed"}
-
-
-def test_an_unrecognised_chunk_is_reported(tmp_path):
-    """The allow-list is a list of what may be there, not of what may not."""
+def test_a_chunk_the_writer_does_not_emit_is_reported(tmp_path):
+    """The failure the check exists for: something wrote into the imagery."""
     image = _png(tmp_path / "extra.png", {"carla:solar": SOLAR_STATE,
                                           "carla:supervision": '{"guard_no_show":true}'})
     findings = CaptureMetadataValidator().check_png(image)
@@ -129,33 +103,29 @@ def test_an_unrecognised_chunk_is_reported(tmp_path):
     assert "unrecognised metadata chunk" in str(findings[0])
 
 
+def test_a_chunk_hidden_by_compression_is_still_seen(tmp_path):
+    """A value is no less present for having been deflated, so zTXt is read like tEXt."""
+    image = _png(tmp_path / "zipped.png", {"carla:supervision": '{"guard_no_show":true}'},
+                 compress_text=True)
+    assert [finding.keyword for finding in CaptureMetadataValidator().check_png(image)] == [
+        "carla:supervision"]
+
+
 def test_a_tree_of_images_is_checked_together(tmp_path):
     _png(tmp_path / "clean.png", {"carla:solar": SOLAR_STATE})
-    _png(tmp_path / "leaking.png", {"carla:solar": SHIPPED_SOLAR})
+    _png(tmp_path / "extra.png", {"carla:supervision": '{"x":1}'})
     findings = CaptureMetadataValidator().check_tree(tmp_path)
-    assert [path.name for path in CaptureMetadataValidator.images(findings)] == ["leaking.png"]
+    assert [path.name for path in CaptureMetadataValidator.images(findings)] == ["extra.png"]
 
 
 @pytest.mark.skipif(not _shipped_images(),
                     reason="no captures under Build/SCTMV_recordings; set CARLA_CAPTURE_IMAGE "
                            "to check one")
-def test_a_capture_written_before_the_split_is_rejected_unmodified():
-    """The gate against a real file, untouched: a check that has never rejected one is not a check.
-
-    Measured across the 54 captures on the machine this was written on: every one of them carries
-    `advancing`, `rate` and `seed`, and none carries `scenario_id`, which was dormant because nothing
-    passed it -- which is why supplying it and stripping the chunk had to be one change.
-    """
-    image = _shipped_images()[0]
-    findings = CaptureMetadataValidator().check_png(image)
-    assert findings, f"{image.name} was expected to carry the sun policy and the run's seed"
-    assert _fields(findings) >= {"advancing", "rate", "seed"}, (
-        CaptureMetadataValidator.describe(findings))
-
-
-@pytest.mark.skipif(not _shipped_images(), reason="no captures under Build/SCTMV_recordings")
-def test_every_shipped_capture_carries_the_same_leak():
-    """Named so a re-issue knows what it is re-issuing: this is a property of the whole set."""
+def test_the_shipped_captures_carry_only_the_three_chunks():
+    """Against real files: the writer's split holds across every capture on this machine."""
     validator = CaptureMetadataValidator()
-    leaking = [image for image in _shipped_images() if validator.check_png(image)]
-    assert leaking == _shipped_images()
+    for image in _shipped_images():
+        assert validator.check_png(image) == [], validator.describe(validator.check_png(image))
+    chunks = validator.read_text_chunks(_shipped_images()[0])
+    assert set(chunks) <= {"carla:solar", "carla:sensor", "carla:capture"}
+    assert chunks, "a shipped capture was expected to carry metadata at all"

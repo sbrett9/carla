@@ -18,11 +18,9 @@ namespace CarlaNet.Recording;
 /// <param name="Tick">Simulation frame number, taken from the sensor frame that produced the capture.</param>
 /// <param name="SimTimeSeconds">Elapsed simulation time at that frame.</param>
 /// <param name="RunId">Identifier grouping every artifact produced by one execution.</param>
-/// <param name="ScenarioId">The scenario being executed, where one is driving the run. Recorded in
-/// the sidecar only; see <see cref="ToJson"/> for why it is kept out of the imagery.</param>
+/// <param name="ScenarioId">The scenario being executed, where one is driving the run.</param>
 /// <param name="Seed">Seed the run was started with, for reproducing it. Numeric because it seeds
-/// pseudo-random generators; typing it so removes any need to validate it downstream. Recorded in the
-/// sidecar only, for the same reason as <paramref name="ScenarioId"/>.</param>
+/// pseudo-random generators; typing it so removes any need to validate it downstream.</param>
 public sealed record CaptureIdentity(
     ulong Tick,
     double SimTimeSeconds,
@@ -37,23 +35,16 @@ public sealed record CaptureIdentity(
         yield return ("carla:capture", ToJson());
     }
 
-    /// <summary>
     /// Compact JSON of the capture identity (ASCII, safe as a PNG tEXt value).
-    ///
-    /// <see cref="Tick"/> and <see cref="SimTimeSeconds"/> are the frame's own timestamp and are what
-    /// pairs the still to the truth recorded beside it, so they belong in the image.
-    /// <see cref="RunId"/> is provenance for one execution. <see cref="ScenarioId"/> and
-    /// <see cref="Seed"/> are neither: they are run configuration, and as handles that index a whole
-    /// <i>set</i> of scenes they let a model key on which scenario or which seed produced a frame
-    /// rather than on the frame. They are written to the CoT sidecar (<see cref="CotWriter"/>), which
-    /// is the truth-side artifact, and never into the imagery.
-    /// </summary>
     public string ToJson()
     {
         var sb = new StringBuilder("{");
         sb.Append("\"tick\":").Append(Tick.ToString(CultureInfo.InvariantCulture));
         sb.Append(",\"sim_time_s\":").Append(F(SimTimeSeconds));
         Append(sb, "run_id", RunId);
+        Append(sb, "scenario_id", ScenarioId);
+        if (Seed.HasValue)
+            sb.Append(",\"seed\":").Append(Seed.Value.ToString(CultureInfo.InvariantCulture));
         return sb.Append('}').ToString();
     }
 
