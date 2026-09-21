@@ -216,7 +216,12 @@ class OsmClipper:
         if bnds is not None:
             newroot.append(bnds)
         
-        for nid in used_orig:
+        # Emitted in a fixed numeric order rather than in set-iteration order: Python randomises the
+        # string hash seed once per process, so iterating the set gives a different node order in
+        # every process and the same graph clipped twice never produces the same bytes. Anything that
+        # records a digest of the clipped extract -- the world package's SourceOsmSha256, a cache key,
+        # a build comparison -- is worthless without this.
+        for nid in sorted(used_orig, key=int):
             newroot.append(nodes[nid].element)
         
         for nid, lat, lon in new_nodes:
