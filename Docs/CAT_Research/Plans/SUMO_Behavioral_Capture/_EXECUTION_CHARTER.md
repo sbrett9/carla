@@ -126,6 +126,24 @@ carry-over is invisible.
 **Scratch files** go in `scratchpad/` at the workspace root, beside the user's own probes — not in a
 session temp directory.
 
+## 4a. What a check may assert
+
+A check reports what it can **establish from the artifact in front of it**. It does not encode a
+judgement about what a field means. This rule exists because a check that overreached was written
+here and then treated as an authority: it named fifteen fields it would reject, **eight of which
+existed nowhere in the tree except inside the check itself**, and its verdict was used to remove
+data a consumer needed.
+
+| | |
+|---|---|
+| **Every name a check references must exist** | Grep for the field, key or chunk before adding it. A check guarding against something nobody writes is guarding an opinion |
+| **Prefer measuring the data to asserting about it** | *"These two groups of records take different values on this field"* is establishable by looking. *"This field is a leak"* is a judgement. The first is a check; the second is a person's call |
+| **A judgement belongs where the writer is written** | With its reasoning beside it, once. A script that re-adjudicates downstream will eventually disagree with the writer, and the script will win by default because it runs in CI |
+| **A gate must have rejected something real** | Before a check blocks anything, point it at an artifact in the tree and watch it fail. §5.2 already requires this; for a check it is the whole of the evidence |
+| **Say what it cannot see** | A name-matching script has no access to whether a quantity is derivable by an observer, or whether a consumer needs it. Its docstring says so, so nobody mistakes its silence for approval |
+
+**When a check and a person disagree, the person is right and the check is the thing that changes.**
+
 ## 5. Definition of done
 
 A stage item is done when **all** of these hold. "It works on my machine" is not on the list.
