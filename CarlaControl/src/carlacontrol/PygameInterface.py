@@ -536,11 +536,15 @@ class PygameInterface:
             tel_str = "n/a"
 
         if self.recorder:
-            rec_str = (
-                f"REC {self.recorder.saved}@{self.recorder.record_hz:g}Hz"
-                if self.recorder.recording
-                else "off"
-            )
+            # Drops are shown as they happen, not only in the summary at the end: a capture the
+            # encoder queue had no room for takes its truth sidecar with it, and an operator who can
+            # see the count climbing can lower the rate while the run is still worth keeping.
+            rec_str = "off"
+            if self.recorder.recording:
+                dropped = self.recorder.dropped
+                rec_str = f"REC {self.recorder.saved}@{self.recorder.record_hz:g}Hz"
+                if dropped:
+                    rec_str += f" -{dropped} dropped"
         else:
             rec_str = "n/a"
 
