@@ -138,6 +138,14 @@ class CotOutputSettings:
     # stands out in a TAK client.
     marked_vehicle: str = "orbiter"
     marked_affiliation: str | None = None
+    # A scenario with more than one anomaly flags several vehicles at once: any vehicle whose id is
+    # in this set is treated exactly like `marked_vehicle`. Empty keeps the single-vehicle
+    # behaviour above.
+    marked_ids: frozenset[str] = frozenset()
+    # CoT affiliation per SUMO vehicle-type id, so a mixed population can carry meaningful labels --
+    # civilian neutral, military friendly, anomaly unknown. A type absent from the map falls back to
+    # `affiliation`; a marked vehicle still overrides to `marked_affiliation` when that is set.
+    affiliation_by_type: dict[str, str] = field(default_factory=dict)
     # Wall-clock instant that simulation time zero maps to. Pin it for a reproducible dataset;
     # leave it unset to stamp events from the clock when the run starts.
     epoch: datetime | None = None
@@ -248,9 +256,13 @@ class SumoCotBridge:
                 for vehicle_id in traci.vehicle.getIDList():
                     seen.add(vehicle_id)
                     record = self._sample(traci, vehicle_id, settings)
-                    marked = vehicle_id == settings.marked_vehicle
-                    affiliation = (settings.marked_affiliation or settings.affiliation) \
-                        if marked else settings.affiliation
+                    marked = (vehicle_id == settings.marked_vehicle
+                              or vehicle_id in settings.marked_ids)
+                    if marked:
+                        affiliation = settings.marked_affiliation or settings.affiliation
+                    else:
+                        affiliation = settings.affiliation_by_type.get(
+                            record["type_id"], settings.affiliation)
                     event = CotUdpEmitter.vehicle_telemetry_to_cot(
                         record, affiliation=affiliation, stale_seconds=settings.stale_seconds,
                         source="truth", uid_prefix=settings.uid_prefix, when=stamp)
@@ -306,7 +318,8 @@ class SumoCotBridge:
             "vz": 0.0,
             "base_type": BASE_TYPE_BY_VEHICLE_CLASS.get(vehicle_class, vehicle_class),
             "type_id": type_id,
-            "special_type": "marked" if vehicle_id == settings.marked_vehicle else "",
+            "special_type": "marked" if (vehicle_id == settings.marked_vehicle
+                                          or vehicle_id in settings.marked_ids) else "",
             "length_m": traci.vehicle.getLength(vehicle_id),
             "width_m": traci.vehicle.getWidth(vehicle_id),
             "height_m": traci.vehicle.getHeight(vehicle_id),

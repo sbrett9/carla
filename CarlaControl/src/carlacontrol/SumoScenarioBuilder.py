@@ -60,6 +60,10 @@ class NetconvertSettings:
     # SumoScenarioBuilder.allow_opposite_overtaking for naming the pairs instead.
     guess_opposite_lanes: bool = False
     drivable_edges_only: bool = True
+    # Edge types netconvert should drop outright, e.g. pedestrian ways that would otherwise become
+    # drivable vehicle edges once the passenger vClass filter is off. Each entry is a netconvert
+    # type name such as "highway.footway".
+    remove_edge_types: tuple[str, ...] = ()
 
     def to_arguments(self, osm_path: Path, out_path: Path) -> list[str]:
         """The full netconvert command line, minus the executable."""
@@ -94,6 +98,8 @@ class NetconvertSettings:
                 "--keep-edges.components", "1",
                 "--remove-edges.isolated", "true",
             ]
+        if self.remove_edge_types:
+            args += ["--remove-edges.by-type", ",".join(self.remove_edge_types)]
         return args
 
 
@@ -168,6 +174,11 @@ class AmbientFlow:
     # Which vehicle-type distribution to draw from. A map with a freeway, an arterial and
     # residential streets wants a different mix on each.
     vehicle_type: str = "ambient_mix"
+    # Time window the flow is active, in simulation seconds. `begin` defaults to the start of the
+    # run; `end` of None means the end of the run. A scenario that spans days uses these to give
+    # each corridor a diurnal rhythm and to fire ferry and shift pulses at set times.
+    begin: float = 0.0
+    end: float | None = None
 
 
 @dataclass(frozen=True)
@@ -514,6 +525,63 @@ class SumoScenarioBuilder:
                          marked, len(edge_pairs))
         return marked
 
+    def restrict_private_roads(self, network_path: str | Path, osm_path: str | Path,
+                               allow: str = "army authority",
+                               restricted_access: tuple[str, ...] = ("private", "no", "military",
+                                                                     "permit")) -> int:
+        """Turn OSM access-controlled roads into a fenced network only some vehicles may enter.
+
+        A secure installation's internal roads carry OSM `access=private` (or `no`/`military`).
+        netconvert keeps them but rewrites their permission list to a civilian remainder
+        (`pedestrian delivery bicycle`) that excludes both ordinary cars and the military classes,
+        so nothing a scenario spawns can drive them. This rewrites every edge whose OSM way carried
+        a restricted access tag to allow only the given vehicle classes -- `army` and `authority`
+        by default -- and clears any permission list netconvert left on the public roads so those
+        stay open to all. The result is two populations that can only exchange at the junctions
+        where a public road meets a private one: the gates.
+
+        Returns the number of edges restricted.
+        """
+        network_path = Path(network_path)
+        access = {}
+        for way in ET.parse(str(osm_path)).getroot().iter("way"):
+            tags = {t.get("k"): t.get("v") for t in way.findall("tag")}
+            if "highway" in tags:
+                access[way.get("id")] = tags.get("access", "")
+
+        tree = ET.parse(network_path)
+        root = tree.getroot()
+        restricted = 0
+        for edge in root:
+            if edge.tag != "edge":
+                continue
+            if edge.get("function") == "internal":
+                # Internal edges are the lanes that carry a movement across a junction. netconvert
+                # built their permissions for the classes the roads allowed at the time (a civilian
+                # remainder that excludes the military classes), so leaving them alone would block
+                # army movements at every junction and fragment the interior. Clear them to open;
+                # the fence still holds because the normal edge beyond each junction stays
+                # restricted, and the router will not route a blocked class onto it.
+                for lane in edge.findall("lane"):
+                    lane.attrib.pop("allow", None)
+                    lane.attrib.pop("disallow", None)
+                continue
+            # An edge id is the OSM way id, optionally sign-prefixed for direction and #-suffixed
+            # for the segment; strip both to recover the way.
+            way_id = edge.get("id").lstrip("-").split("#", 1)[0]
+            if access.get(way_id, "") in restricted_access:
+                restricted += 1
+                for lane in edge.findall("lane"):
+                    lane.set("allow", allow)
+                    lane.attrib.pop("disallow", None)
+            else:
+                for lane in edge.findall("lane"):
+                    lane.attrib.pop("allow", None)
+                    lane.attrib.pop("disallow", None)
+        tree.write(network_path, encoding="UTF-8", xml_declaration=True)
+        self.logger.info("restricted %d edges to '%s'; public roads opened to all", restricted, allow)
+        return restricted
+
     def write_additional(self, out_path: str | Path, closure: LaneClosure) -> Path:
         """Write the additional file carrying a scenario's lane closure."""
         out_path = Path(out_path)
@@ -570,7 +638,10 @@ class SumoScenarioBuilder:
 
     def _flow_xml(self, flow: AmbientFlow, end_time: int) -> str:
         via = f' via="{" ".join(flow.via)}"' if flow.via else ""
-        return (f'    <flow id="{flow.flow_id}" type="{flow.vehicle_type}" begin="0" end="{end_time}"\n'
+        begin = flow.begin
+        end = end_time if flow.end is None else flow.end
+        return (f'    <flow id="{flow.flow_id}" type="{flow.vehicle_type}" '
+                f'begin="{begin:.0f}" end="{end:.0f}"\n'
                 f'          vehsPerHour="{flow.vehicles_per_hour}" '
                 f'from="{flow.from_edge}" to="{flow.to_edge}"{via}\n'
                 f'          departLane="free" departSpeed="max"/>')
