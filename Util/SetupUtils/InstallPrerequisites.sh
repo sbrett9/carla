@@ -70,7 +70,6 @@ sudo apt-get -y install \
     libxerces-c-dev \
     libproj-dev \
     proj-data \
-    swig \
     nasm \
     patchelf \
     xdg-user-dirs
