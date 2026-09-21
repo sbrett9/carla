@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shlex
 import time
 from datetime import datetime
 
@@ -17,7 +18,7 @@ class WorldBuilder:
         self.netconvert_path = netconvert_path
         self.proj_data_path = proj_data_path
         self.logger = logging.getLogger(__name__)
-        
+
         self.logger.info(f"world builder initialized: netconvert={netconvert_path}")
 
 
@@ -61,8 +62,14 @@ class WorldBuilder:
         # netconvert flag set against the one the world package records, so a scenario that needs a
         # flag the build does not offer -- dropping pedestrian ways by type, say -- is served by
         # passing it here rather than by letting the two sides diverge.
+        # Each occurrence is split as a shell would, so one netconvert option and its value are
+        # quoted together: --netconvert-arg "--remove-edges.by-type highway.footway". Keeping the
+        # pair in one token is what carries a value through the parser, which reads a lone
+        # dash-prefixed token as an option of its own. One token per occurrence also works, via
+        # --netconvert-arg=<token>, and the two forms compose.
         for a in getattr(args, "netconvert_arg", None) or []:
-            extra.Add(str(a))
+            for token in shlex.split(str(a)):
+                extra.Add(token)
         opts.ExtraArgs = extra
         return opts
 

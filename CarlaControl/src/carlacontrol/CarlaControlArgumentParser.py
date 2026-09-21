@@ -204,11 +204,13 @@ class CarlaControlArgumentParser:
             "--netconvert-arg",
             action="append",
             default=[],
-            metavar="TOKEN",
-            help="one more argument for netconvert, repeated once per token: "
-            "--netconvert-arg --remove-edges.by-type --netconvert-arg highway.footway. A SUMO "
-            "scenario checks its own flag set against the one recorded in the world package, so "
-            "a world a scenario needs built differently is built with these",
+            metavar="ARGS",
+            help="one more netconvert option and its value, quoted together and repeatable: "
+            "--netconvert-arg '--remove-edges.by-type highway.footway'. Keeping the pair in one quoted token is what carries a "
+            "value through; giving them separately reads the second as an option of its own. An option "
+            "taking no value is the one case needing --netconvert-arg=--no-turnarounds. A SUMO scenario checks its "
+            "own flag set against the one recorded in the world package, so a world a scenario "
+            "needs built differently is built with these",
         )
         build.add_argument(
             "--no-clip-bounds",
