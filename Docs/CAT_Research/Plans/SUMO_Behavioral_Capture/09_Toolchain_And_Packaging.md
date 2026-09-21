@@ -575,7 +575,7 @@ no exclusion to honour**, and the row is corrected at its source. `carlacontrol.
 The obligations that *are* real are third-party, and the distribution meets none of them today.
 **Measured** against the staged Windows distribution at `Build/Dist/`:
 
-| Obligation | State today |
+| Obligation | State before the manifest existed |
 |---|---|
 | **No licence statement of any kind ships.** The distribution root is `CarlaServer/ README.md VERSION osm/ run-sctmv.ps1 run-server.ps1 scripts/ setup-venv.ps1 tools/ wheels/` | No `LICENSE`, no `NOTICE`, no third-party listing, and no precedent anywhere in the tree to copy |
 | **`tools/sumo/` ships 42 DLLs spanning nine or more licences**, including LGPL (`fox-16.dll`, `iconv-2`/`intl-8`), OpenSSL, Apache-2.0 (Arrow, Parquet, Thrift, Xerces), PROJ, and the MS redistributables — debug *and* release variants of several | Redistributed with no notice. The set arrives via `CarlaSetup.ps1`'s `bin\*.dll` glob and `MakeDistribution.ps1`'s recursive copy; `fox` is SUMO's **GUI** toolkit, which `netconvert` never loads |
@@ -712,9 +712,20 @@ staged install — **a named subset, not a recursive copy**. Measured: `data/` a
 of third-party contributions that would each need a `MANIFEST.md` row. Add to the list when something
 consumes it, and record the reason beside the list, or a future reader will "fix" the omission.
 
+**Measured once the walk existed, and it corrects an expectation in §4.3: `fox-16.dll` cannot be
+dropped.** `netconvert.exe` genuinely does not import it, but `sumo.exe` and `duarouter.exe` both do,
+so the LGPL obligation stands for the toolchain as a whole and `MANIFEST.md` records it against the
+binaries that carry it. The walk reaches 20 of the 43 DLLs in the build directory from the four
+binaries; the other 23 are debug variants and libraries nothing here loads. Windows reads the
+imports out of the PE header rather than through `dumpbin`, which needs a Visual Studio developer
+environment the packaging script does not have unless it was invoked with `-Build`; none of these
+binaries has a delay-load import directory, so the plain import table is the whole dependency set.
+Each staged binary is then run from the staged directory, which is the direct check that the list is
+not short.
+
 The binary rows are likewise an explicit list derived from what the binaries import, not `bin\*`
 (§4.3). Linux already walks `ldd` per binary at `MakeDistribution.sh:125-144`; Windows needs the
-equivalent `dumpbin /dependents` pass in place of its glob.
+equivalent, which it gets by reading the PE import table directly.
 
 | Artifact | Windows source | Linux source | Destination |
 |---|---|---|---|
