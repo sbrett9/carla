@@ -181,7 +181,11 @@ comparable. Ground truth rides in the `.labels.json` the telemetry tool reads:
 - `affiliation_by_type` — CoT affiliation per SUMO vehicle type: civilian `n` (neutral), military
   `f` (friendly), anomaly `u` (unknown). The letter appears in `cot_type` = `a-<letter>-G-E-V`.
 - `anomaly_notes` — anomalies that are *absences* (e.g. a guard who never arrives) have no vehicle,
-  so they are documented here as a described gap (location + time window).
+  so they are documented here as a described gap (location + time window). A run carries them out to
+  a `*.supervision.json` beside its dataset, each window placed on the epoch that run stamped
+  (`SupervisionSidecar`, written by `sumo_cot_telemetry`). It is written beside the dataset and never
+  into it: a note saying which post stood unmanned between which hours is the answer to the question
+  the dataset asks.
 
 Height (`hae_m`) is ellipsoidal, read from `bareearth.bin`. Coordinates convert through the running
 simulation (`traci.simulation.convertGeo`), which uses SUMO's own PROJ and the network's projection

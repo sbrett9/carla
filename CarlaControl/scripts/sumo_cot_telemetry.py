@@ -17,6 +17,10 @@ What the sinks carry is what an observer could have measured. Which vehicles a s
 the author's own names for its vehicle types and flows, stay in the scenario's `*.labels.json`: the
 dataset describes the traffic, not the answer.
 
+An anomaly that is an *absence* -- a guard who never arrives -- has no vehicle to attach to either
+channel, so the run writes the scenario's described gaps to a supervision sidecar beside its output,
+with each window placed on the epoch this run stamped.
+
 Examples:
     # dataset only: every vehicle, once a second, to XML and CSV
     python sumo_cot_telemetry.py --xml orbit_cot.xml --csv orbit_cot.csv
@@ -41,9 +45,14 @@ sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 from carlacontrol.SumoCotBridge import (  # noqa: E402  (needs the path above)
     BareEarthGrid,
     CotOutputSettings,
+    RunReport,
     SumoCotBridge,
 )
 from carlacontrol.SumoInstallation import SumoInstallation  # noqa: E402
+from carlacontrol.SupervisionSidecar import (  # noqa: E402
+    LABELS_KEY,
+    SupervisionSidecar,
+)
 
 DEFAULT_MAP = "Gardnerville_Centerville_Lane"
 DEFAULT_CONFIG = _REPO / "Import" / f"{DEFAULT_MAP}_NeighborhoodOrbit.sumocfg"
@@ -84,6 +93,13 @@ def parse_args() -> argparse.Namespace:
                         help="a scenario's *.labels.json: names several planted vehicles at once "
                              "and assigns a CoT affiliation per vehicle type, so each population "
                              "carries the affiliation it would really have")
+    parser.add_argument("--supervision", type=Path,
+                        help="write the scenario's described supervision gaps -- the anomalies that "
+                             "are absences, with no vehicle to attach them to -- to this file, with "
+                             "each window placed on the run's own clock. Defaults to a file beside "
+                             "--xml or --csv. It is written beside the dataset and never into it: a "
+                             "note saying which post stood unmanned between which hours is the "
+                             "answer to the question the dataset asks")
     parser.add_argument("--uid-prefix", default="SUMO-TRUTH",
                         help="prefix for every event's uid (default SUMO-TRUTH)")
     parser.add_argument("--epoch",
@@ -142,14 +158,16 @@ def main() -> int:
         if epoch.tzinfo is None:
             epoch = epoch.replace(tzinfo=UTC)
 
+    labels: dict = {}
     marked_ids: frozenset[str] = frozenset()
     affiliation_by_type: dict[str, str] = {}
     if args.labels:
         labels = json.loads(args.labels.read_text(encoding="utf-8"))
         marked_ids = frozenset(labels.get("marked_ids", []))
         affiliation_by_type = labels.get("affiliation_by_type", {})
-        logging.info("labels %s: %d marked ids, %d typed affiliations",
-                     args.labels.name, len(marked_ids), len(affiliation_by_type))
+        logging.info("labels %s: %d marked ids, %d typed affiliations, %d described gap(s)",
+                     args.labels.name, len(marked_ids), len(affiliation_by_type),
+                     len(labels.get(LABELS_KEY) or []))
 
     try:
         installation = SumoInstallation.locate(args.sumo_home, extra_candidates=[REPO_SUMO])
@@ -183,7 +201,32 @@ def main() -> int:
             logging.info("  %s  (%.1f MB)", path, path.stat().st_size / 1e6)
     if host:
         logging.info("  sent to %s:%d", host, port)
+    _write_supervision(args, labels, report)
     return 0
+
+
+def _write_supervision(args: argparse.Namespace, labels: dict,
+                       report: RunReport) -> None:
+    """Carry the scenario's described absences out to a truth sidecar beside the run's output.
+
+    An anomaly that is an absence has no vehicle, so nothing in the events or rows can carry it and
+    nothing did: the labels held it and no consumer ever read it. Here it is written out with its
+    window placed on the epoch this run stamped, so a consumer holding the dataset can find the hours
+    the gap covers in it.
+    """
+    sidecar = SupervisionSidecar.from_labels(
+        labels, scenario=args.config.stem, epoch=report.epoch, labels_path=args.labels)
+    if not sidecar:
+        return
+    output = args.supervision or next(
+        (SupervisionSidecar.default_path(path) for path in (args.xml, args.csv) if path), None)
+    if output is None:
+        # A live feed writes no files, so the only place left to put it is the operator's screen.
+        logging.warning("%d described supervision gap(s) reached no file, because this run wrote "
+                        "none; give --supervision to keep them:\n%s",
+                        len(sidecar), sidecar.describe())
+        return
+    logging.info("  %s  (%d described supervision gap(s))", sidecar.write(output), len(sidecar))
 
 
 if __name__ == "__main__":

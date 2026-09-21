@@ -21,6 +21,7 @@ from carlacontrol.SensorRig import SensorRig
 from carlacontrol.SimClock import SimClock
 from carlacontrol.SumoCotBridge import SumoCotBridge
 from carlacontrol.SumoScenarioBuilder import SumoScenarioBuilder
+from carlacontrol.SupervisionSidecar import SupervisionSidecar
 from carlacontrol.TelemetryController import TelemetryController
 from carlacontrol.TrafficController import TrafficController
 from carlacontrol.version import __version__
@@ -48,6 +49,7 @@ __all__ = [
     "SimClock",
     "SumoCotBridge",
     "SumoScenarioBuilder",
+    "SupervisionSidecar",
     "TelemetryController",
     "TrafficController",
     "WorldBuilder",

@@ -227,6 +227,11 @@ class RunReport:
     sim_seconds: float = 0.0
     wall_seconds: float = 0.0
     sinks: list[str] = field(default_factory=list)
+    # The instant simulation time zero was stamped with. Reported because it is not always chosen:
+    # without an explicit epoch the run takes the clock as it starts, and anything that has to place
+    # this run's output on a wall clock afterwards -- a described absence, say -- needs to be told
+    # which instant that was rather than guessing it.
+    epoch: datetime | None = None
 
     @property
     def achieved_real_time_factor(self) -> float:
@@ -263,6 +268,7 @@ class SumoCotBridge:
         report = RunReport()
         self.off_grid_heights = 0
         epoch = settings.epoch or datetime.now(UTC)
+        report.epoch = epoch
 
         udp = CotUdpEmitter(settings.udp_host, settings.udp_port, settings.udp_ttl) \
             if settings.udp_host else None

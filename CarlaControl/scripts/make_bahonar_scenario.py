@@ -399,7 +399,8 @@ def main() -> int:
     # planted, which vehicle type each of them hides behind, and which affiliation every type
     # carries. The guard no-show has no vehicle -- it is an absence -- so it is recorded as a
     # described gap: which tower, and the window during which it stood unmanned while the others
-    # were relieved.
+    # were relieved. A run carries those gaps out to its own supervision sidecar, with each window
+    # placed on the run's clock (SupervisionSidecar, written by sumo_cot_telemetry).
     no_show_edge, no_show_pos = TOWER_POSTS[args.no_show_tower]
     gap_begin = args.no_show_day * DAY + args.no_show_hour * HOUR
     anomaly_notes = []
