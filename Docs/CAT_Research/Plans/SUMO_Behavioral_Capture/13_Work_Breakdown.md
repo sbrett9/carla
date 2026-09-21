@@ -13,7 +13,7 @@ are on the critical path.
 | Date | Change |
 |---|---|
 | 2026-09-18 | Traffic-light synchronisation and its signal-id dependency dropped; fixture no longer needs a signalised junction. |
-| 2026-09-21 | One distribution containing the proprietary tools; no packaging mode. Authoring skill promoted to stage A. |
+| 2026-09-21 | One distribution, generated licence manifest, `CarlaSetup.bat` retired, authoring skill promoted to stage A. |
 
 ---
 
@@ -70,7 +70,7 @@ prevents producing one.
 | ⚑ | **Carry OSM relations through the clip.** Measured: 42 relations, 22 of them turn restrictions, and **0 survive**. [Issue #12](https://github.com/sbrett9/carla/issues/12) | Restriction relations referencing surviving ways are present in the clipped OSM, and netconvert stops reporting them as ignored |
 | ⚑ | **Persist the world's `.net.xml` from the same netconvert invocation as the `.xodr`**, and refuse any other. Measured: 321 vs 317 edges and one lane of 352.19 m vs 2.60 m from the *identical* OSM, while `convBoundary` matches exactly | A scenario cannot be built against a network the world did not produce; the attempt names both fingerprints |
 | ⚑ | **Pin which SUMO runs.** `SUMO_HOME` is an independent 1.27.1 and `SumoInstallation.py:36` prefers it over the pinned 1.27.0 | The resolved path and version are logged every run; a mismatch against the world's converter refuses |
-| ⚑ | **Move the authoring skill into the repository**, with the Unreal agent skills, and reduce the workspace copies to references (§13.3, `D9.10`) | The skill has a commit, a version and one source; `07` §8.4's assumption becomes true; it is bundled in the distribution |
+| ⚑ | **Move the authoring skill into the repository** and reduce the workspace copy to a stub; leave the third-party Unreal skills as their upstream clone (§13.3, `D9.10`) | The skill has a commit, a version and one source; `07` §8.4's assumption becomes true; it is bundled in the distribution |
 
 Under SUMO drive, traffic routed through a banned turn looks *worse* than today's and is easily
 misattributed to the bridge. A scenario authored against edge ids from a graph the world does not
@@ -147,9 +147,10 @@ Already scouted; the build itself already compiles clean from the unmodified con
 
 | ⚑ | Item | Done when |
 |---|---|---|
-| ⚑ | Build and stage `sumo`, `duarouter` and `libtracics` beside `netconvert`, plus `data/` and `tools/` | `sumo --version` runs from the **staged install**, not the build tree |
-| ⚑ | Re-key the idempotence guard to "are all four staged" — not "is the newest there", since parallel builds have no dependable last-built file | A returning developer cannot silently keep a half toolchain |
-| | Set `SUMO_HOME` where the other tool paths are set; add `swig` to the Linux prerequisites **and the CI container**, which never runs the prerequisites script | A clean clone and a clean CI container both build it |
+| ⚑ | Build and stage `sumo`, `duarouter` and `libtracics` beside `netconvert`, plus `libtracics-sources.zip` and a **named subset** of `data/` and `tools/` — `tools/traci`, `tools/sumolib`, `data/typemap`, `data/xsd`. Measured: the full copy is 89 MB to deliver the 3.2 MB anything here consumes, and `tools/contributed` alone is 47 MB of third-party sub-licences | `sumo --version` runs from the **staged install**, not the build tree |
+| ⚑ | Re-key the idempotence guard to "is the whole required set staged" — not "is the newest there", since parallel builds have no dependable last-built file. **The guard is firing today**: `netconvert` is staged, so the other three are never built | A returning developer cannot silently keep a half toolchain, and the check reports which members are missing |
+| ⚑ | **Retire `CarlaSetup.bat`** and repoint `Docs/build_windows_ue5.md` at `CarlaSetup.ps1` in the same commit (§13.4) | No documented entry point is left dangling, and the SUMO build block exists in two scripts rather than three |
+| | Set `SUMO_HOME` where the other tool paths are set; add `swig` to the Linux prerequisites **and the CI container**, which never runs the prerequisites script. Windows needs no change — `swig` already rides the pinned `SUMOLibraries` bundle | A clean clone and a clean CI container both build it |
 | | Bundle the toolchain, the binding and the new artifacts, both platforms | The acceptance check passes from an installed distribution |
 | | **Acceptance check**, run rather than remembered | `sumo --version` from the staged install; a console app steps an empty simulation through the C# binding; `duarouter` validates a known route |
 
@@ -283,8 +284,8 @@ that is noted rather than restated.
 | 6 | **How an accidental positive in the ambient population is handled** | **Settled — a cohort may never be `nominal`, and no audit is built.** See §13.1 |
 | 7 | **What the annotation vocabulary contains at v1** | **Settled — fix the term list against the model's requirements before the first corpus.** Terms are cheap to add and expensive to rename once a corpus exists |
 | 8 | **One `sumo` process per capture session, or one shared across several windows** | **Settled — one SUMO process per window.** Each window starts a fresh process, fast-forwards from `t = 0`, captures, and exits. A window is then reproducible from its seed and its bounds alone, a crash costs one window rather than a sequence, and there is no long-lived state to reason about. The cost is paying the fast-forward per window, which the measurement bounds: the sizing scenario's entire seven-day span fast-forwards in **140.41 s**, and a typical window far less |
-| 9 | **The packaging scripts disagree across platforms** | **Settled — Windows and Linux are at parity, for scripts and for deliverables**, and **there is only one distribution, which contains the proprietary tools.** The two platforms produce the same package from the same inputs; a difference between them is a defect, never a policy. The `carlacontrol` wheel ships on both. No internal/external packaging mode is built — `D9.7` is closed as will-not-build, and containment becomes a licence, access and manifest question instead of a build flag (§13.2) |
-| 10 | **Where the authoring skill lives.** It has no reproducible source location — the workspace root is not a git repository | **Settled — move it into the repository and ship it from there**, together with the Unreal agent skills, with the workspace copies reduced to references. It is a **stage A item**, since `07` §8.4 already assumes it (§13.3) |
+| 9 | **The packaging scripts disagree across platforms** | **Settled — Windows and Linux are at parity, for scripts and for deliverables**, and **there is one distribution, containing all of the tools.** A difference between the platforms is a defect, never a policy; the `carlacontrol` wheel ships on both. No internal/external packaging mode is built. What the package must carry instead is a generated component-and-licence manifest — driven by third-party obligations the distribution is already failing to meet, not by anything in `CarlaControl/` (§13.2) |
+| 10 | **Where the authoring skill lives.** It has no reproducible source location — the workspace root is not a git repository | **Settled — move it into the repository and ship it from there**, with the workspace copy reduced to a stub. The 27 co-located Unreal skills are a third-party MIT clone, not ours, and stay upstream rather than being vendored. A **stage A item**, since `07` §8.4 already assumes it (§13.3) |
 
 ### 13.1 Ambient traffic, the idle cull, and who owns a label
 
@@ -325,45 +326,83 @@ render state, the world truth track — computed identically for every vehicle. 
 distinguish blocked flow traffic from parked annotated traffic, that is theirs to declare and theirs
 to bear.
 
-### 13.2 One distribution, containing the proprietary tools
+### 13.2 One distribution, and what it has to declare
 
-The packaging scripts bundle the server and the Python client tools. One of those tools,
-`carlacontrol`, is proprietary. **The Linux script bundles it and the Windows script does not**, and
-nothing in either says which behaviour is intended — so today the answer depends on which platform
-somebody happened to run. Repairing the broken Windows launcher makes Windows bundle it too, matching
-Linux, which is why the question has to be answered now rather than later.
+The packaging scripts bundle the server and the Python client tools. **The Linux script bundles the
+`carlacontrol` wheel and the Windows script does not**, and nothing in either says which behaviour is
+intended — so today the answer depends on which platform somebody happened to run.
 
 **Parity is the rule.** The two scripts produce the same package from the same inputs, and any
-difference between them is a defect to fix rather than a policy to preserve. That settles the
-immediate case: the `carlacontrol` wheel ships on both, because Linux already does it and the Windows
-repair brings it into line.
+difference between them is a defect to fix rather than a policy to preserve. The `carlacontrol` wheel
+ships on both.
 
-**No distribution without the proprietary tools exists.** There is one distribution, it contains the
-tools, and both platforms produce it. No internal/external packaging mode is built: there is no
-external distribution to gate, and an unused mode is a switch someone eventually flips by accident.
+**There is one distribution and it contains all of the tools.** No internal/external packaging mode is
+built: there is no second distribution for one to gate, and an unused mode is a switch someone
+eventually flips by accident (`D9.7`).
 
-What this decides, and what it therefore obliges:
+`Findings/22` §14 records `CarlaControl/` as proprietary and to be excluded from any external
+distribution. **That label came from a plan that did not manifest, and there is no exclusion to
+honour.** The row is corrected at source rather than worked around here.
+
+**What the package does have to declare is a third-party obligation, and it is larger than the one
+that was being worried about.** Measured against the staged Windows distribution:
 
 | | |
 |---|---|
-| **One distribution** | No `--internal` / `--external` flag in either script (`D9.7`) |
-| **The tools are contained in it** | `carlacontrol` ships on both platforms, and so does every proprietary artifact the capture path needs — the launcher, the authoring skill (§13.3), and the SUMO scenario tooling |
-| **Containment is a licence and access question, not a packaging one** | The distribution carries proprietary code, so where it may go is governed by who may receive it. That belongs in the package's own licence statement and in the repository it is published to, not in a build flag |
-| **The package says what it contains** | A manifest naming every proprietary component and its licence, so a recipient can tell without unpacking. This replaces the flag as the mechanism that keeps the boundary visible |
+| The distribution ships **no `LICENSE`, no `NOTICE`, no third-party listing of any kind** | There is no precedent in the tree to copy — `VERSION` is the only self-description, and it states builds, not contents |
+| `tools/sumo/` carries **42 DLLs spanning nine or more licences**, including LGPL (`fox-16.dll`, gettext), shipped in both debug and release variants because the copy is a glob | We are already redistributing LGPL binaries with no notice. `fox` is SUMO's **GUI** toolkit; `netconvert` never loads it |
+| SUMO is **EPL-2.0** — notice plus source offer — and `CarlaNet.Sumo` additionally redistributes SWIG-generated EPL-2.0 source | The pinned upstream commit is already recorded in `CarlaSetup.ps1`, so the offer can cite it rather than duplicate it |
+| The OSM extracts and every generated `.xodr` are **ODbL** | `Findings/22` §14 already establishes the derivative-database obligation |
 
-The proprietary tools are part of the shipped system, so their defects are this plan's to fix rather
-than to hand off — `D9.9`'s non-deterministic OSM-clip node ordering and `D9.10`'s missing skill home
-included.
+So the package carries a **generated `MANIFEST.md` and a `licenses/` directory**, produced at staging
+time from what was actually copied rather than hand-maintained — a hand-written manifest is wrong the
+first time a slot changes. Each row names the component, its provenance, its licence and where it
+sits. Two obligations fall out of the measurement and land in the same work:
+
+- **Stop shipping binaries nothing loads.** The `bin\*.dll` glob becomes an explicit list derived from
+  what the four SUMO binaries actually import. That drops the debug duplicates and the GUI-only `fox`,
+  and it makes the manifest's third-party rows a short true list rather than a long partly-fictional
+  one.
+- **Honour the EPL-2.0 source offer** for the SUMO binaries and the generated C#.
+
+Where the package may go is governed by access to the channel it is published to, not by a build flag.
 
 ### 13.3 The authoring skill moves into the repository
 
-The skill bundle at `.agents/skills/sumo-traffic-scenarios/` sits under the workspace root, which is
-not a git repository — so it has no version, no history and no reproducible source (`D9.10`). It moves into `carla/`, together with the Unreal agent skills, and ships from there
-under §13.2. The workspace copies are reduced to references so there is one source and not two that
-drift.
+`.agents/skills/` under the workspace root holds two things that look alike and are not. Measured:
+**one file of ours** — `sumo-traffic-scenarios/SKILL.md`, 14 KB — and **27 directories that are
+byte-identical copies of `quodsoler/unreal-engine-skills`**, an MIT third-party repository already
+cloned beside it at `unreal-engine-skills/` with its remote, its pinned commit and its `LICENSE`
+intact.
 
-This is a **stage A item**, not a later tidy-up: `07` §8.4 already assumes the move happened, and
-every scenario authored before it lands is authored against an unversioned tool.
+**Ours moves; theirs does not.** The skill bundle moves into `carla/CarlaControl/skills/`, beside the
+compiler that [`07`](07_Scenario_Authoring.md) §8 says generates most of it — generator and generated
+output under one directory — and ships from there under §13.2. The workspace copy is reduced to a
+stub naming the canonical path, not a directory junction: a junction is invisible in `git status` and
+does not survive a fresh clone, which is the silent-divergence failure `D9.10` exists to end.
+
+The Unreal skills stay as the upstream clone, which is already a better reproducible source than
+vendoring: it has a version, a history and an intact licence. Vendoring 1.3 MB of somebody else's MIT
+content into `carla/` would add an attribution obligation for a recipient who has no use for it. The
+unattributed copies under `.agents/skills/` are removed, and the clone plus its commit are recorded as
+a developer prerequisite.
+
+This is a **stage A item**, not a later tidy-up: [`07`](07_Scenario_Authoring.md) §8.4 already assumes
+the move happened, and every scenario authored before it lands is authored against an unversioned
+tool.
+
+### 13.4 `CarlaSetup.bat` is retired
+
+The SUMO build-and-stage block exists in **three** scripts, not two: `CarlaSetup.ps1`,
+`CarlaSetup.sh`, and `CarlaSetup.bat`. The third is the pre-port original — `CarlaSetup.ps1` describes
+itself as a PowerShell port of it — and it has already drifted: it clones `SUMOLibraries` at HEAD with
+no tag where the PowerShell pins the version, which is the exact failure the PowerShell's own comment
+records. `Docs/build_windows_ue5.md` still directs a new developer to run it.
+
+**It is retired rather than carried.** The fork has diverged far enough from upstream that maintaining
+a third copy of every build change buys nothing, and three copies are how the drift above happened.
+Retiring it means removing the script and repointing `Docs/build_windows_ue5.md` at `CarlaSetup.ps1`
+in the same commit, so no documented entry point is left dangling.
 
 ## 14. Risks worth naming
 
