@@ -43,6 +43,23 @@ EXECUTABLE_SUFFIX = ".exe" if os.name == "nt" else ""
 # description on a development build, for example) is not part of the comparison.
 _VERSION_LINE = re.compile(r"Eclipse SUMO \S+ v?(\d+(?:\.\d+)*)")
 
+
+def _release(text: str | None) -> str | None:
+    """The release number out of a version string, however the recorder wrote it.
+
+    A world package records what the tool printed -- `Eclipse SUMO netconvert 1.27.0` -- while this
+    class carries the release alone. Comparing the two verbatim refuses a matching pair, so both
+    sides are reduced to the number before they meet.
+    """
+    if not text:
+        return None
+    match = _VERSION_LINE.search(text)
+    if match:
+        return match.group(1)
+    stripped = text.strip()
+    bare = re.fullmatch(r"v?(\d+(?:\.\d+)*)", stripped)
+    return bare.group(1) if bare else stripped
+
 # Resolutions already announced this process, keyed by the path and the rule that matched, so a
 # long-running tool does not repeat the line while a *second*, different resolution is still reported
 # rather than swallowed.
@@ -155,7 +172,7 @@ class SumoInstallation:
             return
 
         resolved = self.version
-        if resolved == expected:
+        if _release(resolved) == _release(expected):
             return
 
         detail = (f"this world was built with SUMO {expected}; the installation at {self.home} "
