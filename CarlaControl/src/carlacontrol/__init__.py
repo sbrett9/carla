@@ -18,6 +18,8 @@ from carlacontrol.ScenarioController import ScenarioController
 from carlacontrol.SensorController import SensorController
 from carlacontrol.SensorRig import SensorRig
 from carlacontrol.SimClock import SimClock
+from carlacontrol.SolarAudit import SolarAudit
+from carlacontrol.SolarPositionModel import SolarPositionModel
 from carlacontrol.SumoCotBridge import SumoCotBridge
 from carlacontrol.SumoScenarioBuilder import SumoScenarioBuilder
 from carlacontrol.SupervisionSidecar import SupervisionSidecar
@@ -45,6 +47,8 @@ __all__ = [
     "SensorController",
     "SensorRig",
     "SimClock",
+    "SolarAudit",
+    "SolarPositionModel",
     "SumoCotBridge",
     "SumoScenarioBuilder",
     "SupervisionSidecar",
