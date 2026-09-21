@@ -9,6 +9,7 @@ from carlacontrol.CarlaControlArgumentParser import CarlaControlArgumentParser
 from carlacontrol.ClockRatioMeter import ClockRatioMeter
 from carlacontrol.CorpusLeakValidator import CorpusLeakValidator
 from carlacontrol.CotUdpEmitter import CotUdpEmitter
+from carlacontrol.KinematicActorLattice import KinematicActorLattice
 from carlacontrol.NativeRecorder import NativeRecorder
 from carlacontrol.NetworkFingerprint import NetworkFingerprint
 from carlacontrol.OrbitSensorController import OrbitSensorController
@@ -40,6 +41,7 @@ __all__ = [
     "ClockRatioMeter",
     "CorpusLeakValidator",
     "CotUdpEmitter",
+    "KinematicActorLattice",
     "NativeRecorder",
     "NetworkFingerprint",
     "OrbitSensorController",

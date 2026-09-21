@@ -32,6 +32,7 @@ class ClockRatioSample:
     wall_seconds: float
     fixed_delta_seconds: float
     tick_milliseconds: list[float] = field(default_factory=list)
+    before_milliseconds: list[float] = field(default_factory=list)
     first_frame: int = 0
     last_frame: int = 0
 
@@ -60,6 +61,17 @@ class ClockRatioSample:
         return ordered[min(len(ordered) - 1, int(0.95 * len(ordered)))]
 
     @property
+    def mean_before_ms(self) -> float:
+        """Client-side time per tick spent in the work handed to `before_tick`.
+
+        In synchronous mode `apply_batch` queues its commands and returns; the server runs them on
+        the game thread inside the following tick. So this is what the client spends building and
+        sending a batch, and it is separate from what the batch costs the server, which lands in
+        `tick_milliseconds`.
+        """
+        return statistics.fmean(self.before_milliseconds) if self.before_milliseconds else 0.0
+
+    @property
     def frames_advanced(self) -> int:
         """Server frames between the first and last tick, which need not equal the tick count."""
         return self.last_frame - self.first_frame
@@ -67,7 +79,7 @@ class ClockRatioSample:
     def describe(self) -> str:
         return (f"{self.label:<34}{self.ticks:>6} ticks{self.wall_seconds:>9.2f} s"
                 f"{self.ticks_per_wall_second:>9.2f} t/ws{self.clock_ratio * 100:>8.1f}%"
-                f"{self.mean_tick_ms:>9.1f} ms mean{self.median_tick_ms:>9.1f} p50"
+                f"{self.mean_tick_ms:>9.1f} ms tick{self.mean_before_ms:>9.1f} client"
                 f"{self.p95_tick_ms:>9.1f} p95")
 
 
@@ -101,13 +113,16 @@ class ClockRatioMeter:
         rather than beside it.
         """
         durations: list[float] = []
+        before_durations: list[float] = []
         first_frame = 0
         last_frame = 0
         started = time.perf_counter()
         for index in range(ticks):
-            tick_started = time.perf_counter()
+            before_started = time.perf_counter()
             if before_tick is not None:
                 before_tick(index)
+            tick_started = time.perf_counter()
+            before_durations.append((tick_started - before_started) * 1000.0)
             frame = self.world.tick()
             if after_tick is not None:
                 after_tick(index)
@@ -119,6 +134,7 @@ class ClockRatioMeter:
         sample = ClockRatioSample(label=label, ticks=ticks, wall_seconds=wall,
                                   fixed_delta_seconds=self.fixed_delta_seconds,
                                   tick_milliseconds=durations,
+                                  before_milliseconds=before_durations,
                                   first_frame=first_frame, last_frame=last_frame)
         self.logger.info("%s", sample.describe())
         return sample
@@ -126,7 +142,7 @@ class ClockRatioMeter:
     @staticmethod
     def header() -> str:
         return (f"{'arm':<34}{'ticks':>12}{'wall':>11}{'rate':>14}{'ratio':>8}"
-                f"{'mean':>14}{'median':>12}{'p95':>12}")
+                f"{'tick':>14}{'client':>16}{'p95':>12}")
 
     @staticmethod
     def relative(sample: ClockRatioSample, baseline: ClockRatioSample) -> float:
