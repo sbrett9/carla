@@ -299,9 +299,9 @@ out-of-process `sumo` started with `--remote-port`.** It is a port of SUMO's own
 
 **Out of process, and now structurally so.** A SUMO assertion cannot take the CarlaNet client down and
 `sumo` can be restarted without restarting the world — the properties `libsumo` (in-process) would give
-up. `libsumo` is not reachable from a socket client at all, so moving in-process later would be a
-different mechanism rather than a swap, and §9's third question is settled by that rather than left
-open.
+up. `libsumo` is not reachable from a socket client at all, so moving in-process later would mean a
+different mechanism rather than a swap — worth knowing, because a swap is what it would have been
+through SUMO's own bindings, where the two share an API.
 
 **What the port costs, measured.** `connection.py` (407 lines) and `storage.py` (103) are the whole
 transport. `domain.py` (283) is the shared getter/setter/subscription machinery, and a domain call on

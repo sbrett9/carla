@@ -387,10 +387,12 @@ first time a slot changes. Each row names the component, its provenance, its lic
 sits. Two obligations fall out of the measurement and land in the same work:
 
 - **Stop shipping binaries nothing loads.** The `bin\*.dll` glob becomes an explicit list derived from
-  what the four SUMO binaries actually import. That drops the debug duplicates and the GUI-only `fox`,
-  and it makes the manifest's third-party rows a short true list rather than a long partly-fictional
-  one.
-- **Honour the EPL-2.0 source offer** for the SUMO binaries and the generated C#.
+  what the three SUMO binaries actually import. That drops the debug duplicates, and it makes the
+  manifest's third-party rows a short true list rather than a long partly-fictional one. `fox` stays:
+  `netconvert` does not import SUMO's GUI toolkit but `sumo` and `duarouter` both do, so the LGPL
+  obligation holds for the toolchain as a whole.
+- **Honour the EPL-2.0 source offer** for the SUMO binaries, and for `tools/traci` and `tools/sumolib`,
+  which are bundled as EPL-2.0 source rather than as binaries.
 
 Where the package may go is governed by access to the channel it is published to, not by a build flag.
 
