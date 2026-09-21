@@ -24,6 +24,7 @@ Examples:
     python sumo_cot_telemetry.py --udp 127.0.0.1:6969 --csv orbit_cot.csv
 """
 import argparse
+import json
 import logging
 import sys
 from datetime import UTC, datetime
@@ -70,6 +71,10 @@ def parse_args() -> argparse.Namespace:
                         help="vehicle to flag in the dataset's `marked` column (default orbiter)")
     parser.add_argument("--marked-affiliation",
                         help="give the marked vehicle a different affiliation so it stands out")
+    parser.add_argument("--labels", type=Path,
+                        help="a scenario's *.labels.json: flags several anomaly vehicles at once "
+                             "and assigns a CoT affiliation per vehicle type (civilian neutral, "
+                             "military friendly, anomaly unknown)")
     parser.add_argument("--uid-prefix", default="SUMO-TRUTH",
                         help="prefix for every event's uid (default SUMO-TRUTH)")
     parser.add_argument("--epoch",
@@ -124,6 +129,15 @@ def main() -> int:
         if epoch.tzinfo is None:
             epoch = epoch.replace(tzinfo=UTC)
 
+    marked_ids: frozenset[str] = frozenset()
+    affiliation_by_type: dict[str, str] = {}
+    if args.labels:
+        labels = json.loads(args.labels.read_text(encoding="utf-8"))
+        marked_ids = frozenset(labels.get("marked_ids", []))
+        affiliation_by_type = labels.get("affiliation_by_type", {})
+        logging.info("labels %s: %d marked ids, %d typed affiliations",
+                     args.labels.name, len(marked_ids), len(affiliation_by_type))
+
     try:
         installation = SumoInstallation.locate(args.sumo_home, extra_candidates=[REPO_SUMO])
     except FileNotFoundError as error:
@@ -137,6 +151,7 @@ def main() -> int:
         xml_path=args.xml, csv_path=args.csv, rate_hz=args.rate, stale_seconds=args.stale,
         affiliation=args.affiliation, uid_prefix=args.uid_prefix,
         marked_vehicle=args.marked_vehicle, marked_affiliation=args.marked_affiliation,
+        marked_ids=marked_ids, affiliation_by_type=affiliation_by_type,
         epoch=epoch)
 
     try:
