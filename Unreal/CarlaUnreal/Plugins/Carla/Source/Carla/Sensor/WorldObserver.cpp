@@ -317,15 +317,19 @@ static carla::Buffer FWorldObserver_Serialize(
   uint8_t simulation_state = (SimulationState::MapChange * MapChange);
   simulation_state |= (SimulationState::PendingLightUpdate * PendingLightUpdates);
 
-  header.simulation_state = static_cast<SimulationState>(simulation_state);
-
   // Solar / time-of-day state, so each streamed snapshot carries the sun in effect this tick and the
   // recorder can pair frames with it straight from the observer cache (no polling). GetSolarState is
   // [solar_time, year, month, day, time_zone, lat, lon, elevation, azimuth, advancing, rate], or empty
-  // when the world has no CesiumSunSky (then the header keeps its zero/rate-1.0 defaults).
+  // when the world has no CesiumSunSky.
+  //
+  // A world with no sun is signalled by the SolarStateValid flag, not by the values: the header's
+  // solar defaults are a well-formed reading -- midnight of year 0 at latitude 0, longitude 0 -- and
+  // a reader that only checked "are there eleven numbers?" would write that non-reading into an
+  // artifact as fact.
   const TArray<double> Solar = UCesiumHeightSampler::GetSolarState(Episode.GetWorld());
   if (Solar.Num() >= 11)
   {
+    simulation_state |= SimulationState::SolarStateValid;
     header.solar_time      = Solar[0];
     header.solar_year      = Solar[1];
     header.solar_month     = Solar[2];
@@ -338,6 +342,8 @@ static carla::Buffer FWorldObserver_Serialize(
     header.solar_advancing = Solar[9];
     header.solar_rate      = Solar[10];
   }
+
+  header.simulation_state = static_cast<SimulationState>(simulation_state);
 
   write_data(header);
 

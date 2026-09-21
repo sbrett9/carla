@@ -1885,12 +1885,25 @@ public sealed class CarlaClient : IAsyncDisposable
             BinaryPrimitives.ReadInt32LittleEndian(payload[16..]));
         const int HeaderSize = 124;
         if (payload.Length < HeaderSize) return;   // extended (with-solar) header required
-        // Cache the solar block (11 doubles at offset 36) paired to this tick.
-        var solar = new double[11];
-        for (int k = 0; k < 11; k++)
-            solar[k] = BitConverter.Int64BitsToDouble(
-                BinaryPrimitives.ReadInt64LittleEndian(payload[(36 + k * 8)..]));
-        _solar = solar;
+        // Cache the solar block (11 doubles at offset 36) paired to this tick -- but only when the
+        // header says a sun was measured. The solar fields' defaults are a well-formed reading
+        // (midnight of year 0 at latitude 0, longitude 0), so a world with no CesiumSunSky is
+        // distinguishable only by EpisodeStateSerializer::SolarStateValid, bit 2 of the
+        // simulation-state flags at offset 32. Leaving the cache empty is what stops a recorded
+        // artifact asserting a sun that was never there.
+        const byte SolarStateValidFlag = 0x4;
+        if ((payload[32] & SolarStateValidFlag) != 0)
+        {
+            var solar = new double[11];
+            for (int k = 0; k < 11; k++)
+                solar[k] = BitConverter.Int64BitsToDouble(
+                    BinaryPrimitives.ReadInt64LittleEndian(payload[(36 + k * 8)..]));
+            _solar = solar;
+        }
+        else
+        {
+            _solar = System.Array.Empty<double>();
+        }
         const int ActorSize  = 119;
         var actors = payload[HeaderSize..];
         int count  = actors.Length / ActorSize;
