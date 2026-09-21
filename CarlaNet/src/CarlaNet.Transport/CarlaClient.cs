@@ -165,7 +165,8 @@ public sealed class CarlaClient : IAsyncDisposable
     // Solar / time-of-day state from the latest world-observer snapshot (§10.14 extended header):
     // [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate].
     // Updated lock-free each tick in ParseEpisodeState so the recorder pairs frames with the sun with
-    // no RPC and no polling; empty until the first snapshot arrives.
+    // no RPC and no polling; empty until the first snapshot arrives, and empty again for as long as
+    // the world has no sun to report (see the SolarStateValid check in ParseEpisodeState).
     private volatile double[] _solar = System.Array.Empty<double>();
 
     // ── Staging-fade state (see SetActorFadeAsync / GetActorOpacity / IsActorEstablished) ──
@@ -1069,8 +1070,29 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<bool> SetSolarDateAsync(long year, long month, long day)
         => _rpc.CallAsync<bool>("set_solar_date", year, month, day);
 
-    /// Current solar clock/date/origin, packed as
-    /// [solar_time, year, month, day, time_zone, lat, lon, advancing, rate]; empty if no sun.
+    /// Bind the whole solar epoch in one call: the civil calendar date, the civil clock
+    /// (<paramref name="hours"/>, wrapped into [0,24)) and the UTC offset in force at that instant
+    /// (<paramref name="utcOffsetHours"/>; half-hour zones such as +03:30 are representable).
+    /// Setting the offset as the sun's time zone is what makes <paramref name="hours"/> a CIVIL
+    /// clock: otherwise the zone stays at map-longitude/15 and the clock is local mean solar time,
+    /// which near sunrise or sunset is the difference between a sun above and below the horizon. It
+    /// also means the solar state reads back the instant that was declared. One lighting refresh for
+    /// the whole epoch, unlike a SetSolarTime + SetSolarDate pair, which leaves the world holding
+    /// the new time on the old date in between. False if the world has no CesiumSunSky or the date
+    /// is not a calendar date.
+    public Task<bool> SetSolarEpochAsync(long year, long month, long day, double hours,
+        double utcOffsetHours)
+        => _rpc.CallAsync<bool>("set_solar_epoch", year, month, day, hours, utcOffsetHours);
+
+    /// Current solar clock/date/origin/angles, packed as
+    /// [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing,
+    /// rate, corrected_elevation_deg]; empty if no sun.
+    ///
+    /// elevation_deg is geometric. corrected_elevation_deg has atmospheric refraction applied and is
+    /// what the sun's directional light is actually rotated by; near the horizon the two differ by a
+    /// few tenths of a degree, which is a large fraction of a low sun's elevation. It is appended
+    /// last, so the first eleven entries match the per-tick block on the episode-state header, which
+    /// carries the geometric elevation only.
     public Task<IReadOnlyList<double>> GetSolarStateAsync()
         => _rpc.CallAsync<IReadOnlyList<double>>("get_solar_state");
 
@@ -1665,8 +1687,15 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task CloseVehicleDoorAsync(ActorId id, VehicleDoor door)
         => _rpc.CallVoidAsync("close_vehicle_door", id, door);
 
+    /// Every vehicle's current light state, as (actor, flags) pairs.
+    ///
+    /// The RPC is SINGULAR. The plural spelling is the name of the Python API's World method
+    /// (PythonAPI/carla/src/World.cpp binds get_vehicles_light_states onto the client call), not of
+    /// the server binding, which is get_vehicle_light_states in CarlaServer.cpp - and LibCarla's own
+    /// Client::GetVehiclesLightStates calls the singular name for exactly that reason. The C#
+    /// method keeps the plural to match the Python API surface; only the wire name is singular.
     public Task<IReadOnlyList<(ActorId, VehicleLightStateFlags)>> GetVehiclesLightStatesAsync()
-        => _rpc.CallAsync<IReadOnlyList<(ActorId, VehicleLightStateFlags)>>("get_vehicles_light_states");
+        => _rpc.CallAsync<IReadOnlyList<(ActorId, VehicleLightStateFlags)>>("get_vehicle_light_states");
 
     public Task SetWheelSteerDirectionAsync(ActorId id, VehicleWheelLocation wheel, float angleDeg)
         => _rpc.CallVoidAsync("set_wheel_steer_direction", id, wheel, angleDeg);
@@ -1885,12 +1914,25 @@ public sealed class CarlaClient : IAsyncDisposable
             BinaryPrimitives.ReadInt32LittleEndian(payload[16..]));
         const int HeaderSize = 124;
         if (payload.Length < HeaderSize) return;   // extended (with-solar) header required
-        // Cache the solar block (11 doubles at offset 36) paired to this tick.
-        var solar = new double[11];
-        for (int k = 0; k < 11; k++)
-            solar[k] = BitConverter.Int64BitsToDouble(
-                BinaryPrimitives.ReadInt64LittleEndian(payload[(36 + k * 8)..]));
-        _solar = solar;
+        // Cache the solar block (11 doubles at offset 36) paired to this tick -- but only when the
+        // header says a sun was measured. The solar fields' defaults are a well-formed reading
+        // (midnight of year 0 at latitude 0, longitude 0), so a world with no CesiumSunSky is
+        // distinguishable only by EpisodeStateSerializer::SolarStateValid, bit 2 of the
+        // simulation-state flags at offset 32. Leaving the cache empty is what stops a recorded
+        // artifact asserting a sun that was never there.
+        const byte SolarStateValidFlag = 0x4;
+        if ((payload[32] & SolarStateValidFlag) != 0)
+        {
+            var solar = new double[11];
+            for (int k = 0; k < 11; k++)
+                solar[k] = BitConverter.Int64BitsToDouble(
+                    BinaryPrimitives.ReadInt64LittleEndian(payload[(36 + k * 8)..]));
+            _solar = solar;
+        }
+        else
+        {
+            _solar = System.Array.Empty<double>();
+        }
         const int ActorSize  = 119;
         var actors = payload[HeaderSize..];
         int count  = actors.Length / ActorSize;
@@ -2024,8 +2066,14 @@ public sealed class CarlaClient : IAsyncDisposable
 
     /// Solar / time-of-day state from the latest world-observer snapshot, paired to the current tick
     /// (no RPC, no poll): [solar_time, year, month, day, time_zone, lat, lon, elevation_deg,
-    /// azimuth_deg, advancing, rate]. Empty until the first snapshot arrives. Requires the world
-    /// observer to be running (StartWorldObserverAsync).
+    /// azimuth_deg, advancing, rate]. Requires the world observer to be running
+    /// (StartWorldObserverAsync).
+    ///
+    /// Empty both before the first snapshot arrives and whenever the world has no CesiumSunSky to
+    /// report. It is never a fabricated sun: the header's solar defaults read as midnight of year 0
+    /// at latitude 0, longitude 0, so a block is cached only when the server says it measured one.
+    /// elevation_deg is geometric; the refraction-corrected elevation the scene is lit at is
+    /// available from GetSolarStateAsync, which this cache does not carry.
     public IReadOnlyList<double> GetCachedSolarState() => _solar;
 
     // Decode VehicleControl from the cached TypeDependentState union.

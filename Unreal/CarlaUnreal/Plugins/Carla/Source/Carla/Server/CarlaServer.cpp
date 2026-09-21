@@ -634,9 +634,32 @@ void FCarlaServer::FPimpl::BindActions()
         World, static_cast<int32>(year), static_cast<int32>(month), static_cast<int32>(day));
   };
 
+  // Bind the whole solar epoch in one call: the civil date, the civil clock and the UTC offset in
+  // force at that instant. Setting the time zone is what makes `hours` a CIVIL clock -- without it
+  // the zone stays at map-longitude/15, so `hours` is local MEAN SOLAR time (at longitude 56.18,
+  // +03:44.7 against a civil +03:30) and near the horizon that is the difference between a sun above
+  // and below it. It is also one UpdateSun rather than two, so no frame can observe the new time on
+  // the old date. An out-of-calendar date is refused, not clamped. `set_solar_time` and
+  // `set_solar_date` are unchanged and remain the interactive path.
+  BIND_SYNC(set_solar_epoch) << [this](int64_t year, int64_t month, int64_t day, double hours,
+      double utc_offset_hours) -> R<bool>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to set the solar epoch in");
+    }
+    return UCesiumHeightSampler::SetSolarEpoch(
+        World, static_cast<int32>(year), static_cast<int32>(month), static_cast<int32>(day),
+        hours, utc_offset_hours);
+  };
+
   // Current solar clock/date/origin/angles, packed as
-  // [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate];
-  // empty if there is no sun.
+  // [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate,
+  // corrected_elevation_deg]; empty if there is no sun. elevation_deg is geometric;
+  // corrected_elevation_deg has atmospheric refraction applied and is what the sun light is rotated
+  // by. It is last so the first eleven entries keep the positions their readers index by.
   BIND_SYNC(get_solar_state) << [this]() -> R<std::vector<double>>
   {
     REQUIRE_CARLA_EPISODE();

@@ -1328,6 +1328,8 @@ exists or would silently corrupt data that is about to.
 | **F10** | **`Findings/13` §2's claim that no time-of-day RPC exists is now stale.** Its Phase 0 was built | `CarlaServer.cpp:614-680`; `CesiumHeightSampler.cpp:718-845`; `CesiumTimeOfDayController.cpp` | Not a code defect, a documentation one. [`Findings/13`](../../Findings/13_Usable_Night_Lighting.md) should be amended to mark Phase 0 done and to correct §2's `--ev` claim per F9 |
 | **F11** | **A world that already has a `CesiumSunSky` inherits the previous session's solar state.** Noon, DST-off and the longitude-derived zone are applied only when the actor is spawned | `CesiumHeightSampler.cpp:396-419`, guard at `:402`, defaults at `:409-412` | In attach mode, on a second `configure_cesium_georeference`, or against a level that placed a sun, **a capture's illumination is a function of session history** — including a still-true `advancing` flag. Nothing records it and no consumer can reconstruct it. Closed by D11.16 |
 | **F12** | **`--time-rate` is a silent no-op without `--time-advance`** | `WorldBuilder.py:246-247` — the rate is read only inside `if args.time_advance:` | An operator asks for accelerated sun and gets a frozen one, with no message. Closed by D11.18, which makes the combination a refusal |
+| **F13** | **The solar state reports the geometric sun elevation while the scene is lit by the refraction-corrected one.** `ACesiumSunSky::UpdateSun_Implementation` computes `Elevation` and `CorrectedElevation` and rotates the sun directional light by `-CorrectedElevation` (`CesiumSunSky.cpp:436-441`), but the bridge reads back `Elevation` alone | `CesiumSunSky.cpp:436-441`; `CesiumHeightSampler.cpp` `GetSunElevationDeg`. Measured at the Arapahoe site: the two differ by **+0.089° to +0.284°** near the horizon | Every threshold in this section - D11.9's +3.0°/+6.0° headlight band, D11.7's -6° corpus floor, §4.4's illumination bands and any declared window elevation - is stated against the geometric value while the imagery is lit by the corrected one. Near the horizon that is **5 to 25 per cent of the elevation itself**, which is exactly where the capture windows sit. `get_solar_state` now reports both, the corrected value appended last; the per-tick episode-state header still carries the geometric elevation only, because it is a fixed-size packed struct. §12.7 |
+
 
 ---
 
@@ -1411,3 +1413,14 @@ exists or would silently corrupt data that is about to.
    exactly one enabled directional light exists in the world, and record the count in the manifest.
    Cheap, and it turns an invisible corruption into a refused run. Needs a small read-only RPC that
    does not exist today.
+
+7. **Does a declared window elevation mean the geometric sun or the sun the scene is lit by?**
+   The two are not interchangeable at the horizon (F13, +0.089° to +0.284° measured), and the
+   band edges this section names are all within a degree of a threshold. `get_solar_state` now
+   returns both, so the choice is a statement rather than a limitation. **Recommendation: declare
+   windows and the headlight band against the CORRECTED elevation**, because that is the sun the
+   imagery was rendered under and imagery is what the corpus is for - and carry the geometric value
+   as well, because it is the one an external ephemeris reproduces. That requires the recorded
+   `<_solar>` block and the `carla:solar` chunk to carry both, which means widening the
+   episode-state header's fixed solar block; it is the same edit §8.2's added fields need, and
+   should land with them rather than on its own.

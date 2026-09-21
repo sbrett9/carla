@@ -17,6 +17,7 @@
 #include "Components/SkyLightComponent.h"
 #include "EngineUtils.h" // TActorIterator
 #include "HAL/PlatformTime.h" // FPlatformTime (sampling cost)
+#include "Misc/DateTime.h" // FDateTime (calendar validation; CoreMinimal.h does not pull this in)
 #include "UObject/UnrealType.h" // FDoubleProperty (reflection read of CesiumSunSky angles)
 
 // Process-global sample state. One sample at a time, which is all the pipeline
@@ -393,29 +394,38 @@ bool UCesiumHeightSampler::ConfigureCesiumForOrigin(
 	// -5 zone is ~8.75 h / ~131 deg off, pinning the sun near the horizon so the scene looks like
 	// dusk). Derive the time zone from the origin longitude and start at local solar noon so the
 	// world is correctly lit for wherever the OSM origin is. Disable DST for a deterministic clock.
-	bool bHasSunSky = false;
+	//
+	// These are applied whether the sun is spawned here or already exists. A world package can carry
+	// its own ACesiumSunSky, and attaching to a live server or configuring the same world twice
+	// reaches one that an earlier session left at an arbitrary clock. Applying them only on spawn
+	// made a world's illumination a function of session history -- which nothing records and no
+	// consumer can reconstruct -- and left the class defaults (13:00 in a US-Eastern zone, DST on) in
+	// force on every world that shipped its own sun. The calendar date is deliberately not asserted
+	// here: it is the scenario's to declare, and a client that wants a specific sun sets it
+	// explicitly afterwards (set_solar_epoch, or set_solar_time / set_solar_date).
+	ACesiumSunSky* SunSky = nullptr;
 	for (TActorIterator<ACesiumSunSky> It(World); It; ++It)
 	{
-		if (IsValid(*It)) { bHasSunSky = true; break; }
+		if (IsValid(*It)) { SunSky = *It; break; }
 	}
-	bool bSpawnedSunSky = false;
-	if (!bHasSunSky)
+	const bool bSunSkyExisted = (SunSky != nullptr);
+	if (!SunSky)
 	{
 		FActorSpawnParameters SunParams;
 		SunParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		ACesiumSunSky* SunSky = World->SpawnActor<ACesiumSunSky>(SunParams);
-		if (SunSky)
-		{
-			SunSky->SolarTime = 12.0;
-			SunSky->UseDaylightSavingTime = false;
-			// Sets TimeZone = longitude / 15 and calls UpdateSun() internally.
-			SunSky->EstimateTimeZoneForLongitude(OriginLongitude);
-			bSpawnedSunSky = true;
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] failed to spawn ACesiumSunSky."));
-		}
+		SunSky = World->SpawnActor<ACesiumSunSky>(SunParams);
+	}
+	const bool bSpawnedSunSky = (SunSky != nullptr && !bSunSkyExisted);
+	if (SunSky)
+	{
+		SunSky->SolarTime = 12.0;
+		SunSky->UseDaylightSavingTime = false;
+		// Sets TimeZone = longitude / 15 and calls UpdateSun() internally.
+		SunSky->EstimateTimeZoneForLongitude(OriginLongitude);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] failed to spawn ACesiumSunSky."));
 	}
 
 	// Make the camera sensors themselves drive tile selection. Without this the tiles are chosen from
@@ -436,7 +446,7 @@ bool UCesiumHeightSampler::ConfigureCesiumForOrigin(
 		TEXT("[CesiumCarlaBridge] Configured georeference (lat=%.7f lon=%.7f h=%.3f) + %d layer tileset(s) (photoreal asset=%lld, ground asset=%lld)%s%s."),
 		OriginLatitude, OriginLongitude, OriginHeight, NumTilesets,
 		static_cast<long long>(IonAssetId), static_cast<long long>(GroundIonAssetId),
-		bSpawnedSunSky ? TEXT(" (spawned sun)") : TEXT(""),
+		bSpawnedSunSky ? TEXT(" (spawned sun)") : (bSunSkyExisted ? TEXT(" (reset existing sun)") : TEXT("")),
 		bSpawnedPublisher ? TEXT(" (sensor views published)") : TEXT(""));
 	return true;
 }
@@ -715,6 +725,21 @@ static double GetSunAzimuthDeg(const ACesiumSunSky* SunSky)
 	return (SunSky && Prop) ? Prop->GetPropertyValue_InContainer(SunSky) : 0.0;
 }
 
+// The elevation the SCENE is actually lit at, as distinct from the geometric one above.
+// ACesiumSunSky computes both and rotates the sun directional light by CorrectedElevation, which
+// includes the atmosphere's refraction of light near the horizon. The two are identical high in the
+// sky and diverge as the sun approaches the horizon -- measured at the Arapahoe site, +0.089 to
+// +0.284 degrees, which is 5 to 25 per cent of the elevation itself in the low-sun windows a
+// twilight capture is made of. Reported alongside the geometric value rather than replacing it:
+// they answer different questions (where the sun IS, versus where its light comes FROM), and
+// collapsing them would silently change the meaning of a value already in every recorded artifact.
+static double GetSunCorrectedElevationDeg(const ACesiumSunSky* SunSky)
+{
+	static const FDoubleProperty* Prop = CastField<FDoubleProperty>(
+		ACesiumSunSky::StaticClass()->FindPropertyByName(TEXT("CorrectedElevation")));
+	return (SunSky && Prop) ? Prop->GetPropertyValue_InContainer(SunSky) : 0.0;
+}
+
 bool UCesiumHeightSampler::SetSolarTime(UObject* WorldContextObject, double SolarTimeHours)
 {
 	UWorld* World = GEngine
@@ -750,6 +775,48 @@ bool UCesiumHeightSampler::SetSolarDate(UObject* WorldContextObject, int32 Year,
 	return true;
 }
 
+bool UCesiumHeightSampler::SetSolarEpoch(
+	UObject* WorldContextObject, int32 Year, int32 Month, int32 Day,
+	double SolarTimeHours, double UtcOffsetHours)
+{
+	UWorld* World = GEngine
+		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
+		: nullptr;
+	ACesiumSunSky* SunSky = FindCesiumSunSky(World);
+	if (!SunSky)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] SetSolarEpoch: no CesiumSunSky in the world."));
+		return false;
+	}
+	// Reject rather than clamp. A day-of-month clamped onto a month that does not have it (31
+	// February, say) reaches the sun-position solver, which validates the date and returns early
+	// leaving its output struct zeroed -- the sun then reads back at an elevation of -180 degrees
+	// with only a log line to say why.
+	if (!FDateTime::Validate(Year, Month, Day, 0, 0, 0, 0))
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[CesiumCarlaBridge] SetSolarEpoch: %04d-%02d-%02d is not a calendar date; refused."),
+			Year, Month, Day);
+		return false;
+	}
+	SunSky->Year = Year;
+	SunSky->Month = Month;
+	SunSky->Day = Day;
+	// Wrap into [0, 24) so callers can pass a freely-accumulating clock, as SetSolarTime does.
+	SunSky->SolarTime = FMath::Fmod(FMath::Fmod(SolarTimeHours, 24.0) + 24.0, 24.0);
+	// The declared civil offset, so SolarTime is the civil clock rather than local mean solar time
+	// at the map longitude. ACesiumSunSky declares TimeZone over -12..14; a value outside that is a
+	// caller error, and clamping keeps it inside the range the property documents.
+	SunSky->TimeZone = FMath::Clamp(UtcOffsetHours, -12.0, 14.0);
+	// Daylight saving is carried by the offset above. The engine's own implementation is a single
+	// hardcoded start/end date pair applied at every location, which is not how zones work.
+	SunSky->UseDaylightSavingTime = false;
+	// One refresh for the whole epoch: a SetSolarTime/SetSolarDate pair leaves the world holding the
+	// new time on the old date between its two UpdateSun calls.
+	SunSky->UpdateSun();
+	return true;
+}
+
 TArray<double> UCesiumHeightSampler::GetSolarState(UObject* WorldContextObject)
 {
 	TArray<double> Out;
@@ -771,7 +838,11 @@ TArray<double> UCesiumHeightSampler::GetSolarState(UObject* WorldContextObject)
 		Lat = O.Y;
 	}
 	// Layout mirrored by the Python shim's get_solar_state():
-	// [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate].
+	// [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing,
+	//  rate, corrected_elevation_deg].
+	// The refraction-corrected elevation is appended LAST rather than placed beside the geometric
+	// one, because the first eleven entries are read positionally by the world observer, the truth
+	// sidecar and the PNG chunk writer.
 	Out.Add(SunSky->SolarTime);
 	Out.Add(static_cast<double>(SunSky->Year));
 	Out.Add(static_cast<double>(SunSky->Month));
@@ -794,6 +865,7 @@ TArray<double> UCesiumHeightSampler::GetSolarState(UObject* WorldContextObject)
 	}
 	Out.Add(Advancing);
 	Out.Add(Rate);
+	Out.Add(GetSunCorrectedElevationDeg(SunSky));
 	return Out;
 }
 

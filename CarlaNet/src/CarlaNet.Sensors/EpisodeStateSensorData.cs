@@ -9,7 +9,15 @@ namespace CarlaNet.Sensors;
 
 [Flags]
 public enum SimulationState : byte
-{ None = 0x0, MapChange = 0x1, PendingLightUpdate = 0x2 }
+{
+    None = 0x0,
+    MapChange = 0x1,
+    PendingLightUpdate = 0x2,
+    /// The header's solar block carries a sun that was actually measured this tick. Its defaults
+    /// are a well-formed reading -- midnight of year 0 at latitude 0, longitude 0 -- so nothing in
+    /// the values themselves says "this world has no sun"; only this flag does.
+    SolarStateValid = 0x4
+}
 
 public sealed class EpisodeStateHeader
 {
@@ -21,7 +29,8 @@ public sealed class EpisodeStateHeader
 
     /// Solar / time-of-day state in effect this tick (appended to the header, offset 36):
     /// [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate].
-    /// All-zero (rate 1.0) when the world has no CesiumSunSky.
+    /// Empty when the world has no CesiumSunSky (SimulationState.SolarStateValid clear), so a
+    /// consumer never mistakes the header's defaults for a measured sun.
     public IReadOnlyList<double> Solar { get; init; } = System.Array.Empty<double>();
 }
 
@@ -53,12 +62,17 @@ public sealed class EpisodeStateSensorData
         int my = BinaryPrimitives.ReadInt32LittleEndian(payload[24..]);
         int mz = BinaryPrimitives.ReadInt32LittleEndian(payload[28..]);
         var simState         = (SimulationState)payload[32];
-        // 3 bytes padding at [33..35], then 11 solar doubles at offset 36.
-
-        var solar = new double[11];
-        for (int k = 0; k < 11; k++)
-            solar[k] = BitConverter.Int64BitsToDouble(
-                BinaryPrimitives.ReadInt64LittleEndian(payload[(36 + k * 8)..]));
+        // 3 bytes padding at [33..35], then 11 solar doubles at offset 36. They are read only when
+        // the header says a sun was measured; otherwise they are defaults that read as a real sun.
+        var solar = System.Array.Empty<double>();
+        if ((simState & SimulationState.SolarStateValid) != 0)
+        {
+            var measured = new double[11];
+            for (int k = 0; k < 11; k++)
+                measured[k] = BitConverter.Int64BitsToDouble(
+                    BinaryPrimitives.ReadInt64LittleEndian(payload[(36 + k * 8)..]));
+            solar = measured;
+        }
 
         var header = new EpisodeStateHeader
         {

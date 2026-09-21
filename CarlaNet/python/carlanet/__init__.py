@@ -1508,12 +1508,39 @@ class World:
         Returns False if the world has no CesiumSunSky."""
         return bool(_sync(self._client.SetSolarDateAsync(int(year), int(month), int(day))))
 
+    def set_solar_epoch(self, year: int, month: int, day: int, hours: float,
+                        utc_offset_hours: float):
+        """Bind the sun's whole epoch in one call: the civil calendar date, the civil clock
+        `hours` (0-24, wraps) and `utc_offset_hours`, the UTC offset in force at that instant
+        (signed decimal hours; half-hour zones such as +03:30 are representable).
+
+        Setting the offset as the sun's time zone is what makes `hours` CIVIL time. `set_solar_time`
+        alone leaves the zone at map-longitude/15, so its `hours` is local MEAN SOLAR time -- at
+        longitude 56.18 that is +03:44.7 against a civil +03:30, and within a quarter hour of
+        sunrise or sunset that is the difference between a sun above and below the horizon. It also
+        means get_solar_state reads back the civil instant that was set. One lighting refresh for
+        the whole epoch, so no frame is rendered with the new time on the old date.
+
+        Returns False if the world has no CesiumSunSky or the date is not a calendar date (an
+        out-of-calendar date otherwise yields a sun at -180 degrees of elevation)."""
+        return bool(_sync(self._client.SetSolarEpochAsync(
+            int(year), int(month), int(day), float(hours), float(utc_offset_hours))))
+
     def get_solar_state(self):
         """Current sun clock/date/origin/angles, or None if the world has no CesiumSunSky. Returns a
         dict: {solar_time, year, month, day, time_zone, lat, lon, sun_elevation_deg, sun_azimuth_deg,
-        advancing, rate}. sun_elevation_deg is degrees above the horizon; sun_azimuth_deg is degrees
-        clockwise from North. Reads the world-observer cache (paired to the latest tick, no RPC); falls
-        back to an on-demand RPC if the observer cache isn't populated yet."""
+        advancing, rate, sun_corrected_elevation_deg}. sun_elevation_deg is GEOMETRIC degrees above
+        the horizon; sun_azimuth_deg is degrees clockwise from North.
+
+        sun_corrected_elevation_deg is the same elevation with atmospheric refraction applied, which
+        is what the sun's directional light is actually rotated by. Near the horizon the two differ
+        by a few tenths of a degree -- a large fraction of a low sun's elevation, so a threshold on
+        one is not a threshold on the other. It is None when the value came from the world-observer
+        cache, which carries the geometric elevation only; force the on-demand RPC path if you need
+        it every time.
+
+        Reads the world-observer cache (paired to the latest tick, no RPC); falls back to an
+        on-demand RPC if the observer cache isn't populated yet."""
         vals = None
         try:
             cached = self._client.GetCachedSolarState()
@@ -1530,7 +1557,8 @@ class World:
                 "lat": float(vals[5]), "lon": float(vals[6]),
                 "sun_elevation_deg": float(vals[7]), "sun_azimuth_deg": float(vals[8]),
                 "advancing": bool(vals[9]) if vals.Count > 9 else False,
-                "rate": float(vals[10]) if vals.Count > 10 else 1.0}
+                "rate": float(vals[10]) if vals.Count > 10 else 1.0,
+                "sun_corrected_elevation_deg": (float(vals[11]) if vals.Count > 11 else None)}
 
     def set_time_advance(self, enabled: bool, rate: float = 1.0):
         """Enable/disable automatic advancement of the sun's solar clock (the sun moves as the scene

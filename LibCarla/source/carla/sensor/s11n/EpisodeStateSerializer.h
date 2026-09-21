@@ -30,7 +30,12 @@ namespace s11n {
     enum SimulationState {
       None               = (0x0 << 0),
       MapChange          = (0x1 << 0),
-      PendingLightUpdate = (0x1 << 1)
+      PendingLightUpdate = (0x1 << 1),
+      /// The solar fields below carry a sun that was actually measured this tick. Without this
+      /// flag they cannot say "this world has no sun": their defaults are a well-formed reading
+      /// -- midnight of year 0 at latitude 0, longitude 0 -- that a reader cannot tell from a
+      /// real one, and would otherwise record as fact.
+      SolarStateValid    = (0x1 << 2)
     };
 
 #pragma pack(push, 1)
@@ -43,7 +48,8 @@ namespace s11n {
       // Solar / time-of-day state (CesiumSunSky), appended so each streamed world snapshot carries
       // the sun in effect that tick — the recorder pairs frames with the sun straight from the
       // observer cache (no polling). Populated by FWorldObserver from UCesiumHeightSampler::GetSolarState;
-      // left at these defaults (rate 1.0, rest 0) when the world has no CesiumSunSky. Stored as
+      // left at these defaults (rate 1.0, rest 0) when the world has no CesiumSunSky, in which case
+      // simulation_state does NOT carry SolarStateValid and these values must not be read. Stored as
       // doubles for a uniform block mirrored by the CarlaNet reader.
       double solar_time = 0.0;
       double solar_year = 0.0;
