@@ -322,13 +322,22 @@ else
     done
     echo "Staged the SUMO toolchain under $sumo_install."
 fi
-# CarlaNet locates the tool via env vars (see NETCONVERT_INTEGRATION.md):
-#   CARLA_NETCONVERT -> the netconvert binary
+# The toolchain is located through environment variables, read by:
+#   CARLA_NETCONVERT -> the netconvert binary; CarlaNet.Map.OsmConverter runs it
 #   PROJ_LIB (a.k.a. PROJ_DATA) -> the directory containing proj.db (from libproj-dev,
 #     typically /usr/share/proj) so PROJ can resolve the +proj=tmerc projection.
-echo "To use netconvert from CarlaNet, export:"
+#   SUMO_HOME -> this whole installation; carlacontrol.SumoInstallation reads it, and so does
+#     traci itself.
+# These are printed, not persisted: a fresh shell has none of them. CarlaControl/scripts/run_SCTMV.py
+# defaults all three to this staged install when they are unset, and a packaged distribution's
+# run-sctmv.sh points them at its own bundled tools/sumo.
+# SUMO_HOME is worth setting deliberately rather than leaving to whatever a SUMO installer wrote,
+# because it takes precedence over this repository's own build: an unrelated SUMO left in it is how a
+# world and the scenarios authored against it end up built by two different converter versions.
+echo "To use the SUMO toolchain from CarlaNet, export:"
 echo "  export CARLA_NETCONVERT=$sumo_install/bin/netconvert"
 echo "  export PROJ_LIB=/usr/share/proj   # dir containing proj.db (from libproj-dev)"
+echo "  export SUMO_HOME=$sumo_install"
 
 # ── VibeUE editor MCP plugin (OPTIONAL, private mirror, pinned) ──────────────
 # VibeUE is the in-editor MCP bridge used during digital-twin development. We pull a
