@@ -19,7 +19,6 @@ from carlacontrol.SimClock import SimClock
 from carlacontrol.SumoCotBridge import SumoCotBridge
 from carlacontrol.SumoScenarioBuilder import SumoScenarioBuilder
 from carlacontrol.TelemetryController import TelemetryController
-from carlacontrol.TelemetryHeightPatcher import TelemetryHeightPatcher
 from carlacontrol.TrafficController import TrafficController
 from carlacontrol.version import __version__
 from carlacontrol.WorldBuilder import WorldBuilder
@@ -43,7 +42,6 @@ __all__ = [
     "SumoCotBridge",
     "SumoScenarioBuilder",
     "TelemetryController",
-    "TelemetryHeightPatcher",
     "TrafficController",
     "WorldBuilder",
 ]
