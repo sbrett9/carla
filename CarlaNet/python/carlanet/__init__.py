@@ -1508,6 +1508,24 @@ class World:
         Returns False if the world has no CesiumSunSky."""
         return bool(_sync(self._client.SetSolarDateAsync(int(year), int(month), int(day))))
 
+    def set_solar_epoch(self, year: int, month: int, day: int, hours: float,
+                        utc_offset_hours: float):
+        """Bind the sun's whole epoch in one call: the civil calendar date, the civil clock
+        `hours` (0-24, wraps) and `utc_offset_hours`, the UTC offset in force at that instant
+        (signed decimal hours; half-hour zones such as +03:30 are representable).
+
+        Setting the offset as the sun's time zone is what makes `hours` CIVIL time. `set_solar_time`
+        alone leaves the zone at map-longitude/15, so its `hours` is local MEAN SOLAR time -- at
+        longitude 56.18 that is +03:44.7 against a civil +03:30, and within a quarter hour of
+        sunrise or sunset that is the difference between a sun above and below the horizon. It also
+        means get_solar_state reads back the civil instant that was set. One lighting refresh for
+        the whole epoch, so no frame is rendered with the new time on the old date.
+
+        Returns False if the world has no CesiumSunSky or the date is not a calendar date (an
+        out-of-calendar date otherwise yields a sun at -180 degrees of elevation)."""
+        return bool(_sync(self._client.SetSolarEpochAsync(
+            int(year), int(month), int(day), float(hours), float(utc_offset_hours))))
+
     def get_solar_state(self):
         """Current sun clock/date/origin/angles, or None if the world has no CesiumSunSky. Returns a
         dict: {solar_time, year, month, day, time_zone, lat, lon, sun_elevation_deg, sun_azimuth_deg,

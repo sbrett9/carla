@@ -1069,6 +1069,20 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<bool> SetSolarDateAsync(long year, long month, long day)
         => _rpc.CallAsync<bool>("set_solar_date", year, month, day);
 
+    /// Bind the whole solar epoch in one call: the civil calendar date, the civil clock
+    /// (<paramref name="hours"/>, wrapped into [0,24)) and the UTC offset in force at that instant
+    /// (<paramref name="utcOffsetHours"/>; half-hour zones such as +03:30 are representable).
+    /// Setting the offset as the sun's time zone is what makes <paramref name="hours"/> a CIVIL
+    /// clock: otherwise the zone stays at map-longitude/15 and the clock is local mean solar time,
+    /// which near sunrise or sunset is the difference between a sun above and below the horizon. It
+    /// also means the solar state reads back the instant that was declared. One lighting refresh for
+    /// the whole epoch, unlike a SetSolarTime + SetSolarDate pair, which leaves the world holding
+    /// the new time on the old date in between. False if the world has no CesiumSunSky or the date
+    /// is not a calendar date.
+    public Task<bool> SetSolarEpochAsync(long year, long month, long day, double hours,
+        double utcOffsetHours)
+        => _rpc.CallAsync<bool>("set_solar_epoch", year, month, day, hours, utcOffsetHours);
+
     /// Current solar clock/date/origin, packed as
     /// [solar_time, year, month, day, time_zone, lat, lon, advancing, rate]; empty if no sun.
     public Task<IReadOnlyList<double>> GetSolarStateAsync()

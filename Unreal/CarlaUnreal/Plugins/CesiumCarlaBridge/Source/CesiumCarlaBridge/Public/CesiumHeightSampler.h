@@ -200,6 +200,29 @@ public:
 	static bool SetSolarDate(UObject* WorldContextObject, int32 Year, int32 Month, int32 Day);
 
 	/**
+	 * Bind the whole solar epoch in one call: the civil calendar date, the civil clock
+	 * (`SolarTimeHours`, wrapped into [0,24)) and the UTC offset in force at that instant
+	 * (`UtcOffsetHours`, clamped to the sun's -12..14 range; half-hour zones are representable).
+	 * Daylight saving is left off, because the offset already expresses it.
+	 *
+	 * Setting the time zone is what makes `SolarTimeHours` a CIVIL clock. Without it the zone stays
+	 * at longitude/15 from EstimateTimeZoneForLongitude, so the clock is local MEAN SOLAR time at
+	 * the map longitude -- at longitude 56.18 that is +03:44.7 against Iran's civil +03:30, nearly
+	 * fifteen minutes, which near sunrise or sunset is the difference between a sun above and below
+	 * the horizon. Binding the declared civil offset also makes the solar state read back the
+	 * instant that was declared, rather than a converted one every reader would have to undo.
+	 *
+	 * One UpdateSun for the whole epoch, so no frame can observe the new time on the old date the
+	 * way a SetSolarTime/SetSolarDate pair allows. Returns false if there is no ACesiumSunSky, or if
+	 * Year/Month/Day is not a calendar date -- an out-of-calendar date makes the sun-position solver
+	 * return its zeroed default, which reads back as an elevation of -180 degrees.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
+	static bool SetSolarEpoch(
+		UObject* WorldContextObject, int32 Year, int32 Month, int32 Day,
+		double SolarTimeHours, double UtcOffsetHours);
+
+	/**
 	 * Read the current solar clock/date/origin/angles from the ACesiumSunSky, packed as
 	 * [solar_time, year, month, day, time_zone, origin_lat, origin_lon, elevation_deg, azimuth_deg,
 	 * advancing(0/1), rate]. Empty array if no ACesiumSunSky exists. elevation/azimuth are the sun

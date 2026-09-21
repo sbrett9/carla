@@ -17,6 +17,7 @@
 #include "Components/SkyLightComponent.h"
 #include "EngineUtils.h" // TActorIterator
 #include "HAL/PlatformTime.h" // FPlatformTime (sampling cost)
+#include "Misc/DateTime.h" // FDateTime (calendar validation; CoreMinimal.h does not pull this in)
 #include "UObject/UnrealType.h" // FDoubleProperty (reflection read of CesiumSunSky angles)
 
 // Process-global sample state. One sample at a time, which is all the pipeline
@@ -755,6 +756,48 @@ bool UCesiumHeightSampler::SetSolarDate(UObject* WorldContextObject, int32 Year,
 	SunSky->Year = Year;
 	SunSky->Month = FMath::Clamp(Month, 1, 12);
 	SunSky->Day = FMath::Clamp(Day, 1, 31);
+	SunSky->UpdateSun();
+	return true;
+}
+
+bool UCesiumHeightSampler::SetSolarEpoch(
+	UObject* WorldContextObject, int32 Year, int32 Month, int32 Day,
+	double SolarTimeHours, double UtcOffsetHours)
+{
+	UWorld* World = GEngine
+		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
+		: nullptr;
+	ACesiumSunSky* SunSky = FindCesiumSunSky(World);
+	if (!SunSky)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] SetSolarEpoch: no CesiumSunSky in the world."));
+		return false;
+	}
+	// Reject rather than clamp. A day-of-month clamped onto a month that does not have it (31
+	// February, say) reaches the sun-position solver, which validates the date and returns early
+	// leaving its output struct zeroed -- the sun then reads back at an elevation of -180 degrees
+	// with only a log line to say why.
+	if (!FDateTime::Validate(Year, Month, Day, 0, 0, 0, 0))
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[CesiumCarlaBridge] SetSolarEpoch: %04d-%02d-%02d is not a calendar date; refused."),
+			Year, Month, Day);
+		return false;
+	}
+	SunSky->Year = Year;
+	SunSky->Month = Month;
+	SunSky->Day = Day;
+	// Wrap into [0, 24) so callers can pass a freely-accumulating clock, as SetSolarTime does.
+	SunSky->SolarTime = FMath::Fmod(FMath::Fmod(SolarTimeHours, 24.0) + 24.0, 24.0);
+	// The declared civil offset, so SolarTime is the civil clock rather than local mean solar time
+	// at the map longitude. ACesiumSunSky declares TimeZone over -12..14; a value outside that is a
+	// caller error, and clamping keeps it inside the range the property documents.
+	SunSky->TimeZone = FMath::Clamp(UtcOffsetHours, -12.0, 14.0);
+	// Daylight saving is carried by the offset above. The engine's own implementation is a single
+	// hardcoded start/end date pair applied at every location, which is not how zones work.
+	SunSky->UseDaylightSavingTime = false;
+	// One refresh for the whole epoch: a SetSolarTime/SetSolarDate pair leaves the world holding the
+	// new time on the old date between its two UpdateSun calls.
 	SunSky->UpdateSun();
 	return true;
 }
