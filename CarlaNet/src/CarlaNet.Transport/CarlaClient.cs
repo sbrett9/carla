@@ -1679,8 +1679,15 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task CloseVehicleDoorAsync(ActorId id, VehicleDoor door)
         => _rpc.CallVoidAsync("close_vehicle_door", id, door);
 
+    /// Every vehicle's current light state, as (actor, flags) pairs.
+    ///
+    /// The RPC is SINGULAR. The plural spelling is the name of the Python API's World method
+    /// (PythonAPI/carla/src/World.cpp binds get_vehicles_light_states onto the client call), not of
+    /// the server binding, which is get_vehicle_light_states in CarlaServer.cpp - and LibCarla's own
+    /// Client::GetVehiclesLightStates calls the singular name for exactly that reason. The C#
+    /// method keeps the plural to match the Python API surface; only the wire name is singular.
     public Task<IReadOnlyList<(ActorId, VehicleLightStateFlags)>> GetVehiclesLightStatesAsync()
-        => _rpc.CallAsync<IReadOnlyList<(ActorId, VehicleLightStateFlags)>>("get_vehicles_light_states");
+        => _rpc.CallAsync<IReadOnlyList<(ActorId, VehicleLightStateFlags)>>("get_vehicle_light_states");
 
     public Task SetWheelSteerDirectionAsync(ActorId id, VehicleWheelLocation wheel, float angleDeg)
         => _rpc.CallVoidAsync("set_wheel_steer_direction", id, wheel, angleDeg);

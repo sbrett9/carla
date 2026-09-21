@@ -92,7 +92,7 @@ internal sealed class VehicleLightStage : IStageWithRemoveActor
     /// </summary>
     /// <remarks>
     /// Upstream's <c>VehicleLightStage::UpdateWorldInfo</c> issues
-    /// <c>get_vehicles_light_states</c>, <c>is_weather_enabled</c> and
+    /// <c>get_vehicle_light_states</c>, <c>is_weather_enabled</c> and
     /// <c>get_weather_parameters</c> on every tick. Here each is on its own
     /// interval instead — see the constants above for why neither reading
     /// needs to be tick-fresh, and what the round trips cost.
@@ -108,9 +108,16 @@ internal sealed class VehicleLightStage : IStageWithRemoveActor
             {
                 _allLightStates = _client.GetVehiclesLightStatesAsync().GetAwaiter().GetResult();
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 _allLightStates = Array.Empty<(ActorId, VehicleLightStateFlags)>();
+                // Reported once rather than discarded. An empty light-state view is survivable -
+                // the stage re-sends a value a vehicle already has - so this failure produced no
+                // symptom anyone could see, and a wrong RPC name survived in it undetected.
+                TMDiagnostics.WarnOnce("vehicle-light-states",
+                    "[TM] reading every vehicle's light state failed; the stage will re-send light "
+                    + "commands vehicles already have until it succeeds. "
+                    + $"{ex.GetType().Name}: {ex.Message}");
             }
         }
 
