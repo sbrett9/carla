@@ -140,7 +140,10 @@ def main() -> int:
     client.set_timeout(20.0)
     world = client.get_world()
 
-    # Configure solar time/date (re-applied every run because the sun is respawned on each world build).
+    # Place the sun, but only as far as the operator asked. A built world respawns its sun and so
+    # needs whatever was asked for re-applied; an attached world was lit by whoever built it and is
+    # left that way. Whichever branch ran, setup_solar_time applies --date, --time and
+    # --time-advance only where they were given, and reports the sun it found where they were not.
     WorldBuilder.setup_solar_time(world, args)
 
     # Configure world synchronous/asynchronous mode.

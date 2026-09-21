@@ -255,15 +255,19 @@ class CarlaControlArgumentParser:
         view.add_argument(
             "--time",
             default=None,
-            help="start local solar time as HH:MM or decimal hours (default: 12:00, local "
-            "solar noon). The sun's time zone is derived from the map longitude, so "
-            "noon is high sun wherever the OSM origin is.",
+            help="start local solar time as HH:MM or decimal hours. Omit it and the sun keeps "
+            "whatever clock the world already has, which is reported at startup rather than "
+            "replaced -- illumination is only a controlled setting if it was asked for. The "
+            "sun's time zone is derived from the map longitude, so noon is high sun wherever "
+            "the OSM origin is.",
         )
         view.add_argument(
             "--date",
             default=None,
-            help="scene date as YYYY-MM-DD (default: host system date). Sets the seasonal "
-            "sun angle; not for historical/almanac accuracy.",
+            help="scene date as YYYY-MM-DD. Sets the seasonal sun angle, which at mid latitudes "
+            "moves the noon sun by more than forty degrees between the solstices; not for "
+            "historical/almanac accuracy. Omit it and the world keeps the date it already has, "
+            "rather than being given the host machine's calendar.",
         )
         view.add_argument(
             "--time-advance",

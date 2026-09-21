@@ -4,7 +4,6 @@ import logging
 import os
 import shlex
 import time
-from datetime import datetime
 
 from CarlaNet.Map import OsmConversionOptions
 from System.Collections.Generic import List
@@ -229,8 +228,36 @@ class WorldBuilder:
                 logger.debug(f"failed to disable synchronous mode: {e}")
 
     @staticmethod
+    def solar_time_requested(args) -> bool:
+        """Whether the operator asked for the sun to be placed at all.
+
+        `--date`, `--time` and `--time-advance` are the three ways of asking. When none of them was
+        given there is nothing to apply, and the world keeps the sun it already has.
+        """
+        return bool(args.date) or args.time is not None or bool(args.time_advance)
+
+    @staticmethod
+    def parse_solar_hours(value) -> float:
+        """`--time` as decimal hours, written either as HH:MM or as a decimal figure."""
+        text = str(value)
+        if ":" in text:
+            hours, minutes = text.split(":")
+            return int(hours) + int(minutes) / 60.0
+        return float(text)
+
+    @staticmethod
     def setup_solar_time(world, args) -> bool:
-        """Configure solar time/date and time advancement after world build.
+        """Apply the solar date, clock and advancement that were asked for, and only those.
+
+        Each of `--date`, `--time` and `--time-advance` is applied when it was given and left alone
+        when it was not. Nothing is invented for the ones that were not: a stand-in date is the
+        host's calendar and a stand-in hour is noon, so inventing them makes the illumination of
+        every capture a by-product of when the run happened rather than a setting the run declared.
+        Illumination is a controlled variable or it is nothing.
+
+        With none of the three given, the world is not touched at all and the sun it already has is
+        reported instead -- including in attach mode, where nothing was respawned and relighting
+        somebody's world would be a silent change to what their captures show.
 
         Args:
             world: CARLA world object
@@ -240,27 +267,25 @@ class WorldBuilder:
             True if successful (logs warnings on failure)
         """
         logger = logging.getLogger(__name__)
+        if not WorldBuilder.solar_time_requested(args):
+            WorldBuilder._report_solar_state_left_alone(world, logger)
+            return True
         try:
             if args.date:
-                y, mo, d = (int(v) for v in args.date.split("-"))
-            else:
-                now = datetime.now()
-                y, mo, d = now.year, now.month, now.day
-            if args.time is None:
-                hours = 12.0
-            elif ":" in str(args.time):
-                hh, mm = str(args.time).split(":")
-                hours = int(hh) + int(mm) / 60.0
-            else:
-                hours = float(args.time)
-            world.set_solar_date(y, mo, d)
-            if world.set_solar_time(hours):
-                logger.info(
-                    f"solar time set: {int(hours) % 24:02d}:{int(round((hours % 1) * 60)) % 60:02d} "
-                    f"local, date {y:04d}-{mo:02d}-{d:02d}"
-                )
-            else:
-                logger.warning("solar time not set (world has no CesiumSunSky)")
+                year, month, day = (int(v) for v in args.date.split("-"))
+                if world.set_solar_date(year, month, day):
+                    logger.info(f"solar date set: {year:04d}-{month:02d}-{day:02d}")
+                else:
+                    logger.warning("solar date not set (world has no CesiumSunSky)")
+            if args.time is not None:
+                hours = WorldBuilder.parse_solar_hours(args.time)
+                if world.set_solar_time(hours):
+                    logger.info(
+                        "solar time set: "
+                        f"{int(hours) % 24:02d}:{int(round((hours % 1) * 60)) % 60:02d} local"
+                    )
+                else:
+                    logger.warning("solar time not set (world has no CesiumSunSky)")
             if args.time_advance:
                 world.set_time_advance(True, args.time_rate)
                 logger.info(
@@ -271,3 +296,28 @@ class WorldBuilder:
         except Exception as e:
             logger.error(f"solar time-of-day setup failed: {e!r}")
             return False
+
+    @staticmethod
+    def _report_solar_state_left_alone(world, logger: logging.Logger) -> None:
+        """Say which sun the run is using when the run did not choose one.
+
+        Reading it back rather than announcing an intention: the sun a world carries comes from
+        whoever last set it, and a line in the log is the only record of what lit the captures.
+        """
+        state = None
+        try:
+            state = world.get_solar_state()
+        except Exception as e:
+            logger.debug(f"could not read the world's solar state: {e!r}")
+        if not state:
+            logger.info("sun left as the world has it (no --time, --date or --time-advance given); "
+                        "the world reports no sun to read")
+            return
+        hours = state["solar_time"]
+        logger.info(
+            "sun left as the world has it (no --time, --date or --time-advance given): "
+            f"{int(hours) % 24:02d}:{int(round((hours % 1) * 60)) % 60:02d} local on "
+            f"{state['year']:04d}-{state['month']:02d}-{state['day']:02d}, "
+            f"elevation {state['sun_elevation_deg']:.2f} deg"
+            + (f", advancing at {state['rate']:g}x" if state["advancing"] else "")
+        )
