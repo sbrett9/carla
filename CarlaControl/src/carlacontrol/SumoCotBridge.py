@@ -20,7 +20,9 @@ Two conversions matter and both avoid guesswork:
     package's `bareearth.bin` is available its per-cell bare-earth grid supplies the ellipsoidal
     height, which is the same bare-earth truth CARLA telemetry reports; otherwise a single
     configured height is used for every vehicle. Terrain relief across a map is tens of metres, so
-    the grid is worth supplying.
+    the grid is worth supplying. The grid is indexed in the CARLA world frame, where north is -y,
+    while SUMO reports the projection's own metres, where north is +y; the two differ by the sign
+    of y alone, and a position crosses that boundary once, in `_height_at`.
 
 SUMO reports heading as degrees clockwise from north, which is already what CoT `track/course`
 wants, and unlike a course derived from velocity it stays meaningful for a stopped vehicle.
@@ -137,10 +139,24 @@ class BareEarthGrid:
         heights = struct.unpack_from(f"<{count}f", raw, header_size + 4 * count)
         return cls(min_x, min_y, cell, cols, rows, origin_h, heights)
 
-    def height_at(self, x: float, y: float) -> float:
-        """Bare-earth height at a point in the map's projected metres, clamped to the grid."""
-        col = min(self.columns - 1, max(0, int((x - self.min_x) / self.cell_size)))
-        row = min(self.rows - 1, max(0, int((y - self.min_y) / self.cell_size)))
+    def height_at(self, x: float, y: float) -> float | None:
+        """Bare-earth height under a point in the CARLA world frame, or None outside the grid.
+
+        The grid is laid out in the frame the world was generated in -- CARLA's, where +x is east
+        and **-y** is north (`DrapeTerrain.MakeGrid`, `Geodesy.GeodeticToCarlaLocal`). A caller
+        holding a position in the projection's own metres, as SUMO and OpenDRIVE report them, must
+        negate y before asking: the two frames differ by that sign alone, so an unnegated y reads
+        the row mirrored about the map's centre line and returns a height measured somewhere else.
+
+        Outside the grid there is no answer. Returning the nearest edge cell would report a height
+        from the map's rim as though it had been measured under the vehicle, and nothing in the
+        number would show it; the C# reader of the same grids refuses the same way
+        (`CarlaClient.SampleDrapeGroundElevation`).
+        """
+        col = math.floor((x - self.min_x) / self.cell_size)
+        row = math.floor((y - self.min_y) / self.cell_size)
+        if not (0 <= col < self.columns and 0 <= row < self.rows):
+            return None
         return self.heights[row * self.columns + col]
 
 
@@ -187,6 +203,9 @@ class RunReport:
     # means the label ids and the route file have drifted apart, which nothing in the written
     # output can show, since the output deliberately does not distinguish them.
     marked_vehicles: int = 0
+    # Events whose height fell back to the configured constant because the vehicle was outside the
+    # bare-earth grid. A run with any of these has heights of two different kinds in one file.
+    off_grid_heights: int = 0
     sim_seconds: float = 0.0
     wall_seconds: float = 0.0
     sinks: list[str] = field(default_factory=list)
@@ -208,6 +227,7 @@ class SumoCotBridge:
         self.bare_earth = bare_earth
         self.constant_hae = constant_hae
         self.use_gui = use_gui
+        self.off_grid_heights = 0
         self.logger = logging.getLogger(__name__)
 
     def run(self, settings: CotOutputSettings, end_time: float | None = None,
@@ -223,6 +243,7 @@ class SumoCotBridge:
         """
         traci = self.installation.import_traci()
         report = RunReport()
+        self.off_grid_heights = 0
         epoch = settings.epoch or datetime.now(UTC)
 
         udp = CotUdpEmitter(settings.udp_host, settings.udp_port, settings.udp_ttl) \
@@ -306,6 +327,7 @@ class SumoCotBridge:
                 report.sim_seconds = now
             report.vehicles = len(seen)
             report.marked_vehicles = len(seen_marked)
+            report.off_grid_heights = self.off_grid_heights
             report.wall_seconds = time.monotonic() - started_at
         finally:
             traci.close()
@@ -319,6 +341,11 @@ class SumoCotBridge:
         self.logger.info("%d events for %d vehicles over %.0f s of simulation in %.0f s "
                          "(%.1fx real time)", report.events, report.vehicles, report.sim_seconds,
                          report.wall_seconds, report.achieved_real_time_factor)
+        if report.off_grid_heights:
+            self.logger.warning("%d of %d events (%.1f%%) report the configured constant height "
+                                "because the vehicle was outside the bare-earth grid",
+                                report.off_grid_heights, report.events,
+                                100.0 * report.off_grid_heights / max(1, report.events))
         expected_marked = len(settings.marked_ids) or 1
         if report.marked_vehicles:
             self.logger.info("%d of %d labelled vehicles appeared; which ones is recorded only in "
@@ -373,8 +400,23 @@ class SumoCotBridge:
         }
 
     def _height_at(self, x: float, y: float) -> float:
+        """Bare-earth height under a SUMO position, which is in the projection's metres.
+
+        This is the one place a position crosses from SUMO's frame into the grid's, so it is the one
+        place y changes sign. A vehicle outside the grid -- a map whose network runs past the
+        terrain the world was generated over -- falls back to the configured constant, which is
+        wrong by whatever the relief is, but is wrong in a way that is stated rather than disguised
+        as a measurement.
+        """
         if self.bare_earth:
-            return self.bare_earth.height_at(x, y)
+            height = self.bare_earth.height_at(x, -y)
+            if height is not None:
+                return height
+            self.off_grid_heights += 1
+            if self.off_grid_heights == 1:
+                self.logger.warning(
+                    "a vehicle at SUMO (%.1f, %.1f) is outside the bare-earth grid; reporting the "
+                    "configured %.1f m for it and for any others", x, y, self.constant_hae)
         return self.constant_hae
 
     @staticmethod
