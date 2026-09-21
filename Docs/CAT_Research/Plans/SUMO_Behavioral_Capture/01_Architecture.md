@@ -87,7 +87,7 @@ flowchart TB
         AR["AuthoringReferenceSet<br/>catalogue, area table,<br/>street index, world digest"]
         SA["Scenario authoring<br/>SumoNetworkBuilder, SumoDemandAuthor,<br/>BehaviouralAnnotationCompiler, ScenarioValidator"]
         CS["CaptureSessionHost<br/>PlaybackClock, ScenarioEpochResolver,<br/>CarlaNet.CoSim bridge,<br/>CaptureSession, RunManifestWriter"]
-        SUMO["sumo process<br/>via libtraci"]
+        SUMO["sumo process<br/>TraCI over TCP"]
         SRV["CARLA server<br/>world, sensors, engine recorder,<br/>CesiumSunSky, world-scoped state actors"]
         CORP["Capture corpus<br/>PNG + CoT sidecar + manifest"]
         CAUD["CorpusAudit<br/>accidental positives in the<br/>unlabelled population"]
@@ -183,14 +183,14 @@ validation rather than fall back to a guess.
 
 **In `CarlaNet.CoSim`, a new assembly** (the name is carried forward from
 [23 §5](../../Findings/23_SUMO_Traffic_Integration.md)). Its reference set is `CarlaNet.Types`,
-`CarlaNet.Transport`, `CarlaNet.Map` and the `libtracics` wrapper. It must **not** reference
+`CarlaNet.Transport`, `CarlaNet.Map` and `CarlaNet.Sumo` (the TraCI client). It must **not** reference
 `CarlaNet.TrafficManager` for the playback mode; see §5.3. The existing reference graph
 (`CarlaNet/src/*/*.csproj`, read 2026-09-17) confirms `CarlaNet.Types` references nothing and is the only
 common ancestor of `CarlaNet.Scenario` and `CarlaNet.Recording`.
 
 | Component | Responsibility |
 |---|---|
-| `SumoSession` | Owns the `sumo` process lifetime and the libtraci connection; restartable without restarting the world |
+| `SumoSession` | Owns the `sumo` process lifetime and the TraCI connection to it; restartable without restarting the world |
 | `SumoStateReader` | One bulk read per SUMO step through a TraCI subscription, not one call per vehicle. Non-optional at Bahonar scale ([23 §6.11](../../Findings/23_SUMO_Traffic_Integration.md)) |
 | `PlaybackClock` | **The sole owner of the advance of simulated time, and therefore of simulated civil time and of the sun.** Decides when the world is cued and when SUMO is stepped, enforces the step ratio of §6.1, and is the only component that commands the world's solar state (§4.4) |
 | `ScenarioEpochResolver` | Resolves the scenario package's epoch declaration and the run's `SolarPolicy` into one immutable session input: the civil instant of `t = 0`, the civil UTC offset, and whether the sun is frozen or advancing and at what rate. Runs once at session start; produces the projection `PlaybackClock` then evaluates. It is also what a replay uses, reading the epoch and policy back out of a run manifest instead of a scenario package (§5.5) |
@@ -449,7 +449,7 @@ flowchart TB
 
     p1 <-->|"CARLA RPC + sensor streams, TCP"| p4
     p2 <-->|"CARLA RPC + sensor streams, TCP"| p4
-    p1 <-->|"TraCI over TCP via libtracics"| p3
+    p1 <-->|"TraCI over TCP"| p3
     p1 -->|"files, or a live paced stream (§4.6):<br/>the corpus, handed over"| DAT
     p2 -->|"files, or a live paced stream (§4.6):<br/>the corpus, handed over"| DAT
     p1 -->|"CoT over UDP"| TAK
@@ -473,7 +473,7 @@ architecture states nothing further about that transport (D1.28).
 |---|---|---|---|
 | Python entry | CarlaNet assemblies | **No transport** — same process, pythonnet | This is why there is no Python in the per-tick path ([18 D2](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md)) |
 | `CarlaNet.Transport` | CARLA server | CARLA RPC (msgpack over TCP) and the sensor/world-observer streams | `SendTickCueAsync` (`CarlaClient.cs:403`) is the synchronous rendezvous |
-| `CarlaNet.CoSim` | `sumo` | TraCI over TCP, through the first-party SWIG C# binding `Eclipse.Sumo.Libtraci` | Out of process by choice: a SUMO assertion cannot take the client down and `sumo` is restartable ([23 §6.3](../../Findings/23_SUMO_Traffic_Integration.md)) |
+| `CarlaNet.CoSim` | `sumo` | TraCI over TCP, spoken directly by `CarlaNet.Sumo` — a managed socket client ported from SUMO's own reference client | Out of process structurally: nothing of SUMO's is loaded into this process, so a SUMO assertion cannot take the client down and `sumo` is restartable ([23 §1.1, §6.3](../../Findings/23_SUMO_Traffic_Integration.md)) |
 | Any client | World-scoped state | CARLA RPC pairs, in the manner of `set_staging_bounds`/`get_staging_bounds` | Published on change, not per tick; see §4.1 |
 | `SolarStateActuator` | CARLA server | `set_solar_time`, `set_solar_date`, `set_time_advance` — three RPCs (`CarlaServer.cpp:614`, `:625`, `:661`) | **Write path only, and rare**: once at window open, once per solar-date rollover, once per policy change. Never per tick (§4.4) |
 | CARLA server | Any client | Solar state, **on the world-observer snapshot header** — eleven doubles appended at offset 36 (`Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Sensor/WorldObserver.cpp:322-339`; cached at `CarlaClient.cs:1850-1855`, exposed at `:1991`) | **No RPC at all**, tick-paired, lock-free. The read path costs nothing and is already consumed by the recorder (`FrameRecorder.cs:160-162`) |
@@ -1059,7 +1059,7 @@ sequenceDiagram
     autonumber
     participant ERS as ScenarioEpochResolver
     participant CLK as PlaybackClock
-    participant SUM as sumo (libtraci)
+    participant SUM as sumo (TraCI)
     participant SEL as RenderSetSelector
     participant REG as RenderedVehicleRegistry
     participant SOL as SolarStateActuator
@@ -1316,8 +1316,8 @@ exactly — extended to the one channel where SUMO is *not* the better source an
 (`carlanet/__init__.py:484-487`) and already emitted in batch form by the traffic manager's own light
 stage (`Stages/VehicleLightStage.cs:9-12`, which explicitly notes it issues no RPC inside `Update`).
 SUMO's signals arrive on the **same bulk subscription** the state reader already performs —
-`VAR_SIGNALS` is an ordinary subscribable vehicle variable (`libsumo/TraCIConstants.h:1075`) and is
-exposed on the C# binding as `Vehicle.getSignals` (`Eclipse.Sumo.Libtraci/Vehicle.cs:318-319`). So the
+`VAR_SIGNALS` is an ordinary subscribable vehicle variable (`libsumo/TraCIConstants.h:1075`, carried
+into the reference client at `tools/traci/constants.py:1056`, direct getter `_vehicle.py:515`). So the
 whole feature is: more entries in a subscription that already runs, and more entries in a batch that
 already runs. **Zero additional round trips**, at a per-tick cost [10](10_Scale_And_Performance.md) needs
 to bound but that has the same shape as the pose writes it already bounded.
@@ -1512,7 +1512,7 @@ Stated as properties, not as a design:
 | [06 — Truth and annotation](06_Truth_And_Annotation.md) | The rendered span gate upstream of the observed span (§7). Where kinematics provenance is carried. **That the run manifest carries the declared epoch and the `SolarPolicy`**, because the sidecar's `<_solar>` records local solar time and the engine's longitude-derived zone (`CotWriter.cs:52-66`) and nothing in it states the *civil* offset the scenario declared — so without the manifest a consumer cannot convert a recorded frame back to scenario civil time, and a replay cannot re-establish the sun (§5.5) |
 | [07 — Scenario authoring](07_Scenario_Authoring.md) | How [20 §2.4](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s three interval onsets are produced on a SUMO surface, where there is no authored speed-action ramp to separate them. That the validator rejects a package with no epoch declaration, and rejects an author-declared lamp that would breach §8.5.3 |
 | [08 — Collection and EPoL](08_Collection_And_EPoL.md) | That truth never reaches the model service — it consumes tracks only, and this pipeline reads nothing it emits back in. That solar state remains an available covariate for stratifying a corpus; this pipeline does not train or judge any model against it. **The ruling on what `PlaybackClock` does when a live external chain cannot sustain the declared real-time factor** — hold, slow, or drop — and what the operator sees while it happens (§4.6); this section fixes only that the lever is the clock's |
-| [09 — Toolchain and packaging](09_Toolchain_And_Packaging.md) | `sumo`, `duarouter` and `libtracics` staged and shipped, `SUMO_HOME` set ([23 §6.1, §6.2, §6.12](../../Findings/23_SUMO_Traffic_Integration.md)) |
+| [09 — Toolchain and packaging](09_Toolchain_And_Packaging.md) | `sumo` and `duarouter` staged and shipped with `tools/traci`, `SUMO_HOME` set ([23 §6.1, §6.2, §6.12](../../Findings/23_SUMO_Traffic_Integration.md)) |
 | [10 — Scale and performance](10_Scale_And_Performance.md) | The seven properties of §9.4 |
 | [11 — Time and illumination](11_Time_And_Illumination.md) | Five properties, stated in §10.1 below |
 | [12 — Operator control surface](12_Operator_Control_Surface.md) | Four properties, stated in §10.2 below |

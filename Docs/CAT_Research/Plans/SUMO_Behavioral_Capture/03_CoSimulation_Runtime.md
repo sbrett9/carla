@@ -27,6 +27,7 @@ advancement policy, the headlight predicate),
 | Date | Change |
 |---|---|
 | 2026-09-18 | No traffic-light or sign actors rendered; no traffic-light state written; signal layer suppressed per session. |
+| 2026-09-21 | TraCI client is a managed socket client (§2.5); the subscribed set is governed separately from the render set. |
 
 ---
 
@@ -90,7 +91,7 @@ flowchart LR
 
   subgraph cosim["CarlaNet.CoSim"]
     DRV["SumoDriveSession<br/>owns both clocks, owns the lease"]
-    CONN["SumoConnection<br/>libtraci C# wrapper,<br/>subscriptions only"]
+    CONN["SumoConnection<br/>TraCI socket client,<br/>subscriptions only"]
     BUF["PoseBuffer<br/>two SUMO frames:<br/>P&#40;k&#41; and P&#40;k+1&#41;"]
     INT["LaneArcInterpolator<br/>sub-step pose along lane shape"]
     CONV["PoseConverter<br/>frame, yaw, bumper shift, Z, pitch/roll"]
@@ -144,26 +145,30 @@ policy: `SolarClock` turns a simulated instant into a solar-clock write and audi
 
 | Thing | Where | State |
 |---|---|---|
-| `sumo.exe`, `duarouter.exe`, `netconvert.exe`, `libtracics.dll` | `Build/sumo-src/bin/` | all four present; `sumo --version` reports `Eclipse SUMO sumo 1.27.0`, build features include `SWIG` |
-| Generated C# binding | `Build/sumo-build/src/libtraci/Eclipse.Sumo.Libtraci/` | **94 files** |
+| `sumo.exe`, `duarouter.exe`, `netconvert.exe` | `Build/sumo-src/bin/` | all three present; `sumo --version` reports `Eclipse SUMO sumo 1.27.0` |
+| SUMO's reference TraCI client, in Python | `Build/sumo-src/tools/traci/` | complete, pure Python — no native module anywhere in it |
 | Staged into `Build/sumo-install/bin/` | — | **`netconvert.exe` only** |
 | `SUMO_HOME` | — | set nowhere in the repo |
 
-API surface confirmed by reading the generated files:
+**The interface is a wire protocol, not a library.** `sumo --remote-port N` is a TraCI server; a client
+connects over TCP and exchanges length-prefixed frames. `CarlaNet.Sumo` speaks it directly from C#,
+ported from SUMO's own reference client (doc 23 §1.1, §6.3). API surface confirmed by reading that
+client:
 
 | Call | File:line | Note |
 |---|---|---|
-| `Vehicle.moveToXY` | `Vehicle.cs:1103-1118` | 4 overloads including `keepRoute`, `matchThreshold` |
-| `Vehicle.subscribe` / `getAllSubscriptionResults` | `Vehicle.cs:1298-1323`, `:1358` | the constant-call-count read path doc 23 §6.11 requires |
-| `Vehicle.remove`, `Vehicle.add` | `Vehicle.cs:1123-1128`, `:848-913` | |
-| `Simulation.step`, `getTime`, `getDeltaT` | `Simulation.cs:183-188`, `:226`, `:430` | |
-| `Simulation.getDepartedIDList` / `getArrivedIDList` | `Simulation.cs:256`, `:268` | per-step lifecycle deltas |
-| `Simulation.start(cmd, port, retries, label, …)` / `switchConnection` | `Simulation.cs:96-138`, `:150` | labelled connections — a second consumer is possible without a second `sumo` process |
-| TraCI variable constants (`VAR_POSITION`, `VAR_ANGLE`, …) | `libtraci.cs:2958-2990` | exposed as C# properties; no hardcoded integers needed |
-| `TraCICollision`, `FatalTraCIError` | `TraCICollision.cs`, `FatalTraCIError.cs` | collision reporting and process-death signalling are typed |
+| the socket and the frame header | `connection.py:78`, `:105-127` | `socket.socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)`; a 4-byte big-endian length prefix |
+| the typed value codec | `connection.py:154-207`, `storage.py` | 103 lines of `struct` on the read side |
+| `vehicle.moveToXY` | `_vehicle.py:1485-1499` | `edgeID`, `laneIndex`, `x`, `y`, `angle`, `keepRoute`, `matchThreshold` |
+| `subscribe` / `getAllSubscriptionResults` | `domain.py:188-202`, `:223` | the constant-call-count read path doc 23 §6.11 requires |
+| `vehicle.remove`, `vehicle.add` | `_vehicle.py` over `domain.py`'s `_setCmd` | |
+| `simulationStep`, `simulation.getTime`, `getDeltaT` | `connection.py:359-379`, `_simulation.py` | |
+| `simulation.getDepartedIDList` / `getArrivedIDList` | `_simulation.py` | per-step lifecycle deltas |
+| TraCI variable and command constants | `constants.py` (1 545 lines, generated from SUMO's own `TraCIConstants.h` by `rebuildConstants.py`) | one table to port, mechanically checkable against the header |
+| `CMD_GETVERSION` | `connection.py:381-388`, called from `main.py:119` | the server names its API version and SUMO build on connect, so a mismatch is reportable |
 
-All static methods on static-facing classes. One process-global connection unless `label` /
-`switchConnection` is used.
+One connection per session, addressed explicitly — there is no process-global state to share, because
+there is no static native API underneath it.
 
 ### 2.2 The existing Python path, and what it proves
 
@@ -220,9 +225,11 @@ own.
    already open for exactly this failure mode against a *much* lighter Python loop — 5 Hz of CoT
    datagram serialisation — and records simulation time already running at roughly 84% of real time
    under ordinary load.
-3. **Subscription results are SWIG containers.** `Vehicle.getAllSubscriptionResults()` returns a
-   `SubscriptionResults` wrapping a native map (`Vehicle.cs:1358-1362`). Consuming it from Python
-   through pythonnet is a per-element marshal; consuming it from C# is not.
+3. **The subscription result is a wire frame, and whoever decodes it owns the allocation.** A C#
+   client reads it straight out of the socket buffer into the structs the pose path already uses —
+   one decode, no intermediate representation. Handing the same frame to a Python client and then
+   lifting the decoded objects into .NET through pythonnet is a per-element marshal on top of a
+   decode that has already happened once.
 4. **There is an existing, proven .NET tick-subscription pattern.** `ScenarioExecutor` subscribes to
    `CarlaClient.OnTick` at `CarlaNet/src/CarlaNet.Scenario/ScenarioExecutor.cs:77-78` and unsubscribes
    at `:561`. `OnTick` is raised from the world-observer stream thread
@@ -244,13 +251,15 @@ and that is the argument that was already decisive.
 
 **Honest costs of choosing C#,** stated because they are real and none of them is "it needs a rebuild":
 
-- A wrapper `.csproj` around the generated sources plus `libtracics.dll` on the native load path, and
-  a packaging change (doc 23 §6.12). Belongs to [`09_Toolchain_And_Packaging.md`](09_Toolchain_And_Packaging.md).
+- **A TraCI client to write and to keep.** The transport is small — `connection.py` is 407 lines and
+  `storage.py` 103 — but it is ours once written, and the command and variable numbers are pinned to a
+  SUMO release. §2.5 states what that buys and what it costs.
 - The scenario-authoring suite and the existing telemetry emitter are Python. A C# bridge that also
   needs SUMO state for truth must either open a second TraCI connection or become the truth source.
   §2.4 resolves this by making it the truth source; that is a design commitment, not an accident.
-- Debugging a SWIG-wrapped native API from C# is worse than debugging `traci` from Python. Mitigated
-  by keeping `sumo` out of process (D3.2) so a `FatalTraCIError` is catchable rather than a crash.
+- The Python side keeps a mature client with a decade of use behind it while the C# side has a new
+  one. The mitigation is that both speak the same protocol to the same server, so the Python client
+  is an oracle the C# one can be differenced against — §2.5's acceptance check does exactly that.
 
 ### 2.4 The split
 
@@ -267,11 +276,30 @@ The Python side never calls TraCI while a session is live. It reads the bridge's
 This is what keeps one clock and one SUMO connection, and it is also what makes the zero-velocity fix
 (§5) meaningful: the bridge holds SUMO's true speed for every vehicle, rendered or not.
 
-> **D3.2 — `libtraci` (out of process), not `libsumo`.** Carried forward from doc 23 §6.3 and now
-> reinforced by measurement: `Simulation.start` takes a connection `label` and `switchConnection`
-> exists (`Simulation.cs:96-150`), so a second consumer can be added later without a second `sumo`
-> process, and a SUMO assertion cannot take down the CARLA client. The API is identical to `libsumo`,
-> so moving in-process later is a namespace change.
+> **D3.2 — `CarlaNet.Sumo` speaks the TraCI wire protocol over a TCP socket to an out-of-process
+> `sumo`.** It is a port of SUMO's own reference client (doc 23 §6.3), not a binding to one, so nothing
+> native is loaded into the CarlaNet process. Out of process is therefore structural rather than
+> chosen: a SUMO assertion cannot take the CARLA client down, `sumo` can be restarted without
+> restarting the world, and a second consumer is another connection to the same server rather than a
+> second process.
+
+### 2.5 What the client owes, and how it is held to it
+
+Four properties the bridge depends on, each with the thing that establishes it.
+
+| Property | How it is established |
+|---|---|
+| **The frame codec is right** | `storage.py` and `connection.py:154-207` are the whole of it, and the types in play here are `TYPE_DOUBLE`, `TYPE_STRING`, `TYPE_INTEGER`, `TYPE_COMPOUND`, `POSITION_2D` and `TYPE_STRINGLIST`. A round-trip test per type against a live `sumo` is the check, not a reading of the port |
+| **The constants match the build** | `constants.py` is generated from SUMO's own `TraCIConstants.h` by `rebuildConstants.py`. The C# table is checkable against the same header mechanically, and should be |
+| **The decoded state is the state SUMO holds** | Differencing against the reference client is available and cheap: run `tools/traci` and `CarlaNet.Sumo` against the same network and the same seed, and compare a whole subscribed state for a moving vehicle. Two independent decoders of the same frames cannot agree by accident |
+| **The server is the build the client was written for** | `CMD_GETVERSION` on connect (`connection.py:381-388`), asserted against the pin. This is a thing the protocol offers and a linked binding cannot ask for |
+
+**And one property of SUMO, not of the client, that the bridge has to design around: a subscription is
+charged inside `simulationStep`, whether or not anyone reads it.** Measured at 388 live vehicles on
+Arapahoe: **3.73 ms** per step with nothing subscribed, **9.26 ms** with the seven-variable set
+subscribed and never read (doc 23 §6.11). SUMO fills the results as part of advancing; the read is only
+what it costs to collect them afterwards. So the **subscribed** set is a cost the bridge controls in its
+own right, and §8.3 states the consequence for admission.
 
 ---
 
@@ -461,8 +489,8 @@ then turns with no indicator is rendering a lie about a manoeuvre SUMO actually 
 
 SUMO's signal word is `MSVehicle::Signalling`
 (`Build/sumo-src/src/microsim/MSVehicle.h:1108-1139`) and reaches a client as an `int` from
-`Vehicle.getSignals` (`Build/sumo-build/src/libtraci/Eclipse.Sumo.Libtraci/Vehicle.cs:318-322`) or as
-the subscribable variable `VAR_SIGNALS` (`libtraci.cs:3262-3268`).
+`vehicle.getSignals` (`Build/sumo-install/tools/traci/_vehicle.py:515`) or as the subscribable
+variable `VAR_SIGNALS = 0x5b` (`constants.py:1056`, generated from SUMO's own `TraCIConstants.h`).
 
 Grepping the whole of `Build/sumo-src/src` for each of the fourteen non-zero constants shows that
 **SUMO's microsimulation writes exactly three of them on the ordinary path, plus one that requires a
@@ -569,8 +597,8 @@ Four things make that work, each read from source:
    commands"* (`VehicleLightStage.cs:289-295`), and emits it **only on a change**
    (`:289`). The structure is proven; only its inputs change here.
 3. **The read is free.** `VAR_SIGNALS` is one more variable id in the `IntVector` already passed to
-   `Vehicle.subscribe` (`Vehicle.cs:1298-1301`), and the whole render set's values arrive in the
-   single `getAllSubscriptionResults` call the bridge already makes (`Vehicle.cs:1358`). Adding
+   `subscribe` (`domain.py:188-202`), and the whole render set's values arrive in the
+   single `getAllSubscriptionResults` call the bridge already makes (`domain.py:223`). Adding
    signals costs **zero** additional TraCI calls.
 4. **The server-side write is idempotent-guarded.** `ACarlaWheeledVehicle::SetVehicleLightState`
    compares all eleven fields against `InputControl.LightState` and only calls `RefreshLightState`
@@ -1216,19 +1244,36 @@ and to have three properties, each for a reason:
    for, the ranking must be a pure function of the session seed and the vehicle state, so two runs of
    the same seed admit the same set.
 
+**A fourth property, which is about the subscription rather than the render set, and which the two are
+easy to conflate.** SUMO charges for a subscription inside `simulationStep` whether or not the client
+reads it — 3.73 ms against 9.26 ms at 388 vehicles, subscribed and unread (§2.5). So **subscribing is
+not free for a vehicle the bridge decides not to render**, and the render-set policy has to govern
+*two* sets rather than one:
+
+| Set | What it costs | Who decides it |
+|---|---|---|
+| **Subscribed** | SUMO's step time, paid whether or not the result is read | the bridge, from the same predicate, with a wider margin — a vehicle must be subscribed before it can be admitted, because admission needs its state |
+| **Rendered** | a CARLA actor, a pose write and a batch entry per tick | the render-set predicate |
+
+The bridge therefore subscribes on a lead ahead of `AdmitLead` and unsubscribes on a lag behind
+`ReleaseLag`, and the truth record for an unrendered-but-subscribed vehicle is available for free
+because it is already being paid for. What is **not** free is subscribing the whole population: at
+Arapahoe's 388 that is 5.5 ms of the 50 ms tick spent on vehicles nothing is looking at.
+
 **What [`04_Contracts.md`](04_Contracts.md) owns:** the predicate itself, and what the truth record
-says about a SUMO vehicle that is simulated but not rendered. **What
-[`10_Scale_And_Performance.md`](10_Scale_And_Performance.md) owns:** `Capacity`, and whether the
-budget is per blueprint, per camera footprint or global.
+says about a SUMO vehicle that is simulated but not rendered — noting that "simulated but not
+rendered" now divides into *subscribed* and *not subscribed*, and only the first has per-step state to
+record. **What [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md) owns:** `Capacity`, the
+subscription margins, and whether the budget is per blueprint, per camera footprint or global.
 
 ### 8.4 The lookahead dividend
 
 Because the bridge holds one full SUMO step of future (D3.6), `Simulation.getArrivedIDList()`
-(`Simulation.cs:268`) tells it about an arrival **before** the rendered clock reaches it. So a vehicle
+(`_simulation.py:329`) tells it about an arrival **before** the rendered clock reaches it. So a vehicle
 that SUMO removes is known about a whole SUMO step before the rendered clock reaches it, so it can be
 released at a moment the bridge chooses — outside a camera footprint, or at the arrival instant —
 rather than vanishing wherever it happened to be. The same applies to departures via
-`getDepartedIDList()` (`Simulation.cs:256`): a vehicle can be placed before its first rendered frame.
+`getDepartedIDList()` (`_simulation.py:314`): a vehicle can be placed before its first rendered frame.
 Under D3.10 this lookahead is doing the work the dissolve used to do, and doing it better: an
 unobserved appearance is strictly more honest than a visible one that has been smoothed.
 
@@ -1742,7 +1787,7 @@ precondition of this design, not a consequence of it.
 sequenceDiagram
     autonumber
     participant CLK as SumoDriveSession<br/>clock + sun owner
-    participant SU as sumo.exe<br/>via libtraci
+    participant SU as sumo.exe<br/>TraCI over TCP
     participant BUF as PoseBuffer + Interpolator
     participant RS as RenderSetManager + ActorPool
     participant CC as CarlaClient
@@ -1867,8 +1912,12 @@ product is a truth corpus; a corpus with a silently wrong span in it is worse th
 
 ### 11.1 SUMO process death
 
-`libtraci` raises `FatalTraCIError` (`FatalTraCIError.cs` is in the generated set) when the connection
-drops. On it:
+**TraCI errors come in two classes and the bridge must not confuse them.** The reference client draws
+the line explicitly: `TraCIException` for "errors which keep the connection intact" and
+`FatalTraCIError` for "errors which do not allow for continuation"
+(`Build/sumo-install/tools/traci/exceptions.py:69,85`). `CarlaNet.Sumo` carries the same two, as
+itself — a recoverable error is a command SUMO refused and a fatal one is a connection that cannot be
+used again. On a fatal error:
 
 1. Stop cueing world ticks immediately. **Do not keep ticking with a frozen pose buffer** — that
    would write truth records asserting that every vehicle stood still.
@@ -1879,7 +1928,7 @@ drops. On it:
    was saved, and silently splicing two simulations into one truth record is the worst available
    outcome.
 
-`Simulation.loadState` / `saveState` exist (`Simulation.cs:689`), so a checkpoint-and-resume design is
+`simulation.loadState` / `saveState` exist (`_simulation.py:662,665`), so a checkpoint-and-resume design is
 *possible* — but it is a separate feature with its own determinism argument, and it belongs in
 [`13_Work_Breakdown.md`](13_Work_Breakdown.md), not in the failure path.
 
@@ -2021,7 +2070,7 @@ flowchart TD
     AERR[["Fault: park render set,<br/>close step record,<br/>fail the run"]]
   end
 
-  subgraph LANE_SUMO["SUMO via libtraci"]
+  subgraph LANE_SUMO["SUMO over TraCI"]
     B1[Simulation.step] --> B2["getAllSubscriptionResults<br/>pose, speed, lane, type, SIGNALS"]
     B2 --> B3[getDepartedIDList<br/>getArrivedIDList<br/>getCollisions]
     B1 -.->|FatalTraCIError| AERR
@@ -2115,7 +2164,7 @@ solar and light-state paths. They are handed to
 | **G6** | `apply_batch(do_tick_cue=True)` returns before the frame exists; only `world.tick()` waits. | `CarlaClient.cs:1779-1780` vs `:403-417`; `CarlaServer.cpp:393-399` | A caller that assumes the combined form is synchronous will capture against a frame that has not rendered. Worth a docstring at minimum. |
 | **G7** | `ActorDefinition` carries no bounding box; `BoundingBox` exists only on a spawned `Actor`. | `ActorDefinition.cs:5-9`; `Actor.cs:8-15` | The vType ↔ blueprint dimension map (§7.4, and [`04_Contracts.md`](04_Contracts.md)) needs a spawn-and-measure pass against a running server. |
 | **G8** | `ACarlaWheeledVehicle::SetWheelSteerDirection` is stubbed in this port — the physics-off branch's only effective line is commented out — and `GetWheelSteerAngle` is inside `#if 0 // @CARLAUE5`. | `CarlaWheeledVehicle.cpp:717-731`, `:733-740` | Wheel steer is unavailable for teleported vehicles, and for everything else. Wheel *spin* has no control surface at all. Both are visible in oblique EO imagery. |
-| **G9** | `sumo`, `duarouter` and `libtracics` are built in `Build/sumo-src/bin/` but **only `netconvert.exe` is staged** into `Build/sumo-install/bin/`; `SUMO_HOME` is set nowhere. | directory listings, 2026-09-17; `CarlaSetup.ps1:677` builds only the `netconvert` target | Doc 23 §6.1/§6.2 already record this. Belongs to [`09_Toolchain_And_Packaging.md`](09_Toolchain_And_Packaging.md); repeated because the bridge cannot run without it. |
+| **G9** | `sumo` and `duarouter` are built in `Build/sumo-src/bin/` but **only `netconvert.exe` is staged** into `Build/sumo-install/bin/`; `SUMO_HOME` is set nowhere, and `tools/traci` — which the client is ported from — is unstaged. | directory listings, 2026-09-17; `CarlaSetup.ps1:677` builds only the `netconvert` target | Doc 23 §6.1/§6.2 already record this. Belongs to [`09_Toolchain_And_Packaging.md`](09_Toolchain_And_Packaging.md); repeated because the bridge cannot run without it. |
 | **G10** | There is no C# reader for a SUMO `.net.xml` lane geometry. The only one is Python (`SumoScenarioBuilder.RoadNetwork`), and `OsmConverter` returns the network as a string and then deletes the temp file without persisting it (`OsmConverter.cs:141-147`); `WorldPackage` writes `world.json`, `map.xodr` and `bareearth.bin` only (`WorldPackage.cs:132-134`). | as cited | D3.6's lane-arc interpolation needs lane shapes in C#. Also note `RedundantJunctionCollapser.Collapse` rewrites the `.xodr` *after* netconvert produced the `.net.xml` (`CarlaClient.cs:568-573`), so the two files share a frame but not junction identity. |
 | **G11** | Nothing asserts that the SUMO step is an integer multiple of the world delta, or that the `.net.xml` frame matches the `.xodr` frame. | no such check exists | §9's `R` and §7.2's frame identity are silent preconditions today. The session should assert both. |
 | **G12** | **Unverified:** whether Chaos retains a written angular velocity on a kinematic particle. `FWorldObserver_GetAngularVelocity` reads the body with no `IsSimulatingPhysics()` guard, unlike the linear path. | `WorldObserver.cpp:249-262` vs `PrimitiveComponentPhysics.cpp:1328-1340` | Decides whether D3.5 needs an angular counterpart. **Measure; do not assume either way.** |
@@ -2160,7 +2209,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | # | Decision |
 |---|---|
 | **D3.1** | The per-step playback bridge is **C# — `CarlaNet.CoSim`**; orchestration, configuration and the operator surface are Python. There is **exactly one TraCI connection** and the bridge owns it; the Python side reads the bridge's per-step record rather than opening its own. Doc 23 §6.3's "no Python in the tick path" argument does **not** survive the move to teleport unchanged; it is replaced by four measured ones (§2.3). |
-| **D3.2** | `libtraci` out of process, not `libsumo`. Reinforced by `Simulation.start(…, label)` + `switchConnection` (`Simulation.cs:96-150`). |
+| **D3.2** | A managed TraCI socket client to an out-of-process `sumo`, ported from SUMO's reference client. Nothing native in the CarlaNet process; the version handshake is `CMD_GETVERSION` (§2.5). |
 | **D3.3** | One `apply_batch` per world tick carries every pose write; the tick is a separate `SendTickCueAsync` because `do_tick_cue` does not wait for the frame (G6). `apply_batch_sync` only for the admission batch. |
 | **D3.4** | A SUMO-driven actor is kinematic: physics off, gravity off, **collision response left on** so sensors still see it. |
 | **D3.5** | Fix zero velocity at `FCarlaActor::SetActorTargetVelocity`: write `ComponentVelocity` when the root primitive is not simulating (candidate **e**). Candidate (b) is **verified impossible** (§5.3). Candidate (d) is a fallback for actors nobody drives; candidate (c) becomes unnecessary. |

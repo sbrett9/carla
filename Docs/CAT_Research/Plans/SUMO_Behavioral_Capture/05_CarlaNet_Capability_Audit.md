@@ -349,7 +349,7 @@ at `:485-487`. Nothing below Python changes.
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Sumo as sumo (libtraci, out of process)
+    participant Sumo as sumo (TraCI over TCP, out of process)
     participant CoSim as CarlaNet co-simulation<br/>(on CarlaClient.OnWorldTickCompleted)
     participant Rpc as MsgPackRpcClient<br/>(1 TCP socket, msgid-multiplexed)
     participant Srv as CARLA server<br/>(BIND_SYNC, game thread)
