@@ -116,6 +116,9 @@ ENV LC_ALL=en_US.UTF-8
 #   - ninja-build, nasm, patchelf: CARLA + cesium-native (vcpkg) build helpers
 #   - xerces-c-devel, proj-devel: SUMO netconvert (proj-devel pulls proj, which provides proj.db
 #     at /usr/share/proj; there is no separate proj-data package on EL8, unlike Debian/Ubuntu)
+#   - swig: SUMO's libtracics target, the native TraCI library the CarlaNet C# binding loads. It is
+#     needed here as well as in Util/SetupUtils/InstallPrerequisites.sh because the CI job runs
+#     CarlaSetup.sh --skip-prerequisites, so this image is the only place it can arrive from
 #   - openssl-devel: Fast-DDS (ROS2) build
 #   - the libpng/tiff/jpeg/nss/at-spi2/xkbcommon/gbm/pango/alsa/vulkan/SDL2 set: UE5 editor +
 #     CARLA Python API image libs
@@ -129,7 +132,7 @@ RUN dnf -y groupinstall "Development Tools" \
         xdg-user-dirs pigz \
         curl wget zip unzip tar \
         libtool autoconf automake pkgconf-pkg-config perl \
-        xerces-c-devel proj-devel \
+        xerces-c-devel proj-devel swig \
         openssl-devel libxml2-devel \
         libpng-devel libtiff-devel libjpeg-turbo-devel \
         nss-devel at-spi2-atk-devel libxkbcommon-devel \

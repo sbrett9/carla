@@ -13,7 +13,7 @@ an ELEVATED, Cesium-aligned OpenDRIVE world:
 
 Prereqs:
   * Headless server running (RunCarlaServer.ps1) and ticking (async mode).
-  * SUMO netconvert staged under Build/sumo-install (CarlaSetup.bat SUMO section).
+  * SUMO netconvert staged under Build/sumo-install (CarlaSetup.ps1 SUMO section).
   * CESIUM_ION_TOKEN env var (or --ion-token) for the spawned tileset.
 
 Usage:

@@ -76,6 +76,12 @@ _PROJ = os.environ.get("PROJ_LIB") or os.environ.get("PROJ_DATA") or os.path.joi
 os.environ.setdefault("CARLA_NETCONVERT", _NETCONVERT)
 os.environ.setdefault("PROJ_LIB", _PROJ)
 os.environ.setdefault("PROJ_DATA", _PROJ)
+# The SUMO scenario tooling and traci both resolve their installation through SUMO_HOME. Default it
+# to the same staged install the converter above comes from, so a machine with no SUMO installed
+# still authors against the build that converted the world. setdefault, not assignment: an operator
+# who sets it deliberately keeps that choice, which is what makes the version check
+# carlacontrol.SumoInstallation performs meaningful rather than circular.
+os.environ.setdefault("SUMO_HOME", _INSTALL)
 
 
 import carlanet as carla

@@ -575,7 +575,7 @@ no exclusion to honour**, and the row is corrected at its source. `carlacontrol.
 The obligations that *are* real are third-party, and the distribution meets none of them today.
 **Measured** against the staged Windows distribution at `Build/Dist/`:
 
-| Obligation | State today |
+| Obligation | State before the manifest existed |
 |---|---|
 | **No licence statement of any kind ships.** The distribution root is `CarlaServer/ README.md VERSION osm/ run-sctmv.ps1 run-server.ps1 scripts/ setup-venv.ps1 tools/ wheels/` | No `LICENSE`, no `NOTICE`, no third-party listing, and no precedent anywhere in the tree to copy |
 | **`tools/sumo/` ships 42 DLLs spanning nine or more licences**, including LGPL (`fox-16.dll`, `iconv-2`/`intl-8`), OpenSSL, Apache-2.0 (Arrow, Parquet, Thrift, Xerces), PROJ, and the MS redistributables — debug *and* release variants of several | Redistributed with no notice. The set arrives via `CarlaSetup.ps1`'s `bin\*.dll` glob and `MakeDistribution.ps1`'s recursive copy; `fox` is SUMO's **GUI** toolkit, which `netconvert` never loads |
@@ -712,9 +712,20 @@ staged install — **a named subset, not a recursive copy**. Measured: `data/` a
 of third-party contributions that would each need a `MANIFEST.md` row. Add to the list when something
 consumes it, and record the reason beside the list, or a future reader will "fix" the omission.
 
+**Measured once the walk existed, and it corrects an expectation in §4.3: `fox-16.dll` cannot be
+dropped.** `netconvert.exe` genuinely does not import it, but `sumo.exe` and `duarouter.exe` both do,
+so the LGPL obligation stands for the toolchain as a whole and `MANIFEST.md` records it against the
+binaries that carry it. The walk reaches 20 of the 43 DLLs in the build directory from the four
+binaries; the other 23 are debug variants and libraries nothing here loads. Windows reads the
+imports out of the PE header rather than through `dumpbin`, which needs a Visual Studio developer
+environment the packaging script does not have unless it was invoked with `-Build`; none of these
+binaries has a delay-load import directory, so the plain import table is the whole dependency set.
+Each staged binary is then run from the staged directory, which is the direct check that the list is
+not short.
+
 The binary rows are likewise an explicit list derived from what the binaries import, not `bin\*`
 (§4.3). Linux already walks `ldd` per binary at `MakeDistribution.sh:125-144`; Windows needs the
-equivalent `dumpbin /dependents` pass in place of its glob.
+equivalent, which it gets by reading the PE import table directly.
 
 | Artifact | Windows source | Linux source | Destination |
 |---|---|---|---|
@@ -752,26 +763,22 @@ template (`12`).
   lets a consumer refuse a corpus it does not understand" (`:702-707`). Same packaging need: a
   discoverable, versioned file shipped with the distribution (or with a captured corpus — that's `06`'s
   and `08`'s call), not embedded in code.
-- **The authoring skill — a bundle, not a single file, and it moves into the repository.**
-  `.agents/skills/sumo-traffic-scenarios/SKILL.md` is a single 14 KB file with no supporting files,
-  measured directly. [`07_Scenario_Authoring.md`](07_Scenario_Authoring.md) §8 specifies it as a versioned
-  bundle — `schemas/scenario.schema.json`, `schemas/sweep.schema.json`,
+- **The authoring skill — a bundle, not a single file, and it lives in the repository.** It is a
+  single 14 KB `SKILL.md` today, at `carla/CarlaControl/skills/sumo-traffic-scenarios/`, beside the
+  compiler [`07_Scenario_Authoring.md`](07_Scenario_Authoring.md) §8 says generates most of its
+  contents, so generator and generated output sit under one directory and one licence and
+  `MakeDistribution` has a real source path on both platforms (§5.4, `D9.10`). `07` §8 specifies its
+  eventual shape as a versioned bundle — `schemas/scenario.schema.json`, `schemas/sweep.schema.json`,
   `vocabulary.json`, `checks.json`, `examples/`, `references/gotchas.md`, `references/resolution.md` —
-  most of it generated from the compiler so it cannot drift from the code it describes. **`07` §8.4
-  states it lives "in the repository … where it is now."** Measured 2026-09-18: it does not. The
-  workspace root (`G:\Projects\CarlaUE_5_7_4`) is not a git repository at all (`git rev-parse
-  --is-inside-work-tree` fails there), and there is no `.agents/` directory anywhere inside the `carla`
-  repository itself — `carla` *is* a git repository (confirmed), and
-  `carla/.agents/skills/sumo-traffic-scenarios/` does not exist in it. This is not a disagreement to
-  paper over: `07`'s design for the bundle's *content* stands regardless of where it lives, but the
-  bundle cannot be given a real path for `MakeDistribution` to reference, on either platform, until it is
-  physically moved inside `carla/`, tracked, and versioned there. **Target: `carla/CarlaControl/skills/
-  sumo-traffic-scenarios/`** — beside the compiler `07` §8 says generates most of its contents, so
-  generator and generated output sit under one directory and one licence, and `MakeDistribution` gets a
-  real source path on both platforms (§5.4, `D9.10`). The 27 `ue-*` directories beside it in
-  `.agents/skills/` are **not** part of this move: measured byte-identical to the MIT third-party
-  repository `quodsoler/unreal-engine-skills`, already cloned at the workspace root with its remote,
-  pinned commit and `LICENSE` intact. They stay there.
+  most of it generated from the compiler so it cannot drift from the code it describes. It was
+  previously a single untracked file at `.agents/skills/sumo-traffic-scenarios/` under the workspace
+  root (`G:\Projects\CarlaUE_5_7_4`), which is not a git repository, so it had no version, no history
+  and no path a distribution build could reference; that copy is now a stub naming the canonical
+  path, and the move carries no prior history because there was none to carry. The 27 `ue-*`
+  directories beside it in `.agents/skills/` are **not** part of the move: measured byte-identical to
+  the MIT third-party repository `quodsoler/unreal-engine-skills`, already cloned at the workspace
+  root with its remote, pinned commit and `LICENSE` intact. They stay there, and the clone is
+  recorded as a developer prerequisite in [`Docs/authoring_skills.md`](../../../authoring_skills.md).
 - **The illumination reference.** [`07_Scenario_Authoring.md`](07_Scenario_Authoring.md)'s pre-authoring
   artifact list (item 12, §2.9) names a per-world, per-date sunrise/sunset/sun-elevation table and a
   night-viability verdict, computed from the world's origin and the scenario's epoch — owned by
@@ -1097,7 +1104,7 @@ this document's scope to verify (§2.4).
 | D9.7 | **There is one distribution and it contains all of the tools**, and both platforms produce it (`13` §13.2). Neither script gains an internal/external packaging mode: there is no second distribution for one to gate, and an unused mode is a switch that eventually gets flipped by accident. The `carlacontrol` wheel ships on both platforms — which `12`'s capture launcher makes unavoidable regardless of §5.2 (§5.6). `Findings/22` §14's exclusion of `CarlaControl/` came from a plan that did not manifest and is corrected at source. What the package must carry instead is a **generated `MANIFEST.md` and a `licenses/` directory** (§4.3, §5.4), driven by third-party obligations the distribution meets none of today: 42 native DLLs spanning nine or more licences including LGPL, SUMO's EPL-2.0 notice and source offer, and ODbL on the OSM extracts and generated `.xodr`. Where the package may go is governed by access to the channel it is published to. |
 | D9.8 | `carla-base:alma8`'s pull in `build-carla-ue5.yml` is by tag with no digest pin; adding `swig` (D9.1's prerequisite) means rebuilding and re-pushing that tag. Needing the rebuild is not a cost. Whether the workflow should move to a digest pin so future base-image changes can't silently ride into a build is an open question (below), independent of this rebuild. |
 | D9.9 | `CarlaControl/src/carlacontrol/OsmClipper.py:154,219`'s non-deterministic `set`-ordered node emission is a real reproducibility hazard for anything that hashes its output, and the proprietary tools are part of the shipped system (`D9.7`), so it is this plan's defect to fix. The fix is: the fix is `sorted(used_orig, key=int)` (or equivalent) at the emission site; until it lands, no reproducibility or acceptance check in this plan hashes OSM-clip-derived file bytes (§7.3). |
-| D9.10 | The authoring skill (`.agents/skills/sumo-traffic-scenarios/SKILL.md`, 14 KB, one file) sits outside any git repository, so it has no version, no history and no reproducible source, and cannot be bundled into a distribution (§5.5). It **moves into `carla/CarlaControl/skills/`**, beside the compiler `07` §8 says generates most of its contents, and ships from there (§5.4). The workspace copy becomes a stub naming the canonical path — not a directory junction, which is invisible in `git status` and does not survive a fresh clone. **The 27 `ue-*` directories beside it are not ours**: measured byte-identical to `quodsoler/unreal-engine-skills`, an MIT third-party repository already cloned at the workspace root with its remote, pinned commit and `LICENSE` intact. They are **not vendored** — the clone is already a better reproducible source, and copying 1.3 MB of third-party MIT content into `carla/` would add an attribution obligation for a recipient with no use for it. The unattributed copies are removed and the clone is recorded as a developer prerequisite. A **stage A item** (`13` §13.3): `07` §8.4 depends on the move. |
+| D9.10 | The authoring skill lives at **`carla/CarlaControl/skills/sumo-traffic-scenarios/SKILL.md`**, beside the compiler `07` §8 says generates most of its contents, and ships from there (§5.4). It was a single 14 KB file outside any git repository, with no version, no history and no reproducible source, and could not be bundled into a distribution (§5.5). The workspace copy is a stub naming the canonical path — not a directory junction, which is invisible in `git status` and does not survive a fresh clone. **The 27 `ue-*` directories beside it are not ours**: measured byte-identical to `quodsoler/unreal-engine-skills`, an MIT third-party repository already cloned at the workspace root with its remote, pinned commit and `LICENSE` intact. They are **not vendored** — the clone is already a better reproducible source, and copying 1.3 MB of third-party MIT content into `carla/` would add an attribution obligation for a recipient with no use for it. The clone and its commit `231c8571be6f3335685edc566a28ec6f9621361d` are recorded as a developer prerequisite in `Docs/authoring_skills.md`. The unattributed `.agents/skills/ue-*` copies are **left in place**: `.agents/skills/` is itself a discovery convention, so no file needs to reference a skill for a harness to load it, and nothing was found that could show the copies are unread. Removing them is a decision for whoever can confirm that. A **stage A item** (`13` §13.3): `07` §8.4 depends on the move. |
 | D9.11 | **The operator control surface's distribution footprint is packaged generically only where `12` had not yet fixed a shape; where it has, this document packages that shape as fact.** The new capture launcher (`run-capture.ps1`/`.sh`) coexists beside `run-sctmv.ps1`/`.sh` rather than replacing it; the run-configuration schema and site-profile template stage alongside the vehicle catalogue and vocabulary (§5.5); the broken-launcher repair (§5.2) and the new launcher's introduction land as one change, not two, because they touch the same lines of the same scripts (§5.6); and `12`'s launcher makes bundling `carlacontrol` unavoidable on both platforms, which `D9.7` settles on both platforms. |
 | D9.12 | **`tzdata` is added to `CarlaControl/pyproject.toml`'s dependencies once `07`/`11` settle whether IANA zone resolution is required or merely an optional cross-check (§4.4, Open question 4).** It needs no new packaging mechanism — it resolves through the same `pip install` step that already installs `numpy` and `pygame` for every distribution recipient — and it introduces no SUMO dependency, no native code, and no new distribution slot. |
 | D9.13 | **`CarlaSetup.bat` is retired**, and `Docs/build_windows_ue5.md` is repointed at `CarlaSetup.ps1` in the same commit so no documented entry point is left dangling. It is the pre-port original — `CarlaSetup.ps1:3` describes itself as a PowerShell port of it — and it has already drifted: `:145` clones `SUMOLibraries` at HEAD with no tag where `CarlaSetup.ps1:641` pins the version, which is the exact failure `CarlaSetup.ps1:609-618`'s own comment records. Keeping it would mean a third copy of every build change, which is how that drift happened. The charter's parity rule then covers exactly the two scripts it names. |

@@ -373,7 +373,8 @@ Verified by reading the tree on 2026-09-17 unless marked otherwise.
 - Control-side Python package: `carla/CarlaControl/src/carlacontrol/` with CLIs in
   `carla/CarlaControl/scripts/`. (`CarlaControl/build/lib/carlacontrol/` is build output — ignore it.)
 - The authoring skill that describes today's SUMO scenario workflow:
-  `.agents/skills/sumo-traffic-scenarios/SKILL.md` (workspace root, one level above `carla/`).
+  `carla/CarlaControl/skills/sumo-traffic-scenarios/SKILL.md`. (The `.agents/skills/` copy at the
+  workspace root is a stub pointing at it.)
 
 ### What already exists and works
 - **World generation** — `run_SCTMV.py --build --osm … --height-align drape --emit-world-package DIR`

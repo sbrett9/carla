@@ -1909,7 +1909,7 @@ stateDiagram-v2
 **Question:** whether the authoring conventions should ship as a packaged skill with the
 distribution.
 
-**Answer: yes, and the existing `.agents/skills/sumo-traffic-scenarios/SKILL.md` is the embryo of it
+**Answer: yes, and the existing `CarlaControl/skills/sumo-traffic-scenarios/SKILL.md` is the embryo of it
 — but a skill that ships is a different artifact from the one that exists, in three specific ways.**
 
 *Read:* the current skill is a single 14 KB `SKILL.md` with no supporting files, while other skills
@@ -2041,13 +2041,13 @@ doc 11 produces it.
 
 Two locations, one source. The move into the repository is authorised and is a **stage A item**, carried out together with the Unreal agent skills, with the workspace copies reduced to references (`13` §13.3).
 
-- **In the repository** — which is where it must move to, and **not** where it is now. *Measured
-  2026-09-18:* the skill lives at `.agents/skills/sumo-traffic-scenarios/` under the **workspace
-  root**, one level above `carla/`; there is no `carla/.agents/`, and `git ls-files` reports the path
-  as "outside repository". So the artifact the whole authoring workflow depends on is currently
-  unversioned, and a change to it is invisible to review and unreachable by a distribution build.
-  Moving it inside `carla/` is a precondition of everything else in this section, because §8.5's
-  mechanism for keeping it true is a test suite that can only run against tracked files.
+- **In the repository**, at `CarlaControl/skills/sumo-traffic-scenarios/`, beside the tooling it
+  describes and the compiler that generates most of its contents. It was previously a single
+  untracked file at `.agents/skills/sumo-traffic-scenarios/` under the **workspace root**, one level
+  above `carla/`, where it had no version, no history, no reproducible source, and no path a
+  distribution build could reference; the workspace copy is now a stub naming the canonical path.
+  Being tracked is a precondition of everything else in this section, because §8.5's mechanism for
+  keeping it true is a test suite that can only run against tracked files.
 - **In the distribution**, staged by `MakeDistribution.ps1` beside the SUMO tooling it already
   bundles (*carried forward,* doc 23 §6.12: `MakeDistribution.ps1:237` already creates `tools\sumo\`;
   §1.1 of the same document records the slot). A distribution that ships the compiler and not the
