@@ -401,8 +401,8 @@ bool UCesiumHeightSampler::ConfigureCesiumForOrigin(
 	// made a world's illumination a function of session history -- which nothing records and no
 	// consumer can reconstruct -- and left the class defaults (13:00 in a US-Eastern zone, DST on) in
 	// force on every world that shipped its own sun. The calendar date is deliberately not asserted
-	// here: it is the scenario's to declare, and a client that wants a specific sun binds the whole
-	// sun explicitly afterwards (set_solar_time / set_solar_date).
+	// here: it is the scenario's to declare, and a client that wants a specific sun sets it
+	// explicitly afterwards (set_solar_epoch, or set_solar_time / set_solar_date).
 	ACesiumSunSky* SunSky = nullptr;
 	for (TActorIterator<ACesiumSunSky> It(World); It; ++It)
 	{
