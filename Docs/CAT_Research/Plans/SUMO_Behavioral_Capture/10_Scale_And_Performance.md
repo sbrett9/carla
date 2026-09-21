@@ -15,6 +15,7 @@
 | 2026-09-17 | Initial population, network, RPC/TraCI, render and storage budgets; sizing envelope and degradation strategy. |
 | 2026-09-18 | Added sun-elevation, solar-surface and vehicle-light-state measurements; replaced the 23:00 window with a truth-only demotion. |
 | 2026-09-18 | Traffic-light state carries no RPC, batch or byte cost; network signal counts kept as SUMO behaviour inputs. |
+| 2026-09-21 | A subscription is charged inside the step unread, so the subscribed set is its own budget line (§4.5, `D10.6`). |
 
 ---
 
@@ -913,13 +914,41 @@ the entire budget, before CARLA does anything**. With subscriptions it is 8.1 ms
 whose SUMO step is 1.0 s and whose bridge interpolates over 20 world ticks (`03` D3.6), the 2.3 ms cost is
 paid **once per 20 ticks** — 0.12 ms per tick amortised.
 
+**A subscription is charged inside the step whether or not the client reads it**, which the table above
+implies and this measures directly. Same probe, same 388 vehicles, differencing a subscribed run whose
+results are never collected against a run with nothing subscribed at all:
+
+| Configuration | `simulationStep` |
+|---|---|
+| nothing subscribed | **3.73 ms** |
+| seven variables subscribed, results **never read** | **9.26 ms** |
+
+So **5.5 ms of the 388-vehicle figure is bought by subscribing, not by reading** — SUMO fills the results
+as part of advancing. Two consequences the render-set budget has to carry:
+
+- **The subscribed set is a budget line of its own.** Subscribing the whole population and rendering a
+  capped subset spends the full 5.5 ms to render `render_cap` vehicles. `03` §8.3 makes the subscribed
+  set a governed quantity with its own margins rather than a side effect of the render predicate.
+- **The per-vehicle marginal constant above is a subscription constant, not a read constant.** At
+  ≈ 21.4 µs per vehicle per step for the seven-variable set, a decision to subscribe 100 extra vehicles
+  for truth costs 2.1 ms per step whether or not anything renders or records them.
+
+This is a property of SUMO, so it holds for any client and is not affected by `03` D3.2.
+
 > **D10.6 — Subscriptions, and only the variables the bridge and the truth record actually consume.**
 > Measured 14× on total step cost and 48× on the read itself. Subscribe position and angle for the pose
 > path; add speed, type, road and lane only because the truth record needs them, and know they cost 3.5×
 > the pose-only set. Per-vehicle getters in the step loop are a defect, not a tuning choice.
 >
-> These are **Python-binding** numbers. `libtraci` (the C# binding `03` D3.2 selects) links SUMO into the
-> client process with no socket, so these are **upper bounds**. Nothing here needs them to be tight.
+> These are **Python-client** numbers, and they should not be read as upper bounds for a C# one. Every
+> TraCI client is a socket client to an out-of-process `sumo` — the in-process mechanism is `libsumo`,
+> which `03` D3.2 does not take — so SUMO's own step and the round trip are paid the same way whatever
+> the language, and the only part that varies is the decode. Measured at the same 388 vehicles through
+> SUMO's generated C# binding, which decodes twice (native, then out of SWIG's containers into
+> managed types): **10.43 ms against Python's 8.10 ms**, 1.77 ms of it the second decode. A client that
+> decodes once from the socket buffer avoids that 1.77 ms and pays nothing else the Python figure does
+> not; what it actually costs is M6. The ratio `D10.6` rests on holds either way — 14.3× through Python
+> and 13.9× through the C# binding — so the budget conclusion is unchanged.
 
 #### 4.5.1 The cost of carrying vehicle signal state over TraCI
 
@@ -1557,7 +1586,7 @@ those is zero by construction.**
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Sumo as sumo.exe<br/>(out of process, libtraci)
+    participant Sumo as sumo.exe<br/>(out of process, TraCI over TCP)
     participant Bridge as CarlaNet.CoSim<br/>(bridge thread)
     participant Rpc as rpc worker<br/>(-RPCThreads)
     participant Game as CARLA game thread
@@ -1830,7 +1859,7 @@ them.
 | **9** | **M11** | **What does a frame at a given sun elevation actually look like?** Pixel mean, 5th and 95th percentile, and the fraction of pixels at zero, at sun elevations of roughly −61°, −34°, −3°, 0°, +3° and +6°. | One short headless run on an existing world, stepping the epoch between captures. | The *viability* threshold is [`11`](11_Time_And_Illumination.md) §9.2's `M-SOL-1`, not this section's. But **the same run answers a cost question for free**: differencing the clock ratio across the sweep separates the content-dependent part of §4.1's 13.3 ms per streamed megapixel from the readout, which is the one unmeasured term in §4.9's claim that a dark window costs nearly as much as a lit one. Record the clock ratio per elevation as well as the pixel statistics. §4.6's attenuation bound is a synthetic stand-in until this exists. | One short run |
 | **10** | **M12** | **Is a vehicle's brake light legible at the collection altitude?** | [`11`](11_Time_And_Illumination.md) §9.2's `M-SOL-2`: capture one vehicle at each rig altitude with `Brake` asserted and cleared, and difference the frames. | **Not this section's question.** Listed because §4.8.4 establishes that cost is not the reason to decide either way, so this is the measurement that actually decides it. | Two captures |
 | **11** | **M5** | **Does `--load-state` compose with a pre-routed route file?** | `duarouter` the Bahonar route file into explicit `<route edges="…"/>`, then repeat §4.2.1(c). | Nothing, under D10.2 — this is insurance against a future scenario whose fast-forward exceeds ~10 minutes. **Do not do this until one exists.** | Minutes, no CARLA |
-| **12** | **M6** | **Is `libtraci` (C#) faster than the Python binding measured in §4.5, and by how much?** | Re-run the §4.5 and §4.5.1 probes through `Eclipse.Sumo.Libtraci`. | Nothing in the envelope — §4.5's numbers are already upper bounds and already fit. Worth taking only when the bridge exists. | Low |
+| **12** | **M6** | **What does the C# TraCI client cost per step against the Python client measured in §4.5?** | Re-run the §4.5 and §4.5.1 probes through `CarlaNet.Sumo`, same network, same seed, same population. | Nothing in the envelope — §4.5's numbers already fit, and §4.5 establishes that the language is not where a saving would come from. **It is worth taking for correctness rather than for cost**: run against the same `sumo` at the same instant, it is also the differencing check that two independent decoders of the same frames agree (`03` §2.5). | Low |
 
 **One measurement `11` handed this section has already been taken and needs no run.** Its `M-SOL-5`
 asked for the added batch entries from light-state deltas at `render_cap`, confirmed on Arapahoe
@@ -1872,7 +1901,7 @@ separately, because it needs the same actor-count sweep and would otherwise dupl
 | **D10.3** | **Default window length 1,800 simulated seconds; 4–8 windows per seven-day scenario, placed on authored events rather than contiguously.** Measured: days 1–6 of Bahonar peak within 1.5% of each other, so six 1,800 s windows cover every population regime in the week for 10 wall-clock hours and 313 GB (§4.2.3). |
 | **D10.4** | **`render_cap` = 128, `render_cap_hard` = 192**, gated on measurement M2. 100 concurrent rendered, telemetered, occlusion-measured vehicles are demonstrated on this fork; 128 clears Bahonar's seven days for 99.4% of their duration (§4.3). |
 | **D10.5** | **`render_region` is sized per scenario against the measured radial CDF of the live population, never defaulted.** A region wider than the camera footprint buys nothing and costs actors: on Arapahoe a 300 m region holds exactly `render_cap` while a 600 m region holds 276 (§4.3.1). |
-| **D10.6** | **TraCI reads are subscriptions, restricted to the variables the bridge and truth record consume.** Measured 116.0 ms → 8.1 ms per step at 388 vehicles (14×), and the naive path alone exceeds a 50 ms tick budget by 2.3× (§4.5). |
+| **D10.6** | **TraCI reads are subscriptions, restricted to the variables — and the vehicles — the bridge and truth record consume.** Measured 116.0 ms → 8.1 ms per step at 388 vehicles (14×), and the naive path alone exceeds a 50 ms tick budget by 2.3× (§4.5). A subscription is charged inside the step whether or not it is read (3.73 ms → 9.26 ms subscribed and unread), so the **subscribed** set is a budget line in its own right, governed by `03` §8.3 rather than left to follow the render set. |
 | **D10.7** | **`FrameRecorder.Dropped` is read at window close, written into the run manifest, and a non-zero value fails the run's quality gate.** It is incremented today (`FrameRecorder.cs:184`) and has no reader anywhere in the tree (§4.6). |
 | **D10.8** | **`aoi_max_relations_per_vehicle` = 4, nearest always present, and truncation is marked `<_aoi truncated="true">`.** Measured: 4 relations cost 1.49× the base sidecar; 50 cost 6.91×, not the 3× doc 20 §7.4 estimates (§4.6). |
 | **D10.9** | **The bare-earth plane is read as `array.array('f')` or a `numpy` view, not a tuple of Python floats.** Measured: 243.6 MB → 32.3 MB, 5.61 s → 0.011 s, identical semantics, one line at `SumoCotBridge.py:112` (§3.4). |

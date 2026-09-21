@@ -1032,9 +1032,9 @@ on a real change.
 > flag word differs from the last word sent for it, and only on the first world sub-step of a SUMO
 > step.** The signal value arrives on the existing TraCI subscription — `VAR_SIGNALS = 0x5b`
 > (`libsumo/TraCIConstants.h:1075`), handled in the subscription dispatcher at
-> `libsumo/Vehicle.cpp:2932-2933`, exposed to C# as `libtraci.VAR_SIGNALS`
-> (`Build/sumo-build/src/libtraci/Eclipse.Sumo.Libtraci/libtraci.cs:3262`) with the direct getter at
-> `Vehicle.cs:318-320`. Adding it to the subscription variable list is free; a per-vehicle getter
+> `libsumo/Vehicle.cpp:2932-2933`, and carried into the reference client the C# one is ported from as
+> `VAR_SIGNALS = 0x5b` (`Build/sumo-install/tools/traci/constants.py:1056`) with the direct getter at
+> `_vehicle.py:515`. Adding it to the subscription variable list is free; a per-vehicle getter
 > would not be, and [`10`](10_Scale_And_Performance.md) D10.6 forbids it.
 
 ### 6.7 One content dependency, measured and open

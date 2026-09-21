@@ -242,13 +242,14 @@ fi
 #    route validation and the TraCI client library) ─────────────────────────────
 # CarlaNet shells out to stock SUMO `netconvert` at runtime to convert OSM maps
 # to OpenDRIVE, replacing CARLA's old in-tree osm2odr fork; `sumo` runs the traffic
-# microsimulation, `duarouter` validates authored routes, and `libtracics` is the
-# native library the C# TraCI binding loads. All four come from SUMO release
-# v1_27_0; their real dependencies are Xerces-C, PROJ and SWIG (FOX/GUI and GDAL
-# are NOT needed). The apt prerequisites (cmake g++ swig libxerces-c-dev
-# libproj-dev; proj.db ships with libproj-dev/proj-data) are installed by
-# Util/SetupUtils/InstallPrerequisites.sh, and the CI container gets them from
-# Util/Docker/Base.alma8.Dockerfile, which never runs that script.
+# microsimulation, and `duarouter` validates authored routes. All three come from
+# SUMO release v1_27_0; their real dependencies are Xerces-C and PROJ (FOX/GUI and
+# GDAL are NOT needed). CarlaNet talks to `sumo` over the TraCI wire protocol from
+# managed code, so nothing native is built for it here. The apt prerequisites
+# (cmake g++ libxerces-c-dev libproj-dev; proj.db ships with libproj-dev/proj-data)
+# are installed by Util/SetupUtils/InstallPrerequisites.sh, and the CI container
+# gets them from Util/Docker/Base.alma8.Dockerfile, which never runs that script --
+# a prerequisite added to one of those two files and not the other fails in CI.
 sumo_src=$workspace_path/Build/sumo-src
 sumo_build=$workspace_path/Build/sumo-build
 sumo_install=$workspace_path/Build/sumo-install
@@ -265,16 +266,17 @@ fi
 # What a complete staged toolchain holds. The build runs in parallel (-j), so there is no dependable
 # "newest" output to test -- a partial failure leaves an arbitrary subset staged, and a guard keyed on
 # one member reports success for a half toolchain. Check the whole set, and name the members that are
-# missing so the reason is in the log rather than in someone's head. libtracics-sources.zip is the
-# SWIG-generated C# the CarlaNet TraCI binding is built from; it is staged because a distribution
-# recipient has no Build/sumo-src to regenerate it from.
-sumo_required_binaries="netconvert sumo duarouter libtracics.so libtracics-sources.zip"
+# missing so the reason is in the log rather than in someone's head.
+sumo_required_binaries="netconvert sumo duarouter"
 # A NAMED SUBSET of data/ and tools/, not the whole of either. Measured: the full copy is 89 MB to
 # deliver the 3.2 MB anything here consumes, and tools/contributed alone is 47 MB of third-party
 # contributions that would each need a row in the distribution's licence manifest. Add a directory to
 # these lists when something starts consuming it -- the omission is deliberate, not an oversight.
 sumo_required_data="typemap xsd"      # netconvert's OSM type maps; XSDs for generated files
-sumo_required_tools="traci sumolib"   # the Python modules the scenario tooling imports
+# tools/traci carries two obligations: the scenario tooling imports it, and it is SUMO's own
+# reference TraCI client, which CarlaNet.Sumo's managed client is ported from. Staging it at the
+# pinned commit is what makes a SUMO bump a reviewable diff rather than an archaeology exercise.
+sumo_required_tools="traci sumolib"
 
 sumo_missing=""
 for item in $sumo_required_binaries; do
@@ -299,12 +301,12 @@ else
     fi
     # Pin the exact commit (the tag already points here; this is an explicit guard).
     git -C "$sumo_src" checkout e238ea04b7150ba23a348a285d3048919fa4830b
-    # Configure + build the required targets (Release). One invocation, four targets: CMake skips
+    # Configure + build the required targets (Release). One invocation, three targets: CMake skips
     # objects it has already built, so this is not a full rebuild in practice. jtrrouter and
     # polyconvert are deliberately left out -- nothing in this repository invokes either, so building
     # them by default would lengthen every clean build for no consumer.
     cmake -B "$sumo_build" -S "$sumo_src" -DCMAKE_BUILD_TYPE=Release
-    cmake --build "$sumo_build" --target netconvert sumo duarouter libtracics -j"$(nproc)"
+    cmake --build "$sumo_build" --target netconvert sumo duarouter -j"$(nproc)"
     # The SUMO build emits its binaries into Build/sumo-src/bin. Stage them, the named data/ and
     # tools/ subsets and (below) the PROJ data under Build/sumo-install, so that directory is a
     # complete SUMO_HOME rather than one netconvert can be run out of.

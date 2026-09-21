@@ -174,12 +174,12 @@ Already scouted; the build itself already compiles clean from the unmodified con
 
 | ⚑ | Item | Done when |
 |---|---|---|
-| ⚑ | Build and stage `sumo`, `duarouter` and `libtracics` beside `netconvert`, plus `libtracics-sources.zip` and a **named subset** of `data/` and `tools/` — `tools/traci`, `tools/sumolib`, `data/typemap`, `data/xsd`. Measured: the full copy is 89 MB to deliver the 3.2 MB anything here consumes, and `tools/contributed` alone is 47 MB of third-party sub-licences | `sumo --version` runs from the **staged install**, not the build tree |
-| ⚑ | Re-key the idempotence guard to "is the whole required set staged" — not "is the newest there", since parallel builds have no dependable last-built file. **The guard is firing today**: `netconvert` is staged, so the other three are never built | A returning developer cannot silently keep a half toolchain, and the check reports which members are missing |
+| ⚑ | Build and stage `sumo` and `duarouter` beside `netconvert`, plus a **named subset** of `data/` and `tools/` — `tools/traci`, `tools/sumolib`, `data/typemap`, `data/xsd`. Measured: the full copy is 89 MB to deliver the 3.2 MB anything here consumes, and `tools/contributed` alone is 47 MB of third-party sub-licences. `tools/traci` is also the reference `CarlaNet.Sumo` is ported from (`09` §3.4) | `sumo --version` runs from the **staged install**, not the build tree |
+| ⚑ | Re-key the idempotence guard to "is the whole required set staged" — not "is the newest there", since parallel builds have no dependable last-built file. **The guard is firing today**: `netconvert` is staged, so `sumo`, `duarouter` and the `data`/`tools` subsets are never built or staged | A returning developer cannot silently keep a half toolchain, and the check reports which members are missing |
 | ⚑ | **Retire `CarlaSetup.bat`** and repoint `Docs/build_windows_ue5.md` at `CarlaSetup.ps1` in the same commit (§13.4) | No documented entry point is left dangling, and the SUMO build block exists in two scripts rather than three |
-| | Set `SUMO_HOME` where the other tool paths are set; add `swig` to the Linux prerequisites **and the CI container**, which never runs the prerequisites script. Windows needs no change — `swig` already rides the pinned `SUMOLibraries` bundle | A clean clone and a clean CI container both build it |
-| | Bundle the toolchain, the binding and the new artifacts, both platforms | The acceptance check passes from an installed distribution |
-| | **Acceptance check**, run rather than remembered | `sumo --version` from the staged install; a console app steps an empty simulation through the C# binding; `duarouter` validates a known route |
+| | Set `SUMO_HOME` where the other tool paths are set. The build set needs no prerequisite `netconvert` does not already have on either platform, and the TraCI client needs none at all — but **a Linux prerequisite has two homes**, `InstallPrerequisites.sh` and `Util/Docker/Base.alma8.Dockerfile`, because CI runs `--skip-prerequisites` against a pre-built image (`09` §2.3, `D9.8`) | A clean clone and a clean CI container both build it |
+| | Bundle the toolchain and the new artifacts, both platforms. `CarlaNet.Sumo` needs no slot of its own — it is managed code and rides the `carlanet` wheel | The acceptance check passes from an installed distribution |
+| | **Acceptance check**, run rather than remembered | `sumo --version` from the staged install; a test steps an empty simulation over TraCI against a `sumo` it started; the version handshake refuses a mismatched install; `duarouter` validates a known route |
 
 `duarouter` is **required**: route validation becomes an unconditional compile step, measured at
 0.27 s for all 52 Arapahoe routes.
@@ -378,7 +378,7 @@ that was being worried about.** Measured against the staged Windows distribution
 |---|---|
 | The distribution ships **no `LICENSE`, no `NOTICE`, no third-party listing of any kind** | There is no precedent in the tree to copy — `VERSION` is the only self-description, and it states builds, not contents |
 | `tools/sumo/` carries **42 DLLs spanning nine or more licences**, including LGPL (`fox-16.dll`, gettext), shipped in both debug and release variants because the copy is a glob | We are already redistributing LGPL binaries with no notice. `fox` is SUMO's **GUI** toolkit; `netconvert` never loads it |
-| SUMO is **EPL-2.0** — notice plus source offer — and `CarlaNet.Sumo` additionally redistributes SWIG-generated EPL-2.0 source | The pinned upstream commit is already recorded in `CarlaSetup.ps1`, so the offer can cite it rather than duplicate it |
+| SUMO is **EPL-2.0** — notice plus source offer — and the obligation covers source as well as binaries, because `tools/traci` and `tools/sumolib` are bundled as EPL-2.0 Python files. `CarlaNet.Sumo` is *ported* from two of them, which is a licensing question flagged for review (`09` §6) | The pinned upstream commit is already recorded in `CarlaSetup.ps1`, so the offer can cite it rather than duplicate it |
 | The OSM extracts and every generated `.xodr` are **ODbL** | `Findings/22` §14 already establishes the derivative-database obligation |
 
 So the package carries a **generated `MANIFEST.md` and a `licenses/` directory**, produced at staging
@@ -387,10 +387,12 @@ first time a slot changes. Each row names the component, its provenance, its lic
 sits. Two obligations fall out of the measurement and land in the same work:
 
 - **Stop shipping binaries nothing loads.** The `bin\*.dll` glob becomes an explicit list derived from
-  what the four SUMO binaries actually import. That drops the debug duplicates and the GUI-only `fox`,
-  and it makes the manifest's third-party rows a short true list rather than a long partly-fictional
-  one.
-- **Honour the EPL-2.0 source offer** for the SUMO binaries and the generated C#.
+  what the three SUMO binaries actually import. That drops the debug duplicates, and it makes the
+  manifest's third-party rows a short true list rather than a long partly-fictional one. `fox` stays:
+  `netconvert` does not import SUMO's GUI toolkit but `sumo` and `duarouter` both do, so the LGPL
+  obligation holds for the toolchain as a whole.
+- **Honour the EPL-2.0 source offer** for the SUMO binaries, and for `tools/traci` and `tools/sumolib`,
+  which are bundled as EPL-2.0 source rather than as binaries.
 
 Where the package may go is governed by access to the channel it is published to, not by a build flag.
 

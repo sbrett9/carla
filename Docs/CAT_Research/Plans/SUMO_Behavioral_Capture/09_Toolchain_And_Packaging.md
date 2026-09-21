@@ -32,14 +32,8 @@ specifies only their packaging shape.
 |---|---|
 | 2026-09-17 | Initial: SUMO build-target guard, `SUMO_HOME` collision, C# binding design, licensing, distribution gaps. |
 | 2026-09-18 | Added time-of-day and operator-control-surface packaging scope (§2.4, §4.4, §5.6); corrected three drifted citations. |
-
-
-**Change history**
-
-| Revision | Change |
-|---|---|
-| 1 · 2026-09-18 | First draft. |
-| 2 · 2026-09-21 | One distribution, no packaging mode, generated licence manifest; `CarlaSetup.bat` retired; skill moves into the repo. |
+| 2026-09-21 | One distribution, generated licence manifest; `CarlaSetup.bat` retired; skill moves into the repo. |
+| 2026-09-21 | TraCI client is a managed socket client: no SWIG, no `libtracics`, no native staging or bundling. |
 
 ---
 
@@ -54,7 +48,7 @@ Doc 23 §1/§1.2 was measured 2026-08-21. Re-measured today against the same fou
 | `Build/SUMOLibraries` | pinned tag `1.27.0` | confirmed present, matches `CarlaSetup.ps1:617-618` pins | none |
 | `Build/sumo-build` | fully configured — `sumo.vcxproj`, `duarouter.vcxproj`, `libtracics.vcxproj`, `libsumocs.vcxproj` all generated | confirmed all four exist: `src/sumo.vcxproj`, `src/duarouter/duarouter.vcxproj`, `src/libtraci/libtracics.vcxproj`, `src/libsumo/libsumocs.vcxproj` | none |
 | `Build/sumo-install/bin` | **`netconvert.exe` only** staged; `sumo`/`duarouter`/`libtracics` exist in the source tree's `bin/` but are not staged | confirmed identical: `netconvert.exe` + 32 DLLs + `share/proj`; no `sumo.exe`, `duarouter.exe`, or `libtracics.dll` in `sumo-install/bin` | none |
-| Generated C# bindings | **94 generated C# files** in `Eclipse.Sumo.Libtraci/` | **93 `.cs` files.** The 94th file in that directory is `libtraciCSHARP_wrap.cxx` — the SWIG-generated **C++** glue that gets compiled into the native `libtracics.dll`, not a C# source file. Confirmed by unzipping `Build/sumo-src/bin/libtracics-sources.zip` (95 zip entries = 1 directory entry + 93 `.cs` + 1 `.cxx`) and by `find … -iname '*.cs' \| wc -l` = 93 | doc 23 off by one; harmless, but the `.cxx` must not be swept into the C# wrapper project (§4) |
+| Generated C# bindings | **94 generated C# files** in `Eclipse.Sumo.Libtraci/` | **93 `.cs` files.** The 94th file in that directory is `libtraciCSHARP_wrap.cxx` — the SWIG-generated **C++** glue compiled into the native `libtracics.dll`, not a C# source file. Confirmed by unzipping `Build/sumo-src/bin/libtracics-sources.zip` (95 zip entries = 1 directory entry + 93 `.cs` + 1 `.cxx`) and by `find … -iname '*.cs' \| wc -l` = 93 | doc 23 off by one. Inventory only — nothing in this plan builds from these files (§4.1) |
 | `data/`, `tools/` staged | present in source, **unstaged** | confirmed: `Build/sumo-src/data` and `Build/sumo-src/tools` exist and are populated (type maps, XSDs, `traci`/`sumolib`); nothing under `Build/sumo-install` or `Build/Dist/*/tools/sumo` | none |
 | Distribution slot | `MakeDistribution.ps1:237` creates `tools\sumo\` | the directory list is now at `Scripts/Windows/MakeDistribution.ps1:211`; the actual SUMO copy block is `:248-260`. Contents of the built `Build/Dist/Carla-0.10.0-Win64-Development/tools/sumo/`: `netconvert.exe` + its DLLs + a `proj/` subfolder (**PROJ's own data**, not SUMO's `data/typemap/`). No `sumo.exe`, no `duarouter.exe`, no `libtracics.dll`, no SUMO `data/`, no SUMO `tools/` | line-number drift only (script has grown since 2026-08-21); the packaging gap doc 23 described is confirmed unchanged |
 | `SUMO_HOME` | "set nowhere" | **Wrong as a blanket statement — see §3.3.** It is set nowhere *by any script in this repo*, but it exists as an ambient developer environment variable on this machine, pointed at an entirely separate SUMO installation | material correction, not cosmetic |
@@ -73,10 +67,9 @@ this repo performs. Do not rely on it for the distribution path (§5) — a dist
 (§3.3), which changes the shape of §3 below but not §1's inventory.
 
 **Every disk-state claim in the table above, and every `path:line` citation anywhere in this document, is
-checked against the live tree as of 2026-09-18.** Two citations sit on lines that moved because the
-tracked files themselves grew: `build-carla-ue5.yml`'s `CONTAINER_IMAGE` is at `:51` (§2.3), and
-`Util/Docker/Base.alma8.Dockerfile`'s `powertools` repo enablement is at `:94` (§2.3) — both are cited at
-those lines wherever they appear below. `Findings/22_Digital_Twin_Feature_Port.md`'s `CarlaControl/` row
+checked against the live tree as of 2026-09-18.** One citation sits on a line that moved because the
+tracked file itself grew: `build-carla-ue5.yml`'s `CONTAINER_IMAGE` is at `:51` (§7.2), and is cited at
+that line wherever it appears below. `Findings/22_Digital_Twin_Feature_Port.md`'s `CarlaControl/` row
 (§4.3) is at `:529`; the netconvert row two lines above it, quoted in full in §6, is at `:528`. Every other citation in this document — `CarlaSetup.ps1`/`.sh`/`.bat`, `run_SCTMV.py`,
 `Scripts/Windows/MakeDistribution.ps1`, `Scripts/Linux/MakeDistribution.sh`,
 `CarlaControl/src/carlacontrol/SumoInstallation.py`, `OsmClipper.py:154,219`,
@@ -95,7 +88,7 @@ flowchart TD
     CFG["cmake configure\n(VS generator / Unix Makefiles)"] --> BUILD
 
     BUILD["cmake --build --target …\ntoday: netconvert only"]
-    NEWTARGETS["NEW targets: sumo, duarouter, libtracics\n(§2 — same invocation, longer list)"]
+    NEWTARGETS["NEW targets: sumo, duarouter\n(§2 — same invocation, longer list)"]
     BUILD -.-> NEWTARGETS
 
     BUILD --> SRCBIN["Build/sumo-src/bin/\n(SUMO's own build convention)"]
@@ -107,7 +100,7 @@ flowchart TD
     STAGE -.-> NEWSTAGE
 
     STAGE --> DIST["MakeDistribution.ps1/.sh\ntools\\sumo\\ (netconvert+DLLs+proj today)"]
-    NEWSTAGE -.-> DISTFULL["NEW: + sumo, duarouter, libtracics,\ndata/, tools/, SUMO_HOME in launcher\n(§5)"]
+    NEWSTAGE -.-> DISTFULL["NEW: + sumo, duarouter,\ndata/, tools/, SUMO_HOME in launcher\n(§5)"]
     DIST -.-> DISTFULL
     DISTFULL --> BUNDLE["Distribution tarball / zip"]
 ```
@@ -133,8 +126,8 @@ if (Test-Path $netconvert) { Write-Host "Found SUMO netconvert ... Skipping SUMO
 
 `CarlaSetup.sh:261-264` does the platform-appropriate equivalent (`test -f "$sumo_install/bin/netconvert"`).
 Doc 23 §6.1 already names the trap: keying the guard on `netconvert.exe` alone means a developer who
-has that one file staged is told the SUMO step is done, even with `sumo`, `duarouter` and `libtracics`
-never built.
+has that one file staged is told the SUMO step is done, even with `sumo` and `duarouter` never built
+and `data/`/`tools/` never staged.
 
 **Do not replace the single-file check with a different single-file check.** Doc 23 §6.1 phrases the
 fix as keying on "the newest required binary." That phrasing does not survive contact with how the
@@ -152,16 +145,16 @@ stateDiagram-v2
         CheckNetconvert: Test-Path sumo-install/bin/netconvert.exe
         CheckNetconvert --> SkipBuild: exists
         CheckNetconvert --> BuildNetconvertOnly: missing
-        SkipBuild --> HalfToolchain: sumo/duarouter/libtracics\nnever checked, never built
+        SkipBuild --> HalfToolchain: sumo/duarouter\nnever checked, never built
         BuildNetconvertOnly --> [*]
         HalfToolchain --> [*]
     }
     state "PROPOSED" as prop {
         [*] --> CheckAllRequired
-        CheckAllRequired: Test-Path on ALL of\nnetconvert, sumo, duarouter, libtracics
+        CheckAllRequired: Test-Path on ALL of\nnetconvert, sumo, duarouter,\ndata/ and tools/ subsets
         CheckAllRequired --> SkipBuild2: all present
         CheckAllRequired --> BuildFullSet: any missing
-        BuildFullSet: cmake --build --target\nnetconvert sumo duarouter libtracics\n(CMake skips already-built objects —\nnot a full rebuild in practice)
+        BuildFullSet: cmake --build --target\nnetconvert sumo duarouter\n(CMake skips already-built objects —\nnot a full rebuild in practice)
         BuildFullSet --> StageAll: copy the whole required set\n+ data/ + tools/
         StageAll --> [*]
         SkipBuild2 --> [*]
@@ -169,8 +162,9 @@ stateDiagram-v2
     cur --> prop: this document's change
 ```
 
-Required set (built and staged together, one invocation): `netconvert`, `sumo`, `duarouter`,
-`libtracics` (its native library — `.dll` on Windows, `.so` on Linux). `jtrrouter` and `polyconvert`
+Required set (built and staged together, one invocation): `netconvert`, `sumo`, `duarouter`. **Three
+binaries, and no native library** — the TraCI client is managed code speaking the protocol over a socket
+(§4.1), so nothing in `CarlaNet` loads anything out of `Build/sumo-install/bin`. `jtrrouter` and `polyconvert`
 (doc 23 §6.1 lists them as optional) are **not** added to the default target list: nothing in this plan
 or in `carlacontrol` invokes either of them today (verified — no reference to `jtrrouter` or
 `polyconvert` anywhere in `CarlaControl/` or `CarlaNet/`), so building them by default only lengthens
@@ -190,20 +184,17 @@ reaches the same conclusion from the authoring side — see §3.5 below.
 ```powershell
 # Guard: ALL required binaries staged, not just netconvert.
 $requiredBins = 'netconvert.exe','sumo.exe','duarouter.exe'
-$requiredNative = 'libtracics.dll'
-$haveAll = ($requiredBins | ForEach-Object { Test-Path (Join-Path $sumoInstall "bin\$_") }) -notcontains $false `
-           -and (Test-Path (Join-Path $sumoInstall "bin\$requiredNative"))
+$haveAll = ($requiredBins | ForEach-Object { Test-Path (Join-Path $sumoInstall "bin\$_") }) -notcontains $false
 if ($haveAll) {
-    Write-Host "Found the full SUMO toolchain (netconvert, sumo, duarouter, libtracics) staged. Skipping SUMO build."
+    Write-Host "Found the full SUMO toolchain (netconvert, sumo, duarouter) staged. Skipping SUMO build."
 } else {
     ...
-    cmake --build $sumoBuild --target netconvert sumo duarouter libtracics --config Release -- -m
+    cmake --build $sumoBuild --target netconvert sumo duarouter --config Release -- -m
     ...
     # Stage the whole required set, not just netconvert.exe.
     foreach ($bin in $requiredBins) {
         Copy-Item -Force (Join-Path $sumoSrc "bin\$bin") $installBin
     }
-    Copy-Item -Force (Join-Path $sumoSrc "bin\$requiredNative") $installBin
     Copy-Item -Force (Join-Path $sumoSrc 'bin\*.dll') $installBin   # unchanged: runtime DLLs
     # NEW: stage data/ and tools/ beside bin/ (see §3).
     Copy-Item -Recurse -Force (Join-Path $sumoSrc 'data') (Join-Path $sumoInstall 'data')
@@ -222,18 +213,16 @@ Mirrors §2.2 exactly, same required set, same guard shape:
 
 ```sh
 required_bins="netconvert sumo duarouter"
-required_native="libtracics.so"
 have_all=1
 for b in $required_bins; do [ -f "$sumo_install/bin/$b" ] || have_all=0; done
-[ -f "$sumo_install/bin/$required_native" ] || have_all=0
 
 if [ "$have_all" -eq 1 ]; then
     echo "Found the full SUMO toolchain staged. Skipping SUMO build."
 else
     ...
-    cmake --build "$sumo_build" --target netconvert sumo duarouter libtracics -j"$(nproc)"
+    cmake --build "$sumo_build" --target netconvert sumo duarouter -j"$(nproc)"
     mkdir -p "$sumo_install/bin"
-    for b in $required_bins "$required_native"; do
+    for b in $required_bins; do
         cp "$sumo_src/bin/$b" "$sumo_install/bin/$b"
     done
     # NEW: stage data/ and tools/.
@@ -242,34 +231,26 @@ else
 fi
 ```
 
-**Prerequisite gap found beyond doc 23's scope.** Doc 23 §6.1 says "Linux additionally needs `swig` in
-`InstallPrerequisites.sh`." That is necessary but **not sufficient**, because it is the wrong file for
-the path this repo's own CI actually uses:
+**The build set needs no new prerequisite on either platform.** `sumo` and `duarouter` link the same
+libraries `netconvert` already does — Xerces-C and PROJ, present in `Util/SetupUtils/InstallPrerequisites.sh:70-71`
+(`libxerces-c-dev`, `libproj-dev`) and in `Util/Docker/Base.alma8.Dockerfile`'s package block
+(`xerces-c-devel`, `proj-devel`) — and the TraCI client compiles as ordinary managed code with no native
+prerequisite at all (§4.1). The target-list change is therefore reachable from a clean clone and a clean
+CI container as they stand.
 
-- `Util/SetupUtils/InstallPrerequisites.sh:29-42` detects an **Ubuntu** version (`VERSION_ID` from
-  `/etc/os-release`) and installs via `apt-get`. It already carries `libxerces-c-dev`, `libproj-dev`
-  (`:70-71`) but no `swig`. This is the path a bare-metal Ubuntu developer box uses.
-- The CI container is **AlmaLinux 8**, provisioned by `Util/Docker/Base.alma8.Dockerfile`, which
-  `.github/workflows/build-carla-ue5.yml` pulls pre-built and never runs `InstallPrerequisites.sh`
-  against at all — the CI job calls `CarlaSetup.sh --skip-prerequisites` (workflow step "Build CARLA
-  distribution", inline script). The Dockerfile's own package block (`RUN dnf -y groupinstall
-  "Development Tools" && dnf -y install … xerces-c-devel proj-devel …`) already has `xerces-c-devel`
-  and `proj-devel` but **no `swig`** either.
+**The structural finding underneath that is worth keeping, because the next prerequisite will hit it.**
+There are **two** places a Linux build prerequisite has to be declared, and only one of them is obvious:
 
-Both places need it:
+| Path | File | Consumed by |
+|---|---|---|
+| Bare-metal Ubuntu dev box | `Util/SetupUtils/InstallPrerequisites.sh` (detects an Ubuntu `VERSION_ID` from `/etc/os-release` at `:29-42`, installs via `apt-get`) | a developer running `CarlaSetup.sh` **without** `--skip-prerequisites` |
+| CI container (AlmaLinux 8 / RHEL8-compatible) | `Util/Docker/Base.alma8.Dockerfile` — `.github/workflows/build-carla-ue5.yml` pulls this image pre-built and **never runs `InstallPrerequisites.sh` against it**, because the CI job calls `CarlaSetup.sh --skip-prerequisites` | `build-carla-ue5.yml`'s "Build CARLA distribution" step |
+| Windows | — | the pinned `SUMOLibraries` bundle supplies the build dependencies (`CarlaSetup.ps1:617-618`) |
 
-| Path | File | Package | Consumed by |
-|---|---|---|---|
-| Windows | — **no change needed** | `swig` already ships inside the pinned `SUMOLibraries` bundle as `Build/SUMOLibraries/swigwin-4.3.1/` (`CarlaSetup.ps1:617-618`) | any Windows developer |
-| Bare-metal Ubuntu dev box | `Util/SetupUtils/InstallPrerequisites.sh` | `swig` (apt) | a developer running `CarlaSetup.sh` without `--skip-prerequisites` |
-| CI container (AlmaLinux 8 / RHEL8-compatible) | `Util/Docker/Base.alma8.Dockerfile` | `swig` (dnf; ships in AlmaLinux 8's base or PowerTools repo, already enabled at `:94`) | `build-carla-ue5.yml`'s "Build CARLA distribution" step, which always runs `--skip-prerequisites` |
-
-Missing the Dockerfile side would make the target-list change work for every developer laptop and fail
-silently — or rather, fail loudly with a SWIG-not-found CMake error — the first time CI tries to build
-`libtracics` from a clean `Build/` tree, which happens whenever `clean_build: true` is dispatched or the
-runner's cache is ever cleared. Adding the package means rebuilding and re-pushing `carla-base:alma8` to
-the private registry (`iasartifact.sncorp.com:8443/cat-docker-dev/carla-base:alma8`, per
-`build-carla-ue5.yml:51`); that rebuild is not a cost, it is the fix.
+A package added only to `InstallPrerequisites.sh` works on every developer laptop and then fails in CI
+the first time a clean `Build/` tree forces the configure step — whenever `clean_build: true` is
+dispatched, or the runner's cache is cleared. **Anything this plan later adds to one file must be added
+to the other in the same change**, and the image rebuild that implies is not a cost to weigh (`D9.8`).
 
 ### 2.4 What §3a — simulated time of day — does not change here
 
@@ -295,12 +276,12 @@ Three consequences follow, all measured rather than assumed:
   It is not a CMake target, `CarlaSetup.ps1`/`.sh` do not stage it, and it ships inside the cooked server
   exactly the way the rest of the `Carla` and `CesiumForUnreal` plugins already do — §5.1's "Cooked
   server" row already covers it. There is no new distribution slot for it.
-- **The SUMO toolchain has no part in it.** `netconvert`, `sumo`, `duarouter` and `libtracics` do not
-  compute, store or read solar state anywhere. `01_Architecture.md`'s own design (`:170`, `:173`, `:439`,
+- **The SUMO toolchain has no part in it.** `netconvert`, `sumo` and `duarouter` do not compute, store
+  or read solar state anywhere. `01_Architecture.md`'s own design (`:170`, `:173`, `:439`,
   `D1.24`) confirms the split this document would otherwise have to assume: motion-derived vehicle
-  lights (brake, indicator) come from SUMO's existing per-vehicle signal bitmask over the same `traci`
-  subscription CarlaNet already needs for pose — an existing, already-compiled `libtracics` capability,
-  not a new one — while illumination-derived lamps come from the published solar state, and a new C#
+  lights (brake, indicator) come from SUMO's existing per-vehicle signal bitmask over the same TraCI
+  subscription CarlaNet already needs for pose — one more subscribed variable, `VAR_SIGNALS`, not a new
+  mechanism — while illumination-derived lamps come from the published solar state, and a new C#
   component (`SumoSignalProjector`, `11`'s and `01`'s design, not this document's) composes the two.
   Nothing in that design proposes a change to SUMO's own build, and `CarlaNet/src/CarlaNet.Sumo` (§4.1,
   which does not exist yet in the tree — confirmed) needs nothing added to it for time-of-day.
@@ -473,6 +454,10 @@ What changes once `data/` is staged and `SUMO_HOME` points at a complete install
   and `tools/` is where `traci`, `sumolib`, `randomTrips.py` and `routeSampler.py` (doc 23 §9 question 1)
   live — none of that is optional once the Python authoring path (§4.2) is expected to work from a
   staged install rather than a source checkout.
+- **`tools/traci` carries a second obligation now: it is the reference the C# client is ported from**
+  (§4.1, doc 23 §6.3). Staging it at the pinned commit is what lets the port be re-read against the
+  protocol version it was written for, and what makes a SUMO bump a reviewable diff of a file already
+  in the staged install rather than an archaeology exercise against an upstream tag.
 
 Staging shape (both platforms, added in §2's build step): `Build/sumo-install/{bin,data,tools,share/proj}`.
 `SUMO_HOME` is not set by `CarlaSetup.ps1`/`.sh` themselves (§3.1's precedent — they print a reminder,
@@ -518,14 +503,18 @@ apply to any other caller of `SumoInstallation.locate`, because it is one.
 
 ### 4.1 The C# path
 
-**`libtraci` (out-of-process), not `libsumo`** — doc 23 §6.3's recommendation stands; §6 below adds the
-licensing angle it did not carry.
+**`CarlaNet.Sumo` speaks the TraCI wire protocol over a managed TCP socket to an out-of-process `sumo`**
+— doc 23 §6.3, which also records the measurements behind it. What that means for packaging is mostly
+an absence, so it is worth saying what is *not* there: no SWIG, no native library, no generated sources,
+no build-time extraction step, no load-path arrangement, and no build-order dependency on the SUMO
+toolchain having been built first.
 
 What a consuming .NET project needs, concretely:
 
-1. **A new project, `CarlaNet/src/CarlaNet.Sumo/CarlaNet.Sumo.csproj`.** This holds only the generated
-   SWIG proxy classes and the thinnest possible native-load glue — nothing CARLA-specific. It has **no**
-   `ProjectReference` to any other `CarlaNet.*` assembly, which keeps it regenerable in isolation and
+1. **A new project, `CarlaNet/src/CarlaNet.Sumo/CarlaNet.Sumo.csproj`.** This holds the transport — the
+   socket, the frame header, the typed value codec — and the domain calls the bridge uses, ported from
+   SUMO's reference client under `Build/sumo-install/tools/traci` (§3.4). Nothing CARLA-specific. It has
+   **no** `ProjectReference` to any other `CarlaNet.*` assembly, which keeps it testable in isolation and
    gives the eventual bridge (doc 23 §5's proposed `CarlaNet.CoSim`, owned by `03_CoSimulation_Runtime.md`)
    a clean, acyclic dependency: `CarlaNet.CoSim` → `CarlaNet.Sumo` + `CarlaNet.Types` + `CarlaNet.Transport`
    + `CarlaNet.Map` + `CarlaNet.TrafficManager`, mirroring the existing pattern at
@@ -533,22 +522,22 @@ What a consuming .NET project needs, concretely:
    assembly (verified: `CarlaNet.Types.csproj:4`, `CarlaNet.Scenario.csproj:11`). Confirmed by directory
    listing: `CarlaNet/src/CarlaNet.Sumo/` does not exist yet — this is a proposal, not a description of
    something already built.
-2. **The generated sources reproducibly, from a clean clone, not from a build tree someone happens to
-   have.** SUMO's own build already produces exactly the right artifact for this:
-   `Build/sumo-src/bin/libtracics-sources.zip`, which contains the full `Eclipse.Sumo.Libtraci/` folder
-   (93 `.cs` files — §1's correction — plus the harmless `.cxx`, which a default `**/*.cs` compile glob
-   never touches). Once §2/§3 stage the toolchain into `Build/sumo-install/bin/`, that zip is staged
-   there too, and `CarlaNet.Sumo`'s build extracts it into its own source-generation output directory as
-   an MSBuild pre-build step (unzip a fixed, versioned artifact — not "copy whatever loose files are
-   sitting in someone's `Build/sumo-build`"). This makes the wrapper buildable from a clean clone that
-   has run `CarlaSetup.ps1`/`.sh` once, with no manual file placement.
-3. **`libtracics.dll`/`.so` on the native load path.** A post-build MSBuild target copies it from
-   `Build/sumo-install/bin/` next to `CarlaNet.Sumo.dll`'s own output — the same mechanism already
-   needed for any native interop in a `dotnet build` output directory, no RID-specific NuGet packaging
-   required for an in-repo `ProjectReference`.
-4. **Regeneration, not maintenance.** Nothing in `CarlaNet.Sumo` is hand-written; a SUMO version bump
-   re-runs §2's build, produces a new `libtracics-sources.zip`, and the next `dotnet build` picks it up.
-   There is no drift to reconcile because there is no hand-maintained copy.
+2. **It builds from a clean clone on a machine with no SUMO.** The project's only inputs are its own
+   `.cs` files and `System.Net.Sockets`, so `dotnet build` and `dotnet restore` work before
+   `CarlaSetup.ps1`/`.sh` has ever run. Only *running* the tests against a live simulation needs a
+   `sumo` binary (§8.1). That is what removes the build-order question a generated binding would have
+   created, and it is why `CarlaNet.Sumo` can sit in `CarlaNet.sln` unconditionally.
+3. **Nothing native ships with the assembly.** `CarlaNet.Sumo.dll` is pure managed code and travels the
+   way every other CarlaNet assembly already does — inside the `carlanet` wheel, whose
+   `package-data` already carries `dlls/*.dll` (`CarlaNet/python/pyproject.toml:25-30`). No new
+   distribution slot, no RID-specific packaging, no library to place beside an output directory (§5.4).
+4. **Maintenance, not regeneration — and that is the cost side.** The protocol's framing and its command
+   and variable numbers are pinned to a SUMO release, so a version bump is a diff to read against the
+   staged `tools/traci` at the new pin rather than a rebuild that produces new files. The compensation is
+   that the client can check the version it is talking to: TraCI answers `CMD_GETVERSION` with an API
+   version and SUMO's own version string, and the reference client asks on every connect
+   (`Build/sumo-install/tools/traci/connection.py:381-388`), so a mismatch is reportable at the point of
+   connection rather than undefined (doc 23 §6.3).
 
 ### 4.2 The Python path — needed regardless of `03`'s C#-vs-Python decision
 
@@ -579,7 +568,7 @@ The obligations that *are* real are third-party, and the distribution meets none
 |---|---|
 | **No licence statement of any kind ships.** The distribution root is `CarlaServer/ README.md VERSION osm/ run-sctmv.ps1 run-server.ps1 scripts/ setup-venv.ps1 tools/ wheels/` | No `LICENSE`, no `NOTICE`, no third-party listing, and no precedent anywhere in the tree to copy |
 | **`tools/sumo/` ships 42 DLLs spanning nine or more licences**, including LGPL (`fox-16.dll`, `iconv-2`/`intl-8`), OpenSSL, Apache-2.0 (Arrow, Parquet, Thrift, Xerces), PROJ, and the MS redistributables — debug *and* release variants of several | Redistributed with no notice. The set arrives via `CarlaSetup.ps1`'s `bin\*.dll` glob and `MakeDistribution.ps1`'s recursive copy; `fox` is SUMO's **GUI** toolkit, which `netconvert` never loads |
-| **SUMO is EPL-2.0** — notice plus a source offer | The pinned upstream commit is already recorded in `CarlaSetup.ps1`, so the offer can cite it rather than duplicate it. `D9.5`'s SWIG-generated C# redistributes EPL-2.0 source as well |
+| **SUMO is EPL-2.0** — notice plus a source offer | The pinned upstream commit is already recorded in `CarlaSetup.ps1`, so the offer can cite it rather than duplicate it. The obligation covers **source as well as binaries**: `D9.3` stages and `§5.4` bundles `tools/traci` and `tools/sumolib`, which are EPL-2.0 Python source files carrying SUMO's own headers (`tools/traci/storage.py:1-12`) |
 | **The OSM extracts and every generated `.xodr` are ODbL**, the `.xodr` as a Derivative Database | `Findings/22` §14 establishes this; nothing in the package states it |
 
 §5.4 carries these into the bundle list as a generated `MANIFEST.md` and a `licenses/` directory.
@@ -715,13 +704,18 @@ consumes it, and record the reason beside the list, or a future reader will "fix
 **Measured once the walk existed, and it corrects an expectation in §4.3: `fox-16.dll` cannot be
 dropped.** `netconvert.exe` genuinely does not import it, but `sumo.exe` and `duarouter.exe` both do,
 so the LGPL obligation stands for the toolchain as a whole and `MANIFEST.md` records it against the
-binaries that carry it. The walk reaches 20 of the 43 DLLs in the build directory from the four
+binaries that carry it. The walk reaches 20 of the 43 DLLs in the build directory from the three
 binaries; the other 23 are debug variants and libraries nothing here loads. Windows reads the
 imports out of the PE header rather than through `dumpbin`, which needs a Visual Studio developer
 environment the packaging script does not have unless it was invoked with `-Build`; none of these
 binaries has a delay-load import directory, so the plain import table is the whole dependency set.
 Each staged binary is then run from the staged directory, which is the direct check that the list is
 not short.
+
+**The native bundle is the same size whether or not a SWIG binding is in it**, so no licence obligation
+in §6 is retired by dropping one. Measured: `libtracics.dll`'s own imports are the MSVC runtime,
+`kernel32` and `ws2_32`, every one of which `sumo.exe` already imports, so it contributes nothing to
+the reachable set. The nine-or-more licences `tools/sumo/` carries ride `sumo` and `duarouter`.
 
 The binary rows are likewise an explicit list derived from what the binaries import, not `bin\*`
 (§4.3). Linux already walks `ldd` per binary at `MakeDistribution.sh:125-144`; Windows needs the
@@ -730,12 +724,10 @@ equivalent, which it gets by reading the PE import table directly.
 | Artifact | Windows source | Linux source | Destination |
 |---|---|---|---|
 | `sumo`, `duarouter`, `netconvert` + runtime DLLs/`.so`s | `Build\sumo-install\bin\*` | `Build/sumo-install/bin/*` (Linux already walks `ldd` per-binary at `:125-144`; extend the walk to all three, not just `netconvert`) | `tools\sumo\` |
-| `libtracics.dll`/`.so` | same | same | `tools\sumo\` |
 | SUMO `data/`, **named subset**: `typemap`, `xsd` | `Build\sumo-install\data\{typemap,xsd}` | same | `tools\sumo\data\` |
-| SUMO `tools/`, **named subset**: `traci`, `sumolib` | `Build\sumo-install\tools\{traci,sumolib}` | same | `tools\sumo\tools\` |
-| `libtracics-sources.zip` — `D9.5` builds `CarlaNet.Sumo` from it, and a recipient has no `Build/` tree | `Build\sumo-install\bin\libtracics-sources.zip` | same | `tools\sumo\` |
+| SUMO `tools/`, **named subset**: `traci`, `sumolib` — the Python authoring path imports them, and `traci` is the reference the C# client is ported from (§3.4, §4.1) | `Build\sumo-install\tools\{traci,sumolib}` | same | `tools\sumo\tools\` |
 | PROJ data | already bundled | already bundled | `tools\sumo\proj\` (unchanged) |
-| `CarlaNet.Sumo` wrapper assembly + `libtracics` native lib | `CarlaNet\src\CarlaNet.Sumo\bin\Release\net10.0\*` | equivalent | `wheels\` is Python-only — this needs a new `dotnet\` (or similar) slot, since it is a managed assembly, not a wheel |
+| `CarlaNet.Sumo` — **no slot of its own.** It is pure managed code with no native part, so it ships inside the `carlanet` wheel with every other CarlaNet assembly (`CarlaNet/python/pyproject.toml:25-30` already carries `dlls/*.dll`) | `wheels\` (unchanged) | same | `wheels\` |
 | `SUMO_HOME` in the generated launcher | new line in `run-sctmv.ps1`: `$env:SUMO_HOME = Join-Path $here 'tools\sumo'` | new line in `run-sctmv.sh`: `export SUMO_HOME="$here/tools/sumo"` | — |
 | **`MANIFEST.md`** — generated at staging time from what was actually copied, never hand-maintained (§4.3) | generated | generated | distribution root |
 | **`licenses/`** — CARLA MIT, `CarlaControl/LICENSE`, SUMO EPL-2.0 + `NOTICE.md`, the native third-party table, OpenStreetMap ODbL | copied | copied | `licenses\` |
@@ -802,9 +794,8 @@ flowchart TD
         NC2[netconvert/sumo/duarouter + libs]
         DATA[SUMO data/]
         TOOLS[SUMO tools/ - traci, sumolib]
-        LTC[libtracics native lib]
-        WRAP[CarlaNet.Sumo wrapper assembly]
-        CNW[carlanet wheel]
+        CNW["carlanet wheel - carries every CarlaNet
+assembly, CarlaNet.Sumo included"]
         CCW["carlacontrol wheel - ships on both platforms (D9.7);
 named in MANIFEST.md (S4.3)"]
         VCAT[vehicle catalogue - versioned w/ content build]
@@ -827,8 +818,7 @@ named in MANIFEST.md (S4.3)"]
     end
     NC2 --> OSMC
     NC2 --> SSB
-    LTC --> COSIM
-    WRAP --> COSIM
+    NC2 -->|"sumo --remote-port;\nTraCI over TCP"| COSIM
     DATA --> SSB
     TOOLS --> SSB
     TOOLS --> SCB
@@ -922,12 +912,13 @@ Extending that to every binding choice this plan puts in front of the user:
 |---|---|---|---|
 | `netconvert` (already shipped) | compiled binary only | separate process, invoked by argv | notice + source offer (doc 22's existing conclusion, unchanged) |
 | `sumo` + `duarouter` (new) | compiled binaries only | separate processes | same as `netconvert` — no new category |
-| **`libtraci` (recommended bridge)** | compiled native `libtracics.dll`/`.so` **and generated C# source** (`Eclipse.Sumo.Libtraci/*.cs`) | out-of-process TraCI protocol between our code and the `sumo` process; the native `libtracics` library and its generated `.cs` proxies are SWIG output from SUMO's own `.i` interface files, which are themselves part of SUMO's EPL-2.0 source tree | the *binary* half is the same notice-plus-source-offer situation as `netconvert`. The *generated source* half is materially different from anything doc 22 already covers: this plan ships **EPL-2.0-derived source code**, not only an opaque binary, inside our own build/distribution. Whether that requires anything beyond notice + retaining SUMO's own copyright headers in the generated files (EPL-2.0 is file-level copyleft — modifications to an EPL-covered *file* carry obligations for that file, it does not by itself extend to code that merely calls it) is **flagged for legal review, not decided here** |
-| `libsumo` (rejected in doc 23 §6.3 on architecture grounds) | `libsumocpp`/`libsumostatic.lib` **statically linked** into the same native module our own code loads, plus the same category of generated C# source as `libtraci` | in-process; EPL-2.0 is explicit that mere aggregation and dynamic linking do not extend copyleft to the linking program, but **static linking into the same binary is a closer, more contested boundary** than a separate process talking over TCP | staying out-of-process (§4.1's recommendation) is therefore **also** the licensing-conservative choice, not only the crash-isolation one — the architecture decision and the licensing posture point the same direction, which is worth knowing when the choice is made, not after |
+| **SUMO's Python tools (`tools/traci`, `tools/sumolib`)** | **EPL-2.0 source files, verbatim and unmodified**, carrying SUMO's own copyright and SPDX headers (`tools/traci/storage.py:1-12`) | staged by `D9.3`, bundled by §5.4, imported by `carlacontrol` at run time | notice plus source offer, as for the binaries — and this is the row that keeps the **source** half of the obligation alive. Verbatim redistribution under the same licence is the case EPL-2.0 addresses most directly; the headers must survive the copy, which a `cp -a` / `Copy-Item -Recurse` of whole directories does |
+| **`CarlaNet.Sumo` (the TraCI client)** | our own C# **ported from** `tools/traci`'s EPL-2.0 `connection.py`, `storage.py` and the domain calls it needs (doc 23 §6.3) | out-of-process TraCI protocol between our code and the `sumo` process. No SUMO binary or source is linked, loaded or embedded — the coupling is the wire format | the run-time boundary is the cleanest of any option here: a socket, and nothing of SUMO's inside our process. What is **not** settled is whether a translation of an EPL-2.0 source file into another language is a Modified Work of that file — EPL-2.0 is file-level copyleft, and a port is closer to a modification than a call is. **Flagged for legal review, not decided here**, and the cheap mitigation is available now: attribute the ported files to their SUMO originals in a header, keep the pinned commit beside the attribution, and let the review decide whether more is owed |
+| `libsumo` / `libtracics` (SUMO's own bindings) | a native library plus generated C# proxies, redistributed as binary *and* as source | `libtracics` is out of process but loads native code into ours; `libsumo` additionally links SUMO statically into the module our own code loads | not taken (doc 23 §6.3). The licensing posture agreed with that on its own: shipping generated EPL-2.0-derived source inside our build, and for `libsumo` static linking into the same binary, are both wider boundaries than a socket |
 | `CarlaControl/` (existing, unrelated to SUMO; growing on account of `12`, §5.6) | source, `CarlaControl/LICENSE` | notice | **Ships in the single distribution** (`D9.7`) and is named in `MANIFEST.md`. `Findings/22` §14's "exclude from any external distribution" came from a plan that did not manifest and is corrected at source; there is no exclusion to honour |
 
-No conclusion above should be read as legal sign-off. The two flagged rows — generated EPL-2.0 source
-bundled as source, and the internal/external distribution boundary around `CarlaControl/` — are the two
+No conclusion above should be read as legal sign-off. The two flagged rows — a C# client ported from
+EPL-2.0 source, and the internal/external distribution boundary around `CarlaControl/` — are the two
 items worth a licensing review before this ships, stated as facts so that review has something concrete
 to look at rather than a summary.
 
@@ -966,15 +957,16 @@ this section:
 
 ### 7.2 What has to change for the SUMO toolchain to be built and shipped by this pipeline
 
-1. **`carla-base:alma8` needs `swig`** (§2.3) — a Dockerfile change, rebuild, and re-push to
-   `iasartifact.sncorp.com:8443/cat-docker-dev/carla-base:alma8`. The workflow's "Pull container image"
-   step already pulls by a fixed tag with no digest pin visible in the workflow, so a rebuild under the
-   same tag reaches the next run automatically; whether that tag should move to a digest pin so a SUMO
-   toolchain change can't silently ride in on an unrelated base-image rebuild is worth a decision (`D9.8`).
+1. **`carla-base:alma8` needs no package it does not already have** (§2.3) — `xerces-c-devel` and
+   `proj-devel` cover `sumo` and `duarouter` as they cover `netconvert`, and the TraCI client needs
+   nothing native. The image's `swig` is surplus rather than required, and it costs nothing until the
+   next rebuild drops it. Whether the workflow's tag reference should move to a digest pin, so a future
+   base-image change cannot silently ride into a build, is a standing question independent of this plan
+   (`D9.8`).
 2. **No workflow change is needed to trigger the new targets.** `CarlaSetup.sh --skip-prerequisites`
    (the only build-relevant flag the workflow passes) skips `InstallPrerequisites.sh`, not the SUMO build
-   block — the two are separate steps in the script. Once §2's target-list change lands and the container
-   has `swig`, the existing "Build CARLA distribution" step picks it up with no workflow edit.
+   block — the two are separate steps in the script. Once §2's target-list change lands, the existing
+   "Build CARLA distribution" step picks it up with no workflow edit and no image rebuild.
 3. **The persistent `Build/` tree means §2's guard fix is a CI-correctness fix, not only a developer
    convenience.** Before this change, a CI box that already has `netconvert.exe` staged from an earlier
    run would skip the SUMO step forever, silently shipping an incomplete `tools/sumo/` in every
@@ -994,7 +986,7 @@ this section:
 A `workflow_dispatch` run with `clean_build: true` should reproduce, byte-for-byte where that is a
 meaningful comparison and semantically where it is not:
 
-- `Build/sumo-install/bin/` containing all four required binaries, each reporting the pinned version
+- `Build/sumo-install/bin/` containing all three required binaries, each reporting the pinned version
   (`sumo --version` → `1.27.0`, built from commit `e238ea04b7150ba23a348a285d3048919fa4830b` — the same
   pin `CarlaSetup.ps1:616` carries)
 - `Build/sumo-install/{data,tools}` populated
@@ -1024,8 +1016,8 @@ in the verification design regardless of whether that fix ever lands.
 
 ## 8. Verification — concrete, runnable, and living somewhere a person or CI will actually run it
 
-Doc 23 §8 proposes "`sumo --version` from the staged install" plus "a trivial console app stepping an
-empty simulation through the binding." Turned into two runnable checks:
+Doc 23 §8 proposes "`sumo --version` from the staged install" plus "a C# test stepping an empty
+simulation over TraCI." Turned into two runnable checks:
 
 ### 8.1 C# path
 
@@ -1040,11 +1032,16 @@ public void StagedSumoAndDuarouterReportThePinnedVersion() { /* Process.Start(su
     assert stdout contains "1.27.0" and the pinned commit if --version-verbose is used */ }
 
 [Fact]
-public void EmptySimulationStepsThroughLibtraci() {
+public void EmptySimulationStepsOverTraCI() {
     // Start `sumo` as a subprocess with --remote-port on an ephemeral port and a minimal
-    // .sumocfg (an empty net + no vehicles — SUMO ships trivial fixtures under data/ for this).
-    // Eclipse.Sumo.Libtraci.Simulation.init/step/close via CarlaNet.Sumo. Assert no exception
-    // and that simulation time advanced by one step.
+    // .sumocfg (an empty net + no vehicles). Connect CarlaNet.Sumo's client, step, read the
+    // simulation time back, close. Assert no exception and that time advanced by one step.
+}
+
+[Fact]
+public void TheServerReportsTheProtocolVersionTheClientWasWrittenFor() {
+    // CMD_GETVERSION on connect, asserted against the pin. Point it at a different SUMO and it
+    // fails — the failure path §5 of the charter requires, exercised rather than assumed.
 }
 ```
 
@@ -1095,14 +1092,14 @@ this document's scope to verify (§2.4).
 
 | # | Decision |
 |---|---|
-| D9.1 | Build target list becomes `netconvert`, `sumo`, `duarouter`, `libtracics` (required, staged together) on both platforms. `jtrrouter`/`polyconvert` stay out of the default target list — nothing in this plan consumes them. |
-| D9.2 | The idempotence guard checks **presence of the entire required set** — the four binaries, `libtracics-sources.zip` and the staged `data`/`tools` subset — not the freshness of a single "newest" file. It reports *which* members are missing rather than only that the check failed. **Measured: the guard is firing on a developer machine today** — `netconvert.exe` is staged, so `CarlaSetup` prints "Skipping SUMO build" and the other three binaries are never built. The block exists in **three** scripts, not two; `CarlaSetup.bat` is retired rather than carried (`D9.13`) — parallel (`-m`/`-j`) builds have no dependable single last-built artifact, and CI's persistent `Build/` tree makes a wrong guard a standing, silent CI defect, not just a developer inconvenience. |
-| D9.3 | A **named subset** of `data/` and `tools/` is staged into `Build/sumo-install/{data,tools}` by the same build step, on both platforms: `data/typemap`, `data/xsd`, `tools/traci`, `tools/sumolib`. Measured: the full copy is 89 MB to deliver the 3.2 MB anything in this plan consumes, and `tools/contributed` alone is 47 MB of third-party contributions that would each need a `MANIFEST.md` row (§4.3). Directories are added when something consumes them, with the reason recorded beside the list. |
-| D9.4 | `libtraci` (out-of-process) is the binding boundary for the C# path, per doc 23 §6.3, reaffirmed here on licensing grounds independently of the architecture ones (§6). `libsumo` is rejected for both reasons together. |
-| D9.5 | A new, dependency-free `CarlaNet/src/CarlaNet.Sumo` project holds only the generated bindings and native-load glue, built from `libtracics-sources.zip` staged alongside the toolchain. Any co-simulation bridge (`03`'s `CarlaNet.CoSim` or equivalent) depends on it; it depends on nothing CARLA-specific. |
+| D9.1 | Build target list becomes `netconvert`, `sumo`, `duarouter` (required, staged together) on both platforms — three binaries and **no native library**, since the TraCI client is managed code (`D9.4`). `jtrrouter`/`polyconvert` stay out of the default target list — nothing in this plan consumes them. The build needs no prerequisite `netconvert` does not already need, on either platform (§2.3). |
+| D9.2 | The idempotence guard checks **presence of the entire required set** — the three binaries and the staged `data`/`tools` subset — not the freshness of a single "newest" file. It reports *which* members are missing rather than only that the check failed. **Measured: the guard is firing on a developer machine today** — `netconvert.exe` is staged, so `CarlaSetup` prints "Skipping SUMO build" and `sumo` and `duarouter` are never built. The block exists in **three** scripts, not two; `CarlaSetup.bat` is retired rather than carried (`D9.13`) — parallel (`-m`/`-j`) builds have no dependable single last-built artifact, and CI's persistent `Build/` tree makes a wrong guard a standing, silent CI defect, not just a developer inconvenience. |
+| D9.3 | A **named subset** of `data/` and `tools/` is staged into `Build/sumo-install/{data,tools}` by the same build step, on both platforms: `data/typemap`, `data/xsd`, `tools/traci`, `tools/sumolib`. Measured: the full copy is 89 MB to deliver the 3.2 MB anything in this plan consumes, and `tools/contributed` alone is 47 MB of third-party contributions that would each need a `MANIFEST.md` row (§4.3). Directories are added when something consumes them, with the reason recorded beside the list. `tools/traci` earns its place twice: `carlacontrol` imports it, and it is the reference `CarlaNet.Sumo` is ported from (§3.4). |
+| D9.4 | **The C# path is a managed TraCI client speaking the wire protocol over a TCP socket to an out-of-process `sumo`** (doc 23 §6.3). Nothing of SUMO's is loaded into the CarlaNet process, so the crash isolation holds and the licensing boundary is a socket (§6). SUMO's own `libtracics`/`libsumocs` bindings are not built, staged or shipped: measured at no speed advantage, with a version mismatch that loads and steps rather than failing, and 35,767 lines to carry. |
+| D9.5 | A new, dependency-free `CarlaNet/src/CarlaNet.Sumo` project holds the transport and the domain calls the bridge uses, hand-written in C#. It builds from a clean clone on a machine with no SUMO, so nothing in `CarlaNet.sln` depends on the SUMO toolchain having been built first, and it ships inside the `carlanet` wheel with every other CarlaNet assembly rather than in a slot of its own (§4.1, §5.4). Any co-simulation bridge (`03`'s `CarlaNet.CoSim` or equivalent) depends on it; it depends on nothing CARLA-specific. |
 | D9.6 | `SUMO_HOME` precedence in `SumoInstallation.locate` is **not** reordered — `SUMO_HOME` continues to win, matching raw `traci`'s own convention. Instead: resolution is always logged (home + version), a `.version` property is added, and a version-mismatch between the netconvert that built a world and the SUMO installation resolved to author/run a scenario against it becomes a **hard-refusing** condition with an explicit override flag. The consumer-side refuse-vs-warn UX is `07_Scenario_Authoring.md`'s call to finalize against `SumoScenarioBuilder`. Corroborated independently by `07` §9.4 (§3.5); its interaction with `12`'s proposed site profile is answered generically in §3.5. |
 | D9.7 | **There is one distribution and it contains all of the tools**, and both platforms produce it (`13` §13.2). Neither script gains an internal/external packaging mode: there is no second distribution for one to gate, and an unused mode is a switch that eventually gets flipped by accident. The `carlacontrol` wheel ships on both platforms — which `12`'s capture launcher makes unavoidable regardless of §5.2 (§5.6). `Findings/22` §14's exclusion of `CarlaControl/` came from a plan that did not manifest and is corrected at source. What the package must carry instead is a **generated `MANIFEST.md` and a `licenses/` directory** (§4.3, §5.4), driven by third-party obligations the distribution meets none of today: 42 native DLLs spanning nine or more licences including LGPL, SUMO's EPL-2.0 notice and source offer, and ODbL on the OSM extracts and generated `.xodr`. Where the package may go is governed by access to the channel it is published to. |
-| D9.8 | `carla-base:alma8`'s pull in `build-carla-ue5.yml` is by tag with no digest pin; adding `swig` (D9.1's prerequisite) means rebuilding and re-pushing that tag. Needing the rebuild is not a cost. Whether the workflow should move to a digest pin so future base-image changes can't silently ride into a build is an open question (below), independent of this rebuild. |
+| D9.8 | **A Linux build prerequisite must be declared in two places**, `Util/SetupUtils/InstallPrerequisites.sh` and `Util/Docker/Base.alma8.Dockerfile`, in the same change: CI pulls the image pre-built and calls `CarlaSetup.sh --skip-prerequisites`, so the script never runs against it and a package added only there fails the first time a clean `Build/` tree forces a configure (§2.3). `D9.1`'s target set needs nothing new in either file. Whether `carla-base:alma8`'s by-tag reference in `build-carla-ue5.yml:51` should move to a digest pin, so a future base-image change cannot silently ride into a build, is an open question (below) and stands on its own. |
 | D9.9 | `CarlaControl/src/carlacontrol/OsmClipper.py:154,219`'s non-deterministic `set`-ordered node emission is a real reproducibility hazard for anything that hashes its output, and the proprietary tools are part of the shipped system (`D9.7`), so it is this plan's defect to fix. The fix is: the fix is `sorted(used_orig, key=int)` (or equivalent) at the emission site; until it lands, no reproducibility or acceptance check in this plan hashes OSM-clip-derived file bytes (§7.3). |
 | D9.10 | The authoring skill lives at **`carla/CarlaControl/skills/sumo-traffic-scenarios/SKILL.md`**, beside the compiler `07` §8 says generates most of its contents, and ships from there (§5.4). It was a single 14 KB file outside any git repository, with no version, no history and no reproducible source, and could not be bundled into a distribution (§5.5). The workspace copy is a stub naming the canonical path — not a directory junction, which is invisible in `git status` and does not survive a fresh clone. **The 27 `ue-*` directories beside it are not ours**: measured byte-identical to `quodsoler/unreal-engine-skills`, an MIT third-party repository already cloned at the workspace root with its remote, pinned commit and `LICENSE` intact. They are **not vendored** — the clone is already a better reproducible source, and copying 1.3 MB of third-party MIT content into `carla/` would add an attribution obligation for a recipient with no use for it. The clone and its commit `231c8571be6f3335685edc566a28ec6f9621361d` are recorded as a developer prerequisite in `Docs/authoring_skills.md`. The unattributed `.agents/skills/ue-*` copies are **left in place**: `.agents/skills/` is itself a discovery convention, so no file needs to reference a skill for a harness to load it, and nothing was found that could show the copies are unread. Removing them is a decision for whoever can confirm that. A **stage A item** (`13` §13.3): `07` §8.4 depends on the move. |
 | D9.11 | **The operator control surface's distribution footprint is packaged generically only where `12` had not yet fixed a shape; where it has, this document packages that shape as fact.** The new capture launcher (`run-capture.ps1`/`.sh`) coexists beside `run-sctmv.ps1`/`.sh` rather than replacing it; the run-configuration schema and site-profile template stage alongside the vehicle catalogue and vocabulary (§5.5); the broken-launcher repair (§5.2) and the new launcher's introduction land as one change, not two, because they touch the same lines of the same scripts (§5.6); and `12`'s launcher makes bundling `carlacontrol` unavoidable on both platforms, which `D9.7` settles on both platforms. |
@@ -1118,14 +1115,14 @@ this document's scope to verify (§2.4).
    `07_Scenario_Authoring.md` is closer to how often a legitimate mismatch (e.g., deliberately testing
    forward-compatibility with a newer SUMO) would occur in practice.
 2. **Should `carla-base:alma8` move to a digest-pinned reference in `build-carla-ue5.yml` (`D9.8`)?**
-   Independent of this plan, but this plan is the first thing found that needs a base-image change and
-   therefore the first thing that would notice if that pin is missing.
-3. **Where does `libtracics-sources.zip` (or its unzipped contents) live for a build that has never run
-   `CarlaSetup.ps1`/`.sh`** — e.g., a from-scratch CI run before §2's staging step has ever executed?
-   Answered functionally in §4.1 (it is a build-order dependency: `CarlaNet.Sumo` cannot build before the
-   SUMO toolchain step has run once), but whether `CarlaNet.sln`'s build order should encode that
-   dependency explicitly (an MSBuild `Exec` that shells out to `CarlaSetup`) or leave it as documented
-   operator sequencing is a call for whoever wires `CarlaNet.CoSim` into the existing build (`03`/`05`).
+   Independent of this plan, and nothing here forces a base-image change — but §2.3 establishes that the
+   image is the only place a Linux prerequisite reaches CI from, which makes what that tag resolves to
+   part of the build's reproducibility rather than an operational detail.
+3. **Is a C# translation of an EPL-2.0 source file a Modified Work of that file (§6)?** `CarlaNet.Sumo`
+   is ported from `tools/traci`'s `connection.py` and `storage.py`, and EPL-2.0's copyleft is
+   file-level. This is a licensing question, not an engineering one, and the mitigation available
+   without an answer — attribute each ported file to its SUMO original and the pinned commit — should
+   be done regardless of what the answer turns out to be.
 4. **Is `tzdata` a required dependency or an optional one (§4.4)?** `07_Scenario_Authoring.md` §2.8
    frames the IANA zone name as an optional cross-check against a normative numeric offset;
    `11_Time_And_Illumination.md` `D11.3` formalises a `utc_offset_policy` value (`zone_database`) whose

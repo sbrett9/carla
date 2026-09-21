@@ -600,11 +600,11 @@ Set it to the root of your UE 5.7.4 source build, e.g.:
 # ---------------------------------------------------------------------------
 # CarlaNet shells out to stock SUMO `netconvert` at runtime to convert OSM maps to
 # OpenDRIVE, replacing CARLA's old in-tree osm2odr fork; `sumo` runs the traffic
-# microsimulation, `duarouter` validates authored routes, and `libtracics` is the
-# native library the C# TraCI binding loads. All four come from SUMO release
-# v1_27_0 (commit e238ea04). On Windows the build deps (Xerces-C, PROJ, sqlite3,
-# SWIG, ...) come from the prebuilt DLR-TS SUMOLibraries bundle; the build copies
-# the needed DLLs next to the binaries.
+# microsimulation, and `duarouter` validates authored routes. All three come from
+# SUMO release v1_27_0 (commit e238ea04). CarlaNet talks to `sumo` over the TraCI
+# wire protocol from managed code, so nothing native is built for it here.
+# On Windows the build deps (Xerces-C, PROJ, sqlite3, ...) come from the prebuilt
+# DLR-TS SUMOLibraries bundle; the build copies the needed DLLs next to the binaries.
 
 $sumoSrc     = Join-Path $RepoRoot 'Build\sumo-src'
 $sumoBuild   = Join-Path $RepoRoot 'Build\sumo-build'
@@ -621,10 +621,6 @@ $sumoLibs    = Join-Path $RepoRoot 'Build\SUMOLibraries'
 $sumoSrcPin   = 'e238ea04b7150ba23a348a285d3048919fa4830b'   # SUMO v1_27_0
 $sumoLibsTag  = '1.27.0'                                      # DLR-TS/SUMOLibraries tag
 $sumoLibsPin  = 'a71441cce51dea77cabe135ce010b1863f4a4700'   # commit the tag points at
-# Windows needs no separate SWIG install for the libtracics target: the pinned bundle ships it as
-# Build\SUMOLibraries\swigwin-4.3.1 and SUMO's CMake finds it there. The Linux side installs swig
-# explicitly, in Util/SetupUtils/InstallPrerequisites.sh and Util/Docker/Base.alma8.Dockerfile.
-# Do not add a second Windows SWIG here.
 
 # -- CLEAN ------------------------------------------------------------------
 if ($Clean -or $CleanAll) {
@@ -644,16 +640,16 @@ $netconvert = Join-Path $sumoInstall 'bin\netconvert.exe'
 # dependable "newest" output to test -- a partial failure leaves an arbitrary subset staged, and a
 # guard keyed on one member reports success for a half toolchain. Check the whole set, and name the
 # members that are missing so the reason is in the log rather than in someone's head.
-# `libtracics-sources.zip` is the SWIG-generated C# the CarlaNet TraCI binding is built from; it is
-# staged because a distribution recipient has no Build\sumo-src to regenerate it from.
-$sumoRequiredBinaries = @('netconvert.exe', 'sumo.exe', 'duarouter.exe',
-                          'libtracics.dll', 'libtracics-sources.zip')
+$sumoRequiredBinaries = @('netconvert.exe', 'sumo.exe', 'duarouter.exe')
 # A NAMED SUBSET of data/ and tools/, not the whole of either. Measured: the full copy is 89 MB to
 # deliver the 3.2 MB anything here consumes, and tools\contributed alone is 47 MB of third-party
 # contributions that would each need a row in the distribution's licence manifest. Add a directory
 # to these lists when something starts consuming it -- the omission is deliberate, not an oversight.
 $sumoRequiredData  = @('typemap', 'xsd')     # netconvert's OSM type maps; XSDs for generated files
-$sumoRequiredTools = @('traci', 'sumolib')   # the Python modules the scenario tooling imports
+# tools\traci carries two obligations: the scenario tooling imports it, and it is SUMO's own
+# reference TraCI client, which CarlaNet.Sumo's managed client is ported from. Staging it at the
+# pinned commit is what makes a SUMO bump a reviewable diff rather than an archaeology exercise.
+$sumoRequiredTools = @('traci', 'sumolib')
 
 $sumoMissing = @()
 foreach ($item in $sumoRequiredBinaries) {
@@ -704,7 +700,7 @@ if ($sumoMissing.Count -eq 0) {
         git -C $sumoSrc checkout $sumoSrcPin
     }
 
-    # Configure + build the required targets (Release) with the VS generator. One invocation, four
+    # Configure + build the required targets (Release) with the VS generator. One invocation, three
     # targets: CMake skips objects it has already built, so this is not a full rebuild in practice.
     # jtrrouter and polyconvert are deliberately left out -- nothing in this repository invokes
     # either, so building them by default would lengthen every clean build for no consumer.
@@ -714,7 +710,7 @@ if ($sumoMissing.Count -eq 0) {
             -T v143,version=14.44 -A x64 -DCHECK_OPTIONAL_LIBS=false
     }
     Invoke-Checked 'cmake build sumo toolchain' {
-        cmake --build $sumoBuild --target netconvert sumo duarouter libtracics --config Release -- -m
+        cmake --build $sumoBuild --target netconvert sumo duarouter --config Release -- -m
     }
 
     # The build emits the binaries + their runtime DLLs into Build\sumo-src\bin.

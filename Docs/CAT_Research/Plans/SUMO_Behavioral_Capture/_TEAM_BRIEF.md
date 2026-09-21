@@ -391,10 +391,14 @@ Verified by reading the tree on 2026-09-17 unless marked otherwise.
 - **Coordinate identity** — because the SUMO network is rebuilt from the same clipped OSM at the same
   pinned origin with `--offset.disable-normalization`, **SUMO (x, y) equals CARLA (x, −y)** with no
   offset arithmetic. Doc 23 §2 measured `netOffset` as `0.00,0.00` on Arapahoe.
-- **The SUMO toolchain is built** — doc 23 §1.2 records `sumo`, `duarouter` and `libtracics` (the
-  first-party SWIG C# binding, namespace `Eclipse.Sumo.Libtraci`, 94 generated C# files) compiling
-  clean from the unmodified CMake configuration, exit 0. `netconvert` is the only binary *staged*
-  into `Build/sumo-install/bin`; `SUMO_HOME` is set nowhere.
+- **The SUMO toolchain is built** — doc 23 §1.2 records `sumo` and `duarouter` compiling clean from
+  the unmodified CMake configuration, exit 0. `netconvert` is the only binary *staged* into
+  `Build/sumo-install/bin`; `SUMO_HOME` is set nowhere.
+- **TraCI is a wire protocol over TCP, not a library** — `sumo --remote-port` is the server, and SUMO's
+  own reference client under `tools/traci` is pure Python with no native module: `connection.py` (407
+  lines) and `storage.py` (103) are the whole transport. So a client is writable in any language, and
+  `CarlaNet.Sumo` is one in C# (doc 23 §1.1, §6.3). SUMO's generated C#/SWIG bindings exist in the build
+  tree and are not used.
 
 ### Shim API surface that matters here
 Confirmed present in `carla/CarlaNet/python/carlanet/__init__.py`:

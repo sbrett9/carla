@@ -840,9 +840,9 @@ where an in-process registry cannot. SUMO has an exact analogue of doc 20 §5.1'
 *Measured.* SUMO's `<param key= value=/>` child element round-trips end to end. A route file carrying
 `<param>` on a `<vType>` and on a `<trip>` was passed through `duarouter` 1.27.0 (params preserved on
 both the `vType` and the emitted `<vehicle>`) and then through `sumo` 1.27.0 with
-`--vehroute-output` (params preserved on the arrived vehicle, arrival 96.00 s). *Read:* the generated
-C# TraCI binding exposes `Vehicle.getParameter` and `Vehicle.setParameter`
-(`Build/sumo-build/src/libtraci/Eclipse.Sumo.Libtraci/Vehicle.cs:546,558`).
+`--vehroute-output` (params preserved on the arrived vehicle, arrival 96.00 s). *Read:* TraCI carries
+per-object parameters on every domain, `getParameter` and `setParameter`
+(`Build/sumo-install/tools/traci/domain.py:254,278`).
 
 So the path from an authored identity to a CARLA spawn attribute is complete with no new transport:
 the compiler writes `<param key="…" value="…"/>` into the route file, SUMO carries it, the .NET

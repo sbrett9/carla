@@ -468,14 +468,14 @@ Filled in for the two phase kinds SUMO actually has:
 
 | Phase kind | declared | committed | observed |
 |---|---|---|---|
-| **Entry into the world** | `<trip depart>` or `<flow begin>` — an absolute simulated time | `Vehicle.getDeparture` — the step SUMO actually inserted it, which differs by `Vehicle.getDepartDelay` (`Eclipse.Sumo.Libtraci/Vehicle.cs:156`, `:162`) | **the admission instant** — the CARLA tick at which `RenderedVehicleRegistry` admitted the vehicle and its actor first appeared in the world snapshot (§4.4) |
-| **A stop or dwell** | `<stop until>` when the author wrote one; **absent** when the author wrote `duration`, in which case the declared quantity is a length, not a time | `StopData.arrival` against `StopData.intendedArrival`, plus the step on which the id appears in `Simulation.getStopStartingVehiclesIDList` or `getParkingStartingVehiclesIDList` (`Simulation.cs:298-320`, `:274-292`) | the CARLA tick at which the rendered body's speed first held at or below 0.15 m/s, the same physical predicate and the same threshold as `ScenarioExecutor.cs:22` |
+| **Entry into the world** | `<trip depart>` or `<flow begin>` — an absolute simulated time | `vehicle.getDeparture` — the step SUMO actually inserted it, which differs by `vehicle.getDepartDelay` (`_vehicle.py:333`, `:340`) | **the admission instant** — the CARLA tick at which `RenderedVehicleRegistry` admitted the vehicle and its actor first appeared in the world snapshot (§4.4) |
+| **A stop or dwell** | `<stop until>` when the author wrote one; **absent** when the author wrote `duration`, in which case the declared quantity is a length, not a time | `StopData.arrival` against `StopData.intendedArrival`, plus the step on which the id appears in `simulation.getStopStartingVehiclesIDList` or `getParkingStartingVehiclesIDList` (`_simulation.py:402`, `:374`) | the CARLA tick at which the rendered body's speed first held at or below 0.15 m/s, the same physical predicate and the same threshold as `ScenarioExecutor.cs:22` |
 | **Departure from a stop** | `until` if present, otherwise absent | `StopData.depart`, and the id appearing in `getStopEndingVehiclesIDList` / `getParkingEndingVehiclesIDList` | first CARLA tick above the threshold |
 
 **SUMO itself distinguishes declared from committed, and exposes both.** `StopData` carries
 `intendedArrival`, `arrival` and `depart` as separate fields alongside `duration` and `until`
-(`Build/sumo-src/tools/traci/_vehicle.py:37-70`; the same fields in the generated C# binding at
-`Build/sumo-build/src/libtraci/Eclipse.Sumo.Libtraci/TraCINextStopData.cs:181-229`). This is not an
+(`Build/sumo-install/tools/traci/_vehicle.py:37-70`, read back by `getNextStops` at `:760` and
+`getStops` at `:785`). This is not an
 analogy being stretched onto SUMO. It is a distinction SUMO already makes for its own reasons, and it
 lines up with doc 20's exactly.
 
@@ -607,7 +607,7 @@ are not interchangeable:
 | `closed_by` | Means | Source |
 |---|---|---|
 | `trigger` | The authored condition ended it | plan + TraCI |
-| `entity_arrived` | The vehicle reached its route destination and SUMO removed it | `Simulation.getArrivedIDList` (`Simulation.cs:268`) |
+| `entity_arrived` | The vehicle reached its route destination and SUMO removed it | `simulation.getArrivedIDList` (`_simulation.py:329`) |
 | `sumo_removed` | SUMO removed it for another reason — collision action, teleport, `remove` | `Simulation.getCollidingVehiclesIDList`, `getStartingTeleportIDList` (`:328`, `:352`) |
 | `never_inserted` | Declared, but `max-depart-delay` discarded it before it ever existed | absent from `getDepartedIDList` past the delay |
 | `slot_unrealised` | The occasion passed with no vehicle. **The absence** | plan; §3.5 |
@@ -707,8 +707,8 @@ no authored slot is `unlabelled`, exactly like every other unasserted fact.
 annotations are authored intent, area relations are derived context, and no geometric predicate ever
 writes an annotation. Doc 20 flagged that areas make derivation easy. Under SUMO it is worse, because
 SUMO hands the runtime a finished answer: `Vehicle.getStopState` returns a stopped-and-parking flag
-(`Vehicle.cs:360`), `Simulation.getStopStartingVehiclesIDList` returns the ids that just started
-stopping (`Simulation.cs:304`), and either is a one-line label of apparently excellent quality.
+(`_vehicle.py:855`), `simulation.getStopStartingVehiclesIDList` returns the ids that just started
+stopping (`_simulation.py:402`), and either is a one-line label of apparently excellent quality.
 
 Restating the rule so it is enforceable rather than aspirational:
 
@@ -1095,7 +1095,7 @@ different place.
 
 | | **CARLA producer** — `VehicleTelemetryService` | **SUMO producer** — the bridge, modelled on `SumoCotBridge` |
 |---|---|---|
-| Source | world-observer snapshot cache, `VehicleTelemetryService.cs:37,75-79` | TraCI / `libtraci`, `SumoCotBridge.py:296-334` |
+| Source | world-observer snapshot cache, `VehicleTelemetryService.cs:37,75-79` | TraCI, `SumoCotBridge.py:296-334` |
 | Covers | **only actors that exist.** The `IsActorEstablished` gate at `:73` is a second condition only while something is fading, and nothing is: it returns true for any actor with no fade record (`CarlaNet.Transport/CarlaClient.cs:1571`) and the gate's own comment says it is inert in that case (`:66-73`). Under this mode, existing and being reported are the same thing | **every** SUMO vehicle, rendered or not |
 | Position | the applied transform the frame was rendered from | `Vehicle.getPosition`, converted by `Simulation.convertGeo` — SUMO's own PROJ, no second implementation (`SumoCotBridge.py:298-299`) |
 | Height | drape / bare-earth decoupling: `hae` and `hae_dtm`, `:83-86` | a lookup in `bareearth.bin` at (x, y), `BareEarthGrid.height_at`, `:115-119` |
@@ -1611,11 +1611,11 @@ SUMO's housekeeping is not absent, it is different, and three of its mechanisms 
 |---|---|---|---|
 | **Jam teleport** — `time-to-teleport`, default 300 s | A vehicle jumps position. No detector track can follow it; no downstream consumer can reproduce it | **Forbid** | Session start refuses unless `time-to-teleport <= 0`. Bahonar already sets `-1` |
 | **Highway and disconnected teleport** — `time-to-teleport.highways` (default 0), `.disconnected` (default -1) | Second and third teleport paths that the main option does **not** cover | **Forbid** | Both validated at session start. This is a real trap: setting `time-to-teleport=-1` alone does not disable the highways path, which is governed by a separate global (`MSFrame.cpp:1164`) |
-| **Collision action** — default `teleport` | `teleport` jumps, `remove` destroys, both silently | **Constrain** to `warn` or `none` | Refused otherwise. Every collision recorded from `Simulation.getCollidingVehiclesIDList` (`Simulation.cs:328`) into the manifest as a corpus-affecting event, per [01 D1.17](01_Architecture.md) |
+| **Collision action** — default `teleport` | `teleport` jumps, `remove` destroys, both silently | **Constrain** to `warn` or `none` | Refused otherwise. Every collision recorded from `simulation.getCollidingVehiclesIDList` (`_simulation.py:430`) into the manifest as a corpus-affecting event, per [01 D1.17](01_Architecture.md) |
 | **Departure skip** — `max-depart-delay`, default `-1` (never) | A vehicle that cannot insert within the delay is **discarded**. It never exists. This is the direct SUMO analogue of doc 20 §2.8's cull | **Record, always; hard-fail for a plan subject** | Counted per flow and per trip. A discarded vehicle that the supervision plan names as an entity or a slot realisation **fails the run**, because the plan asserts something that did not happen |
-| **Insertion backlog** — `getPendingVehicles` (`Simulation.cs:412`) | Not a removal, a deferral. It moves the departure onset | **Record** | It is the declared-to-committed gap of §3.3, and it is a measurement of congestion, which is signal |
-| **Emergency braking** — `getEmergencyStoppingVehiclesIDList` (`Simulation.cs:340`) | Physically implausible deceleration that reaches both imagery and truth kinematics | **Record** | Harmless to the population, not harmless to the behaviour distribution |
-| **Arrival** — `getArrivedIDList` (`Simulation.cs:268`) | A vehicle reaching its destination is removed. Ordinary and correct | **Harmless, but record** | It closes intervals with `closed_by = entity_arrived` and is the third of the three destruction signals of [issue #18](https://github.com/sbrett9/carla/issues/18) |
+| **Insertion backlog** — `getPendingVehicles` (`_simulation.py:515`) | Not a removal, a deferral. It moves the departure onset | **Record** | It is the declared-to-committed gap of §3.3, and it is a measurement of congestion, which is signal |
+| **Emergency braking** — `getEmergencyStoppingVehiclesIDList` (`_simulation.py:443`) | Physically implausible deceleration that reaches both imagery and truth kinematics | **Record** | Harmless to the population, not harmless to the behaviour distribution |
+| **Arrival** — `getArrivedIDList` (`_simulation.py:329`) | A vehicle reaching its destination is removed. Ordinary and correct | **Harmless, but record** | It closes intervals with `closed_by = entity_arrived` and is the third of the three destruction signals of [issue #18](https://github.com/sbrett9/carla/issues/18) |
 | **Demand scaling** — `scale`, default 1.0; `max-num-vehicles`, default -1 | "by discarding or duplicating vehicles" | **Forbid, or record prominently** | Not used today; if used it belongs in the manifest beside the seed, because it changes the population wholesale |
 | **Departure jitter** — `random-depart-offset`, default 0 | Uniform random offset on every `depart`, which moves every declared onset | **Forbid** | It would make the declared onset of §3.3 a lie |
 | **Route errors** — `ignore-route-errors`, default false | Unroutable vehicles dropped instead of failing the load | **Keep at the default** | The authoring skill already validates every route with `duarouter` rather than a graph check |
