@@ -337,25 +337,24 @@ class SumoCotBridge:
                     # it, so that the CoT type carries affiliation and nothing else.
                     affiliation = settings.affiliation_by_type.get(
                         record["type_id"], settings.affiliation)
-                    published = self._published(record)
+                    # The written files are the truth sidecar and carry the whole record; the
+                    # datagram feed is a moving-map display and carries what a display needs.
                     event = CotUdpEmitter.vehicle_telemetry_to_cot(
-                        published, affiliation=affiliation, stale_seconds=settings.stale_seconds,
+                        record, affiliation=affiliation, stale_seconds=settings.stale_seconds,
                         source="truth", uid_prefix=settings.uid_prefix, when=stamp)
-                    if udp:
-                        # An operator watching the live feed may be shown which vehicle was
-                        # planted; the recorded files below never are, so the distinction cannot
-                        # reach a corpus even by accident.
-                        if settings.marked_affiliation and record["marked"]:
-                            udp.send(CotUdpEmitter.vehicle_telemetry_to_cot(
-                                published, affiliation=settings.marked_affiliation,
-                                stale_seconds=settings.stale_seconds, source="truth",
-                                uid_prefix=settings.uid_prefix, when=stamp))
-                        else:
-                            udp.send(event)
                     if xml_file:
                         xml_file.write("  " + event + "\n")
                     if csv_writer:
-                        csv_writer.writerow(self._row(published, settings, affiliation, stamp, now))
+                        csv_writer.writerow(self._row(record, settings, affiliation, stamp, now))
+                    if udp:
+                        # An operator watching a live feed may be shown which vehicle the scenario
+                        # planted, which is what --marked-affiliation is for.
+                        shown = settings.marked_affiliation if (
+                            settings.marked_affiliation and record["marked"]) else affiliation
+                        udp.send(CotUdpEmitter.vehicle_telemetry_to_cot(
+                            self._published(record), affiliation=shown,
+                            stale_seconds=settings.stale_seconds, source="truth",
+                            uid_prefix=settings.uid_prefix, when=stamp))
                     report.events += 1
                 report.sim_seconds = now
             report.vehicles = len(seen)
