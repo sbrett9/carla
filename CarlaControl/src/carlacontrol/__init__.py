@@ -6,12 +6,14 @@ high-level interfaces for working with the CARLA simulator through CarlaNet.
 
 from carlacontrol.CaptureRunReport import CaptureRunReport
 from carlacontrol.CarlaControlArgumentParser import CarlaControlArgumentParser
+from carlacontrol.ClockRatioMeter import ClockRatioMeter
 from carlacontrol.CorpusLeakValidator import CorpusLeakValidator
 from carlacontrol.CotUdpEmitter import CotUdpEmitter
 from carlacontrol.NativeRecorder import NativeRecorder
 from carlacontrol.NetworkFingerprint import NetworkFingerprint
 from carlacontrol.OrbitSensorController import OrbitSensorController
 from carlacontrol.Pose import Pose
+from carlacontrol.ProbeCameraPair import ProbeCameraPair
 from carlacontrol.PygameInterface import PygameInterface
 from carlacontrol.PyGameSensorController import PyGameSensorController
 from carlacontrol.ScenarioController import ScenarioController
@@ -35,12 +37,14 @@ __all__ = [
     "__version__",
     "CaptureRunReport",
     "CarlaControlArgumentParser",
+    "ClockRatioMeter",
     "CorpusLeakValidator",
     "CotUdpEmitter",
     "NativeRecorder",
     "NetworkFingerprint",
     "OrbitSensorController",
     "Pose",
+    "ProbeCameraPair",
     "PyGameSensorController",
     "PygameInterface",
     "ScenarioController",
