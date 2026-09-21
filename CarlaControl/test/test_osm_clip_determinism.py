@@ -42,8 +42,8 @@ WAY_COUNT = 24
 CLIP_RUNS = 6
 
 # The ordered emission the fix introduced, and the bare set iteration it replaced.
-ORDERED_EMISSION = "for nid in sorted(used_orig, key=int):"
-SET_ORDER_EMISSION = "for nid in used_orig:"
+ORDERED_EMISSION = "for nid in sorted(used_orig | standalone | relation_nodes, key=int):"
+SET_ORDER_EMISSION = "for nid in used_orig | standalone | relation_nodes:"
 
 # The clip is run by a separate interpreter per measurement. The emission forms are passed in as
 # arguments rather than baked in, so this file holds exactly one copy of each.

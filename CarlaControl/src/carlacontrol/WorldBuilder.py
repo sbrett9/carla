@@ -116,9 +116,14 @@ class WorldBuilder:
                     os.path.splitext(os.path.basename(args.osm))[0] + "_clipped.osm",
                 )
                 os.makedirs(os.path.dirname(clipped), exist_ok=True)
-                nways, nbnd = OsmClipper.clip_osm_to_bounds(args.osm, clipped, bb)
+                clip = OsmClipper.clip_osm_to_bounds(args.osm, clipped, bb)
                 osm_for_build = clipped
-                self.logger.info(f"  clip       : roads cut to <bounds> -> {nways} ways (+{nbnd} edge nodes)")
+                self.logger.info(
+                    f"  clip       : roads cut to <bounds> -> {clip.ways} ways "
+                    f"(+{clip.boundary_nodes} edge nodes, {clip.renumbered_runs} split runs "
+                    f"renumbered), carrying {clip.relations} relations, "
+                    f"{clip.standalone_nodes} mapped features and "
+                    f"{clip.relation_nodes} nodes named only by a relation")
         else:
             self.logger.info("  clip       : OFF (--no-clip-bounds)")
 
