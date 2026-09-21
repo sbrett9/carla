@@ -42,8 +42,10 @@ import csv
 import logging
 import math
 import struct
+import sys
 import time
 import zipfile
+from array import array
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -100,6 +102,12 @@ class BareEarthGrid:
     minimum corner, cell size, columns, rows) followed by two float32 planes of columns x rows --
     the drape offset first, then the bare-earth height this reads. Heights are ellipsoidal, which
     is the datum the telemetry contract is fixed to.
+
+    The heights are held as a `float32` array rather than a tuple of Python floats. A port-sized map
+    is 7.6 million cells: 30.4 MB of float32 on disk, which as boxed objects becomes 60.9 MB of
+    pointers plus 182.7 MB of float objects. Nothing reads them as objects -- the only access is one
+    cell at a time through `height_at` -- so the boxing buys nothing and costs 211 MB of resident
+    memory on a process that also holds a simulation.
     """
 
     min_x: float
@@ -108,7 +116,7 @@ class BareEarthGrid:
     columns: int
     rows: int
     origin_height: float
-    heights: tuple[float, ...]
+    heights: array
 
     MAGIC = 0x43575031
     HEADER = "<iddddddii"
@@ -136,7 +144,12 @@ class BareEarthGrid:
         count = cols * rows
         header_size = struct.calcsize(cls.HEADER)
         # The drape-offset plane comes first and is skipped; the bare-earth plane follows it.
-        heights = struct.unpack_from(f"<{count}f", raw, header_size + 4 * count)
+        start = header_size + 4 * count
+        heights = array("f")
+        heights.frombytes(memoryview(raw)[start:start + 4 * count])
+        # The file is little-endian float32 and `array` reads in the host's order.
+        if sys.byteorder != "little":
+            heights.byteswap()
         return cls(min_x, min_y, cell, cols, rows, origin_h, heights)
 
     def height_at(self, x: float, y: float) -> float | None:
