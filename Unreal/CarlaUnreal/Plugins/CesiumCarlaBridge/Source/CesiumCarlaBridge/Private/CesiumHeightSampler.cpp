@@ -725,6 +725,21 @@ static double GetSunAzimuthDeg(const ACesiumSunSky* SunSky)
 	return (SunSky && Prop) ? Prop->GetPropertyValue_InContainer(SunSky) : 0.0;
 }
 
+// The elevation the SCENE is actually lit at, as distinct from the geometric one above.
+// ACesiumSunSky computes both and rotates the sun directional light by CorrectedElevation, which
+// includes the atmosphere's refraction of light near the horizon. The two are identical high in the
+// sky and diverge as the sun approaches the horizon -- measured at the Arapahoe site, +0.089 to
+// +0.284 degrees, which is 5 to 25 per cent of the elevation itself in the low-sun windows a
+// twilight capture is made of. Reported alongside the geometric value rather than replacing it:
+// they answer different questions (where the sun IS, versus where its light comes FROM), and
+// collapsing them would silently change the meaning of a value already in every recorded artifact.
+static double GetSunCorrectedElevationDeg(const ACesiumSunSky* SunSky)
+{
+	static const FDoubleProperty* Prop = CastField<FDoubleProperty>(
+		ACesiumSunSky::StaticClass()->FindPropertyByName(TEXT("CorrectedElevation")));
+	return (SunSky && Prop) ? Prop->GetPropertyValue_InContainer(SunSky) : 0.0;
+}
+
 bool UCesiumHeightSampler::SetSolarTime(UObject* WorldContextObject, double SolarTimeHours)
 {
 	UWorld* World = GEngine
@@ -823,7 +838,11 @@ TArray<double> UCesiumHeightSampler::GetSolarState(UObject* WorldContextObject)
 		Lat = O.Y;
 	}
 	// Layout mirrored by the Python shim's get_solar_state():
-	// [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate].
+	// [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing,
+	//  rate, corrected_elevation_deg].
+	// The refraction-corrected elevation is appended LAST rather than placed beside the geometric
+	// one, because the first eleven entries are read positionally by the world observer, the truth
+	// sidecar and the PNG chunk writer.
 	Out.Add(SunSky->SolarTime);
 	Out.Add(static_cast<double>(SunSky->Year));
 	Out.Add(static_cast<double>(SunSky->Month));
@@ -846,6 +865,7 @@ TArray<double> UCesiumHeightSampler::GetSolarState(UObject* WorldContextObject)
 	}
 	Out.Add(Advancing);
 	Out.Add(Rate);
+	Out.Add(GetSunCorrectedElevationDeg(SunSky));
 	return Out;
 }
 

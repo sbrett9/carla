@@ -1529,9 +1529,18 @@ class World:
     def get_solar_state(self):
         """Current sun clock/date/origin/angles, or None if the world has no CesiumSunSky. Returns a
         dict: {solar_time, year, month, day, time_zone, lat, lon, sun_elevation_deg, sun_azimuth_deg,
-        advancing, rate}. sun_elevation_deg is degrees above the horizon; sun_azimuth_deg is degrees
-        clockwise from North. Reads the world-observer cache (paired to the latest tick, no RPC); falls
-        back to an on-demand RPC if the observer cache isn't populated yet."""
+        advancing, rate, sun_corrected_elevation_deg}. sun_elevation_deg is GEOMETRIC degrees above
+        the horizon; sun_azimuth_deg is degrees clockwise from North.
+
+        sun_corrected_elevation_deg is the same elevation with atmospheric refraction applied, which
+        is what the sun's directional light is actually rotated by. Near the horizon the two differ
+        by a few tenths of a degree -- a large fraction of a low sun's elevation, so a threshold on
+        one is not a threshold on the other. It is None when the value came from the world-observer
+        cache, which carries the geometric elevation only; force the on-demand RPC path if you need
+        it every time.
+
+        Reads the world-observer cache (paired to the latest tick, no RPC); falls back to an
+        on-demand RPC if the observer cache isn't populated yet."""
         vals = None
         try:
             cached = self._client.GetCachedSolarState()
@@ -1548,7 +1557,8 @@ class World:
                 "lat": float(vals[5]), "lon": float(vals[6]),
                 "sun_elevation_deg": float(vals[7]), "sun_azimuth_deg": float(vals[8]),
                 "advancing": bool(vals[9]) if vals.Count > 9 else False,
-                "rate": float(vals[10]) if vals.Count > 10 else 1.0}
+                "rate": float(vals[10]) if vals.Count > 10 else 1.0,
+                "sun_corrected_elevation_deg": (float(vals[11]) if vals.Count > 11 else None)}
 
     def set_time_advance(self, enabled: bool, rate: float = 1.0):
         """Enable/disable automatic advancement of the sun's solar clock (the sun moves as the scene

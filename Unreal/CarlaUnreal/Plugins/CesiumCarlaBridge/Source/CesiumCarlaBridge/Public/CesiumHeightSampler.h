@@ -225,9 +225,13 @@ public:
 	/**
 	 * Read the current solar clock/date/origin/angles from the ACesiumSunSky, packed as
 	 * [solar_time, year, month, day, time_zone, origin_lat, origin_lon, elevation_deg, azimuth_deg,
-	 * advancing(0/1), rate]. Empty array if no ACesiumSunSky exists. elevation/azimuth are the sun
-	 * geometry from the last UpdateSun; advancing/rate come from the ACesiumTimeOfDayController
-	 * (0/1.0 if none).
+	 * advancing(0/1), rate, corrected_elevation_deg]. Empty array if no ACesiumSunSky exists.
+	 * elevation/azimuth are the sun geometry from the last UpdateSun; advancing/rate come from the
+	 * ACesiumTimeOfDayController (0/1.0 if none).
+	 *
+	 * corrected_elevation_deg is the same elevation with atmospheric refraction applied, and it is
+	 * what the sun's directional light is actually rotated by. It is appended last so the first
+	 * eleven entries keep the positions their readers index by.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "CesiumCarla")
 	static TArray<double> GetSolarState(UObject* WorldContextObject);

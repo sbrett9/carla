@@ -656,8 +656,10 @@ void FCarlaServer::FPimpl::BindActions()
   };
 
   // Current solar clock/date/origin/angles, packed as
-  // [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate];
-  // empty if there is no sun.
+  // [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate,
+  // corrected_elevation_deg]; empty if there is no sun. elevation_deg is geometric;
+  // corrected_elevation_deg has atmospheric refraction applied and is what the sun light is rotated
+  // by. It is last so the first eleven entries keep the positions their readers index by.
   BIND_SYNC(get_solar_state) << [this]() -> R<std::vector<double>>
   {
     REQUIRE_CARLA_EPISODE();
