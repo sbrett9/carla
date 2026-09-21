@@ -229,6 +229,10 @@ def parse_args() -> argparse.Namespace:
                              "(default: carla/Import)")
     parser.add_argument("--osm", default=SOURCE_OSM,
                         help="clipped OpenStreetMap extract the CARLA world was built from")
+    parser.add_argument("--world-package", default=WORLD_PACKAGE,
+                        help="world package the CARLA map was generated from. Its map.net.xml is "
+                             "the network this scenario is built against; netconvert is not run "
+                             "here, because a second run would produce a different graph")
     parser.add_argument("--dwell-minutes", type=float, default=30.0,
                         help="how long the marked vehicle waits under the bridge (default 30)")
     parser.add_argument("--depart", type=int, default=120,
@@ -280,7 +284,7 @@ def main() -> int:
         return 1
     logging.info("SUMO from %s", installation.home)
 
-    recorded = read_bare_earth_origin(WORLD_PACKAGE)
+    recorded = read_bare_earth_origin(args.world_package)
     if recorded and not all(math.isclose(a, b, abs_tol=1e-9) for a, b in
                             zip(recorded, (NETCONVERT_SETTINGS.origin_lat,
                                            NETCONVERT_SETTINGS.origin_lon), strict=True)):
@@ -289,7 +293,7 @@ def main() -> int:
                                                           NETCONVERT_SETTINGS.origin_lon), recorded)
         return 1
 
-    builder = SumoScenarioBuilder(installation.netconvert, installation.proj_data)
+    builder = SumoScenarioBuilder()
     out_dir = args.out_dir
     network_name = f"{MAP_NAME}.net.xml"
     routes_name = f"{SCENARIO_NAME}.rou.xml"
@@ -299,7 +303,7 @@ def main() -> int:
     if args.reuse_network:
         logging.info("reusing network %s", network_path)
     else:
-        builder.build_network(args.osm, network_path, NETCONVERT_SETTINGS)
+        builder.build_network(args.world_package, network_path, NETCONVERT_SETTINGS)
     builder.allow_opposite_overtaking(network_path, OPPOSITE_PAIRS)
     network = RoadNetwork.from_file(network_path)
 

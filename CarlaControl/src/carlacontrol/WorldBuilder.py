@@ -57,6 +57,12 @@ class WorldBuilder:
                 f"{args.road_offset_north:.6f}",
             ]:
                 extra.Add(a)
+        # Anything else the caller needs this world built with. A SUMO scenario validates its own
+        # netconvert flag set against the one the world package records, so a scenario that needs a
+        # flag the build does not offer -- dropping pedestrian ways by type, say -- is served by
+        # passing it here rather than by letting the two sides diverge.
+        for a in getattr(args, "netconvert_arg", None) or []:
+            extra.Add(str(a))
         opts.ExtraArgs = extra
         return opts
 

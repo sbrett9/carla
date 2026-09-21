@@ -56,6 +56,9 @@ REPO_SUMO = os.path.join(_REPO, "Build", "sumo-src")
 # Build/world-packages/Gardnerville_Centerville_Lane.world.json as SourceOsmSha256.
 SOURCE_OSM = os.path.join(_REPO, "Build", "sumo-smoketest", f"{MAP_NAME}_clipped.osm")
 
+# The world package beside it, which carries the SUMO network this scenario is built against.
+WORLD_PACKAGE = os.path.join(_REPO, "Build", "world-packages", f"{MAP_NAME}.cwp")
+
 # Origin from that same world package. Pinning it puts the map's centre at (0,0), spanning
 # x -838.9..838.9 and y -455.0..391.3.
 NETCONVERT_SETTINGS = NetconvertSettings(origin_lat=38.91108, origin_lon=-119.76459650000001)
@@ -133,6 +136,10 @@ def parse_args() -> argparse.Namespace:
                         help="where the .net.xml, .rou.xml and .sumocfg go (default: carla/Import)")
     parser.add_argument("--osm", default=SOURCE_OSM,
                         help="clipped OpenStreetMap extract the CARLA world was built from")
+    parser.add_argument("--world-package", default=WORLD_PACKAGE,
+                        help="world package the CARLA map was generated from. Its map.net.xml is "
+                             "the network this scenario is built against; netconvert is not run "
+                             "here, because a second run would produce a different graph")
     parser.add_argument("--laps", type=int, default=20,
                         help="times round the neighbourhood (default 20)")
     parser.add_argument("--loop-speed", type=float, default=11.0,
@@ -169,10 +176,10 @@ def main() -> int:
         logging.error("%s", error)
         return 1
     logging.info("SUMO from %s", installation.home)
-    builder = SumoScenarioBuilder(installation.netconvert, installation.proj_data)
+    builder = SumoScenarioBuilder()
     try:
         builder.build(
-            osm_path=args.osm,
+            world_package=args.world_package,
             out_dir=args.out_dir,
             map_name=MAP_NAME,
             scenario_name=SCENARIO_NAME,

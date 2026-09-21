@@ -89,6 +89,13 @@ then only one flag set to choose. The world build adopts the scenario's flags ra
 1,017 → 1,021 roads and 183 → 184 junctions on Arapahoe — so every world regenerates from its original
 OSM. That cost is paid once, alongside the artifact re-issue stage B already requires.
 
+`--output.original-names` moves with the other three. It does **not** change the graph — measured, it
+adds a `<param key="origId">` per lane and nothing else — but the scenario side has always passed it,
+and the two invocations are compared argument for argument, so a flag that is asked for and not given
+is a refusal whether or not it moves a road. A world a scenario needs built differently again — the
+Bahonar port keeps its private roads and drops pedestrian ways by type — is built that way with
+`--netconvert-arg`, rather than by letting the two sides diverge a second time.
+
 ---
 
 ## 3. Stage B — Repair what is already shipped

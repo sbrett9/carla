@@ -74,6 +74,46 @@ public sealed record OsmConversionOptions
     /// <see cref="OriginLatitude"/>. Both must be set for origin pinning to take effect.</summary>
     public double? OriginLongitude { get; init; }
 
+    /// <summary>
+    /// Write street names onto the edges (<c>--output.street-names</c>). On by default because the
+    /// scenario side's place index is built from them, and because the world build and the scenario
+    /// build must now produce one network between them.
+    /// </summary>
+    /// <remarks>
+    /// This is not free annotation: setting the option changes the graph, because
+    /// <c>NBEdge::expandableBy</c> refuses to merge two edges carrying different street names.
+    /// Measured on one Arapahoe extract, 1,017 roads and 183 junctions become 1,021 and 184.
+    /// </remarks>
+    public bool OutputStreetNames { get; init; } = true;
+
+    /// <summary>
+    /// Write each lane's originating OSM way id as a <c>&lt;param key="origId"&gt;</c>
+    /// (<c>--output.original-names</c>). Measured: this does not change the graph -- it only adds
+    /// the parameters -- but it is part of the flag set the scenario side expects, and the two must
+    /// agree argument for argument.
+    /// </summary>
+    public bool OutputOriginalNames { get; init; } = true;
+
+    /// <summary>
+    /// Distance within which neighbouring junctions are merged (<c>--junctions.join-dist</c>), in
+    /// metres. Null keeps netconvert's own default of 10 m.
+    /// </summary>
+    /// <remarks>
+    /// Where two junctions sit closer than this, the edge between them is trimmed to a fraction of a
+    /// metre while still spanning tens of metres of geometry, and nothing can merge across it -- a
+    /// freeway ramp built that way stands still under SUMO.
+    /// </remarks>
+    public double? JunctionJoinDistanceMeters { get; init; } = 25.0;
+
+    /// <summary>
+    /// The control type netconvert gives a guessed signal (<c>--tls.default-type</c>). netconvert's
+    /// own default, <c>static</c>, is a fixed-time program on a 90 s cycle; <c>actuated</c> holds
+    /// green while traffic is still arriving, which is worth a great deal of throughput at a
+    /// junction carrying freeway ramp traffic. The flag is passed only when it differs from
+    /// netconvert's default, so that what ran and what a scenario asks for compare equal.
+    /// </summary>
+    public string TrafficLightDefaultType { get; init; } = "actuated";
+
     /// <summary>Escape hatch: extra raw netconvert arguments appended verbatim, for tuning
     /// without code changes. Each entry is passed as a single argument token.</summary>
     public IReadOnlyList<string> ExtraArgs { get; init; } = [];
@@ -311,6 +351,24 @@ public sealed class OsmConverter
         if (_options.ImportTurnLanes)
             args.Add("--osm.turn-lanes");
 
+        // Street names. These must be OMITTED to turn them off, NEVER set to "false".
+        // NBEdge::expandableBy guards on `!isDefault("output.street-names")` -- on whether the
+        // option was given at all, not on its value -- so passing "false" produces exactly the
+        // graph that passing "true" produces, and a later attempt to turn names off by setting the
+        // flag false silently changes nothing. Verified by fingerprinting both outputs.
+        if (_options.OutputStreetNames)
+        {
+            args.Add("--output.street-names");
+            args.Add("true");
+        }
+
+        // Lane-level provenance back to the OSM way. Measured not to change the graph.
+        if (_options.OutputOriginalNames)
+        {
+            args.Add("--output.original-names");
+            args.Add("true");
+        }
+
         // A pinned origin must not be shifted; otherwise honour CenterMap.
         if (disableNormalization)
             args.Add("--offset.disable-normalization");
@@ -319,6 +377,15 @@ public sealed class OsmConverter
         {
             // Merge clustered OSM nodes into single signalized intersections.
             args.Add("--junctions.join");
+
+            // Only when it differs from netconvert's own default, so the flag list a scenario
+            // validates against matches argument for argument rather than by interpretation.
+            if (!string.IsNullOrWhiteSpace(_options.TrafficLightDefaultType)
+                && _options.TrafficLightDefaultType != "static")
+            {
+                args.Add("--tls.default-type");
+                args.Add(_options.TrafficLightDefaultType);
+            }
         }
         else
         {
@@ -339,6 +406,12 @@ public sealed class OsmConverter
         {
             args.Add("--output-file");
             args.Add(netPath);
+        }
+
+        if (_options.JunctionJoinDistanceMeters is double joinDistance)
+        {
+            args.Add("--junctions.join-dist");
+            args.Add(joinDistance.ToString(inv));
         }
 
         args.AddRange(_options.ExtraArgs);

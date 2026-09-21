@@ -201,6 +201,16 @@ class CarlaControlArgumentParser:
             help="don't restrict netconvert to car-drivable roads",
         )
         build.add_argument(
+            "--netconvert-arg",
+            action="append",
+            default=[],
+            metavar="TOKEN",
+            help="one more argument for netconvert, repeated once per token: "
+            "--netconvert-arg --remove-edges.by-type --netconvert-arg highway.footway. A SUMO "
+            "scenario checks its own flag set against the one recorded in the world package, so "
+            "a world a scenario needs built differently is built with these",
+        )
+        build.add_argument(
             "--no-clip-bounds",
             action="store_true",
             help="don't clip the road network to the OSM <bounds>",

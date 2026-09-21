@@ -331,6 +331,10 @@ def parse_args() -> argparse.Namespace:
                         help="where the network, routes, config and labels go (default: carla/Import)")
     parser.add_argument("--osm", default=SOURCE_OSM,
                         help="clipped OpenStreetMap extract the CARLA world was built from")
+    parser.add_argument("--world-package", default=WORLD_PACKAGE,
+                        help="world package the CARLA map was generated from. Its map.net.xml is "
+                             "the network this scenario is built against; netconvert is not run "
+                             "here, because a second run would produce a different graph")
     parser.add_argument("--days", type=int, default=7,
                         help="length of the run in days (default 7; use 1 for a GUI preview)")
     parser.add_argument("--no-show-day", type=int, default=4,
@@ -362,7 +366,7 @@ def main() -> int:
         return 1
     logging.info("SUMO from %s", installation.home)
 
-    builder = SumoScenarioBuilder(installation.netconvert, installation.proj_data)
+    builder = SumoScenarioBuilder()
     out_dir = args.out_dir
     network_name = f"{MAP_NAME}.net.xml"
     network_path = os.path.join(out_dir, network_name)
@@ -370,7 +374,7 @@ def main() -> int:
     if args.reuse_network:
         logging.info("reusing network %s", network_path)
     else:
-        builder.build_network(args.osm, network_path, NETCONVERT_SETTINGS)
+        builder.build_network(args.world_package, network_path, NETCONVERT_SETTINGS)
         # Turn the OSM-private roads into an army/authority-only interior; the gate junctions where a
         # public road meets a private one become the only crossing points between the two populations.
         builder.restrict_private_roads(network_path, args.osm, allow="army authority")

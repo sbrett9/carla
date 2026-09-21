@@ -23,6 +23,7 @@ from carlacontrol.TelemetryController import TelemetryController
 from carlacontrol.TrafficController import TrafficController
 from carlacontrol.version import __version__
 from carlacontrol.WorldBuilder import WorldBuilder
+from carlacontrol.WorldPackageReader import WorldPackageReader
 
 __author__ = "SNC Team"
 
@@ -46,4 +47,5 @@ __all__ = [
     "TelemetryController",
     "TrafficController",
     "WorldBuilder",
+    "WorldPackageReader",
 ]

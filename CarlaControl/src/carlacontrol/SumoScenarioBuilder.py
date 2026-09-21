@@ -1,11 +1,24 @@
-"""Build a SUMO road network and traffic scenario for a world generated from OpenStreetMap.
+"""Build a SUMO traffic scenario for a world generated from OpenStreetMap.
 
-The world-generation pipeline already hands OSM to netconvert to get OpenDRIVE, and the same
-netconvert run produces a SUMO network that `OsmConverter` reads for traffic-light phase programs
-and then deletes. This builder re-runs netconvert with the same flag set and *keeps* the network, so
-the result is the road graph the CARLA map was built from, in the same coordinate frame: the origin
-is pinned to the world's latitude/longitude and offset normalization is disabled, which makes SUMO
-(x, y) equal to CARLA (x, -y) with no offset arithmetic.
+The road network comes out of the world package, not out of netconvert. The world build runs
+netconvert once, producing the OpenDRIVE the CARLA map is made from and the SUMO network in the same
+invocation, and writes the network into the package as `map.net.xml`. This builder loads it.
+
+Re-running netconvert here is not an option, and the reason is not tidiness. Asking netconvert for
+OpenDRIVE output makes it default `rectangular-lane-cut` to true, which feeds junction shape
+computation, so a second run with byte-identical flags produces a different graph: measured on one
+Arapahoe extract, 743 of 4,978 canonical rows differ and one lane comes out 352.19 m against 2.60 m,
+while the map boundary matches to the centimetre. A scenario authored against that network names
+edges the rendered world does not have, and every downstream check passes.
+
+`NetconvertSettings` therefore no longer runs anything. It states the flag set this scenario expects
+its world to have been built with, and that expectation is validated against the argument list the
+package records. A disagreement refuses, naming the flags and both fingerprints, because a scenario
+built on the wrong network is worse than one that was not built.
+
+The frame follows from the same single invocation: the origin is pinned to the world's
+latitude/longitude and offset normalization is disabled, which makes SUMO (x, y) equal to CARLA
+(x, -y) with no offset arithmetic.
 
 On top of a network it writes a scenario in which one marked vehicle drives in along a chosen
 approach, repeats a loop a fixed number of times, and leaves along a chosen exit, while ambient
@@ -25,20 +38,31 @@ waypoint spanning every edge in that phase. The phases the marked vehicle drives
 from __future__ import annotations
 
 import logging
-import os
-import subprocess
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
+from carlacontrol.NetworkFingerprint import NetworkFingerprint
+from carlacontrol.WorldPackageReader import WorldPackageReader
+
+# netconvert arguments whose value is a file path. They are part of the record of an invocation and
+# say nothing about the graph, and they never match between two builds -- the world build converts
+# from a temporary file into a temporary file.
+PATH_ARGUMENTS = frozenset({"--osm-files", "--output-file", "--opendrive-output"})
+
 
 @dataclass(frozen=True)
 class NetconvertSettings:
-    """The netconvert flag set a generated world was built with.
+    """The netconvert flag set a generated world is expected to have been built with.
 
-    Defaults mirror `OsmConverter.BuildArguments` and the road filter that world builds pass as
-    extra arguments. `origin_lat` / `origin_lon` come from the world package and are what pin the
-    network to the CARLA map's coordinate frame.
+    Nothing here runs netconvert. `to_arguments` states the invocation this scenario requires, and
+    the world package records the invocation that actually happened; `differences_from` compares
+    them. Defaults mirror `OsmConverter.BuildArguments` and the road filter world builds pass as
+    extra arguments, so a world built with the shipped defaults and a scenario written with the
+    shipped defaults agree without either side restating anything.
+
+    `origin_lat` / `origin_lon` come from the world package and are what pin the network to the
+    CARLA map's coordinate frame.
     """
 
     origin_lat: float
@@ -48,13 +72,14 @@ class NetconvertSettings:
     traffic_lights: bool = True
     # netconvert's guessed signals are fixed-time programs on a 90 s cycle. Real arterials run
     # vehicle-actuated signals that hold green while traffic is still arriving, which is worth a
-    # great deal of throughput at a junction carrying freeway ramp traffic.
-    traffic_light_type: str = "static"
+    # great deal of throughput at a junction carrying freeway ramp traffic. The world build now
+    # defaults to the same value, so one netconvert run serves both sides.
+    traffic_light_type: str = "actuated"
     # Distance within which netconvert merges neighbouring junctions. Where two sit closer than
     # this the edge between them is trimmed away to a fraction of a metre while still spanning
     # tens of metres of geometry, and nothing can merge across it -- a ramp built that way
     # stands still. None keeps netconvert's own default of 10 m.
-    junction_join_distance: float | None = None
+    junction_join_distance: float | None = 25.0
     # Let vehicles overtake a stopped vehicle by crossing the centre line, the way a driver on a
     # two-way road does. netconvert's own guess almost never succeeds; see
     # SumoScenarioBuilder.allow_opposite_overtaking for naming the pairs instead.
@@ -66,7 +91,11 @@ class NetconvertSettings:
     remove_edge_types: tuple[str, ...] = ()
 
     def to_arguments(self, osm_path: Path, out_path: Path) -> list[str]:
-        """The full netconvert command line, minus the executable."""
+        """The netconvert invocation this scenario requires of its world, minus the executable.
+
+        Not run from here. It is compared against the argument list the world package records; see
+        `differences_from`.
+        """
         args = [
             "--osm-files", str(osm_path),
             "--output-file", str(out_path),
@@ -81,8 +110,15 @@ class NetconvertSettings:
             "--geometry.remove",
             "--roundabouts.guess",
             "--osm.turn-lanes",
-            # Names cost nothing geometrically and make the network readable against a scenario.
+            # Street names must be OMITTED to turn them off, NEVER set to "false".
+            # NBEdge::expandableBy guards on whether `output.street-names` was set at all, not on
+            # its value, so "false" produces exactly the graph "true" produces. What the option
+            # costs is that it stops netconvert merging two differently-named edges: measured on
+            # one Arapahoe extract, 1,017 roads and 183 junctions become 1,021 and 184. What it
+            # buys is the edge names the place index is built from -- 91% coverage on the US maps.
             "--output.street-names", "true",
+            # Lane-level provenance back to the originating OSM way. Measured not to change the
+            # graph; it adds <param key="origId"> and nothing else.
             "--output.original-names", "true",
         ]
         args += ["--junctions.join"] if self.traffic_lights else ["--tls.discard-loaded"]
@@ -101,6 +137,94 @@ class NetconvertSettings:
         if self.remove_edge_types:
             args += ["--remove-edges.by-type", ",".join(self.remove_edge_types)]
         return args
+
+    def differences_from(self, recorded: list[str]) -> list[str]:
+        """How the invocation this scenario requires differs from the one a world was built with.
+
+        One line per flag, ready to print. Empty when they agree. File paths are ignored: they are
+        part of the record but never match, since the world build converts a temporary file into a
+        temporary file.
+        """
+        wanted = self.comparable_arguments(self.to_arguments(Path("map.osm"), Path("map.net.xml")))
+        built = self.comparable_arguments(recorded)
+        lines = []
+        for flag in sorted(set(wanted) | set(built)):
+            mine, theirs = wanted.get(flag, _ABSENT), built.get(flag, _ABSENT)
+            if _arguments_agree(mine, theirs):
+                continue
+            lines.append(f"  {flag}: this scenario wants {_show(mine)}, "
+                         f"the world was built with {_show(theirs)}")
+        return lines
+
+    @staticmethod
+    def comparable_arguments(argv: list[str]) -> dict[str, str | None]:
+        """An argument list as flag -> value, with the file paths dropped.
+
+        A bare flag maps to None, which is distinct from a flag given an empty value. netconvert
+        takes at most one value per option, and a token starting with `--` always begins a new one,
+        which is how its own parser reads a command line.
+        """
+        comparable: dict[str, str | None] = {}
+        index = 0
+        while index < len(argv):
+            token = argv[index]
+            index += 1
+            if not token.startswith("--"):
+                continue
+            value = None
+            if index < len(argv) and not argv[index].startswith("--"):
+                value = argv[index]
+                index += 1
+            if token in PATH_ARGUMENTS:
+                continue
+            comparable[token] = value
+        return comparable
+
+
+# Stands for "this flag was not passed at all", which is distinct from a flag passed with no value.
+_ABSENT = object()
+
+
+def _show(value: object) -> str:
+    """One flag's value, for a message a person has to act on."""
+    if value is _ABSENT:
+        return "it absent"
+    if value is None:
+        return "it set with no value"
+    return repr(value)
+
+
+def _arguments_agree(left: object, right: object) -> bool:
+    """Whether two values of one flag say the same thing.
+
+    Compared token by token, and numerically where both tokens are numbers, so that `25` and `25.0`
+    agree -- C# writes a whole number without a decimal point and Python writes it with one, and a
+    difference in how a language prints a float is not a difference in how a map was built. The same
+    rule applied to `key=value` tokens is what lets two spellings of one projection string agree.
+    """
+    if left is _ABSENT or right is _ABSENT:
+        return left is right
+    if left is None or right is None:
+        return left is right
+    if left == right:
+        return True
+    left_tokens, right_tokens = str(left).split(), str(right).split()
+    if len(left_tokens) != len(right_tokens):
+        return False
+    return all(_tokens_agree(a, b) for a, b in zip(left_tokens, right_tokens, strict=True))
+
+
+def _tokens_agree(left: str, right: str) -> bool:
+    if left == right:
+        return True
+    if "=" in left and "=" in right:
+        left_key, left_value = left.split("=", 1)
+        right_key, right_value = right.split("=", 1)
+        return left_key == right_key and _tokens_agree(left_value, right_value)
+    try:
+        return float(left) == float(right)
+    except ValueError:
+        return False
 
 
 @dataclass(frozen=True)
@@ -301,34 +425,58 @@ GENERATED_BY = "carlacontrol.SumoScenarioBuilder"
 class SumoScenarioBuilder:
     """Builds the .net.xml, .rou.xml and .sumocfg for one generated world."""
 
-    def __init__(self, netconvert_path: str | Path, proj_data_path: str | Path | None = None):
-        self.netconvert_path = Path(netconvert_path)
-        self.proj_data_path = Path(proj_data_path) if proj_data_path else None
+    def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
 
-    def build_network(self, osm_path: str | Path, out_path: str | Path,
+    def build_network(self, world_package: str | Path, out_path: str | Path,
                       settings: NetconvertSettings) -> Path:
-        """Run netconvert over an OSM extract and keep the SUMO network it produces."""
-        osm_path, out_path = Path(osm_path), Path(out_path)
-        if not self.netconvert_path.exists():
-            raise FileNotFoundError(f"netconvert not staged: {self.netconvert_path}")
-        if not osm_path.exists():
-            raise FileNotFoundError(f"OSM file not found: {osm_path}")
+        """Take the SUMO network out of a world package, having checked it is the right one.
 
-        environment = None
-        if self.proj_data_path:
-            # libproj needs proj.db to reproject; without it netconvert fails at run time.
-            environment = dict(os.environ,
-                               PROJ_LIB=str(self.proj_data_path),
-                               PROJ_DATA=str(self.proj_data_path))
+        Two checks, and either one refuses:
+
+          * the network the package carries must fingerprint as the one the package says it
+            carries, which catches a package assembled from mismatched parts, and
+          * the invocation the package records must match the one `settings` requires, which
+            catches a scenario written for a world built with different flags.
+
+        Both fingerprints and every differing flag are named, because the fix depends on which of
+        the two is wrong and there is no way to tell from a bare refusal.
+        """
+        out_path = Path(out_path)
+        package = WorldPackageReader(world_package)
+        network = package.network_text()
+
+        recorded = package.recorded_network_fingerprint
+        carried = NetworkFingerprint.of_text(network)
+        differences = settings.differences_from(package.netconvert_argv)
+
+        if recorded and recorded != carried:
+            raise ValueError(
+                f"{package.path} is inconsistent with itself: it records network fingerprint "
+                f"{recorded} but carries a network that fingerprints as {carried}. The package has "
+                "been assembled from parts of two different builds; rebuild the world.")
+
+        if differences:
+            raise ValueError(
+                "this scenario expects a world netconvert was run differently for.\n"
+                + "\n".join(differences)
+                + f"\n  world package: {package.path}"
+                + f"\n  network fingerprint recorded: {recorded or '(none recorded)'}"
+                + f"\n  network fingerprint carried:  {carried}\n"
+                "The network cannot be rebuilt to match -- asking netconvert for OpenDRIVE output "
+                "changes the graph it produces -- so either rebuild the world with these flags or "
+                "author the scenario against the flags the world has.")
+
+        if not recorded:
+            self.logger.warning(
+                "%s records no network fingerprint; it was built before the network was carried. "
+                "Its network is being used as given, unchecked.", package.path)
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        command = [str(self.netconvert_path), *settings.to_arguments(osm_path, out_path)]
-        self.logger.info("netconvert %s -> %s", osm_path.name, out_path.name)
-        result = subprocess.run(command, env=environment, capture_output=True, text=True,
-                                check=False)
-        if result.returncode != 0:
-            raise RuntimeError(f"netconvert exited {result.returncode}:\n{result.stderr}")
+        out_path.write_text(network, encoding="utf-8")
+        self.logger.info("network from %s (%s) -> %s",
+                         package.path.name, package.netconvert_version or "unrecorded version",
+                         out_path.name)
         return out_path
 
     def estimate_end_time(self, network: RoadNetwork, route: OrbitRoute,
@@ -595,7 +743,8 @@ class SumoScenarioBuilder:
 """, encoding="utf-8")
         return out_path
 
-    def build(self, osm_path: str | Path, out_dir: str | Path, map_name: str, scenario_name: str,
+    def build(self, world_package: str | Path, out_dir: str | Path, map_name: str,
+              scenario_name: str,
               netconvert_settings: NetconvertSettings, route: OrbitRoute,
               orbit_settings: OrbitSettings, flows: list[AmbientFlow],
               end_time: int = 0, step_length: float = 0.05, seed: int = 42,
@@ -609,7 +758,7 @@ class SumoScenarioBuilder:
         if reuse_network:
             self.logger.info("reusing network %s", network_path)
         else:
-            self.build_network(osm_path, network_path, netconvert_settings)
+            self.build_network(world_package, network_path, netconvert_settings)
 
         network = RoadNetwork.from_file(network_path)
         end_time = end_time or self.estimate_end_time(network, route, orbit_settings)
