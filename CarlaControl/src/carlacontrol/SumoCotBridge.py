@@ -24,6 +24,15 @@ Two conversions matter and both avoid guesswork:
 
 SUMO reports heading as degrees clockwise from north, which is already what CoT `track/course`
 wants, and unlike a course derived from velocity it stays meaningful for a stopped vehicle.
+
+**Two channels, split here rather than downstream.** Sampling a vehicle produces a *record*, which is
+ground truth and knows everything, including which vehicles a scenario author planted and what the
+author called them. The events and CSV rows written from that record are what a consumer reads, and
+they carry only what an observer could measure: position, course, speed, observable class, size,
+colour and affiliation. The fields named in `AUTHORED_TRUTH_FIELDS` exist only because somebody wrote
+a scenario, so they never cross into the written output; a corpus that carries them is a corpus whose
+answer key is one of its own columns. The durable form of that truth is the scenario's
+`*.labels.json` sidecar, which lists the annotated vehicle ids and nothing else does.
 """
 from __future__ import annotations
 
@@ -60,9 +69,25 @@ CSV_COLUMNS = [
     "time_utc", "sim_time_s", "uid", "callsign", "cot_type", "how",
     "lat", "lon", "hae_m", "ce_m", "le_m",
     "course_deg", "speed_mps", "vx", "vy", "vz",
-    "base_type", "type_id", "special_type", "length_m", "width_m", "height_m", "color",
-    "role_name", "marked", "edge", "lane", "sumo_x", "sumo_y", "carla_x", "carla_y",
+    "base_type", "length_m", "width_m", "height_m", "color",
+    "edge", "lane", "sumo_x", "sumo_y", "carla_x", "carla_y",
 ]
+
+# Record fields that exist only because a scenario author wrote them, and which therefore never
+# reach an event or a CSV row:
+#
+#   `special_type` and `marked` say that this vehicle is one the author planted, which is the whole
+#       question a behavioural model is being given;
+#   `type_id` is the SUMO vehicle-type id and `role_name` the flow the vehicle was generated from,
+#       which are the author's own names for their populations. A planted vehicle needs a vehicle
+#       type of its own to carry its behaviour -- a reduced speed factor, say -- so its type id is
+#       unique to it no matter what it is called, and a flow written for one vehicle names that one
+#       vehicle. Neither can be made indistinguishable while the behaviour stays intact, so they
+#       stay on the truth side.
+#
+# What remains in the written output is what a sensor could have measured. The mapping from a
+# vehicle id back to these is the scenario's `*.labels.json`.
+AUTHORED_TRUTH_FIELDS = ("type_id", "special_type", "role_name", "marked")
 
 
 @dataclass(frozen=True)
@@ -134,17 +159,17 @@ class CotOutputSettings:
     stale_seconds: float = 3.0
     affiliation: str = "n"
     uid_prefix: str = "SUMO-TRUTH"
-    # The vehicle to flag in the dataset, and optionally to give a different CoT affiliation so it
-    # stands out in a TAK client.
+    # The vehicle the scenario planted. It is recorded as truth and counted in the run report; it
+    # is not distinguishable in the written output, which is the point of planting it.
     marked_vehicle: str = "orbiter"
-    marked_affiliation: str | None = None
-    # A scenario with more than one anomaly flags several vehicles at once: any vehicle whose id is
+    # A scenario with more than one planted vehicle flags several at once: any vehicle whose id is
     # in this set is treated exactly like `marked_vehicle`. Empty keeps the single-vehicle
     # behaviour above.
     marked_ids: frozenset[str] = frozenset()
-    # CoT affiliation per SUMO vehicle-type id, so a mixed population can carry meaningful labels --
-    # civilian neutral, military friendly, anomaly unknown. A type absent from the map falls back to
-    # `affiliation`; a marked vehicle still overrides to `marked_affiliation` when that is set.
+    # CoT affiliation per SUMO vehicle-type id, so a mixed population carries the affiliations its
+    # populations would really have -- civilian neutral, military friendly. A type absent from the
+    # map falls back to `affiliation`. A planted vehicle takes the affiliation of the population it
+    # is hiding in, exactly as its neighbours do, so the affiliation never announces it.
     affiliation_by_type: dict[str, str] = field(default_factory=dict)
     # Wall-clock instant that simulation time zero maps to. Pin it for a reproducible dataset;
     # leave it unset to stamp events from the clock when the run starts.
@@ -158,6 +183,10 @@ class RunReport:
     events: int = 0
     updates: int = 0
     vehicles: int = 0
+    # How many of those vehicles the scenario's labels flagged. Zero against a labelled scenario
+    # means the label ids and the route file have drifted apart, which nothing in the written
+    # output can show, since the output deliberately does not distinguish them.
+    marked_vehicles: int = 0
     sim_seconds: float = 0.0
     wall_seconds: float = 0.0
     sinks: list[str] = field(default_factory=list)
@@ -232,6 +261,7 @@ class SumoCotBridge:
                 configured = traci.simulation.getEndTime()
                 end_time = configured if configured > 0 else None
             seen: set[str] = set()
+            seen_marked: set[str] = set()
             index = 0
             started_at = time.monotonic()
             sim_start = traci.simulation.getTime()
@@ -256,26 +286,26 @@ class SumoCotBridge:
                 for vehicle_id in traci.vehicle.getIDList():
                     seen.add(vehicle_id)
                     record = self._sample(traci, vehicle_id, settings)
-                    marked = (vehicle_id == settings.marked_vehicle
-                              or vehicle_id in settings.marked_ids)
-                    if marked:
-                        affiliation = settings.marked_affiliation or settings.affiliation
-                    else:
-                        affiliation = settings.affiliation_by_type.get(
-                            record["type_id"], settings.affiliation)
+                    if record["marked"]:
+                        seen_marked.add(vehicle_id)
+                    # A planted vehicle takes its population's affiliation like any other member of
+                    # it, so that the CoT type carries affiliation and nothing else.
+                    affiliation = settings.affiliation_by_type.get(
+                        record["type_id"], settings.affiliation)
+                    published = self._published(record)
                     event = CotUdpEmitter.vehicle_telemetry_to_cot(
-                        record, affiliation=affiliation, stale_seconds=settings.stale_seconds,
+                        published, affiliation=affiliation, stale_seconds=settings.stale_seconds,
                         source="truth", uid_prefix=settings.uid_prefix, when=stamp)
                     if udp:
                         udp.send(event)
                     if xml_file:
                         xml_file.write("  " + event + "\n")
                     if csv_writer:
-                        csv_writer.writerow(self._row(record, settings, affiliation, stamp,
-                                                      now, marked))
+                        csv_writer.writerow(self._row(published, settings, affiliation, stamp, now))
                     report.events += 1
                 report.sim_seconds = now
             report.vehicles = len(seen)
+            report.marked_vehicles = len(seen_marked)
             report.wall_seconds = time.monotonic() - started_at
         finally:
             traci.close()
@@ -289,12 +319,20 @@ class SumoCotBridge:
         self.logger.info("%d events for %d vehicles over %.0f s of simulation in %.0f s "
                          "(%.1fx real time)", report.events, report.vehicles, report.sim_seconds,
                          report.wall_seconds, report.achieved_real_time_factor)
+        expected_marked = len(settings.marked_ids) or 1
+        if report.marked_vehicles:
+            self.logger.info("%d of %d labelled vehicles appeared; which ones is recorded only in "
+                             "the labels sidecar", report.marked_vehicles, expected_marked)
+        elif settings.marked_ids:
+            self.logger.warning("none of the %d labelled vehicle ids appeared in the run: the "
+                                "labels and the route file name different vehicles",
+                                len(settings.marked_ids))
         return report
 
     # -- sampling ------------------------------------------------------------------------------
 
     def _sample(self, traci, vehicle_id: str, settings: CotOutputSettings) -> dict:
-        """One vehicle's state as the record `vehicle_telemetry_to_cot` expects."""
+        """One vehicle's state as a ground-truth record, including the fields only truth may see."""
         x, y = traci.vehicle.getPosition(vehicle_id)
         lon, lat = traci.simulation.convertGeo(x, y)
         type_id = traci.vehicle.getTypeID(vehicle_id)
@@ -304,6 +342,7 @@ class SumoCotBridge:
         heading = math.radians(course)
         red, green, blue, _alpha = traci.vehicletype.getColor(type_id)
         vehicle_class = traci.vehicletype.getVehicleClass(type_id)
+        marked = vehicle_id == settings.marked_vehicle or vehicle_id in settings.marked_ids
         return {
             "id": vehicle_id,
             "lat": lat,
@@ -318,8 +357,8 @@ class SumoCotBridge:
             "vz": 0.0,
             "base_type": BASE_TYPE_BY_VEHICLE_CLASS.get(vehicle_class, vehicle_class),
             "type_id": type_id,
-            "special_type": "marked" if (vehicle_id == settings.marked_vehicle
-                                          or vehicle_id in settings.marked_ids) else "",
+            "special_type": "marked" if marked else "",
+            "marked": marked,
             "length_m": traci.vehicle.getLength(vehicle_id),
             "width_m": traci.vehicle.getWidth(vehicle_id),
             "height_m": traci.vehicle.getHeight(vehicle_id),
@@ -338,8 +377,18 @@ class SumoCotBridge:
             return self.bare_earth.height_at(x, y)
         return self.constant_hae
 
+    @staticmethod
+    def _published(record: dict) -> dict:
+        """The part of a truth record a consumer may read: everything an observer could measure.
+
+        This is where the two channels part. Nothing downstream removes anything, so nothing
+        downstream can forget to.
+        """
+        return {name: value for name, value in record.items()
+                if name not in AUTHORED_TRUTH_FIELDS}
+
     def _row(self, record: dict, settings: CotOutputSettings, affiliation: str,
-             stamp: datetime, sim_time: float, marked: bool) -> dict:
+             stamp: datetime, sim_time: float) -> dict:
         return {
             "time_utc": CotUdpEmitter.format_cot_timestamp(stamp),
             "sim_time_s": f"{sim_time:.2f}",
@@ -358,14 +407,10 @@ class SumoCotBridge:
             "vy": f"{record['vy']:.2f}",
             "vz": "0.00",
             "base_type": record["base_type"],
-            "type_id": record["type_id"],
-            "special_type": record["special_type"],
             "length_m": f"{record['length_m']:.2f}",
             "width_m": f"{record['width_m']:.2f}",
             "height_m": f"{record['height_m']:.2f}",
             "color": record["color"],
-            "role_name": record["role_name"],
-            "marked": "1" if marked else "0",
             "edge": record["edge"],
             "lane": record["lane"],
             "sumo_x": f"{record['x']:.2f}",

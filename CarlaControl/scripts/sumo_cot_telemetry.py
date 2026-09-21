@@ -13,6 +13,10 @@ The events use the same formatter as the CARLA truth producer, so they follow th
 directly. Positions are converted by the running simulation itself, and heights come from the world
 package's bare-earth grid when one is found next to the scenario.
 
+What the sinks carry is what an observer could have measured. Which vehicles a scenario planted, and
+the author's own names for its vehicle types and flows, stay in the scenario's `*.labels.json`: the
+dataset describes the traffic, not the answer.
+
 Examples:
     # dataset only: every vehicle, once a second, to XML and CSV
     python sumo_cot_telemetry.py --xml orbit_cot.xml --csv orbit_cot.csv
@@ -68,13 +72,13 @@ def parse_args() -> argparse.Namespace:
                         help="CoT affiliation for ambient traffic: n neutral, f friend, h hostile, "
                              "u unknown (default n)")
     parser.add_argument("--marked-vehicle", default="orbiter",
-                        help="vehicle to flag in the dataset's `marked` column (default orbiter)")
-    parser.add_argument("--marked-affiliation",
-                        help="give the marked vehicle a different affiliation so it stands out")
+                        help="the vehicle this scenario planted. It is counted in the run summary "
+                             "and recorded in the labels sidecar; the written dataset does not "
+                             "distinguish it from the traffic it is hiding in (default orbiter)")
     parser.add_argument("--labels", type=Path,
-                        help="a scenario's *.labels.json: flags several anomaly vehicles at once "
-                             "and assigns a CoT affiliation per vehicle type (civilian neutral, "
-                             "military friendly, anomaly unknown)")
+                        help="a scenario's *.labels.json: names several planted vehicles at once "
+                             "and assigns a CoT affiliation per vehicle type, so each population "
+                             "carries the affiliation it would really have")
     parser.add_argument("--uid-prefix", default="SUMO-TRUTH",
                         help="prefix for every event's uid (default SUMO-TRUTH)")
     parser.add_argument("--epoch",
@@ -150,7 +154,7 @@ def main() -> int:
         udp_host=host, udp_port=port, udp_ttl=args.udp_ttl,
         xml_path=args.xml, csv_path=args.csv, rate_hz=args.rate, stale_seconds=args.stale,
         affiliation=args.affiliation, uid_prefix=args.uid_prefix,
-        marked_vehicle=args.marked_vehicle, marked_affiliation=args.marked_affiliation,
+        marked_vehicle=args.marked_vehicle,
         marked_ids=marked_ids, affiliation_by_type=affiliation_by_type,
         epoch=epoch)
 

@@ -25,8 +25,12 @@ kind of deviation a detector would have to catch:
     (temporal and spatial outlier);
   * ferry stay-behind -- a vehicle arrives on a ferry pulse and never leaves (persistence).
 
-The marked vehicles are labelled in a sidecar `*.labels.json` the telemetry tool reads, so the CoT
-dataset carries ground truth: civilian traffic neutral, military friendly, every anomaly unknown.
+Which vehicles those are is recorded in a sidecar `*.labels.json`, and only there. In the scenario
+itself each planted vehicle is an ordinary member of the population it moves among: its vehicle type
+carries that population's colour and CoT affiliation (civilian and port neutral, military friendly),
+its id continues that population's numbering, and what distinguishes it is its behaviour -- where it
+goes, when, how fast and for how long it stops. That is the signal a detector is meant to find, so
+it is the only one the dataset carries.
 
 Usage:
     python make_bahonar_scenario.py [--days 7] [--out-dir ../../Import]
@@ -118,9 +122,13 @@ TOWER_POSTS = [
 FENCE_LINE = ["26413338#6", "-26413425#5", "-26413460", "26413459",
               "26413427", "-26413426", "-26413411"]
 
+# The route file this string is copied into travels with the corpus, so the types are grouped by the
+# population they belong to and nothing here says which of them a planted vehicle uses. That mapping
+# is in the labels sidecar; the roster in `PLANTED_VEHICLE_TYPES` below is the readable form of it.
 VEHICLE_TYPES = """\
     <!-- Civilian traffic on the public coastal corridor (passenger class; neutral affiliation). -->
     <vType id="civ_car" vClass="passenger" length="4.4" maxSpeed="35" color="0.80,0.80,0.82"/>
+    <vType id="civ_sedan" vClass="passenger" length="4.4" maxSpeed="35" color="0.80,0.80,0.82"/>
     <vType id="civ_pickup" vClass="passenger" length="5.2" width="1.95" maxSpeed="33" color="0.55,0.58,0.60"/>
     <vType id="civ_taxi" vClass="taxi" length="4.5" maxSpeed="35" color="0.90,0.80,0.20"/>
     <vType id="civ_truck" vClass="truck" length="10.0" maxSpeed="25" color="0.60,0.50,0.35"/>
@@ -131,31 +139,46 @@ VEHICLE_TYPES = """\
     <!-- Port-cleared traffic that passes a checkpoint to reach the ferry and quays (authority
          class; neutral affiliation: ferry passengers and port freight, access-controlled). -->
     <vType id="port_vehicle" vClass="authority" length="4.6" maxSpeed="30" color="0.55,0.70,0.85"/>
+    <vType id="port_van" vClass="authority" length="4.6" maxSpeed="30" color="0.55,0.70,0.85"/>
     <vType id="port_truck" vClass="authority" length="9.0" maxSpeed="24" color="0.45,0.60,0.75"/>
     <vTypeDistribution id="port_mix" vTypes="port_vehicle port_truck" probabilities="0.7 0.3"/>
 
     <!-- Naval / base traffic inside the wire (army class; friendly affiliation). -->
     <vType id="mil_jeep" vClass="army" length="4.8" width="2.0" maxSpeed="33" color="0.30,0.38,0.25"/>
+    <vType id="mil_utility" vClass="army" length="6.0" width="2.3" maxSpeed="28" color="0.30,0.38,0.25"/>
     <vType id="mil_truck" vClass="army" length="7.5" width="2.4" maxSpeed="24" color="0.28,0.34,0.22"/>
     <vType id="guard" vClass="army" length="4.8" width="2.0" maxSpeed="30" color="0.35,0.45,0.30"/>
-    <vTypeDistribution id="mil_mix" vTypes="mil_jeep mil_truck" probabilities="0.6 0.4"/>
-
-    <!-- Anomalies (unknown affiliation; flagged as ground truth in the labels sidecar). -->
-    <vType id="anomaly_probe" vClass="passenger" length="4.4" maxSpeed="35" color="1.00,0.45,0.00"/>
-    <vType id="anomaly_escort" vClass="army" length="6.0" width="2.3" maxSpeed="28" color="1.00,0.10,0.10"/>
-    <vType id="anomaly_shadow" vClass="army" length="4.6" maxSpeed="33" color="1.00,0.20,0.60"
+    <vType id="mil_patrol" vClass="army" length="4.6" maxSpeed="33" color="0.35,0.45,0.30"
            speedFactor="0.45" speedDev="0"/>
-    <vType id="anomaly_staybehind" vClass="authority" length="4.6" maxSpeed="30" color="1.00,0.30,0.00"/>
+    <vTypeDistribution id="mil_mix" vTypes="mil_jeep mil_truck" probabilities="0.6 0.4"/>
 """
 
-# CoT affiliation per vehicle-type id: civilian and port traffic neutral, military friendly, every
-# anomaly unknown.
+# The vehicle types the planted vehicles use, and the population each one hides in. Each carries its
+# cover population's colour and affiliation and, where the author did not write otherwise, its
+# dimensions; what remains different is the behaviour -- the routes, the stops and `mil_patrol`'s
+# 0.45 speed factor -- which is the signal a model is meant to find. This roster is written into the
+# labels sidecar and nowhere else.
+#
+# Open, and deliberately left as it is: `mil_utility` is 6.0 m long and 2.3 m wide, and no other
+# vehicle in this map is either, so a corpus containing the escort fails the leak check on both
+# (`CarlaControl/scripts/check_corpus_leaks.py`). Its cover, `mil_jeep`, is 4.8 by 2.0. Changing a
+# vehicle's dimensions changes its car-following gaps and the space it needs to turn, so it is a
+# change to authored behaviour rather than to a label, and belongs to whoever authored the convoy.
+PLANTED_VEHICLE_TYPES = {
+    "civ_sedan": "civ_car",
+    "mil_utility": "mil_jeep",
+    "mil_patrol": "guard",
+    "port_van": "port_vehicle",
+}
+
+# CoT affiliation per vehicle-type id: civilian and port traffic neutral, military friendly. A
+# planted vehicle's type takes the affiliation of the population it is hiding in, so that the CoT
+# type carries affiliation and not the answer.
 AFFILIATION_BY_TYPE = {
-    "civ_car": "n", "civ_pickup": "n", "civ_taxi": "n", "civ_truck": "n", "civ_bus": "n",
-    "port_vehicle": "n", "port_truck": "n",
-    "mil_jeep": "f", "mil_truck": "f", "guard": "f",
-    "anomaly_probe": "u", "anomaly_escort": "u",
-    "anomaly_shadow": "u", "anomaly_staybehind": "u",
+    "civ_car": "n", "civ_sedan": "n", "civ_pickup": "n", "civ_taxi": "n", "civ_truck": "n",
+    "civ_bus": "n",
+    "port_vehicle": "n", "port_van": "n", "port_truck": "n",
+    "mil_jeep": "f", "mil_utility": "f", "mil_truck": "f", "guard": "f", "mil_patrol": "f",
 }
 
 # Ferry sailings (local hours) -- daylight only, none overnight.
@@ -254,7 +277,12 @@ def routine_hauls(days: int) -> list[ScheduledVehicle]:
 
 
 def anomaly_vehicles(days: int) -> list[ScheduledVehicle]:
-    """The anomalies that are individual vehicles (the guard no-show is an absence, in the labels)."""
+    """The anomalies that are individual vehicles (the guard no-show is an absence, in the labels).
+
+    Their ids go into every event's uid and callsign, so each one continues the numbering of the
+    routine family it is hiding in rather than naming its own deviation. `routine_hauls` uses
+    indices 0-2 per day, so the escort takes 3-7 of day 3 without colliding with one.
+    """
     out = []
 
     # Escort-to-drydock (day 3, 10:00): a five-vehicle military escort from the apron to the
@@ -263,7 +291,7 @@ def anomaly_vehicles(days: int) -> list[ScheduledVehicle]:
         base = 3 * DAY + 10 * HOUR
         for i in range(5):
             out.append(ScheduledVehicle(
-                veh_id=f"escort_{i}", vehicle_type="anomaly_escort", depart=base + i * 4,
+                veh_id=f"haul_d3_{3 + i}", vehicle_type="mil_utility", depart=base + i * 4,
                 from_edge=APRON, to_edge=DRYDOCK, marked=True))
 
     # Gate probe (day 2 and day 5): a civilian vehicle approaches the airfield sentry on the public
@@ -271,7 +299,7 @@ def anomaly_vehicles(days: int) -> list[ScheduledVehicle]:
     for day in (2, 5):
         if days > day:
             out.append(ScheduledVehicle(
-                veh_id=f"probe_d{day}", vehicle_type="anomaly_probe",
+                veh_id=f"errand_d{day}", vehicle_type="civ_sedan",
                 depart=day * DAY + 11 * HOUR + (day * 137),
                 from_edge=CORRIDOR_WEST_IN, to_edge=CORRIDOR_EAST_OUT, via=(PORT_GATE_APPROACH,),
                 stops=(ScheduleStop(lane=f"{PORT_GATE_APPROACH}_0", end_pos=30.0, duration=300),),
@@ -281,7 +309,7 @@ def anomaly_vehicles(days: int) -> list[ScheduledVehicle]:
     # moves, and does not stop at any post.
     if days > 6:
         out.append(ScheduledVehicle(
-            veh_id="shadow", vehicle_type="anomaly_shadow",
+            veh_id="patrol_d6", vehicle_type="mil_patrol",
             depart=6 * DAY + 2 * HOUR + 30 * 60, from_edge=GUARD_BASE, to_edge=GUARD_BASE,
             via=tuple(FENCE_LINE), marked=True))
 
@@ -289,7 +317,7 @@ def anomaly_vehicles(days: int) -> list[ScheduledVehicle]:
     if days > 1:
         remaining = days * DAY - (1 * DAY + 8 * HOUR + 600)
         out.append(ScheduledVehicle(
-            veh_id="staybehind", vehicle_type="anomaly_staybehind",
+            veh_id="port_run_d1", vehicle_type="port_van",
             depart=1 * DAY + 8 * HOUR, from_edge=CORRIDOR_EAST_IN, to_edge=FERRY,
             stops=(ScheduleStop(lane=f"{FERRY}_0", end_pos=20.0, duration=remaining, parking=True),),
             marked=True))
@@ -363,10 +391,11 @@ def main() -> int:
                                        network_name, routes_name, end_time, args.step_length,
                                        args.seed)
 
-    # The telemetry tool reads this to label the dataset: which vehicles are anomalies, and which
-    # affiliation each vehicle type carries. The guard no-show has no vehicle -- it is an absence --
-    # so it is recorded as a described gap: which tower, and the window during which it stood
-    # unmanned while the others were relieved.
+    # The ground truth for this scenario, and the only place it is written: which vehicles were
+    # planted, which vehicle type each of them hides behind, and which affiliation every type
+    # carries. The guard no-show has no vehicle -- it is an absence -- so it is recorded as a
+    # described gap: which tower, and the window during which it stood unmanned while the others
+    # were relieved.
     no_show_edge, no_show_pos = TOWER_POSTS[args.no_show_tower]
     gap_begin = args.no_show_day * DAY + args.no_show_hour * HOUR
     anomaly_notes = []
@@ -380,6 +409,7 @@ def main() -> int:
     labels_path = os.path.join(out_dir, f"{SCENARIO_NAME}.labels.json")
     with open(labels_path, "w", encoding="utf-8") as handle:
         json.dump({"marked_ids": marked, "affiliation_by_type": AFFILIATION_BY_TYPE,
+                   "planted_vehicle_types": PLANTED_VEHICLE_TYPES,
                    "anomaly_notes": anomaly_notes}, handle, indent=1)
 
     logging.info("network  %s", network_path)

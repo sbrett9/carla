@@ -73,7 +73,9 @@ class CotUdpEmitter:
         """Convert vehicle telemetry record to CoT XML event string.
 
         Args:
-            rec: Telemetry dict from world.get_vehicle_telemetry()
+            rec: Telemetry dict from world.get_vehicle_telemetry(). `type_id`, `special_type` and
+                `role_name` are optional: each is written only when the record carries it, so a
+                producer whose categories are ground truth can withhold them at source.
             affiliation: CoT affiliation code (n=neutral, f=friendly, h=hostile)
             stale_seconds: How long until event is considered stale
             source: Source type ("truth" for ground truth, "m-f" for fusion)
@@ -128,25 +130,28 @@ class CotUdpEmitter:
                 "callsign": f"{rec['base_type']}-{rec['id']}",
             },
         )
-        ET.SubElement(
-            detail,
-            "_carla",
-            {
-                "source": source,
-                "actor_id": str(rec["id"]),
-                "type_id": rec["type_id"],
-                "base_type": rec["base_type"],
-                "special_type": rec["special_type"],
-                "length_m": f"{rec['length_m']:.2f}",
-                "width_m": f"{rec['width_m']:.2f}",
-                "height_m": f"{rec['height_m']:.2f}",
-                "color": rec["color"],
-                "role_name": rec["role_name"],
-                "vx": f"{rec['vx']:.2f}",
-                "vy": f"{rec['vy']:.2f}",
-                "vz": f"{rec['vz']:.2f}",
-            },
-        )
+        # `type_id`, `special_type` and `role_name` are written only when the caller supplies them.
+        # A CARLA vehicle has all three as blueprint facts. A SUMO-driven one does not: there they
+        # are the scenario author's own categories and its annotation, which stay on the truth side
+        # of the corpus, so the bridge hands over a record without them (SumoCotBridge's
+        # AUTHORED_TRUTH_FIELDS). Writing them empty instead would still mark which records were
+        # withheld, so the attribute is omitted rather than blanked.
+        carla = {"source": source, "actor_id": str(rec["id"])}
+        if "type_id" in rec:
+            carla["type_id"] = rec["type_id"]
+        carla["base_type"] = rec["base_type"]
+        if "special_type" in rec:
+            carla["special_type"] = rec["special_type"]
+        carla["length_m"] = f"{rec['length_m']:.2f}"
+        carla["width_m"] = f"{rec['width_m']:.2f}"
+        carla["height_m"] = f"{rec['height_m']:.2f}"
+        carla["color"] = rec["color"]
+        if "role_name" in rec:
+            carla["role_name"] = rec["role_name"]
+        carla["vx"] = f"{rec['vx']:.2f}"
+        carla["vy"] = f"{rec['vy']:.2f}"
+        carla["vz"] = f"{rec['vz']:.2f}"
+        ET.SubElement(detail, "_carla", carla)
 
         if capture is not None:
             ET.SubElement(detail, "_capture", capture.attributes())

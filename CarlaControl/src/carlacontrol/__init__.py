@@ -5,6 +5,7 @@ high-level interfaces for working with the CARLA simulator through CarlaNet.
 """
 
 from carlacontrol.CarlaControlArgumentParser import CarlaControlArgumentParser
+from carlacontrol.CorpusLeakValidator import CorpusLeakValidator
 from carlacontrol.CotUdpEmitter import CotUdpEmitter
 from carlacontrol.NativeRecorder import NativeRecorder
 from carlacontrol.OrbitSensorController import OrbitSensorController
@@ -27,6 +28,7 @@ __author__ = "SNC Team"
 __all__ = [
     "__version__",
     "CarlaControlArgumentParser",
+    "CorpusLeakValidator",
     "CotUdpEmitter",
     "NativeRecorder",
     "OrbitSensorController",
