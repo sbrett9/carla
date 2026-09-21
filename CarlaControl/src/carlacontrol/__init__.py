@@ -4,6 +4,7 @@ This package provides advanced control systems, automation utilities, and
 high-level interfaces for working with the CARLA simulator through CarlaNet.
 """
 
+from carlacontrol.CaptureMetadataValidator import CaptureMetadataValidator
 from carlacontrol.CarlaControlArgumentParser import CarlaControlArgumentParser
 from carlacontrol.CorpusLeakValidator import CorpusLeakValidator
 from carlacontrol.CotUdpEmitter import CotUdpEmitter
@@ -29,6 +30,7 @@ __author__ = "SNC Team"
 
 __all__ = [
     "__version__",
+    "CaptureMetadataValidator",
     "CarlaControlArgumentParser",
     "CorpusLeakValidator",
     "CotUdpEmitter",

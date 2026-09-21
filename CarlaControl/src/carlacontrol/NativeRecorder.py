@@ -6,6 +6,7 @@ the .NET thread pool without crossing to Python or holding the GIL.
 """
 
 import logging
+import os
 
 import carlanet as carla
 
@@ -43,7 +44,7 @@ class NativeRecorder:
             camera: CARLA camera sensor actor to record
             args: Parsed arguments with record_dir, record_hz, affiliation, stale, fov,
                   platform_type, platform_affiliation, platform_callsign, platform_uid,
-                  occlusion, occlusion_margin, occlusion_samples
+                  scenario, scenario_id, seed, occlusion, occlusion_margin, occlusion_samples
             run_id: Identifier grouping every capture of this run
             depth_camera: Depth camera held at the recorded camera's pose. When given (and
                   --no-occlusion was not passed) each capture also records how much of each
@@ -63,6 +64,7 @@ class NativeRecorder:
         self.platform_affiliation = args.platform_affiliation
         self.platform_callsign = args.platform_callsign
         self.platform_uid = args.platform_uid
+        self.scenario_id = self.resolve_scenario_id(args)
 
         # Check if CarlaNet.Recording assembly is available
         self.available = bool(getattr(carla, "_CARLANET_RECORDING_AVAILABLE", False))
@@ -75,8 +77,27 @@ class NativeRecorder:
         self.logger.info(
             f"native recorder initialized: dir={self.record_dir}, hz={self.record_hz}, "
             f"available={self.available}, "
+            f"scenario={self.scenario_id or 'none'}, "
             f"occlusion={'on' if self.depth_camera is not None else 'off'}"
         )
+
+    @staticmethod
+    def resolve_scenario_id(args) -> str | None:
+        """Which scenario a capture says it belongs to.
+
+        An explicit --scenario-id wins. Failing that, a run driving a storyboard is named after that
+        storyboard file, so the sidecar says which scenario produced a still without the operator
+        having to name it twice. It reaches the sidecar and the run report and never the imagery: a
+        scenario name indexes a whole set of scenes, and an image carrying one is a handle a model
+        can learn instead of learning the scene.
+        """
+        explicit = getattr(args, "scenario_id", None)
+        if explicit:
+            return str(explicit)
+        scenario = getattr(args, "scenario", None)
+        if scenario:
+            return os.path.splitext(os.path.basename(str(scenario)))[0]
+        return None
 
     def apply_want(self) -> None:
         """Apply the want_enabled state (start or stop recording).
@@ -105,6 +126,7 @@ class NativeRecorder:
                 platform_callsign=self.platform_callsign,
                 platform_uid=self.platform_uid,
                 run_id=self.run_id,
+                scenario_id=self.scenario_id,
                 seed=self.args.seed,
                 depth_camera=self.depth_camera,
                 occlusion_margin_m=getattr(self.args, "occlusion_margin", 1.0),

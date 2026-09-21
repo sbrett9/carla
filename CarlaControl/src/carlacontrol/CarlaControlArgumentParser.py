@@ -474,6 +474,16 @@ class CarlaControlArgumentParser:
             "Positions are resolved against the road network the server has loaded, so "
             "the storyboard must have been authored against this same world.",
         )
+        scen.add_argument(
+            "--scenario-id",
+            default=None,
+            help="name of the scenario this run is executing, recorded on every capture's "
+            "Cursor-on-Target sidecar so the truth written beside a still says which scenario "
+            "produced it. Defaults to the name of the --scenario file when one is given. It is "
+            "deliberately kept out of the image metadata: a scenario name is a handle on a whole "
+            "set of scenes, so an image carrying it lets a model key on the scenario instead of "
+            "on what the scene shows.",
+        )
 
     def _add_telemetry_args(self, ap: argparse.ArgumentParser) -> None:
         """Add CoT telemetry arguments."""
