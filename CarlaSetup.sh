@@ -238,13 +238,17 @@ else
     exit 1
 fi
 
-# ── BUILD SUMO netconvert (OSM -> OpenDRIVE converter, bundled for CarlaNet) ──
+# ── BUILD THE SUMO TOOLCHAIN (OSM -> OpenDRIVE conversion, microsimulation, ───
+#    route validation and the TraCI client library) ─────────────────────────────
 # CarlaNet shells out to stock SUMO `netconvert` at runtime to convert OSM maps
-# to OpenDRIVE, replacing CARLA's old in-tree osm2odr fork. We build ONLY the
-# `netconvert` target from SUMO release v1_27_0; that target's only real
-# dependencies are Xerces-C and PROJ (FOX/GUI and GDAL are NOT needed). The apt
-# prerequisites (cmake g++ libxerces-c-dev libproj-dev; proj.db ships with
-# libproj-dev/proj-data) are installed by Util/SetupUtils/InstallPrerequisites.sh.
+# to OpenDRIVE, replacing CARLA's old in-tree osm2odr fork; `sumo` runs the traffic
+# microsimulation, `duarouter` validates authored routes, and `libtracics` is the
+# native library the C# TraCI binding loads. All four come from SUMO release
+# v1_27_0; their real dependencies are Xerces-C, PROJ and SWIG (FOX/GUI and GDAL
+# are NOT needed). The apt prerequisites (cmake g++ swig libxerces-c-dev
+# libproj-dev; proj.db ships with libproj-dev/proj-data) are installed by
+# Util/SetupUtils/InstallPrerequisites.sh, and the CI container gets them from
+# Util/Docker/Base.alma8.Dockerfile, which never runs that script.
 sumo_src=$workspace_path/Build/sumo-src
 sumo_build=$workspace_path/Build/sumo-build
 sumo_install=$workspace_path/Build/sumo-install
@@ -258,10 +262,36 @@ if [ "$clean_sumo" -eq 1 ] || [ "$clean_all" -eq 1 ]; then
     fi
 fi
 
-if [ -f "$sumo_install/bin/netconvert" ]; then
-    echo "Found SUMO netconvert at $sumo_install/bin/netconvert. Skipping SUMO build."
+# What a complete staged toolchain holds. The build runs in parallel (-j), so there is no dependable
+# "newest" output to test -- a partial failure leaves an arbitrary subset staged, and a guard keyed on
+# one member reports success for a half toolchain. Check the whole set, and name the members that are
+# missing so the reason is in the log rather than in someone's head. libtracics-sources.zip is the
+# SWIG-generated C# the CarlaNet TraCI binding is built from; it is staged because a distribution
+# recipient has no Build/sumo-src to regenerate it from.
+sumo_required_binaries="netconvert sumo duarouter libtracics.so libtracics-sources.zip"
+# A NAMED SUBSET of data/ and tools/, not the whole of either. Measured: the full copy is 89 MB to
+# deliver the 3.2 MB anything here consumes, and tools/contributed alone is 47 MB of third-party
+# contributions that would each need a row in the distribution's licence manifest. Add a directory to
+# these lists when something starts consuming it -- the omission is deliberate, not an oversight.
+sumo_required_data="typemap xsd"      # netconvert's OSM type maps; XSDs for generated files
+sumo_required_tools="traci sumolib"   # the Python modules the scenario tooling imports
+
+sumo_missing=""
+for item in $sumo_required_binaries; do
+    [ -e "$sumo_install/bin/$item" ] || sumo_missing="$sumo_missing bin/$item"
+done
+for item in $sumo_required_data; do
+    [ -d "$sumo_install/data/$item" ] || sumo_missing="$sumo_missing data/$item"
+done
+for item in $sumo_required_tools; do
+    [ -d "$sumo_install/tools/$item" ] || sumo_missing="$sumo_missing tools/$item"
+done
+
+if [ -z "$sumo_missing" ]; then
+    echo "Found the whole SUMO toolchain staged under $sumo_install. Skipping SUMO build."
 else
-    echo "Building SUMO netconvert..."
+    echo "SUMO toolchain incomplete under $sumo_install - missing:$sumo_missing"
+    echo "Building the SUMO toolchain..."
     if [ ! -d "$sumo_src" ]; then
         echo "Cloning SUMO v1_27_0..."
         git clone --depth 1 --branch v1_27_0 \
@@ -269,14 +299,28 @@ else
     fi
     # Pin the exact commit (the tag already points here; this is an explicit guard).
     git -C "$sumo_src" checkout e238ea04b7150ba23a348a285d3048919fa4830b
-    # Configure + build ONLY the netconvert target (Release).
+    # Configure + build the required targets (Release). One invocation, four targets: CMake skips
+    # objects it has already built, so this is not a full rebuild in practice. jtrrouter and
+    # polyconvert are deliberately left out -- nothing in this repository invokes either, so building
+    # them by default would lengthen every clean build for no consumer.
     cmake -B "$sumo_build" -S "$sumo_src" -DCMAKE_BUILD_TYPE=Release
-    cmake --build "$sumo_build" --target netconvert -j"$(nproc)"
-    # The SUMO build emits binaries into Build/sumo-src/bin/netconvert.
-    # Stage it (and a note about PROJ data) under Build/sumo-install for CarlaNet.
-    mkdir -p "$sumo_install/bin"
-    cp "$sumo_src/bin/netconvert" "$sumo_install/bin/netconvert"
-    echo "Staged netconvert at $sumo_install/bin/netconvert."
+    cmake --build "$sumo_build" --target netconvert sumo duarouter libtracics -j"$(nproc)"
+    # The SUMO build emits its binaries into Build/sumo-src/bin. Stage them, the named data/ and
+    # tools/ subsets and (below) the PROJ data under Build/sumo-install, so that directory is a
+    # complete SUMO_HOME rather than one netconvert can be run out of.
+    mkdir -p "$sumo_install/bin" "$sumo_install/data" "$sumo_install/tools"
+    for item in $sumo_required_binaries; do
+        cp -a "$sumo_src/bin/$item" "$sumo_install/bin/$item"
+    done
+    for item in $sumo_required_data; do
+        rm -rf "$sumo_install/data/$item"
+        cp -a "$sumo_src/data/$item" "$sumo_install/data/$item"
+    done
+    for item in $sumo_required_tools; do
+        rm -rf "$sumo_install/tools/$item"
+        cp -a "$sumo_src/tools/$item" "$sumo_install/tools/$item"
+    done
+    echo "Staged the SUMO toolchain under $sumo_install."
 fi
 # CarlaNet locates the tool via env vars (see NETCONVERT_INTEGRATION.md):
 #   CARLA_NETCONVERT -> the netconvert binary
