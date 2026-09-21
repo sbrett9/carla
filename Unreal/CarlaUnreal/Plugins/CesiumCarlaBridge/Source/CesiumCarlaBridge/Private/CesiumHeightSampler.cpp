@@ -393,29 +393,38 @@ bool UCesiumHeightSampler::ConfigureCesiumForOrigin(
 	// -5 zone is ~8.75 h / ~131 deg off, pinning the sun near the horizon so the scene looks like
 	// dusk). Derive the time zone from the origin longitude and start at local solar noon so the
 	// world is correctly lit for wherever the OSM origin is. Disable DST for a deterministic clock.
-	bool bHasSunSky = false;
+	//
+	// These are applied whether the sun is spawned here or already exists. A world package can carry
+	// its own ACesiumSunSky, and attaching to a live server or configuring the same world twice
+	// reaches one that an earlier session left at an arbitrary clock. Applying them only on spawn
+	// made a world's illumination a function of session history -- which nothing records and no
+	// consumer can reconstruct -- and left the class defaults (13:00 in a US-Eastern zone, DST on) in
+	// force on every world that shipped its own sun. The calendar date is deliberately not asserted
+	// here: it is the scenario's to declare, and a client that wants a specific sun binds the whole
+	// sun explicitly afterwards (set_solar_time / set_solar_date).
+	ACesiumSunSky* SunSky = nullptr;
 	for (TActorIterator<ACesiumSunSky> It(World); It; ++It)
 	{
-		if (IsValid(*It)) { bHasSunSky = true; break; }
+		if (IsValid(*It)) { SunSky = *It; break; }
 	}
-	bool bSpawnedSunSky = false;
-	if (!bHasSunSky)
+	const bool bSunSkyExisted = (SunSky != nullptr);
+	if (!SunSky)
 	{
 		FActorSpawnParameters SunParams;
 		SunParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		ACesiumSunSky* SunSky = World->SpawnActor<ACesiumSunSky>(SunParams);
-		if (SunSky)
-		{
-			SunSky->SolarTime = 12.0;
-			SunSky->UseDaylightSavingTime = false;
-			// Sets TimeZone = longitude / 15 and calls UpdateSun() internally.
-			SunSky->EstimateTimeZoneForLongitude(OriginLongitude);
-			bSpawnedSunSky = true;
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] failed to spawn ACesiumSunSky."));
-		}
+		SunSky = World->SpawnActor<ACesiumSunSky>(SunParams);
+	}
+	const bool bSpawnedSunSky = (SunSky != nullptr && !bSunSkyExisted);
+	if (SunSky)
+	{
+		SunSky->SolarTime = 12.0;
+		SunSky->UseDaylightSavingTime = false;
+		// Sets TimeZone = longitude / 15 and calls UpdateSun() internally.
+		SunSky->EstimateTimeZoneForLongitude(OriginLongitude);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] failed to spawn ACesiumSunSky."));
 	}
 
 	// Make the camera sensors themselves drive tile selection. Without this the tiles are chosen from
@@ -436,7 +445,7 @@ bool UCesiumHeightSampler::ConfigureCesiumForOrigin(
 		TEXT("[CesiumCarlaBridge] Configured georeference (lat=%.7f lon=%.7f h=%.3f) + %d layer tileset(s) (photoreal asset=%lld, ground asset=%lld)%s%s."),
 		OriginLatitude, OriginLongitude, OriginHeight, NumTilesets,
 		static_cast<long long>(IonAssetId), static_cast<long long>(GroundIonAssetId),
-		bSpawnedSunSky ? TEXT(" (spawned sun)") : TEXT(""),
+		bSpawnedSunSky ? TEXT(" (spawned sun)") : (bSunSkyExisted ? TEXT(" (reset existing sun)") : TEXT("")),
 		bSpawnedPublisher ? TEXT(" (sensor views published)") : TEXT(""));
 	return true;
 }
