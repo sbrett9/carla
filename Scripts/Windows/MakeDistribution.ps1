@@ -12,7 +12,10 @@
       wheels\        the carlanet + carlacontrol Python wheels (install into a venv)
       scripts\       run_SCTMV.py (the demo client; imports carlanet + carlacontrol)
       osm\           the example OpenStreetMap maps the demo can build worlds from
-      tools\sumo\    SUMO netconvert.exe + its DLLs + PROJ data (OSM -> OpenDRIVE conversion)
+      tools\sumo\    the SUMO toolchain: netconvert, sumo, duarouter, libtracics, the DLLs they
+                     import, SUMO's typemap/xsd data, its traci/sumolib modules, and PROJ data
+      licenses\      the licence text of every third-party component in the bundle
+      MANIFEST.md    what is in here, where it came from and under what terms (generated)
       setup-venv.ps1 / run-server.ps1 / run-sctmv.ps1 / README.md
 
     Run AFTER the build + cook have produced the artifacts:
@@ -23,10 +26,11 @@
     or pass -Build to run those steps first:
       .\Scripts\Windows\MakeDistribution.ps1 -Build -Config Development
 
-    Unlike the Linux SUMO bundling (which walks ldd), Windows SUMO ships netconvert.exe with its
-    DLLs already beside it in Build\sumo-install\bin, so this just copies that folder + the PROJ
-    data folder. The assembled Build\Dist\<name>\ folder is runnable in place; the .zip is only for
-    shipping to another machine -- pass -SkipArchive to skip it during local test iterations.
+    The SUMO libraries are an explicit list read from what the binaries import, the Windows peer of
+    the Linux script's ldd walk: the build directory holds release and debug variants of every
+    library in the SUMOLibraries bundle, and shipping the lot means a licence obligation for each.
+    The assembled Build\Dist\<name>\ folder is runnable in place; the .zip is only for shipping to
+    another machine -- pass -SkipArchive to skip it during local test iterations.
 
 .PARAMETER Config
     Build configuration: Development (default), Shipping, or Debug. Selects the cooked package and
@@ -133,6 +137,71 @@ if ($Config -notin @('Development', 'Shipping', 'Debug')) {
 function Write-Info { param([Parameter(ValueFromPipeline)][string]$Message) Write-Host $Message -ForegroundColor Green }
 function Write-Fail { param([Parameter(ValueFromPipeline)][string]$Message) Write-Host $Message -ForegroundColor Red }
 
+# ── What a binary imports, read from its own PE import table ─────────────────────────────────
+# The Linux peer walks ldd to bundle exactly the libraries its binaries load; this is the Windows
+# equivalent, and it is deliberately not dumpbin: dumpbin needs a Visual Studio developer
+# environment, which this script does not have unless it was invoked with -Build. Reading the header
+# directly needs nothing but the file. Returns the imported module names, or an empty list for
+# anything that is not a PE image.
+function Get-ImportedDllName {
+    param([Parameter(Mandatory)][string]$Path)
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    if ($bytes.Length -lt 64 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { return @() }     # "MZ"
+    $peOffset = [BitConverter]::ToInt32($bytes, 0x3C)
+    if ($peOffset -le 0 -or $peOffset + 24 -ge $bytes.Length) { return @() }
+    if ([BitConverter]::ToUInt32($bytes, $peOffset) -ne 0x00004550) { return @() }             # "PE\0\0"
+
+    $coff               = $peOffset + 4
+    $sectionCount       = [BitConverter]::ToUInt16($bytes, $coff + 2)
+    $optionalHeaderSize = [BitConverter]::ToUInt16($bytes, $coff + 16)
+    $optional           = $coff + 20
+    # The data directories follow the optional header's fixed part: 96 bytes for PE32, 112 for PE32+.
+    $magic            = [BitConverter]::ToUInt16($bytes, $optional)
+    $dataDirectories  = $optional + $(if ($magic -eq 0x20B) { 112 } else { 96 })
+    $importRva        = [BitConverter]::ToUInt32($bytes, $dataDirectories + 8)   # directory 1: imports
+    if ($importRva -eq 0) { return @() }
+
+    $sections = @()
+    $sectionTable = $optional + $optionalHeaderSize
+    for ($i = 0; $i -lt $sectionCount; $i++) {
+        $entry = $sectionTable + ($i * 40)
+        $sections += [pscustomobject]@{
+            VirtualAddress = [BitConverter]::ToUInt32($bytes, $entry + 12)
+            VirtualSize    = [BitConverter]::ToUInt32($bytes, $entry + 8)
+            RawSize        = [BitConverter]::ToUInt32($bytes, $entry + 16)
+            RawPointer     = [BitConverter]::ToUInt32($bytes, $entry + 20)
+        }
+    }
+    # An address in the loaded image maps back to a file offset through the section that contains it.
+    $toFileOffset = {
+        param([uint32]$Rva)
+        foreach ($s in $sections) {
+            $span = [Math]::Max($s.VirtualSize, $s.RawSize)
+            if ($Rva -ge $s.VirtualAddress -and $Rva -lt $s.VirtualAddress + $span) {
+                return [int]($Rva - $s.VirtualAddress + $s.RawPointer)
+            }
+        }
+        return -1
+    }
+
+    $names = @()
+    $descriptor = & $toFileOffset $importRva
+    if ($descriptor -lt 0) { return @() }
+    # Import descriptors are 20 bytes each and the table ends at an all-zero one; the module's name
+    # is at offset 12, as an address to a null-terminated string.
+    while ($descriptor + 20 -le $bytes.Length) {
+        $nameRva = [BitConverter]::ToUInt32($bytes, $descriptor + 12)
+        if ($nameRva -eq 0) { break }
+        $nameOffset = & $toFileOffset $nameRva
+        if ($nameOffset -lt 0) { break }
+        $end = $nameOffset
+        while ($end -lt $bytes.Length -and $bytes[$end] -ne 0) { $end++ }
+        $names += [System.Text.Encoding]::ASCII.GetString($bytes, $nameOffset, $end - $nameOffset)
+        $descriptor += 20
+    }
+    return $names
+}
+
 # ── Paths: CARLA repo root is two dirs up from this script (carla\Scripts\Windows), derived by
 # location so it survives a renamed/relocated checkout. ──────────────────────────────────────
 $CarlaRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
@@ -208,8 +277,35 @@ Write-Info "[dist] using cooked package: $pkgServer"
 $dist = Join-Path $BuildDir "Dist\$pkgName"
 Write-Info "[dist] staging into $dist"
 if (Test-Path $dist) { Remove-Item -Recurse -Force $dist }
-foreach ($d in 'CarlaServer', 'wheels', 'scripts', 'osm', 'tools\sumo') {
+foreach ($d in 'CarlaServer', 'wheels', 'scripts', 'osm', 'tools\sumo', 'licenses') {
     New-Item -ItemType Directory -Force -Path (Join-Path $dist $d) | Out-Null
+}
+
+# ── Component and licence inventory ──────────────────────────────────────────────────────────
+# The distribution used to ship no LICENSE, no NOTICE and no third-party listing of any kind while
+# redistributing a few dozen native libraries under nine or more licences. It now carries a
+# MANIFEST.md and a licenses\ directory, both GENERATED FROM WHAT THIS SCRIPT ACTUALLY COPIES: each
+# staging step below records its own rows, so the inventory cannot describe a bundle other than the
+# one on disk. A hand-maintained list is wrong the first time a slot changes.
+$manifestRows = [System.Collections.Generic.List[object]]::new()
+function Add-ManifestRow {
+    param([Parameter(Mandatory)][string]$Component, [Parameter(Mandatory)][string]$Provenance,
+          [Parameter(Mandatory)][string]$License, [Parameter(Mandatory)][string]$Location)
+    $manifestRows.Add([pscustomobject]@{ Component = $Component; Provenance = $Provenance
+                                         License = $License; Location = $Location })
+}
+
+$licenseDir = Join-Path $dist 'licenses'
+# Copies a licence text into licenses\ and returns the name it was filed under, or $null when the
+# source is absent -- in which case the manifest says the text is missing rather than staying quiet.
+function Copy-LicenseText {
+    param([Parameter(Mandatory)][string]$Source, [Parameter(Mandatory)][string]$Name)
+    if (-not (Test-Path $Source)) {
+        Write-Fail "[dist] WARNING: licence text not found at $Source; MANIFEST.md will record it as missing."
+        return $null
+    }
+    Copy-Item -Force $Source (Join-Path $licenseDir $Name)
+    return $Name
 }
 
 # 1. Cooked server (contents of the platform dir: CarlaUnreal.exe, Engine\, CarlaUnreal\).
@@ -240,9 +336,15 @@ function Copy-NewestWheel {
     }
     Copy-Item -Force $wheel.FullName (Join-Path $dist 'wheels')
     Write-Info "[dist] wheel: $($wheel.Name)"
+    return $wheel.Name
 }
-Copy-NewestWheel (Join-Path $CarlaRoot 'CarlaNet\python\dist')
-Copy-NewestWheel (Join-Path $CarlaRoot 'CarlaControl\dist')
+$carlanetWheel     = Copy-NewestWheel (Join-Path $CarlaRoot 'CarlaNet\python\dist')
+$carlacontrolWheel = Copy-NewestWheel (Join-Path $CarlaRoot 'CarlaControl\dist')
+Add-ManifestRow -Component 'carlanet (CARLA .NET client)' -Provenance "built from this repository, $carlanetWheel" `
+                -License 'MIT (licenses\CARLA-LICENSE.txt)' -Location 'wheels\'
+Add-ManifestRow -Component 'carlacontrol (world building, scenarios, telemetry)' `
+                -Provenance "built from this repository, $carlacontrolWheel" `
+                -License 'Sierra Nevada Corporation (licenses\CarlaControl-LICENSE.txt)' -Location 'wheels\'
 
 # 3. Demo client. run_SCTMV.py imports carlanet + carlacontrol (both installed from wheels\ above);
 #    it has no sibling-file imports -- it clips OSM through carlacontrol.OsmClipper from the wheel,
@@ -252,31 +354,219 @@ $demoClient = Join-Path $CarlaRoot 'CarlaControl\scripts\run_SCTMV.py'
 if (-not (Test-Path $demoClient)) { throw "demo client not found at $demoClient" }
 Copy-Item -Force $demoClient (Join-Path $dist 'scripts')
 
-# 4. Example OSM maps.
-$osm = Get-ChildItem (Join-Path $CarlaRoot 'Import\*.osm') -ErrorAction SilentlyContinue
-if ($osm) { Copy-Item -Force $osm.FullName (Join-Path $dist 'osm') }
-else { Write-Warning "no .osm files under Import\" }
+# 4. Example OSM maps. These are OpenStreetMap extracts, so they and every .xodr derived from them
+#    carry the Open Database License; MANIFEST.md names the files that actually shipped.
+$osm = @(Get-ChildItem (Join-Path $CarlaRoot 'Import\*.osm') -ErrorAction SilentlyContinue)
+if ($osm.Count -gt 0) {
+    Copy-Item -Force ($osm | ForEach-Object { $_.FullName }) (Join-Path $dist 'osm')
+    Add-ManifestRow -Component 'OpenStreetMap extracts' `
+                    -Provenance "openstreetmap.org contributors: $(($osm | ForEach-Object { $_.Name }) -join ', ')" `
+                    -License 'ODbL 1.0 (licenses\OpenStreetMap-ODbL-NOTICE.txt)' -Location 'osm\'
+} else { Write-Warning "no .osm files under Import\" }
 
-# 5. SUMO netconvert + its DLLs + PROJ data. The Windows SUMO build already places every runtime
-#    DLL beside netconvert.exe in Build\sumo-install\bin, so copying that folder is self-contained
-#    (Windows resolves a binary's DLLs from its own directory) -- no ldd walk like the Linux peer.
-$sumoBin = Join-Path $BuildDir 'sumo-install\bin'
-$nc      = Join-Path $sumoBin 'netconvert.exe'
+# 5. The SUMO toolchain: the binaries, the runtime DLLs they actually import, the SWIG-generated C#
+#    the CarlaNet TraCI binding is built from, the named data/ and tools/ subsets, and PROJ's data.
+$sumoInstall = Join-Path $BuildDir 'sumo-install'
+$sumoBin     = Join-Path $sumoInstall 'bin'
+$sumoDest    = Join-Path $dist 'tools\sumo'
+$sumoExecutables = @('netconvert.exe', 'sumo.exe', 'duarouter.exe')
+$sumoNativeStaged = @()   # the DLLs actually copied; the licence inventory covers exactly these
+$sumoVersion = 'unknown'
+$nc = Join-Path $sumoBin 'netconvert.exe'
 if (Test-Path $nc) {
-    Copy-Item -Recurse -Force -Path (Join-Path $sumoBin '*') -Destination (Join-Path $dist 'tools\sumo')
-    $projSrc = Join-Path $BuildDir 'sumo-install\share\proj'
+    foreach ($binary in ($sumoExecutables + @('libtracics.dll', 'libtracics-sources.zip'))) {
+        $src = Join-Path $sumoBin $binary
+        if (Test-Path $src) { Copy-Item -Force $src $sumoDest }
+        else { Write-Warning "$binary is missing from $sumoBin (run CarlaSetup.ps1 to build the whole toolchain)" }
+    }
+
+    # Runtime DLLs: an explicit list derived from what the binaries import, not a bin\*.dll glob.
+    # The glob shipped every DLL the SUMOLibraries bundle left in the build directory -- release and
+    # debug variants of the same library, and libraries nothing here loads -- each of which would
+    # need a row in the licence inventory below whether or not anything used it.
+    # The imports are read straight out of the PE header rather than through dumpbin, so this works
+    # without a Visual Studio developer environment (the cook does not activate one). Measured on the
+    # pinned toolchain: none of these binaries has a delay-load import directory, so the plain import
+    # table is the whole dependency set. Anything not sitting in sumo-install\bin is a system library
+    # the target machine supplies, and is skipped by never being found there.
+    $needed = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $pending = [System.Collections.Generic.Queue[string]]::new()
+    foreach ($binary in ($sumoExecutables + @('libtracics.dll'))) {
+        $src = Join-Path $sumoBin $binary
+        if (Test-Path $src) { $pending.Enqueue($src) }
+    }
+    while ($pending.Count -gt 0) {
+        foreach ($imported in Get-ImportedDllName -Path $pending.Dequeue()) {
+            $candidate = Join-Path $sumoBin $imported
+            if ((Test-Path $candidate) -and $needed.Add($imported)) { $pending.Enqueue($candidate) }
+        }
+    }
+    foreach ($library in ($needed | Sort-Object)) {
+        Copy-Item -Force (Join-Path $sumoBin $library) $sumoDest
+        $sumoNativeStaged += $library
+    }
+    Write-Info "[dist] bundled $($sumoNativeStaged.Count) runtime DLLs the SUMO binaries import (of $(@(Get-ChildItem "$sumoBin\*.dll").Count) present)"
+
+    # The named data/ and tools/ subsets, so tools\sumo is a usable SUMO_HOME on the target.
+    foreach ($subset in @(@{ Kind = 'data'; Items = @('typemap', 'xsd') },
+                          @{ Kind = 'tools'; Items = @('traci', 'sumolib') })) {
+        foreach ($item in $subset.Items) {
+            $src = Join-Path $sumoInstall "$($subset.Kind)\$item"
+            if (-not (Test-Path $src)) {
+                Write-Warning "$($subset.Kind)\$item is missing from $sumoInstall (run CarlaSetup.ps1)"
+                continue
+            }
+            $dstParent = Join-Path $sumoDest $subset.Kind
+            New-Item -ItemType Directory -Force -Path $dstParent | Out-Null
+            Copy-Item -Recurse -Force $src (Join-Path $dstParent $item)
+        }
+    }
+
+    $projSrc = Join-Path $sumoInstall 'share\proj'
     if (Test-Path (Join-Path $projSrc 'proj.db')) {
-        New-Item -ItemType Directory -Force -Path (Join-Path $dist 'tools\sumo\proj') | Out-Null
-        Copy-Item -Recurse -Force -Path (Join-Path $projSrc '*') -Destination (Join-Path $dist 'tools\sumo\proj')
-        Write-Info "[dist] bundled netconvert + DLLs + PROJ data"
+        New-Item -ItemType Directory -Force -Path (Join-Path $sumoDest 'proj') | Out-Null
+        Copy-Item -Recurse -Force -Path (Join-Path $projSrc '*') -Destination (Join-Path $sumoDest 'proj')
     } else {
         Write-Warning "proj.db not found under $projSrc; OSM geo-referencing may fail on the target"
+    }
+
+    # Run each staged binary from the staged directory. Windows resolves a binary's DLLs from its own
+    # folder first, so this is a direct check that the explicit DLL list above is sufficient -- the
+    # one way the list can be wrong is by being short, and this is what would say so.
+    foreach ($binary in $sumoExecutables) {
+        $staged = Join-Path $sumoDest $binary
+        if (-not (Test-Path $staged)) { continue }
+        # Collect the whole output before reading the exit code: stopping the pipeline early (with
+        # Select-Object -First) can end it before the native command's status is recorded, which
+        # under Set-StrictMode leaves $LASTEXITCODE unset and throws on the next read.
+        $output   = @(& $staged --version 2>&1)
+        $exitCode = $LASTEXITCODE
+        $reported = if ($output.Count -gt 0) { "$($output[0])" } else { '(no output)' }
+        if ($exitCode -ne 0) {
+            throw "$binary does not run from the staged bundle (exit $exitCode): $reported. The bundled DLL set is incomplete."
+        }
+        Write-Info "[dist] staged $binary : $reported"
+        if ($binary -eq 'netconvert.exe' -and "$reported" -match 'Eclipse SUMO \S+ v?(\d+(?:\.\d+)*)') {
+            $sumoVersion = $matches[1]
+        }
     }
 } else {
     Write-Warning "netconvert.exe not found at $nc (run CarlaSetup.ps1); OSM->OpenDRIVE unavailable"
 }
 
-# 6. Helper scripts + README for the target machine.
+# ============================================================================
+#  6. Licence texts, and the inventory rows for everything staged above.
+# ============================================================================
+# CARLA's own licence, and CarlaControl's as it is carried in the repository.
+$carlaLicense = Copy-LicenseText (Join-Path $CarlaRoot 'LICENSE') 'CARLA-LICENSE.txt'
+Copy-LicenseText (Join-Path $CarlaRoot 'CarlaControl\LICENSE') 'CarlaControl-LICENSE.txt' | Out-Null
+Add-ManifestRow -Component 'CARLA server (cooked)' -Provenance 'built from this repository; see VERSION' `
+                -License "MIT (licenses\$carlaLicense)" -Location 'CarlaServer\'
+
+# OpenStreetMap's terms are not a file in this tree, so the notice is written rather than copied; it
+# states the obligation and where the licence text lives, for the extracts and for every .xodr
+# derived from them, which are a Derivative Database under the same terms.
+@'
+OpenStreetMap data and works derived from it
+============================================
+
+The .osm extracts under osm\, and every OpenDRIVE (.xodr) road network this distribution generates
+from one, are derived from OpenStreetMap.
+
+  (c) OpenStreetMap contributors, available under the Open Database License (ODbL) v1.0.
+  Licence text: https://opendatacommons.org/licenses/odbl/1-0/
+  Attribution:  https://www.openstreetmap.org/copyright
+
+A generated road network is a Derivative Database under that licence. Anything published from it
+must carry the attribution above.
+'@ | Set-Content -Path (Join-Path $licenseDir 'OpenStreetMap-ODbL-NOTICE.txt') -Encoding UTF8
+
+if ($sumoNativeStaged.Count -gt 0 -or (Test-Path (Join-Path $sumoDest 'netconvert.exe'))) {
+    # SUMO itself: Eclipse Public License 2.0, which carries a source offer. The offer cites the
+    # commit CarlaSetup.ps1 pins rather than repeating it, so the two cannot drift apart.
+    $sumoPin = 'unrecorded'
+    $setupText = Get-Content (Join-Path $CarlaRoot 'CarlaSetup.ps1') -Raw -ErrorAction SilentlyContinue
+    if ($setupText -match "\`$sumoSrcPin\s*=\s*'([0-9a-f]{7,40})'") { $sumoPin = $matches[1] }
+    Copy-LicenseText (Join-Path $BuildDir 'sumo-src\LICENSE') 'SUMO-LICENSE.txt' | Out-Null
+    Copy-LicenseText (Join-Path $BuildDir 'sumo-src\NOTICE.md') 'SUMO-NOTICE.md' | Out-Null
+    Add-ManifestRow -Component "Eclipse SUMO $sumoVersion (netconvert, sumo, duarouter, libtracics)" `
+                    -Provenance "github.com/eclipse-sumo/sumo at $sumoPin; source available from that commit" `
+                    -License 'EPL-2.0 (licenses\SUMO-LICENSE.txt, licenses\SUMO-NOTICE.md)' -Location 'tools\sumo\'
+    Add-ManifestRow -Component 'Eclipse SUMO C# TraCI bindings (SWIG-generated source)' `
+                    -Provenance "generated by SUMO's own build at $sumoPin" `
+                    -License 'EPL-2.0 (licenses\SUMO-LICENSE.txt)' -Location 'tools\sumo\libtracics-sources.zip'
+    Add-ManifestRow -Component 'Eclipse SUMO data and Python tools (typemap, xsd, traci, sumolib)' `
+                    -Provenance "github.com/eclipse-sumo/sumo at $sumoPin" `
+                    -License 'EPL-2.0 (licenses\SUMO-LICENSE.txt)' -Location 'tools\sumo\data\, tools\sumo\tools\'
+
+    # Each staged DLL's upstream project and the licence text the pinned SUMOLibraries bundle carries
+    # for it. This maps a file name to metadata that cannot be derived from the file; WHICH rows
+    # appear is still decided by what the import walk above actually copied. A staged DLL missing
+    # from this table is reported as unattributed, so the inventory cannot quietly omit one.
+    $sumoLibs = Join-Path $BuildDir 'SUMOLibraries'
+    $apacheText = @{ From = 'xerces-c-3.3.0\LICENSE'; As = 'Apache-2.0.txt' }
+    $nativeLicenses = @{
+        'xerces-c_3_3.dll'    = @{ Component = 'Apache Xerces-C++ 3.3.0'; License = 'Apache-2.0'; Text = $apacheText }
+        'arrow.dll'           = @{ Component = 'Apache Arrow 22.0.0';     License = 'Apache-2.0'; Text = $apacheText }
+        'parquet.dll'         = @{ Component = 'Apache Parquet C++ 22.0.0'; License = 'Apache-2.0'; Text = $apacheText }
+        'thriftmd.dll'        = @{ Component = 'Apache Thrift 0.22.0';    License = 'Apache-2.0'; Text = $apacheText }
+        'proj_9.dll'          = @{ Component = 'PROJ 9.5.0';              License = 'PROJ licence (MIT-style)'; Text = @{ From = 'proj-9.5.0\LICENSE'; As = 'PROJ-LICENSE.txt' } }
+        'sqlite3.dll'         = @{ Component = 'SQLite 3.46.1';           License = 'public domain'; Text = @{ From = '3rdPartyLibs\sqlite-3.46.1\LICENSE'; As = 'SQLite-LICENSE.txt' } }
+        'tiff.dll'            = @{ Component = 'libtiff 4.7.0';           License = 'libtiff licence (BSD-style)'; Text = @{ From = '3rdPartyLibs\tiff-4.7.0\LICENSE'; As = 'libtiff-LICENSE.txt' } }
+        'libcurl.dll'         = @{ Component = 'curl 8.10.1';             License = 'curl licence (MIT-style)'; Text = @{ From = '3rdPartyLibs\curl-8.10.1\LICENSE'; As = 'curl-LICENSE.txt' } }
+        'libssh2.dll'         = @{ Component = 'libssh2 1.11.1';          License = 'BSD-3-Clause'; Text = @{ From = '3rdPartyLibs\libssh2-1.11.1\LICENSE'; As = 'libssh2-LICENSE.txt' } }
+        'libssl-3-x64.dll'    = @{ Component = 'OpenSSL 3.3.2';           License = 'Apache-2.0'; Text = @{ From = '3rdPartyLibs\openssl-3.3.2\LICENSE'; As = 'OpenSSL-LICENSE.txt' } }
+        'libcrypto-3-x64.dll' = @{ Component = 'OpenSSL 3.3.2';           License = 'Apache-2.0'; Text = @{ From = '3rdPartyLibs\openssl-3.3.2\LICENSE'; As = 'OpenSSL-LICENSE.txt' } }
+        'zlib.dll'            = @{ Component = 'zlib 1.3.1';              License = 'Zlib'; Text = @{ From = '3rdPartyLibs\zlib-1.3.1\LICENSE'; As = 'zlib-LICENSE.txt' } }
+        'bz2-1.dll'           = @{ Component = 'bzip2 1.1.0';             License = 'bzip2 licence (BSD-style)'; Text = @{ From = '3rdPartyLibs\bzip2-1.1.0\LICENSE'; As = 'bzip2-LICENSE.txt' } }
+        'libpng16.dll'        = @{ Component = 'libpng 1.6.44';           License = 'PNG Reference Library License'; Text = @{ From = '3rdPartyLibs\libpng-1.6.44\LICENSE'; As = 'libpng-LICENSE.txt' } }
+        'freetype.dll'        = @{ Component = 'FreeType 2.13.3';         License = 'FreeType licence or GPL-2.0'; Text = @{ From = '3rdPartyLibs\freetype-2.13.3\LICENSE'; As = 'FreeType-LICENSE.txt' } }
+        # GNU components: the bundle carries the text shown, which is the one that ships.
+        'fox-16.dll'          = @{ Component = 'FOX toolkit 1.6.59 (SUMO GUI toolkit; sumo and duarouter import it, netconvert does not)'
+                                   License = 'LGPL-2.1 with the addendum the project carries'
+                                   Text = @{ From = 'fox-1.6.59\LICENSE'; As = 'FOX-LICENSE.txt' }
+                                   AlsoText = @{ From = 'fox-1.6.59\LICENSE_ADDENDUM'; As = 'FOX-LICENSE_ADDENDUM.txt' } }
+        'iconv-2.dll'         = @{ Component = 'GNU libiconv 1.17';       License = 'the bundle carries a GPL-3.0 text; the libiconv runtime is LGPL-2.1-or-later'; Text = @{ From = '3rdPartyLibs\libiconv-1.17\LICENSE'; As = 'libiconv-LICENSE.txt' } }
+        'intl-8.dll'          = @{ Component = 'GNU gettext runtime 0.21'; License = 'the bundle carries a GPL-3.0 text; the libintl runtime is LGPL-2.1-or-later'; Text = @{ From = 'gettext-0.21\LICENSE'; As = 'gettext-LICENSE.txt' } }
+        # Microsoft's redistributables carry no text in the bundle; their terms come with Visual Studio.
+        'MSVCP140.dll'        = @{ Component = 'Microsoft Visual C++ runtime'; License = 'Microsoft Visual Studio redistributable terms'; Text = $null }
+        'VCRUNTIME140.dll'    = @{ Component = 'Microsoft Visual C++ runtime'; License = 'Microsoft Visual Studio redistributable terms'; Text = $null }
+        'VCRUNTIME140_1.dll'  = @{ Component = 'Microsoft Visual C++ runtime'; License = 'Microsoft Visual Studio redistributable terms'; Text = $null }
+    }
+    $attributed = @{}
+    foreach ($library in $sumoNativeStaged) {
+        $entry = $nativeLicenses[$library]
+        if (-not $entry) {
+            Write-Fail "[dist] WARNING: $library has no licence row; MANIFEST.md will list it as unattributed."
+            Add-ManifestRow -Component "$library (UNATTRIBUTED - add it to the licence table)" `
+                            -Provenance 'DLR-TS/SUMOLibraries bundle' -License 'unknown' -Location 'tools\sumo\'
+            continue
+        }
+        $filed = 'text not carried'
+        $texts = @($entry['Text'])
+        if ($entry.ContainsKey('AlsoText')) { $texts += $entry['AlsoText'] }
+        foreach ($text in $texts) {
+            if (-not $text) { continue }
+            $copied = Copy-LicenseText (Join-Path $sumoLibs $text.From) $text.As
+            if ($copied) { $filed = if ($filed -eq 'text not carried') { "licenses\$copied" } else { "$filed, licenses\$copied" } }
+        }
+        # One row per upstream component, listing every file that came from it.
+        if ($attributed.ContainsKey($entry.Component)) { $attributed[$entry.Component].Files += $library }
+        else { $attributed[$entry.Component] = @{ Files = @($library); License = $entry.License; Filed = $filed } }
+    }
+    foreach ($component in ($attributed.Keys | Sort-Object)) {
+        $row = $attributed[$component]
+        Add-ManifestRow -Component $component -Provenance "DLR-TS/SUMOLibraries $($row.Files -join ', ')" `
+                        -License "$($row.License) ($($row.Filed))" -Location 'tools\sumo\'
+    }
+
+    if (Test-Path (Join-Path $sumoDest 'proj')) {
+        Add-ManifestRow -Component 'PROJ coordinate database' -Provenance 'PROJ 9.5.0 data files' `
+                        -License 'PROJ licence (licenses\PROJ-LICENSE.txt)' -Location 'tools\sumo\proj\'
+    }
+}
+
+# 7. Helper scripts + README for the target machine.
 $setupVenv = @'
 #Requires -Version 5.1
 # Create a Python venv and install the carlanet + carlacontrol wheels + the demo's Python deps.
@@ -339,11 +629,45 @@ client packages, the run_SCTMV demo, example OSM maps, and SUMO netconvert.
 ``````
 ``run-sctmv.ps1`` points carlanet at the bundled ``tools\sumo\netconvert.exe`` and sets ``SUMO_HOME``
 to ``tools\sumo``; pass ``--help`` to run-sctmv for options.
+
+## What is in here, and under what terms
+``MANIFEST.md`` lists every component this bundle carries, where it came from and its licence, with
+the licence texts themselves under ``licenses\``. Both are generated from what the packaging script
+actually copied, so they describe this bundle rather than an intended one.
 "@
 Set-Content -Path (Join-Path $dist 'README.md') -Value $readme -Encoding UTF8
 
 # ============================================================================
-#  7. Archive (.zip). Prefer 7-Zip (fast, multithreaded), else Windows' bundled
+#  8. MANIFEST.md -- the inventory the steps above built up, rendered last so it
+#     covers everything that was actually staged.
+# ============================================================================
+$versionSummary = if (Test-Path (Join-Path $dist 'VERSION')) {
+    ((Get-Content (Join-Path $dist 'VERSION')) -join '; ')
+} else { 'no VERSION file was staged' }
+
+$manifest = [System.Text.StringBuilder]::new()
+[void]$manifest.AppendLine("# $pkgName - component and licence manifest")
+[void]$manifest.AppendLine('')
+[void]$manifest.AppendLine("Generated by ``Scripts\Windows\MakeDistribution.ps1`` on $(Get-Date -Format 'yyyy-MM-dd') from")
+[void]$manifest.AppendLine('what it copied into this bundle. It is not hand-maintained, and it is an inventory for a')
+[void]$manifest.AppendLine('licensing review rather than a legal determination.')
+[void]$manifest.AppendLine('')
+[void]$manifest.AppendLine("Build: $versionSummary")
+[void]$manifest.AppendLine('')
+[void]$manifest.AppendLine('| Component | Provenance | Licence | Location |')
+[void]$manifest.AppendLine('|---|---|---|---|')
+foreach ($row in $manifestRows) {
+    [void]$manifest.AppendLine("| $($row.Component) | $($row.Provenance) | $($row.License) | ``$($row.Location)`` |")
+}
+[void]$manifest.AppendLine('')
+[void]$manifest.AppendLine('Licence texts are under `licenses\`. Eclipse SUMO is distributed under the EPL-2.0, which')
+[void]$manifest.AppendLine('carries a source offer: the exact commit every SUMO binary here was built from is named in')
+[void]$manifest.AppendLine('its row above, and its source is available from that commit at github.com/eclipse-sumo/sumo.')
+Set-Content -Path (Join-Path $dist 'MANIFEST.md') -Value $manifest.ToString() -Encoding UTF8
+Write-Info "[dist] MANIFEST.md: $($manifestRows.Count) components, $(@(Get-ChildItem "$licenseDir\*").Count) licence texts"
+
+# ============================================================================
+#  9. Archive (.zip). Prefer 7-Zip (fast, multithreaded), else Windows' bundled
 #     tar.exe (libarchive, makes a .zip from the extension), else Compress-Archive.
 # ============================================================================
 if ($SkipArchive) {
