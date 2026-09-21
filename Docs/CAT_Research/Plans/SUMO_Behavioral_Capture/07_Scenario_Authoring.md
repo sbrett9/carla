@@ -2027,7 +2027,7 @@ doc 11 produces it.
 
 ### 8.4 Where it lives
 
-Two locations, one source.
+Two locations, one source. The move into the repository is authorised and is a **stage A item**, carried out together with the Unreal agent skills, with the workspace copies reduced to references (`13` §13.3).
 
 - **In the repository** — which is where it must move to, and **not** where it is now. *Measured
   2026-09-18:* the skill lives at `.agents/skills/sumo-traffic-scenarios/` under the **workspace

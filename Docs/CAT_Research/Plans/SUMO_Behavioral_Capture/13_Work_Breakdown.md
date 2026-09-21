@@ -13,6 +13,7 @@ are on the critical path.
 | Date | Change |
 |---|---|
 | 2026-09-18 | Traffic-light synchronisation and its signal-id dependency dropped; fixture no longer needs a signalised junction. |
+| 2026-09-21 | One distribution containing the proprietary tools; no packaging mode. Authoring skill promoted to stage A. |
 
 ---
 
@@ -69,6 +70,7 @@ prevents producing one.
 | ⚑ | **Carry OSM relations through the clip.** Measured: 42 relations, 22 of them turn restrictions, and **0 survive**. [Issue #12](https://github.com/sbrett9/carla/issues/12) | Restriction relations referencing surviving ways are present in the clipped OSM, and netconvert stops reporting them as ignored |
 | ⚑ | **Persist the world's `.net.xml` from the same netconvert invocation as the `.xodr`**, and refuse any other. Measured: 321 vs 317 edges and one lane of 352.19 m vs 2.60 m from the *identical* OSM, while `convBoundary` matches exactly | A scenario cannot be built against a network the world did not produce; the attempt names both fingerprints |
 | ⚑ | **Pin which SUMO runs.** `SUMO_HOME` is an independent 1.27.1 and `SumoInstallation.py:36` prefers it over the pinned 1.27.0 | The resolved path and version are logged every run; a mismatch against the world's converter refuses |
+| ⚑ | **Move the authoring skill into the repository**, with the Unreal agent skills, and reduce the workspace copies to references (§13.3, `D9.10`) | The skill has a commit, a version and one source; `07` §8.4's assumption becomes true; it is bundled in the distribution |
 
 Under SUMO drive, traffic routed through a banned turn looks *worse* than today's and is easily
 misattributed to the bridge. A scenario authored against edge ids from a graph the world does not
@@ -268,7 +270,7 @@ New `CarlaNet.CoSim` in C#, orchestrated from Python; one TraCI connection owned
 
 ## 13. Decisions taken, and what is still open
 
-Settled 2026-09-18. A settled row is binding on every section; where a section already reflects it,
+Settled 2026-09-18 and 2026-09-21. A settled row is binding on every section; where a section already reflects it,
 that is noted rather than restated.
 
 | # | Question | Outcome |
@@ -281,8 +283,8 @@ that is noted rather than restated.
 | 6 | **How an accidental positive in the ambient population is handled** | **Settled — a cohort may never be `nominal`, and no audit is built.** See §13.1 |
 | 7 | **What the annotation vocabulary contains at v1** | **Settled — fix the term list against the model's requirements before the first corpus.** Terms are cheap to add and expensive to rename once a corpus exists |
 | 8 | **One `sumo` process per capture session, or one shared across several windows** | **Settled — one SUMO process per window.** Each window starts a fresh process, fast-forwards from `t = 0`, captures, and exits. A window is then reproducible from its seed and its bounds alone, a crash costs one window rather than a sequence, and there is no long-lived state to reason about. The cost is paying the fast-forward per window, which the measurement bounds: the sizing scenario's entire seven-day span fast-forwards in **140.41 s**, and a typical window far less |
-| 9 | **The packaging scripts disagree across platforms** | **Settled — Windows and Linux are at parity, for scripts and for deliverables.** The two platforms produce the same package from the same inputs; a difference between them is a defect, never a policy. The `carlacontrol` wheel therefore ships on both, as Linux already does. If an internal-versus-external distinction is ever wanted, it is an **explicit, identical flag on both platforms** — never an accident of which machine ran the build (§13.2) |
-| 10 | **Where the authoring skill lives.** It has no reproducible source location — the workspace root is not a git repository | **Settled — move it into the repository and ship it from there**, together with the Unreal agent skills, with the workspace copies reduced to references. Done when the work starts |
+| 9 | **The packaging scripts disagree across platforms** | **Settled — Windows and Linux are at parity, for scripts and for deliverables**, and **there is only one distribution, which contains the proprietary tools.** The two platforms produce the same package from the same inputs; a difference between them is a defect, never a policy. The `carlacontrol` wheel ships on both. No internal/external packaging mode is built — `D9.7` is closed as will-not-build, and containment becomes a licence, access and manifest question instead of a build flag (§13.2) |
+| 10 | **Where the authoring skill lives.** It has no reproducible source location — the workspace root is not a git repository | **Settled — move it into the repository and ship it from there**, together with the Unreal agent skills, with the workspace copies reduced to references. It is a **stage A item**, since `07` §8.4 already assumes it (§13.3) |
 
 ### 13.1 Ambient traffic, the idle cull, and who owns a label
 
@@ -323,7 +325,7 @@ render state, the world truth track — computed identically for every vehicle. 
 distinguish blocked flow traffic from parked annotated traffic, that is theirs to declare and theirs
 to bear.
 
-### 13.2 Internal versus external distributions — what is being asked
+### 13.2 One distribution, containing the proprietary tools
 
 The packaging scripts bundle the server and the Python client tools. One of those tools,
 `carlacontrol`, is proprietary. **The Linux script bundles it and the Windows script does not**, and
@@ -336,10 +338,32 @@ difference between them is a defect to fix rather than a policy to preserve. Tha
 immediate case: the `carlacontrol` wheel ships on both, because Linux already does it and the Windows
 repair brings it into line.
 
-It does not, by itself, decide whether a distribution *without* the proprietary tools should exist.
-That question stays open on its own terms, and if it is ever answered yes, the answer is a flag the
-operator sets — applied identically on both platforms, named in the package, and never inherited from
-which operating system happened to run the build.
+**No distribution without the proprietary tools exists.** There is one distribution, it contains the
+tools, and both platforms produce it. No internal/external packaging mode is built: there is no
+external distribution to gate, and an unused mode is a switch someone eventually flips by accident.
+
+What this decides, and what it therefore obliges:
+
+| | |
+|---|---|
+| **One distribution** | No `--internal` / `--external` flag in either script (`D9.7`) |
+| **The tools are contained in it** | `carlacontrol` ships on both platforms, and so does every proprietary artifact the capture path needs — the launcher, the authoring skill (§13.3), and the SUMO scenario tooling |
+| **Containment is a licence and access question, not a packaging one** | The distribution carries proprietary code, so where it may go is governed by who may receive it. That belongs in the package's own licence statement and in the repository it is published to, not in a build flag |
+| **The package says what it contains** | A manifest naming every proprietary component and its licence, so a recipient can tell without unpacking. This replaces the flag as the mechanism that keeps the boundary visible |
+
+The proprietary tools are part of the shipped system, so their defects are this plan's to fix rather
+than to hand off — `D9.9`'s non-deterministic OSM-clip node ordering and `D9.10`'s missing skill home
+included.
+
+### 13.3 The authoring skill moves into the repository
+
+The skill bundle at `.agents/skills/sumo-traffic-scenarios/` sits under the workspace root, which is
+not a git repository — so it has no version, no history and no reproducible source (`D9.10`). It moves into `carla/`, together with the Unreal agent skills, and ships from there
+under §13.2. The workspace copies are reduced to references so there is one source and not two that
+drift.
+
+This is a **stage A item**, not a later tidy-up: `07` §8.4 already assumes the move happened, and
+every scenario authored before it lands is authored against an unversioned tool.
 
 ## 14. Risks worth naming
 

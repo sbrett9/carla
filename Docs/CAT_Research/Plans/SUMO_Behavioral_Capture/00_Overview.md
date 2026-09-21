@@ -10,6 +10,7 @@ from inferences, and inferences labelled.
 | 2 · 2026-09-18 | Simulated time of day bound to playback; adds time, illumination and the operator surface. |
 | 3 · 2026-09-18 | Scope narrowed: the pipeline labels and never scores. |
 | 4 · 2026-09-18 | Live exercise made primary and generic past our boundary; cyclic generation driven externally. |
+| 5 · 2026-09-21 | One distribution containing the proprietary tools; authoring skill moves into the repository. |
 
 **Scope:** Realising, as one system, the supervision model of
 [`Findings/20`](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) and the SUMO
@@ -212,6 +213,8 @@ physically impossible constant sun and nothing flags it.
 | [11 — Time and illumination](11_Time_And_Illumination.md) | The epoch, the solar policy, the night verdict, the lamp mapping |
 | [12 — Operator control surface](12_Operator_Control_Surface.md) | How a run is configured, validated, launched and recorded |
 | [13 — Work breakdown](13_Work_Breakdown.md) | What to build, in what order, and what must be measured before committing |
+| [Execution charter](_EXECUTION_CHARTER.md) | **Read this first if you are building it.** The roster, who owns what, the standing engineering rules, the definition of done, and what to escalate |
 
 Decisions are numbered by section (`D1.x` … `D12.x`) and unique across the folder, so they can be
-cited from outside it. `_TEAM_BRIEF.md` records the constraints every section was written under.
+cited from outside it. `_TEAM_BRIEF.md` records the constraints every section was written under;
+`_EXECUTION_CHARTER.md` records the constraints it is built under.

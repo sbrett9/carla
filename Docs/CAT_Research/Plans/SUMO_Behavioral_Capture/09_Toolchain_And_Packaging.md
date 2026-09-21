@@ -33,6 +33,14 @@ specifies only their packaging shape.
 | 2026-09-17 | Initial: SUMO build-target guard, `SUMO_HOME` collision, C# binding design, licensing, distribution gaps. |
 | 2026-09-18 | Added time-of-day and operator-control-surface packaging scope (§2.4, §4.4, §5.6); corrected three drifted citations. |
 
+
+**Change history**
+
+| Revision | Change |
+|---|---|
+| 1 · 2026-09-18 | First draft. |
+| 2 · 2026-09-21 | One distribution containing the proprietary tools; no packaging mode; skill moves into the repo. |
+
 ---
 
 ## 1. What is actually on disk today, against doc 23's table
@@ -589,7 +597,7 @@ dependencies = [
 and nothing else — no `tzdata`. [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md) `D11.3`
 formalises a `utc_offset_policy` with a `zone_database` option that resolves the offset from the IANA
 zone at each instant; whether that makes `tzdata` a hard requirement, or (as `07` frames it) an optional
-cross-check against a normative numeric offset, is `07`'s and `11`'s call to settle — see Open question 5
+cross-check against a normative numeric offset, is `07`'s and `11`'s call to settle — see Open question 4
 — not this document's. **What packaging needs to do is the same regardless of that answer.**
 
 **The packaging consequence is small and rides an existing mechanism, not a new one.** `tzdata` is a
@@ -1041,37 +1049,30 @@ this document's scope to verify (§2.4).
 | D9.4 | `libtraci` (out-of-process) is the binding boundary for the C# path, per doc 23 §6.3, reaffirmed here on licensing grounds independently of the architecture ones (§6). `libsumo` is rejected for both reasons together. |
 | D9.5 | A new, dependency-free `CarlaNet/src/CarlaNet.Sumo` project holds only the generated bindings and native-load glue, built from `libtracics-sources.zip` staged alongside the toolchain. Any co-simulation bridge (`03`'s `CarlaNet.CoSim` or equivalent) depends on it; it depends on nothing CARLA-specific. |
 | D9.6 | `SUMO_HOME` precedence in `SumoInstallation.locate` is **not** reordered — `SUMO_HOME` continues to win, matching raw `traci`'s own convention. Instead: resolution is always logged (home + version), a `.version` property is added, and a version-mismatch between the netconvert that built a world and the SUMO installation resolved to author/run a scenario against it becomes a **hard-refusing** condition with an explicit override flag. The consumer-side refuse-vs-warn UX is `07_Scenario_Authoring.md`'s call to finalize against `SumoScenarioBuilder`. Corroborated independently by `07` §9.4 (§3.5); its interaction with `12`'s proposed site profile is answered generically in §3.5. |
-| D9.7 | Both distribution scripts must gain an explicit internal/external packaging mode. Today, fixing the broken Windows demo-client reference (§5.2) the obvious way makes both platforms bundle the SNC-proprietary `carlacontrol` wheel uniformly — correct for the one distribution channel that exists today (an internal Artifactory repo) and wrong the moment any distribution is meant to leave that boundary. No such mode exists in either script today; this document does not choose its shape, only that it must exist before an external distribution is ever produced from this pipeline (see Open Questions). `12`'s new capture launcher makes bundling `carlacontrol` unavoidable on both platforms regardless of whether §5.2 is fixed on its own (§5.6). |
+| D9.7 | **There is one distribution and it contains the proprietary tools**, and both platforms produce it (`13` §13.2). Neither script gains an internal/external packaging mode: there is no external distribution for one to gate, and an unused mode is a switch that eventually gets flipped by accident. The `carlacontrol` wheel therefore ships on both platforms — which `12`'s capture launcher makes unavoidable regardless of §5.2 (§5.6). Two obligations follow. The package carries a **manifest naming every proprietary component and its licence**, so a recipient can tell what they hold without unpacking it. And where the package may go is governed by access to the channel it is published to — doc 22 §14's licensing exclusion is satisfied by the channel, not by the tooling. |
 | D9.8 | `carla-base:alma8`'s pull in `build-carla-ue5.yml` is by tag with no digest pin; adding `swig` (D9.1's prerequisite) means rebuilding and re-pushing that tag. Needing the rebuild is not a cost. Whether the workflow should move to a digest pin so future base-image changes can't silently ride into a build is an open question (below), independent of this rebuild. |
-| D9.9 | `CarlaControl/src/carlacontrol/OsmClipper.py:154,219`'s non-deterministic `set`-ordered node emission is a real reproducibility hazard for anything that hashes its output, but it is proprietary code outside this document's scope to change. Recorded here as a handoff: the fix is `sorted(used_orig, key=int)` (or equivalent) at the emission site; until it lands, no reproducibility or acceptance check in this plan hashes OSM-clip-derived file bytes (§7.3). |
-| D9.10 | The authoring skill (`.agents/skills/sumo-traffic-scenarios/SKILL.md`) has no reproducible, version-controlled source location today (it sits outside any git repository). It cannot be bundled into a distribution until it is given one inside `carla/`. `07_Scenario_Authoring.md`'s decision is where the skill lives; that it currently has none is this document's finding. `07` §8.4 assumes the move already happened; measurement says it has not (§5.5). |
+| D9.9 | `CarlaControl/src/carlacontrol/OsmClipper.py:154,219`'s non-deterministic `set`-ordered node emission is a real reproducibility hazard for anything that hashes its output, and the proprietary tools are part of the shipped system (`D9.7`), so it is this plan's defect to fix. The fix is: the fix is `sorted(used_orig, key=int)` (or equivalent) at the emission site; until it lands, no reproducibility or acceptance check in this plan hashes OSM-clip-derived file bytes (§7.3). |
+| D9.10 | The authoring skill (`.agents/skills/sumo-traffic-scenarios/SKILL.md`) sits outside any git repository, so it has no version, no history and no reproducible source, and cannot be bundled into a distribution (§5.5). It **moves into `carla/`** together with the Unreal agent skills, with the workspace copies reduced to references so there is one source rather than two that drift, and ships in the single distribution. This is a **stage A item** (`13` §13.3): `07` §8.4 depends on the move, and a scenario authored before it lands is authored against an unversioned tool. |
 | D9.11 | **The operator control surface's distribution footprint is packaged generically only where `12` had not yet fixed a shape; where it has, this document packages that shape as fact.** The new capture launcher (`run-capture.ps1`/`.sh`) coexists beside `run-sctmv.ps1`/`.sh` rather than replacing it; the run-configuration schema and site-profile template stage alongside the vehicle catalogue and vocabulary (§5.5); the broken-launcher repair (§5.2) and the new launcher's introduction land as one change, not two, because they touch the same lines of the same scripts (§5.6); and `D9.7`'s internal/external packaging-mode question stops being hypothetical because `12`'s launcher makes bundling `carlacontrol` unavoidable on both platforms. |
-| D9.12 | **`tzdata` is added to `CarlaControl/pyproject.toml`'s dependencies once `07`/`11` settle whether IANA zone resolution is required or merely an optional cross-check (§4.4, Open question 5).** It needs no new packaging mechanism — it resolves through the same `pip install` step that already installs `numpy` and `pygame` for every distribution recipient — and it introduces no SUMO dependency, no native code, and no new distribution slot. |
+| D9.12 | **`tzdata` is added to `CarlaControl/pyproject.toml`'s dependencies once `07`/`11` settle whether IANA zone resolution is required or merely an optional cross-check (§4.4, Open question 4).** It needs no new packaging mechanism — it resolves through the same `pip install` step that already installs `numpy` and `pygame` for every distribution recipient — and it introduces no SUMO dependency, no native code, and no new distribution slot. |
 
 ## Open questions
 
-1. **Is there ever an external distribution channel for this program?** If the answer is "no, everything
-   this pipeline produces is internal," `D9.7`'s mode can default to "bundle everything" and the
-   licensing exclusion in doc 22 §14 is satisfied by the channel itself rather than by the tooling. If
-   the answer is "yes, eventually," the mode needs to exist before that day, not on it. This is a
-   product/distribution-strategy question, not a toolchain one — recommend deciding it explicitly rather
-   than by default. `D9.11` makes this more pressing, since the proprietary surface area it would gate
-   has grown.
-2. **Does the version-mismatch check (§3.3, `D9.6`) default to refuse or default to warn?** Recommended:
+1. **Does the version-mismatch check (§3.3, `D9.6`) default to refuse or default to warn?** Recommended:
    refuse by default with an explicit override, on the grounds that a silently-divergent converter is
    worse than a blocked run — but this trades developer friction against correctness, and
    `07_Scenario_Authoring.md` is closer to how often a legitimate mismatch (e.g., deliberately testing
    forward-compatibility with a newer SUMO) would occur in practice.
-3. **Should `carla-base:alma8` move to a digest-pinned reference in `build-carla-ue5.yml` (`D9.8`)?**
+2. **Should `carla-base:alma8` move to a digest-pinned reference in `build-carla-ue5.yml` (`D9.8`)?**
    Independent of this plan, but this plan is the first thing found that needs a base-image change and
    therefore the first thing that would notice if that pin is missing.
-4. **Where does `libtracics-sources.zip` (or its unzipped contents) live for a build that has never run
+3. **Where does `libtracics-sources.zip` (or its unzipped contents) live for a build that has never run
    `CarlaSetup.ps1`/`.sh`** — e.g., a from-scratch CI run before §2's staging step has ever executed?
    Answered functionally in §4.1 (it is a build-order dependency: `CarlaNet.Sumo` cannot build before the
    SUMO toolchain step has run once), but whether `CarlaNet.sln`'s build order should encode that
    dependency explicitly (an MSBuild `Exec` that shells out to `CarlaSetup`) or leave it as documented
    operator sequencing is a call for whoever wires `CarlaNet.CoSim` into the existing build (`03`/`05`).
-5. **Is `tzdata` a required dependency or an optional one (§4.4)?** `07_Scenario_Authoring.md` §2.8
+4. **Is `tzdata` a required dependency or an optional one (§4.4)?** `07_Scenario_Authoring.md` §2.8
    frames the IANA zone name as an optional cross-check against a normative numeric offset;
    `11_Time_And_Illumination.md` `D11.3` formalises a `utc_offset_policy` value (`zone_database`) whose
    whole point is resolving the offset from the zone at each instant, which reads as a harder requirement
