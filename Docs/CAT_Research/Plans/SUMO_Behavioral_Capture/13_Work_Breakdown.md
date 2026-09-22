@@ -19,6 +19,7 @@ are on the critical path.
 | 2026-09-22 | Two-wheelers are outside the vehicle mapping contract; stage E states the boundary. |
 | 2026-09-22 | §13.4 states the two-script setup; stage D drops the completed retirement item. |
 | 2026-09-22 | The Unreal skills are vendored under `skills/third-party/` and excluded from the distribution. |
+| 2026-09-22 | Stage I: the road layer is suppressed alongside the signal layer, the session owns both, and the capture camera is aimed and its tiles pre-rolled before the first frame. |
 
 ---
 
@@ -269,7 +270,9 @@ New `CarlaNet.CoSim` in C#, orchestrated from Python; one TraCI connection owned
 | | **Civil-to-solar conversion**, and the date rollover the engine never performs | The team recommends an engine time-zone setter over client arithmetic; see the decisions below |
 | | Windowed capture via SUMO fast-forward from t = 0 | Measured: the whole week is 140.41 s at 4,307×. `--begin` rejected — cold start 87.5% under-populated; state save/load does not compose with unrouted trips and flows |
 | | Region gate sized per scenario so the cap does not bind | The region gate is label-independent; the cap is not |
-| | **Suppress the signal layer for the session.** One `set_layer_visible("signals", false)` before the first tick, fixed off for the run, recorded in the manifest | No traffic-light or sign actor is rendered and no traffic-light state is written; vehicle lamps are unaffected. World generation is untouched — the actors are hidden, not removed, so every other mode still renders them |
+| | **Suppress the road and signal layers for the session.** One `set_layer_visible` per layer before the first tick, fixed for the run, recorded on the run report and given back on every exit path | The session holds them, not the launcher: `LayerVisibilityLease`, taken beside the world-settings lease. The generated road surface is a flat grey ribbon over the photogrammetry of the real road and the signal meshes are frequently misaligned against it, so both are rendering artefacts in every frame. Hidden by default with an operator override per layer, decided at session start. World generation is untouched — the actors are hidden, not removed — and hiding is rendering-only, so the road keeps its collision and a hidden signal keeps its stop-line trigger |
+| | **Let the camera's own tiles arrive before the first frame is written.** A pre-roll of world ticks with the camera standing in its final pose and nothing recording | Cesium selects tiles on the world tick from the views registered for it, and a CARLA camera sensor is registered by `ACesiumSensorViewPublisher`, so the selection follows the sensor's frustum. Measured at four cold camera poses: with no pre-roll the first written frame is an empty sky and the imagery takes two to three frames to fill in; at three further poses 120 to 400 ticks of pre-roll produced a first frame indistinguishable from the sixth. **A timed wait is the wrong shape** — nothing renders and nothing streams between ticks in a synchronous world |
+| | **Aim the capture camera at the vehicles, not at the middle of the rendered region** | The region is drawn around a road that runs through it, so its middle is whatever that road happens to pass: a run aimed there framed a builder's yard while the traffic was on a highway a hundred metres away. The aim is the mean of the poses the bridge wrote to bodies on the first step, which is measured rather than assumed; it costs the run its first SUMO step |
 | | Failure paths: SUMO death, CARLA stall, a vehicle removed while held, route errors, collisions, a world with no sun | If either side stalls, **both** stop and the run fails — a world that ticks without SUMO produces a plausible lie |
 
 ---

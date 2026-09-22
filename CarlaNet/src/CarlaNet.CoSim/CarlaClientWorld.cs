@@ -120,4 +120,19 @@ public sealed class CarlaClientWorld : ICarlaWorld
         ulong frame = _client.SendTickCueAsync().GetAwaiter().GetResult();
         return _client.LatestObservedFrame >= frame;
     }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// The answer is discarded. The server returns a bare success for every layer name it
+    /// recognises and for every one it does not, so nothing about it establishes that the frame
+    /// changed; what a hidden layer did to the imagery is read off a written frame. The call is
+    /// rendering-only at the far end -- collision is a separate server call that this one does not
+    /// touch -- so hiding the road surface leaves it collidable and hiding the signals leaves their
+    /// stop-line triggers live.
+    /// </remarks>
+    public void WriteLayerVisible(string layer, bool visible)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(layer);
+        _client.SetLayerVisibleAsync(layer, visible).GetAwaiter().GetResult();
+    }
 }

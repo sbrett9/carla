@@ -37,6 +37,17 @@ public sealed class CoSimRunReport
     public required string CatalogueDigest { get; init; }
 
     /// <summary>
+    /// Which rendering layers the session wrote before its first tick, and what it wrote them to.
+    /// </summary>
+    /// <remarks>
+    /// What was in frame is a property of the corpus and is not recoverable from the imagery: a
+    /// capture with no road mesh in it and a capture of a world that has no road mesh look the same.
+    /// Empty where the session drove no world, which is a run that rendered nothing at all.
+    /// </remarks>
+    public IReadOnlyDictionary<string, bool> LayerVisibility { get; init; } =
+        new Dictionary<string, bool>();
+
+    /// <summary>
     /// The SUMO step length the run was forced to, where an operator overrode the scenario's own.
     /// </summary>
     /// <remarks>
@@ -263,6 +274,13 @@ public sealed class CoSimRunReport
         if (SumoStepOverrideSeconds is { } forced)
         {
             text.AppendLine($"step override      {forced:0.###} s (behaviour-changing)");
+        }
+
+        if (LayerVisibility.Count > 0)
+        {
+            text.AppendLine("layers             "
+                            + string.Join(", ", LayerVisibility.OrderBy(entry => entry.Key)
+                                .Select(entry => $"{entry.Key} {(entry.Value ? "drawn" : "hidden")}")));
         }
 
         text.AppendLine($"ticks              {Ticks} over {SumoSteps} SUMO steps");

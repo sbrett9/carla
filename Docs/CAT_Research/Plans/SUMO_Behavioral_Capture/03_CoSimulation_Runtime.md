@@ -349,7 +349,7 @@ Everything in this section was read from the source, not assumed.
 | C# transport | `CarlaClient.SetActorFadeAsync` | `:1545-1556` | `set_actor_fade`; also maintains the client-side opacity/arrival registry |
 | C# transport | `CarlaClient.ApplyBatchAsync` / `ApplyBatchSyncAsync` | `:1779-1785` | `apply_batch`; the sync form uses the raw path because the server returns a bare vector |
 | C# transport | ten traffic-light RPCs | `:1659-1689` | `set_traffic_light_state`, green/yellow/red time, freeze, reset, group, light boxes. **None is called by this bridge** (D3.24) |
-| C# transport | `SetLayerVisibleAsync` | `:1077-1078` | `set_layer_visible`; the `signals` layer is written **once at session start** (§3.4) |
+| C# transport | `SetLayerVisibleAsync` | `:1077-1078` | `set_layer_visible`; the `road` and `signals` layers are each written **once at session start** and once more when the session is disposed (§3.4) |
 | C# transport | `SetVehicleLightStateAsync` / `GetVehicleLightStateAsync` | `:1621-1622`, `:1615-1617` | `set_vehicle_light_state` / `get_vehicle_light_state`. **The getter is an RPC, not a cache read** — vehicle light state is *not* in the world-observer snapshot, unlike transform and velocity (§3.5). |
 | C# transport | `GetVehiclesLightStatesAsync` | `:1630-1631` | `get_vehicles_light_states` — every vehicle's light state in **one** RPC (`CarlaServer.cpp:2824`) |
 | C# transport | four solar calls | `:1043`, `:1048`, `:1053`, `:1058` | `set_solar_time`, `set_solar_date`, `get_solar_state`, `set_time_advance` |
@@ -407,7 +407,7 @@ single batch.
 | on a SUMO signal-word change only | `SetVehicleLightStateCommand(actor, flags)` | yes | **measured** on Bahonar: mean 14.44, p90 31, max 47 per *SUMO step* map-wide, all landing in one of the R sub-step batches (§3.5) |
 | on a sun-elevation threshold crossing | `SetVehicleLightStateCommand(actor, flags)` | yes | at most \|render set\| commands, at most twice per window, and **never** under a frozen sun (§3.5) |
 | at window open, and on a civil-day rollover | `set_solar_time` / `set_solar_date` | **no — a plain RPC** | 1–2 RPCs per window (§9.3) |
-| session start, once | `set_layer_visible("signals", false)` | **no — a plain RPC** | 1 RPC per session, before the first tick (§3.4) |
+| session start, once | `set_layer_visible` for `road` and for `signals` | **no — a plain RPC** | 2 RPCs per session, before the first tick, and 2 more when it is disposed (§3.4) |
 | release | pool check-in (transform to the parking pose, lights to `None`) | yes | folded into the same batch |
 
 > **D3.3 — One `apply_batch` per world tick carries every pose write *and* every vehicle
@@ -434,7 +434,7 @@ sun is a whole-world RPC issued once or twice per capture window and read for fr
 observer cache every tick. Neither introduces a per-vehicle round trip, which is the only thing that
 would matter.
 
-### 3.4 No traffic-light or sign actors are rendered, and no traffic-light state is sent
+### 3.4 No road mesh, no traffic-light or sign actors, and no traffic-light state is sent
 
 **This mode renders no traffic-light or sign actors, and the write path carries no traffic-light
 state.** There is no `SetTrafficLightStateCommand` in any batch, no traffic-light RPC on any path,
@@ -455,7 +455,17 @@ cannot discharge a busy interchange), and SUMO resolves it every step. What arri
 stream is already the behaviour those programs produced: a vehicle that waits at a junction waits
 because SUMO's signal held it. **What is dropped is the rendering of the signal, not the signal.**
 
-**The mechanism, and it is one RPC at session start.** `set_layer_visible("signals", false)` —
+**The generated road surface is suppressed the same way, and for a reason of the same kind.** The
+road mesh CARLA builds from the `.xodr` is a flat grey ribbon laid over the photogrammetry of the
+real road surface, and a capture with it drawn carries that ribbon in every frame. Its geometry is
+also only as good as the elevation fit, so where the two disagree the artefact is a road drawn
+beside the road. The same call takes it: `set_layer_visible("road", false)`, whose arm at
+`CarlaServer.cpp:729-738` clears `SetActorHiddenInGame` on the road surface actors. Hiding is
+rendering-only there too — collision is the separate `set_layer_collision` — so the surface stays
+collidable, which this mode would not notice either way because a SUMO-driven body is teleported
+with its physics off.
+
+**The mechanism, and it is one RPC per layer at session start.** `set_layer_visible("signals", false)` —
 shim `carlanet/__init__.py:1548-1555` → `CarlaClient.SetLayerVisibleAsync` (`CarlaClient.cs:1077-1078`)
 → `BIND_SYNC(set_layer_visible)` (`CarlaServer.cpp:697`), whose `signals` arm at `:719-728` calls
 `ATrafficLightManager::SetGeneratedSignalsVisible(false)` (`TrafficLightManager.cpp:618-628`). That
@@ -463,9 +473,22 @@ walks the registered generated signals once and clears `SetVisibility` on every 
 (`TrafficLightManager.cpp:589-600`). It is issued before the first world tick and never again:
 **zero per-tick cost, and it is not on the steady loop at all.**
 
-> **D3.24 — A SUMO-drive session renders no traffic-light or sign actors. The `signals` layer is
-> written off once at session start and is fixed off for the session's lifetime — not an operator
-> toggle — and the manifest records that no signal geometry was in frame.**
+> **D3.24 — A SUMO-drive session renders neither the generated road surface nor the traffic-light
+> and sign actors. Both layers are written once at session start, before the first tick, and are
+> fixed for the session's lifetime; the run report records what was in frame.**
+>
+> Each layer has an operator override, and it is a session-start decision rather than a toggle: a
+> layer that changed mid-run would make two frames of one capture incomparable with nothing in the
+> record saying why. Hidden is the default for both, because the corpus is of the photogrammetry.
+> `--show-road-mesh` exists for the question *where is the network the vehicles are driving on*,
+> which is a debugging view and not a capture.
+
+The session owns both, not the launcher that started it: `LayerVisibilityLease`
+(`CarlaNet.CoSim/LayerVisibilityLease.cs`), taken beside the world-settings lease and given back on
+every exit path including a failure. **It gives them back to *drawn*, not to what it found**, because
+the server binds a setter for layer visibility and no getter, so what a layer was before the session
+touched it is not readable. The asymmetry is deliberate in that direction: a run that hid the road
+mesh and then threw must not leave an operator's editor showing a world with no road network in it.
 
 The viewer's `L` hotkey drives the same layer (flag `PygameInterface.py:106`, bound at `:295`, shown
 on the HUD at `:580`), and a capture session must not be able to change a recorded property of the
@@ -688,7 +711,7 @@ Per world tick, in the steady state, for a render set of `N` vehicles:
 | Solar writes | **0** on a steady tick | §9.3 — 1 `set_solar_time` at window open, plus `set_solar_date` only on a civil-day rollover |
 | Solar reads | **0 RPC** | `GetCachedSolarState` (`CarlaClient.cs:1991`) returns the block parsed at `:1855` out of the observer header the server already pushes (`WorldObserver.cpp:323-341`) |
 | Light-state reads | **0 RPC** | the bridge holds what it wrote (§3.5.3); the `get_` path is never on the steady loop |
-| Traffic-light traffic, any kind | **0 RPC, 0 commands** | §3.4 — nothing is written, read or subscribed. `set_layer_visible` is one RPC at session start and is not a steady-tick line |
+| Traffic-light traffic, any kind | **0 RPC, 0 commands** | §3.4 — nothing is written, read or subscribed. `set_layer_visible` is two RPCs at session start and is not a steady-tick line |
 
 **So the steady-state budget is unchanged at two RPCs per world tick, and the solar and vehicle
 lamp traffic is carried entirely inside an array that already exists.** The one number that grew is the
@@ -2373,7 +2396,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.21** | **The solar clock is written from the first *ticked* instant** (`window.begin − prewarm_s`), after the SUMO fast-forward and before the first world tick, and `set_time_advance` is issued **after** the clock is set. The fast-forward itself cannot move the sun — in synchronous mode no tick cue means no actor tick, so the controller never runs (§9.5) — but that is a property of the tick loop, not of the sun, and the audit is what keeps it true if the loop ever changes. |
 | **D3.22** | **A session refuses to start when `set_solar_time` returns `false`** (no `CesiumSunSky`), non-overridably. Presence is probed with the **write**, never with a state read, because the cached read cannot express "no sun" (G15). |
 | **D3.23** | **A `SolarDisagreement` has the same consequence as a `TickFault`**: stop, park the render set, close the step record with `terminated: solar-state-disagreement`, fail the run. Same governing principle as D3.15 — a run that cannot produce honest truth must stop, not degrade. |
-| **D3.24** | **A SUMO-drive session renders no traffic-light or sign actors, and writes no traffic-light state.** No `SetTrafficLightStateCommand` in any batch, no traffic-light RPC, no `tlLogic` subscription. The `signals` layer is written off once at session start with `set_layer_visible("signals", false)` (`CarlaClient.cs:1077-1078` → `CarlaServer.cpp:697`, `:719-728` → `TrafficLightManager.cpp:618-628`) and is **fixed off for the session, not an operator toggle**; `set_layer_visible` joins the RPCs the episode drive-mode flag refuses to a client without the drive lease (§10.2 mechanism 4), and the manifest records that no signal geometry was in frame. Suppression is at the session, not at the source: `SignInjector` and native `SpawnSignals` are untouched, because the world build is shared with other modes (§3.4). SUMO's `tlLogic` programs, its right-of-way rows and the actuated netconvert setting are unaffected, and its vehicles still obey them. Vehicle lamps are a separate mechanism and are unchanged (D3.17). |
+| **D3.24** | **A SUMO-drive session renders neither the generated road surface nor the traffic-light and sign actors, and writes no traffic-light state.** No `SetTrafficLightStateCommand` in any batch, no traffic-light RPC, no `tlLogic` subscription. The `road` and `signals` layers are each written once at session start with `set_layer_visible` (`CarlaClient.cs:1077-1078` → `CarlaServer.cpp:697`; the `road` arm at `:729-738`, the `signals` arm at `:739-751` → `TrafficLightManager.cpp:618-628`), **fixed for the session's lifetime** with an operator override per layer that is a session-start decision and not a toggle, and given back on every exit path by `LayerVisibilityLease`. The run report records what was in frame. `set_layer_visible` joins the RPCs the episode drive-mode flag refuses to a client without the drive lease (§10.2 mechanism 4). Suppression is at the session, not at the source: `SignInjector` and native `SpawnSignals` are untouched, because the world build is shared with other modes (§3.4). SUMO's `tlLogic` programs, its right-of-way rows and the actuated netconvert setting are unaffected, and its vehicles still obey them. Vehicle lamps are a separate mechanism and are unchanged (D3.17). |
 
 ---
 

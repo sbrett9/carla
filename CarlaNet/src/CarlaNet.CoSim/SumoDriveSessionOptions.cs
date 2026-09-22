@@ -102,6 +102,33 @@ public sealed record SumoDriveSessionOptions(
     /// <summary>Simulated second to fast-forward SUMO to before the first world tick.</summary>
     public double WarmUpToSimulatedSecond { get; set; }
 
+    /// <summary>
+    /// Whether the generated road surface is drawn for the session.
+    /// </summary>
+    /// <remarks>
+    /// <para>Off, because the imagery this mode exists to produce is electro-optical: the generated
+    /// road mesh is a flat grey ribbon drawn over the photogrammetry of the real road surface, so
+    /// leaving it on puts the same rendering artefact in every frame of the corpus. Turned on it is
+    /// a debugging view -- where the network the vehicles are driving on actually lies.</para>
+    ///
+    /// <para>Whichever it is, it is decided here, at the session's start, and holds for the whole
+    /// run. A layer that changed mid-capture would make two frames of one run incomparable with
+    /// nothing in the record saying why, so the report carries what was set.</para>
+    /// </remarks>
+    public bool RoadLayerVisible { get; set; }
+
+    /// <summary>
+    /// Whether the generated traffic-light and sign actors are drawn for the session.
+    /// </summary>
+    /// <remarks>
+    /// Off, for the same reason and one more: the available signal meshes are a limited set and are
+    /// frequently misaligned against the photogrammetry, so a detector trained on them learns an
+    /// artefact. SUMO still simulates the signals and its vehicles still obey them -- what is
+    /// dropped is the rendering of the signal, not the signal -- and hiding them is rendering-only,
+    /// so their stop-line triggers stay live.
+    /// </remarks>
+    public bool SignalLayerVisible { get; set; }
+
     /// <summary>Where each computed pose goes.</summary>
     public Action<CoSimPoseRecord>? OnPose { get; set; }
 

@@ -10,9 +10,10 @@ namespace CarlaNet.CoSim;
 /// Everything the playback bridge asks of a CARLA world, and nothing else.
 /// </summary>
 /// <remarks>
-/// <para>Six operations. The bridge places bodies, writes their poses in one batch, reads back where
-/// the world says they went, advances the world a tick, and reads and writes the episode settings so
-/// it can hand the world back as it found it. Anything larger than that would be the client's whole
+/// <para>Seven operations. The bridge places bodies, writes their poses in one batch, reads back
+/// where the world says they went, advances the world a tick, reads and writes the episode settings
+/// so it can hand the world back as it found it, and shows or hides the rendering layers whose
+/// presence is a property of the imagery. Anything larger than that would be the client's whole
 /// surface, and a driving session tested against the client's whole surface is a session that can
 /// only be tested against a running server.</para>
 ///
@@ -58,4 +59,20 @@ public interface ICarlaWorld
     /// Advance the world one tick, answering false where the tick produced no frame.
     /// </summary>
     bool Tick();
+
+    /// <summary>
+    /// Show or hide one of the world's rendering layers.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Rendering only — collision is a separate setting.</b> The server drives visibility
+    /// and collision through two independent calls, and hiding a layer changes neither the
+    /// collision of the road surface nor the stop-line triggers of a signal. Hiding the road mesh
+    /// therefore does not remove a driving surface, and hiding the signals does not stop a signal
+    /// detecting vehicles.</para>
+    ///
+    /// <para><b>There is no reader.</b> The server binds a setter and no getter, so a caller cannot
+    /// ask a world how a layer is currently drawn and cannot restore one to what it found. A caller
+    /// that has to give a layer back has to declare the state it gives it back to.</para>
+    /// </remarks>
+    void WriteLayerVisible(string layer, bool visible);
 }

@@ -38,6 +38,7 @@ public sealed class SumoDriveSession : IDisposable
     private readonly SumoRoadNetwork _network;
     private readonly PopulationLease _lease;
     private readonly WorldSettingsLease? _settings;
+    private readonly LayerVisibilityLease? _layers;
     private readonly VehicleBodyPool? _pool;
     private readonly Func<bool> _tickWorld;
     private readonly List<Command> _batch = [];
@@ -60,6 +61,7 @@ public sealed class SumoDriveSession : IDisposable
                              VehicleCatalogue catalogue,
                              PopulationLease lease,
                              WorldSettingsLease? settings,
+                             LayerVisibilityLease? layers,
                              VehicleBodyPool? pool)
     {
         _options = options;
@@ -67,6 +69,7 @@ public sealed class SumoDriveSession : IDisposable
         _network = network;
         _lease = lease;
         _settings = settings;
+        _layers = layers;
         _pool = pool;
         _tickWorld = options.World is { } world ? world.Tick : options.TickWorld ?? (() => true);
         _population = new SubscribedPopulation(sumo.TraCI);
@@ -83,6 +86,7 @@ public sealed class SumoDriveSession : IDisposable
             WorldPackagePath = options.WorldPackagePath,
             CatalogueDigest = catalogue.CatalogueDigest,
             SumoStepOverrideSeconds = options.SumoStepOverrideSeconds,
+            LayerVisibility = layers?.Applied ?? new Dictionary<string, bool>(),
         };
     }
 
@@ -132,6 +136,7 @@ public sealed class SumoDriveSession : IDisposable
             });
 
         WorldSettingsLease? settings = null;
+        LayerVisibilityLease? layers = null;
         try
         {
             RequireOneWayToAdvanceTheWorld(options);
@@ -141,6 +146,22 @@ public sealed class SumoDriveSession : IDisposable
             // ones the caller asked for.
             settings = options.World is { } claimed
                 ? WorldSettingsLease.Take(claimed, options.WorldDeltaSeconds)
+                : null;
+
+            // What is in frame, decided once and before anything is rendered. Both layers are a
+            // property of the corpus rather than of whoever launched the run, so the session writes
+            // them rather than trusting a launcher to: the generated road surface is a flat ribbon
+            // drawn over the photogrammetry of the real road, and the generated signals are meshes
+            // frequently misaligned against it. Hiding either is rendering-only -- the road keeps
+            // its collision and a hidden signal keeps its stop-line trigger -- so nothing here
+            // removes a surface to drive on. Nothing in this mode would notice if it did: a
+            // SUMO-driven body is teleported with its physics off.
+            layers = options.World is { } rendered
+                ? LayerVisibilityLease.Take(rendered, new Dictionary<string, bool>
+                {
+                    [LayerVisibilityLease.RoadLayer] = options.RoadLayerVisible,
+                    [LayerVisibilityLease.SignalLayer] = options.SignalLayerVisible,
+                })
                 : null;
 
             CoSimClock clock = CoSimClock.ForSession(
@@ -159,7 +180,7 @@ public sealed class SumoDriveSession : IDisposable
                 : null;
 
             var session = new SumoDriveSession(options, sumo, clock, network, ground, catalogue,
-                                               lease, settings, pool);
+                                               lease, settings, layers, pool);
             try
             {
                 session.Prime();
@@ -178,6 +199,7 @@ public sealed class SumoDriveSession : IDisposable
             // session that failed to start must leave the world exactly as it found it: an operator
             // whose editor is stranded in synchronous mode is waiting on a tick from a process that
             // never started.
+            layers?.Dispose();
             settings?.Dispose();
             sumo.Dispose();
             throw;
@@ -230,7 +252,9 @@ public sealed class SumoDriveSession : IDisposable
     /// Every step runs whatever the ones before it did. A session is disposed on its failure paths
     /// as well as its happy one, and a failure that skipped the rest of the shutdown would leave the
     /// operator's world holding the wreckage of the run that failed -- which is exactly the state
-    /// nobody is in a position to clean up, because whatever was driving it has just thrown.
+    /// nobody is in a position to clean up, because whatever was driving it has just thrown. The
+    /// rendering layers are global state of the same class as the world's clock: a run that hid the
+    /// road mesh and threw must not leave an editor showing a world with no road network in it.
     /// </remarks>
     public void Dispose()
     {
@@ -260,6 +284,7 @@ public sealed class SumoDriveSession : IDisposable
             }
         });
         Attempt(failures, () => _pool?.DestroyAll());
+        Attempt(failures, () => _layers?.Dispose());
         Attempt(failures, () => _settings?.Dispose());
         Attempt(failures, _lease.Dispose);
         Attempt(failures, _sumo.Dispose);

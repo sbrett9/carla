@@ -2,8 +2,8 @@
 """Drive a CARLA world's vehicles from a SUMO microsimulation and record what a camera sees.
 
 SUMO decides where every vehicle is; CARLA renders them and the native recorder writes frames. The
-session owns the advance of simulated time on both sides -- nothing here calls `world.tick()`, and
-no traffic manager runs beside it.
+session owns the advance of simulated time on both sides once it is recording -- nothing here ticks
+the world while the session is advancing it, and no traffic manager runs beside it.
 
 What a run needs on disk:
 
@@ -26,6 +26,15 @@ Usage:
 
 Pass `--no-record` to drive the world without spawning a camera, which is the shortest way to see
 whether the vehicles are where SUMO says they are.
+
+Two things happen between the session starting and the recorder starting, and both are about what
+the first written frame contains. The camera is aimed at the vehicles rather than at the middle of
+the rendered region, because a corridor scenario puts its traffic nowhere near that middle. And the
+world is then ticked with the camera standing in its final pose and nothing recording, because
+Cesium selects photogrammetry tiles on the world tick from the camera views registered for that
+tick: measured on a cold view, the first frame written with no such pre-roll is an empty sky and
+takes two to three frames to fill in, while 120 ticks of pre-roll produced a first frame
+indistinguishable from the sixth.
 """
 import argparse
 import math
@@ -79,6 +88,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--maximum-bodies", type=int, default=192,
                         help="how many CARLA actors the session may own")
 
+    parser.add_argument("--show-road-mesh", action="store_true",
+                        help="draw the generated road surface. Hidden by default: it is a flat grey "
+                             "ribbon laid over the photogrammetry of the real road, so leaving it "
+                             "on puts the same rendering artefact in every frame of the corpus. "
+                             "Turn it on to see where the network the vehicles drive on lies")
+    parser.add_argument("--show-signals", action="store_true",
+                        help="draw the generated traffic-light and sign actors. Hidden by default: "
+                             "the available meshes are few and are frequently misaligned against "
+                             "the photogrammetry. SUMO simulates the signals and its vehicles obey "
+                             "them either way -- what is dropped is the rendering, not the signal")
+
     parser.add_argument("--no-record", action="store_true",
                         help="drive the world without spawning a camera or writing frames")
     parser.add_argument("--record-dir", default=os.path.join(_REPO, "Build", "captures"))
@@ -89,21 +109,71 @@ def parse_args() -> argparse.Namespace:
                         help="camera distance back from the region centre, metres")
     parser.add_argument("--camera-yaw", type=float, default=0.0,
                         help="bearing the camera stands off along, degrees clockwise from north")
+    parser.add_argument("--camera-aim", choices=("traffic", "region-centre"), default="traffic",
+                        help="what the camera looks at: 'traffic' the mean position of the vehicles "
+                             "rendered on the first step, 'region-centre' the middle of the "
+                             "rendered region. The middle of a corridor scenario's region is "
+                             "usually not where its traffic is")
+    parser.add_argument("--settle-ticks", type=int, default=200,
+                        help="world ticks with the camera in place and nothing recording, so the "
+                             "photogrammetry has streamed in for the camera's own view before the "
+                             "first frame is written. Cesium selects tiles on the world tick, so "
+                             "this is counted in ticks rather than in seconds: a wait that does not "
+                             "tick renders nothing and streams nothing")
     parser.add_argument("--width", type=int, default=1920)
     parser.add_argument("--height", type=int, default=1080)
     parser.add_argument("--fov", type=float, default=60.0)
     return parser.parse_args()
 
 
-def camera_transform(args: argparse.Namespace) -> carla.Transform:
-    """An oblique view of the rendered region, standing off along a bearing and looking back at it.
+def region_centre(args: argparse.Namespace) -> tuple[float, float]:
+    """The middle of the rendered region, in CARLA's frame.
 
-    The region centre is given in SUMO's projected frame and the camera in CARLA's, which is the
-    same frame with the northing negated -- the one conversion this script performs, and the same
-    sign the bridge applies to every vehicle.
+    The region is given in SUMO's projected frame and the camera lives in CARLA's, which is the same
+    frame with the northing negated -- the one conversion this script performs, and the same sign
+    the bridge applies to every vehicle.
     """
-    centre_x = args.region_x
-    centre_y = -args.region_y
+    return args.region_x, -args.region_y
+
+
+class RenderedVehicleCentre:
+    """Where the vehicles are, measured from the poses the bridge wrote to bodies.
+
+    The middle of the rendered region is a poor thing to point a camera at. On a corridor scenario
+    the region is drawn around a road that runs through it, so its middle is whatever that road
+    happens to pass: a run aimed there framed a builder's yard while the traffic was on a highway a
+    hundred metres away. The mean of the poses is not a guess about where the traffic ought to be --
+    it is where the bodies were put.
+
+    The session hands out one pose per rendered vehicle per tick, from the tick thread, so a run's
+    worth of them kept in a list is a run-length leak. This keeps a running sum instead, and only
+    while it is open: the camera is aimed once, before the recorder starts, and does not move again.
+    Poses that were written to no body are left out, because a vehicle with no body is not in frame.
+    """
+
+    def __init__(self) -> None:
+        self.open = False
+        self.total_x = 0.0
+        self.total_y = 0.0
+        self.count = 0
+
+    def collect(self, record) -> None:
+        """Take one computed pose. Bound to the session's pose callback for the whole run."""
+        if self.open and record.Actor != 0:
+            self.total_x += record.Pose.X
+            self.total_y += record.Pose.Y
+            self.count += 1
+
+    def centre(self) -> tuple[float, float] | None:
+        """The mean position in CARLA's frame, or None where nothing was rendered."""
+        if self.count == 0:
+            return None
+        return self.total_x / self.count, self.total_y / self.count
+
+
+def camera_transform(args: argparse.Namespace, centre: tuple[float, float]) -> carla.Transform:
+    """An oblique view of a point, standing off along a bearing and looking back at it."""
+    centre_x, centre_y = centre
     bearing = math.radians(args.camera_yaw)
     camera_x = centre_x - (args.camera_standoff * math.sin(bearing))
     camera_y = centre_y + (args.camera_standoff * math.cos(bearing))
@@ -117,7 +187,7 @@ def camera_transform(args: argparse.Namespace) -> carla.Transform:
                            carla.Rotation(pitch=pitch, yaw=yaw, roll=0.0))
 
 
-def spawn_camera(world, args: argparse.Namespace):
+def spawn_camera(world, args: argparse.Namespace, centre: tuple[float, float]):
     blueprint = world.get_blueprint_library().find("sensor.camera.rgb")
     blueprint.set_attribute("image_size_x", str(args.width))
     blueprint.set_attribute("image_size_y", str(args.height))
@@ -131,12 +201,39 @@ def spawn_camera(world, args: argparse.Namespace):
     # delivery, so the cost goes with it.
     if blueprint.has_attribute("sensor_tick") and args.record_hz > 0:
         blueprint.set_attribute("sensor_tick", str(1.0 / args.record_hz))
-    transform = camera_transform(args)
+    transform = camera_transform(args, centre)
     camera = world.spawn_actor(blueprint, transform)
     print(f"camera {camera.id} at ({transform.location.x:.1f}, {transform.location.y:.1f}, "
           f"{transform.location.z:.1f}), pitch {transform.rotation.pitch:.1f}, "
-          f"yaw {transform.rotation.yaw:.1f}")
+          f"yaw {transform.rotation.yaw:.1f}, looking at ({centre[0]:.1f}, {centre[1]:.1f})")
     return camera
+
+
+def settle_tiles(world, ticks: int) -> None:
+    """Tick the world with the camera in place and nothing recording, so its tiles arrive first.
+
+    Cesium picks and refines photogrammetry tiles on the world tick, from the camera views
+    registered for that tick -- and a CARLA camera sensor is registered by its own publisher, so
+    tiles are selected for the sensor's frustum rather than for the spectator's. Neither happens
+    without a tick, which is why this is counted in ticks and not in seconds: in a synchronous world
+    a wait that does not tick renders nothing, streams nothing and buys nothing.
+
+    Measured on this world at three camera poses whose ground had not been looked at before: with no
+    pre-roll the first written frame was an empty sky and the imagery took two to three frames to
+    fill in; with 120 ticks the first frame was indistinguishable from the sixth. How many are
+    needed is a property of the network and of what the tile cache already holds, not of the scene,
+    so it is an operator's number with a default that had margin over the measurement.
+
+    This ticks the world while the session that owns its clock is between steps: no pose is written,
+    SUMO does not advance, and nothing is recorded, so the timeline the session computes poses for
+    is unchanged by it.
+    """
+    if ticks <= 0:
+        return
+    started = time.time()
+    for _ in range(ticks):
+        world.tick()
+    print(f"settled the camera's view over {ticks} ticks in {time.time() - started:.1f} s")
 
 
 def main() -> int:
@@ -154,6 +251,8 @@ def main() -> int:
 
     camera = None
     session = None
+    aim = RenderedVehicleCentre()
+    aims_at_traffic = args.camera_aim == "traffic" and not args.no_record
     worst = {"metres": 0.0, "vehicle": "", "tick": 0}
 
     def on_divergence(divergence):
@@ -165,9 +264,6 @@ def main() -> int:
             worst["tick"] = divergence.TickIndex
 
     try:
-        if not args.no_record:
-            camera = spawn_camera(world, args)
-
         session = world.start_sumo_drive(
             args.scenario, args.world_package, args.catalogue,
             region_centre=(args.region_x, args.region_y),
@@ -179,15 +275,44 @@ def main() -> int:
             record_hz=args.record_hz,
             warm_up_to=args.warm_up,
             step_length=args.step_length,
+            road_layer_visible=args.show_road_mesh,
+            signal_layer_visible=args.show_signals,
+            # Bound only where the aim needs it: the session hands out a pose per rendered
+            # vehicle per tick, and a callback that spends the whole run declining them is a
+            # crossing into Python per vehicle per tick for nothing.
+            on_pose=aim.collect if aims_at_traffic else None,
             on_divergence=on_divergence)
         if session is None:
             return 1
 
         print(f"clock: {session.Clock}")
+        print("layers: " + ", ".join(
+            f"{layer} {'drawn' if session.Report.LayerVisibility[layer] else 'hidden'}"
+            for layer in session.Report.LayerVisibility.Keys))
 
-        # The recorder is started after the session has the world in synchronous mode, because a
-        # camera in an asynchronous world delivers no frames at all.
-        if camera is not None:
+        steps = 0
+        # Everything up to the recorder starting happens with the world already in synchronous mode,
+        # because a camera in an asynchronous world delivers no frames at all: the session takes the
+        # clock before the camera exists, and the camera then stands in its final pose for as many
+        # ticks as it takes its own tiles to arrive.
+        if not args.no_record:
+            centre = region_centre(args)
+            if aims_at_traffic:
+                # One step, to see where the bodies actually went. Bought rather than assumed, and
+                # it costs the run its first SUMO step.
+                aim.open = True
+                session.Advance()
+                aim.open = False
+                steps += 1
+                if aim.centre() is None:
+                    print("nothing was rendered on the first step, so the camera is aimed at the "
+                          "region centre instead", file=sys.stderr)
+                else:
+                    centre = aim.centre()
+                    print(f"aimed at {aim.count} rendered vehicles")
+            camera = spawn_camera(world, args, centre)
+            settle_tiles(world, args.settle_ticks)
+
             os.makedirs(args.record_dir, exist_ok=True)
             if world.start_recording(camera, args.record_dir, args.record_hz,
                                      fov=args.fov) is None:
@@ -195,7 +320,6 @@ def main() -> int:
             print(f"recording -> {args.record_dir}")
 
         started = time.time()
-        steps = 0
         while session.Advance():
             steps += 1
             if args.steps and steps >= args.steps:

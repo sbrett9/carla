@@ -282,6 +282,61 @@ public sealed class SumoDriveSessionTests
     }
 
     [RequiresSumoFact]
+    public void TheRoadAndSignalLayersAreHiddenBeforeTheFirstTickAndDrawnAgainAtTheEnd()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld();
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            // Written before the world had produced a single frame, so no capture of this run can
+            // contain either of them and no two frames of it can disagree about whether they did.
+            Assert.Equal(2, carla.LayerWrites.Count);
+            Assert.All(carla.LayerWrites, write => Assert.Equal(0, write.AtTick));
+            Assert.All(carla.LayerWrites, write => Assert.False(write.Visible));
+
+            // And the run says so itself, because a frame with no road mesh in it and a frame of a
+            // world that has no road mesh look the same.
+            Assert.False(session.Report.LayerVisibility[LayerVisibilityLease.RoadLayer]);
+            Assert.False(session.Report.LayerVisibility[LayerVisibilityLease.SignalLayer]);
+
+            for (int step = 0; step < 40 && session.Advance(); step++)
+            {
+            }
+
+            // Fixed for the run: nothing wrote a layer again once the world started producing
+            // frames.
+            Assert.All(carla.LayerWrites, write => Assert.Equal(0, write.AtTick));
+        }
+
+        Assert.Equal(4, carla.LayerWrites.Count);
+        Assert.All(carla.LayerWrites.Skip(2), write => Assert.True(write.Visible));
+    }
+
+    [RequiresSumoFact]
+    public void ASessionAskedToRenderTheRoadMeshRendersIt()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld();
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+        options.RoadLayerVisible = true;
+
+        using SumoDriveSession session = SumoDriveSession.Start(options);
+
+        Assert.True(session.Report.LayerVisibility[LayerVisibilityLease.RoadLayer]);
+        Assert.False(session.Report.LayerVisibility[LayerVisibilityLease.SignalLayer]);
+        Assert.Contains(carla.LayerWrites,
+                        write => write.Layer == LayerVisibilityLease.RoadLayer && write.Visible);
+    }
+
+    [RequiresSumoFact]
     public void ASessionThatFailsMidRunStillGivesTheWorldBackAsItFoundIt()
     {
         using SyntheticWorld world = SyntheticWorld.Write(
@@ -321,6 +376,12 @@ public sealed class SumoDriveSessionTests
         Assert.Equal(before, carla.Settings);
         Assert.False(carla.Settings.SynchronousMode);
         Assert.All(carla.Batches[^1], command => Assert.IsType<DestroyActorCommand>(command));
+
+        // And the road network is drawn again. Layer visibility is global state of the same class
+        // as the world's clock: a run that hid the road mesh and threw must not leave an operator
+        // looking at a world with no roads in it.
+        Assert.Equal(4, carla.LayerWrites.Count);
+        Assert.All(carla.LayerWrites.Skip(2), write => Assert.True(write.Visible));
     }
 
     [RequiresSumoFact]
@@ -341,6 +402,10 @@ public sealed class SumoDriveSessionTests
 
         Assert.Throws<PopulationAuthorityHeldException>(() => SumoDriveSession.Start(options));
         Assert.Equal(before, carla.Settings);
+
+        // The layers were written before the population was refused, so they too are given back.
+        Assert.Equal(4, carla.LayerWrites.Count);
+        Assert.All(carla.LayerWrites.Skip(2), write => Assert.True(write.Visible));
     }
 
     [RequiresSumoFact]

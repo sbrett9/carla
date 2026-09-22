@@ -2018,6 +2018,7 @@ class World:
                          region_centre=(0.0, 0.0), admit_radius_m=400.0, hysteresis_m=60.0,
                          capacity=128, maximum_bodies=192, fixed_delta=0.05, record_hz=2.0,
                          warm_up_to=0.0, step_length=None,
+                         road_layer_visible=False, signal_layer_visible=False,
                          on_pose=None, on_release=None, on_divergence=None):
         """Drive this world's vehicles from a SUMO microsimulation. Returns the session, or None if
         the co-simulation assemblies are not loaded.
@@ -2040,6 +2041,16 @@ class World:
         once and `maximum_bodies` how many CARLA actors the session may own. `warm_up_to`
         fast-forwards SUMO to a simulated second before the first world tick, and `step_length`
         overrides the scenario's own SUMO step (behaviour-changing, and recorded as such).
+
+        `road_layer_visible` and `signal_layer_visible` decide what is in frame. Both are off,
+        because the imagery this mode produces is of the photogrammetry: the generated road mesh is
+        a flat grey ribbon drawn over the real road surface and the generated signal meshes are
+        frequently misaligned against it, so either left on is a rendering artefact in every frame.
+        The session writes them once before the first tick and never again — a layer that changed
+        mid-run would make two frames of one capture incomparable — and puts them back on every exit
+        path, including a failure. Hiding is rendering-only: the road keeps its collision and a
+        hidden signal keeps its stop-line trigger. `session.Report.LayerVisibility` carries what was
+        set, since a capture with no road mesh and a capture of a world that has none look alike.
 
         The three callbacks are handed a record per vehicle per tick from the tick thread and must
         not block: `on_pose` the computed pose, `on_release` a completed render interval, and
@@ -2068,6 +2079,8 @@ class World:
         options.WarmUpToSimulatedSecond = float(warm_up_to)
         if step_length is not None:
             options.SumoStepOverrideSeconds = float(step_length)
+        options.RoadLayerVisible = bool(road_layer_visible)
+        options.SignalLayerVisible = bool(signal_layer_visible)
         # Each callback is bound to the delegate type it is assigned to. A bare Python callable
         # does not convert to a generic Action<T> and the assignment fails outright, which is worth
         # knowing here rather than at the far end of a caller's own wiring.

@@ -21,10 +21,11 @@ namespace CarlaNet.CoSim.Tests;
 /// proves the comparison is wired; a drift of something is a world that does not, and proves the
 /// comparison would notice.</para>
 /// </remarks>
-internal sealed class RecordedWorld : ICarlaWorld
+internal class RecordedWorld : ICarlaWorld
 {
     private readonly Dictionary<ActorId, Transform> _actors = [];
     private readonly List<IReadOnlyList<Command>> _batches = [];
+    private readonly List<(string Layer, bool Visible, long AtTick)> _layerWrites = [];
     private ActorId _nextActor = 1;
 
     /// <summary>The settings the world holds, as a server would.</summary>
@@ -57,6 +58,9 @@ internal sealed class RecordedWorld : ICarlaWorld
 
     /// <summary>Set to have the next tick throw, as a dropped connection does.</summary>
     public Exception? ThrowOnTick { get; set; }
+
+    /// <summary>Every layer visibility written, with the tick the world was on when it arrived.</summary>
+    public IReadOnlyList<(string Layer, bool Visible, long AtTick)> LayerWrites => _layerWrites;
 
     /// <summary>Batches carrying at least one transform, which is what a driven tick writes.</summary>
     public IEnumerable<IReadOnlyList<Command>> PoseBatches =>
@@ -144,4 +148,13 @@ internal sealed class RecordedWorld : ICarlaWorld
         Ticks++;
         return ProducesFrames;
     }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// The tick count at the moment of the write is kept with it, because when a layer was written
+    /// is half of what the session promises about it: a layer written at tick zero was fixed before
+    /// the first frame existed, and one written later changed the imagery mid-capture.
+    /// </remarks>
+    public virtual void WriteLayerVisible(string layer, bool visible) =>
+        _layerWrites.Add((layer, visible, Ticks));
 }
