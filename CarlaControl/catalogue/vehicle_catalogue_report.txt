@@ -1,0 +1,72 @@
+Vehicle catalogue carla-0.10.0-windows
+  generated 2026-09-22T00:23:41.022Z by carlacontrol.VehicleCatalogueBuilder/1.0.0
+  server 0.10.0, content build carla-0.10.0-windows
+  blueprint set digest bd7624c8e474e86f73e6ecba1983b88b1c42050e21d68dbaea29e387a7db5fc1
+
+Measured bodies. length, width and height are twice the spawned actor's bounding-box
+extent; the box centre is in the actor's own frame and is what the bumper-to-origin
+shift is computed from.
+
+blueprint                         length   width  height  centre x  centre y  bumper  colour
+vehicle.ambulance.ford             6.357   2.351   2.431    -0.293     0.002   2.886  true
+vehicle.carlacola.actors           8.004   2.912   4.055    -0.023     0.000   3.979  true
+vehicle.dodge.charger              5.006   1.881   1.540    -0.006     0.000   2.497  true
+vehicle.dodgecop.charger           5.237   1.924   1.644     0.109     0.000   2.728  false
+vehicle.firetruck.actors           8.580   2.901   3.827    -0.198     0.005   4.092  true
+vehicle.fuso.mitsubishi           10.174   3.928   4.241    -0.493    -0.092   4.594  false
+vehicle.lincoln.mkz                4.892   1.836   1.524    -0.006     0.000   2.440  false
+vehicle.mini.cooper                4.553   2.096   1.772    -0.034     0.000   2.242  false
+vehicle.nissan.patrol              5.591   2.147   2.059     0.041     0.000   2.837  true
+vehicle.sprinter.mercedes          5.915   1.988   2.726    -0.011     0.004   2.947  false
+vehicle.taxi.ford                  5.354   1.789   1.575     0.180     0.000   2.858  true
+vehicle.ue4.audi.tt                4.181   1.994   1.385    -0.000    -0.000   2.090  true
+vehicle.ue4.bmw.grantourer         4.611   2.242   1.667     0.000    -0.001   2.305  true
+vehicle.ue4.chevrolet.impala       5.357   2.033   1.411     0.000     0.002   2.679  true
+vehicle.ue4.ford.crown             5.366   1.801   1.575     0.185    -0.000   2.868  true
+vehicle.ue4.ford.mustang           4.718   1.895   1.301     0.032    -0.000   2.391  true
+vehicle.ue4.mercedes.ccc           4.674   1.812   1.442    -0.003     0.000   2.334  true
+
+Where the content's own metadata disagrees with the measurement. A copy of the
+content build's vehicle metadata with these corrections applied is written as
+VehicleParameters.corrected.json beside this report; the catalogue's own class
+assignment is what truth reads, so the correction is for the next content build
+rather than something a consumer of this catalogue has to wait for.
+
+  vehicle.ambulance.ford: base_type declared 'truck', measured 'van'; special_type declared 'empty', curated 'emergency'; curated: ambulance; the box measures as a van and the emergency role is not visible in it
+  vehicle.dodgecop.charger: special_type declared 'empty', curated 'emergency'; curated: police car; identical in shape to the civilian Charger it is built from
+  vehicle.firetruck.actors: special_type declared 'empty', curated 'emergency'; curated: fire appliance; the box measures as a truck and the emergency role is not visible in it
+  vehicle.fuso.mitsubishi: base_type declared 'bus', measured 'truck'
+  vehicle.nissan.patrol: curated: sport utility on a car chassis; its 2.06 m roof reads as a van to the height band, and it is the only measured body within 0.06 m of that edge
+  vehicle.sprinter.mercedes: base_type declared 'empty', measured 'van'
+  vehicle.taxi.ford: special_type declared 'empty', curated 'taxi'; curated: taxi; identical in shape to the Crown saloon it is built from
+  vehicle.ue4.audi.tt: base_type declared 'bus', measured 'car'
+  vehicle.ue4.bmw.grantourer: base_type declared 'bus', measured 'car'
+  vehicle.ue4.chevrolet.impala: base_type declared 'bus', measured 'car'
+  vehicle.ue4.ford.crown: base_type declared 'bus', measured 'car'
+  vehicle.ue4.ford.mustang: base_type declared 'bus', measured 'car'
+  vehicle.ue4.mercedes.ccc: base_type declared 'bus', measured 'car'
+
+Lamp capability, measured optically.
+
+  sun at solar hour 1.0 on 2026-03-21, elevation -48.4493408203125 degrees
+  a pixel counts as gained above 24/255, and a lamp needs more of them than 8 and than 4.0 times the largest difference measured between two captures of the same state
+  positive control (sun moved to daylight): 158467 pixels
+  'unlit' means the lamp was commanded, the vehicle was rendered and the
+  image did not change. It does not say why, and it is not 'unknown'.
+  vehicle.ambulance.ford           no lamp changed the image  (strongest lamp 1 px, worst same-state control 3 px, needed more than 12 px)
+  vehicle.carlacola.actors         no lamp changed the image  (strongest lamp 21 px, worst same-state control 48 px, needed more than 192 px)
+  vehicle.dodge.charger            no lamp changed the image  (strongest lamp 2 px, worst same-state control 6 px, needed more than 24 px)
+  vehicle.dodgecop.charger         no lamp changed the image  (strongest lamp 1 px, worst same-state control 2 px, needed more than 8 px)
+  vehicle.firetruck.actors         lit: high_beam  (strongest lamp 369 px, worst same-state control 48 px, needed more than 192 px)
+  vehicle.fuso.mitsubishi          no lamp changed the image  (strongest lamp 16 px, worst same-state control 18 px, needed more than 72 px)
+  vehicle.lincoln.mkz              no lamp changed the image  (strongest lamp 0 px, worst same-state control 1 px, needed more than 8 px)
+  vehicle.mini.cooper              no lamp changed the image  (strongest lamp 8 px, worst same-state control 6 px, needed more than 24 px)
+  vehicle.nissan.patrol            no lamp changed the image  (strongest lamp 3 px, worst same-state control 3 px, needed more than 12 px)
+  vehicle.sprinter.mercedes        no lamp changed the image  (strongest lamp 4 px, worst same-state control 5 px, needed more than 20 px)
+  vehicle.taxi.ford                no lamp changed the image  (strongest lamp 2 px, worst same-state control 5 px, needed more than 20 px)
+  vehicle.ue4.audi.tt              no lamp changed the image  (strongest lamp 1 px, worst same-state control 2 px, needed more than 8 px)
+  vehicle.ue4.bmw.grantourer       no lamp changed the image  (strongest lamp 2 px, worst same-state control 3 px, needed more than 12 px)
+  vehicle.ue4.chevrolet.impala     no lamp changed the image  (strongest lamp 4 px, worst same-state control 10 px, needed more than 40 px)
+  vehicle.ue4.ford.crown           no lamp changed the image  (strongest lamp 1 px, worst same-state control 1 px, needed more than 8 px)
+  vehicle.ue4.ford.mustang         no lamp changed the image  (strongest lamp 7 px, worst same-state control 11 px, needed more than 44 px)
+  vehicle.ue4.mercedes.ccc         no lamp changed the image  (strongest lamp 2 px, worst same-state control 5 px, needed more than 20 px)

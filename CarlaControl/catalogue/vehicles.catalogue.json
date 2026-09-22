@@ -1,0 +1,1710 @@
+{
+  "blueprint_set_digest": "bd7624c8e474e86f73e6ecba1983b88b1c42050e21d68dbaea29e387a7db5fc1",
+  "catalogue_digest": "771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a",
+  "catalogue_id": "carla-0.10.0-windows",
+  "catalogue_version": 1,
+  "classes": [
+    {
+      "accel_mps2": 2.6,
+      "class_id": "civ_car",
+      "cot_base_type": "car",
+      "decel_mps2": 4.5,
+      "description": "Ordinary civilian passenger cars. The default for background traffic.",
+      "gui_colour": "#CCCCD1",
+      "gui_shape": "passenger",
+      "max_speed_mps": 35.0,
+      "members": [
+        {
+          "blueprint_id": "vehicle.dodge.charger",
+          "weight": 1.0
+        },
+        {
+          "blueprint_id": "vehicle.lincoln.mkz",
+          "weight": 1.0
+        },
+        {
+          "blueprint_id": "vehicle.mini.cooper",
+          "weight": 1.0
+        },
+        {
+          "blueprint_id": "vehicle.nissan.patrol",
+          "weight": 1.0
+        },
+        {
+          "blueprint_id": "vehicle.ue4.audi.tt",
+          "weight": 1.0
+        },
+        {
+          "blueprint_id": "vehicle.ue4.bmw.grantourer",
+          "weight": 1.0
+        },
+        {
+          "blueprint_id": "vehicle.ue4.chevrolet.impala",
+          "weight": 1.0
+        },
+        {
+          "blueprint_id": "vehicle.ue4.ford.crown",
+          "weight": 1.0
+        },
+        {
+          "blueprint_id": "vehicle.ue4.ford.mustang",
+          "weight": 1.0
+        },
+        {
+          "blueprint_id": "vehicle.ue4.mercedes.ccc",
+          "weight": 1.0
+        }
+      ],
+      "min_gap_m": 2.5,
+      "render_colour_policy": "palette",
+      "sigma": 0.5,
+      "speed_factor_dev": 0.1,
+      "speed_factor_mean": 1.0,
+      "sumo_vclass": "passenger"
+    },
+    {
+      "accel_mps2": 2.6,
+      "class_id": "civ_van",
+      "cot_base_type": "van",
+      "decel_mps2": 4.5,
+      "description": "Panel vans and light commercial bodies on a van chassis.",
+      "gui_colour": "#9AA0A6",
+      "gui_shape": "delivery",
+      "max_speed_mps": 30.0,
+      "members": [
+        {
+          "blueprint_id": "vehicle.sprinter.mercedes",
+          "weight": 1.0
+        }
+      ],
+      "min_gap_m": 2.5,
+      "render_colour_policy": "palette",
+      "sigma": 0.5,
+      "speed_factor_dev": 0.05,
+      "speed_factor_mean": 1.0,
+      "sumo_vclass": "delivery"
+    },
+    {
+      "accel_mps2": 1.3,
+      "class_id": "civ_truck",
+      "cot_base_type": "truck",
+      "decel_mps2": 4.0,
+      "description": "Rigid lorries. Slower, longer and taller than anything civilian.",
+      "gui_colour": "#8C7B5A",
+      "gui_shape": "truck",
+      "max_speed_mps": 25.0,
+      "members": [
+        {
+          "blueprint_id": "vehicle.carlacola.actors",
+          "weight": 1.0
+        },
+        {
+          "blueprint_id": "vehicle.fuso.mitsubishi",
+          "weight": 1.0
+        }
+      ],
+      "min_gap_m": 3.0,
+      "render_colour_policy": "palette",
+      "sigma": 0.5,
+      "speed_factor_dev": 0.05,
+      "speed_factor_mean": 1.0,
+      "sumo_vclass": "truck"
+    },
+    {
+      "accel_mps2": 2.6,
+      "class_id": "taxi",
+      "cot_base_type": "car",
+      "cot_special_type": "taxi",
+      "decel_mps2": 4.5,
+      "description": "Licensed taxis. Same body as a civilian saloon, different livery policy.",
+      "gui_colour": "#E8B93B",
+      "gui_shape": "taxi",
+      "max_speed_mps": 35.0,
+      "members": [
+        {
+          "blueprint_id": "vehicle.taxi.ford",
+          "weight": 1.0
+        }
+      ],
+      "min_gap_m": 2.5,
+      "render_colour_policy": "palette",
+      "sigma": 0.5,
+      "speed_factor_dev": 0.05,
+      "speed_factor_mean": 1.0,
+      "sumo_vclass": "taxi"
+    },
+    {
+      "accel_mps2": 2.6,
+      "class_id": "police",
+      "cot_base_type": "car",
+      "cot_special_type": "emergency",
+      "decel_mps2": 4.5,
+      "description": "Marked police cars.",
+      "gui_colour": "#3C6EDB",
+      "gui_shape": "police",
+      "max_speed_mps": 40.0,
+      "members": [
+        {
+          "blueprint_id": "vehicle.dodgecop.charger",
+          "weight": 1.0
+        }
+      ],
+      "min_gap_m": 2.5,
+      "render_colour_policy": "palette",
+      "sigma": 0.4,
+      "speed_factor_dev": 0.05,
+      "speed_factor_mean": 1.0,
+      "sumo_vclass": "authority"
+    },
+    {
+      "accel_mps2": 2.6,
+      "class_id": "ambulance",
+      "cot_base_type": "van",
+      "cot_special_type": "emergency",
+      "decel_mps2": 4.5,
+      "description": "Ambulances on a van chassis.",
+      "gui_colour": "#D94F4F",
+      "gui_shape": "emergency",
+      "max_speed_mps": 35.0,
+      "members": [
+        {
+          "blueprint_id": "vehicle.ambulance.ford",
+          "weight": 1.0
+        }
+      ],
+      "min_gap_m": 2.5,
+      "render_colour_policy": "palette",
+      "sigma": 0.4,
+      "speed_factor_dev": 0.05,
+      "speed_factor_mean": 1.0,
+      "sumo_vclass": "emergency"
+    },
+    {
+      "accel_mps2": 1.3,
+      "class_id": "fire_appliance",
+      "cot_base_type": "truck",
+      "cot_special_type": "emergency",
+      "decel_mps2": 4.0,
+      "description": "Fire appliances. The largest emergency body in the content build.",
+      "gui_colour": "#C62828",
+      "gui_shape": "firebrigade",
+      "max_speed_mps": 25.0,
+      "members": [
+        {
+          "blueprint_id": "vehicle.firetruck.actors",
+          "weight": 1.0
+        }
+      ],
+      "min_gap_m": 3.0,
+      "render_colour_policy": "palette",
+      "sigma": 0.4,
+      "speed_factor_dev": 0.05,
+      "speed_factor_mean": 1.0,
+      "sumo_vclass": "emergency"
+    }
+  ],
+  "content_build_id": "carla-0.10.0-windows",
+  "generated_at_utc": "2026-09-22T00:23:41.022Z",
+  "generator": "carlacontrol.VehicleCatalogueBuilder/1.0.0",
+  "lamp_probe": {
+    "average_frames": 5,
+    "camera_poses": [
+      {
+        "fov_deg": 60.0,
+        "height_offset_m": -2.5,
+        "pitch_deg": 22.0,
+        "standoff_m": 4.0,
+        "yaw_deg": 180.0
+      },
+      {
+        "fov_deg": 60.0,
+        "height_offset_m": -2.5,
+        "pitch_deg": 22.0,
+        "standoff_m": 4.0,
+        "yaw_deg": 0.0
+      }
+    ],
+    "drift_margin": 4.0,
+    "image_size": [
+      480,
+      360
+    ],
+    "luminance_threshold": 24,
+    "minimum_lit_pixels": 8,
+    "positive_control_pixels": 158467,
+    "ran": true,
+    "region": [
+      0.0,
+      0.0,
+      1.0,
+      1.0
+    ],
+    "solar_date": "2026-03-21",
+    "solar_time_hours": 1.0,
+    "sun_elevation_deg": -48.4493408203125
+  },
+  "server_version": "0.10.0",
+  "vehicles": [
+    {
+      "bbox_centre_m": [
+        -0.2929,
+        0.0019,
+        1.2158
+      ],
+      "blueprint_id": "vehicle.ambulance.ford",
+      "colour_applied": "true",
+      "colour_palette": [
+        "255,255,255"
+      ],
+      "colour_settable": true,
+      "declared_base_type": "truck",
+      "declared_has_lights": true,
+      "declared_special_type": "",
+      "generation": 3,
+      "height_m": 2.431,
+      "lamp_capability": {
+        "brake": "unlit",
+        "fog": "unlit",
+        "high_beam": "unlit",
+        "interior": "unlit",
+        "left_blinker": "unlit",
+        "low_beam": "unlit",
+        "position": "unlit",
+        "reverse": "unlit",
+        "right_blinker": "unlit",
+        "special_1": "unlit",
+        "special_2": "unlit"
+      },
+      "length_m": 6.3569,
+      "measurement": "measured",
+      "number_of_wheels": 4,
+      "settable_attributes": [
+        {
+          "id": "color",
+          "recommended_values": [
+            "255,255,255"
+          ],
+          "restrict_to_recommended": false,
+          "type": "RGBColor"
+        },
+        {
+          "id": "role_name",
+          "recommended_values": [
+            "autopilot",
+            "scenario",
+            "ego_vehicle"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "ros_name",
+          "recommended_values": [
+            "vehicle.ambulance.ford"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "sticky_control",
+          "recommended_values": [
+            "true"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        },
+        {
+          "id": "terramechanics",
+          "recommended_values": [
+            "false"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        }
+      ],
+      "tags": "vehicle,ambulance,ford",
+      "uid": 6,
+      "width_m": 2.3512
+    },
+    {
+      "bbox_centre_m": [
+        -0.023,
+        0.0,
+        2.0276
+      ],
+      "blueprint_id": "vehicle.carlacola.actors",
+      "colour_applied": "true",
+      "colour_palette": [
+        "149,0,14"
+      ],
+      "colour_settable": true,
+      "declared_base_type": "truck",
+      "declared_has_lights": true,
+      "declared_special_type": "",
+      "generation": 3,
+      "height_m": 4.0546,
+      "lamp_capability": {
+        "brake": "unlit",
+        "fog": "unlit",
+        "high_beam": "unlit",
+        "interior": "unlit",
+        "left_blinker": "unlit",
+        "low_beam": "unlit",
+        "position": "unlit",
+        "reverse": "unlit",
+        "right_blinker": "unlit",
+        "special_1": "unlit",
+        "special_2": "unlit"
+      },
+      "length_m": 8.0037,
+      "measurement": "measured",
+      "number_of_wheels": 4,
+      "settable_attributes": [
+        {
+          "id": "color",
+          "recommended_values": [
+            "149,0,14"
+          ],
+          "restrict_to_recommended": false,
+          "type": "RGBColor"
+        },
+        {
+          "id": "role_name",
+          "recommended_values": [
+            "autopilot",
+            "scenario",
+            "ego_vehicle"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "ros_name",
+          "recommended_values": [
+            "vehicle.carlacola.actors"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "sticky_control",
+          "recommended_values": [
+            "true"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        },
+        {
+          "id": "terramechanics",
+          "recommended_values": [
+            "false"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        }
+      ],
+      "tags": "vehicle,carlacola,actors",
+      "uid": 16,
+      "width_m": 2.9118
+    },
+    {
+      "bbox_centre_m": [
+        -0.0062,
+        0.0,
+        0.7628
+      ],
+      "blueprint_id": "vehicle.dodge.charger",
+      "colour_applied": "true",
+      "colour_palette": [
+        "0,0,0",
+        "71,71,71",
+        "220,218,217",
+        "78,17,17",
+        "142,45,22",
+        "221,50,13",
+        "72,119,172"
+      ],
+      "colour_settable": true,
+      "declared_base_type": "car",
+      "declared_has_lights": true,
+      "declared_special_type": "",
+      "generation": 3,
+      "height_m": 1.5403,
+      "lamp_capability": {
+        "brake": "unlit",
+        "fog": "unlit",
+        "high_beam": "unlit",
+        "interior": "unlit",
+        "left_blinker": "unlit",
+        "low_beam": "unlit",
+        "position": "unlit",
+        "reverse": "unlit",
+        "right_blinker": "unlit",
+        "special_1": "unlit",
+        "special_2": "unlit"
+      },
+      "length_m": 5.006,
+      "measurement": "measured",
+      "number_of_wheels": 4,
+      "settable_attributes": [
+        {
+          "id": "color",
+          "recommended_values": [
+            "0,0,0",
+            "71,71,71",
+            "220,218,217",
+            "78,17,17",
+            "142,45,22",
+            "221,50,13",
+            "72,119,172"
+          ],
+          "restrict_to_recommended": false,
+          "type": "RGBColor"
+        },
+        {
+          "id": "role_name",
+          "recommended_values": [
+            "autopilot",
+            "scenario",
+            "ego_vehicle"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "ros_name",
+          "recommended_values": [
+            "vehicle.dodge.charger"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "sticky_control",
+          "recommended_values": [
+            "true"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        },
+        {
+          "id": "terramechanics",
+          "recommended_values": [
+            "false"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        }
+      ],
+      "tags": "vehicle,dodge,charger",
+      "uid": 3,
+      "width_m": 1.881
+    },
+    {
+      "bbox_centre_m": [
+        0.1091,
+        0.0,
+        0.8146
+      ],
+      "blueprint_id": "vehicle.dodgecop.charger",
+      "colour_applied": "false",
+      "colour_palette": [
+        "26,26,26"
+      ],
+      "colour_settable": true,
+      "declared_base_type": "car",
+      "declared_has_lights": true,
+      "declared_special_type": "",
+      "generation": 3,
+      "height_m": 1.644,
+      "lamp_capability": {
+        "brake": "unlit",
+        "fog": "unlit",
+        "high_beam": "unlit",
+        "interior": "unlit",
+        "left_blinker": "unlit",
+        "low_beam": "unlit",
+        "position": "unlit",
+        "reverse": "unlit",
+        "right_blinker": "unlit",
+        "special_1": "unlit",
+        "special_2": "unlit"
+      },
+      "length_m": 5.2368,
+      "measurement": "measured",
+      "number_of_wheels": 4,
+      "settable_attributes": [
+        {
+          "id": "color",
+          "recommended_values": [
+            "26,26,26"
+          ],
+          "restrict_to_recommended": false,
+          "type": "RGBColor"
+        },
+        {
+          "id": "role_name",
+          "recommended_values": [
+            "autopilot",
+            "scenario",
+            "ego_vehicle"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "ros_name",
+          "recommended_values": [
+            "vehicle.dodgecop.charger"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "sticky_control",
+          "recommended_values": [
+            "true"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        },
+        {
+          "id": "terramechanics",
+          "recommended_values": [
+            "false"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        }
+      ],
+      "tags": "vehicle,dodgecop,charger",
+      "uid": 4,
+      "width_m": 1.9244
+    },
+    {
+      "bbox_centre_m": [
+        -0.1975,
+        0.0054,
+        1.9137
+      ],
+      "blueprint_id": "vehicle.firetruck.actors",
+      "colour_applied": "true",
+      "colour_palette": [
+        "255,75,26"
+      ],
+      "colour_settable": true,
+      "declared_base_type": "truck",
+      "declared_has_lights": true,
+      "declared_special_type": "",
+      "generation": 3,
+      "height_m": 3.8268,
+      "lamp_capability": {
+        "brake": "unlit",
+        "fog": "unlit",
+        "high_beam": "lit",
+        "interior": "unlit",
+        "left_blinker": "unlit",
+        "low_beam": "unlit",
+        "position": "unlit",
+        "reverse": "unlit",
+        "right_blinker": "unlit",
+        "special_1": "unlit",
+        "special_2": "unlit"
+      },
+      "length_m": 8.5799,
+      "measurement": "measured",
+      "number_of_wheels": 4,
+      "settable_attributes": [
+        {
+          "id": "color",
+          "recommended_values": [
+            "255,75,26"
+          ],
+          "restrict_to_recommended": false,
+          "type": "RGBColor"
+        },
+        {
+          "id": "role_name",
+          "recommended_values": [
+            "autopilot",
+            "scenario",
+            "ego_vehicle"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "ros_name",
+          "recommended_values": [
+            "vehicle.firetruck.actors"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "sticky_control",
+          "recommended_values": [
+            "true"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        },
+        {
+          "id": "terramechanics",
+          "recommended_values": [
+            "false"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        }
+      ],
+      "tags": "vehicle,firetruck,actors",
+      "uid": 15,
+      "width_m": 2.9013
+    },
+    {
+      "bbox_centre_m": [
+        -0.4935,
+        -0.0925,
+        2.1318
+      ],
+      "blueprint_id": "vehicle.fuso.mitsubishi",
+      "colour_applied": "false",
+      "colour_palette": [
+        "250,252,246",
+        "212,229,246",
+        "167,44,58",
+        "0,84,166",
+        "142,142,142",
+        "255,238,170"
+      ],
+      "colour_settable": true,
+      "declared_base_type": "bus",
+      "declared_has_lights": true,
+      "declared_special_type": "",
+      "generation": 3,
+      "height_m": 4.241,
+      "lamp_capability": {
+        "brake": "unlit",
+        "fog": "unlit",
+        "high_beam": "unlit",
+        "interior": "unlit",
+        "left_blinker": "unlit",
+        "low_beam": "unlit",
+        "position": "unlit",
+        "reverse": "unlit",
+        "right_blinker": "unlit",
+        "special_1": "unlit",
+        "special_2": "unlit"
+      },
+      "length_m": 10.1743,
+      "measurement": "measured",
+      "number_of_wheels": 4,
+      "settable_attributes": [
+        {
+          "id": "color",
+          "recommended_values": [
+            "250,252,246",
+            "212,229,246",
+            "167,44,58",
+            "0,84,166",
+            "142,142,142",
+            "255,238,170"
+          ],
+          "restrict_to_recommended": false,
+          "type": "RGBColor"
+        },
+        {
+          "id": "role_name",
+          "recommended_values": [
+            "autopilot",
+            "scenario",
+            "ego_vehicle"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "ros_name",
+          "recommended_values": [
+            "vehicle.fuso.mitsubishi"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "sticky_control",
+          "recommended_values": [
+            "true"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        },
+        {
+          "id": "terramechanics",
+          "recommended_values": [
+            "false"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        }
+      ],
+      "tags": "vehicle,fuso,mitsubishi",
+      "uid": 8,
+      "width_m": 3.9277
+    },
+    {
+      "bbox_centre_m": [
+        -0.0062,
+        0.0,
+        0.7632
+      ],
+      "blueprint_id": "vehicle.lincoln.mkz",
+      "colour_applied": "false",
+      "colour_palette": [
+        "0,0,0"
+      ],
+      "colour_settable": true,
+      "declared_base_type": "car",
+      "declared_has_lights": true,
+      "declared_special_type": "",
+      "generation": -1,
+      "height_m": 1.5241,
+      "lamp_capability": {
+        "brake": "unlit",
+        "fog": "unlit",
+        "high_beam": "unlit",
+        "interior": "unlit",
+        "left_blinker": "unlit",
+        "low_beam": "unlit",
+        "position": "unlit",
+        "reverse": "unlit",
+        "right_blinker": "unlit",
+        "special_1": "unlit",
+        "special_2": "unlit"
+      },
+      "length_m": 4.892,
+      "measurement": "measured",
+      "number_of_wheels": 3,
+      "settable_attributes": [
+        {
+          "id": "color",
+          "recommended_values": [
+            "0,0,0"
+          ],
+          "restrict_to_recommended": false,
+          "type": "RGBColor"
+        },
+        {
+          "id": "role_name",
+          "recommended_values": [
+            "autopilot",
+            "scenario",
+            "ego_vehicle"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "ros_name",
+          "recommended_values": [
+            "vehicle.lincoln.mkz"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "sticky_control",
+          "recommended_values": [
+            "true"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        },
+        {
+          "id": "terramechanics",
+          "recommended_values": [
+            "false"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        }
+      ],
+      "tags": "vehicle,lincoln,mkz",
+      "uid": 1,
+      "width_m": 1.8356
+    },
+    {
+      "bbox_centre_m": [
+        -0.034,
+        0.0,
+        0.8884
+      ],
+      "blueprint_id": "vehicle.mini.cooper",
+      "colour_applied": "false",
+      "colour_palette": [
+        "0,0,0",
+        "104,4,8",
+        "27,54,118",
+        "26,62,29"
+      ],
+      "colour_settable": true,
+      "declared_base_type": "car",
+      "declared_has_lights": true,
+      "declared_special_type": "",
+      "generation": 3,
+      "height_m": 1.7725,
+      "lamp_capability": {
+        "brake": "unlit",
+        "fog": "unlit",
+        "high_beam": "unlit",
+        "interior": "unlit",
+        "left_blinker": "unlit",
+        "low_beam": "unlit",
+        "position": "unlit",
+        "reverse": "unlit",
+        "right_blinker": "unlit",
+        "special_1": "unlit",
+        "special_2": "unlit"
+      },
+      "length_m": 4.5526,
+      "measurement": "measured",
+      "number_of_wheels": 4,
+      "settable_attributes": [
+        {
+          "id": "color",
+          "recommended_values": [
+            "0,0,0",
+            "104,4,8",
+            "27,54,118",
+            "26,62,29"
+          ],
+          "restrict_to_recommended": false,
+          "type": "RGBColor"
+        },
+        {
+          "id": "role_name",
+          "recommended_values": [
+            "autopilot",
+            "scenario",
+            "ego_vehicle"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "ros_name",
+          "recommended_values": [
+            "vehicle.mini.cooper"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "sticky_control",
+          "recommended_values": [
+            "true"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        },
+        {
+          "id": "terramechanics",
+          "recommended_values": [
+            "false"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        }
+      ],
+      "tags": "vehicle,mini,cooper",
+      "uid": 2,
+      "width_m": 2.0956
+    },
+    {
+      "bbox_centre_m": [
+        0.0411,
+        0.0,
+        1.0098
+      ],
+      "blueprint_id": "vehicle.nissan.patrol",
+      "colour_applied": "true",
+      "colour_palette": [
+        "2,35,54",
+        "83,83,83",
+        "172,172,172",
+        "5,5,5",
+        "122,107,100",
+        "159,65,47"
+      ],
+      "colour_settable": true,
+      "declared_base_type": "car",
+      "declared_has_lights": true,
+      "declared_special_type": "",
+      "generation": 3,
+      "height_m": 2.059,
+      "lamp_capability": {
+        "brake": "unlit",
+        "fog": "unlit",
+        "high_beam": "unlit",
+        "interior": "unlit",
+        "left_blinker": "unlit",
+        "low_beam": "unlit",
+        "position": "unlit",
+        "reverse": "unlit",
+        "right_blinker": "unlit",
+        "special_1": "unlit",
+        "special_2": "unlit"
+      },
+      "length_m": 5.5912,
+      "measurement": "measured",
+      "number_of_wheels": 4,
+      "settable_attributes": [
+        {
+          "id": "color",
+          "recommended_values": [
+            "2,35,54",
+            "83,83,83",
+            "172,172,172",
+            "5,5,5",
+            "122,107,100",
+            "159,65,47"
+          ],
+          "restrict_to_recommended": false,
+          "type": "RGBColor"
+        },
+        {
+          "id": "role_name",
+          "recommended_values": [
+            "autopilot",
+            "scenario",
+            "ego_vehicle"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "ros_name",
+          "recommended_values": [
+            "vehicle.nissan.patrol"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "sticky_control",
+          "recommended_values": [
+            "true"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        },
+        {
+          "id": "terramechanics",
+          "recommended_values": [
+            "false"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        }
+      ],
+      "tags": "vehicle,nissan,patrol",
+      "uid": 5,
+      "width_m": 2.1466
+    },
+    {
+      "bbox_centre_m": [
+        -0.0106,
+        0.0041,
+        1.369
+      ],
+      "blueprint_id": "vehicle.sprinter.mercedes",
+      "colour_applied": "false",
+      "colour_palette": [
+        "233,234,236",
+        "135,151,160",
+        "78,80,77",
+        "69,22,25",
+        "28,51,83"
+      ],
+      "colour_settable": true,
+      "declared_base_type": "",
+      "declared_has_lights": true,
+      "declared_special_type": "",
+      "generation": 3,
+      "height_m": 2.726,
+      "lamp_capability": {
+        "brake": "unlit",
+        "fog": "unlit",
+        "high_beam": "unlit",
+        "interior": "unlit",
+        "left_blinker": "unlit",
+        "low_beam": "unlit",
+        "position": "unlit",
+        "reverse": "unlit",
+        "right_blinker": "unlit",
+        "special_1": "unlit",
+        "special_2": "unlit"
+      },
+      "length_m": 5.9151,
+      "measurement": "measured",
+      "number_of_wheels": 4,
+      "settable_attributes": [
+        {
+          "id": "color",
+          "recommended_values": [
+            "233,234,236",
+            "135,151,160",
+            "78,80,77",
+            "69,22,25",
+            "28,51,83"
+          ],
+          "restrict_to_recommended": false,
+          "type": "RGBColor"
+        },
+        {
+          "id": "role_name",
+          "recommended_values": [
+            "autopilot",
+            "scenario",
+            "ego_vehicle"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "ros_name",
+          "recommended_values": [
+            "vehicle.sprinter.mercedes"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "sticky_control",
+          "recommended_values": [
+            "true"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        },
+        {
+          "id": "terramechanics",
+          "recommended_values": [
+            "false"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        }
+      ],
+      "tags": "vehicle,sprinter,mercedes",
+      "uid": 7,
+      "width_m": 1.9884
+    },
+    {
+      "bbox_centre_m": [
+        0.1803,
+        0.0,
+        0.7683
+      ],
+      "blueprint_id": "vehicle.taxi.ford",
+      "colour_applied": "true",
+      "colour_palette": [
+        "232,192,0"
+      ],
+      "colour_settable": true,
+      "declared_base_type": "car",
+      "declared_has_lights": true,
+      "declared_special_type": "",
+      "generation": 3,
+      "height_m": 1.5752,
+      "lamp_capability": {
+        "brake": "unlit",
+        "fog": "unlit",
+        "high_beam": "unlit",
+        "interior": "unlit",
+        "left_blinker": "unlit",
+        "low_beam": "unlit",
+        "position": "unlit",
+        "reverse": "unlit",
+        "right_blinker": "unlit",
+        "special_1": "unlit",
+        "special_2": "unlit"
+      },
+      "length_m": 5.3545,
+      "measurement": "measured",
+      "number_of_wheels": 4,
+      "settable_attributes": [
+        {
+          "id": "color",
+          "recommended_values": [
+            "232,192,0"
+          ],
+          "restrict_to_recommended": false,
+          "type": "RGBColor"
+        },
+        {
+          "id": "role_name",
+          "recommended_values": [
+            "autopilot",
+            "scenario",
+            "ego_vehicle"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "ros_name",
+          "recommended_values": [
+            "vehicle.taxi.ford"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "sticky_control",
+          "recommended_values": [
+            "true"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        },
+        {
+          "id": "terramechanics",
+          "recommended_values": [
+            "false"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        }
+      ],
+      "tags": "vehicle,taxi,ford",
+      "uid": 17,
+      "width_m": 1.7891
+    },
+    {
+      "bbox_centre_m": [
+        -0.0004,
+        -0.0,
+        0.6926
+      ],
+      "blueprint_id": "vehicle.ue4.audi.tt",
+      "colour_applied": "true",
+      "colour_palette": [
+        "0,0,0",
+        "27,54,118",
+        "104,4,8",
+        "230,216,205",
+        "108,108,108"
+      ],
+      "colour_settable": true,
+      "declared_base_type": "bus",
+      "declared_has_lights": true,
+      "declared_special_type": "",
+      "generation": 2,
+      "height_m": 1.3853,
+      "lamp_capability": {
+        "brake": "unlit",
+        "fog": "unlit",
+        "high_beam": "unlit",
+        "interior": "unlit",
+        "left_blinker": "unlit",
+        "low_beam": "unlit",
+        "position": "unlit",
+        "reverse": "unlit",
+        "right_blinker": "unlit",
+        "special_1": "unlit",
+        "special_2": "unlit"
+      },
+      "length_m": 4.1812,
+      "measurement": "measured",
+      "number_of_wheels": 4,
+      "settable_attributes": [
+        {
+          "id": "color",
+          "recommended_values": [
+            "0,0,0",
+            "27,54,118",
+            "104,4,8",
+            "230,216,205",
+            "108,108,108"
+          ],
+          "restrict_to_recommended": false,
+          "type": "RGBColor"
+        },
+        {
+          "id": "role_name",
+          "recommended_values": [
+            "autopilot",
+            "scenario",
+            "ego_vehicle"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "ros_name",
+          "recommended_values": [
+            "vehicle.ue4.audi.tt"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "sticky_control",
+          "recommended_values": [
+            "true"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        },
+        {
+          "id": "terramechanics",
+          "recommended_values": [
+            "false"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        }
+      ],
+      "tags": "vehicle,ue4.audi,tt",
+      "uid": 12,
+      "width_m": 1.9941
+    },
+    {
+      "bbox_centre_m": [
+        0.0,
+        -0.0005,
+        0.7651
+      ],
+      "blueprint_id": "vehicle.ue4.bmw.grantourer",
+      "colour_applied": "true",
+      "colour_palette": [
+        "0,0,0",
+        "27,54,118",
+        "104,4,8",
+        "230,216,205",
+        "108,108,108"
+      ],
+      "colour_settable": true,
+      "declared_base_type": "bus",
+      "declared_has_lights": true,
+      "declared_special_type": "",
+      "generation": 2,
+      "height_m": 1.6673,
+      "lamp_capability": {
+        "brake": "unlit",
+        "fog": "unlit",
+        "high_beam": "unlit",
+        "interior": "unlit",
+        "left_blinker": "unlit",
+        "low_beam": "unlit",
+        "position": "unlit",
+        "reverse": "unlit",
+        "right_blinker": "unlit",
+        "special_1": "unlit",
+        "special_2": "unlit"
+      },
+      "length_m": 4.611,
+      "measurement": "measured",
+      "number_of_wheels": 4,
+      "settable_attributes": [
+        {
+          "id": "color",
+          "recommended_values": [
+            "0,0,0",
+            "27,54,118",
+            "104,4,8",
+            "230,216,205",
+            "108,108,108"
+          ],
+          "restrict_to_recommended": false,
+          "type": "RGBColor"
+        },
+        {
+          "id": "role_name",
+          "recommended_values": [
+            "autopilot",
+            "scenario",
+            "ego_vehicle"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "ros_name",
+          "recommended_values": [
+            "vehicle.ue4.bmw.grantourer"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "sticky_control",
+          "recommended_values": [
+            "true"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        },
+        {
+          "id": "terramechanics",
+          "recommended_values": [
+            "false"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        }
+      ],
+      "tags": "vehicle,ue4.bmw,grantourer",
+      "uid": 11,
+      "width_m": 2.2417
+    },
+    {
+      "bbox_centre_m": [
+        0.0001,
+        0.0018,
+        0.7015
+      ],
+      "blueprint_id": "vehicle.ue4.chevrolet.impala",
+      "colour_applied": "true",
+      "colour_palette": [
+        "0,146,255",
+        "27,54,118",
+        "104,4,8",
+        "230,216,205",
+        "108,108,108"
+      ],
+      "colour_settable": true,
+      "declared_base_type": "bus",
+      "declared_has_lights": true,
+      "declared_special_type": "",
+      "generation": 2,
+      "height_m": 1.4107,
+      "lamp_capability": {
+        "brake": "unlit",
+        "fog": "unlit",
+        "high_beam": "unlit",
+        "interior": "unlit",
+        "left_blinker": "unlit",
+        "low_beam": "unlit",
+        "position": "unlit",
+        "reverse": "unlit",
+        "right_blinker": "unlit",
+        "special_1": "unlit",
+        "special_2": "unlit"
+      },
+      "length_m": 5.3575,
+      "measurement": "measured",
+      "number_of_wheels": 4,
+      "settable_attributes": [
+        {
+          "id": "color",
+          "recommended_values": [
+            "0,146,255",
+            "27,54,118",
+            "104,4,8",
+            "230,216,205",
+            "108,108,108"
+          ],
+          "restrict_to_recommended": false,
+          "type": "RGBColor"
+        },
+        {
+          "id": "role_name",
+          "recommended_values": [
+            "autopilot",
+            "scenario",
+            "ego_vehicle"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "ros_name",
+          "recommended_values": [
+            "vehicle.ue4.chevrolet.impala"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "sticky_control",
+          "recommended_values": [
+            "true"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        },
+        {
+          "id": "terramechanics",
+          "recommended_values": [
+            "false"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        }
+      ],
+      "tags": "vehicle,ue4.chevrolet,impala",
+      "uid": 14,
+      "width_m": 2.0332
+    },
+    {
+      "bbox_centre_m": [
+        0.1854,
+        -0.0,
+        0.7684
+      ],
+      "blueprint_id": "vehicle.ue4.ford.crown",
+      "colour_applied": "true",
+      "colour_palette": [
+        "254,211,0"
+      ],
+      "colour_settable": true,
+      "declared_base_type": "bus",
+      "declared_has_lights": true,
+      "declared_special_type": "",
+      "generation": -1,
+      "height_m": 1.575,
+      "lamp_capability": {
+        "brake": "unlit",
+        "fog": "unlit",
+        "high_beam": "unlit",
+        "interior": "unlit",
+        "left_blinker": "unlit",
+        "low_beam": "unlit",
+        "position": "unlit",
+        "reverse": "unlit",
+        "right_blinker": "unlit",
+        "special_1": "unlit",
+        "special_2": "unlit"
+      },
+      "length_m": 5.3657,
+      "measurement": "measured",
+      "number_of_wheels": 4,
+      "settable_attributes": [
+        {
+          "id": "color",
+          "recommended_values": [
+            "254,211,0"
+          ],
+          "restrict_to_recommended": false,
+          "type": "RGBColor"
+        },
+        {
+          "id": "role_name",
+          "recommended_values": [
+            "autopilot",
+            "scenario",
+            "ego_vehicle"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "ros_name",
+          "recommended_values": [
+            "vehicle.ue4.ford.crown"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "sticky_control",
+          "recommended_values": [
+            "true"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        },
+        {
+          "id": "terramechanics",
+          "recommended_values": [
+            "false"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        }
+      ],
+      "tags": "vehicle,ue4.ford,crown",
+      "uid": 10,
+      "width_m": 1.8007
+    },
+    {
+      "bbox_centre_m": [
+        0.0321,
+        -0.0,
+        0.6505
+      ],
+      "blueprint_id": "vehicle.ue4.ford.mustang",
+      "colour_applied": "true",
+      "colour_palette": [
+        "0,0,0",
+        "27,54,118",
+        "104,4,8",
+        "230,216,205",
+        "108,108,108"
+      ],
+      "colour_settable": true,
+      "declared_base_type": "bus",
+      "declared_has_lights": true,
+      "declared_special_type": "",
+      "generation": -1,
+      "height_m": 1.3009,
+      "lamp_capability": {
+        "brake": "unlit",
+        "fog": "unlit",
+        "high_beam": "unlit",
+        "interior": "unlit",
+        "left_blinker": "unlit",
+        "low_beam": "unlit",
+        "position": "unlit",
+        "reverse": "unlit",
+        "right_blinker": "unlit",
+        "special_1": "unlit",
+        "special_2": "unlit"
+      },
+      "length_m": 4.7175,
+      "measurement": "measured",
+      "number_of_wheels": 4,
+      "settable_attributes": [
+        {
+          "id": "color",
+          "recommended_values": [
+            "0,0,0",
+            "27,54,118",
+            "104,4,8",
+            "230,216,205",
+            "108,108,108"
+          ],
+          "restrict_to_recommended": false,
+          "type": "RGBColor"
+        },
+        {
+          "id": "role_name",
+          "recommended_values": [
+            "autopilot",
+            "scenario",
+            "ego_vehicle"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "ros_name",
+          "recommended_values": [
+            "vehicle.ue4.ford.mustang"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "sticky_control",
+          "recommended_values": [
+            "true"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        },
+        {
+          "id": "terramechanics",
+          "recommended_values": [
+            "false"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        }
+      ],
+      "tags": "vehicle,ue4.ford,mustang",
+      "uid": 9,
+      "width_m": 1.8948
+    },
+    {
+      "bbox_centre_m": [
+        -0.0026,
+        0.0,
+        0.7204
+      ],
+      "blueprint_id": "vehicle.ue4.mercedes.ccc",
+      "colour_applied": "true",
+      "colour_palette": [
+        "73,0,0",
+        "27,54,118",
+        "104,4,8",
+        "230,216,205"
+      ],
+      "colour_settable": true,
+      "declared_base_type": "bus",
+      "declared_has_lights": true,
+      "declared_special_type": "",
+      "generation": 2,
+      "height_m": 1.4419,
+      "lamp_capability": {
+        "brake": "unlit",
+        "fog": "unlit",
+        "high_beam": "unlit",
+        "interior": "unlit",
+        "left_blinker": "unlit",
+        "low_beam": "unlit",
+        "position": "unlit",
+        "reverse": "unlit",
+        "right_blinker": "unlit",
+        "special_1": "unlit",
+        "special_2": "unlit"
+      },
+      "length_m": 4.6736,
+      "measurement": "measured",
+      "number_of_wheels": 4,
+      "settable_attributes": [
+        {
+          "id": "color",
+          "recommended_values": [
+            "73,0,0",
+            "27,54,118",
+            "104,4,8",
+            "230,216,205"
+          ],
+          "restrict_to_recommended": false,
+          "type": "RGBColor"
+        },
+        {
+          "id": "role_name",
+          "recommended_values": [
+            "autopilot",
+            "scenario",
+            "ego_vehicle"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "ros_name",
+          "recommended_values": [
+            "vehicle.ue4.mercedes.ccc"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "sticky_control",
+          "recommended_values": [
+            "true"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        },
+        {
+          "id": "terramechanics",
+          "recommended_values": [
+            "false"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        }
+      ],
+      "tags": "vehicle,ue4.mercedes,ccc",
+      "uid": 13,
+      "width_m": 1.8118
+    }
+  ]
+}
