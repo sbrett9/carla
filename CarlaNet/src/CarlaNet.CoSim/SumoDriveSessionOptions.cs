@@ -1,0 +1,123 @@
+namespace CarlaNet.CoSim;
+
+/// <summary>What a co-simulation session is pointed at, and what it is allowed to do.</summary>
+/// <param name="ScenarioPath">The scenario's SUMO configuration.</param>
+/// <param name="WorldPackagePath">
+/// The world package: the ground surface the poses are seated on, and the road network they are
+/// interpolated along.
+/// </param>
+/// <param name="CataloguePath">The measured vehicle catalogue.</param>
+/// <param name="WorldKey">
+/// What identifies the world to every component that could claim its population -- a server address
+/// and the map it has loaded.
+/// </param>
+/// <param name="RenderSet">Which vehicles hold a place in the render set, and how many may.</param>
+/// <remarks>
+/// The five that decide what a session <i>is</i> are constructor parameters and the rest are
+/// settable. A session is orchestrated from Python, where an object initialiser is not expressible
+/// and an init-only property cannot be written at all, so an options object that can only be built
+/// with one is an options object the orchestrator cannot build.
+/// </remarks>
+public sealed record SumoDriveSessionOptions(
+    string ScenarioPath,
+    string WorldPackagePath,
+    string CataloguePath,
+    string WorldKey,
+    IRenderSetPolicy RenderSet)
+{
+    /// <summary>
+    /// The fixed delta the world ticks at: what a session with a <see cref="World"/> sets it to,
+    /// and what one without takes on trust.
+    /// </summary>
+    public double WorldDeltaSeconds { get; set; } = 0.05;
+
+    /// <summary>Frames per simulated second a recorder would emit.</summary>
+    public double CaptureRateHz { get; set; } = 2.0;
+
+    /// <summary>
+    /// Whether the world advances only on a tick cue, for a session with no <see cref="World"/>.
+    /// False refuses the session, and the refusal is not a formality: measured on this fork, a
+    /// camera spawned into an asynchronous world delivers no frames at all.
+    /// </summary>
+    /// <remarks>
+    /// Ignored where a world is given, because the session then puts that world into synchronous
+    /// mode itself and validates its clock against what the world reports back rather than against
+    /// what a caller declared. Two sources for one fact is how they come to disagree.
+    /// </remarks>
+    public bool WorldIsSynchronous { get; set; } = true;
+
+    /// <summary>
+    /// The CARLA world the session drives: where the bodies are spawned, the poses written and the
+    /// ticks cued.
+    /// </summary>
+    /// <remarks>
+    /// Absent, the session computes every pose and applies none of them, which is what established
+    /// the pose conversion before anything moved and stays the way to check it again. A session with
+    /// no world still owns the advance of simulated time on both sides -- it just advances a counter
+    /// instead of a world -- so what it exercises is the whole bridge bar the writing.
+    /// </remarks>
+    public ICarlaWorld? World { get; set; }
+
+    /// <summary>
+    /// How many CARLA actors the session may own at once, across every blueprint.
+    /// </summary>
+    /// <remarks>
+    /// The pool grows to demand and never past this. It is above the render-set capacity on purpose:
+    /// capacity bounds how many vehicles are rendered at one instant, while the pool also holds the
+    /// bodies of blueprints that were busy earlier and are parked now, and a mix that shifts over a
+    /// run needs both.
+    /// </remarks>
+    public int MaximumBodies { get; set; } = 192;
+
+    /// <summary>
+    /// Advance the CARLA world by one tick, answering false where the tick did not produce a frame.
+    /// </summary>
+    /// <remarks>
+    /// For a session with no <see cref="World"/>: a run with no CARLA at all supplies one that
+    /// counts. Giving both is refused, because a session with two ways to advance the world has two
+    /// clocks and no way to say which a frame belongs to.
+    /// </remarks>
+    public Func<bool>? TickWorld { get; set; }
+
+    /// <summary>Who to name if something else has already claimed the world's population.</summary>
+    public string Holder { get; set; } = "CarlaNet.CoSim playback bridge";
+
+    /// <summary>
+    /// Height of the actor origin above the contact surface per blueprint, where it has been
+    /// measured by settling a body on level ground rather than taken from its bounding box.
+    /// </summary>
+    public IReadOnlyDictionary<string, double>? MeasuredSeatHeights { get; set; }
+
+    /// <summary>
+    /// A SUMO step length to force, overriding what the scenario authored.
+    /// </summary>
+    /// <remarks>
+    /// Behaviour-changing, and recorded in the report for that reason. Measured on the shipped port
+    /// scenario: moving from a one-second step to a tenth left the demand identical -- same
+    /// insertions, same routes -- and cut mean time loss per vehicle by 62%, which is most of what
+    /// the run is capturing truth about.
+    /// </remarks>
+    public double? SumoStepOverrideSeconds { get; set; }
+
+    /// <summary>Simulated second to fast-forward SUMO to before the first world tick.</summary>
+    public double WarmUpToSimulatedSecond { get; set; }
+
+    /// <summary>Where each computed pose goes.</summary>
+    public Action<CoSimPoseRecord>? OnPose { get; set; }
+
+    /// <summary>Where a completed render-set interval goes.</summary>
+    public Action<RenderedVehicleInterval>? OnRelease { get; set; }
+
+    /// <summary>
+    /// Where each commanded-against-applied comparison goes, one per rendered vehicle per tick.
+    /// </summary>
+    /// <remarks>
+    /// Handed out rather than accumulated, like the poses: a capture run produces one of these for
+    /// every vehicle on every tick, and a list of all of them is a run-length leak on the tick
+    /// thread. The summary a run needs is on the report either way.
+    /// </remarks>
+    public Action<PoseDivergence>? OnDivergence { get; set; }
+
+    /// <summary>Where SUMO's own console output goes.</summary>
+    public Action<string>? SumoOutput { get; set; }
+}

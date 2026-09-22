@@ -3,7 +3,7 @@ using CarlaNet.Sumo;
 namespace CarlaNet.CoSim.Tests;
 
 /// <summary>
-/// A ghost run against whatever scenario and world the environment names, rather than the fixture.
+/// A run against whatever scenario and world the environment names, rather than the fixture.
 /// </summary>
 /// <remarks>
 /// <para>Opt-in, and skipped when nothing is named. A generated world package is tens of megabytes
@@ -15,7 +15,7 @@ namespace CarlaNet.CoSim.Tests;
 /// <c>CARLANET_COSIM_WORLD_PACKAGE</c> to the <c>.cwp</c> the world was built as. Optionally
 /// <c>CARLANET_COSIM_STEPS</c>, <c>CARLANET_COSIM_WARMUP</c> and <c>CARLANET_COSIM_STEP_LENGTH</c>.</para>
 /// </remarks>
-internal sealed class NamedGhostRunFactAttribute : FactAttribute
+internal sealed class NamedCoSimRunFactAttribute : FactAttribute
 {
     public const string ScenarioVariable = "CARLANET_COSIM_SCENARIO";
     public const string WorldPackageVariable = "CARLANET_COSIM_WORLD_PACKAGE";
@@ -23,12 +23,12 @@ internal sealed class NamedGhostRunFactAttribute : FactAttribute
     public const string WarmUpVariable = "CARLANET_COSIM_WARMUP";
     public const string StepLengthVariable = "CARLANET_COSIM_STEP_LENGTH";
 
-    public NamedGhostRunFactAttribute()
+    public NamedCoSimRunFactAttribute()
     {
         if (Scenario is null || WorldPackage is null)
         {
             Skip = $"Set {ScenarioVariable} to a .sumocfg and {WorldPackageVariable} to a .cwp to "
-                   + "run a ghost session against a real scenario and world.";
+                   + "run a co-simulation session against a real scenario and world.";
             return;
         }
 

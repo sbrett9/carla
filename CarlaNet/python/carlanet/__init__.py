@@ -110,6 +110,17 @@ try:
 except FileNotFoundError:
     _CARLANET_SCENARIO_AVAILABLE = False
 
+# SUMO co-simulation (CarlaNet.Sumo + CarlaNet.CoSim): a TraCI client and the playback bridge that
+# drives a world's vehicles from a SUMO microsimulation. Python starts and ends a session and reads
+# its report; every pose is computed and written in .NET off the tick thread's critical path.
+# Optional — a missing assembly leaves sumo_drive_world() unavailable.
+try:
+    _ref("CarlaNet.Sumo")
+    _ref("CarlaNet.CoSim")
+    _CARLANET_COSIM_AVAILABLE = True
+except FileNotFoundError:
+    _CARLANET_COSIM_AVAILABLE = False
+
 # ── C# type imports ───────────────────────────────────────────────────────────
 from CarlaNet.Transport import CarlaClient as _CarlaClient
 from CarlaNet.Types.Geom import (Transform as _CSTransform,
@@ -2002,6 +2013,71 @@ class World:
             except Exception:
                 pass
             self._scenario = None
+
+    def start_sumo_drive(self, scenario, world_package, catalogue,
+                         region_centre=(0.0, 0.0), admit_radius_m=400.0, hysteresis_m=60.0,
+                         capacity=128, maximum_bodies=192, fixed_delta=0.05, record_hz=2.0,
+                         warm_up_to=0.0, step_length=None,
+                         on_pose=None, on_release=None, on_divergence=None):
+        """Drive this world's vehicles from a SUMO microsimulation. Returns the session, or None if
+        the co-simulation assemblies are not loaded.
+
+        The session owns the advance of simulated time on BOTH sides: call `session.Advance()` in a
+        loop and call nothing else that ticks — not `world.tick()`, and no traffic manager. It puts
+        the world into synchronous mode at `fixed_delta` and restores whatever settings it found
+        when it is disposed, on its failure paths as well as its normal one, so it belongs in a
+        `try`/`finally` or a `with`-equivalent. Ambient traffic cannot run beside it: the session
+        takes the world's population lease and names whoever already holds it.
+
+        `scenario` is a .sumocfg, `world_package` the .cwp the world was built as (the ground
+        surface the poses are seated on and the road network they are interpolated along), and
+        `catalogue` the measured vehicle catalogue. A vType that names no blueprint the catalogue
+        holds a measurement for is simulated and never rendered — no body of another shape stands in
+        for it.
+
+        `region_centre`, `admit_radius_m` and `hysteresis_m` draw the region vehicles are rendered
+        in, in the SUMO network's own projected metres; `capacity` is how many may be rendered at
+        once and `maximum_bodies` how many CARLA actors the session may own. `warm_up_to`
+        fast-forwards SUMO to a simulated second before the first world tick, and `step_length`
+        overrides the scenario's own SUMO step (behaviour-changing, and recorded as such).
+
+        The three callbacks are handed a record per vehicle per tick from the tick thread and must
+        not block: `on_pose` the computed pose, `on_release` a completed render interval, and
+        `on_divergence` the commanded pose against what the world did with it. The run's summary is
+        on `session.Report` either way."""
+        if not _CARLANET_COSIM_AVAILABLE:
+            print("SUMO co-simulation unavailable: CarlaNet.CoSim assembly not loaded "
+                  "(rebuild the wheel/DLLs).", file=sys.stderr)
+            return None
+        from CarlaNet.CoSim import (CarlaClientWorld, CoSimPoseRecord, PoseDivergence,
+                                    RegionRenderSetPolicy, RenderedVehicleInterval,
+                                    SumoDriveSession, SumoDriveSessionOptions)
+        from System import Action
+
+        options = SumoDriveSessionOptions(
+            str(scenario), str(world_package), str(catalogue),
+            f"{self._client.Endpoint}/{self.get_map().name}",
+            RegionRenderSetPolicy(float(region_centre[0]), float(region_centre[1]),
+                                  float(admit_radius_m), float(hysteresis_m), int(capacity)))
+        # Attaching starts the world-observer stream the pose read-back is taken from, if this
+        # client has not already got one.
+        options.World = CarlaClientWorld.Attach(self._client, True)
+        options.MaximumBodies = int(maximum_bodies)
+        options.WorldDeltaSeconds = float(fixed_delta)
+        options.CaptureRateHz = float(record_hz)
+        options.WarmUpToSimulatedSecond = float(warm_up_to)
+        if step_length is not None:
+            options.SumoStepOverrideSeconds = float(step_length)
+        # Each callback is bound to the delegate type it is assigned to. A bare Python callable
+        # does not convert to a generic Action<T> and the assignment fails outright, which is worth
+        # knowing here rather than at the far end of a caller's own wiring.
+        if on_pose is not None:
+            options.OnPose = Action[CoSimPoseRecord](on_pose)
+        if on_release is not None:
+            options.OnRelease = Action[RenderedVehicleInterval](on_release)
+        if on_divergence is not None:
+            options.OnDivergence = Action[PoseDivergence](on_divergence)
+        return SumoDriveSession.Start(options)
 
     def stop_recording(self):
         """Stop native recording (flushes pending captures)."""

@@ -1,12 +1,16 @@
 using System.Diagnostics;
 using CarlaNet.Map.WorldPackage;
 using CarlaNet.Sumo;
+using CarlaNet.Types.Geom;
+using CarlaNet.Types.Rpc.Commands;
+
+using ActorId = uint;
 
 namespace CarlaNet.CoSim;
 
 /// <summary>
-/// A co-simulation session that computes every pose it would apply, records it, and applies none of
-/// them.
+/// The playback bridge: one session that owns the advance of simulated time on both sides, computes
+/// every vehicle's CARLA pose from SUMO's state, and records what it computed.
 /// </summary>
 /// <remarks>
 /// <para><b>Why a session that does nothing is worth running.</b> The conversion from a SUMO state
@@ -22,9 +26,9 @@ namespace CarlaNet.CoSim;
 /// caller supplied, so the session owns the advance of simulated time on both sides exactly as it
 /// will when it drives.</para>
 /// </remarks>
-public sealed class GhostSession : IDisposable
+public sealed class SumoDriveSession : IDisposable
 {
-    private readonly GhostSessionOptions _options;
+    private readonly SumoDriveSessionOptions _options;
     private readonly SumoConnection _sumo;
     private readonly SubscribedPopulation _population;
     private readonly RenderSetManager _renderSet;
@@ -33,6 +37,12 @@ public sealed class GhostSession : IDisposable
     private readonly LaneArcInterpolator _interpolator;
     private readonly SumoRoadNetwork _network;
     private readonly PopulationLease _lease;
+    private readonly WorldSettingsLease? _settings;
+    private readonly VehicleBodyPool? _pool;
+    private readonly Func<bool> _tickWorld;
+    private readonly List<Command> _batch = [];
+    private readonly List<Command> _parked = [];
+    private readonly List<(string VehicleId, ActorId Actor, VehiclePose Pose)> _commanded = [];
     private readonly Dictionary<string, (double X, double Y)> _positions = [];
     private readonly Dictionary<string, CoSimVehicleFrame> _previous = [];
     private readonly Dictionary<string, CoSimVehicleFrame> _next = [];
@@ -42,26 +52,31 @@ public sealed class GhostSession : IDisposable
     private long _tickIndex;
     private bool _disposed;
 
-    private GhostSession(GhostSessionOptions options,
-                         SumoConnection sumo,
-                         CoSimClock clock,
-                         SumoRoadNetwork network,
-                         GroundSurface ground,
-                         VehicleCatalogue catalogue,
-                         PopulationLease lease)
+    private SumoDriveSession(SumoDriveSessionOptions options,
+                             SumoConnection sumo,
+                             CoSimClock clock,
+                             SumoRoadNetwork network,
+                             GroundSurface ground,
+                             VehicleCatalogue catalogue,
+                             PopulationLease lease,
+                             WorldSettingsLease? settings,
+                             VehicleBodyPool? pool)
     {
         _options = options;
         _sumo = sumo;
         _network = network;
         _lease = lease;
+        _settings = settings;
+        _pool = pool;
+        _tickWorld = options.World is { } world ? world.Tick : options.TickWorld ?? (() => true);
         _population = new SubscribedPopulation(sumo.TraCI);
-        _renderSet = new RenderSetManager(options.RenderSet, options.OnRelease);
+        _renderSet = new RenderSetManager(options.RenderSet, Release);
         _binder = new VehicleTypeBinder(sumo.TraCI, catalogue);
         _converter = new PoseConverter(ground, options.MeasuredSeatHeights);
         _interpolator = new LaneArcInterpolator(network);
 
         Clock = clock;
-        Report = new GhostRunReport
+        Report = new CoSimRunReport
         {
             Clock = clock,
             ScenarioPath = options.ScenarioPath,
@@ -75,7 +90,7 @@ public sealed class GhostSession : IDisposable
     public CoSimClock Clock { get; }
 
     /// <summary>What the run has established so far.</summary>
-    public GhostRunReport Report { get; }
+    public CoSimRunReport Report { get; }
 
     /// <summary>The simulated instant the last world tick rendered.</summary>
     public double RenderedTimeSeconds { get; private set; }
@@ -91,7 +106,7 @@ public sealed class GhostSession : IDisposable
     /// The clock does not divide, the world is asynchronous, the network is not the one the world
     /// was built from, or something else already holds the world's population.
     /// </exception>
-    public static GhostSession Start(GhostSessionOptions options)
+    public static SumoDriveSession Start(SumoDriveSessionOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
 
@@ -116,17 +131,35 @@ public sealed class GhostSession : IDisposable
                 Output = options.SumoOutput ?? (_ => { }),
             });
 
+        WorldSettingsLease? settings = null;
         try
         {
-            CoSimClock clock = CoSimClock.ForSession(sumo.StepLength, options.WorldDeltaSeconds,
-                                                     options.CaptureRateHz,
-                                                     options.WorldIsSynchronous);
+            RequireOneWayToAdvanceTheWorld(options);
+
+            // Take the world's clock before anything else is checked against it: the settings the
+            // session validates its own against have to be the ones the world is holding, not the
+            // ones the caller asked for.
+            settings = options.World is { } claimed
+                ? WorldSettingsLease.Take(claimed, options.WorldDeltaSeconds)
+                : null;
+
+            CoSimClock clock = CoSimClock.ForSession(
+                sumo.StepLength,
+                settings is { } held ? held.FixedDeltaSeconds : options.WorldDeltaSeconds,
+                options.CaptureRateHz,
+                settings is { } asked ? asked.Applied.SynchronousMode : options.WorldIsSynchronous);
             RequireTheWorldSNetwork(manifest, network, options);
 
             PopulationLease lease = WorldDriveAuthority.ForWorld(options.WorldKey)
                 .Acquire(PopulationMode.SumoDrivenPlayback, options.Holder);
 
-            var session = new GhostSession(options, sumo, clock, network, ground, catalogue, lease);
+            VehicleBodyPool? pool = options.World is { } world
+                ? new VehicleBodyPool(world, VehicleParking.BeyondTheSurface(ground),
+                                      options.MaximumBodies)
+                : null;
+
+            var session = new SumoDriveSession(options, sumo, clock, network, ground, catalogue,
+                                               lease, settings, pool);
             try
             {
                 session.Prime();
@@ -134,12 +167,18 @@ public sealed class GhostSession : IDisposable
             }
             catch
             {
+                pool?.DestroyAll();
                 lease.Dispose();
                 throw;
             }
         }
         catch
         {
+            // Everything this method changed, given back, in the reverse order it was taken. A
+            // session that failed to start must leave the world exactly as it found it: an operator
+            // whose editor is stranded in synchronous mode is waiting on a tick from a process that
+            // never started.
+            settings?.Dispose();
             sumo.Dispose();
             throw;
         }
@@ -162,15 +201,17 @@ public sealed class GhostSession : IDisposable
             _bridgeClock.Start();
             double fraction = Clock.InterpolationFraction(tick);
             ComputePoses(fraction);
+            WriteTheBatch();
             _bridgeClock.Stop();
 
-            if (_options.TickWorld is { } tickWorld && !tickWorld())
+            if (!_tickWorld())
             {
                 throw new CoSimSessionRefusedException(
                     $"The CARLA world produced no frame for tick {_tickIndex}. A world that stops "
                     + "ticking while SUMO keeps stepping renders a timeline nothing simulated.");
             }
 
+            MeasureDivergence();
             _tickIndex++;
             Report.Ticks++;
             RenderedTimeSeconds += Clock.WorldDeltaSeconds;
@@ -182,7 +223,15 @@ public sealed class GhostSession : IDisposable
         return more;
     }
 
-    /// <summary>Close the open intervals, give back the lease, and end the simulation.</summary>
+    /// <summary>
+    /// Close the open intervals, give back every body, give back the lease, and end the simulation.
+    /// </summary>
+    /// <remarks>
+    /// Every step runs whatever the ones before it did. A session is disposed on its failure paths
+    /// as well as its happy one, and a failure that skipped the rest of the shutdown would leave the
+    /// operator's world holding the wreckage of the run that failed -- which is exactly the state
+    /// nobody is in a position to clean up, because whatever was driving it has just thrown.
+    /// </remarks>
     public void Dispose()
     {
         if (_disposed)
@@ -191,18 +240,36 @@ public sealed class GhostSession : IDisposable
         }
 
         _disposed = true;
-        _renderSet.CloseAll(RenderedTimeSeconds);
-        Report.Admissions = _renderSet.Admissions;
-        Report.CapacityDeclines = _renderSet.CapacityDeclines;
-        foreach (UnrenderableReason reason in _binder.RefusedTypes.Values)
+        List<Exception> failures = [];
+        Attempt(failures, () => _renderSet.CloseAll(RenderedTimeSeconds));
+        Attempt(failures, () =>
         {
-            Report.CountRefusedType(reason);
-        }
+            Report.Admissions = _renderSet.Admissions;
+            Report.CapacityDeclines = _renderSet.CapacityDeclines;
+            foreach (UnrenderableReason reason in _binder.RefusedTypes.Values)
+            {
+                Report.CountRefusedType(reason);
+            }
 
-        Report.BridgeSecondsOnTicks = _bridgeClock.Elapsed.TotalSeconds;
-        Report.SumoSecondsOnSteps = _sumoClock.Elapsed.TotalSeconds;
-        _lease.Dispose();
-        _sumo.Dispose();
+            Report.BridgeSecondsOnTicks = _bridgeClock.Elapsed.TotalSeconds;
+            Report.SumoSecondsOnSteps = _sumoClock.Elapsed.TotalSeconds;
+            if (_pool is { } counted)
+            {
+                Report.BodiesSpawned = counted.Bodies.Count;
+                Report.BodyDeclines = counted.Exhaustions;
+            }
+        });
+        Attempt(failures, () => _pool?.DestroyAll());
+        Attempt(failures, () => _settings?.Dispose());
+        Attempt(failures, _lease.Dispose);
+        Attempt(failures, _sumo.Dispose);
+
+        if (failures.Count > 0)
+        {
+            throw new AggregateException(
+                "The session did not shut down cleanly. Every step was attempted; these are the "
+                + "ones that failed.", failures);
+        }
     }
 
     /// <summary>
@@ -250,6 +317,13 @@ public sealed class GhostSession : IDisposable
 
     private void ComputePoses(double fraction)
     {
+        // Every body released since the last tick goes back to its slot, in this same batch. A
+        // parking pose is a pose like any other, so it costs an entry rather than a round trip.
+        _batch.Clear();
+        _batch.AddRange(_parked);
+        _parked.Clear();
+        _commanded.Clear();
+
         foreach (string vehicleId in _renderSet.RenderedVehicleIds)
         {
             if (!_next.TryGetValue(vehicleId, out CoSimVehicleFrame to))
@@ -293,9 +367,165 @@ public sealed class GhostSession : IDisposable
                 Report.WorstBumperResidualMetres,
                 BumperResidual(applied, extent, state.X, state.Y));
 
-            _options.OnPose?.Invoke(new GhostPoseRecord(
-                _tickIndex, RenderedTimeSeconds, Clock.IsCaptureTick(_tickIndex), applied,
+            ActorId actor = 0;
+            if (_pool is { } pool)
+            {
+                if (pool.TryCheckOut(vehicleId, extent.BlueprintId, out PooledBody body))
+                {
+                    actor = body.Actor;
+                    _batch.Add(new ApplyTransformCommand(actor, TransformOf(applied)));
+                    _commanded.Add((vehicleId, actor, applied));
+                }
+                else
+                {
+                    Report.PoseDeclinesForNoBody++;
+                }
+            }
+
+            _options.OnPose?.Invoke(new CoSimPoseRecord(
+                _tickIndex, RenderedTimeSeconds, Clock.IsCaptureTick(_tickIndex), actor, applied,
                 state.Case, state.X, state.Y, state.HeadingDegrees));
+        }
+
+        if (_pool is { } counted)
+        {
+            Report.BodiesSpawned = counted.Bodies.Count;
+            Report.BodyDeclines = counted.Exhaustions;
+        }
+    }
+
+    /// <summary>
+    /// A vehicle has left the render set: take its body back and pass the interval on with the
+    /// body named.
+    /// </summary>
+    /// <remarks>
+    /// The render set decides who is rendered and knows nothing about which body renders them, so
+    /// the two facts meet here and nowhere else. A consumer holding a track in the imagery has an
+    /// actor id and needs the vehicle; only the pair of instants tells it which of the succession of
+    /// vehicles that body carried was the one it is looking at.
+    /// </remarks>
+    private void Release(RenderedVehicleInterval interval)
+    {
+        ActorId actor = 0;
+        if (_pool is { } pool && pool.TryCheckIn(interval.VehicleId, out PooledBody body))
+        {
+            actor = body.Actor;
+            _parked.Add(new ApplyTransformCommand(actor, body.Parking));
+        }
+
+        _options.OnRelease?.Invoke(interval with { Actor = actor });
+    }
+
+    /// <summary>
+    /// Write every pose this tick in one round trip.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>One batch, and no variable tail.</b> Every command CARLA's batch endpoint takes is
+    /// supported at both ends, so N vehicles cost one round trip rather than N. The .NET traffic
+    /// manager already writes its control frame this way, against the same endpoint.</para>
+    ///
+    /// <para><b>No target velocity beside the transform.</b> The runtime section's D3.5 has the
+    /// bridge emit one, and it will once the engine change beside it lands. Today it would be a
+    /// command per vehicle per tick that cannot do anything: on a body that is not simulating,
+    /// <c>SetPhysicsLinearVelocity</c> writes a physics body that
+    /// <c>UPrimitiveComponent::GetComponentVelocity</c> will not read, and disabling physics
+    /// destroys that body in the first place. The engine classifies the call as invalid on a
+    /// non-simulating body and logs it in every non-shipping build, so emitting it now buys a line
+    /// of log per vehicle per tick and nothing else. SUMO's own speed is on the pose record either
+    /// way, which is where the truth path reads it.</para>
+    ///
+    /// <para>A failed command is counted rather than thrown on. The batch's responses name the
+    /// commands that failed, and a run in which some poses did not take is a run whose imagery is
+    /// wrong in a way only the count makes visible.</para>
+    /// </remarks>
+    private void WriteTheBatch()
+    {
+        if (_options.World is not { } world || _batch.Count == 0)
+        {
+            return;
+        }
+
+        IReadOnlyList<CommandResponse> responses = world.ApplyBatch(_batch);
+        Report.Batches++;
+        Report.CommandsWritten += _batch.Count;
+        foreach (CommandResponse response in responses)
+        {
+            if (response.HasError)
+            {
+                Report.SampleBatchFailure(response.Error);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Compare every pose written this tick against what the world says the body became.
+    /// </summary>
+    /// <remarks>
+    /// <para>Taken after the tick, because the world observer reports the state of a frame once that
+    /// frame exists, and the pose was written for the frame the tick just produced.</para>
+    ///
+    /// <para>Free: the observer streams every actor's transform every tick whether or not anything
+    /// reads it, so this is an array read and a subtraction per rendered vehicle. That is what makes
+    /// it affordable per vehicle per tick rather than as a sample, and being per vehicle per tick is
+    /// what lets a residual be attributed to a vehicle rather than to the run.</para>
+    /// </remarks>
+    private void MeasureDivergence()
+    {
+        if (_options.World is not { } world)
+        {
+            return;
+        }
+
+        foreach ((string vehicleId, ActorId actor, VehiclePose pose) in _commanded)
+        {
+            if (world.ObservedTransform(actor) is not { } observed)
+            {
+                Report.VehicleTicksWithNoReadBack++;
+                continue;
+            }
+
+            PoseDivergence divergence = PoseDivergence.Between(
+                _tickIndex, RenderedTimeSeconds, vehicleId, actor, pose, observed);
+            Report.AddDivergence(divergence);
+            _options.OnDivergence?.Invoke(divergence);
+        }
+    }
+
+    /// <summary>The CARLA transform a computed pose is, in the units the batch is written in.</summary>
+    private static Transform TransformOf(in VehiclePose pose) =>
+        new(new Location((float)pose.X, (float)pose.Y, (float)pose.Z),
+            new Rotation((float)pose.PitchDegrees, (float)pose.YawDegrees, (float)pose.RollDegrees));
+
+    private static void Attempt(List<Exception> failures, Action step)
+    {
+        try
+        {
+            step();
+        }
+        catch (Exception failure)
+        {
+            failures.Add(failure);
+        }
+    }
+
+    /// <summary>
+    /// Refuse a session given two ways to advance the world.
+    /// </summary>
+    /// <remarks>
+    /// A world and a tick delegate together is not an ambiguity to resolve in favour of one of them:
+    /// whichever the session picked, the caller believes the other is running, and the run that
+    /// results is a world ticked a different number of times from the timeline its poses were
+    /// computed for.
+    /// </remarks>
+    private static void RequireOneWayToAdvanceTheWorld(SumoDriveSessionOptions options)
+    {
+        if (options.World is not null && options.TickWorld is not null)
+        {
+            throw new CoSimSessionRefusedException(
+                "The session was given both a CARLA world and a tick delegate. It owns the advance "
+                + "of simulated time on both sides, so exactly one thing may advance the world: "
+                + "give the world to drive it, or the delegate to compute every pose and apply "
+                + "none of them.");
         }
     }
 
@@ -363,7 +593,7 @@ public sealed class GhostSession : IDisposable
     /// </remarks>
     private static void RequireTheWorldSNetwork(WorldPackageManifest manifest,
                                                 SumoRoadNetwork network,
-                                                GhostSessionOptions options)
+                                                SumoDriveSessionOptions options)
     {
         if (network.NetOffset != (0.0, 0.0))
         {

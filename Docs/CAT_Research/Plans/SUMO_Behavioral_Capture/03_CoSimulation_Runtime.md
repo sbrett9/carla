@@ -1195,14 +1195,30 @@ essentially free:
 δ = grid cell size (2.0 m on Bahonar, measured)
 f = (cos ψ, sin ψ)            forward, CARLA XY
 r = (−sin ψ, cos ψ)           right,   CARLA XY
-∂g/∂f = ( g(p + δf) − g(p − δf) ) / (2δ)
-∂g/∂r = ( g(p + δr) − g(p − δr) ) / (2δ)
-pitch = −atan(∂g/∂f)   ·(180/π)      # nose up on a climb; sign to be confirmed against the viewer
-roll  =  atan(∂g/∂r)   ·(180/π)
+a = ∂g/∂f = ( g(p + δf) − g(p − δf) ) / (2δ)
+b = ∂g/∂r = ( g(p + δr) − g(p − δr) ) / (2δ)
+pitch = +atan(a)                        ·(180/π)      # nose up on a climb
+roll  = −asin( b / √(1 + a² + b²) )     ·(180/π)      # right side down where the ground falls right
 ```
 
-The pitch sign convention must be confirmed visually against the CARLA viewer before it ships; it is
-one bit and it is cheap to get wrong. Marked **unverified**.
+**Both signs are CARLA's own, and both are the opposite of what this section first wrote.**
+`Math::GetForwardVector` is `(cos ψ cos p, sin ψ cos p, sin p)` and `Math::GetRightVector`'s third
+component is `−cos p sin r` (`LibCarla/source/carla/geom/Math.cpp:117-136`), and a
+`carla::geom::Rotation` reaches the engine as `FRotator{pitch, yaw, roll}` with no sign change
+(`Rotation.h:221`). A body seated in the surface has both horizontal axes lying in the tangent
+plane, which requires the forward axis to rise with the surface — a **positive** pitch on a climb —
+and the right axis to rise where the surface rises to the right, which needs a **negative** roll
+because the right axis's height is the *negative* sine of the roll.
+
+**And the roll is the exact seating, not the independent gradient.** Rolling by `atan(b)` is the
+same thing only where the pitch is zero, because the roll turns about an axis the pitch has already
+tilted. The closed form above costs one square root. Established by a test that ports
+`GetForwardVector` and `GetRightVector`, puts a body on a plane sloping in both axes at seven
+headings, and requires each horizontal axis to satisfy `z = a·x + b·y`
+(`CarlaNet/test/CarlaNet.CoSim.Tests/PoseConverterTests.cs`).
+
+What the geometry cannot settle is whether the body on screen agrees, which is the one thing a live
+run adds. Marked **derived, pending a look**.
 
 **Cost per vehicle per world tick:** 5 `SampleDrapeGroundElevation` calls (one for Z, four for the
 gradients) = 20 array reads, no allocation, no RPC. At 131 vehicles × 20 ticks/s that is 13,100
@@ -1269,13 +1285,25 @@ clear parking pose, and never spawn again during the run.
 
 - Pool keyed by **blueprint id**, because an actor's blueprint cannot change. The catalogue's
   vType→blueprint map therefore also determines the pool's shape.
-- Pool depth per blueprint sized from the render-set budget with headroom; sizing is
+- **The pool grows to demand rather than being spawned in full at session start**, which is what was
+  built and is a departure from the paragraph above. Spawning the full depth of every blueprint
+  before the first tick is, for the shipped seventeen-blueprint catalogue at a capacity of 128, two
+  thousand actors, nearly all parked for the whole run. Growing on demand spawns a body the first
+  time a blueprint is actually needed and never again, so the spawn-once property that makes the
+  pool safe is kept while the actor count stays near what the scene holds. Each body gets its own
+  parking slot, so every spawn is still onto ground known to be clear. The ceiling is a **total**
+  across blueprints, because which bodies a scenario asks for is a property of its traffic mix and
+  the total is the budget that binds; sizing is
   [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md)'s.
 - Parking pose: below the drape surface and outside the OSM sandbox, physics and gravity off, **light
   state cleared to `None`**. A parked actor costs one entry in the world-observer snapshot per tick
   and nothing else. No opacity call is involved: it is out of sight because of where it is, not
   because of what it looks like.
-- **Every check-out re-writes the light state, unconditionally.** `InputControl.LightState` lives on
+- **Every check-out re-writes the light state, unconditionally** — *not implemented, and not
+  currently reachable.* Nothing writes a lamp bit in this mode (the lamp item is deferred: measured,
+  16 of 17 blueprints change no pixel on any light bit), so a pooled body's lights are whatever they
+  were spawned as, which is off, and there is no predecessor's state to inherit. The rule stands and
+  becomes load-bearing the moment anything drives a lamp. `InputControl.LightState` lives on
   the actor and survives reuse (`CarlaWheeledVehicle.cpp:684-700`), so a recycled actor would
   otherwise inherit whatever its predecessor was showing — night headlights on a vehicle admitted at
   noon, or a brake light on a vehicle admitted at speed. This is one more command in the admission

@@ -298,8 +298,17 @@ public sealed class CarlaClient : IAsyncDisposable
     {
         _host = host;
         _log = logger;
+        Endpoint = $"{host}:{port}";
         _rpc = new MsgPackRpcClient(host, port, timeout ?? TimeSpan.FromMilliseconds(5000), logger);
     }
+
+    /// <summary>The simulator this client is connected to, as host and port.</summary>
+    /// <remarks>
+    /// For anything that has to name a world rather than only talk to it -- an exclusive claim over
+    /// its population, a run manifest saying which simulator produced a capture. The map name alone
+    /// does not name a world: two servers can have the same map loaded.
+    /// </remarks>
+    public string Endpoint { get; }
 
     /// Update the per-call RPC timeout. Affects subsequent calls only.
     public void SetTimeout(TimeSpan timeout)
@@ -1864,8 +1873,23 @@ public sealed class CarlaClient : IAsyncDisposable
     // Subscribes to the episode state stream (FWorldObserver) and caches all
     // actor snapshots.  Call once after construction; required for GetActorTransform etc.
 
+    /// <summary>
+    /// Subscribe to the episode-state stream and cache every actor's snapshot from it. Calling it
+    /// again while the subscription is live does nothing.
+    /// </summary>
+    /// <remarks>
+    /// Idempotent because a second subscription is a second stream reader filling the same cache,
+    /// which costs a thread and a socket and buys nothing. More than one component in a process now
+    /// wants the cache -- the recorder, the truth path and the co-simulation bridge's pose read-back
+    /// -- and each of them is entitled to ask for it without knowing whether another already has.
+    /// </remarks>
     public async Task StartWorldObserverAsync()
     {
+        if (_worldObserver is not null)
+        {
+            return;
+        }
+
         var info = await GetEpisodeInfoAsync().ConfigureAwait(false);
         _worldObserver = SubscribeToStream(info.Token.Data, OnWorldObserverFrame);
     }
