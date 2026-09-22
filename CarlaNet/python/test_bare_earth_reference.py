@@ -61,7 +61,6 @@ ap.add_argument("--terrain-res", type=float, default=8.0, help="drape: heightfie
 ap.add_argument("--terrain-margin", type=float, default=30.48, help="drape: sandbox margin past OSM (m)")
 ap.add_argument("--drape-cache-dir", default=os.path.join(_REPO, "Build", "drape-cache"),
                 help="drape: grid sampling cache dir (speeds re-runs)")
-ap.add_argument("--settle", type=float, default=10.0)
 ap.add_argument("--stock-map", default="Town10HD_Opt",
                 help="a map that was never generated from OSM, loaded first so the 'no record' "
                      "check does not read a record left by an earlier run on the same server")
@@ -200,7 +199,6 @@ class BareEarthReferenceTest:
             sample_step_meters=args.step,
             height_align=args.height_align,
             ground_collision=True,
-            cesium_settle_seconds=args.settle,
             terrain_res=args.terrain_res,
             terrain_margin=args.terrain_margin,
             drape_cache_dir=args.drape_cache_dir)

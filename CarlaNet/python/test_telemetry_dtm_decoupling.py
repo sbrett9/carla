@@ -68,7 +68,6 @@ ap.add_argument("--terrain-margin", type=float, default=30.48, help="drape: sand
 ap.add_argument("--drape-cache-dir", default=os.path.join(_REPO, "Build", "drape-cache"),
                 help="drape: grid sampling cache dir (speeds re-runs)")
 ap.add_argument("--offroad", type=int, default=3, help="drape: also spawn N off-road vehicles to check")
-ap.add_argument("--settle", type=float, default=10.0)
 ap.add_argument("--traffic", type=int, default=8)
 ap.add_argument("--samples", type=int, default=5, help="telemetry polls (1 Hz)")
 ap.add_argument("--tm-port", type=int, default=8000)
@@ -155,7 +154,6 @@ def main() -> int:
         sample_step_meters=args.step,
         height_align=args.height_align,
         ground_collision=True,
-        cesium_settle_seconds=args.settle,
         terrain_res=args.terrain_res,
         terrain_margin=args.terrain_margin,
         drape_cache_dir=args.drape_cache_dir)

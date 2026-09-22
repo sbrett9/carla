@@ -565,7 +565,6 @@ public sealed class CarlaClient : IAsyncDisposable
         double outlierThresholdMeters = 4.0,
         string heightAlign = "none",
         bool groundCollision = true,
-        TimeSpan? cesiumSettle = null,
         double terrainResMeters = 2.0,
         double terrainMarginMeters = 30.48,
         int drapeChunkCells = 64,
@@ -634,9 +633,6 @@ public sealed class CarlaClient : IAsyncDisposable
         string sampleSelector = sampleGround ? "ground" : "";
         if (sampleGround)
             await SetLayerVisibleAsync("ground", true).ConfigureAwait(false);
-
-        if (cesiumSettle is { } settle)
-            await Task.Delay(settle, ct).ConfigureAwait(false);
 
         // 4) Sample heights: origin first (vertical datum), then every road sample.
         var points = new List<GeoLocation>(geo.Count + 1)

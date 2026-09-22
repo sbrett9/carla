@@ -190,12 +190,6 @@ class CarlaControlArgumentParser:
             help="disable collision on the bare-earth ground (default ON)",
         )
         build.add_argument(
-            "--settle",
-            type=float,
-            default=10.0,
-            help="Cesium settle seconds during build",
-        )
-        build.add_argument(
             "--no-road-filter",
             action="store_true",
             help="don't restrict netconvert to car-drivable roads",

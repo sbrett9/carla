@@ -154,7 +154,6 @@ class WorldBuilder:
             origin_height=args.origin_height,
             height_align=args.height_align,
             ground_collision=args.ground_collision,
-            cesium_settle_seconds=args.settle,
             terrain_res=args.terrain_res,
             terrain_margin=args.terrain_margin,
             drape_cache_dir=args.drape_cache_dir,

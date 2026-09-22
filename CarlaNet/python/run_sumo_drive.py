@@ -27,14 +27,15 @@ Usage:
 Pass `--no-record` to drive the world without spawning a camera, which is the shortest way to see
 whether the vehicles are where SUMO says they are.
 
-Two things happen between the session starting and the recorder starting, and both are about what
-the first written frame contains. The camera is aimed at the vehicles rather than at the middle of
-the rendered region, because a corridor scenario puts its traffic nowhere near that middle. And the
-world is then ticked with the camera standing in its final pose and nothing recording, because
-Cesium selects photogrammetry tiles on the world tick from the camera views registered for that
-tick: measured on a cold view, the first frame written with no such pre-roll is an empty sky and
-takes two to three frames to fill in, while 120 ticks of pre-roll produced a first frame
-indistinguishable from the sixth.
+One thing happens between the session starting and the recorder starting: the camera is aimed at the
+vehicles rather than at the middle of the rendered region, because a corridor scenario puts its
+traffic nowhere near that middle.
+
+The first frames of a run whose camera looks somewhere Cesium has not streamed yet carry imagery
+that is still arriving -- an unattended capture has nobody watching the view fill in, where an
+operator flying the camera does. What that costs, and why the number of ticks it takes is not a
+caller's to supply, is in
+`Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/03_CoSimulation_Runtime.md` section 9.5.1.
 """
 import argparse
 import math
@@ -114,12 +115,6 @@ def parse_args() -> argparse.Namespace:
                              "rendered on the first step, 'region-centre' the middle of the "
                              "rendered region. The middle of a corridor scenario's region is "
                              "usually not where its traffic is")
-    parser.add_argument("--settle-ticks", type=int, default=200,
-                        help="world ticks with the camera in place and nothing recording, so the "
-                             "photogrammetry has streamed in for the camera's own view before the "
-                             "first frame is written. Cesium selects tiles on the world tick, so "
-                             "this is counted in ticks rather than in seconds: a wait that does not "
-                             "tick renders nothing and streams nothing")
     parser.add_argument("--width", type=int, default=1920)
     parser.add_argument("--height", type=int, default=1080)
     parser.add_argument("--fov", type=float, default=60.0)
@@ -209,33 +204,6 @@ def spawn_camera(world, args: argparse.Namespace, centre: tuple[float, float]):
     return camera
 
 
-def settle_tiles(world, ticks: int) -> None:
-    """Tick the world with the camera in place and nothing recording, so its tiles arrive first.
-
-    Cesium picks and refines photogrammetry tiles on the world tick, from the camera views
-    registered for that tick -- and a CARLA camera sensor is registered by its own publisher, so
-    tiles are selected for the sensor's frustum rather than for the spectator's. Neither happens
-    without a tick, which is why this is counted in ticks and not in seconds: in a synchronous world
-    a wait that does not tick renders nothing, streams nothing and buys nothing.
-
-    Measured on this world at three camera poses whose ground had not been looked at before: with no
-    pre-roll the first written frame was an empty sky and the imagery took two to three frames to
-    fill in; with 120 ticks the first frame was indistinguishable from the sixth. How many are
-    needed is a property of the network and of what the tile cache already holds, not of the scene,
-    so it is an operator's number with a default that had margin over the measurement.
-
-    This ticks the world while the session that owns its clock is between steps: no pose is written,
-    SUMO does not advance, and nothing is recorded, so the timeline the session computes poses for
-    is unchanged by it.
-    """
-    if ticks <= 0:
-        return
-    started = time.time()
-    for _ in range(ticks):
-        world.tick()
-    print(f"settled the camera's view over {ticks} ticks in {time.time() - started:.1f} s")
-
-
 def main() -> int:
     args = parse_args()
     for label, path in (("scenario", args.scenario), ("world package", args.world_package),
@@ -293,8 +261,7 @@ def main() -> int:
         steps = 0
         # Everything up to the recorder starting happens with the world already in synchronous mode,
         # because a camera in an asynchronous world delivers no frames at all: the session takes the
-        # clock before the camera exists, and the camera then stands in its final pose for as many
-        # ticks as it takes its own tiles to arrive.
+        # clock before the camera exists.
         if not args.no_record:
             centre = region_centre(args)
             if aims_at_traffic:
@@ -311,7 +278,6 @@ def main() -> int:
                     centre = aim.centre()
                     print(f"aimed at {aim.count} rendered vehicles")
             camera = spawn_camera(world, args, centre)
-            settle_tiles(world, args.settle_ticks)
 
             os.makedirs(args.record_dir, exist_ok=True)
             if world.start_recording(camera, args.record_dir, args.record_hz,

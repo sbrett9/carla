@@ -2461,7 +2461,6 @@ class Client:
                                                outlier_threshold=4.0,
                                                height_align="none",
                                                ground_collision=True,
-                                               cesium_settle_seconds=5.0,
                                                terrain_res=2.0,
                                                terrain_margin=30.48,
                                                drape_chunk_cells=64,
@@ -2502,15 +2501,13 @@ class Client:
         drape_cache_dir caches the (slow) drape sampling per area so rebuilds are fast. osm_options
         should pin the origin; if origin_height is None the height sampled at the origin is the datum.
         """
-        from System import TimeSpan
         from System.Threading import CancellationToken
         params = _default_osm_opendrive_params() if parameters is None else parameters
-        settle = TimeSpan.FromSeconds(float(cesium_settle_seconds)) if cesium_settle_seconds else TimeSpan(0)
         oh = None if origin_height is None else float(origin_height)
         xodr = _sync(self._inner.GenerateWorldFromOsmWithElevationAsync(
             osm_path, str(ion_token), int(ion_asset_id), int(ground_ion_asset_id),
             osm_options, params, float(sample_step_meters), oh,
-            float(outlier_threshold), str(height_align), bool(ground_collision), settle,
+            float(outlier_threshold), str(height_align), bool(ground_collision),
             float(terrain_res), float(terrain_margin), int(drape_chunk_cells),
             float(drape_max_drape), (None if drape_cache_dir is None else str(drape_cache_dir)),
             CancellationToken(False)))

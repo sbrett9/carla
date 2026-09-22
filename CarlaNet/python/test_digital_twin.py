@@ -71,7 +71,6 @@ ap.add_argument("--no-ground-collision", dest="ground_collision", action="store_
                 help="disable collision on the bare-earth ground (default ON = vehicles always have "
                      "ground to drive on, on and off road). Safe to leave ON with any --height-align: "
                      "the ground is matched to where the roads sit, so cars neither float nor fall through.")
-ap.add_argument("--settle", type=float, default=10.0)
 ap.add_argument("--traffic", type=int, default=0, help="spawn N autopilot vehicles after build")
 ap.add_argument("--no-road-filter", action="store_true",
                 help="don't restrict netconvert to car-drivable roads (keeps sidewalks/rail/parking)")
@@ -202,7 +201,6 @@ def main() -> int:
         origin_height=args.origin_height,
         height_align=args.height_align,
         ground_collision=args.ground_collision,
-        cesium_settle_seconds=args.settle,
         terrain_res=args.terrain_res,
         terrain_margin=args.terrain_margin,
         drape_cache_dir=args.drape_cache_dir)
