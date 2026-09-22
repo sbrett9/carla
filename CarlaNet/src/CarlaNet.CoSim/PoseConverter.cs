@@ -28,7 +28,9 @@ namespace CarlaNet.CoSim;
 /// <para><b>The height, pitch and roll.</b> The SUMO network is flat, so none of the three comes
 /// from SUMO. They come from the world's draped ground surface, sampled in process with no round
 /// trip: one sample for the height and two pairs either side of the vehicle for the two gradients.
-/// A vehicle outside the grid has no height, and no pose is produced for it.</para>
+/// A vehicle outside the grid has no height, and no pose is produced for it. The two tilt signs are
+/// CARLA's own, taken from the code that turns a rotation into axes rather than chosen: see
+/// <see cref="Tilt"/>.</para>
 /// </remarks>
 public sealed class PoseConverter
 {
@@ -128,8 +130,8 @@ public sealed class PoseConverter
                 frame.SpeedMetresPerSecond);
 
     /// <summary>
-    /// Nose-up and right-down angles from the ground surface's gradient along and across the
-    /// heading.
+    /// Nose-up and right-down angles that lay the body's own axes in the ground surface's tangent
+    /// plane.
     /// </summary>
     /// <remarks>
     /// <para>Central differences one grid cell either side, which is the finest step the surface
@@ -137,11 +139,31 @@ public sealed class PoseConverter
     /// gradient is then taken as zero rather than as a one-sided difference against nothing, because
     /// a tilt invented at the sandbox boundary would be indistinguishable from a measured one.</para>
     ///
-    /// <para><b>The two signs are unconfirmed.</b> Nose-up on a climb and right-side-down on a
-    /// surface falling to the right are what is intended and what is written. Each is one bit that
-    /// cannot be established without applying a pose and looking at the result, which no part of
-    /// this stage does. Whoever first applies one confirms both against the viewer before a capture
-    /// is taken.</para>
+    /// <para><b>The two signs are CARLA's own, derived from the code that turns a rotation into
+    /// axes.</b> <c>Math::GetForwardVector</c> is
+    /// <c>(cos yaw cos pitch, sin yaw cos pitch, sin pitch)</c> and <c>Math::GetRightVector</c>'s
+    /// third component is <c>-cos pitch sin roll</c> (<c>LibCarla/source/carla/geom/Math.cpp</c>
+    /// lines 117-136), and a <c>carla::geom::Rotation</c> reaches the engine as
+    /// <c>FRotator{pitch, yaw, roll}</c> with no sign change (<c>Rotation.h:221</c>), so these are
+    /// the engine's conventions and not a second set. Requiring the forward axis to rise with the
+    /// surface gives a <b>positive</b> pitch on a climb, and requiring the right axis to rise where
+    /// the surface rises to the right gives a <b>negative</b> roll, because the right axis's height
+    /// is the <i>negative</i> sine of the roll.</para>
+    ///
+    /// <para>Both are the opposite of what this converter first carried, where each was written as
+    /// an intention and marked unconfirmed. A vehicle on a climb was nosing down into the hill and
+    /// a vehicle on a camber was leaning the wrong way, at twice the slope angle from where it
+    /// belongs -- about eleven degrees of error on a one-in-ten grade, which is plain in an oblique
+    /// frame and invisible in a residual, since the pose and the truth record agreed with each other
+    /// throughout.</para>
+    ///
+    /// <para><b>And the roll is the exact seating rather than the small-angle one.</b> With
+    /// <c>a = dg/df</c> and <c>b = dg/dr</c>, laying both horizontal axes in the tangent plane gives
+    /// <c>pitch = atan(a)</c> and <c>roll = -asin(b / sqrt(1 + a^2 + b^2))</c>. Rolling by
+    /// <c>atan(b)</c> instead -- the pair of independent gradients the runtime section writes -- is
+    /// the same thing only where the pitch is zero, because the roll turns about an axis the pitch
+    /// has already tilted. On a compound one-in-ten slope the difference is small, a hundredth of a
+    /// degree, and the exact form costs one square root, so there is nothing to trade.</para>
     /// </remarks>
     private (double Pitch, double Roll) Tilt(double x, double y, double forwardX, double forwardY)
     {
@@ -149,11 +171,12 @@ public sealed class PoseConverter
         double rightX = -forwardY;
         double rightY = forwardX;
 
-        double? alongGradient = Gradient(x, y, forwardX, forwardY, step);
-        double? acrossGradient = Gradient(x, y, rightX, rightY, step);
+        double along = Gradient(x, y, forwardX, forwardY, step) ?? 0.0;
+        double across = Gradient(x, y, rightX, rightY, step) ?? 0.0;
 
-        double pitch = alongGradient is { } along ? -Math.Atan(along) * (180.0 / Math.PI) : 0.0;
-        double roll = acrossGradient is { } across ? Math.Atan(across) * (180.0 / Math.PI) : 0.0;
+        double pitch = Math.Atan(along) * (180.0 / Math.PI);
+        double roll = -Math.Asin(across / Math.Sqrt(1.0 + (along * along) + (across * across)))
+                      * (180.0 / Math.PI);
         return (pitch, roll);
     }
 
