@@ -123,6 +123,14 @@ def spawn_camera(world, args: argparse.Namespace):
     blueprint.set_attribute("image_size_y", str(args.height))
     if blueprint.has_attribute("fov"):
         blueprint.set_attribute("fov", str(args.fov))
+    # Render at the rate the recorder keeps, not at the world's. Left unset, the camera renders and
+    # streams a frame every tick while the recorder keeps one in ten, and the frames the recorder
+    # discards are discarded after they have been rendered, read back off the GPU and sent. At
+    # 1920x1080 that was measured at 35.1 ms of a 43.0 ms tick, and the backlog stalls the server
+    # until an apply_batch times out. sensor_tick suppresses the render itself, not merely the
+    # delivery, so the cost goes with it.
+    if blueprint.has_attribute("sensor_tick") and args.record_hz > 0:
+        blueprint.set_attribute("sensor_tick", str(1.0 / args.record_hz))
     transform = camera_transform(args)
     camera = world.spawn_actor(blueprint, transform)
     print(f"camera {camera.id} at ({transform.location.x:.1f}, {transform.location.y:.1f}, "
