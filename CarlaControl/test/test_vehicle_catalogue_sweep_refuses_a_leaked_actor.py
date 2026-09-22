@@ -37,6 +37,35 @@ class _BoundingBox:
         self.location = _Vector(-0.034, 0.0, 0.8884)
 
 
+class _Attribute:
+    """One attribute as the server's definition record carries it, flags and all."""
+
+    def __init__(self, identifier: str, value: str, recommended: list[str], modifiable: bool,
+                 restricted: bool) -> None:
+        self.Id = identifier
+        self.Type = "String"
+        self.Value = value
+        self.RecommendedValues = recommended
+        self.IsModifiable = modifiable
+        self.RestrictToRecommended = restricted
+
+
+class _Attributes:
+    """The definition's attribute list, which the sweep indexes and counts rather than iterates."""
+
+    def __init__(self, attributes: list[_Attribute]) -> None:
+        self._attributes = attributes
+        self.Count = len(attributes)
+
+    def __getitem__(self, index: int) -> _Attribute:
+        return self._attributes[index]
+
+
+class _Definition:
+    def __init__(self, attributes: _Attributes) -> None:
+        self.Attributes = attributes
+
+
 class _Blueprint:
     """As much of a blueprint as the dimension pass reads off one."""
 
@@ -44,6 +73,10 @@ class _Blueprint:
         self.id = blueprint_id
         self.tags = blueprint_id.replace(".", ",")
         self._uid = 1
+        self._def = _Definition(_Attributes([
+            _Attribute("color", "0,0,0", ["0,0,0"], True, False),
+            _Attribute("base_type", "car", [], False, False),
+        ]))
         self._attrs = {
             "base_type": {"type": 4, "value": "car", "recommended": [], "modifiable": False},
             "special_type": {"type": 4, "value": "", "recommended": [], "modifiable": False},

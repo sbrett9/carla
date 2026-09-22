@@ -334,13 +334,21 @@ class VehicleCatalogueBuilder:
 
     @staticmethod
     def _settable_attributes(definition) -> list[dict]:
-        """Every variation the definition declares, with its type and recommended values."""
-        return [
-            {"id": name, "type": info["type"],
-             "restrict_to_recommended": not info["modifiable"],
-             "recommended_values": list(info["recommended"])}
-            for name, info in sorted(definition._attrs.items()) if info["modifiable"]
-        ]
+        """Every variation the definition declares, read from the definition the server sent.
+
+        Taken from the RPC record rather than from the client wrapper's cache, because the cache does
+        not carry `restrict_to_recommended` -- and a flag that says whether a value outside the
+        recommended list is accepted cannot be inferred from whether the attribute is modifiable at
+        all. They are two different flags on the wire.
+        """
+        declared = definition._def.Attributes
+        return sorted(
+            ({"id": str(declared[index].Id),
+              "type": str(declared[index].Type),
+              "restrict_to_recommended": bool(declared[index].RestrictToRecommended),
+              "recommended_values": [str(value) for value in declared[index].RecommendedValues]}
+             for index in range(declared.Count) if declared[index].IsModifiable),
+            key=lambda attribute: attribute["id"])
 
     @staticmethod
     def _integer(value: str | None) -> int:
