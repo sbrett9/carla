@@ -14,7 +14,8 @@
       osm\           the example OpenStreetMap maps the demo can build worlds from
       tools\sumo\    the SUMO toolchain: netconvert, sumo, duarouter, the DLLs they import,
                      SUMO's typemap/xsd data, its traci/sumolib modules, and PROJ data
-      skills\        the authoring skills describing how to build scenarios for a generated world
+      skills\        this repository's own authoring skills, describing how to build scenarios for a
+                     generated world. The vendored third-party skills are developer aids and stay out
       licenses\      the licence text of every third-party component in the bundle
       MANIFEST.md    what is in here, where it came from and under what terms (generated)
       setup-venv.ps1 / run-server.ps1 / run-sctmv.ps1 / README.md
@@ -358,11 +359,22 @@ Copy-Item -Force $demoClient (Join-Path $dist 'scripts')
 # 3b. The authoring skills: the reference bundles that describe how to build scenarios against a
 #     world this distribution generates. They travel with the tools so the description and the tool
 #     are always the same version.
+#
+#     CarlaControl\skills\third-party\ is skipped. It holds vendored copies of somebody else's
+#     skills -- Unreal Engine C++ reference, for developers working on this repository -- which a
+#     distribution recipient has no use for, and shipping them would attach a third-party
+#     attribution obligation to the package. It would also make the manifest row below false: that
+#     row states one provenance and one licence for the whole skills\ slot.
 $skillsSrc = Join-Path $CarlaRoot 'CarlaControl\skills'
+$thirdPartySkills = 'third-party'
 if (Test-Path $skillsSrc) {
+    $skillItems = @(Get-ChildItem $skillsSrc | Where-Object { $_.Name -ne $thirdPartySkills })
     New-Item -ItemType Directory -Force -Path (Join-Path $dist 'skills') | Out-Null
-    Copy-Item -Recurse -Force -Path (Join-Path $skillsSrc '*') -Destination (Join-Path $dist 'skills')
-    $skillNames = @(Get-ChildItem $skillsSrc -Directory | ForEach-Object { $_.Name })
+    foreach ($item in $skillItems) {
+        Copy-Item -Recurse -Force -Path $item.FullName -Destination (Join-Path $dist 'skills')
+    }
+    $skillNames = @($skillItems | Where-Object { $_.PSIsContainer } | ForEach-Object { $_.Name })
+    if ($skillNames.Count -eq 0) { Write-Warning "no first-party authoring skills under $skillsSrc" }
     Write-Info "[dist] skills: $($skillNames -join ', ')"
     Add-ManifestRow -Component "authoring skills ($($skillNames -join ', '))" `
                     -Provenance 'built from this repository, CarlaControl\skills\' `

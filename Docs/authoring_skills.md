@@ -19,31 +19,48 @@ why the `.agents/skills/sumo-traffic-scenarios/` copy at the workspace root is n
 here rather than a second, editable copy. It is deliberately not a directory junction: a junction is
 invisible in `git status`, does not survive a fresh clone, and lets the two diverge unseen.
 
-## Theirs: the Unreal Engine skills, cloned beside the repository
+## Theirs: `CarlaControl/skills/third-party/`
 
 General Unreal Engine 5 reference skills — gameplay framework, Mass Entity, Niagara, materials,
-replication and about twenty more — are a third-party MIT-licensed collection. They are **not
-vendored into this repository**: the upstream clone already has a version, a history and an intact
-licence, and copying 1.3 MB of somebody else's content in would add an attribution obligation for a
-recipient with no use for it.
+replication and about twenty more — are a third-party MIT-licensed collection, and they are
+**vendored here** at `CarlaControl/skills/third-party/unreal-engine-skills/`, under the `third-party`
+path segment that says whose they are. Assistants working in this workspace read them, so the version
+they read needs a commit behind it rather than whatever a developer happened to clone.
 
-Clone them beside the `carla` checkout, at the workspace root:
+| | |
+|---|---|
+| Upstream | <https://github.com/quodsoler/unreal-engine-skills> |
+| Pinned commit | `231c8571be6f3335685edc566a28ec6f9621361d` |
+| Licence | MIT, Copyright (c) 2025 quodsoler — the upstream text sits beside the skills as `LICENSE`, verbatim |
+| Provenance and update procedure | [`PROVENANCE.md`](../CarlaControl/skills/third-party/unreal-engine-skills/PROVENANCE.md) beside them |
 
-```sh
-git clone https://github.com/quodsoler/unreal-engine-skills.git
-git -C unreal-engine-skills checkout 231c8571be6f3335685edc566a28ec6f9621361d
-```
+**They do not ship.** `MakeDistribution` copies `CarlaControl/skills/` into the distribution and skips
+`third-party/` on both platforms. A distribution recipient authors scenarios against a generated
+world; they do not write engine C++, so this is 1.3 MB of somebody else's content they have no use
+for, and the `skills/` row in the distribution's generated `MANIFEST.md` states one provenance and one
+licence for everything under it — which is true only while everything under it is ours.
 
-That commit is the version this project has been working against. The clone carries its own
-`LICENSE` (MIT, Copyright (c) 2025 quodsoler); leave it in place.
+**Do not edit the vendored files.** A local fix is invisible to upstream and is lost at the next
+update. Replace the directory wholesale from a fresh clone and move the pin, here and in
+`PROVENANCE.md`.
 
-The resulting workspace layout:
+## What an assistant discovers
+
+An assistant working in this workspace loads skills from `.agents/skills/` at the workspace root,
+which is outside this repository and outside any repository:
 
 ```
 <workspace>/
   carla/                        this repository
-  unreal-engine-skills/         the third-party clone, with its remote and LICENSE
+    CarlaControl/skills/
+      sumo-traffic-scenarios/   ours, canonical
+      third-party/
+        unreal-engine-skills/   vendored, MIT, pinned
+  unreal-engine-skills/         the upstream clone the vendored copy came from
   .agents/skills/               what an assistant discovers:
     sumo-traffic-scenarios/     a stub pointing at carla/CarlaControl/skills/
-    ue-*/                       the Unreal Engine skills
+    ue-*/                       the Unreal Engine skills, byte-identical to the vendored copy
 ```
+
+The `.agents/skills/ue-*` directories are what the harness actually reads, so they stay where they
+are. The vendored copy is what gives them a version, a licence and a diff.

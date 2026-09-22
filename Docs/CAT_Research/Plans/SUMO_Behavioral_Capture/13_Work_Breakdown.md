@@ -18,6 +18,7 @@ are on the critical path.
 | 2026-09-21 | Role and phase values are author space; only `subject` and `vacancy` are reserved. |
 | 2026-09-22 | Two-wheelers are outside the vehicle mapping contract; stage E states the boundary. |
 | 2026-09-22 | §13.4 states the two-script setup; stage D drops the completed retirement item. |
+| 2026-09-22 | The Unreal skills are vendored under `skills/third-party/` and excluded from the distribution. |
 
 ---
 
@@ -75,7 +76,7 @@ prevents producing one.
 | ⚑ | **Persist the world's `.net.xml` from the same netconvert invocation as the `.xodr`**, and refuse any other. Measured: 321 vs 317 edges and one lane of 352.19 m vs 2.60 m from the *identical* OSM, while `convBoundary` matches exactly | A scenario cannot be built against a network the world did not produce; the attempt names both fingerprints |
 | ⚑ | **Unify the netconvert flag set on the world build, and regenerate every world.** The scenario path stops invoking netconvert entirely and loads `map.net.xml` from the package; the world build adopts `--output.street-names`, `--junctions.join-dist` and `--tls.default-type` so the single invocation produces what both sides need | Every world is rebuilt from its original OSM. **`--output.street-names` must be omitted, never set `false`** — `NBEdge::expandableBy` guards on the option having been *set at all*, so `false` produces the same graph as `true` and a later attempt to turn it off fails silently |
 | ⚑ | **Pin which SUMO runs.** `SUMO_HOME` is an independent 1.27.1 and `SumoInstallation.py:36` prefers it over the pinned 1.27.0 | The resolved path and version are logged every run; a mismatch against the world's converter refuses |
-| ⚑ | **Move the authoring skill into the repository** and reduce the workspace copy to a stub; leave the third-party Unreal skills as their upstream clone (§13.3, `D9.10`) | The skill has a commit, a version and one source; `07` §8.4's assumption becomes true; it is bundled in the distribution |
+| ⚑ | **Move the authoring skill into the repository** and reduce the workspace copy to a stub; vendor the third-party Unreal skills under `CarlaControl/skills/third-party/` with their `LICENSE` and pin, and exclude them from `MakeDistribution` on both platforms (§13.3, `D9.10`) | Every skill an assistant reads has a commit behind it; `07` §8.4's assumption becomes true; ours is bundled in the distribution and theirs is not |
 
 Under SUMO drive, traffic routed through a banned turn looks *worse* than today's and is easily
 misattributed to the bridge. A scenario authored against edge ids from a graph the world does not
@@ -314,7 +315,7 @@ that is noted rather than restated.
 | 7 | **What the annotation vocabulary contains at v1** | **Settled — the vocabulary is layered, and we author the core rather than waiting.** The EPoL model team has stated no requirements, so there is nothing to fix a list against; inventing a usable core beats leaving consumers to stumble. But labelling is a **contract between the scenario author and the model trainer**, and the range of authorable SUMO scenarios is too wide to enumerate — so the pipeline closes and versions only the terms its own code branches on, and carries author-defined terms through **opaquely but self-describingly** to the corpus consumer. Passing a term the pipeline does not understand is a feature. Terms stay cheap to add and expensive to rename (§13.5) |
 | 8 | **One `sumo` process per capture session, or one shared across several windows** | **Settled — one SUMO process per window.** Each window starts a fresh process, fast-forwards from `t = 0`, captures, and exits. A window is then reproducible from its seed and its bounds alone, a crash costs one window rather than a sequence, and there is no long-lived state to reason about. The cost is paying the fast-forward per window, which the measurement bounds: the sizing scenario's entire seven-day span fast-forwards in **140.41 s**, and a typical window far less |
 | 9 | **The packaging scripts disagree across platforms** | **Settled — Windows and Linux are at parity, for scripts and for deliverables**, and **there is one distribution, containing all of the tools.** A difference between the platforms is a defect, never a policy; the `carlacontrol` wheel ships on both. No internal/external packaging mode is built. What the package must carry instead is a generated component-and-licence manifest — driven by third-party obligations the distribution is already failing to meet, not by anything in `CarlaControl/` (§13.2) |
-| 10 | **Where the authoring skill lives.** It has no reproducible source location — the workspace root is not a git repository | **Settled — move it into the repository and ship it from there**, with the workspace copy reduced to a stub. The 27 co-located Unreal skills are a third-party MIT clone, not ours, and stay upstream rather than being vendored. A **stage A item**, since `07` §8.4 already assumes it (§13.3) |
+| 10 | **Where the skills an assistant reads live.** The workspace root is not a git repository, so nothing under it has a version, a history or a diff | **Settled — both kinds live in the repository, and only ours ships.** The authoring skill moves in and is shipped from there, with the workspace copy reduced to a stub. The 27 co-located Unreal skills are a third-party MIT collection and are **vendored** under `CarlaControl/skills/third-party/` with their `LICENSE` and pinned commit, and **excluded from the distribution** on both platforms. A **stage A item**, since `07` §8.4 already assumes it (§13.3) |
 
 ### 13.1 Ambient traffic, the idle cull, and who owns a label
 
@@ -398,29 +399,40 @@ sits. Two obligations fall out of the measurement and land in the same work:
 
 Where the package may go is governed by access to the channel it is published to, not by a build flag.
 
-### 13.3 The authoring skill moves into the repository
+### 13.3 Both kinds of skill live in the repository, and only ours ships
 
 `.agents/skills/` under the workspace root holds two things that look alike and are not. Measured:
 **one file of ours** — `sumo-traffic-scenarios/SKILL.md`, 14 KB — and **27 directories that are
-byte-identical copies of `quodsoler/unreal-engine-skills`**, an MIT third-party repository already
-cloned beside it at `unreal-engine-skills/` with its remote, its pinned commit and its `LICENSE`
-intact.
+byte-identical copies of `quodsoler/unreal-engine-skills`**, an MIT third-party collection cloned
+beside it at `unreal-engine-skills/` with its remote, its pinned commit and its `LICENSE` intact.
+The workspace root is not a git repository, so nothing under it has a version, a history or a diff,
+and an assistant reads all 28 of them.
 
-**Ours moves; theirs does not.** The skill bundle moves into `carla/CarlaControl/skills/`, beside the
-compiler that [`07`](07_Scenario_Authoring.md) §8 says generates most of it — generator and generated
-output under one directory — and ships from there under §13.2. The workspace copy is reduced to a
-stub naming the canonical path, not a directory junction: a junction is invisible in `git status` and
-does not survive a fresh clone, which is the silent-divergence failure `D9.10` exists to end.
+**Ours lives at `carla/CarlaControl/skills/sumo-traffic-scenarios/`**, beside the compiler
+[`07`](07_Scenario_Authoring.md) §8 says generates most of it — generator and generated output under
+one directory — and ships from there under §13.2. The workspace copy is a stub naming the canonical
+path, not a directory junction: a junction is invisible in `git status` and does not survive a fresh
+clone, which is the silent-divergence failure `D9.10` exists to end.
 
-The Unreal skills stay as the upstream clone, which is already a better reproducible source than
-vendoring: it has a version, a history and an intact licence. Vendoring 1.3 MB of somebody else's MIT
-content into `carla/` would add an attribution obligation for a recipient who has no use for it. The
-unattributed copies under `.agents/skills/` are removed, and the clone plus its commit are recorded as
-a developer prerequisite.
+**Theirs is vendored at `carla/CarlaControl/skills/third-party/unreal-engine-skills/`**, at pinned
+commit `231c857`, with the upstream MIT `LICENSE` copied verbatim beside it and a `PROVENANCE.md`
+recording the upstream URL, the commit and how to move the pin. The `third-party` path segment is
+what marks whose it is, and vendoring is what gives the copy an assistant actually reads a version
+and a licence rather than leaving it to whatever a developer happened to clone.
+
+**Theirs does not ship.** `MakeDistribution` copies `CarlaControl/skills/` and skips `third-party/`
+on both platforms. A distribution recipient authors scenarios against a generated world and writes no
+engine C++, so 1.3 MB of somebody else's MIT content would put an attribution obligation on a package
+that uses none of it — and it would falsify the generated `MANIFEST.md`'s `skills/` row, which states
+one provenance and one licence for the whole slot (§13.2).
+
+**The `.agents/skills/` copies stay exactly as they are.** They are what the harness loads, and
+`.agents/skills/` is itself a discovery convention, so no file needs to reference a skill for it to be
+read. The vendored copy is the versioned record of what is there, not a replacement for it.
 
 This is a **stage A item**, not a later tidy-up: [`07`](07_Scenario_Authoring.md) §8.4 already assumes
-the move happened, and every scenario authored before it lands is authored against an unversioned
-tool.
+the skill's repository home, and every scenario authored before it lands is authored against an
+unversioned tool.
 
 ### 13.4 There are two setup scripts, and every build change lands in both
 

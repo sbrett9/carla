@@ -10,7 +10,8 @@
 #   osm/           the example OpenStreetMap maps the demo can build worlds from
 #   tools/sumo/    the SUMO toolchain: netconvert, sumo, duarouter, the shared libraries they load,
 #                  SUMO's typemap/xsd data, its traci/sumolib modules, and PROJ data
-#   skills/        the authoring skills describing how to build scenarios for a generated world
+#   skills/        this repository's own authoring skills, describing how to build scenarios for a
+#                  generated world. The vendored third-party skills are developer aids and stay out
 #   licenses/      the licence text of every third-party component in the bundle
 #   MANIFEST.md    what is in here, where it came from and under what terms (generated)
 #   setup-venv.sh / run-server.sh / run-sctmv.sh / README.md
@@ -158,10 +159,23 @@ cp "$root/CarlaControl/scripts/run_SCTMV.py" "$dist/scripts/"
 # 3b. The authoring skills: the reference bundles that describe how to build scenarios against a
 #     world this distribution generates. They travel with the tools so the description and the tool
 #     are always the same version.
+#
+#     CarlaControl/skills/third-party/ is skipped. It holds vendored copies of somebody else's
+#     skills - Unreal Engine C++ reference, for developers working on this repository - which a
+#     distribution recipient has no use for, and shipping them would attach a third-party
+#     attribution obligation to the package. It would also make the manifest row below false: that
+#     row states one provenance and one licence for the whole skills/ slot.
 if [ -d "$root/CarlaControl/skills" ]; then
     mkdir -p "$dist/skills"
-    cp -a "$root/CarlaControl/skills/." "$dist/skills/"
+    for skill_item in "$root"/CarlaControl/skills/*; do
+        [ -e "$skill_item" ] || continue
+        if [ "$(basename "$skill_item")" = "third-party" ]; then
+            continue
+        fi
+        cp -a "$skill_item" "$dist/skills/"
+    done
     skill_names="$(ls "$dist/skills" | tr '\n' ' ')"
+    [ -n "$skill_names" ] || echo "[dist] WARNING: no first-party authoring skills under $root/CarlaControl/skills"
     echo "[dist] skills: $skill_names"
     add_manifest_row "authoring skills ($skill_names)" \
                      "built from this repository, CarlaControl/skills/" \
