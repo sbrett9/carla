@@ -404,7 +404,13 @@ class VehicleCatalogueBuilder:
                 f"{entry['blueprint_id']:32s} {entry['length_m']:7.3f} {entry['width_m']:7.3f}"
                 f" {entry['height_m']:7.3f} {entry['bbox_centre_m'][0]:9.3f}"
                 f" {entry['bbox_centre_m'][1]:9.3f} {bumper:7.3f}  {entry['colour_applied']}")
-        lines += ["", "Where the content's own metadata disagrees with the measurement.", ""]
+        lines += ["",
+                  "Where the content's own metadata disagrees with the measurement. A copy of the",
+                  "content build's vehicle metadata with these corrections applied is written as",
+                  f"{CORRECTED_PARAMETERS_FILENAME} beside this report; the catalogue's own class",
+                  "assignment is what truth reads, so the correction is for the next content build",
+                  "rather than something a consumer of this catalogue has to wait for.",
+                  ""]
         for entry in document["vehicles"]:
             record = self.class_records.get(entry["blueprint_id"])
             if record is None:
