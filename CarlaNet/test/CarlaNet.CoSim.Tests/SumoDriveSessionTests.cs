@@ -1,3 +1,4 @@
+using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Commands;
 using Xunit.Abstractions;
 
@@ -193,7 +194,7 @@ public sealed class SumoDriveSessionTests
         // never lent one, and is recorded as having held none. A body of some other shape would
         // have been available and is never a substitute.
         RenderedVehicleInterval unrenderable =
-            Assert.Single(released.Where(interval => interval.VehicleId == "unrenderable"));
+            Assert.Single(released, interval => interval.VehicleId == "unrenderable");
         Assert.Equal(0u, unrenderable.Actor);
         Assert.DoesNotContain(computed, record => record.Pose.VehicleId == "unrenderable");
 
@@ -203,6 +204,80 @@ public sealed class SumoDriveSessionTests
         // The session's end is the one moment a pooled actor is destroyed.
         Assert.All(carla.Batches[^1], command => Assert.IsType<DestroyActorCommand>(command));
         Assert.Equal(carla.Spawned.Count, carla.Batches[^1].Count);
+    }
+
+    [RequiresSumoFact]
+    public void EveryTickWritesItsPosesInOneBatchOfTransformsAndNothingElse()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld();
+        List<CoSimPoseRecord> computed = [];
+        List<RenderedVehicleInterval> released = [];
+        SumoDriveSessionOptions options = Options(world, computed, released, tick: null);
+        options.World = carla;
+
+        using SumoDriveSession session = SumoDriveSession.Start(options);
+        for (int step = 0; step < 400 && session.Advance(); step++)
+        {
+        }
+
+        _output.WriteLine(session.Report.ToString());
+
+        // One round trip per tick that had anything to write, and never more: the whole point of
+        // the batch is that N vehicles cost one.
+        Assert.True(session.Report.Batches > 0, "nothing was ever written");
+        Assert.True(session.Report.Batches <= session.Report.Ticks,
+                    $"{session.Report.Batches} batches for {session.Report.Ticks} ticks");
+        Assert.Equal(0, session.Report.BatchFailures);
+
+        // And what a tick writes is transforms. Not a target velocity beside each one -- on a body
+        // that is not simulating it would write a physics body the getter will not read, and the
+        // engine logs the call as invalid.
+        foreach (IReadOnlyList<Command> batch in carla.PoseBatches)
+        {
+            Assert.All(batch, command => Assert.IsType<ApplyTransformCommand>(command));
+        }
+
+        // One command per pose that had a body to go to, and nothing else in the batch but the
+        // parking poses of the bodies given back.
+        Assert.Equal(computed.Count + released.Count(each => each.Actor != 0),
+                     session.Report.CommandsWritten);
+    }
+
+    [RequiresSumoFact]
+    public void ABodyGivenBackIsWrittenToItsSlotInTheNextTickSBatch()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld();
+        List<RenderedVehicleInterval> released = [];
+        SumoDriveSessionOptions options = Options(world, [], released, tick: null);
+        options.World = carla;
+
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            // Run until the first vehicle has been released, then one more step so the parking pose
+            // it queued is written.
+            for (int step = 0; step < 400 && released.Count == 0 && session.Advance(); step++)
+            {
+            }
+
+            Assert.NotEmpty(released);
+            session.Advance();
+
+            RenderedVehicleInterval first = released[0];
+            Transform? resting = carla.ObservedTransform(first.Actor);
+            Assert.NotNull(resting);
+            Transform parked = resting.Value;
+
+            // The slot is below the surface and beyond it, which is where a parked body belongs and
+            // nowhere a camera aimed at the road can frame.
+            Assert.True(parked.Location.Z < -100f, $"parked at z {parked.Location.Z}");
+            Assert.True(parked.Location.X > 100f, $"parked at x {parked.Location.X}");
+        }
     }
 
     [RequiresSumoFact]

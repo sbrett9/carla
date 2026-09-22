@@ -87,6 +87,28 @@ public sealed class CoSimRunReport
     /// <summary>How many times the pool had no body to lend.</summary>
     public long BodyDeclines { get; internal set; }
 
+    /// <summary>
+    /// Round trips spent writing poses: one per world tick that had a pose to write, never more.
+    /// </summary>
+    /// <remarks>
+    /// The number to read against <see cref="Ticks"/>. Anything above one per tick means a write
+    /// path grew a tail, which is the cost this mode was designed to not have.
+    /// </remarks>
+    public long Batches { get; internal set; }
+
+    /// <summary>Commands written across every batch.</summary>
+    public long CommandsWritten { get; internal set; }
+
+    /// <summary>Commands the server answered with an error.</summary>
+    public long BatchFailures { get; internal set; }
+
+    /// <summary>The first few command failures, as the server described them.</summary>
+    /// <remarks>
+    /// A count says how much of the imagery is wrong; the messages say what about it. Kept to a
+    /// handful because a batch that starts failing usually fails the same way every tick.
+    /// </remarks>
+    public IReadOnlyList<string> BatchFailureSamples => _batchFailures;
+
     /// <summary>The largest and mean bumper round-trip residual, in metres.</summary>
     public double WorstBumperResidualMetres { get; internal set; }
 
@@ -124,7 +146,9 @@ public sealed class CoSimRunReport
     public IReadOnlyList<string> DiscontinuitySamples => _discontinuities;
 
     private const int DiscontinuitySampleLimit = 20;
+    private const int BatchFailureSampleLimit = 10;
 
+    private readonly List<string> _batchFailures = [];
     private readonly List<string> _discontinuities = [];
     private double _laneGeometryTotal;
 
@@ -144,6 +168,15 @@ public sealed class CoSimRunReport
             $"{from.Id}: {from.LaneId}@{from.LanePositionMetres:0.00} -> "
             + $"{to.LaneId}@{to.LanePositionMetres:0.00}, {distance}, "
             + $"speed {from.SpeedMetresPerSecond:0.0} to {to.SpeedMetresPerSecond:0.0} m/s");
+    }
+
+    internal void SampleBatchFailure(string? message)
+    {
+        BatchFailures++;
+        if (_batchFailures.Count < BatchFailureSampleLimit && message is { Length: > 0 })
+        {
+            _batchFailures.Add(message);
+        }
     }
 
     internal void CountCase(LaneInterpolationCase which) =>
@@ -188,6 +221,12 @@ public sealed class CoSimRunReport
         text.AppendLine($"admissions         {Admissions}, capacity declines {CapacityDeclines}");
         text.AppendLine($"bodies             {BodiesSpawned} spawned, {PoseDeclinesForNoBody} "
                         + "vehicle-ticks with no body to write to");
+        text.AppendLine($"batches            {Batches} for {Ticks} ticks, {CommandsWritten} "
+                        + $"commands, {BatchFailures} refused");
+        foreach (string sample in _batchFailures)
+        {
+            text.AppendLine($"  batch failure    {sample}");
+        }
         foreach ((LaneInterpolationCase which, long count) in _cases.OrderBy(entry => entry.Key))
         {
             text.AppendLine($"  {which,-26} {count}");

@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using CarlaNet.Map.WorldPackage;
 using CarlaNet.Sumo;
+using CarlaNet.Types.Geom;
+using CarlaNet.Types.Rpc.Commands;
 
 using ActorId = uint;
 
@@ -37,6 +39,8 @@ public sealed class SumoDriveSession : IDisposable
     private readonly PopulationLease _lease;
     private readonly VehicleBodyPool? _pool;
     private readonly Func<bool> _tickWorld;
+    private readonly List<Command> _batch = [];
+    private readonly List<Command> _parked = [];
     private readonly Dictionary<string, (double X, double Y)> _positions = [];
     private readonly Dictionary<string, CoSimVehicleFrame> _previous = [];
     private readonly Dictionary<string, CoSimVehicleFrame> _next = [];
@@ -178,6 +182,7 @@ public sealed class SumoDriveSession : IDisposable
             _bridgeClock.Start();
             double fraction = Clock.InterpolationFraction(tick);
             ComputePoses(fraction);
+            WriteTheBatch();
             _bridgeClock.Stop();
 
             if (!_tickWorld())
@@ -286,6 +291,12 @@ public sealed class SumoDriveSession : IDisposable
 
     private void ComputePoses(double fraction)
     {
+        // Every body released since the last tick goes back to its slot, in this same batch. A
+        // parking pose is a pose like any other, so it costs an entry rather than a round trip.
+        _batch.Clear();
+        _batch.AddRange(_parked);
+        _parked.Clear();
+
         foreach (string vehicleId in _renderSet.RenderedVehicleIds)
         {
             if (!_next.TryGetValue(vehicleId, out CoSimVehicleFrame to))
@@ -335,6 +346,7 @@ public sealed class SumoDriveSession : IDisposable
                 if (pool.TryCheckOut(vehicleId, extent.BlueprintId, out PooledBody body))
                 {
                     actor = body.Actor;
+                    _batch.Add(new ApplyTransformCommand(actor, TransformOf(applied)));
                 }
                 else
                 {
@@ -370,10 +382,57 @@ public sealed class SumoDriveSession : IDisposable
         if (_pool is { } pool && pool.TryCheckIn(interval.VehicleId, out PooledBody body))
         {
             actor = body.Actor;
+            _parked.Add(new ApplyTransformCommand(actor, body.Parking));
         }
 
         _options.OnRelease?.Invoke(interval with { Actor = actor });
     }
+
+    /// <summary>
+    /// Write every pose this tick in one round trip.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>One batch, and no variable tail.</b> Every command CARLA's batch endpoint takes is
+    /// supported at both ends, so N vehicles cost one round trip rather than N. The .NET traffic
+    /// manager already writes its control frame this way, against the same endpoint.</para>
+    ///
+    /// <para><b>No target velocity beside the transform.</b> The runtime section's D3.5 has the
+    /// bridge emit one, and it will once the engine change beside it lands. Today it would be a
+    /// command per vehicle per tick that cannot do anything: on a body that is not simulating,
+    /// <c>SetPhysicsLinearVelocity</c> writes a physics body that
+    /// <c>UPrimitiveComponent::GetComponentVelocity</c> will not read, and disabling physics
+    /// destroys that body in the first place. The engine classifies the call as invalid on a
+    /// non-simulating body and logs it in every non-shipping build, so emitting it now buys a line
+    /// of log per vehicle per tick and nothing else. SUMO's own speed is on the pose record either
+    /// way, which is where the truth path reads it.</para>
+    ///
+    /// <para>A failed command is counted rather than thrown on. The batch's responses name the
+    /// commands that failed, and a run in which some poses did not take is a run whose imagery is
+    /// wrong in a way only the count makes visible.</para>
+    /// </remarks>
+    private void WriteTheBatch()
+    {
+        if (_options.World is not { } world || _batch.Count == 0)
+        {
+            return;
+        }
+
+        IReadOnlyList<CommandResponse> responses = world.ApplyBatch(_batch);
+        Report.Batches++;
+        Report.CommandsWritten += _batch.Count;
+        foreach (CommandResponse response in responses)
+        {
+            if (response.HasError)
+            {
+                Report.SampleBatchFailure(response.Error);
+            }
+        }
+    }
+
+    /// <summary>The CARLA transform a computed pose is, in the units the batch is written in.</summary>
+    private static Transform TransformOf(in VehiclePose pose) =>
+        new(new Location((float)pose.X, (float)pose.Y, (float)pose.Z),
+            new Rotation((float)pose.PitchDegrees, (float)pose.YawDegrees, (float)pose.RollDegrees));
 
     private static void Attempt(List<Exception> failures, Action step)
     {
