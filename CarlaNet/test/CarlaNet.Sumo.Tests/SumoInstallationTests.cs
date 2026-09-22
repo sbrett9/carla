@@ -12,6 +12,21 @@ public class SumoInstallationTests(ITestOutputHelper output)
     /// <summary>The SUMO release <c>TraCIConstants</c> was translated from.</summary>
     private const string PinnedRelease = "1.27.0";
 
+    [Fact]
+    public void TheUpwardSearchStartsFromThisAssemblyAsWellAsTheApplication()
+    {
+        // Two starting points, and the second is what makes the search work at all when the runtime
+        // is hosted rather than launched: loaded into another process -- as it is when a Python
+        // orchestrator drives the co-simulation bridge -- an application has no base directory, and
+        // AppContext.BaseDirectory is the empty string. Starting only from it raised on the empty
+        // path rather than answering that no installation resolved.
+        string[] roots = [.. SumoInstallation.SearchRoots()];
+
+        Assert.NotEmpty(roots);
+        Assert.DoesNotContain(roots, root => string.IsNullOrWhiteSpace(root));
+        Assert.Contains(roots, root => root.Contains("CarlaNet.Sumo.Tests", StringComparison.Ordinal));
+    }
+
     [RequiresSumoFact]
     public void TheResolvedInstallationSaysWhichRuleFoundIt()
     {

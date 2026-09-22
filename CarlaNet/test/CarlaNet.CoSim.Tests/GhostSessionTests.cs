@@ -128,14 +128,14 @@ public sealed class GhostSessionTests
     public void AGhostRunAgainstARealScenarioAndWorld()
     {
         List<GhostPoseRecord> ghost = [];
-        var options = new GhostSessionOptions
+        var options = new GhostSessionOptions(
+            NamedGhostRunFactAttribute.Scenario!,
+            NamedGhostRunFactAttribute.WorldPackage!,
+            CoSimFixtures.VehicleCatalogue,
+            "named://" + Guid.NewGuid().ToString("n"),
+            new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 270.0,
+                                      hysteresisMetres: 30.0, capacity: 128))
         {
-            ScenarioPath = NamedGhostRunFactAttribute.Scenario!,
-            WorldPackagePath = NamedGhostRunFactAttribute.WorldPackage!,
-            CataloguePath = CoSimFixtures.VehicleCatalogue,
-            WorldKey = "named://" + Guid.NewGuid().ToString("n"),
-            RenderSet = new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 270.0,
-                                                  hysteresisMetres: 30.0, capacity: 128),
             WarmUpToSimulatedSecond = NamedGhostRunFactAttribute.WarmUp,
             SumoStepOverrideSeconds = NamedGhostRunFactAttribute.StepLength,
             OnPose = ghost.Add,
@@ -157,14 +157,13 @@ public sealed class GhostSessionTests
                                                List<GhostPoseRecord> ghost,
                                                List<RenderedVehicleInterval> released,
                                                Func<bool> tick) =>
-        new()
+        new(CoSimFixtures.RightAngleTurnScenario,
+            world.PackagePath,
+            CoSimFixtures.VehicleCatalogue,
+            "test://" + Guid.NewGuid().ToString("n"),
+            new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 60.0,
+                                      hysteresisMetres: 15.0, capacity: 8))
         {
-            ScenarioPath = CoSimFixtures.RightAngleTurnScenario,
-            WorldPackagePath = world.PackagePath,
-            CataloguePath = CoSimFixtures.VehicleCatalogue,
-            WorldKey = "test://" + Guid.NewGuid().ToString("n"),
-            RenderSet = new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 60.0,
-                                                  hysteresisMetres: 15.0, capacity: 8),
             TickWorld = tick,
             OnPose = ghost.Add,
             OnRelease = released.Add,

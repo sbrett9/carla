@@ -193,19 +193,53 @@ public sealed class SumoInstallation
     /// </summary>
     private static string? FindUpwards(string relative)
     {
-        DirectoryInfo? directory = new(AppContext.BaseDirectory);
-        while (directory is not null)
+        foreach (string start in SearchRoots())
         {
-            string candidate = Path.Combine(directory.FullName, relative);
-            if (Directory.Exists(candidate))
+            DirectoryInfo? directory = new(start);
+            while (directory is not null)
             {
-                return candidate;
-            }
+                string candidate = Path.Combine(directory.FullName, relative);
+                if (Directory.Exists(candidate))
+                {
+                    return candidate;
+                }
 
-            directory = directory.Parent;
+                directory = directory.Parent;
+            }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Where the upward walk starts: the application's base directory, and this assembly's own.
+    /// </summary>
+    /// <remarks>
+    /// Two starting points, and the second is not redundant. An application's base directory is the
+    /// executable's, and <b>there is no executable when the runtime is hosted</b> -- loaded into
+    /// another process, as it is when a Python orchestrator drives the bridge,
+    /// <see cref="AppContext.BaseDirectory"/> is the empty string and constructing a
+    /// <see cref="DirectoryInfo"/> from it raises. The assembly's own directory is under the
+    /// repository in exactly that case, which is the case where the repository build is the
+    /// installation wanted.
+    /// </remarks>
+    internal static IEnumerable<string> SearchRoots()
+    {
+        string applicationBase = AppContext.BaseDirectory;
+        if (!string.IsNullOrWhiteSpace(applicationBase))
+        {
+            yield return applicationBase;
+        }
+
+        string assembly = Path.GetDirectoryName(typeof(SumoInstallation).Assembly.Location)
+                          ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(assembly)
+            && !string.Equals(Path.TrimEndingDirectorySeparator(assembly),
+                              Path.TrimEndingDirectorySeparator(applicationBase),
+                              StringComparison.OrdinalIgnoreCase))
+        {
+            yield return assembly;
+        }
     }
 
     /// <summary>
