@@ -476,18 +476,39 @@ value is not a measurement.
 - Set the sun to a night instant and disable advancement, so the only light in frame is the vehicle's:
   `set_solar_date` then `set_solar_time` at a declared sun-clock hour, and `set_time_advance(false)`
   (`carlanet/__init__.py:1506`, `:1500`, `:1535`). The hour and date used are recorded in the catalogue
-  header as `lamp_probe_solar_time` / `lamp_probe_solar_date`, because a measurement whose lighting is
-  not recorded is not repeatable. This is the one place `C1` depends on `C9`'s mechanism, and it is a
-  build-time dependency only.
-- Spawn one blueprint at the sweep's fixed transform, place one camera at a declared relative pose,
-  capture a reference frame with `VehicleLightState.NONE`, then one frame per lamp bit with exactly that
-  bit set, restoring `NONE` between bits.
-- A lamp is `lit` when the frame for that bit differs from the reference above a declared luminance
-  threshold in a declared region; `unlit` when it does not; `unknown` when the pass could not run — no
-  camera, no sun in the world, or a capture that failed. The threshold, the region and the camera pose
-  are catalogue-header fields, not constants in code, for the same reason the solar instant is.
+  header as `lamp_probe.solar_time_hours` / `lamp_probe.solar_date`, together with the sun elevation
+  the world reported back, because a measurement whose lighting is not recorded is not repeatable. The
+  pass refuses to report at all if that elevation is above the horizon, since it would then be
+  measuring a lamp against daylight. This is the one place `C1` depends on `C9`'s mechanism, and it is
+  a build-time dependency only.
+- Spawn one blueprint at the sweep's fixed transform and place a camera at each of **two** declared
+  relative poses, ahead of the body looking back along it and behind it looking forward. Two, because
+  front and rear lamps are different meshes and one camera cannot see both; a pixel count is taken from
+  whichever camera sees the larger change, so the camera that cannot see a lamp does not dilute the one
+  that can.
+- Capture with `VehicleLightState.NONE`, then one frame per lamp bit with exactly that bit set,
+  restoring `NONE` between bits — and **capture the restored `NONE` state as well**. Each lamp is
+  compared against the off state before it and the off state after it, and the difference between those
+  two off states is the run's own noise floor. A single early reference is not enough: **measured on
+  this content build**, a pass that compared every bit against one reference taken 40 steps after the
+  spawn reported all eleven lamps lit on `vehicle.ambulance.ford` with 3,281 pixels of gain, against
+  2,464 pixels between two captures of the *same* state — the vehicle's arrival moves the scene's
+  exposure, and exposure drift produces the same positive difference a lamp does. Comparing each bit
+  against the off state beside it reduced the same blueprint's readings to 0–1 pixels.
+- A lamp is `lit` when it gains more pixels than both the measured floor by a declared margin and a
+  declared minimum, above a declared luminance threshold in a declared region; `unlit` when it does
+  not; `unknown` when the pass could not run — no camera, no sun in the world, or a capture that
+  failed. The threshold, the region, the margin, the minimum and the camera poses are catalogue-header
+  fields, not constants in code, for the same reason the solar instant is.
+- **A positive control runs once per pass**: the sun is moved to a declared daylight instant and back,
+  and the same metric must respond. A metric that cannot see a vehicle go from night to day could not
+  have seen a lamp either, so if it does not respond the pass records `ran: false` and every verdict
+  `unknown`, rather than publishing seventeen `unlit` verdicts it was never in a position to make.
 - The pass must never write `lit` by assumption, and must never infer one lamp from another. Front and
   rear are separate bits and separate meshes.
+- **The camera takes the clock.** Measured on this server: a camera delivers no frames at all while the
+  simulation free-runs and exactly one frame per step in synchronous mode, so the pass switches the
+  world to synchronous stepping for its duration and restores the caller's settings afterwards.
 
 **What is *not* measured, and must not be.** Whether a lamp is bright enough to be *detectable* at a
 given range by a given sensor is a collection question, not a content property; it belongs to
@@ -576,6 +597,15 @@ only appears once the SUMO side is in scope:
 So: one measurement, two serialisations, the JSON authoritative. A consumer finding the two in
 disagreement treats it as a build error, not as a choice.
 
+**The OpenSCENARIO projection is not yet emitted, and the reason is a gap in the measurement, not in
+the writer.** A conformant `<Vehicle>` requires `<Axles>` — wheel diameter, track width and the
+longitudinal and vertical position of each axle — and the sweep measures none of them: the only
+geometry a spawned actor hands back is its bounding box. Writing plausible axle numbers derived from
+the box would put fabricated measurements into a file whose whole purpose is to be read by a foreign
+player as measured. Until the sweep can read wheel geometry off the actor, the JSON catalogue and the
+SUMO vehicle types are what it emits, and a `VehicleCatalog.xosc` remains something to add to the same
+run rather than something to hand-write.
+
 **Location.** The catalogue is a property of a content build, so it ships with the distribution:
 
 ```
@@ -603,7 +633,7 @@ rule of §1 to be well defined.
 | `generated_at_utc` | string | — | yes | ISO-8601 UTC, millisecond precision |
 | `generator` | string | — | yes | `carlacontrol.VehicleCatalogueBuilder` and its version |
 | `server_version` | string | — | yes | The server the sweep measured against |
-| `lamp_probe` | object | — | yes | The lamp pass's own conditions, so the measurement is repeatable: `{ ran, solar_date, solar_time_hours, camera_pose, luminance_threshold, region }`. `ran: false` with a reason when the pass could not run, in which case every `lamp_capability` value is `unknown` (§3.2a) |
+| `lamp_probe` | object | — | yes | The lamp pass's own conditions, so the measurement is repeatable: `{ ran, solar_date, solar_time_hours, sun_elevation_deg, camera_poses, image_size, luminance_threshold, region, minimum_lit_pixels, drift_margin, average_frames, positive_control_pixels }`. `camera_poses` is a list because front and rear lamps need two of them (§3.2a). `ran: false` with a reason when the pass could not run, in which case every `lamp_capability` value is `unknown` |
 | `vehicles` | array | — | yes | §3.4.2 |
 | `classes` | array | — | yes | §3.4.3 |
 
@@ -755,16 +785,36 @@ Catalogue fragment, with measured dimensions and measured palettes:
 }
 ```
 
-**Provenance of the numbers above.** `length_m`, `width_m`, `height_m`, `colour_palette` and the
-`recommended_values` are **measured** (§3.2, Measurement 1 and Measurement 4). `bbox_centre_m` is
-**illustrative**: the recorded sidecars carry dimensions but not the box centre
-(`CarlaNet.Recording/CotWriter.cs` writes `length_m`/`width_m`/`height_m` and no centre), so no
-measurement of it exists in this tree. The sweep is the first thing that will produce real values, and
-§3.2's pose formula is why they matter. `declared_has_lights` is **measured** (§3.2a, Measurement 5:
-`true` on all 17). `lamp_capability` is **illustrative** — no optical measurement of any lamp exists in
-this tree, and the two entries deliberately show both shapes: a probed blueprint with per-lamp verdicts,
-and an unprobed one carrying `unknown` for every bit. A real catalogue whose `lamp_probe.ran` is `true`
-carries verdicts for every entry the pass reached and `unknown` only for the ones it did not.
+**Provenance of the numbers above.** The example predates the sweep, and the sweep has since run: the
+catalogue it produced is in the tree at `CarlaControl/catalogue/vehicles.catalogue.json`, and that file
+rather than this fragment is where a real value is read from. Against it:
+
+- `length_m`, `width_m`, `height_m`, `colour_palette` and the `recommended_values` are **measured**
+  (§3.2, Measurement 1 and Measurement 4), and the swept values agree with Measurement 4's to within a
+  centimetre. Two `colour_palette` counts here do not survive the sweep: `vehicle.ue4.ford.crown`
+  declares **one** recommended colour rather than five, and `vehicle.ue4.mercedes.ccc` **four** rather
+  than five.
+- `bbox_centre_m` was **illustrative** when this was written, because the recorded sidecars carry
+  dimensions but not the box centre (`CarlaNet.Recording/CotWriter.cs` writes
+  `length_m`/`width_m`/`height_m` and no centre). It is now **measured**, and it is not zero: the
+  forward component runs from **−0.493 m** (`vehicle.fuso.mitsubishi`) to **+0.185 m**
+  (`vehicle.ue4.ford.crown`), so ignoring it biases the bumper shift by up to half a metre. The
+  lateral component is zero to a millimetre on sixteen of the seventeen and **−0.092 m** on
+  `vehicle.fuso.mitsubishi`, which is the off-centre mesh §3.2's general form exists for.
+- `declared_has_lights` is **measured** (§3.2a, Measurement 5: `true` on all 17).
+- `lamp_capability` was **illustrative**. It is now **measured**, and it is very nearly uniform:
+  **sixteen of the seventeen blueprints change no pixel when any of their eleven lamps is
+  commanded.** The seventeenth, `vehicle.firetruck.actors`, lights exactly one — its `high_beam`,
+  at 369 gained pixels against a same-state control of 48 and a bar of 192. Every other blueprint's
+  strongest reading across all eleven bits is between 0 and 20 pixels, at or below its own noise
+  floor, in a pass whose positive control moved by six figures of pixels. The example's row of `lit`
+  verdicts is therefore a shape rather than a value: it shows what an entry looks like when lamps do
+  light, which one blueprint and one bit in this content build do.
+- **The consequence for `V1.19` is immediate.** Lamp capability is currently a perfect separator of
+  one class: at the probe's sun instant, the only vehicle in this content build that shows a lit lamp
+  is the fire appliance, and `fire_appliance` is a single-member class. Any night window containing it
+  alongside anything else has an illumination covariate that is not behavioural, and `V1.18` will warn
+  on every other class for every conspicuity lamp the policy commands.
 
 The `.rou.xml` the scenario builder emits from that class — **generated, never hand-written**:
 
