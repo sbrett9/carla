@@ -20,6 +20,12 @@ The scenario this writes:
     the real peak for a connector of this class, and the lighter westbound side is what leaves the
     marked vehicle room to exceed the limit on its way out.
 
+Every vehicle in it is a body somebody measured. A vehicle type names one CARLA blueprint and takes
+its length, width and height from the spawn-and-measure sweep of that blueprint, so the vehicle SUMO
+reserves road for is the vehicle CARLA draws; what kind of vehicle a class is made of is declared in
+AMBIENT_CLASSES below, with each measured body set against the size the traffic was designed around.
+The content build has no pickup, so this corridor has none.
+
 The network is rebuilt from the same clipped OSM and the same netconvert flags the CARLA world
 package records, so its coordinates line up with the CARLA map: SUMO (x, y) is CARLA (x, -y).
 
@@ -37,6 +43,7 @@ _THIS = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.normpath(os.path.join(_THIS, "..", ".."))
 sys.path.insert(0, os.path.join(_REPO, "CarlaControl", "src"))
 
+from carlacontrol.ScenarioVehicleMix import ScenarioVehicleMix, VehicleClassSpec  # noqa: E402
 from carlacontrol.SumoInstallation import SumoInstallation  # noqa: E402  (needs the path above)
 from carlacontrol.SumoScenarioBuilder import (  # noqa: E402
     AmbientFlow,
@@ -45,12 +52,26 @@ from carlacontrol.SumoScenarioBuilder import (  # noqa: E402
     OrbitSettings,
     SumoScenarioBuilder,
 )
+from carlacontrol.SumoVehicleTypeWriter import (  # noqa: E402
+    ROUTES_SCHEMA_RELATIVE_PATH,
+    SumoVehicleTypeWriter,
+)
+from carlacontrol.VehicleCatalogue import VehicleCatalogue  # noqa: E402
 
 MAP_NAME = "Gardnerville_Centerville_Lane"
 SCENARIO_NAME = f"{MAP_NAME}_NeighborhoodOrbit"
 
 # Falls back to the SUMO built inside this repository when SUMO_HOME is not set.
 REPO_SUMO = os.path.join(_REPO, "Build", "sumo-src")
+
+# The SUMO this repository stages and the distribution ships. Its route schema is what the written
+# scenario is validated against, in preference to whichever SUMO is installed on this machine: the
+# two have been observed to differ by a patch release, and the scenario has to load under the one
+# that ships.
+STAGED_SUMO = os.path.join(_REPO, "Build", "sumo-install")
+
+# The measured vehicle catalogue every vehicle type in this scenario is sized from.
+CATALOGUE = os.path.join(_REPO, "CarlaControl", "catalogue", "vehicles.catalogue.json")
 
 # The clipped OSM the shipped world was built from; its SHA-256 is recorded in
 # Build/world-packages/Gardnerville_Centerville_Lane.world.json as SourceOsmSha256.
@@ -128,6 +149,92 @@ AMBIENT_FLOWS = [
     AmbientFlow("west_to_keystone", "108141475#0", "219060584#1", 30),
 ]
 
+# What the ambient traffic is made of. Each class names the CARLA blueprints it draws, and every
+# vehicle type written from it takes its length, width and height from the sweep that measured that
+# body, so the vehicle SUMO reserves road for is the vehicle CARLA draws. `share` is this corridor's
+# traffic composition as it was first authored; the emitted probabilities are normalised, so the
+# missing pickup share below is redistributed across the surviving classes in the proportions the
+# composition already held rather than being handed to whichever class happens to suit it.
+#
+# The classes this scenario was first written with declared their own lengths, and those numbers are
+# recorded against the measurements here because they are what the traffic was designed around. Two
+# are close and two are not, and the difference is a difference in body, not in pose: a type's length
+# is now the measured length of the body it renders as, so nothing is placed away from where SUMO
+# believes it is. What moves is the size of the vehicles this corridor is made of.
+#
+# There is no pickup. The content build registers seventeen vehicles and not one of them has a bed,
+# so the class that carried a quarter of this corridor is absent rather than rendered as something
+# else: a substituted body makes the imagery and the behavioural record disagree while each stays
+# internally consistent, and nothing downstream can detect that. A rural Nevada corridor without
+# pickups is a visibly incomplete population, and closing that needs a pickup in the content, not a
+# different choice here.
+AMBIENT_CLASSES = (
+    VehicleClassSpec(
+        class_id="car",
+        # Every measured passenger body except the Patrol, which is the sport utility below.
+        blueprints=("vehicle.ue4.audi.tt", "vehicle.mini.cooper", "vehicle.ue4.bmw.grantourer",
+                    "vehicle.ue4.mercedes.ccc", "vehicle.ue4.ford.mustang", "vehicle.lincoln.mkz",
+                    "vehicle.dodge.charger", "vehicle.ue4.chevrolet.impala",
+                    "vehicle.ue4.ford.crown"),
+        sumo_vclass="passenger",
+        behaviour={"maxSpeed": "55", "speedFactor": "normc(1.00,0.10,0.80,1.20)"},
+        share=0.45,
+        gui_shape="passenger",
+        note="Saloons, hatchbacks and coupes. Designed around a 4.6 m car; the nine measured bodies "
+             "run 4.18 m to 5.37 m and average 4.82 m, so the class is 0.22 m longer on average "
+             "than it was drawn up as and considerably more varied than the single body it used to "
+             "be."),
+    VehicleClassSpec(
+        class_id="suv",
+        blueprints=("vehicle.nissan.patrol",),
+        sumo_vclass="passenger",
+        behaviour={"maxSpeed": "52", "speedFactor": "normc(1.00,0.10,0.80,1.20)"},
+        share=0.18,
+        gui_shape="passenger",
+        note="The only sport utility in the content build: a 5.59 x 2.15 x 2.06 m body, against the "
+             "5.0 x 1.95 m this class was designed around, so every SUV here is 0.59 m longer than "
+             "intended. One body means every SUV on the map looks the same, which is a property of "
+             "the content and not of this scenario."),
+    VehicleClassSpec(
+        class_id="van",
+        blueprints=("vehicle.sprinter.mercedes",),
+        sumo_vclass="delivery",
+        behaviour={"maxSpeed": "45", "speedFactor": "normc(0.95,0.08,0.75,1.10)"},
+        share=0.07,
+        gui_shape="delivery",
+        note="A panel van measuring 5.92 m against the 5.9 m designed around: the closest agreement "
+             "of any class here, at 0.02 m."),
+    VehicleClassSpec(
+        class_id="truck",
+        blueprints=("vehicle.carlacola.actors", "vehicle.fuso.mitsubishi"),
+        sumo_vclass="truck",
+        behaviour={"maxSpeed": "35", "speedFactor": "normc(0.90,0.06,0.75,1.05)"},
+        share=0.05,
+        gui_shape="truck",
+        note="The two rigid lorries in the content build, measuring 8.00 m and 10.17 m. The 9.5 m "
+             "this class was designed around falls between them, so a lorry here is either 1.50 m "
+             "shorter or 0.67 m longer than intended and the two are drawn equally."),
+)
+
+# The marked vehicle's body. Everything about how it drives is set from the command line and written
+# alongside this; what is fixed here is which body it is. The saloon measures 4.89 m against the
+# 4.8 m the vehicle was designed around, the closest match in the catalogue, and it is also one of
+# the nine bodies the ambient cars draw from, so the vehicle under observation is not the only one
+# of its kind on the map.
+ORBITER_BLUEPRINT = "vehicle.lincoln.mkz"
+
+VEHICLE_MIX_HEADER = (
+    "Every vehicle type below names one CARLA blueprint in a carla:blueprint parameter and takes its "
+    "length, width and height from the measurement of that body, so SUMO reserves road for the "
+    "vehicle that is actually drawn. Variety inside a class is SUMO's own seeded draw from the "
+    "class distribution, not a choice made at playback.\n"
+    "A colour here is read by sumo-gui and reaches nothing rendered: the rendered colour comes from "
+    "the blueprint's own measured palette, so highlighting a vehicle on screen cannot make the "
+    "highlight a property of what was highlighted.\n"
+    "This content build has no pickup, so this corridor has none. See "
+    "CarlaControl/scripts/make_sumo_scenario.py for what each class is made of and how far each "
+    "measured body sits from the size the traffic was designed around.")
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -163,6 +270,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--reuse-network", action="store_true",
                         help="keep the .net.xml already in the output directory instead of "
                              "running netconvert again")
+    parser.add_argument("--catalogue", default=CATALOGUE,
+                        help="measured vehicle catalogue every vehicle type is sized from. A class "
+                             "naming a body this catalogue does not hold stops the build")
     return parser.parse_args()
 
 
@@ -178,7 +288,29 @@ def main() -> int:
     logging.info("SUMO from %s", installation.home)
     builder = SumoScenarioBuilder()
     try:
-        builder.build(
+        catalogue = VehicleCatalogue.load(args.catalogue)
+        # The marked vehicle is a class of one body, so it is bound to a measurement by the same
+        # rule as the ambient traffic. Its share of zero keeps it out of the ambient mix.
+        orbiter = VehicleClassSpec(
+            class_id="orbiter",
+            blueprints=(ORBITER_BLUEPRINT,),
+            sumo_vclass="passenger",
+            behaviour={"maxSpeed": "55", "speedFactor": f"{args.exit_speed_factor:.2f}",
+                       "speedDev": "0", "sigma": "0.20", "tau": "1.20"},
+            # Conspicuous in sumo-gui so the author can follow it there, and nowhere else: the
+            # rendered colour is drawn from the blueprint's own palette.
+            gui_colour="#FF8C00",
+            gui_shape="passenger",
+            note="The marked vehicle. speedDev is zeroed so its speed multiple is exact rather "
+                 "than drawn from a distribution around it.")
+        mix = ScenarioVehicleMix(catalogue, (*AMBIENT_CLASSES, orbiter), mix_id="ambient_mix",
+                                 header=VEHICLE_MIX_HEADER)
+        logging.info("vehicle catalogue %s (%d measured bodies)",
+                     catalogue.catalogue_id, len(catalogue.blueprint_ids))
+        for line in mix.summary():
+            logging.info("  %s", line)
+
+        paths = builder.build(
             world_package=args.world_package,
             out_dir=args.out_dir,
             map_name=MAP_NAME,
@@ -187,14 +319,28 @@ def main() -> int:
             route=ORBIT_ROUTE,
             orbit_settings=OrbitSettings(laps=args.laps, loop_speed=args.loop_speed,
                                          exit_speed_factor=args.exit_speed_factor,
-                                         depart_time=args.depart),
+                                         depart_time=args.depart,
+                                         vehicle_type=orbiter.class_id),
             flows=AMBIENT_FLOWS,
+            vehicle_types=mix.to_xml(),
             end_time=args.end,
             step_length=args.step_length,
             seed=args.seed,
             reuse_network=args.reuse_network,
         )
-    except (FileNotFoundError, RuntimeError, ValueError) as error:
+        # Read the written file back rather than trusting what was just written to it. The schema
+        # says whether SUMO will load it at all; the catalogue check says whether every type in it
+        # names a body that exists and is the size the type claims.
+        schema = os.path.join(STAGED_SUMO, "data", str(ROUTES_SCHEMA_RELATIVE_PATH))
+        if not os.path.exists(schema):
+            schema = os.path.join(str(installation.home), "data", str(ROUTES_SCHEMA_RELATIVE_PATH))
+        if os.path.exists(schema):
+            SumoVehicleTypeWriter.validate(paths.routes, schema)
+        else:
+            logging.warning("no route schema found at %s; the scenario was not schema-checked",
+                            schema)
+        ScenarioVehicleMix.check_route_file(paths.routes, catalogue)
+    except (FileNotFoundError, LookupError, RuntimeError, ValueError) as error:
         logging.error("%s", error)
         return 1
     return 0

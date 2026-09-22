@@ -2,7 +2,7 @@
 name: sumo-traffic-scenarios
 description: Use when building a SUMO traffic scenario or a Cursor-on-Target (CoT) telemetry dataset for a CARLA world generated from OpenStreetMap — including orbit/dwell/pattern-of-life scenarios, planted anomalies, ambient traffic, guard postings, fenced (access-restricted) road networks, or standalone scenario zips. Also use when the question is about how the OSM → world package (.xodr + bareearth.bin drape) → SUMO network → routes → CoT pipeline fits together, how run_SCTMV.py and CarlaNet produce the world, or which of the make_*_scenario.py / sumo_cot_telemetry.py tools to reach for. Covers the netconvert flags, coordinate alignment, which vehicles a scenario may ask for, and the measured gotchas that make routes actually work.
 metadata:
-  version: 1.1.0
+  version: 1.2.0
 ---
 
 # SUMO traffic scenarios for generated CARLA worlds
@@ -85,6 +85,8 @@ All pure standard library. One public class per file (repo convention, see `carl
 | `SumoInstallation.py` | Finds SUMO: `--sumo-home` → `$SUMO_HOME` → repo `Build/sumo-src` → `PATH`. Gives `netconvert`, `sumo`, `duarouter`, the `tools/` dir (traci, sumolib), and `proj` data. |
 | `SumoScenarioBuilder.py` | `NetconvertSettings` (the flag set), `build_network` (OSM→.net.xml, origin-pinned), `RoadNetwork` (reads a net for lane geometry + connections), `AmbientFlow` (a time-windowed traffic stream), and network post-processors: `restrict_private_roads` (the fence), `allow_opposite_overtaking`, `write_config`, plus the orbit/dwell route writers. |
 | `SumoPatternOfLifeBuilder.py` | A multi-day timeline: `ScheduledVehicle` + `ScheduleStop`, and `write_routes` that merges time-windowed flows and scheduled vehicles onto one departure-sorted timeline. For week-long "pattern of life" scenarios. |
+| `ScenarioVehicleMix.py` | `VehicleClassSpec` (one kind of vehicle a scenario asks for: which measured blueprints it draws, its share of the traffic, and the author's own driving attributes) and `ScenarioVehicleMix`, which writes those as `<vType>`s sized from the catalogue plus the per-class and whole-mix `<vTypeDistribution>`s. `check_route_file` reads a written `.rou.xml` back and refuses one whose types name no measured body. This is how a scenario satisfies the mapping contract below. |
+| `VehicleCatalogue.py` | Read side of `vehicles.catalogue.json`: measured extent per blueprint, the bumper-to-origin shift the pose conversion needs, and the refusal reason for a type it cannot answer for. |
 | `SumoCotBridge.py` | Drives a scenario through **TraCI** and emits CoT. `BareEarthGrid` (reads `bareearth.bin`, loose or inside a `.cwp`), per-type affiliation + multi-marked support, real-time pacing. |
 | `CotUdpEmitter.py` | The CoT event formatter (shared with the CARLA truth producer, so datasets are comparable) and the UDP socket. Schema: `Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md`. |
 
@@ -140,6 +142,25 @@ If a user asks for motorcycle traffic, say plainly that this content build has n
 two-wheeler is out of scope — never quietly render it as a car. Same answer for bicycles, and for
 pedestrians, which the world-generation pipeline produces no footway meshes for.
 
+**How a scenario satisfies this in practice.** Declare each kind of vehicle as a
+`VehicleClassSpec` — the blueprints it draws, its share of the traffic, and the driving attributes
+the scenario wants — and hand the list to `ScenarioVehicleMix` with the catalogue. It writes one
+`<vType>` per blueprint with the measured box and the `carla:blueprint` param, one
+`<vTypeDistribution>` per class, and the flat whole-mix distribution whose probabilities are share ×
+member weight; shares that do not sum to one are normalised, so dropping a class the content build
+has no body for redistributes it across the rest in the proportions already authored. A class naming
+a body the catalogue does not hold, restating a dimension the measurement supplies, or declaring a
+two-wheeler `vClass` stops the build. Then read the written file back with
+`ScenarioVehicleMix.check_route_file` and validate it against
+`Build/sumo-install/data/xsd/routes_file.xsd`; `make_sumo_scenario.py` does both and is the worked
+example.
+
+**What the catalogue cannot fill.** It measured 17 bodies and there is **no pickup** among them,
+and exactly one sport utility (`vehicle.nissan.patrol`). A scenario that wants a pickup does not get
+one: say so, drop the class, and let the shares redistribute — do not reach for the nearest-sized
+body, because a substituted body makes the imagery and the behavioural record disagree while each
+stays internally consistent.
+
 ## The recipe for a new scenario
 
 1. **Get the world package** (Stage 1), or confirm one exists in `Build/world-packages/`. Read its
@@ -151,8 +172,10 @@ pedestrians, which the world-generation pipeline produces no footway meshes for.
    and their access class. Use `duarouter` (below) to confirm every origin-destination and waypoint
    route the scenario needs. Save the validated edge IDs as named constants in the CLI.
 4. **Write the traffic.** `AmbientFlow`s for background streams (with `via` edges where the shortest
-   path would differ); `OrbitRoute`/`DwellTrip`/`ScheduledVehicle` for the marked vehicles. Every
-   `vType` obeys the mapping contract above; no two-wheelers.
+   path would differ); `OrbitRoute`/`DwellTrip`/`ScheduledVehicle` for the marked vehicles. Build the
+   vehicle types with `ScenarioVehicleMix` so every `vType` obeys the mapping contract above; no
+   two-wheelers. The marked vehicle is a class like any other — one of one body, with a share of zero
+   so it stays out of the ambient mix — so it is bound to a measurement by the same rule.
 5. **Write config + labels.** For a labelled dataset, emit a `.labels.json`:
    `{marked_ids, affiliation_by_type, anomaly_notes}`.
 6. **Run and verify.** Simulate; read back the marked vehicles' fcd and the tripinfo; confirm each

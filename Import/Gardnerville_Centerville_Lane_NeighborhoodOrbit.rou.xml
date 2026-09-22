@@ -5,27 +5,108 @@
 <routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
 
-    <!-- Ambient mix. Rural Nevada, so pickups and light trucks carry more of it than a town would.
+    <!-- Every vehicle type below names one CARLA blueprint in a carla:blueprint parameter and takes its
+         length, width and height from the measurement of that body, so SUMO reserves road for the
+         vehicle that is actually drawn. Variety inside a class is SUMO's own seeded draw from the class
+         distribution, not a choice made at playback.
+         A colour here is read by sumo-gui and reaches nothing rendered: the rendered colour comes from
+         the blueprint's own measured palette, so highlighting a vehicle on screen cannot make the
+         highlight a property of what was highlighted.
+         This content build has no pickup, so this corridor has none. See
+         CarlaControl/scripts/make_sumo_scenario.py for what each class is made of and how far each
+         measured body sits from the size the traffic was designed around. -->
+    <!-- Saloons, hatchbacks and coupes. Designed around a 4.6 m car; the nine measured bodies run 4.18 m
+         to 5.37 m and average 4.82 m, so the class is 0.22 m longer on average than it was drawn up as
+         and considerably more varied than the single body it used to be. -->
+    <vType id="car.vehicle.ue4.audi.tt" vClass="passenger" length="4.1812" width="1.9941" height="1.3853" maxSpeed="55" speedFactor="normc(1.00,0.10,0.80,1.20)" guiShape="passenger">
+        <param key="carla:blueprint" value="vehicle.ue4.audi.tt"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a"/>
+    </vType>
+    <vType id="car.vehicle.mini.cooper" vClass="passenger" length="4.5526" width="2.0956" height="1.7725" maxSpeed="55" speedFactor="normc(1.00,0.10,0.80,1.20)" guiShape="passenger">
+        <param key="carla:blueprint" value="vehicle.mini.cooper"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a"/>
+    </vType>
+    <vType id="car.vehicle.ue4.bmw.grantourer" vClass="passenger" length="4.611" width="2.2417" height="1.6673" maxSpeed="55" speedFactor="normc(1.00,0.10,0.80,1.20)" guiShape="passenger">
+        <param key="carla:blueprint" value="vehicle.ue4.bmw.grantourer"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a"/>
+    </vType>
+    <vType id="car.vehicle.ue4.mercedes.ccc" vClass="passenger" length="4.6736" width="1.8118" height="1.4419" maxSpeed="55" speedFactor="normc(1.00,0.10,0.80,1.20)" guiShape="passenger">
+        <param key="carla:blueprint" value="vehicle.ue4.mercedes.ccc"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a"/>
+    </vType>
+    <vType id="car.vehicle.ue4.ford.mustang" vClass="passenger" length="4.7175" width="1.8948" height="1.3009" maxSpeed="55" speedFactor="normc(1.00,0.10,0.80,1.20)" guiShape="passenger">
+        <param key="carla:blueprint" value="vehicle.ue4.ford.mustang"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a"/>
+    </vType>
+    <vType id="car.vehicle.lincoln.mkz" vClass="passenger" length="4.892" width="1.8356" height="1.5241" maxSpeed="55" speedFactor="normc(1.00,0.10,0.80,1.20)" guiShape="passenger">
+        <param key="carla:blueprint" value="vehicle.lincoln.mkz"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a"/>
+    </vType>
+    <vType id="car.vehicle.dodge.charger" vClass="passenger" length="5.006" width="1.881" height="1.5403" maxSpeed="55" speedFactor="normc(1.00,0.10,0.80,1.20)" guiShape="passenger">
+        <param key="carla:blueprint" value="vehicle.dodge.charger"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a"/>
+    </vType>
+    <vType id="car.vehicle.ue4.chevrolet.impala" vClass="passenger" length="5.3575" width="2.0332" height="1.4107" maxSpeed="55" speedFactor="normc(1.00,0.10,0.80,1.20)" guiShape="passenger">
+        <param key="carla:blueprint" value="vehicle.ue4.chevrolet.impala"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a"/>
+    </vType>
+    <vType id="car.vehicle.ue4.ford.crown" vClass="passenger" length="5.3657" width="1.8007" height="1.575" maxSpeed="55" speedFactor="normc(1.00,0.10,0.80,1.20)" guiShape="passenger">
+        <param key="carla:blueprint" value="vehicle.ue4.ford.crown"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a"/>
+    </vType>
+    <!-- The only sport utility in the content build: a 5.59 x 2.15 x 2.06 m body, against the 5.0 x 1.95
+         m this class was designed around, so every SUV here is 0.59 m longer than intended. One body
+         means every SUV on the map looks the same, which is a property of the content and not of this
+         scenario. -->
+    <vType id="suv.vehicle.nissan.patrol" vClass="passenger" length="5.5912" width="2.1466" height="2.059" maxSpeed="52" speedFactor="normc(1.00,0.10,0.80,1.20)" guiShape="passenger">
+        <param key="carla:blueprint" value="vehicle.nissan.patrol"/>
+        <param key="carla:class_id" value="suv"/>
+        <param key="carla:catalogue_digest" value="771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a"/>
+    </vType>
+    <!-- A panel van measuring 5.92 m against the 5.9 m designed around: the closest agreement of any
+         class here, at 0.02 m. -->
+    <vType id="van.vehicle.sprinter.mercedes" vClass="delivery" length="5.9151" width="1.9884" height="2.726" maxSpeed="45" speedFactor="normc(0.95,0.08,0.75,1.10)" guiShape="delivery">
+        <param key="carla:blueprint" value="vehicle.sprinter.mercedes"/>
+        <param key="carla:class_id" value="van"/>
+        <param key="carla:catalogue_digest" value="771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a"/>
+    </vType>
+    <!-- The two rigid lorries in the content build, measuring 8.00 m and 10.17 m. The 9.5 m this class
+         was designed around falls between them, so a lorry here is either 1.50 m shorter or 0.67 m
+         longer than intended and the two are drawn equally. -->
+    <vType id="truck.vehicle.carlacola.actors" vClass="truck" length="8.0037" width="2.9118" height="4.0546" maxSpeed="35" speedFactor="normc(0.90,0.06,0.75,1.05)" guiShape="truck">
+        <param key="carla:blueprint" value="vehicle.carlacola.actors"/>
+        <param key="carla:class_id" value="truck"/>
+        <param key="carla:catalogue_digest" value="771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a"/>
+    </vType>
+    <vType id="truck.vehicle.fuso.mitsubishi" vClass="truck" length="10.1743" width="3.9277" height="4.241" maxSpeed="35" speedFactor="normc(0.90,0.06,0.75,1.05)" guiShape="truck">
+        <param key="carla:blueprint" value="vehicle.fuso.mitsubishi"/>
+        <param key="carla:class_id" value="truck"/>
+        <param key="carla:catalogue_digest" value="771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a"/>
+    </vType>
+    <!-- The marked vehicle. speedDev is zeroed so its speed multiple is exact rather than drawn from a
+         distribution around it. -->
+    <vType id="orbiter.vehicle.lincoln.mkz" vClass="passenger" length="4.892" width="1.8356" height="1.5241" maxSpeed="55" sigma="0.20" speedDev="0" speedFactor="1.25" tau="1.20" guiShape="passenger" color="#FF8C00">
+        <param key="carla:blueprint" value="vehicle.lincoln.mkz"/>
+        <param key="carla:class_id" value="orbiter"/>
+        <param key="carla:catalogue_digest" value="771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a"/>
+    </vType>
 
-         Two wheelers are outside the vehicle mapping contract and no type here declares one. A
-         motorcycle carries a rider, and a riderless motorcycle is not a vehicle anyone would want
-         in the imagery; separately, this content build registers no two wheeled blueprint at all
-         (Unreal/CarlaUnreal/Content/Carla/Config/VehicleParameters.json holds 17 vehicles, every
-         one of them four wheeled), so nothing exists to measure or to render one against. -->
-    <vType id="car" vClass="passenger" length="4.6" maxSpeed="55" color="0.80,0.80,0.85"
-           speedFactor="normc(1.00,0.10,0.80,1.20)"/>
-    <vType id="pickup" vClass="passenger" length="5.6" width="2.00" maxSpeed="50" color="0.50,0.55,0.60"
-           speedFactor="normc(1.02,0.10,0.80,1.22)"/>
-    <vType id="suv" vClass="passenger" length="5.0" width="1.95" maxSpeed="52" color="0.35,0.40,0.45"
-           speedFactor="normc(1.00,0.10,0.80,1.20)"/>
-    <vType id="van" vClass="delivery" length="5.9" maxSpeed="45" color="0.90,0.90,0.90"
-           speedFactor="normc(0.95,0.08,0.75,1.10)"/>
-    <vType id="truck" vClass="truck" length="9.5" maxSpeed="35" color="0.60,0.45,0.30"
-           speedFactor="normc(0.90,0.06,0.75,1.05)"/>
+    <vTypeDistribution id="car" vTypes="car.vehicle.ue4.audi.tt car.vehicle.mini.cooper car.vehicle.ue4.bmw.grantourer car.vehicle.ue4.mercedes.ccc car.vehicle.ue4.ford.mustang car.vehicle.lincoln.mkz car.vehicle.dodge.charger car.vehicle.ue4.chevrolet.impala car.vehicle.ue4.ford.crown" probabilities="1 1 1 1 1 1 1 1 1"/>
+    <vTypeDistribution id="suv" vTypes="suv.vehicle.nissan.patrol" probabilities="1"/>
+    <vTypeDistribution id="van" vTypes="van.vehicle.sprinter.mercedes" probabilities="1"/>
+    <vTypeDistribution id="truck" vTypes="truck.vehicle.carlacola.actors truck.vehicle.fuso.mitsubishi" probabilities="1 1"/>
+    <vTypeDistribution id="orbiter" vTypes="orbiter.vehicle.lincoln.mkz" probabilities="1"/>
 
-    <vTypeDistribution id="ambient_mix"
-                       vTypes="car pickup suv van truck"
-                       probabilities="0.45 0.25 0.18 0.07 0.05"/>
+    <vTypeDistribution id="ambient_mix" vTypes="car.vehicle.ue4.audi.tt car.vehicle.mini.cooper car.vehicle.ue4.bmw.grantourer car.vehicle.ue4.mercedes.ccc car.vehicle.ue4.ford.mustang car.vehicle.lincoln.mkz car.vehicle.dodge.charger car.vehicle.ue4.chevrolet.impala car.vehicle.ue4.ford.crown suv.vehicle.nissan.patrol van.vehicle.sprinter.mercedes truck.vehicle.carlacola.actors truck.vehicle.fuso.mitsubishi" probabilities="0.0666667 0.0666667 0.0666667 0.0666667 0.0666667 0.0666667 0.0666667 0.0666667 0.0666667 0.24 0.0933333 0.0333333 0.0333333"/>
 
     <flow id="corridor_west_to_northeast" type="ambient_mix" begin="0" end="2220"
           vehsPerHour="210" from="108141475#0" to="1236933617#2"
@@ -118,15 +199,11 @@
           vehsPerHour="30" from="108141475#0" to="219060584#1"
           departLane="free" departSpeed="max"/>
 
-    <!-- The marked vehicle. speedFactor is what it runs at wherever no waypoint constrains it,
-         which is only on the way out: 1.25 x the posted
-         20.1 m/s = 25.2 m/s. speedDev is zeroed so
-         that multiple is exact rather than drawn from a distribution around it. -->
-    <vType id="orbiter" vClass="passenger" length="4.8" maxSpeed="55" color="1.00,0.55,0.00"
-           speedFactor="1.25" speedDev="0" sigma="0.20" tau="1.20"/>
-
     <!-- 5 edges in, 20 x 5 edges round the loop
-         (848 m), 5 edges out. -->
+         (848 m), 5 edges out.
+         The marked vehicle's speedFactor is what it runs at wherever no waypoint constrains it,
+         which is only on the way out: 1.25 x the posted
+         20.1 m/s = 25.2 m/s. -->
     <route id="orbit" edges="108141475#0 108141475#2 108141475#3 108141475#4 -219060582#2 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060582#2 -108141475#4 -108141475#3 -108141475#2 -108141475#1"/>
 
     <vehicle id="orbiter" type="orbiter" route="orbit" depart="60"

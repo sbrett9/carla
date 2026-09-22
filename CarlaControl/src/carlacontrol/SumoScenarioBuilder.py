@@ -328,6 +328,10 @@ class OrbitSettings:
     # Multiple of the posted limit once the last waypoint is behind it, i.e. on the way out only.
     exit_speed_factor: float = 1.25
     depart_time: int = 60
+    # The vType or vTypeDistribution the marked vehicle is drawn from. It is declared in the vehicle
+    # types the caller supplies, alongside the ambient ones, so the marked vehicle is bound to a
+    # measured body by exactly the same rule as every other vehicle in the scenario.
+    vehicle_type: str = "orbiter"
 
 
 @dataclass(frozen=True)
@@ -398,30 +402,6 @@ class ScenarioPaths:
     lap_length: float = 0.0
     route_length: float = 0.0
 
-
-AMBIENT_VEHICLE_TYPES = """\
-    <!-- Ambient mix. Rural Nevada, so pickups and light trucks carry more of it than a town would.
-
-         Two wheelers are outside the vehicle mapping contract and no type here declares one. A
-         motorcycle carries a rider, and a riderless motorcycle is not a vehicle anyone would want
-         in the imagery; separately, this content build registers no two wheeled blueprint at all
-         (Unreal/CarlaUnreal/Content/Carla/Config/VehicleParameters.json holds 17 vehicles, every
-         one of them four wheeled), so nothing exists to measure or to render one against. -->
-    <vType id="car" vClass="passenger" length="4.6" maxSpeed="55" color="0.80,0.80,0.85"
-           speedFactor="normc(1.00,0.10,0.80,1.20)"/>
-    <vType id="pickup" vClass="passenger" length="5.6" width="2.00" maxSpeed="50" color="0.50,0.55,0.60"
-           speedFactor="normc(1.02,0.10,0.80,1.22)"/>
-    <vType id="suv" vClass="passenger" length="5.0" width="1.95" maxSpeed="52" color="0.35,0.40,0.45"
-           speedFactor="normc(1.00,0.10,0.80,1.20)"/>
-    <vType id="van" vClass="delivery" length="5.9" maxSpeed="45" color="0.90,0.90,0.90"
-           speedFactor="normc(0.95,0.08,0.75,1.10)"/>
-    <vType id="truck" vClass="truck" length="9.5" maxSpeed="35" color="0.60,0.45,0.30"
-           speedFactor="normc(0.90,0.06,0.75,1.05)"/>
-
-    <vTypeDistribution id="ambient_mix"
-                       vTypes="car pickup suv van truck"
-                       probabilities="0.45 0.25 0.18 0.07 0.05"/>
-"""
 
 GENERATED_BY = "carlacontrol.SumoScenarioBuilder"
 
@@ -499,8 +479,14 @@ class SumoScenarioBuilder:
 
     def write_routes(self, out_path: str | Path, network: RoadNetwork, route: OrbitRoute,
                      settings: OrbitSettings, flows: list[AmbientFlow], end_time: int,
-                     title: str = "") -> Path:
-        """Write the .rou.xml: vehicle types, the marked vehicle's route, and the ambient flows."""
+                     vehicle_types: str, title: str = "") -> Path:
+        """Write the .rou.xml: vehicle types, the marked vehicle's route, and the ambient flows.
+
+        `vehicle_types` is the `<vType>` and `<vTypeDistribution>` block, which the caller builds
+        from the measured vehicle catalogue (`ScenarioVehicleMix`). It is required rather than
+        defaulted because a type written from anywhere else names no rendered body, and a vehicle
+        whose body is unknown is refused at playback rather than drawn at a guess.
+        """
         out_path = Path(out_path)
         network.check_drivable(route.edges(min(settings.laps, 2)))
 
@@ -514,18 +500,14 @@ class SumoScenarioBuilder:
         stop_xml = "\n".join(self._waypoint_xml(network, route, settings))
         loop_names = self._street_names(network, route.loop)
 
-        marked_xml = f"""    <!-- The marked vehicle. speedFactor is what it runs at wherever no waypoint constrains it,
+        marked_xml = f"""    <!-- {len(route.approach)} edges in, {settings.laps} x {len(route.loop)} edges round the loop
+         ({lap_length:.0f} m), {len(route.exit)} edges out.
+         The marked vehicle's speedFactor is what it runs at wherever no waypoint constrains it,
          which is only on the way out: {settings.exit_speed_factor:.2f} x the posted
-         {network.speed_of(route.exit[-1]):.1f} m/s = {exit_speed:.1f} m/s. speedDev is zeroed so
-         that multiple is exact rather than drawn from a distribution around it. -->
-    <vType id="orbiter" vClass="passenger" length="4.8" maxSpeed="55" color="1.00,0.55,0.00"
-           speedFactor="{settings.exit_speed_factor:.2f}" speedDev="0" sigma="0.20" tau="1.20"/>
-
-    <!-- {len(route.approach)} edges in, {settings.laps} x {len(route.loop)} edges round the loop
-         ({lap_length:.0f} m), {len(route.exit)} edges out. -->
+         {network.speed_of(route.exit[-1]):.1f} m/s = {exit_speed:.1f} m/s. -->
     <route id="orbit" edges="{" ".join(route.edges(settings.laps))}"/>
 
-    <vehicle id="orbiter" type="orbiter" route="orbit" depart="{settings.depart_time}"
+    <vehicle id="orbiter" type="{settings.vehicle_type}" route="orbit" depart="{settings.depart_time}"
              departLane="free" departSpeed="{posted:.2f}" arrivalSpeed="current">
         <!-- One waypoint per edge. Each holds the vehicle to the given speed for that edge's whole
              length; past the last one nothing constrains it but its own speedFactor. -->
@@ -534,11 +516,11 @@ class SumoScenarioBuilder:
         headline = (f'{title or "Orbit scenario"}: ambient traffic plus one marked vehicle that '
                     f'drives in, circles\n     {loop_names} {settings.laps} times, and leaves '
                     f'faster than it arrived.')
-        return self._write_routes_document(out_path, headline, flow_xml, marked_xml)
+        return self._write_routes_document(out_path, headline, flow_xml, marked_xml, vehicle_types)
 
     def write_dwell_routes(self, out_path: str | Path, network: RoadNetwork, trip: DwellTrip,
-                           flows: list[AmbientFlow], end_time: int, title: str = "",
-                           vehicle_types: str = AMBIENT_VEHICLE_TYPES) -> Path:
+                           flows: list[AmbientFlow], end_time: int, vehicle_types: str,
+                           title: str = "") -> Path:
         """Write the .rou.xml for a marked vehicle that drives somewhere, waits, and drives on."""
         for edge_id in (trip.from_edge, trip.to_edge, trip.dwell_edge, *trip.via):
             if edge_id not in network.street_name:
@@ -573,8 +555,7 @@ class SumoScenarioBuilder:
                                           vehicle_types)
 
     def _write_routes_document(self, out_path: str | Path, headline: str, flow_xml: str,
-                               marked_xml: str,
-                               vehicle_types: str = AMBIENT_VEHICLE_TYPES) -> Path:
+                               marked_xml: str, vehicle_types: str) -> Path:
         """The shared .rou.xml skeleton: vehicle types, the ambient flows, then the marked vehicle.
 
         SUMO ignores any vehicle or flow that departs earlier than one already read, so the flows --
@@ -750,7 +731,7 @@ class SumoScenarioBuilder:
     def build(self, world_package: str | Path, out_dir: str | Path, map_name: str,
               scenario_name: str,
               netconvert_settings: NetconvertSettings, route: OrbitRoute,
-              orbit_settings: OrbitSettings, flows: list[AmbientFlow],
+              orbit_settings: OrbitSettings, flows: list[AmbientFlow], vehicle_types: str,
               end_time: int = 0, step_length: float = 0.05, seed: int = 42,
               reuse_network: bool = False) -> ScenarioPaths:
         """Build network, routes and config together, and report what was written."""
@@ -768,7 +749,7 @@ class SumoScenarioBuilder:
         end_time = end_time or self.estimate_end_time(network, route, orbit_settings)
 
         routes_path = self.write_routes(out_dir / routes_name, network, route, orbit_settings,
-                                        flows, end_time, title=map_name)
+                                        flows, end_time, vehicle_types, title=map_name)
         config_path = self.write_config(out_dir / f"{scenario_name}.sumocfg", network_name,
                                         routes_name, end_time, step_length, seed)
 
