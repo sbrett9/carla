@@ -29,6 +29,7 @@ advancement policy, the headlight predicate),
 | 2026-09-18 | No traffic-light or sign actors rendered; no traffic-light state written; signal layer suppressed per session. |
 | 2026-09-21 | TraCI client is a managed socket client (§2.5); the subscribed set is governed separately from the render set. |
 | 2026-09-21 | The managed client is built; §2.5 carries the check behind each property and the measured step cost through it. |
+| 2026-09-22 | The bridge is built as far as the pose, applying none: §6.4 carries five interpolation cases and the speed-ramp integration, §7.2 the frame check as it is made and the network-identity residual beside it, §7.5 the seat height the catalogue does not carry, §8.3 the two subscription tiers, §9.7 the two measured server properties the loop rests on. |
 
 ---
 
@@ -962,8 +963,19 @@ the rendered simulated time — so that latency is free. It also buys something:
 (`Shahid_Bahonar_Port.net.xml`, 2026-09-17): 3,198 internal junction-connector lanes, length median
 **8.25 m**, p90 16.37 m, max 48.64 m; median lane width **3.35 m**. A vehicle at 35 m/s crosses the
 median junction connector in under a quarter of a SUMO step, so consecutive samples routinely sit on
-*opposite sides* of a turn. For a right-angle turn with 15 m of approach and 15 m of exit, the
-straight chord between the two samples passes **10.6 m** from the corner — three lane widths. Even
+*opposite sides* of a turn.
+
+Two figures bound the cost of the chord, and they are a long way apart. The **geometric** one: for a
+right-angle turn with 15 m of approach and 15 m of exit, the straight chord between the two samples
+passes 10.6 m from the corner. The **trajectory** one, and this is the number to plan against:
+**1.16 m**, measured 2026-09-22 on a recorded SUMO run of a right-angle junction, sampled at the
+world's 0.05 s tick rate and subsampled to 1.0 s SUMO steps over every alignment of the window
+(`CarlaNet.CoSim.Tests.LaneArcInterpolatorTests`). The geometric figure overstates it because
+**SUMO does not take a right-angle turn at speed**: measured on the same run, a vehicle approaching
+at 27 m/s enters the junction at **6.39 m/s**, spends **1.40 s** inside the connector, and covers
+**6.88 m** in the second straddling the corner, so a one-second chord spans about three metres either
+side of the turn rather than fifteen. A third of a lane width is still a systematic offset a tracker
+would learn, and following the lane takes it to under 0.10 m, so the conclusion is unchanged. Even
 for a chord spanning only the connector itself, a 90° turn of arc length 8.25 m has radius 5.25 m and
 a chordal deviation of **1.54 m**, against a lane half-width of 1.68 m: the vehicle's centreline ends
 up on the lane edge.
@@ -979,21 +991,39 @@ up on the lane edge.
 Inputs per vehicle for frames k and k+1, from one subscription: position, angle, speed, road id, lane
 id, lane position. Cases, in order:
 
-1. **Same lane.** Interpolate *lane position* linearly, then evaluate the lane's polyline at that
-   distance. The lane shape comes from the persisted `.net.xml`, read once at session start by the
-   existing road-network reader concept in `SumoScenarioBuilder.RoadNetwork` (re-implemented in C#;
-   see §12 G10). Exact on curves by construction.
-2. **Lane change on the same edge.** Interpolate along-lane as in (1) on each lane, then blend the two
+1. **Same lane.** Advance the *lane position* by the step's distance and evaluate the lane's polyline
+   at that distance. The lane shape comes from the `.net.xml` the **world package** carries, read
+   once at session start by `CarlaNet.CoSim.SumoRoadNetwork`. Exact on curves by construction.
+2. **Lane change on the same edge.** Advance along-lane as in (1) on each lane, then blend the two
    resulting points laterally with a smoothstep over the step. SUMO's lane change is instantaneous in
    the data; a linear lateral blend across 1.0 s at 3.35 m is a 3.35 m/s lateral rate, which is
    brisk but not absurd. Consider a shorter blend window as a tuning knob.
 3. **Crossed one or more edges.** Walk the route from lane(k) to lane(k+1) through the connecting
    internal lanes, accumulate arc length, and place the vehicle at the interpolated arc distance along
-   that concatenated polyline. This is the case the 10.6 m corner-cut number is about, and it is the
-   common case at 35 m/s.
-4. **Discontinuous** — the along-route distance between the two frames exceeds `v_max · Δs · 1.5`, or
-   no route connects the two lanes. This is a SUMO teleport or a removal-and-reinsertion. Do **not**
-   interpolate. Release the actor and re-admit it at the new pose (§8.4, §11.6).
+   that concatenated polyline. This is the case the corner-cut number is about, and it is the common
+   case at speed.
+4. **Crossed an edge and changed lane at once.** No route reaches lane(k+1) at all, because the
+   junction connector the vehicle left feeds its *sibling*. Walk the route to the sibling as in (3)
+   and blend the sideways move onto lane(k+1) on top, as in (2) — the two cases together, which is
+   what leaving a junction and immediately changing lane is. **Measured 2026-09-22** on the shipped
+   Arapahoe underpass scenario at a forced 1.0 s step, 100 steps at ≈99 rendered vehicles: **38 of
+   them**, one every 2.5 simulated seconds. At the scenario's authored 0.05 s step, 14 in 2,000
+   steps. Treating them as case (5) releases and re-admits a vehicle that did nothing but change
+   lane, which downstream is a track that stops and restarts for no visible reason.
+5. **Discontinuous** — the along-route distance between the two frames exceeds `v_max · Δs · 1.5`, or
+   no route connects lane(k) to *any* lane of lane(k+1)'s edge. This is a SUMO teleport or a
+   removal-and-reinsertion. Do **not** interpolate. Release the actor and re-admit it at the new pose
+   (§8.4, §11.6). With (4) in place this case does not arise at all on a matched network: measured,
+   0 in 197,300 poses at a 1.0 s step and 0 in 193,808 at 0.05 s.
+
+**Distance is advanced by integrating the speed ramp, not linearly in time.** A step during which the
+vehicle's speed changed does not cover its distance at a constant rate, and the error from pretending
+it does lands entirely along the vehicle's own track. **Measured** on a recorded run subsampled to
+1.0 s steps: **0.563 m** at the worst instant, worst where a vehicle brakes for a junction. The bound
+is `a · Δs² / 8`, and SUMO's default deceleration of 4.5 m/s² over a one-second step gives exactly
+that. Integrating a linear ramp between the two reported speeds — three multiplications, and the step
+length cancels so it is a *fraction of the distance travelled* rather than a distance — takes the
+same measurement under **0.10 m**.
 
 Yaw is interpolated as the tangent of the evaluated polyline, not by blending the two reported
 angles — the polyline tangent is already correct through a turn and a blended angle is not. Speed is
@@ -1032,8 +1062,24 @@ y_c = −y_s
 ```
 
 with no offset arithmetic, provided the SUMO network was rebuilt from the same clipped OSM at the
-same pinned origin. **The bridge must assert this**, not assume it: compare the `.net.xml`
-`convBoundary` against the `.xodr` header bounds at session start and refuse a mismatch.
+same pinned origin. **The bridge asserts this rather than assuming it**, in three parts at session
+start, each of which is a thing that makes the conversion a sign and nothing else: the network's
+`projParameter` must equal the world manifest's `GeoReferenceString`, its `netOffset` must be zero,
+and its `convBoundary` must lie inside the world's drape grid once the northings are negated. The
+last carries a tolerance of one grid cell, because the surface is built from the same bounds the
+network was clipped to and the two agree only to rounding — measured on the shipped Arapahoe world,
+the network overhangs the grid by **0.2 mm** at one edge. A vehicle that genuinely stands off the end
+of the surface is counted at the tick it happens, which is where an overhang of any size shows up.
+
+**And the frame check is not the network-identity check**, which is a different question with a
+different answer. Two networks can share a projection, an offset and a boundary and still be
+different graphs: the world's `map.net.xml` and the `Import/` network the shipped Arapahoe scenario
+is authored against agree on all three and differ in 6,806 bytes. What separates them is measured at
+runtime by the ghost's **lane-geometry residual** — the lane polyline evaluated at a frame's reported
+lane position against the position SUMO reported. Measured 2026-09-22 over 193,426 frames: **0.000 m**
+on the world's own network, **mean 0.258 m and worst 1.342 m** on the other, plus 68 spurious
+discontinuities. That is what a scenario built against a network the world does not have costs, and
+it is a silent quarter-metre systematic offset.
 
 ### 7.3 Yaw
 
@@ -1132,6 +1178,15 @@ per-blueprint constant, measured once by spawning each catalogue blueprint on fl
 physics on, letting it settle, and recording `loc.z − g(x, y) + h₀`. Deriving it from
 `b.z − e.z` is an approximation only: a vehicle's collision body is not its visual bounding box.
 **Measure it; do not compute it.**
+
+**The published catalogue carries no such measurement**, so until it does the bounding-box
+approximation stands in for it and **every computed pose records that it used one**
+(`VehiclePose.SeatHeightWasApproximated`), so a run can say how many of its poses rest on it rather
+than leaving the question open. The approximation is `e.z − b.z`, which measures **−7 mm** for the
+Dodge Charger and **−11 mm** for the Mitsubishi Fuso — the origin sits a centimetre *below* the box
+bottom on every blueprint in the shipped catalogue, which says the measured boxes enclose the wheels
+and that the gap to a settled measurement is of that order. The catalogue field belongs with the
+blueprint sweep that produces the rest of the measurements.
 
 Pitch and roll from the same grid, two extra samples each, which is why this compensation is
 essentially free:
@@ -1278,6 +1333,23 @@ The bridge therefore subscribes on a lead ahead of `AdmitLead` and unsubscribes 
 `ReleaseLag`, and the truth record for an unrendered-but-subscribed vehicle is available for free
 because it is already being paid for. What is **not** free is subscribing the whole population: at
 Arapahoe's 388 that is 5.5 ms of the 50 ms tick spent on vehicles nothing is looking at.
+
+**Two tiers, because the predicate's own input is a subscription.** A vehicle's position is what the
+render set is decided from, and a vehicle nothing is subscribed to has no position to decide on. So
+the subscribed set is not one set but two sizes of one: every vehicle in the simulation carries a
+**screening** subscription of a single variable, `VAR_POSITION`, and one inside the margin is
+**promoted** to the eight the bridge reads — the client's seven-variable state plus `VAR_LANEPOSITION`,
+which is the parameter the lane polyline is evaluated at. A promotion delivers its state on the step
+it is made, because SUMO answers a subscribe command with the current values of everything
+subscribed, and those land in the same per-step store the step response fills.
+
+**A TraCI subscription only ever grows, and a demotion is therefore two commands.** Measured
+2026-09-22 against SUMO's own Python client on a fixture network: subscribing a vehicle to one
+variable and then to eight delivers eight, and subscribing it back to one **still delivers eight**,
+on that step and on every step after. Only an explicit `unsubscribe` clears the set, and a
+`subscribe` after it takes effect from the following step. A demotion written as a plain re-subscribe
+keeps paying for the seven variables it meant to give back for the rest of the vehicle's life, and
+nothing shows it: the values keep arriving and everything reads correctly.
 
 **What [`04_Contracts.md`](04_Contracts.md) owns:** the predicate itself, and what the truth record
 says about a SUMO vehicle that is simulated but not rendered — noting that "simulated but not
@@ -1731,7 +1803,9 @@ sun was, and never has to trust the bridge's own arithmetic about it.
 session.start():
     assert world.settings.synchronous_mode and world.settings.fixed_delta_seconds == Δw
     Δs = Simulation.getDeltaT();  R = Δs / Δw;  assert R is a positive integer
-    assert netxml.convBoundary matches xodr bounds        # frame identity, §7.2
+    assert 1 / captureRateHz is a whole number of Δw      # a frame lands on the tick it is stamped
+    assert netxml.projParameter == world.geoReference     # frame identity, §7.2
+    assert netxml.netOffset == (0, 0) and its bounds sit inside the drape grid
     assert sumocfg time-to-teleport < 0                   # §11.6
     Vehicle.subscribe(each vehicle, [VAR_POSITION, VAR_ANGLE, VAR_SPEED,
                                      VAR_ROAD_ID, VAR_LANE_ID, VAR_LANEPOSITION,
@@ -1782,6 +1856,28 @@ session.run():
 
 Everything between `applyBatch` and `sendTickCue` executes inside the server's RPC drain for the
 frame that cue produces (§9.2), which is why the day-rollover write lands on the right frame.
+
+**Two properties of the server this loop rests on, both measured 2026-09-22 against a running
+editor.**
+
+**A camera delivers no frames at all in asynchronous mode.** A 320 × 240 RGB camera spawned into an
+asynchronous world and left alone produced **0 frames over 5 seconds** of wall clock, with a fixed
+delta set and again with none; the same camera in synchronous mode produced **40 frames over 40
+ticks**. The control matters, because a camera spawned while the world was synchronous and then
+switched will not distinguish "the mode delivers nothing" from "the settings change broke an
+established stream" — the camera above was spawned into the asynchronous world and never touched.
+So the session's refusal of an asynchronous world is not a clock-ownership formality: an
+asynchronous capture produces no imagery whatsoever.
+
+**`world.get_actors()` with no arguments answers nothing until the world has been ticked since the
+client connected.** The shim's no-argument path reads `CarlaClient.GetCachedActorIds`, which is the
+world-observer snapshot cache, and in synchronous mode a snapshot is produced only by a tick.
+Measured: a fresh client on a synchronous world read **0** actors before any tick and **25**
+immediately after one, while `get_actors([id])` on that same client resolved straight away because it
+goes to the server by id. A bridge enumerates the world at session start, which is before its first
+tick, so **the bridge must not depend on enumeration** — its one whole-population question is SUMO's
+`Vehicle.getIDList()` when it seeds the screening tier, and everything after that is departure and
+arrival deltas.
 
 **When SUMO is slower than the world.** It cannot be, in any way that matters: the loop is serial and
 the world clock is simulated, not wall. A heavy SUMO step delays the next world tick in *wall* time
@@ -2184,7 +2280,7 @@ solar and light-state paths. They are handed to
 | **G7** | `ActorDefinition` carries no bounding box; `BoundingBox` exists only on a spawned `Actor`. | `ActorDefinition.cs:5-9`; `Actor.cs:8-15` | The vType ↔ blueprint dimension map (§7.4, and [`04_Contracts.md`](04_Contracts.md)) needs a spawn-and-measure pass against a running server. |
 | **G8** | `ACarlaWheeledVehicle::SetWheelSteerDirection` is stubbed in this port — the physics-off branch's only effective line is commented out — and `GetWheelSteerAngle` is inside `#if 0 // @CARLAUE5`. | `CarlaWheeledVehicle.cpp:717-731`, `:733-740` | Wheel steer is unavailable for teleported vehicles, and for everything else. Wheel *spin* has no control surface at all. Both are visible in oblique EO imagery. |
 | **G9** | `sumo` and `duarouter` are built in `Build/sumo-src/bin/` but **only `netconvert.exe` is staged** into `Build/sumo-install/bin/`; `SUMO_HOME` is set nowhere, and `tools/traci` — which the client is ported from — is unstaged. | directory listings, 2026-09-17; `CarlaSetup.ps1:677` builds only the `netconvert` target | Doc 23 §6.1/§6.2 already record this. Belongs to [`09_Toolchain_And_Packaging.md`](09_Toolchain_And_Packaging.md); repeated because the bridge cannot run without it. |
-| **G10** | There is no C# reader for a SUMO `.net.xml` lane geometry. The only one is Python (`SumoScenarioBuilder.RoadNetwork`), and `OsmConverter` returns the network as a string and then deletes the temp file without persisting it (`OsmConverter.cs:141-147`); `WorldPackage` writes `world.json`, `map.xodr` and `bareearth.bin` only (`WorldPackage.cs:132-134`). | as cited | D3.6's lane-arc interpolation needs lane shapes in C#. Also note `RedundantJunctionCollapser.Collapse` rewrites the `.xodr` *after* netconvert produced the `.net.xml` (`CarlaClient.cs:568-573`), so the two files share a frame but not junction identity. |
+| **G10** | **Closed.** `CarlaNet.CoSim.SumoRoadNetwork` reads lane shapes, lane lengths and the connection table out of the `map.net.xml` a world package carries, and `WorldPackage` carries it. It keeps only what an interpolation needs and skips the rest while parsing. | `CarlaNet.CoSim/SumoRoadNetwork.cs`, `CarlaNet.Map/WorldPackage/WorldPackage.cs` | Note that `RedundantJunctionCollapser.Collapse` rewrites the `.xodr` *after* netconvert produced the `.net.xml` (`CarlaClient.cs:568-573`), so the two files share a frame but not junction identity. |
 | **G11** | Nothing asserts that the SUMO step is an integer multiple of the world delta, or that the `.net.xml` frame matches the `.xodr` frame. | no such check exists | §9's `R` and §7.2's frame identity are silent preconditions today. The session should assert both. |
 | **G12** | **Unverified:** whether Chaos retains a written angular velocity on a kinematic particle. `FWorldObserver_GetAngularVelocity` reads the body with no `IsSimulatingPhysics()` guard, unlike the linear path. | `WorldObserver.cpp:249-262` vs `PrimitiveComponentPhysics.cpp:1328-1340` | Decides whether D3.5 needs an angular counterpart. **Measure; do not assume either way.** |
 | **G13** *(not required by this mode — recorded for the audit)* | The Python shim has **no traffic-light surface at all** — `class TrafficLight(TrafficSign): pass`. All ten traffic-light RPCs exist in C# and are bound server-side. | shim `carlanet/__init__.py:1002-1004`; C# `CarlaClient.cs:1659-1689`; server `CarlaServer.cpp:2648-2884` | **This mode writes no traffic-light state from any binding (D3.24)**, so nothing here depends on it. It stays on the list because it is a real capability the .NET path has and the Python path does not, and it is the audit's to scope. |
