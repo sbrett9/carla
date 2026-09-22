@@ -436,9 +436,10 @@ class VehicleCatalogueBuilder:
         else:
             lines.append(f"  sun at solar hour {probe['solar_time_hours']} on {probe['solar_date']},"
                          f" elevation {probe.get('sun_elevation_deg')} degrees")
-            lines.append(f"  a pixel counts as lit above {probe['luminance_threshold']}/255 of gain;"
-                         f" at least {probe['minimum_lit_pixels']} of them, and more than the"
-                         " same-state control measured")
+            lines.append(f"  a pixel counts as gained above {probe['luminance_threshold']}/255, and"
+                         f" a lamp needs more of them than {probe['minimum_lit_pixels']} and than"
+                         f" {probe['drift_margin']} times the largest difference measured between"
+                         " two captures of the same state")
             lines.append(f"  positive control (sun moved to daylight):"
                          f" {probe.get('positive_control_pixels')} pixels")
             lines.append("  'unlit' means the lamp was commanded, the vehicle was rendered and the")
