@@ -339,6 +339,35 @@ contract does not get to edit it; what this boundary fixes is that no class in a
 those values, because no member blueprint could carry them. The consequence for an author is §3.10's
 refusal row, and it is a refusal precisely so the substitution §3.12 describes cannot happen quietly.
 
+#### Scope boundary — articulated vehicles are outside this contract
+
+> **D4.41 — an articulated vehicle is outside the vehicle mapping contract until its trailer's pose
+> can be produced. SUMO does not report one, and a rigid body of the full length is wrong in exactly
+> the situation the corpus is made of.**
+
+**SUMO reports one position, one angle and one declared length per vehicle, and nothing else.**
+Measured: nothing in TraCI's vehicle surface or its constant table names a trailer, a hitch, a
+kingpin or an articulation angle (`Build/sumo-install/tools/traci/_vehicle.py`,
+`constants.py`). Where `sumo-gui` draws a semi bending through a turn, that is a drawing convention
+applied to a shape name; the simulated body is rigid and the bend is not state anyone can read.
+
+So a tractor and its trailer cannot be placed from what the bridge receives. The trailer does not
+follow the cab's *current* heading — it follows where the cab has **been**, and its yaw lag through a
+turn is set by the path and the wheelbase. Reconstructing it means carrying a history of the cab's
+track and seating the trailer along it, which is a different mechanism from the pose conversion of
+[`03`](03_CoSimulation_Runtime.md) §6 and would have to be built rather than configured.
+
+**Placing one rigid body of the articulated length instead is wrong precisely where it matters.** On a
+straight it is indistinguishable; through a turn it sweeps a path no articulated vehicle sweeps, and
+turns are where behaviour is legible — a corpus is made of the manoeuvres, not the straights. A
+plausible-looking lorry that corners impossibly is worse than an absent vehicle class, for the same
+reason a riderless motorcycle is.
+
+The content also registers none: the sweep found no articulated body among the 17, and the two lorries
+it did measure — 8.00 m and 10.17 m — are rigid. So the boundary costs nothing today. It is recorded
+because the first attempt to add a semi will otherwise reach for the nearest long body and discover
+the problem in the imagery rather than in the contract.
+
 ### 3.2 Where a blueprint's dimensions come from — measured, not assumed
 
 The brief asks whether dimensions are available *before* spawning. They are not. Four readings, in the
@@ -1100,6 +1129,7 @@ driver at run start (`R`).
 | `vType` length disagrees with the blueprint | scenario build, V1.9 | **Refuse to build.** Report the pose bias `Δ/2` it would have caused, in metres |
 | Author asks for a class that does not exist | scenario build | **Refuse**, listing the classes the catalogue offers |
 | Author asks for a two-wheeler — motorcycle, moped or bicycle | scenario build | **Refuse**, naming `D4.40`: two-wheelers are outside this contract, the content build registers none, and a rider would not be rendered even if it did. Never fall through to a car |
+| Author asks for an articulated vehicle — a semi, a tractor unit, a drawbar trailer | scenario build | **Refuse**, naming `D4.41`: SUMO reports one pose for the whole vehicle and no articulation, so a trailer cannot be placed. Never fall through to the nearest long rigid body |
 | Author asks for any other vehicle kind the content lacks | scenario build | **Refuse**, and say plainly that this content build has none. Never substitute |
 | A `vType` reaches playback without `carla:blueprint` (should be unreachable) | playback | Vehicle is **not rendered**; `render_state = simulated_only`, reason `no_blueprint`; one warning per distinct vType, not per vehicle; the run continues and the manifest records it |
 | Colour string malformed | server, silently | Nothing is reported to the client (`ActorBlueprintFunctionLibrary.cpp:1241-1252`). V1.15 exists precisely because this failure is invisible at runtime |
