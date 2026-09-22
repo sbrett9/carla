@@ -30,6 +30,7 @@ advancement policy, the headlight predicate),
 | 2026-09-21 | TraCI client is a managed socket client (§2.5); the subscribed set is governed separately from the render set. |
 | 2026-09-21 | The managed client is built; §2.5 carries the check behind each property and the measured step cost through it. |
 | 2026-09-22 | The bridge is built as far as the pose, applying none: §6.4 carries five interpolation cases and the speed-ramp integration, §7.2 the frame check as it is made and the network-identity residual beside it, §7.5 the seat height the catalogue does not carry, §8.3 the two subscription tiers, §9.7 the two measured server properties the loop rests on. |
+| 2026-09-22 | §9.5.1: imagery readiness is counted in ticks; in the attended path the operator's key press is the settle. |
 
 ---
 
@@ -1829,6 +1830,32 @@ Three follow-ons, all of which are answers to "would a long warm-up drift the su
   audit costs eleven array reads per tick (§9.4) and would catch the drift on the first prewarm tick,
   before a single frame is captured. That is the whole point of running it during the prewarm: the
   prewarm exists precisely so that things that need to settle can settle where nothing is watching.
+
+#### 9.5.1 The imagery has its own readiness, and an unattended run has nobody waiting for it
+
+The sun is not the only thing a warm-up settles. Cesium selects and refines photogrammetry tiles
+**on the world tick**, from the camera views registered for that tick — and a CARLA camera sensor is
+registered by its own publisher, so tiles are selected for the sensor's frustum and not for the
+spectator's. A wait that does not tick renders nothing and streams nothing, so this readiness is
+counted in ticks and never in seconds.
+
+Measured at three camera poses whose ground had not been looked at before: the first frame written
+with no ticked pre-roll is an empty sky and the imagery takes two to three frames to fill in, while
+a first frame written after 120 ticks is indistinguishable from the sixth. Between an unsettled view
+and a settled one the frame's mean grey level differs by 83 to 112 levels, and the difference goes
+flat at about 120 ticks.
+
+**The attended path never had this problem, because a person is its settle.** In `run_SCTMV.py`
+recording starts on a key press — `CarlaControl/src/carlacontrol/PygameInterface.py:308` binds
+`pygame.K_f` to `NativeRecorder.toggle_want()` — and the operator is flying the camera and watching
+the same view the recorder will write. Nobody presses the key over an empty sky. An unattended
+capture has no such person, which is why the first frames of a cold view are this section's problem
+and were never SCTMV's.
+
+**How many ticks it takes is a property of the network and of what the tile cache already holds, not
+of the scene**, so no caller can know it and a run must not be asked for it. Whatever establishes
+imagery readiness has to read it from the tileset's own state — the thing the warm-up waits for is
+an observation, not an elapsed count.
 
 ### 9.6 What this section needs from `11_Time_And_Illumination.md`
 
