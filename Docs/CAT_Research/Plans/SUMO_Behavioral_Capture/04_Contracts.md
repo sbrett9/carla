@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 8 | The OpenSCENARIO catalogue projection leaves this plan; `C1` has one serialisation |
 | 7 | Two-wheelers are outside the vehicle mapping contract; `C1` refuses them rather than substituting |
 | 6 | `C3` carries the annotation vocabulary and binds it by digest |
 | 5 | `C10` records facts, not a verdict; per-artifact crash safety; the contract for observing a live run |
@@ -76,6 +77,15 @@ checked*).
   while a run is alive. **When a run starts and when it stops are the caller's, not ours**
   ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3d): there is no scheduler, no cadence, no run-length policy, no
   training loop and no model lifecycle anywhere in this plan.
+- **Anything OpenSCENARIO.** This system is SUMO-driven; the storyboard path is a separate effort on
+  its own branch, and the executor it uses stays
+  ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3 item 6). No contract here produces, consumes or validates an
+  OpenSCENARIO document, and `C1` emits one serialisation of the vehicle catalogue rather than a
+  projection of it. [`Findings/20`](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)
+  §5.6's two requirements on a vehicle catalogue — generated from a running server rather than
+  hand-maintained, versioned and shipped with the distribution — are both met by `C1`; its preference
+  for the OpenSCENARIO serialisation belongs to whoever builds the storyboard path, and §3.2 records
+  the one measurement that path would have to add, namely axle geometry the sweep has no source for.
 - **Pedestrians**, out of scope by [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3.5.
 
 ---
@@ -145,7 +155,7 @@ flowchart TB
   subgraph build["Content and world build"]
     CONTENT[("cooked content<br/>VehicleParameters.json")]
     SWEEP["vehicle-catalogue sweep<br/>(spawns one of each, measures)"]
-    CAT[/"C1 vehicles.catalogue.json<br/>+ VehicleCatalog.xosc"/]
+    CAT[/"C1 vehicles.catalogue.json"/]
     WORLDGEN["world build<br/>run_SCTMV.py --build"]
     CWP[/"world package .cwp<br/>world.json · map.xodr · bareearth.bin"/]
     AOI[/"C5 &lt;extract&gt;.aoi.geojson"/]
@@ -226,7 +236,6 @@ flowchart TB
 | Artifact | Written by | Read by | Contract |
 |---|---|---|---|
 | `vehicles.catalogue.json` | the catalogue sweep, against a running server | scenario builder, assistant author, human author, validator, **and the co-simulation bridge at runtime — the pose conversion needs the measured extent** (`C1` §3.2) | `C1` |
-| `VehicleCatalog.xosc` | the same sweep, same run | OpenSCENARIO executor, foreign preview player | `C1` |
 | `<name>.rou.xml` `vType` set | scenario builder, from the catalogue | SUMO, playback bridge | `C1` |
 | render-set parameters in `scenario.json` | scenario author | render-set controller | `C2` |
 | `render_states[]` in the run manifest | render-set controller | truth consumers, corpus auditor, corpus builder | `C2` |
@@ -448,7 +457,14 @@ the wrong `bus` values never reach SUMO's `vClass`.
   blueprint actually lights. It is a separate pass because it is the only measurement in the sweep that
   needs a camera and a night sun, and because a sweep that cannot get one must still emit a catalogue
   (with every lamp recorded `unknown`) rather than emit a guess.
-- **What it emits:** `vehicles.catalogue.json` and `VehicleCatalog.xosc` (§3.3), plus a one-page
+- **How far its geometry reaches: the bounding box, and no further.** The only geometry a spawned
+  actor hands back is `bounding_box` (`CarlaNet.Types/Rpc/Actors/Actor.cs`, key 3), so the sweep
+  measures no wheel diameter, no track width and no axle position — it has no source for any of them.
+  Anything that needs axle geometry, such as a conformant OpenSCENARIO `<Vehicle>` with its required
+  `<Axles>` element, cannot be produced from this measurement, and deriving plausible axle numbers
+  from the box would put fabricated values into a file a foreign reader takes as measured. Closing
+  that gap means reading wheel geometry off the actor, which is an engine change nothing here needs.
+- **What it emits:** `vehicles.catalogue.json` (§3.3), plus a one-page
   human-readable report listing every blueprint, its measured dimensions, and every discrepancy
   between the measurement and the blueprint's own declared metadata — which, on the measured content
   build, is seven wrong `base_type` values, one empty one, seventeen empty `special_type` values and
@@ -604,41 +620,20 @@ into a silently wrong corpus.
 
 ### 3.3 Artifact and format
 
-> **D4.2 — the canonical catalogue is JSON; the OpenSCENARIO `<VehicleCatalog>` is a generated,
-> non-authoritative projection emitted by the same sweep run.**
+> **D4.2 — the catalogue has one serialisation, `vehicles.catalogue.json`, and it is authoritative.
+> The sweep emits no second projection of it.**
 
-Doc 20 §5.6 argues for the OpenSCENARIO catalogue format so one artifact serves both authoring
-surfaces. That argument is right about the *goal* and wrong about the *mechanism*, for a reason that
-only appears once the SUMO side is in scope:
-
-- `<Vehicle>` can carry `<BoundingBox><Dimensions>`, `<Performance>` and `<Axles>` natively. It cannot
-  carry `vClass`, `guiShape`, `sigma`, `speedDev`, class membership, or the colour palette without
-  `<Properties><Property>` vendor keys. Once half the payload is vendor keys, the standard's advantage
-  is reduced to one thing: a conformant foreign player can resolve a `CatalogReference`.
-- That one thing is still worth having ([doc 20 §5.5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)
-  wants the storyboard previewable as authored), and it costs nothing, because both files are emitted
-  from **one** measurement run and both carry the same `catalogue_digest`. There is no hand-editing
-  step in which they could drift.
-- The SUMO scenario builder, the playback bridge and an assistant author all read JSON at lower cost
-  than they read OpenSCENARIO XML with vendor properties.
-
-So: one measurement, two serialisations, the JSON authoritative. A consumer finding the two in
-disagreement treats it as a build error, not as a choice.
-
-**The OpenSCENARIO projection is not yet emitted, and the reason is a gap in the measurement, not in
-the writer.** A conformant `<Vehicle>` requires `<Axles>` — wheel diameter, track width and the
-longitudinal and vertical position of each axle — and the sweep measures none of them: the only
-geometry a spawned actor hands back is its bounding box. Writing plausible axle numbers derived from
-the box would put fabricated measurements into a file whose whole purpose is to be read by a foreign
-player as measured. Until the sweep can read wheel geometry off the actor, the JSON catalogue and the
-SUMO vehicle types are what it emits, and a `VehicleCatalog.xosc` remains something to add to the same
-run rather than something to hand-write.
+The catalogue's readers are the SUMO scenario builder, the playback bridge, the validator and an
+assistant author, and every one of them reads JSON at lower cost than any alternative. The payload is
+also mostly outside what any vehicle-description standard carries natively: `vClass`, `guiShape`,
+`sigma`, `speedDev`, class membership, the colour palette, `lamp_capability` and the `lamp_probe`
+conditions have no home except vendor extensions, so a second serialisation would be a vendor
+document wearing a standard's file extension, plus a second thing to keep in step.
 
 **Location.** The catalogue is a property of a content build, so it ships with the distribution:
 
 ```
 <distribution root>/catalogue/vehicles.catalogue.json
-<distribution root>/catalogue/VehicleCatalog.xosc
 ```
 
 and a copy is **embedded** in every scenario package (`C3`), so a scenario is never separated from the
@@ -882,28 +877,6 @@ The `.rou.xml` the scenario builder emits from that class — **generated, never
 `<xsd:element name="param" type="paramType" minOccurs="0" maxOccurs="unbounded"/>`, and
 `SUMORouteHandler::myStartElement` handles `SUMO_TAG_PARAM`
 (`Build/sumo-src/src/utils/vehicle/SUMORouteHandler.cpp:200-201`).
-
-The OpenSCENARIO projection of the same entry:
-
-```xml
-<Vehicle name="vehicle.mini.cooper" vehicleCategory="car">
-  <BoundingBox>
-    <Center x="0.02" y="0.00" z="0.72"/>
-    <Dimensions width="2.10" length="4.55" height="1.77"/>
-  </BoundingBox>
-  <Performance maxSpeed="35.0" maxAcceleration="2.6" maxDeceleration="4.5"/>
-  <Axles>
-    <FrontAxle maxSteering="0.5" wheelDiameter="0.7" trackWidth="2.10" positionX="3.40" positionZ="0.35"/>
-    <RearAxle  maxSteering="0"   wheelDiameter="0.7" trackWidth="2.10" positionX="0"    positionZ="0.35"/>
-  </Axles>
-  <Properties>
-    <Property name="carla:blueprint"        value="vehicle.mini.cooper"/>
-    <Property name="carla:class_id"         value="civ_car"/>
-    <Property name="carla:catalogue_digest" value="8f2c…"/>
-    <Property name="carla:colour_palette"   value="0,0,0;104,4,8;27,54,118;26,62,29"/>
-  </Properties>
-</Vehicle>
-```
 
 ### 3.6 The two-way mapping, and why it needs no tolerance
 
@@ -1456,7 +1429,6 @@ Three findings from that measurement:
 | `routes/scenario.rou.xml` | Types, distributions, flows, trips, vehicles |
 | `config/scenario.sumocfg` | The SUMO configuration |
 | `catalogue/vehicles.catalogue.json` | The exact catalogue authored against (`C1`), embedded |
-| `catalogue/VehicleCatalog.xosc` | Its OpenSCENARIO projection |
 | `annotations/scenario.annotations.json` | The `AnnotationSet` of doc 20 §6.1 — payload owned by [`06`](06_Truth_And_Annotation.md) |
 | `annotations/vocabulary.json` | The document every term in the annotation set resolves against: the closed core, and each author namespace the specification declared or imported, import-flattened — payload owned by [`06`](06_Truth_And_Annotation.md) §8.7 |
 | `areas/areas.aoi.geojson` | The source area definitions (`C5`) |
@@ -4395,7 +4367,7 @@ sequenceDiagram
   loop per blueprint, per lamp bit
     SW->>SRV: spawn, set light state, capture, compare to the NONE reference
   end
-  SW-->>OP: vehicles.catalogue.json + VehicleCatalog.xosc<br/>catalogue_digest, blueprint_set_digest,<br/>lamp_capability per blueprint (C1 §3.2a)
+  SW-->>OP: vehicles.catalogue.json<br/>catalogue_digest, blueprint_set_digest,<br/>lamp_capability per blueprint (C1 §3.2a)
 
   Note over AU,SB: Scenario authoring — no CARLA in the loop
   AU->>SB: classes wanted, flows, trips, areas, annotations,<br/>epoch and illumination policy
@@ -4468,7 +4440,7 @@ Stated as properties needed, not as requests.
 | [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) | An `AnnotationSet` payload whose `entity_id` and `instance_id` match `C4`'s grammars; `<_supervision>` identical across sensors at one tick; the sidecar carrying `sumo_id` and `entity_id` on `_carla`. The `<_solar>` element already exists (`CotWriter.cs:52-65`) and needs no change; what is needed is the container additionally carrying the scenario's `epoch` so a sidecar states its own civil time without the manifest |
 | [`07_Scenario_Authoring.md`](07_Scenario_Authoring.md) | An authoring surface that emits only catalogue classes, never bare vTypes; area references rather than raw edge ids where an area exists; and an `epoch` that is **authored**, not defaulted — the authoring surface is where the 3.5-hour contradiction of Measurement 7 gets fixed at source |
 | [`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md) | **Two** artifact roots, not three (`D4.26`) — `08` owns the collection rationale for how they are laid out, named and sessioned; `C8` owns the ruling that there is no third. An observation writer with no reference to truth artifacts, and the split performed at the writer rather than by a stripping step (`D4.16`, and `08`'s own `D8.17` mechanism 2). A `context` block whose `solar` and `epoch` fields are exactly §10.4a's allow-list, taken from the sidecar and the PNG chunk rather than from the run manifest (`D4.21`). The per-label quality fields of `D4.28` — `occlusion`, `visible_signature`, `label_crowding`, `nearest_label_px`, `supervision_transfer_ambiguous` — computed from truth and the rendered frame alone and written onto the label record. If `08` reserves a partition whose truth is not released, that the corpus manifest declares it (V8.9). **And for the live delivery mode** (`D4.29`): a transport binding satisfying §10.9.1's three properties; one endpoint per root, with the truth endpoint off by default (`08` §11.4, guarantee L7); drop-oldest at the emitter with a per-sensor counter and the covered-but-not-delivered coverage row (`08` §11.3, V8.16); a real-time factor observed rather than owned (`08` §11.1); and one world-observer snapshot per tick behind every stream (`08` §3.4, guarantee L6) |
-| [`09_Toolchain_And_Packaging.md`](09_Toolchain_And_Packaging.md) | `vehicles.catalogue.json` and `VehicleCatalog.xosc` shipped in the distribution under `catalogue/`; `sumo` and `duarouter` staged with `tools/traci` and `SUMO_HOME` set |
+| [`09_Toolchain_And_Packaging.md`](09_Toolchain_And_Packaging.md) | `vehicles.catalogue.json` shipped in the distribution under `catalogue/`; `sumo` and `duarouter` staged with `tools/traci` and `SUMO_HOME` set |
 | [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md) | Values for `render_cap`, `render_cap_hard`, `prewarm_s`, `entry_lead_m`, `exit_lag_m`, `exit_lag_s`, `aoi_halo_m`, `frustum_lead_s`, `near_m`, `sumo_step_timeout_wall_s`, **`solar_audit_tolerance_s`, `solar_audit_tolerance_elev_deg`, `solar_audit_every_n_ticks`, the bound on a per-scenario tolerance override, the solar-bin edges `C8` V8.6 stratifies on, the live emitter's `queue_depth_frames` (§10.9.2, guarantee L4), and the transcript's per-record and per-run byte caps (§10.10 rule 5)** |
 | [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md) | The five properties listed in §11.13: a recommended default policy, the headlight thresholds in the `sun_elevation_deg` convention, the `freeze_date_advances` default, whether illumination is a declared stratifier, and a view on a time-zone setter. `C9` carries and checks whatever `11` decides; it does not decide any of them |
 | [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md) | An override that produces exactly an `illumination` object of §11.5's shape, so the driver validates the operator's choice with the same rules as the author's; and a surface that can express the four policies without inventing a fifth. `C9` requires only that whatever an operator expresses resolves to `illumination_in_force` in the manifest (§11.8). **And for non-interactive invocation**: the five properties of §12.11 — non-interactive, parameterised from artifacts only, reproducible, addressed by `run_id`, and a record always written that depends on no exit status, because a killed process has none. `12` owns the surface, the configuration resolution, the exit-status set and the closeout rendering; `C10` owns the record artifact, and its gate rows are `12` §7.2's gate record projected rather than a second set of gates. `C10` publishes no aggregate verdict (`D4.36`, §12), so `12`'s `quality_gate` rendering is the only summary in the plan and is `12`'s to justify |
@@ -4480,7 +4452,7 @@ Stated as properties needed, not as requests.
 | # | Decision |
 |---|---|
 | **D4.1** | **The vehicle catalogue is generated by a build-time spawn-and-measure sweep against a running server; it cannot be a projection of the blueprint library.** Measured: dimensions do not exist on `rpc::ActorDefinition`, on `FVehicleParameters`, or in any attribute `MakeVehicleDefinition` emits; the bounding box first exists on the spawned actor (§3.2). Upstream's static `vtypes.json` is the same conclusion reached once and frozen; our blueprint set differs, so ours is new work |
-| **D4.2** | **The canonical catalogue is JSON; the OpenSCENARIO `<VehicleCatalog>` is a generated projection emitted by the same sweep run.** One measurement, two serialisations, one digest, no hand-editing step in which they could drift (§3.3) |
+| **D4.2** | **The catalogue has one serialisation, `vehicles.catalogue.json`, and it is authoritative; the sweep emits no second projection of it.** Most of the payload — `vClass`, `guiShape`, `sigma`, `speedDev`, class membership, colour palette, lamp capability — has no home in a vehicle-description standard except vendor extensions, so a second serialisation would be a vendor document in a standard's clothing and a second artifact to keep in step (§3.3) |
 | **D4.3** | **One `vType` per catalogue blueprint with dimensions copied verbatim; one `vTypeDistribution` per catalogue class.** The author asks for a class, SUMO draws the member, the member *is* the blueprint. No matching, no nearest neighbour, tolerance 0.01 m for rounding only (§3.6) |
 | **D4.4** | **Colours are `#RRGGBB` in every SUMO artifact and `"R,G,B"` 0–255 in every CARLA artifact.** SUMO reinterprets an all-≤1 integer triple as fractions (`RGBColor.cpp:308-311`); hex removes the ambiguity (§3.7) |
 | **D4.5** | **`vType@color` is a `sumo-gui` property and is never rendered.** Measured: Bahonar's four anomaly types are the only conspicuous colours in the file and cover all nine marked vehicles, so carrying colour through would make it a perfect separator of the positive class. The rendered colour is drawn from the blueprint's own palette by a seeded rule, identically for marked and unmarked vehicles of one class (§3.7.1) |
