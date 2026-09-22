@@ -6,28 +6,28 @@ namespace CarlaNet.CoSim.Tests;
 /// The whole bridge, running with nothing applied: the clock, the frame check, the lease, the
 /// subscription, the render set, the lookahead, the interpolation and the conversion.
 /// </summary>
-public sealed class GhostSessionTests
+public sealed class SumoDriveSessionTests
 {
     private readonly ITestOutputHelper _output;
 
-    public GhostSessionTests(ITestOutputHelper output)
+    public SumoDriveSessionTests(ITestOutputHelper output)
     {
         _output = output;
     }
 
     [RequiresSumoFact]
-    public void AGhostRunComputesPosesAgreesWithSumoAndAppliesNothing()
+    public void ARunWithNoFleetComputesPosesAgreesWithSumoAndAppliesNothing()
     {
         // The fixture network projects as "!", which is netconvert's own way of saying it was given
         // no projection, so the world it is packaged with declares the same.
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
 
-        List<GhostPoseRecord> ghost = [];
+        List<CoSimPoseRecord> computed = [];
         List<RenderedVehicleInterval> released = [];
         long ticks = 0;
 
-        using (GhostSession session = GhostSession.Start(Options(world, ghost, released,
+        using (SumoDriveSession session = SumoDriveSession.Start(Options(world, computed, released,
                                                                  () => { ticks++; return true; })))
         {
             for (int step = 0; step < 200 && session.Advance(); step++)
@@ -52,9 +52,9 @@ public sealed class GhostSessionTests
             Assert.Contains(LaneInterpolationCase.SameLane, session.Report.InterpolationCases.Keys);
         }
 
-        Assert.NotEmpty(ghost);
+        Assert.NotEmpty(computed);
         Assert.NotEmpty(released);
-        Assert.All(ghost, record => Assert.Equal("vehicle.fuso.mitsubishi", record.Pose.BlueprintId));
+        Assert.All(computed, record => Assert.Equal("vehicle.fuso.mitsubishi", record.Pose.BlueprintId));
     }
 
     [RequiresSumoFact]
@@ -62,16 +62,16 @@ public sealed class GhostSessionTests
     {
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
-        List<GhostPoseRecord> ghost = [];
+        List<CoSimPoseRecord> computed = [];
 
-        using GhostSession session = GhostSession.Start(Options(world, ghost, [], () => true));
+        using SumoDriveSession session = SumoDriveSession.Start(Options(world, computed, [], () => true));
         for (int step = 0; step < 400 && session.Advance(); step++)
         {
         }
 
         Assert.True(session.Report.VehicleTicksWithNoMeasuredBody > 0,
                     "the unrenderable vehicle never reached the render set, so nothing was refused");
-        Assert.DoesNotContain(ghost, record => record.Pose.VehicleId == "unrenderable");
+        Assert.DoesNotContain(computed, record => record.Pose.VehicleId == "unrenderable");
     }
 
     [RequiresSumoFact]
@@ -79,13 +79,13 @@ public sealed class GhostSessionTests
     {
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
-        GhostSessionOptions options = Options(world, [], [], () => true);
+        SumoDriveSessionOptions options = Options(world, [], [], () => true);
 
         using PopulationLease ambient = WorldDriveAuthority.ForWorld(options.WorldKey)
             .Acquire(PopulationMode.TrafficManagerAmbient, "TrafficController on the same world");
 
         PopulationAuthorityHeldException refused = Assert.Throws<PopulationAuthorityHeldException>(
-            () => GhostSession.Start(options));
+            () => SumoDriveSession.Start(options));
         Assert.Contains("TrafficController on the same world", refused.Message);
     }
 
@@ -95,18 +95,18 @@ public sealed class GhostSessionTests
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
 
-        GhostSessionOptions asynchronous = Options(world, [], [], () => true) with
+        SumoDriveSessionOptions asynchronous = Options(world, [], [], () => true) with
         {
             WorldIsSynchronous = false,
         };
-        Assert.Throws<CoSimSessionRefusedException>(() => GhostSession.Start(asynchronous));
+        Assert.Throws<CoSimSessionRefusedException>(() => SumoDriveSession.Start(asynchronous));
 
         using SyntheticWorld elsewhere = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork,
             "+proj=tmerc +lat_0=39.59431 +lon_0=-104.88449 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 "
             + "+units=m +no_defs");
         CoSimSessionRefusedException mismatch = Assert.Throws<CoSimSessionRefusedException>(
-            () => GhostSession.Start(Options(elsewhere, [], [], () => true)));
+            () => SumoDriveSession.Start(Options(elsewhere, [], [], () => true)));
         Assert.Contains("projects as", mismatch.Message);
     }
 
@@ -116,7 +116,7 @@ public sealed class GhostSessionTests
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
 
-        using GhostSession session = GhostSession.Start(
+        using SumoDriveSession session = SumoDriveSession.Start(
             Options(world, [], [], () => false));
 
         CoSimSessionRefusedException failed =
@@ -124,37 +124,37 @@ public sealed class GhostSessionTests
         Assert.Contains("no frame", failed.Message);
     }
 
-    [NamedGhostRunFact]
-    public void AGhostRunAgainstARealScenarioAndWorld()
+    [NamedCoSimRunFact]
+    public void ARunAgainstARealScenarioAndWorld()
     {
-        List<GhostPoseRecord> ghost = [];
-        var options = new GhostSessionOptions(
-            NamedGhostRunFactAttribute.Scenario!,
-            NamedGhostRunFactAttribute.WorldPackage!,
+        List<CoSimPoseRecord> computed = [];
+        var options = new SumoDriveSessionOptions(
+            NamedCoSimRunFactAttribute.Scenario!,
+            NamedCoSimRunFactAttribute.WorldPackage!,
             CoSimFixtures.VehicleCatalogue,
             "named://" + Guid.NewGuid().ToString("n"),
             new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 270.0,
                                       hysteresisMetres: 30.0, capacity: 128))
         {
-            WarmUpToSimulatedSecond = NamedGhostRunFactAttribute.WarmUp,
-            SumoStepOverrideSeconds = NamedGhostRunFactAttribute.StepLength,
-            OnPose = ghost.Add,
+            WarmUpToSimulatedSecond = NamedCoSimRunFactAttribute.WarmUp,
+            SumoStepOverrideSeconds = NamedCoSimRunFactAttribute.StepLength,
+            OnPose = computed.Add,
         };
 
-        using GhostSession session = GhostSession.Start(options);
-        for (int step = 0; step < NamedGhostRunFactAttribute.Steps && session.Advance(); step++)
+        using SumoDriveSession session = SumoDriveSession.Start(options);
+        for (int step = 0; step < NamedCoSimRunFactAttribute.Steps && session.Advance(); step++)
         {
         }
 
         _output.WriteLine(session.Report.ToString());
-        _output.WriteLine($"poses logged       {ghost.Count}");
+        _output.WriteLine($"poses logged       {computed.Count}");
         Assert.True(session.Report.PosesComputed > 0, "the render set never held a vehicle");
         Assert.True(session.Report.WorstBumperResidualMetres < 1e-6,
                     $"bumper residual {session.Report.WorstBumperResidualMetres}");
     }
 
-    private static GhostSessionOptions Options(SyntheticWorld world,
-                                               List<GhostPoseRecord> ghost,
+    private static SumoDriveSessionOptions Options(SyntheticWorld world,
+                                               List<CoSimPoseRecord> computed,
                                                List<RenderedVehicleInterval> released,
                                                Func<bool> tick) =>
         new(CoSimFixtures.RightAngleTurnScenario,
@@ -165,7 +165,7 @@ public sealed class GhostSessionTests
                                       hysteresisMetres: 15.0, capacity: 8))
         {
             TickWorld = tick,
-            OnPose = ghost.Add,
+            OnPose = computed.Add,
             OnRelease = released.Add,
         };
 }

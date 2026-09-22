@@ -3,7 +3,7 @@ using System.Text;
 namespace CarlaNet.CoSim;
 
 /// <summary>
-/// What a ghost run established: how much of the conversion ran, how far it disagreed with SUMO,
+/// What a run established: how much of the conversion ran, how far it disagreed with SUMO,
 /// and what it refused.
 /// </summary>
 /// <remarks>
@@ -19,7 +19,7 @@ namespace CarlaNet.CoSim;
 /// position against the position SUMO reported for that frame, and measures whether the network the
 /// bridge read is the network SUMO is driving on.</para>
 /// </remarks>
-public sealed class GhostRunReport
+public sealed class CoSimRunReport
 {
     private readonly Dictionary<LaneInterpolationCase, long> _cases = [];
     private readonly Dictionary<UnrenderableReason, long> _refusedTypes = [];

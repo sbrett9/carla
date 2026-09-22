@@ -1,6 +1,6 @@
 namespace CarlaNet.CoSim;
 
-/// <summary>What a ghost session is pointed at, and what it is allowed to do.</summary>
+/// <summary>What a co-simulation session is pointed at, and what it is allowed to do.</summary>
 /// <param name="ScenarioPath">The scenario's SUMO configuration.</param>
 /// <param name="WorldPackagePath">
 /// The world package: the ground surface the poses are seated on, and the road network they are
@@ -18,7 +18,7 @@ namespace CarlaNet.CoSim;
 /// and an init-only property cannot be written at all, so an options object that can only be built
 /// with one is an options object the orchestrator cannot build.
 /// </remarks>
-public sealed record GhostSessionOptions(
+public sealed record SumoDriveSessionOptions(
     string ScenarioPath,
     string WorldPackagePath,
     string CataloguePath,
@@ -44,12 +44,12 @@ public sealed record GhostSessionOptions(
     /// <remarks>
     /// A delegate rather than a client, because the only thing this stage needs from CARLA is the
     /// advance of the world clock: the poses are computed from the world package and the catalogue,
-    /// and none of them is applied. A ghost run with no CARLA at all supplies one that counts.
+    /// and none of them is applied. A run with no CARLA at all supplies one that counts.
     /// </remarks>
     public Func<bool>? TickWorld { get; set; }
 
     /// <summary>Who to name if something else has already claimed the world's population.</summary>
-    public string Holder { get; set; } = "CarlaNet.CoSim ghost session";
+    public string Holder { get; set; } = "CarlaNet.CoSim playback bridge";
 
     /// <summary>
     /// Height of the actor origin above the contact surface per blueprint, where it has been
@@ -71,8 +71,8 @@ public sealed record GhostSessionOptions(
     /// <summary>Simulated second to fast-forward SUMO to before the first world tick.</summary>
     public double WarmUpToSimulatedSecond { get; set; }
 
-    /// <summary>Where each computed pose goes. The ghost's whole output.</summary>
-    public Action<GhostPoseRecord>? OnPose { get; set; }
+    /// <summary>Where each computed pose goes.</summary>
+    public Action<CoSimPoseRecord>? OnPose { get; set; }
 
     /// <summary>Where a completed render-set interval goes.</summary>
     public Action<RenderedVehicleInterval>? OnRelease { get; set; }

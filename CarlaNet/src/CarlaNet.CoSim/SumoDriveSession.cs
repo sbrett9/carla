@@ -5,8 +5,8 @@ using CarlaNet.Sumo;
 namespace CarlaNet.CoSim;
 
 /// <summary>
-/// A co-simulation session that computes every pose it would apply, records it, and applies none of
-/// them.
+/// The playback bridge: one session that owns the advance of simulated time on both sides, computes
+/// every vehicle's CARLA pose from SUMO's state, and records what it computed.
 /// </summary>
 /// <remarks>
 /// <para><b>Why a session that does nothing is worth running.</b> The conversion from a SUMO state
@@ -22,9 +22,9 @@ namespace CarlaNet.CoSim;
 /// caller supplied, so the session owns the advance of simulated time on both sides exactly as it
 /// will when it drives.</para>
 /// </remarks>
-public sealed class GhostSession : IDisposable
+public sealed class SumoDriveSession : IDisposable
 {
-    private readonly GhostSessionOptions _options;
+    private readonly SumoDriveSessionOptions _options;
     private readonly SumoConnection _sumo;
     private readonly SubscribedPopulation _population;
     private readonly RenderSetManager _renderSet;
@@ -42,13 +42,13 @@ public sealed class GhostSession : IDisposable
     private long _tickIndex;
     private bool _disposed;
 
-    private GhostSession(GhostSessionOptions options,
-                         SumoConnection sumo,
-                         CoSimClock clock,
-                         SumoRoadNetwork network,
-                         GroundSurface ground,
-                         VehicleCatalogue catalogue,
-                         PopulationLease lease)
+    private SumoDriveSession(SumoDriveSessionOptions options,
+                             SumoConnection sumo,
+                             CoSimClock clock,
+                             SumoRoadNetwork network,
+                             GroundSurface ground,
+                             VehicleCatalogue catalogue,
+                             PopulationLease lease)
     {
         _options = options;
         _sumo = sumo;
@@ -61,7 +61,7 @@ public sealed class GhostSession : IDisposable
         _interpolator = new LaneArcInterpolator(network);
 
         Clock = clock;
-        Report = new GhostRunReport
+        Report = new CoSimRunReport
         {
             Clock = clock,
             ScenarioPath = options.ScenarioPath,
@@ -75,7 +75,7 @@ public sealed class GhostSession : IDisposable
     public CoSimClock Clock { get; }
 
     /// <summary>What the run has established so far.</summary>
-    public GhostRunReport Report { get; }
+    public CoSimRunReport Report { get; }
 
     /// <summary>The simulated instant the last world tick rendered.</summary>
     public double RenderedTimeSeconds { get; private set; }
@@ -91,7 +91,7 @@ public sealed class GhostSession : IDisposable
     /// The clock does not divide, the world is asynchronous, the network is not the one the world
     /// was built from, or something else already holds the world's population.
     /// </exception>
-    public static GhostSession Start(GhostSessionOptions options)
+    public static SumoDriveSession Start(SumoDriveSessionOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
 
@@ -126,7 +126,7 @@ public sealed class GhostSession : IDisposable
             PopulationLease lease = WorldDriveAuthority.ForWorld(options.WorldKey)
                 .Acquire(PopulationMode.SumoDrivenPlayback, options.Holder);
 
-            var session = new GhostSession(options, sumo, clock, network, ground, catalogue, lease);
+            var session = new SumoDriveSession(options, sumo, clock, network, ground, catalogue, lease);
             try
             {
                 session.Prime();
@@ -293,7 +293,7 @@ public sealed class GhostSession : IDisposable
                 Report.WorstBumperResidualMetres,
                 BumperResidual(applied, extent, state.X, state.Y));
 
-            _options.OnPose?.Invoke(new GhostPoseRecord(
+            _options.OnPose?.Invoke(new CoSimPoseRecord(
                 _tickIndex, RenderedTimeSeconds, Clock.IsCaptureTick(_tickIndex), applied,
                 state.Case, state.X, state.Y, state.HeadingDegrees));
         }
@@ -363,7 +363,7 @@ public sealed class GhostSession : IDisposable
     /// </remarks>
     private static void RequireTheWorldSNetwork(WorldPackageManifest manifest,
                                                 SumoRoadNetwork network,
-                                                GhostSessionOptions options)
+                                                SumoDriveSessionOptions options)
     {
         if (network.NetOffset != (0.0, 0.0))
         {

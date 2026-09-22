@@ -11,7 +11,7 @@ namespace CarlaNet.CoSim;
 /// <param name="SumoX">Where SUMO said the front bumper was, for a reader checking the conversion.</param>
 /// <param name="SumoY">The same, northing.</param>
 /// <param name="SumoHeadingDegrees">And the heading SUMO reported, clockwise from north.</param>
-public readonly record struct GhostPoseRecord(
+public readonly record struct CoSimPoseRecord(
     long TickIndex,
     double SimulatedTimeSeconds,
     bool IsCaptureTick,
