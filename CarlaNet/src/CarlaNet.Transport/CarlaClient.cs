@@ -496,7 +496,7 @@ public sealed class CarlaClient : IAsyncDisposable
         => _rpc.CallAsync<IReadOnlyList<EnvironmentObject>>("get_environment_objects", queriedTag);
 
     public Task EnableEnvironmentObjectsAsync(IReadOnlyList<ulong> ids, bool enable)
-        => _rpc.CallVoidAsync("enable_environment_objects", ids, enable);
+        => _rpc.CallVoidAsync("enable_environment_objects", AsArray(ids), enable);
 
     public Task CopyOpenDriveToServerAsync(string openDrive, OpendriveGenerationParameters p)
         => _rpc.CallVoidAsync("copy_opendrive_to_file", openDrive, p);
@@ -1853,12 +1853,27 @@ public sealed class CarlaClient : IAsyncDisposable
         => _rpc.CallVoidAsync("draw_debug_shape", shape);
 
     public Task ApplyBatchAsync(IReadOnlyList<Command> commands, bool doTickCue)
-        => _rpc.CallVoidAsync("apply_batch", commands, doTickCue);
+        => _rpc.CallVoidAsync("apply_batch", AsArray(commands), doTickCue);
 
     public Task<IReadOnlyList<CommandResponse>> ApplyBatchSyncAsync(
         IReadOnlyList<Command> commands, bool doTickCue)
         // Server returns std::vector<CommandResponse> directly (no Response<T> wrap), so use raw path.
-        => _rpc.CallRawAsync<IReadOnlyList<CommandResponse>>("apply_batch", commands, doTickCue);
+        => _rpc.CallRawAsync<IReadOnlyList<CommandResponse>>(
+               "apply_batch", AsArray(commands), doTickCue);
+
+    /// <summary>
+    /// The sequence as an array, so MessagePack can serialise it.
+    /// </summary>
+    /// <remarks>
+    /// MessagePack resolves a formatter from the argument's <b>runtime</b> type, not from the
+    /// parameter's declared one. An <see cref="IReadOnlyList{T}"/> that is neither an array nor a
+    /// <see cref="List{T}"/> therefore has no registered formatter and throws at serialisation
+    /// rather than at the call — a collection expression produces exactly such a wrapper, so a
+    /// caller building a batch with <c>[..]</c> fails while the same batch in a <c>List</c>
+    /// succeeds. Converting here rather than at each call site means no caller has to know that.
+    /// An argument that is already an array is returned unchanged.
+    /// </remarks>
+    private static T[] AsArray<T>(IReadOnlyList<T> items) => items as T[] ?? [.. items];
 
     // ── §8.17 Raycast and Queries ─────────────────────────────────────────────
 
