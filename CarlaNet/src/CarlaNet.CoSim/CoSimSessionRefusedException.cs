@@ -16,7 +16,7 @@ namespace CarlaNet.CoSim;
 /// always "which of the three do I change", and a refusal that names none of them cannot answer
 /// it.</para>
 /// </remarks>
-public sealed class CoSimSessionRefusedException : InvalidOperationException
+public class CoSimSessionRefusedException : InvalidOperationException
 {
     public CoSimSessionRefusedException(string message) : base(message)
     {
