@@ -23,6 +23,7 @@ public sealed class SumoRoadNetwork
 {
     private readonly Dictionary<string, SumoLane> _lanes;
     private readonly Dictionary<string, List<LaneLink>> _successors;
+    private readonly Dictionary<string, List<SumoLane>> _lanesByEdge = [];
 
     private SumoRoadNetwork(Dictionary<string, SumoLane> lanes,
                             Dictionary<string, List<LaneLink>> successors,
@@ -32,6 +33,22 @@ public sealed class SumoRoadNetwork
     {
         _lanes = lanes;
         _successors = successors;
+        foreach (SumoLane lane in lanes.Values)
+        {
+            if (!_lanesByEdge.TryGetValue(lane.EdgeId, out List<SumoLane>? siblings))
+            {
+                siblings = [];
+                _lanesByEdge[lane.EdgeId] = siblings;
+            }
+
+            siblings.Add(lane);
+        }
+
+        foreach (List<SumoLane> siblings in _lanesByEdge.Values)
+        {
+            siblings.Sort(static (left, right) => left.Index.CompareTo(right.Index));
+        }
+
         ConvBoundary = convBoundary;
         NetOffset = netOffset;
         Projection = projection;
@@ -115,6 +132,15 @@ public sealed class SumoRoadNetwork
 
     /// <summary>One lane by its id.</summary>
     public bool TryGetLane(string laneId, out SumoLane lane) => _lanes.TryGetValue(laneId, out lane!);
+
+    /// <summary>Every lane of one edge, ordered by index.</summary>
+    /// <remarks>
+    /// Lanes of one edge run alongside each other for its whole length, so a distance along one is
+    /// the same distance along its siblings. That is what makes a lane change expressible as a
+    /// sideways blend between two points at one along-lane distance.
+    /// </remarks>
+    public IReadOnlyList<SumoLane> LanesOfEdge(string edgeId) =>
+        _lanesByEdge.TryGetValue(edgeId, out List<SumoLane>? lanes) ? lanes : [];
 
     /// <summary>Where a lane leads, and through which junction connector.</summary>
     public IReadOnlyList<LaneLink> SuccessorsOf(string laneId) =>

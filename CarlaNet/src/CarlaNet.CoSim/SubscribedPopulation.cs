@@ -119,6 +119,21 @@ public sealed class SubscribedPopulation
     }
 
     /// <summary>
+    /// Take up every vehicle already in the simulation at the screening tier.
+    /// </summary>
+    /// <remarks>
+    /// The one whole-population question a session asks, and it asks it once. The departure list
+    /// covers only the step just taken, so a session that starts part-way into a scenario -- which
+    /// is what a capture window is -- would otherwise never subscribe the vehicles that departed
+    /// during the fast-forward, and they would be invisible to it for the rest of their lives.
+    /// </remarks>
+    public void Seed(IReadOnlyList<string> vehicleIds)
+    {
+        ArgumentNullException.ThrowIfNull(vehicleIds);
+        Reconcile(vehicleIds, []);
+    }
+
+    /// <summary>
     /// Release a vehicle SUMO has already removed, without telling SUMO -- which would refuse the
     /// command and log a line for it.
     /// </summary>

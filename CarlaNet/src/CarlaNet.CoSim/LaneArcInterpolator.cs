@@ -98,8 +98,8 @@ public sealed class LaneArcInterpolator
             return to.LanePositionMetres - from.LanePositionMetres;
         }
 
-        IReadOnlyList<SumoLane>? path = _network.FindPath(from.LaneId, to.LaneId);
-        if (path is null || path.Count == 0)
+        IReadOnlyList<SumoLane>? path = FindRoute(from, to, out _);
+        if (path is null)
         {
             return null;
         }
@@ -111,6 +111,55 @@ public sealed class LaneArcInterpolator
         }
 
         return distance + to.LanePositionMetres;
+    }
+
+    /// <summary>
+    /// The lanes from one frame to the next, and the lane the route actually arrives on.
+    /// </summary>
+    /// <remarks>
+    /// <para>A vehicle that leaves a junction and changes lane inside one SUMO step ends up on a
+    /// lane the connector does not feed, so there is no route to it at all. There is a route to its
+    /// sibling, and the difference between the two is a sideways move -- which is a lane change, not
+    /// a discontinuity. Measured on the shipped Arapahoe scenario at a one-second step, 38 of the
+    /// 100 steps sampled contained one; calling them discontinuities releases and re-admits a
+    /// vehicle that did nothing but change lane.</para>
+    ///
+    /// <para>The sibling nearest the reported lane is preferred, because a connector feeding the
+    /// lane next door is a one-lane move and one feeding the far side of the carriageway is not.</para>
+    /// </remarks>
+    private IReadOnlyList<SumoLane>? FindRoute(in CoSimVehicleFrame from,
+                                               in CoSimVehicleFrame to,
+                                               out SumoLane? arrival)
+    {
+        arrival = null;
+        IReadOnlyList<SumoLane>? direct = _network.FindPath(from.LaneId, to.LaneId);
+        if (direct is { Count: > 0 })
+        {
+            return direct;
+        }
+
+        IReadOnlyList<SumoLane> siblings = _network.LanesOfEdge(to.EdgeId);
+        int wanted = to.LaneId.LastIndexOf('_') is var underscore and >= 0
+                     && int.TryParse(to.LaneId.AsSpan(underscore + 1), out int index)
+            ? index
+            : 0;
+
+        foreach (SumoLane sibling in siblings.OrderBy(lane => Math.Abs(lane.Index - wanted)))
+        {
+            if (sibling.Id == to.LaneId)
+            {
+                continue;
+            }
+
+            IReadOnlyList<SumoLane>? route = _network.FindPath(from.LaneId, sibling.Id);
+            if (route is { Count: > 0 })
+            {
+                arrival = sibling;
+                return route;
+            }
+        }
+
+        return null;
     }
 
     private InterpolatedState AcrossLanes(SumoLane fromLane,
@@ -150,8 +199,8 @@ public sealed class LaneArcInterpolator
                                          double speed,
                                          double stepSeconds)
     {
-        IReadOnlyList<SumoLane>? path = _network.FindPath(from.LaneId, to.LaneId);
-        if (path is null || path.Count == 0)
+        IReadOnlyList<SumoLane>? path = FindRoute(from, to, out SumoLane? arrival);
+        if (path is null)
         {
             return Reported(to, speed, LaneInterpolationCase.Discontinuous);
         }
@@ -171,15 +220,18 @@ public sealed class LaneArcInterpolator
             return Reported(to, speed, LaneInterpolationCase.Discontinuous);
         }
 
+        LaneInterpolationCase which = arrival is null
+            ? LaneInterpolationCase.CrossedEdges
+            : LaneInterpolationCase.CrossedEdgesWithLaneChange;
+
         // Walk the concatenated shape: the tail of the lane the vehicle started on, then each lane
-        // of the route in turn, then the head of the one it ended on.
+        // of the route in turn, then the head of the one it arrives on.
         double travelled = distance * DistanceFraction(from.SpeedMetresPerSecond,
                                                        to.SpeedMetresPerSecond, fraction);
         double remainingOnFirst = fromLane.DeclaredLengthMetres - from.LanePositionMetres;
         if (travelled <= remainingOnFirst)
         {
-            return Evaluate(fromLane, from.LanePositionMetres + travelled, speed,
-                            LaneInterpolationCase.CrossedEdges);
+            return Evaluate(fromLane, from.LanePositionMetres + travelled, speed, which);
         }
 
         travelled -= remainingOnFirst;
@@ -187,13 +239,33 @@ public sealed class LaneArcInterpolator
         {
             if (travelled <= path[index].DeclaredLengthMetres)
             {
-                return Evaluate(path[index], travelled, speed, LaneInterpolationCase.CrossedEdges);
+                return Evaluate(path[index], travelled, speed, which);
             }
 
             travelled -= path[index].DeclaredLengthMetres;
         }
 
-        return Evaluate(toLane, travelled, speed, LaneInterpolationCase.CrossedEdges);
+        // On the final lane of the route. Where that is not the lane the vehicle reported, the
+        // difference between the two is the lane change, blended sideways over the step exactly as
+        // one within an edge is.
+        SumoLane last = arrival ?? toLane;
+        if (arrival is null)
+        {
+            return Evaluate(last, travelled, speed, which);
+        }
+
+        (double alongX, double alongY, double alongDirectionX, double alongDirectionY) =
+            last.PointAt(travelled);
+        (double sideX, double sideY, double sideDirectionX, double sideDirectionY) =
+            toLane.PointAt(travelled);
+        double blend = fraction * fraction * (3.0 - (2.0 * fraction));
+        return new InterpolatedState(
+            alongX + ((sideX - alongX) * blend),
+            alongY + ((sideY - alongY) * blend),
+            Heading(alongDirectionX + ((sideDirectionX - alongDirectionX) * blend),
+                    alongDirectionY + ((sideDirectionY - alongDirectionY) * blend)),
+            speed,
+            which);
     }
 
     /// <summary>

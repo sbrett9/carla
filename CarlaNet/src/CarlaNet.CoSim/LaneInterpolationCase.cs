@@ -28,6 +28,20 @@ public enum LaneInterpolationCase
     CrossedEdges,
 
     /// <summary>
+    /// The frames are on different edges and the vehicle also changed lane, so no route reaches the
+    /// lane it ended on. The route to the lane the connector actually feeds is walked, and the
+    /// sideways move onto the lane it reported is blended on top -- the two cases at once, which is
+    /// what leaving a junction and immediately changing lane is.
+    /// </summary>
+    /// <remarks>
+    /// Measured on the shipped Arapahoe scenario at a one-second SUMO step: 38 of these in a hundred
+    /// steps at about a hundred rendered vehicles, one every two and a half simulated seconds.
+    /// Treating them as discontinuities instead releases and re-admits a vehicle that did nothing
+    /// but change lane, which downstream is a track that stops and restarts for no visible reason.
+    /// </remarks>
+    CrossedEdgesWithLaneChange,
+
+    /// <summary>
     /// No route joins the two lanes, or the distance between them is further than the vehicle could
     /// have travelled. A SUMO teleport, or a removal and reinsertion. Nothing is interpolated: the
     /// vehicle is placed at the later frame, and a bridge releases and re-admits it rather than

@@ -84,6 +84,56 @@ public sealed class LaneArcInterpolatorTests
         Assert.Equal(-100.0 + 52.5, middle.Y, 2);             // and half way along in the meantime
     }
 
+    /// <summary>
+    /// One 40 m approach, a 10 m connector, and a two-lane exit the connector feeds only the right
+    /// lane of. Written out here rather than built with netconvert because the whole point of it is
+    /// a connection that reaches one lane of an edge and not its sibling, which is a property of the
+    /// connection table rather than of any geometry.
+    /// </summary>
+    private const string ExitWithASecondLane = """
+        <net>
+          <location netOffset="0.00,0.00" convBoundary="0.00,-10.00,100.00,10.00"
+                    origBoundary="0.00,-10.00,100.00,10.00" projParameter="!"/>
+          <edge id=":junction_0" function="internal">
+            <lane id=":junction_0_0" index="0" speed="20.00" length="10.00" width="3.20"
+                  shape="40.00,-1.60 50.00,-1.60"/>
+          </edge>
+          <edge id="approach" from="west" to="junction">
+            <lane id="approach_0" index="0" speed="20.00" length="40.00" width="3.20"
+                  shape="0.00,-1.60 40.00,-1.60"/>
+          </edge>
+          <edge id="exit" from="junction" to="east">
+            <lane id="exit_0" index="0" speed="20.00" length="50.00" width="3.20"
+                  shape="50.00,-1.60 100.00,-1.60"/>
+            <lane id="exit_1" index="1" speed="20.00" length="50.00" width="3.20"
+                  shape="50.00,1.60 100.00,1.60"/>
+          </edge>
+          <connection from="approach" to="exit" fromLane="0" toLane="0" via=":junction_0_0"
+                      dir="s" state="M"/>
+          <connection from=":junction_0" to="exit" fromLane="0" toLane="0" dir="s" state="M"/>
+        </net>
+        """;
+
+    [Fact]
+    public void LeavingAJunctionAndChangingLaneAtOnceIsALaneChangeAndNotADiscontinuity()
+    {
+        // The vehicle ends up on a lane the connector does not feed, so no route reaches it at all.
+        // There is a route to its sibling, and the difference between the two is a sideways move.
+        var interpolator = new LaneArcInterpolator(SumoRoadNetwork.Parse(ExitWithASecondLane));
+        CoSimVehicleFrame from = On("approach_0", 35.0, speed: 20.0);
+        CoSimVehicleFrame to = On("exit_1", 5.0, speed: 20.0);
+
+        InterpolatedState start = interpolator.Interpolate(from, to, 0.0, 1.0);
+        InterpolatedState end = interpolator.Interpolate(from, to, 1.0, 1.0);
+
+        Assert.Equal(LaneInterpolationCase.CrossedEdgesWithLaneChange, end.Case);
+        Assert.Equal(-1.60, start.Y, 2);          // still on the lane it came in on
+        Assert.Equal(35.0, start.X, 2);
+        Assert.Equal(1.60, end.Y, 2);             // arrived on the lane it reported
+        Assert.Equal(55.0, end.X, 2);
+        Assert.Equal(20.0, interpolator.RouteDistance(from, to)!.Value, 6);
+    }
+
     [Fact]
     public void AGapNoRouteCoversIsCalledDiscontinuousAndNothingIsSlidAcrossIt()
     {
