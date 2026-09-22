@@ -322,7 +322,7 @@ left there, and that is what `carlacontrol.SumoInstallation` resolves against (�
 
 ### 3.2 `SumoInstallation`'s discovery order, and what it resolves to right now
 
-`SumoInstallation.locate` (`SumoInstallation.py:32-56`) tries, in order:
+`SumoInstallation.locate` (`SumoInstallation.py:82-110`) tries, in order:
 
 1. `explicit` — an argument the caller passed (every CLI here exposes `--sumo-home`, defaulting to `None`)
 2. `os.environ.get("SUMO_HOME")`
@@ -548,7 +548,7 @@ today's **working** SUMO tooling (`SumoScenarioBuilder`, `SumoPatternOfLifeBuild
 `sumolib` from `$SUMO_HOME/tools`, and will keep needing that regardless of what `03` decides for the
 bridge. Once §2/§3 stage `data/` and `tools/` into `Build/sumo-install`, this path needs nothing new
 structurally — `SumoInstallation.tools` already resolves to `<home>/tools` and `import_traci()` already
-adds it to `sys.path` (`SumoInstallation.py:93-97`). What changes is that `Build/sumo-install` becomes a
+adds it to `sys.path` (`SumoInstallation.py:227-228`). What changes is that `Build/sumo-install` becomes a
 **genuinely complete** installation matching what `_is_installation`'s lenient check already implies is
 possible, closing the gap where `REPO_SUMO = Build/sumo-src` (the source tree) is the only candidate that
 currently works end-to-end for this path (§3.2).
@@ -1112,7 +1112,7 @@ this document's scope to verify (§2.4).
 | D9.11 | **The operator control surface's distribution footprint is packaged generically only where `12` had not yet fixed a shape; where it has, this document packages that shape as fact.** The new capture launcher (`run-capture.ps1`/`.sh`) coexists beside `run-sctmv.ps1`/`.sh` rather than replacing it; the run-configuration schema and site-profile template stage alongside the vehicle catalogue and vocabulary (§5.5); the broken-launcher repair (§5.2) and the new launcher's introduction land as one change, not two, because they touch the same lines of the same scripts (§5.6); and `12`'s launcher makes bundling `carlacontrol` unavoidable on both platforms, which `D9.7` settles on both platforms. |
 | D9.12 | **`tzdata` is added to `CarlaControl/pyproject.toml`'s dependencies once `07`/`11` settle whether IANA zone resolution is required or merely an optional cross-check (§4.4, Open question 4).** It needs no new packaging mechanism — it resolves through the same `pip install` step that already installs `numpy` and `pygame` for every distribution recipient — and it introduces no SUMO dependency, no native code, and no new distribution slot. |
 | D9.13 | **There are two setup scripts, `CarlaSetup.ps1` and `CarlaSetup.sh`, and every build change lands in both.** The charter's parity rule covers exactly that pair, and `Docs/build_windows_ue5.md:20` names `CarlaSetup.ps1` as the Windows entry point. A third copy is what a maintained port costs and what drift is made of: the SUMO block is duplicated once, not twice, and the `SUMOLibraries` pin (`CarlaSetup.ps1:621-623`, with `:614-620`'s comment recording exactly how an unpinned clone breaks the SUMO build) has one place to be wrong rather than two. |
-| D9.14 | **`SUMO_HOME` resolution is logged unconditionally, once per process, and a mismatch against the world's converter refuses.** `SumoInstallation.py:36` prefers `SUMO_HOME` over the repo-pinned install and has no version member at all; measured on a developer machine, worlds are built by the pinned **1.27.0** while every scenario tool silently resolves an unrelated **1.27.1**. `SumoInstallation` gains a `version` property parsed from `netconvert --version` (not `sumo` — `_is_installation` accepts a netconvert-only directory), a `source` field recording *which* rule matched, an unconditional `INFO` line naming path, version and source, and `require_version()`. Precedence is **not** reordered; `D9.6` stands. The escapes are `--sumo-home`, `--allow-version-mismatch`, and a world package that records no converter, which warns rather than refuses. |
+| D9.14 | **`SUMO_HOME` resolution is logged unconditionally, once per process, and a mismatch against the world's converter refuses.** Without it, `SUMO_HOME` silently outranks the repo-pinned install — measured on a developer machine, worlds built by the pinned **1.27.0** while every scenario tool resolved an unrelated **1.27.1**, with no log line saying which ran. `SumoInstallation` carries a `version` parsed from `netconvert --version` (not `sumo` — `_is_installation` accepts a netconvert-only directory), a `source` naming which rule matched, an `INFO` line stating path, version and source before `locate` returns (`SumoInstallation.py:120-128`), and `require_version` (`:158`). Precedence is **not** reordered; `D9.6` stands. The escapes are `--sumo-home`, `--allow-version-mismatch`, and a world package recording no converter, which warns rather than refuses. **Releases are compared by number, not by printed string**: a package records what the tool printed (`Eclipse SUMO netconvert 1.27.0`) while the installation carries the release alone, and comparing them verbatim refuses a matched pair — a false refusal with no escape but disabling the check. |
 
 ## Open questions
 
