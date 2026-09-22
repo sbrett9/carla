@@ -16,6 +16,7 @@ are on the critical path.
 | 2026-09-21 | One distribution, licence manifest, `CarlaSetup.bat` retired, skill to stage A, stage B re-measured. |
 | 2026-09-21 | Netconvert flags unified on the world build; vocabulary layered into a closed core and open author terms. |
 | 2026-09-21 | Role and phase values are author space; only `subject` and `vacancy` are reserved. |
+| 2026-09-22 | Two-wheelers are outside the vehicle mapping contract; stage E states the boundary. |
 
 ---
 
@@ -192,6 +193,7 @@ Already scouted; the build itself already compiles clean from the unmodified con
 |---|---|---|
 | ⚑ | **The vehicle catalogue, by spawn-and-measure.** Dimensions do not exist before spawn; the box first exists on the spawned actor | One vType per blueprint; one distribution per class; dimensions verbatim; blueprint named in a `<param>` that is schema-valid against SUMO's own `route.xsd` |
 | ⚑ | **The catalogue is a runtime dependency of the bridge**, because the bumper-to-centre pose shift needs the measured extent. A vehicle of unknown extent is **not rendered**, never rendered at a guess | |
+| | **Two-wheelers are outside the catalogue's scope.** No class names a motorcycle, moped or bicycle, no `vType` declares one, and an author asking for one is refused rather than given a car. A two-wheeler carries a rider and riders are not rendered; and the content build registers no two-wheeled blueprint for the sweep to measure | A scope boundary, not a defect to close later. [`04`](04_Contracts.md) `D4.40`, V1.20; the authoring skill carries it |
 | | **Lamp capability, measured optically.** `HasLights` is `true` on all 17 blueprints and `GetVehicleLightState` returns the *command*, so the API will confirm lamps that never lit | Rides the same sweep |
 | | **Areas of interest**: GeoJSON validated at build, resolved to CARLA metres *and* SUMO edges, held on an actor with a Set/Get pair | Required, not optional — an absence anomaly anchors to an area plus a window |
 | | **The place index**, carrying its own coverage caveat: 91% on the US maps, **5% on Bahonar**, one name mapping to 65 edges | |

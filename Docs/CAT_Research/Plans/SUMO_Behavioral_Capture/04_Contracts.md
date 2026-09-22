@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 7 | Two-wheelers are outside the vehicle mapping contract; `C1` refuses them rather than substituting |
 | 6 | `C3` carries the annotation vocabulary and binds it by digest |
 | 5 | `C10` records facts, not a verdict; per-artifact crash safety; the contract for observing a live run |
 | 4 | `C8` gains a live delivery mode; `C10` added; the external side left unspecified on purpose |
@@ -297,10 +298,37 @@ match nothing, so those categories fall through to `vehicles[0]` — a car
 and doc 20 use `vehicle.audi.tt` and `vehicle.audi.a2` as examples; **neither id exists** in this
 content build.
 
-**Measurement 3 — the SUMO side already declares vehicles that CARLA cannot render.** The shipped
-ambient type set (`CarlaControl/src/carlacontrol/SumoScenarioBuilder.py:278-296`) declares a
-`motorcycle` vType with `vClass="motorcycle"`. Measurement 1 says no motorcycle blueprint exists. Under
-today's chooser that vehicle would render as a car with no error anywhere.
+**Measurement 3 — the shipped SUMO type sets declare only vehicle kinds this content build holds.**
+The two authored type sets are `AMBIENT_VEHICLE_TYPES`
+(`CarlaControl/src/carlacontrol/SumoScenarioBuilder.py:402-424`, five types over `passenger`,
+`delivery` and `truck`) and `VEHICLE_TYPES`
+(`CarlaControl/scripts/make_arapahoe_scenario.py:100-138`, six over the same three classes). Every
+type in both is a four-wheeled road vehicle, which is what Measurement 1 says the content build can
+render. Nothing in either set reaches the chooser's unmatched fall-through of Measurement 2.
+
+#### Scope boundary — two-wheelers are outside this contract
+
+> **D4.40 — motorcycles, mopeds and bicycles are outside the vehicle mapping contract. No catalogue
+> class names one, no `vType` declares one, and an author asking for one is refused rather than given
+> something else.**
+
+Two independent reasons, and either alone settles it:
+
+- **A two-wheeler carries a rider, and riders are not rendered.** Pedestrians are out of scope
+  ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3.5), so a motorcycle in this corpus would be a riderless body
+  moving down a road at motorcycle speed — an object that exists nowhere outside the imagery, which is
+  a worse thing to train a detector on than an absent vehicle class.
+- **The content build registers none.** Measurement 1: `VehicleParameters.json` holds 17 vehicles and
+  not one of them is a two-wheeler, and the two-wheeler identifiers the client carries elsewhere —
+  `harley`, `kawasaki`, `yamaha`, `vespa`, `omafiets`, `crossbike`, `diamondback`, `gazelle`
+  (`CarlaControl/src/carlacontrol/TrafficController.py:36-48`) — match nothing the server returns
+  (Measurement 2). Nothing is registered, so the sweep has nothing to spawn and nothing to measure.
+
+This is a boundary on what the catalogue covers, not a defect in it. The `cot_base_type` vocabulary of
+§3.4.3 still lists `motorcycle` and `bicycle`, because that vocabulary is the CoT contract's and this
+contract does not get to edit it; what this boundary fixes is that no class in a catalogue may take
+those values, because no member blueprint could carry them. The consequence for an author is §3.10's
+refusal row, and it is a refusal precisely so the substitution §3.12 describes cannot happen quietly.
 
 ### 3.2 Where a blueprint's dimensions come from — measured, not assumed
 
@@ -892,9 +920,10 @@ Neither pure direction works:
   identical cars — the appearance confounder
   [doc 20 §2.6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) and decision 12
   prohibit.
-- *blueprint chosen to fit the vType* lets an author declare a vType no blueprint matches. Measured:
-  the shipped ambient set declares a `motorcycle` vType (`SumoScenarioBuilder.py:290`) and the content
-  build has no motorcycle. A nearest-match rule would render it as a car, silently.
+- *blueprint chosen to fit the vType* lets an author declare a vType no blueprint matches. A
+  nearest-match rule would then render a 2.2 m two-wheeler as a 4.55 m car, silently — the substitution
+  §3.1's scope boundary and `D4.40` exist to refuse, and the one the chooser performs today for any
+  category its preference table misses (Measurement 2).
 
 The distribution form resolves both, and it is already how the largest authored scenario works.
 Measured in `BahonarPatternOfLife.zip`, path
@@ -1088,6 +1117,7 @@ driver at run start (`R`).
 | V1.18 | For a scenario with any capture window whose civil span includes an hour at which `C7` §9.4 commands a conspicuity lamp (`C9` decides which; the check is "the policy would command lamp L"), every class used in that window has `lamp_capability[L] == "lit"` for every member | S | **warn**, naming the class, the member and the lamp, and record it in the run manifest as `lamp_gaps[]`. Not a refusal: a blueprint without a working headlight is a content fact, not an authoring error, and the honest response is to record it rather than to forbid the capture |
 | V1.18a | The same check where `lamp_capability[L] == "unknown"` | S | **warn**, distinctly from V1.18 — "not measured" and "measured absent" must never collapse into one message |
 | V1.19 | Within any class used in a night window, `lamp_capability` for the policy-commanded lamps is identical across all members, **or** the class contains both marked and unmarked vehicles in the scenario | S | refuse — otherwise lamp capability is a night-time appearance separator of the positive class, exactly as `vType@color` was a daytime one (§3.7.1, V1.11) |
+| V1.20 | No class declares a `sumo_vclass` of `motorcycle`, `moped` or `bicycle`, and no class declares a `cot_base_type` of `motorcycle` or `bicycle`; no `vType` in the routes file carries those `vClass` values | G, S | refuse, naming `D4.40` — the scope boundary of §3.1, checkable because both vocabularies are closed lists |
 
 ### 3.10 Failure modes
 
@@ -1096,7 +1126,8 @@ driver at run start (`R`).
 | Catalogue references a blueprint the running content does not have | run start, V1.14 | **Refuse to start.** Name every blueprint that moved. Do not substitute |
 | `vType` length disagrees with the blueprint | scenario build, V1.9 | **Refuse to build.** Report the pose bias `Δ/2` it would have caused, in metres |
 | Author asks for a class that does not exist | scenario build | **Refuse**, listing the classes the catalogue offers |
-| Author asks for a vehicle kind the content lacks (motorcycle, bicycle) | scenario build | **Refuse**, and say plainly that this content build has none. Never fall through to a car |
+| Author asks for a two-wheeler — motorcycle, moped or bicycle | scenario build | **Refuse**, naming `D4.40`: two-wheelers are outside this contract, the content build registers none, and a rider would not be rendered even if it did. Never fall through to a car |
+| Author asks for any other vehicle kind the content lacks | scenario build | **Refuse**, and say plainly that this content build has none. Never substitute |
 | A `vType` reaches playback without `carla:blueprint` (should be unreachable) | playback | Vehicle is **not rendered**; `render_state = simulated_only`, reason `no_blueprint`; one warning per distinct vType, not per vehicle; the run continues and the manifest records it |
 | Colour string malformed | server, silently | Nothing is reported to the client (`ActorBlueprintFunctionLibrary.cpp:1241-1252`). V1.15 exists precisely because this failure is invisible at runtime |
 | A lamp the illumination policy commands is `unlit` on a rendered blueprint | scenario build V1.18; and again at run start | **Warn, and record.** The vehicle renders dark where it should be lit; `lamp_gaps[]` in the run manifest names every (class, blueprint, lamp) so a corpus auditor can find every affected frame. Never substitute another lamp |
@@ -1165,8 +1196,10 @@ defaults). Under `C1` those numbers become the blueprint's real 4.55 × 2.10 × 
   identical vehicles, which
   [doc 18 §8.4](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md) already records as worse
   than arbitrary for detector training.
-- **Silent substitution.** An author asks for a motorcycle, gets a car, and is told nothing. Every
-  subsequent conclusion about two-wheeler detection is about cars.
+- **Silent substitution.** An author asks for a vehicle kind the content lacks, gets a car, and is
+  told nothing. Every subsequent conclusion about that kind is a conclusion about cars. `D4.40` and
+  V1.20 make the two-wheeler case a refusal for exactly this reason; the general case is §3.10's
+  second refusal row.
 - **A night corpus of dark vehicles, asserted to be lit.** `has_lights` is `true` on all 17
   (Measurement 5) and the light-state read-back returns the command rather than the vehicle
   (`CarlaWheeledVehicle.cpp:486-489`), so every layer above reports success while the imagery shows an
@@ -4485,6 +4518,7 @@ Stated as properties needed, not as requests.
 | **D4.37** | **A caller observes a run in progress through the surfaces that already exist** — a second client on the CARLA server, the live handover stream if one is open, and the incrementally written artifacts on disk. **This plan adds no status service, no progress RPC, no completion percentage and no callback to the caller.** Where an existing surface cannot answer a question, the gap is recorded as a gap (§12.8.4) rather than designed around, because a status service would be a fourth place a run's state is asserted (§12.8) |
 | **D4.38** | **Nothing in this contract requires a run to have a declared length.** A convenience limit may exist on the invocation surface; no field, rule, gate or reader here may assume one was set, and reaching the end of a limit is one ordinary way a run can end among several. The caller stops us, so a contract that needed a duration would be a contract that only worked for callers who did not want to use it that way (§12.9) |
 | **D4.39** | **The annotation vocabulary travels inside the scenario package and is bound by digest at the refuse tier, exactly as the annotation set and the epoch are.** A package that carries terms and not their definitions is a package whose labels only the author can read, and a vocabulary bound by nothing can be edited after the annotation set was compiled against it — after which every label still resolves, to a meaning nobody declared. `annotations/vocabulary.json` is an entry, `vocabulary_sha256` is a required field, and V3.15 refuses a mismatch. The **content** of the document — what the core holds, how an author term declares itself, how a namespace is versioned — is [`06`](06_Truth_And_Annotation.md) §3.7, §3.8 and §8.7's; this contract owns only that it travels, where, and what binds it (§5.2, §5.3, §5.4) |
+| **D4.40** | **Motorcycles, mopeds and bicycles are outside the vehicle mapping contract.** No catalogue class names one, no `vType` declares one, and an author asking for one is refused rather than substituted. A two-wheeler carries a rider and riders are not rendered; and the content build registers no two-wheeled blueprint for the sweep to measure (§3.1, V1.20) |
 
 ---
 

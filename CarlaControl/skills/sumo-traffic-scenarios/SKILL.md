@@ -1,8 +1,8 @@
 ---
 name: sumo-traffic-scenarios
-description: Use when building a SUMO traffic scenario or a Cursor-on-Target (CoT) telemetry dataset for a CARLA world generated from OpenStreetMap — including orbit/dwell/pattern-of-life scenarios, planted anomalies, ambient traffic, guard postings, fenced (access-restricted) road networks, or standalone scenario zips. Also use when the question is about how the OSM → world package (.xodr + bareearth.bin drape) → SUMO network → routes → CoT pipeline fits together, how run_SCTMV.py and CarlaNet produce the world, or which of the make_*_scenario.py / sumo_cot_telemetry.py tools to reach for. Covers the netconvert flags, coordinate alignment, and the measured gotchas that make routes actually work.
+description: Use when building a SUMO traffic scenario or a Cursor-on-Target (CoT) telemetry dataset for a CARLA world generated from OpenStreetMap — including orbit/dwell/pattern-of-life scenarios, planted anomalies, ambient traffic, guard postings, fenced (access-restricted) road networks, or standalone scenario zips. Also use when the question is about how the OSM → world package (.xodr + bareearth.bin drape) → SUMO network → routes → CoT pipeline fits together, how run_SCTMV.py and CarlaNet produce the world, or which of the make_*_scenario.py / sumo_cot_telemetry.py tools to reach for. Covers the netconvert flags, coordinate alignment, which vehicles a scenario may ask for, and the measured gotchas that make routes actually work.
 metadata:
-  version: 1.0.0
+  version: 1.1.0
 ---
 
 # SUMO traffic scenarios for generated CARLA worlds
@@ -104,6 +104,42 @@ Each scenario is also shipped as a **standalone zip at the workspace root** (`Ga
 CoT sample, and a README. Rebuilt by the `make_*_bundle.py` scripts in the scratchpad. The zips run
 on any box with `SUMO_HOME` set — no repo, no CARLA.
 
+## Which vehicles a scenario may ask for
+
+A SUMO `vType` is a behaviour model *and* a body: its `length` and `width` set car-following gaps and
+junction occupancy, so the vehicle SUMO reserved space for and the vehicle CARLA draws have to be the
+same one. That is what the **vehicle mapping contract** fixes
+(`Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/04_Contracts.md`, contract `C1`):
+
+- **One `vType` names exactly one CARLA blueprint**, by an explicit
+  `<param key="carla:blueprint" value="vehicle.mini.cooper"/>` child — never by its id, its `vClass`,
+  its `guiShape` or any resemblance between them. Variety within a kind of vehicle comes from a
+  `<vTypeDistribution>` over several such types, not from one type standing for several vehicles.
+- **The type's `length`, `width` and `height` are the blueprint's measured bounding box**, copied
+  verbatim from the vehicle catalogue. The catalogue is produced by spawning each blueprint against a
+  running server and measuring it, because a blueprint carries no dimension until it is spawned. SUMO's
+  own class defaults are large and silent — declare all three rather than letting them apply.
+- **A `vType` with no catalogue entry is not rendered.** No blueprint named, a blueprint the catalogue
+  could not measure, or a name the catalogue does not hold: the vehicle stays in SUMO and in the
+  behavioural truth record, and CARLA draws nothing for it. There is no nearest match and no
+  substitution, because a substituted body makes the imagery and the truth disagree while both stay
+  internally consistent, and nothing downstream can detect that.
+
+**Motorcycles and other two-wheelers are outside the contract.** Do not declare a `motorcycle`,
+`moped` or `bicycle` `vType`, and do not add one to a `vTypeDistribution`. Two reasons, and either
+alone is enough:
+
+- A motorcycle carries a rider. Riders are not rendered, and a riderless motorcycle moving down a road
+  is a worse thing to put in a training corpus than no motorcycle at all.
+- The content build registers no two-wheeled blueprint. `VehicleParameters.json` holds 17 vehicles,
+  every one of them four-wheeled, and the two-wheeler identifiers that appear elsewhere in this
+  repository (`harley`, `yamaha`, `crossbike` and the rest) match nothing in it, so there is nothing to
+  measure and nothing to draw.
+
+If a user asks for motorcycle traffic, say plainly that this content build has none and that a
+two-wheeler is out of scope — never quietly render it as a car. Same answer for bicycles, and for
+pedestrians, which the world-generation pipeline produces no footway meshes for.
+
 ## The recipe for a new scenario
 
 1. **Get the world package** (Stage 1), or confirm one exists in `Build/world-packages/`. Read its
@@ -115,7 +151,8 @@ on any box with `SUMO_HOME` set — no repo, no CARLA.
    and their access class. Use `duarouter` (below) to confirm every origin-destination and waypoint
    route the scenario needs. Save the validated edge IDs as named constants in the CLI.
 4. **Write the traffic.** `AmbientFlow`s for background streams (with `via` edges where the shortest
-   path would differ); `OrbitRoute`/`DwellTrip`/`ScheduledVehicle` for the marked vehicles.
+   path would differ); `OrbitRoute`/`DwellTrip`/`ScheduledVehicle` for the marked vehicles. Every
+   `vType` obeys the mapping contract above; no two-wheelers.
 5. **Write config + labels.** For a labelled dataset, emit a `.labels.json`:
    `{marked_ids, affiliation_by_type, anomaly_notes}`.
 6. **Run and verify.** Simulate; read back the marked vehicles' fcd and the tripinfo; confirm each

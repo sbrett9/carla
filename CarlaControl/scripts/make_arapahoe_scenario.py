@@ -93,6 +93,10 @@ DWELL_VIA = ("629675735", "427819537#1", "1026993839#0", "218965860#0")
 # per-lane speed setting, so the gradient has to come from what the drivers want and how willing
 # they are to move over for it. lcKeepRight above 1 pushes a type right when it is not overtaking,
 # lcSpeedGain above 1 makes it change lanes for speed more readily.
+#
+# Two wheelers are outside the vehicle mapping contract and no type below declares one: a riderless
+# motorcycle is not something worth rendering, and this content build registers no two wheeled
+# blueprint to render it with.
 VEHICLE_TYPES = """\
     <!-- Freeway traffic. The spread of speedFactor across these three, together with the lane-change
          parameters, is what puts the quick vehicles in the left lanes and the heavy ones on the
@@ -115,25 +119,22 @@ VEHICLE_TYPES = """\
     <vType id="semi" vClass="truck" length="16.5" maxSpeed="32" color="0.45,0.35,0.25"
            speedFactor="normc(0.84,0.03,0.78,0.92)" lcSpeedGain="0.3" lcKeepRight="5.0"
            sigma="0.5" tau="1.6"/>
-    <vType id="motorcycle" vClass="motorcycle" length="2.2" width="0.90" maxSpeed="60" color="0.20,0.20,0.20"
-           speedFactor="normc(1.20,0.10,1.00,1.40)" lcSpeedGain="4.0" lcKeepRight="0.2"
-           sigma="0.4" tau="0.8"/>
 
     <!-- Freeway mix: mostly cars, a realistic tail of heavy vehicles. -->
     <vTypeDistribution id="freeway_mix"
-                       vTypes="car_quick car suv van truck semi motorcycle"
-                       probabilities="0.26 0.32 0.20 0.08 0.07 0.04 0.03"/>
+                       vTypes="car_quick car suv van truck semi"
+                       probabilities="0.26 0.35 0.20 0.08 0.07 0.04"/>
 
     <!-- Arterial mix: Arapahoe Road is lined with commercial frontage, so vans and box trucks make
          up a much larger share of it than they do of the freeway. -->
     <vTypeDistribution id="arterial_mix"
-                       vTypes="car suv van truck motorcycle"
-                       probabilities="0.42 0.24 0.20 0.11 0.03"/>
+                       vTypes="car suv van truck"
+                       probabilities="0.45 0.24 0.20 0.11"/>
 
     <!-- Residential mix: commuters, nothing heavy. -->
     <vTypeDistribution id="residential_mix"
-                       vTypes="car suv van motorcycle"
-                       probabilities="0.55 0.33 0.09 0.03"/>
+                       vTypes="car suv van"
+                       probabilities="0.58 0.33 0.09"/>
 """
 
 # Ambient traffic. Gateways are the fringe edges where a road leaves the extract.

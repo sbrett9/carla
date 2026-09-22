@@ -400,7 +400,13 @@ class ScenarioPaths:
 
 
 AMBIENT_VEHICLE_TYPES = """\
-    <!-- Ambient mix. Rural Nevada, so pickups and light trucks carry more of it than a town would. -->
+    <!-- Ambient mix. Rural Nevada, so pickups and light trucks carry more of it than a town would.
+
+         Two wheelers are outside the vehicle mapping contract and no type here declares one. A
+         motorcycle carries a rider, and a riderless motorcycle is not a vehicle anyone would want
+         in the imagery; separately, this content build registers no two wheeled blueprint at all
+         (Unreal/CarlaUnreal/Content/Carla/Config/VehicleParameters.json holds 17 vehicles, every
+         one of them four wheeled), so nothing exists to measure or to render one against. -->
     <vType id="car" vClass="passenger" length="4.6" maxSpeed="55" color="0.80,0.80,0.85"
            speedFactor="normc(1.00,0.10,0.80,1.20)"/>
     <vType id="pickup" vClass="passenger" length="5.6" width="2.00" maxSpeed="50" color="0.50,0.55,0.60"
@@ -411,12 +417,10 @@ AMBIENT_VEHICLE_TYPES = """\
            speedFactor="normc(0.95,0.08,0.75,1.10)"/>
     <vType id="truck" vClass="truck" length="9.5" maxSpeed="35" color="0.60,0.45,0.30"
            speedFactor="normc(0.90,0.06,0.75,1.05)"/>
-    <vType id="motorcycle" vClass="motorcycle" length="2.2" width="0.90" maxSpeed="55" color="0.20,0.20,0.20"
-           speedFactor="normc(1.05,0.12,0.85,1.30)"/>
 
     <vTypeDistribution id="ambient_mix"
-                       vTypes="car pickup suv van truck motorcycle"
-                       probabilities="0.42 0.25 0.18 0.07 0.05 0.03"/>
+                       vTypes="car pickup suv van truck"
+                       probabilities="0.45 0.25 0.18 0.07 0.05"/>
 """
 
 GENERATED_BY = "carlacontrol.SumoScenarioBuilder"
