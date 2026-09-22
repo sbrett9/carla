@@ -1,5 +1,6 @@
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Commands;
+using CarlaNet.Types.Rpc.Environment;
 using Xunit.Abstractions;
 
 namespace CarlaNet.CoSim.Tests;
@@ -278,6 +279,68 @@ public sealed class SumoDriveSessionTests
             Assert.True(parked.Location.Z < -100f, $"parked at z {parked.Location.Z}");
             Assert.True(parked.Location.X > 100f, $"parked at x {parked.Location.X}");
         }
+    }
+
+    [RequiresSumoFact]
+    public void ASessionThatFailsMidRunStillGivesTheWorldBackAsItFoundIt()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld();
+        EpisodeSettings before = carla.Settings;
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+
+        SumoDriveSession session = SumoDriveSession.Start(options);
+        Assert.True(carla.Settings.SynchronousMode);
+
+        try
+        {
+            // Run far enough in that the pool holds bodies, then drop the connection under it.
+            for (int step = 0; step < 60 && session.Advance(); step++)
+            {
+            }
+
+            Assert.NotEmpty(carla.Spawned);
+            carla.ThrowOnTick = new IOException("the connection to the simulator was dropped");
+            for (int step = 0; step < 400 && session.Advance(); step++)
+            {
+            }
+
+            Assert.Fail("the run should have failed on the dropped connection");
+        }
+        catch (IOException)
+        {
+            // What an operator's harness does next, and the only thing it can do.
+            session.Dispose();
+        }
+
+        // The world is asynchronous again, and every body the session spawned is gone. A session
+        // that failed must not leave an editor waiting for a tick from a process that has stopped.
+        Assert.Equal(before, carla.Settings);
+        Assert.False(carla.Settings.SynchronousMode);
+        Assert.All(carla.Batches[^1], command => Assert.IsType<DestroyActorCommand>(command));
+    }
+
+    [RequiresSumoFact]
+    public void ASessionThatNeverStartsLeavesTheWorldAsItFoundIt()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld();
+        EpisodeSettings before = carla.Settings;
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+
+        // Something else holds the world's population, which is refused after the session has
+        // already taken the world's clock.
+        using PopulationLease ambient = WorldDriveAuthority.ForWorld(options.WorldKey)
+            .Acquire(PopulationMode.TrafficManagerAmbient, "TrafficController on the same world");
+
+        Assert.Throws<PopulationAuthorityHeldException>(() => SumoDriveSession.Start(options));
+        Assert.Equal(before, carla.Settings);
     }
 
     [RequiresSumoFact]

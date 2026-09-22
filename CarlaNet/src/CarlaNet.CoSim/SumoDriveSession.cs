@@ -37,6 +37,7 @@ public sealed class SumoDriveSession : IDisposable
     private readonly LaneArcInterpolator _interpolator;
     private readonly SumoRoadNetwork _network;
     private readonly PopulationLease _lease;
+    private readonly WorldSettingsLease? _settings;
     private readonly VehicleBodyPool? _pool;
     private readonly Func<bool> _tickWorld;
     private readonly List<Command> _batch = [];
@@ -58,12 +59,14 @@ public sealed class SumoDriveSession : IDisposable
                              GroundSurface ground,
                              VehicleCatalogue catalogue,
                              PopulationLease lease,
+                             WorldSettingsLease? settings,
                              VehicleBodyPool? pool)
     {
         _options = options;
         _sumo = sumo;
         _network = network;
         _lease = lease;
+        _settings = settings;
         _pool = pool;
         _tickWorld = options.World is { } world ? world.Tick : options.TickWorld ?? (() => true);
         _population = new SubscribedPopulation(sumo.TraCI);
@@ -128,14 +131,24 @@ public sealed class SumoDriveSession : IDisposable
                 Output = options.SumoOutput ?? (_ => { }),
             });
 
+        WorldSettingsLease? settings = null;
         try
         {
-            CoSimClock clock = CoSimClock.ForSession(sumo.StepLength, options.WorldDeltaSeconds,
-                                                     options.CaptureRateHz,
-                                                     options.WorldIsSynchronous);
-            RequireTheWorldSNetwork(manifest, network, options);
-
             RequireOneWayToAdvanceTheWorld(options);
+
+            // Take the world's clock before anything else is checked against it: the settings the
+            // session validates its own against have to be the ones the world is holding, not the
+            // ones the caller asked for.
+            settings = options.World is { } claimed
+                ? WorldSettingsLease.Take(claimed, options.WorldDeltaSeconds)
+                : null;
+
+            CoSimClock clock = CoSimClock.ForSession(
+                sumo.StepLength,
+                settings is { } held ? held.FixedDeltaSeconds : options.WorldDeltaSeconds,
+                options.CaptureRateHz,
+                settings is { } asked ? asked.Applied.SynchronousMode : options.WorldIsSynchronous);
+            RequireTheWorldSNetwork(manifest, network, options);
 
             PopulationLease lease = WorldDriveAuthority.ForWorld(options.WorldKey)
                 .Acquire(PopulationMode.SumoDrivenPlayback, options.Holder);
@@ -146,7 +159,7 @@ public sealed class SumoDriveSession : IDisposable
                 : null;
 
             var session = new SumoDriveSession(options, sumo, clock, network, ground, catalogue,
-                                               lease, pool);
+                                               lease, settings, pool);
             try
             {
                 session.Prime();
@@ -161,6 +174,11 @@ public sealed class SumoDriveSession : IDisposable
         }
         catch
         {
+            // Everything this method changed, given back, in the reverse order it was taken. A
+            // session that failed to start must leave the world exactly as it found it: an operator
+            // whose editor is stranded in synchronous mode is waiting on a tick from a process that
+            // never started.
+            settings?.Dispose();
             sumo.Dispose();
             throw;
         }
@@ -237,6 +255,7 @@ public sealed class SumoDriveSession : IDisposable
             Report.SumoSecondsOnSteps = _sumoClock.Elapsed.TotalSeconds;
         });
         Attempt(failures, () => _pool?.DestroyAll());
+        Attempt(failures, () => _settings?.Dispose());
         Attempt(failures, _lease.Dispose);
         Attempt(failures, _sumo.Dispose);
 

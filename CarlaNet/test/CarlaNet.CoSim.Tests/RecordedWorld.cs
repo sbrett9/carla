@@ -62,6 +62,12 @@ internal sealed class RecordedWorld : ICarlaWorld
     public IEnumerable<IReadOnlyList<Command>> PoseBatches =>
         _batches.Where(batch => batch.Any(command => command is ApplyTransformCommand));
 
+    /// <summary>
+    /// Set to have the world record a settings write and not act on it, as a server that refuses
+    /// one does.
+    /// </summary>
+    public bool IgnoresSettingsWrites { get; set; }
+
     /// <inheritdoc/>
     public EpisodeSettings ReadSettings() => Settings;
 
@@ -69,7 +75,10 @@ internal sealed class RecordedWorld : ICarlaWorld
     public void WriteSettings(EpisodeSettings settings)
     {
         SettingsWrites.Add(settings);
-        Settings = settings;
+        if (!IgnoresSettingsWrites)
+        {
+            Settings = settings;
+        }
     }
 
     /// <inheritdoc/>
