@@ -25,17 +25,25 @@ public sealed record SumoDriveSessionOptions(
     string WorldKey,
     IRenderSetPolicy RenderSet)
 {
-    /// <summary>The CARLA world's fixed delta.</summary>
+    /// <summary>
+    /// The fixed delta the world ticks at: what a session with a <see cref="World"/> sets it to,
+    /// and what one without takes on trust.
+    /// </summary>
     public double WorldDeltaSeconds { get; set; } = 0.05;
 
     /// <summary>Frames per simulated second a recorder would emit.</summary>
     public double CaptureRateHz { get; set; } = 2.0;
 
     /// <summary>
-    /// Whether the CARLA world advances only on a tick cue. False refuses the session, and the
-    /// refusal is not a formality: measured on this fork, a camera spawned into an asynchronous
-    /// world delivers no frames at all.
+    /// Whether the world advances only on a tick cue, for a session with no <see cref="World"/>.
+    /// False refuses the session, and the refusal is not a formality: measured on this fork, a
+    /// camera spawned into an asynchronous world delivers no frames at all.
     /// </summary>
+    /// <remarks>
+    /// Ignored where a world is given, because the session then puts that world into synchronous
+    /// mode itself and validates its clock against what the world reports back rather than against
+    /// what a caller declared. Two sources for one fact is how they come to disagree.
+    /// </remarks>
     public bool WorldIsSynchronous { get; set; } = true;
 
     /// <summary>

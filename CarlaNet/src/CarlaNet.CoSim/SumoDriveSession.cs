@@ -253,6 +253,11 @@ public sealed class SumoDriveSession : IDisposable
 
             Report.BridgeSecondsOnTicks = _bridgeClock.Elapsed.TotalSeconds;
             Report.SumoSecondsOnSteps = _sumoClock.Elapsed.TotalSeconds;
+            if (_pool is { } counted)
+            {
+                Report.BodiesSpawned = counted.Bodies.Count;
+                Report.BodyDeclines = counted.Exhaustions;
+            }
         });
         Attempt(failures, () => _pool?.DestroyAll());
         Attempt(failures, () => _settings?.Dispose());
