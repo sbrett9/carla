@@ -247,9 +247,9 @@ New `CarlaNet.CoSim` in C#, orchestrated from Python; one TraCI connection owned
 | ⚑ | **Subscription-based** state reading, including `VAR_SIGNALS` | Measured 14× cheaper than per-vehicle getters |
 | ⚑ | Pose conversion — Y negation, `carlaYaw = sumoAngle − 90`, bumper-to-centre from the catalogue; Z, pitch and roll from the drape, client-side with no RPC | The commanded-versus-applied divergence is a stated tolerance, so a conversion error shows up there rather than as plausible imagery with every box wrong by half a car |
 | ⚑ | **One-step lookahead and lane-geometry interpolation**, four cases: same lane, lane change, crossed edges, discontinuous | A vehicle tracks its lane through a junction rather than cutting the corner by 10.6 m |
-| | Render-set selector and actor pool, recording admission and release instants | |
-| | **Population-authority lease and the ambient lockout** | Starting ambient traffic while SUMO holds the lease fails the session start and names the holder |
-| | Log SUMO's decisions without applying them | The ghost tracks a world driven by something else within a stated tolerance |
+| ⚑ | Render-set selector and actor pool, recording admission and release instants | Each interval names the body that rendered it, so a track in the imagery resolves to one vehicle |
+| ⚑ | **Population-authority lease and the ambient lockout** | Starting ambient traffic while SUMO holds the lease fails the session start and names the holder |
+| ⚑ | Log SUMO's decisions without applying them | A session with no CARLA attached tracks a world driven by something else within a stated tolerance |
 
 ---
 
@@ -257,7 +257,11 @@ New `CarlaNet.CoSim` in C#, orchestrated from Python; one TraCI connection owned
 
 | ⚑ | Item | Notes |
 |---|---|---|
-| ⚑ | Batched pose application — one `apply_batch` per tick, no variable tail | All 22 command types supported; the .NET traffic manager already does exactly this |
+| ⚑ | Batched pose application — one `apply_batch` per tick, no variable tail | All 22 command types supported; the .NET traffic manager already does exactly this. Carries `ApplyTransform` only: the `ApplyTargetVelocity` D3.5 specifies goes in when the engine change beside it lands, since on a non-simulating body it writes a physics body the getter will not read and the engine logs the call as invalid |
+| ⚑ | **Spawn from the catalogue, physics and gravity off.** A vType naming no measured blueprint is never rendered and never substituted | The pool grows to demand; every body is spawned once at its own parking slot and destroyed only at the session's end |
+| ⚑ | **The commanded-versus-applied divergence, per vehicle per tick** | Free: the world observer streams every actor's transform every tick. Position in metres and the three angles as shortest arcs, with the worst named by vehicle and instant |
+| ⚑ | **The pitch and roll signs** | Settled from `Math::GetForwardVector` / `GetRightVector` and the `FRotator` conversion; both were inverted. The visual confirmation is still owed |
+| ⚑ | **The world's clock, taken and given back.** Synchronous mode at a fixed delta, read back to confirm the world took it, restored on every exit path including a failure | A camera in an asynchronous world delivers no frames at all. A previous run left an editor stranded in synchronous mode; restoration is now a property of the lease rather than a step at the end of a good run |
 | ⚑ | **Bind the sun per window.** One write after the SUMO fast-forward and before the first tick, of the civil instant at `window.begin − prewarm`; `set_time_advance` after the clock is set | Without it, illumination depends on session history — a loaded world inherits the previous session's sun |
 | ⚑ | **The per-tick solar audit**, free from the observer cache | Declared civil time against observed sun; disagreement is a fault, never a silent correction |
 | ⚑ | **Engine: velocity for a pose-applied body.** `GetComponentVelocity` reads the physics body only when simulating and otherwise returns a field ChaosVehicles never writes | An engine change; a rebuild is not a cost. Kinematic truth comes from SUMO regardless — the fix makes the body agree with the record |

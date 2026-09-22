@@ -8,6 +8,7 @@
     <ProjectReference Include="..\CarlaNet.Map\CarlaNet.Map.csproj" />
     <ProjectReference Include="..\CarlaNet.TrafficManager\CarlaNet.TrafficManager.csproj" />
     <ProjectReference Include="..\CarlaNet.Scenario\CarlaNet.Scenario.csproj" />
+    <ProjectReference Include="..\CarlaNet.CoSim\CarlaNet.CoSim.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
