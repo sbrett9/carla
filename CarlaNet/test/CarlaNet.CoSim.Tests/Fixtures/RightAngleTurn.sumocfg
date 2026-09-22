@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The cross, with the four vehicles of RightAngleTurn.rou.xml on it. The step length matches the
+     CARLA fixed delta the bridge ticks at, so the clock's ratio is one and a test of the
+     interpolation has to subsample this run rather than rely on the step being coarse. -->
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
+    <input>
+        <net-file value="RightAngleTurn.net.xml"/>
+        <route-files value="RightAngleTurn.rou.xml"/>
+    </input>
+    <time>
+        <begin value="0"/>
+        <end value="3600"/>
+        <step-length value="0.05"/>
+    </time>
+    <processing>
+        <!-- Fixed so the tests see the same vehicle states on every run. -->
+        <seed value="42"/>
+        <!-- A teleport is a vehicle jumping position, which no interpolation can render honestly,
+             so it is forbidden here exactly as a capture scenario forbids it. -->
+        <time-to-teleport value="-1"/>
+    </processing>
+    <report>
+        <no-step-log value="true"/>
+    </report>
+</configuration>

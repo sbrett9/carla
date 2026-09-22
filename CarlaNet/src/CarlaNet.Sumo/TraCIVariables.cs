@@ -34,6 +34,17 @@ public static class TraCIVariables
     /// <summary>The lane the vehicle is on, as <c>edge_index</c>.</summary>
     public const int LaneId = TraCIConstants.VAR_LANE_ID;
 
+    /// <summary>
+    /// How far along its lane the vehicle's front bumper is, in metres from the lane's start.
+    /// </summary>
+    /// <remarks>
+    /// Not in <see cref="VehicleState"/>, because nothing that reads a vehicle's state needs it and
+    /// every subscribed variable is charged to every step. A bridge that interpolates between two
+    /// SUMO frames along the lane's own polyline does need it -- it is the parameter the polyline is
+    /// evaluated at -- and subscribes it on top of the set below.
+    /// </remarks>
+    public const int LanePosition = TraCIConstants.VAR_LANEPOSITION;
+
     /// <summary>The vehicle type identifier, which a catalogue maps to a renderable blueprint.</summary>
     public const int TypeId = TraCIConstants.VAR_TYPE;
 

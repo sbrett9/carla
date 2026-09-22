@@ -86,5 +86,12 @@ public sealed class TraCISubscriptionResults
     }
 
     /// <summary>Release the storage held for an object that will not be seen again.</summary>
-    internal void Forget(string objectId) => _byObject.Remove(objectId);
+    /// <remarks>
+    /// Public because the store is, and because a caller driving subscriptions through
+    /// <see cref="TraCIConnection.Subscribe"/> directly -- which is how a subscription set that is
+    /// not one fixed variable list is expressed -- has no other way to release an object's storage.
+    /// Calling it for an object still in the simulation loses the last step's values for it and
+    /// nothing else; the subscription itself is SUMO's and is untouched.
+    /// </remarks>
+    public void Forget(string objectId) => _byObject.Remove(objectId);
 }

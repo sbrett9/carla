@@ -224,6 +224,44 @@ public sealed class TraCIConnection : IDisposable
     }
 
     /// <summary>
+    /// Read one of an object's named parameters -- the <c>&lt;param key=… value=…/&gt;</c> entries a
+    /// scenario writes on a vehicle, a vehicle type, an edge or a lane.
+    /// </summary>
+    /// <param name="getCommandId">The domain's get command, such as
+    /// <see cref="TraCIConstants.CMD_GET_VEHICLETYPE_VARIABLE"/>.</param>
+    /// <param name="objectId">Which object.</param>
+    /// <param name="key">The parameter's key. An unset key answers with an empty string.</param>
+    /// <remarks>
+    /// The only get in the protocol that carries a payload: the key rides behind the object id as a
+    /// typed string. It is how a scenario says something SUMO itself does not model -- which
+    /// rendered body a vehicle type stands for, for instance -- and it cannot be subscribed, so a
+    /// caller that needs one per type asks once and keeps the answer.
+    /// </remarks>
+    public string GetParameter(int getCommandId, string objectId, string key)
+    {
+        ArgumentNullException.ThrowIfNull(objectId);
+        ArgumentNullException.ThrowIfNull(key);
+
+        _writer.BeginCommand(getCommandId, TraCIConstants.VAR_PARAMETER, objectId);
+        _writer.WriteString(key);
+        TraCIReader reader = Exchange(getCommandId);
+        reader.ReadLength();
+        int response = reader.ReadUnsignedByte();
+        int returnedVariable = reader.ReadUnsignedByte();
+        string returnedObject = reader.ReadString();
+        if (response - getCommandId != ResponseOffset
+            || returnedVariable != TraCIConstants.VAR_PARAMETER
+            || returnedObject != objectId)
+        {
+            throw new FatalTraCIError(
+                $"SUMO answered parameter '{key}' of 0x{getCommandId:x2} '{objectId}' with "
+                + $"0x{response:x2}/0x{returnedVariable:x2} for '{returnedObject}'.");
+        }
+
+        return reader.ReadTypedValue(TraCIConstants.VAR_PARAMETER).AsString;
+    }
+
+    /// <summary>
     /// Begin a command that changes something, returning the writer its payload is appended to.
     /// The command goes out when <see cref="SendPreparedCommand"/> is called.
     /// </summary>

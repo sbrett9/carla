@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Three vehicles over the cross, one for each of the interpolation cases that has geometry in it.
+
+     `turner` crosses the junction at speed and is the case the corner-cut measurement is about.
+     `changer` departs in the right-hand lane with a route that leaves by the left, so it has to
+     change lanes on the approach. `goer` runs straight through.
+
+     The types are the catalogue's business, not the network's: `measured_truck` names a CARLA
+     blueprint the vehicle catalogue holds a measured body for, and `unmeasured` deliberately names
+     none, so a run exercises both the pose conversion and its refusal. -->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+    <vType id="measured_truck" vClass="truck" length="7.0184" width="2.5074" maxSpeed="30.00"
+           accel="2.60" decel="4.50" sigma="0" tau="1.0">
+        <param key="carla:blueprint" value="vehicle.fuso.mitsubishi"/>
+    </vType>
+    <vType id="unmeasured" vClass="passenger" length="4.60" maxSpeed="30.00"
+           accel="2.60" decel="4.50" sigma="0" tau="1.0"/>
+
+    <route id="right" edges="approach turn_east"/>
+    <route id="left" edges="approach turn_west"/>
+    <route id="straight" edges="approach ahead"/>
+
+    <vehicle id="turner" type="measured_truck" route="right" depart="0.00" departLane="0"
+             departSpeed="max"/>
+    <vehicle id="goer" type="measured_truck" route="straight" depart="2.00" departLane="1"
+             departSpeed="max"/>
+    <vehicle id="changer" type="measured_truck" route="left" depart="6.00" departLane="0"
+             departSpeed="max"/>
+    <vehicle id="unrenderable" type="unmeasured" route="straight" depart="10.00" departLane="1"
+             departSpeed="max"/>
+</routes>
