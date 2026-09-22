@@ -102,6 +102,42 @@ public sealed class CoSimRunReport
     /// <summary>Commands the server answered with an error.</summary>
     public long BatchFailures { get; internal set; }
 
+    /// <summary>Commanded-against-applied comparisons taken, one per rendered vehicle per tick.</summary>
+    public long DivergenceSamples { get; private set; }
+
+    /// <summary>
+    /// Vehicle-ticks whose pose was written and whose body the world reported nothing for.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from a divergence of zero and from one of anything else. A body nothing reports is a
+    /// body whose pose nobody has checked, and a run in which that is most of them has measured
+    /// nothing while appearing to measure everything.
+    /// </remarks>
+    public long VehicleTicksWithNoReadBack { get; internal set; }
+
+    /// <summary>The largest separation between a commanded position and the applied one, metres.</summary>
+    public double WorstPositionDivergenceMetres { get; private set; }
+
+    /// <summary>The mean of the same, metres.</summary>
+    public double MeanPositionDivergenceMetres =>
+        DivergenceSamples == 0 ? 0.0 : _positionDivergenceTotal / DivergenceSamples;
+
+    /// <summary>The largest shortest-arc separation in yaw, degrees.</summary>
+    public double WorstYawDivergenceDegrees { get; private set; }
+
+    /// <summary>The largest shortest-arc separation in pitch, degrees.</summary>
+    public double WorstPitchDivergenceDegrees { get; private set; }
+
+    /// <summary>The largest shortest-arc separation in roll, degrees.</summary>
+    public double WorstRollDivergenceDegrees { get; private set; }
+
+    /// <summary>The vehicle and tick the largest position separation was measured on.</summary>
+    /// <remarks>
+    /// The worst figure on its own says how bad the run is; the vehicle and the instant say where to
+    /// look, which is the next question every time.
+    /// </remarks>
+    public PoseDivergence? WorstDivergence { get; private set; }
+
     /// <summary>The first few command failures, as the server described them.</summary>
     /// <remarks>
     /// A count says how much of the imagery is wrong; the messages say what about it. Kept to a
@@ -150,6 +186,7 @@ public sealed class CoSimRunReport
 
     private readonly List<string> _batchFailures = [];
     private readonly List<string> _discontinuities = [];
+    private double _positionDivergenceTotal;
     private double _laneGeometryTotal;
 
     internal void SampleDiscontinuity(in CoSimVehicleFrame from,
@@ -168,6 +205,21 @@ public sealed class CoSimRunReport
             $"{from.Id}: {from.LaneId}@{from.LanePositionMetres:0.00} -> "
             + $"{to.LaneId}@{to.LanePositionMetres:0.00}, {distance}, "
             + $"speed {from.SpeedMetresPerSecond:0.0} to {to.SpeedMetresPerSecond:0.0} m/s");
+    }
+
+    internal void AddDivergence(in PoseDivergence divergence)
+    {
+        DivergenceSamples++;
+        _positionDivergenceTotal += divergence.PositionMetres;
+        if (divergence.PositionMetres > WorstPositionDivergenceMetres || WorstDivergence is null)
+        {
+            WorstPositionDivergenceMetres = divergence.PositionMetres;
+            WorstDivergence = divergence;
+        }
+
+        WorstYawDivergenceDegrees = Math.Max(WorstYawDivergenceDegrees, divergence.YawDegrees);
+        WorstPitchDivergenceDegrees = Math.Max(WorstPitchDivergenceDegrees, divergence.PitchDegrees);
+        WorstRollDivergenceDegrees = Math.Max(WorstRollDivergenceDegrees, divergence.RollDegrees);
     }
 
     internal void SampleBatchFailure(string? message)
@@ -235,6 +287,26 @@ public sealed class CoSimRunReport
         foreach ((UnrenderableReason reason, long count) in _refusedTypes.OrderBy(entry => entry.Key))
         {
             text.AppendLine($"  refused {reason,-12} {count} type(s)");
+        }
+
+        if (DivergenceSamples > 0 || VehicleTicksWithNoReadBack > 0)
+        {
+            text.AppendLine($"divergence         worst {WorstPositionDivergenceMetres:0.000000} m, "
+                            + $"mean {MeanPositionDivergenceMetres:0.000000} m over "
+                            + $"{DivergenceSamples} vehicle-ticks");
+            text.AppendLine($"  worst rotation   yaw {WorstYawDivergenceDegrees:0.0000} deg, "
+                            + $"pitch {WorstPitchDivergenceDegrees:0.0000} deg, "
+                            + $"roll {WorstRollDivergenceDegrees:0.0000} deg");
+            if (WorstDivergence is { } worst)
+            {
+                text.AppendLine($"  worst on         {worst.VehicleId} as actor {worst.Actor} at "
+                                + $"tick {worst.TickIndex} ({worst.SimulatedTimeSeconds:0.00} s)");
+            }
+
+            if (VehicleTicksWithNoReadBack > 0)
+            {
+                text.AppendLine($"  not reported     {VehicleTicksWithNoReadBack} vehicle-ticks");
+            }
         }
 
         text.AppendLine($"bumper residual    worst {WorstBumperResidualMetres:0.000000000} m");

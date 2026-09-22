@@ -41,6 +41,7 @@ public sealed class SumoDriveSession : IDisposable
     private readonly Func<bool> _tickWorld;
     private readonly List<Command> _batch = [];
     private readonly List<Command> _parked = [];
+    private readonly List<(string VehicleId, ActorId Actor, VehiclePose Pose)> _commanded = [];
     private readonly Dictionary<string, (double X, double Y)> _positions = [];
     private readonly Dictionary<string, CoSimVehicleFrame> _previous = [];
     private readonly Dictionary<string, CoSimVehicleFrame> _next = [];
@@ -192,6 +193,7 @@ public sealed class SumoDriveSession : IDisposable
                     + "ticking while SUMO keeps stepping renders a timeline nothing simulated.");
             }
 
+            MeasureDivergence();
             _tickIndex++;
             Report.Ticks++;
             RenderedTimeSeconds += Clock.WorldDeltaSeconds;
@@ -296,6 +298,7 @@ public sealed class SumoDriveSession : IDisposable
         _batch.Clear();
         _batch.AddRange(_parked);
         _parked.Clear();
+        _commanded.Clear();
 
         foreach (string vehicleId in _renderSet.RenderedVehicleIds)
         {
@@ -347,6 +350,7 @@ public sealed class SumoDriveSession : IDisposable
                 {
                     actor = body.Actor;
                     _batch.Add(new ApplyTransformCommand(actor, TransformOf(applied)));
+                    _commanded.Add((vehicleId, actor, applied));
                 }
                 else
                 {
@@ -426,6 +430,40 @@ public sealed class SumoDriveSession : IDisposable
             {
                 Report.SampleBatchFailure(response.Error);
             }
+        }
+    }
+
+    /// <summary>
+    /// Compare every pose written this tick against what the world says the body became.
+    /// </summary>
+    /// <remarks>
+    /// <para>Taken after the tick, because the world observer reports the state of a frame once that
+    /// frame exists, and the pose was written for the frame the tick just produced.</para>
+    ///
+    /// <para>Free: the observer streams every actor's transform every tick whether or not anything
+    /// reads it, so this is an array read and a subtraction per rendered vehicle. That is what makes
+    /// it affordable per vehicle per tick rather than as a sample, and being per vehicle per tick is
+    /// what lets a residual be attributed to a vehicle rather than to the run.</para>
+    /// </remarks>
+    private void MeasureDivergence()
+    {
+        if (_options.World is not { } world)
+        {
+            return;
+        }
+
+        foreach ((string vehicleId, ActorId actor, VehiclePose pose) in _commanded)
+        {
+            if (world.ObservedTransform(actor) is not { } observed)
+            {
+                Report.VehicleTicksWithNoReadBack++;
+                continue;
+            }
+
+            PoseDivergence divergence = PoseDivergence.Between(
+                _tickIndex, RenderedTimeSeconds, vehicleId, actor, pose, observed);
+            Report.AddDivergence(divergence);
+            _options.OnDivergence?.Invoke(divergence);
         }
     }
 

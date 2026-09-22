@@ -100,6 +100,16 @@ public sealed record SumoDriveSessionOptions(
     /// <summary>Where a completed render-set interval goes.</summary>
     public Action<RenderedVehicleInterval>? OnRelease { get; set; }
 
+    /// <summary>
+    /// Where each commanded-against-applied comparison goes, one per rendered vehicle per tick.
+    /// </summary>
+    /// <remarks>
+    /// Handed out rather than accumulated, like the poses: a capture run produces one of these for
+    /// every vehicle on every tick, and a list of all of them is a run-length leak on the tick
+    /// thread. The summary a run needs is on the report either way.
+    /// </remarks>
+    public Action<PoseDivergence>? OnDivergence { get; set; }
+
     /// <summary>Where SUMO's own console output goes.</summary>
     public Action<string>? SumoOutput { get; set; }
 }
