@@ -2,6 +2,8 @@ using System.Diagnostics;
 using CarlaNet.Map.WorldPackage;
 using CarlaNet.Sumo;
 
+using ActorId = uint;
+
 namespace CarlaNet.CoSim;
 
 /// <summary>
@@ -33,6 +35,8 @@ public sealed class SumoDriveSession : IDisposable
     private readonly LaneArcInterpolator _interpolator;
     private readonly SumoRoadNetwork _network;
     private readonly PopulationLease _lease;
+    private readonly VehicleBodyPool? _pool;
+    private readonly Func<bool> _tickWorld;
     private readonly Dictionary<string, (double X, double Y)> _positions = [];
     private readonly Dictionary<string, CoSimVehicleFrame> _previous = [];
     private readonly Dictionary<string, CoSimVehicleFrame> _next = [];
@@ -48,14 +52,17 @@ public sealed class SumoDriveSession : IDisposable
                              SumoRoadNetwork network,
                              GroundSurface ground,
                              VehicleCatalogue catalogue,
-                             PopulationLease lease)
+                             PopulationLease lease,
+                             VehicleBodyPool? pool)
     {
         _options = options;
         _sumo = sumo;
         _network = network;
         _lease = lease;
+        _pool = pool;
+        _tickWorld = options.World is { } world ? world.Tick : options.TickWorld ?? (() => true);
         _population = new SubscribedPopulation(sumo.TraCI);
-        _renderSet = new RenderSetManager(options.RenderSet, options.OnRelease);
+        _renderSet = new RenderSetManager(options.RenderSet, Release);
         _binder = new VehicleTypeBinder(sumo.TraCI, catalogue);
         _converter = new PoseConverter(ground, options.MeasuredSeatHeights);
         _interpolator = new LaneArcInterpolator(network);
@@ -123,10 +130,18 @@ public sealed class SumoDriveSession : IDisposable
                                                      options.WorldIsSynchronous);
             RequireTheWorldSNetwork(manifest, network, options);
 
+            RequireOneWayToAdvanceTheWorld(options);
+
             PopulationLease lease = WorldDriveAuthority.ForWorld(options.WorldKey)
                 .Acquire(PopulationMode.SumoDrivenPlayback, options.Holder);
 
-            var session = new SumoDriveSession(options, sumo, clock, network, ground, catalogue, lease);
+            VehicleBodyPool? pool = options.World is { } world
+                ? new VehicleBodyPool(world, VehicleParking.BeyondTheSurface(ground),
+                                      options.MaximumBodies)
+                : null;
+
+            var session = new SumoDriveSession(options, sumo, clock, network, ground, catalogue,
+                                               lease, pool);
             try
             {
                 session.Prime();
@@ -134,6 +149,7 @@ public sealed class SumoDriveSession : IDisposable
             }
             catch
             {
+                pool?.DestroyAll();
                 lease.Dispose();
                 throw;
             }
@@ -164,7 +180,7 @@ public sealed class SumoDriveSession : IDisposable
             ComputePoses(fraction);
             _bridgeClock.Stop();
 
-            if (_options.TickWorld is { } tickWorld && !tickWorld())
+            if (!_tickWorld())
             {
                 throw new CoSimSessionRefusedException(
                     $"The CARLA world produced no frame for tick {_tickIndex}. A world that stops "
@@ -182,7 +198,15 @@ public sealed class SumoDriveSession : IDisposable
         return more;
     }
 
-    /// <summary>Close the open intervals, give back the lease, and end the simulation.</summary>
+    /// <summary>
+    /// Close the open intervals, give back every body, give back the lease, and end the simulation.
+    /// </summary>
+    /// <remarks>
+    /// Every step runs whatever the ones before it did. A session is disposed on its failure paths
+    /// as well as its happy one, and a failure that skipped the rest of the shutdown would leave the
+    /// operator's world holding the wreckage of the run that failed -- which is exactly the state
+    /// nobody is in a position to clean up, because whatever was driving it has just thrown.
+    /// </remarks>
     public void Dispose()
     {
         if (_disposed)
@@ -191,18 +215,30 @@ public sealed class SumoDriveSession : IDisposable
         }
 
         _disposed = true;
-        _renderSet.CloseAll(RenderedTimeSeconds);
-        Report.Admissions = _renderSet.Admissions;
-        Report.CapacityDeclines = _renderSet.CapacityDeclines;
-        foreach (UnrenderableReason reason in _binder.RefusedTypes.Values)
+        List<Exception> failures = [];
+        Attempt(failures, () => _renderSet.CloseAll(RenderedTimeSeconds));
+        Attempt(failures, () =>
         {
-            Report.CountRefusedType(reason);
-        }
+            Report.Admissions = _renderSet.Admissions;
+            Report.CapacityDeclines = _renderSet.CapacityDeclines;
+            foreach (UnrenderableReason reason in _binder.RefusedTypes.Values)
+            {
+                Report.CountRefusedType(reason);
+            }
 
-        Report.BridgeSecondsOnTicks = _bridgeClock.Elapsed.TotalSeconds;
-        Report.SumoSecondsOnSteps = _sumoClock.Elapsed.TotalSeconds;
-        _lease.Dispose();
-        _sumo.Dispose();
+            Report.BridgeSecondsOnTicks = _bridgeClock.Elapsed.TotalSeconds;
+            Report.SumoSecondsOnSteps = _sumoClock.Elapsed.TotalSeconds;
+        });
+        Attempt(failures, () => _pool?.DestroyAll());
+        Attempt(failures, _lease.Dispose);
+        Attempt(failures, _sumo.Dispose);
+
+        if (failures.Count > 0)
+        {
+            throw new AggregateException(
+                "The session did not shut down cleanly. Every step was attempted; these are the "
+                + "ones that failed.", failures);
+        }
     }
 
     /// <summary>
@@ -293,9 +329,82 @@ public sealed class SumoDriveSession : IDisposable
                 Report.WorstBumperResidualMetres,
                 BumperResidual(applied, extent, state.X, state.Y));
 
+            ActorId actor = 0;
+            if (_pool is { } pool)
+            {
+                if (pool.TryCheckOut(vehicleId, extent.BlueprintId, out PooledBody body))
+                {
+                    actor = body.Actor;
+                }
+                else
+                {
+                    Report.PoseDeclinesForNoBody++;
+                }
+            }
+
             _options.OnPose?.Invoke(new CoSimPoseRecord(
-                _tickIndex, RenderedTimeSeconds, Clock.IsCaptureTick(_tickIndex), applied,
+                _tickIndex, RenderedTimeSeconds, Clock.IsCaptureTick(_tickIndex), actor, applied,
                 state.Case, state.X, state.Y, state.HeadingDegrees));
+        }
+
+        if (_pool is { } counted)
+        {
+            Report.BodiesSpawned = counted.Bodies.Count;
+            Report.BodyDeclines = counted.Exhaustions;
+        }
+    }
+
+    /// <summary>
+    /// A vehicle has left the render set: take its body back and pass the interval on with the
+    /// body named.
+    /// </summary>
+    /// <remarks>
+    /// The render set decides who is rendered and knows nothing about which body renders them, so
+    /// the two facts meet here and nowhere else. A consumer holding a track in the imagery has an
+    /// actor id and needs the vehicle; only the pair of instants tells it which of the succession of
+    /// vehicles that body carried was the one it is looking at.
+    /// </remarks>
+    private void Release(RenderedVehicleInterval interval)
+    {
+        ActorId actor = 0;
+        if (_pool is { } pool && pool.TryCheckIn(interval.VehicleId, out PooledBody body))
+        {
+            actor = body.Actor;
+        }
+
+        _options.OnRelease?.Invoke(interval with { Actor = actor });
+    }
+
+    private static void Attempt(List<Exception> failures, Action step)
+    {
+        try
+        {
+            step();
+        }
+        catch (Exception failure)
+        {
+            failures.Add(failure);
+        }
+    }
+
+    /// <summary>
+    /// Refuse a session given two ways to advance the world.
+    /// </summary>
+    /// <remarks>
+    /// A world and a tick delegate together is not an ambiguity to resolve in favour of one of them:
+    /// whichever the session picked, the caller believes the other is running, and the run that
+    /// results is a world ticked a different number of times from the timeline its poses were
+    /// computed for.
+    /// </remarks>
+    private static void RequireOneWayToAdvanceTheWorld(SumoDriveSessionOptions options)
+    {
+        if (options.World is not null && options.TickWorld is not null)
+        {
+            throw new CoSimSessionRefusedException(
+                "The session was given both a CARLA world and a tick delegate. It owns the advance "
+                + "of simulated time on both sides, so exactly one thing may advance the world: "
+                + "give the world to drive it, or the delegate to compute every pose and apply "
+                + "none of them.");
         }
     }
 

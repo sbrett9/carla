@@ -181,7 +181,9 @@ public sealed class RenderSetManager
             return;
         }
 
-        _onRelease?.Invoke(new RenderedVehicleInterval(vehicleId, admittedAt, simulatedTimeSeconds,
-                                                       reason));
+        // The actor is filled in by whoever holds the pool: this manager decides who is rendered and
+        // knows nothing about which body renders them.
+        _onRelease?.Invoke(new RenderedVehicleInterval(vehicleId, 0, admittedAt,
+                                                       simulatedTimeSeconds, reason));
     }
 }

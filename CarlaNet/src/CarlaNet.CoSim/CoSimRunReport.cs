@@ -70,6 +70,23 @@ public sealed class CoSimRunReport
     /// <summary>Admissions the render-set capacity declined, counted per step per vehicle.</summary>
     public long CapacityDeclines { get; internal set; }
 
+    /// <summary>CARLA actors the session owns, spawned once each and never during a tick.</summary>
+    public long BodiesSpawned { get; internal set; }
+
+    /// <summary>
+    /// Vehicle-ticks whose pose was computed and written to nothing, because every body of that
+    /// blueprint was lent out and the pool was at its ceiling.
+    /// </summary>
+    /// <remarks>
+    /// A budget decision rather than a fault, and counted rather than logged: it is the difference
+    /// between "the scene held what the render set admitted" and "the scene held what there were
+    /// bodies for", which nothing downstream can tell from the imagery.
+    /// </remarks>
+    public long PoseDeclinesForNoBody { get; internal set; }
+
+    /// <summary>How many times the pool had no body to lend.</summary>
+    public long BodyDeclines { get; internal set; }
+
     /// <summary>The largest and mean bumper round-trip residual, in metres.</summary>
     public double WorstBumperResidualMetres { get; internal set; }
 
@@ -169,6 +186,8 @@ public sealed class CoSimRunReport
         text.AppendLine($"  no ground        {PosesRefusedForMissingGround}");
         text.AppendLine($"  no measured body {VehicleTicksWithNoMeasuredBody} vehicle-ticks");
         text.AppendLine($"admissions         {Admissions}, capacity declines {CapacityDeclines}");
+        text.AppendLine($"bodies             {BodiesSpawned} spawned, {PoseDeclinesForNoBody} "
+                        + "vehicle-ticks with no body to write to");
         foreach ((LaneInterpolationCase which, long count) in _cases.OrderBy(entry => entry.Key))
         {
             text.AppendLine($"  {which,-26} {count}");

@@ -7,13 +7,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- The TraCI client this bridge reads SUMO through, and the world package it reads the road
-         network and the ground surface out of. Deliberately no reference to CarlaNet.Transport:
-         everything here is computed from a SUMO frame, a world package and a catalogue, so it
-         builds and is tested with no CARLA server anywhere. What the bridge needs from CARLA, the
-         world tick, arrives as a delegate the session is given. -->
+    <!-- The TraCI client this bridge reads SUMO through, the world package it reads the road network
+         and the ground surface out of, and the CARLA client it writes poses through.
+
+         The write side reaches CARLA through ICarlaWorld, which is six operations wide, so the
+         session and everything under it is exercised against a recording implementation with no
+         server anywhere. CarlaClientWorld is the only file in this assembly that names a
+         CarlaClient, and it is the only one a live run is needed to exercise. -->
     <ProjectReference Include="..\CarlaNet.Sumo\CarlaNet.Sumo.csproj" />
     <ProjectReference Include="..\CarlaNet.Map\CarlaNet.Map.csproj" />
+    <ProjectReference Include="..\CarlaNet.Transport\CarlaNet.Transport.csproj" />
   </ItemGroup>
 
   <ItemGroup>

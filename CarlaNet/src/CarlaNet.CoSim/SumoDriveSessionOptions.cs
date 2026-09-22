@@ -39,12 +39,35 @@ public sealed record SumoDriveSessionOptions(
     public bool WorldIsSynchronous { get; set; } = true;
 
     /// <summary>
+    /// The CARLA world the session drives: where the bodies are spawned, the poses written and the
+    /// ticks cued.
+    /// </summary>
+    /// <remarks>
+    /// Absent, the session computes every pose and applies none of them, which is what established
+    /// the pose conversion before anything moved and stays the way to check it again. A session with
+    /// no world still owns the advance of simulated time on both sides -- it just advances a counter
+    /// instead of a world -- so what it exercises is the whole bridge bar the writing.
+    /// </remarks>
+    public ICarlaWorld? World { get; set; }
+
+    /// <summary>
+    /// How many CARLA actors the session may own at once, across every blueprint.
+    /// </summary>
+    /// <remarks>
+    /// The pool grows to demand and never past this. It is above the render-set capacity on purpose:
+    /// capacity bounds how many vehicles are rendered at one instant, while the pool also holds the
+    /// bodies of blueprints that were busy earlier and are parked now, and a mix that shifts over a
+    /// run needs both.
+    /// </remarks>
+    public int MaximumBodies { get; set; } = 192;
+
+    /// <summary>
     /// Advance the CARLA world by one tick, answering false where the tick did not produce a frame.
     /// </summary>
     /// <remarks>
-    /// A delegate rather than a client, because the only thing this stage needs from CARLA is the
-    /// advance of the world clock: the poses are computed from the world package and the catalogue,
-    /// and none of them is applied. A run with no CARLA at all supplies one that counts.
+    /// For a session with no <see cref="World"/>: a run with no CARLA at all supplies one that
+    /// counts. Giving both is refused, because a session with two ways to advance the world has two
+    /// clocks and no way to say which a frame belongs to.
     /// </remarks>
     public Func<bool>? TickWorld { get; set; }
 

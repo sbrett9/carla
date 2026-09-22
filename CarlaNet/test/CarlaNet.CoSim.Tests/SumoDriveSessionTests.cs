@@ -1,3 +1,4 @@
+using CarlaNet.Types.Rpc.Commands;
 using Xunit.Abstractions;
 
 namespace CarlaNet.CoSim.Tests;
@@ -153,10 +154,75 @@ public sealed class SumoDriveSessionTests
                     $"bumper residual {session.Report.WorstBumperResidualMetres}");
     }
 
+    [RequiresSumoFact]
+    public void AnAdmittedVehicleIsLentABodyAndGivesItBackWhenItLeaves()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld();
+        List<RenderedVehicleInterval> released = [];
+        List<CoSimPoseRecord> computed = [];
+        SumoDriveSessionOptions options = Options(world, computed, released, tick: null);
+        options.World = carla;
+
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            for (int step = 0; step < 400 && session.Advance(); step++)
+            {
+            }
+
+            _output.WriteLine(session.Report.ToString());
+            Assert.True(session.Report.BodiesSpawned > 0, "no body was ever lent");
+            Assert.Equal(0, session.Report.PoseDeclinesForNoBody);
+        }
+
+        // One blueprint in the scenario, so every body is one; and each is spawned once, never
+        // during a tick and never again.
+        Assert.All(carla.Spawned, blueprint => Assert.Equal("vehicle.fuso.mitsubishi", blueprint));
+
+        // Every vehicle that was rendered gave its body back, over an interval that runs forwards.
+        Assert.NotEmpty(released);
+        Assert.All(released, interval =>
+            Assert.True(interval.ReleasedAtSeconds >= interval.AdmittedAtSeconds,
+                        $"{interval.VehicleId} was released before it was admitted"));
+        Assert.All(released.Where(interval => interval.VehicleId != "unrenderable"),
+                   interval => Assert.NotEqual(0u, interval.Actor));
+
+        // And the vehicle whose type names no measured body was admitted to the render set, was
+        // never lent one, and is recorded as having held none. A body of some other shape would
+        // have been available and is never a substitute.
+        RenderedVehicleInterval unrenderable =
+            Assert.Single(released.Where(interval => interval.VehicleId == "unrenderable"));
+        Assert.Equal(0u, unrenderable.Actor);
+        Assert.DoesNotContain(computed, record => record.Pose.VehicleId == "unrenderable");
+
+        // And the poses name the body they were written to.
+        Assert.All(computed, record => Assert.NotEqual(0u, record.Actor));
+
+        // The session's end is the one moment a pooled actor is destroyed.
+        Assert.All(carla.Batches[^1], command => Assert.IsType<DestroyActorCommand>(command));
+        Assert.Equal(carla.Spawned.Count, carla.Batches[^1].Count);
+    }
+
+    [RequiresSumoFact]
+    public void ASessionGivenTwoWaysToAdvanceTheWorldIsRefused()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        SumoDriveSessionOptions options = Options(world, [], [], () => true);
+        options.World = new RecordedWorld();
+
+        CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+            () => SumoDriveSession.Start(options));
+        Assert.Contains("both a CARLA world and a tick delegate", refused.Message);
+    }
+
     private static SumoDriveSessionOptions Options(SyntheticWorld world,
-                                               List<CoSimPoseRecord> computed,
-                                               List<RenderedVehicleInterval> released,
-                                               Func<bool> tick) =>
+                                                   List<CoSimPoseRecord> computed,
+                                                   List<RenderedVehicleInterval> released,
+                                                   Func<bool>? tick) =>
         new(CoSimFixtures.RightAngleTurnScenario,
             world.PackagePath,
             CoSimFixtures.VehicleCatalogue,
