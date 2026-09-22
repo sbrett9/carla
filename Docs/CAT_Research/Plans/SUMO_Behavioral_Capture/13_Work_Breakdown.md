@@ -17,6 +17,7 @@ are on the critical path.
 | 2026-09-21 | Netconvert flags unified on the world build; vocabulary layered into a closed core and open author terms. |
 | 2026-09-21 | Role and phase values are author space; only `subject` and `vacancy` are reserved. |
 | 2026-09-22 | Two-wheelers are outside the vehicle mapping contract; stage E states the boundary. |
+| 2026-09-22 | §13.4 states the two-script setup; stage D drops the completed retirement item. |
 
 ---
 
@@ -177,7 +178,6 @@ Already scouted; the build itself already compiles clean from the unmodified con
 |---|---|---|
 | ⚑ | Build and stage `sumo` and `duarouter` beside `netconvert`, plus a **named subset** of `data/` and `tools/` — `tools/traci`, `tools/sumolib`, `data/typemap`, `data/xsd`. Measured: the full copy is 89 MB to deliver the 3.2 MB anything here consumes, and `tools/contributed` alone is 47 MB of third-party sub-licences. `tools/traci` is also the reference `CarlaNet.Sumo` is ported from (`09` §3.4) | `sumo --version` runs from the **staged install**, not the build tree |
 | ⚑ | Re-key the idempotence guard to "is the whole required set staged" — not "is the newest there", since parallel builds have no dependable last-built file. **The guard is firing today**: `netconvert` is staged, so `sumo`, `duarouter` and the `data`/`tools` subsets are never built or staged | A returning developer cannot silently keep a half toolchain, and the check reports which members are missing |
-| ⚑ | **Retire `CarlaSetup.bat`** and repoint `Docs/build_windows_ue5.md` at `CarlaSetup.ps1` in the same commit (§13.4) | No documented entry point is left dangling, and the SUMO build block exists in two scripts rather than three |
 | | Set `SUMO_HOME` where the other tool paths are set. The build set needs no prerequisite `netconvert` does not already have on either platform, and the TraCI client needs none at all — but **a Linux prerequisite has two homes**, `InstallPrerequisites.sh` and `Util/Docker/Base.alma8.Dockerfile`, because CI runs `--skip-prerequisites` against a pre-built image (`09` §2.3, `D9.8`) | A clean clone and a clean CI container both build it |
 | | Bundle the toolchain and the new artifacts, both platforms. `CarlaNet.Sumo` needs no slot of its own — it is managed code and rides the `carlanet` wheel | The acceptance check passes from an installed distribution |
 | | **Acceptance check**, run rather than remembered | `sumo --version` from the staged install; a test steps an empty simulation over TraCI against a `sumo` it started; the version handshake refuses a mismatched install; `duarouter` validates a known route |
@@ -422,18 +422,17 @@ This is a **stage A item**, not a later tidy-up: [`07`](07_Scenario_Authoring.md
 the move happened, and every scenario authored before it lands is authored against an unversioned
 tool.
 
-### 13.4 `CarlaSetup.bat` is retired
+### 13.4 There are two setup scripts, and every build change lands in both
 
-The SUMO build-and-stage block exists in **three** scripts, not two: `CarlaSetup.ps1`,
-`CarlaSetup.sh`, and `CarlaSetup.bat`. The third is the pre-port original — `CarlaSetup.ps1` describes
-itself as a PowerShell port of it — and it has already drifted: it clones `SUMOLibraries` at HEAD with
-no tag where the PowerShell pins the version, which is the exact failure the PowerShell's own comment
-records. `Docs/build_windows_ue5.md` still directs a new developer to run it.
+Setup is `CarlaSetup.ps1` on Windows and `CarlaSetup.sh` on Linux, and `Docs/build_windows_ue5.md:20`
+names the PowerShell script as the Windows entry point. The charter's parity rule covers exactly that
+pair, and the SUMO build-and-stage block is duplicated once rather than twice.
 
-**It is retired rather than carried.** The fork has diverged far enough from upstream that maintaining
-a third copy of every build change buys nothing, and three copies are how the drift above happened.
-Retiring it means removing the script and repointing `Docs/build_windows_ue5.md` at `CarlaSetup.ps1`
-in the same commit, so no documented entry point is left dangling.
+A third copy is not carried, and the reason is concrete rather than tidiness: the fork has diverged
+far enough from upstream that every build change would have to be made three times, and an unpinned
+`SUMOLibraries` clone does not fail loudly — it silently produces a bundle whose layout SUMO 1.27.0's
+CMake cannot glob, which is why the pin and the explanation of what an unpinned clone costs live in
+one place (`CarlaSetup.ps1:614-623`).
 
 ### 13.5 The annotation vocabulary is a contract we carry, not one we write
 
