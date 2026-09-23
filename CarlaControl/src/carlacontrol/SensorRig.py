@@ -33,14 +33,18 @@ class SensorRig:
     # nothing at all. Ten metres of a range that is kilometres long, so it costs nothing real.
     SATURATION_MARGIN_M = 10.0
 
-    def __init__(self, world: carla.World, args):
+    def __init__(self, world: carla.World, args, client: carla.Client | None = None):
         """Initialize and spawn RGB and depth cameras.
 
         Args:
             world: CARLA world object
             args: Parsed arguments with x, y, z, width, height, fov, ev, asynchronous
+            client: The client the world came from. Needed to move the rig's cameras as one
+                batch, which is what keeps them at the same pose in the same frame; without it
+                they are moved one call each, and can be captured a frame apart.
         """
         self.world = world
+        self._client = client
         self.width = args.width
         self.height = args.height
         self.fov = args.fov
@@ -93,36 +97,64 @@ class SensorRig:
         self.spectator.set_transform(tf)
 
         self.logger.info(f"spawned RGB camera id={self.camera.id}, depth camera id={self.depth_cam.id}")
+        if self._client is None:
+            self.logger.warning(
+                "no client given: the rig's cameras will be moved one call each, so under a "
+                "free-running world a frame can be captured with them at different poses"
+            )
 
         # Set up listeners based on sync mode
         self._setup_listeners_internal()
 
     def set_transform(self, tf: carla.Transform) -> None:
-        """Update all camera transforms synchronously.
+        """Move every camera in the rig to one pose, together.
+
+        One batch is one game-thread task, so the RGB camera, the depth camera and the spectator
+        all take the new pose before the next frame is rendered. Moving them with a call each is
+        not the same thing: each call is its own round trip, and under a free-running world the
+        simulator renders between them, so a frame can be captured with the RGB camera at the new
+        pose and the depth camera still at the old one. The recorder then refuses to pair those
+        two captures -- correctly, since they were not taken from the same place -- and the
+        capture carries no occlusion. Measured on an orbiting camera over a hundred vehicles:
+        25 of 65 captures lost that way, every one a pose mismatch, none a missing or late depth
+        frame.
 
         Args:
-            tf: CARLA Transform object
+            tf: The pose for the whole rig
         """
+        if self._client is None:
+            self._set_transform_separately(tf)
+            return
+        try:
+            responses = self._client.apply_batch_sync([
+                carla.command.ApplyTransform(self.camera, tf),
+                carla.command.ApplyTransform(self.depth_cam, tf),
+                carla.command.ApplyTransform(self.spectator, tf),
+            ])
+        except Exception as e:
+            self.logger.warning(f"failed to move the rig: {e}")
+            return
+        for which, response in zip(("RGB camera", "depth camera", "spectator"), responses):
+            if response.has_error:
+                self.logger.warning(f"failed to move the {which}: {response.error}")
+
+    def set_pose(self, pose: Pose) -> None:
+        """Move every camera in the rig to one pose, together. See set_transform.
+
+        Args:
+            pose: Camera pose (6-DOF)
+        """
+        self.set_transform(pose.to_carla_transform())
+
+    def _set_transform_separately(self, tf: carla.Transform) -> None:
+        """Move the cameras one call each. Only for a rig built without a client: the calls are
+        separate round trips, so the cameras can end up a frame apart -- see set_transform."""
         try:
             self.camera.set_transform(tf)
             self.depth_cam.set_transform(tf)
             self.spectator.set_transform(tf)
         except Exception as e:
             self.logger.warning(f"failed to set transform: {e}")
-
-    def set_pose(self, pose: Pose) -> None:
-        """Update all camera transforms synchronously.
-
-        Args:
-            pose: Camera pose (6-DOF)
-        """
-        try:
-            tf = pose.to_carla_transform()
-            self.camera.set_transform(tf)
-            self.depth_cam.set_transform(tf)
-            self.spectator.set_transform(tf)
-        except Exception as e:
-            self.logger.warning(f"failed to set pose: {e}")
 
     def _setup_listeners_internal(self) -> None:
         """Attach sensor listeners based on execution mode (determined at init)."""
