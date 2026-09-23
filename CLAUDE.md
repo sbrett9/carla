@@ -39,3 +39,4 @@ conversation that produced it**. State *what changed and why*, factually.
 (Forward-only — existing history is grandfathered, don't rewrite it.)
 
 @AGENTS.md
+@.claude/CLAUDE.md

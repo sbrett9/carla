@@ -175,7 +175,7 @@ def main() -> int:
 
     # Sensors: RGB (display) + depth (Ctrl+LMB picking). Listeners are configured automatically
     # based on args.asynchronous: sync mode uses queues, async mode stores frames directly.
-    sensors = SensorRig(world=world, args=args)
+    sensors = SensorRig(world=world, args=args, client=client)
 
     # PyGameSensorController to move the sensor rig around the world
     pygame_controller = PyGameSensorController(
