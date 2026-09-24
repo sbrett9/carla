@@ -23,6 +23,41 @@ public class CotWriterTests
         finally { File.Delete(path); }
     }
 
+    private static string WriteWith(CaptureIdentity capture, params VehicleTelemetry[] records)
+    {
+        string path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".xml");
+        try
+        {
+            CotWriter.WriteToFile(path, new DateTime(2026, 7, 10, 18, 0, 0, DateTimeKind.Utc), records,
+                                  capture: capture);
+            return File.ReadAllText(path);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void The_Frame_The_Truth_Came_From_Is_Named_Beside_The_Frame_Of_The_Pixels()
+    {
+        // The image's own frame and the frame its vehicle records describe are normally the same; when
+        // the client no longer held the image's frame the sidecar must say which frame it got instead.
+        string exact = WriteWith(new CaptureIdentity(260042, 310.21974, "run-1", null, 103, 260042), Saloon());
+        Assert.Contains("tick=\"260042\"", exact);
+        Assert.Contains("telemetry_tick=\"260042\"", exact);
+
+        string offset = WriteWith(new CaptureIdentity(260042, 310.21974, "run-1", null, 103, 260039), Saloon());
+        Assert.Contains("telemetry_tick=\"260039\"", offset);
+    }
+
+    [Fact]
+    public void A_Capture_Without_Truth_Names_No_Telemetry_Frame()
+    {
+        string xml = WriteWith(new CaptureIdentity(260042, 310.21974), Saloon());
+        Assert.Contains("tick=\"260042\"", xml);
+        Assert.DoesNotContain("telemetry_tick", xml);
+        Assert.DoesNotContain("telemetry_tick", new CaptureIdentity(1, 0.0).ToJson());
+        Assert.Contains("\"telemetry_tick\":5", new CaptureIdentity(7, 0.0, TelemetryTick: 5).ToJson());
+    }
+
     [Fact]
     public void Measured_Occlusion_Rides_In_The_Truth_Extras()
     {

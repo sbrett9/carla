@@ -44,11 +44,22 @@ public sealed class FrameRecorder : IDisposable
     private Transform? _prevSensorTf;
     private double _prevSensorSimTime = double.NegativeInfinity;
     private long _saved, _dropped;
+    private long _telemetryExact, _telemetryOffset, _telemetryWorstOffset;
 
     public long Saved => Interlocked.Read(ref _saved);
     public long Dropped => Interlocked.Read(ref _dropped);
     public bool HaveTelemetryOrigin => _haveOrigin;
     public string Directory => _dir;
+
+    /// <summary>Captures whose truth records came from the very frame that produced the pixels.</summary>
+    public long TelemetryTickExact => Interlocked.Read(ref _telemetryExact);
+
+    /// <summary>Captures whose truth records came from a neighbouring frame, because the client no longer
+    /// held the image's own frame when the image arrived. Each such sidecar says which frame it got.</summary>
+    public long TelemetryTickOffset => Interlocked.Read(ref _telemetryOffset);
+
+    /// <summary>The largest distance, in frames, between a capture's pixels and its truth records.</summary>
+    public long TelemetryTickWorstOffset => Interlocked.Read(ref _telemetryWorstOffset);
 
     /// <summary>Whether captures carry a per-vehicle occlusion measurement.</summary>
     public bool MeasuresOcclusion => _occlusion is not null;
@@ -141,11 +152,30 @@ public sealed class FrameRecorder : IDisposable
 
         var captured = DateTime.UtcNow;
         IReadOnlyList<VehicleTelemetry> recs = Array.Empty<VehicleTelemetry>();
+        ulong? telemetryTick = null;
         if (_haveOrigin)
         {
-            // Cache reads (transforms/velocities) are fresh for this frame; descriptions are cached, so
-            // this is fast and keeps the still and its truth labels paired.
-            try { recs = _telemetry.Compute(_origin); } catch { }
+            // The truth is read as of the frame named in this image's header, not as of whatever the
+            // observer delivered last: the image is read back from the GPU asynchronously and arrives on
+            // its own stream, so by now the newest snapshot is usually a tick or more past the pixels,
+            // and it can be behind them when the observer thread was held up. Descriptions are cached,
+            // so this is fast.
+            try
+            {
+                recs = _telemetry.Compute(_origin, frame.Header.Frame, out ulong served);
+                telemetryTick = served;
+                if (served == frame.Header.Frame)
+                    Interlocked.Increment(ref _telemetryExact);
+                else
+                {
+                    Interlocked.Increment(ref _telemetryOffset);
+                    long gap = (long)(served > frame.Header.Frame ? served - frame.Header.Frame : frame.Header.Frame - served);
+                    long worst;
+                    while (gap > (worst = Interlocked.Read(ref _telemetryWorstOffset))
+                           && Interlocked.CompareExchange(ref _telemetryWorstOffset, gap, worst) != worst) { }
+                }
+            }
+            catch { }
         }
 
         // How much of each vehicle this camera can actually see. Occlusion belongs to the
@@ -176,7 +206,7 @@ public sealed class FrameRecorder : IDisposable
         // Tick and simulation time come from the very frame that produced these pixels, so the still,
         // its truth sidecar and the simulation instant are bound together rather than correlated after
         // the fact by wall clock.
-        var capture = new CaptureIdentity(frame.Header.Frame, t, _runId, _scenarioId, _seed);
+        var capture = new CaptureIdentity(frame.Header.Frame, t, _runId, _scenarioId, _seed, telemetryTick);
 
         // RawBgra is already a private copy produced by Deserialize, so we can hand it to the worker
         // without copying again.

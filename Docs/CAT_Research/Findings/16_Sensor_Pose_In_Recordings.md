@@ -21,9 +21,14 @@ CarlaNet (C#) for performance, and the pure-Python path is obsolete.
 
 ## 2. Current state (the gap)
 
-- **Pixels ↔ vehicle truth ↔ sun** are already frame-coherent. In synchronous mode the world is frozen
-  between ticks, so the world-observer snapshot the telemetry is drawn from corresponds to the same tick
-  as the frame; the solar block rides in the same world-observer datagram.
+- **Pixels ↔ vehicle truth ↔ sun** are frame-coherent. The recorder reads the vehicle truth as of the
+  frame named in the image's own header: the client keeps a short per-frame history of world-observer
+  snapshots, and the sidecar's `telemetry_tick` names the frame the truth actually came from. Reading
+  the *newest* snapshot instead, as the recorder once did, paired each still with truth a tick or more
+  past its pixels, because an image is read back from the GPU asynchronously and reaches the client
+  after later snapshots have already replaced the cache; that held in synchronous mode as well, where
+  the next tick is cued as soon as the observer frame arrives, before the image does. The solar block
+  rides in the same world-observer datagram.
   ([FrameRecorder.OnFrame](../../../CarlaNet/src/CarlaNet.Recording/FrameRecorder.cs),
   [VehicleTelemetryService.Compute](../../../CarlaNet/src/CarlaNet.Recording/VehicleTelemetryService.cs)).
 - **What is written today:** the CoT XML holds `<events>` → one `<_solar>` + one `<event><point lat lon
@@ -63,7 +68,8 @@ full camera intrinsics ride in a custom `<_carla_intrinsics>` child (TAK ignores
 ### 4.1 CoT XML — an air-track `<event>`
 
 ```xml
-<events captured="2026-07-07T18:00:00.000Z" count="3" source="truth">
+<events captured="2026-07-07T18:00:00.000Z" count="3" source="truth"
+        tick="12345" sim_time_s="617.25" telemetry_tick="12345">
   <_solar .../>
   <event version="2.0" uid="CARLA-SENSOR-42" type="a-f-A-M-F-Q" how="m-g"
          time="2026-07-07T18:00:00.000Z" start="2026-07-07T18:00:00.000Z"
