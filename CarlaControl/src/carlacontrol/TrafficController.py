@@ -1032,6 +1032,7 @@ class TrafficController:
                 "entered": False,
                 "born": now,
                 "xy": (sx, sy),
+                "xy_at": now,
                 "spawn_xy": (sx, sy),
                 "routed": route is not None,
                 "bp": str(getattr(bp, "id", "?")),
@@ -1040,7 +1041,7 @@ class TrafficController:
                 "misses": 0,
                 "speed": 0.0,
                 # Last opacity the server acknowledged, so the reconcile can tell a real change
-                # from the same value being sent again. None until one has landed.
+                # from the same value being sent again. None until the server has acknowledged one.
                 "fade": spawn_hide,
             }
             overhang, _ = self.red_edge_deficit(sx, sy, syaw, ext, self.b)
@@ -1175,7 +1176,13 @@ class TrafficController:
             xy = rec["xy"]
             rec["xy"] = (loc.x, loc.y)
             dist = math.hypot(loc.x - xy[0], loc.y - xy[1]) if xy is not None else 0.0
-            rec["speed"] = dist / self.CHECK_S
+            # Over the time that actually passed since this vehicle was last sampled, not the nominal
+            # check interval: under load a pass takes several times CHECK_S, and dividing by the
+            # nominal value reported 22 m/s vehicles as 221 m/s.
+            elapsed = now - rec["xy_at"]
+            rec["xy_at"] = now
+            if elapsed > 1e-6:
+                rec["speed"] = dist / elapsed
 
             op = self.interior_opacity(loc.x, loc.y, yaw, rec["ext"][0], rec["ext"][1], b)
             if self.args.fade:

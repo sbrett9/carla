@@ -32,9 +32,25 @@ public sealed class VehicleTelemetryService
     /// the per-call RPC.</summary>
     public GeoLocation GetOrigin() => _client.GetCesiumOriginAsync().GetAwaiter().GetResult();
 
-    public IReadOnlyList<VehicleTelemetry> Compute(GeoLocation origin)
+    /// <summary>Truth for every vehicle as of the newest world-observer frame.</summary>
+    public IReadOnlyList<VehicleTelemetry> Compute(GeoLocation origin) => Compute(origin, null, out _);
+
+    /// <summary>
+    /// Truth for every vehicle as of <paramref name="frame"/>, for pairing with something produced at
+    /// that frame: a camera image carries its frame in its header, and the snapshot of that frame is
+    /// what its pixels show. Null asks for the newest frame instead. <paramref name="telemetryFrame"/>
+    /// is the frame the records actually describe: the one asked for whenever the client still holds
+    /// it, otherwise the nearest it does hold, so a caller can record what it got rather than assume.
+    /// </summary>
+    public IReadOnlyList<VehicleTelemetry> Compute(GeoLocation origin, ulong? frame, out ulong telemetryFrame)
     {
-        IReadOnlyList<ActorId> ids = _client.GetCachedActorIds();
+        IReadOnlyDictionary<ActorId, ActorSnapshot>? atFrame = null;
+        telemetryFrame = 0;
+        if (frame.HasValue)
+            atFrame = _client.GetSnapshotFrame(frame.Value, out telemetryFrame);
+        if (atFrame is null)
+            telemetryFrame = _client.LatestObservedFrame;
+        IReadOnlyList<ActorId> ids = atFrame is not null ? atFrame.Keys.ToArray() : _client.GetCachedActorIds();
 
         // Refresh descriptions only for actors we have not seen (RPC once per new actor, not per call).
         List<ActorId>? unknown = null;
@@ -72,7 +88,9 @@ public sealed class VehicleTelemetryService
             // so this gate is inert unless staging traffic is running.
             if (!_client.IsActorEstablished(id)) continue;
 
-            var snap = _client.GetActorSnapshot(id);
+            ActorSnapshot? snap = atFrame is not null
+                ? (atFrame.TryGetValue(id, out var held) ? held : null)
+                : _client.GetActorSnapshot(id);
             if (snap is null) continue;
             var loc = snap.Transform.Location;
             var vel = snap.Velocity;

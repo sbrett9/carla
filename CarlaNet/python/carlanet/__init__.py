@@ -2149,6 +2149,15 @@ class World:
         `.elapsed_seconds`, `.delta_seconds`, `.platform_timestamp` attributes.
         Returns an opaque id usable with `remove_on_tick`.
 
+        The callback runs on CarlaNet's tick dispatcher thread, never on the
+        world-observer thread. A Python callback has to take the interpreter
+        lock, and the main thread holds that lock for the whole of any blocking
+        call it makes into CarlaNet, so a callback invoked on the observer
+        thread stalled every later snapshot until the lock came free: the actor
+        state every reader in the process depends on froze for ticks at a time.
+        Dispatched, a slow callback delays only later callbacks. Ticks arrive in
+        order; the oldest are dropped if a few hundred pile up behind a stall.
+
         Requires the world observer subscription to be active (auto-started by
         Client.get_world()).
         """
@@ -2167,23 +2176,22 @@ class World:
                 traceback.print_exc()
 
         cs_action = Action[_CSTickTs](_handler)
-        # Use the C# event API — pythonnet maps += to add_OnTick.
-        self._client.add_OnTick(cs_action)
-        # Track for remove_on_tick. Use id() of cs_action — but pythonnet may
-        # produce a different wrapper each call, so we cache the delegate too.
+        handle = self._client.SubscribeTick(cs_action)
+        # Track for remove_on_tick. The delegate is kept alongside its
+        # subscription so it cannot be collected while CarlaNet still calls it.
         if not hasattr(self, "_tick_callbacks"):
             self._tick_callbacks = {}
         key = id(cs_action)
-        self._tick_callbacks[key] = cs_action
+        self._tick_callbacks[key] = (cs_action, handle)
         return key
 
     def remove_on_tick(self, callback_id):
         if not hasattr(self, "_tick_callbacks"):
             return
-        cs_action = self._tick_callbacks.pop(callback_id, None)
-        if cs_action is not None:
+        entry = self._tick_callbacks.pop(callback_id, None)
+        if entry is not None:
             try:
-                self._client.remove_OnTick(cs_action)
+                entry[1].Dispose()
             except Exception:
                 pass
 
