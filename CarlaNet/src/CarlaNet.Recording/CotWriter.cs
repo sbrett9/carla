@@ -41,6 +41,10 @@ public static class CotWriter
         {
             w.WriteAttributeString("tick", capture.Tick.ToString(CultureInfo.InvariantCulture));
             w.WriteAttributeString("sim_time_s", F(capture.SimTimeSeconds, "0.######"));
+            // The frame the vehicle records describe. Normally the same as tick; when it differs, the
+            // truth beside this still is from a neighbouring frame and this says which.
+            if (capture.TelemetryTick.HasValue)
+                w.WriteAttributeString("telemetry_tick", capture.TelemetryTick.Value.ToString(CultureInfo.InvariantCulture));
             if (!string.IsNullOrEmpty(capture.RunId)) w.WriteAttributeString("run_id", capture.RunId);
             if (!string.IsNullOrEmpty(capture.ScenarioId)) w.WriteAttributeString("scenario_id", capture.ScenarioId);
             if (capture.Seed.HasValue)

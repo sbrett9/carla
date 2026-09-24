@@ -158,10 +158,31 @@ class NativeRecorder:
             # encoder queue, and reading first would under-report a whole queue's worth of them.
             self.world.stop_recording()
             report = self.report()
-            note = self._occlusion_note()
+            note = self._occlusion_note() + self._pairing_note()
             self.recording = False
             self._handle = None
             self._log_report(report, note)
+
+    def _pairing_note(self) -> str:
+        """How many captures had their truth read from the very frame that produced the pixels."""
+        if self._handle is None:
+            return ""
+        try:
+            exact = int(self._handle.TelemetryTickExact)
+            offset = int(self._handle.TelemetryTickOffset)
+            worst = int(self._handle.TelemetryTickWorstOffset)
+        except Exception as e:
+            self.logger.debug(f"failed to read pairing counters: {e}")
+            return ""
+        if not exact and not offset:
+            return ""
+        if not offset:
+            return f"; truth paired to its own frame on all {exact}"
+        # A capture whose own frame was no longer held got the nearest frame still held, and its
+        # sidecar names that frame in telemetry_tick. This is the case to watch: it means images were
+        # arriving further behind the observer than the client keeps history for.
+        return (f"; truth paired to its own frame on {exact}, to a neighbouring frame on {offset} "
+                f"(worst {worst} frame(s) apart, see telemetry_tick in those sidecars)")
 
     def _occlusion_note(self) -> str:
         """How many captures got a per-vehicle occlusion measurement, for the stop message."""

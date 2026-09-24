@@ -162,6 +162,16 @@ public sealed class CarlaClient : IAsyncDisposable
     private readonly HashSet<ActorId> _observedIds = new();
     private IDisposable? _worldObserver;
 
+    // The actor snapshots of the last few frames, by frame number, for a consumer that holds something
+    // stamped with a frame (a camera image) and needs the actor state of THAT frame. The cache above is
+    // always the newest frame; SnapshotHistory says why that is not the same thing.
+    private readonly SnapshotHistory _history = new();
+
+    // Tick handlers that must not run on the observer thread: a Python delegate needs the interpreter
+    // lock, and the observer must never wait for it. Created on first use.
+    private TickDispatcher? _tickDispatcher;
+    private readonly object _tickDispatcherLock = new();
+
     // Solar / time-of-day state from the latest world-observer snapshot (§10.14 extended header):
     // [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate].
     // Updated lock-free each tick in ParseEpisodeState so the recorder pairs frames with the sun with
@@ -322,9 +332,26 @@ public sealed class CarlaClient : IAsyncDisposable
     // ── §9.3 world.on_tick — fired once per world-observer frame ─────────────
     // Subscribers receive a TickTimestamp built from the SensorFrame header
     // (Frame, Timestamp) and the parsed EpisodeState header (DeltaSeconds,
-    // PlatformTimestamp). Multi-threaded — handlers should be cheap or marshal
-    // to their own thread / queue.
+    // PlatformTimestamp). Raised ON the world-observer thread, so a handler here
+    // holds up every later snapshot for as long as it runs: only for handlers
+    // that are cheap and never wait on anything. Everything else, and every
+    // Python callback, goes through SubscribeTick.
     public event Action<TickTimestamp>? OnTick;
+
+    /// <summary>
+    /// Register a tick handler that runs on a dispatcher thread rather than on the world-observer
+    /// thread. The observer thread only enqueues the tick, so a handler that is slow, or that has to
+    /// wait for the Python interpreter lock, delays later handlers and nothing else; the actor state
+    /// every other reader depends on keeps advancing. Ticks are delivered in order; the oldest are
+    /// dropped once <see cref="TickDispatcher.DefaultBacklog"/> of them are waiting. Disposing the
+    /// result removes the handler.
+    /// </summary>
+    public IDisposable SubscribeTick(Action<TickTimestamp> handler)
+    {
+        lock (_tickDispatcherLock)
+            _tickDispatcher ??= new TickDispatcher(ex => _log?.LogWarning(ex, "Dispatched tick handler threw"));
+        return _tickDispatcher.Subscribe(handler);
+    }
 
     // ── §8.1 Session / Traffic Manager ───────────────────────────────────────
 
@@ -1911,7 +1938,11 @@ public sealed class CarlaClient : IAsyncDisposable
         {
             double platformTs = 0;
             float deltaS = 0;
-            ParseEpisodeState(frame.Payload.Span, out platformTs, out deltaS);
+            ParseEpisodeState(frame.Payload.Span, out platformTs, out deltaS, out var frameActors);
+            // Retained before the gate is pulsed, so a tick-cue waiter woken by this frame can read
+            // the frame's own actors straight away.
+            if (frameActors is not null)
+                _history.Retain(frame.Header.Frame, frameActors);
             lock (_frameGate)
             {
                 _latestObservedFrame = frame.Header.Frame;
@@ -1920,26 +1951,29 @@ public sealed class CarlaClient : IAsyncDisposable
                 _latestPlatformTimestamp = platformTs;
                 Monitor.PulseAll(_frameGate);
             }
-            // Emit a tick event so Python world.on_tick(callback) can fire.
+            var ts = new TickTimestamp(
+                frame.Header.Frame,
+                frame.Header.Timestamp,
+                deltaS,
+                platformTs);
+            // Inline handlers run here, on the observer thread; dispatched ones are only queued.
             var handlers = OnTick;
             if (handlers is not null)
             {
-                var ts = new TickTimestamp(
-                    frame.Header.Frame,
-                    frame.Header.Timestamp,
-                    deltaS,
-                    platformTs);
                 try { handlers(ts); }
                 catch (Exception cbEx) { _log?.LogWarning(cbEx, "OnTick handler threw"); }
             }
+            _tickDispatcher?.Publish(ts);
         }
         catch (Exception ex) { _log?.LogWarning(ex, "World observer parse error"); }
     }
 
-    private void ParseEpisodeState(ReadOnlySpan<byte> payload, out double platformTimestamp, out float deltaSeconds)
+    private void ParseEpisodeState(ReadOnlySpan<byte> payload, out double platformTimestamp, out float deltaSeconds,
+                                   out Dictionary<ActorId, ActorSnapshot>? frameActors)
     {
         platformTimestamp = 0;
         deltaSeconds = 0;
+        frameActors = null;
         // Header layout (124 bytes): episode_id(8) platform_ts(8) delta_s(4) map_origin(12) state(1)
         // pad(3), then 11 appended solar doubles at offset 36 (§10.14 extended header).
         if (payload.Length < 36) return;
@@ -1972,6 +2006,7 @@ public sealed class CarlaClient : IAsyncDisposable
         var actors = payload[HeaderSize..];
         int count  = actors.Length / ActorSize;
         _observedIds.Clear();
+        frameActors = new Dictionary<ActorId, ActorSnapshot>(count);
         for (int i = 0; i < count; i++)
         {
             var a  = actors.Slice(i * ActorSize, ActorSize);
@@ -1998,7 +2033,7 @@ public sealed class CarlaClient : IAsyncDisposable
             float ax  = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(a[53..]));
             float ay  = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(a[57..]));
             float az  = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(a[61..]));
-            _actorCache[id] = new ActorSnapshot
+            var snapshot = new ActorSnapshot
             {
                 Id = id, State = st,
                 Transform       = new Transform(new Location(lx, ly, lz), new Rotation(rp, ry, rr)),
@@ -2007,6 +2042,8 @@ public sealed class CarlaClient : IAsyncDisposable
                 Acceleration    = new Vector3D(ax, ay, az),
                 TypeDependentState = a[65..119].ToArray()
             };
+            _actorCache[id] = snapshot;
+            frameActors[id] = snapshot;
         }
         // The episode state is a full snapshot of every live actor each tick, so evict any cached actor
         // absent from it (destroyed since the last tick). Without this the cache — and every telemetry
@@ -2032,6 +2069,18 @@ public sealed class CarlaClient : IAsyncDisposable
     public Vector3D        GetActorAngularVelocity(ActorId id) => _actorCache.TryGetValue(id, out var s) ? s.AngularVelocity : default;
     public Vector3D        GetActorAcceleration   (ActorId id) => _actorCache.TryGetValue(id, out var s) ? s.Acceleration    : default;
     public ActorSnapshot?  GetActorSnapshot       (ActorId id) => _actorCache.TryGetValue(id, out var s) ? s : null;
+
+    /// <summary>
+    /// Every actor's snapshot as of <paramref name="frame"/>, for pairing with something stamped with
+    /// that frame (a camera image), rather than the newest frame the queries above answer from. When
+    /// that frame is no longer held the nearest one still held is returned and
+    /// <paramref name="servedFrame"/> names it; null when no frame has been observed yet.
+    /// </summary>
+    public IReadOnlyDictionary<ActorId, ActorSnapshot>? GetSnapshotFrame(ulong frame, out ulong servedFrame)
+        => _history.Nearest(frame, out servedFrame);
+
+    /// <summary>How many recent frames <see cref="GetSnapshotFrame"/> can answer for exactly.</summary>
+    public int RetainedSnapshotFrames => _history.Count;
 
     /// <summary>
     /// Per-vehicle traffic-light state, speed limit, and at-traffic-light flag, decoded from the
@@ -2131,6 +2180,7 @@ public sealed class CarlaClient : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _tickDispatcher?.Dispose();
         _worldObserver?.Dispose();
         lock (_streams) { foreach (var s in _streams) s.Dispose(); _streams.Clear(); }
         await _rpc.DisposeAsync().ConfigureAwait(false);

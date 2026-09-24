@@ -377,7 +377,8 @@ takes advantage of that.
 The per-vehicle event carries `point`, `track` (course and speed), `contact`, and the `_carla`
 truth-extras block with `source`, `actor_id`, `type_id`, `base_type`, `special_type`, dimensions,
 `color`, `role_name` and raw velocity components (`CotWriter.cs:130-178`). Run identity — `tick`,
-`sim_time_s`, `run_id`, `scenario_id`, `seed` — sits on the `<events>` container rather than on each
+`sim_time_s`, `telemetry_tick` (the frame the vehicle records describe, normally equal to `tick`), `run_id`,
+`scenario_id`, `seed` — sits on the `<events>` container rather than on each
 event, on the reasoning that every event in a sidecar shares one tick and that a strict CoT client may
 reject unknown attributes on `<event>` (`CotWriter.cs:36-48`).
 
