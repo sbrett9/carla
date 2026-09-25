@@ -26,6 +26,7 @@ internal class RecordedWorld : ICarlaWorld
     private readonly Dictionary<ActorId, Transform> _actors = [];
     private readonly List<IReadOnlyList<Command>> _batches = [];
     private readonly List<(string Layer, bool Visible, long AtTick)> _layerWrites = [];
+    private readonly List<(string Call, long AtTick)> _solarWrites = [];
     private ActorId _nextActor = 1;
 
     /// <summary>The settings the world holds, as a server would.</summary>
@@ -61,6 +62,15 @@ internal class RecordedWorld : ICarlaWorld
 
     /// <summary>Every layer visibility written, with the tick the world was on when it arrived.</summary>
     public IReadOnlyList<(string Layer, bool Visible, long AtTick)> LayerWrites => _layerWrites;
+
+    /// <summary>
+    /// The world's sun, or <see langword="null"/> for a world that has none -- stock content, or a
+    /// generated world whose georeference was never configured.
+    /// </summary>
+    public SimulatedSun? Sun { get; set; } = new();
+
+    /// <summary>Every write to the sun, by call, with the tick the world was on when it arrived.</summary>
+    public IReadOnlyList<(string Call, long AtTick)> SolarWrites => _solarWrites;
 
     /// <summary>Batches carrying at least one transform, which is what a driven tick writes.</summary>
     public IEnumerable<IReadOnlyList<Command>> PoseBatches =>
@@ -146,6 +156,13 @@ internal class RecordedWorld : ICarlaWorld
         }
 
         Ticks++;
+        if (ProducesFrames)
+        {
+            // The time-of-day controller is an actor, and actors tick before the world observer
+            // publishes the frame, so the sun a frame is published with has already moved.
+            Sun?.Tick(Settings.FixedDeltaSeconds ?? 0.0);
+        }
+
         return ProducesFrames;
     }
 
@@ -157,4 +174,21 @@ internal class RecordedWorld : ICarlaWorld
     /// </remarks>
     public virtual void WriteLayerVisible(string layer, bool visible) =>
         _layerWrites.Add((layer, visible, Ticks));
+
+    /// <inheritdoc/>
+    public IReadOnlyList<double> ReadSolarState() => Sun?.Read() ?? [];
+
+    /// <inheritdoc/>
+    public bool WriteSolarEpoch(int year, int month, int day, double hours, double utcOffsetHours)
+    {
+        _solarWrites.Add(("set_solar_epoch", Ticks));
+        return Sun?.WriteEpoch(year, month, day, hours, utcOffsetHours) ?? false;
+    }
+
+    /// <inheritdoc/>
+    public bool WriteTimeAdvance(bool advancing, double rate)
+    {
+        _solarWrites.Add(("set_time_advance", Ticks));
+        return Sun?.WriteAdvance(advancing, rate) ?? false;
+    }
 }

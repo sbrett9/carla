@@ -114,6 +114,18 @@ public sealed record SumoDriveSessionOptions(
     public SolarEpoch? Epoch { get; set; }
 
     /// <summary>
+    /// What the session does with the world's sun across its window.
+    /// </summary>
+    /// <remarks>
+    /// Under any policy that binds the sun, the session writes the date, the civil clock, the civil
+    /// offset, the advancing flag and the rate once, after SUMO has been fast-forwarded and before
+    /// the first world tick, for the civil instant of the first frame it renders -- and reads the
+    /// sun back to confirm the world took it. The sun the world was found with is given back when the
+    /// session ends, on its failure paths as on its normal one.
+    /// </remarks>
+    public IlluminationPolicy? Illumination { get; set; }
+
+    /// <summary>
     /// Whether the generated road surface is drawn for the session.
     /// </summary>
     /// <remarks>

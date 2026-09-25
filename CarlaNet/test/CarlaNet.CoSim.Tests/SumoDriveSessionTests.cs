@@ -409,6 +409,76 @@ public sealed class SumoDriveSessionTests
     }
 
     [RequiresSumoFact]
+    public void TheSunIsBoundBeforeTheFirstTickToTheInstantTheFirstFrameRenders()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld();
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+        options.WarmUpToSimulatedSecond = 2.0;
+        options.Epoch = SolarEpoch.Declare("2026-03-21T07:00:00+03:30", 3.5, "2026-03-21T03:30:00Z",
+                                           calendarAdvances: true, dstInEffect: false);
+        options.Illumination = IlluminationPolicy.FreezeAtWindowStart();
+
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            // SUMO was fast-forwarded to two seconds and nothing has ticked yet, so the sun holds
+            // the civil instant of the first frame the session will render, in the civil zone.
+            Assert.Equal(0, carla.Ticks);
+            Assert.All(carla.SolarWrites, write => Assert.Equal(0, write.AtTick));
+            Assert.Equal((2026, 3, 21), (carla.Sun!.Year, carla.Sun.Month, carla.Sun.Day));
+            Assert.Equal(7.0 + (2.0 / 3600.0), carla.Sun.SolarTime, 12);
+            Assert.Equal(3.5, carla.Sun.TimeZone);
+            Assert.Equal("2026-03-21T07:00:02+03:30",
+                         SolarEpoch.FormatCivil(session.Sun!.Declared.WindowOpenCivil));
+
+            for (int step = 0; step < 40 && session.Advance(); step++)
+            {
+            }
+
+            // Frozen: forty steps of ticks later the sun has not moved, and nothing wrote it again.
+            Assert.Equal(7.0 + (2.0 / 3600.0), carla.Sun.SolarTime, 12);
+            Assert.Equal(2, carla.SolarWrites.Count);
+        }
+
+        // Given back as found, the class-default sun an unconfigured world holds.
+        Assert.Equal((13.0, 2019, 9, 21, -5.0), (carla.Sun.SolarTime, carla.Sun.Year,
+                                                 carla.Sun.Month, carla.Sun.Day, carla.Sun.TimeZone));
+    }
+
+    [RequiresSumoFact]
+    public void ASessionThatFailsMidRunStillGivesTheSunBack()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld();
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+        options.Epoch = SolarLeaseTests.PortEpoch();
+        options.Illumination = IlluminationPolicy.Advance(1.0);
+
+        SumoDriveSession session = SumoDriveSession.Start(options);
+        Assert.True(carla.Sun!.Advancing);
+        try
+        {
+            carla.ThrowOnTick = new IOException("the connection to the simulator was dropped");
+            session.Advance();
+            Assert.Fail("the run should have failed on the dropped connection");
+        }
+        catch (IOException)
+        {
+            session.Dispose();
+        }
+
+        Assert.Equal((13.0, 2019, 9, 21, -5.0, false), (carla.Sun.SolarTime, carla.Sun.Year,
+                                                        carla.Sun.Month, carla.Sun.Day,
+                                                        carla.Sun.TimeZone, carla.Sun.Advancing));
+    }
+
+    [RequiresSumoFact]
     public void ASessionGivenTwoWaysToAdvanceTheWorldIsRefused()
     {
         using SyntheticWorld world = SyntheticWorld.Write(

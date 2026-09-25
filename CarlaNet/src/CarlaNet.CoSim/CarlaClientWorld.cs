@@ -135,4 +135,16 @@ public sealed class CarlaClientWorld : ICarlaWorld
         ArgumentException.ThrowIfNullOrEmpty(layer);
         _client.SetLayerVisibleAsync(layer, visible).GetAwaiter().GetResult();
     }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<double> ReadSolarState() =>
+        _client.GetSolarStateAsync().GetAwaiter().GetResult() ?? [];
+
+    /// <inheritdoc/>
+    public bool WriteSolarEpoch(int year, int month, int day, double hours, double utcOffsetHours) =>
+        _client.SetSolarEpochAsync(year, month, day, hours, utcOffsetHours).GetAwaiter().GetResult();
+
+    /// <inheritdoc/>
+    public bool WriteTimeAdvance(bool advancing, double rate) =>
+        _client.SetTimeAdvanceAsync(advancing, rate).GetAwaiter().GetResult();
 }

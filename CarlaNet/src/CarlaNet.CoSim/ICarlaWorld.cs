@@ -10,12 +10,12 @@ namespace CarlaNet.CoSim;
 /// Everything the playback bridge asks of a CARLA world, and nothing else.
 /// </summary>
 /// <remarks>
-/// <para>Seven operations. The bridge places bodies, writes their poses in one batch, reads back
+/// <para>Ten operations. The bridge places bodies, writes their poses in one batch, reads back
 /// where the world says they went, advances the world a tick, reads and writes the episode settings
-/// so it can hand the world back as it found it, and shows or hides the rendering layers whose
-/// presence is a property of the imagery. Anything larger than that would be the client's whole
-/// surface, and a driving session tested against the client's whole surface is a session that can
-/// only be tested against a running server.</para>
+/// so it can hand the world back as it found it, shows or hides the rendering layers whose presence
+/// is a property of the imagery, and reads and writes the sun the imagery is lit by. Anything larger
+/// than that would be the client's whole surface, and a driving session tested against the client's
+/// whole surface is a session that can only be tested against a running server.</para>
 ///
 /// <para><b>Synchronous by design.</b> Every call here happens on the tick thread, between one world
 /// tick and the next, in an order the session fixes. There is nothing for a caller to overlap, and
@@ -75,4 +75,37 @@ public interface ICarlaWorld
     /// that has to give a layer back has to declare the state it gives it back to.</para>
     /// </remarks>
     void WriteLayerVisible(string layer, bool visible);
+
+    /// <summary>
+    /// The sun as the server computes it now, asked for on demand: the values
+    /// <see cref="SolarReading.From"/> reads, the refraction-corrected elevation included, or none
+    /// where the world has no sun.
+    /// </summary>
+    /// <remarks>
+    /// A round trip, and deliberately not the world-observer cache: the cache is paired to the last
+    /// tick, so right after a write it still holds the sun from before it.
+    /// </remarks>
+    IReadOnlyList<double> ReadSolarState();
+
+    /// <summary>
+    /// Bind the sun's date, its clock and the zone the clock is read in, recomputing it once.
+    /// </summary>
+    /// <param name="year">Calendar year.</param>
+    /// <param name="month">Calendar month.</param>
+    /// <param name="day">Calendar day.</param>
+    /// <param name="hours">The clock, hours in [0, 24) in the zone below.</param>
+    /// <param name="utcOffsetHours">
+    /// The zone, as a civil offset in hours. Written as the sun's time zone, which is what makes the
+    /// clock civil time rather than local mean solar time at the map's longitude.
+    /// </param>
+    /// <returns>False where the world has no sun or the date is not a calendar date; the sun is then
+    /// left as it was.</returns>
+    bool WriteSolarEpoch(int year, int month, int day, double hours, double utcOffsetHours);
+
+    /// <summary>
+    /// Whether the engine carries the sun's clock forward with the world tick, and at how many
+    /// sun-clock seconds per simulated second.
+    /// </summary>
+    /// <returns>False where the world has no sun.</returns>
+    bool WriteTimeAdvance(bool advancing, double rate);
 }

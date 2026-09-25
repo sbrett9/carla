@@ -50,6 +50,7 @@ public sealed class SumoDriveSession : IDisposable
     private readonly Stopwatch _bridgeClock = new();
     private readonly Stopwatch _sumoClock = new();
 
+    private SolarLease? _sun;
     private long _tickIndex;
     private bool _disposed;
 
@@ -101,6 +102,12 @@ public sealed class SumoDriveSession : IDisposable
 
     /// <summary>The vehicles that would hold a rendered actor right now.</summary>
     public IReadOnlyCollection<string> RenderedVehicleIds => _renderSet.RenderedVehicleIds;
+
+    /// <summary>
+    /// The session's hold on the world's sun: what it was bound to, what the world reported back,
+    /// and what it was found holding. Null where the session binds no sun.
+    /// </summary>
+    public SolarLease? Sun => _sun;
 
     /// <summary>
     /// Start a session: validate the clock, check the network is the world's, take the population
@@ -184,10 +191,12 @@ public sealed class SumoDriveSession : IDisposable
             try
             {
                 session.Prime();
+                session.BindTheSun();
                 return session;
             }
             catch
             {
+                session._sun?.Dispose();
                 pool?.DestroyAll();
                 lease.Dispose();
                 throw;
@@ -283,6 +292,7 @@ public sealed class SumoDriveSession : IDisposable
                 Report.BodyDeclines = counted.Exhaustions;
             }
         });
+        Attempt(failures, () => _sun?.Dispose());
         Attempt(failures, () => _pool?.DestroyAll());
         Attempt(failures, () => _layers?.Dispose());
         Attempt(failures, () => _settings?.Dispose());
@@ -312,6 +322,27 @@ public sealed class SumoDriveSession : IDisposable
         ReconcileAndRead();
         RenderedTimeSeconds = _sumo.Time;
         AdvanceSumo();
+    }
+
+    /// <summary>
+    /// Bind the world's sun to the civil instant of the first frame the session will render.
+    /// </summary>
+    /// <remarks>
+    /// Here, and nowhere earlier: SUMO has been fast-forwarded, so the instant of the first rendered
+    /// frame is known, and the world has not yet ticked, so no frame has been rendered under whatever
+    /// sun it was holding. Nothing ticks the world during the fast-forward, so nothing could have
+    /// moved the sun in between either.
+    /// </remarks>
+    private void BindTheSun()
+    {
+        if (_options.World is not { } world
+            || _options.Illumination is not { BindsTheSun: true } policy
+            || _options.Epoch is not { } epoch)
+        {
+            return;
+        }
+
+        _sun = SolarLease.Take(world, new DeclaredSun(epoch, policy, RenderedTimeSeconds));
     }
 
     private bool AdvanceSumo()
