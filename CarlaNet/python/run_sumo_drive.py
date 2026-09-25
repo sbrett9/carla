@@ -319,6 +319,7 @@ def main() -> int:
 
     camera = None
     session = None
+    recorder = None
     aim = RenderedVehicleCentre()
     aims_at_traffic = args.camera_aim == "traffic" and not args.no_record
     worst = {"metres": 0.0, "vehicle": "", "tick": 0}
@@ -384,8 +385,12 @@ def main() -> int:
             camera = spawn_camera(world, args, centre)
 
             os.makedirs(args.record_dir, exist_ok=True)
-            if world.start_recording(camera, args.record_dir, args.record_hz,
-                                     fov=args.fov) is None:
+            # Every capture carries the declaration of its own frame's sun and the audit's residual
+            # on the tick that rendered it, so a still's illumination is traceable to what this run
+            # said it should be.
+            recorder = world.start_recording(camera, args.record_dir, args.record_hz, fov=args.fov,
+                                             illumination=session.Illumination)
+            if recorder is None:
                 return 1
             print(f"recording -> {args.record_dir}")
 
@@ -421,6 +426,11 @@ def main() -> int:
             world.stop_recording()
         except Exception as failure:
             print(f"could not stop the recorder: {failure!r}", file=sys.stderr)
+        if recorder is not None:
+            # Read once the recorder has flushed, so the counts are the run's and not a moment's.
+            print(f"captures           {recorder.Saved} written, {recorder.Dropped} dropped; "
+                  f"{recorder.IlluminationPaired} carry their frame's illumination declaration, "
+                  f"{recorder.IlluminationUnpaired} do not")
         if camera is not None:
             try:
                 camera.destroy()

@@ -1,3 +1,4 @@
+using CarlaNet.Recording;
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Commands;
 using CarlaNet.Types.Rpc.Environment;
@@ -543,6 +544,84 @@ public sealed class SumoDriveSessionTests
         Assert.Equal(before, carla.Settings);
         Assert.Equal((13.0, 2019, 9, 21), (carla.Sun.SolarTime, carla.Sun.Year, carla.Sun.Month,
                                            carla.Sun.Day));
+    }
+
+    [RequiresSumoFact]
+    public void EveryRenderedFrameCarriesItsDeclarationAndTheAuditOfItsOwnTick()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld();
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+        options.Epoch = SolarEpoch.Declare("2026-03-21T07:00:00+03:30", 3.5, "2026-03-21T03:30:00Z",
+                                           calendarAdvances: true, dstInEffect: false);
+        options.Illumination = IlluminationPolicy.FreezeAtWindowStart();
+
+        using SumoDriveSession session = SumoDriveSession.Start(options);
+        for (int step = 0; step < 10 && session.Advance(); step++)
+        {
+        }
+
+        // One declaration per rendered frame, keyed by the frame the tick produced.
+        IIlluminationSource source = session.Illumination;
+        Assert.Equal((ulong)session.Report.Ticks, source.NewestFrame);
+        Assert.True(source.TryGetDeclaration(1, out IlluminationDeclaration first));
+        Assert.True(source.TryGetDeclaration((ulong)session.Report.Ticks, out IlluminationDeclaration last));
+
+        // Simulated second zero is 07:00 at the port. The first frame renders that instant; the
+        // fixture steps at the world's delta, so the tenth frame renders nine ticks of 0.05 s later.
+        Assert.Equal("freeze_at_window_start", first.Policy);
+        Assert.True(first.EpochHonoured);
+        Assert.True(first.Audited);
+        Assert.Equal(options.Epoch.Digest, first.EpochDigest);
+        Assert.Equal(10, session.Report.Ticks);
+        Assert.Equal("2026-03-21T07:00:00+03:30", first.DeclaredCivil);
+        Assert.Equal("2026-03-21T03:30:00Z", first.DeclaredUtc);
+        Assert.Equal("2026-03-21T07:00:00+03:30", first.SunDeclared);
+        Assert.Equal("2026-03-21T07:00:00.45+03:30", last.DeclaredCivil);
+        Assert.Equal("2026-03-21T07:00:00+03:30", last.SunDeclared);
+
+        // Both elevations, named, and which one the declaration is made against.
+        Assert.Equal("refraction_corrected", first.DeclaredElevationKind);
+        Assert.True(first.SunCorrectedElevationDeclaredDegrees > first.SunElevationDeclaredDegrees);
+        Assert.Equal(0.001, first.ResidualClockSeconds!.Value, 6);
+        Assert.True(first.ResidualDegrees < 1e-4);
+
+        // And the run says the same thing once, for the whole run.
+        string report = session.Report.ToString();
+        Assert.Contains("epoch              t = 0 is 2026-03-21T07:00:00+03:30", report);
+        Assert.Contains("illumination       freeze_at_window_start, date held; each frame lit by its "
+                        + "declared civil instant", report);
+        Assert.Contains("found holding    2019-09-21 13:00:00.000", report);
+        Assert.Contains("deg refraction_corrected (geometric", report);
+        Assert.Contains($"audit            {session.Report.Ticks} ticks", report);
+        Assert.True(session.Report.WorstSolarResidualDegrees < 1e-4);
+    }
+
+    [RequiresSumoFact]
+    public void AFrameUnderTheIgnorePolicySaysItsLightingHonoursNoEpoch()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld();
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+        options.Illumination = IlluminationPolicy.Ignore();
+
+        using SumoDriveSession session = SumoDriveSession.Start(options);
+        session.Advance();
+
+        Assert.True(session.Illumination.TryGetDeclaration(1, out IlluminationDeclaration declared));
+        Assert.Equal("ignore", declared.Policy);
+        Assert.False(declared.EpochHonoured);
+        Assert.False(declared.Audited);
+        Assert.NotNull(declared.DeclaredCivil);
+        Assert.Null(declared.ResidualDegrees);
+        Assert.Contains("not bound, so not audited", session.Report.ToString());
+        Assert.Null(session.Report.WorstSolarResidualDegrees);
     }
 
     [Fact]

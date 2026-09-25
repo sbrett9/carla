@@ -57,6 +57,37 @@ public sealed class CoSimRunReport
     /// </remarks>
     public double? SumoStepOverrideSeconds { get; init; }
 
+    /// <summary>What simulated second zero meant in civil time, as the run declared it.</summary>
+    public SolarEpoch? Epoch { get; init; }
+
+    /// <summary>What the run declared its sun would do.</summary>
+    /// <remarks>
+    /// Recorded because a frozen run and a run nobody configured write identical sun blocks: the
+    /// declaration is what tells them apart.
+    /// </remarks>
+    public IlluminationPolicy? Illumination { get; init; }
+
+    /// <summary>
+    /// The sun the run found the world holding, what it bound it to, and what the world reported
+    /// back. Null where the run bound no sun.
+    /// </summary>
+    public SolarLease? Sun { get; internal set; }
+
+    /// <summary>
+    /// Every comparison of the world's sun against the declared one: at window open and on every
+    /// tick. Null where the run bound no sun, which is an audit that was skipped rather than passed.
+    /// </summary>
+    public SolarAudit? SunAudit { get; internal set; }
+
+    /// <summary>The largest angle between the world's sun and the declared one, degrees.</summary>
+    public double? WorstSolarResidualDegrees => SunAudit?.WorstAngle?.AngleResidualDegrees;
+
+    /// <summary>The largest distance between the world's sun clock and the declared instant, seconds.</summary>
+    public double? WorstSolarClockResidualSeconds => SunAudit?.WorstClock?.ClockResidualSeconds;
+
+    /// <summary>The largest difference in refraction-corrected elevation, degrees, where it was carried.</summary>
+    public double? WorstSolarCorrectedResidualDegrees => SunAudit?.WorstCorrected?.CorrectedResidualDegrees;
+
     /// <summary>World ticks the session ran.</summary>
     public long Ticks { get; internal set; }
 
@@ -255,6 +286,78 @@ public sealed class CoSimRunReport
         WorstLaneGeometryResidualMetres = Math.Max(WorstLaneGeometryResidualMetres, metres);
     }
 
+    /// <summary>
+    /// The illumination lines: what was declared, what the world was found holding, what was bound,
+    /// and how far the world's sun ever sat from the declaration.
+    /// </summary>
+    private void AppendIllumination(StringBuilder text)
+    {
+        if (Epoch is { } epoch)
+        {
+            text.AppendLine($"epoch              {epoch}; digest {epoch.Digest[..12]}");
+        }
+
+        if (Illumination is not { } policy)
+        {
+            return;
+        }
+
+        text.AppendLine($"illumination       {policy}; "
+                        + (policy.HonoursTheEpoch && Sun is { NoSun: false }
+                            ? "each frame lit by its declared civil instant"
+                            : "the frame's civil instant is not the sun it is lit by"));
+        if (Sun is not { } sun)
+        {
+            text.AppendLine("sun                not bound, so not audited");
+            return;
+        }
+
+        if (sun.NoSun)
+        {
+            text.AppendLine("sun                the world has none; not audited");
+            return;
+        }
+
+        text.AppendLine($"  found holding    {sun.AsFound}");
+        if (SunAudit?.AtWindowOpen is { } opened)
+        {
+            SunPosition declared = opened.Modelled;
+            text.AppendLine($"  bound            {SolarEpoch.FormatCivil(sun.Declared.WindowOpenCivil)}, sun "
+                            + $"{sun.Declared.SunAtWindowOpen:yyyy-MM-dd HH:mm:ss} at "
+                            + $"UTC{SolarEpoch.FormatOffset(sun.Declared.Epoch.UtcOffset)}: declared elevation "
+                            + $"{DeclaredSunElevation.Of(declared):0.####} deg {DeclaredSunElevation.Name} "
+                            + $"(geometric {declared.ElevationDegrees:0.####}, corrected "
+                            + $"{declared.CorrectedElevationDegrees:0.####}), azimuth "
+                            + $"{declared.AzimuthDegrees:0.####}");
+        }
+
+        if (SunAudit is { } audit)
+        {
+            text.AppendLine($"  audit            {audit.AuditedTicks} ticks, corrected elevation on "
+                            + $"{audit.TicksWithCorrectedElevation} of them and at window open; "
+                            + $"tolerance {audit.ToleranceSeconds:0.###} s, {audit.ToleranceDegrees:0.####} deg");
+            if (audit.WorstAngle is { } angle)
+            {
+                text.AppendLine($"  worst direction  {angle.AngleResidualDegrees:0.######} deg at {angle.Where}");
+            }
+
+            if (audit.WorstClock is { } clock)
+            {
+                text.AppendLine($"  worst clock      {clock.ClockResidualSeconds:+0.######;-0.######;0} s at {clock.Where}");
+            }
+
+            if (audit.WorstCorrected is { CorrectedResidualDegrees: { } corrected } refracted)
+            {
+                text.AppendLine($"  worst corrected  {corrected:+0.######;-0.######;0} deg at {refracted.Where}");
+            }
+
+            if (audit.Failure is { } failure)
+            {
+                text.AppendLine($"  FAILED           at {failure.Where}");
+            }
+        }
+    }
+
     /// <summary>The bridge's own cost per world tick, in milliseconds.</summary>
     public double BridgeMillisecondsPerTick =>
         Ticks == 0 ? 0.0 : BridgeSecondsOnTicks * 1000.0 / Ticks;
@@ -283,6 +386,7 @@ public sealed class CoSimRunReport
                                 .Select(entry => $"{entry.Key} {(entry.Value ? "drawn" : "hidden")}")));
         }
 
+        AppendIllumination(text);
         text.AppendLine($"ticks              {Ticks} over {SumoSteps} SUMO steps");
         text.AppendLine($"poses computed     {PosesComputed}");
         text.AppendLine($"  approximated Z   {PosesOnAnApproximatedSeatHeight}");

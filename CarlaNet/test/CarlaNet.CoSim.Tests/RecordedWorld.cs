@@ -157,7 +157,8 @@ internal class RecordedWorld : ICarlaWorld
     }
 
     /// <inheritdoc/>
-    public bool Tick()
+    /// <remarks>The frame is the tick count, which is what a server's frame counter is to a session.</remarks>
+    public ulong? Tick()
     {
         if (ThrowOnTick is { } failure)
         {
@@ -172,7 +173,7 @@ internal class RecordedWorld : ICarlaWorld
             Sun?.Tick(Settings.FixedDeltaSeconds ?? 0.0);
         }
 
-        return ProducesFrames;
+        return ProducesFrames ? (ulong)Ticks : null;
     }
 
     /// <inheritdoc/>

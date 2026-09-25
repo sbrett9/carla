@@ -1914,7 +1914,7 @@ class World:
                         fov=90.0, platform_type="uas-fixed", platform_affiliation="f",
                         platform_callsign="OVERWATCH", platform_uid=None, distortion="none",
                         run_id=None, scenario_id=None, seed=None, depth_camera=None,
-                        occlusion_margin_m=1.0, occlusion_samples=24):
+                        occlusion_margin_m=1.0, occlusion_samples=24, illumination=None):
         """Start native (C#) recording of `camera`'s imagery to `record_dir`: every 1/hz seconds a
         lossless PNG of the clean frame + a paired CoT-XML telemetry sidecar, encoded on the .NET thread
         pool (no Python/GIL in the hot path). Returns the FrameRecorder, or None if unavailable.
@@ -1939,7 +1939,14 @@ class World:
         (`occlusion` and `occlusion_level` in the sidecar's truth extras). `occlusion_margin_m` is how
         much nearer than a vehicle's own surface something has to be before it counts as blocking it,
         and `occlusion_samples` how finely each vehicle's outline is sampled. Measuring costs a second
-        subscription to that camera's stream, so it happens only when a depth camera is given."""
+        subscription to that camera's stream, so it happens only when a depth camera is given.
+
+        Pass `illumination` -- a SUMO drive session's `session.Illumination` -- to have each capture
+        also record what its sun was declared to be: the scenario epoch's digest, the illumination
+        policy, the frame's civil instant, the sun declared for it with both its geometric and its
+        refraction-corrected elevation, and the audit's residual on the tick that rendered it, as an
+        `<_illumination>` element beside `<_solar>` and a `carla:illumination` PNG chunk. The recorder's
+        `IlluminationUnpaired` counts captures that went without one."""
         if not _CARLANET_RECORDING_AVAILABLE:
             print("native recording unavailable: CarlaNet.Recording assembly not loaded "
                   "(rebuild the wheel/DLLs).", file=sys.stderr)
@@ -1966,7 +1973,7 @@ class World:
                                        None if run_id is None else str(run_id),
                                        None if scenario_id is None else str(scenario_id),
                                        None if seed is None else int(seed),
-                                       depth_token, occlusion)
+                                       depth_token, occlusion, illumination)
         return self._recorder
 
     def start_scenario(self, path, traffic_manager, report=None):

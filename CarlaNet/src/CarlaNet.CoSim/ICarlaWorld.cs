@@ -56,9 +56,14 @@ public interface ICarlaWorld
     Transform? ObservedTransform(ActorId actor);
 
     /// <summary>
-    /// Advance the world one tick, answering false where the tick produced no frame.
+    /// Advance the world one tick, answering the simulation frame it produced, or
+    /// <see langword="null"/> where it produced none.
     /// </summary>
-    bool Tick();
+    /// <remarks>
+    /// The frame is the identity every capture of that tick carries, which is how a still is paired
+    /// with what the session established about the tick that rendered it.
+    /// </remarks>
+    ulong? Tick();
 
     /// <summary>
     /// Show or hide one of the world's rendering layers.

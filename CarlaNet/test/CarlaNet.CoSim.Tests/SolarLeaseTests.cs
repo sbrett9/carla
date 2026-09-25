@@ -30,7 +30,7 @@ public sealed class SolarLeaseTests
         {
             // 07:00 on day 0 at +03:30, frozen: the clock is civil time because the zone is the
             // civil offset, and nothing moves it. Written a millisecond past the second, where the
-            // engine's decomposition lands on the second declared.
+            // engine's decomposition falls on the second declared.
             Assert.Equal((2026, 3, 21), (sun.Year, sun.Month, sun.Day));
             Assert.Equal(7.0 + (0.001 / 3600.0), sun.SolarTime, 12);
             Assert.Equal((7, 0, 0), SolarPositionModel.EngineClock(sun.SolarTime));

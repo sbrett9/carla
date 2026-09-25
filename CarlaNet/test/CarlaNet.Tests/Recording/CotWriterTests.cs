@@ -57,6 +57,66 @@ public class CotWriterTests
         finally { File.Delete(path); }
     }
 
+    private static IlluminationDeclaration PortWindow() =>
+        new("freeze_at_window_start", EpochHonoured: true, Audited: true)
+        {
+            EpochDigest = "979f424f6f030bacbdd659afd1adec90c00a91be4ea3df2f39ec0fd7964ab40e",
+            EpochCivil = "2026-12-21T00:00:00+03:30",
+            UtcOffsetHours = 3.5,
+            DeclaredCivil = "2026-12-21T17:00:00.25+03:30",
+            DeclaredUtc = "2026-12-21T13:30:00.25Z",
+            SunDeclared = "2026-12-21T17:00:00+03:30",
+            SunElevationDeclaredDegrees = -1.58296,
+            SunCorrectedElevationDeclaredDegrees = -1.37418,
+            DeclaredElevationKind = "refraction_corrected",
+            ResidualClockSeconds = 0.001,
+            ResidualDegrees = 0.0000123,
+            ResidualCorrectedDegrees = -0.0000045,
+        };
+
+    [Fact]
+    public void The_Illumination_Declaration_Is_Written_Beside_The_Sun_It_Was_Checked_Against()
+    {
+        string path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".xml");
+        try
+        {
+            double[] sun = [17.0, 2026, 12, 21, 3.5, 27.15012, 56.18065, -1.58296, 244.3416, 0.0, 0.0, -1.37418];
+            CotWriter.WriteToFile(path, new DateTime(2026, 7, 10, 18, 0, 0, DateTimeKind.Utc), [],
+                                  solar: sun, illumination: PortWindow());
+            string xml = File.ReadAllText(path);
+
+            Assert.Contains("<_illumination policy=\"freeze_at_window_start\" epoch_honoured=\"true\" audited=\"true\"", xml);
+            Assert.Contains("declared_civil=\"2026-12-21T17:00:00.25+03:30\"", xml);
+            Assert.Contains("sun_declared=\"2026-12-21T17:00:00+03:30\"", xml);
+            Assert.Contains("sun_elevation_declared_deg=\"-1.583\"", xml);
+            Assert.Contains("sun_corrected_elevation_declared_deg=\"-1.3742\"", xml);
+            Assert.Contains("declared_elevation=\"refraction_corrected\"", xml);
+            Assert.Contains("residual_deg=\"0.000012\"", xml);
+            Assert.True(xml.IndexOf("<_solar", StringComparison.Ordinal)
+                        < xml.IndexOf("<_illumination", StringComparison.Ordinal));
+
+            // A run that declared nothing writes nothing, rather than an empty declaration.
+            CotWriter.WriteToFile(path, new DateTime(2026, 7, 10, 18, 0, 0, DateTimeKind.Utc), [], solar: sun);
+            Assert.DoesNotContain("_illumination", File.ReadAllText(path));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void The_Illumination_Chunk_Names_The_Epoch_And_Omits_What_Was_Not_Declared()
+    {
+        (string keyword, string json) = Assert.Single(PortWindow().PngTextChunks());
+        Assert.Equal("carla:illumination", keyword);
+        Assert.StartsWith("{\"policy\":\"freeze_at_window_start\",\"epoch_honoured\":true,\"audited\":true", json);
+        Assert.Contains("\"epoch_digest\":\"979f424f6f03", json);
+        Assert.Contains("\"utc_offset_hours\":3.5", json);
+        Assert.Contains("\"residual_clock_s\":0.001", json);
+        Assert.DoesNotContain("\"rate\"", json);
+
+        string ignored = new IlluminationDeclaration("ignore", false, false).ToJson();
+        Assert.Equal("{\"policy\":\"ignore\",\"epoch_honoured\":false,\"audited\":false}", ignored);
+    }
+
     [Fact]
     public void The_Frame_The_Truth_Came_From_Is_Named_Beside_The_Frame_Of_The_Pixels()
     {

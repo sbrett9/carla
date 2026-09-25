@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using CarlaNet.Map.WorldPackage;
+using CarlaNet.Recording;
 using CarlaNet.Sumo;
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Commands;
@@ -40,7 +41,8 @@ public sealed class SumoDriveSession : IDisposable
     private readonly WorldSettingsLease? _settings;
     private readonly LayerVisibilityLease? _layers;
     private readonly VehicleBodyPool? _pool;
-    private readonly Func<bool> _tickWorld;
+    private readonly Func<ulong?> _tickWorld;
+    private readonly IlluminationFrames _illumination = new();
     private readonly List<Command> _batch = [];
     private readonly List<Command> _parked = [];
     private readonly List<(string VehicleId, ActorId Actor, VehiclePose Pose)> _commanded = [];
@@ -76,7 +78,12 @@ public sealed class SumoDriveSession : IDisposable
         _settings = settings;
         _layers = layers;
         _pool = pool;
-        _tickWorld = options.World is { } world ? world.Tick : options.TickWorld ?? (() => true);
+        // A delegate that only counts has no frames of its own, so its ticks are numbered by the
+        // session; nothing records a frame of a world that does not exist.
+        Func<bool> counted = options.TickWorld ?? (() => true);
+        _tickWorld = options.World is { } world
+            ? world.Tick
+            : () => counted() ? (ulong)(_tickIndex + 1) : null;
         _population = new SubscribedPopulation(sumo.TraCI);
         _renderSet = new RenderSetManager(options.RenderSet, Release);
         _binder = new VehicleTypeBinder(sumo.TraCI, catalogue);
@@ -92,6 +99,8 @@ public sealed class SumoDriveSession : IDisposable
             CatalogueDigest = catalogue.CatalogueDigest,
             SumoStepOverrideSeconds = options.SumoStepOverrideSeconds,
             LayerVisibility = layers?.Applied ?? new Dictionary<string, bool>(),
+            Epoch = options.Epoch,
+            Illumination = options.Illumination,
         };
     }
 
@@ -118,6 +127,13 @@ public sealed class SumoDriveSession : IDisposable
     /// on every tick since. Null where the session binds no sun.
     /// </summary>
     public SolarAudit? SunAudit => _sunAudit;
+
+    /// <summary>
+    /// Each rendered frame's illumination declaration, for a recorder to write beside the capture of
+    /// that frame: the epoch, the policy, the frame's civil instant, the sun declared for it and the
+    /// audit's residual on its tick. Empty where the session renders no world.
+    /// </summary>
+    public IIlluminationSource Illumination => _illumination;
 
     /// <summary>
     /// Start a session: validate the clock, check the network is the world's, take the population
@@ -249,14 +265,14 @@ public sealed class SumoDriveSession : IDisposable
             WriteTheBatch();
             _bridgeClock.Stop();
 
-            if (!_tickWorld())
+            if (_tickWorld() is not { } frame)
             {
                 throw new CoSimSessionRefusedException(
                     $"The CARLA world produced no frame for tick {_tickIndex}. A world that stops "
                     + "ticking while SUMO keeps stepping renders a timeline nothing simulated.");
             }
 
-            AuditTheSun();
+            AuditTheSun(frame);
             MeasureDivergence();
             _tickIndex++;
             Report.Ticks++;
@@ -372,12 +388,14 @@ public sealed class SumoDriveSession : IDisposable
         }
 
         _sun = SolarLease.Take(world, new DeclaredSun(_options.Epoch!, policy, RenderedTimeSeconds));
+        Report.Sun = _sun;
         if (_sun.AtWindowOpen is { } opened)
         {
             // The one comparison that sees the refraction-corrected elevation whatever the server's
             // observer header carries, taken before anything is rendered under it.
             _sunAudit = new SolarAudit(_sun.Declared, _origin.Latitude, _origin.Longitude,
                                        Clock.WorldDeltaSeconds);
+            Report.SunAudit = _sunAudit;
             _sunAudit.AuditWindowOpen(opened);
         }
     }
@@ -392,12 +410,64 @@ public sealed class SumoDriveSession : IDisposable
     /// capture, and never corrected: rewriting the sun would hide whichever of a wrong mapping or a
     /// second writer caused it.
     /// </remarks>
-    private void AuditTheSun()
+    private void AuditTheSun(ulong frame)
     {
-        if (_sunAudit is { } audit && _options.World is { } world)
+        if (_options.World is not { } world || _options.Illumination is not { } policy)
         {
-            audit.AuditTick(_tickIndex, RenderedTimeSeconds, world.ObservedSolarState());
+            return;
         }
+
+        SolarAuditSample? sample = null;
+        try
+        {
+            if (_sunAudit is { } audit)
+            {
+                sample = audit.AuditTick(_tickIndex, RenderedTimeSeconds, world.ObservedSolarState());
+            }
+        }
+        catch (SolarAuditFailedException failed)
+        {
+            // The frame this tick rendered may already be on its way to a recorder, and it should
+            // say what it was measured against rather than arrive with nothing.
+            _illumination.Record(frame, Declare(policy, failed.Sample));
+            throw;
+        }
+
+        _illumination.Record(frame, Declare(policy, sample));
+    }
+
+    /// <summary>
+    /// What a frame's illumination was declared to be, and the audit's residual on its tick.
+    /// </summary>
+    private IlluminationDeclaration Declare(IlluminationPolicy policy, SolarAuditSample? sample)
+    {
+        SolarEpoch? epoch = _options.Epoch;
+        DateTimeOffset? civil = epoch?.CivilInstantAt(RenderedTimeSeconds);
+        var declared = new IlluminationDeclaration(
+            policy.Name, policy.HonoursTheEpoch && _sun is { NoSun: false }, sample is not null)
+        {
+            Rate = policy.Advances ? policy.Rate : null,
+            FreezeAtCivilTime = policy.FreezeAtCivilTimeOfDay?.ToString("hh\\:mm\\:ss",
+                                                                        System.Globalization.CultureInfo.InvariantCulture),
+            EpochDigest = epoch?.Digest,
+            EpochCivil = epoch?.CivilDateTimeText,
+            UtcOffsetHours = epoch?.UtcOffsetHours,
+            DeclaredCivil = civil is { } local ? SolarEpoch.FormatCivil(local) : null,
+            DeclaredUtc = civil is { } instant ? SolarEpoch.FormatUtc(instant) : null,
+        };
+
+        return sample is not { } measured || epoch is null
+            ? declared
+            : declared with
+            {
+                SunDeclared = SolarEpoch.FormatCivil(new DateTimeOffset(measured.DeclaredSun, epoch.UtcOffset)),
+                SunElevationDeclaredDegrees = measured.Modelled.ElevationDegrees,
+                SunCorrectedElevationDeclaredDegrees = measured.Modelled.CorrectedElevationDegrees,
+                DeclaredElevationKind = DeclaredSunElevation.Name,
+                ResidualClockSeconds = measured.ClockResidualSeconds,
+                ResidualDegrees = measured.AngleResidualDegrees,
+                ResidualCorrectedDegrees = measured.CorrectedResidualDegrees,
+            };
     }
 
     private bool AdvanceSumo()

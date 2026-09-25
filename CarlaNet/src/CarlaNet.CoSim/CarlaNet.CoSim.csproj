@@ -17,6 +17,9 @@
     <ProjectReference Include="..\CarlaNet.Sumo\CarlaNet.Sumo.csproj" />
     <ProjectReference Include="..\CarlaNet.Map\CarlaNet.Map.csproj" />
     <ProjectReference Include="..\CarlaNet.Transport\CarlaNet.Transport.csproj" />
+    <!-- The recorder's contract for a frame's illumination declaration, which the session answers
+         for every frame it renders. -->
+    <ProjectReference Include="..\CarlaNet.Recording\CarlaNet.Recording.csproj" />
   </ItemGroup>
 
   <ItemGroup>

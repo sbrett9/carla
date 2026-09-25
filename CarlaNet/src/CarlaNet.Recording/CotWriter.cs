@@ -14,7 +14,7 @@ public static class CotWriter
     public static void WriteToFile(string path, DateTime capturedUtc,
         IReadOnlyList<VehicleTelemetry> recs, string affiliation = "n", double staleSeconds = 3.0,
         IReadOnlyList<double>? solar = null, SensorPose? sensor = null,
-        CaptureIdentity? capture = null)
+        CaptureIdentity? capture = null, IlluminationDeclaration? illumination = null)
     {
         var settings = new XmlWriterSettings
         {
@@ -72,6 +72,12 @@ public static class CotWriter
             w.WriteAttributeString("rate", F(solar[10], "0.####"));
             w.WriteEndElement(); // _solar
         }
+
+        // What the run declared the sun to be for this frame, and how far the sun above was from it.
+        // Beside _solar rather than inside it: that block is read from the world, this one is the
+        // declaration it is checked against, and a reader should never have to tell the two apart by
+        // attribute name.
+        illumination?.WriteElement(w);
 
         // Collection platform (the airborne EO camera) as a CoT air-track event: standard <sensor> element
         // for boresight/FOV (TAK can render the field-of-view cone) + a <_carla_intrinsics> child for the

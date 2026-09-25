@@ -66,7 +66,7 @@ public sealed class DeclaredSun
 
     /// <summary>
     /// How far past the declared second a frozen clock is written, so the engine's decomposition
-    /// lands on that second.
+    /// falls on that second.
     /// </summary>
     public static readonly TimeSpan FrozenClockLead = TimeSpan.FromMilliseconds(1);
 

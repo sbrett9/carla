@@ -111,14 +111,14 @@ public sealed class CarlaClientWorld : ICarlaWorld
     /// <inheritdoc/>
     /// <remarks>
     /// The cue is answered with the frame it produced, and the client waits for the world observer
-    /// to deliver that frame before returning. A tick whose frame never arrives answers false rather
+    /// to deliver that frame before returning. A tick whose frame never arrives answers null rather
     /// than throwing, because it is the session that decides a world which stopped producing frames
     /// is a failed run.
     /// </remarks>
-    public bool Tick()
+    public ulong? Tick()
     {
         ulong frame = _client.SendTickCueAsync().GetAwaiter().GetResult();
-        return _client.LatestObservedFrame >= frame;
+        return _client.LatestObservedFrame >= frame ? frame : null;
     }
 
     /// <inheritdoc/>

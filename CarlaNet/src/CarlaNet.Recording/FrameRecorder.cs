@@ -35,6 +35,7 @@ public sealed class FrameRecorder : IDisposable
     private readonly long? _seed;
 
     private readonly OcclusionEstimator? _occlusion;
+    private readonly IIlluminationSource? _illumination;
 
     private readonly Channel<Job> _channel;
     private readonly Task[] _workers;
@@ -45,6 +46,15 @@ public sealed class FrameRecorder : IDisposable
     private double _prevSensorSimTime = double.NegativeInfinity;
     private long _saved, _dropped;
     private long _telemetryExact, _telemetryOffset, _telemetryWorstOffset;
+    private long _illuminationPaired, _illuminationUnpaired;
+
+    /// <summary>
+    /// How long a capture waits for the declaration of its own frame when it arrives before the
+    /// source has audited that frame. The image is read back from the GPU after the tick's snapshot
+    /// is published, so it is not expected to wait at all; the bound is what keeps a frame the source
+    /// will never answer for from holding a worker.
+    /// </summary>
+    private static readonly TimeSpan IlluminationWait = TimeSpan.FromMilliseconds(500);
 
     public long Saved => Interlocked.Read(ref _saved);
     public long Dropped => Interlocked.Read(ref _dropped);
@@ -60,6 +70,15 @@ public sealed class FrameRecorder : IDisposable
 
     /// <summary>The largest distance, in frames, between a capture's pixels and its truth records.</summary>
     public long TelemetryTickWorstOffset => Interlocked.Read(ref _telemetryWorstOffset);
+
+    /// <summary>Captures written with the illumination declaration of their own frame.</summary>
+    public long IlluminationPaired => Interlocked.Read(ref _illuminationPaired);
+
+    /// <summary>
+    /// Captures written without one, although an illumination source was given: frames the source
+    /// did not answer for. Every one is a still whose sun cannot be traced to a declaration.
+    /// </summary>
+    public long IlluminationUnpaired => Interlocked.Read(ref _illuminationUnpaired);
 
     /// <summary>Whether captures carry a per-vehicle occlusion measurement.</summary>
     public bool MeasuresOcclusion => _occlusion is not null;
@@ -91,11 +110,16 @@ public sealed class FrameRecorder : IDisposable
     /// pose and field of view. Supplying it adds a per-vehicle occlusion measurement to each capture,
     /// at the cost of a second subscription to that camera. Null leaves occlusion unmeasured.</param>
     /// <param name="occlusion">Tuning for that measurement; defaults when null.</param>
+    /// <param name="illumination">What declared the sun this run is lit by. Supplying it writes, beside
+    /// each capture's sun, the declaration for that capture's frame and the audit's residual on it,
+    /// so the still's illumination is traceable to what the run said it should be. Null writes the
+    /// sun alone.</param>
     public FrameRecorder(CarlaClient client, byte[] streamToken, string dir, double hz,
                          string affiliation = "n", double staleSeconds = 3.0,
                          SensorPlatformOptions? platform = null, int workers = 0,
                          string? runId = null, string? scenarioId = null, long? seed = null,
-                         byte[]? depthStreamToken = null, OcclusionOptions? occlusion = null)
+                         byte[]? depthStreamToken = null, OcclusionOptions? occlusion = null,
+                         IIlluminationSource? illumination = null)
     {
         if (streamToken is not { Length: 24 })
             throw new ArgumentException("streamToken must be a 24-byte sensor stream token", nameof(streamToken));
@@ -122,6 +146,7 @@ public sealed class FrameRecorder : IDisposable
 
         if (depthStreamToken is not null)
             _occlusion = new OcclusionEstimator(client, depthStreamToken, occlusion);
+        _illumination = illumination;
 
         int n = workers > 0 ? workers : Math.Max(2, Environment.ProcessorCount / 2);
         _channel = Channel.CreateBounded<Job>(new BoundedChannelOptions(Math.Max(4, n * 2))
@@ -250,16 +275,19 @@ public sealed class FrameRecorder : IDisposable
             {
                 try
                 {
+                    IlluminationDeclaration? illumination = await DeclarationForAsync(job.Capture.Tick)
+                        .ConfigureAwait(false);
                     string stem = "SCTMV_" + job.CapturedUtc.ToLocalTime()
                         .ToString("yyyy.MM.dd_HH.mm.ss.fff", CultureInfo.InvariantCulture);
                     PngEncoder.WriteBgraToFile(job.Bgra, job.Width, job.Height,
                                                Path.Combine(_dir, stem + ".png"),
                                                SolarMetadata.PngTextChunks(job.Solar)
+                                                   .Concat(illumination?.PngTextChunks() ?? [])
                                                    .Concat(SensorMetadata.PngTextChunks(job.Sensor))
                                                    .Concat(job.Capture.PngTextChunks()));
                     CotWriter.WriteToFile(Path.Combine(_dir, stem + ".xml"),
                                           job.CapturedUtc, job.Telemetry, _affiliation, _stale,
-                                          job.Solar, job.Sensor, job.Capture);
+                                          job.Solar, job.Sensor, job.Capture, illumination);
                     Interlocked.Increment(ref _saved);
                 }
                 catch (Exception ex)
@@ -267,6 +295,37 @@ public sealed class FrameRecorder : IDisposable
                     Console.Error.WriteLine($"[Recorder] write failed: {ex.Message}");
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// The declaration of a capture's own frame, waiting a bounded moment for a source that has not
+    /// reached that frame yet, and counting a capture that goes without.
+    /// </summary>
+    private async Task<IlluminationDeclaration?> DeclarationForAsync(ulong frame)
+    {
+        if (_illumination is not { } source)
+        {
+            return null;
+        }
+
+        DateTime giveUp = DateTime.UtcNow + IlluminationWait;
+        while (true)
+        {
+            if (source.TryGetDeclaration(frame, out IlluminationDeclaration declaration))
+            {
+                Interlocked.Increment(ref _illuminationPaired);
+                return declaration;
+            }
+
+            // A source already past this frame without an answer for it will not have one later.
+            if ((source.NewestFrame is { } newest && newest >= frame) || DateTime.UtcNow >= giveUp)
+            {
+                Interlocked.Increment(ref _illuminationUnpaired);
+                return null;
+            }
+
+            await Task.Delay(2).ConfigureAwait(false);
         }
     }
 
