@@ -1125,8 +1125,9 @@ public sealed class CarlaClient : IAsyncDisposable
     /// elevation_deg is geometric. corrected_elevation_deg has atmospheric refraction applied and is
     /// what the sun's directional light is actually rotated by; near the horizon the two differ by a
     /// few tenths of a degree, which is a large fraction of a low sun's elevation. It is appended
-    /// last, so the first eleven entries match the per-tick block on the episode-state header, which
-    /// carries the geometric elevation only.
+    /// last, so the entries match the per-tick block on the episode-state header in order: all twelve
+    /// from a server whose header carries the corrected elevation, the first eleven from one built
+    /// before it.
     public Task<IReadOnlyList<double>> GetSolarStateAsync()
         => _rpc.CallAsync<IReadOnlyList<double>>("get_solar_state");
 

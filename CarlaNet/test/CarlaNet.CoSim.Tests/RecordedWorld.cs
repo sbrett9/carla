@@ -10,10 +10,10 @@ namespace CarlaNet.CoSim.Tests;
 /// A CARLA world that records what was asked of it and answers as a server would.
 /// </summary>
 /// <remarks>
-/// <para>Everything the bridge does to a world is six operations wide, so a world that keeps a
-/// dictionary of actors and a list of batches exercises the whole driving path -- the pool, the
-/// batch, the read-back, the tick and the settings restoration -- with no server, no engine and no
-/// render. What it cannot establish is what a body looks like once the pose is applied, which is the
+/// <para>Everything the bridge does to a world is eleven operations wide, so a world that keeps a
+/// dictionary of actors, a list of batches and a simulated sun exercises the whole driving path --
+/// the pool, the batch, the read-back, the tick, the settings restoration and the sun's binding and
+/// audit -- with no server, no engine and no render. What it cannot establish is what a body looks like once the pose is applied, which is the
 /// one thing only a live run can answer.</para>
 ///
 /// <para>It answers the read-back with exactly what was commanded, plus whatever

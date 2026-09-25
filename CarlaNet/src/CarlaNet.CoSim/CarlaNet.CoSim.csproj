@@ -10,7 +10,7 @@
     <!-- The TraCI client this bridge reads SUMO through, the world package it reads the road network
          and the ground surface out of, and the CARLA client it writes poses through.
 
-         The write side reaches CARLA through ICarlaWorld, which is six operations wide, so the
+         The write side reaches CARLA through ICarlaWorld, which is eleven operations wide, so the
          session and everything under it is exercised against a recording implementation with no
          server anywhere. CarlaClientWorld is the only file in this assembly that names a
          CarlaClient, and it is the only one a live run is needed to exercise. -->
