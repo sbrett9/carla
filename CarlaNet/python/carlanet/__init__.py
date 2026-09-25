@@ -23,6 +23,7 @@ Environment:
 import sys
 import os
 import time
+import json as _json
 import math as _math
 import threading
 import fnmatch
@@ -2019,6 +2020,7 @@ class World:
                          capacity=128, maximum_bodies=192, fixed_delta=0.05, record_hz=2.0,
                          warm_up_to=0.0, step_length=None,
                          road_layer_visible=False, signal_layer_visible=False,
+                         epoch=None, illumination=None,
                          on_pose=None, on_release=None, on_divergence=None):
         """Drive this world's vehicles from a SUMO microsimulation. Returns the session, or None if
         the co-simulation assemblies are not loaded.
@@ -2052,6 +2054,21 @@ class World:
         hidden signal keeps its stop-line trigger. `session.Report.LayerVisibility` carries what was
         set, since a capture with no road mesh and a capture of a world that has none look alike.
 
+        `epoch` says what simulated second zero means in civil time at the site -- the `epoch` object
+        of a scenario.json, as a dict or its JSON text: `civil_datetime` with its numeric offset,
+        `utc_offset_hours`, the same instant again as `utc_datetime`, `calendar_advances`,
+        `dst_in_effect`, and optionally `time_zone_id` (carried, never resolved) and `note`. A
+        malformed one is refused, naming every rule it breaks. `illumination` says what the sun does
+        across the window -- the `illumination` object, as a dict or JSON, or just a policy name:
+        'freeze_at_window_start', 'advance' (with `rate_sun_s_per_sim_s`), 'freeze_at' (with
+        `freeze_at_civil_time`) or 'ignore'. **There is no default**, because a frozen run and an
+        unconfigured one write identical records: a session that renders a world and declares no
+        policy is refused. 'freeze_at_window_start' is the recommended one -- the sun is set, after
+        SUMO's fast-forward and before the first tick, to the civil instant of the first rendered
+        frame, read back to confirm the world took it, and held there. The sun the world was found
+        with is given back when the session ends. `session.Sun` says what was bound and what the
+        world reported.
+
         The three callbacks are handed a record per vehicle per tick from the tick thread and must
         not block: `on_pose` the computed pose, `on_release` a completed render interval, and
         `on_divergence` the commanded pose against what the world did with it. The run's summary is
@@ -2060,9 +2077,10 @@ class World:
             print("SUMO co-simulation unavailable: CarlaNet.CoSim assembly not loaded "
                   "(rebuild the wheel/DLLs).", file=sys.stderr)
             return None
-        from CarlaNet.CoSim import (CarlaClientWorld, CoSimPoseRecord, PoseDivergence,
-                                    RegionRenderSetPolicy, RenderedVehicleInterval,
-                                    SumoDriveSession, SumoDriveSessionOptions)
+        from CarlaNet.CoSim import (CarlaClientWorld, CoSimPoseRecord, IlluminationPolicy,
+                                    PoseDivergence, RegionRenderSetPolicy,
+                                    RenderedVehicleInterval, SolarEpoch, SumoDriveSession,
+                                    SumoDriveSessionOptions)
         from System import Action
 
         options = SumoDriveSessionOptions(
@@ -2081,6 +2099,16 @@ class World:
             options.SumoStepOverrideSeconds = float(step_length)
         options.RoadLayerVisible = bool(road_layer_visible)
         options.SignalLayerVisible = bool(signal_layer_visible)
+        # Both are read by the C# side, which is the one validator: a declaration checked twice is
+        # a declaration two implementations will eventually disagree about.
+        if epoch is not None:
+            options.Epoch = SolarEpoch.FromJson(
+                epoch if isinstance(epoch, str) else _json.dumps(epoch))
+        if illumination is not None:
+            if isinstance(illumination, str) and not illumination.lstrip().startswith("{"):
+                illumination = {"illumination_version": 1, "policy": illumination}
+            options.Illumination = IlluminationPolicy.FromJson(
+                illumination if isinstance(illumination, str) else _json.dumps(illumination))
         # Each callback is bound to the delegate type it is assigned to. A bare Python callable
         # does not convert to a generic Action<T> and the assignment fails outright, which is worth
         # knowing here rather than at the far end of a caller's own wiring.

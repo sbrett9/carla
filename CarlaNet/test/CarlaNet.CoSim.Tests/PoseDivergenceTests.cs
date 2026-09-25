@@ -133,6 +133,8 @@ public sealed class PoseDivergenceTests
         {
             World = carla,
             OnDivergence = divergences.Add,
+            Epoch = SolarLeaseTests.PortEpoch(),
+            Illumination = IlluminationPolicy.FreezeAtWindowStart(),
         };
 
         SumoDriveSession session = SumoDriveSession.Start(options);

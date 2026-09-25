@@ -14,7 +14,23 @@ What a run needs on disk:
   * the measured vehicle catalogue, and a `carla:blueprint` parameter on every vType that is meant
     to be rendered. A vType naming no measured blueprint is simulated and never rendered -- no body
     of another shape stands in for it, so a scenario whose types carry no such parameter produces an
-    empty road and says so in the report's refused-type count.
+    empty road and says so in the report's refused-type count;
+  * the scenario's epoch -- what simulated second zero means in civil time at the site -- as a JSON
+    file holding the `epoch` object on its own or inside a scenario.json:
+
+        {"epoch_version": 1, "civil_datetime": "2026-03-21T00:00:00-07:00",
+         "utc_offset_hours": -7, "utc_datetime": "2026-03-21T07:00:00Z",
+         "calendar_advances": true, "dst_in_effect": true,
+         "time_zone_id": "America/Los_Angeles"}
+
+    The offset is the declaration, daylight saving included -- Pacific time on 21 March is -07:00
+    -- and the zone name is carried for a reader and never resolved.
+
+The sun's policy has no default. A frozen run and a run nobody configured write identical records,
+so the session refuses to render a world whose run does not say what its sun is doing.
+`--illumination freeze_at_window_start` is the recommended one: after SUMO is fast-forwarded and
+before the first tick, the sun is set to the civil instant of the first rendered frame, read back to
+confirm the world took it, and held there. The sun the world was found with is given back at the end.
 
 Usage:
 
@@ -22,6 +38,7 @@ Usage:
         --scenario ../../Import/Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg \\
         --world-package <build dir>/Gardnerville_Centerville_Lane.cwp \\
         --catalogue ../../CarlaControl/catalogue/vehicles.catalogue.json \\
+        --epoch gardnerville.epoch.json --illumination freeze_at_window_start \\
         --record-dir ../../Build/captures/gardnerville
 
 Pass `--no-record` to drive the world without spawning a camera, which is the shortest way to see
@@ -38,6 +55,7 @@ caller's to supply, is in
 `Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/03_CoSimulation_Runtime.md` section 9.5.1.
 """
 import argparse
+import json
 import math
 import os
 import sys
@@ -100,6 +118,31 @@ def parse_args() -> argparse.Namespace:
                              "the photogrammetry. SUMO simulates the signals and its vehicles obey "
                              "them either way -- what is dropped is the rendering, not the signal")
 
+    parser.add_argument("--epoch",
+                        help="a JSON file declaring what simulated second zero means in civil time: "
+                             "the scenario's `epoch` object on its own, or a scenario.json carrying "
+                             "one, whose `illumination` object is then read as well")
+    parser.add_argument("--illumination",
+                        choices=("freeze_at_window_start", "advance", "freeze_at", "ignore"),
+                        help="what the sun does across the window. No default: "
+                             "freeze_at_window_start (recommended) sets it to the civil instant the "
+                             "window opens and holds it; advance lets the engine carry it at "
+                             "--solar-rate; freeze_at holds it at --freeze-at; ignore leaves it as "
+                             "the world holds it and records that the lighting honours no epoch")
+    parser.add_argument("--solar-rate", type=float,
+                        help="with --illumination advance: sun-clock seconds per simulated second; "
+                             "1.0 keeps the sun on civil time")
+    parser.add_argument("--freeze-at",
+                        help="with --illumination freeze_at: the civil time of day, HH:MM:SS, the "
+                             "sun is held at whatever time the window opens")
+    parser.add_argument("--freeze-date-advances", action="store_true",
+                        help="under a freeze, let the sun's date follow the civil date when the "
+                             "epoch's calendar advances. Without it a frozen week of windows keeps "
+                             "the epoch's own date, and so one seasonal sun geometry")
+    parser.add_argument("--no-sun-required", action="store_true",
+                        help="run on a world with no sun rather than refusing it. The run is then "
+                             "lit by nothing anyone declared, and says so")
+
     parser.add_argument("--no-record", action="store_true",
                         help="drive the world without spawning a camera or writing frames")
     parser.add_argument("--record-dir", default=os.path.join(_REPO, "Build", "captures"))
@@ -129,6 +172,61 @@ def region_centre(args: argparse.Namespace) -> tuple[float, float]:
     the bridge applies to every vehicle.
     """
     return args.region_x, -args.region_y
+
+
+class SunDeclaration:
+    """The scenario's epoch and the run's sun policy, as the session is handed them.
+
+    The session reads both and is the one validator of either; this only gathers them. An epoch file
+    may be the `epoch` object on its own or a whole scenario.json, whose `illumination` object is
+    then the policy. A policy given in the file and on the command line is refused rather than
+    resolved: which of two declarations wins is the operator surface's decision to make, not this
+    script's.
+    """
+
+    def __init__(self, args: argparse.Namespace) -> None:
+        self.epoch: dict | None = None
+        self.illumination: dict | None = None
+        from_file: dict | None = None
+        if args.epoch:
+            with open(args.epoch, encoding="utf-8") as handle:
+                document = json.load(handle)
+            if isinstance(document, dict) and isinstance(document.get("epoch"), dict):
+                self.epoch = document["epoch"]
+                from_file = document.get("illumination")
+            else:
+                self.epoch = document
+
+        from_command_line = self.from_command_line(args)
+        if from_file is not None and from_command_line is not None:
+            raise SystemExit(
+                f"{args.epoch} declares the '{from_file.get('policy')}' illumination policy and the "
+                f"command line declares '{from_command_line.get('policy')}'. Declare it in one place.")
+        self.illumination = from_file if from_file is not None else from_command_line
+
+    @staticmethod
+    def from_command_line(args: argparse.Namespace) -> dict | None:
+        """The `illumination` object the flags describe, or None where none of them was given.
+
+        Every flag given is passed on, including one that belongs to another policy, so the session
+        refuses the combination by name rather than this script quietly dropping half of it.
+        """
+        given = (args.illumination, args.solar_rate, args.freeze_at)
+        if all(value is None for value in given) and not (
+                args.freeze_date_advances or args.no_sun_required):
+            return None
+        declared: dict = {"illumination_version": 1}
+        if args.illumination is not None:
+            declared["policy"] = args.illumination
+        if args.solar_rate is not None:
+            declared["rate_sun_s_per_sim_s"] = args.solar_rate
+        if args.freeze_at is not None:
+            declared["freeze_at_civil_time"] = args.freeze_at
+        if args.freeze_date_advances:
+            declared["freeze_date_advances"] = True
+        if args.no_sun_required:
+            declared["require_sun"] = False
+        return declared
 
 
 class RenderedVehicleCentre:
@@ -212,6 +310,8 @@ def main() -> int:
             print(f"no {label} at {path}", file=sys.stderr)
             return 2
 
+    sun = SunDeclaration(args)
+
     client = carla.Client(args.host, args.port)
     client.set_timeout(30.0)
     world = client.get_world()
@@ -245,6 +345,8 @@ def main() -> int:
             step_length=args.step_length,
             road_layer_visible=args.show_road_mesh,
             signal_layer_visible=args.show_signals,
+            epoch=sun.epoch,
+            illumination=sun.illumination,
             # Bound only where the aim needs it: the session hands out a pose per rendered
             # vehicle per tick, and a callback that spends the whole run declining them is a
             # crossing into Python per vehicle per tick for nothing.
@@ -254,6 +356,8 @@ def main() -> int:
             return 1
 
         print(f"clock: {session.Clock}")
+        print(f"sun: {session.Sun}" if session.Sun is not None
+              else "sun: left as the world holds it; the run's lighting honours no epoch")
         print("layers: " + ", ".join(
             f"{layer} {'drawn' if session.Report.LayerVisibility[layer] else 'hidden'}"
             for layer in session.Report.LayerVisibility.Keys))

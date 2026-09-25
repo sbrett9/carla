@@ -478,6 +478,94 @@ public sealed class SumoDriveSessionTests
                                                         carla.Sun.TimeZone, carla.Sun.Advancing));
     }
 
+    [Fact]
+    public void ASessionThatRendersAWorldAndDeclaresNoPolicyIsRefusedBeforeAnythingIsTouched()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld();
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+        options.Illumination = null;
+
+        CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+            () => SumoDriveSession.Start(options));
+
+        // The recommendation is named, and not applied.
+        Assert.Contains("declares no illumination policy", refused.Message);
+        Assert.Contains("freeze_at_window_start (recommended", refused.Message);
+        Assert.Empty(carla.SettingsWrites);
+        Assert.Empty(carla.LayerWrites);
+        Assert.Empty(carla.SolarWrites);
+    }
+
+    [Fact]
+    public void APolicyThatBindsTheSunNeedsAnEpochToBindItFrom()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld();
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+        options.Epoch = null;
+
+        CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+            () => SumoDriveSession.Start(options));
+
+        Assert.Contains("declares no epoch", refused.Message);
+        Assert.Empty(carla.SettingsWrites);
+    }
+
+    [RequiresSumoFact]
+    public void TheIgnorePolicyLeavesTheSunAloneAndStillRefusesAWorldWithNone()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld();
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+        options.Epoch = null;
+        options.Illumination = IlluminationPolicy.Ignore();
+
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            session.Advance();
+            Assert.Null(session.Sun);
+            Assert.Empty(carla.SolarWrites);
+        }
+
+        var sunless = new RecordedWorld { Sun = null };
+        options.World = sunless;
+        CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+            () => SumoDriveSession.Start(options));
+        Assert.Contains("reports no sun", refused.Message);
+
+        // Given back on the way out, as any other refusal after the world was taken.
+        Assert.False(sunless.Settings.SynchronousMode);
+
+        options.Illumination = IlluminationPolicy.Ignore(requireSun: false);
+        using SumoDriveSession allowed = SumoDriveSession.Start(options);
+        Assert.True(allowed.Advance());
+    }
+
+    [RequiresSumoFact]
+    public void ASessionThatRendersNothingDeclaresNothing()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        SumoDriveSessionOptions options = Options(world, [], [], () => true);
+        options.Epoch = null;
+        options.Illumination = null;
+
+        using SumoDriveSession session = SumoDriveSession.Start(options);
+        Assert.True(session.Advance());
+        Assert.Null(session.Sun);
+    }
+
     [RequiresSumoFact]
     public void ASessionGivenTwoWaysToAdvanceTheWorldIsRefused()
     {
@@ -506,5 +594,7 @@ public sealed class SumoDriveSessionTests
             TickWorld = tick,
             OnPose = computed.Add,
             OnRelease = released.Add,
+            Epoch = SolarLeaseTests.PortEpoch(),
+            Illumination = IlluminationPolicy.FreezeAtWindowStart(),
         };
 }

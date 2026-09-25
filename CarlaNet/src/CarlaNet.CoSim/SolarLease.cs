@@ -186,6 +186,18 @@ public sealed class SolarLease : IDisposable
         }
     }
 
+    /// <summary>What was bound, what the world reported back, and what it was found holding.</summary>
+    public override string ToString()
+    {
+        string window = $"{Declared.Policy} for a window opening at "
+                        + SolarEpoch.FormatCivil(Declared.WindowOpenCivil);
+        return NoSun
+            ? $"{window}; the world has no sun and the policy did not require one"
+            : $"{window}; sun written {Declared.SunAtWindowOpen:yyyy-MM-dd HH:mm:ss.FFF} at "
+              + $"UTC{SolarEpoch.FormatOffset(Declared.Epoch.UtcOffset)}; the world reports "
+              + $"{AtWindowOpen}; it was found holding {AsFound}";
+    }
+
     private static List<string> Disagreements(DeclaredSun declared, SolarReading read)
     {
         DateTime sun = declared.SunAtWindowOpen;

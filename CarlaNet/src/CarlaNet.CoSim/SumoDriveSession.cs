@@ -114,12 +114,15 @@ public sealed class SumoDriveSession : IDisposable
     /// lease, and buffer the one SUMO step of lookahead every sub-step pose is interpolated inside.
     /// </summary>
     /// <exception cref="CoSimSessionRefusedException">
-    /// The clock does not divide, the world is asynchronous, the network is not the one the world
-    /// was built from, or something else already holds the world's population.
+    /// The session renders a world and declares no illumination policy, or a policy that binds the
+    /// sun and no epoch to bind it from; the clock does not divide, the world is asynchronous, the
+    /// network is not the one the world was built from, something else already holds the world's
+    /// population, or the world's sun could not be bound.
     /// </exception>
     public static SumoDriveSession Start(SumoDriveSessionOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        RequireADeclaredIllumination(options);
 
         WorldPackageManifest manifest = WorldPackage.ReadManifest(options.WorldPackagePath);
         GroundSurface ground = GroundSurface.FromWorldPackage(options.WorldPackagePath);
@@ -335,14 +338,28 @@ public sealed class SumoDriveSession : IDisposable
     /// </remarks>
     private void BindTheSun()
     {
-        if (_options.World is not { } world
-            || _options.Illumination is not { BindsTheSun: true } policy
-            || _options.Epoch is not { } epoch)
+        if (_options.World is not { } world || _options.Illumination is not { } policy)
         {
             return;
         }
 
-        _sun = SolarLease.Take(world, new DeclaredSun(epoch, policy, RenderedTimeSeconds));
+        if (!policy.BindsTheSun)
+        {
+            // Left alone, but not unexamined: a run that requires a sun and has none is lit by
+            // nothing anyone declared, whichever policy it runs under.
+            if (policy.RequireSun && SolarReading.From(world.ReadSolarState()) is null)
+            {
+                throw new CoSimSessionRefusedException(
+                    "The world reports no sun, and the run requires one. Under the 'ignore' policy "
+                    + "the session leaves the sun alone, but a world with no CesiumSunSky is lit by "
+                    + "nothing anyone declared; declare that the run does not require a sun if "
+                    + "that is the intent.");
+            }
+
+            return;
+        }
+
+        _sun = SolarLease.Take(world, new DeclaredSun(_options.Epoch!, policy, RenderedTimeSeconds));
     }
 
     private bool AdvanceSumo()
@@ -561,6 +578,49 @@ public sealed class SumoDriveSession : IDisposable
         catch (Exception failure)
         {
             failures.Add(failure);
+        }
+    }
+
+    /// <summary>
+    /// Refuse a session that renders a world and does not say what its sun is doing.
+    /// </summary>
+    /// <remarks>
+    /// <para>There is no default policy, and that is the point. A frozen run and a run nobody
+    /// configured write byte-identical records, so a default would make an absent declaration
+    /// indistinguishable from a deliberate one -- and the absent one is today's behaviour, under which
+    /// every capture was lit by whatever the world last held. Freezing at the window's opening
+    /// instant is the recommended policy; it is recommended, not assumed.</para>
+    ///
+    /// <para>Checked before anything is started, because it needs nothing but the options. A session
+    /// with no world renders nothing and has no sun, so it declares nothing.</para>
+    /// </remarks>
+    private static void RequireADeclaredIllumination(SumoDriveSessionOptions options)
+    {
+        if (options.World is null)
+        {
+            return;
+        }
+
+        if (options.Illumination is not { } policy)
+        {
+            throw new CoSimSessionRefusedException(
+                "The session renders a world and declares no illumination policy. A frozen run and "
+                + "a run nobody configured write identical records, so an absent policy cannot be "
+                + "told from a chosen one, and there is no default. Declare one: "
+                + "freeze_at_window_start (recommended -- the sun is set to the civil instant the "
+                + "window opens and held there, so the window is one lighting condition), advance "
+                + "(the engine carries it forward at a declared rate), freeze_at (held at a declared "
+                + "civil time of day) or ignore (left as the world holds it, and recorded as not "
+                + "honouring any epoch).");
+        }
+
+        if (policy.BindsTheSun && options.Epoch is null)
+        {
+            throw new CoSimSessionRefusedException(
+                $"The '{policy.Name}' policy binds the sun to the scenario's civil time, and the "
+                + "session declares no epoch to take it from. Declare what simulated second zero "
+                + "means in civil time, or run under 'ignore', which leaves the sun alone and records "
+                + "that the run's lighting honours no epoch.");
         }
     }
 
