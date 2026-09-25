@@ -364,9 +364,9 @@ def main() -> int:
             for layer in session.Report.LayerVisibility.Keys))
 
         steps = 0
-        # Everything up to the recorder starting happens with the world already in synchronous mode,
-        # because a camera in an asynchronous world delivers no frames at all: the session takes the
-        # clock before the camera exists.
+        # Everything up to the recorder starting happens with the world already in synchronous mode:
+        # the session takes the clock before the camera exists, so every image the camera delivers is
+        # of a tick the session issued.
         if not args.no_record:
             centre = region_centre(args)
             if aims_at_traffic:

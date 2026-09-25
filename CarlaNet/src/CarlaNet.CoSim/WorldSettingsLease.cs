@@ -9,10 +9,8 @@ namespace CarlaNet.CoSim;
 /// <remarks>
 /// <para><b>Why the bridge writes the settings at all.</b> It owns the advance of simulated time on
 /// both sides, which an asynchronous world makes impossible: the world advances on its own between
-/// the pose write and the frame, so no captured frame corresponds to any SUMO step. Measured on this
-/// fork it is worse than a timing error -- a camera spawned into an asynchronous world delivered no
-/// frames at all over five seconds, against forty over forty ticks in synchronous mode. So the
-/// session puts the world into synchronous mode at a fixed delta rather than asking an operator to.
+/// the pose write and the frame, so no captured frame corresponds to any SUMO step. So the session
+/// puts the world into synchronous mode at a fixed delta rather than asking an operator to.
 /// </para>
 ///
 /// <para><b>And why it reads them back.</b> Writing a setting is not the same as the world having
@@ -94,8 +92,7 @@ public sealed class WorldSettingsLease : IDisposable
             + $"{(applied.SynchronousMode ? "synchronous" : "asynchronous")} at "
             + $"{(applied.FixedDeltaSeconds is { } reported ? reported.ToString("0.######") : "a variable delta")}. "
             + "A session that believes it owns the tick while the world runs on its own stamps "
-            + "every frame with an instant nothing rendered, and on this fork an asynchronous "
-            + "world delivers a camera no frames at all.");
+            + "every frame with an instant nothing rendered.");
     }
 
     /// <summary>

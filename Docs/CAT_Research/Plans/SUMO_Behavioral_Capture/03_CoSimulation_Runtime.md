@@ -1935,22 +1935,25 @@ session.run():
 Everything between `applyBatch` and `sendTickCue` executes inside the server's RPC drain for the
 frame that cue produces (§9.2), which is why the day-rollover write lands on the right frame.
 
-**Two properties of the server this loop rests on, both measured 2026-09-22 against a running
-editor.**
+**Two properties of the server this loop rests on, both measured against a running editor.**
 
-**A camera delivers no frames at all in asynchronous mode.** A 320 × 240 RGB camera spawned into an
-asynchronous world and left alone produced **0 frames over 5 seconds** of wall clock, with a fixed
-delta set and again with none; the same camera in synchronous mode produced **40 frames over 40
-ticks**. The control matters, because a camera spawned while the world was synchronous and then
-switched will not distinguish "the mode delivers nothing" from "the settings change broke an
-established stream" — the camera above was spawned into the asynchronous world and never touched.
-So the session's refusal of an asynchronous world is not a clock-ownership formality: an
-asynchronous capture produces no imagery whatsoever.
+**A world handed back asynchronous free-runs on its own.** The session gives the world back with the
+settings it found, and a client that switches a world from synchronous to asynchronous is served
+from inside the server's synchronous RPC drain (§9.2). The drain tests the mode on every pass, so the
+switch ends it and the next frame is free-running. A drain that waits on the tick cue alone never
+ends, because an asynchronous client sends no cue: the world reports asynchronous and advances
+nothing — the whole engine, not only CARLA's clock — until some client ticks it, and every camera
+and observer in it sees nothing. Measured 2026-09-25 against such a server: **0 observer frames and
+0 camera images over 3 seconds** with no client ticking; **one tick cue** sent to the same world
+released it to **481 observer frames in the next 3 seconds**, and a camera then delivered **373
+images in 5 seconds**, still asynchronous. `CarlaNet/python/test_sync_to_async_release.py` is the
+guard: it proves its frame counter against 20 synchronous ticks, then requires the world it switches
+to asynchronous to deliver observer frames and camera images with no client ticking.
 
 **`world.get_actors()` with no arguments answers nothing until the world has been ticked since the
 client connected.** The shim's no-argument path reads `CarlaClient.GetCachedActorIds`, which is the
 world-observer snapshot cache, and in synchronous mode a snapshot is produced only by a tick.
-Measured: a fresh client on a synchronous world read **0** actors before any tick and **25**
+Measured 2026-09-22: a fresh client on a synchronous world read **0** actors before any tick and **25**
 immediately after one, while `get_actors([id])` on that same client resolved straight away because it
 goes to the server by id. A bridge enumerates the world at session start, which is before its first
 tick, so **the bridge must not depend on enumeration** — its one whole-population question is SUMO's

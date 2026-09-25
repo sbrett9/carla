@@ -579,9 +579,10 @@ value is not a measurement.
   `unknown`, rather than publishing seventeen `unlit` verdicts it was never in a position to make.
 - The pass must never write `lit` by assumption, and must never infer one lamp from another. Front and
   rear are separate bits and separate meshes.
-- **The camera takes the clock.** Measured on this server: a camera delivers no frames at all while the
-  simulation free-runs and exactly one frame per step in synchronous mode, so the pass switches the
-  world to synchronous stepping for its duration and restores the caller's settings afterwards.
+- **The camera takes the clock.** Stepped synchronously, a camera delivers exactly one frame per step,
+  each rendered after the lamp state the pass wrote; free-running, it delivers whatever frame the
+  world happened to render. So the pass switches the world to synchronous stepping for its duration
+  and restores the caller's settings afterwards.
 
 **What is *not* measured, and must not be.** Whether a lamp is bright enough to be *detectable* at a
 given range by a given sensor is a collection question, not a content property; it belongs to

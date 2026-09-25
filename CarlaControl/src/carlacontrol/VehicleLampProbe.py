@@ -143,8 +143,9 @@ class VehicleLampProbe:
     """Runs the optical lamp pass over a set of blueprints against a live server.
 
     Puts the world into synchronous stepping for the duration and restores the caller's settings
-    afterwards: a camera on this server delivers a frame per simulation step and none at all while the
-    server free-runs, so a pass that did not take the clock would be reading whatever arrived.
+    afterwards: stepped, a camera delivers exactly one frame per step, each rendered after the lamp
+    state the pass wrote; free-running, a pass that did not take the clock would be reading whatever
+    arrived.
     """
 
     def __init__(self, world, settings: LampProbeSettings | None = None) -> None:

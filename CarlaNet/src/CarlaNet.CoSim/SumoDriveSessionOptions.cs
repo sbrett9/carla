@@ -36,8 +36,8 @@ public sealed record SumoDriveSessionOptions(
 
     /// <summary>
     /// Whether the world advances only on a tick cue, for a session with no <see cref="World"/>.
-    /// False refuses the session, and the refusal is not a formality: measured on this fork, a
-    /// camera spawned into an asynchronous world delivers no frames at all.
+    /// False refuses the session: a world that advances on its own moves between the pose write and
+    /// the frame, so no captured frame corresponds to any SUMO step.
     /// </summary>
     /// <remarks>
     /// Ignored where a world is given, because the session then puts that world into synchronous
