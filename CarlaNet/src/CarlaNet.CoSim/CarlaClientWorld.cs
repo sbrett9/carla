@@ -66,6 +66,30 @@ public sealed class CarlaClientWorld : ICarlaWorld
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// The record's grids are fetched only where the record says the surface is draped, which is the
+    /// only case in which the server holds any.
+    /// </remarks>
+    public LoadedWorld DescribeLoadedWorld()
+    {
+        GeoLocation origin = _client.GetCesiumOriginAsync().GetAwaiter().GetResult();
+        string openDrive = _client.GetMapDataAsync().GetAwaiter().GetResult() ?? string.Empty;
+        IReadOnlyList<double> scalars = _client.GetBareEarthReferenceAsync().GetAwaiter().GetResult();
+
+        BareEarthRecord? record = null;
+        if (scalars is { Count: >= 7 })
+        {
+            bool draped = scalars[1] != 0.0;
+            record = new BareEarthRecord(
+                scalars[0], draped, scalars[2], scalars[3], scalars[4], (int)scalars[5], (int)scalars[6],
+                draped ? [.. _client.GetBareEarthOffsetGridAsync().GetAwaiter().GetResult()] : [],
+                draped ? [.. _client.GetBareEarthDtmGridAsync().GetAwaiter().GetResult()] : []);
+        }
+
+        return new LoadedWorld(origin.Latitude, origin.Longitude, origin.Altitude, openDrive, record);
+    }
+
+    /// <inheritdoc/>
     public EpisodeSettings ReadSettings() =>
         _client.GetEpisodeSettingsAsync().GetAwaiter().GetResult();
 

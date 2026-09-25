@@ -57,6 +57,17 @@ public sealed class CoSimRunReport
     /// </remarks>
     public double? SumoStepOverrideSeconds { get; init; }
 
+    /// <summary>
+    /// The pace the run was declared to hold against the wall clock, and the pace it held: over each
+    /// fixed window of wall clock, over the whole run, and for the worst window.
+    /// </summary>
+    /// <remarks>
+    /// Live while the run goes, so a harness can print it between advances. Published whether or not
+    /// the run was paced: a run that did not hold its declared rate is a fact about the data -- its
+    /// frames are unevenly spaced in wall clock -- and an unpaced run's figure is how fast it went.
+    /// </remarks>
+    public required RealTimePacer Pacing { get; init; }
+
     /// <summary>What simulated second zero meant in civil time, as the run declared it.</summary>
     public SolarEpoch? Epoch { get; init; }
 
@@ -358,6 +369,29 @@ public sealed class CoSimRunReport
         }
     }
 
+    /// <summary>
+    /// The pacing lines: what was declared, what the whole run achieved, the windows, and for a paced
+    /// run how far behind its schedule it went.
+    /// </summary>
+    private void AppendPacing(StringBuilder text)
+    {
+        text.AppendLine($"pacing             {Pacing}");
+        if (Pacing.CompletedWindows > 0)
+        {
+            text.AppendLine($"  windows          {Pacing.CompletedWindows} of {Pacing.WindowSeconds:0.###} s; "
+                            + $"last {Pacing.LastWindowFactor:0.####} x, worst "
+                            + $"{Pacing.WorstWindowFactor:0.####} x closing at "
+                            + $"{Pacing.WorstWindowClosedAtSeconds:0.00} s");
+        }
+
+        if (Pacing.Paced && Pacing.Cues > 1)
+        {
+            text.AppendLine($"  behind schedule  {Pacing.BehindScheduleSeconds:0.000} s at the last tick, worst "
+                            + $"{Pacing.WorstBehindScheduleSeconds:0.000} s"
+                            + (Pacing.WorstBehindScheduleAtSeconds is { } at ? $" at {at:0.00} s" : string.Empty));
+        }
+    }
+
     /// <summary>The bridge's own cost per world tick, in milliseconds.</summary>
     public double BridgeMillisecondsPerTick =>
         Ticks == 0 ? 0.0 : BridgeSecondsOnTicks * 1000.0 / Ticks;
@@ -379,6 +413,7 @@ public sealed class CoSimRunReport
             text.AppendLine($"step override      {forced:0.###} s (behaviour-changing)");
         }
 
+        AppendPacing(text);
         if (LayerVisibility.Count > 0)
         {
             text.AppendLine("layers             "

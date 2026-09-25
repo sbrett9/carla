@@ -122,6 +122,7 @@ public sealed class PoseDivergenceTests
     {
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        carla.Loaded = world.AsLoaded();
 
         var options = new SumoDriveSessionOptions(
             CoSimFixtures.RightAngleTurnScenario,

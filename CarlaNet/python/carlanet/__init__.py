@@ -2028,6 +2028,7 @@ class World:
                          warm_up_to=0.0, step_length=None,
                          road_layer_visible=False, signal_layer_visible=False,
                          epoch=None, illumination=None,
+                         real_time_factor=0.0, pacing_window_s=5.0,
                          on_pose=None, on_release=None, on_divergence=None):
         """Drive this world's vehicles from a SUMO microsimulation. Returns the session, or None if
         the co-simulation assemblies are not loaded.
@@ -2076,6 +2077,20 @@ class World:
         with is given back when the session ends. `session.Sun` says what was bound and what the
         world reported.
 
+        `real_time_factor` holds the world's ticks to the wall clock: simulated seconds per
+        wall-clock second, so 1.0 is the pace of real traffic, 0.5 half of it and 2.0 twice it. 0,
+        the default, holds them to nothing and the world ticks as fast as the machine allows. It is
+        read once, when the session starts, and a negative, infinite or NaN factor is refused. The
+        warm-up is never paced -- it ticks no world -- and pacing starts at the first tick. What the
+        run actually held is on `session.Report.Pacing`, paced or not and live while it runs:
+        `AchievedFactor` over the whole run, `LastWindowFactor` over the latest `pacing_window_s` of
+        wall clock, `WorstWindowFactor`, and for a paced run `BehindScheduleSeconds`. Nothing stops a
+        run for falling behind; it says so.
+
+        The session also refuses a `world_package` that does not describe the world this server has
+        loaded -- another build's origin, surface grid or road network -- and a world that carries no
+        bare-earth record at all, which is any stock map. It checks before it touches the world.
+
         The three callbacks are handed a record per vehicle per tick from the tick thread and must
         not block: `on_pose` the computed pose, `on_release` a completed render interval, and
         `on_divergence` the commanded pose against what the world did with it. The run's summary is
@@ -2106,6 +2121,8 @@ class World:
             options.SumoStepOverrideSeconds = float(step_length)
         options.RoadLayerVisible = bool(road_layer_visible)
         options.SignalLayerVisible = bool(signal_layer_visible)
+        options.RealTimeFactor = float(real_time_factor)
+        options.PacingWindowSeconds = float(pacing_window_s)
         # Both are read by the C# side, which is the one validator: a declaration checked twice is
         # a declaration two implementations will eventually disagree about.
         if epoch is not None:

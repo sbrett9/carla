@@ -51,6 +51,7 @@ public sealed class SumoDriveSession : IDisposable
     private readonly Dictionary<string, CoSimVehicleFrame> _next = [];
     private readonly Stopwatch _bridgeClock = new();
     private readonly Stopwatch _sumoClock = new();
+    private readonly RealTimePacer _pacer;
 
     private readonly (double Latitude, double Longitude) _origin;
     private SolarLease? _sun;
@@ -90,6 +91,11 @@ public sealed class SumoDriveSession : IDisposable
         _converter = new PoseConverter(ground, options.MeasuredSeatHeights);
         _interpolator = new LaneArcInterpolator(network);
 
+        // The factor is read here, once. The options object stays writable after the session starts,
+        // and a pace that could change part-way through would make one run two.
+        _pacer = new RealTimePacer(options.RealTimeFactor, options.PacingWindowSeconds,
+                                   clock.WorldDeltaSeconds, options.WallClock);
+
         Clock = clock;
         Report = new CoSimRunReport
         {
@@ -98,6 +104,7 @@ public sealed class SumoDriveSession : IDisposable
             WorldPackagePath = options.WorldPackagePath,
             CatalogueDigest = catalogue.CatalogueDigest,
             SumoStepOverrideSeconds = options.SumoStepOverrideSeconds,
+            Pacing = _pacer,
             LayerVisibility = layers?.Applied ?? new Dictionary<string, bool>(),
             Epoch = options.Epoch,
             Illumination = options.Illumination,
@@ -136,24 +143,36 @@ public sealed class SumoDriveSession : IDisposable
     public IIlluminationSource Illumination => _illumination;
 
     /// <summary>
-    /// Start a session: validate the clock, check the network is the world's, take the population
-    /// lease, and buffer the one SUMO step of lookahead every sub-step pose is interpolated inside.
+    /// Start a session: check the world package is the loaded world's, validate the clock, check the
+    /// network is the world's, take the population lease, and buffer the one SUMO step of lookahead
+    /// every sub-step pose is interpolated inside.
     /// </summary>
     /// <exception cref="CoSimSessionRefusedException">
     /// The session renders a world and declares no illumination policy, or a policy that binds the
-    /// sun and no epoch to bind it from; the clock does not divide, the world is asynchronous, the
-    /// network is not the one the world was built from, something else already holds the world's
-    /// population, or the world's sun could not be bound.
+    /// sun and no epoch to bind it from; the real-time factor or its window is not a usable number;
+    /// the world package does not describe the world the server has loaded; the clock does not
+    /// divide, the world is asynchronous, the network is not the one the world was built from,
+    /// something else already holds the world's population, or the world's sun could not be bound.
     /// </exception>
     public static SumoDriveSession Start(SumoDriveSessionOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
         RequireADeclaredIllumination(options);
+        RequireAUsablePace(options);
+        RequireOneWayToAdvanceTheWorld(options);
 
         WorldPackageManifest manifest = WorldPackage.ReadManifest(options.WorldPackagePath);
         GroundSurface ground = GroundSurface.FromWorldPackage(options.WorldPackagePath);
         SumoRoadNetwork network = SumoRoadNetwork.FromWorldPackage(options.WorldPackagePath);
         VehicleCatalogue catalogue = VehicleCatalogue.Load(options.CataloguePath);
+
+        // Before SUMO is started and before anything on the server is written: a package that is not
+        // the loaded world's is refused with the world exactly as it was found, and it costs no
+        // process to find out.
+        if (options.World is { } loaded)
+        {
+            LoadedWorldCheck.Require(options.WorldPackagePath, loaded.DescribeLoadedWorld());
+        }
 
         List<string> extraArguments = [];
         if (options.SumoStepOverrideSeconds is { } forced)
@@ -175,8 +194,6 @@ public sealed class SumoDriveSession : IDisposable
         LayerVisibilityLease? layers = null;
         try
         {
-            RequireOneWayToAdvanceTheWorld(options);
-
             // Take the world's clock before anything else is checked against it: the settings the
             // session validates its own against have to be the ones the world is holding, not the
             // ones the caller asked for.
@@ -253,6 +270,11 @@ public sealed class SumoDriveSession : IDisposable
     /// False where SUMO has nothing left to simulate, which is how a run ends rather than by a
     /// count of steps.
     /// </returns>
+    /// <remarks>
+    /// Under a real-time factor, each tick cue waits here for the instant it is due -- after the
+    /// tick's poses are written, so the cue goes out at that instant rather than the bridge's work
+    /// later -- and every cue is timed whether or not it waited.
+    /// </remarks>
     public bool Advance()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -265,6 +287,9 @@ public sealed class SumoDriveSession : IDisposable
             WriteTheBatch();
             _bridgeClock.Stop();
 
+            // The server is held in its RPC drain until the cue arrives, with this tick's batch
+            // already applied, so waiting here holds the frame and nothing else.
+            _pacer.BeforeTickCue(RenderedTimeSeconds);
             if (_tickWorld() is not { } frame)
             {
                 throw new CoSimSessionRefusedException(
@@ -729,6 +754,41 @@ public sealed class SumoDriveSession : IDisposable
                 + "session declares no epoch to take it from. Declare what simulated second zero "
                 + "means in civil time, or run under 'ignore', which leaves the sun alone and records "
                 + "that the run's lighting honours no epoch.");
+        }
+    }
+
+    /// <summary>
+    /// Refuse a real-time factor, or a window to measure it over, that describes no pace.
+    /// </summary>
+    /// <remarks>
+    /// Checked before anything is started, because it needs nothing but the options. A factor that
+    /// is negative, infinite or undefined is not rounded to the nearest pace that makes sense:
+    /// whichever pace that was, it is one nobody asked for, and the run would record it as declared.
+    /// </remarks>
+    private static void RequireAUsablePace(SumoDriveSessionOptions options)
+    {
+        if (!double.IsFinite(options.RealTimeFactor) || options.RealTimeFactor < 0.0)
+        {
+            throw new CoSimSessionRefusedException(
+                $"The real-time factor is {options.RealTimeFactor}. It is simulated seconds per "
+                + "wall-clock second: 1.0 holds the world to the pace of real traffic, 0.5 to half "
+                + "of it, 2.0 to twice it, and 0 runs it as fast as the machine allows. A negative, "
+                + "infinite or undefined factor is no pace at all.");
+        }
+
+        if (!double.IsFinite(options.PacingWindowSeconds) || options.PacingWindowSeconds <= 0.0)
+        {
+            throw new CoSimSessionRefusedException(
+                $"The pacing window is {options.PacingWindowSeconds} s. The achieved real-time "
+                + "factor is published over windows of that much wall clock, so it has to be a "
+                + "positive number of seconds.");
+        }
+
+        if (options.WallClock is null)
+        {
+            throw new CoSimSessionRefusedException(
+                "The session was given no wall clock to pace against and time its ticks by. Leave "
+                + "it at the system's unless a test is standing one in.");
         }
     }
 

@@ -3,8 +3,8 @@
 **Status:** design, ready for review · **Date:** 2026-09-18
 **Scope:** the component that takes a running SUMO simulation and makes the CARLA world show it —
 binding choice, the per-step write path, pose conversion, sub-step motion, **the solar clock**,
-**vehicle light state**, vehicle lifecycle, clock ownership, the ambient-traffic lockout, and
-failure handling.
+**vehicle light state**, vehicle lifecycle, clock ownership, **real-time pacing**, the
+ambient-traffic lockout, and failure handling.
 **Audience:** an engineer who will implement the bridge and has not read the conversation that
 produced this plan. Familiarity with CARLA's client/server split is assumed; familiarity with SUMO
 is not.
@@ -31,6 +31,7 @@ advancement policy, the headlight predicate),
 | 2026-09-21 | The managed client is built; §2.5 carries the check behind each property and the measured step cost through it. |
 | 2026-09-22 | The bridge is built as far as the pose, applying none: §6.4 carries five interpolation cases and the speed-ramp integration, §7.2 the frame check as it is made and the network-identity residual beside it, §7.5 the seat height the catalogue does not carry, §8.3 the two subscription tiers, §9.7 the two measured server properties the loop rests on. |
 | 2026-09-22 | §9.5.1: imagery readiness is counted in ticks; in the attended path the operator's key press is the settle. |
+| 2026-09-25 | Real-time pacing on the world tick, achieved factor published per window (§9.9); package checked against the loaded world (§7.2). |
 
 ---
 
@@ -1105,6 +1106,46 @@ on the world's own network, **mean 0.258 m and worst 1.342 m** on the other, plu
 discontinuities. That is what a scenario built against a network the world does not have costs, and
 it is a silent quarter-metre systematic offset.
 
+**Both of those check the network against the world package. Neither checks the package against the
+world the server has loaded**, and when one process builds and views a world and another drives it,
+nothing else ties the two: a package from another build seats every vehicle on that build's roads
+and ground. So a session given a world asks the server what it has loaded and refuses a package that
+does not describe it, before SUMO is started and before anything on the server is written
+(`LoadedWorldCheck`, called from `SumoDriveSession.Start`; D3.26). Every value compared exists on both
+sides:
+
+| Server | Package | Compared |
+|---|---|---|
+| the bare-earth reference record (`get_bare_earth_reference`), published by the building client and again by a world restored from its level | — | present, or the session is refused: a stock map has none |
+| the record's drape flag, grid corner, cell size, columns and rows | `DrapeActive`, `GridMinX/YMeters`, `GridCellSizeMeters`, `GridNumCols/Rows` | equal, positions within 1 mm |
+| the record's offset and bare-earth grids (`get_bare_earth_offset_grid`, `get_bare_earth_dtm_grid`) | `bareearth.bin` | bit for bit — the session seats vehicles on the package's grids and the world's collision surface and telemetry use the record's |
+| the georeference origin (`get_cesium_origin`) | `OriginLatitude/Longitude`, `OriginHeightMeters` | within 1e-9° and 1 mm |
+| the OpenDRIVE served for the loaded map (`get_map_data`) | `map.xodr` | `WorldPackage.HashOpenDrive` of each; this is what tells two builds of one area apart when origin and grid coincide |
+
+The grids are compared bit for bit because a second client's copy of the record is byte-identical to
+the building client's (`CarlaNet/python/test_bare_earth_reference.py`) and the package's grids are
+written from the same arrays. The manifest's `OpenDriveSha256` is that same normalised digest of `map.xodr`, **measured
+equal on all three packages in `Build/world-packages`**. The staging bounds are not compared: on all
+three they equal the drape grid's extent exactly, so they add nothing a draped world does not already
+carry. The margins on doubles are not measurements — an unchanged world returns the identical double —
+and exist so a value that has passed through a restored level's settings asset is not refused over
+its last bit. **Not yet measured against a running server:** the server's leg of the OpenDRIVE
+comparison (the text it received, written to a file or held by a level, and served back), and the
+level-restored path for any of the values.
+
+**What it cannot see.** The `.net.xml` never reaches the server, so the loaded world is tied to it
+only through the package (the loaded OpenDRIVE is the package's, and the package's network came from
+the same netconvert run by construction); the frame check and the lane-geometry residual above are
+what see a network swapped inside a package. The server publishes nothing about which imagery it
+streams. It accepts a record from any client and does not tie it to the roads it loaded, so the record
+is taken as the world's statement about itself. And it is checked once, at session start.
+
+**Exercised by** `LoadedWorldCheckTests` — each value changed alone is refused and named; each of the
+three shipped packages describes the world it was written from, and Gardnerville's package against a
+server holding Arapahoe is refused on its grid, its origin and its OpenDRIVE — and by two session tests
+showing that a refusal, for a world with no record or for another build's ground, leaves the world
+untouched. Each was seen failing against a check with that comparison removed.
+
 ### 7.3 Yaw
 
 Derived rather than asserted, against code whose correctness is already established by the shipped
@@ -1879,6 +1920,8 @@ sun was, and never has to trust the bridge's own arithmetic about it.
 
 ```
 session.start():
+    assert f is finite and f >= 0                         # the real-time factor, read once, §9.9
+    assert the world package describes the loaded world   # record, grids, origin, OpenDRIVE, §7.2
     assert world.settings.synchronous_mode and world.settings.fixed_delta_seconds == Δw
     Δs = Simulation.getDeltaT();  R = Δs / Δw;  assert R is a positive integer
     assert 1 / captureRateHz is a whole number of Δw      # a frame lands on the tick it is stamped
@@ -1923,6 +1966,7 @@ session.run():
             client.applyBatch(batch, doTickCue = false)   # one RPC; no variable tail, §8.5
             if civilDayRolledOver(t_render):              # the engine will not do this, §9.1
                 client.setSolarDate(civilDateFor(t_render))
+            waitUntil(T0 + n·Δw / f) if f > 0             # absolute target, then time the cue, §9.9
             frame = client.sendTickCue()                  # blocks for the frame
             if frame is null: raise TickFault             # §11.2
             stepRecord.emit(t_render, sun, allSumoVehicles, renderSet)
@@ -2017,6 +2061,9 @@ sequenceDiagram
             CLK->>CC: set_solar_date
             CC->>SRV: same RPC drain, same frame
         end
+        opt real-time factor f > 0
+            CLK->>CLK: wait until T0 + n·Δw/f, only if early (§9.9)
+        end
         CLK->>CC: tick_cue
         CC->>SRV: tick_cue — ends the drain
         SRV->>SUN: actor tick: SolarTime += Δw x Rate, then UpdateSun
@@ -2032,6 +2079,110 @@ sequenceDiagram
 
 The two `AFTER the advance` returns are the ordering established in §9.2 and are the reason a night
 window cannot render under the previous tick's sun.
+
+### 9.9 Real-time pacing
+
+> **D3.25 — Pacing is a run input to the clock owner: a real-time factor, read once when the session
+> starts and fixed for it, applied on the world tick against an absolute wall-clock schedule, with
+> the achieved factor measured and published whether or not the run is paced.**
+
+This is the mechanism [`01`](01_Architecture.md) §4.6.3 and [`08`](08_Collection_And_EPoL.md) §11.1
+ask this section for, in the manner of `SumoCotBridge.run`
+(`CarlaControl/src/carlacontrol/SumoCotBridge.py:319-323`).
+
+**The input.** `SumoDriveSessionOptions.RealTimeFactor` is simulated seconds per wall-clock second:
+1.0 is the pace of real traffic, 0.5 half of it, 2.0 twice it. **0 is the default and holds the cues to
+nothing**, so a session that does not set it ticks as fast as the machine allows. The session reads it
+once, in its constructor, so a caller writing the options object afterwards changes nothing. A
+negative, infinite or NaN factor refuses the session before anything is started, as does a
+non-positive or non-finite `PacingWindowSeconds`
+(`SumoDriveSession.RequireAUsablePace`). This is `pacing.real_time_factor` of
+[`12`](12_Operator_Control_Surface.md) §5.2.
+
+**Where the wait is.** In `SumoDriveSession.Advance()`, inside the tick loop, **immediately before each
+world tick cue** and after that tick's batch has been written. The server is held in its RPC drain
+until the cue arrives (§9.2), with the batch already applied, so the wait holds the frame and nothing
+else, and the cue goes out at its due instant rather than the bridge's own work later. It is per world
+tick: a SUMO step worth `R` ticks is `R` paced cues, not one.
+
+**The schedule is absolute.** With `T0` the wall instant of the session's first tick cue and `n` the
+ticks cued since it,
+
+```
+due(n) = T0 + n · Δw / f          wait only if now < due(n); then send the cue
+```
+
+A tick that overruns sends the next cue late; the cues after it go out as soon as they can until the
+schedule is met again, and then keep to it. An overrun is absorbed by the ticks that follow it rather
+than carried forward, so over any span the world renders `f` simulated seconds per wall second however
+uneven the span was. A sleep of one interval per tick would add every overrun to the run for good. The
+converse is worth stating plainly: **after a stall, the ticks that follow run as fast as the machine
+allows until the schedule is met**, so a live viewer sees traffic briefly move faster than real time
+after anything that held the loop up — including the caller's own work between advances.
+
+**The warm-up is not paced.** The SUMO fast-forward cues no world tick (§9.5), so nothing is rendered
+during it and there is no cue to hold. The schedule starts at the first cue and counts ticks from
+there, not simulated seconds from zero: a warm-up to 07:00 does not leave the first cue seven hours
+behind.
+
+**The wall clock** is read through a .NET `TimeProvider` (`SumoDriveSessionOptions.WallClock`, the
+system's by default), by `RealTimePacer`, which the session owns and which is the only thing in a
+session that decides when a cue goes out by the wall clock. A test stands in a clock that moves only
+when told to, which is what lets the schedule be asserted to the tick.
+
+**What is published.** Every cue is timed, paced or not, and `CoSimRunReport.Pacing` carries, live
+while the run goes and in the report's text form:
+
+| Figure | Definition |
+|---|---|
+| `DeclaredFactor` | the factor the session read at start; 0 where unpaced |
+| `LastWindowFactor`, `CompletedWindows` | the achieved factor over each window of `PacingWindowSeconds` of wall clock, **default 5 s**; a window closes on the first cue at or after that much wall clock and is measured over exactly the span it covered |
+| `WorstWindowFactor`, `WorstWindowClosedAtSeconds` | the lowest window, and the simulated instant of the cue that closed it |
+| `AchievedFactor`, `SimulatedSeconds`, `WallSeconds` | the whole run, first cue to latest |
+| `BehindScheduleSeconds`, `WorstBehindScheduleSeconds` | paced runs only: how far after its due instant the latest cue went out, and the furthest any cue did — how far the simulated clock is behind the wall clock at the declared factor |
+
+The achieved factor is measured between cues: simulated time between two cues is exactly the ticks
+between them times `Δw`, and wall time is read as each cue goes out, so a run that holds its schedule
+measures exactly its factor. Everything between two cues counts against the pace — the bridge's work,
+the world's frame, and whatever the caller does between advances — because all of it is wall clock
+the run took. An unpaced run's figure is how fast "as fast as the machine allows" was. **This is the
+defect in the pattern it is copied from, not copied:** `SumoCotBridge.py:322-323` sleeps when ahead
+and records nothing when behind; the only figure it keeps is the whole run's, logged once at the end
+(`:373-375`), so a run that held its rate for an hour and then slipped for ten minutes reads the same as
+one that ran a little slow throughout.
+
+**Nothing stops a run for falling behind.** `pacing.min_achieved_factor` has no tool default
+([`12`](12_Operator_Control_Surface.md) §5.2) and the pacing floor is an open question in its §7.5, so
+a floor here would be a number nobody chose; the session publishes and a reader decides. For the same reason nothing here slows the world in
+response to a consumer, and there is no floor factor or drop policy in the bridge: both are
+[`08`](08_Collection_And_EPoL.md) §11.3's, at the emission socket.
+
+**Truth is unaffected.** The factor changes when a cue goes out and nothing else: the SUMO step, `Δw`
+and the capture rate keep their whole ratio (§9), every frame is stamped with its simulated instant,
+and the sun advances by `Δw × Rate` per tick (§9.1), so a world held below real time renders exactly
+the frames it would have rendered unpaced, and the same sun on each.
+
+**The jitter of one cue, measured on the development host** (Windows, the system timer, through the
+same wait the pacer uses; three runs of 200 cues on a 50 ms schedule): a cue goes out a median of
+**6.9–7.4 ms** late, **p95 14.2–14.3 ms**, **worst 14.9–15.3 ms** — the system timer's resolution, not
+an accumulation, since the absolute schedule gives each late cue's lateness back on the next wait. So
+a healthy run at `f = 1.0` and the default `Δw` sends its cues 35–65 ms apart (computed from those
+figures) at an exact average of 20 per second, and its `WorstBehindScheduleSeconds` reads about
+0.015 s. The figures are this host's.
+
+**Exercised by** `RealTimePacerTests` and the pacing tests in `SumoDriveSessionTests`: a factor of 0
+never waits; a run that is ahead waits exactly to the absolute target; one overrun is absorbed two
+ticks later with the two hundredth cue exactly on the first cue's schedule; a run that falls to half
+of real time publishes 0.5, not 1.0; the fast-forward is not paced and every world tick, not every
+SUMO step, is; unusable factors and windows are refused. Each was seen failing against a deliberately
+wrong implementation — a sleep relative to the previous cue, a fixed sleep per tick, reporting the
+declared factor as achieved, pacing once per SUMO step, scheduling from simulated zero, treating 0 as
+real time, and removing the refusal.
+
+**From Python**, `world.start_sumo_drive(..., real_time_factor=0.0, pacing_window_s=5.0)`, and
+`CarlaNet/python/run_sumo_drive.py --real-time-factor 1.0`, which logs the declared pace at start, a
+progress line with the achieved figures once per closed window, and the achieved figures in its final
+summary. `--steps 0` runs until the scenario ends.
 
 ---
 
@@ -2427,6 +2578,8 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.22** | **A session refuses to start when `set_solar_time` returns `false`** (no `CesiumSunSky`), non-overridably. Presence is probed with the **write**, never with a state read, because the cached read cannot express "no sun" (G15). |
 | **D3.23** | **A `SolarDisagreement` has the same consequence as a `TickFault`**: stop, park the render set, close the step record with `terminated: solar-state-disagreement`, fail the run. Same governing principle as D3.15 — a run that cannot produce honest truth must stop, not degrade. |
 | **D3.24** | **A SUMO-drive session renders neither the generated road surface nor the traffic-light and sign actors, and writes no traffic-light state.** No `SetTrafficLightStateCommand` in any batch, no traffic-light RPC, no `tlLogic` subscription. The `road` and `signals` layers are each written once at session start with `set_layer_visible` (`CarlaClient.cs:1077-1078` → `CarlaServer.cpp:697`; the `road` arm at `:729-738`, the `signals` arm at `:739-751` → `TrafficLightManager.cpp:618-628`), **fixed for the session's lifetime** with an operator override per layer that is a session-start decision and not a toggle, and given back on every exit path by `LayerVisibilityLease`. The run report records what was in frame. `set_layer_visible` joins the RPCs the episode drive-mode flag refuses to a client without the drive lease (§10.2 mechanism 4). Suppression is at the session, not at the source: `SignInjector` and native `SpawnSignals` are untouched, because the world build is shared with other modes (§3.4). SUMO's `tlLogic` programs, its right-of-way rows and the actuated netconvert setting are unaffected, and its vehicles still obey them. Vehicle lamps are a separate mechanism and are unchanged (D3.17). |
+| **D3.25** | **Real-time pacing is a factor the session reads once at start**, 0 by default and unconstrained, applied immediately before every world tick cue against the absolute schedule `T0 + n·Δw/f` counted from the first cue, so an overrun is absorbed rather than accumulated and the SUMO fast-forward is never paced. The session times every cue, paced or not, and publishes the achieved factor per window of wall clock (default 5 s), for the whole run and for the worst window, with the slip behind schedule, on `CoSimRunReport.Pacing`. It never stops or slows a run for falling behind: the floor is undecided and the consumer-side response is `08` §11.3's (§9.9). |
+| **D3.26** | **A session given a world refuses a world package that does not describe the world the server has loaded, and a world that carries no bare-earth reference record**, before SUMO is started and before anything on the server is written: the record's drape flag, grid and both grids against the package's, the georeference origin against the manifest's, and the served OpenDRIVE against the package's by normalised digest (§7.2). |
 
 ---
 

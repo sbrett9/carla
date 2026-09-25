@@ -44,6 +44,18 @@ Usage:
 Pass `--no-record` to drive the world without spawning a camera, which is the shortest way to see
 whether the vehicles are where SUMO says they are.
 
+By default the world ticks as fast as the machine allows, so traffic moves at whatever pace the
+machine manages. To watch it at the pace of real traffic from another process that holds the view,
+hold the ticks to the wall clock and run until the scenario ends:
+
+    python run_sumo_drive.py --scenario ... --world-package ... --epoch ... \\
+        --illumination freeze_at_window_start --no-record --real-time-factor 1.0 --steps 0
+
+The session measures the pace it actually held and this prints it once per pacing window; nothing
+stops a run that falls behind, and the final report says by how much it did. The session refuses a
+world package that does not describe the world the server has loaded, so a package from another
+build of the world cannot put the traffic somewhere the world is not.
+
 One thing happens between the session starting and the recorder starting: the camera is aimed at the
 vehicles rather than at the middle of the rendered region, because a corridor scenario puts its
 traffic nowhere near that middle.
@@ -56,6 +68,7 @@ caller's to supply, is in
 """
 import argparse
 import json
+import logging
 import math
 import os
 import sys
@@ -70,6 +83,8 @@ _INSTALL = os.path.join(_REPO, "Build", "sumo-install")
 os.environ.setdefault("SUMO_HOME", _INSTALL)
 
 import carlanet as carla  # noqa: E402 -- SUMO_HOME must be set before the bridge resolves its toolchain
+
+logger = logging.getLogger("run_sumo_drive")
 
 
 def parse_args() -> argparse.Namespace:
@@ -86,7 +101,14 @@ def parse_args() -> argparse.Namespace:
                         help="the measured vehicle catalogue")
 
     parser.add_argument("--steps", type=int, default=600,
-                        help="SUMO steps to run, or 0 for the whole scenario")
+                        help="SUMO steps to run. 0 runs until the scenario ends -- until SUMO has "
+                             "no vehicle left to simulate or insert -- which is what a live watcher "
+                             "wants")
+    parser.add_argument("--real-time-factor", type=float, default=0.0,
+                        help="hold the world's ticks to the wall clock: simulated seconds per "
+                             "wall-clock second. 1.0 is the pace of real traffic, 0.5 half of it, 2.0 "
+                             "twice it. 0, the default, runs as fast as the machine allows. The "
+                             "fast-forward of --warm-up is never paced")
     parser.add_argument("--warm-up", type=float, default=0.0,
                         help="simulated second to fast-forward SUMO to before the first tick")
     parser.add_argument("--step-length", type=float, default=None,
@@ -264,6 +286,49 @@ class RenderedVehicleCentre:
         return self.total_x / self.count, self.total_y / self.count
 
 
+class PacingProgress:
+    """Says, once per closed pacing window, how far the run has got and what pace it held.
+
+    Every figure is the session's own (`session.Report.Pacing`), read between advances: nothing here
+    times anything, so what this prints and what the final report records cannot disagree. A line
+    per window of wall clock rather than per so many steps, because at real time a scenario with a
+    one-second SUMO step would otherwise print once every few minutes.
+    """
+
+    def __init__(self) -> None:
+        self.windows_seen = 0
+
+    @staticmethod
+    def declared(pacing) -> str:
+        """The pace the session was declared to hold, as it echoes it back."""
+        if pacing.Paced:
+            return f"held to {pacing.DeclaredFactor:g}x real time"
+        return "not paced, as fast as the machine allows"
+
+    @staticmethod
+    def achieved(pacing) -> str:
+        """The pace held over the last window and the whole run, and for a paced run the slip."""
+        if pacing.AchievedFactor is None:
+            return "nothing timed yet"
+        text = f"{pacing.AchievedFactor:.3f}x over the whole run"
+        if pacing.LastWindowFactor is not None:
+            text = (f"{pacing.LastWindowFactor:.3f}x over the last {pacing.WindowSeconds:g} s, "
+                    f"{text}, worst window {pacing.WorstWindowFactor:.3f}x")
+        if pacing.Paced:
+            text += f", {pacing.BehindScheduleSeconds:.2f} s behind schedule"
+        return text
+
+    def after_step(self, session, steps: int, worst_metres: float) -> None:
+        """Log a line if a pacing window closed during the step just taken."""
+        pacing = session.Report.Pacing
+        if pacing.CompletedWindows == self.windows_seen:
+            return
+        self.windows_seen = pacing.CompletedWindows
+        logger.info("  %d steps, t=%.1f s, %d rendered, pace %s, worst divergence %.4f m",
+                    steps, session.RenderedTimeSeconds, session.RenderedVehicleIds.Count,
+                    self.achieved(pacing), worst_metres)
+
+
 def camera_transform(args: argparse.Namespace, centre: tuple[float, float]) -> carla.Transform:
     """An oblique view of a point, standing off along a bearing and looking back at it."""
     centre_x, centre_y = centre
@@ -296,18 +361,19 @@ def spawn_camera(world, args: argparse.Namespace, centre: tuple[float, float]):
         blueprint.set_attribute("sensor_tick", str(1.0 / args.record_hz))
     transform = camera_transform(args, centre)
     camera = world.spawn_actor(blueprint, transform)
-    print(f"camera {camera.id} at ({transform.location.x:.1f}, {transform.location.y:.1f}, "
-          f"{transform.location.z:.1f}), pitch {transform.rotation.pitch:.1f}, "
-          f"yaw {transform.rotation.yaw:.1f}, looking at ({centre[0]:.1f}, {centre[1]:.1f})")
+    logger.info("camera %s at (%.1f, %.1f, %.1f), pitch %.1f, yaw %.1f, looking at (%.1f, %.1f)",
+                camera.id, transform.location.x, transform.location.y, transform.location.z,
+                transform.rotation.pitch, transform.rotation.yaw, centre[0], centre[1])
     return camera
 
 
 def main() -> int:
     args = parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
     for label, path in (("scenario", args.scenario), ("world package", args.world_package),
                         ("catalogue", args.catalogue)):
         if not os.path.isfile(path):
-            print(f"no {label} at {path}", file=sys.stderr)
+            logger.error("no %s at %s", label, path)
             return 2
 
     sun = SunDeclaration(args)
@@ -315,12 +381,13 @@ def main() -> int:
     client = carla.Client(args.host, args.port)
     client.set_timeout(30.0)
     world = client.get_world()
-    print(f"server {client.get_server_version()}, map {world.get_map().name}")
+    logger.info("server %s, map %s", client.get_server_version(), world.get_map().name)
 
     camera = None
     session = None
     recorder = None
     aim = RenderedVehicleCentre()
+    progress = PacingProgress()
     aims_at_traffic = args.camera_aim == "traffic" and not args.no_record
     worst = {"metres": 0.0, "vehicle": "", "tick": 0}
 
@@ -348,6 +415,7 @@ def main() -> int:
             signal_layer_visible=args.show_signals,
             epoch=sun.epoch,
             illumination=sun.illumination,
+            real_time_factor=args.real_time_factor,
             # Bound only where the aim needs it: the session hands out a pose per rendered
             # vehicle per tick, and a callback that spends the whole run declining them is a
             # crossing into Python per vehicle per tick for nothing.
@@ -356,10 +424,13 @@ def main() -> int:
         if session is None:
             return 1
 
-        print(f"clock: {session.Clock}")
-        print(f"sun: {session.Sun}" if session.Sun is not None
-              else "sun: left as the world holds it; the run's lighting honours no epoch")
-        print("layers: " + ", ".join(
+        logger.info("clock: %s", session.Clock)
+        # The pace as the session declared it, not as this script asked for it: the session read
+        # the factor once and is the one thing that holds the run to it.
+        logger.info("pace: %s", PacingProgress.declared(session.Report.Pacing))
+        logger.info("sun: %s", session.Sun if session.Sun is not None
+                    else "left as the world holds it; the run's lighting honours no epoch")
+        logger.info("layers: %s", ", ".join(
             f"{layer} {'drawn' if session.Report.LayerVisibility[layer] else 'hidden'}"
             for layer in session.Report.LayerVisibility.Keys))
 
@@ -377,11 +448,11 @@ def main() -> int:
                 aim.open = False
                 steps += 1
                 if aim.centre() is None:
-                    print("nothing was rendered on the first step, so the camera is aimed at the "
-                          "region centre instead", file=sys.stderr)
+                    logger.warning("nothing was rendered on the first step, so the camera is aimed "
+                                   "at the region centre instead")
                 else:
                     centre = aim.centre()
-                    print(f"aimed at {aim.count} rendered vehicles")
+                    logger.info("aimed at %d rendered vehicles", aim.count)
             camera = spawn_camera(world, args, centre)
 
             os.makedirs(args.record_dir, exist_ok=True)
@@ -392,30 +463,30 @@ def main() -> int:
                                              illumination=session.Illumination)
             if recorder is None:
                 return 1
-            print(f"recording -> {args.record_dir}")
+            logger.info("recording -> %s", args.record_dir)
 
         started = time.time()
         while session.Advance():
             steps += 1
             if args.steps and steps >= args.steps:
                 break
-            if steps % 200 == 0:
-                print(f"  {steps} steps, {session.RenderedVehicleIds.Count} rendered, "
-                      f"worst divergence {worst['metres']:.4f} m")
+            progress.after_step(session, steps, worst["metres"])
 
         elapsed = time.time() - started
-        print(f"\n{steps} SUMO steps in {elapsed:.1f} s wall clock\n")
-        print(session.Report)
+        pacing = session.Report.Pacing
+        logger.info("\n%d SUMO steps in %.1f s wall clock; pace %s: %s\n", steps, elapsed,
+                    PacingProgress.declared(pacing), PacingProgress.achieved(pacing))
+        logger.info("%s", session.Report)
         if worst["vehicle"]:
-            print(f"\nworst divergence {worst['metres']:.6f} m on {worst['vehicle']} "
-                  f"at tick {worst['tick']}")
+            logger.info("\nworst divergence %.6f m on %s at tick %d",
+                        worst["metres"], worst["vehicle"], worst["tick"])
         if session.Report.PosesComputed == 0:
             # The likeliest reason by far, and the one that produces a run that looks healthy and
             # renders an empty road: the scenario's vTypes name no blueprint the catalogue has
             # measured, so every vehicle is simulated and none is rendered.
-            print("\nNOTHING WAS RENDERED. The refused-type counts above say why; the usual cause "
-                  "is vTypes with no carla:blueprint parameter, which are simulated and never "
-                  "given a body.", file=sys.stderr)
+            logger.error("\nNOTHING WAS RENDERED. The refused-type counts above say why; the usual "
+                         "cause is vTypes with no carla:blueprint parameter, which are simulated and "
+                         "never given a body.")
         return 0
     finally:
         # Order matters on the way out: stop tapping the camera, take the camera out of the world,
@@ -425,25 +496,25 @@ def main() -> int:
         try:
             world.stop_recording()
         except Exception as failure:
-            print(f"could not stop the recorder: {failure!r}", file=sys.stderr)
+            logger.error("could not stop the recorder: %r", failure)
         if recorder is not None:
             # Read once the recorder has flushed, so the counts are the run's and not a moment's.
-            print(f"captures           {recorder.Saved} written, {recorder.Dropped} dropped; "
-                  f"{recorder.IlluminationPaired} carry their frame's illumination declaration, "
-                  f"{recorder.IlluminationUnpaired} do not")
+            logger.info("captures           %s written, %s dropped; %s carry their frame's "
+                        "illumination declaration, %s do not", recorder.Saved, recorder.Dropped,
+                        recorder.IlluminationPaired, recorder.IlluminationUnpaired)
         if camera is not None:
             try:
                 camera.destroy()
             except Exception as failure:
-                print(f"could not destroy the camera: {failure!r}", file=sys.stderr)
+                logger.error("could not destroy the camera: %r", failure)
         if session is not None:
             # Disposal attempts every step of the shutdown whatever the ones before it did, and
-            # reports the ones that failed together. Printing them is all a harness can do, and it
+            # reports the ones that failed together. Logging them is all a harness can do, and it
             # is more than losing them.
             try:
                 session.Dispose()
             except Exception as failure:
-                print(f"the session did not shut down cleanly: {failure!r}", file=sys.stderr)
+                logger.error("the session did not shut down cleanly: %r", failure)
 
 
 if __name__ == "__main__":

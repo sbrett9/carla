@@ -92,6 +92,28 @@ internal sealed class SyntheticWorld : IDisposable
                                   WorldPackage.PackagePath(directory, manifest.MapName));
     }
 
+    /// <summary>
+    /// What a server holding this world answers when asked which world it has loaded: the origin
+    /// the package declares, the OpenDRIVE it carries, and the bare-earth record its build published
+    /// -- the same values and the same grids, as the building client sends them.
+    /// </summary>
+    public LoadedWorld AsLoaded() => Describe(PackagePath);
+
+    /// <summary>What a server holding the world a package was written from answers.</summary>
+    public static LoadedWorld Describe(string packagePath)
+    {
+        WorldPackageManifest manifest = WorldPackage.ReadManifest(packagePath);
+        BareEarthRecord record = WorldPackage.TryReadGrids(packagePath, out float[] offset, out float[] ground)
+            ? new BareEarthRecord(manifest.HeightAlignOffsetMeters, manifest.DrapeActive,
+                                  manifest.GridMinXMeters, manifest.GridMinYMeters,
+                                  manifest.GridCellSizeMeters, manifest.GridNumCols,
+                                  manifest.GridNumRows, offset, ground)
+            : new BareEarthRecord(manifest.HeightAlignOffsetMeters, false, 0.0, 0.0, 0.0, 0, 0, [], []);
+        return new LoadedWorld(manifest.OriginLatitude, manifest.OriginLongitude,
+                               manifest.OriginHeightMeters, WorldPackage.ReadOpenDrive(packagePath),
+                               record);
+    }
+
     /// <inheritdoc/>
     public void Dispose()
     {

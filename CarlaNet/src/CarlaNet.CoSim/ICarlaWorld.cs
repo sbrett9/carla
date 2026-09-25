@@ -10,10 +10,11 @@ namespace CarlaNet.CoSim;
 /// Everything the playback bridge asks of a CARLA world, and nothing else.
 /// </summary>
 /// <remarks>
-/// <para>Eleven operations. The bridge places bodies, writes their poses in one batch, reads back
-/// where the world says they went, advances the world a tick, reads and writes the episode settings
-/// so it can hand the world back as it found it, shows or hides the rendering layers whose presence
-/// is a property of the imagery, and reads and writes the sun the imagery is lit by. Anything larger
+/// <para>Twelve operations. The bridge asks which world is loaded, places bodies, writes their poses
+/// in one batch, reads back where the world says they went, advances the world a tick, reads and
+/// writes the episode settings so it can hand the world back as it found it, shows or hides the
+/// rendering layers whose presence is a property of the imagery, and reads and writes the sun the
+/// imagery is lit by. Anything larger
 /// than that would be the client's whole surface, and a driving session tested against the client's
 /// whole surface is a session that can only be tested against a running server.</para>
 ///
@@ -24,6 +25,17 @@ namespace CarlaNet.CoSim;
 /// </remarks>
 public interface ICarlaWorld
 {
+    /// <summary>
+    /// What the server says about the world it has loaded: its georeference origin, the OpenDRIVE it
+    /// serves, and the bare-earth reference record published for it, grids included.
+    /// </summary>
+    /// <remarks>
+    /// Several round trips, and the grids are the size of the drape -- sixty megabytes for the
+    /// largest world in <c>Build/world-packages</c> -- so it is asked once, when a session starts,
+    /// and never on the tick thread.
+    /// </remarks>
+    LoadedWorld DescribeLoadedWorld();
+
     /// <summary>The episode settings as the server currently holds them.</summary>
     EpisodeSettings ReadSettings();
 

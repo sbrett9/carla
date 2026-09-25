@@ -10,11 +10,12 @@ namespace CarlaNet.CoSim.Tests;
 /// A CARLA world that records what was asked of it and answers as a server would.
 /// </summary>
 /// <remarks>
-/// <para>Everything the bridge does to a world is eleven operations wide, so a world that keeps a
+/// <para>Everything the bridge does to a world is twelve operations wide, so a world that keeps a
 /// dictionary of actors, a list of batches and a simulated sun exercises the whole driving path --
-/// the pool, the batch, the read-back, the tick, the settings restoration and the sun's binding and
-/// audit -- with no server, no engine and no render. What it cannot establish is what a body looks like once the pose is applied, which is the
-/// one thing only a live run can answer.</para>
+/// the check of which world is loaded, the pool, the batch, the read-back, the tick, the settings
+/// restoration and the sun's binding and audit -- with no server, no engine and no render. What it
+/// cannot establish is what a body looks like once the pose is applied, which is the one thing only
+/// a live run can answer.</para>
 ///
 /// <para>It answers the read-back with exactly what was commanded, plus whatever
 /// <see cref="TransformDrift"/> is set to. A drift of zero is a world that does what it is told and
@@ -28,6 +29,16 @@ internal class RecordedWorld : ICarlaWorld
     private readonly List<(string Layer, bool Visible, long AtTick)> _layerWrites = [];
     private readonly List<(string Call, long AtTick)> _solarWrites = [];
     private ActorId _nextActor = 1;
+
+    /// <summary>
+    /// What the world answers when asked which world it has loaded. A stock map by default: an
+    /// origin at zero, no road network and no bare-earth record, which a session refuses. A test
+    /// driving a package sets this to <see cref="SyntheticWorld.AsLoaded"/> of that package.
+    /// </summary>
+    public LoadedWorld Loaded { get; set; } = new(0.0, 0.0, 0.0, string.Empty, null);
+
+    /// <summary>How many times the world was asked which world it has loaded.</summary>
+    public int Descriptions { get; private set; }
 
     /// <summary>The settings the world holds, as a server would.</summary>
     public EpisodeSettings Settings { get; set; } =
@@ -90,6 +101,13 @@ internal class RecordedWorld : ICarlaWorld
     /// one does.
     /// </summary>
     public bool IgnoresSettingsWrites { get; set; }
+
+    /// <inheritdoc/>
+    public LoadedWorld DescribeLoadedWorld()
+    {
+        Descriptions++;
+        return Loaded;
+    }
 
     /// <inheritdoc/>
     public EpisodeSettings ReadSettings() => Settings;

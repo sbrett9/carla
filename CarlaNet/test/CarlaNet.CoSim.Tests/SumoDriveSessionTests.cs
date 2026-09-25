@@ -163,7 +163,7 @@ public sealed class SumoDriveSessionTests
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
 
-        var carla = new RecordedWorld();
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         List<RenderedVehicleInterval> released = [];
         List<CoSimPoseRecord> computed = [];
         SumoDriveSessionOptions options = Options(world, computed, released, tick: null);
@@ -214,7 +214,7 @@ public sealed class SumoDriveSessionTests
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
 
-        var carla = new RecordedWorld();
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         List<CoSimPoseRecord> computed = [];
         List<RenderedVehicleInterval> released = [];
         SumoDriveSessionOptions options = Options(world, computed, released, tick: null);
@@ -254,7 +254,7 @@ public sealed class SumoDriveSessionTests
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
 
-        var carla = new RecordedWorld();
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         List<RenderedVehicleInterval> released = [];
         SumoDriveSessionOptions options = Options(world, [], released, tick: null);
         options.World = carla;
@@ -288,7 +288,7 @@ public sealed class SumoDriveSessionTests
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
 
-        var carla = new RecordedWorld();
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         SumoDriveSessionOptions options = Options(world, [], [], tick: null);
         options.World = carla;
 
@@ -324,7 +324,7 @@ public sealed class SumoDriveSessionTests
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
 
-        var carla = new RecordedWorld();
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         SumoDriveSessionOptions options = Options(world, [], [], tick: null);
         options.World = carla;
         options.RoadLayerVisible = true;
@@ -343,7 +343,7 @@ public sealed class SumoDriveSessionTests
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
 
-        var carla = new RecordedWorld();
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         EpisodeSettings before = carla.Settings;
         SumoDriveSessionOptions options = Options(world, [], [], tick: null);
         options.World = carla;
@@ -391,7 +391,7 @@ public sealed class SumoDriveSessionTests
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
 
-        var carla = new RecordedWorld();
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         EpisodeSettings before = carla.Settings;
         SumoDriveSessionOptions options = Options(world, [], [], tick: null);
         options.World = carla;
@@ -415,7 +415,7 @@ public sealed class SumoDriveSessionTests
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
 
-        var carla = new RecordedWorld();
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         SumoDriveSessionOptions options = Options(world, [], [], tick: null);
         options.World = carla;
         options.WarmUpToSimulatedSecond = 2.0;
@@ -455,7 +455,7 @@ public sealed class SumoDriveSessionTests
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
 
-        var carla = new RecordedWorld();
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         SumoDriveSessionOptions options = Options(world, [], [], tick: null);
         options.World = carla;
         options.Epoch = SolarLeaseTests.PortEpoch();
@@ -485,7 +485,7 @@ public sealed class SumoDriveSessionTests
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
 
-        var carla = new RecordedWorld();
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         SumoDriveSessionOptions options = Options(world, [], [], tick: null);
         options.World = carla;
 
@@ -529,7 +529,7 @@ public sealed class SumoDriveSessionTests
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
 
         // The package's origin is 0, 0; the world's georeference, and so its sun, is at the port.
-        var carla = new RecordedWorld();
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         carla.Sun!.Latitude = 27.15012;
         carla.Sun.Longitude = 56.18065;
         EpisodeSettings before = carla.Settings;
@@ -552,7 +552,7 @@ public sealed class SumoDriveSessionTests
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
 
-        var carla = new RecordedWorld();
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         SumoDriveSessionOptions options = Options(world, [], [], tick: null);
         options.World = carla;
         options.Epoch = SolarEpoch.Declare("2026-03-21T07:00:00+03:30", 3.5, "2026-03-21T03:30:00Z",
@@ -606,7 +606,7 @@ public sealed class SumoDriveSessionTests
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
 
-        var carla = new RecordedWorld();
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         SumoDriveSessionOptions options = Options(world, [], [], tick: null);
         options.World = carla;
         options.Illumination = IlluminationPolicy.Ignore();
@@ -630,7 +630,7 @@ public sealed class SumoDriveSessionTests
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
 
-        var carla = new RecordedWorld();
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         SumoDriveSessionOptions options = Options(world, [], [], tick: null);
         options.World = carla;
         options.Illumination = null;
@@ -652,7 +652,7 @@ public sealed class SumoDriveSessionTests
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
 
-        var carla = new RecordedWorld();
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         SumoDriveSessionOptions options = Options(world, [], [], tick: null);
         options.World = carla;
         options.Epoch = null;
@@ -670,7 +670,7 @@ public sealed class SumoDriveSessionTests
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
 
-        var carla = new RecordedWorld();
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         SumoDriveSessionOptions options = Options(world, [], [], tick: null);
         options.World = carla;
         options.Epoch = null;
@@ -683,7 +683,7 @@ public sealed class SumoDriveSessionTests
             Assert.Empty(carla.SolarWrites);
         }
 
-        var sunless = new RecordedWorld { Sun = null };
+        var sunless = new RecordedWorld { Sun = null, Loaded = world.AsLoaded() };
         options.World = sunless;
         CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
             () => SumoDriveSession.Start(options));
@@ -724,6 +724,181 @@ public sealed class SumoDriveSessionTests
         CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
             () => SumoDriveSession.Start(options));
         Assert.Contains("both a CARLA world and a tick delegate", refused.Message);
+    }
+
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(-1.0)]
+    [InlineData(-0.25)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void ARealTimeFactorThatDescribesNoPaceIsRefusedBeforeAnythingIsTouched(double factor)
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+        options.RealTimeFactor = factor;
+
+        CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+            () => SumoDriveSession.Start(options));
+
+        Assert.Contains("real-time factor", refused.Message);
+        Assert.Contains("1.0 holds the world to the pace of real traffic", refused.Message);
+        Assert.Equal(0, carla.Descriptions);
+        Assert.Empty(carla.SettingsWrites);
+        Assert.Empty(carla.LayerWrites);
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(-5.0)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    public void APacingWindowThatIsNotAPositiveLengthOfTimeIsRefused(double windowSeconds)
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        SumoDriveSessionOptions options = Options(world, [], [], () => true);
+        options.PacingWindowSeconds = windowSeconds;
+
+        CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+            () => SumoDriveSession.Start(options));
+        Assert.Contains("pacing window", refused.Message);
+    }
+
+    [RequiresSumoFact]
+    public void ASessionHeldToRealTimeCuesEveryWorldTickOnTheWallClockFromItsFirstTick()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var clock = new SteppedWallClock();
+        List<double> cuedAt = [];
+        SumoDriveSessionOptions options = Options(world, [], [], () =>
+        {
+            // The instant the cue went out, then the world's own four milliseconds on the frame.
+            cuedAt.Add(clock.NowSeconds);
+            clock.AdvanceMilliseconds(4);
+            return true;
+        });
+        options.RealTimeFactor = 1.0;
+        options.PacingWindowSeconds = 0.5;
+        options.WallClock = clock;
+        // Two world ticks per SUMO step, so a pace kept per step rather than per tick would show.
+        options.SumoStepOverrideSeconds = 0.1;
+        // Two simulated seconds of fast-forward before the first tick.
+        options.WarmUpToSimulatedSecond = 2.0;
+
+        using SumoDriveSession session = SumoDriveSession.Start(options);
+        Assert.Equal(2, session.Clock.WorldTicksPerSumoStep);
+        for (int step = 0; step < 40 && session.Advance(); step++)
+        {
+        }
+
+        _output.WriteLine(session.Report.ToString());
+        Assert.Equal(80, cuedAt.Count);
+
+        // The fast-forward is not paced: the first cue went out at once, rather than two seconds
+        // late for a schedule that started at simulated zero.
+        Assert.Equal(0.0, cuedAt[0]);
+        Assert.Equal(79, clock.Waits.Count);
+
+        // Every world tick, not every SUMO step, went out one world delta after the one before.
+        for (int cue = 0; cue < cuedAt.Count; cue++)
+        {
+            Assert.Equal(cue * 0.05, cuedAt[cue], 9);
+        }
+
+        RealTimePacer pacing = session.Report.Pacing;
+        Assert.Equal(1.0, pacing.DeclaredFactor);
+        Assert.Equal(1.0, pacing.AchievedFactor!.Value, 9);
+        Assert.Equal(7, pacing.CompletedWindows);
+        Assert.Equal(1.0, pacing.WorstWindowFactor!.Value, 9);
+        Assert.Equal(0.0, pacing.WorstBehindScheduleSeconds);
+
+        string report = session.Report.ToString();
+        Assert.Equal(3.95, pacing.WallSeconds, 9);
+        Assert.Contains("pacing             held to 1 x real time; achieved 1 x over ", report);
+        Assert.Contains("  windows          7 of 0.5 s; last 1 x, worst 1 x", report);
+        Assert.Contains("  behind schedule  0.000 s at the last tick, worst 0.000 s", report);
+    }
+
+    [RequiresSumoFact]
+    public void AnUnpacedSessionWaitsForNothingAndStillSaysHowFastItWent()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var clock = new SteppedWallClock();
+        SumoDriveSessionOptions options = Options(world, [], [], () =>
+        {
+            clock.AdvanceMilliseconds(5);
+            return true;
+        });
+        options.WallClock = clock;
+        options.PacingWindowSeconds = 0.1;
+
+        using SumoDriveSession session = SumoDriveSession.Start(options);
+        for (int step = 0; step < 40 && session.Advance(); step++)
+        {
+        }
+
+        Assert.Empty(clock.Waits);
+        RealTimePacer pacing = session.Report.Pacing;
+        Assert.False(pacing.Paced);
+        Assert.Equal(10.0, pacing.AchievedFactor!.Value, 9);
+        Assert.Contains("pacing             not paced, as fast as the machine allows; achieved 10 x",
+                        session.Report.ToString());
+        Assert.DoesNotContain("behind schedule", session.Report.ToString());
+    }
+
+    [Fact]
+    public void ASessionRefusesAPackageThatIsNotTheLoadedWorldAndTouchesNothing()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        // Another build of the same area: the same origin, grid and road network, and a ground
+        // surface a metre higher across the eastern half.
+        using SyntheticWorld rebuilt = SyntheticWorld.Write(
+            at => at.X > 0.0 ? 1.0 : 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld { Loaded = rebuilt.AsLoaded() };
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+
+        CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+            () => SumoDriveSession.Start(options));
+
+        Assert.Contains("does not describe the world the server has loaded", refused.Message);
+        Assert.Contains("cells of the loaded world's bare-earth ground grid differ", refused.Message);
+        Assert.Equal(1, carla.Descriptions);
+        Assert.Empty(carla.SettingsWrites);
+        Assert.Empty(carla.LayerWrites);
+        Assert.Empty(carla.SolarWrites);
+        Assert.Empty(carla.Spawned);
+    }
+
+    [Fact]
+    public void ASessionRefusesAWorldThatCarriesNoBareEarthRecord()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        // A stock map: nothing published, as the recorded world answers by default.
+        var carla = new RecordedWorld();
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+
+        CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+            () => SumoDriveSession.Start(options));
+
+        Assert.Contains("carries no bare-earth reference record", refused.Message);
+        Assert.Empty(carla.SettingsWrites);
     }
 
     private static SumoDriveSessionOptions Options(SyntheticWorld world,

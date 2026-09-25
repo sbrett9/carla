@@ -100,7 +100,49 @@ public sealed record SumoDriveSessionOptions(
     public double? SumoStepOverrideSeconds { get; set; }
 
     /// <summary>Simulated second to fast-forward SUMO to before the first world tick.</summary>
+    /// <remarks>
+    /// Never paced, whatever <see cref="RealTimeFactor"/> is: the fast-forward steps SUMO alone and
+    /// cues no world tick, so nothing renders during it and there is nothing to hold to the wall
+    /// clock. Pacing starts at the first tick cue.
+    /// </remarks>
     public double WarmUpToSimulatedSecond { get; set; }
+
+    /// <summary>
+    /// Simulated seconds per wall-clock second the world's tick cues are held to: 1.0 is the pace of
+    /// real traffic, 0.5 half of it, 2.0 twice it, and 0 -- the default -- holds them to nothing, so
+    /// the world ticks as fast as the machine allows.
+    /// </summary>
+    /// <remarks>
+    /// <para>Declared once, read when the session starts, and fixed for the session: a run whose
+    /// pace changed part-way is two runs in one record. A negative, infinite or undefined factor is
+    /// refused.</para>
+    ///
+    /// <para>Pacing changes only when a cue goes out. Every frame is stamped with the simulated
+    /// instant it renders and the SUMO step, the world delta and the capture rate keep the same whole
+    /// ratio at any factor, so a world held below real time renders exactly the frames it would have
+    /// rendered unpaced -- more slowly. What a run actually held is measured and published on the
+    /// report's <see cref="CoSimRunReport.Pacing"/>, paced or not.</para>
+    /// </remarks>
+    public double RealTimeFactor { get; set; }
+
+    /// <summary>
+    /// Wall-clock seconds each window of the published achieved factor spans.
+    /// </summary>
+    /// <remarks>
+    /// Long enough that the figure is not the jitter of one tick against the system timer, short
+    /// enough that an operator watching a live run sees a slowdown within seconds of it starting.
+    /// Must be a positive number of seconds.
+    /// </remarks>
+    public double PacingWindowSeconds { get; set; } = 5.0;
+
+    /// <summary>
+    /// The wall clock the session holds its cues to and times them against.
+    /// </summary>
+    /// <remarks>
+    /// The system's by default. A test supplies one that advances only when told to, which is what
+    /// lets the schedule be asserted to the tick rather than within a timer's resolution.
+    /// </remarks>
+    public TimeProvider WallClock { get; set; } = TimeProvider.System;
 
     /// <summary>
     /// What simulated second zero means in civil time at the site: the scenario's epoch.
