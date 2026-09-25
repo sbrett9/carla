@@ -103,6 +103,17 @@ public sealed record SumoDriveSessionOptions(
     public double WarmUpToSimulatedSecond { get; set; }
 
     /// <summary>
+    /// What simulated second zero means in civil time at the site: the scenario's epoch.
+    /// </summary>
+    /// <remarks>
+    /// The only statement of what time the scene is. Every civil instant the session derives -- the
+    /// one the sun is bound to and the one each frame is recorded under -- is
+    /// <see cref="SolarEpoch.CivilInstantAt"/> of the simulated instant, so a malformed epoch is
+    /// refused where it is built, before anything is started, naming what is wrong with it.
+    /// </remarks>
+    public SolarEpoch? Epoch { get; set; }
+
+    /// <summary>
     /// Whether the generated road surface is drawn for the session.
     /// </summary>
     /// <remarks>
