@@ -9,6 +9,7 @@ using CarlaNet.Map.WorldPackage;
 using CarlaNet.Transport.MsgPackRpc;
 using CarlaNet.Transport.Streaming;
 using CarlaNet.Transport.TrafficManager;
+using CarlaNet.Types.Streaming;
 using Microsoft.Extensions.Logging;
 
 namespace CarlaNet.Transport;
@@ -173,10 +174,11 @@ public sealed class CarlaClient : IAsyncDisposable
     private readonly object _tickDispatcherLock = new();
 
     // Solar / time-of-day state from the latest world-observer snapshot (§10.14 extended header):
-    // [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate].
-    // Updated lock-free each tick in ParseEpisodeState so the recorder pairs frames with the sun with
-    // no RPC and no polling; empty until the first snapshot arrives, and empty again for as long as
-    // the world has no sun to report (see the SolarStateValid check in ParseEpisodeState).
+    // [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate,
+    // corrected_elevation_deg], the last only from a server whose header carries it. Updated
+    // lock-free each tick in ParseEpisodeState so the recorder pairs frames with the sun with no RPC
+    // and no polling; empty until the first snapshot arrives, and empty again for as long as the
+    // world has no sun to report (see EpisodeStateLayout.ReadSolar).
     private volatile double[] _solar = System.Array.Empty<double>();
 
     // ── Staging-fade state (see SetActorFadeAsync / GetActorOpacity / IsActorEstablished) ──
@@ -1974,36 +1976,24 @@ public sealed class CarlaClient : IAsyncDisposable
         platformTimestamp = 0;
         deltaSeconds = 0;
         frameActors = null;
-        // Header layout (124 bytes): episode_id(8) platform_ts(8) delta_s(4) map_origin(12) state(1)
-        // pad(3), then 11 appended solar doubles at offset 36 (§10.14 extended header).
-        if (payload.Length < 36) return;
+        // Header layout: episode_id(8) platform_ts(8) delta_s(4) map_origin(12) state(1) pad(3),
+        // then the solar block at offset 36 -- eleven doubles, or twelve from a server that carries
+        // the refraction-corrected elevation, which the flags byte says (§10.14 extended header).
+        if (payload.Length < EpisodeStateLayout.SolarOffset) return;
         platformTimestamp = BitConverter.Int64BitsToDouble(
             BinaryPrimitives.ReadInt64LittleEndian(payload[8..]));
         deltaSeconds = BitConverter.Int32BitsToSingle(
             BinaryPrimitives.ReadInt32LittleEndian(payload[16..]));
-        const int HeaderSize = 124;
-        if (payload.Length < HeaderSize) return;   // extended (with-solar) header required
-        // Cache the solar block (11 doubles at offset 36) paired to this tick -- but only when the
-        // header says a sun was measured. The solar fields' defaults are a well-formed reading
-        // (midnight of year 0 at latitude 0, longitude 0), so a world with no CesiumSunSky is
-        // distinguishable only by EpisodeStateSerializer::SolarStateValid, bit 2 of the
-        // simulation-state flags at offset 32. Leaving the cache empty is what stops a recorded
+        int headerSize = EpisodeStateLayout.HeaderSize(payload);
+        if (payload.Length < headerSize) return;   // extended (with-solar) header required
+        // Cache the solar block paired to this tick -- but only when the header says a sun was
+        // measured. The solar fields' defaults are a well-formed reading (midnight of year 0 at
+        // latitude 0, longitude 0), so a world with no CesiumSunSky is distinguishable only by
+        // EpisodeStateSerializer::SolarStateValid. Leaving the cache empty is what stops a recorded
         // artifact asserting a sun that was never there.
-        const byte SolarStateValidFlag = 0x4;
-        if ((payload[32] & SolarStateValidFlag) != 0)
-        {
-            var solar = new double[11];
-            for (int k = 0; k < 11; k++)
-                solar[k] = BitConverter.Int64BitsToDouble(
-                    BinaryPrimitives.ReadInt64LittleEndian(payload[(36 + k * 8)..]));
-            _solar = solar;
-        }
-        else
-        {
-            _solar = System.Array.Empty<double>();
-        }
+        _solar = EpisodeStateLayout.ReadSolar(payload);
         const int ActorSize  = 119;
-        var actors = payload[HeaderSize..];
+        var actors = payload[headerSize..];
         int count  = actors.Length / ActorSize;
         _observedIds.Clear();
         frameActors = new Dictionary<ActorId, ActorSnapshot>(count);
@@ -2150,14 +2140,15 @@ public sealed class CarlaClient : IAsyncDisposable
 
     /// Solar / time-of-day state from the latest world-observer snapshot, paired to the current tick
     /// (no RPC, no poll): [solar_time, year, month, day, time_zone, lat, lon, elevation_deg,
-    /// azimuth_deg, advancing, rate]. Requires the world observer to be running
-    /// (StartWorldObserverAsync).
+    /// azimuth_deg, advancing, rate, corrected_elevation_deg]. Requires the world observer to be
+    /// running (StartWorldObserverAsync).
     ///
     /// Empty both before the first snapshot arrives and whenever the world has no CesiumSunSky to
     /// report. It is never a fabricated sun: the header's solar defaults read as midnight of year 0
     /// at latitude 0, longitude 0, so a block is cached only when the server says it measured one.
-    /// elevation_deg is geometric; the refraction-corrected elevation the scene is lit at is
-    /// available from GetSolarStateAsync, which this cache does not carry.
+    /// elevation_deg is geometric. corrected_elevation_deg, the elevation the scene is lit at, is
+    /// present from a server whose header carries it; one built before that publishes the first
+    /// eleven only, and GetSolarStateAsync then remains the way to read it.
     public IReadOnlyList<double> GetCachedSolarState() => _solar;
 
     // Decode VehicleControl from the cached TypeDependentState union.

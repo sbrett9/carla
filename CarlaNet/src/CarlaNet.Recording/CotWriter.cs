@@ -63,6 +63,10 @@ public static class CotWriter
             w.WriteAttributeString("lat", F(solar[5], "0.0000000"));
             w.WriteAttributeString("lon", F(solar[6], "0.0000000"));
             w.WriteAttributeString("sun_elevation_deg", F(solar[7], "0.###"));
+            // The elevation the frame was lit at, where the server carries it: the one above is
+            // geometric, and near the horizon the two differ by a large fraction of the elevation.
+            if (solar.Count > 11)
+                w.WriteAttributeString("sun_corrected_elevation_deg", F(solar[11], "0.###"));
             w.WriteAttributeString("sun_azimuth_deg", F(solar[8], "0.###"));
             w.WriteAttributeString("advancing", solar[9] != 0.0 ? "true" : "false");
             w.WriteAttributeString("rate", F(solar[10], "0.####"));

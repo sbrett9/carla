@@ -4,8 +4,11 @@ namespace CarlaNet.Recording;
 
 /// <summary>
 /// Formats the world-observer solar block for embedding in recorded artifacts. The block is the
-/// 11-double layout streamed on the EpisodeState header (§10.14 extended header):
-/// [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate].
+/// layout streamed on the EpisodeState header (§10.14 extended header):
+/// [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate,
+/// corrected_elevation_deg]. The twelfth is present from a server that carries it, and written as
+/// sun_corrected_elevation_deg: sun_elevation_deg is the geometric elevation, and the corrected one
+/// is the elevation the frame was actually lit at.
 /// </summary>
 public static class SolarMetadata
 {
@@ -31,6 +34,7 @@ public static class SolarMetadata
             + $"\"sun_elevation_deg\":{F(s[7])},\"sun_azimuth_deg\":{F(s[8])},"
             + $"\"advancing\":{(s[9] != 0.0 ? "true" : "false")},"
             + $"\"rate\":{F(s[10])}"
+            + (s.Count > 11 ? $",\"sun_corrected_elevation_deg\":{F(s[11])}" : string.Empty)
             + "}";
     }
 

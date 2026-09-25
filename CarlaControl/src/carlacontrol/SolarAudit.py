@@ -12,9 +12,11 @@ second failure is far more likely than the first and looks identical in an eleva
 `check_inputs` runs first and an input mismatch is reported as an input mismatch.
 
 Two solar reads exist and they are not the same read. `world.get_solar_state()` prefers the
-world-observer cache, which is pushed with each tick and carries eleven values; the on-demand RPC
-computes twelve, the twelfth being the refraction-corrected elevation the sun's directional light is
-actually rotated by. This class reads both and reports where they differ.
+world-observer cache, which is pushed with each tick; the on-demand RPC computes the sun when asked.
+The RPC answers with twelve values, the twelfth being the refraction-corrected elevation the sun's
+directional light is actually rotated by. The cache carries the same twelve from a server whose
+header was widened to hold it, and eleven from one built before that. This class reads both and
+reports where they differ.
 """
 from __future__ import annotations
 
@@ -29,8 +31,9 @@ from carlacontrol.SolarPositionModel import (
 )
 
 # The order `get_solar_state` packs its values in (`CarlaServer.cpp`, `set_solar_epoch`'s neighbour).
-# The world-observer header stops at `rate`; `WorldObserver.cpp:330` guards on `Num() >= 11` and
-# copies eleven fields, so a cached read never carries the last one.
+# A world-observer header from a server built before the corrected elevation was carried stops at
+# `rate`, so a cached read from one never carries the last value; `OBSERVER_CACHE_FIELD_COUNT` is
+# that older width, and the fewest values a reading can have.
 SOLAR_STATE_FIELDS = (
     "solar_time", "year", "month", "day", "time_zone", "lat", "lon",
     "sun_elevation_deg", "sun_azimuth_deg", "advancing", "rate",
@@ -125,9 +128,9 @@ class SolarAudit:
         """The server's own computation of the sun, now.
 
         This goes past `World.get_solar_state`, which prefers the world-observer cache. The cache is
-        paired to a tick rather than to the last thing written, and it is eleven values wide, so it
-        can neither be relied on to reflect an epoch set microseconds ago nor to carry the
-        refraction-corrected elevation. An audit needs both.
+        paired to a tick rather than to the last thing written, and from an older server it is
+        eleven values wide, so it can neither be relied on to reflect an epoch set microseconds ago
+        nor to carry the refraction-corrected elevation. An audit needs both.
         """
         # `_sync` and `_client` are carlanet's own plumbing; the public shim exposes no way to ask
         # for the uncached read, and asking for it is the whole point of this function.

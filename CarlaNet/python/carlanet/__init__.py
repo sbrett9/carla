@@ -1548,8 +1548,8 @@ class World:
         is what the sun's directional light is actually rotated by. Near the horizon the two differ
         by a few tenths of a degree -- a large fraction of a low sun's elevation, so a threshold on
         one is not a threshold on the other. It is None when the value came from the world-observer
-        cache, which carries the geometric elevation only; force the on-demand RPC path if you need
-        it every time.
+        cache of a server built before its header carried the corrected elevation; force the
+        on-demand RPC path if you need it from one of those.
 
         Reads the world-observer cache (paired to the latest tick, no RPC); falls back to an
         on-demand RPC if the observer cache isn't populated yet."""

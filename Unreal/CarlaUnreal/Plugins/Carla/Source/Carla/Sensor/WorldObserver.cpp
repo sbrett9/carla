@@ -316,18 +316,23 @@ static carla::Buffer FWorldObserver_Serialize(
 
   uint8_t simulation_state = (SimulationState::MapChange * MapChange);
   simulation_state |= (SimulationState::PendingLightUpdate * PendingLightUpdates);
+  // The layout, not the reading: the solar block is always twelve doubles wide, and a reader needs
+  // to know that to find the actors that follow it.
+  simulation_state |= SimulationState::SolarCorrectedElevationCarried;
 
   // Solar / time-of-day state, so each streamed snapshot carries the sun in effect this tick and the
   // recorder can pair frames with it straight from the observer cache (no polling). GetSolarState is
-  // [solar_time, year, month, day, time_zone, lat, lon, elevation, azimuth, advancing, rate], or empty
-  // when the world has no CesiumSunSky.
+  // [solar_time, year, month, day, time_zone, lat, lon, elevation, azimuth, advancing, rate,
+  // corrected_elevation], or empty when the world has no CesiumSunSky.
   //
   // A world with no sun is signalled by the SolarStateValid flag, not by the values: the header's
   // solar defaults are a well-formed reading -- midnight of year 0 at latitude 0, longitude 0 -- and
   // a reader that only checked "are there eleven numbers?" would write that non-reading into an
-  // artifact as fact.
+  // artifact as fact. GetSolarState appends the corrected elevation whenever it answers at all, so
+  // a sun is valid only with all twelve: a reading missing its last value is reported as no reading
+  // rather than published with a corrected elevation of zero.
   const TArray<double> Solar = UCesiumHeightSampler::GetSolarState(Episode.GetWorld());
-  if (Solar.Num() >= 11)
+  if (Solar.Num() >= 12)
   {
     simulation_state |= SimulationState::SolarStateValid;
     header.solar_time      = Solar[0];
@@ -341,6 +346,7 @@ static carla::Buffer FWorldObserver_Serialize(
     header.solar_azimuth   = Solar[8];
     header.solar_advancing = Solar[9];
     header.solar_rate      = Solar[10];
+    header.solar_corrected_elevation = Solar[11];
   }
 
   header.simulation_state = static_cast<SimulationState>(simulation_state);

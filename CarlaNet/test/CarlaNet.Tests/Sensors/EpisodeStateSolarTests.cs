@@ -9,6 +9,7 @@
 using System.Buffers.Binary;
 using CarlaNet.Recording;
 using CarlaNet.Sensors;
+using CarlaNet.Types.Streaming;
 
 namespace CarlaNet.Tests.Sensors;
 
@@ -89,6 +90,66 @@ public class EpisodeStateSolarTests
         var data = EpisodeStateSensorData.Deserialize(payload);
 
         Assert.Empty(data.Header.Solar);
+    }
+
+    /// A header as a server that carries the refraction-corrected elevation writes it -- twelve
+    /// solar doubles, the layout flag set whatever the sun -- followed by one actor record.
+    private static byte[] MakeWideHeaderWithOneActor(bool sun, uint actorId)
+    {
+        const int WideHeaderSize = 132;
+        const int ActorSize = 119;
+        var bytes = new byte[WideHeaderSize + ActorSize];
+        var span = bytes.AsSpan();
+        bytes[32] = (byte)(SimulationState.SolarCorrectedElevationCarried
+                           | (sun ? SimulationState.SolarStateValid : SimulationState.None));
+        double[] block = [.. MeasuredSun, 18.42];
+        for (int k = 0; k < block.Length; k++)
+            BinaryPrimitives.WriteInt64LittleEndian(
+                span[(SolarOffset + k * 8)..], BitConverter.DoubleToInt64Bits(block[k]));
+        BinaryPrimitives.WriteUInt32LittleEndian(span[WideHeaderSize..], actorId);
+        return bytes;
+    }
+
+    [Fact]
+    public void The_Corrected_Elevation_Is_Read_Where_The_Header_Carries_It()
+    {
+        var data = EpisodeStateSensorData.Deserialize(MakeWideHeaderWithOneActor(sun: true, 4242));
+
+        Assert.Equal(12, data.Header.Solar.Count);
+        Assert.Equal(18.38, data.Header.Solar[7]);   // geometric
+        Assert.Equal(18.42, data.Header.Solar[11]);  // what the frame was lit at
+        Assert.Contains("\"sun_corrected_elevation_deg\":18.42", SolarMetadata.ToJson(data.Header.Solar));
+
+        // The actors start after the wider header, not eight bytes into it.
+        Assert.Equal(4242u, Assert.Single(data.Actors).Id);
+    }
+
+    [Fact]
+    public void The_Layout_Flag_Places_The_Actors_Even_When_There_Is_No_Sun()
+    {
+        var data = EpisodeStateSensorData.Deserialize(MakeWideHeaderWithOneActor(sun: false, 77));
+
+        Assert.Empty(data.Header.Solar);
+        Assert.Equal(77u, Assert.Single(data.Actors).Id);
+    }
+
+    [Fact]
+    public void A_Server_That_Carries_Only_The_Geometric_Elevation_Is_Still_Read()
+    {
+        // A header from a server built before the corrected elevation was carried: eleven doubles,
+        // no layout flag, actors at offset 124. A reader that assumed the wide layout would read
+        // every actor eight bytes late.
+        var narrow = new byte[StateHeaderSize + 119];
+        MakeHeader(SimulationState.SolarStateValid, MeasuredSun).CopyTo(narrow, 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(narrow.AsSpan(StateHeaderSize), 9001);
+
+        var data = EpisodeStateSensorData.Deserialize(narrow);
+
+        Assert.Equal(11, data.Header.Solar.Count);
+        Assert.Equal(9001u, Assert.Single(data.Actors).Id);
+        Assert.DoesNotContain("sun_corrected_elevation_deg", SolarMetadata.ToJson(data.Header.Solar));
+        Assert.Equal(124, EpisodeStateLayout.HeaderSize(narrow));
+        Assert.Equal(132, EpisodeStateLayout.HeaderSize(MakeWideHeaderWithOneActor(true, 1)));
     }
 
     [Fact]

@@ -35,7 +35,14 @@ namespace s11n {
       /// flag they cannot say "this world has no sun": their defaults are a well-formed reading
       /// -- midnight of year 0 at latitude 0, longitude 0 -- that a reader cannot tell from a
       /// real one, and would otherwise record as fact.
-      SolarStateValid    = (0x1 << 2)
+      SolarStateValid    = (0x1 << 2),
+      /// The solar block below is twelve doubles wide: the sun's refraction-corrected elevation
+      /// follows the rate. It describes the layout rather than the reading, so it is set on every
+      /// snapshot, sun or no sun: the header's size is the offset of the actor array, and a reader
+      /// has to know which size it is reading before it can read anything after it. A reader that
+      /// does not know this flag reads the actors eight bytes early, so readers are rebuilt with
+      /// the server that sets it.
+      SolarCorrectedElevationCarried = (0x1 << 3)
     };
 
 #pragma pack(push, 1)
@@ -62,6 +69,11 @@ namespace s11n {
       double solar_azimuth = 0.0;
       double solar_advancing = 0.0;
       double solar_rate = 1.0;
+      // The elevation the sun's directional light is actually rotated by, with atmospheric
+      // refraction applied. solar_elevation above is geometric; near the horizon the two differ by
+      // up to a few tenths of a degree, which is a large fraction of a low sun. Carried every tick
+      // so a frame's record states the sun it was lit by, not only the sun's geometric position.
+      double solar_corrected_elevation = 0.0;
     };
 #pragma pack(pop)
 

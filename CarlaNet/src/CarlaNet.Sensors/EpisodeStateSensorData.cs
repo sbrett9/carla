@@ -1,9 +1,11 @@
 // §10.14 — FWorldObserver / EpisodeState.
-// After 48-byte header: 124-byte EpisodeState header + N * 119-byte ActorDynamicState.
-// The EpisodeState header is the original 36 bytes plus 11 appended solar doubles (offset 36).
+// After 48-byte header: the EpisodeState header + N * 119-byte ActorDynamicState.
+// The EpisodeState header is the original 36 bytes plus the solar block at offset 36: 11 doubles,
+// or 12 where the server also carries the refraction-corrected elevation (EpisodeStateLayout).
 // static_assert(sizeof(ActorDynamicState) == 119) — verified in source (§13.6).
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Enums;
+using CarlaNet.Types.Streaming;
 
 namespace CarlaNet.Sensors;
 
@@ -16,7 +18,11 @@ public enum SimulationState : byte
     /// The header's solar block carries a sun that was actually measured this tick. Its defaults
     /// are a well-formed reading -- midnight of year 0 at latitude 0, longitude 0 -- so nothing in
     /// the values themselves says "this world has no sun"; only this flag does.
-    SolarStateValid = 0x4
+    SolarStateValid = 0x4,
+    /// The header's solar block is twelve doubles wide: the refraction-corrected elevation follows
+    /// the rate. Set on every snapshot from a server that carries it, sun or no sun, because it
+    /// describes where the actors start rather than what was measured.
+    SolarCorrectedElevationCarried = 0x8
 }
 
 public sealed class EpisodeStateHeader
@@ -28,7 +34,8 @@ public sealed class EpisodeStateHeader
     public SimulationState SimulationState { get; init; }
 
     /// Solar / time-of-day state in effect this tick (appended to the header, offset 36):
-    /// [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate].
+    /// [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate,
+    /// corrected_elevation_deg], the last only where the server carries it.
     /// Empty when the world has no CesiumSunSky (SimulationState.SolarStateValid clear), so a
     /// consumer never mistakes the header's defaults for a measured sun.
     public IReadOnlyList<double> Solar { get; init; } = System.Array.Empty<double>();
@@ -61,18 +68,10 @@ public sealed class EpisodeStateSensorData
         int mx = BinaryPrimitives.ReadInt32LittleEndian(payload[20..]);
         int my = BinaryPrimitives.ReadInt32LittleEndian(payload[24..]);
         int mz = BinaryPrimitives.ReadInt32LittleEndian(payload[28..]);
-        var simState         = (SimulationState)payload[32];
-        // 3 bytes padding at [33..35], then 11 solar doubles at offset 36. They are read only when
-        // the header says a sun was measured; otherwise they are defaults that read as a real sun.
-        var solar = System.Array.Empty<double>();
-        if ((simState & SimulationState.SolarStateValid) != 0)
-        {
-            var measured = new double[11];
-            for (int k = 0; k < 11; k++)
-                measured[k] = BitConverter.Int64BitsToDouble(
-                    BinaryPrimitives.ReadInt64LittleEndian(payload[(36 + k * 8)..]));
-            solar = measured;
-        }
+        var simState         = (SimulationState)payload[EpisodeStateLayout.FlagsOffset];
+        // 3 bytes padding at [33..35], then the solar block at offset 36. It is read only when the
+        // header says a sun was measured; otherwise it holds defaults that read as a real sun.
+        var solar = EpisodeStateLayout.ReadSolar(payload);
 
         var header = new EpisodeStateHeader
         {
@@ -81,8 +80,8 @@ public sealed class EpisodeStateSensorData
             SimulationState = simState, Solar = solar
         };
 
-        const int StateHeaderSize = 124;
-        var actorData = payload[StateHeaderSize..];
+        int stateHeaderSize = EpisodeStateLayout.HeaderSize(payload);
+        var actorData = payload[stateHeaderSize..];
         const int ActorSize = 119;
         int count = actorData.Length / ActorSize;
         var actors = new ActorDynamicState[count];

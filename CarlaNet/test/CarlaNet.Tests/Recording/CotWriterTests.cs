@@ -36,6 +36,28 @@ public class CotWriterTests
     }
 
     [Fact]
+    public void The_Sun_Block_States_The_Elevation_The_Frame_Was_Lit_At_Where_It_Is_Known()
+    {
+        double[] geometricOnly = [7.0, 2026, 3, 21, 3.5, 27.15012, 56.18065, 4.981, 119.56, 0.0, 0.0];
+        double[] withCorrected = [.. geometricOnly, 5.141];
+
+        string path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".xml");
+        try
+        {
+            CotWriter.WriteToFile(path, new DateTime(2026, 7, 10, 18, 0, 0, DateTimeKind.Utc), [],
+                                  solar: withCorrected);
+            string xml = File.ReadAllText(path);
+            Assert.Contains("sun_elevation_deg=\"4.981\"", xml);
+            Assert.Contains("sun_corrected_elevation_deg=\"5.141\"", xml);
+
+            CotWriter.WriteToFile(path, new DateTime(2026, 7, 10, 18, 0, 0, DateTimeKind.Utc), [],
+                                  solar: geometricOnly);
+            Assert.DoesNotContain("sun_corrected_elevation_deg", File.ReadAllText(path));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
     public void The_Frame_The_Truth_Came_From_Is_Named_Beside_The_Frame_Of_The_Pixels()
     {
         // The image's own frame and the frame its vehicle records describe are normally the same; when
