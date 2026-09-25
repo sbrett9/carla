@@ -429,7 +429,7 @@ public sealed class SumoDriveSessionTests
             Assert.Equal(0, carla.Ticks);
             Assert.All(carla.SolarWrites, write => Assert.Equal(0, write.AtTick));
             Assert.Equal((2026, 3, 21), (carla.Sun!.Year, carla.Sun.Month, carla.Sun.Day));
-            Assert.Equal(7.0 + (2.0 / 3600.0), carla.Sun.SolarTime, 12);
+            Assert.Equal((7, 0, 2), SolarPositionModel.EngineClock(carla.Sun.SolarTime));
             Assert.Equal(3.5, carla.Sun.TimeZone);
             Assert.Equal("2026-03-21T07:00:02+03:30",
                          SolarEpoch.FormatCivil(session.Sun!.Declared.WindowOpenCivil));
@@ -439,7 +439,7 @@ public sealed class SumoDriveSessionTests
             }
 
             // Frozen: forty steps of ticks later the sun has not moved, and nothing wrote it again.
-            Assert.Equal(7.0 + (2.0 / 3600.0), carla.Sun.SolarTime, 12);
+            Assert.Equal((7, 0, 2), SolarPositionModel.EngineClock(carla.Sun.SolarTime));
             Assert.Equal(2, carla.SolarWrites.Count);
         }
 
@@ -476,6 +476,73 @@ public sealed class SumoDriveSessionTests
         Assert.Equal((13.0, 2019, 9, 21, -5.0, false), (carla.Sun.SolarTime, carla.Sun.Year,
                                                         carla.Sun.Month, carla.Sun.Day,
                                                         carla.Sun.TimeZone, carla.Sun.Advancing));
+    }
+
+    [RequiresSumoFact]
+    public void EveryTickIsAuditedAndASunAnotherClientMovedStopsTheRun()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld();
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+
+        SumoDriveSession session = SumoDriveSession.Start(options);
+        try
+        {
+            for (int step = 0; step < 20 && session.Advance(); step++)
+            {
+            }
+
+            // Every tick, not a sample of them, and the snapshot carried the corrected elevation on
+            // every one.
+            SolarAudit audit = session.SunAudit!;
+            Assert.Equal(session.Report.Ticks, audit.AuditedTicks);
+            Assert.Equal(audit.AuditedTicks, audit.TicksWithCorrectedElevation);
+            Assert.NotNull(audit.AtWindowOpen);
+
+            // A minute of clock moved by something other than the session.
+            carla.Sun!.SolarTime += 1.0 / 60.0;
+            SolarAuditFailedException failed =
+                Assert.Throws<SolarAuditFailedException>(() => session.Advance());
+            Assert.Equal(session.Report.Ticks, failed.Sample!.TickIndex);
+        }
+        finally
+        {
+            session.Dispose();
+        }
+
+        // Stopped, not corrected: the session wrote the sun when it bound it and when it gave it
+        // back, and at no point in between.
+        Assert.Equal(["set_solar_epoch", "set_time_advance", "set_solar_epoch", "set_time_advance"],
+                     carla.SolarWrites.Select(write => write.Call));
+        Assert.Equal((13.0, 2019, 9, 21), (carla.Sun.SolarTime, carla.Sun.Year, carla.Sun.Month,
+                                           carla.Sun.Day));
+    }
+
+    [RequiresSumoFact]
+    public void AWorldWhoseSunIsComputedElsewhereIsRefusedBeforeItRenders()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        // The package's origin is 0, 0; the world's georeference, and so its sun, is at the port.
+        var carla = new RecordedWorld();
+        carla.Sun!.Latitude = 27.15012;
+        carla.Sun.Longitude = 56.18065;
+        EpisodeSettings before = carla.Settings;
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+
+        SolarAuditFailedException failed =
+            Assert.Throws<SolarAuditFailedException>(() => SumoDriveSession.Start(options));
+
+        Assert.Contains("not the world package's origin", failed.Message);
+        Assert.Equal(0, carla.Ticks);
+        Assert.Equal(before, carla.Settings);
+        Assert.Equal((13.0, 2019, 9, 21), (carla.Sun.SolarTime, carla.Sun.Year, carla.Sun.Month,
+                                           carla.Sun.Day));
     }
 
     [Fact]

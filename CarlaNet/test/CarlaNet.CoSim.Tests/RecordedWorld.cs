@@ -69,6 +69,15 @@ internal class RecordedWorld : ICarlaWorld
     /// </summary>
     public SimulatedSun? Sun { get; set; } = new();
 
+    /// <summary>
+    /// Whether the world-observer snapshot carries the refraction-corrected elevation, as a server
+    /// whose header was widened to hold it does. False is a server built before that.
+    /// </summary>
+    public bool ObserverCarriesCorrectedElevation { get; set; } = true;
+
+    /// <summary>Set to have the world publish no sun with its snapshots, as a sunless world does.</summary>
+    public bool ObserverPublishesNoSun { get; set; }
+
     /// <summary>Every write to the sun, by call, with the tick the world was on when it arrived.</summary>
     public IReadOnlyList<(string Call, long AtTick)> SolarWrites => _solarWrites;
 
@@ -190,5 +199,17 @@ internal class RecordedWorld : ICarlaWorld
     {
         _solarWrites.Add(("set_time_advance", Ticks));
         return Sun?.WriteAdvance(advancing, rate) ?? false;
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<double> ObservedSolarState()
+    {
+        if (Sun is null || ObserverPublishesNoSun)
+        {
+            return [];
+        }
+
+        IReadOnlyList<double> block = Sun.Read();
+        return ObserverCarriesCorrectedElevation ? block : block.Take(SolarReading.RequiredValues).ToArray();
     }
 }

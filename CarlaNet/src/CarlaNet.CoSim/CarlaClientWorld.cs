@@ -147,4 +147,12 @@ public sealed class CarlaClientWorld : ICarlaWorld
     /// <inheritdoc/>
     public bool WriteTimeAdvance(bool advancing, double rate) =>
         _client.SetTimeAdvanceAsync(advancing, rate).GetAwaiter().GetResult();
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// <see cref="Tick"/> returns once the observer has delivered the frame the cue produced, and in
+    /// synchronous mode no later frame exists until the next cue, so after a tick this is that tick's
+    /// sun.
+    /// </remarks>
+    public IReadOnlyList<double> ObservedSolarState() => _client.GetCachedSolarState();
 }

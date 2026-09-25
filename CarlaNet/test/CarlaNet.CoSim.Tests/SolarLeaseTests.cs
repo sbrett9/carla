@@ -29,16 +29,20 @@ public sealed class SolarLeaseTests
         using (SolarLease lease = SolarLease.Take(world, declared))
         {
             // 07:00 on day 0 at +03:30, frozen: the clock is civil time because the zone is the
-            // civil offset, and nothing moves it.
+            // civil offset, and nothing moves it. Written a millisecond past the second, where the
+            // engine's decomposition lands on the second declared.
             Assert.Equal((2026, 3, 21), (sun.Year, sun.Month, sun.Day));
-            Assert.Equal(7.0, sun.SolarTime, 12);
+            Assert.Equal(7.0 + (0.001 / 3600.0), sun.SolarTime, 12);
+            Assert.Equal((7, 0, 0), SolarPositionModel.EngineClock(sun.SolarTime));
             Assert.Equal(3.5, sun.TimeZone);
             Assert.False(sun.Advancing);
             Assert.Equal(0.0, sun.Rate);
 
             // What the session would otherwise have captured under, kept for the record.
-            Assert.Equal(new SolarReading(13.0, 2019, 9, 21, -5.0, 0, 0, 0, 0, true, 60.0, 0.0),
-                         lease.AsFound);
+            SolarReading found = lease.AsFound!.Value;
+            Assert.Equal((13.0, 2019, 9, 21, -5.0, true, 60.0),
+                         (found.SolarTimeHours, found.Year, found.Month, found.Day, found.TimeZoneHours,
+                          found.Advancing, found.Rate));
             Assert.Equal(2026, lease.AtWindowOpen!.Value.Year);
         }
 
@@ -63,15 +67,14 @@ public sealed class SolarLeaseTests
     }
 
     [Fact]
-    public void AFrozenSunIsWrittenToTheWholeSecondAndAnAdvancingOneExactly()
+    public void AFrozenSunIsDeclaredToTheWholeSecondAndAnAdvancingOneExactly()
     {
-        // 07:00:00.6: the engine would round a frozen clock there itself, except that in the last
-        // half-second of a minute it rounds to sixty and drops the minute it should have carried.
+        // 07:00:00.6 is declared as 07:00:01, the second the engine would round it to anyway.
         var frozen = new RecordedWorld();
         using (SolarLease.Take(frozen, new DeclaredSun(PortEpoch(), IlluminationPolicy.FreezeAtWindowStart(),
                                                        25_200.6)))
         {
-            Assert.Equal(7.0 + (1.0 / 3600.0), frozen.Sun!.SolarTime, 12);
+            Assert.Equal(7.0 + (1.001 / 3600.0), frozen.Sun!.SolarTime, 12);
         }
 
         var advancing = new RecordedWorld();
@@ -83,6 +86,29 @@ public sealed class SolarLeaseTests
     }
 
     [Fact]
+    public void EveryFrozenSecondOfADayIsWrittenWhereTheEngineDecomposesItAsThatSecond()
+    {
+        // Written at the whole second itself, the engine evaluates 623 of the day's 1,440 whole
+        // minutes as the minute before: 01:01:00 as 01:00:00. A millisecond past it, none.
+        var epoch = SolarEpoch.Declare("2026-03-21T00:00:00+03:30", 3.5, "2026-03-20T20:30:00Z",
+                                       calendarAdvances: false, dstInEffect: false);
+        int exactlyOnTheSecond = 0;
+        for (int second = 0; second < 86_400; second++)
+        {
+            var declared = new DeclaredSun(epoch, IlluminationPolicy.FreezeAtWindowStart(), second);
+            (int hours, int minutes, int seconds) = (second / 3600, second / 60 % 60, second % 60);
+            Assert.Equal((hours, minutes, seconds), SolarPositionModel.EngineClock(declared.WrittenClockHours));
+            if (SolarPositionModel.EngineClock(declared.SunAtWindowOpen.TimeOfDay.TotalHours)
+                != (hours, minutes, seconds))
+            {
+                exactlyOnTheSecond++;
+            }
+        }
+
+        Assert.Equal(623, exactlyOnTheSecond);
+    }
+
+    [Fact]
     public void AFrozenWeekKeepsTheEpochSDateUnlessItsDateIsDeclaredToFollow()
     {
         // Day 4's morning shift. A freeze that let the seasonal angle drift across a week would be
@@ -91,7 +117,8 @@ public sealed class SolarLeaseTests
         using (SolarLease.Take(held, new DeclaredSun(PortEpoch(), IlluminationPolicy.FreezeAtWindowStart(),
                                                      370_800)))
         {
-            Assert.Equal((2026, 3, 21, 7.0), (held.Sun!.Year, held.Sun.Month, held.Sun.Day, held.Sun.SolarTime));
+            Assert.Equal((2026, 3, 21), (held.Sun!.Year, held.Sun.Month, held.Sun.Day));
+            Assert.Equal((7, 0, 0), SolarPositionModel.EngineClock(held.Sun.SolarTime));
         }
 
         var following = new RecordedWorld();
@@ -120,7 +147,7 @@ public sealed class SolarLeaseTests
         using SolarLease lease = SolarLease.Take(world, declared);
 
         // The night shift, lit as though it were mid-afternoon: deliberate, and the record says so.
-        Assert.Equal(15.0, world.Sun!.SolarTime, 12);
+        Assert.Equal((15, 0, 0), SolarPositionModel.EngineClock(world.Sun!.SolarTime));
         Assert.Equal("2026-03-21T23:00:00+03:30", SolarEpoch.FormatCivil(declared.WindowOpenCivil));
     }
 

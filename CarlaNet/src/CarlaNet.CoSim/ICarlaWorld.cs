@@ -10,7 +10,7 @@ namespace CarlaNet.CoSim;
 /// Everything the playback bridge asks of a CARLA world, and nothing else.
 /// </summary>
 /// <remarks>
-/// <para>Ten operations. The bridge places bodies, writes their poses in one batch, reads back
+/// <para>Eleven operations. The bridge places bodies, writes their poses in one batch, reads back
 /// where the world says they went, advances the world a tick, reads and writes the episode settings
 /// so it can hand the world back as it found it, shows or hides the rendering layers whose presence
 /// is a property of the imagery, and reads and writes the sun the imagery is lit by. Anything larger
@@ -108,4 +108,15 @@ public interface ICarlaWorld
     /// </summary>
     /// <returns>False where the world has no sun.</returns>
     bool WriteTimeAdvance(bool advancing, double rate);
+
+    /// <summary>
+    /// The sun the last tick's world-observer snapshot carried: the values
+    /// <see cref="SolarReading.From"/> reads, or none where the world published no sun.
+    /// </summary>
+    /// <remarks>
+    /// A read of the snapshot the tick already delivered, not a round trip, which is what makes a
+    /// comparison on every tick affordable. Eleven values from a server whose observer header carries
+    /// the geometric elevation only, twelve from one that also carries the refraction-corrected one.
+    /// </remarks>
+    IReadOnlyList<double> ObservedSolarState();
 }

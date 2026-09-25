@@ -10,8 +10,9 @@ namespace CarlaNet.CoSim.Tests;
 /// on 2019-09-21 in a zone of -5 hours -- because that, or whatever the previous session left, is
 /// what a real session finds.</para>
 ///
-/// <para>What it cannot establish is what the engine's renderer does with the sun it holds; the
-/// angles it reports are computed from what it holds, never measured.</para>
+/// <para>The angles it reports are the engine's algorithm evaluated on what it holds, through the
+/// engine's own clock decomposition, which is what the engine was measured to do. What it cannot
+/// establish is what the renderer does with them.</para>
 /// </remarks>
 internal sealed class SimulatedSun
 {
@@ -47,12 +48,24 @@ internal sealed class SimulatedSun
     /// <summary>Set to have the sun refuse every epoch, as a sun given an impossible date does.</summary>
     public bool RefusesEpochs { get; set; }
 
+    /// <summary>
+    /// Degrees added to the corrected elevation the sun reports, as a build whose corrected-elevation
+    /// property read something other than what its light is rotated by would.
+    /// </summary>
+    public double CorrectedElevationError { get; set; }
+
     /// <summary>The packed values <c>get_solar_state</c> answers with, corrected elevation last.</summary>
-    public IReadOnlyList<double> Read() =>
-    [
-        SolarTime, Year, Month, Day, TimeZone, Latitude, Longitude, 0.0, 0.0,
-        Advancing ? 1.0 : 0.0, Rate, 0.0,
-    ];
+    public IReadOnlyList<double> Read()
+    {
+        SunPosition sun = SolarPositionModel.AtEngineClock(Latitude, Longitude, TimeZone, Year, Month,
+                                                           Day, SolarTime);
+        return
+        [
+            SolarTime, Year, Month, Day, TimeZone, Latitude, Longitude, sun.ElevationDegrees,
+            sun.AzimuthDegrees, Advancing ? 1.0 : 0.0, Rate,
+            sun.CorrectedElevationDegrees + CorrectedElevationError,
+        ];
+    }
 
     /// <summary><c>UCesiumHeightSampler::SetSolarEpoch</c>: validate, then set everything at once.</summary>
     public bool WriteEpoch(int year, int month, int day, double hours, double utcOffsetHours)

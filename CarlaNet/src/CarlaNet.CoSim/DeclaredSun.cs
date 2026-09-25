@@ -15,12 +15,17 @@ namespace CarlaNet.CoSim;
 /// year, month and day and a clock in hours -- and the zone is the epoch's offset, written beside
 /// it.</para>
 ///
-/// <para><b>A frozen sun is written to the whole second.</b> The engine evaluates the sun at whole
-/// seconds of its clock and rounds anything finer, except that a clock in the last half-second of a
-/// minute rounds up to sixty and loses the minute it should have carried: a sun set to 07:00:59.6
-/// is computed for 07:00:00. Writing the frozen clock already rounded means the engine evaluates
-/// exactly what was written. An advancing sun is written exactly, because the engine moves it off
-/// any whole second on the first tick regardless.</para>
+/// <para><b>A frozen sun is declared to the whole second and written a millisecond past it.</b> The
+/// engine evaluates its sun at whole seconds, decomposing the clock by truncating the minute and
+/// rounding the second, and it does not carry: when the seconds round up to sixty the minute they
+/// belong to is lost. That happens in the last half-second of every minute -- a sun set to 07:00:59.6
+/// is computed for 07:00:00 -- and, because a whole minute is rarely exact in binary, on the whole
+/// minute itself: measured by replaying the engine's arithmetic over every whole second of a day,
+/// 623 of the 1,440 whole-minute clocks are evaluated as the minute before, 01:01:00 as 01:00:00.
+/// Written one millisecond past the second, every one of the 86,400 decomposes as the second
+/// declared. The millisecond is visible in the recorded clock and nowhere else. An advancing sun is
+/// written exactly, because the engine moves it off any whole second on the first tick regardless,
+/// and the audit reports what the decomposition does to it from there.</para>
 /// </remarks>
 public sealed class DeclaredSun
 {
@@ -60,9 +65,22 @@ public sealed class DeclaredSun
     public DateTimeOffset WindowOpenCivil { get; }
 
     /// <summary>
-    /// The date and clock the sun is written with at the window's opening, in the epoch's zone.
+    /// How far past the declared second a frozen clock is written, so the engine's decomposition
+    /// lands on that second.
+    /// </summary>
+    public static readonly TimeSpan FrozenClockLead = TimeSpan.FromMilliseconds(1);
+
+    /// <summary>
+    /// The date and clock the sun is declared to hold at the window's opening, in the epoch's zone.
     /// </summary>
     public DateTime SunAtWindowOpen { get; }
+
+    /// <summary>
+    /// The clock actually written, in hours: <see cref="SunAtWindowOpen"/>'s, plus
+    /// <see cref="FrozenClockLead"/> for a frozen sun.
+    /// </summary>
+    public double WrittenClockHours =>
+        (SunAtWindowOpen.TimeOfDay + (Policy.Advances ? TimeSpan.Zero : FrozenClockLead)).TotalHours;
 
     /// <summary>The zone the sun's clock is written in: the epoch's declared offset, in hours.</summary>
     public double TimeZoneHours => Epoch.UtcOffsetHours;

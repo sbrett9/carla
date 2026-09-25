@@ -101,7 +101,7 @@ public sealed class SolarLease : IDisposable
 
         var lease = new SolarLease(world, declared, found);
         DateTime sun = declared.SunAtWindowOpen;
-        if (!world.WriteSolarEpoch(sun.Year, sun.Month, sun.Day, sun.TimeOfDay.TotalHours,
+        if (!world.WriteSolarEpoch(sun.Year, sun.Month, sun.Day, declared.WrittenClockHours,
                                    declared.TimeZoneHours))
         {
             // The server leaves the sun untouched when it refuses, so there is nothing to give back.
@@ -208,10 +208,10 @@ public sealed class SolarLease : IDisposable
                               + $"{sun:yyyy-MM-dd}");
         }
 
-        if (Math.Abs(read.SolarTimeHours - sun.TimeOfDay.TotalHours) > ClockReadBackHours)
+        if (Math.Abs(read.SolarTimeHours - declared.WrittenClockHours) > ClockReadBackHours)
         {
             disagreements.Add($"clock {read.SolarTimeHours:0.#########} h, written "
-                              + $"{sun.TimeOfDay.TotalHours:0.#########} h");
+                              + $"{declared.WrittenClockHours:0.#########} h");
         }
 
         if (Math.Abs(read.TimeZoneHours - declared.TimeZoneHours) > ClockReadBackHours)

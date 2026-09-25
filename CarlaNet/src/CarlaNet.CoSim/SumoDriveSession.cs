@@ -50,7 +50,9 @@ public sealed class SumoDriveSession : IDisposable
     private readonly Stopwatch _bridgeClock = new();
     private readonly Stopwatch _sumoClock = new();
 
+    private readonly (double Latitude, double Longitude) _origin;
     private SolarLease? _sun;
+    private SolarAudit? _sunAudit;
     private long _tickIndex;
     private bool _disposed;
 
@@ -63,9 +65,11 @@ public sealed class SumoDriveSession : IDisposable
                              PopulationLease lease,
                              WorldSettingsLease? settings,
                              LayerVisibilityLease? layers,
-                             VehicleBodyPool? pool)
+                             VehicleBodyPool? pool,
+                             (double Latitude, double Longitude) origin)
     {
         _options = options;
+        _origin = origin;
         _sumo = sumo;
         _network = network;
         _lease = lease;
@@ -108,6 +112,12 @@ public sealed class SumoDriveSession : IDisposable
     /// and what it was found holding. Null where the session binds no sun.
     /// </summary>
     public SolarLease? Sun => _sun;
+
+    /// <summary>
+    /// The comparison of the world's sun against the declared one, taken when the window opened and
+    /// on every tick since. Null where the session binds no sun.
+    /// </summary>
+    public SolarAudit? SunAudit => _sunAudit;
 
     /// <summary>
     /// Start a session: validate the clock, check the network is the world's, take the population
@@ -190,7 +200,8 @@ public sealed class SumoDriveSession : IDisposable
                 : null;
 
             var session = new SumoDriveSession(options, sumo, clock, network, ground, catalogue,
-                                               lease, settings, layers, pool);
+                                               lease, settings, layers, pool,
+                                               (manifest.OriginLatitude, manifest.OriginLongitude));
             try
             {
                 session.Prime();
@@ -245,6 +256,7 @@ public sealed class SumoDriveSession : IDisposable
                     + "ticking while SUMO keeps stepping renders a timeline nothing simulated.");
             }
 
+            AuditTheSun();
             MeasureDivergence();
             _tickIndex++;
             Report.Ticks++;
@@ -360,6 +372,32 @@ public sealed class SumoDriveSession : IDisposable
         }
 
         _sun = SolarLease.Take(world, new DeclaredSun(_options.Epoch!, policy, RenderedTimeSeconds));
+        if (_sun.AtWindowOpen is { } opened)
+        {
+            // The one comparison that sees the refraction-corrected elevation whatever the server's
+            // observer header carries, taken before anything is rendered under it.
+            _sunAudit = new SolarAudit(_sun.Declared, _origin.Latitude, _origin.Longitude,
+                                       Clock.WorldDeltaSeconds);
+            _sunAudit.AuditWindowOpen(opened);
+        }
+    }
+
+    /// <summary>
+    /// Compare the sun this tick's snapshot carried against the sun declared for the instant it
+    /// rendered, failing the run on a disagreement.
+    /// </summary>
+    /// <remarks>
+    /// Free: the snapshot already arrived with the tick. Taken on every tick rather than only those a
+    /// recorder keeps, so a disagreement is caught on the tick it starts rather than at the next
+    /// capture, and never corrected: rewriting the sun would hide whichever of a wrong mapping or a
+    /// second writer caused it.
+    /// </remarks>
+    private void AuditTheSun()
+    {
+        if (_sunAudit is { } audit && _options.World is { } world)
+        {
+            audit.AuditTick(_tickIndex, RenderedTimeSeconds, world.ObservedSolarState());
+        }
     }
 
     private bool AdvanceSumo()
