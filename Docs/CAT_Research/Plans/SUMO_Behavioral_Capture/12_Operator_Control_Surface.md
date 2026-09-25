@@ -1,11 +1,12 @@
 # 12 — The operator control surface
 
-**Status:** Plan section. Specification of a control surface, not an implementation. No code was
-changed, no build, cook or engine run. Every measurement in §1 was taken read-only by introspecting
+**Status:** Plan section. Specification of a control surface. Of the classes in §3.9,
+`ChannelDescription`, `StareAim` and the camera follower are built; the rest are not. Every measurement in §1 was taken read-only by introspecting
 the live parser object and grepping the live source tree on 2026-09-18; the further measurements in
 §3.5, §3.10.1, §3.10.2, §5.2 and §7.6 were taken the same way, and each says where.
 **Date:** 2026-09-18
 **Revisions:**
+`2026-09-25` — Stare pose and orbit centre fields; `ChannelDescription` and the camera follower built.
 `2026-09-18` — Termination under external kill made first class; aggregate verdict removed; in-run observability stated.
 `2026-09-18` — Unattended caller, live-exercise pacing and transcript, exposure-profile correction.
 `2026-09-18` — Initial: measured the present surface; layered resolution, validation phases, time-of-day expression.
@@ -536,7 +537,11 @@ PascalCase, modern union hints, absolute imports outside the package, all import
 | `RunResult.py` | `RunResult` | §3.10.3's result artifact, whose *fields* are [`04`](04_Contracts.md)'s `C10`. Written in **every** terminal outcome the tool survives, including a refusal that produced no session; the process exit status is read from it rather than computed beside it |
 | `RunTerminationSequence.py` | `RunTerminationSequence` | §3.10.2's ordered flush. Installed as the handler for every signal the platform delivers *and* as the session's `finally`, so one code path serves a stop, a signal and a fault. Idempotent, time-boxed at every step, and re-entrant: a second signal abandons the remaining steps |
 | `WorldBuildConfiguration.py` | `WorldBuildConfiguration` | §9.2's single definition of the 23 world-build inputs, produced by both front ends |
+| `ChannelDescription.py` | `ChannelDescription` | **Built.** One camera channel: §5.2's per-channel fields and their defaults, defined once and validated on construction. §9.2's typed channel description |
+| `StareAim.py` | `StareAim` | **Built.** The pose a stare channel holds, from a look-at point or an explicit pose |
+| `CameraFollower.py` | `CameraFollower` | **Built.** A viewer that places one camera from a `ChannelDescription` and shows its picture live; a camera-follower process in [`01`](01_Architecture.md) D1.1's sense — it never cues, never writes episode settings, and never records ([`08`](08_Collection_And_EPoL.md) §3.4). Its camera, window and frame-stall notice are `FollowerCamera`, `FollowerWindow` and `FrameStallWatch` |
 | `scripts/run_capture.py` | — | Thin `main`: resolve, validate, construct `CaptureSession`, run, close out |
+| `scripts/run_camera_follower.py` | — | **Built.** Thin `main` for `CameraFollower` |
 
 `CaptureSession`, `PlaybackClock`, `RenderSetSelector`, `RunManifestWriter` and `SumoSession` are
 [`01`](01_Architecture.md) §2.3's components and are not redefined here; this section constructs them
@@ -1104,6 +1109,26 @@ The drop policy is deliberately absent from this table as a choice: it is Bound 
 | `post_process_profile` | `Default` (EV100 +12.32, measured by [`08`](08_Collection_And_EPoL.md) §2.9) | Session-fixed, and **recorded as the digest of the JSON the server actually loaded**, not as the name that was asked for | [`08`](08_Collection_And_EPoL.md) D8.27, D8.28; see the correction below |
 | `exposure` (a numeric exposure value) | **not offered** — no numeric exposure attribute exists on any camera blueprint (§1.3) | — | measured; check 16 names `post_process_profile` as the field that does the job |
 | `orbit_radius_m`, `orbit_altitude_m`, `orbit_period_s` | `200.0`, `518.2`, `240.0` | Session-fixed | today's `:598-615`, **converted to metres** (§1.5) |
+| `orbit_centre_x_m`, `orbit_centre_y_m` | **cond.** — required when `pattern` is `orbit`; refused with `stare` | Session-fixed | today's `--orbit-x` / `--orbit-y`, which fall back to the start pose when absent (`OrbitSensorController.py:235-242`) |
+| `orbit_centre_z_m` | `0.0` | Session-fixed | today's fixed `center_z` (`OrbitSensorController.py:215`) |
+| `stare_look_at_x_m`, `stare_look_at_y_m` | **cond.** — a stare gives these or the five `stare_*` pose fields below, exactly one of the two; refused with `orbit` | Session-fixed | [`08`](08_Collection_And_EPoL.md) §3.3 |
+| `stare_look_at_z_m` | `0.0` | Session-fixed | the implicit look-at height of `camera_transform` in `CarlaNet/python/run_sumo_drive.py` |
+| `stare_altitude_m`, `stare_standoff_m`, `stare_bearing_deg` | `304.8`, `0.0`, `0.0` | Session-fixed | altitude and standoff are today's start pose — `--z` 1000 ft **converted to metres**, looking straight down (`CarlaControlArgumentParser.py:232-234`, `SensorRig.py:62`); the bearing puts north at the top of the picture, where the start pose's `yaw=0.0` puts east there |
+| `stare_x_m`, `stare_y_m`, `stare_z_m`, `stare_pitch_deg`, `stare_yaw_deg` | **cond.** — all five or none; the alternative to a look-at point | Session-fixed | §9.1: a stare is sited by flying there first, and what flying produces is a pose |
+
+**How a stare and an orbit are placed.** All positions are in CARLA's frame — metres, x east, y south,
+so north is −y — and angles are CARLA's: yaw 0 faces east and −90 faces north, and a negative pitch looks
+down. A stare aimed at a point stands `stare_standoff_m` back from the look-at point, on the side
+opposite `stare_bearing_deg`, and `stare_altitude_m` above it; the bearing is the compass direction the
+camera looks along, clockwise from north, so the boresight passes through the point and dips by
+atan(altitude / standoff). A standoff of `0.0` looks straight down with the bearing at the top of the
+picture. An orbit circles its centre at `orbit_radius_m`, `orbit_altitude_m` above
+`orbit_centre_z_m`, with the boresight held on the centre. A field the chosen pattern would ignore is
+refused rather than dropped. The single definition of every row in this table that is built is
+`ChannelDescription` (`CarlaControl/src/carlacontrol/ChannelDescription.py`), whose defaults a test
+holds equal to this table; the stare geometry is `StareAim`. `capture_rgb`, `capture_depth`,
+`capture_segmentation`, `depth_max_range_m`, `sensor_tick` and `post_process_profile` are not yet in
+it — they arrive with §9.2's `SensorRig` conversion, which has not been made.
 
 **`post_process_profile` is the exposure control, and its default is a hidden host-dependent value of
 exactly the kind M2 forbids.** No camera blueprint publishes a *numeric* exposure attribute (§1.3), but
@@ -2215,3 +2240,10 @@ them by number ([`08`](08_Collection_And_EPoL.md) §15 cites check 17).
    rather than an absence nobody notices — and revisit once one unattended run has happened. The case
    for mandating it is stronger than it looks, because a run the caller will stop at an unknown instant
    cannot be cheaply inspected in its first minute and re-launched.
+10. **What `pattern` is the interactive viewer's camera once §9.2 converts it?** run_SCTMV's one camera
+   starts as a stare and becomes an orbit on the `O` key or under `--orbit`, with the orbit's centre
+   defaulting to the start pose (`OrbitSensorController.py:235-242`). `ChannelDescription` holds one
+   `pattern` per channel and refuses an orbit centre on a stare, so a description built from today's
+   flags would be refused for exactly the camera D12.17 keeps. Either the interactive path builds
+   an orbit description whenever orbiting is possible, or the description admits a channel whose
+   pattern the operator switches. Nothing changes for run_SCTMV until §9.2's conversion is made.

@@ -20,6 +20,7 @@ are on the critical path.
 | 2026-09-22 | §13.4 states the two-script setup; stage D drops the completed retirement item. |
 | 2026-09-22 | The Unreal skills are vendored under `skills/third-party/` and excluded from the distribution. |
 | 2026-09-22 | Stage I: the road layer is suppressed alongside the signal layer, the session owns both, and the capture camera is aimed and its tiles pre-rolled before the first frame. |
+| 2026-09-25 | Stage I: a world handed back asynchronous must free-run. Stage K: pacing and a live picture from a camera follower are built; the rest of the live exercise is not. |
 
 ---
 
@@ -303,7 +304,7 @@ New `CarlaNet.CoSim` in C#, orchestrated from Python; one TraCI connection owned
 | **The anti-leak boundary**: **two** roots, one writer each, split **at the writer**, a validator in CI that reads tEXt chunks, and a held-back split recorded as a **release property** rather than a directory | Governed by observer-derivability: fieldable, scene-independent, supervision-blind, and sourceable without opening a truth artifact. There is no third root — model output is neither produced nor consumed here, and a named shelf for it would only invite it into the tree |
 | **The illumination-only leakage probe** — can the label be predicted from light alone, with no imagery? A property of the dataset, not a floor for a model to beat | How the hour-to-label correlation at 0.600 is caught rather than argued about |
 | **The corpus handover**: prevalence and coverage per sensor and unioned, stratified by illumination, plus an explicit statement of what the corpus does **not** contain — and the published supervision-transfer rule a downstream team applies to its own tracks. This pipeline performs no association and emits no metric | |
-| The live exercise: pacing, latency budget, operator view | An EPoL assessment can ride the existing Cursor-on-Target feed as a `<detail>` child |
+| The live exercise: pacing, latency budget, operator view | **Pacing is built**: a real-time factor on the world tick, the achieved factor published per wall-clock window ([`03`](03_CoSimulation_Runtime.md) §9.9, D3.25). **A live picture is built**: the camera follower, a process that never cues ([`12`](12_Operator_Control_Surface.md) §3.9). Not built: the latency budget, the run operator's panel ([`08`](08_Collection_And_EPoL.md) §11.4) and the handover endpoint (§11.5). An EPoL assessment can ride the existing Cursor-on-Target feed as a `<detail>` child |
 
 ---
 
