@@ -29,6 +29,7 @@ Usage:
     python test_sync_to_async_release.py [--ticks 20] [--seconds 3] [--host h] [--port p]
 """
 import argparse
+import logging
 import sys
 import threading
 import time
@@ -53,14 +54,14 @@ class FrameCounter:
         with self._lock:
             return self._count
 
+    def count_over(self, seconds: float) -> int:
+        """Frames that arrive during the next `seconds` of wall clock."""
+        start = self.read()
+        time.sleep(seconds)
+        return self.read() - start
+
     def close(self) -> None:
         self._world.remove_on_tick(self._id)
-
-
-def count_over(read, seconds: float) -> int:
-    start = read()
-    time.sleep(seconds)
-    return read() - start
 
 
 def main() -> int:
@@ -70,13 +71,15 @@ def main() -> int:
     parser.add_argument("--ticks", type=int, default=20)
     parser.add_argument("--seconds", type=float, default=3.0)
     args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    logger = logging.getLogger("test_sync_to_async_release")
 
     client = carla.Client(args.host, args.port)
     client.set_timeout(20.0)
     world = client.get_world()
     original = world.get_settings()
-    print(f"map {world.get_map().name}; found sync={original.synchronous_mode} "
-          f"delta={original.fixed_delta_seconds}")
+    logger.info("map %s; found sync=%s delta=%s", world.get_map().name,
+                original.synchronous_mode, original.fixed_delta_seconds)
 
     counter = FrameCounter(world)
     camera = None
@@ -94,9 +97,10 @@ def main() -> int:
             world.tick()
         time.sleep(0.5)
         seen = counter.read() - before
-        print(f"synchronous: {args.ticks} ticks, {seen} observer frames")
+        logger.info("synchronous: %d ticks, %d observer frames", args.ticks, seen)
         if seen != args.ticks:
-            print("FAIL: the frame counter does not count ticks; nothing below can be concluded")
+            logger.error("FAIL: the frame counter does not count ticks; nothing below can be "
+                         "concluded")
             return 2
 
         settings = world.get_settings()
@@ -104,8 +108,9 @@ def main() -> int:
         settings.fixed_delta_seconds = None
         world.apply_settings(settings)
 
-        seen = count_over(counter.read, args.seconds)
-        print(f"asynchronous, no client ticking, {args.seconds:.1f} s: {seen} observer frames")
+        seen = counter.count_over(args.seconds)
+        logger.info("asynchronous, no client ticking, %.1f s: %d observer frames",
+                    args.seconds, seen)
         if seen == 0:
             failures.append("the world did not advance after the switch to asynchronous")
 
@@ -118,7 +123,7 @@ def main() -> int:
         camera.listen(lambda image: images.append(image.frame))
         time.sleep(args.seconds)
         camera.stop()
-        print(f"asynchronous camera, {args.seconds:.1f} s: {len(images)} images")
+        logger.info("asynchronous camera, %.1f s: %d images", args.seconds, len(images))
         if not images:
             failures.append("a camera in the asynchronous world delivered no images")
     finally:
@@ -128,10 +133,10 @@ def main() -> int:
         world.apply_settings(original)
 
     for failure in failures:
-        print(f"FAIL: {failure}")
+        logger.error("FAIL: %s", failure)
     if failures:
         return 1
-    print("PASS")
+    logger.info("PASS")
     return 0
 
 
