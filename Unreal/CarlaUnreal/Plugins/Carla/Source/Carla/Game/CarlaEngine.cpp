@@ -333,12 +333,15 @@ void FCarlaEngine::OnPreTick(UWorld *, ELevelTick TickType, float DeltaSeconds)
       if (bSynchronousMode)
       {
         // The world cannot advance until the client says so, and every RPC still waiting is work
-        // the client may be blocked on, so drain until the cue arrives.
+        // the client may be blocked on, so drain until the cue arrives. The mode is tested on every
+        // pass, not only on entry: a client that switches the world to asynchronous is served from
+        // inside this drain and sends no further cue, so waiting on the cue alone holds the world
+        // still -- reporting asynchronous, advancing nothing -- until some client ticks it.
         do
         {
           Server.RunSome(1u);
         }
-        while (!Server.TickCueReceived());
+        while (bSynchronousMode && !Server.TickCueReceived());
       }
       else
       {
