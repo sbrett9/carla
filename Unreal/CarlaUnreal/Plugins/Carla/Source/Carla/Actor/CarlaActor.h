@@ -208,7 +208,7 @@ public:
 
   FVector GetActorAngularVelocity() const;
 
-  ECarlaServerResponse SetActorTargetVelocity(const FVector& Velocity);
+  virtual ECarlaServerResponse SetActorTargetVelocity(const FVector& Velocity);
 
   ECarlaServerResponse SetActorTargetAngularVelocity(const FVector& AngularVelocity);
 
@@ -506,6 +506,8 @@ public:
       const EVehicleWheelLocation& WheelLocation, float& Angle);
 
   virtual ECarlaServerResponse SetActorSimulatePhysics(bool bSimulatePhysics) final;
+
+  virtual ECarlaServerResponse SetActorTargetVelocity(const FVector& Velocity) final;
 
   virtual ECarlaServerResponse ApplyControlToVehicle(
       const FVehicleControl&, const EVehicleInputPriority&) final;

@@ -14,6 +14,7 @@
 | 1 — 2026-09-17 | First audit: actuation, sensing, truth, spawn, recorder, traffic lights, RPC budget. |
 | 2 — 2026-09-18 | Adds §14 solar surface, §15 vehicle lights, §16 weather; gaps G5.13–G5.22, decisions D5.13–D5.20. |
 | 3 — 2026-09-18 | Traffic-light findings marked present, audited, not required by this plan; vehicle lights unaffected. |
+| 4 — 2026-09-25 | §7 velocity chain corrected through `APawn`; D3.5's engine shape recorded. §7 citations against `feature/sumo-behavioral-capture`. |
 
 ## What this section does **not** cover
 
@@ -580,68 +581,75 @@ Accessors are pure cache reads, no RPC: `GetActorTransform`, `GetActorVelocity`,
 
 ```cpp
 // Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Sensor/WorldObserver.cpp
-373:      Velocity = TO_METERS * View->GetActor()->GetVelocity();
+385:      Velocity = TO_METERS * View->GetActor()->GetVelocity();
 ```
 
-Confirmed at exactly line 373, inside the `else` branch of an `if (View->IsDormant())` at `:358`.
-The dormant branch reads a stored value instead: `Velocity = TO_METERS * ActorData->Velocity`
-(`:361`). Acceleration in **both** branches is derived by differencing the same velocity against the
-previous frame's (`FWorldObserver_GetAcceleration`, `:264-278`), so whatever is true of velocity is
-true of acceleration.
+At line 385 of the current tree (373 at `b39ffe338`), inside the `else` branch of an
+`if (View->IsDormant())` at `:370`. The dormant branch reads a stored value instead:
+`Velocity = TO_METERS * ActorData->Velocity` (`:373`). Acceleration in **both** branches is derived
+by differencing the same velocity against the previous frame's (`FWorldObserver_GetAcceleration`,
+`:264-278`), so whatever is true of velocity is true of acceleration.
 
 Following `GetActor()->GetVelocity()` down for a CARLA vehicle:
 
 1. `ACarlaWheeledVehicle::GetVelocity()` overrides it and returns
    `BaseMovementComponent->GetVelocity()`
-   (`Vehicle/CarlaWheeledVehicle.cpp:804-806`, declared `Vehicle/CarlaWheeledVehicle.h:412`).
+   (`Vehicle/CarlaWheeledVehicle.cpp:857-860`, declared `Vehicle/CarlaWheeledVehicle.h:424`).
 2. `UBaseCarlaMovementComponent::GetVelocity()` returns
    `CarlaVehicle->AWheeledVehiclePawn::GetVelocity()`
    (`Vehicle/MovementComponents/BaseCarlaMovementComponent.cpp:35-42`) — i.e. it explicitly routes
    back to the pawn's base implementation.
-3. `AWheeledVehiclePawn` does not override it, so this is `AActor::GetVelocity()`, which returns
-   `RootComponent->GetComponentVelocity()`
-   (`UE_5_7_4/Engine/Source/Runtime/Engine/Private/Actor.cpp:748-755`).
-4. `UPrimitiveComponent::GetComponentVelocity()`
-   (`.../Private/PrimitiveComponentPhysics.cpp:1328-1340`):
+3. `AWheeledVehiclePawn` does not override it, so this is `APawn::GetVelocity()`
+   (`UE_5_7_4/Engine/Source/Runtime/Engine/Private/Pawn.cpp:240-249`), not `AActor::GetVelocity()`:
 
    ```cpp
-   if (IsSimulatingPhysics())
+   if(GetRootComponent() && GetRootComponent()->IsSimulatingPhysics())
    {
-       FBodyInstance* BodyInst = GetBodyInstance();
-       if(BodyInst != NULL) { return BodyInst->GetUnrealWorldVelocity(); }
+       return GetRootComponent()->GetComponentVelocity();   // reads the physics body
    }
-   return Super::GetComponentVelocity();
+   const UPawnMovementComponent* MovementComponent = GetMovementComponent();
+   return MovementComponent ? MovementComponent->Velocity : FVector::ZeroVector;
    ```
-5. `USceneComponent::GetComponentVelocity()` returns the bare `ComponentVelocity` field
-   (`.../Private/Components/SceneComponent.cpp:2995-2998`).
+4. `APawn::GetMovementComponent()` is `FindComponentByClass<UPawnMovementComponent>()`
+   (`Pawn.cpp:186-189`). On a CARLA vehicle that is the `UChaosWheeledVehicleMovementComponent`:
+   `UBaseCarlaMovementComponent` derives from `UMovementComponent`, not `UPawnMovementComponent`
+   (`Vehicle/MovementComponents/BaseCarlaMovementComponent.h:21`).
+5. So a non-simulating vehicle reports the `UMovementComponent::Velocity` field of its Chaos
+   movement component. `UPrimitiveComponent::GetComponentVelocity()`
+   (`.../Private/PrimitiveComponentPhysics.cpp:1328-1340`), which falls back to the bare
+   `ComponentVelocity` field (`.../Private/Components/SceneComponent.cpp:2995-2998`), is reached only
+   while the root simulates, and then reads the body.
 
 ### 7.3 The conclusion, stated more strongly than doc 23 states it
 
-**Read.** `ComponentVelocity` is written in exactly one place in the engine's movement machinery:
-`UMovementComponent::UpdateComponentVelocity()`
-(`.../Private/Components/MovementComponent.cpp:382-388`). A grep of the entire
-`Engine/Plugins/Experimental/ChaosVehiclesPlugin/Source/ChaosVehicles` tree for
-`UpdateComponentVelocity` or `ComponentVelocity` returns **zero hits**.
+**Read.** The Chaos vehicle plugin never assigns `UMovementComponent::Velocity`: a grep of
+`Engine/Plugins/Experimental/ChaosVehiclesPlugin/Source/ChaosVehicles` finds one `Velocity =`, and it
+is `UChaosVehicleWheel`'s own member (`ChaosVehicleWheel.cpp:144`). The engine's writers are
+`UNavMovementComponent::RequestDirectMove` (`.../Private/Components/NavMovementComponent.cpp:132-134`),
+called only by AI path following, and `UMovementComponent::StopMovementImmediately`
+(`.../Classes/GameFramework/MovementComponent.h:473-477`), which writes zero.
 
-**Inferred, and this is the audit's most consequential inference:** a CARLA vehicle's
-`ComponentVelocity` is never written by anything. So for a vehicle whose physics is off, the world
-observer does not report a *stale* velocity — it reports a **structural zero**, and would do so
-however the vehicle got where it is. Doc 23's framing ("a teleport does not update component
-velocity") is correct but understates the problem: there is no history to be stale.
+**Inferred, and this is the audit's most consequential inference:** nothing but
+`ACarlaWheeledVehicle::SetKinematicVelocity` (§7.4) writes the field a non-simulating CARLA
+vehicle's velocity is read from. So for a vehicle whose physics is off and whose velocity nobody
+sets, the world observer does not report a *stale* velocity — it reports a
+**structural zero**, and would do so however the vehicle got where it is. Doc 23's framing ("a
+teleport does not update component velocity") is correct but understates the problem: there is no
+history to be stale.
 
-Nor can the client set it. `FCarlaActor::SetActorTargetVelocity` on a non-dormant actor calls
-`RootComponent->SetPhysicsLinearVelocity(...)` (`Actor/CarlaActor.cpp:392-411`), which writes the
-physics body (`FBodyInstance::SetLinearVelocity`, guarded by
-`FPhysicsInterface::IsRigidBody`) — and step 4 above never *reads* the body when
-`IsSimulatingPhysics()` is false. And for a CARLA vehicle, `set_simulate_physics(false)` does more
-than clear a flag: `ACarlaWheeledVehicle::SetSimulatePhysics(false)` calls
-`Movement->DestroyPhysicsState()` (`Vehicle/CarlaWheeledVehicle.cpp:754-788`, the destroy at `:781`),
-so there is no body left to write to.
+Nor can the client set it through the base implementation. `FCarlaActor::SetActorTargetVelocity` on
+a non-dormant actor calls `RootComponent->SetPhysicsLinearVelocity(...)`
+(`Actor/CarlaActor.cpp:392-411`), which writes the physics body (`FBodyInstance::SetLinearVelocity`,
+guarded by `FPhysicsInterface::IsRigidBody`) — and step 3 above never *reads* the body when the root
+does not simulate. For a CARLA vehicle that body is kinematic: `ACarlaWheeledVehicle::SetSimulatePhysics(false)`
+turns off simulation on the root and calls `Movement->DestroyPhysicsState()`
+(`Vehicle/CarlaWheeledVehicle.cpp:757-796`, the destroy at `:787`), which removes the Chaos vehicle
+simulation and recreates the mesh's physics state (`ChaosVehicleMovementComponent.cpp:791-805`).
 
 **One route does exist in the current code**, and it is worth naming because it is the only one:
 the **dormant** branch. `FCarlaActor::SetActorTargetVelocity` writes `ActorData->Velocity` when the
 actor is dormant (`CarlaActor.cpp:394-397`), and `FWorldObserver_Serialize` reads exactly that field
-for a dormant actor (`WorldObserver.cpp:361`). But dormancy is driven by large-map streaming and
+for a dormant actor (`WorldObserver.cpp:373`). But dormancy is driven by large-map streaming and
 `actor_active_distance`, not by the client — there is no `put_actor_to_sleep` RPC (§8.3) — so this
 is a description of the shape of a fix, not a usable mechanism today.
 
@@ -652,18 +660,36 @@ collision stage, and the arrival/occlusion gating of
 [doc 17](../../Findings/17_Photoreal_Occlusion_Metric.md). The team brief's decision 2 already says
 this is a problem to be solved rather than a reason to reject the mode. The audit's contribution is
 to say **where** it must be solved: in the engine, because no ordering of client calls produces a
-non-zero reading. Candidate shapes, for
-[`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) and
-[`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) to choose between:
+non-zero reading. The candidate shapes:
 
-| Shape | Where it lands | Note |
+| Shape | Where it goes | Note |
 |---|---|---|
-| Have `SetActorTargetVelocity` also write `ComponentVelocity` on a non-simulating root | `Actor/CarlaActor.cpp:392-411` | Smallest change; makes the existing API mean what its name says. Alters behaviour for every client, so it is a shared-code change and needs stock-content regression. |
-| A new "asserted velocity" field on `FActorInfo`, set by a new command/RPC and preferred by the observer when physics is off | `WorldObserver.cpp:358-378` + a new `BIND_SYNC` + a new variant arm | Keeps teleport velocity distinguishable from measured velocity, which the truth record arguably wants to know. Adds a 23rd command type, so `Command.h`, `Command.cs` and `CommandFormatter.cs` move together. |
+| Have `SetActorTargetVelocity` write the field a non-simulating vehicle is read from | `Actor/CarlaActor.cpp`, `Vehicle/CarlaWheeledVehicle.cpp` | Makes the existing API mean what its name says. **The shape [`03`](03_CoSimulation_Runtime.md) D3.5 takes**, below. |
+| A new "asserted velocity" field on `FActorInfo`, set by a new command/RPC and preferred by the observer when physics is off | `WorldObserver.cpp:358-378` + a new `BIND_SYNC` + a new variant arm | Keeps teleport velocity distinguishable from measured velocity inside the engine, but the per-actor record has no field to carry the distinction to a client (`sensor/data/ActorDynamicState.h:124-143`). Adds a 23rd command type, so `Command.h`, `Command.cs` and `CommandFormatter.cs` move together. |
 | Derive velocity client-side from consecutive snapshot transforms | `CarlaNet` only | Needs no engine change but produces a *different quantity* (finite difference of pose) that must be labelled as such in truth, never as measured speed. |
 
 Each is a design decision, not an effort estimate; a rebuild is neutral and is not a consideration
 between them.
+
+**What D3.5 is in the engine.** `FCarlaActor::SetActorTargetVelocity` is virtual, and
+`FVehicleActor::SetActorTargetVelocity` (`Actor/CarlaActor.cpp:831-846`) sends a vehicle that
+`ACarlaWheeledVehicle::IsKinematic()` accepts to `ACarlaWheeledVehicle::SetKinematicVelocity`
+(`Vehicle/CarlaWheeledVehicle.cpp:798-843`). A kinematic vehicle is one whose physics was disabled
+through `SetSimulatePhysics`, runs the default movement component, and has a root that does not
+simulate. For it, both fields a non-simulating vehicle is read from are written: the pawn movement
+component's `Velocity`, which `APawn::GetVelocity` returns (§7.2 step 3), and the root's
+`ComponentVelocity`, which `GetComponentVelocity` returns to a caller that asks the component. The
+kinematic body is written as before, without the component's invalid-operation warning.
+`SetSimulatePhysics` zeroes both fields on every change of state (`:791-792`). Every other actor, and
+every vehicle whose physics is on, takes the base implementation, which is unchanged — so the
+stock-content regression the shared change needs is confined to vehicles with physics disabled. Of
+the callers in the tree, both traffic managers (`CarlaNet.TrafficManager/Stages/ALSM.cs:472`,
+`LibCarla/source/carla/trafficmanager/ALSM.cpp:232`), the replayer
+(`Recorder/CarlaReplayerHelper.cpp:543-544`) and frame playback (`Game/FrameData.cpp:1108-1109`)
+enable physics before they set a velocity; `CarlaControl/src/carlacontrol/TrafficController.py:1006`
+sets one on a freshly spawned vehicle, whose physics is on; and
+`CarlaNet.Scenario/ScenarioExecutor.cs:180` sets zero. None of them reaches the new path with a
+velocity that changes what is read back.
 
 ---
 
@@ -1911,15 +1937,11 @@ number. `D5.13`–`D5.20` all concern time of day, illumination and vehicle ligh
 
 ## 20. Open questions
 
-1. **Which shape closes the truth-velocity hole (§7.4)?** The three candidates differ in what the
-   truth record is allowed to claim, not in effort. Writing `ComponentVelocity` from
-   `SetActorTargetVelocity` makes the existing API honest but changes behaviour for every client; a
-   separate asserted-velocity field keeps teleported speed distinguishable from measured speed,
-   which a downstream consumer of the corpus may well want; a client-side finite difference needs no engine change
-   but is a different quantity. **Recommendation:** the asserted-velocity field, because the truth
-   record's whole purpose is to be unambiguous about provenance, and because the same field would
-   serve any future mode that moves a body without simulating it. This needs the user's decision, not
-   the auditor's.
+1. **Which shape closes the truth-velocity hole (§7.4)?** Decided by
+   [`03`](03_CoSimulation_Runtime.md) D3.5: `SetActorTargetVelocity` writes the field a kinematic
+   vehicle is read from, and only for vehicles whose physics is disabled. Provenance, the reason for
+   preferring an asserted-velocity field, is carried by the truth record's own SUMO speed field; the
+   per-actor snapshot record has no slot that could carry it to a client in either shape.
 2. **Does the render-set contract want an "instantiated but inert" state cheaper than
    `set_simulate_physics(false)`?** If it does, G5.5 (binding `PutActorToSleep`/`WakeActorUp`) stops
    being optional — and the dormant path is also the one place where a stored velocity already
