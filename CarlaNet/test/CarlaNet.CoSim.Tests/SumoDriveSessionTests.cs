@@ -462,7 +462,8 @@ public sealed class SumoDriveSessionTests
         options.Illumination = IlluminationPolicy.Advance(1.0);
 
         SumoDriveSession session = SumoDriveSession.Start(options);
-        Assert.True(carla.Sun!.Advancing);
+        Assert.False(carla.Sun!.Advancing);
+        Assert.Equal(3.5, carla.Sun.TimeZone);
         try
         {
             carla.ThrowOnTick = new IOException("the connection to the simulator was dropped");
@@ -477,6 +478,49 @@ public sealed class SumoDriveSessionTests
         Assert.Equal((13.0, 2019, 9, 21, -5.0, false), (carla.Sun.SolarTime, carla.Sun.Year,
                                                         carla.Sun.Month, carla.Sun.Day,
                                                         carla.Sun.TimeZone, carla.Sun.Advancing));
+    }
+
+    [RequiresSumoFact]
+    public void AnAdvancingSessionWritesTheSunForEveryFrameBeforeItsCueAndHoldsAcrossTheMinute()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        // Simulated second zero is two seconds before 07:01 at the port, and the fixture steps at the
+        // world's delta, so eighty ticks cross the minute the engine's own advance renders as 07:00:00.
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+        options.Epoch = SolarEpoch.Declare("2026-03-21T07:00:58+03:30", 3.5, "2026-03-21T03:30:58Z",
+                                           calendarAdvances: true, dstInEffect: false);
+        options.Illumination = IlluminationPolicy.Advance(1.0);
+
+        using SumoDriveSession session = SumoDriveSession.Start(options);
+        for (int step = 0; step < 80 && session.Advance(); step++)
+        {
+        }
+
+        // The bind, then one write per tick, each arriving while the world was still on the tick
+        // before the frame it was written for, and the engine's own advance off throughout.
+        long ticks = session.Report.Ticks;
+        Assert.True(ticks >= 60, $"{ticks} ticks");
+        List<(string Call, long AtTick)> writes = [.. carla.SolarWrites];
+        Assert.Equal(["set_solar_epoch", "set_time_advance"], writes.Take(2).Select(write => write.Call));
+        Assert.Equal(ticks, writes.Skip(2).Count());
+        Assert.Equal(Enumerable.Range(0, (int)ticks).Select(tick => ("set_solar_epoch", (long)tick)),
+                     writes.Skip(2));
+        Assert.False(carla.Sun!.Advancing);
+        Assert.Equal(ticks, session.Sun!.FrameWrites);
+
+        // Every tick audited and none stopped, the minute crossed on the clock the engine holds.
+        SolarAudit audit = session.SunAudit!;
+        Assert.Equal(ticks, audit.AuditedTicks);
+        Assert.Null(audit.Failure);
+        Assert.InRange(audit.WorstClock!.ClockResidualSeconds, -0.5, 0.5);
+        Assert.Equal((7, 1, 0), (SolarPositionModel.EngineClock(audit.Last!.Observed.SolarTimeHours).Hour,
+                                 SolarPositionModel.EngineClock(audit.Last.Observed.SolarTimeHours).Minute,
+                                 0));
+        Assert.Contains($"  written          for {ticks} frames", session.Report.ToString());
     }
 
     [RequiresSumoFact]

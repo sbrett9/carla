@@ -13,7 +13,8 @@ namespace CarlaNet.CoSim;
 /// which catches a different way to be wrong:</para>
 /// <list type="bullet">
 /// <item>The zone, the advancing flag and the rate, exactly. A zone other than the declared offset is
-/// a clock read as local mean solar time; a flag or rate other than the policy's is a second
+/// a clock read as local mean solar time. The session turns the engine's own advance off under every
+/// policy (<see cref="DeclaredSun.EngineAdvances"/>), so a flag or rate other than off is a second
 /// component driving the sun.</item>
 /// <item>The instant the sun holds -- its date and its clock together -- within
 /// <see cref="ToleranceSeconds"/>. A wrong date is a whole day out and cannot pass.</item>
@@ -28,18 +29,22 @@ namespace CarlaNet.CoSim;
 /// says whether it did.</item>
 /// </list>
 ///
-/// <para><b>The tolerances are derived, not chosen.</b> The clock floor is half a second: the engine
-/// evaluates its sun at whole seconds, so a clock nearer than that to the declared one cannot change
-/// the sun it renders. The angle floor is <see cref="SolarPositionModel.ResolutionFloorDegrees"/>,
-/// the finest agreement with the engine that is resolvable at all; measured, the engine agrees with
-/// the algorithm three orders of magnitude inside it. Under an advancing sun both widen by two ticks'
-/// worth of advance -- the engine's advance and the snapshot need not fall on the same side of a tick
-/// -- which at a real-time rate and a 0.05 s tick leaves both at the floor.</para>
+/// <para><b>The tolerances are derived, not chosen, and they are the same at every rate.</b> The clock
+/// floor is half a second: the engine evaluates its sun at whole seconds, so a clock nearer than that
+/// to the declared one cannot change the sun it renders. The angle floor is
+/// <see cref="SolarPositionModel.ResolutionFloorDegrees"/>, the finest agreement with the engine that
+/// is resolvable at all; measured, the engine agrees with the algorithm three orders of magnitude
+/// inside it. Under an advancing sun the session writes each frame's clock itself, at the whole
+/// second nearest the frame's declared instant (<see cref="DeclaredSun.WrittenAt"/>), before that
+/// frame's tick cue, so the clock the snapshot carries is within half a second of the declared one
+/// whatever the rate, and the sun it renders is within half a second of motion -- about 0.002
+/// degrees -- of the declared sun. Nothing stands between the write and the frame for the tolerance
+/// to absorb.</para>
 ///
 /// <para><b>A disagreement stops the run.</b> See <see cref="SolarAuditFailedException"/>. Where the
-/// disagreement is the engine's own clock decomposition -- the world holds the declared clock and
-/// renders the sun of the minute before -- the failure says so, because the remedy is in the engine
-/// and not in the declaration.</para>
+/// disagreement is the engine's own clock decomposition -- the world holds a clock within tolerance
+/// of the declared one and renders the sun of the minute before -- the failure says so, and says that
+/// the clock was not one this session wrote.</para>
 ///
 /// <para><b>What it cannot see.</b> It reads the sun's state, not the light: a second directional
 /// light added to the level, a sky that was re-lit, or exposure that compensated the change away all
@@ -62,17 +67,12 @@ public sealed class SolarAudit
     /// <param name="declared">The sun the window declares.</param>
     /// <param name="originLatitude">The world package's origin, which the sun is computed for.</param>
     /// <param name="originLongitude">Likewise.</param>
-    /// <param name="worldDeltaSeconds">The fixed delta the world ticks at.</param>
-    public SolarAudit(DeclaredSun declared, double originLatitude, double originLongitude,
-                      double worldDeltaSeconds)
+    public SolarAudit(DeclaredSun declared, double originLatitude, double originLongitude)
     {
         ArgumentNullException.ThrowIfNull(declared);
         Declared = declared;
         OriginLatitude = originLatitude;
         OriginLongitude = originLongitude;
-        ToleranceSeconds = Math.Max(ClockFloorSeconds, 2.0 * declared.Policy.Rate * worldDeltaSeconds);
-        ToleranceDegrees = Math.Max(SolarPositionModel.ResolutionFloorDegrees,
-                                    15.0 * ToleranceSeconds / 3600.0);
     }
 
     /// <summary>The sun the window declares.</summary>
@@ -85,10 +85,10 @@ public sealed class SolarAudit
     public double OriginLongitude { get; }
 
     /// <summary>How far the sun's instant may sit from the declared one, in seconds.</summary>
-    public double ToleranceSeconds { get; }
+    public double ToleranceSeconds => ClockFloorSeconds;
 
     /// <summary>How far the sun's direction, or its corrected elevation, may sit from the declared.</summary>
-    public double ToleranceDegrees { get; }
+    public double ToleranceDegrees => SolarPositionModel.ResolutionFloorDegrees;
 
     /// <summary>The on-demand comparison taken when the window opened.</summary>
     public SolarAuditSample? AtWindowOpen { get; private set; }
@@ -176,13 +176,16 @@ public sealed class SolarAudit
                              : string.Empty));
         }
 
-        if (observed.Advancing != Declared.Policy.Advances
-            || Math.Abs(observed.Rate - Declared.Policy.Rate) > ExactTolerance)
+        if (observed.Advancing != DeclaredSun.EngineAdvances
+            || Math.Abs(observed.Rate - DeclaredSun.EngineRate) > ExactTolerance)
         {
-            problems.Add($"it is {(observed.Advancing ? "advancing" : "not advancing")} at rate "
-                         + $"{Hours(observed.Rate)} where the '{Declared.Policy.Name}' policy declared "
-                         + $"{(Declared.Policy.Advances ? "advancing" : "not advancing")} at "
-                         + $"{Hours(Declared.Policy.Rate)}: something other than this session is driving it");
+            problems.Add($"the engine's own advance is {(observed.Advancing ? "on" : "off")} at rate "
+                         + $"{Hours(observed.Rate)} where this session set it off at rate 0 -- under "
+                         + $"the '{Declared.Policy.Name}' policy "
+                         + (Declared.Policy.Advances
+                             ? "the session writes the sun for every frame itself"
+                             : "nothing moves the sun")
+                         + ": something other than this session is driving it");
         }
 
         double clockResidual = double.NaN;
@@ -277,8 +280,9 @@ public sealed class SolarAudit
                 return $". The world holds the declared clock, {clock:hh\\:mm\\:ss\\.fff}, and its sun "
                        + $"evaluates it as {evaluated:hh\\:mm\\:ss}: ACesiumSunSky::GetHMSFromSolarTime "
                        + "rounds the seconds to sixty and drops the minute they carry into, so the "
-                       + "frame is lit by the sun of a minute earlier. The remedy is that carry in the "
-                       + "engine, not the declaration";
+                       + "frame is lit by the sun of a minute earlier. This session writes every clock "
+                       + "a millisecond past a whole second, where every second decomposes as declared, "
+                       + "so this clock was not one it wrote";
             }
         }
 

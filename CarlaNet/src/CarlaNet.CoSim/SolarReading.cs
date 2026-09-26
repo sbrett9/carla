@@ -17,7 +17,10 @@ namespace CarlaNet.CoSim;
 /// The <b>geometric</b> elevation above the horizon -- where the sun is, with no atmosphere.
 /// </param>
 /// <param name="AzimuthDegrees">Degrees clockwise from north.</param>
-/// <param name="Advancing">Whether the engine advances the clock with the world tick.</param>
+/// <param name="Advancing">
+/// Whether the engine's own advance moves the clock with the world tick. Off in a session, which writes
+/// an advancing sun itself.
+/// </param>
 /// <param name="Rate">Sun-clock seconds per simulated second when it does.</param>
 /// <param name="CorrectedElevationDegrees">
 /// The elevation with atmospheric refraction applied, which is what the sun's directional light is

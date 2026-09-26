@@ -52,37 +52,107 @@ public sealed class SolarLeaseTests
     }
 
     [Fact]
-    public void TheAdvanceSettingIsWrittenAfterTheClockAndBeforeAnyTick()
+    public void TheEngineSOwnAdvanceIsTurnedOffUnderAnAdvancingPolicyToo()
     {
+        // A sun left advancing fast by whoever used the world last.
         var world = new RecordedWorld();
+        world.Sun!.WriteAdvance(true, 60.0);
         var declared = new DeclaredSun(PortEpoch(), IlluminationPolicy.Advance(1.0), 25_200);
 
         using SolarLease lease = SolarLease.Take(world, declared);
 
-        // Enabled first, an advancing sun would carry a clock that was about to be replaced.
+        // The clock first, then the engine's advance off: the session writes an advancing sun for every
+        // frame itself, and nothing else may move it.
         Assert.Equal(["set_solar_epoch", "set_time_advance"], world.SolarWrites.Select(write => write.Call));
         Assert.All(world.SolarWrites, write => Assert.Equal(0, write.AtTick));
-        Assert.True(world.Sun!.Advancing);
-        Assert.Equal(1.0, world.Sun.Rate);
+        Assert.False(world.Sun.Advancing);
+        Assert.Equal(0.0, world.Sun.Rate);
+        Assert.Equal(7.0 + (0.001 / 3600.0), world.Sun.SolarTime, 12);
     }
 
     [Fact]
-    public void AFrozenSunIsDeclaredToTheWholeSecondAndAnAdvancingOneExactly()
+    public void EverySunIsWrittenAMillisecondPastTheWholeSecondNearestItsInstant()
     {
-        // 07:00:00.6 is declared as 07:00:01, the second the engine would round it to anyway.
-        var frozen = new RecordedWorld();
-        using (SolarLease.Take(frozen, new DeclaredSun(PortEpoch(), IlluminationPolicy.FreezeAtWindowStart(),
-                                                       25_200.6)))
+        // Frozen, 07:00:00.6 is declared as 07:00:01, the second the engine would round it to anyway;
+        // advancing, it is declared to the tick and written at the second nearest it.
+        Assert.Equal(7.0 + (1.001 / 3600.0), WrittenHours(IlluminationPolicy.FreezeAtWindowStart(), 25_200.6), 12);
+        Assert.Equal(7.0 + (1.001 / 3600.0), WrittenHours(IlluminationPolicy.Advance(1.0), 25_200.6), 12);
+        Assert.Equal(7.0 + (0.001 / 3600.0), WrittenHours(IlluminationPolicy.Advance(1.0), 25_200.4), 12);
+
+        // At the half-second, the advancing clock goes to the earlier second, because the written clock
+        // sits a millisecond past it and the later one would put it half a second and a millisecond
+        // from the declared instant. The frozen sun has already rounded its declaration up to the later
+        // second, and is written a millisecond past that.
+        Assert.Equal(7.0 + (0.001 / 3600.0), WrittenHours(IlluminationPolicy.Advance(1.0), 25_200.5), 12);
+        Assert.Equal(7.0 + (1.001 / 3600.0), WrittenHours(IlluminationPolicy.FreezeAtWindowStart(), 25_200.5), 12);
+    }
+
+    [Fact]
+    public void EveryAdvancingInstantOfADayIsWrittenWithinHalfASecondAndDecomposesAsItsSecond()
+    {
+        // Two sweeps of a whole day: the 0.05 s tick, and a step with no common factor with a second,
+        // so every fraction of a second is visited. Each written clock must sit in (-0.5, +0.5] of the
+        // declared instant and be evaluated by the engine as the whole second it was written past.
+        var declared = new DeclaredSun(PortEpoch(calendarAdvances: false), IlluminationPolicy.Advance(1.0), 0);
+        foreach (double step in new[] { 0.05, 0.0371 })
         {
-            Assert.Equal(7.0 + (1.001 / 3600.0), frozen.Sun!.SolarTime, 12);
+            for (double t = 0; t < 86_400; t += step)
+            {
+                DateTime written = declared.WrittenAt(t);
+                double residual = (written - declared.SunAt(t)).TotalSeconds;
+                Assert.InRange(residual, -0.5, 0.5);
+                if (residual == -0.5)
+                {
+                    Assert.Fail($"{t} s written half a second early");
+                }
+
+                TimeSpan clock = written.TimeOfDay;
+                Assert.Equal((clock.Hours, clock.Minutes, clock.Seconds),
+                             SolarPositionModel.EngineClock(clock.TotalHours));
+            }
+        }
+    }
+
+    [Fact]
+    public void AFrameIsWrittenOnlyUnderAnAdvancingPolicyAndNeverAfterTheSunIsGivenBack()
+    {
+        var frozen = new RecordedWorld();
+        using (SolarLease lease = SolarLease.Take(frozen, new DeclaredSun(
+                   PortEpoch(), IlluminationPolicy.FreezeAtWindowStart(), 25_200)))
+        {
+            lease.WriteForFrame(25_200.05);
+            Assert.Equal(0, lease.FrameWrites);
+            Assert.Equal(2, frozen.SolarWrites.Count);
         }
 
         var advancing = new RecordedWorld();
-        using (SolarLease.Take(advancing, new DeclaredSun(PortEpoch(), IlluminationPolicy.Advance(1.0),
-                                                          25_200.6)))
-        {
-            Assert.Equal(7.0 + (0.6 / 3600.0), advancing.Sun!.SolarTime, 12);
-        }
+        SolarLease advanced = SolarLease.Take(advancing, new DeclaredSun(
+            PortEpoch(), IlluminationPolicy.Advance(1.0), 25_200));
+        advanced.WriteForFrame(25_201.55);
+        Assert.Equal(1, advanced.FrameWrites);
+        Assert.Equal((7, 0, 2), SolarPositionModel.EngineClock(advancing.Sun!.SolarTime));
+        Assert.Equal((2026, 3, 21, 3.5), (advancing.Sun.Year, advancing.Sun.Month, advancing.Sun.Day,
+                                          advancing.Sun.TimeZone));
+
+        advanced.Dispose();
+        Assert.Throws<InvalidOperationException>(() => advanced.WriteForFrame(25_201.6));
+        Assert.Equal(13.0, advancing.Sun.SolarTime);
+    }
+
+    [Fact]
+    public void AFrameTheWorldRefusesStopsTheRun()
+    {
+        var world = new RecordedWorld();
+        using SolarLease lease = SolarLease.Take(world, new DeclaredSun(
+            PortEpoch(), IlluminationPolicy.Advance(1.0), 25_200));
+        world.Sun!.RefusesEpochs = true;
+
+        CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+            () => lease.WriteForFrame(25_200.05));
+
+        Assert.Contains("refused the sun written for the frame at 25200.05 s", refused.Message);
+        Assert.Equal(0, lease.FrameWrites);
+        world.Sun.RefusesEpochs = false;
     }
 
     [Fact]
@@ -218,6 +288,15 @@ public sealed class SolarLeaseTests
 
         Assert.True(lease.IsReleased);
         Assert.Equal(writes, world.SolarWrites.Count);
+    }
+
+    private static double WrittenHours(IlluminationPolicy policy, double windowOpens)
+    {
+        var world = new RecordedWorld();
+        using (SolarLease.Take(world, new DeclaredSun(PortEpoch(), policy, windowOpens)))
+        {
+            return world.Sun!.SolarTime;
+        }
     }
 
     [Fact]

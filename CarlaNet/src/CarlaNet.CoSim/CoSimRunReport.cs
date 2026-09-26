@@ -342,6 +342,12 @@ public sealed class CoSimRunReport
                             + $"{declared.AzimuthDegrees:0.####}");
         }
 
+        if (policy.Advances)
+        {
+            text.AppendLine($"  written          for {sun.FrameWrites} frames, each a millisecond past the "
+                            + "whole second nearest its declared instant; the engine's own advance off");
+        }
+
         if (SunAudit is { } audit)
         {
             text.AppendLine($"  audit            {audit.AuditedTicks} ticks, corrected elevation on "

@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 9 | `C6`: the session writes an advancing sun every tick, engine advance off; residual tolerances rate-independent |
 | 8 | The OpenSCENARIO catalogue projection leaves this plan; `C1` has one serialisation |
 | 7 | Two-wheelers are outside the vehicle mapping contract; `C1` refuses them rather than substituting |
 | 6 | `C3` carries the annotation vocabulary and binds it by digest |
@@ -2024,9 +2025,9 @@ After the driver returns from one advance, all of the following hold:
 | G6 | The annotation state a capture is stamped with is the snapshot for **that capture's tick**, not "current" — the recorder's workers encode asynchronously while the world keeps ticking (`CarlaNet.Recording/FrameRecorder.cs` worker path), so a registry read at write time would annotate a frame with a later state |
 | G7 | A given `(scenario package, sumo_seed, appearance_seed)` produces the same sequence of `(tick, sumo_vehicle_id, pose)` triples on every run, provided the world is in synchronous mode |
 | G8 | **Civil time.** Every tick has exactly one civil instant, `civil(n) = epoch.civil_datetime + t_render(n)` seconds, computed in the epoch's declared offset. It is the same for every participant, every sensor and every artifact of that tick; it is a pure function of the epoch and the tick index; and it is independent of wall-clock time, host time zone, host locale and the order in which components ask for it (`D4.25`) |
-| G9 | **The sun agrees with it.** The solar state observed at tick `n` corresponds to `civil(n)` within the tolerances of §8.3a. This is the residual that makes the silent failure loud |
-| G10 | **The policy is the one that was declared.** The observed `advancing` flag and `rate` (`get_solar_state` fields 9 and 10, `CesiumHeightSampler.cpp:786-796`) equal the policy in force for the whole run; under a freeze policy the observed sun clock is additionally constant across the window to within the same tolerance |
-| G11 | **The calendar does what was declared.** Define the *effective date rule* as: the date advances iff `epoch.calendar_advances` is true **and** the policy is `advance` or `illumination.freeze_date_advances` is true. Under it, the observed solar date equals `civil(n)`'s date at every tick; otherwise the observed date equals the epoch's date at every tick while the sun clock still wraps. Either way the check is **exact**, and either way the date that was used is recorded per window beside the civil date it corresponds to (`C9` §11.8.1) |
+| G9 | **The sun agrees with it.** The solar state observed at tick `n` corresponds to the sun declared for `civil(n)` within the tolerances of §8.3a. This is the residual that makes the silent failure loud |
+| G10 | **Nothing but the clock owner moves the sun.** The observed engine-advance flag and rate (`get_solar_state` fields 9 and 10, `CesiumHeightSampler.cpp:786-796`) are off and zero for the whole run under every policy: under a freeze nothing moves the sun, and under `advance` the clock owner writes the sun for every tick before that tick's cue ([`03`](03_CoSimulation_Runtime.md) D3.19). Under a freeze the observed sun clock is additionally constant across the window |
+| G11 | **The calendar does what was declared.** Define the *effective date rule* as: the date advances iff `epoch.calendar_advances` is true **and** the policy is `advance` or `illumination.freeze_date_advances` is true. Under it, the declared sun at tick `n` carries `civil(n)`'s date; otherwise it carries the epoch's date while the sun clock wraps at midnight. The observed date is compared as part of the observed instant (§8.3a), so a date a day out is 86,400 s out and can never pass; the one written instant on another date is the last half-second before a midnight under a held date, written as the following midnight on the following date because that whole second is the one nearest the declared instant. The date that was used is recorded per window beside the civil date it corresponds to (`C9` §11.8.1) |
 
 The world's tick identity is available to every participant as `TickTimestamp(Frame, ElapsedSeconds,
 DeltaSeconds, PlatformTimestamp)` (`CarlaNet.Transport/CarlaClient.cs:20-24`), raised on
@@ -2041,65 +2042,70 @@ enforced**. The whole of `_TEAM_BRIEF.md` §3a rests on the observation that the
 faithfully record noon while the scenario asserted 23:00; the residual below is what turns that from a
 silent contradiction into a failed run.
 
-**The arithmetic, written out so two implementations agree.** All of it is exact integer arithmetic on
-milliseconds until the final conversion to hours.
+**The arithmetic, written out so two implementations agree.** It is implemented once, in
+`CarlaNet.CoSim` (`DeclaredSun`, `SolarAudit`), and every consumer calls it.
 
 ```
 t_render(n)          = begin_s + n · world_fixed_delta_s        # simulated seconds, C6
 civil(n)             = epoch.civil_datetime + t_render(n)       # in epoch.utc_offset_hours
-civil_hours(n)       = hour-of-day of civil(n), as a real number in [0, 24)
-civil_date(n)        = calendar date of civil(n)
-expected_date(n)     = civil_date(n)      if G11's effective date rule advances the date
-                     = epoch's own date   otherwise
-expected_solar_hours = civil_hours(n) + (sun_time_zone_hours − epoch.utc_offset_hours)   # C9 §11.4
-expected_elev_deg    = the sun's elevation for (expected_date(n), expected_solar_hours,
-                       world_origin_latitude, world_origin_longitude, sun_time_zone_hours)
+declared_sun(n)      = the date and clock the sun is declared to hold at t_render(n):
+                         advance:                 the window's opening instant carried forward by
+                                                  (t_render(n) − begin_s) × rate; its date moves with it
+                                                  if G11's rule advances the date, and the clock wraps
+                                                  onto the epoch's date if not
+                         freeze_at_window_start:  the window's opening instant, to the whole second,
+                                                  on its civil date if G11's rule advances the date,
+                                                  else on the epoch's date
+                         freeze_at:               the declared civil time of day, dated the same way
+written(n)           = the whole second nearest (declared_sun(n) − 1 ms), plus 1 ms
+                       — what the clock owner writes with set_solar_epoch, in epoch.utc_offset_hours
+expected_elev_deg    = the sun's direction for declared_sun(n) at the world origin, from the
+                       engine's own algorithm evaluated at the instant itself
 ```
 
-Under a freeze policy `expected_solar_hours` is the value computed once for the window's pinned instant
-rather than per tick; everything else is unchanged. **The expectation is always computed for the date
-and hour that were declared to be in force, never for the date the sun happens to hold** — otherwise the
-audit would compare the sun against itself and pass unconditionally, which is the one way to make this
-check worthless.
+`set_solar_epoch` writes the sun's zone as `epoch.utc_offset_hours` together with the date and the
+clock ([`11`](11_Time_And_Illumination.md) D11.5), so the sun's clock is the civil clock and no
+conversion between zones enters the arithmetic. Under a freeze `written` is computed once, at window
+open. Under `advance` it is written for every tick, before that tick's cue, so the tick renders
+exactly it. **The expectation is always the declared sun, never the sun the world happens to hold** —
+otherwise the audit would compare the sun against itself and pass unconditionally, which is the one
+way to make this check worthless.
 
-`sun_time_zone_hours` is **read**, never assumed: it is field 4 of `get_solar_state`
-(`CesiumHeightSampler.cpp:779`, shim key `time_zone` at `carlanet/__init__.py:1529`). §11.4 explains why
-it is not the civil offset and measures the difference on the sizing scenario.
-
-**The observation.** The solar state paired to tick `n` is read from the world-observer cache, which
-already carries it: `FWorldObserver` writes the eleven-value solar block into every snapshot header
+**The observation.** The solar state paired to tick `n` is read from the world-observer snapshot the
+tick delivered: `FWorldObserver` writes the solar block into every snapshot header
 (`WorldObserver.cpp:322-340`), the client updates it lock-free per tick
-(`CarlaClient.cs:165-169`), and both the recorder (`FrameRecorder.cs:160-162`) and any consumer
-(`GetCachedSolarState`, `CarlaClient.cs:1991`) read it with **no RPC**. The audit therefore costs
-nothing on the tick thread, which is already contended
-([issue #14](https://github.com/sbrett9/carla/issues/14)).
+(`CarlaClient.cs:165-169`), and both the recorder (`FrameRecorder.cs`) and the audit
+(`GetCachedSolarState`) read it with **no RPC**. The audit therefore costs nothing on the tick
+thread, which is already contended ([issue #14](https://github.com/sbrett9/carla/issues/14)).
 
 **The residual, and the tolerance.**
 
 | Residual | Definition | Tolerance |
 |---|---|---|
-| `Δsolar_s` | `\|observed.solar_time − expected_solar_hours\| × 3600`, taken on the circle so 23:59:59 and 00:00:01 differ by 2 s | `max(solar_audit_tolerance_s, 2 × rate × world_fixed_delta_s)` |
-| `Δelev_deg` | `\|observed.sun_elevation_deg − expected_elev_deg\|` | `max(solar_audit_tolerance_elev_deg, 15 × Δsolar_tolerance_s / 3600)` |
-| `Δdate` | observed `(year, month, day)` against the date G11 requires | **exact**. A date is never within tolerance of another date |
-| `Δpolicy` | observed `advancing`, `rate` against the policy in force | **exact** |
+| `Δsolar_s` | observed instant (the sun's date and clock) − `declared_sun(n)`, in seconds | **0.5 s** at every rate |
+| `Δdir_deg` | angle between the observed sun direction (geometric elevation, azimuth) and `expected`'s | **0.01°** at every rate |
+| `Δelev_corrected_deg` | observed refraction-corrected elevation − `expected`'s, where the snapshot carries it | **0.01°** |
+| `Δpolicy` | observed zone against `epoch.utc_offset_hours`; engine advance flag and rate against off and 0 | **exact** |
 
-**Why the tolerance has that shape rather than a single number.** The floor `solar_audit_tolerance_s`
-absorbs serialisation and the conversion; the `2 × rate × world_fixed_delta_s` term absorbs the
-one-tick lag that any advancing mechanism can have between the sun being written and the snapshot being
-observed. That term is not decorative: the engine's advance is `DeltaSeconds × Rate / 3600` hours per
-actor tick (`CesiumTimeOfDayController.cpp:34`), so at `rate = 3600` — one hour of sun per second, an
-entirely ordinary sweep setting — a single 0.05 s tick moves the sun **180 sun-clock seconds**. A fixed
-one-second tolerance would fail every run at that rate and pass nothing extra at `rate = 1`. The
-elevation tolerance is derived from the clock tolerance at the sun's maximum apparent rate of 15° of
-hour angle per hour, so the two cannot disagree about what "in tolerance" means.
+**Why the tolerance has that value and does not depend on the rate.** The engine evaluates its sun at
+whole seconds, so a clock nearer than half a second to the declared one cannot change the sun it
+renders; `written(n)` is by construction within (−0.5 s, +0.5 s] of `declared_sun(n)`, and the sun it
+renders is within about 0.002° of the declared direction. The clock owner writes `written(n)` in the
+drain of tick `n`, so there is no lag between the write and the snapshot for a rate-dependent term to
+absorb, and a tolerance that grew with the rate would, at an hour of sun per simulated second, admit a
+clock three hundred and sixty seconds from the declaration that the writing never produces. The angle
+floor is the resolution at which the engine was measured against the model, three orders of
+magnitude inside it ([`11`](11_Time_And_Illumination.md) §8.3). The built audit runs at these values
+and refuses the scenario's tolerance overrides of §8.2 until the bound on them is valued
+([`11`](11_Time_And_Illumination.md) §4.4.1).
 
-**When it is evaluated.** Every `solar_audit_every_n_ticks` ticks, **and unconditionally on every
-capture tick** — a tick on which any recorder writes a frame. A capture whose solar block was never
-audited is a capture whose `<_solar>` is an unverified claim, and those are the only frames that end up
-in a corpus.
+**When it is evaluated.** On every tick, and so on every capture tick — a tick on which any recorder
+writes a frame. A capture whose solar block was never audited is a capture whose `<_solar>` is an
+unverified claim, and those are the only frames that end up in a corpus.
 
 **What is recorded.** The maximum residual over the run, the tick it occurred at, and the
-`within_tolerance` verdict, all in the run manifest (`C9` §11.8). A run that never exceeded tolerance
+`within_tolerance` verdict, all in the run manifest (`C9` §11.8); until stage J builds the manifest,
+the co-simulation run report carries them (`CoSimRunReport`). A run that never exceeded tolerance
 still records its maximum, because "the residual was 0.4 s" and "the residual was never measured" must
 not look alike.
 
@@ -2111,11 +2117,11 @@ not look alike.
 | Call `traci.simulationStep()` | Same, on the other side |
 | Change `synchronous_mode` or `fixed_delta_seconds` mid-run | Breaks G7 and invalidates `world_substeps_per_sumo_step` |
 | Register a vehicle with the .NET traffic manager | Locked out by [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3.4. A second controller writing poses makes G2 false |
-| Block the tick thread | The tick thread is already contended by telemetry emission ([issue #14](https://github.com/sbrett9/carla/issues/14)); the driver lands in the same budget |
+| Block the tick thread | The tick thread is already contended by telemetry emission ([issue #14](https://github.com/sbrett9/carla/issues/14)); the driver runs in the same budget |
 | Emit telemetry synchronously from the tick thread | Same |
 | Destroy an actor outside the render-set controller | The fourth destroyer ([issue #18](https://github.com/sbrett9/carla/issues/18)) |
 | Read "current" annotation or render state at capture-write time | Violates G6 |
-| Call `set_solar_time`, `set_solar_date` or `set_time_advance` while a session is live, unless you are the clock owner | A second writer of the sun is a second owner of time (`D4.25`). The RPCs exist and are reachable from any client (`CarlaServer.cpp:614`, `:625`, `:661`), so this is a rule a reviewer enforces, not one the transport can |
+| Call `set_solar_time`, `set_solar_date`, `set_solar_epoch` or `set_time_advance` while a session is live, unless you are the clock owner | A second writer of the sun is a second owner of time (`D4.25`). The RPCs exist and are reachable from any client (`CarlaServer.cpp:614`, `:625`, `:644`, `:661`), so this is a rule a reviewer enforces, not one the transport can; the per-tick audit catches a write that lights a frame |
 | Read the host clock, host time zone or host locale to decide what time the scene is | Violates G8. Measured as the present behaviour: the scene date defaults to `datetime.now()` (`WorldBuilder.py:229-230`), which makes a capture's seasonal sun angle depend on the day it was run |
 | Assume `set_solar_time`'s argument is civil time | It is sun-clock time in a zone derived from longitude (`CesiumSunSky.cpp:571`), and `C9` §11.4 measures the difference as 14.7 minutes on the sizing scenario |
 | Let a recorder write a frame on a tick whose solar residual has not been evaluated | Violates the capture-tick rule of §8.3a: the frame's `<_solar>` would be an unverified claim |
@@ -2140,9 +2146,9 @@ stop moving.
 | V6.3 | The world reports `synchronous_mode == true` and `fixed_delta_seconds == world_fixed_delta_s` | refuse |
 | V6.4 | The SUMO config's `<seed>` equals `scenario.json`'s `sumo_seed` | refuse |
 | V6.5 | At every SUMO-step boundary, `\|world_elapsed_s − sumo_time_s\| ≤ 1 µs` | assertion; a violation fails the run |
-| V6.6 | `Δsolar_s` and `Δelev_deg` between the **commanded** solar target and the observed sun, within the §8.3a tolerances at every audited tick | **fail the run** at the first violation, naming the tick, both residuals, the expected and observed values, and the policy in force. Not a warning: the sun is not doing what it was told, so every frame from here on carries a `<_solar>` nothing predicted — an inherited sun, a wrapped date or engine drift, never an authored choice |
+| V6.6 | `Δsolar_s`, `Δdir_deg` and `Δelev_corrected_deg` between the **declared** sun and the observed sun, within the §8.3a tolerances at every audited tick | **fail the run** at the first violation, naming the tick, both residuals, the expected and observed values, and the policy in force. Not a warning: the sun is not doing what it was told, so every frame from here on carries a `<_solar>` nothing predicted — an inherited sun, a wrapped date or engine drift, never an authored choice |
 | V6.6a | The commanded solar target equals the civil time the epoch derives for the tick, **unless** the run declares an illumination override | **warn and mark the corpus**, never fail. An operator may deliberately render a window under light its own clock does not imply; that is a parameterisation, not a defect, and the responsibility is theirs. The warning names the derived civil time, the commanded one and the gap; the manifest records `illumination_override` with both values so a consumer can filter on it. An **undeclared** gap is not this case — it is a bug in the driver and fails under V6.6 |
-| V6.7 | Observed `advancing` and `rate` equal the policy in force (G10) | fail the run — the sun is being driven by something other than the declared policy |
+| V6.7 | Observed engine `advancing` and `rate` are off and zero (G10) | fail the run — the sun is being driven by something other than the clock owner |
 | V6.8 | Observed solar date satisfies G11 | fail the run — a wrong date is a wrong seasonal sun angle, and the check is exact, not approximate |
 | V6.9 | Every capture tick is an audited tick (§8.3a) | assertion in the recorder path; a capture written on an unaudited tick is a bug, not a condition |
 | V6.10 | `solar_audit_every_n_ticks ≥ 1` and both tolerances `> 0` | refuse at run start |
@@ -3477,7 +3483,7 @@ flowchart LR
   SC --> W["set_solar_date + set_solar_time"]
   W --> SUN["CesiumSunSky"]
   SUN --> OBS["solar block on the<br/>world-observer snapshot"]
-  OBS --> AUD{"C6 §8.3a audit<br/>Δsolar_s · Δelev_deg · Δdate"}
+  OBS --> AUD{"C6 §8.3a audit<br/>Δsolar_s · Δdir_deg · Δpolicy"}
   CIV --> AUD
   AUD -->|in tolerance| REC["frame recorded with &lt;_solar&gt;"]
   AUD -->|out of tolerance| FAIL["fail the run, V6.6"]
@@ -3513,7 +3519,7 @@ tick loop.
 
 | `policy` | The sun does | Guaranteed | Use |
 |---|---|---|---|
-| `advance` | Tracks civil time at `rate_sun_s_per_sim_s` | `C6` G9 and G10 hold with `advancing = true` and the declared rate. At `rate = 1.0`, the civil time of a frame and its solar state are the same instant | A long window that should show the light changing — dawn over a shift change |
+| `advance` | Tracks civil time at `rate_sun_s_per_sim_s`, written by the clock owner for every tick at the whole second nearest the frame's declared instant | `C6` G9 and G10 hold, with the engine's own advance off: `<_solar>` reads `advancing = false`, `rate = 0`, and `<_illumination>` carries the declared policy and rate. At `rate = 1.0`, the civil time of a frame and its solar state are within half a second of the same instant | A long window that should show the light changing — dawn over a shift change |
 | `freeze_at_window_start` | Is set once, to the civil instant each capture window opens, and does not move within the window | The observed sun clock is constant across the window to within the §8.3a tolerance, and `advancing = false`. Different windows get **different** frozen suns, each correct for its own opening instant | The default for a sweep: illumination is a controlled constant within a window and a deliberate variable between windows |
 | `freeze_at` | Is set once, to `freeze_at_civil_time`, for every window | As above, and **identical across every window**. The declared civil time of a frame and its solar state then deliberately disagree, and the manifest records that they do | Holding lighting fixed while varying behaviour — the counterfactual pair whose only difference is the thing that was varied |
 | `ignore` | Is not written at all | Nothing. The manifest carries `illumination_in_force.policy = "ignore"`, `epoch_honoured: false` and `corpus_eligible: false` | Diagnostics, and the only legal behaviour when no epoch is declared (§11.7) |
@@ -3524,13 +3530,13 @@ illegitimate corpus if nobody knows, so the manifest records both numbers per wi
 `<_solar>` block already records the sun that was actually used. A consumer comparing the two gets the
 right answer; a consumer that reads only one of them was going to be wrong under any design.
 
-**The calendar is the driver's job under every policy.** Measured: the engine's advance wraps the clock
-and **never touches the date** — `SolarTime = fmod(fmod(SolarTime + DeltaHours, 24) + 24, 24)`
-(`CesiumTimeOfDayController.cpp:35`), with no write to `SunSky->Year/Month/Day` anywhere in the
-controller. So a seven-day scenario left to the engine's own advance would spend all seven days on the
-epoch's date, with the seasonal sun angle of day 0. Whenever `C6` G11's effective date rule says the
-date advances, the clock owner **must** write `set_solar_date` at each civil midnight crossing; G11 and
-V6.8 are the check, and they are exact because a date is either right or wrong.
+**The calendar is the driver's job under every policy.** The clock owner writes the date with the
+clock in one `set_solar_epoch` — at window open, and under `advance` for every tick — so a window
+crossing civil midnight is carried onto the next date when `C6` G11's effective date rule advances it
+and held on the epoch's date when it does not. Nothing relies on the engine: its own advance, which
+the session keeps off, does carry whole days onto the date (`CesiumTimeOfDayController.cpp`,
+`RollSolarDate`). G11 and V6.8 are the check, and a date a day out is 86,400 s out of the compared
+instant.
 
 ### 11.7 What a consumer does when the declaration is absent
 
@@ -3597,10 +3603,10 @@ append-only rows, so what was already true survives a kill at any instant (`D4.3
 | Field | Type | Unit | Meaning |
 |---|---|---|---|
 | `max_delta_solar_s` | number | s | The largest `Δsolar_s` seen at any audited tick (`C6` §8.3a) |
-| `max_delta_elev_deg` | number | ° | The largest `Δelev_deg` |
+| `max_delta_elev_deg` | number | ° | The largest `Δdir_deg` (`C6` §8.3a) |
 | `max_at_tick` | integer | — | The tick the maximum occurred at, so it can be found |
 | `max_at_sim_time_s` | number | s | The same instant in simulated seconds |
-| `tolerance_s`, `tolerance_elev_deg` | number | s, ° | The tolerances actually in force, including the rate-dependent term |
+| `tolerance_s`, `tolerance_elev_deg` | number | s, ° | The tolerances actually in force (`C6` §8.3a; the same at every rate) |
 | `audited_ticks` | integer | — | How many ticks were audited |
 | `capture_ticks` | integer | — | How many capture ticks there were. `audited_ticks ≥ capture_ticks` always (`C6` V6.9) |
 | `within_tolerance` | boolean | — | The verdict |
@@ -4434,7 +4440,7 @@ sequenceDiagram
         DR->>SRV: SetVehicleLightStateCommand on change —<br/>brake and blinkers from SUMO, conspicuity from the sun (C7 §9.4)
         DR->>SRV: world tick
         SRV-->>SC: solar block on the world-observer snapshot (no RPC)
-        SC->>SC: audit Δsolar_s, Δelev_deg, Δdate (C6 §8.3a, V6.6-V6.8)
+        SC->>SC: audit Δsolar_s, Δdir_deg, Δpolicy (C6 §8.3a, V6.6-V6.8)
         SRV-->>REC: frame
         REC->>REC: truth with SUMO velocity (D4.13),<br/>annotation snapshot for THIS tick (G6),<br/><_solar> for this tick (C9)
       end

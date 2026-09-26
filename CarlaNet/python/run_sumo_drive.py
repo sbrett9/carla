@@ -148,8 +148,9 @@ def parse_args() -> argparse.Namespace:
                         choices=("freeze_at_window_start", "advance", "freeze_at", "ignore"),
                         help="what the sun does across the window. No default: "
                              "freeze_at_window_start (recommended) sets it to the civil instant the "
-                             "window opens and holds it; advance lets the engine carry it at "
-                             "--solar-rate; freeze_at holds it at --freeze-at; ignore leaves it as "
+                             "window opens and holds it; advance carries it forward at --solar-rate, "
+                             "the session writing it for every frame; freeze_at holds it at "
+                             "--freeze-at; ignore leaves it as "
                              "the world holds it and records that the lighting honours no epoch")
     parser.add_argument("--solar-rate", type=float,
                         help="with --illumination advance: sun-clock seconds per simulated second; "

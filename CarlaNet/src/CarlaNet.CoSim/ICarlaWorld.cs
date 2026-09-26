@@ -120,8 +120,9 @@ public interface ICarlaWorld
     bool WriteSolarEpoch(int year, int month, int day, double hours, double utcOffsetHours);
 
     /// <summary>
-    /// Whether the engine carries the sun's clock forward with the world tick, and at how many
-    /// sun-clock seconds per simulated second.
+    /// Whether the engine's own time-of-day advance carries the sun's clock forward with the world
+    /// tick, and at how many sun-clock seconds per simulated second. A session sets it off under every
+    /// policy and writes an advancing sun itself.
     /// </summary>
     /// <returns>False where the world has no sun.</returns>
     bool WriteTimeAdvance(bool advancing, double rate);

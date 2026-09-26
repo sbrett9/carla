@@ -38,10 +38,13 @@ public sealed class SolarAuditTests
     public void AFrozenTerminatorWindowHoldsTheDeclaredSunAtBothSites(string site, double latitude,
                                                                       double longitude)
     {
-        (RecordedWorld world, SolarAudit audit) = Bind(latitude, longitude, SolsticeEpoch(site),
-                                                       IlluminationPolicy.FreezeAtWindowStart(), 61_200);
+        (RecordedWorld world, SolarLease lease, SolarAudit audit) = Bind(
+            latitude, longitude, SolsticeEpoch(site), IlluminationPolicy.FreezeAtWindowStart(), 61_200);
 
-        Run(world, audit, 61_200, 200);
+        Run(world, lease, audit, 61_200, 200);
+
+        // Nothing is written per frame under a freeze: the bind and nothing after it.
+        Assert.Equal(["set_solar_epoch", "set_time_advance"], world.SolarWrites.Select(write => write.Call));
 
         Assert.Equal(200, audit.AuditedTicks);
         Assert.Equal(200, audit.TicksWithCorrectedElevation);
@@ -56,8 +59,8 @@ public sealed class SolarAuditTests
     [Fact]
     public void TheDeclaredSunAtThePortIsTheOneTheEngineWasMeasuredToRender()
     {
-        (_, SolarAudit audit) = Bind(27.15012, 56.18065, SolsticeEpoch("Bahonar"),
-                                     IlluminationPolicy.FreezeAtWindowStart(), 61_200);
+        (_, _, SolarAudit audit) = Bind(27.15012, 56.18065, SolsticeEpoch("Bahonar"),
+                                        IlluminationPolicy.FreezeAtWindowStart(), 61_200);
 
         // get_solar_state read these at 17:00 on the solstice at +03:30 on a running server: a sun
         // below the horizon either way, but by 1.58 degrees geometrically and 1.37 by the light.
@@ -67,38 +70,148 @@ public sealed class SolarAuditTests
     }
 
     [Fact]
-    public void AnAdvancingWindowAtRealTimeAgreesToTheFloorAndReadsOneTickAhead()
+    public void AnAdvancingWindowAtRealTimeIsWrittenForEveryFrameWithinHalfASecond()
     {
-        (RecordedWorld world, SolarAudit audit) = Bind(27.15012, 56.18065, SolsticeEpoch("Bahonar"),
-                                                       IlluminationPolicy.Advance(1.0), 25_200);
+        (RecordedWorld world, SolarLease lease, SolarAudit audit) = Bind(
+            27.15012, 56.18065, SolsticeEpoch("Bahonar"), IlluminationPolicy.Advance(1.0), 25_200);
 
-        Run(world, audit, 25_200, 40);
+        Run(world, lease, audit, 25_200, 40);
 
-        // The engine's controller advances the clock before the snapshot is published, so each
-        // tick's sun reads one tick's advance past the instant its poses were written for: 0.05 s
-        // at a real-time rate, a hundredth of the tolerance. Measured here from the simulated sun,
-        // which is built to tick that way; a live run is what establishes the engine does.
+        // One write per frame, each before its tick, with the engine's own advance off throughout.
+        Assert.Equal(40, lease.FrameWrites);
+        Assert.Equal(42, world.SolarWrites.Count);
+        Assert.False(world.Sun!.Advancing);
+
+        // The frame at 07:00:00.50 is written at 07:00:00.001: the whole second nearest the declared
+        // instant less the millisecond, so the residual is the half-second less that millisecond and
+        // the furthest any frame sits.
         Assert.Equal(40, audit.AuditedTicks);
-        Assert.Equal(0.05, audit.WorstClock!.ClockResidualSeconds, 6);
-        Assert.True(audit.WorstAngle!.AngleResidualDegrees < SolarPositionModel.ResolutionFloorDegrees);
+        Assert.Equal(-0.499, audit.WorstClock!.ClockResidualSeconds, 6);
+        Assert.Equal(10, audit.WorstClock.TickIndex);
+        Assert.True(audit.WorstAngle!.AngleResidualDegrees < 0.003,
+                    $"{audit.WorstAngle.AngleResidualDegrees} degrees");
+    }
+
+    [Theory]
+    [MemberData(nameof(Sites))]
+    public void AnAdvancingWindowHoldsAcrossTheMinuteTheEngineWouldDrop(string site, double latitude,
+                                                                        double longitude)
+    {
+        // Two seconds before 07:01. A clock the engine carries forward reaches 07:00:59.5, where the
+        // engine rounds its seconds to sixty and drops the minute, and renders the sun of 07:00:00.
+        // Written by the session, the frame declared at 07:00:59.55 holds 07:01:00.001.
+        (RecordedWorld world, SolarLease lease, SolarAudit audit) = Bind(
+            latitude, longitude, SolsticeEpoch(site), IlluminationPolicy.Advance(1.0), 25_258);
+        List<SolarAuditSample> samples = [];
+
+        for (int tick = 0; tick < 80; tick++)
+        {
+            double rendered = 25_258 + (tick * WorldDelta);
+            lease.WriteForFrame(rendered);
+            samples.Add(audit.AuditTick(tick, rendered, TickOnce(world)));
+        }
+
+        SolarAuditSample crossing = samples[31];
+        Assert.Equal(new DateTime(2026, 12, 21, 7, 0, 59, 550), crossing.DeclaredSun);
+        Assert.Equal((7, 1, 0), SolarPositionModel.EngineClock(crossing.Observed.SolarTimeHours));
+        Assert.Equal(0.451, crossing.ClockResidualSeconds, 6);
+        Assert.All(samples, sample => Assert.InRange(sample.ClockResidualSeconds, -0.5, 0.5));
+        Assert.True(audit.WorstAngle!.AngleResidualDegrees < 0.003);
+        Assert.Null(audit.Failure);
     }
 
     [Fact]
-    public void AnAdvancingSunIsStoppedWhereTheEngineRendersTheMinuteBefore()
+    public void AnAdvancingWindowCarriesTheDateAcrossMidnightWhenTheCalendarAdvances()
     {
-        // Two seconds before 07:01. When the carried clock reaches 07:00:59.5 the engine rounds its
-        // seconds to sixty and drops the minute: the world holds the declared clock and renders the
-        // sun of 07:00:00, a quarter of a degree of hour angle early.
-        (RecordedWorld world, SolarAudit audit) = Bind(27.15012, 56.18065, SolsticeEpoch("Bahonar"),
-                                                       IlluminationPolicy.Advance(1.0), 25_258);
+        (RecordedWorld world, SolarLease lease, SolarAudit audit) = Bind(
+            27.15012, 56.18065, SolsticeEpoch("Bahonar"), IlluminationPolicy.Advance(1.0), 86_398);
+
+        Run(world, lease, audit, 86_398, 80);
+
+        // Two seconds past midnight, on the 22nd: the session wrote the date, as the engine never does.
+        SolarReading last = audit.Last!.Observed;
+        Assert.Equal((2026, 12, 22), (last.Year, last.Month, last.Day));
+        Assert.Equal((0, 0, 2), SolarPositionModel.EngineClock(last.SolarTimeHours));
+        Assert.Equal(80, audit.AuditedTicks);
+    }
+
+    [Fact]
+    public void AHeldCalendarWrapsTheAdvancingClockOntoTheEpochSDate()
+    {
+        SolarEpoch held = SolarEpoch.Declare("2026-12-21T00:00:00+03:30", 3.5, "2026-12-20T20:30:00Z",
+                                             calendarAdvances: false, dstInEffect: false, "Asia/Tehran");
+        (RecordedWorld world, SolarLease lease, SolarAudit audit) = Bind(
+            27.15012, 56.18065, held, IlluminationPolicy.Advance(1.0), 86_398);
+        List<SolarAuditSample> samples = [];
+
+        for (int tick = 0; tick < 80; tick++)
+        {
+            double rendered = 86_398 + (tick * WorldDelta);
+            lease.WriteForFrame(rendered);
+            samples.Add(audit.AuditTick(tick, rendered, TickOnce(world)));
+        }
+
+        // The frame declared at 23:59:59.55 on the held date is nearest the following midnight, which
+        // the engine holds on the following date; from midnight on, the clock is back on the 21st.
+        SolarReading beforeMidnight = samples[31].Observed;
+        Assert.Equal(new DateTime(2026, 12, 21, 23, 59, 59, 550), samples[31].DeclaredSun);
+        Assert.Equal((2026, 12, 22, 0, 0, 0),
+                     (beforeMidnight.Year, beforeMidnight.Month, beforeMidnight.Day,
+                      SolarPositionModel.EngineClock(beforeMidnight.SolarTimeHours).Hour,
+                      SolarPositionModel.EngineClock(beforeMidnight.SolarTimeHours).Minute,
+                      SolarPositionModel.EngineClock(beforeMidnight.SolarTimeHours).Second));
+        SolarReading last = samples[^1].Observed;
+        Assert.Equal((2026, 12, 21), (last.Year, last.Month, last.Day));
+        Assert.Equal((0, 0, 2), SolarPositionModel.EngineClock(last.SolarTimeHours));
+        Assert.Null(audit.Failure);
+    }
+
+    [Fact]
+    public void AnHourOfSunPerSimulatedSecondHoldsAtTheSameTolerances()
+    {
+        // 180 sun-seconds a tick. Written per frame, the clock is still within half a second of the
+        // declared instant, so nothing about the rate needs a wider tolerance.
+        (RecordedWorld world, SolarLease lease, SolarAudit audit) = Bind(
+            27.15012, 56.18065, SolsticeEpoch("Bahonar"), IlluminationPolicy.Advance(3600.0), 25_200);
+
+        Run(world, lease, audit, 25_200, 40);
+
+        Assert.Equal((0.5, 0.01), (audit.ToleranceSeconds, audit.ToleranceDegrees));
+        Assert.Equal(40, audit.AuditedTicks);
+        Assert.InRange(audit.WorstClock!.ClockResidualSeconds, -0.5, 0.5);
+    }
+
+    [Fact]
+    public void AnEngineAdvanceAnotherClientSwitchedOnUnderAnAdvancingPolicyIsCaught()
+    {
+        (RecordedWorld world, SolarLease lease, SolarAudit audit) = Bind(
+            27.15012, 56.18065, SolsticeEpoch("Bahonar"), IlluminationPolicy.Advance(1.0), 25_200);
+        Run(world, lease, audit, 25_200, 5);
+
+        world.Sun!.WriteAdvance(true, 1.0);
+        lease.WriteForFrame(25_200.25);
 
         SolarAuditFailedException failed = Assert.Throws<SolarAuditFailedException>(
-            () => Run(world, audit, 25_258, 60));
+            () => audit.AuditTick(5, 25_200.25, TickOnce(world)));
+        Assert.Contains("the session writes the sun for every frame itself", failed.Message);
+        Assert.Contains("something other than this session is driving it", failed.Message);
+    }
+
+    [Fact]
+    public void AClockInTheMinuteTheEngineDropsIsNamedAsOneTheSessionDidNotWrite()
+    {
+        // Something moves the clock to 07:00:59.6 when the session declared 07:00:59.55 for the frame:
+        // within the half-second, and lit by the sun of 07:00:00.
+        (RecordedWorld world, SolarLease lease, SolarAudit audit) = Bind(
+            27.15012, 56.18065, SolsticeEpoch("Bahonar"), IlluminationPolicy.Advance(1.0), 25_259.55);
+        lease.WriteForFrame(25_259.55);
+        world.Sun!.SolarTime = 7.0 + (59.6 / 3600.0);
+
+        SolarAuditFailedException failed = Assert.Throws<SolarAuditFailedException>(
+            () => audit.AuditTick(0, 25_259.55, TickOnce(world)));
 
         Assert.Contains("GetHMSFromSolarTime", failed.Message);
-        Assert.Contains("remedy is that carry in the engine", failed.Message);
-        double seconds = TimeSpan.FromHours(failed.Sample!.Observed.SolarTimeHours).TotalSeconds % 60.0;
-        Assert.InRange(seconds, 59.5, 60.0);
+        Assert.Contains("so this clock was not one it wrote", failed.Message);
         Assert.Same(failed.Sample, audit.Failure);
     }
 
@@ -107,9 +220,9 @@ public sealed class SolarAuditTests
     public void AZoneLeftAtLongitudeOverFifteenIsCaughtAtBothSites(string site, double latitude,
                                                                    double longitude)
     {
-        (RecordedWorld world, SolarAudit audit) = Bind(latitude, longitude, SolsticeEpoch(site),
-                                                       IlluminationPolicy.FreezeAtWindowStart(), 61_200);
-        Run(world, audit, 61_200, 10);
+        (RecordedWorld world, SolarLease lease, SolarAudit audit) = Bind(
+            latitude, longitude, SolsticeEpoch(site), IlluminationPolicy.FreezeAtWindowStart(), 61_200);
+        Run(world, lease, audit, 61_200, 10);
 
         // Another client configures the georeference mid-run, which resets the zone to local mean
         // solar time. At Arapahoe that moves the sun a tenth of a degree, which an angle check
@@ -125,8 +238,8 @@ public sealed class SolarAuditTests
     [Fact]
     public void AClockAnotherClientMovedStopsTheRunRatherThanBeingRewritten()
     {
-        (RecordedWorld world, SolarAudit audit) = Bind(27.15012, 56.18065, SolsticeEpoch("Bahonar"),
-                                                       IlluminationPolicy.FreezeAtWindowStart(), 61_200);
+        (RecordedWorld world, _, SolarAudit audit) = Bind(27.15012, 56.18065, SolsticeEpoch("Bahonar"),
+                                                          IlluminationPolicy.FreezeAtWindowStart(), 61_200);
         world.Sun!.SolarTime += 30.0 / 3600.0;
         int writes = world.SolarWrites.Count;
 
@@ -140,8 +253,8 @@ public sealed class SolarAuditTests
     [Fact]
     public void ADateADayOutIsNamedAsTheDate()
     {
-        (RecordedWorld world, SolarAudit audit) = Bind(27.15012, 56.18065, SolsticeEpoch("Bahonar"),
-                                                       IlluminationPolicy.FreezeAtWindowStart(), 61_200);
+        (RecordedWorld world, _, SolarAudit audit) = Bind(27.15012, 56.18065, SolsticeEpoch("Bahonar"),
+                                                          IlluminationPolicy.FreezeAtWindowStart(), 61_200);
         world.Sun!.Day += 1;
 
         SolarAuditFailedException failed = Assert.Throws<SolarAuditFailedException>(
@@ -153,8 +266,8 @@ public sealed class SolarAuditTests
     [Fact]
     public void AnAdvanceAnotherClientSwitchedOnIsCaught()
     {
-        (RecordedWorld world, SolarAudit audit) = Bind(27.15012, 56.18065, SolsticeEpoch("Bahonar"),
-                                                       IlluminationPolicy.FreezeAtWindowStart(), 61_200);
+        (RecordedWorld world, _, SolarAudit audit) = Bind(27.15012, 56.18065, SolsticeEpoch("Bahonar"),
+                                                          IlluminationPolicy.FreezeAtWindowStart(), 61_200);
         world.Sun!.WriteAdvance(true, 60.0);
 
         SolarAuditFailedException failed = Assert.Throws<SolarAuditFailedException>(
@@ -172,7 +285,7 @@ public sealed class SolarAuditTests
         world.Sun.Longitude = 56.18065;
         var declared = new DeclaredSun(SolsticeEpoch("Arapahoe"), IlluminationPolicy.FreezeAtWindowStart(), 61_200);
         using SolarLease lease = SolarLease.Take(world, declared);
-        var audit = new SolarAudit(declared, 39.59431, -104.88449, WorldDelta);
+        var audit = new SolarAudit(declared, 39.59431, -104.88449);
 
         SolarAuditFailedException failed = Assert.Throws<SolarAuditFailedException>(
             () => audit.AuditWindowOpen(lease.AtWindowOpen!.Value));
@@ -184,8 +297,8 @@ public sealed class SolarAuditTests
     [Fact]
     public void ASnapshotWithNoSunStopsTheRun()
     {
-        (RecordedWorld world, SolarAudit audit) = Bind(27.15012, 56.18065, SolsticeEpoch("Bahonar"),
-                                                       IlluminationPolicy.FreezeAtWindowStart(), 61_200);
+        (RecordedWorld world, _, SolarAudit audit) = Bind(27.15012, 56.18065, SolsticeEpoch("Bahonar"),
+                                                          IlluminationPolicy.FreezeAtWindowStart(), 61_200);
         world.ObserverPublishesNoSun = true;
 
         SolarAuditFailedException failed = Assert.Throws<SolarAuditFailedException>(
@@ -200,11 +313,11 @@ public sealed class SolarAuditTests
     {
         // A server built before the observer header carried the corrected elevation: it is compared
         // once, on demand, when the window opens, and the audit says it was not compared per tick.
-        (RecordedWorld world, SolarAudit audit) = Bind(27.15012, 56.18065, SolsticeEpoch("Bahonar"),
-                                                       IlluminationPolicy.FreezeAtWindowStart(), 61_200);
+        (RecordedWorld world, SolarLease lease, SolarAudit audit) = Bind(
+            27.15012, 56.18065, SolsticeEpoch("Bahonar"), IlluminationPolicy.FreezeAtWindowStart(), 61_200);
         world.ObserverCarriesCorrectedElevation = false;
 
-        Run(world, audit, 61_200, 20);
+        Run(world, lease, audit, 61_200, 20);
 
         Assert.Equal(20, audit.AuditedTicks);
         Assert.Equal(0, audit.TicksWithCorrectedElevation);
@@ -220,7 +333,7 @@ public sealed class SolarAuditTests
         world.Sun.CorrectedElevationError = 0.1;
         var declared = new DeclaredSun(SolsticeEpoch("Bahonar"), IlluminationPolicy.FreezeAtWindowStart(), 61_200);
         using SolarLease lease = SolarLease.Take(world, declared);
-        var audit = new SolarAudit(declared, 27.15012, 56.18065, WorldDelta);
+        var audit = new SolarAudit(declared, 27.15012, 56.18065);
 
         SolarAuditFailedException failed = Assert.Throws<SolarAuditFailedException>(
             () => audit.AuditWindowOpen(lease.AtWindowOpen!.Value));
@@ -229,25 +342,20 @@ public sealed class SolarAuditTests
     }
 
     [Fact]
-    public void TheTolerancesWidenWithTheRateAndNeverFallBelowTheFloor()
+    public void TheTolerancesAreTheFloorsAtEveryRate()
     {
         var epoch = SolsticeEpoch("Bahonar");
-        var frozen = new SolarAudit(new DeclaredSun(epoch, IlluminationPolicy.FreezeAtWindowStart(), 0), 0, 0, WorldDelta);
-        var realTime = new SolarAudit(new DeclaredSun(epoch, IlluminationPolicy.Advance(1.0), 0), 0, 0, WorldDelta);
-        var fast = new SolarAudit(new DeclaredSun(epoch, IlluminationPolicy.Advance(3600.0), 0), 0, 0, WorldDelta);
+        var frozen = new SolarAudit(new DeclaredSun(epoch, IlluminationPolicy.FreezeAtWindowStart(), 0), 0, 0);
+        var realTime = new SolarAudit(new DeclaredSun(epoch, IlluminationPolicy.Advance(1.0), 0), 0, 0);
+        var fast = new SolarAudit(new DeclaredSun(epoch, IlluminationPolicy.Advance(3600.0), 0), 0, 0);
 
         Assert.Equal((0.5, 0.01), (frozen.ToleranceSeconds, frozen.ToleranceDegrees));
         Assert.Equal((0.5, 0.01), (realTime.ToleranceSeconds, realTime.ToleranceDegrees));
-
-        // An hour of sun per simulated second moves it 180 sun-seconds a tick.
-        Assert.Equal(360.0, fast.ToleranceSeconds, 9);
-        Assert.Equal(1.5, fast.ToleranceDegrees, 9);
+        Assert.Equal((0.5, 0.01), (fast.ToleranceSeconds, fast.ToleranceDegrees));
     }
 
-    private static (RecordedWorld World, SolarAudit Audit) Bind(double latitude, double longitude,
-                                                                SolarEpoch epoch,
-                                                                IlluminationPolicy policy,
-                                                                double windowOpens)
+    private static (RecordedWorld World, SolarLease Lease, SolarAudit Audit) Bind(
+        double latitude, double longitude, SolarEpoch epoch, IlluminationPolicy policy, double windowOpens)
     {
         var world = new RecordedWorld
         {
@@ -262,16 +370,20 @@ public sealed class SolarAuditTests
         world.Sun.Longitude = longitude;
         var declared = new DeclaredSun(epoch, policy, windowOpens);
         SolarLease lease = SolarLease.Take(world, declared);
-        var audit = new SolarAudit(declared, latitude, longitude, WorldDelta);
+        var audit = new SolarAudit(declared, latitude, longitude);
         audit.AuditWindowOpen(lease.AtWindowOpen!.Value);
-        return (world, audit);
+        return (world, lease, audit);
     }
 
-    private static void Run(RecordedWorld world, SolarAudit audit, double windowOpens, int ticks)
+    /// <summary>The session's loop: the sun written for each frame before its tick, then audited.</summary>
+    private static void Run(RecordedWorld world, SolarLease lease, SolarAudit audit, double windowOpens,
+                            int ticks)
     {
         for (int tick = 0; tick < ticks; tick++)
         {
-            audit.AuditTick(tick, windowOpens + (tick * WorldDelta), TickOnce(world));
+            double rendered = windowOpens + (tick * WorldDelta);
+            lease.WriteForFrame(rendered);
+            audit.AuditTick(tick, rendered, TickOnce(world));
         }
     }
 

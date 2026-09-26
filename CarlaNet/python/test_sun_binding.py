@@ -23,10 +23,16 @@ What it does, per site, on whatever map the server has loaded:
      2026-09-21;
   5. gives the sun and the clock back.
 
---advance also opens an advancing window two seconds before 07:01 and runs it across the minute.
-The engine's clock decomposition drops the minute its seconds carry into, so the audit is expected
-to stop that window at 07:00:59.5 naming `GetHMSFromSolarTime`; the script reports whether the
-engine does, and which side of the tick its advance falls on.
+--advance also opens three advancing windows at each site and requires every one to hold under the
+audit for four seconds of simulated time: one two seconds before 07:01, across the minute, and two
+two seconds before civil midnight, one on an epoch whose calendar advances and one on an epoch whose
+calendar is held. Under `advance` the session writes the sun for every frame before its tick cue, at
+the whole second nearest the frame's declared instant and a millisecond past it, with the engine's
+own advance off. The minute is the case that matters: `ACesiumSunSky::GetHMSFromSolarTime` rounds
+the seconds to sixty and drops the minute they carry into, so a sun the engine advanced itself is
+lit by the sun of 07:00:00 from 07:00:59.5 and the audit stops it there. The midnight windows check
+the date the session writes: the next day when the calendar advances, the epoch's own date when it
+is held.
 
 --capture spawns a camera, records a few frames of the frozen window and checks that each sidecar's
 <_solar> block carries the refraction-corrected elevation the widened observer header delivers. The
@@ -40,6 +46,7 @@ Usage:
     python test_sun_binding.py [--host 127.0.0.1] [--port 2000] [--ticks 40] [--advance] [--capture]
 """
 import argparse
+import json
 import logging
 import os
 import sys
@@ -59,6 +66,7 @@ try:  # The sun types ship in the rebuilt wheel; an older one lacks them.
         SolarEpoch,
         SolarLease,
         SolarPositionModel,
+        SolarReading,
         WorldSettingsLease,
     )
 except ImportError as missing:
@@ -66,7 +74,16 @@ except ImportError as missing:
 
 WORLD_DELTA = 0.05
 WINDOW_OPENS = 17 * 3600.0          # 17:00 civil, simulated seconds after the epoch's midnight
-ADVANCE_OPENS = 7 * 3600.0 + 58.0   # two seconds before 07:01
+
+# The advancing windows: what each crosses, where it opens (simulated seconds after the epoch's
+# midnight, two seconds before the crossing), whether the epoch's calendar advances, and the date the
+# sun should hold once the crossing is passed.
+ADVANCE_WINDOWS = (
+    ("07:01", 7 * 3600.0 + 58.0, True, (2026, 12, 21)),
+    ("midnight, calendar advancing", 86_400.0 - 2.0, True, (2026, 12, 22)),
+    ("midnight, calendar held", 86_400.0 - 2.0, False, (2026, 12, 21)),
+)
+ADVANCE_TICKS = 80                  # four seconds of simulated time
 
 # The origins stage C audited, and what the engine returned there at 17:00 on 2026-12-21 at the
 # civil offset: geometric and refraction-corrected elevation, degrees.
@@ -112,7 +129,8 @@ class SunBindingCheck:
                    measured_elevation: float, measured_corrected: float) -> bool:
         """The frozen terminator window: bind, audit, read back, give back. True where it all agreed."""
         self.georeference(latitude, longitude)
-        found = self.world.get_solar_state()
+        # On demand: the observer cache still holds the snapshot from before the georeference moved.
+        found = SolarReading.From(self.adapter.ReadSolarState())
         self.logger.info("%s: sun as found after configuring the georeference: %s", site, found)
 
         epoch = SolarEpoch.FromJson(epoch_json)
@@ -123,7 +141,7 @@ class SunBindingCheck:
         agreed = True
         try:
             lease = SolarLease.Take(self.adapter, declared)
-            audit = SolarAudit(declared, latitude, longitude, WORLD_DELTA)
+            audit = SolarAudit(declared, latitude, longitude)
             opened = audit.AuditWindowOpen(unwrap(lease.AtWindowOpen))
             for tick in range(self.ticks):
                 if self.adapter.Tick() is None:
@@ -173,29 +191,53 @@ class SunBindingCheck:
             settings.Dispose()
         return agreed
 
-    def run_advancing(self, site: str, latitude: float, longitude: float, epoch_json: str) -> None:
-        """An advancing window across a minute: report where, and whether, the audit stops it."""
+    def run_advancing(self, site: str, latitude: float, longitude: float, epoch_json: str,
+                      crossing: str, opens: float, calendar_advances: bool,
+                      date_after: tuple[int, int, int]) -> bool:
+        """An advancing window across a crossing. True where the audit held on every tick and the
+        sun crossed it onto the declared date."""
         self.georeference(latitude, longitude)
-        declared = DeclaredSun(SolarEpoch.FromJson(epoch_json),
-                               IlluminationPolicy.Advance(1.0, True, None), ADVANCE_OPENS)
+        epoch = json.loads(epoch_json)
+        epoch["calendar_advances"] = calendar_advances
+        declared = DeclaredSun(SolarEpoch.FromJson(json.dumps(epoch)),
+                               IlluminationPolicy.Advance(1.0, True, None), opens)
         settings = WorldSettingsLease.Take(self.adapter, WORLD_DELTA)
         lease = None
         try:
             lease = SolarLease.Take(self.adapter, declared)
-            audit = SolarAudit(declared, latitude, longitude, WORLD_DELTA)
+            audit = SolarAudit(declared, latitude, longitude)
             audit.AuditWindowOpen(unwrap(lease.AtWindowOpen))
-            for tick in range(80):
-                self.adapter.Tick()
-                sample = audit.AuditTick(tick, ADVANCE_OPENS + tick * WORLD_DELTA,
-                                         self.adapter.ObservedSolarState())
-                if tick < 3:
-                    self.logger.info("%s: advancing tick %d clock residual %+.6f s", site, tick,
-                                     sample.ClockResidualSeconds)
-            self.logger.warning("%s: the advancing window crossed 07:01 without the audit "
-                                "stopping it", site)
+            held = []
+            for tick in range(ADVANCE_TICKS):
+                # Written before the cue, as SumoDriveSession.Advance writes it beside the poses.
+                rendered = opens + tick * WORLD_DELTA
+                lease.WriteForFrame(rendered)
+                if self.adapter.Tick() is None:
+                    raise RuntimeError(f"{site}: advancing tick {tick} produced no frame")
+                sample = audit.AuditTick(tick, rendered, self.adapter.ObservedSolarState())
+                held.append(unwrap(sample.Observed.LocalInstant))
+
+            first, last = held[0], held[-1]
+            checks = {
+                "held every tick": audit.AuditedTicks == ADVANCE_TICKS,
+                "crossed": (first.Minute, last.Minute) == (0, 1) if crossing == "07:01"
+                else (first.Hour, last.Hour) == (23, 0),
+                "date after": (last.Year, last.Month, last.Day) == date_after,
+            }
+            self.logger.info(
+                "%s: advancing across %s, %d ticks: the sun held %s to %s; worst clock %+.4f s, "
+                "worst direction %.2e deg, tolerances %.3f s and %.3f deg", site, crossing,
+                audit.AuditedTicks, first.ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                last.ToString("yyyy-MM-dd HH:mm:ss.fff"), audit.WorstClock.ClockResidualSeconds,
+                audit.WorstAngle.AngleResidualDegrees, audit.ToleranceSeconds,
+                audit.ToleranceDegrees)
+            for name, passed in checks.items():
+                self.logger.info("%s:   %-20s %s", site, name, "agrees" if passed else "DISAGREES")
+            return all(checks.values())
         except SolarAuditFailedException as failed:
-            self.logger.info("%s: the audit stopped the advancing window, as the engine's clock "
-                             "decomposition predicts: %s", site, failed.Message)
+            self.logger.error("%s: the audit stopped the window advancing across %s: %s", site,
+                              crossing, failed.Message)
+            return False
         finally:
             if lease is not None:
                 lease.Dispose()
@@ -254,7 +296,7 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=60.0)
     parser.add_argument("--ticks", type=int, default=40, help="ticks audited per frozen window")
     parser.add_argument("--advance", action="store_true",
-                        help="also run an advancing window across a minute boundary")
+                        help="also run advancing windows across a minute and across midnight")
     parser.add_argument("--capture", action="store_true",
                         help="also record a few frames and check the sidecar's sun block")
     args = parser.parse_args()
@@ -271,7 +313,9 @@ def main() -> int:
     for site, latitude, longitude, epoch_json, elevation, corrected in SITES:
         agreed = check.run_frozen(site, latitude, longitude, epoch_json, elevation, corrected) and agreed
         if args.advance:
-            check.run_advancing(site, latitude, longitude, epoch_json)
+            for crossing, opens, calendar_advances, date_after in ADVANCE_WINDOWS:
+                agreed = check.run_advancing(site, latitude, longitude, epoch_json, crossing, opens,
+                                             calendar_advances, date_after) and agreed
         if args.capture:
             agreed = check.run_capture(site, latitude, longitude, epoch_json) and agreed
 

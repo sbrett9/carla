@@ -6,7 +6,7 @@ namespace CarlaNet.CoSim;
 
 /// <summary>
 /// What a session does with the sun across its window: freeze it at the window's opening instant,
-/// let the engine carry it forward, freeze it at a declared hour, or leave it alone.
+/// carry it forward, freeze it at a declared hour, or leave it alone.
 /// </summary>
 /// <remarks>
 /// <para><b>Declared, never defaulted.</b> A frozen run and a run nobody configured write
@@ -59,11 +59,12 @@ public sealed class IlluminationPolicy
 
     /// <summary>
     /// Sun-clock seconds per simulated second under <see cref="IlluminationPolicyKind.Advance"/>, and
-    /// zero under every other policy, which is what the engine is told for a frozen sun.
+    /// zero under every other policy.
     /// </summary>
     /// <remarks>
-    /// Per simulated second, not per wall-clock second: the engine advances the clock by the world
-    /// tick's delta times the rate, and under synchronous ticking that delta is the fixed one.
+    /// Per simulated second, not per wall-clock second: the declared instant of a frame is the
+    /// window's opening instant carried forward by the frame's elapsed simulated time times the rate,
+    /// and the session writes the sun for that instant before the frame's tick cue.
     /// </remarks>
     public double Rate { get; }
 
@@ -98,7 +99,11 @@ public sealed class IlluminationPolicy
     /// <summary>Whether the session writes the sun at all.</summary>
     public bool BindsTheSun => Kind != IlluminationPolicyKind.Ignore;
 
-    /// <summary>Whether the engine carries the sun forward with the world tick.</summary>
+    /// <summary>
+    /// Whether the sun moves across the window: the session writes it for every frame, carried
+    /// forward from the window's opening instant at <see cref="Rate"/>. The engine's own advance is
+    /// never used.
+    /// </summary>
     public bool Advances => Kind == IlluminationPolicyKind.Advance;
 
     /// <summary>
@@ -118,7 +123,8 @@ public sealed class IlluminationPolicy
         new(IlluminationPolicyKind.FreezeAtWindowStart, 0.0, null, freezeDateAdvances, requireSun, note);
 
     /// <summary>
-    /// Start the sun at the civil instant the window opens and let the engine carry it forward.
+    /// Start the sun at the civil instant the window opens and carry it forward, writing it for every
+    /// frame.
     /// </summary>
     /// <param name="rate">Sun-clock seconds per simulated second; 1.0 keeps the sun on civil time.</param>
     /// <exception cref="CoSimSessionRefusedException">The rate is not a positive number.</exception>

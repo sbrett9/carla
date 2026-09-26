@@ -28,10 +28,12 @@ advancement policy, the headlight predicate),
 |---|---|
 | 2026-09-18 | No traffic-light or sign actors rendered; no traffic-light state written; signal layer suppressed per session. |
 | 2026-09-21 | TraCI client is a managed socket client (§2.5); the subscribed set is governed separately from the render set. |
+| 2026-09-25 | §5: velocity chain runs through `APawn`; D3.5 restated as implemented; bridge velocity writes specified (§5.4). |
 | 2026-09-21 | The managed client is built; §2.5 carries the check behind each property and the measured step cost through it. |
 | 2026-09-22 | The bridge is built as far as the pose, applying none: §6.4 carries five interpolation cases and the speed-ramp integration, §7.2 the frame check as it is made and the network-identity residual beside it, §7.5 the seat height the catalogue does not carry, §8.3 the two subscription tiers, §9.7 the two measured server properties the loop rests on. |
 | 2026-09-22 | §9.5.1: imagery readiness is counted in ticks; in the attended path the operator's key press is the settle. |
 | 2026-09-25 | Real-time pacing on the world tick, achieved factor published per window (§9.9); package checked against the loaded world (§7.2). |
+| 2026-09-25 | §9: sun bound by `set_solar_epoch`; under `advance` written every tick, engine advance off; audit as built. |
 
 ---
 
@@ -343,7 +345,7 @@ Everything in this section was read from the source, not assumed.
 | Python shim, traffic lights | `class TrafficLight(TrafficSign): pass` | `:1002-1004` | marker class, **no methods**. **Not used by this bridge** (D3.24); listed so the audit's picture of the surface is complete — see §12 G13 |
 | Python shim, vehicle lights | `Actor.set_light_state` / `Actor.get_light_state` | `:781-784`, `:786-788` | present → `SetVehicleLightStateAsync` / `GetVehicleLightStateAsync`; the setter accepts an `int`, a `VehicleLightState` wrapper or the C# flags enum |
 | Python shim, batch command | `command.SetVehicleLightState` | imported `:487`, emitted `:1147` | **exposed** — one of the 8 the shim carries, so this is the one per-tick write a Python bridge *could* also batch |
-| Python shim, solar | `set_solar_time` / `set_solar_date` / `get_solar_state` / `set_time_advance` | `:1500`, `:1506`, `:1511`, `:1535` | present → the four `CarlaClient` solar calls; `get_solar_state` prefers the observer cache (§9.4) |
+| Python shim, solar | `set_solar_time` / `set_solar_date` / `get_solar_state` / `set_time_advance` | `:1500`, `:1506`, `:1511`, `:1535` | present → the four `CarlaClient` solar calls; `get_solar_state` prefers the observer cache (§9.4). `set_solar_epoch` (shim `:1523`) is the session's one write (§9.2) |
 | C# transport | `CarlaClient.SetActorTransformAsync` | `CarlaNet/src/CarlaNet.Transport/CarlaClient.cs:1496` | `set_actor_transform` |
 | C# transport | `CarlaClient.SetActorTargetVelocityAsync` | `:1499` | `set_actor_target_velocity` |
 | C# transport | `CarlaClient.SetActorSimulatePhysicsAsync` | `:1529` | `set_actor_simulate_physics` |
@@ -354,7 +356,7 @@ Everything in this section was read from the source, not assumed.
 | C# transport | `SetLayerVisibleAsync` | `:1077-1078` | `set_layer_visible`; the `road` and `signals` layers are each written **once at session start** and once more when the session is disposed (§3.4) |
 | C# transport | `SetVehicleLightStateAsync` / `GetVehicleLightStateAsync` | `:1621-1622`, `:1615-1617` | `set_vehicle_light_state` / `get_vehicle_light_state`. **The getter is an RPC, not a cache read** — vehicle light state is *not* in the world-observer snapshot, unlike transform and velocity (§3.5). |
 | C# transport | `GetVehiclesLightStatesAsync` | `:1630-1631` | `get_vehicles_light_states` — every vehicle's light state in **one** RPC (`CarlaServer.cpp:2824`) |
-| C# transport | four solar calls | `:1043`, `:1048`, `:1053`, `:1058` | `set_solar_time`, `set_solar_date`, `get_solar_state`, `set_time_advance` |
+| C# transport | five solar calls | `:1043`, `:1048`, `:1053`, `:1058`, `:1117` | `set_solar_time`, `set_solar_date`, `get_solar_state`, `set_time_advance`, `set_solar_epoch` |
 | C# transport | `GetCachedSolarState` | `:1991`, written at `:1855` | the tick's solar block, parsed out of the world-observer header — **no RPC and no poll** (§9.4) |
 | C# types | all 22 `Command` records | `CarlaNet.Types/Rpc/Commands/Command.cs:41-126` | complete, including `ApplyTargetVelocityCommand`, `SetSimulatePhysicsCommand`, `SetEnableGravityCommand`, `SetVehicleLightStateCommand` (variant **18**, `Command.cs:32`, `:94`) and `SetTrafficLightStateCommand` |
 | C# serialisation | `CommandFormatter.WritePayload` | `CarlaNet.Types/Formatters/CommandFormatter.cs:41-72` | all 22 handled; variant indices match `LibCarla/source/carla/rpc/Command.h:284-305` |
@@ -364,7 +366,7 @@ Everything in this section was read from the source, not assumed.
 | Server RPC | `set_actor_simulate_physics` | `CarlaServer.cpp:2113-2144` | `CarlaActor->SetActorSimulatePhysics(...)` |
 | Server RPC | `set_actor_fade` | `CarlaServer.cpp:2217-2249` | writes Custom Primitive Data float 8 on **every** `UPrimitiveComponent` of the actor |
 | Server RPC | `set_vehicle_light_state` | `CarlaServer.cpp:1985-2008` | → `FVehicleActor::SetVehicleLightState` (`CarlaActor.cpp:756-776`) → `ACarlaWheeledVehicle::SetVehicleLightState` (`CarlaWheeledVehicle.cpp:684-700`), which **compares field by field and only calls `RefreshLightState` when something changed** |
-| Server RPC | `set_solar_time` / `set_solar_date` / `get_solar_state` / `set_time_advance` | `CarlaServer.cpp:614`, `:625`, `:640`, `:661` | thin wrappers over `UCesiumHeightSampler`; each returns **false** when the world has no `CesiumSunSky` |
+| Server RPC | `set_solar_time` / `set_solar_date` / `get_solar_state` / `set_time_advance` / `set_solar_epoch` | `CarlaServer.cpp:614`, `:625`, `:640`, `:661`, `:644` | thin wrappers over `UCesiumHeightSampler`; each returns **false** when the world has no `CesiumSunSky` |
 | Server batch | `apply_batch` | `CarlaServer.cpp:3198-3213` | visits each command, then `tick_cue()` if `do_tick_cue`; the `SetVehicleLightState` arm is `CarlaServer.cpp:3187` |
 
 **The batch path is complete from C# to the server.** The only gap is the Python shim's exposed
@@ -405,10 +407,10 @@ single batch.
 | admission, once | `SetEnableGravityCommand(actor, false)` | yes | one-off |
 | admission, once | `SetVehicleLightStateCommand(actor, flags)` | yes | one-off, and **mandatory** — a pooled actor carries its predecessor's light state (§3.5, §8.2) |
 | **every world tick** | `ApplyTransformCommand(actor, pose)` | yes | 1 command per rendered vehicle |
-| **every world tick** | `ApplyTargetVelocityCommand(actor, v)` | yes | 1 command per rendered vehicle — **only after D3.5 lands**; see §5 |
+| **every world tick** | `ApplyTargetVelocityCommand(actor, v)` | yes | 1 command per rendered vehicle, after its `ApplyTransformCommand`; read back only through the D3.5 engine change, and **zero** at check-in (§5.4) |
 | on a SUMO signal-word change only | `SetVehicleLightStateCommand(actor, flags)` | yes | **measured** on Bahonar: mean 14.44, p90 31, max 47 per *SUMO step* map-wide, all landing in one of the R sub-step batches (§3.5) |
 | on a sun-elevation threshold crossing | `SetVehicleLightStateCommand(actor, flags)` | yes | at most \|render set\| commands, at most twice per window, and **never** under a frozen sun (§3.5) |
-| at window open, and on a civil-day rollover | `set_solar_time` / `set_solar_date` | **no — a plain RPC** | 1–2 RPCs per window (§9.3) |
+| at window open, and every tick under `advance` | `set_solar_epoch` | **no — a plain RPC**; no batch command sets the sun | 1 per window under a freeze; 1 per tick under `advance`, measured at a 0.128 ms median round trip (§9.2) |
 | session start, once | `set_layer_visible` for `road` and for `signals` | **no — a plain RPC** | 2 RPCs per session, before the first tick, and 2 more when it is disposed (§3.4) |
 | release | pool check-in (transform to the parking pose, lights to `None`) | yes | folded into the same batch |
 
@@ -710,13 +712,14 @@ Per world tick, in the steady state, for a render set of `N` vehicles:
 | `apply_batch` | **1 RPC** | D3.3 |
 | `tick_cue` (via `SendTickCueAsync`) | **1 RPC** | §3.2 — `do_tick_cue` does not wait for the frame (G6) |
 | Commands inside that one batch | `2N` steady (pose + velocity), `+0.72` amortised for vehicle lamp changes | §3.3, §3.5.3 |
-| Solar writes | **0** on a steady tick | §9.3 — 1 `set_solar_time` at window open, plus `set_solar_date` only on a civil-day rollover |
+| Solar writes | **0** on a steady tick under a freeze; **1 RPC** under `advance` | §9.2 — 1 `set_solar_epoch` at window open, and under `advance` 1 per tick, for that frame, after the batch and before the cue |
 | Solar reads | **0 RPC** | `GetCachedSolarState` (`CarlaClient.cs:1991`) returns the block parsed at `:1855` out of the observer header the server already pushes (`WorldObserver.cpp:323-341`) |
 | Light-state reads | **0 RPC** | the bridge holds what it wrote (§3.5.3); the `get_` path is never on the steady loop |
 | Traffic-light traffic, any kind | **0 RPC, 0 commands** | §3.4 — nothing is written, read or subscribed. `set_layer_visible` is two RPCs at session start and is not a steady-tick line |
 
-**So the steady-state budget is unchanged at two RPCs per world tick, and the solar and vehicle
-lamp traffic is carried entirely inside an array that already exists.** The one number that grew is the
+**So the steady-state budget is two RPCs per world tick under a frozen sun and three under an
+advancing one, and the vehicle lamp traffic is carried entirely inside an array that already
+exists.** The one number that grew is the
 batch's command count, by 0.28% amortised and 18% on the worst single tick in a measured hour — against
 a mode that simultaneously deletes the fade's *one blocking RPC per vehicle per reconcile* (§8.5).
 This is not an assumption that solar is cheap; it is the arithmetic, and the inputs are cited above.
@@ -758,36 +761,44 @@ wheel-spin losses are real and are the price of this mode.
 
 Doc 23 §4 and `_TEAM_BRIEF.md` §5 state that `WorldObserver.cpp:373` serialises
 `GetActor()->GetVelocity()` and that a teleport on a non-simulating body does not update it. **Both
-halves verified, and the chain is longer than the citation suggests.**
+halves hold.** The read is at `WorldObserver.cpp:385` in the current tree, and the chain passes
+through `APawn`, which is where the outcome is decided.
 
 ```
-WorldObserver.cpp:373          Velocity = TO_METERS * View->GetActor()->GetVelocity();
-  └─ CarlaWheeledVehicle.cpp:804-807   ACarlaWheeledVehicle::GetVelocity()
+WorldObserver.cpp:385          Velocity = TO_METERS * View->GetActor()->GetVelocity();
+  └─ CarlaWheeledVehicle.cpp:857-860   ACarlaWheeledVehicle::GetVelocity()
         → BaseMovementComponent->GetVelocity()
   └─ MovementComponents/BaseCarlaMovementComponent.cpp:35-42
         → CarlaVehicle->AWheeledVehiclePawn::GetVelocity()
            (UDefaultMovementComponent does NOT override it — the declaration is
             commented out at DefaultMovementComponent.h:27 and .cpp:47)
-  └─ UE_5_7_4/.../Engine/Private/Actor.cpp:748-756   AActor::GetVelocity()
-        → RootComponent->GetComponentVelocity()
-  └─ UE_5_7_4/.../Engine/Private/PrimitiveComponentPhysics.cpp:1328-1340
-        UPrimitiveComponent::GetComponentVelocity()
-           if (IsSimulatingPhysics()) return BodyInst->GetUnrealWorldVelocity();
-           return Super::GetComponentVelocity();
-  └─ UE_5_7_4/.../Engine/Private/Components/SceneComponent.cpp:2995-2998
-        USceneComponent::GetComponentVelocity()  { return ComponentVelocity; }
+  └─ UE_5_7_4/.../Engine/Private/Pawn.cpp:240-249   APawn::GetVelocity()
+           (AWheeledVehiclePawn does not override it)
+           if (GetRootComponent()->IsSimulatingPhysics())
+               return GetRootComponent()->GetComponentVelocity();   // the physics body
+           return GetMovementComponent()->Velocity;
+  └─ UE_5_7_4/.../Engine/Private/Pawn.cpp:186-189   APawn::GetMovementComponent()
+        → FindComponentByClass<UPawnMovementComponent>()
+           = the UChaosWheeledVehicleMovementComponent. UBaseCarlaMovementComponent is a
+             UMovementComponent, not a UPawnMovementComponent (BaseCarlaMovementComponent.h:21)
 ```
 
-So with physics off, the reported velocity is the cached `USceneComponent::ComponentVelocity` field.
-**Nothing in the CARLA vehicle path ever writes that field.** The only writer in the engine is
-`UMovementComponent::UpdateComponentVelocity()`
-(`UE_5_7_4/.../Engine/Private/Components/MovementComponent.cpp:382-388`), and
-`UChaosVehicleMovementComponent` never calls it (grepped
-`UE_5_7_4/Engine/Plugins/Experimental/ChaosVehiclesPlugin/Source/ChaosVehicles/Private/ChaosVehicleMovementComponent.cpp`
-— no occurrence). It is therefore whatever it was constructed as: zero.
+So with physics off, the reported velocity is the `UMovementComponent::Velocity` field of the Chaos
+vehicle movement component. **Nothing on the CARLA vehicle path writes that field.** The Chaos
+vehicle plugin never assigns it (`ChaosVehiclesPlugin/Source/ChaosVehicles`; its one `Velocity =` is
+`UChaosVehicleWheel`'s own member, `ChaosVehicleWheel.cpp:144`). The engine's writers are
+`UNavMovementComponent::RequestDirectMove` (`NavMovementComponent.cpp:132-134`), which only AI path
+following calls, and `UMovementComponent::StopMovementImmediately` (`MovementComponent.h:473-477`),
+which writes zero. It is therefore zero.
 
-Consequence: every teleported vehicle reports **speed 0** into the world-observer snapshot, and
-everything downstream of that snapshot inherits it.
+`USceneComponent::ComponentVelocity`, which `UPrimitiveComponent::GetComponentVelocity()` returns for
+a non-simulating primitive (`PrimitiveComponentPhysics.cpp:1328-1340`,
+`SceneComponent.cpp:2995-2998`), is **not** on this path: `APawn::GetVelocity` asks the root
+component only when it simulates. It is read by consumers that ask a component rather than an actor,
+such as `SpringBasedVegetationComponent.cpp:660`, and it too is never written on the vehicle path.
+
+Consequence: a teleported vehicle whose velocity nobody sets through D3.5 (§5.3) reports **speed 0**
+into the world-observer snapshot, and everything downstream of that snapshot inherits it.
 
 ### 5.2 Who actually reads it — one correction to doc 23
 
@@ -796,6 +807,8 @@ everything downstream of that snapshot inherits it.
 | **Truth telemetry, C# (native recorder)** | **yes** | `CarlaNet.Recording/VehicleTelemetryService.cs:78` `var vel = snap.Velocity;` → `speed_mps`, `vx`, `vy` |
 | **Truth telemetry, Python shim** | **yes** | `carlanet/__init__.py:1809` `vel = v.get_velocity()` |
 | **Traffic-manager collision stage** | **yes** | `CarlaNet.TrafficManager/Stages/CollisionStage.cs:105-112`, `:371-377`, `:405` — collision radius and forward extension scale with speed |
+| **Engine recorder** | **yes** | `Recorder/CarlaRecorder.cpp:324-339` `AddActorKinematics` writes `GetActorVelocity()` into the kinematics packet of the `.log` |
+| **Radar sensor** | **yes** | `Sensor/Radar.cpp:219` `HittedActor->GetVelocity()` — the Doppler term of every return off a vehicle |
 | **Occlusion / arrival gating (doc 17)** | **no** | `CarlaNet.Recording/OcclusionEstimator.cs` contains no reference to velocity or speed at all. The arrival gate is `_client.IsActorEstablished(id)` (`VehicleTelemetryService.cs:73`), which is driven by the **fade registry**, not by motion (`CarlaClient.cs:1571`) — and with no fade in this mode (D3.10) it is inert, returning `true` for every actor. |
 
 > **Correction to carry into [`00_Overview.md`](00_Overview.md):** doc 23 §4's claim that zero velocity
@@ -827,20 +840,27 @@ render-set scale, and does not survive a turn. Reject.
 
 **Verified impossible, three ways:**
 
-1. `UPrimitiveComponent::GetComponentVelocity()` only consults the body when `IsSimulatingPhysics()`
-   (`PrimitiveComponentPhysics.cpp:1330`). With physics off it returns `ComponentVelocity`, which the
+1. `APawn::GetVelocity()` only consults the body when the root `IsSimulatingPhysics()`
+   (`Pawn.cpp:242`). With physics off it returns the pawn movement component's `Velocity`, which the
    setter does not touch.
 2. `SetPhysicsLinearVelocity` calls `WarnInvalidPhysicsOperations` first
    (`PrimitiveComponentPhysics.cpp:383-389`), which in a non-shipping build logs *"has to have
    'Simulate Physics' enabled if you'd like to SetPhysicsLinearVelocity"*
    (`PrimitiveComponentPhysics.cpp:159-163`). The engine explicitly classifies this call as invalid on
    a non-simulating body.
-3. For a CARLA vehicle there may be no body to write: `SetSimulatePhysics(false)` calls
-   `Movement->DestroyPhysicsState()` (`CarlaWheeledVehicle.cpp:784`).
+3. The body it writes is kinematic, and a teleport overwrites its velocity.
+   `SetSimulatePhysics(false)` calls `Movement->DestroyPhysicsState()` (`CarlaWheeledVehicle.cpp:787`),
+   which removes the Chaos vehicle simulation and then recreates the mesh's physics state
+   (`ChaosVehicleMovementComponent.cpp:791-805`), so the root keeps a body, now kinematic. A
+   `TeleportPhysics` transform on a kinematic body sets a position target beside the new pose
+   (`BodyInstance.cpp:2786-2798`), and the solver recomputes the body's velocity from that target
+   (`PBDRigidsEvolutionGBF.cpp:1180-1223`) — zero, since the pose already stands on it. Nothing
+   switches a kinematic particle to velocity-integrating mode (`KinematicTargets.h:106` has no
+   caller), so a written velocity does not move the body either. Read from source, not measured.
 
 Reject. This is the option most likely to be assumed to work, so it is worth the three citations.
-Note what the failure actually is: `set_target_velocity` writes a body the getter will not read, and
-`set_simulate_physics(false)` destroys that body anyway. **No ordering of client calls fixes this** —
+Note what the failure actually is: `set_target_velocity` writes a kinematic body the getter will not
+read and the next teleport resets. **No ordering of client calls fixes this** —
 there is no sequence of `set_transform`, `set_target_velocity` and `set_simulate_physics` that makes
 the world observer report a non-zero speed for a kinematic CARLA vehicle. The fix is necessarily at
 the server or engine layer, which is what (d) and (e) are. Independently confirmed by the capability
@@ -862,43 +882,97 @@ precedent in the same file: `FWorldObserver_GetAcceleration` already finite-diff
 manager already does exactly this client-side when physics is off — *"When physics is disabled,
 recompute velocity from displacement"* (`CarlaNet.TrafficManager/Stages/ALSM.cs:480-490`).
 
-Fails on discontinuity. Every pose discontinuity becomes a velocity spike: a pool check-out that
-moves an actor from its parking pose to its entry pose, a SUMO teleport (forbidden here, §11.6, but
-not forbidden in general), a lane-change snap. It also lags by one frame and, if the bridge ever
-holds a pose across sub-steps instead of interpolating, reports zero on 19 frames of every 20. It is
-a reasonable *fallback* for actors nobody sets a velocity on, not the primary.
+Fails on discontinuity. Every pose discontinuity becomes a velocity spike: the first tick after
+admission, when a pool check-out moves a body from its parking slot beyond the sandbox to its entry
+pose; a re-admission after a discontinuous step (§6.4 case 5), which is a teleport by construction; a
+SUMO teleport (forbidden here, §11.6, but not forbidden in general). No rule at the engine can tell
+those jumps from motion, because the engine does not know why a pose moved. It also lags by one
+frame, measures the chord of an interpolated arc rather than its tangent, needs the elapsed time
+between two poses, which under asynchronous ticking is not the world delta, and reports zero on
+every frame a pose is held. It is a reasonable *fallback* for actors nobody sets a velocity on, not
+the primary.
 
-**(e) Make `set_actor_target_velocity` mean what its name says on a kinematic body.**
+**(e) Make `set_actor_target_velocity` mean what its name says on a kinematic vehicle.**
 
-Extend `FCarlaActor::SetActorTargetVelocity` (`CarlaActor.cpp:392-411`) so that when the root
-primitive is not simulating it writes `RootComponent->ComponentVelocity` — the exact field
-`UPrimitiveComponent::GetComponentVelocity()` falls back to. `FVehicleActor` does **not** override
-`SetActorTargetVelocity` (checked `CarlaActor.h:472-536`: it overrides `EnableActorConstantVelocity`,
-`SetActorSimulatePhysics` and 18 others, but not this), so the base implementation is the one on the
-vehicle path, and `ACarlaWheeledVehicle::GetVelocity()` resolves through the root component as traced
-in §5.1. One change, and the whole chain reads back.
+`FVehicleActor::SetActorTargetVelocity` (`CarlaActor.cpp:831-846`) overrides the base for a vehicle
+that `ACarlaWheeledVehicle::IsKinematic()` accepts (`CarlaWheeledVehicle.cpp:798-808`): its physics
+was disabled with `SetSimulatePhysics`, which clears `bPhysicsEnabled`; it runs the default movement
+component, since CarSim and Chrono report their own velocity; and its root does not simulate. For
+such a vehicle `ACarlaWheeledVehicle::SetKinematicVelocity` (`:810-827`) writes both fields a
+non-simulating vehicle is read from — the pawn movement component's `Velocity`, which
+`APawn::GetVelocity` returns, and the root's `ComponentVelocity`, which `GetComponentVelocity`
+returns — and writes the kinematic body as the base always has, through
+`FBodyInstance::SetLinearVelocity`, which does not raise the component's warning. Every other actor,
+and every vehicle whose physics is on, takes the base implementation unchanged
+(`CarlaActor.cpp:392-411`).
 
-Satisfies: the world-observer snapshot, therefore both truth paths, the traffic-manager collision
-stage, `Actor.get_velocity()`, any second client, and the recorder. Exact — SUMO's own speed, not a
-difference. No lag, no discontinuity spike. Costs a `Vector3D` per actor per tick in the batch, which
-is one extra command in an array that already exists.
+The value is held until the next write. `SetSimulatePhysics` zeroes both fields on every change of
+state (`CarlaWheeledVehicle.cpp:791-792`), so a kinematic vehicle nobody sets a velocity on reports
+zero, and a velocity from one kinematic period never outlives a return to physics. A dormant vehicle
+keeps its velocity across sleep: the base stores it in `ActorData->Velocity`, the world observer
+reports that while the actor is dormant (`WorldObserver.cpp:373`), and `FVehicleData::RestoreActorData`
+hands it back to a vehicle that wakes kinematic (`ActorData.cpp:124-129`).
 
-> **D3.5 — Fix the zero-velocity problem at `FCarlaActor::SetActorTargetVelocity`: on a non-simulating
-> root primitive, write `ComponentVelocity` (candidate e). The bridge then emits an
-> `ApplyTargetVelocityCommand` beside every `ApplyTransformCommand`.** Candidate (d) is retained as a
-> *fallback only* — if a consumer needs velocity for an actor nobody is setting one on — and is not
-> needed for SUMO-driven vehicles. Candidate (c) becomes unnecessary; the truth record still carries
-> SUMO's speed as its own field for cross-checking, which is cheap and catches a regression.
+Writing `ComponentVelocity` alone would change nothing the observer reads, because `APawn::GetVelocity`
+does not consult it for a non-simulating root (§5.1).
 
-**Two follow-ons this opens, for [`05_CarlaNet_Capability_Audit.md`](05_CarlaNet_Capability_Audit.md):**
+Satisfies: the world-observer snapshot, therefore both truth paths, `Actor.get_velocity()`, any
+second client, the engine recorder, the radar's Doppler term and the traffic-manager collision stage.
+Exact — SUMO's own speed, not a difference. No lag, no discontinuity spike. Costs a `Vector3D` per
+actor per tick in the batch, one extra command in an array that already exists.
+
+**(f) A separate asserted-velocity command, preferred by the observer when physics is off**
+([`05`](05_CarlaNet_Capability_Audit.md) §7.4).
+
+Keeps an asserted velocity distinguishable from a simulated one inside the engine. But the snapshot
+has no field to carry the distinction to a client (`LibCarla/source/carla/sensor/data/ActorDynamicState.h:124-143`), so a consumer
+would still see one velocity; the provenance belongs in the truth record, which carries SUMO's speed
+as its own field. It adds a 23rd command type, moving `Command.h`, `Command.cs` and
+`CommandFormatter.cs` together, for no reader that needs it. Not taken.
+
+> **D3.5 — A pose-applied vehicle reports the velocity its driver supplies.
+> `set_actor_target_velocity` on a vehicle whose physics is disabled writes the velocity where
+> `GetVelocity` reads a non-simulating vehicle (candidate e). The bridge emits an
+> `ApplyTargetVelocityCommand` beside every `ApplyTransformCommand`, and a zero one when it parks a
+> body (§5.4).** Candidate (d) is retained as a *fallback only* — if a consumer needs velocity for an
+> actor nobody is setting one on — and is not needed for SUMO-driven vehicles. Candidate (c) becomes
+> unnecessary; the truth record still carries SUMO's speed as its own field for cross-checking, which
+> is cheap and catches a regression.
+
+### 5.4 What the bridge sends
+
+The engine holds whatever velocity it was last given, so the bridge's writes are the whole of the
+contract. All in the tick's one `apply_batch` (D3.3), in metres per second, in the CARLA world frame
+the transform is written in.
+
+| When | Command | Value |
+|---|---|---|
+| every tick, per body whose pose is written | `ApplyTargetVelocityCommand(actor, v)` **after** that body's `ApplyTransformCommand` | `v.x = VelocityX`, `v.y = VelocityY` of the same `VehiclePose` — the interpolated speed times the forward vector of the applied yaw — and `v.z = speed × along-heading gradient`, the slope the pose's pitch came from, so the velocity is tangent to the draped path the body moves along |
+| the first tick after check-out | the same pair | nothing extra: the vehicle's current speed from its first tick, with no spike, because the parked body's velocity is zero |
+| a tick in which a held body gets no pose (no ground under it, no body bound) | `ApplyTargetVelocityCommand(actor, 0)` | the body stands still that tick, so it reports zero |
+| check-in to the parking slot | `ApplyTargetVelocityCommand(actor, 0)` after the parking `ApplyTransformCommand` | a parked body is not moving; otherwise it would report its last speed from beyond the sandbox for as long as it is parked |
+| spawn into the pool | nothing | `SetSimulatePhysicsCommand(actor, false)` zeroes the velocity, and it must precede every velocity write — one that arrives while physics is on writes the simulating body instead |
+
+Where one batch carries two pairs for the same actor — a release and a re-admission of one body in
+one tick — the batch is visited in order (`CarlaServer.cpp:3221`), so the last pair is the one in
+effect. Truth speed and course are horizontal (`hypot(vx, vy)`, `carlanet/__init__.py:1864-1868`),
+so `v.z` changes neither; it makes the observer's acceleration vertical component describe the
+body's motion. The observer's acceleration on the first tick after admission is the whole admission
+speed over one frame, because the parked body's velocity was zero.
+
+### 5.5 What D3.5 leaves open
+
+Two follow-ons, for [`05_CarlaNet_Capability_Audit.md`](05_CarlaNet_Capability_Audit.md):
 
 - **Angular velocity is probably different and must be measured, not assumed.**
   `FWorldObserver_GetAngularVelocity` calls `RootComponent->GetPhysicsAngularVelocityInDegrees()` with
   **no `IsSimulatingPhysics()` check** (`WorldObserver.cpp:249-262`), and
   `SetActorTargetAngularVelocity` writes `SetPhysicsAngularVelocityInDegrees`
-  (`CarlaActor.cpp:413-431`). Whether Chaos retains a written angular velocity on a kinematic
-  particle and reads it back is **unverified**. Measure before deciding whether the same change is
-  needed for the angular path.
+  (`CarlaActor.cpp:413-431`). D3.5 does not touch the angular path. Read from source and not
+  measured: the position target a teleport sets on a kinematic body makes the solver recompute its
+  angular velocity as well as its linear one (`PBDRigidsEvolutionGBF.cpp:1180-1223`), from a rotation
+  the pose already stands on, so a pose-applied vehicle is expected to report zero angular velocity
+  whatever is written to it. Measure before deciding whether the angular path needs its own change.
 - **Acceleration is derived and will be wrong for one frame after any step change.**
   `FWorldObserver_GetAcceleration` differences the reported velocity
   (`WorldObserver.cpp:264-277`). With D3.5 and sub-step interpolation (§6) the velocity is
@@ -1580,13 +1654,11 @@ stateDiagram-v2
     }
 
     state "World, per tick" as W {
-        [*] --> SunSet : solar clock written once, after the SUMO<br/>fast-forward and before the first tick (D3.21)
-        SunSet --> Frozen : policy = frozen
-        SunSet --> Advancing : policy = advancing(rate)
-        Frozen --> Frozen : no controller tick effect;<br/>headlight bits constant for the whole window
-        Advancing --> Advancing : SolarTime += Δw × Rate each world tick
-        Advancing --> DayRolled : t_civil crossed midnight
-        DayRolled --> Advancing : session issues set_solar_date<br/>(the engine never does)
+        [*] --> SunSet : sun bound after the SUMO fast-forward and before<br/>the first tick; engine advance off (D3.21)
+        SunSet --> Frozen : policy = a freeze
+        SunSet --> Advancing : policy = advance(rate)
+        Frozen --> Frozen : nothing written;<br/>headlight bits constant for the whole window
+        Advancing --> Advancing : session writes date, clock and zone for each frame<br/>before its cue; midnight carried or held (D3.19)
         Frozen --> [*] : window close
         Advancing --> [*] : window close
     }
@@ -1610,9 +1682,10 @@ coupling of lifetimes.
 
 > **D3.18 — The same component owns the solar clock, because the solar clock is a function of
 > simulated time and nothing else in the system knows what simulated instant a frame is.** The
-> session sets the sun, chooses whether the engine advances it, and audits it against the scenario
-> epoch on every tick. No other component in a SUMO-drive session calls `set_solar_time`,
-> `set_solar_date` or `set_time_advance`.
+> session binds the sun when the window opens, writes it for every frame under `advance` with the
+> engine's own advance off, and audits it against the scenario epoch on every tick. No other
+> component in a SUMO-drive session calls `set_solar_time`, `set_solar_date`, `set_solar_epoch` or
+> `set_time_advance`.
 
 Contract:
 
@@ -1625,15 +1698,21 @@ Contract:
 | `t_sumo` | SUMO's clock, always `t_render + Δs` once primed (the D3.6 lookahead) |
 | `t_civil` | the civil instant `t_render` means, from the scenario epoch — **owned by [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md)**, consumed here as a pure function of `t_render` (§9.5) |
 | `T_sun` | `ACesiumSunSky::SolarTime`, hours in `[0, 24)`, interpreted against `ACesiumSunSky::TimeZone` |
-| `Rate` | the `rate` argument of `set_time_advance` — **sun-clock seconds per simulated second** (§9.1) |
+| `Rate` | the illumination policy's `rate_sun_s_per_sim_s` — **sun-clock seconds per simulated second**. The session carries each frame's declared instant forward from the window's opening by it (§9.2). The engine's own `set_time_advance` rate has the same unit (§9.1) and the session sets it to 0 |
 
 The world must be in synchronous mode. The server drains RPCs until a tick cue arrives —
-`do { Server.RunSome(1u); } while (!Server.TickCueReceived());`
+`do { Server.RunSome(1u); } while (bSynchronousMode && !Server.TickCueReceived());`
 (`Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Game/CarlaEngine.cpp:333-341`) — so the world cannot
 advance without the session, which is what makes the loop authoritative rather than advisory. **That
 same property is what makes the sun controllable**, as §9.1 and §9.4 show.
 
 ### 9.1 What `set_time_advance` actually does under synchronous ticking
+
+**The session does not use this advance.** It sets it off under every policy and, under `advance`,
+writes the sun for every frame itself (§9.2; [`11`](11_Time_And_Illumination.md) D11.19), because a
+clock the engine carries forward passes through the last half-second of every minute, where the
+engine's clock decomposition drops the minute. `set_time_advance` remains the interactive viewer's
+surface, and what follows pins it down.
 
 The RPC's own comment says advancement *"tracks wall-clock in asynchronous mode and sim time under
 synchronous ticking"* (`CarlaServer.cpp:658-660`) and the shim repeats it
@@ -1650,13 +1729,16 @@ mechanism is four links long and completely determined.**
    `Rate = rate`. Note the spawn: calling `set_time_advance(false, …)` still creates the controller,
    which is harmless and is what makes `advancing` and `rate` readable afterwards (`:784-798`).
 
-2. **The controller advances on the actor tick, and the arithmetic is one line.**
+2. **The controller advances on the actor tick, and the arithmetic is a few lines.**
    `ACesiumTimeOfDayController::Tick`
-   (`Unreal/CarlaUnreal/Plugins/CesiumCarlaBridge/Source/CesiumCarlaBridge/Private/CesiumTimeOfDayController.cpp:14-39`):
+   (`Unreal/CarlaUnreal/Plugins/CesiumCarlaBridge/Source/CesiumCarlaBridge/Private/CesiumTimeOfDayController.cpp:53-91`):
 
    ```cpp
    const double DeltaHours = static_cast<double>(DeltaSeconds) * Rate / 3600.0;
-   SunSky->SolarTime = FMath::Fmod(FMath::Fmod(SunSky->SolarTime + DeltaHours, 24.0) + 24.0, 24.0);
+   const double Advanced = SunSky->SolarTime + DeltaHours;
+   const double WholeDays = FMath::FloorToDouble(Advanced / 24.0);
+   SunSky->SolarTime = Advanced - WholeDays * 24.0;
+   RollSolarDate(SunSky, ...WholeDays...);   // whole days onto Year/Month/Day, via FDateTime
    SunSky->UpdateSun();
    ```
 
@@ -1691,27 +1773,31 @@ per SUMO step (R world ticks):         ΔT_sun = R·Δw × Rate = Δs × Rate   
 > `rate = 1.0` therefore shows exactly 30 minutes of solar motion — 7.5° of hour angle — regardless of
 > how long the window takes in wall clock, which is the property the whole requirement rests on.
 
-Four consequences that are not obvious from the docstring and that the loop has to handle:
+Four consequences that are not obvious from the docstring:
 
-- **The solar clock is quantised to one second.** `UpdateSun` converts `SolarTime` to integer
-  H/M/S before computing the sun (`CesiumSunSky.cpp:420` → `GetHMSFromSolarTime`, `:575-585`, whose
-  `Second` is a `RoundToInt`). At `Δw = 0.05` and `rate = 1.0` each tick adds 0.05 sun-seconds, below
-  the quantum, so **the sun actually moves once every 20 ticks** — in steps of 1 sun-second, which is
-  0.0042° of hour angle and invisible. The quantisation only becomes visible at large `rate`: at
+- **The solar clock is quantised to one second, and the quantiser drops a minute.** `UpdateSun`
+  converts `SolarTime` to integer H/M/S before computing the sun (`CesiumSunSky.cpp:420` →
+  `GetHMSFromSolarTime`, `:575-585`, whose `Second` is a `RoundToInt` that can reach sixty and is then
+  zeroed without carrying). A clock in the last half-second of any minute is therefore rendered as the
+  minute before — measured live, an advancing window this controller carried stopped the audit at
+  07:00:59.45, lit by the sun of 07:00:00 — which is why the session writes every clock a millisecond
+  past a whole second instead ([`11`](11_Time_And_Illumination.md) §3.4, F1). At `Δw = 0.05` and
+  `rate = 1.0` each tick adds 0.05 sun-seconds, below the quantum, so **the sun actually moves once
+  every 20 ticks** — in steps of 1 sun-second, which is 0.0042° of hour angle and invisible; the
+  session's per-frame write moves it on the same whole seconds. The quantisation only becomes visible at large `rate`: at
   `rate = 3600` a tick advances 180 sun-seconds and the sun steps 0.75° per frame. *Inference, from
   the arithmetic above:* an accelerated sun will show stepping in the imagery, so an accelerated-sun
   capture is a different product from a real-time-sun capture. `11` should say whether it wants one.
-- **`SolarTime` wraps but the date does not.** Both the controller (`:35`) and `SetSolarTime`
-  (`CesiumHeightSampler.cpp:730`) wrap with `Fmod(…, 24.0)`, and **neither touches `Year`, `Month` or
-  `Day`.** A window that advances through midnight rolls the clock to 00:00 on the *same* calendar
-  date. The seasonal sun angle barely moves in a day, so this is invisible in the imagery — but the
-  `solar_day` the truth sidecar records (`WorldObserver.cpp:332`) would then disagree with the
-  scenario's day, in a corpus whose entire point is that the record and the assertion agree. The loop
-  detects the wrap and issues `set_solar_date` (§9.3).
-- **`UpdateSun()` runs every advancing tick.** It recomputes the sun position, rewrites the
-  directional light's rotation and repositions the sky light (`CesiumSunSky.cpp:405-467`). That is
-  per-tick engine work the frozen policy does not pay. It is small, but it is not zero, and it is a
-  measurable difference between the two policies that `10` may want to know about.
+- **The controller carries whole days onto the date; `SetSolarTime` does not.** The controller
+  floors the advanced clock by 24 hours and rolls `Year`, `Month` and `Day` with `FDateTime`
+  (`RollSolarDate`); `SetSolarTime` and `SetSolarEpoch` wrap the clock into [0, 24) and leave the date
+  to the caller (`CesiumHeightSampler.cpp:755`, `:806`). The session relies on neither: under
+  `advance` it writes the date with every frame's clock, carrying it across civil midnight when the
+  epoch's calendar advances and holding it when it does not (§9.2).
+- **`UpdateSun()` runs on every write.** It recomputes the sun position, rewrites the directional
+  light's rotation and repositions the sky light (`CesiumSunSky.cpp:405-467`). Under `advance` the
+  session's write triggers it once per tick, work the frozen policy does not pay; measured with the
+  round trip it belongs to, 0.128 ms median (§9.2).
 - **The controller lives in the world.** It is spawned into the current `UWorld`, so a map load
   discards it and the advancement setting with it. Set it *after* the world is up, not before.
 
@@ -1722,67 +1808,60 @@ The intra-tick ordering is not a matter of opinion; it is three consecutive stat
 
 | Phase of world tick `n` | What happens | Source |
 |---|---|---|
-| **1. `OnWorldTickStart`** | synchronous RPC drain: `do { Server.RunSome(1u); } while (!Server.TickCueReceived())`. **The pose batch, its light-state commands and any `set_solar_time` / `set_solar_date` issued before the cue are all executed here, before a single actor ticks** — `BIND_SYNC` handlers are drained on the game thread inside this loop (`CarlaServer.cpp:278`). Ordering *among* them is guaranteed by the client, which awaits each call before issuing the next (`CarlaClient.ApplyBatchAsync`, `:1779-1785`); the server guarantees only that all of them precede the tick. | `CarlaEngine.cpp:333-341` |
-| **2. Actor ticks** | `ACesiumTimeOfDayController::Tick` advances `SolarTime` by `Δw × Rate` and calls `UpdateSun()`, if and only if `bAdvancing`. | `CesiumTimeOfDayController.cpp:14-39` |
-| **3. `OnWorldPostActorTick`** | `WorldObserver.BroadcastTick(...)` writes the snapshot **including the solar block read from the now-advanced sun**, and then `SensorManager.PostPhysTick(...)` runs the camera captures. | `CarlaEngine.cpp:424-425`; solar block `WorldObserver.cpp:323-341`; capture path `SceneCaptureSensor.cpp:944-947` |
+| **1. `OnWorldTickStart`** | synchronous RPC drain: `do { Server.RunSome(1u); } while (bSynchronousMode && !Server.TickCueReceived())`. **The pose batch, its light-state commands and, under `advance`, the session's `set_solar_epoch` for the frame are all executed here, before a single actor ticks** — `BIND_SYNC` handlers are drained on the game thread inside this loop (`CarlaServer.cpp:278`). Ordering *among* them is guaranteed by the client, which awaits each call before issuing the next (`CarlaClient.ApplyBatchAsync`, `:1779-1785`); the server guarantees only that all of them precede the tick. | `CarlaEngine.cpp:333-341` |
+| **2. Actor ticks** | `ACesiumTimeOfDayController::Tick` advances `SolarTime` by `Δw × Rate` and calls `UpdateSun()`, if and only if `bAdvancing` — which the session sets false, so in a session nothing here moves the sun. | `CesiumTimeOfDayController.cpp:53-91` |
+| **3. `OnWorldPostActorTick`** | `WorldObserver.BroadcastTick(...)` writes the snapshot **including the solar block of the sun written in phase 1**, and then `SensorManager.PostPhysTick(...)` runs the camera captures. | `CarlaEngine.cpp:424-425`; solar block `WorldObserver.cpp:323-341`; capture path `SceneCaptureSensor.cpp:944-947` |
 
 > **The sun that lights frame `n`, the sun in frame `n`'s observer snapshot, and the poses written
-> for frame `n` are all the same tick.** The advance happens in phase 2 and the capture in phase 3, so
-> there is no possibility of a frame rendering under the previous tick's sun. This is stronger than it
-> needed to be and it is worth not breaking.
+> for frame `n` are all the same tick.** The write is executed in phase 1 and the capture happens in
+> phase 3, so there is no possibility of a frame rendering under the previous tick's sun. This is
+> stronger than it needed to be and it is worth not breaking.
 
-> **D3.19 — The session writes the solar clock inside the RPC drain of the tick it is meant to take
-> effect on: `set_solar_time` is issued after the `apply_batch` and before `sendTickCue`.** It is a
-> plain RPC, not a batch command, but it lands in the same drain as the batch and therefore in the
-> same frame. This is why a solar write is never off by a tick.
+> **D3.19 — Under `advance` the session writes the sun for every frame inside the RPC drain of that
+> frame's tick: one `set_solar_epoch` of date, clock and zone, issued after the `apply_batch` and
+> before `sendTickCue`** (`SumoDriveSession.Advance` → `WriteTheSun` → `SolarLease.WriteForFrame`),
+> with the engine's own advance off. It is a plain RPC — no batch command sets the sun
+> (`LibCarla/source/carla/rpc/Command.h:284-306`) — and the server executes it in the same drain as
+> the batch, before the same frame. The clock is the whole second nearest the frame's declared
+> instant, one millisecond past it ([`11`](11_Time_And_Illumination.md) §3.4, D11.19). Measured on
+> the loaded Gardnerville world: a median round trip of 0.128 ms (p95 0.190 ms) over 500 calls, and
+> 6.151 ms per tick with a write every tick against 6.063 ms with none, a difference the size of the
+> round-to-round spread.
 
-The loop writes the sun in exactly two situations, plus one audit:
+The loop writes the sun in two situations, plus one audit:
 
-1. **At window open (and at the start of the prewarm span — §9.4).** One `set_solar_time`, one
-   `set_solar_date`. Under a frozen policy this is the only solar write of the entire run.
-2. **On a civil-day rollover.** When advancement is on and the tick's `t_civil` crosses midnight, the
-   session issues `set_solar_date` for the new civil day, because the engine will not
-   (§9.1). Detected from `t_civil`, not from the wrapped `SolarTime`, so it cannot be fooled by the
-   quantisation.
-3. **Every tick, the audit** — a free read and a comparison, never a write unless it fails (§9.4).
+1. **At window open.** One `set_solar_epoch` — date, clock and civil offset together, one
+   `UpdateSun()` — then `set_time_advance(false, 0)`, then an on-demand read-back compared field by
+   field (`SolarLease.Take`). Under a frozen policy this is the only solar write of the run.
+2. **Under `advance`, every tick.** One `set_solar_epoch` for the frame the tick renders (D3.19). The
+   date is written with the clock, so a window crossing civil midnight is carried onto the next date
+   when the epoch's calendar advances and held on the epoch's date when it does not — measured live
+   at both sites. Nothing depends on the engine rolling a date.
+3. **Every tick, the audit** — a free read of the snapshot the tick delivered and a comparison, never
+   a correction (§9.4).
 
 ### 9.3 Civil time, the time zone, and a half-hour offset
 
 `ACesiumSunSky::SolarTime` is local clock time **in the zone `ACesiumSunSky::TimeZone`**:
 `UpdateSun` passes `TimeZone` straight into `USunPositionFunctionLibrary::GetSunPosition` beside the
-H/M/S decomposed from `SolarTime` (`CesiumSunSky.cpp:420-434`). So the sun depends on
-`SolarTime − TimeZone`, and to render a civil instant the session must write
+H/M/S decomposed from `SolarTime` (`CesiumSunSky.cpp:420-434`), so the sun depends on
+`SolarTime − TimeZone`.
 
-```
-T_sun = civil_hours + (TimeZone_world − UTC_offset_civil)
-```
+**The zone a world is configured with is not the civil offset, and on the sizing scenario the gap is
+measurable.** Configuring the georeference sets `TimeZone = Longitude / 15.0` with **no rounding to a
+civil zone** (`CesiumSunSky.cpp:570-573`). Bahonar's origin is `lon_0 = 56.18065`, so that zone is
+3.745377 h against Iran's civil **+03:30** — 0.245377 h = **14 min 43 s = 3.68° of solar hour angle**.
 
-**`TimeZone_world` is not the civil offset, and on the sizing scenario the gap is measurable.** The
-bridge spawns the sun with `EstimateTimeZoneForLongitude(OriginLongitude)`
-(`CesiumHeightSampler.cpp:412`), which is `TimeZone = Longitude / 15.0` with **no rounding to a civil
-zone** (`CesiumSunSky.cpp:570-573`). Bahonar's origin is `lon_0 = 56.18065`
-(`projParameter` in `Shahid_Bahonar_Port.net.xml`), so `TimeZone_world = 3.745377`. Iran's civil
-offset is **+03:30**. The bias is therefore
-
-```
-3.745377 − 3.5 = 0.245377 h = 14 min 43 s = 3.68° of solar hour angle
-```
-
-and rendering civil 23:00 IRST means writing `set_solar_time(23.245377)`, not `set_solar_time(23.0)`.
-
-**There is no `set_solar_time_zone` RPC.** Grepping `CarlaServer.cpp` for `time_zone` finds only the
-`get_solar_state` layout comment at `:638`; `TimeZone` is written exactly once, at spawn
-(`CesiumHeightSampler.cpp:412`). So the bias is the only mechanism available, and it is sufficient:
-the session reads `TimeZone_world` for free from `get_solar_state()[4]` and applies the arithmetic.
-Recorded as §12 G16 in case a later reader would rather have the setter, which would be small.
-
-`UseDaylightSavingTime` is set `false` at spawn (`CesiumHeightSampler.cpp:410`), so `IsDST` short-
-circuits to false (`CesiumSunSky.cpp:587-596`) and the clock does not jump an hour mid-window. That is
-a deliberate property of the world this mode renders into and the session must not change it.
-
-**What this section needs from [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md):** the
-civil UTC offset as a declared number, not one derived from the map. Iran is `+03:30`; a longitude
-estimate cannot produce a half-hour zone at all.
+**The session writes the civil offset as the sun's zone.** `set_solar_epoch(year, month, day, hours,
+utc_offset_hours)` (`CarlaServer.cpp:644`, `UCesiumHeightSampler::SetSolarEpoch`
+`CesiumHeightSampler.cpp:778`) sets the date, the clock and `TimeZone` together, turns the engine's
+daylight-saving rule off and calls `UpdateSun()` once, so the clock the session writes is the
+declared civil clock and the recorded `solar_time` and `time_zone` are the declared ones — no bias is
+applied anywhere, and a half-hour or quarter-hour offset is written as it is declared
+([`11`](11_Time_And_Illumination.md) D11.5). The offset comes from the scenario epoch, never from the
+map (`SolarEpoch`, [`11`](11_Time_And_Illumination.md) §2.2). The audit compares the zone exactly on
+every tick, so a second `configure_cesium_georeference` that puts `longitude / 15` back is caught on
+the next tick and named as local mean solar time.
 
 ### 9.4 Reading the sun back is free, and the per-tick audit
 
@@ -1794,12 +1873,16 @@ on the observer stream thread (`CarlaClient.cs:1849-1855`) and `GetCachedSolarSt
 with **no RPC and no poll** (`:1987-1991`). The shim prefers that path and only falls back to an RPC
 before the cache is populated (`carlanet/__init__.py:1511-1533`).
 
-So the session can compare, on **every** tick, at the cost of eleven array reads:
+So the session compares, on **every** tick, at the cost of a dozen array reads
+(`SolarAudit.AuditTick`, [`11`](11_Time_And_Illumination.md) §8.3):
 
 ```
-expected = solarTimeFor(t_render)          # from the epoch + the §9.3 time-zone bias
-actual   = cachedSolarState[0]             # SolarTime, wrapped into [0,24)
-if circularDistanceHours(expected, actual) > tolerance:  raise SolarDisagreement
+declared = DeclaredSun.SunAt(t_render)     # date and clock in the epoch's offset, from the epoch
+observed = the snapshot's solar block      # the tick just delivered, no round trip
+zone, engine advance flag and rate         exactly: the declared offset, off, 0
+observed instant − declared instant        within 0.5 s        (date and clock together)
+observed direction vs the model at declared   within 0.01°     (and the corrected elevation)
+any disagreement:                          raise SolarAuditFailedException
 ```
 
 > **D3.20 — The session audits the solar clock against the scenario epoch on every world tick, from
@@ -1817,10 +1900,11 @@ the observer is running, and the shim's `get_solar_state()` — which accepts th
 `cached.Count >= 9` (`carlanet/__init__.py:1515-1517`) — returns a **plausible-looking dict of zeros
 instead of `None`**. A world with no sun is indistinguishable from midnight, from the cache alone.
 
-> The session therefore establishes sun presence from the **return value of `set_solar_time`**, which
-> is `false` when there is no `CesiumSunSky` (`CesiumHeightSampler.cpp:723-729` →
-> `CarlaServer.cpp:614-623`), and never from the truthiness of a state read. `solar_year == 0` in the
-> cache is a usable secondary tell, since no real scenario epoch is year 0. Recorded as §12 G15.
+> The session therefore establishes sun presence from an **on-demand `get_solar_state`**, which
+> answers empty when there is no `CesiumSunSky` (`CesiumHeightSampler.cpp:760-762`), and from the
+> return value of `set_solar_epoch`, which is `false` in the same case — never from the observer
+> cache (`SolarLease.Take`). A snapshot whose date is year 0 fails the per-tick audit as not a
+> calendar date. Recorded as §12 G15.
 
 ### 9.5 The warm-up — where a silently wrong first frame would come from
 
@@ -1834,7 +1918,7 @@ sun is doing.
 | Phase | Wall clock | World ticks | Simulated time advanced | What the sun does |
 |---|---|---|---|---|
 | **SUMO fast-forward** — `t = 0` → `window.begin − prewarm_s` | up to 140.41 s | **none** | 604,800 s in the limit | **Nothing at all.** In synchronous mode the game thread is blocked in the `OnWorldTickStart` drain (`CarlaEngine.cpp:333-341`) until a cue arrives, so no actor ticks, so `ACesiumTimeOfDayController::Tick` never runs. Advancement cannot drift the sun because there is no tick to advance it on. |
-| **Render prewarm** — `prewarm_s = 300` simulated seconds of ticked, uncaptured time (`10` §4.2.2) | minutes | **6,000** at `Δw = 0.05` | 300 s | **It advances, if advancement is on**: 6,000 × 0.05 × `Rate` = 300 × `Rate` sun-seconds. At `rate = 1.0` that is five minutes of sun before the first captured frame. |
+| **Render prewarm** — `prewarm_s = 300` simulated seconds of ticked, uncaptured time (`10` §4.2.2) | minutes | **6,000** at `Δw = 0.05` | 300 s | **It moves under `advance`**: the session writes each prewarm frame's sun at that frame's own instant, so the sun moves 300 × `Rate` sun-seconds before the first captured frame — five minutes at `rate = 1.0`. Under a freeze it does not move. |
 
 > **This is the seam.** The fast-forward is safe for a reason that has nothing to do with the sun — it
 > is safe because there are no ticks — and it would stop being safe the moment anything cued ticks
@@ -1843,17 +1927,19 @@ sun is doing.
 > wall-clock so the sun is fine" is relying on an accident. A design that sets the sun from
 > `t_render` and audits it every tick is not.
 
-> **D3.21 — The solar clock is written once, after the SUMO fast-forward completes and before the
-> first world tick of the prewarm, and `set_time_advance` is issued after it; the audit runs during
-> the prewarm as well as during capture.** The instant written depends on the policy, and only on the
-> policy:
+> **D3.21 — The sun is bound after the SUMO fast-forward completes and before the first world
+> tick, at the civil instant of the first frame the session renders, and `set_time_advance(false, 0)`
+> is issued after it under every policy; under `advance` the sun is then written for every tick; the
+> audit runs from the first tick.** The instant written depends on the policy, and only on the policy
+> (`DeclaredSun`):
 >
-> | Policy | Write | Then | At `window.begin` the clock reads |
+> | Policy | Written at window open | Then | Each later frame is lit by |
 > |---|---|---|---|
-> | `advancing(rate)` | `solarTimeFor(window.begin − prewarm_s)` — the **first ticked** instant | `set_time_advance(true, rate)` | `solarTimeFor(window.begin)`, carried there by the engine across the prewarm's 6,000 ticks |
-> | `frozen(pin)` | `solarTimeFor(pin)` — `11`'s pinned instant (Q3.10) | `set_time_advance(false, 1.0)` | `solarTimeFor(pin)`, unchanged, because nothing advances it |
+> | `advance` | the first rendered instant — the simulated second SUMO was fast-forwarded to — at the whole second nearest it | `set_time_advance(false, 0)`, then one `set_solar_epoch` per tick | the sun written for that frame, from the epoch: nothing accumulates |
+> | `freeze_at_window_start` | the first rendered instant, declared to the whole second | `set_time_advance(false, 0)` | the same sun, because nothing moves it |
+> | `freeze_at` | the declared civil time of day | `set_time_advance(false, 0)` | the same sun |
 >
-> In both cases the audit expectation is derived from the same policy, so the advancing case is
+> In every case the audit expectation is derived from the same declaration, so the advancing case is
 > checked against a moving target and the frozen case against a constant. Getting the write and the
 > expectation from one function is what makes the audit a real check rather than a tautology — the
 > function's *input* is the policy and the epoch, and its output is compared against what the engine
@@ -1861,14 +1947,15 @@ sun is doing.
 
 Three follow-ons, all of which are answers to "would a long warm-up drift the sun":
 
-- **Setting the sun before the fast-forward is not wrong, but it is fragile, and it is also
-  insufficient** — the prewarm is 300 s of *simulated* time after it, so an advancing sun would still
-  need the write to be for `window.begin − prewarm_s` rather than for `window.begin`. Setting it once,
-  afterwards, from the first ticked instant, is both correct and one rule instead of two.
-- **Advancement must be enabled after the clock is set, not before**, or the 300 s of prewarm is added
-  to a clock that was already right for `window.begin`.
+- **Setting the sun before the fast-forward is not wrong, but it is fragile** — binding it
+  afterwards, at the first rendered instant, is correct whatever the fast-forward did, and it is one
+  rule. With a render prewarm ticked before capture, the first rendered instant is the prewarm's first
+  tick, and a frozen window is frozen there.
+- **The engine's advance is set off after the clock is written, under every policy**, and under
+  `advance` every frame's clock is written from the epoch rather than carried from the last, so a
+  prewarm of any length leaves each frame at its own declared instant.
 - **A long warm-up cannot drift the sun today, and the audit is what keeps that true tomorrow.** The
-  audit costs eleven array reads per tick (§9.4) and would catch the drift on the first prewarm tick,
+  audit costs a dozen array reads per tick (§9.4) and would catch the drift on the first prewarm tick,
   before a single frame is captured. That is the whole point of running it during the prewarm: the
   prewarm exists precisely so that things that need to settle can settle where nothing is watching.
 
@@ -1905,11 +1992,11 @@ Stated as an interface rather than a request, because the loop has to compile ag
 | Needed | Form | Why the loop cannot supply it |
 |---|---|---|
 | The scenario epoch | civil date + UTC offset + the civil instant `t = 0` means, declared in the scenario, machine-readable | `_TEAM_BRIEF.md` §3a: today the mapping exists only inside trip identifiers (`guard_d0_h7_t3`) and in the author's head |
-| `solarTimeFor(t_render)` | a pure function → `(T_sun hours, year, month, day)`, already carrying the §9.3 time-zone bias | the bias needs the *civil* offset (+03:30 for Iran), which cannot be derived from longitude |
-| The advancement policy | `frozen(pinInstant)` or `advancing(rate)` per run | it is a property of the capture, not of the code (`_TEAM_BRIEF.md` §3a.2) |
-| For `frozen`, the pinned instant | `window.begin`, or `window.begin − prewarm_s` | both are defensible; the loop needs to be told which, and the manifest needs to record it |
+| The declared sun at `t_render` | `DeclaredSun.SunAt(t)` — date and clock in the epoch's offset — and `DeclaredSun.WrittenAt(t)`, the whole second written for the frame; built in `CarlaNet.CoSim` | the civil offset (+03:30 for Iran) cannot be derived from longitude |
+| The illumination policy | `IlluminationPolicy` — `freeze_at_window_start`, `advance`, `freeze_at` or `ignore`, declared per run and refused when absent ([`04`](04_Contracts.md) `C9` §11.6); built | it is a property of the capture, not of the code (`_TEAM_BRIEF.md` §3a.2) |
+| For a freeze, the pinned instant | the first rendered instant under `freeze_at_window_start`, a declared civil time under `freeze_at`; recorded on the run report | the loop needs to be told which, and the record needs to say |
 | `headlightsFor(sunElevationDeg)` | a pure function → `VehicleLightStateFlags`, in the **`CesiumSunSky::Elevation`** convention (§3.5.2) | it is an illumination-modelling choice with corpus consequences, and the existing thresholds in this tree are in a different convention |
-| The audit tolerance | hours | it trades a false fault against a real one; that is a corpus-quality judgement |
+| The audit tolerance | 0.5 s of clock and 0.01° of direction, the same at every rate ([`11`](11_Time_And_Illumination.md) §8.3) | it trades a false fault against a real one; that is a corpus-quality judgement |
 
 And one thing this section supplies *to* `11` and to
 [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md): the step record carries the tick's solar
@@ -1938,13 +2025,12 @@ session.start():
     while Simulation.getTime() < window.begin - prewarm_s:
         Simulation.step()
 
-    # ── Sun: one write, before the first tick, instant chosen by the policy (D3.21) ──
-    tz_world = client.getSolarState()[4]                  # RPC once; cache not yet populated
-    t0 = (window.begin - prewarm_s) if policy.advancing else policy.pinInstant
-    (T_sun, y, m, d) = solarTimeFor(t0, tz_world)         # carries the §9.3 time-zone bias
-    if not client.setSolarTime(T_sun):  raise NoSolarAuthority          # §11.7, D3.22
-    client.setSolarDate(y, m, d)
-    client.setTimeAdvance(policy.advancing, policy.rate)   # after the clock is set, never before
+    # ── Sun: bound before the first tick, at the first rendered instant (D3.21) ──
+    found = client.getSolarState()                        # on demand; empty means no sun, D3.22
+    (y, m, d, hours) = declared.writtenAt(t_first)        # a millisecond past a whole second
+    if not client.setSolarEpoch(y, m, d, hours, epoch.utc_offset):  raise refused   # §11.7
+    client.setTimeAdvance(false, 0)                       # under every policy, after the clock
+    auditWindowOpen(client.getSolarState())               # every written field, then the declared sun
 
     P_prev = readSubscriptions()                          # t = window.begin - prewarm_s
     Simulation.step();  P_next = readSubscriptions()      # one step of lookahead, D3.6
@@ -1955,8 +2041,6 @@ session.run():
         for i in 0 .. R-1:
             alpha = i / R
             poses = interpolate(P_prev, P_next, alpha)    # along lane geometry, §6.4
-            sun   = client.getCachedSolarState()          # free, paired to the last tick, §9.4
-            auditSolar(sun, t_render)                     # D3.20; fault, never silent correction
             batch = []
             for v in renderSet:
                 batch += ApplyTransformCommand(v.actor, poses[v].transform)
@@ -1964,11 +2048,12 @@ session.run():
             if i == 0:
                 batch += changedLightStates(P_next, sun.elevation)   # §3.5, mean 14.44, max 47
             client.applyBatch(batch, doTickCue = false)   # one RPC; no variable tail, §8.5
-            if civilDayRolledOver(t_render):              # the engine will not do this, §9.1
-                client.setSolarDate(civilDateFor(t_render))
+            if policy.advances:                           # this frame's sun, D3.19
+                client.setSolarEpoch(declared.writtenAt(t_render), epoch.utc_offset)
             waitUntil(T0 + n·Δw / f) if f > 0             # absolute target, then time the cue, §9.9
             frame = client.sendTickCue()                  # blocks for the frame
             if frame is null: raise TickFault             # §11.2
+            auditSolar(client.getCachedSolarState(), t_render)   # this frame's snapshot, D3.20
             stepRecord.emit(t_render, sun, allSumoVehicles, renderSet)
             captureHook(frame)
         P_prev = P_next
@@ -1977,7 +2062,8 @@ session.run():
 ```
 
 Everything between `applyBatch` and `sendTickCue` executes inside the server's RPC drain for the
-frame that cue produces (§9.2), which is why the day-rollover write lands on the right frame.
+frame that cue produces (§9.2), which is why the sun written for a frame is the sun that frame is
+rendered under.
 
 **Two properties of the server this loop rests on, both measured against a running editor.**
 
@@ -2006,17 +2092,17 @@ arrival deltas.
 
 **When SUMO is slower than the world.** It cannot be, in any way that matters: the loop is serial and
 the world clock is simulated, not wall. A heavy SUMO step delays the next world tick in *wall* time
-and changes nothing about the simulated timeline — **and, since 2026-09-18's reading of the engine,
-that guarantee now demonstrably extends to the sun**, which advances on `Δw` and not on elapsed
-seconds (§9.1). This is the property that makes owning all three clocks in one loop worth more than
+and changes nothing about the simulated timeline — **and
+that guarantee extends to the sun**, whose every frame is written from that frame's simulated
+instant (§9.2) and never from elapsed seconds. This is the property that makes owning all three clocks in one loop worth more than
 any amount of overlap.
 
 **When the world is slower than SUMO.** Same answer, mirrored. `sendTickCue` blocks; SUMO is simply
-not stepped until the loop comes back round, and the sun does not move because no tick happens.
+not stepped until the loop comes back round, and the sun is not written again until the next tick.
 
 **Why this sidesteps issue #14.** The tick thread is already contended by telemetry emission
 (issue #14). Under this design the bridge's per-tick work is: array arithmetic, one msgpack encode,
-one RPC, and eleven array reads for the solar audit. The step record is *produced* on the tick thread
+one RPC — two under an advancing sun — and a dozen array reads for the solar audit. The step record is *produced* on the tick thread
 and *consumed* elsewhere — it must be handed to a bounded queue, exactly as `FrameRecorder` already
 does for imagery, and never serialised or sent on the tick thread. Issue #14's suggested fix is a
 precondition of this design, not a consequence of it.
@@ -2032,11 +2118,11 @@ sequenceDiagram
     participant RS as RenderSetManager + ActorPool
     participant CC as CarlaClient
     participant SRV as CARLA server<br/>(RPC drain, actor ticks, post-tick)
-    participant SUN as CesiumTimeOfDayController<br/>+ CesiumSunSky
+    participant SUN as CesiumSunSky
     participant CAP as Capture + StepRecord
 
     Note over CLK,SU: SUMO clock is one step (Δs) ahead of the rendered clock
-    Note over CLK,SUN: sun already set for the first ticked instant; advancement configured (D3.21)
+    Note over CLK,SUN: sun bound at the first rendered instant; engine advance off (D3.21)
 
     CLK->>SU: Simulation.step()
     SU-->>CLK: t_sumo = t_render + 2Δs
@@ -2050,35 +2136,32 @@ sequenceDiagram
     RS->>RS: record admission and release instants
 
     loop R world ticks (R = Δs / Δw)
-        CLK->>CC: GetCachedSolarState — no RPC, paired to tick n-1
-        CC-->>CLK: solar_time, elevation, azimuth, advancing, rate
-        CLK->>CLK: audit against solarTimeFor(t_render) — fault, never correct (D3.20)
         CLK->>BUF: interpolate at alpha = i/R along lane geometry
         BUF-->>CLK: pose and velocity per rendered vehicle
         CLK->>CC: apply_batch: ApplyTransform + ApplyTargetVelocity,<br/>plus SetVehicleLightState on a change (i = 0)
         CC->>SRV: one msgpack array, one RPC
-        opt civil day rolled over — the engine will not do this
-            CLK->>CC: set_solar_date
+        opt policy advances
+            CLK->>CC: set_solar_epoch for frame n's declared instant (D3.19)
             CC->>SRV: same RPC drain, same frame
+            SRV->>SUN: date, clock, zone, then UpdateSun
         end
         opt real-time factor f > 0
             CLK->>CLK: wait until T0 + n·Δw/f, only if early (§9.9)
         end
         CLK->>CC: tick_cue
         CC->>SRV: tick_cue — ends the drain
-        SRV->>SUN: actor tick: SolarTime += Δw x Rate, then UpdateSun
-        SUN-->>SRV: sun for frame n
-        SRV-->>CC: world observer frame n, solar block read AFTER the advance
-        SRV-->>CAP: sensor frames for tick n, captured AFTER the advance
+        SRV-->>CC: world observer frame n, solar block of the sun written for frame n
+        SRV-->>CAP: sensor frames for tick n, captured under that sun
         CC-->>CLK: TickTimestamp, or null on timeout -> TickFault
+        CLK->>CLK: audit frame n's sun against frame n's declaration — fault, never correct (D3.20)
         CLK->>CAP: t_render, tick solar state, step record for every SUMO vehicle
     end
 
     CLK->>BUF: P(k) := P(k+1)
 ```
 
-The two `AFTER the advance` returns are the ordering established in §9.2 and are the reason a night
-window cannot render under the previous tick's sun.
+The sun is written in the drain and read and captured after the actor tick — the ordering
+established in §9.2 — which is why no frame renders under the previous tick's sun.
 
 ### 9.9 Real-time pacing
 
@@ -2232,7 +2315,7 @@ than letting the operator discover the refusal from a server log. This is ergono
 it makes the failure obvious in the same process. It must never be the only mechanism.
 
 **(4) The same episode flag covers the sun.** While the episode is in SUMO-drive mode,
-`set_solar_time`, `set_solar_date` and `set_time_advance` are refused for any client that does not
+`set_solar_time`, `set_solar_date`, `set_solar_epoch` and `set_time_advance` are refused for any client that does not
 hold the drive lease. Today there is **no ownership check on these at all** — they are plain
 `BIND_SYNC` handlers that any connected client can call (`CarlaServer.cpp:614`, `:625`, `:661`) — so a
 stray notebook can move the sun under a capture in progress and nothing would notice except the audit
@@ -2361,15 +2444,17 @@ This is not an edge case to tolerate. A capture that cannot set its own illumina
 frame whose solar state means anything, and the truth sidecar would record zeros as though they were
 a measurement.
 
-> **D3.22 — A SUMO-drive session refuses to start when `set_solar_time` returns `false`.** It is a
+> **D3.22 — A SUMO-drive session refuses to start when the world reports no sun.** It is a
 > start-up refusal, not a runtime degradation, and it is not overridable: a run with no solar authority
 > cannot satisfy the requirement that a 23:00 window renders at 23:00, and a corpus produced by one
 > would be indistinguishable from a correct one by inspection. The failure message names the missing
 > `CesiumSunSky` and points at `ConfigureCesiumForOrigin`, which is what spawns it
 > (`CesiumHeightSampler.cpp:396-419`).
 
-The probe is the **return value of the write**, never a state read, for the reason in §9.4: the cached
-read cannot express "no sun" and will hand back a plausible midnight instead (§12 G15). If a
+The probe is an **on-demand `get_solar_state`**, which answers empty when there is no sun, and the
+return value of `set_solar_epoch`; never the cached read, for the reason in §9.4: the cached read
+cannot express "no sun" and will hand back a plausible midnight instead (§12 G15). A run that
+declares `require_sun: false` is the one exception, and it binds and audits nothing. If a
 non-Cesium world ever becomes a legitimate target for this mode — a stock town, say — that is a
 different illumination authority and a decision for
 [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md), not a relaxation of this refusal.
@@ -2377,15 +2462,16 @@ different illumination authority and a decision for
 ### 11.8 A solar state that disagrees with the scenario
 
 Detected by the per-tick audit in §9.4, which runs inside the loop at
-`auditSolar(sun, t_render)` — **before** the batch for that tick is assembled, so a run that is about
-to render under the wrong sun stops before it writes the frame rather than after.
+`auditSolar(sun, t_render)` on the snapshot each tick delivers, so a run stops on the first frame
+rendered under a sun nothing declared; that frame still carries its declaration and its residual, so
+a capture of it says what it was measured against.
 
 | Cause | How it shows | What the session does |
 |---|---|---|
-| Wrong epoch arithmetic — an off-by-one in the civil-offset bias, a time zone read from the wrong place | constant offset from the first prewarm tick | fault at the first audit, **during the prewarm, before any capture** |
+| Wrong epoch arithmetic — an offset applied in the wrong direction, a zone the world kept at `longitude / 15` | constant offset from the window's opening | fault at the on-demand read-back, **before the first tick** |
 | A second client wrote the sun | step change mid-window | fault. **Nothing prevents this today** — the solar RPCs have no ownership check — which is why D3.13's fourth mechanism extends the episode drive-mode flag to cover them (§10.2) |
-| Advancement left on from a previous run | drift proportional to elapsed simulated time | fault within `tolerance / rate` simulated seconds |
-| Midnight wrap with no date roll (§9.1) | `solar_time` correct, `solar_day` stale | caught by auditing the **date** as well as the clock; the session's own rollover write is what prevents it |
+| The engine's advance left on, or switched on by another client | the advancing flag, and a clock moved between writes | fault on the first tick: the session sets it off, and the flag is compared exactly |
+| A date a whole day out | `solar_time` correct, `solar_day` wrong | caught by auditing the **date** with the clock as one instant; under `advance` the session writes the date with every frame |
 | No sun at all | zeros | caught earlier and harder by D3.22 |
 
 > **D3.23 — A solar disagreement is a `SolarDisagreement` fault with the same consequence as a
@@ -2400,10 +2486,10 @@ brief is explicit that this class of failure is the expensive one, because the t
 solar state and would faithfully report whatever the world happened to be doing
 (`_TEAM_BRIEF.md` §3a).
 
-The tolerance is `11`'s (§9.6). It has to be loose enough that the one-second quantisation of
-`SolarTime` (§9.1) and the wrapped-clock arithmetic never trip it, and tight enough that a
-one-time-zone error — a whole hour, or the 14 min 43 s half-hour-zone error measured in §9.3 — always
-does.
+The tolerance is `11`'s (§9.6): 0.5 s of clock and 0.01° of direction, the same at every rate. It is
+loose enough that the one-second quantisation of `SolarTime` (§9.1) never trips it — the session
+writes the whole second nearest each frame's declared instant — and tight enough that a one-time-zone
+error — a whole hour, or the 14 min 43 s half-hour-zone error measured in §9.3 — always does.
 
 ### 11.9 The per-step loop with its error paths
 
@@ -2423,12 +2509,12 @@ flowchart TD
     B1 -.->|FatalTraCIError| AERR
   end
 
-  subgraph LANE_SUN["SolarClock — free read, per tick"]
-    G1[GetCachedSolarState<br/>no RPC]
-    G2{"matches solarTimeFor&#40;t_render&#41;<br/>within tolerance?"}
-    G3[["SolarDisagreement:<br/>stop before writing the frame"]]
-    G4{"civil day<br/>rolled over?"}
-    G5[set_solar_date<br/>same RPC drain, same frame]
+  subgraph LANE_SUN["SolarLease and SolarAudit, per tick"]
+    G4{"policy<br/>advances?"}
+    G5[set_solar_epoch for this frame<br/>same RPC drain, same frame]
+    G1[snapshot's solar block<br/>no RPC]
+    G2{"matches DeclaredSun.SunAt&#40;t_render&#41;<br/>within tolerance?"}
+    G3[["SolarAuditFailedException:<br/>stop at this frame"]]
   end
 
   subgraph LANE_BUF["PoseBuffer and Interpolator"]
@@ -2449,7 +2535,7 @@ flowchart TD
     E1["apply_batch:<br/>ApplyTransform + ApplyTargetVelocity<br/>+ changed SetVehicleLightState"]
     E2[tick_cue]
     E3{"Frame observed<br/>before timeout?"}
-    E4["Frame n available —<br/>sun already advanced this tick"]
+    E4["Frame n available —<br/>lit by the sun written for it"]
   end
 
   subgraph LANE_OUT["Capture and truth"]
@@ -2469,11 +2555,7 @@ flowchart TD
   C1 -->|no| C3
   C3 --> D1
   C1 -->|yes| C2
-  C2 --> G1
-  G1 --> G2
-  G2 -->|no| G3
-  G3 --> AERR
-  G2 -->|yes| E1
+  C2 --> E1
   E1 --> G4
   G4 -->|yes| G5
   G5 --> E2
@@ -2481,7 +2563,11 @@ flowchart TD
   E2 --> E3
   E3 -->|no| AERR
   E3 -->|yes| E4
-  E4 --> F1
+  E4 --> G1
+  G1 --> G2
+  G2 -->|no| G3
+  G3 --> AERR
+  G2 -->|yes| F1
   E4 --> F2
   F1 --> F3
   F2 --> F3
@@ -2490,8 +2576,9 @@ flowchart TD
   A6 -->|yes| A7
 ```
 
-The solar lane sits **between** the interpolator and the batch on purpose: the audit is the last thing
-that can stop a tick before a frame is written under a sun nobody checked.
+The solar lane's write sits between the batch and the cue, so the frame is rendered under the sun
+written for it, and its audit sits on the frame the tick delivered, so the run stops at the first frame
+whose sun disagrees with its declaration.
 
 ---
 
@@ -2505,7 +2592,7 @@ solar and light-state paths. They are handed to
 |---|---|---|---|
 | **G1** | The Python shim's `command` namespace exposes **8** of the 22 command types the C# layer and the server both support. Missing: `ApplyVehicleAckermannControl`, `ApplyWalkerControl`, `ApplyVehiclePhysicsControl`, `ApplyWalkerState`, **`ApplyTargetVelocity`**, `ApplyTargetAngularVelocity`, `ApplyImpulse`, `ApplyForce`, `ApplyAngularImpulse`, `ApplyTorque`, **`SetSimulatePhysics`**, **`SetEnableGravity`**, `ShowDebugTelemetry`, `SetTrafficLightState`. | shim `carlanet/__init__.py:1080-1149` vs `LibCarla/source/carla/rpc/Command.h:284-305`, `Command.cs:12-35`, `CommandFormatter.cs:41-72`, `CarlaServer.cpp:3145-3194` | A Python bridge cannot batch a physics toggle, a velocity or a vehicle light state. Does not block the C# bridge; blocks any Python probe of it, and is a surface-parity defect in its own right. The .NET side already exercises the full path (`TrafficManagerLocal.cs:568`, `MotionPlanStage.cs:244`/`:424`), so the gap is purely the shim's. |
 | **G2** *(no longer blocking — recorded for the audit, not for this mode)* | No batch command for `set_actor_fade` anywhere in the stack. | `Command.cs:12-35`; `CarlaServer.cpp:3169-3194`; handler at `CarlaServer.cpp:2217-2249` walks every primitive component | **This bridge does not call `set_actor_fade` (D3.10)**, so it is not on the critical path here. It remains a real asymmetry for any client that *does* fade — and it is a large part of why `--fade` defaults off (`CarlaControlArgumentParser.py:318-328`). If the fade is ever revived, adding the batch variant is the fix that makes it affordable. |
-| **G3** | `set_actor_target_velocity` on a non-simulating body writes the physics body, which `GetComponentVelocity()` will not read back; nothing writes `ComponentVelocity` on the CARLA vehicle path. | chain in §5.1: `CarlaActor.cpp:392-411`, `PrimitiveComponentPhysics.cpp:1328-1340`, `SceneComponent.cpp:2995-2998`, `MovementComponent.cpp:382-388`, `PrimitiveComponentPhysics.cpp:159-163` | **The zero-velocity problem.** Fix recommended as D3.5. |
+| **G3** | `set_actor_target_velocity` on a non-simulating vehicle writes a kinematic physics body, which `APawn::GetVelocity()` does not read; for a non-simulating root it returns the pawn movement component's `Velocity`, which nothing on the CARLA vehicle path writes. | chain in §5.1: `CarlaActor.cpp:392-411`, `Pawn.cpp:240-249`, `Pawn.cpp:186-189`, `NavMovementComponent.cpp:132-134`, `MovementComponent.h:473-477`, `PrimitiveComponentPhysics.cpp:159-163` | **The zero-velocity problem.** Closed by D3.5 in the engine (`CarlaActor.cpp:831-846`, `CarlaWheeledVehicle.cpp:798-843`); the bridge's half is §5.4. |
 | **G4** *(latent — not reached by this design)* | The client-side arrival latch (`IsActorEstablished`) is cleared only when an actor id leaves the world-observer snapshot, and never by fading back out. A pooled actor never leaves the snapshot, so it would inherit its predecessor's arrival state. | `CarlaClient.cs:1545-1556`, `:1571`, `:1901-1908` | **Recorded rather than dropped, because it is real.** It would block the actor pool and a fade together. With D3.10 removing the fade, the latch is never set: `IsActorEstablished` returns `true` for any actor with no fade record (`:1571`) and the truth gate is documented inert in that case (`VehicleTelemetryService.cs:66-73`). **The actor pool (D3.9) is therefore unblocked.** The defect still exists for any client that combines a fade with actor reuse, which is why it stays on the list. |
 | **G5** — **a data defect in delivered artifacts, not a future risk** | `SumoCotBridge._height_at` indexes a **CARLA-frame** bare-earth grid with a **SUMO-frame** `y`. Since CARLA `y = −`SUMO `y` (`Geodesy.cs:104-108`), every lookup reads the row mirrored about the grid's Y origin. | call site `SumoCotBridge.py:311`; reader `SumoCotBridge.py:115-119`; grid frame `DrapeTerrain.cs:19-21` and `:54-68` | **Every `hae_m` in every CoT dataset already produced by this path is wrong** — the UDP feeds, the XML files, the CSV datasets, and the sample shipped inside `BahonarPatternOfLife.zip`. It is invisible in bounds terms, which is why it has survived: measured on Bahonar the grid spans y ∈ [−2108.05, +2107.95] while the road network spans y ∈ [−1914.94, +2107.82], so a mirrored row is always *inside* the grid and always returns a plausible height. Only points on the grid's Y centreline are unaffected. This is independent of the new bridge and needs correcting **and re-issuing affected datasets**, not just patching forward. |
 | **G6** | `apply_batch(do_tick_cue=True)` returns before the frame exists; only `world.tick()` waits. | `CarlaClient.cs:1779-1780` vs `:403-417`; `CarlaServer.cpp:393-399` | A caller that assumes the combined form is synchronous will capture against a frame that has not rendered. Worth a docstring at minimum. |
@@ -2514,12 +2601,12 @@ solar and light-state paths. They are handed to
 | **G9** | `sumo` and `duarouter` are built in `Build/sumo-src/bin/` but **only `netconvert.exe` is staged** into `Build/sumo-install/bin/`; `SUMO_HOME` is set nowhere, and `tools/traci` — which the client is ported from — is unstaged. | directory listings, 2026-09-17; `CarlaSetup.ps1:677` builds only the `netconvert` target | Doc 23 §6.1/§6.2 already record this. Belongs to [`09_Toolchain_And_Packaging.md`](09_Toolchain_And_Packaging.md); repeated because the bridge cannot run without it. |
 | **G10** | **Closed.** `CarlaNet.CoSim.SumoRoadNetwork` reads lane shapes, lane lengths and the connection table out of the `map.net.xml` a world package carries, and `WorldPackage` carries it. It keeps only what an interpolation needs and skips the rest while parsing. | `CarlaNet.CoSim/SumoRoadNetwork.cs`, `CarlaNet.Map/WorldPackage/WorldPackage.cs` | Note that `RedundantJunctionCollapser.Collapse` rewrites the `.xodr` *after* netconvert produced the `.net.xml` (`CarlaClient.cs:568-573`), so the two files share a frame but not junction identity. |
 | **G11** | Nothing asserts that the SUMO step is an integer multiple of the world delta, or that the `.net.xml` frame matches the `.xodr` frame. | no such check exists | §9's `R` and §7.2's frame identity are silent preconditions today. The session should assert both. |
-| **G12** | **Unverified:** whether Chaos retains a written angular velocity on a kinematic particle. `FWorldObserver_GetAngularVelocity` reads the body with no `IsSimulatingPhysics()` guard, unlike the linear path. | `WorldObserver.cpp:249-262` vs `PrimitiveComponentPhysics.cpp:1328-1340` | Decides whether D3.5 needs an angular counterpart. **Measure; do not assume either way.** |
+| **G12** | **Unverified:** whether Chaos retains a written angular velocity on a kinematic particle. `FWorldObserver_GetAngularVelocity` reads the body with no `IsSimulatingPhysics()` guard, unlike the linear path. The source suggests a teleport resets it (§5.5). | `WorldObserver.cpp:249-262` vs `Pawn.cpp:242` | Decides whether D3.5 needs an angular counterpart. **Measure; do not assume either way.** |
 | **G13** *(not required by this mode — recorded for the audit)* | The Python shim has **no traffic-light surface at all** — `class TrafficLight(TrafficSign): pass`. All ten traffic-light RPCs exist in C# and are bound server-side. | shim `carlanet/__init__.py:1002-1004`; C# `CarlaClient.cs:1659-1689`; server `CarlaServer.cpp:2648-2884` | **This mode writes no traffic-light state from any binding (D3.24)**, so nothing here depends on it. It stays on the list because it is a real capability the .NET path has and the Python path does not, and it is the audit's to scope. |
 | **G14** *(not required by this mode — recorded for the audit)* | A CARLA traffic-light actor's **OpenDRIVE signal id is not reachable from a client**. The server holds it as `USignComponent::SignId` and uses it for lookup, but no RPC exposes it. | `Traffic/SignComponent.h:80`, `SignComponent.cpp:35-41`; `Traffic/TrafficLightManager.cpp:150-155`, `:216`; no `sign_id`/`signal_id` binding in `CarlaServer.cpp` | **Nothing in this mode needs to turn an OpenDRIVE signal id into an actor id**, because no client here addresses a traffic-light actor at all (D3.24) — the layer is suppressed wholesale by `set_layer_visible`, which takes a layer name and no ids. The observation is accurate and stays recorded; it is a gap for any *other* client that wants to address a signal individually, and the cheapest fix there is one getter RPC returning the sign id per traffic-light actor. |
-| **G15** | **The cached solar path cannot express "no sun", and the shim returns a plausible midnight instead of `None`.** `FWorldObserver` leaves the header's solar fields at their defaults (zeros, `solar_rate = 1.0`) when `GetSolarState` comes back empty, but `CarlaClient` unconditionally parses 11 doubles out of the header, so `GetCachedSolarState()` is never empty once the observer is running — and the shim accepts the cache on `cached.Count >= 9`. | `EpisodeStateSerializer.h:48-58`; `WorldObserver.cpp:326-328`; `CesiumHeightSampler.cpp:760-762`; `CarlaClient.cs:1851-1855`; `carlanet/__init__.py:1511-1533` | Any client that tests `get_solar_state()` for `None` to decide whether the world has a sun gets the wrong answer, and a truth record built from the cache would carry year 0 / midnight / elevation 0 as though measured. The bridge sidesteps it by probing with the **write** (D3.22), but the shim's contract is wrong as written. Cheapest fixes: have the observer write a sentinel (`solar_year = 0` is already the de-facto one — document it), or have the shim reject `year == 0` from the cache. |
-| **G16** | **There is no `set_solar_time_zone` RPC.** `ACesiumSunSky::TimeZone` is written exactly once, at spawn, as `longitude / 15.0` with no rounding to a civil zone, and is thereafter read-only to a client. | `CesiumHeightSampler.cpp:412`; `CesiumSunSky.cpp:570-573`; `get_solar_state` layout `CarlaServer.cpp:638`; no `time_zone` setter anywhere in `CarlaServer.cpp` | Rendering a declared civil time means biasing `set_solar_time` by `TimeZone_world − UTC_offset_civil` (§9.3). **Measured on Bahonar** (`lon_0 = 56.18065`, Iran `+03:30`): the bias is 0.245377 h = 14 min 43 s = 3.68° of hour angle. The bias works and costs nothing, so this is a clarity gap rather than a blocker — but it means the world's reported `time_zone` is not a civil zone and no consumer should treat it as one. |
-| **G17** | **Solar advancement wraps the clock but never rolls the date.** Both `ACesiumTimeOfDayController::Tick` and `UCesiumHeightSampler::SetSolarTime` wrap `SolarTime` with `Fmod(…, 24.0)` and neither touches `Year`, `Month` or `Day`. | `CesiumTimeOfDayController.cpp:35`; `CesiumHeightSampler.cpp:730` | A window advancing through midnight reports the pre-midnight `solar_day` in every snapshot header (`WorldObserver.cpp:332`) and therefore in the truth sidecar, while the scenario asserts the next day. Invisible in the imagery, wrong in the record. The bridge compensates (§9.3) but a second client would not, and the engine-side fix — roll the date in the controller when the clock wraps — is four lines. |
+| **G15** | **The cached solar path cannot express "no sun", and the shim returns a plausible midnight instead of `None`.** `FWorldObserver` leaves the header's solar fields at their defaults (zeros, `solar_rate = 1.0`) when `GetSolarState` comes back empty, but `CarlaClient` unconditionally parses 11 doubles out of the header, so `GetCachedSolarState()` is never empty once the observer is running — and the shim accepts the cache on `cached.Count >= 9`. | `EpisodeStateSerializer.h:48-58`; `WorldObserver.cpp:326-328`; `CesiumHeightSampler.cpp:760-762`; `CarlaClient.cs:1851-1855`; `carlanet/__init__.py:1511-1533` | Any client that tests `get_solar_state()` for `None` to decide whether the world has a sun gets the wrong answer, and a truth record built from the cache would carry year 0 / midnight / elevation 0 as though measured. The bridge sidesteps it by probing on demand and with the write (D3.22), but the shim's contract is wrong as written. Cheapest fixes: have the observer write a sentinel (`solar_year = 0` is already the de-facto one — document it), or have the shim reject `year == 0` from the cache. |
+| **G16** | **Closed.** `set_solar_epoch` writes the sun's zone with its date and clock ([`11`](11_Time_And_Illumination.md) D11.5). Configuring the georeference still sets `longitude / 15.0` with no rounding to a civil zone. | `CarlaServer.cpp:644`; `CesiumHeightSampler.cpp:778-817`; `CesiumSunSky.cpp:570-573` | The session writes the declared civil offset, so the recorded `time_zone` is the declared one. **Measured on Bahonar** (`lon_0 = 56.18065`, Iran `+03:30`): the longitude zone is 0.245377 h = 14 min 43 s = 3.68° of hour angle from civil time, which the per-tick audit names if anything puts it back (§9.3). |
+| **G17** | **Closed.** `ACesiumTimeOfDayController::Tick` carries whole days onto the date (`RollSolarDate`); `SetSolarTime` still wraps the clock and leaves the date. | `CesiumTimeOfDayController.cpp:53-91`; `CesiumHeightSampler.cpp:755` | The session does not rely on either: under `advance` it writes the date with every frame's clock (D3.19), carried across midnight when the calendar advances and held when it does not. |
 | **G18** | **Vehicle headlights never come on in a generated world, under any client, at any hour.** The .NET traffic manager's entire sun/precipitation/fog block is gated on `_isWeatherEnabled`, and `is_weather_enabled` returns false when the episode has no weather actor — which is the generated-map case, and is precisely why `CesiumSunSky` is spawned. | `VehicleLightStage.cs:228-254`; `CarlaServer.cpp:1281-1290`; `CesiumHeightSampler.cpp:385-388` | Every night collect produced by any existing path shows unlit vehicles. It is a pre-existing capability hole that this mode is the first to fill (§3.5.3), and the general fix — point the light stage at `get_solar_state()` instead of at the inert weather — would fix it for the traffic-manager path too. Note the convention trap: the stage's thresholds (15 / 165 / 35 / 145, `Constants.cs:202-205`) are in CARLA's weather convention, not `CesiumSunSky::Elevation`'s. |
 
 ---
@@ -2530,7 +2617,7 @@ Per `_TEAM_BRIEF.md` §4, nothing is lost silently.
 
 | # | Capability | Status under SUMO drive | Compensation |
 |---|---|---|---|
-| L1 | Real velocity in the truth record | **preserved** | D3.5 — SUMO's own speed, written to the component velocity |
+| L1 | Real velocity in the truth record | **preserved** | D3.5 — SUMO's own speed, written where `GetVelocity` reads a kinematic vehicle |
 | L2 | Terrain seating | **preserved and improved** | analytic Z from the drape grid (§7.5), the same surface the collision heightfield was built from — exact rather than settled |
 | L3 | Body pitch and roll over undulations | **preserved** | drape-grid gradient (§7.5), four extra in-process samples per vehicle per tick |
 | L4 | The CARLA-free SUMO→CoT path | **preserved, untouched** | `SumoCotBridge` and `sumo_cot_telemetry.py` stay a supported product; the bridge does not replace them (D3.1) |
@@ -2559,7 +2646,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.2** | A managed TraCI socket client to an out-of-process `sumo`, ported from SUMO's reference client. Nothing native in the CarlaNet process; the version handshake is `CMD_GETVERSION` (§2.5). |
 | **D3.3** | One `apply_batch` per world tick carries every pose write; the tick is a separate `SendTickCueAsync` because `do_tick_cue` does not wait for the frame (G6). `apply_batch_sync` only for the admission batch. |
 | **D3.4** | A SUMO-driven actor is kinematic: physics off, gravity off, **collision response left on** so sensors still see it. |
-| **D3.5** | Fix zero velocity at `FCarlaActor::SetActorTargetVelocity`: write `ComponentVelocity` when the root primitive is not simulating (candidate **e**). Candidate (b) is **verified impossible** (§5.3). Candidate (d) is a fallback for actors nobody drives; candidate (c) becomes unnecessary. |
+| **D3.5** | A pose-applied vehicle reports the velocity its driver supplies: `FVehicleActor::SetActorTargetVelocity` on a vehicle whose physics is disabled writes the pawn movement component's `Velocity` and the root's `ComponentVelocity` (candidate **e**), and the bridge sends an `ApplyTargetVelocityCommand` beside every `ApplyTransformCommand` and a zero one at check-in (§5.4). Vehicles with physics on, and every other actor, are unchanged. Candidate (b) is **verified impossible** (§5.3). Candidate (d) is a fallback for actors nobody drives; candidates (c) and (f) are not taken. |
 | **D3.6** | SUMO runs **one step ahead** of the rendered clock; every sub-step pose is interpolated between the two buffered frames **along the lane's own geometry**, never chordally. The SUMO step-length is the scenario's; the bridge reads it and does not change it. |
 | **D3.7** | The reference-point shift uses the **CARLA front overhang** `b.x + e.x`, so the rendered front bumper lands exactly on SUMO's reference point. The catalogue must set each vType's `length`/`width` from the blueprint's bounding box, at **authoring** time. |
 | **D3.8** | Z, pitch and roll come from `CarlaClient.SampleDrapeGroundElevation`, sampled in the **CARLA** frame `(x_s, −y_s)`. `z_seat` per blueprint is **measured**, not computed from the bounding box. |
@@ -2567,15 +2654,15 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.10** | **A vehicle admitted to the render set appears at full opacity; a released one disappears.** No dissolve, no per-vehicle opacity RPC, no fade state published. The mitigation for a visible pop is **geometric** — size the render volume so admission and release fall outside every active camera footprint, which §8.4's lookahead already pays for — and where the margin cannot be made large enough, the **manifest records that fact** rather than a fade papering over it. The arrival gate needs no replacement: with no fade record, `IsActorEstablished` is `true` and the truth gate is inert (`CarlaClient.cs:1571`; `VehicleTelemetryService.cs:66-73`). `VehicleTelemetry.Opacity` is a constant 1.0 in this mode. What is still required is the **recorded admission and release instant** per vehicle. |
 | **D3.11** | In a SUMO-drive session **SUMO is the only removal authority**. The bridge translates removals; it never originates one. This resolves [issue #18](https://github.com/sbrett9/carla/issues/18) for this mode by deleting both of its deciders rather than adding a third. |
 | **D3.12** | `SumoDriveSession` owns the advance of simulated time on both sides. `R = Δs/Δw` must be a positive integer; the session refuses to start otherwise. Neither side can outrun the other, because the loop is serial and the world clock is simulated. |
-| **D3.13** | The lockout is **four mechanisms**: per-actor server-side control authority (the one that actually stops the .NET TM, which drives via `ApplyControlToVehicle`), an episode-level drive-mode flag that refuses `set_actor_autopilot` for *any* actor (the one that stops a second process), a client-side lease for a legible error at the call site, and the same episode flag refusing **`set_solar_time` / `set_solar_date` / `set_time_advance`** to anyone but the lease holder — because illumination is world-scoped state that a capture records, and today those RPCs have no ownership check whatever. |
+| **D3.13** | The lockout is **four mechanisms**: per-actor server-side control authority (the one that actually stops the .NET TM, which drives via `ApplyControlToVehicle`), an episode-level drive-mode flag that refuses `set_actor_autopilot` for *any* actor (the one that stops a second process), a client-side lease for a legible error at the call site, and the same episode flag refusing **`set_solar_time` / `set_solar_date` / `set_solar_epoch` / `set_time_advance`** to anyone but the lease holder — because illumination is world-scoped state that a capture records, and today those RPCs have no ownership check whatever. |
 | **D3.14** | A session refuses to start against a configuration with `time-to-teleport >= 0`, and carries a non-overridable runtime jump detector that releases and re-admits rather than interpolating across a discontinuity. |
 | **D3.15** | Any fault that makes the truth record unreliable — SUMO connection loss, a world-tick timeout — **stops the run**. It does not degrade, does not restart `sumo`, and does not keep ticking a frozen pose buffer. |
 | **D3.17** | **Vehicle light state rides the existing per-tick `apply_batch`** as `SetVehicleLightStateCommand` (variant **18**), emitted only on a change, with the last written flags held client-side because the getter is an RPC and the snapshot carries no light state. Brake and indicator bits come from SUMO's `VAR_SIGNALS`, read at zero extra cost in the subscription the bridge already makes; `Position` and `LowBeam` come from sun elevation, because **SUMO has no headlight model at all** (§3.5.1). Measured batching cost: mean 14.44 / p90 31 / max 47 extra commands in one of the 20 sub-step batches per SUMO step — **0.72 amortised per tick, and zero extra RPCs**. |
-| **D3.18** | **The session owns the solar clock**, because the sun is a function of simulated time and only the clock owner knows what instant a frame is. No other component in a SUMO-drive session calls `set_solar_time`, `set_solar_date` or `set_time_advance`. |
-| **D3.19** | **Solar writes go inside the RPC drain of the tick they take effect on** — after `apply_batch`, before `sendTickCue`. Established from the engine, not assumed: the drain (`CarlaEngine.cpp:333-341`) precedes the actor tick that advances the sun (`CesiumTimeOfDayController.cpp:14-39`), which precedes both the observer snapshot and the sensor capture (`CarlaEngine.cpp:424-425`). A frame therefore cannot render under the previous tick's sun. |
-| **D3.20** | **The session audits the solar clock against the scenario epoch on every world tick**, from the free observer cache (`CarlaClient.cs:1991`), **before** assembling that tick's batch — and treats a disagreement as a fault, never as something to correct silently. |
-| **D3.21** | **The solar clock is written from the first *ticked* instant** (`window.begin − prewarm_s`), after the SUMO fast-forward and before the first world tick, and `set_time_advance` is issued **after** the clock is set. The fast-forward itself cannot move the sun — in synchronous mode no tick cue means no actor tick, so the controller never runs (§9.5) — but that is a property of the tick loop, not of the sun, and the audit is what keeps it true if the loop ever changes. |
-| **D3.22** | **A session refuses to start when `set_solar_time` returns `false`** (no `CesiumSunSky`), non-overridably. Presence is probed with the **write**, never with a state read, because the cached read cannot express "no sun" (G15). |
+| **D3.18** | **The session owns the solar clock**, because the sun is a function of simulated time and only the clock owner knows what instant a frame is. It binds the sun at window open, writes it for every frame under `advance` with the engine's own advance off, and audits it every tick. No other component in a SUMO-drive session calls `set_solar_time`, `set_solar_date`, `set_solar_epoch` or `set_time_advance`. |
+| **D3.19** | **Under `advance` the session writes the sun for every frame inside the RPC drain of that frame's tick** — one `set_solar_epoch` of date, clock and zone, after `apply_batch`, before `sendTickCue`, at the whole second nearest the frame's declared instant and a millisecond past it; the engine's own advance is off ([`11`](11_Time_And_Illumination.md) D11.19). Established from the engine, not assumed: the drain (`CarlaEngine.cpp:333-341`) precedes the actor ticks, which precede both the observer snapshot and the sensor capture (`CarlaEngine.cpp:424-425`). A frame therefore cannot render under the previous tick's sun. One RPC per tick, measured at a 0.128 ms median round trip; no batch command sets the sun. |
+| **D3.20** | **The session audits the sun against the scenario epoch on every world tick**, from the snapshot that tick delivered (`CarlaClient.GetCachedSolarState`, no round trip) — zone, engine advance and rate exactly, the held instant within 0.5 s, the direction and corrected elevation within 0.01°, the same at every rate — and treats a disagreement as a fault, never as something to correct silently. |
+| **D3.21** | **The sun is bound at the first rendered instant**, after the SUMO fast-forward and before the first world tick, and `set_time_advance(false, 0)` is issued **after** the clock is written, under every policy; under `advance` every later frame's sun is written from the epoch for that frame. The fast-forward itself cannot move the sun — in synchronous mode no tick cue means no actor tick, so the controller never runs (§9.5) — but that is a property of the tick loop, not of the sun, and the audit is what keeps it true if the loop ever changes. |
+| **D3.22** | **A session refuses to start when the world reports no sun**, unless the run declares `require_sun: false`. Presence is probed with an on-demand `get_solar_state` and the return value of `set_solar_epoch`, never with the cached read, because the cached read cannot express "no sun" (G15). |
 | **D3.23** | **A `SolarDisagreement` has the same consequence as a `TickFault`**: stop, park the render set, close the step record with `terminated: solar-state-disagreement`, fail the run. Same governing principle as D3.15 — a run that cannot produce honest truth must stop, not degrade. |
 | **D3.24** | **A SUMO-drive session renders neither the generated road surface nor the traffic-light and sign actors, and writes no traffic-light state.** No `SetTrafficLightStateCommand` in any batch, no traffic-light RPC, no `tlLogic` subscription. The `road` and `signals` layers are each written once at session start with `set_layer_visible` (`CarlaClient.cs:1077-1078` → `CarlaServer.cpp:697`; the `road` arm at `:729-738`, the `signals` arm at `:739-751` → `TrafficLightManager.cpp:618-628`), **fixed for the session's lifetime** with an operator override per layer that is a session-start decision and not a toggle, and given back on every exit path by `LayerVisibilityLease`. The run report records what was in frame. `set_layer_visible` joins the RPCs the episode drive-mode flag refuses to a client without the drive lease (§10.2 mechanism 4). Suppression is at the session, not at the source: `SignInjector` and native `SpawnSignals` are untouched, because the world build is shared with other modes (§3.4). SUMO's `tlLogic` programs, its right-of-way rows and the actuated netconvert setting are unaffected, and its vehicles still obey them. Vehicle lamps are a separate mechanism and are unchanged (D3.17). |
 | **D3.25** | **Real-time pacing is a factor the session reads once at start**, 0 by default and unconstrained, applied immediately before every world tick cue against the absolute schedule `T0 + n·Δw/f` counted from the first cue, so an overrun is absorbed rather than accumulated and the SUMO fast-forward is never paced. The session times every cue, paced or not, and publishes the achieved factor per window of wall clock (default 5 s), for the whole run and for the worst window, with the slip behind schedule, on `CoSimRunReport.Pacing`. It never stops or slows a run for falling behind: the floor is undecided and the consumer-side response is `08` §11.3's (§9.9). |

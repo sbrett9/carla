@@ -15,8 +15,34 @@ namespace CarlaNet.Recording;
 ///
 /// Construction starts recording; <see cref="Dispose"/> stops it (flushes pending captures).
 /// </summary>
+/// <remarks>
+/// <para><b>The stream thread never waits on the server.</b> The camera's frames arrive on a thread
+/// that reads its socket and calls <see cref="OnFrame"/> inline, and that thread does only what needs
+/// nothing from the server: decimate, copy the pixels, read the cached sun and hand the frame on. The
+/// truth records, the occlusion measurement and the platform pose are built on one preparation task
+/// behind it, because building them can ask the server for things -- the description of an actor seen
+/// for the first time, and the bare-earth reference record and its grids on the first capture of a
+/// world -- and those are answered only from the synchronous server's RPC drain.</para>
+///
+/// <para>A synchronous server does not drop a sensor message: before it writes a camera's next image it
+/// waits until the previous one has been written to that camera's socket
+/// (<c>LibCarla/source/carla/streaming/detail/tcp/ServerSession.cpp</c>, <c>ServerSession::Write</c>).
+/// So a stream thread that waits on the server while the image behind the one it is handling fills the
+/// socket holds the server's next frame, and the server's next frame is where the drain that would
+/// answer it runs. Measured with a 320x180 camera at every tick: a stream callback that waits on four
+/// sequential synchronous round trips per frame stops the world at the fifth tick, and on two at the
+/// ninth; one that waits on one, or on none, runs forty ticks; a 64x36 image, whose messages the socket
+/// buffers absorb, runs forty ticks even with the wait. Recording a 320x180 camera stopped the world at
+/// the fifth tick in exactly this way, on the first capture's actor descriptions and bare-earth
+/// fetch.</para>
+/// </remarks>
 public sealed class FrameRecorder : IDisposable
 {
+    /// <summary>A decimated frame as the stream thread hands it on: nothing asked of the server yet.</summary>
+    private sealed record Arrival(DateTime CapturedUtc, ulong Frame, double SimTimeSeconds,
+                                  Transform SensorTransform, int Width, int Height,
+                                  ReadOnlyMemory<byte> Bgra, IReadOnlyList<double> Solar);
+
     private sealed record Job(DateTime CapturedUtc, int Width, int Height,
                               ReadOnlyMemory<byte> Bgra, IReadOnlyList<VehicleTelemetry> Telemetry,
                               IReadOnlyList<double> Solar, SensorPose? Sensor,
@@ -37,9 +63,12 @@ public sealed class FrameRecorder : IDisposable
     private readonly OcclusionEstimator? _occlusion;
     private readonly IIlluminationSource? _illumination;
 
+    private readonly Channel<Arrival> _arrivals;
+    private readonly Task _preparation;
     private readonly Channel<Job> _channel;
     private readonly Task[] _workers;
     private readonly IDisposable _subscription;
+    private readonly CaptureInstantClock _captureClock = new();
 
     private double _lastCaptureSimTime = double.NegativeInfinity;
     private Transform? _prevSensorTf;
@@ -151,17 +180,31 @@ public sealed class FrameRecorder : IDisposable
         int n = workers > 0 ? workers : Math.Max(2, Environment.ProcessorCount / 2);
         _channel = Channel.CreateBounded<Job>(new BoundedChannelOptions(Math.Max(4, n * 2))
         {
-            FullMode = BoundedChannelFullMode.DropWrite,   // never block the stream-reader thread
+            FullMode = BoundedChannelFullMode.DropWrite,
             SingleReader = false,
             SingleWriter = true,
         });
         _workers = new Task[n];
         for (int i = 0; i < n; i++) _workers[i] = Task.Run(WorkerLoopAsync);
 
+        // Between the stream thread and the preparation task. Dropping when full is what keeps the
+        // stream thread from ever blocking; a dropped frame is counted.
+        _arrivals = Channel.CreateBounded<Arrival>(new BoundedChannelOptions(Math.Max(4, n * 2))
+        {
+            FullMode = BoundedChannelFullMode.DropWrite,
+            SingleReader = true,
+            SingleWriter = true,
+        });
+        _preparation = Task.Run(PreparationLoopAsync);
+
         // Independent subscription to the camera stream (does not disturb the display listener).
         _subscription = client.SubscribeToStream(streamToken, OnFrame);
     }
 
+    /// <summary>
+    /// Runs on the camera stream's thread, once per frame the server sends. Asks nothing of the server:
+    /// see the remarks on the class for why that is a rule and not a preference.
+    /// </summary>
     private void OnFrame(SensorFrame frame)
     {
         double t = frame.Header.Timestamp;
@@ -175,7 +218,43 @@ public sealed class FrameRecorder : IDisposable
         int w = (int)img.Width, h = (int)img.Height;
         if (w <= 0 || h <= 0 || img.RawBgra.Length < (long)w * h * 4) return;
 
-        var captured = DateTime.UtcNow;
+        // Solar state read lock-free from the world-observer cache (no RPC, no poll), now rather than on
+        // the preparation task, so it is the sun of the tick nearest the pixels.
+        IReadOnlyList<double> solar = _client.GetCachedSolarState();
+
+        // RawBgra is already a private copy produced by Deserialize, so it can be handed on without
+        // copying again.
+        var arrival = new Arrival(_captureClock.Next(DateTime.UtcNow), frame.Header.Frame, t,
+                                  frame.SensorTransform, w, h, img.RawBgra, solar);
+        if (!_arrivals.Writer.TryWrite(arrival))
+            Interlocked.Increment(ref _dropped);
+    }
+
+    /// <summary>
+    /// Turns each arrival into a capture: its truth records, its occlusion measurement and its platform
+    /// pose. One task, in arrival order, because the platform's course and speed come from the pose of
+    /// the capture before; free to wait on the server, because it is not the thread reading a socket
+    /// the server is waiting to write to.
+    /// </summary>
+    private async Task PreparationLoopAsync()
+    {
+        try
+        {
+            await foreach (Arrival arrival in _arrivals.Reader.ReadAllAsync().ConfigureAwait(false))
+            {
+                Job job = Prepare(arrival);
+                if (!_channel.Writer.TryWrite(job))
+                    Interlocked.Increment(ref _dropped);
+            }
+        }
+        finally
+        {
+            _channel.Writer.TryComplete();
+        }
+    }
+
+    private Job Prepare(Arrival arrival)
+    {
         IReadOnlyList<VehicleTelemetry> recs = Array.Empty<VehicleTelemetry>();
         ulong? telemetryTick = null;
         if (_haveOrigin)
@@ -184,17 +263,17 @@ public sealed class FrameRecorder : IDisposable
             // observer delivered last: the image is read back from the GPU asynchronously and arrives on
             // its own stream, so by now the newest snapshot is usually a tick or more past the pixels,
             // and it can be behind them when the observer thread was held up. Descriptions are cached,
-            // so this is fast.
+            // so this is fast once every actor has been seen.
             try
             {
-                recs = _telemetry.Compute(_origin, frame.Header.Frame, out ulong served);
+                recs = _telemetry.Compute(_origin, arrival.Frame, out ulong served);
                 telemetryTick = served;
-                if (served == frame.Header.Frame)
+                if (served == arrival.Frame)
                     Interlocked.Increment(ref _telemetryExact);
                 else
                 {
                     Interlocked.Increment(ref _telemetryOffset);
-                    long gap = (long)(served > frame.Header.Frame ? served - frame.Header.Frame : frame.Header.Frame - served);
+                    long gap = (long)(served > arrival.Frame ? served - arrival.Frame : arrival.Frame - served);
                     long worst;
                     while (gap > (worst = Interlocked.Read(ref _telemetryWorstOffset))
                            && Interlocked.CompareExchange(ref _telemetryWorstOffset, gap, worst) != worst) { }
@@ -208,36 +287,33 @@ public sealed class FrameRecorder : IDisposable
         // pose; when none matches, the capture simply carries no occlusion rather than a stale one.
         if (_occlusion is not null && recs.Count > 0)
         {
-            try { recs = MeasureOcclusion(recs, frame.Header.Frame, t, frame.SensorTransform); }
+            try { recs = MeasureOcclusion(recs, arrival.Frame, arrival.SimTimeSeconds, arrival.SensorTransform); }
             catch { }
         }
-
-        // Solar state paired to this tick, read lock-free from the world-observer cache (no RPC, no
-        // poll) — the same snapshot the telemetry above came from.
-        IReadOnlyList<double> solar = _client.GetCachedSolarState();
 
         // The collection platform, derived from THIS frame's header transform — same pixels, same tick.
         // Course/speed come from the delta to the previous captured frame's pose.
         SensorPose? sensor = null;
         if (_haveOrigin && _platform is not null)
         {
-            double dt = _prevSensorTf is null ? 0.0 : (t - _prevSensorSimTime);
-            try { sensor = _telemetry.ComputeSensorPose(_origin, frame.SensorTransform, _prevSensorTf, dt, _platform, w, h); }
+            double dt = _prevSensorTf is null ? 0.0 : (arrival.SimTimeSeconds - _prevSensorSimTime);
+            try
+            {
+                sensor = _telemetry.ComputeSensorPose(_origin, arrival.SensorTransform, _prevSensorTf, dt,
+                                                      _platform, arrival.Width, arrival.Height);
+            }
             catch { }
-            _prevSensorTf = frame.SensorTransform;
-            _prevSensorSimTime = t;
+            _prevSensorTf = arrival.SensorTransform;
+            _prevSensorSimTime = arrival.SimTimeSeconds;
         }
 
         // Tick and simulation time come from the very frame that produced these pixels, so the still,
         // its truth sidecar and the simulation instant are bound together rather than correlated after
         // the fact by wall clock.
-        var capture = new CaptureIdentity(frame.Header.Frame, t, _runId, _scenarioId, _seed, telemetryTick);
-
-        // RawBgra is already a private copy produced by Deserialize, so we can hand it to the worker
-        // without copying again.
-        var job = new Job(captured, w, h, img.RawBgra, recs, solar, sensor, capture);
-        if (!_channel.Writer.TryWrite(job))
-            Interlocked.Increment(ref _dropped);
+        var capture = new CaptureIdentity(arrival.Frame, arrival.SimTimeSeconds, _runId, _scenarioId, _seed,
+                                          telemetryTick);
+        return new Job(arrival.CapturedUtc, arrival.Width, arrival.Height, arrival.Bgra, recs, arrival.Solar,
+                       sensor, capture);
     }
 
     private IReadOnlyList<VehicleTelemetry> MeasureOcclusion(
@@ -332,8 +408,12 @@ public sealed class FrameRecorder : IDisposable
     public void Dispose()
     {
         try { _subscription.Dispose(); } catch { /* already gone */ }
-        _occlusion?.Dispose();
+        // Every frame already handed on is prepared and written: the preparation task completes the
+        // encoding channel when it has drained the arrivals, and the workers finish on that.
+        _arrivals.Writer.TryComplete();
+        try { _preparation.Wait(TimeSpan.FromSeconds(10)); } catch { /* best-effort flush */ }
         _channel.Writer.TryComplete();
+        _occlusion?.Dispose();
         try { Task.WaitAll(_workers, TimeSpan.FromSeconds(10)); } catch { /* best-effort flush */ }
     }
 }

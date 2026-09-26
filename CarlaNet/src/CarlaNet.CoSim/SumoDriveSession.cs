@@ -271,9 +271,12 @@ public sealed class SumoDriveSession : IDisposable
     /// count of steps.
     /// </returns>
     /// <remarks>
-    /// Under a real-time factor, each tick cue waits here for the instant it is due -- after the
+    /// <para>Under a real-time factor, each tick cue waits here for the instant it is due -- after the
     /// tick's poses are written, so the cue goes out at that instant rather than the bridge's work
-    /// later -- and every cue is timed whether or not it waited.
+    /// later -- and every cue is timed whether or not it waited.</para>
+    ///
+    /// <para>Under an advancing sun, the sun for the frame is written here too, beside the poses and
+    /// before the cue, so it is executed in the same drain and the frame is lit by it.</para>
     /// </remarks>
     public bool Advance()
     {
@@ -285,6 +288,7 @@ public sealed class SumoDriveSession : IDisposable
             double fraction = Clock.InterpolationFraction(tick);
             ComputePoses(fraction);
             WriteTheBatch();
+            WriteTheSun();
             _bridgeClock.Stop();
 
             // The server is held in its RPC drain until the cue arrives, with this tick's batch
@@ -418,12 +422,27 @@ public sealed class SumoDriveSession : IDisposable
         {
             // The one comparison that sees the refraction-corrected elevation whatever the server's
             // observer header carries, taken before anything is rendered under it.
-            _sunAudit = new SolarAudit(_sun.Declared, _origin.Latitude, _origin.Longitude,
-                                       Clock.WorldDeltaSeconds);
+            _sunAudit = new SolarAudit(_sun.Declared, _origin.Latitude, _origin.Longitude);
             Report.SunAudit = _sunAudit;
             _sunAudit.AuditWindowOpen(opened);
         }
     }
+
+    /// <summary>
+    /// Write the sun for the frame this tick renders, under a policy that advances it.
+    /// </summary>
+    /// <remarks>
+    /// <para>Every tick, including the first, whose sun the binding already wrote: the write is the
+    /// whole of the sun's state, so a frame's sun never depends on what an earlier write left. It is
+    /// one <c>set_solar_epoch</c> round trip, measured at a median of 0.13 ms from the server's drain;
+    /// no batch command sets the sun.</para>
+    ///
+    /// <para>The engine's own advance stays off. Its clock passes through the last half-second of
+    /// every minute, where the engine's clock decomposition drops the minute, whereas the written clock
+    /// is always a millisecond past the whole second nearest the frame's declared instant. Under a
+    /// freeze this writes nothing: the window-open write holds for the whole window.</para>
+    /// </remarks>
+    private void WriteTheSun() => _sun?.WriteForFrame(RenderedTimeSeconds);
 
     /// <summary>
     /// Compare the sun this tick's snapshot carried against the sun declared for the instant it
@@ -742,9 +761,9 @@ public sealed class SumoDriveSession : IDisposable
                 + "told from a chosen one, and there is no default. Declare one: "
                 + "freeze_at_window_start (recommended -- the sun is set to the civil instant the "
                 + "window opens and held there, so the window is one lighting condition), advance "
-                + "(the engine carries it forward at a declared rate), freeze_at (held at a declared "
-                + "civil time of day) or ignore (left as the world holds it, and recorded as not "
-                + "honouring any epoch).");
+                + "(carried forward at a declared rate and written for every frame), freeze_at "
+                + "(held at a declared civil time of day) or ignore (left as the world holds it, and "
+                + "recorded as not honouring any epoch).");
         }
 
         if (policy.BindsTheSun && options.Epoch is null)

@@ -14,13 +14,23 @@ namespace CarlaNet.CoSim;
 /// Every one of those renders plausible imagery. So the date, the clock, the zone, the advancing flag
 /// and the rate are all written, whatever the world was believed to hold.</para>
 ///
-/// <para><b>One write, in one place in the sequence.</b> After SUMO has been fast-forwarded -- no
-/// world tick happens during that, so nothing can move the sun -- and before the first world tick,
-/// one <c>set_solar_epoch</c> sets the date, the civil clock and the civil offset together and the
-/// sun is recomputed once. Then <c>set_time_advance</c>, and only then: enabled before the clock is
-/// set, an advancing sun would carry a clock that was about to be replaced. Setting the zone to the
-/// declared offset is what makes the clock civil time rather than local mean solar time at the map's
-/// longitude, a difference of 14 minutes 43 seconds at the sizing site.</para>
+/// <para><b>One write at window open, in one place in the sequence.</b> After SUMO has been
+/// fast-forwarded -- no world tick happens during that, so nothing can move the sun -- and before the
+/// first world tick, one <c>set_solar_epoch</c> sets the date, the civil clock and the civil offset
+/// together and the sun is recomputed once. Then <c>set_time_advance(false, 0)</c>, under every
+/// policy: the engine's own advance is never used. Setting the zone to the declared offset is what
+/// makes the clock civil time rather than local mean solar time at the map's longitude, a difference
+/// of 14 minutes 43 seconds at the sizing site.</para>
+///
+/// <para><b>Under <c>advance</c>, one write per frame.</b> <see cref="WriteForFrame"/> writes the sun
+/// for the frame the world is about to render, before its tick cue, so the frame is lit by the sun
+/// written for it. The engine's own advance is not used because its clock passes through the last
+/// half-second of every minute, where <c>ACesiumSunSky::GetHMSFromSolarTime</c> rounds the seconds to
+/// sixty and drops the minute; the session writes each clock a millisecond past the whole second
+/// nearest the frame's declared instant (<see cref="DeclaredSun.WrittenAt"/>), where every second
+/// decomposes as declared. The date is written with it, so a window that crosses civil midnight is
+/// carried onto the next date when the epoch's calendar advances and held on the epoch's date when it
+/// does not; the engine rolls no date the session does not write.</para>
 ///
 /// <para><b>Read back, because a write is not the world having it.</b> The world is asked for its
 /// sun on demand -- not from the observer cache, which is paired to the last tick and so predates
@@ -70,6 +80,9 @@ public sealed class SolarLease : IDisposable
     /// <summary>Whether the sun has been given back.</summary>
     public bool IsReleased => _released;
 
+    /// <summary>How many frames <see cref="WriteForFrame"/> wrote the sun for.</summary>
+    public long FrameWrites { get; private set; }
+
     /// <summary>
     /// Bind the world's sun to the window's declared instant and confirm the world took it.
     /// </summary>
@@ -100,8 +113,8 @@ public sealed class SolarLease : IDisposable
         }
 
         var lease = new SolarLease(world, declared, found);
-        DateTime sun = declared.SunAtWindowOpen;
-        if (!world.WriteSolarEpoch(sun.Year, sun.Month, sun.Day, declared.WrittenClockHours,
+        DateTime sun = declared.WrittenAtWindowOpen;
+        if (!world.WriteSolarEpoch(sun.Year, sun.Month, sun.Day, sun.TimeOfDay.TotalHours,
                                    declared.TimeZoneHours))
         {
             // The server leaves the sun untouched when it refuses, so there is nothing to give back.
@@ -114,14 +127,12 @@ public sealed class SolarLease : IDisposable
         SolarReading readBack;
         try
         {
-            if (!world.WriteTimeAdvance(declared.Policy.Advances, declared.Policy.Rate))
+            if (!world.WriteTimeAdvance(DeclaredSun.EngineAdvances, DeclaredSun.EngineRate))
             {
                 throw new CoSimSessionRefusedException(
-                    "The world refused set_time_advance("
-                    + $"{declared.Policy.Advances.ToString().ToLowerInvariant()}, "
-                    + $"{declared.Policy.Rate.ToString("0.######", CultureInfo.InvariantCulture)}) "
-                    + "after taking the epoch, so whether the sun moves is not what the "
-                    + $"'{declared.Policy.Name}' policy declares.");
+                    "The world refused set_time_advance(false, 0) after taking the epoch, so the "
+                    + "engine's own advance may still be carrying the sun, and under the "
+                    + $"'{declared.Policy.Name}' policy nothing but this session may move it.");
             }
 
             readBack = SolarReading.From(world.ReadSolarState())
@@ -153,6 +164,50 @@ public sealed class SolarLease : IDisposable
 
         lease.AtWindowOpen = readBack;
         return lease;
+    }
+
+    /// <summary>
+    /// Write the sun for the frame the world renders next, at simulated instant
+    /// <paramref name="renderedSeconds"/>, under a policy that advances it; under a freeze, nothing,
+    /// because the write at window open holds for the whole window.
+    /// </summary>
+    /// <remarks>
+    /// Called before the frame's tick cue. In synchronous mode the server executes every RPC that
+    /// arrives before the cue in the drain of that same frame, before any actor ticks and before the
+    /// cameras capture, so the frame is lit by exactly the sun written here -- and the snapshot the
+    /// tick publishes carries it, for the audit to compare against the declaration. The date and the
+    /// zone are written with the clock every time, so the write is the whole of the sun's state and
+    /// never depends on what the previous frame left.
+    /// </remarks>
+    /// <exception cref="CoSimSessionRefusedException">The world refused the write.</exception>
+    /// <exception cref="InvalidOperationException">The sun has already been given back.</exception>
+    public void WriteForFrame(double renderedSeconds)
+    {
+        if (_released)
+        {
+            throw new InvalidOperationException(
+                "The sun has been given back; writing it now would overwrite the sun it was found with.");
+        }
+
+        if (NoSun || !Declared.Policy.Advances)
+        {
+            return;
+        }
+
+        DateTime sun = Declared.WrittenAt(renderedSeconds);
+        if (!_world.WriteSolarEpoch(sun.Year, sun.Month, sun.Day, sun.TimeOfDay.TotalHours,
+                                    Declared.TimeZoneHours))
+        {
+            throw new CoSimSessionRefusedException(
+                "The world refused the sun written for the frame at "
+                + $"{renderedSeconds.ToString("0.###", CultureInfo.InvariantCulture)} s, "
+                + $"{sun:yyyy-MM-dd HH:mm:ss.fff} at UTC{SolarEpoch.FormatOffset(Declared.Epoch.UtcOffset)}. "
+                + "set_solar_epoch answers false only when there is no sun or the date is not a "
+                + "calendar date, and a frame rendered under the previous sun is lit by an instant "
+                + "nothing declared for it.");
+        }
+
+        FrameWrites++;
     }
 
     /// <summary>
@@ -193,14 +248,14 @@ public sealed class SolarLease : IDisposable
                         + SolarEpoch.FormatCivil(Declared.WindowOpenCivil);
         return NoSun
             ? $"{window}; the world has no sun and the policy did not require one"
-            : $"{window}; sun written {Declared.SunAtWindowOpen:yyyy-MM-dd HH:mm:ss.FFF} at "
+            : $"{window}; sun written {Declared.WrittenAtWindowOpen:yyyy-MM-dd HH:mm:ss.fff} at "
               + $"UTC{SolarEpoch.FormatOffset(Declared.Epoch.UtcOffset)}; the world reports "
               + $"{AtWindowOpen}; it was found holding {AsFound}";
     }
 
     private static List<string> Disagreements(DeclaredSun declared, SolarReading read)
     {
-        DateTime sun = declared.SunAtWindowOpen;
+        DateTime sun = declared.WrittenAtWindowOpen;
         List<string> disagreements = [];
         if (read.Year != sun.Year || read.Month != sun.Month || read.Day != sun.Day)
         {
@@ -221,15 +276,14 @@ public sealed class SolarLease : IDisposable
                               + "local mean solar time, not the site's civil offset");
         }
 
-        if (read.Advancing != declared.Policy.Advances)
+        if (read.Advancing != DeclaredSun.EngineAdvances)
         {
-            disagreements.Add($"advancing {read.Advancing.ToString().ToLowerInvariant()}, written "
-                              + declared.Policy.Advances.ToString().ToLowerInvariant());
+            disagreements.Add($"advancing {read.Advancing.ToString().ToLowerInvariant()}, written false");
         }
 
-        if (Math.Abs(read.Rate - declared.Policy.Rate) > 1e-12)
+        if (Math.Abs(read.Rate - DeclaredSun.EngineRate) > 1e-12)
         {
-            disagreements.Add($"rate {read.Rate:0.######}, written {declared.Policy.Rate:0.######}");
+            disagreements.Add($"rate {read.Rate:0.######}, written 0");
         }
 
         return disagreements;

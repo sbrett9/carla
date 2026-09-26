@@ -23,7 +23,8 @@ namespace CarlaNet.CoSim;
 /// </param>
 /// <param name="ClockResidualSeconds">
 /// The instant the world's sun holds -- its date and clock -- minus the declared one, in seconds.
-/// Signed: an advancing sun whose controller ticks before the snapshot is taken reads a tick ahead.
+/// Signed. The session writes each clock a millisecond past the whole second nearest the declared
+/// instant, so it lies in (-0.5, +0.5]: +0.001 under a freeze, anywhere in that range under advance.
 /// </param>
 /// <param name="AngleResidualDegrees">
 /// The angle between the direction the world's sun reported and the declared sun's direction, from

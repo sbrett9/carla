@@ -1,7 +1,8 @@
 # 11 — Time and illumination
 
-**Status:** Plan. The epoch, the per-window sun binding, the asserted policy, the per-tick solar audit
-and the per-frame record are built in `CarlaNet.CoSim` and `CarlaNet.Recording`; the night work, the
+**Status:** Plan. The epoch, the per-window sun binding, the session's per-frame write of an advancing
+sun, the asserted policy, the per-tick solar audit and the per-frame record are built in
+`CarlaNet.CoSim` and `CarlaNet.Recording`; the night work, the
 lamps and the bands are not. Claims about existing behaviour are cited to `path:line`; measurements
 say how they were taken; inferences are labelled.
 **Scope:** The mapping from a scenario's simulated seconds to a civil date, time and zone; how the
@@ -14,6 +15,7 @@ possible. Assumes familiarity with the fork but not with the conversation that p
 | Date | Change |
 |---|---|
 | 2026-09-25 | Epoch, sun binding, asserted policy, per-tick audit and per-frame record built; engine clock decomposition measured. |
+| 2026-09-25 | Under `advance` the session writes the sun every tick, engine advance off (D11.19); audit tolerances rate-independent. |
 
 Capture windows are placed in simulated time, and the sun must be bound to them. This section owns the
 epoch that maps simulated seconds to civil time, the policy governing whether the sun is frozen or
@@ -46,8 +48,8 @@ vehicle signals to CARLA's lamps.
 | Question | Answer |
 |---|---|
 | **What does `t = 0` mean?** | Whatever a new `scenario_epoch` block in `scenario.json` says it means: a civil date, a civil time and a UTC offset. Nothing else may assert it. A corpus-eligible run whose scenario omits the block is **refused**, because today's fallback is the *host system date* (`CarlaControl/src/carlacontrol/WorldBuilder.py:229`) and that is the failure mode this section exists to end (§2) |
-| **How is the sun driven?** | One atomic `set_solar_epoch` call at window open, before the first tick, then either nothing more or the engine-side advance actor. Binding it is **mandatory, not merely correct**: a world keeps the date the previous session left, or `ACesiumSunSky`'s class-default 2019-09-21 (§3.6). The sun is read back when the window opens and compared against the declaration on every tick, and a disagreement stops the run (§8.3). Measured: with `fixed_delta_seconds = 0.05` and `rate = 1.0`, the solar clock advances **exactly one sun-second per simulated second** (§3.3) |
-| **Frozen or advancing?** | **Neither is a default: the policy is declared, and a run that renders a world without one is refused.** `freeze_at_window_start` is the recommended value. Measured on the sizing scenario: one default 1,800 s window at `rate = 1.0` moves the sun through **up to 6.7° of elevation**, which is a different illumination at the window's two ends and confounds any sweep run inside it (§4). An advancing sun also meets the engine's clock-decomposition defect and is stopped by the audit until the engine is fixed (§8.3, F1) |
+| **How is the sun driven?** | One atomic `set_solar_epoch` call at window open, before the first tick, with the engine's own advance set off. Under a freeze nothing more is written; under `advance` the session writes the sun again for **every frame**, before that frame's tick cue, at the whole second nearest the frame's declared instant and one millisecond past it (§3.4, D11.19). Binding it is **mandatory, not merely correct**: a world keeps the date the previous session left, or `ACesiumSunSky`'s class-default 2019-09-21 (§3.6). The sun is read back when the window opens and compared against the declaration on every tick, and a disagreement stops the run (§8.3) |
+| **Frozen or advancing?** | **Neither is a default: the policy is declared, and a run that renders a world without one is refused.** `freeze_at_window_start` is the recommended value. Measured on the sizing scenario: one default 1,800 s window at `rate = 1.0` moves the sun through **up to 6.7° of elevation**, which is a different illumination at the window's two ends and confounds any sweep run inside it (§4). An advancing window holds under the audit across every minute and across civil midnight, measured at both sites, because the session writes each frame's clock where the engine's clock decomposition cannot drop a minute (§8.3, F1) |
 | **Is night viable?** | **No, not today, and not as a rendering problem that more exposure fixes.** At the 23:00 window [`10`](10_Scale_And_Performance.md) §3.1 already recommends, the sun sits at **−60.95°** — 43° past the end of astronomical twilight. There is no moon light, no artificial light of any kind in a generated world, no reachable exposure control, and the photoreal tiles carry baked daytime radiance. The renderable low-light band at this site is **26–30 minutes per twilight edge** (§5) |
 
 ---
@@ -137,23 +139,28 @@ implementations of it is how the corpus becomes internally contradictory a secon
 
 ### 2.3 The calendar must advance
 
-The advance actor carries whole days off the clock and onto the calendar: `ACesiumTimeOfDayController`
-floors the advanced clock by 24 hours and rolls `Year`/`Month`/`Day` by the whole days with `FDateTime`
-(`CesiumTimeOfDayController.cpp`, `RollSolarDate`). Wrapping the clock alone would return a window that
-crosses local midnight to 00:00 of the *same* day — the next morning rendered under the previous day's
-declination, the sidecar asserting a date a day out, and a seven-day scenario never leaving day 0, so
-day-of-week could never mean anything.
+A clock that wrapped at midnight and left the date alone would return a window that crosses local
+midnight to 00:00 of the *same* day — the next morning rendered under the previous day's declination,
+the sidecar asserting a date a day out, and a seven-day scenario never leaving day 0, so day-of-week
+could never mean anything. Under `advance` the session writes the date with every frame's clock
+(§3.4), so the date a frame is lit by is the one its declared instant carries. The engine's own advance
+actor, which the session does not use, also carries whole days onto the calendar:
+`ACesiumTimeOfDayController` floors the advanced clock by 24 hours and rolls `Year`/`Month`/`Day` by the
+whole days with `FDateTime` (`CesiumTimeOfDayController.cpp`, `RollSolarDate`).
 
 > **D11.2 — `calendar_advances` is declared, and the sun's date follows one rule.** The date the sun is
 > written with moves with the civil date only when the epoch's calendar advances *and* the policy is
 > `advance` or a freeze declares `freeze_date_advances` — [`04`](04_Contracts.md) `C6` G11's effective
 > date rule. Otherwise it stays on the epoch's own date, so a frozen week of windows keeps one seasonal
-> sun geometry. The session writes the date and the clock together at window open; under `advance` the
-> engine carries midnight onto the date; and the per-tick audit compares the whole instant — date and
-> clock — against the declaration, so a missed or spurious rollover is a whole day out and stops the
-> run. One combination is expressible and cannot run through midnight: `advance` with a held calendar,
-> because the engine rolls the date regardless; the audit stops such a run at the crossing, naming the
-> date.
+> sun geometry. The session writes the date and the clock together at window open, and under `advance`
+> again for every frame, so the date moves where the rule moves it and nowhere else; the per-tick audit
+> compares the whole instant — date and clock — against the declaration, so a missed or spurious
+> rollover is a whole day out and stops the run. `advance` with a held calendar runs through midnight
+> with the clock wrapping onto the epoch's date. The last half-second before that midnight is written
+> as the following midnight — the whole second nearest the declared instant, which the engine can hold
+> only on the following date — and from midnight on the written date is the epoch's again. Measured
+> live at both sites in `CarlaNet/python/test_sun_binding.py --advance`: a window crossing midnight
+> holds on 22 December when the calendar advances and returns to 21 December when it is held.
 
 ### 2.4 Daylight saving, and why the engine's own DST is not used
 
@@ -237,7 +244,8 @@ The chain is complete end to end and needs using, not building.
 | Server RPC | `set_solar_time`, `set_solar_date`, `get_solar_state`, `set_time_advance` | `Carla/Server/CarlaServer.cpp:614, 625, 640, 661` |
 | Bridge | `UCesiumHeightSampler::SetSolarTime` / `SetSolarDate` / `GetSolarState` / `SetTimeAdvance` | `CesiumCarlaBridge/Private/CesiumHeightSampler.cpp:718, 735, 753, 819` |
 | Engine | `ACesiumSunSky` — **the single sun and lighting authority for the georeferenced world** | `CarlaServer.cpp:611-612`; the bridge disables every pre-existing level light to make it so, `CesiumHeightSampler.cpp:358-383` |
-| Advance actor | `ACesiumTimeOfDayController`, find-or-spawned by `SetTimeAdvance` | `CesiumTimeOfDayController.cpp:14-40`, `CesiumHeightSampler.cpp:799-815` |
+| Advance actor | `ACesiumTimeOfDayController`, find-or-spawned by `SetTimeAdvance`. **Set off by the session under every policy** (§3.4) | `CesiumTimeOfDayController.cpp:14-40`, `CesiumHeightSampler.cpp:799-815` |
+| The session's one write | `set_solar_epoch` — shim `:1523`, `CarlaClient.SetSolarEpochAsync` `:1117`, `CarlaServer.cpp:644`, `UCesiumHeightSampler::SetSolarEpoch` `CesiumHeightSampler.cpp:778` | D11.5; written at window open, and under `advance` for every frame |
 
 `ACesiumSunSky::UpdateSun_Implementation` (`CesiumSunSky.cpp:405-466`) computes elevation and azimuth
 via `USunPositionFunctionLibrary::GetSunPosition` from the georeference latitude and longitude, the
@@ -342,6 +350,13 @@ a silent 14.7-minute error in shadow direction is precisely the kind of thing th
 
 ### 3.3 What `rate = 1.0` means under synchronous ticking — measured from source
 
+`rate` in a policy is sun-clock seconds per **simulated** second: the session carries each frame's
+declared instant forward from the window's opening instant by the frame's elapsed simulated time times
+the rate (`DeclaredSun.SunAt`), and writes it for that frame (§3.4). The engine's own advance, which
+`set_time_advance` configures and the interactive viewer still uses, has the same unit under
+synchronous ticking; the session does not use it, and sets it off (D11.19). What follows pins the
+engine's advance down, because `set_time_advance`'s docstring does not.
+
 The docstring says the advance "tracks wall-clock in asynchronous mode and simulation time under
 synchronous ticking" (`CarlaServer.cpp:663-664`, `carlanet/__init__.py:1535-1540`). Pinned down:
 
@@ -392,55 +407,66 @@ sequenceDiagram
     Note over SRV,SUN: no world ticks during fast-forward,<br/>so the solar clock cannot drift
 
     DRV->>SRV: attach, apply world settings<br/>synchronous, fixed_delta_seconds
-    DRV->>SRV: set_solar_epoch year, month, day, hours, utc_offset
+    DRV->>SRV: set_solar_epoch year, month, day, hours, utc_offset<br/>hours a millisecond past a whole second
     SRV->>SUN: TimeZone, Year, Month, Day, SolarTime then UpdateSun once
     SUN-->>SRV: Elevation, Azimuth refreshed
 
-    alt policy = advancing
-        DRV->>SRV: set_time_advance true, rate
-        SRV->>SUN: find or spawn ACesiumTimeOfDayController
-    else policy = frozen
-        DRV->>SRV: set_time_advance false, 0.0
-        Note over SRV,SUN: asserted unconditionally,<br/>never assumed to have carried over
-    end
+    DRV->>SRV: set_time_advance false, 0.0
+    Note over SRV,SUN: under every policy, asserted unconditionally,<br/>never assumed to have carried over
 
     DRV->>SRV: read back solar state, verify residual
     SRV-->>DRV: solar_time, date, time_zone, lat, lon,<br/>elevation, azimuth, advancing, rate
     Note over DRV: residual over tolerance = FAIL THE RUN,<br/>section 8.3 - never a warning
 
-    loop prewarm_s, nothing captured
-        DRV->>SRV: apply_batch poses, then tick cue
-    end
-
-    loop capture window
+    loop every tick, prewarm and capture window
         DRV->>SRV: apply_batch poses plus light-state deltas
+        opt policy = advance
+            DRV->>SRV: set_solar_epoch for this frame's declared instant
+        end
         DRV->>SRV: tick cue
         SRV-->>REC: episode-state header carries the 12 solar doubles<br/>WorldObserver.cpp, no RPC
+        DRV->>DRV: audit the snapshot's sun against this frame's declaration
         REC->>REC: PNG carla:solar chunk + sidecar _solar block,<br/>both stamped with this tick
     end
 ```
 
-Three properties of that sequence are load-bearing:
+Four properties of that sequence are load-bearing:
 
-- **The solar set happens after the world settings and before the first tick.** Before the settings,
-  the fixed delta is not in force and an advancing policy would step at the wrong rate for one frame.
-  After the first tick, a frame has already been rendered under the previous sun. The instant written
-  is the civil instant of the first frame the session renders — the simulated second SUMO was
-  fast-forwarded to — which, with one SUMO process per window, is the window's opening instant.
-  `SolarLease` (`CarlaNet/src/CarlaNet.CoSim/SolarLease.cs`) takes it beside the world-settings and
-  layer leases and gives back the sun it found on every exit path.
-- **A frozen clock is declared to the whole second and written one millisecond past it.** The
-  engine's clock decomposition drops a minute at 623 of the day's 1,440 whole-minute clocks (F1);
-  a millisecond past the second, all 86,400 seconds decompose as declared.
+- **The solar set happens after the world settings and before the first tick.** After the first
+  tick, a frame has already been rendered under the previous sun. The instant written is the civil
+  instant of the first frame the session renders — the simulated second SUMO was fast-forwarded to —
+  which, with one SUMO process per window, is the window's opening instant. `SolarLease`
+  (`CarlaNet/src/CarlaNet.CoSim/SolarLease.cs`) takes it beside the world-settings and layer leases
+  and gives back the sun it found on every exit path.
+- **Every clock is written one millisecond past a whole second.** The engine's clock decomposition
+  drops a minute at 623 of the day's 1,440 whole-minute clocks and in the last half-second of every
+  minute (F1); a millisecond past the second, all 86,400 seconds decompose as declared. A frozen clock
+  is declared to the whole second, so it is written at that second plus the millisecond.
+- **Under `advance`, the session writes the sun for every frame, and the engine's own advance is
+  off.** `SumoDriveSession.Advance` calls `SolarLease.WriteForFrame` for each tick after the pose batch
+  and before the tick cue — where the real-time pacer waits — so the server executes it in that frame's
+  RPC drain, before any actor ticks and before the cameras capture (`03` §9.2), and the frame is lit by
+  exactly the sun written for it. It writes the date, the clock and the zone together every time
+  (`DeclaredSun.WrittenAt`). **Which whole second:** the clock written is `S + 1 ms`, and the audit
+  holds it to within 0.5 s of the frame's declared instant `d`, which is true exactly when `S` is the
+  whole second nearest `d − 1 ms`. That is the one taken, so the residual lies in (−0.5 s, +0.5 s] at
+  any rate; on a 0.05 s tick from a whole-second opening instant it reaches −0.499 s, at the frame
+  declared on the half-second, which is written at the earlier second. It is also the best sun the
+  engine can render, since it renders `S` and `S` is within half a second of `d`: at most about
+  0.002° of solar motion, measured 0.0019° live. The write is one `set_solar_epoch` round trip per
+  tick — no batch command sets the sun (`LibCarla/source/carla/rpc/Command.h:284-306`) — measured at
+  a median of 0.128 ms (§9.1). It is made on every tick, including those whose whole second has not
+  changed, so a frame's sun never depends on what an earlier write left.
 - **The read-back is not optional.** `set_solar_epoch` returns `false` when the world has no
   `ACesiumSunSky` or the date is not a calendar date, and a `false` that nobody checks is how a window
   renders under the spawn default. The sun is then read back on demand — not from the observer cache,
   which predates the write — and every written field compared exactly, and the read-back is the first
   audit sample: its direction and its refraction-corrected elevation are compared against the
   declared sun before anything is rendered (§8.3).
-- **The policy is asserted every window, in both branches.** `ACesiumTimeOfDayController` persists in
-  the world once spawned (`CesiumHeightSampler.cpp:799-815`), so `advancing` is sticky across windows
-  within a session. A window that means to freeze must say so.
+- **The engine's advance is set off every window, under every policy.** `ACesiumTimeOfDayController`
+  persists in the world once spawned (`CesiumHeightSampler.cpp:799-815`), so `advancing` is sticky
+  across windows and across sessions; a flag another client left on would move the sun between the
+  session's writes.
 - **So is the epoch, and for a stronger reason.** The sun actor persists too, and the bridge
   re-applies its defaults *only* when it spawns one (§3.6). Nothing in this sequence may be skipped
   on the grounds that the world "was just built" — D11.16.
@@ -454,11 +480,11 @@ simulated time. The solar clock is a **derived view of that same clock**, not a 
 |---|---|---|
 | Simulated time | the driver | `traci.simulationStep()` then `k` × `world.tick()` |
 | Solar clock, frozen | the driver, once per window | nothing |
-| Solar clock, advancing | the driver sets the origin; the engine integrates | the world tick, at `rate` sun-seconds per simulated second |
+| Solar clock, advancing | the driver, once per window and once per frame | the driver's write for each frame, at the frame's declared instant, `rate` sun-seconds per simulated second from the window's opening |
 
-The advancing case is the only place anything other than the driver moves a clock, and it is safe
-because it is *driven by* the driver's own tick. It is still worth adding to
-[`04`](04_Contracts.md) §8.4's forbidden list: **no component other than the solar driver may call
+Under every policy nothing but the driver moves the solar clock: the engine's own advance is off, and
+under `advance` the driver writes each frame's instant itself. [`04`](04_Contracts.md) §8.4's
+forbidden list carries the rule: **no component other than the solar driver may call
 `set_solar_time`, `set_solar_date`, `set_solar_epoch` or `set_time_advance` during a session.** The
 interactive viewer's `K` hotkey (`CarlaControl/src/carlacontrol/PygameInterface.py:258-268, 296`) is
 exactly such a component, and it must be inert while a capture session holds the world.
@@ -466,8 +492,13 @@ exactly such a component, and it must be inert while a capture session holds the
 At runtime the rule is enforced by detection. Any other writer — `set_solar_time`, the `K` hotkey, a
 second `configure_cesium_georeference` — moves the clock, the zone, the date or the advancing flag
 away from the declaration, and the per-tick audit stops the run on the next tick, naming what moved
-(§8.3). Refusing a second writer before it writes is not built: the RPCs are reachable from any
-client, and nothing in a separate process can be stopped from calling them.
+(§8.3). Under `advance` one case goes unseen and is harmless: a clock, date or zone written between
+the session's write for one frame and its write for the next is replaced before the next frame
+renders, so it lights no frame. A write that arrives between the session's write and the tick cue
+lights that frame and is caught, and the advancing flag is never rewritten per frame, so another
+client switching the engine's advance on is caught on the next tick. Refusing a second writer before
+it writes is not built: the RPCs are reachable from any client, and nothing in a separate process can
+be stopped from calling them.
 
 ### 3.6 A loaded world inherits the previous session's sun
 
@@ -565,8 +596,9 @@ illumination condition.
 
 `advance` is a first-class choice, and is the right one for a deliberate dawn/dusk-transition
 product. It is not the recommended one because the recommendation should be the one that does not
-silently invalidate a comparison — and, until the engine's clock decomposition is fixed, an advancing
-sun is rendered a minute early for part of every minute and the audit stops it (F1).
+silently invalidate a comparison. It is usable under the full audit: the session writes each frame's
+sun itself, so the engine's clock decomposition never renders an advancing frame a minute early (F1,
+D11.19).
 
 **A note on "frozen" being exactly frozen.** Under `frozen`, `set_time_advance(false, 0.0)` is
 asserted and `ACesiumTimeOfDayController::Tick` early-returns on `!bAdvancing`
@@ -583,18 +615,18 @@ stateDiagram-v2
 
     Unset: Unset<br/>no epoch has been applied this session<br/>a configured world holds SolarTime 12.0,<br/>TimeZone lon/15 and whatever date it had,<br/>2019-09-21 for a sun nobody dated<br/>an ATTACHED world is at whatever<br/>the previous session left, section 3.6
     Frozen: Frozen<br/>solar clock fixed at civil_instant of window_open<br/>advancing = false, rate = 0<br/>_solar identical on every capture
-    Advancing: Advancing<br/>solar clock integrates the world tick<br/>advancing = true, rate = r<br/>r sun-seconds per simulated second
+    Advancing: Advancing<br/>solar clock written by the session for every frame<br/>at its civil instant carried at r sun-seconds<br/>per simulated second; engine advance off,<br/>advancing = false, rate = 0
     Failed: Failed<br/>residual over tolerance,<br/>no CesiumSunSky, or invalid date<br/>run is stopped, section 8.3
 
     Unset --> Frozen: set_solar_epoch then<br/>set_time_advance false, 0.0
-    Unset --> Advancing: set_solar_epoch then<br/>set_time_advance true, rate
+    Unset --> Advancing: set_solar_epoch then<br/>set_time_advance false, 0.0
     Unset --> Failed: RPC returns false<br/>no sun in the world
 
     Frozen --> Advancing: window with advancing policy opens<br/>epoch re-applied first
     Advancing --> Frozen: window with frozen policy opens<br/>epoch re-applied first
     Frozen --> Frozen: next window opens<br/>epoch re-applied at its own instant
 
-    Advancing --> Advancing: local midnight crossed<br/>driver re-asserts the date, D11.2
+    Advancing --> Advancing: every frame, set_solar_epoch before the cue<br/>date carried or held at midnight, D11.2
 
     Frozen --> Failed: read-back residual over tolerance
     Advancing --> Failed: read-back residual over tolerance
@@ -1235,6 +1267,13 @@ rendered it, and counts a capture that went without as `IlluminationUnpaired`.
 | `sun_elevation_declared_deg`, `sun_corrected_elevation_declared_deg`, `declared_elevation` | Both elevations of the declared sun, and which of them a declared elevation means (§12, question 7) |
 | `residual_clock_s`, `residual_deg`, `residual_corrected_deg` | The audit's residuals on this frame's tick (§8.3) |
 
+Under `advance` the two blocks name two different things, and a reader should not expect them to
+match: `<_solar>`'s `advancing` and `rate` are the engine's own advance, which the session keeps off,
+so they read `false` and `0`; `<_illumination>`'s `policy` and `rate` are the declaration the session
+wrote the sun from, `advance` and `1`. Measured on a capture of a `SumoDriveSession` under `advance`
+at Gardnerville: `declared_civil` 10:01:00.05, `<_solar>` holding 10:01:00.001 (`solar_time`
+10.0167 h), `residual_clock_s` −0.049.
+
 A run that declared nothing writes no `<_illumination>` at all. The two §4.4 fields that depend on
 the lamps and the band — `illumination_band` and `headlights_asserted` — are not written, because
 neither the band function nor the headlight rule is built.
@@ -1252,7 +1291,7 @@ against the sun's own clock, which would compare the sun with itself and pass un
 
 | Compared | How | Catches |
 |---|---|---|
-| Zone, advancing flag, rate | Exactly | A zone of longitude/15 (local mean solar time), a second client driving the sun |
+| Zone, advancing flag, rate | Exactly: the declared offset, and the engine's advance off at rate 0 under every policy | A zone of longitude/15 (local mean solar time), a second client driving the sun |
 | `residual_clock_s` | The instant the sun holds — date and clock — minus the declared instant | A clock another client moved, a missed or spurious rollover (a whole day), a wrong date |
 | `residual_deg` | Angle between the reported sun's direction (geometric elevation and azimuth) and the declared sun's, from the engine's own algorithm evaluated at the declared instant itself | Everything above, a sun computed for another georeference, the −180° sentinel of §3.7, and the engine rendering a minute other than the one it holds |
 | `residual_corrected_deg` | Reported refraction-corrected elevation minus the declared one | The elevation the light is actually rotated by; compared per tick where the snapshot carries it, and always at window open |
@@ -1262,22 +1301,42 @@ The reference implementation is **the algorithm the engine uses**: `SolarPositio
 `SunPosition.cpp:11-149` with the engine's single-precision inputs and outputs, and reproduces all
 twelve stage C readings, taken from a running server at both sites, inside 10⁻⁴°.
 
-**Tolerance.** Derived, not chosen: **0.5 s** of clock, because the engine evaluates its sun at whole
-seconds and nothing nearer can change the sun it renders, and **0.01°** of direction, the resolution
-floor stage C measured the engine three orders of magnitude inside. Under `advance` both widen by two
-ticks' worth of advance ([`04`](04_Contracts.md) `C6` §8.3a's form), which at a real-time rate and a
-0.05 s tick leaves both at the floor.
+**Tolerance.** Derived, not chosen, and the same at every rate: **0.5 s** of clock, because the
+engine evaluates its sun at whole seconds and nothing nearer can change the sun it renders, and
+**0.01°** of direction, the resolution floor stage C measured the engine three orders of magnitude
+inside. Under `advance` the session writes each frame's clock in that frame's RPC drain, at the whole
+second nearest the declared instant, so the clock the snapshot carries is within half a second of the
+declaration whatever the rate and the sun it renders is within about 0.002° of it; nothing stands
+between the write and the frame for a wider tolerance to absorb. A tolerance that widened with the
+rate would, at an hour of sun per simulated second, admit a clock three hundred and sixty seconds
+from the declaration that the writing never produces, so the audit does not widen
+(`SolarAudit.ToleranceSeconds`, `ToleranceDegrees`).
 
 **The engine's clock decomposition is a disagreement, and the audit reports it as one.**
 `ACesiumSunSky::GetHMSFromSolarTime` truncates the minute, rounds the second and never carries (F1).
 Replaying its arithmetic over every whole second of a day, it evaluates **623 of the 1,440
 whole-minute clocks as the minute before** — 01:01:00 as 01:00:00 — besides the last half-second of
 every minute. That is a quarter of a degree of hour angle, and near the horizon most of it is
-elevation. A frozen clock is therefore written one millisecond past its declared second, where all
-86,400 seconds decompose as declared (§3.4). An advancing clock passes through the bad half-second
-of every minute, and the audit stops the run at the first such tick, naming `GetHMSFromSolarTime` and
-the carry in the engine as the remedy. Until that carry is made, `advance` is not usable under this
-audit.
+elevation. Every clock the session writes is therefore one millisecond past a whole second, where all
+86,400 seconds decompose as declared (§3.4). A clock the engine carries forward itself passes through
+the bad half-second of every minute: measured with `CarlaNet/python/test_sun_binding.py --advance`
+against a session that left the advance to the engine, the audit stopped every advancing window at
+both sites at tick 29 — civil 07:00:59.45, and 23:59:59.45 before midnight — with the world holding
+07:00:59.500 and lit by the sun of 07:00:00, 0.227° from the declared sun. Where the audit meets a
+clock in that half-second, it names `GetHMSFromSolarTime` and says the clock was not one the session
+wrote.
+
+> **D11.19 — under `advance` the session drives the sun: it writes each frame's sun, date, clock and
+> zone, before that frame's tick cue, at the whole second nearest the frame's declared instant and one
+> millisecond past it, and the engine's own advance is off.** Decided by the plan owner on
+> 2026-09-25 among three remedies for the minute the engine drops: the session driving the sun every
+> tick, patching `ACesiumSunSky::GetHMSFromSolarTime` to carry the minute, and loosening the audit's
+> tolerance to pass it. The second and the third are rejected and neither is done: the vendored
+> plugin is not patched, and the audit holds 0.5 s and 0.01° at every rate. Measured live at both
+> sites (`test_sun_binding.py --advance`): windows across 07:01, across midnight with the calendar
+> advancing and across midnight with it held all hold on every tick, worst clock residual −0.499 s and
+> worst direction 0.0019°; a `SumoDriveSession` under `advance` across 10:01 at Gardnerville held 120
+> ticks with 120 writes. The write costs one `set_solar_epoch` round trip per tick (§9.1).
 
 **Response.** A disagreement at window open refuses the session before it renders; during a window
 it stops the run at that tick, naming the tick, the civil instant, each disagreement and its likeliest
@@ -1319,10 +1378,10 @@ properties it needs to measure and what is already known, rather than inventing 
 | Operation | Cost | Read from |
 |---|---|---|
 | `set_solar_epoch` at window open | One RPC round trip, one `UpdateSun()`, once per window. Outside the capture loop entirely | §3.4 |
-| `set_time_advance` | One RPC, once per window. The controller is find-or-spawned | `CesiumHeightSampler.cpp:799-845` |
+| `set_time_advance(false, 0)` | One RPC, once per window, under every policy. The controller is find-or-spawned | `CesiumHeightSampler.cpp:799-845` |
 | Reading solar state per capture | **Zero.** It rides the episode-state header already being parsed, into a volatile field | `WorldObserver.cpp:326-339`; `CarlaClient.cs:1848-1855, 1991` |
-| Advancing, per tick | One `Fmod` pair and one `UpdateSun()` per world tick | `CesiumTimeOfDayController.cpp:14-40` |
-| Frozen, per tick | The controller's `Tick` early-returns on `!bAdvancing` | `CesiumTimeOfDayController.cpp:17-20` |
+| Advancing, per tick | **One `set_solar_epoch` round trip and one `UpdateSun()` per world tick**, from the session. No batch command sets the sun (`LibCarla/source/carla/rpc/Command.h:284-306`), so it is a plain RPC beside the pose batch. **Measured** on the loaded Gardnerville world, synchronous at 0.05 s, no vehicles and no camera: a median round trip of **0.128 ms** (p95 0.190 ms, worst 0.673 ms) over 500 calls served from the drain; **6.151 ms per tick with a write every tick against 6.063 ms with none**, means of three interleaved rounds of 200 ticks whose round-to-round spread (6.03–6.26 ms) is of the same size as the difference (`scratchpad/sun_session_driven/sun_write_cost.py`) | §3.4 |
+| Frozen, per tick | Nothing written; the controller's `Tick` early-returns on `!bAdvancing` | `CesiumTimeOfDayController.cpp:17-20` |
 | `UpdateSun()` itself | Sets the sky light's absolute world location, evaluates the NOAA solar formulation in scalar double math, and calls `SetWorldRotation` on one `UDirectionalLightComponent`. **No sky-light recapture is triggered** | `CesiumSunSky.cpp:405-466` |
 | Vehicle light commands | Rides the existing `apply_batch`; measured ≈26 extra entries on one sub-step in twenty at `render_cap` = 128 | §6.6 |
 
@@ -1340,7 +1399,7 @@ an inference from the light's configuration, not a measurement**, and it is the 
 |---|---|---|
 | **M-SOL-1** | **Pixel statistics of a headless capture at sun elevation −61° and at −34°, and at −3°, 0°, +3° and +6°.** Report the mean, the 5th and 95th percentile and the fraction of pixels at zero — **and the camera's exposure state alongside, because without it the result is uninterpretable (§5.5)**. Costs one short run on an existing world | Bounds the dim end of the twilight product and converts [`Findings/13`](../../Findings/13_Usable_Night_Lighting.md) §1's "near-black" prediction into a number. §5.4 |
 | **M-SOL-2** | **Whether a vehicle's lights are legible in a capture at operational altitude.** Capture one vehicle at each of the rig's altitudes with `Brake` asserted and cleared, and difference the frames | Confirms or overturns D11.10's default and §6.4's sub-pixel inference |
-| **M-SOL-3** | **Per-tick game-thread cost of `UpdateSun()` under the advancing policy, at `render_cap` vehicles.** Difference the tick time with `advancing` true against false, all else held | The only per-tick cost the advancing policy adds. §9.1's inference is that it is negligible; that needs confirming before `advancing` is used on a long window |
+| **M-SOL-3** | **Per-tick cost of the advancing policy's write at `render_cap` vehicles** — one `set_solar_epoch` round trip and one `UpdateSun()` per tick. Difference the tick time under `advance` against `freeze_at_window_start`, all else held | The only per-tick cost the advancing policy adds. Measured at 0.09 ms per tick on an empty world (§9.1); the world's load at `render_cap` is what is not measured. The written clock changes whole second once in twenty ticks at `rate = 1.0`, so the light's direction does too |
 | **M-SOL-4** | **Unconditional per-tick cost of `GetSolarState` inside `WorldObserver::Serialize`.** It performs **three full actor-list sweeps per tick** — `TActorIterator<ACesiumSunSky>` (`CesiumHeightSampler.cpp:683-697`), `ACesiumGeoreference::GetDefaultGeoreference` which itself iterates all actors (`CesiumGeoreference.cpp:70-88, 144-161`), and `TActorIterator<ACesiumTimeOfDayController>` (`CesiumHeightSampler.cpp:786-794`) | This runs on **every** tick, including under `frozen` where the answer cannot have changed, and it scales with total actor count — which in a capture window includes up to `render_cap` vehicles plus every generated signal actor. The fix is to cache the three pointers and the packed block, invalidated on `UpdateSun`, making the frozen policy genuinely free (§10, F2) |
 | **M-SOL-5** | **Added batch entries from light-state deltas at `render_cap`.** §6.6 measures 20.5% of live population per SUMO step on the sizing scenario; confirm on Arapahoe Underpass, whose median population is 336 | Arapahoe is the binding scenario ([`10`](10_Scale_And_Performance.md) §3.2), and its lane-change rate may differ |
 
@@ -1353,11 +1412,11 @@ exists or would silently corrupt data that is about to.
 
 | # | Defect | Evidence | Consequence |
 |---|---|---|---|
-| **F1** | **`GetHMSFromSolarTime` drops up to 60 seconds.** `Minute` is truncated, `Second = FMath::RoundToInt(...) % 60` rounds a value that can reach 60 and then zeroes it, and nothing carries into the minute | `CesiumSunSky.cpp:575-585`. Swept over the 0–24 h range at 0.1 s: worst error **−60.000 s** over **0.833%** of the range, worst-case **0.25°** of hour angle and **0.222°** of elevation at the sizing site. Replayed over every whole second of a day: **623 of the 1,440 whole-minute clocks** are evaluated as the minute before, because a whole minute is rarely exact in binary | A frozen clock written on a whole minute renders the minute before, 43% of the time; the session writes it one millisecond past the second, where every second decomposes as declared. An advancing clock renders a minute early for half a second of every minute, and the audit stops such a run (§8.3). One-line carry fix in the vendored plugin |
+| **F1** | **`GetHMSFromSolarTime` drops up to 60 seconds.** `Minute` is truncated, `Second = FMath::RoundToInt(...) % 60` rounds a value that can reach 60 and then zeroes it, and nothing carries into the minute | `CesiumSunSky.cpp:575-585`. Swept over the 0–24 h range at 0.1 s: worst error **−60.000 s** over **0.833%** of the range, worst-case **0.25°** of hour angle and **0.222°** of elevation at the sizing site. Replayed over every whole second of a day: **623 of the 1,440 whole-minute clocks** are evaluated as the minute before, because a whole minute is rarely exact in binary | A clock written on a whole minute renders the minute before, 43% of the time, and a clock the engine carries forward renders a minute early for half a second of every minute — measured, the audit stops such a window at tick 29, civil 07:00:59.45 (§8.3). The session writes every clock, frozen or advancing, one millisecond past a whole second, where every second decomposes as declared, and never lets the engine carry the clock (D11.19). The vendored plugin is not patched |
 | **F2** | **`GetSolarState` does three full actor-list sweeps on every tick**, including under a frozen clock where nothing can have changed | `CesiumHeightSampler.cpp:753-797` calling `FindCesiumSunSky` (`:683-697`), `GetDefaultGeoreference` (`CesiumGeoreference.cpp:144-161`, iterating at `:70-88`) and a `TActorIterator<ACesiumTimeOfDayController>` (`:786-794`); invoked per tick from `WorldObserver.cpp:326` | Unconditional per-tick cost that scales with actor count, for a value that is constant under the default policy. M-SOL-4 |
 | **F3** | **The configured zone is local mean solar time**, `longitude / 15`, not the civil offset | `CesiumSunSky.cpp:570-573` | At the sizing site, a **14.72 minute / up to 3.27° elevation** error — decisive at the horizon. Closed by D11.5: `set_solar_epoch` writes the declared offset, and the audit compares the zone exactly on every tick |
 | **F4** | **An invalid date yields a silent sentinel sun.** `SetSolarDate` clamps day to 1–31, so 31 February reaches `GetSunPosition`, which returns early leaving the output struct zeroed | `CesiumHeightSampler.cpp:746`; `SunPosition.cpp:17-21, 215-221`; `CesiumSunSky.cpp:436` | `sun_elevation_deg = −180.0`, `sun_azimuth_deg = 0.0`, with only a log line. `set_solar_epoch` rejects such a date and `SolarEpoch` refuses it at declaration; `set_solar_date` still clamps and is not on the session's path |
-| **F5** | **An advancing clock that only wraps never rolls the calendar over**, so a window crossing midnight returns to 00:00 of the *same* day | A modulo-24 wrap with `Day` untouched | Closed in the engine: `ACesiumTimeOfDayController` carries whole days onto the date (`RollSolarDate`). The audit compares the whole instant, so a missed rollover would be a whole day out and stop the run |
+| **F5** | **An advancing clock that only wraps never rolls the calendar over**, so a window crossing midnight returns to 00:00 of the *same* day | A modulo-24 wrap with `Day` untouched | Closed in the engine: `ACesiumTimeOfDayController` carries whole days onto the date (`RollSolarDate`). The session does not use that advance: under `advance` it writes the date with every frame's clock, carried or held by D11.2. The audit compares the whole instant, so a missed rollover would be a whole day out and stop the run |
 | **F6** | **The solar date defaults to the host system date and the time defaults to noon**, applied unconditionally including in `--no-build` attach mode | `WorldBuilder.py:227-232`; `run_SCTMV.py:138`, whose comment at `:137` — "the sun is respawned on each world build" — is false for attach mode | Two runs of the same scenario on different days render under different seasonal sun angles, with nothing recording that the date was not chosen. Measured seasonal range at the sizing site: peak elevation 39.41° to 86.29°. **Every capture and every shipped CoT dataset this pipeline has produced is therefore noon on an arbitrary date** |
 | **F7** | **Setting the sun is two RPCs and two `UpdateSun()` calls**, so between them the world holds the new time on the old date | `WorldBuilder.py:238-239`; `CesiumHeightSampler.cpp:731, 749` | Harmless if no frame is captured between, which is not guaranteed. The session uses D11.5's atomic call |
 | **F8** | **The `_solar` block is silently omitted when the cache is unpopulated**, rather than failing | `CotWriter.cs`; `SolarMetadata.cs` | Right for a frame, wrong for a run. The session's audit stops a run whose snapshot carries no sun after one was bound (§8.3) |
@@ -1375,11 +1434,11 @@ exists or would silently corrupt data that is about to.
 | # | Decision |
 |---|---|
 | **D11.1** | **A scenario declares its epoch as a civil instant with an explicit numeric UTC offset** — the `epoch` object of [`04`](04_Contracts.md) `C9` §11.3, read as `SolarEpoch`. The offset is normative and the zone name provenance only; a redundant UTC instant catches an offset applied in the wrong direction. The epoch is the sole authority for what a simulated second means in civil time, and one function, `SolarEpoch.CivilInstantAt`, resolves `civil_instant(t)` for every consumer. Half-hour offsets are first-class: the sizing site is Iran at **+03:30** (§2.2) |
-| **D11.2** | **`calendar_advances` is declared, and the sun's date follows `C6` G11's effective date rule**: it moves with the civil date only when the calendar advances and the policy is `advance` or a freeze declares `freeze_date_advances`. The session writes date and clock together at window open, the engine carries midnight onto the date under `advance`, and the per-tick audit compares the whole instant (§2.3) |
+| **D11.2** | **`calendar_advances` is declared, and the sun's date follows `C6` G11's effective date rule**: it moves with the civil date only when the calendar advances and the policy is `advance` or a freeze declares `freeze_date_advances`. The session writes date and clock together at window open and, under `advance`, for every frame, so the date moves across midnight where the rule moves it and is held where it holds; the per-tick audit compares the whole instant (§2.3) |
 | **D11.3** | **Daylight saving is carried by the declared UTC offset, never an engine DST flag.** `set_solar_epoch` turns `UseDaylightSavingTime` off; `dst_in_effect` records whether the offset includes daylight saving. The engine's DST implementation is a single hardcoded date pair with `protected` fields and is unusable (§2.4) |
 | **D11.4** | **A corpus-eligible run whose scenario declares no epoch is refused.** An exploratory run may proceed with `corpus_eligible: false` and `epoch_source: "absent"` in its manifest. There is no silent default, because today's silent default is the host's wall-clock date (§2.6, F6) |
 | **D11.5** | **Add one atomic `set_solar_epoch(year, month, day, hours, utc_offset_hours)` RPC** that sets `TimeZone`, the date and `SolarTime` and calls `UpdateSun()` exactly once. It closes the time-zone gap — measured at **14.72 min / up to 3.27° of elevation and a standing ~3.7° shadow-direction error** at the sizing site — and removes the two-RPC intermediate state. Chosen over pre-converting civil time to local-mean-solar time in the bridge, **which produces the same sun to 0.004° but records a `solar_time` and `time_zone` that are not the declared ones, and moves the date boundary to civil 23:45:17 — 14 min 43 s from the close of the plan's own 23:00 window**. `set_solar_time` and `set_solar_date` are retained unchanged (§3.2.1, F3, F7) |
-| **D11.6** | **The illumination policy is declared, never defaulted; `freeze_at_window_start` is the recommended value.** A session that renders a world with no declared policy is refused. Measured: one default 1,800 s window at `rate = 1.0` moves the sun up to **6.7° of elevation**, which confounds any comparison run inside it. `advance` is the choice for a deliberate transition product once the engine's clock decomposition is fixed (§4.2, F1) |
+| **D11.6** | **The illumination policy is declared, never defaulted; `freeze_at_window_start` is the recommended value.** A session that renders a world with no declared policy is refused. Measured: one default 1,800 s window at `rate = 1.0` moves the sun up to **6.7° of elevation**, which confounds any comparison run inside it. `advance` is the choice for a deliberate transition product, written by the session for every frame (§4.2, D11.19) |
 | **D11.7** | **Night capture is not viable today, and no window whose sun elevation is below −6° may be declared corpus-eligible.** There is no moon light, no artificial light in a generated world, no reachable exposure control, and the photoreal tiles carry baked daytime radiance. The renderable low-light band at the sizing site is **26–30 minutes per twilight edge** (§5) |
 | **D11.8** | **The SUMO-to-CARLA light mapping is pure and total** — a function of the SUMO signal mask and the recorded sun elevation and nothing else. `HighBeam`, `Fog` and `Interior` are never set, because asserting them would fabricate a driver decision the scenario never made (§6.2) |
 | **D11.9** | **Headlights are driven from the recorded sun elevation with hysteresis**, `Position \| LowBeam` on below **+3.0°** and off above **+6.0°** — a band the sun crosses in ~14 minutes at the sizing site, so at most one transition per default window. Computed from `_solar.sun_elevation_deg`, identically for every vehicle (§6.3) |
@@ -1387,11 +1446,12 @@ exists or would silently corrupt data that is about to.
 | **D11.11** | **Light-state commands are deltas, ride the existing `apply_batch`, and go only on the first world sub-step of each SUMO step.** `VAR_SIGNALS` joins the existing TraCI subscription, never a per-vehicle getter. Measured: **16.73 changes per step** at population 81.6 — 20.5% — so ≈26 extra batch entries once per twenty ticks at `render_cap` = 128, and **zero extra round trips** (§6.6) |
 | **D11.12** | **Illumination is derived context: computed identically for every capture, recorded always, legitimate for stratification and legitimate as model input, never a supervision signal.** Enforced by the same boundary [`06`](06_Truth_And_Annotation.md) §3.6 rule 3 already names — the compiled `SupervisionPlan` is immutable and exposes no writer — plus an assembly-reference rule: the plan compiler may not link anything that can read a solar value (§7.1, §7.3) |
 | **D11.13** | **The corpus auditor cross-tabulates `illumination_band` against supervision label and reports a band that contains only positives or only negatives as a confound.** A report, not a refusal, because a single window legitimately has one band (§7.2) |
-| **D11.14** | **The world's sun is compared against the declared one at window open and on every tick, and a disagreement stops the run**; every capture carries the residuals of its own tick. Zone, flag and rate exactly; `residual_clock_s` within **0.5 s**; `residual_deg` and `residual_corrected_deg` within **0.01°**, widened under `advance` by two ticks of advance. A snapshot with no sun fails the same gate. **Never a warning, never a correction** (§8.3) |
+| **D11.14** | **The world's sun is compared against the declared one at window open and on every tick, and a disagreement stops the run**; every capture carries the residuals of its own tick. Zone, flag and rate exactly; `residual_clock_s` within **0.5 s**; `residual_deg` and `residual_corrected_deg` within **0.01°**, the same at every rate. A snapshot with no sun fails the same gate. **Never a warning, never a correction** (§8.3) |
 | **D11.15** | **The solar driver is the only component permitted to call `set_solar_time`, `set_solar_date`, `set_solar_epoch` or `set_time_advance` during a session**, added to [`04`](04_Contracts.md) §8.4's forbidden list. The interactive viewer's `K` hotkey (`PygameInterface.py:258-268`) is inert while a capture session holds the world (§3.5) |
 | **D11.16** | **The session binds the full solar state at every window open, unconditionally, and never reads the world's existing state as a starting point.** Configuring the georeference does not assert the date, so a world keeps whatever date the previous session left — 2019-09-21 for a sun nobody dated — and possibly a still-true `advancing` flag. `SolarLease` writes date, clock, zone, flag and rate, reads them back, records the sun it found and restores it on every exit path (§3.6, F11) |
 | **D11.17** | **A corpus-eligible run fixes camera exposure per window and records it; histogram auto-exposure is not permitted.** The exposure API is implemented (`SceneCaptureSensor.h:237-369`) and simply not published as camera attributes, so exposure is currently uncontrolled auto — which across a dusk window compensates away the 6.7° illumination change `_solar` faithfully records, and which would make M-SOL-1's night frame uninterpretable. Publishing the attributes (N2) is therefore a prerequisite of the **daylight** corpus, not only a night one (§5.5, F9) |
 | **D11.18** | **The illumination policy is validated as a whole at run start; an incoherent combination is refused, never partially applied.** `solar_rate` with `frozen`, `advancing` with `solar_rate = 0`, a non-unit rate in a corpus-eligible run, inverted headlight thresholds, and `vehicle_lights = "off"` with `headlights_driven = true` are all refusals. Today `--time-rate` without `--time-advance` is a silent no-op (`WorldBuilder.py:246-247`), which is the same failure shape as everything else this section fixes (§4.4.1, F12) |
+| **D11.19** | **Under `advance` the session drives the sun: it writes each frame's date, clock and zone before that frame's tick cue, at the whole second nearest the frame's declared instant and one millisecond past it, and the engine's own advance is off.** The plan owner's decision of 2026-09-25, among three remedies for the minute `GetHMSFromSolarTime` drops; patching the vendored plugin to carry it and loosening the audit's tolerance to pass it are rejected and not done. One `set_solar_epoch` per tick, measured at a 0.128 ms median round trip; windows across 07:01 and across midnight, calendar advancing and held, hold at both sites (§3.4, §8.3, §9.1, F1) |
 
 ---
 
