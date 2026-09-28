@@ -26,6 +26,7 @@ are on the critical path.
 | 2026-09-28 | Stage A: the co-simulation session pins the SUMO release it launches to the world's converter. |
 | 2026-09-28 | Stage F: the compiler and its checks, the epoch, civil time, the schema, route validation, the resolution report, the association check and sweeps are built. |
 | 2026-09-28 | Stage A: the session refuses a scenario not on its world's own network. Stage B: the shipped scenarios are to be recompiled. Stage I: the session's check of the compile lock. |
+| 2026-09-28 | Stage G: run_capture, layered resolution, validation, the echo, the result, termination and both launchers built. |
 
 ---
 
@@ -238,11 +239,13 @@ only 20 unconditionally in force, plus 13 undeclared hotkeys of which one is doc
 
 | Item | Notes |
 |---|---|
-| Layered resolution — tool defaults → site profile → world bindings → scenario declarations → run configuration → operator overrides | Every field carries its value **and the layer that set it**; the manifest's copy is itself a valid run configuration, so reproducing a run is reading it back |
-| The toggle inventory with mutability classes, decided by one question: *would a consumer reading the corpus be wrong if this changed and they did not know?* | The occlusion estimator is session-fixed, not run-mutable — turning it off mid-run silently changes the unoccluded denominator |
-| **Launch validation**, reusing the compiler rather than inventing a second one | A configuration that cannot work fails at launch naming the reason, not at minute forty |
-| **An echo before commit** | A multi-hour, multi-hundred-gigabyte run states its first frame's civil instant and sun elevation before starting |
-| Coexistence with `run_SCTMV.py`, which stays for the traffic-manager path | No capability lost; the three diverged duplicated defaults reconciled |
+| Layered resolution — tool defaults → site profile → world bindings → scenario declarations → run configuration → operator overrides | Every field carries its value **and the layer that set it**; the manifest's copy is itself a valid run configuration, so reproducing a run is reading it back. **Built**: `RunConfigurationResolver`, `EffectiveRunConfiguration`, `SiteProfile`; a run is reproduced by handing `<run>.effective.json` back to `run_capture --run` |
+| The toggle inventory with mutability classes, decided by one question: *would a consumer reading the corpus be wrong if this changed and they did not know?* | The occlusion estimator is session-fixed, not run-mutable — turning it off mid-run silently changes the unoccluded denominator. **Built**: `RunConfiguration`'s field table, published as `CarlaControl/schemas/run_configuration.schema.json`, generating `--help`, and held equal to [`12`](12_Operator_Control_Surface.md) §5.2 by a test |
+| **Launch validation**, reusing the compiler rather than inventing a second one | A configuration that cannot work fails at launch naming the reason, not at minute forty. **Built**: `RunConfigurationValidator`, in the compiler's finding vocabulary; [`12`](12_Operator_Control_Surface.md) §6.2.1 says where each of the 49 checks runs and which have nothing in the tree to compare yet |
+| **An echo before commit** | A multi-hour, multi-hundred-gigabyte run states its first frame's civil instant and sun elevation before starting. **Built**: `LaunchEcho`, including the instant a frozen sun is actually pinned at |
+| Coexistence with `run_SCTMV.py`, which stays for the traffic-manager path | No capability lost; the three diverged duplicated defaults reconciled. `run_SCTMV.py` is unchanged; reconciling the defaults waits for [`12`](12_Operator_Control_Surface.md) §9.2's conversion |
+| **`run_capture`**, the capture front end. **Built**: binds a compiled scenario and its world package, drives through `SumoDriveSession`, one recorder per channel; `RunResult` in every outcome with the exit status read from it; `RunTerminationSequence`; `RunCloseoutReport`; `SessionMonitor`; `RunCapture.ps1` and `RunCapture.sh` with a parity test | Not built: the distribution launchers ([`12`](12_Operator_Control_Surface.md) §10 lists what MakeDistribution needs), run lists, world-build configuration |
+| **What the session does not yet give `run_capture`** | A refusal carries no stage, so a pre-roll failure reports as a server refusal or an internal error; the window-open instant is not separate from the first rendered frame, so a frozen sun is pinned at the start of the prewarm; admissions and capacity declines are published only at disposal; a channel cannot yet aim at the traffic, as the harness's camera can |
 
 ---
 
@@ -297,7 +300,7 @@ New `CarlaNet.CoSim` in C#, orchestrated from Python; one TraCI connection owned
 | **Take a state's instant from the bridge's clock, never from SUMO's output files.** SUMO writes a step's outputs and only then advances its clock, while TraCI reports the advanced clock (`MSNet.cpp:948`, `:956`, `:809`), so an output file labels a state one step earlier than the frame that renders it. Measured: the bridge's speed at `t` matches SUMO's output at `t − 0.05 s` to 5e-3 m/s, and at `t` only to 0.229 m/s | At a 1 s SUMO step that is a whole second of onset error in any truth taken from output files |
 | **The solar block extended** with declared civil time, the asserted policy, and the residual | A frozen run and an unconfigured run are byte-identical today; assertion is what makes them distinguishable |
 | Observability with five outcomes plus an **illumination qualifier**, keyed to recorded admission and release instants | `unlit` becomes a sixth outcome only if a resolvability cutoff is measured — and is then computable from qualifiers already recorded in every earlier corpus |
-| The run supervision manifest, written incrementally | Prevalence in **three units**, plus per solar bin |
+| The run supervision manifest, written incrementally | Prevalence in **three units**, plus per solar bin. Until it exists, a run's gate records reach disk only in its `RunResult` at the end |
 | SUMO's distribution-editing behaviours enumerated as forbid, record or harmless | Three are on by default: `time-to-teleport` at 300 s, `collision.action` at `teleport`, instantaneous lane changes |
 
 ---
