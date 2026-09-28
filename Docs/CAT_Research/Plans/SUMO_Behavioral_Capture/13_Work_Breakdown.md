@@ -31,6 +31,7 @@ are on the critical path.
 | 2026-09-28 | Stage I: the compile lock and teleporting checks, staged refusals, the window-open instant and live admission passes built in the session. |
 | 2026-09-28 | Stage I: tile readiness measured; two conditions from two witnesses, and the server RPC it needs specified. |
 | 2026-09-28 | Stage I: `get_view_readiness`, the server half of tile readiness, written and awaiting a build. |
+| 2026-09-28 | Stage G: run_capture reads staged refusals, the window instant, admission passes and check 33; a stare aimed at the traffic. |
 
 ---
 
@@ -252,7 +253,7 @@ only 20 unconditionally in force, plus 13 undeclared hotkeys of which one is doc
 | **An echo before commit** | A multi-hour, multi-hundred-gigabyte run states its first frame's civil instant and sun elevation before starting. **Built**: `LaunchEcho`, including the instant a frozen sun is actually pinned at |
 | Coexistence with `run_SCTMV.py`, which stays for the traffic-manager path | No capability lost; the three diverged duplicated defaults reconciled. `run_SCTMV.py` is unchanged; reconciling the defaults waits for [`12`](12_Operator_Control_Surface.md) §9.2's conversion |
 | **`run_capture`**, the capture front end. **Built**: binds a compiled scenario and its world package, drives through `SumoDriveSession`, one recorder per channel; `RunResult` in every outcome with the exit status read from it; `RunTerminationSequence`; `RunCloseoutReport`; `SessionMonitor`; `RunCapture.ps1` and `RunCapture.sh` with a parity test | Not built: the distribution launchers ([`12`](12_Operator_Control_Surface.md) §10 lists what MakeDistribution needs), run lists, world-build configuration |
-| **What the session gives `run_capture` that it does not yet read** | Built in the session: each refusal's stage (`Stage`/`StageName`, [`03`](03_CoSimulation_Runtime.md) §11.10); the window-open instant (`window_opens_at`); admission passes as they are made (`Report.LastAdmissionPass`, `on_admission_pass`). Remaining: `run_capture` reading them, and a channel aiming at the traffic |
+| **What `run_capture` reads from the session** | **Built**: every refusal mapped by its stage; the window opening at its own begin (`window_opens_at`), with the echo's sun stated there; the live admission pass on the monitor and check 33 from the pass for the window's begin; the compile lock and teleporting checks in the result and the closeout; a stare aimed at the rendered traffic (`stare_look_at_target`) that follows it through the prewarm and records the point it resolves to. Not built: a transport failure is `internal_error` until the session stages it; no run-configuration field accepts teleporting |
 
 ---
 
