@@ -2,7 +2,6 @@ using System.Diagnostics;
 using CarlaNet.Map.WorldPackage;
 using CarlaNet.Recording;
 using CarlaNet.Sumo;
-using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Commands;
 
 using ActorId = uint;
@@ -43,8 +42,7 @@ public sealed class SumoDriveSession : IDisposable
     private readonly VehicleBodyPool? _pool;
     private readonly Func<ulong?> _tickWorld;
     private readonly IlluminationFrames _illumination = new();
-    private readonly List<Command> _batch = [];
-    private readonly List<Command> _parked = [];
+    private readonly TickBatch _batch = new();
     private readonly List<(string VehicleId, ActorId Actor, VehiclePose Pose)> _commanded = [];
     private readonly Dictionary<string, (double X, double Y)> _positions = [];
     private readonly Dictionary<string, CoSimVehicleFrame> _previous = [];
@@ -542,11 +540,10 @@ public sealed class SumoDriveSession : IDisposable
 
     private void ComputePoses(double fraction)
     {
-        // Every body released since the last tick goes back to its slot, in this same batch. A
-        // parking pose is a pose like any other, so it costs an entry rather than a round trip.
-        _batch.Clear();
-        _batch.AddRange(_parked);
-        _parked.Clear();
+        // Every body released since the last tick goes back to its slot at the head of this same
+        // batch, ahead of every pose, so a body lent to another vehicle this tick holds that
+        // vehicle's pose and velocity once the batch has been applied.
+        _batch.Begin();
         _commanded.Clear();
 
         foreach (string vehicleId in _renderSet.RenderedVehicleIds)
@@ -579,6 +576,15 @@ public sealed class SumoDriveSession : IDisposable
             if (pose is not { } applied)
             {
                 Report.PosesRefusedForMissingGround++;
+
+                // A body already lent to this vehicle stays where its last pose put it, so it is
+                // told it is standing still rather than left reporting the speed of a pose it no
+                // longer follows.
+                if (_pool is { } holding && holding.TryGetHeld(vehicleId, out PooledBody stranded))
+                {
+                    _batch.HoldStill(stranded.Actor);
+                }
+
                 continue;
             }
 
@@ -598,7 +604,7 @@ public sealed class SumoDriveSession : IDisposable
                 if (pool.TryCheckOut(vehicleId, extent.BlueprintId, out PooledBody body))
                 {
                     actor = body.Actor;
-                    _batch.Add(new ApplyTransformCommand(actor, TransformOf(applied)));
+                    _batch.Pose(actor, applied);
                     _commanded.Add((vehicleId, actor, applied));
                 }
                 else
@@ -635,29 +641,31 @@ public sealed class SumoDriveSession : IDisposable
         if (_pool is { } pool && pool.TryCheckIn(interval.VehicleId, out PooledBody body))
         {
             actor = body.Actor;
-            _parked.Add(new ApplyTransformCommand(actor, body.Parking));
+            _batch.Park(actor, body.Parking);
         }
 
         _options.OnRelease?.Invoke(interval with { Actor = actor });
     }
 
     /// <summary>
-    /// Write every pose this tick in one round trip.
+    /// Write every pose this tick, and the velocity that goes with it, in one round trip.
     /// </summary>
     /// <remarks>
     /// <para><b>One batch, and no variable tail.</b> Every command CARLA's batch endpoint takes is
     /// supported at both ends, so N vehicles cost one round trip rather than N. The .NET traffic
     /// manager already writes its control frame this way, against the same endpoint.</para>
     ///
-    /// <para><b>No target velocity beside the transform.</b> The runtime section's D3.5 has the
-    /// bridge emit one, and it will once the engine change beside it lands. Today it would be a
-    /// command per vehicle per tick that cannot do anything: on a body that is not simulating,
-    /// <c>SetPhysicsLinearVelocity</c> writes a physics body that
-    /// <c>UPrimitiveComponent::GetComponentVelocity</c> will not read, and disabling physics
-    /// destroys that body in the first place. The engine classifies the call as invalid on a
-    /// non-simulating body and logs it in every non-shipping build, so emitting it now buys a line
-    /// of log per vehicle per tick and nothing else. SUMO's own speed is on the pose record either
-    /// way, which is where the truth path reads it.</para>
+    /// <para><b>A target velocity beside every transform.</b> A vehicle whose root does not simulate
+    /// reports, through <c>APawn::GetVelocity</c>, its pawn movement component's <c>Velocity</c> --
+    /// not the physics body, and not <c>ComponentVelocity</c>. Nothing on the vehicle path writes
+    /// that field except <c>set_actor_target_velocity</c> on a vehicle whose physics is disabled, so
+    /// a body moved by transforms alone reports zero to the world observer, the recorder, radar and
+    /// the truth telemetry. Disabling physics does not take the body's physics state away: it tears
+    /// down the Chaos vehicle simulation, and the movement component's
+    /// <c>OnDestroyPhysicsState</c> recreates the mesh's physics state, kinematic. That body is
+    /// written by the same call as it always was, and nothing reads it back. What a tick writes,
+    /// and in which order, is <see cref="TickBatch"/>'s; SUMO's own speed stays on the pose record
+    /// beside it.</para>
     ///
     /// <para>A failed command is counted rather than thrown on. The batch's responses name the
     /// commands that failed, and a run in which some poses did not take is a run whose imagery is
@@ -665,14 +673,14 @@ public sealed class SumoDriveSession : IDisposable
     /// </remarks>
     private void WriteTheBatch()
     {
-        if (_options.World is not { } world || _batch.Count == 0)
+        if (_options.World is not { } world || _batch.Commands.Count == 0)
         {
             return;
         }
 
-        IReadOnlyList<CommandResponse> responses = world.ApplyBatch(_batch);
+        IReadOnlyList<CommandResponse> responses = world.ApplyBatch(_batch.Commands);
         Report.Batches++;
-        Report.CommandsWritten += _batch.Count;
+        Report.CommandsWritten += _batch.Commands.Count;
         foreach (CommandResponse response in responses)
         {
             if (response.HasError)
@@ -683,16 +691,23 @@ public sealed class SumoDriveSession : IDisposable
     }
 
     /// <summary>
-    /// Compare every pose written this tick against what the world says the body became.
+    /// Compare every pose and velocity written this tick against what the world says the body
+    /// became.
     /// </summary>
     /// <remarks>
     /// <para>Taken after the tick, because the world observer reports the state of a frame once that
     /// frame exists, and the pose was written for the frame the tick just produced.</para>
     ///
-    /// <para>Free: the observer streams every actor's transform every tick whether or not anything
-    /// reads it, so this is an array read and a subtraction per rendered vehicle. That is what makes
-    /// it affordable per vehicle per tick rather than as a sample, and being per vehicle per tick is
-    /// what lets a residual be attributed to a vehicle rather than to the run.</para>
+    /// <para>Free: the observer streams every actor's transform and velocity every tick whether or
+    /// not anything reads them, so this is an array read and a subtraction per rendered vehicle. That
+    /// is what makes it affordable per vehicle per tick rather than as a sample, and being per
+    /// vehicle per tick is what lets a residual be attributed to a vehicle rather than to the
+    /// run.</para>
+    ///
+    /// <para>The velocity read is the one every other reader of the world takes -- the truth
+    /// telemetry reads the same snapshot -- so a velocity gap here is a gap in the truth record, and a
+    /// bridge that sends no velocity shows up as a gap equal to the commanded speed on every moving
+    /// vehicle.</para>
     /// </remarks>
     private void MeasureDivergence()
     {
@@ -703,23 +718,19 @@ public sealed class SumoDriveSession : IDisposable
 
         foreach ((string vehicleId, ActorId actor, VehiclePose pose) in _commanded)
         {
-            if (world.ObservedTransform(actor) is not { } observed)
+            if (world.ObservedTransform(actor) is not { } observed
+                || world.ObservedVelocity(actor) is not { } moving)
             {
                 Report.VehicleTicksWithNoReadBack++;
                 continue;
             }
 
             PoseDivergence divergence = PoseDivergence.Between(
-                _tickIndex, RenderedTimeSeconds, vehicleId, actor, pose, observed);
+                _tickIndex, RenderedTimeSeconds, vehicleId, actor, pose, observed, moving);
             Report.AddDivergence(divergence);
             _options.OnDivergence?.Invoke(divergence);
         }
     }
-
-    /// <summary>The CARLA transform a computed pose is, in the units the batch is written in.</summary>
-    private static Transform TransformOf(in VehiclePose pose) =>
-        new(new Location((float)pose.X, (float)pose.Y, (float)pose.Z),
-            new Rotation((float)pose.PitchDegrees, (float)pose.YawDegrees, (float)pose.RollDegrees));
 
     private static void Attempt(List<Exception> failures, Action step)
     {

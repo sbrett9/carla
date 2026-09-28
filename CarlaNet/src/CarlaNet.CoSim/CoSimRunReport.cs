@@ -191,6 +191,32 @@ public sealed class CoSimRunReport
     /// </remarks>
     public PoseDivergence? WorstDivergence { get; private set; }
 
+    /// <summary>
+    /// The largest difference between a commanded velocity and the one the world reported for the
+    /// body, metres per second.
+    /// </summary>
+    /// <remarks>
+    /// The reported velocity is the one the truth telemetry reads, so this bounds how far the truth
+    /// record's speed is from SUMO's. Read it against <see cref="MeanCommandedSpeedMetresPerSecond"/>:
+    /// a bridge that sends no velocity, or a server that cannot report one for a physics-disabled
+    /// vehicle, shows a mean gap equal to the mean commanded speed.
+    /// </remarks>
+    public double WorstVelocityDivergenceMetresPerSecond { get; private set; }
+
+    /// <summary>The mean of the same, metres per second.</summary>
+    public double MeanVelocityDivergenceMetresPerSecond =>
+        DivergenceSamples == 0 ? 0.0 : _velocityDivergenceTotal / DivergenceSamples;
+
+    /// <summary>
+    /// The mean length of the commanded velocities the velocity gap is measured against, metres per
+    /// second: what the mean gap would be if no velocity reached any body.
+    /// </summary>
+    public double MeanCommandedSpeedMetresPerSecond =>
+        DivergenceSamples == 0 ? 0.0 : _commandedSpeedTotal / DivergenceSamples;
+
+    /// <summary>The vehicle and tick the largest velocity difference was measured on.</summary>
+    public PoseDivergence? WorstVelocityDivergence { get; private set; }
+
     /// <summary>The first few command failures, as the server described them.</summary>
     /// <remarks>
     /// A count says how much of the imagery is wrong; the messages say what about it. Kept to a
@@ -240,6 +266,8 @@ public sealed class CoSimRunReport
     private readonly List<string> _batchFailures = [];
     private readonly List<string> _discontinuities = [];
     private double _positionDivergenceTotal;
+    private double _velocityDivergenceTotal;
+    private double _commandedSpeedTotal;
     private double _laneGeometryTotal;
 
     internal void SampleDiscontinuity(in CoSimVehicleFrame from,
@@ -273,6 +301,15 @@ public sealed class CoSimRunReport
         WorstYawDivergenceDegrees = Math.Max(WorstYawDivergenceDegrees, divergence.YawDegrees);
         WorstPitchDivergenceDegrees = Math.Max(WorstPitchDivergenceDegrees, divergence.PitchDegrees);
         WorstRollDivergenceDegrees = Math.Max(WorstRollDivergenceDegrees, divergence.RollDegrees);
+
+        _velocityDivergenceTotal += divergence.VelocityMetresPerSecond;
+        _commandedSpeedTotal += divergence.CommandedSpeedMetresPerSecond;
+        if (divergence.VelocityMetresPerSecond > WorstVelocityDivergenceMetresPerSecond
+            || WorstVelocityDivergence is null)
+        {
+            WorstVelocityDivergenceMetresPerSecond = divergence.VelocityMetresPerSecond;
+            WorstVelocityDivergence = divergence;
+        }
     }
 
     internal void SampleBatchFailure(string? message)
@@ -464,6 +501,19 @@ public sealed class CoSimRunReport
             {
                 text.AppendLine($"  worst on         {worst.VehicleId} as actor {worst.Actor} at "
                                 + $"tick {worst.TickIndex} ({worst.SimulatedTimeSeconds:0.00} s)");
+            }
+
+            text.AppendLine($"  velocity         worst {WorstVelocityDivergenceMetresPerSecond:0.000000} m/s, "
+                            + $"mean {MeanVelocityDivergenceMetresPerSecond:0.000000} m/s against a "
+                            + $"mean commanded {MeanCommandedSpeedMetresPerSecond:0.000} m/s");
+            if (WorstVelocityDivergence is { } fastest)
+            {
+                text.AppendLine($"  velocity worst   {fastest.VehicleId} as actor {fastest.Actor} at "
+                                + $"tick {fastest.TickIndex} ({fastest.SimulatedTimeSeconds:0.00} s), "
+                                + $"commanded ({fastest.Commanded.VelocityX:0.000}, "
+                                + $"{fastest.Commanded.VelocityY:0.000}, {fastest.Commanded.VelocityZ:0.000}), "
+                                + $"reported ({fastest.ObservedVelocity.X:0.000}, "
+                                + $"{fastest.ObservedVelocity.Y:0.000}, {fastest.ObservedVelocity.Z:0.000}) m/s");
             }
 
             if (VehicleTicksWithNoReadBack > 0)

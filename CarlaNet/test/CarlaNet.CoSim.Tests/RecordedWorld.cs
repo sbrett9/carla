@@ -10,7 +10,7 @@ namespace CarlaNet.CoSim.Tests;
 /// A CARLA world that records what was asked of it and answers as a server would.
 /// </summary>
 /// <remarks>
-/// <para>Everything the bridge does to a world is twelve operations wide, so a world that keeps a
+/// <para>Everything the bridge does to a world is thirteen operations wide, so a world that keeps a
 /// dictionary of actors, a list of batches and a simulated sun exercises the whole driving path --
 /// the check of which world is loaded, the pool, the batch, the read-back, the tick, the settings
 /// restoration and the sun's binding and audit -- with no server, no engine and no render. What it
@@ -21,11 +21,22 @@ namespace CarlaNet.CoSim.Tests;
 /// <see cref="TransformDrift"/> is set to. A drift of zero is a world that does what it is told and
 /// proves the comparison is wired; a drift of something is a world that does not, and proves the
 /// comparison would notice.</para>
+///
+/// <para>Velocity is answered as a server built with the kinematic-velocity change answers it. A body
+/// is spawned simulating; switching its physics either way zeroes its velocity; a target velocity
+/// written while its physics is off is what it reports until the next one; and one written while its
+/// physics is on goes to the simulating body, which this world does not model and counts instead.
+/// <see cref="ReportsNoKinematicVelocity"/> makes it a server built before that change.</para>
 /// </remarks>
 internal class RecordedWorld : ICarlaWorld
 {
+    private static readonly Vector3D Still = new(0f, 0f, 0f);
+
     private readonly Dictionary<ActorId, Transform> _actors = [];
+    private readonly Dictionary<ActorId, Vector3D> _velocities = [];
+    private readonly HashSet<ActorId> _simulating = [];
     private readonly List<IReadOnlyList<Command>> _batches = [];
+    private readonly List<long> _batchTicks = [];
     private readonly List<(string Layer, bool Visible, long AtTick)> _layerWrites = [];
     private readonly List<(string Call, long AtTick)> _solarWrites = [];
     private ActorId _nextActor = 1;
@@ -97,6 +108,28 @@ internal class RecordedWorld : ICarlaWorld
         _batches.Where(batch => batch.Any(command => command is ApplyTransformCommand));
 
     /// <summary>
+    /// Batches carrying a transform or a velocity, each with the tick the world was on when it
+    /// arrived -- which is the session's index of the tick it was written for.
+    /// </summary>
+    public IEnumerable<(IReadOnlyList<Command> Batch, long AtTick)> DrivenBatches =>
+        _batches.Zip(_batchTicks)
+            .Where(entry => entry.First.Any(command => command is ApplyTransformCommand
+                                                       or ApplyTargetVelocityCommand));
+
+    /// <summary>
+    /// Set to have a vehicle whose physics is disabled report zero velocity whatever it is given, as
+    /// a server built before the kinematic-velocity change does. To the observer that is exactly a
+    /// bridge that sends no velocity.
+    /// </summary>
+    public bool ReportsNoKinematicVelocity { get; set; }
+
+    /// <summary>
+    /// Target velocities written to a body whose physics was still on, which reach the simulating
+    /// body rather than the field a kinematic vehicle is read from.
+    /// </summary>
+    public int VelocityWritesWhileSimulating { get; private set; }
+
+    /// <summary>
     /// Set to have the world record a settings write and not act on it, as a server that refuses
     /// one does.
     /// </summary>
@@ -128,13 +161,23 @@ internal class RecordedWorld : ICarlaWorld
         Spawned.Add(blueprintId);
         ActorId actor = _nextActor++;
         _actors[actor] = at;
+
+        // A vehicle is spawned simulating, as the server spawns one.
+        _simulating.Add(actor);
+        _velocities[actor] = Still;
         return actor;
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// Applied in order, as the server visits a batch, so where one batch writes an actor twice the
+    /// later write is what the actor holds.
+    /// </remarks>
     public IReadOnlyList<CommandResponse> ApplyBatch(IReadOnlyList<Command> commands)
     {
-        _batches.Add(commands);
+        // A copy, because the session reuses its batch from one tick to the next.
+        _batches.Add([.. commands]);
+        _batchTicks.Add(Ticks);
         var responses = new List<CommandResponse>(commands.Count);
         foreach (Command command in commands)
         {
@@ -144,8 +187,35 @@ internal class RecordedWorld : ICarlaWorld
                     _actors[transform.Actor] = transform.Transform;
                     responses.Add(CommandResponse.Success(transform.Actor));
                     break;
+                case ApplyTargetVelocityCommand velocity:
+                    if (_simulating.Contains(velocity.Actor))
+                    {
+                        VelocityWritesWhileSimulating++;
+                    }
+                    else if (!ReportsNoKinematicVelocity)
+                    {
+                        _velocities[velocity.Actor] = velocity.Velocity;
+                    }
+
+                    responses.Add(CommandResponse.Success(velocity.Actor));
+                    break;
+                case SetSimulatePhysicsCommand physics:
+                    if (physics.Enabled)
+                    {
+                        _simulating.Add(physics.Actor);
+                    }
+                    else
+                    {
+                        _simulating.Remove(physics.Actor);
+                    }
+
+                    _velocities[physics.Actor] = Still;
+                    responses.Add(CommandResponse.Success(physics.Actor));
+                    break;
                 case DestroyActorCommand destroy:
                     _actors.Remove(destroy.Actor);
+                    _velocities.Remove(destroy.Actor);
+                    _simulating.Remove(destroy.Actor);
                     responses.Add(CommandResponse.Success(destroy.Actor));
                     break;
                 default:
@@ -173,6 +243,10 @@ internal class RecordedWorld : ICarlaWorld
                          held.Rotation.Yaw + RotationDrift.Yaw,
                          held.Rotation.Roll + RotationDrift.Roll));
     }
+
+    /// <inheritdoc/>
+    public Vector3D? ObservedVelocity(ActorId actor) =>
+        _velocities.TryGetValue(actor, out Vector3D velocity) ? velocity : null;
 
     /// <inheritdoc/>
     /// <remarks>The frame is the tick count, which is what a server's frame counter is to a session.</remarks>

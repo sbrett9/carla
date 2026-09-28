@@ -10,8 +10,9 @@ namespace CarlaNet.CoSim;
 /// Everything the playback bridge asks of a CARLA world, and nothing else.
 /// </summary>
 /// <remarks>
-/// <para>Twelve operations. The bridge asks which world is loaded, places bodies, writes their poses
-/// in one batch, reads back where the world says they went, advances the world a tick, reads and
+/// <para>Thirteen operations. The bridge asks which world is loaded, places bodies, writes their
+/// poses and velocities in one batch, reads back where the world says they went and how fast it says
+/// they are moving, advances the world a tick, reads and
 /// writes the episode settings so it can hand the world back as it found it, shows or hides the
 /// rendering layers whose presence is a property of the imagery, and reads and writes the sun the
 /// imagery is lit by. Anything larger
@@ -66,6 +67,22 @@ public interface ICarlaWorld
     /// commanded pose against what the world did with it costs nothing.
     /// </remarks>
     Transform? ObservedTransform(ActorId actor);
+
+    /// <summary>
+    /// The velocity the world says an actor has, in metres per second in the CARLA frame, or
+    /// <see langword="null"/> where it has reported nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>A read of the same snapshot as <see cref="ObservedTransform"/>, so comparing the
+    /// velocity a body was given against the one it reports costs nothing either. It is the velocity
+    /// every other reader of the world sees: the truth telemetry, the recorder and radar all take it
+    /// from the same place.</para>
+    ///
+    /// <para>For a vehicle whose physics is disabled it is the velocity last written to it with a
+    /// target-velocity command, on a server built with the kinematic-velocity change (doc 03 D3.5).
+    /// On a server built before it, such a vehicle reads zero whatever it was given.</para>
+    /// </remarks>
+    Vector3D? ObservedVelocity(ActorId actor);
 
     /// <summary>
     /// Advance the world one tick, answering the simulation frame it produced, or

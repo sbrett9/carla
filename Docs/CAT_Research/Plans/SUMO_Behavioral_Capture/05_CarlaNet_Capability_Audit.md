@@ -15,6 +15,7 @@
 | 2 — 2026-09-18 | Adds §14 solar surface, §15 vehicle lights, §16 weather; gaps G5.13–G5.22, decisions D5.13–D5.20. |
 | 3 — 2026-09-18 | Traffic-light findings marked present, audited, not required by this plan; vehicle lights unaffected. |
 | 4 — 2026-09-25 | §7 velocity chain corrected through `APawn`; D3.5's engine shape recorded. §7 citations against `feature/sumo-behavioral-capture`. |
+| 5 — 2026-09-28 | Pose-applied vehicle velocity present, measured live; angular velocity measured absent (§1, §3, §7.4, G5.1, §18). |
 
 ## What this section does **not** cover
 
@@ -101,11 +102,18 @@ about the client and engine, useful to other work in this fork, but nothing here
 is unrelated to vehicle light state (§15), which the plan still needs and which this audit finds
 intact end to end except one RPC-name defect (§15.5).
 
+**A pose-applied vehicle reports the velocity it is given.** The field the world observer reads for a
+vehicle whose physics is disabled is written by `set_actor_target_velocity` and by nothing else in the
+CARLA/Chaos vehicle stack (§7.3), and the SUMO bridge writes it for every body whose pose it writes.
+Measured live, the truth sidecars carry SUMO's own speed for every moving driven body, and zero for a
+parked one (§7.4).
+
 The gaps are real. In order of consequence:
 
-1. **Truth velocity for a non-simulating body is structurally zero**, not merely un-updated. The
-   field the world observer falls back to is written by nothing in the CARLA/Chaos vehicle stack
-   (§7). No client-side call can fix it.
+1. **Angular velocity for a pose-applied body is structurally zero.** It reads zero on every driven
+   body, turning ones included, and on a kinematic vehicle with a target angular velocity written
+   every tick (§7.4, measured), so no client-side call can supply it. Nothing in the truth record
+   reads it.
 2. **One RPC name in the C# client matches no server binding**, so the bulk vehicle-light read always
    fails and the failure is always swallowed (§15.5).
 3. **The Python shim exposes 8 of the 22 batch commands.** Everything missing exists one layer down
@@ -153,7 +161,7 @@ flowchart TB
 
     PY --> CS --> RPC --> ENG
 
-    G1["GAP A — truth velocity is zero for a<br/>non-simulating body (structural)"]
+    G1["GAP A — angular velocity is zero for a<br/>pose-applied body, written or not (structural)"]
     G2["GAP B — shim exposes 8 of 22 batch<br/>commands; no traffic-light surface"]
     G3["GAP C — no pre-spawn bounding box"]
     G4["GAP D — shim single-recorder /<br/>single-listener slots"]
@@ -218,7 +226,8 @@ GAP B's traffic-light half is present, audited, and **not required** by this pla
 | 5 | `has_lights` **before** spawn | P | P | `get_actor_definitions` | P | **Present** | none — the light declaration exists although dimensions do not (§15.4) |
 | 6 | World snapshot every tick | P | P | n/a (stream) | P | **Present** | none |
 | 6 | Velocity of a **simulating** actor | P | P | n/a (stream) | P | **Present** | none |
-| 6 | Velocity of a **teleported non-simulating** actor | n/a | n/a | n/a | — | **Absent** | engine (structural) |
+| 6 | Velocity of a **pose-applied** vehicle, physics disabled | P | P | `set_actor_target_velocity` (per call or in batch); read on the stream | P | **Present** — reports the velocity last written; the SUMO bridge writes it every tick, measured live (§7.4) | none |
+| 6 | Angular velocity of a **pose-applied** vehicle, physics disabled | p | P | `set_actor_target_angular_velocity`; read on the stream | — | **Absent** — reads zero whether or not one is written, measured (§7.4) | engine (structural); the shim reads it and has no setter |
 | 7 | Many simultaneous sensor streams per process | p | P | n/a (stream) | P | **Present in C#** | shim single-slot fields |
 | 8 | `SampleDrapeGroundElevation` | P | P | none — local | P (grid fetched once) | **Present** | shim does not prime the grid |
 | 9 | `get_staging_bounds` / `set_staging_bounds` | P | P | `get/set_staging_bounds` | P | **Present** | none |
@@ -560,7 +569,7 @@ the reason it cannot be a runtime query.
 
 ---
 
-## 7. Capability 6 — the world snapshot, and why a teleported vehicle reports zero speed
+## 7. Capability 6 — the world snapshot, and the velocity a pose-applied vehicle reports
 
 ### 7.1 How state reaches the client
 
@@ -655,12 +664,13 @@ is a description of the shape of a fix, not a usable mechanism today.
 
 ### 7.4 What this means for the plan
 
-Everything downstream of velocity is affected, not just the CoT record: the traffic manager's
-collision stage, and the arrival/occlusion gating of
-[doc 17](../../Findings/17_Photoreal_Occlusion_Metric.md). The team brief's decision 2 already says
-this is a problem to be solved rather than a reason to reject the mode. The audit's contribution is
-to say **where** it must be solved: in the engine, because no ordering of client calls produces a
-non-zero reading. The candidate shapes:
+Everything downstream of the observer's velocity reads it, not just the CoT record: the engine
+recorder, radar's Doppler term and the traffic manager's collision stage
+([`03`](03_CoSimulation_Runtime.md) §5.2 traces each; doc 17's occlusion and arrival gating does not
+read velocity). The team brief's decision 2 already says a pose-applied body's zero is a problem to be
+solved rather than a reason to reject the mode. The audit's contribution is to say **where** it must
+be solved: in the engine, because no ordering of client calls produces a non-zero reading through the
+base implementation. The candidate shapes:
 
 | Shape | Where it goes | Note |
 |---|---|---|
@@ -690,6 +700,26 @@ enable physics before they set a velocity; `CarlaControl/src/carlacontrol/Traffi
 sets one on a freshly spawned vehicle, whose physics is on; and
 `CarlaNet.Scenario/ScenarioExecutor.cs:180` sets zero. None of them reaches the new path with a
 velocity that changes what is read back.
+
+**Measured**, on a server built with D3.5 and the generated Gardnerville world.
+`CarlaNet/python/test_kinematic_velocity.py` reads a kinematic vehicle's commanded 12.5 m/s back on
+every tick within 3.2 × 10⁻⁷ m/s, and zero when it is moved by transforms alone. The SUMO bridge
+writes SUMO's velocity beside every pose it writes and zero at a parking transform
+([`03`](03_CoSimulation_Runtime.md) §5.4). Over 400 ticks of `run_sumo_drive.py` on the Gardnerville
+scenario the world observer reported every posed body's commanded velocity to within 3 × 10⁻⁶ m/s
+(3,996 vehicle-ticks, mean commanded speed 18.037 m/s), and every one of the 398 truth-sidecar rows of
+a moving driven body carried SUMO's own speed — read from an independent SUMO run — to the sidecar's
+0.01 m/s; parked bodies read 0.00. With the bridge's velocity writes removed, the same comparison reads
+a mean gap of 18.2058 m/s against a mean commanded 18.206 m/s, and every moving truth row reads 0.00.
+
+**Angular velocity has no such path, measured.** `FWorldObserver_GetAngularVelocity` reads
+`GetPhysicsAngularVelocityInDegrees()` on the root with no `IsSimulatingPhysics()` check
+(`WorldObserver.cpp:249-262`). Every driven body read zero angular velocity on all 3,996
+vehicle-ticks, turning ones included, and a kinematic vehicle turned at 30°/s by transforms read zero
+both with nothing else written and with `set_actor_target_angular_velocity` of 30°/s written after
+every transform. A client cannot supply it; an engine change in the shape D3.5 took for the linear
+velocity could. The truth telemetry reads the linear velocity only
+(`CarlaNet.Recording/VehicleTelemetryService.cs:96`).
 
 ---
 
@@ -1818,7 +1848,7 @@ number.
 
 | # | Gap | Layer | What it blocks | Scope of fix |
 |---|---|---|---|---|
-| **G5.1** | A non-simulating (teleported) actor reports velocity **zero** in the world observer, structurally: `ComponentVelocity` is never written by the CARLA/Chaos vehicle stack (§7.3) | **Engine** | CoT truth speed, the traffic manager's collision stage, doc 17's occlusion and arrival gating. The single named cost of teleport mode. | Engine change plus, for one of the three shapes in §7.4, a new command variant moving together across `Command.h`, `Command.cs`, `CommandFormatter.cs`. Shared code — regression-test stock content. |
+| **G5.1** | A non-simulating (pose-applied) vehicle's **linear** velocity is the one `set_actor_target_velocity` last wrote (D3.5, §7.4), and the SUMO bridge writes it every tick; its **angular** velocity reads zero whether or not one is written (measured, §7.4) | **Engine** | Linear: nothing — measured live, the truth sidecars carry SUMO's own speed. Angular: any consumer of the observer's angular velocity for a pose-applied body; nothing in the truth record reads it | Angular only: an engine change in the shape D3.5 took for the linear velocity, if a consumer needs it. Shared code — regression-test stock content. |
 | **G5.2** | Python shim exposes 8 of 22 batch command types (§4.3) | **Shim** | A Python-driven teleport loop cannot batch `SetSimulatePhysics`, `ApplyTargetVelocity`, `SetEnableGravity` or `SetTrafficLightState`; each becomes one RPC per vehicle. Does **not** block a C# runtime. | 14 wrapper classes beside the existing 8 and an import line. Shim only. |
 | **G5.3** | No traffic-light surface in Python; phase times and the frozen flag discarded in C# (§12.2) | **Shim**, then **C#** | Driving CARLA's lights from SUMO's `tlLogic` from Python; reading real phase durations from anywhere. **Not required by this plan** — CARLA renders no traffic-light or sign actors and drives no light state from SUMO (§3e) | Shim: a `TrafficLight` class over the ten existing C# methods. C#: one public accessor returning the already-decoded `TrafficLightObservedState`. No RPC, no server change. |
 | **G5.4** | Vehicle dimensions unavailable before spawn — no size attribute on any blueprint definition, no dimension field on `FVehicleParameters` (§6.3) | **RPC / engine** | A runtime `vType` ↔ blueprint fit check. Forces the correspondence to be a build-time catalogue. | Either accept the build-time catalogue (recommended; see D5.6), or add dimensions to `FVehicleParameters` and `MakeVehicleDefinition` and carry them on `ActorDefinition`, which is an engine + LibCarla + C# type change. |
@@ -1897,8 +1927,10 @@ The last is the one that matters most, because it is the failure mode
 consistent and wrong, with nothing to flag it.
 
 The things that are genuinely **missing rather than unexposed** are in
-the engine rather than in the port. A teleported vehicle reports zero velocity because the field
-CARLA's world observer falls back to for a non-simulating body is written by nothing (§7.3). A
+the engine rather than in the port. A pose-applied vehicle reports zero angular velocity whatever is
+written to it, because the observer reads a kinematic body whose angular velocity the solver
+recomputes from each teleport (§7.4, measured); its linear velocity is the one the bridge writes,
+through `set_actor_target_velocity`, and the truth record carries SUMO's speed (§7.4, measured). A
 blueprint tells you nothing about a vehicle's size until you have spawned it (§6.3) — though it does
 tell you whether it has lights (§15.4). And CARLA's own weather does nothing at all, on any map
 (§16). None of those is a CarlaNet defect; all three are facts the design has to be built around.

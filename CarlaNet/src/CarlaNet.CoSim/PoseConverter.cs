@@ -31,6 +31,12 @@ namespace CarlaNet.CoSim;
 /// A vehicle outside the grid has no height, and no pose is produced for it. The two tilt signs are
 /// CARLA's own, taken from the code that turns a rotation into axes rather than chosen: see
 /// <see cref="Tilt"/>.</para>
+///
+/// <para><b>The velocity.</b> SUMO's speed along the lane, pointed along the yaw, with a vertical
+/// component of that speed times the along-heading gradient the pitch was taken from -- so the
+/// velocity is tangent to the draped surface the body is seated on. SUMO's network is flat, so its
+/// speed is the horizontal speed, and the horizontal speed a truth record derives from this velocity
+/// is SUMO's own.</para>
 /// </remarks>
 public sealed class PoseConverter
 {
@@ -106,7 +112,7 @@ public sealed class PoseConverter
             seat = extent.ApproximateSeatHeightMetres;
         }
 
-        (double pitch, double roll) = Tilt(originX, originY, forwardX, forwardY);
+        (double pitch, double roll, double slope) = Tilt(originX, originY, forwardX, forwardY);
 
         return new VehiclePose(
             vehicleId,
@@ -119,6 +125,7 @@ public sealed class PoseConverter
             roll,
             speedMetresPerSecond * forwardX,
             speedMetresPerSecond * forwardY,
+            speedMetresPerSecond * slope,
             approximated);
     }
 
@@ -131,7 +138,7 @@ public sealed class PoseConverter
 
     /// <summary>
     /// Nose-up and right-down angles that lay the body's own axes in the ground surface's tangent
-    /// plane.
+    /// plane, and the along-heading gradient the pitch was taken from.
     /// </summary>
     /// <remarks>
     /// <para>Central differences one grid cell either side, which is the finest step the surface
@@ -164,8 +171,14 @@ public sealed class PoseConverter
     /// the same thing only where the pitch is zero, because the roll turns about an axis the pitch
     /// has already tilted. On a compound one-in-ten slope the difference is small, a hundredth of a
     /// degree, and the exact form costs one square root, so there is nothing to trade.</para>
+    ///
+    /// <para><b>The gradient is returned beside the angles</b> because the vertical velocity is the
+    /// speed times the same number: one slope decides both how the body is tilted and how fast it
+    /// climbs, so the two cannot disagree. Where the gradient is taken as zero at the edge of the
+    /// grid, the body is level there and its vertical velocity is zero with it.</para>
     /// </remarks>
-    private (double Pitch, double Roll) Tilt(double x, double y, double forwardX, double forwardY)
+    private (double Pitch, double Roll, double AlongGradient) Tilt(double x, double y,
+                                                                   double forwardX, double forwardY)
     {
         double step = _ground.CellSizeMetres;
         double rightX = -forwardY;
@@ -177,7 +190,7 @@ public sealed class PoseConverter
         double pitch = Math.Atan(along) * (180.0 / Math.PI);
         double roll = -Math.Asin(across / Math.Sqrt(1.0 + (along * along) + (across * across)))
                       * (180.0 / Math.PI);
-        return (pitch, roll);
+        return (pitch, roll, along);
     }
 
     private double? Gradient(double x, double y, double dirX, double dirY, double step)

@@ -201,6 +201,49 @@ public sealed class PoseConverterTests
         VehiclePose north = converter.Convert("v", Fuso, 0.0, 0.0, 0.0, 13.0)!.Value;
         Assert.Equal(0.0, north.VelocityX, 9);
         Assert.Equal(-13.0, north.VelocityY, 9);
+
+        // Level ground: nothing climbs.
+        Assert.Equal(0.0, east.VelocityZ, 9);
+        Assert.Equal(0.0, north.VelocityZ, 9);
+    }
+
+    [Fact]
+    public void TheVelocityClimbsWithTheGroundTheBodyIsSeatedOn()
+    {
+        // One in ten eastwards. Heading east at 13 m/s the body climbs 1.3 m every second, heading
+        // west it descends as fast, and heading north it neither climbs nor descends. The horizontal
+        // speed is SUMO's own in every case, because SUMO's network is flat and its speed is the
+        // horizontal speed; a truth record that takes the horizontal speed of this velocity reads
+        // SUMO's.
+        //
+        // The same float32 quantisation of the grid as the tilt test allows for: a thousandth of a
+        // degree of slope is about 2e-5 of gradient, a quarter of a millimetre per second here.
+        GroundSurface ground = RampSurface(gradientEastwards: 0.1);
+        var converter = new PoseConverter(ground);
+
+        VehiclePose east = converter.Convert("v", Fuso, 0.0, 0.0, 90.0, 13.0)!.Value;
+        VehiclePose west = converter.Convert("v", Fuso, 0.0, 0.0, 270.0, 13.0)!.Value;
+        VehiclePose north = converter.Convert("v", Fuso, 0.0, 0.0, 0.0, 13.0)!.Value;
+
+        Assert.True(Math.Abs(east.VelocityZ - 1.3) < 1e-3, $"east climbs at {east.VelocityZ}");
+        Assert.True(Math.Abs(west.VelocityZ + 1.3) < 1e-3, $"west climbs at {west.VelocityZ}");
+        Assert.Equal(0.0, north.VelocityZ, 6);
+        foreach (VehiclePose pose in new[] { east, west, north })
+        {
+            Assert.Equal(13.0, Math.Sqrt((pose.VelocityX * pose.VelocityX)
+                                         + (pose.VelocityY * pose.VelocityY)), 9);
+        }
+
+        // And the velocity is tangent to the body's own forward axis: the climb over the
+        // horizontal speed is the tangent of the pitch, whichever way the body faces.
+        foreach (double sumoAngle in new[] { 0.0, 37.0, 90.0, 143.5, 200.0, 270.0, 333.0 })
+        {
+            VehiclePose pose = converter.Convert("v", Fuso, 0.0, 0.0, sumoAngle, 13.0)!.Value;
+            double pitchTangent = Math.Tan(pose.PitchDegrees * (Math.PI / 180.0));
+            Assert.True(Math.Abs((pose.VelocityZ / 13.0) - pitchTangent) < 1e-9,
+                        $"at {sumoAngle} deg the velocity climbs at {pose.VelocityZ / 13.0} and the "
+                        + $"body is pitched at a tangent of {pitchTangent}");
+        }
     }
 
     [Fact]

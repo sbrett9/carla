@@ -49,7 +49,8 @@ public sealed class CarlaClientWorld : ICarlaWorld
     /// </summary>
     /// <remarks>
     /// Starting the observer here rather than leaving it to the caller is what makes
-    /// <see cref="ObservedTransform"/> answer at all. It is idempotent in effect -- a second
+    /// <see cref="ObservedTransform"/> and <see cref="ObservedVelocity"/> answer at all. It is
+    /// idempotent in effect -- a second
     /// subscription would be a second stream -- so a client that already has one is left alone.
     /// </remarks>
     public static CarlaClientWorld Attach(CarlaClient client, bool startWorldObserver = true)
@@ -131,6 +132,10 @@ public sealed class CarlaClientWorld : ICarlaWorld
     /// <inheritdoc/>
     public Transform? ObservedTransform(ActorId actor) =>
         _client.GetActorSnapshot(actor) is { } snapshot ? snapshot.Transform : null;
+
+    /// <inheritdoc/>
+    public Vector3D? ObservedVelocity(ActorId actor) =>
+        _client.GetActorSnapshot(actor) is { } snapshot ? snapshot.Velocity : null;
 
     /// <inheritdoc/>
     /// <remarks>

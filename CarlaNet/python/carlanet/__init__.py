@@ -2093,8 +2093,15 @@ class World:
 
         The three callbacks are handed a record per vehicle per tick from the tick thread and must
         not block: `on_pose` the computed pose, `on_release` a completed render interval, and
-        `on_divergence` the commanded pose against what the world did with it. The run's summary is
-        on `session.Report` either way."""
+        `on_divergence` the commanded pose and velocity against the transform and velocity the world
+        reported for the body. The run's summary is on `session.Report` either way.
+
+        Every pose the session writes carries its velocity: SUMO's speed along the lane, pointed along
+        the body's yaw, climbing with the ground it is seated on. A vehicle whose physics is disabled
+        reports the velocity it was last given, so `get_velocity`, the truth telemetry and the
+        recorder read SUMO's speed for a driven body and zero for a parked one -- on a server built
+        with the kinematic-velocity change. On one built before it every driven body reads zero, and
+        `session.Report.MeanVelocityDivergenceMetresPerSecond` equals the mean commanded speed."""
         if not _CARLANET_COSIM_AVAILABLE:
             print("SUMO co-simulation unavailable: CarlaNet.CoSim assembly not loaded "
                   "(rebuild the wheel/DLLs).", file=sys.stderr)

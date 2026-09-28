@@ -23,6 +23,7 @@ cited is marked **inference**.
 | 2 — 2026-09-18 | Simulated civil time, solar policy and illumination given named owners. Adds D1.19–D1.25. |
 | 3 — 2026-09-18 | Detect-and-track and EPoL model fixed as external; no evaluation or association component. |
 | 4 — 2026-09-18 | Live exercise a primary use case; real-time pacing owned by `PlaybackClock`. Adds D1.26–D1.29. |
+| 5 — 2026-09-28 | D1.4 and §4.3: a pose-applied body reports the SUMO velocity the bridge writes, measured. |
 
 **Out of scope, deliberately.** The per-tick mechanism of the co-simulation loop
 ([03](03_CoSimulation_Runtime.md)), the wire-level shape of any contract
@@ -569,12 +570,17 @@ them is a bridge defect and should be reported, which gives the mode a free self
 
 ### 4.3 Why SUMO owns kinematics although CARLA holds the body
 
-`WorldObserver.cpp:373` serialises `View->GetActor()->GetVelocity()`, which a transform applied to a
-non-simulating body does not update. Deriving speed from successive positions on the consumer side would
-work but is a second implementation of a quantity SUMO already computed exactly, and it would be
+`WorldObserver.cpp:385` serialises `View->GetActor()->GetVelocity()`, which a transform applied to a
+non-simulating body does not update. For a vehicle whose physics is disabled it is whatever
+`set_actor_target_velocity` last wrote, and the bridge writes SUMO's velocity beside every pose it
+writes ([03](03_CoSimulation_Runtime.md) D3.5, §5.4). So the body reports SUMO's speed, not one of its
+own: measured on the generated Gardnerville world, every truth-sidecar row of a moving driven body
+carries SUMO's own speed to the record's 0.01 m/s, read against an independent SUMO run
+([03](03_CoSimulation_Runtime.md) §5.4). Deriving speed from successive positions on the consumer side
+would work but is a second implementation of a quantity SUMO already computed exactly, and it would be
 indistinguishable from detector-derived speed in a record whose whole purpose is to be compared against
-detector output. So the bridge carries SUMO's speed and angle into the truth record, and the record says
-where it came from.
+detector output. So the truth record's speed and angle are SUMO's, and the record says where they came
+from.
 
 Appearance deserves a flag of its own, because the hazard is live and measured. **Measured** 2026-09-17 by
 parsing `BahonarPatternOfLife.zip`'s route file: the scenario declares 14 `vType`s, and the anomaly types
@@ -1661,7 +1667,7 @@ on opacity.
 | D1.1 | **`PlaybackClock` is the sole owner of simulated time.** It cues the CARLA world and steps SUMO; nothing else advances either. A camera-follower process never cues. A failure to deliver a cued frame is a session fault, not a dropped frame (§4.1, §6.1). Because simulated civil time, the sun, and — for a live exercise — pacing against a wall clock are all projections of, or run-input policies attached to, simulated time, this ownership extends to each without a second clock or a governor — see D1.19 and D1.26 |
 | D1.2 | **SUMO owns vehicle existence in the simulation; `RenderedVehicleRegistry` owns existence in the world.** These are different questions with different answers, and truth must be able to say that a vehicle exists in one and not the other (§4.1, §7) |
 | D1.3 | **SUMO's pose is the command; CARLA's applied pose is the record.** Positional truth is CARLA's because the pixels were rendered from it, and a measurable divergence between the two is a bridge defect to report (§4.2) |
-| D1.4 | **Kinematic truth comes from SUMO, not from the CARLA body.** `Actor.GetVelocity` is zero for a pose-applied body (`WorldObserver.cpp:373`); the record carries SUMO's speed and angle and says so (§4.3, §8.2) |
+| D1.4 | **Kinematic truth comes from SUMO.** The bridge writes SUMO's velocity to every body whose pose it writes, so `Actor.GetVelocity` on a pose-applied body reports SUMO's speed, measured equal to it in the truth sidecars ([03](03_CoSimulation_Runtime.md) §5.4); the record carries SUMO's speed and angle and says so (§4.3, §8.2) |
 | D1.5 | **Z, pitch and roll come from the drape**, sampled client-side with no RPC (`CarlaClient.cs:241-263`). SUMO contributes no height and is never asked for one (§4.1, §8.2) |
 | D1.6 | **A `vType`'s colour never reaches a blueprint.** Appearance is drawn from the world's vehicle catalogue by the run seed; `vType` dimensions are respected because they change car-following behaviour, `vType` colour is display metadata and carrying it would make colour the label (§4.3). The same rule governs the light channel, which reopens the same hazard by a different route — see D1.24 |
 | D1.7 | **Population authority is an exclusive, engine-held, world-scoped lease**, in the manner of staging bounds. Ambient traffic and SUMO-driven playback both acquire it, so the lockout is a failed session start naming the current holder, never a runtime warning (§5.3) |

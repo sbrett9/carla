@@ -34,6 +34,7 @@ advancement policy, the headlight predicate),
 | 2026-09-22 | §9.5.1: imagery readiness is counted in ticks; in the attended path the operator's key press is the settle. |
 | 2026-09-25 | Real-time pacing on the world tick, achieved factor published per window (§9.9); package checked against the loaded world (§7.2). |
 | 2026-09-25 | §9: sun bound by `set_solar_epoch`; under `advance` written every tick, engine advance off; audit as built. |
+| 2026-09-28 | §5.4: velocity sent and checked per tick, measured live; §5.5 angular velocity and acceleration measured. |
 
 ---
 
@@ -407,12 +408,12 @@ single batch.
 | admission, once | `SetEnableGravityCommand(actor, false)` | yes | one-off |
 | admission, once | `SetVehicleLightStateCommand(actor, flags)` | yes | one-off, and **mandatory** — a pooled actor carries its predecessor's light state (§3.5, §8.2) |
 | **every world tick** | `ApplyTransformCommand(actor, pose)` | yes | 1 command per rendered vehicle |
-| **every world tick** | `ApplyTargetVelocityCommand(actor, v)` | yes | 1 command per rendered vehicle, after its `ApplyTransformCommand`; read back only through the D3.5 engine change, and **zero** at check-in (§5.4) |
+| **every world tick** | `ApplyTargetVelocityCommand(actor, v)` | yes | 1 command per body whose pose is written, straight after its `ApplyTransformCommand`; **zero** for a held body that gets no pose and after a parking transform. **Built** (`TickBatch`), and read back through D3.5 on every tick by the self-check (§5.4) |
 | on a SUMO signal-word change only | `SetVehicleLightStateCommand(actor, flags)` | yes | **measured** on Bahonar: mean 14.44, p90 31, max 47 per *SUMO step* map-wide, all landing in one of the R sub-step batches (§3.5) |
 | on a sun-elevation threshold crossing | `SetVehicleLightStateCommand(actor, flags)` | yes | at most \|render set\| commands, at most twice per window, and **never** under a frozen sun (§3.5) |
 | at window open, and every tick under `advance` | `set_solar_epoch` | **no — a plain RPC**; no batch command sets the sun | 1 per window under a freeze; 1 per tick under `advance`, measured at a 0.128 ms median round trip (§9.2) |
 | session start, once | `set_layer_visible` for `road` and for `signals` | **no — a plain RPC** | 2 RPCs per session, before the first tick, and 2 more when it is disposed (§3.4) |
-| release | pool check-in (transform to the parking pose, lights to `None`) | yes | folded into the same batch |
+| release | pool check-in (transform to the parking pose, velocity to zero, lights to `None`) | yes | folded into the head of the next tick's batch, ahead of every pose (§5.4) |
 
 > **D3.3 — One `apply_batch` per world tick carries every pose write *and* every vehicle
 > light-state change due that tick, then a separate `world.tick()`.**
@@ -943,41 +944,85 @@ as its own field. It adds a 23rd command type, moving `Command.h`, `Command.cs` 
 
 The engine holds whatever velocity it was last given, so the bridge's writes are the whole of the
 contract. All in the tick's one `apply_batch` (D3.3), in metres per second, in the CARLA world frame
-the transform is written in.
+the transform is written in. **Built**: `CarlaNet.CoSim/TickBatch.cs` composes each tick's batch, and
+`SumoDriveSession.ComputePoses` and `Release` fill it.
 
-| When | Command | Value |
-|---|---|---|
-| every tick, per body whose pose is written | `ApplyTargetVelocityCommand(actor, v)` **after** that body's `ApplyTransformCommand` | `v.x = VelocityX`, `v.y = VelocityY` of the same `VehiclePose` — the interpolated speed times the forward vector of the applied yaw — and `v.z = speed × along-heading gradient`, the slope the pose's pitch came from, so the velocity is tangent to the draped path the body moves along |
-| the first tick after check-out | the same pair | nothing extra: the vehicle's current speed from its first tick, with no spike, because the parked body's velocity is zero |
-| a tick in which a held body gets no pose (no ground under it, no body bound) | `ApplyTargetVelocityCommand(actor, 0)` | the body stands still that tick, so it reports zero |
-| check-in to the parking slot | `ApplyTargetVelocityCommand(actor, 0)` after the parking `ApplyTransformCommand` | a parked body is not moving; otherwise it would report its last speed from beyond the sandbox for as long as it is parked |
-| spawn into the pool | nothing | `SetSimulatePhysicsCommand(actor, false)` zeroes the velocity, and it must precede every velocity write — one that arrives while physics is on writes the simulating body instead |
+| When | Command | Value | Where |
+|---|---|---|---|
+| every tick, per body whose pose is written | `ApplyTargetVelocityCommand(actor, v)` straight **after** that body's `ApplyTransformCommand` | `v.x = VelocityX`, `v.y = VelocityY` of the same `VehiclePose` — the interpolated speed times the forward vector of the applied yaw — and `v.z = VelocityZ`, the speed times the along-heading gradient the pose's pitch came from, so the velocity is tangent to the draped path the body moves along | `TickBatch.Pose` (`TickBatch.cs:65`); `v.z` from `PoseConverter.Tilt` (`PoseConverter.cs:128`, `:193`) |
+| the first tick after check-out | the same pair | nothing extra: the vehicle's current speed from its first tick, because the parked body's velocity is zero | as above |
+| a tick in which a held body gets no pose | `ApplyTargetVelocityCommand(actor, 0)`, and no transform | the body stands where its last pose left it, so it reports zero. The one path on which a body is held and gets no pose is no ground under the vehicle: every vehicle in the render set has a frame, and a vehicle whose type has no measured body is never lent one | `TickBatch.HoldStill`, called from `SumoDriveSession.cs:585` |
+| check-in to the parking slot | `ApplyTargetVelocityCommand(actor, 0)` after the parking `ApplyTransformCommand` | a parked body is not moving; otherwise it would report its last speed from beyond the sandbox for as long as it is parked | `TickBatch.Park` (`TickBatch.cs:50`), called from `Release` |
+| spawn into the pool | nothing | `SetSimulatePhysicsCommand(actor, false)` zeroes the velocity, and it precedes every velocity write — one that arrives while physics is on writes the simulating body instead | `VehicleBodyPool.Spawn` writes it before a body is ever lent |
 
 Where one batch carries two pairs for the same actor — a release and a re-admission of one body in
-one tick — the batch is visited in order (`CarlaServer.cpp:3221`), so the last pair is the one in
-effect. Truth speed and course are horizontal (`hypot(vx, vy)`, `carlanet/__init__.py:1864-1868`),
-so `v.z` changes neither; it makes the observer's acceleration vertical component describe the
-body's motion. The observer's acceleration on the first tick after admission is the whole admission
-speed over one frame, because the parked body's velocity was zero.
+one tick — the batch is visited in order (`CarlaServer.cpp:3227`), so the last pair is the one in
+effect. Bodies are given back between ticks, while SUMO's answer is read, and `TickBatch.Begin`
+writes every one of them at the head of the next tick's batch, ahead of every pose, so a body lent
+again in the same tick holds its new vehicle's pose and velocity. Truth speed and course are
+horizontal (`hypot(vx, vy)`, `carlanet/__init__.py:1865`; `VehicleTelemetryService.cs:107`), so
+`v.z` changes neither; it makes the observer's acceleration vertical component describe the body's
+motion.
 
-### 5.5 What D3.5 leaves open
+**The self-check.** `SumoDriveSession.MeasureDivergence` compares, per vehicle per tick, the velocity
+the world observer reports for each posed body against the one it was given, beside the pose
+comparison and from the same snapshot, so it costs no round trip. The observer's velocity is the one
+the truth telemetry, the recorder and radar read, so the comparison bounds how far the truth record's
+speed is from SUMO's. Each `PoseDivergence` carries `ObservedVelocity` and
+`VelocityMetresPerSecond`, the length of the vector difference; `CoSimRunReport` publishes
+`WorstVelocityDivergenceMetresPerSecond`, `MeanVelocityDivergenceMetresPerSecond`,
+`WorstVelocityDivergence` and, to read the gap against, `MeanCommandedSpeedMetresPerSecond`. A bridge
+that sends no velocity, or a server without D3.5, shows a mean gap equal to the mean commanded speed.
 
-Two follow-ons, for [`05_CarlaNet_Capability_Audit.md`](05_CarlaNet_Capability_Audit.md):
+**Measured**, 2026-09-28, on the generated Gardnerville world (`OpenDriveMap`) with a server built
+with D3.5: `run_sumo_drive.py` on `Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg`,
+fast-forwarded 120 s, 400 ticks at 0.05 s, recording at 2 Hz, SUMO 1.27.0.
 
-- **Angular velocity is probably different and must be measured, not assumed.**
+| | Bridge as built | The same bridge with `TickBatch`'s three velocity writes removed |
+|---|---|---|
+| Commands written | 8,002 for 400 ticks: one pair per pose and per parking | 2,012 for 200 ticks: transforms only |
+| Velocity gap, worst | **3 × 10⁻⁶ m/s** | **21.807 m/s** (`corridor_west_to_east.6`, commanded (21.795, −0.176, 0.719), reported (0, 0, 0)) |
+| Velocity gap, mean, against mean commanded speed | 1 × 10⁻⁶ against 18.037 m/s, over 3,996 vehicle-ticks | 18.2058 against 18.206 m/s, over 2,009 vehicle-ticks |
+| Truth-sidecar rows of moving driven bodies | 398 in 40 captures; every sidecar speed equal to SUMO's own to the sidecar's 0.01 m/s | 200 in 20 captures; every one **0.00** against SUMO speeds up to 21.80 m/s |
+| Truth-sidecar rows of parked bodies | 96, all 0.00 | 18, all 0.00 |
+
+SUMO's speed in that comparison is not the bridge's: it is read from an independent standalone run of
+the same configuration with `--fcd-output`, joined to each sidecar row through the frame, body and
+vehicle the session recorded. **SUMO's own outputs label a vehicle state one step earlier than the
+TraCI clock the session stamps it with**: `MSNet::postMoveStep` writes the step's outputs and only
+then advances `myStep` (`MSNet.cpp:948`, `:956`), and TraCI answers the step with the advanced clock
+(`:809`). Measured on this run, the session's commanded speed at its instant *t* agrees with the FCD
+speed at *t* − 0.05 s to 5.0 × 10⁻³ m/s — the FCD's own two-decimal rounding — and at *t* to only
+0.229 m/s. The rendered state is SUMO's; its stamp is one SUMO step later than any SUMO output file
+gives the same state.
+
+### 5.5 Angular velocity and acceleration
+
+Measured on the same run, and for [`05_CarlaNet_Capability_Audit.md`](05_CarlaNet_Capability_Audit.md):
+
+- **Angular velocity reads zero for a pose-applied vehicle, whatever is written.**
   `FWorldObserver_GetAngularVelocity` calls `RootComponent->GetPhysicsAngularVelocityInDegrees()` with
   **no `IsSimulatingPhysics()` check** (`WorldObserver.cpp:249-262`), and
   `SetActorTargetAngularVelocity` writes `SetPhysicsAngularVelocityInDegrees`
-  (`CarlaActor.cpp:413-431`). D3.5 does not touch the angular path. Read from source and not
-  measured: the position target a teleport sets on a kinematic body makes the solver recompute its
-  angular velocity as well as its linear one (`PBDRigidsEvolutionGBF.cpp:1180-1223`), from a rotation
-  the pose already stands on, so a pose-applied vehicle is expected to report zero angular velocity
-  whatever is written to it. Measure before deciding whether the angular path needs its own change.
-- **Acceleration is derived and will be wrong for one frame after any step change.**
-  `FWorldObserver_GetAcceleration` differences the reported velocity
-  (`WorldObserver.cpp:264-277`). With D3.5 and sub-step interpolation (§6) the velocity is
-  piecewise-smooth, so acceleration is right except at SUMO-step boundaries where it shows the whole
-  step's acceleration in one frame. Acceptable; name it in the truth contract.
+  (`CarlaActor.cpp:413-431`); D3.5 does not touch the angular path. The observer reported zero on all
+  3,996 driven vehicle-ticks, turning vehicles included. A kinematic vehicle turned at 30°/s by
+  writing its transform every tick read zero for 40 ticks with nothing else written, and zero for 40
+  more with a target angular velocity of 30°/s written after every transform. This is what the source
+  predicts — a teleport sets a position target on a kinematic body and the solver recomputes its
+  velocities from it (`PBDRigidsEvolutionGBF.cpp:1180-1223`) — so no ordering of client calls supplies
+  an angular velocity; a consumer that needs one needs an engine change of its own. Nothing in the
+  truth record reads it: the telemetry takes the linear velocity only (`VehicleTelemetryService.cs:96`).
+- **Acceleration is the reported velocity differenced over one tick, so it is SUMO's velocity change
+  per tick.** `FWorldObserver_GetAcceleration` differences the reported velocity
+  (`WorldObserver.cpp:264-277`). Measured on continuing ticks, the reported acceleration equals the
+  commanded velocity's own per-tick difference to 6.9 × 10⁻⁵ m/s² over 3,981 vehicle-ticks, with a
+  median of 0.742 m/s². Ten exceed 10 m/s²; the largest, 117.9 m/s², is SUMO's heading turning 25.6°
+  in one 0.05 s step at a junction, and the vertical component reaches 4.7 m/s² where the ground
+  gradient changes under a vehicle at 21.8 m/s. On the first tick of each of the 15 lendings it is the
+  whole admission speed over one tick — at most 434.9 m/s² — because the parked body's velocity was
+  zero. At a SUMO step equal to the world delta every tick is a step boundary; at a coarser step the
+  interpolated speed between boundaries (§6) is what is differenced. Name both spikes in the truth
+  contract.
 
 ---
 
@@ -2592,7 +2637,7 @@ solar and light-state paths. They are handed to
 |---|---|---|---|
 | **G1** | The Python shim's `command` namespace exposes **8** of the 22 command types the C# layer and the server both support. Missing: `ApplyVehicleAckermannControl`, `ApplyWalkerControl`, `ApplyVehiclePhysicsControl`, `ApplyWalkerState`, **`ApplyTargetVelocity`**, `ApplyTargetAngularVelocity`, `ApplyImpulse`, `ApplyForce`, `ApplyAngularImpulse`, `ApplyTorque`, **`SetSimulatePhysics`**, **`SetEnableGravity`**, `ShowDebugTelemetry`, `SetTrafficLightState`. | shim `carlanet/__init__.py:1080-1149` vs `LibCarla/source/carla/rpc/Command.h:284-305`, `Command.cs:12-35`, `CommandFormatter.cs:41-72`, `CarlaServer.cpp:3145-3194` | A Python bridge cannot batch a physics toggle, a velocity or a vehicle light state. Does not block the C# bridge; blocks any Python probe of it, and is a surface-parity defect in its own right. The .NET side already exercises the full path (`TrafficManagerLocal.cs:568`, `MotionPlanStage.cs:244`/`:424`), so the gap is purely the shim's. |
 | **G2** *(no longer blocking — recorded for the audit, not for this mode)* | No batch command for `set_actor_fade` anywhere in the stack. | `Command.cs:12-35`; `CarlaServer.cpp:3169-3194`; handler at `CarlaServer.cpp:2217-2249` walks every primitive component | **This bridge does not call `set_actor_fade` (D3.10)**, so it is not on the critical path here. It remains a real asymmetry for any client that *does* fade — and it is a large part of why `--fade` defaults off (`CarlaControlArgumentParser.py:318-328`). If the fade is ever revived, adding the batch variant is the fix that makes it affordable. |
-| **G3** | `set_actor_target_velocity` on a non-simulating vehicle writes a kinematic physics body, which `APawn::GetVelocity()` does not read; for a non-simulating root it returns the pawn movement component's `Velocity`, which nothing on the CARLA vehicle path writes. | chain in §5.1: `CarlaActor.cpp:392-411`, `Pawn.cpp:240-249`, `Pawn.cpp:186-189`, `NavMovementComponent.cpp:132-134`, `MovementComponent.h:473-477`, `PrimitiveComponentPhysics.cpp:159-163` | **The zero-velocity problem.** Closed by D3.5 in the engine (`CarlaActor.cpp:831-846`, `CarlaWheeledVehicle.cpp:798-843`); the bridge's half is §5.4. |
+| **G3** | `set_actor_target_velocity` on a non-simulating vehicle writes a kinematic physics body, which `APawn::GetVelocity()` does not read; for a non-simulating root it returns the pawn movement component's `Velocity`, which nothing on the CARLA vehicle path writes. | chain in §5.1: `CarlaActor.cpp:392-411`, `Pawn.cpp:240-249`, `Pawn.cpp:186-189`, `NavMovementComponent.cpp:132-134`, `MovementComponent.h:473-477`, `PrimitiveComponentPhysics.cpp:159-163` | **The zero-velocity problem.** Closed by D3.5 in the engine (`CarlaActor.cpp:831-846`, `CarlaWheeledVehicle.cpp:798-843`) and by the bridge's writes (§5.4); measured live, the truth sidecars carry SUMO's own speed. |
 | **G4** *(latent — not reached by this design)* | The client-side arrival latch (`IsActorEstablished`) is cleared only when an actor id leaves the world-observer snapshot, and never by fading back out. A pooled actor never leaves the snapshot, so it would inherit its predecessor's arrival state. | `CarlaClient.cs:1545-1556`, `:1571`, `:1901-1908` | **Recorded rather than dropped, because it is real.** It would block the actor pool and a fade together. With D3.10 removing the fade, the latch is never set: `IsActorEstablished` returns `true` for any actor with no fade record (`:1571`) and the truth gate is documented inert in that case (`VehicleTelemetryService.cs:66-73`). **The actor pool (D3.9) is therefore unblocked.** The defect still exists for any client that combines a fade with actor reuse, which is why it stays on the list. |
 | **G5** — **a data defect in delivered artifacts, not a future risk** | `SumoCotBridge._height_at` indexes a **CARLA-frame** bare-earth grid with a **SUMO-frame** `y`. Since CARLA `y = −`SUMO `y` (`Geodesy.cs:104-108`), every lookup reads the row mirrored about the grid's Y origin. | call site `SumoCotBridge.py:311`; reader `SumoCotBridge.py:115-119`; grid frame `DrapeTerrain.cs:19-21` and `:54-68` | **Every `hae_m` in every CoT dataset already produced by this path is wrong** — the UDP feeds, the XML files, the CSV datasets, and the sample shipped inside `BahonarPatternOfLife.zip`. It is invisible in bounds terms, which is why it has survived: measured on Bahonar the grid spans y ∈ [−2108.05, +2107.95] while the road network spans y ∈ [−1914.94, +2107.82], so a mirrored row is always *inside* the grid and always returns a plausible height. Only points on the grid's Y centreline are unaffected. This is independent of the new bridge and needs correcting **and re-issuing affected datasets**, not just patching forward. |
 | **G6** | `apply_batch(do_tick_cue=True)` returns before the frame exists; only `world.tick()` waits. | `CarlaClient.cs:1779-1780` vs `:403-417`; `CarlaServer.cpp:393-399` | A caller that assumes the combined form is synchronous will capture against a frame that has not rendered. Worth a docstring at minimum. |
@@ -2601,7 +2646,7 @@ solar and light-state paths. They are handed to
 | **G9** | `sumo` and `duarouter` are built in `Build/sumo-src/bin/` but **only `netconvert.exe` is staged** into `Build/sumo-install/bin/`; `SUMO_HOME` is set nowhere, and `tools/traci` — which the client is ported from — is unstaged. | directory listings, 2026-09-17; `CarlaSetup.ps1:677` builds only the `netconvert` target | Doc 23 §6.1/§6.2 already record this. Belongs to [`09_Toolchain_And_Packaging.md`](09_Toolchain_And_Packaging.md); repeated because the bridge cannot run without it. |
 | **G10** | **Closed.** `CarlaNet.CoSim.SumoRoadNetwork` reads lane shapes, lane lengths and the connection table out of the `map.net.xml` a world package carries, and `WorldPackage` carries it. It keeps only what an interpolation needs and skips the rest while parsing. | `CarlaNet.CoSim/SumoRoadNetwork.cs`, `CarlaNet.Map/WorldPackage/WorldPackage.cs` | Note that `RedundantJunctionCollapser.Collapse` rewrites the `.xodr` *after* netconvert produced the `.net.xml` (`CarlaClient.cs:568-573`), so the two files share a frame but not junction identity. |
 | **G11** | Nothing asserts that the SUMO step is an integer multiple of the world delta, or that the `.net.xml` frame matches the `.xodr` frame. | no such check exists | §9's `R` and §7.2's frame identity are silent preconditions today. The session should assert both. |
-| **G12** | **Unverified:** whether Chaos retains a written angular velocity on a kinematic particle. `FWorldObserver_GetAngularVelocity` reads the body with no `IsSimulatingPhysics()` guard, unlike the linear path. The source suggests a teleport resets it (§5.5). | `WorldObserver.cpp:249-262` vs `Pawn.cpp:242` | Decides whether D3.5 needs an angular counterpart. **Measure; do not assume either way.** |
+| **G12** | Chaos does not retain a written angular velocity on a kinematic particle. **Measured**: a kinematic vehicle turned at 30°/s by transforms reads zero angular velocity with a 30°/s target angular velocity written every tick, and every driven body reads zero while it turns (§5.5). `FWorldObserver_GetAngularVelocity` reads the body with no `IsSimulatingPhysics()` guard, unlike the linear path. | `WorldObserver.cpp:249-262` vs `Pawn.cpp:242`; `PBDRigidsEvolutionGBF.cpp:1180-1223` | No client call supplies an angular velocity for a pose-applied body. Nothing in the truth record reads it; a consumer that needs it needs an angular counterpart to D3.5 in the engine. |
 | **G13** *(not required by this mode — recorded for the audit)* | The Python shim has **no traffic-light surface at all** — `class TrafficLight(TrafficSign): pass`. All ten traffic-light RPCs exist in C# and are bound server-side. | shim `carlanet/__init__.py:1002-1004`; C# `CarlaClient.cs:1659-1689`; server `CarlaServer.cpp:2648-2884` | **This mode writes no traffic-light state from any binding (D3.24)**, so nothing here depends on it. It stays on the list because it is a real capability the .NET path has and the Python path does not, and it is the audit's to scope. |
 | **G14** *(not required by this mode — recorded for the audit)* | A CARLA traffic-light actor's **OpenDRIVE signal id is not reachable from a client**. The server holds it as `USignComponent::SignId` and uses it for lookup, but no RPC exposes it. | `Traffic/SignComponent.h:80`, `SignComponent.cpp:35-41`; `Traffic/TrafficLightManager.cpp:150-155`, `:216`; no `sign_id`/`signal_id` binding in `CarlaServer.cpp` | **Nothing in this mode needs to turn an OpenDRIVE signal id into an actor id**, because no client here addresses a traffic-light actor at all (D3.24) — the layer is suppressed wholesale by `set_layer_visible`, which takes a layer name and no ids. The observation is accurate and stays recorded; it is a gap for any *other* client that wants to address a signal individually, and the cheapest fix there is one getter RPC returning the sign id per traffic-light actor. |
 | **G15** | **The cached solar path cannot express "no sun", and the shim returns a plausible midnight instead of `None`.** `FWorldObserver` leaves the header's solar fields at their defaults (zeros, `solar_rate = 1.0`) when `GetSolarState` comes back empty, but `CarlaClient` unconditionally parses 11 doubles out of the header, so `GetCachedSolarState()` is never empty once the observer is running — and the shim accepts the cache on `cached.Count >= 9`. | `EpisodeStateSerializer.h:48-58`; `WorldObserver.cpp:326-328`; `CesiumHeightSampler.cpp:760-762`; `CarlaClient.cs:1851-1855`; `carlanet/__init__.py:1511-1533` | Any client that tests `get_solar_state()` for `None` to decide whether the world has a sun gets the wrong answer, and a truth record built from the cache would carry year 0 / midnight / elevation 0 as though measured. The bridge sidesteps it by probing on demand and with the write (D3.22), but the shim's contract is wrong as written. Cheapest fixes: have the observer write a sentinel (`solar_year = 0` is already the de-facto one — document it), or have the shim reject `year == 0` from the cache. |
@@ -2681,7 +2726,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **Q3.3** | Does a scenario ever need a **different** SUMO step at playback than at authoring? | (a) never — refuse; (b) allow with a manifest entry and a loud warning | (b), given the measured 62% change in mean time loss (§6.3) is a behaviour change and not a rendering one. The knob must be visible in the truth manifest so a corpus can be filtered on it. |
 | **Q3.4** | How is the **one-step lookahead latency** expressed in the truth record? | (a) invisible — everything is stamped `t_render`; (b) an explicit `lookahead_s` field in the run manifest | (b). It costs one field and it is the difference between a reader being able to reconstruct the pipeline and guessing at it. Belongs to [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md). |
 | **Q3.5** | Should the bridge run its own `sumo` process, or attach to one started elsewhere? | (a) own it — `Simulation.start` spawns and the session owns the lifetime; (b) attach by port, so an operator can run `sumo-gui` alongside | (a) by default for determinism and clean teardown; (b) behind a flag, because watching the SUMO GUI beside the CARLA viewer is worth a great deal during bring-up. |
-| **Q3.6** | Does the angular-velocity path need the same fix as the linear one (G12)? | measure | **Measure before deciding.** `FWorldObserver_GetAngularVelocity` has no `IsSimulatingPhysics()` guard where the linear path does, so the answer is genuinely not predictable from the source. |
+| **Q3.6** | Does the angular-velocity path need the same fix as the linear one (G12)? | (a) an angular counterpart to D3.5 in the engine; (b) none, while nothing reads angular velocity | **Measured**: a written angular velocity does not read back on a kinematic vehicle, so it would need an engine change of its own (§5.5). Nothing in the truth record reads angular velocity; the change waits on a consumer that does. |
 | **Q3.7** | What is the right `_frameWaitTimeout` for a capture session? | inherited from the RPC timeout today (`CarlaClient.cs:293-300`), which `run_SCTMV.py` sets to 20 s | Needs a number from [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md): long enough that a heavy Cesium-streaming frame is not a fault, short enough that a real stall is caught inside one run. |
 | **Q3.9** | Should the Python shim's missing command and traffic-light surface (G1, G13) be closed as part of this work? | (a) yes — surface parity is worth having regardless; (b) no — the C# bridge does not need it, so it is unrelated scope | (b) for *this* section's critical path, (a) as a separate item. Stated explicitly so nobody reads D3.1 as a reason to leave the shim gap open: the shim gap is a real defect and the binding choice does not depend on it. Owner: [`05_CarlaNet_Capability_Audit.md`](05_CarlaNet_Capability_Audit.md). |
 | **Q3.10** | Under a **frozen** sun, is the pinned instant `window.begin` or `window.begin − prewarm_s`? | (a) `window.begin` — the sun matches the first *captured* frame, and the 300 s prewarm renders under a sun 5 minutes late that nobody sees; (b) `window.begin − prewarm_s` — one rule shared with the advancing policy, and the prewarm is internally consistent | (a), narrowly. The point of freezing is that the *corpus* has one illumination, and `window.begin` is the instant the corpus is about. But it means frozen and advancing pin different instants, so the manifest must record which — and the difference is 300 simulated seconds, which is 1.25° of hour angle and not nothing at dawn. Owner: [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md). |

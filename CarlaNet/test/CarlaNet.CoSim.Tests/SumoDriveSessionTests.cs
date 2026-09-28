@@ -209,10 +209,12 @@ public sealed class SumoDriveSessionTests
     }
 
     [RequiresSumoFact]
-    public void EveryTickWritesItsPosesInOneBatchOfTransformsAndNothingElse()
+    public void EveryTickWritesEachPoseThenItsVelocityInOneBatchAndNothingElse()
     {
+        // A surface that climbs both eastwards and southwards, so every arm of the cross has a
+        // vertical velocity for the batch to carry.
         using SyntheticWorld world = SyntheticWorld.Write(
-            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+            at => (0.04 * at.X) + (0.03 * at.Y), CoSimFixtures.RightAngleTurnNetwork, "!");
 
         var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         List<CoSimPoseRecord> computed = [];
@@ -234,18 +236,121 @@ public sealed class SumoDriveSessionTests
                     $"{session.Report.Batches} batches for {session.Report.Ticks} ticks");
         Assert.Equal(0, session.Report.BatchFailures);
 
-        // And what a tick writes is transforms. Not a target velocity beside each one -- on a body
-        // that is not simulating it would write a physics body the getter will not read, and the
-        // engine logs the call as invalid.
-        foreach (IReadOnlyList<Command> batch in carla.PoseBatches)
+        // What a tick writes is pairs: a transform, then a target velocity for the same body. A
+        // posed body's velocity is the one its own pose carries, climb included; a parked body's is
+        // zero. Each pose is matched to the tick it was computed on, which is the tick the world was
+        // on when the batch arrived.
+        Dictionary<(long Tick, uint Actor), VehiclePose> posed = computed
+            .Where(record => record.Actor != 0)
+            .ToDictionary(record => (record.TickIndex, record.Actor), record => record.Pose);
+        int poses = 0;
+        int parkings = 0;
+        foreach ((IReadOnlyList<Command> batch, long tick) in carla.DrivenBatches)
         {
-            Assert.All(batch, command => Assert.IsType<ApplyTransformCommand>(command));
+            Assert.Equal(0, batch.Count % 2);
+            for (int index = 0; index < batch.Count; index += 2)
+            {
+                ApplyTransformCommand transform = Assert.IsType<ApplyTransformCommand>(batch[index]);
+                ApplyTargetVelocityCommand velocity =
+                    Assert.IsType<ApplyTargetVelocityCommand>(batch[index + 1]);
+                Assert.Equal(transform.Actor, velocity.Actor);
+
+                if (posed.TryGetValue((tick, transform.Actor), out VehiclePose pose)
+                    && transform.Transform == ExpectedTransform(pose))
+                {
+                    Assert.Equal(ExpectedVelocity(pose), velocity.Velocity);
+                    poses++;
+                }
+                else
+                {
+                    Assert.True(transform.Transform.Location.Z < -100f,
+                                $"a transform at tick {tick} is neither a pose nor a parking slot");
+                    Assert.Equal(new Vector3D(0f, 0f, 0f), velocity.Velocity);
+                    parkings++;
+                }
+            }
         }
 
-        // One command per pose that had a body to go to, and nothing else in the batch but the
-        // parking poses of the bodies given back.
-        Assert.Equal(computed.Count + released.Count(each => each.Actor != 0),
-                     session.Report.CommandsWritten);
+        // Every pose that had a body to go to, and every body given back, and nothing else.
+        Assert.Equal(posed.Count, poses);
+        Assert.Equal(released.Count(each => each.Actor != 0), parkings);
+        Assert.Equal(2 * (poses + parkings), session.Report.CommandsWritten);
+
+        // The slope reached the batch, both ways.
+        Assert.Contains(posed.Values, pose => pose.VelocityZ > 0.1);
+        Assert.Contains(posed.Values, pose => pose.VelocityZ < -0.1);
+
+        // And no velocity reached a body whose physics was still on: the pool disables it before a
+        // body is ever lent, and a velocity written before that goes to the simulating body.
+        Assert.Equal(0, carla.VelocityWritesWhileSimulating);
+    }
+
+    [RequiresSumoFact]
+    public void ABodyWhoseVehicleDrivesOffTheGroundIsLeftWhereItWasAndToldItIsStill()
+    {
+        // A 26 m grid from -76 m to 80 m under a network whose arms reach 100 m. That is inside the
+        // one cell a session lets a network overhang its surface, so the session starts, and the
+        // outer end of every arm has no ground under it. The region reaches past the arms' ends, so
+        // a vehicle is still rendered, and still holds its body, as it drives off the surface.
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!", cellSize: 26.0, min: -76.0, cells: 7);
+
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
+        var options = new SumoDriveSessionOptions(
+            CoSimFixtures.RightAngleTurnScenario,
+            world.PackagePath,
+            CoSimFixtures.VehicleCatalogue,
+            "test://" + Guid.NewGuid().ToString("n"),
+            new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 120.0,
+                                      hysteresisMetres: 15.0, capacity: 8))
+        {
+            World = carla,
+            Epoch = SolarLeaseTests.PortEpoch(),
+            Illumination = IlluminationPolicy.FreezeAtWindowStart(),
+        };
+
+        using SumoDriveSession session = SumoDriveSession.Start(options);
+        for (int step = 0; step < 400 && session.Advance(); step++)
+        {
+        }
+
+        _output.WriteLine(session.Report.ToString());
+        Assert.True(session.Report.PosesRefusedForMissingGround > 0, "no vehicle ever left the ground");
+
+        // A body with no pose this tick gets a velocity and no transform: zero, and it stays where
+        // its last pose put it. It had been moving -- it was given a non-zero velocity on an earlier
+        // tick -- so the zero is the hold and not a default.
+        Dictionary<uint, bool> movedBefore = [];
+        int holds = 0;
+        foreach ((IReadOnlyList<Command> batch, long tick) in carla.DrivenBatches)
+        {
+            for (int index = 0; index < batch.Count; index++)
+            {
+                if (batch[index] is not ApplyTargetVelocityCommand velocity)
+                {
+                    continue;
+                }
+
+                bool afterItsTransform = index > 0
+                                         && batch[index - 1] is ApplyTransformCommand transform
+                                         && transform.Actor == velocity.Actor;
+                if (afterItsTransform)
+                {
+                    movedBefore[velocity.Actor] = movedBefore.GetValueOrDefault(velocity.Actor)
+                                                  || velocity.Velocity != new Vector3D(0f, 0f, 0f);
+                    continue;
+                }
+
+                holds++;
+                Assert.Equal(new Vector3D(0f, 0f, 0f), velocity.Velocity);
+                Assert.True(movedBefore.GetValueOrDefault(velocity.Actor),
+                            $"actor {velocity.Actor} was held still at tick {tick} before it ever moved");
+                Assert.DoesNotContain(batch, command => command is ApplyTransformCommand held
+                                                        && held.Actor == velocity.Actor);
+            }
+        }
+
+        Assert.True(holds > 0, "no body was ever held still");
     }
 
     [RequiresSumoFact]
@@ -268,9 +373,15 @@ public sealed class SumoDriveSessionTests
             }
 
             Assert.NotEmpty(released);
+            RenderedVehicleInterval first = released[0];
+
+            // Given back, and not yet written: it still reports the speed it was last driven at.
+            Vector3D driven = carla.ObservedVelocity(first.Actor)!.Value;
+            Assert.True(Math.Sqrt((driven.X * driven.X) + (driven.Y * driven.Y)) > 1.0,
+                        $"the body was reporting {driven} before it was parked");
+
             session.Advance();
 
-            RenderedVehicleInterval first = released[0];
             Transform? resting = carla.ObservedTransform(first.Actor);
             Assert.NotNull(resting);
             Transform parked = resting.Value;
@@ -279,6 +390,10 @@ public sealed class SumoDriveSessionTests
             // nowhere a camera aimed at the road can frame.
             Assert.True(parked.Location.Z < -100f, $"parked at z {parked.Location.Z}");
             Assert.True(parked.Location.X > 100f, $"parked at x {parked.Location.X}");
+
+            // And it reports standing still, rather than its last speed from beyond the sandbox for
+            // as long as it stays parked.
+            Assert.Equal(new Vector3D(0f, 0f, 0f), carla.ObservedVelocity(first.Actor));
         }
     }
 
@@ -962,4 +1077,16 @@ public sealed class SumoDriveSessionTests
             Epoch = SolarLeaseTests.PortEpoch(),
             Illumination = IlluminationPolicy.FreezeAtWindowStart(),
         };
+
+    /// <summary>
+    /// The transform a pose should be written as, spelled out from its fields rather than taken from
+    /// the code under test.
+    /// </summary>
+    private static Transform ExpectedTransform(in VehiclePose pose) =>
+        new(new Location((float)pose.X, (float)pose.Y, (float)pose.Z),
+            new Rotation((float)pose.PitchDegrees, (float)pose.YawDegrees, (float)pose.RollDegrees));
+
+    /// <summary>The velocity a pose should be written with, spelled out from its fields.</summary>
+    private static Vector3D ExpectedVelocity(in VehiclePose pose) =>
+        new((float)pose.VelocityX, (float)pose.VelocityY, (float)pose.VelocityZ);
 }

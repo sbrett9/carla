@@ -325,9 +325,12 @@ class PacingProgress:
         if pacing.CompletedWindows == self.windows_seen:
             return
         self.windows_seen = pacing.CompletedWindows
-        logger.info("  %d steps, t=%.1f s, %d rendered, pace %s, worst divergence %.4f m",
-                    steps, session.RenderedTimeSeconds, session.RenderedVehicleIds.Count,
-                    self.achieved(pacing), worst_metres)
+        # The velocity figure is the report's own, live: how far the velocity the world reports for
+        # a body -- the one the truth telemetry reads -- has been from the velocity it was given.
+        logger.info("  %d steps, t=%.1f s, %d rendered, pace %s, worst divergence %.4f m, "
+                    "%.4f m/s", steps, session.RenderedTimeSeconds,
+                    session.RenderedVehicleIds.Count, self.achieved(pacing), worst_metres,
+                    session.Report.WorstVelocityDivergenceMetresPerSecond)
 
 
 def camera_transform(args: argparse.Namespace, centre: tuple[float, float]) -> carla.Transform:

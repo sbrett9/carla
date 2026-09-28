@@ -16,9 +16,7 @@ internal sealed class SyntheticWorld : IDisposable
 {
     private const double CellSize = 2.0;
     private const int Columns = 101;
-    private const int Rows = 101;
     private const double MinX = -100.0;
-    private const double MinY = -100.0;
     private const double OriginHeight = 1000.0;
 
     private SyntheticWorld(string directory, string packagePath)
@@ -53,7 +51,30 @@ internal sealed class SyntheticWorld : IDisposable
     /// </param>
     public static SyntheticWorld Write(Func<(double X, double Y), double> heightAbove,
                                        string networkPath,
-                                       string geoReference)
+                                       string geoReference) =>
+        Write(heightAbove, networkPath, geoReference, CellSize, MinX, Columns);
+
+    /// <summary>
+    /// A package whose ground surface is a square grid of the caller's choosing, for a test that
+    /// needs part of the network to have no ground under it.
+    /// </summary>
+    /// <param name="heightAbove">Surface height above the origin at a CARLA-frame cell centre.</param>
+    /// <param name="networkPath">The <c>.net.xml</c> to carry, or an empty string for none.</param>
+    /// <param name="geoReference">The projection the manifest declares.</param>
+    /// <param name="cellSize">Grid spacing, metres.</param>
+    /// <param name="min">The grid's lowest x and lowest y in the CARLA frame, metres.</param>
+    /// <param name="cells">Cells along each side.</param>
+    /// <remarks>
+    /// A session accepts a network that overhangs the grid by up to one cell, so a coarse grid a
+    /// little smaller than the network is a world the session starts on and in which a vehicle near
+    /// the network's edge stands on no ground.
+    /// </remarks>
+    public static SyntheticWorld Write(Func<(double X, double Y), double> heightAbove,
+                                       string networkPath,
+                                       string geoReference,
+                                       double cellSize,
+                                       double min,
+                                       int cells)
     {
         string directory = Path.Combine(Path.GetTempPath(),
                                         "carlanet-cosim-" + Guid.NewGuid().ToString("n"));
@@ -67,22 +88,22 @@ internal sealed class SyntheticWorld : IDisposable
             HeightAlignMode = "drape",
             DrapeActive = true,
             HeightAlignOffsetMeters = 0.0,
-            GridMinXMeters = MinX,
-            GridMinYMeters = MinY,
-            GridCellSizeMeters = CellSize,
-            GridNumCols = Columns,
-            GridNumRows = Rows,
+            GridMinXMeters = min,
+            GridMinYMeters = min,
+            GridCellSizeMeters = cellSize,
+            GridNumCols = cells,
+            GridNumRows = cells,
         };
 
-        float[] offset = new float[Columns * Rows];
-        float[] bareEarth = new float[Columns * Rows];
-        for (int row = 0; row < Rows; row++)
+        float[] offset = new float[cells * cells];
+        float[] bareEarth = new float[cells * cells];
+        for (int row = 0; row < cells; row++)
         {
-            for (int column = 0; column < Columns; column++)
+            for (int column = 0; column < cells; column++)
             {
-                double x = MinX + (column * CellSize);
-                double y = MinY + (row * CellSize);
-                bareEarth[(row * Columns) + column] = (float)(OriginHeight + heightAbove((x, y)));
+                double x = min + (column * cellSize);
+                double y = min + (row * cellSize);
+                bareEarth[(row * cells) + column] = (float)(OriginHeight + heightAbove((x, y)));
             }
         }
 

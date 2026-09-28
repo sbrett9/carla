@@ -11,7 +11,8 @@ namespace CarlaNet.CoSim.Tests;
 /// told establishes only the first. It has to read zero when the world applies the pose, so that a
 /// zero means something; and it has to read the separation when the world does not, so that a
 /// non-zero means something. The recording world answers with the pose plus whatever drift it is
-/// given, which is how both are exercised without a server.
+/// given, and with the velocity it was given or -- as a server that cannot report one for a
+/// physics-disabled vehicle -- with zero, which is how both are exercised without a server.
 /// </remarks>
 public sealed class PoseDivergenceTests
 {
@@ -42,6 +43,31 @@ public sealed class PoseDivergenceTests
         Assert.Equal(0.0, divergence.YawDegrees, 6);
         Assert.Equal(0.0, divergence.PitchDegrees, 6);
         Assert.Equal(0.0, divergence.RollDegrees, 6);
+        Assert.Equal(0.0, divergence.VelocityMetresPerSecond, 6);
+    }
+
+    [Fact]
+    public void ABodyThatReportsNoVelocityIsShortByTheWholeCommandedSpeed()
+    {
+        // What a bridge that sends no velocity produces, and what a server built before the
+        // kinematic-velocity change produces whatever is sent: the gap is the commanded velocity's
+        // whole length, climb included, so it cannot be mistaken for rounding.
+        PoseDivergence divergence = Compare(default, default, observedVelocity: new Vector3D(0f, 0f, 0f));
+
+        Assert.Equal(Math.Sqrt((12.0 * 12.0) + (5.0 * 5.0) + (0.6 * 0.6)),
+                     divergence.CommandedSpeedMetresPerSecond, 6);
+        Assert.Equal(divergence.CommandedSpeedMetresPerSecond, divergence.VelocityMetresPerSecond, 6);
+    }
+
+    [Fact]
+    public void AVelocityAtTheRightSpeedPointingTheWrongWayIsStillMeasured()
+    {
+        // The same speed with the northing's sign lost, which is the frame conversion's own mistake
+        // repeated on the velocity. A comparison of speeds would read zero; the vectors are ten
+        // metres per second apart.
+        PoseDivergence divergence = Compare(default, default, observedVelocity: new Vector3D(12f, -5f, 0.6f));
+
+        Assert.Equal(10.0, divergence.VelocityMetresPerSecond, 5);
     }
 
     [Fact]
@@ -80,11 +106,49 @@ public sealed class PoseDivergenceTests
                         $"worst pitch {session.Report.WorstPitchDivergenceDegrees} deg");
             Assert.True(session.Report.WorstRollDivergenceDegrees < 1e-3,
                         $"worst roll {session.Report.WorstRollDivergenceDegrees} deg");
+
+            // And every body reports the velocity it was given, to the rounding of the
+            // single-precision wire, while it moves at traffic speed.
+            Assert.True(session.Report.MeanCommandedSpeedMetresPerSecond > 5.0,
+                        $"mean commanded {session.Report.MeanCommandedSpeedMetresPerSecond} m/s");
+            Assert.True(session.Report.WorstVelocityDivergenceMetresPerSecond < 1e-4,
+                        $"worst velocity {session.Report.WorstVelocityDivergenceMetresPerSecond} m/s");
+            Assert.Equal(0, carla.VelocityWritesWhileSimulating);
         }
 
         // One comparison per vehicle per tick, handed out rather than accumulated.
         Assert.NotEmpty(divergences);
         Assert.All(divergences, divergence => Assert.NotEqual(0u, divergence.Actor));
+    }
+
+    [RequiresSumoFact]
+    public void ARunAgainstAWorldWhoseBodiesReportNoVelocitySaysTheGapIsTheWholeSpeed()
+    {
+        // The self-check pointed at the failure it exists for: bodies that report standing still
+        // while they are driven. It has to say so on every vehicle-tick, by the commanded speed, and
+        // name where the largest gap was -- a check that has never read anything but zero has not
+        // been shown to measure anything.
+        var carla = new RecordedWorld { ReportsNoKinematicVelocity = true };
+        List<PoseDivergence> divergences = [];
+
+        using SumoDriveSession session = Run(carla, divergences);
+
+        string report = session.Report.ToString();
+        _output.WriteLine(report);
+        Assert.True(session.Report.MeanCommandedSpeedMetresPerSecond > 5.0,
+                    $"mean commanded {session.Report.MeanCommandedSpeedMetresPerSecond} m/s");
+        Assert.Equal(session.Report.MeanCommandedSpeedMetresPerSecond,
+                     session.Report.MeanVelocityDivergenceMetresPerSecond, 6);
+        Assert.True(session.Report.WorstVelocityDivergenceMetresPerSecond > 10.0,
+                    $"worst velocity {session.Report.WorstVelocityDivergenceMetresPerSecond} m/s");
+        Assert.All(divergences, divergence =>
+            Assert.Equal(divergence.CommandedSpeedMetresPerSecond, divergence.VelocityMetresPerSecond, 6));
+        Assert.NotEmpty(session.Report.WorstVelocityDivergence!.Value.VehicleId);
+        Assert.Contains("  velocity         worst ", report);
+
+        // The poses themselves were applied: the gap is in the velocity and nowhere else.
+        Assert.True(session.Report.WorstPositionDivergenceMetres < 1e-3,
+                    $"worst {session.Report.WorstPositionDivergenceMetres} m");
     }
 
     [RequiresSumoFact]
@@ -105,17 +169,22 @@ public sealed class PoseDivergenceTests
         Assert.All(divergences, divergence => Assert.Equal(0.5, divergence.PositionMetres, 3));
     }
 
-    private static PoseDivergence Compare(Location drift, Rotation rotationDrift)
+    private static PoseDivergence Compare(Location drift,
+                                          Rotation rotationDrift,
+                                          Vector3D? observedVelocity = null)
     {
         var commanded = new VehiclePose("v", "vehicle.dodge.charger", 10.0, -20.0, 5.0,
-                                        179.0, 2.0, -1.0, 0.0, 0.0, true);
+                                        179.0, 2.0, -1.0, 12.0, 5.0, 0.6, true);
         var observed = new Transform(
             new Location((float)commanded.X + drift.X, (float)commanded.Y + drift.Y,
                          (float)commanded.Z + drift.Z),
             new Rotation((float)commanded.PitchDegrees + rotationDrift.Pitch,
                          (float)commanded.YawDegrees + rotationDrift.Yaw,
                          (float)commanded.RollDegrees + rotationDrift.Roll));
-        return PoseDivergence.Between(7, 3.5, "v", 42, commanded, observed);
+        Vector3D reported = observedVelocity
+            ?? new Vector3D((float)commanded.VelocityX, (float)commanded.VelocityY,
+                            (float)commanded.VelocityZ);
+        return PoseDivergence.Between(7, 3.5, "v", 42, commanded, observed, reported);
     }
 
     private static SumoDriveSession Run(RecordedWorld carla, List<PoseDivergence> divergences)
