@@ -19,6 +19,7 @@
 #include "Carla/Walker/WalkerBase.h"
 #include "Carla/Game/Tagger.h"
 #include "Carla/Game/CarlaStatics.h"
+#include "Carla/Game/CarlaEngine.h"
 #include "Carla/Vehicle/MovementComponents/CarSimManagerComponent.h"
 #include "Carla/Vehicle/MovementComponents/ChronoMovementComponent.h"
 #include "Carla/Lights/CarlaLightSubsystem.h"
@@ -77,6 +78,7 @@
 #include "Animation/PoseSnapshot.h"
 #include "BareEarthReference.h"
 #include "CesiumHeightSampler.h"
+#include "CesiumViewReadiness.h"
 #include "DrapedTerrain.h"
 #include "StagingBounds.h"
 #include <util/ue-header-guard-end.h>
@@ -967,6 +969,72 @@ void FCarlaServer::FPimpl::BindActions()
     }
     const FVector O = UCesiumHeightSampler::GetCesiumOrigin(World); // (lon, lat, height)
     return cg::GeoLocation{ O.Y, O.X, O.Z };                        // (lat, lon, alt)
+  };
+
+  // Whether a camera's photoreal tiles have arrived, as of the end of the last tick. Only the server
+  // can see tiles stream, so this is the tile half of a capture's readiness; whether the picture has
+  // settled is for the camera's own frames to say. Packed as a header and then one row per
+  // ACesium3DTileset in the world, hidden ones included:
+  //   [frame, published, tileset_count, row_length,
+  //    then per tileset: ion_asset_id, visible, load_progress, worker_queue, main_queue, kicked,
+  //                      failed_in_view, failed_loaded]
+  // frame is the frame of the tick this state is from: RPCs are served before the frame counter
+  // advances, so it is the frame that tick returned. published says the camera's view was written
+  // to the Cesium camera manager on that tick, and so was in every tileset's selection. The row
+  // figures are FCesiumTilesetReadiness's; flags are 0 or 1. row_length lets a reader index rows
+  // while columns are appended to their end. A world with no tileset and no publisher answers with
+  // no rows. An unknown id, a dormant actor, an actor that is not a camera the publisher can
+  // register, and a world whose tilesets have no publisher are errors, never an empty answer.
+  BIND_SYNC(get_view_readiness) << [this](cr::ActorId ActorId) -> R<std::vector<double>>
+  {
+    REQUIRE_CARLA_EPISODE();
+    FCarlaActor* CarlaActor = Episode->FindCarlaActor(ActorId);
+    if (!CarlaActor)
+    {
+      return RespondError(
+          "get_view_readiness",
+          ECarlaServerResponse::ActorNotFound,
+          " Actor Id: " + FString::FromInt(ActorId));
+    }
+    AActor* Actor = CarlaActor->GetActor();
+    if (CarlaActor->IsDormant() || Actor == nullptr)
+    {
+      return RespondError(
+          "get_view_readiness",
+          TEXT("the actor is dormant, so it has no view"),
+          " Actor Id: " + FString::FromInt(ActorId));
+    }
+    FCesiumViewReadiness Readiness;
+    FString Refusal;
+    if (!FCesiumViewReadiness::Read(Actor, Readiness, Refusal))
+    {
+      return RespondError(
+          "get_view_readiness",
+          Refusal,
+          " Actor Id: " + FString::FromInt(ActorId));
+    }
+
+    constexpr size_t HeaderLength = 4u;
+    constexpr size_t RowLength = 8u;
+    const size_t TilesetCount = static_cast<size_t>(Readiness.Tilesets.Num());
+    std::vector<double> Out;
+    Out.reserve(HeaderLength + TilesetCount * RowLength);
+    Out.push_back(static_cast<double>(FCarlaEngine::GetFrameCounter()));
+    Out.push_back(Readiness.bPublished ? 1.0 : 0.0);
+    Out.push_back(static_cast<double>(TilesetCount));
+    Out.push_back(static_cast<double>(RowLength));
+    for (const FCesiumTilesetReadiness& Row : Readiness.Tilesets)
+    {
+      Out.push_back(static_cast<double>(Row.IonAssetId));
+      Out.push_back(Row.bVisible ? 1.0 : 0.0);
+      Out.push_back(static_cast<double>(Row.LoadProgress));
+      Out.push_back(static_cast<double>(Row.WorkerThreadLoadQueueLength));
+      Out.push_back(static_cast<double>(Row.MainThreadLoadQueueLength));
+      Out.push_back(static_cast<double>(Row.TilesKicked));
+      Out.push_back(static_cast<double>(Row.FailedInView));
+      Out.push_back(static_cast<double>(Row.FailedLoaded));
+    }
+    return Out;
   };
 
   BIND_SYNC(apply_texture_to_actor) << [this](
