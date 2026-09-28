@@ -24,6 +24,7 @@ are on the critical path.
 | 2026-09-28 | Stages E and I state what is built: the authoring reference set, the session-written sun, and velocity for a pose-applied body, written and awaiting a build. |
 | 2026-09-28 | Stage I: the bridge writes each body's velocity with its pose, and velocity for a pose-applied body is built and verified live. Stage J: a state's instant comes from the bridge's clock, not SUMO's output files. |
 | 2026-09-28 | Stage A: the co-simulation session pins the SUMO release it launches to the world's converter. |
+| 2026-09-28 | Stage F: the compiler and its checks, the epoch, civil time, the schema, route validation, the resolution report, the association check and sweeps are built. |
 
 ---
 
@@ -212,18 +213,19 @@ Already scouted; the build itself already compiles clean from the unmodified con
 ## 7. Stage F — The scenario specification, the epoch, and the compiler
 
 The Python builder stays, but **emits the specification rather than SUMO XML**, so a generated
-scenario faces every check a hand-written one does.
+scenario faces every check a hand-written one does. The compiler is built (`ScenarioCompiler`,
+`compile_scenario.py`); the generators still write SUMO XML directly.
 
 | ⚑ | Item | Notes |
 |---|---|---|
-| ⚑ | **The epoch declaration.** Civil date and time that `t = 0` means, a **numeric** UTC offset (normative; the zone name is provenance only, because `zoneinfo` resolves zero zones on this machine), whether the calendar advances, and the DST state as a declared offset | Half-hour offsets first-class — the sizing site is **+03:30**. A redundant UTC datetime cross-checks an offset applied in the wrong direction, a 7-hour error here |
-| ⚑ | **Civil time as an authoring construct.** Times written as civil instants and compiled to seconds | Measured on the sizing scenario: sixteen arithmetic sites go to zero, the 335-entry rota with its deliberate no-show becomes one block with one `skip`, and the civil meaning of **610 of 610** entries becomes recoverable against **0 of 610** today |
-| ⚑ | The specification schema and the supervision plan as its **sole** annotation channel | SUMO route files are XSD-validated and generated; `<param>` is a flat un-namespaced store SUMO's own devices read |
-| | The compiler and its checks — seven groups, each stating refuse or warn | Including epoch form, offset a whole number of minutes, span against the calendar, midnight crossing, windows inside the span, and policy well-formedness |
-| | **Route validation via `duarouter`, with the false-accept guard** — terminal edge equals the requested destination and every `via` appears in order | Measured: a trip to a nonexistent edge still produces a `<vehicle>` with a one-edge route |
-| | **The resolution report**, the only place an annotation or an epoch can ever be checked | |
-| | **The hour-to-label correlation check — warns, never refuses.** Measured at **0.600** on the shipped scenario; at 02:00 and 11:00 every entry is annotated | Refusing would make doc 20's class 4 unauthorable, and a check firing on the only large scenario gets switched off. Buckets by illumination regime, not clock hour; the statistic lands in the lock file |
-| | Sweeps and counterfactual pairing, with illumination as a declared axis | **Sweeping `epoch.date` rather than the window hour** moves the sun 21° while holding population and behaviour provably fixed |
+| ⚑ | **The epoch declaration.** Civil date and time that `t = 0` means, a **numeric** UTC offset (normative; the zone name is provenance only, because `zoneinfo` resolves zero zones on this machine), whether the calendar advances, and the DST state as a declared offset. **Built**: `ScenarioEpoch` reads the C9 object with the session's `SolarEpoch`; checks 33 and 34; whole quarter hours; the zone name carried, never resolved | Half-hour offsets first-class — the sizing site is **+03:30**. A redundant UTC datetime cross-checks an offset applied in the wrong direction, a 7-hour error here |
+| ⚑ | **Civil time as an authoring construct.** Times written as civil instants and compiled to seconds. **Built**: `CivilTimeResolver`, `RotaExpander`; checks 37, 47 and 48; the guard rota as one block reproduces the generator's 335 entries | Measured on the sizing scenario: sixteen arithmetic sites go to zero, the 335-entry rota with its deliberate no-show becomes one block with one `skip`, and the civil meaning of **610 of 610** entries becomes recoverable against **0 of 610** today |
+| ⚑ | The specification schema and the supervision plan as its **sole** annotation channel. **Built**: `ScenarioSchema` (published), `SupervisionPlanCompiler`; the route file carries only the vType binding (check 52) | SUMO route files are XSD-validated and generated; `<param>` is a flat un-namespaced store SUMO's own devices read |
+| | The compiler and its checks — seven groups, each stating refuse or warn. **Built**: 51 compiler checks, listed in the skill's `checks.json`. Not built: point, gateway and junction places, and stop-speed phases. Network edits are not part of a specification: a world a scenario needs built differently is built that way (stage A) | Including epoch form, offset a whole number of quarter hours, span against the calendar, midnight crossing, windows inside the span, and policy well-formedness |
+| | **Route validation via `duarouter`, with the false-accept guard** — terminal edge equals the requested destination and every `via` appears in order. **Built**: `RouteValidator`, which also requires the route to start on its origin and pass every stop in order | Measured: a trip to a nonexistent edge still produces a `<vehicle>` with a one-edge route |
+| | **The resolution report**, the only place an annotation or an epoch can ever be checked. **Built**: `ResolutionReport`, JSON and Markdown; a refused compile writes only the report | |
+| | **The hour-to-label correlation check — warns, never refuses.** Measured at **0.600** on the shipped scenario; at 02:00 and 11:00 every entry is annotated. **Built**: `IlluminationLabelAssociation`, by doc 11's bands | Refusing would make doc 20's class 4 unauthorable, and a check firing on the only large scenario gets switched off. Buckets by illumination regime, not clock hour; the statistic lands in the lock file |
+| | Sweeps and counterfactual pairing, with illumination as a declared axis. **Built**: `ScenarioSweep`; an `epoch.date` sweep leaves the routes' traffic identical | **Sweeping `epoch.date` rather than the window hour** moves the sun 21° while holding population and behaviour provably fixed |
 
 ---
 
