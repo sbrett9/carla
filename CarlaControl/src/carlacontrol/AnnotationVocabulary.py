@@ -20,8 +20,11 @@ What it refuses is only what it can establish from the declarations in front of 
   `realisation` excludes the instance's.
 
 The core is written here from 06 §3.7, which names `CarlaNet.Types` as its eventual source; nothing in
-that assembly enumerates it yet. The published document is resolved and import-flattened, and
-`digest` is over exactly what is published, so a consumer can bind it (`04_Contracts.md` C3 V3.15).
+that assembly enumerates it yet. The one family not written here is `illumination_band`: its terms are
+`11_Time_And_Illumination.md` §4.4's six bands, taken from `IlluminationBand`, the function that assigns
+them, so the vocabulary and the statistic that buckets by band read one table. The published document is
+resolved and import-flattened, and `digest` is over exactly what is published, so a consumer can bind it
+(`04_Contracts.md` C3 V3.15).
 """
 from __future__ import annotations
 
@@ -30,6 +33,7 @@ import json
 from pathlib import Path
 
 from carlacontrol.CompileFindings import CompileFindings
+from carlacontrol.IlluminationBand import IlluminationBand
 from carlacontrol.ScenarioSchema import ScenarioSchema
 
 CORE_VOCABULARY_VERSION = 1
@@ -52,7 +56,8 @@ CORE_TERMS: dict[str, list[str]] = {
                   "capture_window_end", "scenario_end"],
     "observability_outcome": ["observed", "out_of_frame", "occluded", "not_rendered",
                               "site_unobserved"],
-    "illumination_band": ["day", "civil", "nautical", "astronomical", "night"],
+    # Doc 11 §4.4's bands, from the function that assigns them (IlluminationBand).
+    "illumination_band": IlluminationBand.names(),
     "cadence": ["enumerated", "period_s + offsets_s[] + span"],
     "reserved_role": [SUBJECT_ROLE],
     "reserved_phase": [VACANCY_PHASE],

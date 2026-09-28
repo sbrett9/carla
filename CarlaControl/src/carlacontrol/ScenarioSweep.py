@@ -93,8 +93,9 @@ _LIST_KEYS = ("id", "name", "class_id", "series_id", "flow")
 class ScenarioSweep:
     """Expands a sweep into members, compiles each, and writes the sweep index."""
 
-    def __init__(self, installation) -> None:
+    def __init__(self, installation, allow_sumo_version_mismatch: bool = False) -> None:
         self.installation = installation
+        self.allow_sumo_version_mismatch = bool(allow_sumo_version_mismatch)
 
     @staticmethod
     def write_schema(path: str | Path) -> Path:
@@ -273,7 +274,8 @@ class ScenarioSweep:
                                     for p in vocabulary["import"]]
         spec = directory / f"{member_id}.scenario.json"
         spec.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8", newline="\n")
-        result = ScenarioCompiler(self.installation).compile(spec, directory)
+        result = ScenarioCompiler(self.installation,
+                                  self.allow_sumo_version_mismatch).compile(spec, directory)
         member = {"member_id": member_id, "assignments": [{"path": p, "value": v}
                                                           for p, v in assignment],
                   "outcome": "refused" if result.refused else "compiled",

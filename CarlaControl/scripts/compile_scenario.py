@@ -16,8 +16,9 @@ compiles every member of a sweep into its own directory and writes `<sweep_id>.s
 skill (`07_Scenario_Authoring.md` §8.3, §8.5).
 
 The SUMO that routes the scenario is the one this repository stages (`Build/sumo-install`) unless
-`--sumo-home` names another; the release that routed it is recorded in the lock, and a release other
-than the one that built the world is warned about (check 6).
+`--sumo-home` names another. A release other than the one that converted the world is refused (check
+6): a different `duarouter` release can route the same demand differently. `--allow-sumo-version-mismatch`
+compiles anyway, and the lock records that the mismatch was accepted.
 """
 from __future__ import annotations
 
@@ -46,6 +47,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-dir", type=Path, help="where the scenario package is written")
     parser.add_argument("--sumo-home", type=Path, default=STAGED_SUMO if STAGED_SUMO.exists() else None,
                         help="SUMO installation providing duarouter (default: Build/sumo-install)")
+    parser.add_argument("--allow-sumo-version-mismatch", action="store_true",
+                        help="compile when that SUMO is not the release that converted the world; "
+                             "the lock records the acceptance")
     parser.add_argument("--write-checks", type=Path, metavar="PATH",
                         help="write checks.json, generated from the compiler's check catalogue")
     parser.add_argument("--write-schema", type=Path, metavar="PATH",
@@ -73,7 +77,8 @@ def main() -> int:
         return 2
     installation = SumoInstallation.locate(args.sumo_home)
     if args.sweep is not None:
-        index = ScenarioSweep(installation).compile(args.sweep, args.out_dir)
+        index = ScenarioSweep(installation, args.allow_sumo_version_mismatch).compile(
+            args.sweep, args.out_dir)
         for finding in index["findings"]:
             (logging.error if finding["outcome"] == "refuse" else logging.warning)(
                 "check %s %s %s: %s", finding["check"], finding["outcome"].upper(),
@@ -81,7 +86,8 @@ def main() -> int:
         logging.info("%d members; index %s; %s", len(index["members"]), index["path"],
                      index["outcome"])
         return 1 if index["outcome"] == "refused" else 0
-    result = ScenarioCompiler(installation).compile(args.specification, args.out_dir)
+    result = ScenarioCompiler(installation, args.allow_sumo_version_mismatch).compile(
+        args.specification, args.out_dir)
     for finding in result.findings.findings:
         (logging.error if finding.outcome == "refuse" else logging.warning)("%s", finding)
     for role, path in sorted(result.files.items()):

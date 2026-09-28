@@ -2,7 +2,7 @@
 name: sumo-traffic-scenarios
 description: Use when building a SUMO traffic scenario or a Cursor-on-Target (CoT) telemetry dataset for a CARLA world generated from OpenStreetMap — including orbit/dwell/pattern-of-life scenarios, planted anomalies, ambient traffic, guard postings, fenced (access-restricted) road networks, or standalone scenario zips. Also use when the question is about how the OSM → world package (.xodr + bareearth.bin drape) → SUMO network → routes → CoT pipeline fits together, how run_SCTMV.py and CarlaNet produce the world, or which of the make_*_scenario.py / sumo_cot_telemetry.py tools to reach for. Covers the netconvert flags, coordinate alignment, which vehicles a scenario may ask for, and the measured gotchas that make routes actually work. Also use when writing or compiling a scenario specification (compile_scenario.py): the epoch that says what civil time t = 0 is, civil-time literals, named places, rotas, supervision labels and vocabulary, capture windows, the illumination default, sweeps and counterfactual pairs.
 metadata:
-  version: 1.3.0
+  version: 1.4.0
 ---
 
 # SUMO traffic scenarios for generated CARLA worlds
@@ -57,12 +57,16 @@ Run from a machine with a **headless CARLA server up** and `CESIUM_ION_TOKEN` se
 
 ```bash
 python carla/CarlaControl/scripts/run_SCTMV.py \
-    --build \                    # run the world-build phase (--no-build attaches to a loaded world)
     --osm carla/Import/<Name>.osm \
-    --height-align drape \        # samples true ground height per cell → the bareearth.bin grid
+    --height-align drape \
     --emit-world-package carla/Build/world-packages \
-    --no-road-filter             # keep access=private roads (see the fence note below)
+    --no-road-filter \
+    --type-map carla/Import/<Name>.typ.xml
 ```
+
+The world is built unless `--no-build` is given, which attaches to the world already loaded.
+`--no-road-filter` and `--type-map` are for a secure site (see **The fence** below); the type map is
+found beside the extract without the flag.
 
 Key flags (`CarlaControlArgumentParser`, "world build" group):
 
@@ -70,10 +74,16 @@ Key flags (`CarlaControlArgumentParser`, "world build" group):
   point-by-point and, as a side effect, writes the per-cell `bareearth.bin` grid. Telemetry altitude
   is always true bare-earth; the grid is what Stage 2 reads for `hae`. Without drape, no grid.
 - `--emit-world-package DIR` — writes the durable record (`WorldBuilder._write_world_package` →
-  `client.write_world_package`): `world.json`, `map.xodr`, `bareearth.bin`.
+  `client.write_world_package`): `world.json`, `map.xodr`, `map.net.xml`, `bareearth.bin`, then the
+  authoring reference set.
 - `--no-road-filter` — see **The fence** below. Off by default the build passes
-  `--keep-edges.by-vclass passenger`, which **deletes every `access=private` road**. For a secure
-  site (a port, a base) that removes the whole interior — turn the filter off.
+  `--keep-edges.by-vclass passenger`, which **deletes every road a passenger car may not drive**:
+  every `highway=service` road (SUMO's own type map opens it to delivery vans, pedestrians and
+  bicycles only) and every `access=no` road. netconvert does not read `access=private` at all, so a
+  private residential road survives the filter and a public service road does not. For a secure site
+  whose interior is service roads, the filter removes the interior — turn it off.
+- `--type-map FILE` — the world's own road types, layered over SUMO's OSM type map; default
+  `<extract>.typ.xml` beside `--osm`. See **The fence** below.
 - `--ion-asset-id` (photoreal, default 2275207) and `--ground-asset-id` (bare-earth heights,
   default 1 = Cesium World Terrain).
 
@@ -103,6 +113,17 @@ only place an annotation, a date or a sun can be checked, because `sumo-gui` sho
 The schema is `schemas/scenario.schema.json` beside this file; every check, with its id, what it
 compares and whether it refuses or warns, is `checks.json`. Both are generated from the compiler. The
 design is `Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/07_Scenario_Authoring.md` §3.5–§7.
+
+Beside this file, and held to the compiler by the test suite:
+
+- `examples/` — worked specifications with their recorded resolution reports: a minimal one, one with
+  every kind of supervision and a counterfactual sweep, and three epochs (whole hour, daylight saving,
+  +03:30). `examples/README.md` says what each shows.
+- `references/resolution.md` — every place form and instant form, what each resolves to and refuses.
+- `references/time.md` — the epoch object and the six conventions for writing civil time.
+- `references/illumination.md` — the illumination default, windows, doc 11's six bands, night, and the
+  illumination–label association.
+- `references/gotchas.md` — the measured gotchas, each with the code that enforces it.
 
 **The blocks.** `world` (the package path and the network fingerprint it was authored against), `epoch`,
 `illumination`, `seeds` (`sumo`), `simulation` (`end`, `step_length_s`), `catalogue`, `vehicle_classes`
@@ -145,8 +166,19 @@ A route never carries a bare edge id: flows and actors name places. A place is `
 `{"street": "East Arapahoe Road", "direction": "west", "at": "<cross street>"}`. A street name is never
 one edge (`South Yosemite Street` is 65), so narrow it with `direction` and `at`; the compiler refuses
 ambiguity and lists the candidates rather than guessing. A stop needs a lane position: a lane with an
-offset, an edge with an offset, or an area holding one lane. On a map with few street names (Bahonar:
-4.5 %), use areas and explicit lanes.
+offset, an edge with an offset, a geographic point, or an area holding one lane. On a map with few
+street names (Bahonar: 4.5 %), use points, gateways and areas:
+
+- `{"lat": …, "lon": …, "max_snap_m": 25, "vclass": "army"}` — the position on the nearest lane
+  admitting the class (any road vehicle without one); refused past `max_snap_m`, and refused when two
+  roads are equally near. The report states the snap distance: read it.
+- `{"street": …, "direction": …, "near": {"lat": …, "lon": …}}` — the one edge of that run nearest
+  the point.
+- `{"gateway": "south", "travel": "in", "street": "South Valley Highway"}` — where a road enters
+  (`in`) or leaves (`out`) the world on that side. On Arapahoe this finds the four I-25 edges the
+  script had found by hand.
+- `{"from_street": …, "to_street": …}` with optional `from_direction`, `to_direction` — a turn: the
+  two edges one connection joins. Use it in `via`, where it contributes both.
 
 ### Repetition — a rota, not a loop
 
@@ -159,6 +191,25 @@ offset, an edge with an offset, or an area holding one lane. On a map with few s
 ```
 
 A skip must match exactly one occasion and say why: it is how an absence is planted.
+
+### An orbit — an explicit route in phases, a held phase waypointed per edge
+
+```json
+{"id": "orbiter", "type": "orbiter", "depart": 60, "depart_lane": "free", "depart_speed": "20.12",
+ "arrival_speed": "current",
+ "phases": [{"route": ["108141475#0", "108141475#2", "108141475#3", "108141475#4", "-219060582#2"],
+             "hold": "posted"},
+            {"route": ["219060581#4", "-219060584#0", "219060581#1", "219060581#2", "219060581#3"],
+             "repeat": 20, "hold": 11.0},
+            {"route": ["219060582#2", "-108141475#4", "-108141475#3", "-108141475#2", "-108141475#1"]}]}
+```
+
+Each entry names a place (here, places named by their edge ids). `hold` is a speed in m/s capped at each
+edge's limit, or `"posted"` for each edge's own limit; the compiler writes one waypoint spanning each
+held edge, because a `<stop speed>` binds only its own edge. A phase without `hold` runs on the vehicle's
+speedFactor. `repeat` counts passes over the phase; the joins are checked for connection. A stop beside
+phases is refused — on a repeated route it names no one pass. `make_sumo_scenario.py` is the worked
+example: it writes the Gardnerville orbit this way and compiles it.
 
 ### Supervision — the only annotation channel, and the author's words
 
@@ -207,8 +258,9 @@ All pure standard library. One public class per file (repo convention, see `carl
 
 | module | responsibility |
 |---|---|
-| `SumoInstallation.py` | Finds SUMO: `--sumo-home` → `$SUMO_HOME` → repo `Build/sumo-src` → `PATH`. Gives `netconvert`, `sumo`, `duarouter`, the `tools/` dir (traci, sumolib), and `proj` data. |
-| `SumoScenarioBuilder.py` | `NetconvertSettings` (the flag set), `build_network` (OSM→.net.xml, origin-pinned), `RoadNetwork` (reads a net for lane geometry + connections), `AmbientFlow` (a time-windowed traffic stream), and network post-processors: `restrict_private_roads` (the fence), `allow_opposite_overtaking`, `write_config`, plus the orbit/dwell route writers. |
+| `SumoInstallation.py` | Finds SUMO: `--sumo-home` → `$SUMO_HOME` → repo `Build/sumo-src` → `PATH`. Gives `netconvert`, `sumo`, `duarouter`, the `tools/` dir (traci, sumolib), and `proj` data. Compares its release with a world's converter through `CarlaNet.Sumo.SumoRelease`, the session's own comparison. |
+| `SumoScenarioBuilder.py` | `NetconvertSettings` (the flag set), `build_network` (the world package's network, checked and copied byte for byte), `RoadNetwork` (reads a net for lane geometry + connections), `AmbientFlow` (a time-windowed traffic stream), and network post-processors for the legacy generators: `restrict_private_roads` (an access-keyed fence the session refuses), `allow_opposite_overtaking`, `write_config`, plus the orbit/dwell route writers. |
+| `NetconvertTypeMap.py` | The world's own road types (`<extract>.typ.xml`, `--type-map`), validated before a build and passed to netconvert after SUMO's own map: the fence as a world-build decision. |
 | `SumoPatternOfLifeBuilder.py` | A multi-day timeline: `ScheduledVehicle` + `ScheduleStop`, and `write_routes` that merges time-windowed flows and scheduled vehicles onto one departure-sorted timeline. For week-long "pattern of life" scenarios. |
 | `ScenarioVehicleMix.py` | `VehicleClassSpec` (one kind of vehicle a scenario asks for: which measured blueprints it draws, its share of the traffic, and the author's own driving attributes) and `ScenarioVehicleMix`, which writes those as `<vType>`s sized from the catalogue plus the per-class and whole-mix `<vTypeDistribution>`s. `check_route_file` reads a written `.rou.xml` back and refuses one whose types name no measured body. This is how a scenario satisfies the mapping contract below. |
 | `VehicleCatalogue.py` | Read side of `vehicles.catalogue.json`: measured extent per blueprint, the bumper-to-origin shift the pose conversion needs, and the refusal reason for a type it cannot answer for. |
@@ -217,7 +269,8 @@ All pure standard library. One public class per file (repo convention, see `carl
 
 CLIs in `carla/CarlaControl/scripts/`:
 
-- `make_sumo_scenario.py` — Gardnerville orbit (one marked vehicle laps a block N times).
+- `make_sumo_scenario.py` — Gardnerville orbit (one marked vehicle laps a block N times). Writes a
+  specification and compiles it; the other two still write SUMO XML.
 - `make_arapahoe_scenario.py` — Arapahoe I-25 dwell (freeway + underpass, an incident, a long dwell).
 - `make_bahonar_scenario.py` — Shahid Bahonar 7-day pattern of life (fenced port, guard postings,
   six anomalies).
@@ -277,8 +330,8 @@ has no body for redistributes it across the rest in the proportions already auth
 a body the catalogue does not hold, restating a dimension the measurement supplies, or declaring a
 two-wheeler `vClass` stops the build. Then read the written file back with
 `ScenarioVehicleMix.check_route_file` and validate it against
-`Build/sumo-install/data/xsd/routes_file.xsd`; `make_sumo_scenario.py` does both and is the worked
-example.
+`Build/sumo-install/data/xsd/routes_file.xsd`. The scenario compiler does all of this from a
+specification's `vehicle_classes` (checks 14, 15, 51); `make_sumo_scenario.py` is the worked example.
 
 **What the catalogue cannot fill.** It measured 17 bodies and there is **no pickup** among them,
 and exactly one sport utility (`vehicle.nissan.patrol`). A scenario that wants a pickup does not get
@@ -312,20 +365,29 @@ Prefer a specification compiled with `compile_scenario.py` (above): it resolves 
 8. **Regression-check** the other scenarios still regenerate identically after any shared-code edit
    (Gardnerville is the canary).
 
-## The fence: two populations meeting at gates (secure sites)
+## The fence: what a secure site's roads admit (a world-build decision)
 
-When a map's interior is `access=private` (a port, a base), model it as two vehicle populations:
+What a road admits is part of the **world**: a scenario runs the world's network byte for byte, and
+the co-simulation session refuses any other. So the fence is set when the world is built, never by
+editing a network afterwards:
 
-- Build the net with the private roads **kept** (`NetconvertSettings(drivable_edges_only=False,
-  remove_edge_types=(pedestrian ways))`).
-- Call `SumoScenarioBuilder.restrict_private_roads(net, osm, allow="army authority")`. It sets every
-  OSM-private edge to allow only the given vehicle classes and clears the public roads to allow all.
-- **Critical:** it also clears the *internal junction-connector lanes*. netconvert built those for
-  the classes the roads allowed at the time (a civilian remainder that excludes the military
-  classes); if you leave them, the restricted class cannot cross any junction and the interior
-  fragments. This was the single subtlest bug in the Bahonar build.
-- Civilian traffic (`passenger`) is then physically locked to the public roads; `army`/`authority`
-  vehicles move everywhere; the gates are the junctions where public meets private.
+- Build with `--no-road-filter`, and give the world a **type map** — `Import/<Name>.typ.xml` beside
+  the extract (found by name) or `--type-map` — naming the classes a road type admits. It is layered
+  over SUMO's own map, so a line states only what it changes:
+  `<types><type id="highway.service" allow="delivery pedestrian bicycle army authority"/></types>`.
+- `Import/Shahid_Bahonar_Port.typ.xml` is the worked one. The guard towers and the apron are untagged
+  `highway=service` roads, which SUMO's map closes to `army`; that line opens them, and the 335-entry
+  guard rota compiles on the world converted with it and is refused by check 10 on the world without.
+- netconvert builds the junction-connector lanes from the permissions it assigned, so nothing has to
+  clear them afterwards.
+- **What it cannot do: key on `access`.** netconvert reads `access` only as `access=no` (public
+  transport, emergency and authority only), never `access=private`, so a type map sets what every road
+  of a type admits, private or not. A fence that keeps civilians off `access=private` residential
+  roads is not expressible in a world today.
+- `SumoScenarioBuilder.restrict_private_roads` still does that access-keyed rewrite for the legacy
+  Bahonar generator's SUMO-only preview and CoT path. A network it rewrites is **not** the world's: the
+  session refuses a scenario on it and a specification cannot use it. Do not use it for anything CARLA
+  renders.
 
 ## Measured gotchas (each cost real time; do not relearn them)
 
@@ -334,8 +396,9 @@ The compiler enforces four of these on a specification — departure order, `--`
 - **Validate routes with `duarouter`, not `sumolib.getShortestPath`.** sumolib gives false positives
   (it will traverse one-way edges the real router refuses), so hand-picked routes then fail at SUMO
   load with "no valid route". Batch candidate trips through
-  `duarouter -n net -r trips.rou.xml -o out.rou.xml --ignore-errors` and keep only those that
-  produce a `<vehicle>`.
+  `duarouter -n net -r trips.rou.xml -o out.rou.xml --ignore-errors`, and keep only those whose routed
+  `<vehicle>` starts on the origin, ends on the destination and passes every `via` in order: a trip to
+  an edge that does not exist still comes back as a `<vehicle>`, with a one-edge route.
 - **A `<stop speed=…>` waypoint caps speed only between its own `startPos`/`endPos` on its own edge**
   (`MSVehicle.cpp` "process all stops and waypoints on the current edge"), not from the previous
   waypoint onward. Holding a whole phase to one speed needs one waypoint per edge in that phase.

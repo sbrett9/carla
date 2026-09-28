@@ -239,11 +239,20 @@ class RoadNetwork:
     @classmethod
     def from_file(cls, path: str | Path) -> RoadNetwork:
         """Read a .net.xml, skipping the internal edges SUMO generates inside junctions."""
+        return cls.from_root(ET.parse(str(path)).getroot())
+
+    @classmethod
+    def from_text(cls, network_text: str) -> RoadNetwork:
+        """Read a network held in memory -- a world package's, say -- as `from_file` reads a file."""
+        return cls.from_root(ET.fromstring(network_text))
+
+    @classmethod
+    def from_root(cls, root: ET.Element) -> RoadNetwork:
         lane_length: dict[str, float] = {}
         lane_speed: dict[str, float] = {}
         street_name: dict[str, str] = {}
         successors: dict[str, set[str]] = {}
-        for element in ET.parse(str(path)).getroot():
+        for element in root:
             if element.tag == "edge" and element.get("function") != "internal":
                 edge_id = element.get("id")
                 street_name[edge_id] = element.get("name", "")
@@ -457,7 +466,9 @@ class SumoScenarioBuilder:
                 "Its network is being used as given, unchecked.", package.path)
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(network, encoding="utf-8")
+        # Written as the package carries it, line endings included, so the file SUMO loads is the
+        # world's network and not a re-encoding of it.
+        out_path.write_text(network, encoding="utf-8", newline="")
         self.logger.info("network from %s (%s) -> %s",
                          package.path.name, package.netconvert_version or "unrecorded version",
                          out_path.name)

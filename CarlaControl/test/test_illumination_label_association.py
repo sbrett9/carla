@@ -16,6 +16,7 @@ import pytest
 _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
+from carlacontrol.AnnotationVocabulary import CORE_TERMS  # noqa: E402
 from carlacontrol.IlluminationBand import IlluminationBand  # noqa: E402
 from carlacontrol.IlluminationLabelAssociation import IlluminationLabelAssociation  # noqa: E402
 
@@ -69,3 +70,11 @@ def test_independence_scores_zero_and_determination_scores_one():
 ])
 def test_the_band_edges_are_doc_11s(elevation, band):
     assert IlluminationBand.of(elevation) == band
+
+
+def test_the_vocabulary_spells_the_bands_the_statistic_buckets_by():
+    """Doc 11 §4.4 is the single definition of the bands (07 §12 question 13): the core vocabulary's
+    `illumination_band` terms are the names the band function assigns, in its order."""
+    assert CORE_TERMS["illumination_band"] == IlluminationBand.names() == [
+        "day", "golden", "civil_twilight", "nautical_twilight", "astronomical_twilight", "night"]
+    assert {IlluminationBand.of(e) for e in range(-90, 91)} == set(IlluminationBand.names())

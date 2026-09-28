@@ -1,0 +1,238 @@
+{
+  "supervision_plan_version": 1,
+  "plan_id": "Gardnerville_Centerville_Lane_NeighborhoodOrbit",
+  "spec_version": 1,
+  "scenario_id": "Gardnerville_Centerville_Lane_NeighborhoodOrbit",
+  "routes_digest": "3556d033cc198870ab2aea7eedd5f312f55b4dd891a723e0763011961c8647ad",
+  "network_digest": "20a6877216f222f877ad337f8da13b7fac4430441cafbbd8784f2353890457ef",
+  "config_digest": "34304150fb6f4406a61c0e863c7a9b6d074bc352742f0d737640011c9a47d980",
+  "vocabulary_version": 1,
+  "vocabulary_digest": "f55740d1198fafffbee1a2d030dfaf57444434b083a44cc1fe87106503435edf",
+  "vocabulary": {
+    "core": {
+      "vocabulary_version": 1,
+      "source": "06_Truth_And_Annotation.md §3.7",
+      "terms": {
+        "supervision_state": [
+          "annotated",
+          "nominal",
+          "unlabelled"
+        ],
+        "subject_kind": [
+          "entity",
+          "cohort",
+          "slot"
+        ],
+        "realisation": [
+          "present",
+          "absent"
+        ],
+        "interval_onset": [
+          "declared",
+          "committed",
+          "observed"
+        ],
+        "closed_by": [
+          "trigger",
+          "entity_arrived",
+          "sumo_removed",
+          "never_inserted",
+          "slot_unrealised",
+          "physical_predicate_never_held",
+          "render_released",
+          "capture_window_end",
+          "scenario_end"
+        ],
+        "observability_outcome": [
+          "observed",
+          "out_of_frame",
+          "occluded",
+          "not_rendered",
+          "site_unobserved"
+        ],
+        "illumination_band": [
+          "day",
+          "golden",
+          "civil_twilight",
+          "nautical_twilight",
+          "astronomical_twilight",
+          "night"
+        ],
+        "cadence": [
+          "enumerated",
+          "period_s + offsets_s[] + span"
+        ],
+        "reserved_role": [
+          "subject"
+        ],
+        "reserved_phase": [
+          "vacancy"
+        ]
+      }
+    },
+    "namespaces": []
+  },
+  "instances": [],
+  "series": [],
+  "cohorts": [
+    {
+      "flow_id": "corridor_west_to_northeast",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "corridor_northeast_to_west",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "corridor_west_to_east",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "corridor_east_to_west",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "corridor_northeast_to_east",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "corridor_east_to_northeast",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "edna_to_west",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "west_to_edna",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "marianne_to_east",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "west_to_marianne",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "rubio_to_west",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "east_to_rubio",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "heavenlyview_to_west",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "west_to_heavenlyview",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "northstub_to_west",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "west_to_northstub",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "turningcircle_to_east",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "east_to_turningcircle",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "neighbourhood_through_north",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "neighbourhood_through_west",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "neighbourhood_south_to_north",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "neighbourhood_north_to_south",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "cobblestone_to_east",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "east_to_cobblestone",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "lostriver_to_east",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "west_to_lostriver",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "rockterrace_local_north",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "rockterrace_local_in",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "keystone_to_west",
+      "supervision": "unlabelled",
+      "labels": []
+    },
+    {
+      "flow_id": "west_to_keystone",
+      "supervision": "unlabelled",
+      "labels": []
+    }
+  ],
+  "entities": [
+    {
+      "entity_id": "orbiter",
+      "supervision": [
+        "unlabelled"
+      ],
+      "refs": []
+    }
+  ]
+}

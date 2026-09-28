@@ -11,6 +11,11 @@ from System.Collections.Generic import List
 
 from carlacontrol.AreaOfInterestSource import AreaOfInterestError, AreaOfInterestSource
 from carlacontrol.AuthoringReferenceSet import AuthoringReferenceSet
+from carlacontrol.NetconvertTypeMap import (
+    TYPE_FILES_OPTION,
+    NetconvertTypeMap,
+    NetconvertTypeMapError,
+)
 from carlacontrol.OsmClipper import OsmClipper
 from carlacontrol.SumoInstallation import SumoInstallation
 
@@ -20,6 +25,9 @@ class WorldBuilder:
         self.repo_root = repo_root
         self.netconvert_path = netconvert_path
         self.proj_data_path = proj_data_path
+        # The world's own edge types, when it declares any (`load_type_map`); passed to netconvert
+        # with SUMO's map first by `make_osm_conversion_options`.
+        self.type_map: NetconvertTypeMap | None = None
         self.logger = logging.getLogger(__name__)
 
         self.logger.info(f"world builder initialized: netconvert={netconvert_path}")
@@ -73,6 +81,13 @@ class WorldBuilder:
         for a in getattr(args, "netconvert_arg", None) or []:
             for token in shlex.split(str(a)):
                 extra.Add(token)
+        # The world's own edge types, after SUMO's: which vehicle classes each kind of road admits
+        # is decided in the one netconvert run that writes the world's network and its OpenDRIVE, so
+        # the network every scenario on this world runs already carries it (NetconvertTypeMap).
+        if self.type_map is not None:
+            installation_home = Path(self.netconvert_path).resolve().parent.parent
+            for a in self.type_map.netconvert_arguments(installation_home):
+                extra.Add(a)
         opts.ExtraArgs = extra
         return opts
 
@@ -108,6 +123,8 @@ class WorldBuilder:
             )
         ok, areas = self.load_areas_of_interest(args)
         if not ok:
+            return False
+        if not self.load_type_map(args):
             return False
         self.logger.info(
             f"  ion asset  : {args.ion_asset_id} (photoreal)  ground: {args.ground_asset_id}  "
@@ -209,6 +226,46 @@ class WorldBuilder:
             + ("" if args.emit_world_package else " (validated; published only with "
                                                   "--emit-world-package)"))
         return True, areas
+
+    def load_type_map(self, args) -> bool:
+        """Find and validate the world's own edge types before anything is built.
+
+        `--type-map` names the file; without it, `<extract>.typ.xml` beside `--osm` is used when it
+        exists. A malformed file, a map with SUMO's own map missing from the installation beside
+        netconvert, or a `--type-files` also given through `--netconvert-arg` refuses the build:
+        netconvert takes that option once, and a second list would replace the first. Returns
+        whether to proceed; the map is kept on `self.type_map`.
+        """
+        self.type_map = None
+        explicit = getattr(args, "type_map", None)
+        path = Path(explicit) if explicit else NetconvertTypeMap.discover(args.osm)
+        if path is None:
+            self.logger.info("  road types : SUMO's own (no --type-map, and no %s beside the extract)",
+                             NetconvertTypeMap.beside(args.osm).name)
+            return True
+        if not path.is_file():
+            self.logger.error(f"type map not found: {path}")
+            return False
+        passed = [token for a in getattr(args, "netconvert_arg", None) or []
+                  for token in shlex.split(str(a))]
+        if any(token == TYPE_FILES_OPTION or token.startswith(TYPE_FILES_OPTION + "=")
+               for token in passed):
+            self.logger.error(f"a type map ({path}) and {TYPE_FILES_OPTION} through "
+                              "--netconvert-arg were both given; netconvert reads the option once, "
+                              "so name the world's types with --type-map alone")
+            return False
+        try:
+            type_map = NetconvertTypeMap.load(path)
+            type_map.netconvert_arguments(Path(self.netconvert_path).resolve().parent.parent)
+        except (NetconvertTypeMapError, FileNotFoundError) as refusal:
+            self.logger.error(f"type map refused, so the world is not built: {refusal}")
+            return False
+        self.type_map = type_map
+        self.logger.info(f"  road types : SUMO's own, then {len(type_map.types)} from {path} "
+                         f"(sha256 {type_map.sha256[:12]})")
+        for line in type_map.describe():
+            self.logger.info(f"               {line}")
+        return True
 
     def _write_world_package(self, client, args, osm_for_build: str, elevated: str,
                              areas: AreaOfInterestSource | None = None) -> None:

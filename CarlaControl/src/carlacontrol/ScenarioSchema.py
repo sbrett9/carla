@@ -118,8 +118,29 @@ SCHEMA: dict = {
                  "required": ["street", "direction"],
                  "properties": {"street": {"type": "string", "minLength": 1},
                                 "direction": {"enum": ["north", "east", "south", "west"]},
-                                "at": {"type": "string", "minLength": 1}}},
+                                "at": {"type": "string", "minLength": 1},
+                                "near": {"$ref": "#/$defs/geographic_point"}}},
+                {"type": "object", "additionalProperties": False,
+                 "required": ["lat", "lon", "max_snap_m"],
+                 "properties": {"lat": {"type": "number"}, "lon": {"type": "number"},
+                                "max_snap_m": {"type": "number", "exclusiveMinimum": 0},
+                                "vclass": {"type": "string", "minLength": 1}}},
+                {"type": "object", "additionalProperties": False,
+                 "required": ["gateway", "travel"],
+                 "properties": {"gateway": {"enum": ["north", "east", "south", "west"]},
+                                "travel": {"enum": ["in", "out"]},
+                                "street": {"type": "string", "minLength": 1}}},
+                {"type": "object", "additionalProperties": False,
+                 "required": ["from_street", "to_street"],
+                 "properties": {"from_street": {"type": "string", "minLength": 1},
+                                "to_street": {"type": "string", "minLength": 1},
+                                "from_direction": {"enum": ["north", "east", "south", "west"]},
+                                "to_direction": {"enum": ["north", "east", "south", "west"]}}},
             ],
+        },
+        "geographic_point": {
+            "type": "object", "additionalProperties": False, "required": ["lat", "lon"],
+            "properties": {"lat": {"type": "number"}, "lon": {"type": "number"}},
         },
         "stop": {
             "type": "object", "additionalProperties": False, "required": ["place"],
@@ -151,9 +172,28 @@ SCHEMA: dict = {
                 "to": {"type": "string", "minLength": 1},
                 "via": _STRINGS,
                 "route": {"type": "array", "minItems": 2, "items": {"type": "string", "minLength": 1}},
+                "phases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/phase"},
+                           "description": "An explicit route in phases, each driven `repeat` times "
+                                          "and optionally held to a speed; instead of route or "
+                                          "from/to"},
                 "stops": {"type": "array", "items": {"$ref": "#/$defs/stop"}},
                 "depart_lane": {"type": "string"}, "depart_speed": {"type": "string"},
                 "arrival_speed": {"type": "string"},
+            },
+        },
+        "phase": {
+            "type": "object", "additionalProperties": False, "required": ["route"],
+            "properties": {
+                "route": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1},
+                          "description": "Places naming one edge each, in driving order"},
+                "repeat": {"type": "integer", "minimum": 1,
+                           "description": "How many times the phase's route is driven; default 1"},
+                "hold": {"anyOf": [{"type": "number", "exclusiveMinimum": 0},
+                                   {"const": "posted"}],
+                         "description": "Hold the vehicle to this speed in m/s, capped at each "
+                                        "edge's limit, or to each edge's own limit ('posted'), "
+                                        "over every edge of the phase: one waypoint per edge. "
+                                        "Without it the vehicle drives at its own speedFactor"},
             },
         },
         "rota": {

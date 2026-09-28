@@ -22,12 +22,18 @@ produces a network and a scenario that are not from the same converter, and noth
 `locate` reports the path, the version and *which rule matched* at `INFO`, once per distinct
 resolution, with no flag to turn it off, and `require_version` turns a known mismatch against a
 recorded converter into a refusal rather than a note in a log nobody reads.
+
+**One definition of the comparison.** Whether two version strings name one SUMO release, and how an
+installation stands against the converter a world records, are `CarlaNet.Sumo.SumoRelease` and
+`SumoReleaseCheck` -- the functions the co-simulation session refuses a mismatched SUMO with. This
+class reaches them through `carlanet` rather than restating them, so a world-build tool, the scenario
+compiler and the session cannot disagree about whether `Eclipse SUMO netconvert 1.27.0` and `1.27.0`
+are the same release.
 """
 from __future__ import annotations
 
 import logging
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -36,29 +42,10 @@ from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 
+import carlanet  # noqa: F401  -- loads the CarlaNet assemblies the next import names
+from CarlaNet.Sumo import SumoRelease, SumoReleaseAgreement, SumoReleaseCheck
+
 EXECUTABLE_SUFFIX = ".exe" if os.name == "nt" else ""
-
-# `Eclipse SUMO netconvert 1.27.0` / `Eclipse SUMO sumo 1.27.1` — the first line of any SUMO tool's
-# `--version` output. The trailing dot-separated number is the release; anything after it (a git
-# description on a development build, for example) is not part of the comparison.
-_VERSION_LINE = re.compile(r"Eclipse SUMO \S+ v?(\d+(?:\.\d+)*)")
-
-
-def _release(text: str | None) -> str | None:
-    """The release number out of a version string, however the recorder wrote it.
-
-    A world package records what the tool printed -- `Eclipse SUMO netconvert 1.27.0` -- while this
-    class carries the release alone. Comparing the two verbatim refuses a matching pair, so both
-    sides are reduced to the number before they meet.
-    """
-    if not text:
-        return None
-    match = _VERSION_LINE.search(text)
-    if match:
-        return match.group(1)
-    stripped = text.strip()
-    bare = re.fullmatch(r"v?(\d+(?:\.\d+)*)", stripped)
-    return bare.group(1) if bare else stripped
 
 # Resolutions already announced this process, keyed by the path and the rule that matched, so a
 # long-running tool does not repeat the line while a *second*, different resolution is still reported
@@ -149,11 +136,23 @@ class SumoInstallation:
         except OSError as error:
             logger.warning("could not run %s to read its version: %s", netconvert, error)
             return None
-        match = _VERSION_LINE.search(completed.stdout or completed.stderr or "")
-        if not match:
+        release = SumoRelease.FromToolOutput(completed.stdout or completed.stderr or "")
+        if release is None:
             logger.warning("could not parse a version from %s --version", netconvert)
             return None
-        return match.group(1)
+        return str(release)
+
+    def release_check(self, recorded: str | None, allow_mismatch: bool = False) -> SumoReleaseCheck:
+        """How this installation stands against the converter an artifact records.
+
+        `recorded` is what the artifact wrote -- a world package records the netconvert that built it,
+        `Eclipse SUMO netconvert 1.27.0` -- or None where it records nothing. The comparison is
+        `CarlaNet.Sumo.SumoReleaseCheck`'s, by release number; `allow_mismatch` turns a different
+        release into an accepted one rather than a mismatch. Deciding what to do about the answer is
+        the caller's, because what a refusal must name -- which flag, which tool -- is the caller's.
+        """
+        return SumoReleaseCheck.Compare(str(self.home), self.source, self.version, recorded,
+                                        bool(allow_mismatch))
 
     def require_version(self, expected: str | None, allow_mismatch: bool = False) -> None:
         """Refuse when this installation is not the SUMO release `expected`.
@@ -162,9 +161,14 @@ class SumoInstallation:
         world package records the netconvert that built it. Pass None when nothing recorded one: that
         warns and proceeds, because an older artifact that predates the recording is not evidence of a
         mismatch. `allow_mismatch` warns and proceeds for a caller that has a reason to accept the
-        risk, and is what a `--allow-version-mismatch` flag sets.
+        risk, and is what a `--allow-version-mismatch` flag sets. An installation whose release cannot
+        be read agrees with nothing, so it is refused against any recorded release.
         """
-        if expected is None:
+        check = self.release_check(expected, allow_mismatch)
+        agreement = check.Agreement
+        if agreement == SumoReleaseAgreement.SameRelease:
+            return
+        if agreement == SumoReleaseAgreement.NotRecorded:
             logger.warning(
                 "nothing records which SUMO produced the artifact being worked on, so the "
                 "installation at %s (version %s) cannot be checked against it. Proceeding; rebuild "
@@ -172,13 +176,10 @@ class SumoInstallation:
             return
 
         resolved = self.version
-        if _release(resolved) == _release(expected):
-            return
-
         detail = (f"this world was built with SUMO {expected}; the installation at {self.home} "
                   f"(matched by {self.source}) is "
                   + (f"SUMO {resolved}" if resolved else "of an unreadable version"))
-        if allow_mismatch:
+        if agreement == SumoReleaseAgreement.MismatchAccepted:
             logger.warning("%s. Proceeding because the version mismatch was explicitly allowed.",
                            detail)
             return

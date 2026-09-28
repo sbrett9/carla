@@ -235,6 +235,17 @@ class CarlaControlArgumentParser:
             "Validated before the build starts, which a malformed file refuses; resolved to CARLA "
             "metres and SUMO lanes and published with --emit-world-package",
         )
+        build.add_argument(
+            "--type-map",
+            default=None,
+            metavar="TYP_XML",
+            help="netconvert edge types for this world, layered over SUMO's own OSM type map: a "
+            "<types> file whose <type> entries replace the defaults attribute by attribute, e.g. "
+            "which vehicle classes a highway.service road admits. Default: <extract>.typ.xml "
+            "beside --osm, when one exists. Validated before the build starts, and recorded in "
+            "the world package's netconvert argument list; the world's network carries what it "
+            "sets, so every scenario on the world inherits it",
+        )
         build.add_argument("--timeout", type=float, default=300.0, help="build RPC timeout (s)")
 
     def _add_view_args(self, ap: argparse.ArgumentParser) -> None:

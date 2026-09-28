@@ -81,12 +81,14 @@ def test_the_shipped_flag_set_matches_the_world_build(tmp_path):
 
 
 def test_the_network_comes_out_of_the_package_verbatim(tmp_path):
+    """Byte for byte, line endings included: the file SUMO loads is the world's network, not a
+    re-encoding of it."""
     package = write_package(tmp_path)
     out = tmp_path / "out" / "TestWorld.net.xml"
 
     SumoScenarioBuilder().build_network(package, out, settings())
 
-    assert out.read_text(encoding="utf-8") == NETWORK
+    assert out.read_bytes() == zipfile.ZipFile(package).read("map.net.xml")
 
 
 def test_file_paths_do_not_count_as_a_difference(tmp_path):

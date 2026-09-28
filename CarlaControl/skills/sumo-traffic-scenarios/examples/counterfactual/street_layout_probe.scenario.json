@@ -1,0 +1,298 @@
+{
+  "spec_version": 1,
+  "scenario_id": "street_layout_probe",
+  "scenario_name": "Street layout probe",
+  "description": "A probe halts at the kerb on East Street while ambient traffic passes; a patrol checks the kerb and misses its second visit.",
+  "world": {
+    "package": "StreetLayout.cwp",
+    "network_fingerprint": "44194b18d22c91a25e85babe0469d43d064f3fb9aabe15fa62a486cd8fb4e2e0"
+  },
+  "epoch": {
+    "epoch_version": 1,
+    "civil_datetime": "2026-03-21T06:00:00-06:00",
+    "utc_offset_hours": -6.0,
+    "utc_datetime": "2026-03-21T12:00:00Z",
+    "calendar_advances": true,
+    "dst_in_effect": true,
+    "time_zone_id": "America/Denver"
+  },
+  "illumination": {
+    "illumination_version": 1,
+    "policy": "freeze_at_window_start",
+    "note": "one lighting condition per window"
+  },
+  "seeds": {
+    "sumo": 42
+  },
+  "simulation": {
+    "end": "d0 09:00",
+    "step_length_s": 0.05
+  },
+  "catalogue": "../../../../catalogue/vehicles.catalogue.json",
+  "vehicle_classes": [
+    {
+      "class_id": "car",
+      "blueprints": [
+        "vehicle.lincoln.mkz",
+        "vehicle.dodge.charger",
+        "vehicle.mini.cooper"
+      ],
+      "sumo_vclass": "passenger",
+      "behaviour": {
+        "maxSpeed": "40"
+      },
+      "share": 1.0
+    },
+    {
+      "class_id": "saloon",
+      "blueprints": [
+        "vehicle.lincoln.mkz"
+      ],
+      "sumo_vclass": "passenger",
+      "behaviour": {
+        "maxSpeed": "40",
+        "speedDev": "0"
+      },
+      "share": 0.0
+    }
+  ],
+  "vehicle_mix": "ambient_mix",
+  "places": {
+    "west_gate": {
+      "edge": "900"
+    },
+    "east_end": {
+      "edge": "901#1"
+    },
+    "cross_south": {
+      "edge": "902#1"
+    },
+    "kerb": {
+      "area": "kerb"
+    },
+    "east_before_cross": {
+      "street": "East Street",
+      "direction": "east",
+      "at": "Cross Street"
+    }
+  },
+  "instants": {
+    "probe_time": "d0 07:00"
+  },
+  "flows": [
+    {
+      "id": "ambient",
+      "type": "ambient_mix",
+      "from": "west_gate",
+      "to": "east_end",
+      "vehs_per_hour": 200,
+      "begin": "d0 06:00",
+      "end": "d0 09:00"
+    }
+  ],
+  "actors": [
+    {
+      "id": "probe",
+      "type": "saloon",
+      "depart": {
+        "instant": "probe_time"
+      },
+      "from": "west_gate",
+      "to": "east_end",
+      "via": [
+        "east_before_cross"
+      ],
+      "stops": [
+        {
+          "place": "kerb",
+          "duration": "5m"
+        }
+      ]
+    },
+    {
+      "id": "hauler",
+      "type": "car",
+      "depart": "d0 07:30",
+      "from": "west_gate",
+      "to": "cross_south"
+    }
+  ],
+  "rotas": [
+    {
+      "id": "patrol",
+      "days": [
+        0
+      ],
+      "at": [
+        "06:15",
+        "08:15"
+      ],
+      "subjects": [
+        "kerb"
+      ],
+      "id_pattern": "patrol_d{day}_h{hour}",
+      "template": {
+        "type": "car",
+        "from": "west_gate",
+        "to": "east_end",
+        "stops": [
+          {
+            "place": "$subject",
+            "duration": "10m",
+            "parking": true
+          }
+        ]
+      },
+      "skip": [
+        {
+          "day": 0,
+          "at": "08:15",
+          "subject_index": 0,
+          "because": "the second patrol does not come"
+        }
+      ]
+    }
+  ],
+  "vocabulary": {
+    "namespaces": [
+      {
+        "namespace": "fixture",
+        "version": 1,
+        "authority": "the compiler's test fixture",
+        "terms": [
+          {
+            "term": "fixture:standoff",
+            "definition": "A vehicle halts at the kerb for minutes and leaves.",
+            "applies_to": [
+              "entity"
+            ],
+            "realisation": [
+              "present"
+            ],
+            "since": 1,
+            "status": "active"
+          },
+          {
+            "term": "fixture:routine_patrol",
+            "definition": "A scheduled patrol that halts at the kerb.",
+            "applies_to": [
+              "entity"
+            ],
+            "realisation": [
+              "present"
+            ],
+            "since": 1,
+            "status": "active",
+            "hard_negative_for": [
+              "fixture:standoff"
+            ]
+          },
+          {
+            "term": "fixture:patrol_missed",
+            "definition": "A scheduled patrol that never came.",
+            "applies_to": [
+              "slot"
+            ],
+            "realisation": [
+              "absent"
+            ],
+            "since": 1,
+            "status": "active",
+            "counterfactual": {
+              "kind": "term",
+              "ref": "fixture:routine_patrol"
+            }
+          }
+        ],
+        "roles": [
+          {
+            "role": "fixture:patroller",
+            "definition": "the vehicle making a patrol"
+          }
+        ],
+        "area_kinds": [
+          {
+            "kind": "fixture:kerb"
+          }
+        ]
+      }
+    ]
+  },
+  "supervision": {
+    "instances": [
+      {
+        "name": "probe_standoff",
+        "supervision": "annotated",
+        "labels": [
+          "fixture:standoff"
+        ],
+        "participants": [
+          {
+            "actor": "probe",
+            "role": "subject"
+          }
+        ],
+        "intervals": [
+          {
+            "participant": "probe",
+            "phase": "wait",
+            "begin": "d0 07:00",
+            "end": "d0 07:06"
+          }
+        ],
+        "aoi_refs": [
+          "kerb"
+        ]
+      },
+      {
+        "name": "hauler_nominal",
+        "supervision": "nominal",
+        "labels": [],
+        "participants": [
+          {
+            "actor": "hauler",
+            "role": "subject"
+          }
+        ]
+      }
+    ],
+    "cohorts": [
+      {
+        "flow": "ambient",
+        "supervision": "unlabelled"
+      }
+    ],
+    "series": [
+      {
+        "series_id": "kerb_patrol",
+        "rota": "patrol",
+        "member_role": "fixture:patroller",
+        "slot_length": "10m",
+        "slot_aoi_refs": {
+          "kerb": "kerb"
+        },
+        "supervision": "nominal",
+        "labels": [
+          "fixture:routine_patrol"
+        ]
+      }
+    ],
+    "absences": [
+      {
+        "name": "patrol_missed_d0_h8",
+        "series": "kerb_patrol",
+        "entry": "patrol_d0_h8",
+        "labels": [
+          "fixture:patrol_missed"
+        ]
+      }
+    ]
+  },
+  "capture_windows": [
+    {
+      "id": "morning",
+      "begin": "d0 07:00",
+      "length": "15m"
+    }
+  ]
+}

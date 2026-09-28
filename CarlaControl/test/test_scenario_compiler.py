@@ -116,6 +116,23 @@ def test_sumo_runs_the_compiled_scenario_and_stops_where_the_report_says(world, 
     assert (kerb["lane"], kerb["end_pos"]) == ("901#0_0", 51.5)
 
 
+def test_entries_departing_together_keep_the_specification_s_order(world, installation, tmp_path):
+    """SUMO inserts, and draws its random numbers, in the order it reads, so the order of entries
+    departing together decides the traffic: the author's order is kept, flows before actors."""
+    spec = world.specification()
+    first = dict(spec["flows"][0], id="zulu", begin="d0 07:00")
+    second = dict(spec["flows"][0], id="alpha", begin="d0 07:00")
+    spec["flows"] = [first, second, *spec["flows"]]
+    spec["actors"][0]["depart"] = "d0 07:00"
+    result = ScenarioCompiler(installation).compile(world.write(spec, "order.scenario.json"),
+                                                    tmp_path / "out")
+    assert not result.refused
+    root = ET.parse(result.files["routes"]).getroot()
+    together = [e.get("id") for e in root if e.tag in ("vehicle", "flow")
+                and float(e.get("depart") or e.get("begin")) == 3600.0]
+    assert together == ["zulu", "alpha", spec["actors"][0]["id"]]
+
+
 def test_compiling_twice_gives_byte_identical_scenario_files(world, installation, tmp_path):
     first = compile_spec(world, installation, tmp_path / "a", name="twice")
     second = compile_spec(world, installation, tmp_path / "b", name="twice")
@@ -135,6 +152,7 @@ def test_the_lock_binds_the_four_files_the_epoch_and_the_traffic(world, installa
     assert lock["epoch_block_sha256"] == ScenarioEpoch.read(EPOCH).digest
     assert lock["traffic"]["sumo_seed"] == 42 and lock["traffic"]["step_length_s"] == 0.05
     assert lock["traffic"]["routed_by"]["version"] == installation.version
+    assert lock["traffic"]["routed_by"]["world_converter"] == "Eclipse SUMO netconvert 1.27.0"
     assert "sumo-install" not in json.dumps(lock), "the lock names no machine path"
     plan = result.plan
     assert plan["routes_digest"] == lock["files"]["routes"]["sha256"]
@@ -154,6 +172,15 @@ def test_the_plan_states_every_subject_explicitly(world, installation, tmp_path)
     assert plan["vocabulary"]["core"]["terms"]["supervision_state"] == ["annotated", "nominal",
                                                                        "unlabelled"]
     assert "solar" not in json.dumps(plan) and "epoch" not in plan
+
+
+def test_the_plan_s_vocabulary_names_doc_11_s_six_illumination_bands(world, installation, tmp_path):
+    """The published vocabulary and the association statistic use one band table (07 §12 q13)."""
+    result = compile_spec(world, installation, tmp_path)
+    assert result.plan["vocabulary"]["core"]["terms"]["illumination_band"] == [
+        "day", "golden", "civil_twilight", "nautical_twilight", "astronomical_twilight", "night"]
+    bands = result.lock["illumination_label_association"]["bands"]
+    assert bands and set(bands) <= set(result.plan["vocabulary"]["core"]["terms"]["illumination_band"])
 
 
 def test_the_report_states_every_time_in_seconds_and_civil(world, installation, tmp_path):
@@ -223,6 +250,173 @@ def test_a_network_carrying_a_road_offset_is_refused_under_check_5(world, instal
                                                     tmp_path / "out")
     assert checks(result) == {5}
     assert "5.0, -3.0" in messages(result, 5)
+
+
+
+# ---- an explicit route in phases, a held phase waypointed per edge -----------------------------------
+
+# A closed circuit on the fixture network: east along East Street, the turnaround at its end, back
+# west, the turnaround at West Street's end, and east again to where it began.
+LOOP = ["901#0", "901#1", "-901#1", "-901#0", "-900", "900"]
+LOOP_LENGTH_M = 93.29 + 93.28 + 93.28 + 93.29 + 201.27 + 201.27
+
+
+def orbit_specification(world, **orbiter_changes) -> dict:
+    """The fixture scenario with an orbiter: in on West Street at the posted limit, three laps of
+    LOOP held to 8 m/s, and out along East Street on its own speedFactor."""
+    spec = world.specification()
+    names = {edge: f"orbit_{index}" for index, edge in enumerate(dict.fromkeys(LOOP))}
+    for edge, name in names.items():
+        spec["places"][name] = {"edge": edge}
+    orbiter = {"id": "orbiter", "type": "saloon", "depart": "d0 07:10",
+               "depart_speed": "13.41", "arrival_speed": "current",
+               "phases": [{"route": [names["900"]], "hold": "posted"},
+                          {"route": [names[e] for e in LOOP], "repeat": 3, "hold": 8.0},
+                          {"route": [names["901#0"], names["901#1"]]}]}
+    orbiter.update(orbiter_changes)
+    spec["actors"].append(orbiter)
+    return spec
+
+
+def orbiter_entry(result) -> ET.Element:
+    root = ET.parse(result.files["routes"]).getroot()
+    return next(e for e in root if e.tag == "vehicle" and e.get("id") == "orbiter")
+
+
+def test_phases_compile_to_one_route_and_a_waypoint_per_held_edge(world, installation, tmp_path):
+    result = ScenarioCompiler(installation).compile(
+        world.write(orbit_specification(world), "phases.scenario.json"), tmp_path / "out")
+    assert not result.refused, [str(f) for f in result.findings.findings if f.outcome == "refuse"]
+    orbiter = orbiter_entry(result)
+    assert orbiter.find("route").get("edges").split() == ["900", *LOOP * 3, "901#0", "901#1"]
+    waypoints = orbiter.findall("stop")
+    assert len(waypoints) == 1 + 3 * len(LOOP), "one per held edge, none on the exit"
+    assert waypoints[0].get("lane") == "900_0" and waypoints[0].get("speed") == "13.41"
+    assert {w.get("speed") for w in waypoints[1:]} == {"8.00"}
+    assert all(w.get("startPos") == "0.00" and w.get("duration") is None for w in waypoints)
+    assert [w.get("lane") for w in waypoints[1:1 + len(LOOP)]] == [f"{e}_0" for e in LOOP]
+    report = next(r for r in result.report["routes"] if r["id"] == "orbiter")
+    assert report["waypoints"] == 19 and report["phases"][1] == {"edges": 6, "repeat": 3,
+                                                                  "hold": 8.0}
+
+
+def test_sumo_drives_the_phases_and_holds_the_held_one(world, installation, tmp_path):
+    """Read back from SUMO: the orbiter drives the whole route, and on West Street's westbound
+    carriageway -- 201 m with no junction along it, driven only inside the held laps -- it never
+    exceeds the 8 m/s hold, where its own speedFactor at the 13.41 m/s limit would take it past."""
+    result = ScenarioCompiler(installation).compile(
+        world.write(orbit_specification(world), "phases_run.scenario.json"), tmp_path / "out")
+    tripinfo, fcd = tmp_path / "tripinfo.xml", tmp_path / "fcd.xml"
+    completed = subprocess.run(
+        [str(installation.sumo), "-c", str(result.files["config"]), "--tripinfo-output",
+         str(tripinfo), "--fcd-output", str(fcd), "--device.fcd.explicit", "orbiter",
+         "--no-step-log", "true"],
+        capture_output=True, text=True, timeout=300, check=False)
+    assert completed.returncode == 0, completed.stderr
+    trip = next(t for t in ET.parse(tripinfo).getroot().iter("tripinfo") if t.get("id") == "orbiter")
+    assert float(trip.get("routeLength")) > 3 * LOOP_LENGTH_M
+    samples = [(v.get("lane"), float(v.get("speed"))) for v in ET.parse(fcd).getroot().iter("vehicle")
+               if v.get("id") == "orbiter"]
+    westbound = [speed for lane, speed in samples if lane == "-900_0"]
+    assert westbound and max(westbound) <= 8.0 + 0.05
+
+
+@pytest.mark.parametrize(("changes", "check"), [
+    ({"route": ["west_gate", "east_end"]}, 53),
+    ({"from": "west_gate"}, 53),
+    ({"stops": [{"place": "kerb", "duration": "1m"}]}, 53),
+    ({"phases": [{"route": ["west_gate"], "hold": "fast"}]}, 53),
+    ({"phases": [{"route": ["west_gate"], "repeat": 0}]}, 53),
+    ({"phases": [{"route": ["east_before_cross", "east_end"], "repeat": 2}]}, 13),
+])
+def test_phases_given_with_another_route_or_a_stop_or_not_closing_are_refused(
+        world, installation, tmp_path, changes, check):
+    spec = orbit_specification(world, **changes)
+    result = ScenarioCompiler(installation).compile(world.write(spec, f"phases{check}.scenario.json"),
+                                                    tmp_path / "out")
+    assert check in checks(result)
+
+
+# ---- the SUMO release that routes (check 6) ---------------------------------------------------------
+
+def package_recording_converter(world, tmp_path, converter: str | None) -> dict:
+    """The fixture world, its manifest recording `converter` (None: recording none), as a spec."""
+    manifest = json.loads(zipfile.ZipFile(world.package).read("world.json"))
+    if converter is None:
+        manifest.pop("NetconvertVersion", None)
+    else:
+        manifest["NetconvertVersion"] = converter
+    rewrite_package(world.package, tmp_path / "w" / "StreetLayout.cwp",
+                    {"world.json": json.dumps(manifest).encode()})
+    spec = world.specification()
+    spec["world"]["package"] = str(tmp_path / "w" / "StreetLayout.cwp")
+    return spec
+
+
+def test_a_world_converted_by_another_release_is_refused_under_check_6(world, installation,
+                                                                       tmp_path):
+    """A different duarouter release can route the same demand differently, so it is not the
+    world's traffic; the compile stops before anything is routed or written."""
+    spec = package_recording_converter(world, tmp_path, "Eclipse SUMO netconvert 1.26.0")
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c6.scenario.json"),
+                                                    tmp_path / "out")
+    assert checks(result) == {6}
+    assert "1.26.0" in messages(result, 6) and installation.version in messages(result, 6)
+    assert "--allow-sumo-version-mismatch" in messages(result, 6)
+    assert set(result.files) == {"resolution", "resolution_md"}
+    assert result.report["world"]["routing_sumo"]["release_agreement"] == "Mismatch"
+
+
+def test_an_accepted_release_mismatch_compiles_warns_and_is_recorded_in_the_lock(
+        world, installation, tmp_path):
+    spec = package_recording_converter(world, tmp_path, "Eclipse SUMO netconvert 1.26.0")
+    result = ScenarioCompiler(installation, allow_sumo_version_mismatch=True).compile(
+        world.write(spec, "c6a.scenario.json"), tmp_path / "out")
+    assert not result.refused
+    assert 6 in checks(result, "warn") and "explicitly accepted" in messages(result, 6)
+    routed_by = result.lock["traffic"]["routed_by"]
+    assert routed_by == {"tool": "duarouter", "version": installation.version,
+                         "world_converter": "Eclipse SUMO netconvert 1.26.0",
+                         "release_agreement": "MismatchAccepted", "mismatch_accepted": True}
+
+
+@pytest.mark.parametrize("converter", ["Eclipse SUMO netconvert 1.27.0", "1.27.0", "v1.27.0"])
+def test_the_world_s_release_however_written_compiles_with_no_finding_on_check_6(
+        world, installation, tmp_path, converter):
+    if installation.version != "1.27.0":
+        pytest.skip(f"the staged SUMO is {installation.version}, not the release written here")
+    spec = package_recording_converter(world, tmp_path, converter)
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c6s.scenario.json"),
+                                                    tmp_path / "out")
+    assert not result.refused and not result.findings.by_check(6)
+    routed_by = result.lock["traffic"]["routed_by"]
+    assert routed_by["release_agreement"] == "SameRelease"
+    assert routed_by["mismatch_accepted"] is False and routed_by["world_converter"] == converter
+
+
+def test_a_world_recording_no_converter_compiles_and_warns_under_check_6(world, installation,
+                                                                         tmp_path):
+    """A package written before the converter was recorded is not evidence of a mismatch."""
+    spec = package_recording_converter(world, tmp_path, None)
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c6n.scenario.json"),
+                                                    tmp_path / "out")
+    assert not result.refused
+    assert 6 in checks(result, "warn") and "records no converter" in messages(result, 6)
+    assert result.lock["traffic"]["routed_by"]["release_agreement"] == "NotRecorded"
+
+
+def test_an_installation_whose_release_cannot_be_read_is_refused_under_check_6(world, installation,
+                                                                               tmp_path):
+    """An unreadable release agrees with nothing: it is not evidence of a match."""
+    class _Unreadable(type(installation)):
+        @property
+        def version(self):  # type: ignore[override]
+            return None
+
+    unreadable = _Unreadable(home=installation.home, source=installation.source)
+    result = ScenarioCompiler(unreadable).compile(
+        world.write(world.specification(), "c6u.scenario.json"), tmp_path / "out")
+    assert checks(result) == {6}
 
 
 # ---- the epoch and civil time -----------------------------------------------------------------------

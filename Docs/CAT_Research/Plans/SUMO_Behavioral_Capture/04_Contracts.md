@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 13 | `C3` is the directory of loose files the scenario compiler writes, bound by its lock; the clipped OSM is not carried, and each validation rule states where it is enforced |
 | 12 | `C9`'s package-build rules carried out by the scenario compiler with the session's own readers |
 | 11 | `C9`: `set_solar_epoch` writes the declared offset as the sun's zone; no client-side conversion; one advance mechanism |
 | 10 | `C5` built at world build: resolved table in the world package, SUMO lane positions and intervals, V5.12 compares two implementations; the engine RPC pair specified |
@@ -168,8 +169,8 @@ flowchart TB
   subgraph author["Scenario authoring (no CARLA)"]
     BUILDER["SUMO scenario builder<br/>carlacontrol.SumoScenarioBuilder"]
     ANNOT["annotation compiler"]
-    EPOCH[/"C9 epoch + illumination policy<br/>(a block of scenario.json)"/]
-    CSP[/"C3 scenario package .csp<br/>scenario.json · net · routes · sumocfg<br/>· catalogue · annotations · vocabulary · areas · clipped OSM"/]
+    EPOCH[/"C9 epoch + illumination policy<br/>(carried in the lock)"/]
+    CSP[/"C3 scenario package, loose files<br/>lock · network · routes · sumocfg<br/>· supervision plan and its vocabulary · resolution report"/]
   end
 
   subgraph run["Capture run"]
@@ -241,13 +242,13 @@ flowchart TB
 |---|---|---|---|
 | `vehicles.catalogue.json` | the catalogue sweep, against a running server | scenario builder, assistant author, human author, validator, **and the co-simulation bridge at runtime — the pose conversion needs the measured extent** (`C1` §3.2) | `C1` |
 | `<name>.rou.xml` `vType` set | scenario builder, from the catalogue | SUMO, playback bridge | `C1` |
-| render-set parameters in `scenario.json` | scenario author | render-set controller | `C2` |
+| render-set parameters in the specification (not built) | scenario author | render-set controller | `C2` |
 | `render_states[]` in the run manifest | render-set controller | truth consumers, corpus auditor, corpus builder | `C2` |
-| `<name>.csp` scenario package | scenario builder | co-simulation driver, validator | `C3` |
+| scenario package: `<scenario_id>.lock.json` and the files beside it | scenario compiler | co-simulation session, operator surface | `C3` |
 | spawn attributes `capture:*` | playback bridge at spawn | truth producer, recorder log, replayer | `C4` |
 | `<extract>.aoi.geojson` | the author, beside the OSM | world build, scenario builder, world actor | `C5` |
-| `<name>.aoi.resolved.json` | scenario builder | SUMO route writer, truth producer, and — for its **authored definitions only** — the observation writer (`C8` §10.4) | `C5` |
-| clock parameters in `scenario.json` | scenario author | co-simulation driver | `C6` |
+| `areas.resolved.json` in the world package | world build | scenario compiler, truth producer, and — for its **authored definitions only** — the observation writer (`C8` §10.4) | `C5` |
+| clock parameters: the step in the scenario package, the rest given at run start | scenario compiler; operator | co-simulation driver | `C6` |
 | per-actor authority | playback bridge at spawn | every subsystem that touches an actor | `C7` |
 | per-actor vehicle light state | playback bridge, every tick | the rendered scene, and nothing else — it is not published as data | `C7` |
 | `OBSERVATION` root — imagery plus collection metadata | frame recorder and the collection-metadata writer | an external consumer, at handover — deferred or live (`D4.29`) | `C8` |
@@ -256,8 +257,8 @@ flowchart TB
 | the live handover streams — the **same** `OBSERVATION` and `TRUTH` records, emitted as produced | the handover emitter | an arbitrary external consumer, about which this document assumes nothing | `C8` §10.9 |
 | transcript index and blobs — bytes an external chain returned | the transcript recorder | **nothing in this system** (`D4.32`); a human, or an external team if the transcript is released | `C8` §10.10 |
 | `run_record.jsonl` — identity and bindings, the gate record, the stop, what was produced | the component that owns the run manifest, appended from before the first capture | an automated caller; an operator; a corpus builder | `C10` |
-| `epoch` block in `scenario.json` | scenario author | co-simulation driver, solar clock, truth producer, corpus auditor, **and the observation writer** (`C8` §10.4a) | `C9` |
-| `illumination` block in `scenario.json`, and the run override | scenario author; operator at run start | solar clock | `C9` |
+| `epoch` block in the scenario package's lock | scenario author, through the compiler | co-simulation driver, solar clock, truth producer, corpus auditor, **and the observation writer** (`C8` §10.4a) | `C9` |
+| `illumination` block in the scenario package's lock, and the run override | scenario author, through the compiler; operator at run start | solar clock | `C9` |
 | `<_solar>` sidecar element and the `carla:solar` PNG chunk | frame recorder — **already written today** (`CotWriter.cs:52-65`, `SolarMetadata.cs:19`) | truth consumers, corpus auditor, observation writer | `C9` |
 | `epoch`, `illumination_in_force`, `solar_achieved[]`, `solar_residual` in the run manifest | the solar clock, closed at run end | corpus auditor, corpus stratification | `C9` |
 
@@ -506,7 +507,8 @@ the wrong `bus` values never reach SUMO's `vClass`.
 - **What it must not do:** infer a dimension, fall back to a default, or skip a blueprint that failed
   to spawn. A blueprint that will not spawn is written with `"measurement": "failed"` and a reason, and
   the catalogue is still emitted — a partial catalogue that says which entries are missing is more
-  useful than no catalogue, and `C3` validation refuses a scenario that references a failed entry.
+  useful than no catalogue, and the scenario compiler refuses a scenario that references a failed
+  entry ([`07`](07_Scenario_Authoring.md) check 14).
 - **Dependency on [`05_CarlaNet_Capability_Audit.md`](05_CarlaNet_Capability_Audit.md):** the sweep
   needs the Python shim to expose a spawned actor's bounding box. That the RPC carries it is measured
   above; that the shim surfaces it is not verified here. If it does not, the sweep is a C# tool over
@@ -670,8 +672,9 @@ document wearing a standard's file extension, plus a second thing to keep in ste
 <distribution root>/catalogue/vehicles.catalogue.json
 ```
 
-and a copy is **embedded** in every scenario package (`C3`), so a scenario is never separated from the
-catalogue it was authored against.
+and every scenario package binds it by `catalogue_digest` and `blueprint_set_digest` in its lock, and by
+`carla:catalogue_digest` on every vehicle type it emits (`C3` §5.3), so a scenario always names the
+catalogue it was compiled against.
 
 **Encoding.** UTF-8, no BOM, `\n` line endings, two-space indent, object keys sorted, for the digest
 rule of §1 to be well defined.
@@ -1080,9 +1083,11 @@ index    = int.from_bytes(h[0:8], byteorder="big") % len(palette)
 colour   = palette[index]
 ```
 
-- `appearance_seed` is a 64-bit unsigned integer in `scenario.json`, **defaulting to the SUMO seed**,
-  rendered in decimal with no sign and no padding. A separate field so a deliberate appearance re-roll
-  is expressible without re-running the behaviour.
+- `appearance_seed` is a 64-bit unsigned integer, **defaulting to the SUMO seed**, rendered in decimal
+  with no sign and no padding. A separate field so a deliberate appearance re-roll is expressible without
+  re-running the behaviour. Not declared in the scenario package as built: SUMO's own seeded
+  `vTypeDistribution` draw chooses the body, and nothing reads a separate seed yet
+  ([`07`](07_Scenario_Authoring.md) D7.11).
 - `sumo_vehicle_id` is the exact SUMO id, including a flow's `.N` suffix, so two vehicles of one flow
   differ.
 - An empty palette (impossible in the measured content build, but expressible) means no `color`
@@ -1117,7 +1122,7 @@ driver at run start (`R`).
 | V1.12 | Every `carla:colour_override` value also appears on a vehicle with supervision `unlabelled` or `nominal` in the same class | S | refuse |
 | V1.13 | A `carla:colour_override` on a blueprint with `colour_applied == "false"` | S | warn |
 | V1.14 | `blueprint_set_digest` recomputed from the live server equals the catalogue's | R | refuse — §3.10 |
-| V1.14a | The bridge loaded the embedded catalogue and every class member has `length_m` and `bbox_centre_m` | R | refuse to start — without them the pose conversion is undefined (§3.2) |
+| V1.14a | The bridge loaded the catalogue and every class member has `length_m` and `bbox_centre_m` | R | refuse to start — without them the pose conversion is undefined (§3.2) |
 | V1.15 | SUMO colours are `#RRGGBB`; CARLA colours are `"R,G,B"` 0–255 | G, S | refuse |
 | V1.16 | A referenced class's `sumo_vclass` is permitted on every edge its flows route over | S | refuse, naming the vClass and the first offending edge |
 | V1.17 | Every `measured` entry carries all eleven `lamp_capability` keys, each `lit`/`unlit`/`unknown`; and `lamp_probe` is present with `ran` set | G | refuse — an absent key is indistinguishable from an unmeasured one, and that is the ambiguity this field exists to remove |
@@ -1233,7 +1238,8 @@ much larger than the set CARLA should ever instantiate, and the rule for choosin
 
 Two halves, both named:
 
-- **Input** — a `render_set` object in `scenario.json` (`C3`), written by the scenario author.
+- **Input** — a `render_set` object in the scenario specification, written by the scenario author and
+  carried in the lock (`C3`). Not built.
 - **Output** — a `render_states[]` array in the run manifest, written by the render-set controller as
   append-only rows: an admission row when a vehicle is admitted, a release row when it is released. A
   vehicle still rendered when the run stops has an admission row and no release row, which is exactly
@@ -1268,7 +1274,7 @@ Definitions of the sub-terms, so two implementations agree:
   read from `get_staging_bounds`, which returns `[minX, minY, maxX, maxY, margin]` in CARLA-local
   metres (`Unreal/.../Carla/Server/CarlaServer.cpp:828-840`; measured for Arapahoe as
   `[-476.79, -969.28, 477.21, 970.72]` with `margin = 30.48`) and (b), when the author declares one,
-  either an area-of-interest id (`C5`) or an explicit rectangle in `scenario.json`.
+  either an area-of-interest id (`C5`) or an explicit rectangle in the scenario specification.
 - **`aoi_member`** — `v` is inside a declared area, or within `aoi_halo_m` of one.
 - **`in_frustum`** — `v`'s position, advanced by `frustum_lead_s × v.speed` along its heading, projects
   inside the image rectangle of any collection sensor, using the pinhole intrinsics the sidecar
@@ -1397,39 +1403,30 @@ window:
 
 ## 5. C3 — The scenario package
 
-Today a scenario is a loose set of files — `.net.xml`, `.rou.xml`, `.sumocfg`, `.labels.json` — beside a
-separate world package. Nothing binds one to the other, and the coordinate identity that makes the
-whole pipeline work depends on both having been built from the same clipped OSM at the same pinned
-origin.
+A scenario package is a **directory of loose files**, all of them written by the scenario compiler
+(`carlacontrol.ScenarioCompiler`, `CarlaControl/scripts/compile_scenario.py`) from one specification and
+one world package, and bound to each other and to that world by the digests in its lock
+([`07`](07_Scenario_Authoring.md) §5.1). Loose rather than zipped because every reader takes the files as
+they are: SUMO loads the `.sumocfg` and the network and route file beside it, the co-simulation session
+takes the `.sumocfg` path and resolves the network the way SUMO does
+([`03`](03_CoSimulation_Runtime.md) D3.28), and the operator surface reads the lock as its scenario layer
+([`12`](12_Operator_Control_Surface.md) §3.6).
 
-### 5.1 What the world package holds today, measured
+The generators it replaces also wrote loose files — `.net.xml`, `.rou.xml`, `.sumocfg`, `.labels.json` —
+and bound them to nothing: no digest, no world, no record that `t = 0` was midnight.
 
-`WorldPackage` writes a `.cwp` zip with **exactly three STORED entries** — `world.json`, `map.xodr`,
-`bareearth.bin` (`CarlaNet/src/CarlaNet.Map/WorldPackage/WorldPackage.cs`, entry names at the
-`ManifestEntry`/`OpenDriveEntry`/`GridEntry` constants). Read from
-`carla/Build/world-packages/Arapahoe_I25.cwp` with `zipfile`, its `world.json` is:
+### 5.1 What the world package holds, measured
 
-```json
-{
-  "MapName": "Arapahoe_I25",
-  "OriginLatitude": 39.59431, "OriginLongitude": -104.88449,
-  "OriginHeightMeters": 1747.4032423071112,
-  "GeoReferenceString": "+proj=tmerc +lat_0=39.59431 +lon_0=-104.88449 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
-  "HeightAlignMode": "drape", "DrapeActive": true, "HeightAlignOffsetMeters": 0,
-  "GridMinXMeters": -476.78851318359375, "GridMinYMeters": -969.27978515625,
-  "GridCellSizeMeters": 2, "GridNumCols": 478, "GridNumRows": 971,
-  "PhotorealIonAssetId": 2275207, "GroundIonAssetId": 1,
-  "StagingMinXMeters": -476.78851318359375, "StagingMinYMeters": -969.27978515625,
-  "StagingMaxXMeters": 477.21148681640625, "StagingMaxYMeters": 970.72021484375,
-  "StagingMarginMeters": 30.48,
-  "SourceOsmFileName": "Arapahoe_I25_clipped.osm",
-  "SourceOsmSha256": "4d82119fa1aa75db8e5bb0f6214830d88ebe78ed900d055ef4584395242204a9",
-  "OpenDriveSha256": "29bc4a5a9003944e8a618c5e5ba6e35dfca38bf059321fae3e15a9ec8746271b",
-  "SampleStepMeters": 10, "TerrainResolutionMeters": 2, "TerrainMarginMeters": 30.48,
-  "GeneratedAtUtc": "2026-09-15T17:51:06.3705087Z", "GeneratorVersion": "1.0.0.0",
-  "NetconvertExtraArgs": ["--keep-edges.by-vclass","passenger","--keep-edges.components","1","--remove-edges.isolated","true"]
-}
-```
+`WorldPackage` writes a `.cwp` zip of STORED entries — `world.json`, `map.xodr`, `map.net.xml` and, for a
+draped world, `bareearth.bin` (`CarlaNet/src/CarlaNet.Map/WorldPackage/WorldPackage.cs`, the
+`ManifestEntry`, `OpenDriveEntry`, `NetworkEntry` and `GridEntry` constants) — and the world build then
+publishes the authoring reference set into the same file: `areas.resolved.json`, `areas.aoi.geojson`,
+`places.json` and `solar.json` ([`07`](07_Scenario_Authoring.md) §2.12). Read from
+`carla/Build/world-packages/Shahid_Bahonar_Port.cwp` with `zipfile`, its `world.json` records, beyond the
+origin, georeference, grid and staging fields: `SourceOsmFileName` and `SourceOsmSha256`,
+`OpenDriveSha256`, `NetworkFingerprint`, `NetconvertPath`, `NetconvertVersion` (`Eclipse SUMO netconvert
+1.27.0`), `NetconvertExtraArgs`, and `NetconvertArgv` — the complete argument list of the one netconvert
+run that wrote both the network and the OpenDRIVE the world was made from.
 
 Three findings from that measurement:
 
@@ -1437,122 +1434,111 @@ Three findings from that measurement:
    `CarlaNet.Transport/CarlaClient.cs:1253`, and `SourceOsmSha256` at `:1252`. Doc 20 §7.5 and
    [doc 18 §5.5](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md) plan to *introduce* a
    world-binding digest; it is already produced. `C3` consumes it rather than inventing one.
-2. **The clipped OSM is named but not carried.** `SourceOsmFileName` is
-   `Arapahoe_I25_clipped.osm`, and that file is not an entry in the package. But the SUMO network must
-   be rebuilt from *that exact file* at *that exact origin* for the measured SUMO↔CARLA coordinate
-   identity to hold ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §5). A world package alone is therefore not
-   sufficient to rebuild a co-simulable scenario. **The scenario package must carry the clipped OSM.**
-3. **`NetconvertExtraArgs` is recorded**, so the SUMO network can be rebuilt with the same edge
-   filtering. That list drives the fence behaviour described in the authoring skill.
+2. **The network travels; the clipped OSM does not need to.** The package carries the SUMO network from
+   the same invocation as the OpenDRIVE, and a scenario runs that network byte for byte
+   ([`07`](07_Scenario_Authoring.md) D7.32). Rebuilding a network from the clipped OSM would not
+   reproduce it — a second conversion with identical flags is a different graph (07 §1.3,
+   `WorldPackageReader`) — so the OSM is the world build's input, and neither a scenario nor its package
+   reads it (07 §2.2).
+3. **The whole netconvert invocation is recorded**, `NetconvertArgv`, and what it produced is
+   fingerprinted, `NetworkFingerprint`: canonical graph content, not file bytes (07 D7.15). The
+   fingerprint is what binds a scenario to a world; the argument list is provenance, and it names the
+   world's type map where the world has one (07 D7.33).
 
 ### 5.2 Artifact and format
 
-- **Name:** `<scenario_name>.csp`, "scenario package".
-- **Location:** `carla/Build/scenario-packages/` by convention; the path is an argument.
-- **Format:** a zip archive with **STORED** entries, mirroring `WorldPackage.Write`'s choice and for
-  the same reason — the editor's `FZipArchiveReader` handles uncompressed archives only, and a
-  package that writes cleanly and fails to import is a far worse trade than three times the bytes
-  (`WorldPackage.cs`, header comment). Written whole to `<name>.csp.partial` and moved into place, so
-  a package that exists is always complete.
+- **Location:** one directory per scenario, named by the caller (`compile_scenario.py --out-dir`);
+  `Build/scenarios/<scenario_id>/` by convention.
+- **Files**, each named by the `scenario_id` except the network, which keeps the world's map name:
 
-**Entries:**
-
-| Entry | Content |
+| File | Content |
 |---|---|
-| `scenario.json` | The manifest, §5.3 |
-| `network/map.net.xml` | The SUMO network |
-| `routes/scenario.rou.xml` | Types, distributions, flows, trips, vehicles |
-| `config/scenario.sumocfg` | The SUMO configuration |
-| `catalogue/vehicles.catalogue.json` | The exact catalogue authored against (`C1`), embedded |
-| `annotations/scenario.annotations.json` | The `AnnotationSet` of doc 20 §6.1 — payload owned by [`06`](06_Truth_And_Annotation.md) |
-| `annotations/vocabulary.json` | The document every term in the annotation set resolves against: the closed core, and each author namespace the specification declared or imported, import-flattened — payload owned by [`06`](06_Truth_And_Annotation.md) §8.7 |
-| `areas/areas.aoi.geojson` | The source area definitions (`C5`) |
-| `areas/areas.resolved.json` | Areas resolved to CARLA-local metres and to SUMO edges/lanes (`C5`) |
-| `source/clipped.osm` | The clipped OSM the network was built from — §5.1 finding 2 |
+| `<scenario_id>.lock.json` | The manifest, §5.3: every binding, digest and declaration a run needs, and the digests of the four files below |
+| `<scenario_id>.sumocfg` | The SUMO configuration: the network and route file by relative name, `begin` 0, `end`, `step-length`, the seed and the processing options, the epoch restated in a comment |
+| `<scenario_id>.rou.xml` | Vehicle types bound to measured bodies (`C1`), every actor and flow already routed, departure-sorted, in plain seconds, with no supervision |
+| `<MapName>.net.xml` | The world package's `map.net.xml`, byte for byte |
+| `<scenario_id>.supervision.json` | The supervision plan — the annotation set, payload owned by [`06`](06_Truth_And_Annotation.md) §8.1 — carrying the resolved vocabulary it was checked against, import-flattened, with its digest ([`06`](06_Truth_And_Annotation.md) §8.7) |
+| `<scenario_id>.resolution.json`, `.resolution.md` | What the compile resolved, and every finding ([`07`](07_Scenario_Authoring.md) §5.3). Written by every compile; the only files a refused compile writes |
 
-### 5.3 `scenario.json` fields
+- **Written whole, and only when the compile passes.** Every self-check runs on the files in memory
+  before any is written (07 §5.4, the emission stage); a refused compile writes only its resolution
+  report.
+- **Byte-identical from the same specification, seed and world**: no file carries a timestamp, a machine
+  path or the specification's file name (07 D7.30).
+- **Referenced, not carried:** the world package, bound by network fingerprint and OpenDRIVE digest; the
+  vehicle catalogue, bound by `catalogue_digest` and `blueprint_set_digest` and named on every emitted
+  vehicle type by `carla:catalogue_digest`; and the areas of interest, which are the world package's own
+  published table (`C5` §7.2) and which the supervision plan names by id.
 
-| Field | Type | Unit | Req. | Meaning |
-|---|---|---|---|---|
-| `scenario_package_version` | integer | — | yes | Schema shape |
-| `scenario_id` | string | — | yes | Stable across runs. **This is the field the recorder accepts and is never given** — §5.6 |
-| `scenario_name` | string | — | yes | Human |
-| `description` | string | — | yes | What the scenario depicts, in prose |
-| `generated_at_utc` | string | — | yes | ISO-8601 UTC |
-| `generator` | string | — | yes | Tool and version |
-| **World binding** | | | | |
-| `world_map_name` | string | — | yes | Must equal the world package's `MapName` |
-| `world_opendrive_sha256` | string | — | yes | Must equal `OpenDriveSha256` |
-| `world_source_osm_sha256` | string | — | yes | Must equal `SourceOsmSha256` |
-| `world_origin_latitude` | number | ° | yes | Must equal `OriginLatitude` |
-| `world_origin_longitude` | number | ° | yes | Must equal `OriginLongitude` |
-| `world_origin_height_m` | number | m | yes | Must equal `OriginHeightMeters` |
-| `world_georeference` | string | — | yes | Must equal `GeoReferenceString`, byte for byte |
-| `world_staging_bounds` | `[minX,minY,maxX,maxY,margin]` | m | yes | Copied from the world package |
-| `netconvert_extra_args` | array of string | — | yes | Copied from `NetconvertExtraArgs` |
-| `content_build_id` | string | — | yes | From the catalogue |
-| **Component digests** | | | | |
-| `sumo_net_sha256` | string | — | yes | Digest of `network/map.net.xml` |
-| `sumo_routes_sha256` | string | — | yes | Digest of `routes/scenario.rou.xml` |
-| `clipped_osm_sha256` | string | — | yes | Digest of `source/clipped.osm`; must equal `world_source_osm_sha256` |
-| `catalogue_digest` | string | — | yes | From the embedded catalogue |
-| `blueprint_set_digest` | string | — | yes | From the embedded catalogue |
-| `area_block_sha256` | string | — | yes | Digest of `areas/areas.aoi.geojson` alone — tiered separately, §5.4 |
-| `annotations_sha256` | string | — | yes | Digest of the annotation set |
-| `vocabulary_sha256` | string | — | yes | Digest of `annotations/vocabulary.json`. **Bound at the refuse tier**, §5.4 V3.15 |
-| `epoch_block_sha256` | string | — | yes | Digest of the `epoch` object alone, canonicalised per §1. **Bound at the refuse tier**, §5.4 V3.11 |
-| **Time and illumination** | | | | |
-| `epoch` | object | — | yes | The civil instant `t = 0` corresponds to, and everything derived from it. Shape, units and validation are `C9` §11.3 |
-| `illumination` | object | — | yes | The declared advancement policy and its rate. Shape and validation are `C9` §11.5. An operator may override it at run start (`C9` §11.8); the manifest records which won |
-| **Run parameters** | | | | |
-| `sumo_seed` | integer | — | yes | Mirrors `<seed>` in the sumocfg |
-| `appearance_seed` | integer | — | yes | `C1` §3.8; defaults to `sumo_seed` |
-| `sumo_step_s` | number | s | yes | Mirrors `<step-length>` |
-| `world_fixed_delta_s` | number | s | yes | `C6` |
-| `world_substeps_per_sumo_step` | integer | — | yes | `C6` |
-| `render_set` | object | — | yes | `C2` §4.2 |
-| `render_uses_vtype_colour` | boolean | — | yes | `C1` §3.7.1; `false` for any corpus-eligible run |
-| `capture_windows` | array | s | yes | `C2` |
+### 5.3 Lock fields
+
+`<scenario_id>.lock.json`, as `ScenarioCompiler._lock` writes it:
+
+| Field | Meaning |
+|---|---|
+| `lock_version` | Schema shape; refused when unimplemented |
+| `scenario_id`, `scenario_name` | Stable across runs. `scenario_id` is **the field the recorder accepts and is never given** — §5.6 |
+| `spec_version`, `specification`, `specification_sha256` | The specification compiled, by name and digest |
+| `compiler` | `name` and `version` |
+| `files` | `routes`, `config`, `network`, `supervision`: each a `path` relative to the lock, and its `sha256` |
+| **`world`** | `package`, `map_name`, `network_fingerprint`, `netconvert_argv`, `netconvert_version`, `opendrive_sha256`, `source_osm_sha256`, `origin_latitude`, `origin_longitude`, `georeference` — copied from the world package the specification was compiled against |
+| **`catalogue`** | `catalogue_id`, `catalogue_digest`, `blueprint_set_digest`, `content_build_id` (`C1` §3.11) |
+| **`vocabulary`** | `core_version`, `namespaces` with their versions, and `vocabulary_digest`, the digest of the vocabulary document the supervision plan carries |
+| **`traffic`** | `sumo_seed`, `step_length_s`, `end_s`, `processing` (the SUMO options that decide how traffic moves), and `routed_by`: the `duarouter` release that routed, the world's converter, how the two stand by release number and whether a mismatch was accepted ([`07`](07_Scenario_Authoring.md) check 6) |
+| `epoch`, `epoch_block_sha256` | The `C9` epoch object verbatim, and its digest canonicalised per §1 |
+| `illumination` | The authored `C9` illumination default. An operator may override it at run start (`C9` §11.8); the run manifest records which won |
+| `capture_windows` | The authored candidate windows: id, begin and end seconds, civil begin, end and date |
+| `ephemeris` | The functions every declared sun was computed with |
+| `illumination_label_association` | Check 41's statistic, its band table and its entry count ([`07`](07_Scenario_Authoring.md) §5.6) |
+
+**Fields an earlier form of this contract named, and where they are.** The world's origin height and
+staging rectangle are the world package's, which the lock binds. The run's fixed delta and substep count
+are the run's (`C6`). `generated_at_utc` is absent on purpose: a timestamp would break byte-identity. The
+clipped OSM's digest went with the OSM (§5.1 finding 2). `appearance_seed` is not declared, because SUMO's
+own seeded `vTypeDistribution` draw chooses the body (07 D7.11). `area_block_sha256`, `render_set` and
+`render_uses_vtype_colour` are not built.
 
 ### 5.4 Validation and the mismatch tiers
 
-Every check runs at run start, against the world actually loaded.
+Each rule states where it is enforced today. The compiler's checks are [`07`](07_Scenario_Authoring.md)
+§5.2's, by id; the session's refusals are [`03`](03_CoSimulation_Runtime.md)'s.
 
-| # | Condition | Response | Reason |
+| # | Condition | Response | Enforced |
 |---|---|---|---|
-| V3.1 | `world_opendrive_sha256` differs | **refuse** | Road ids, lane ids and elevation may all have moved; every edge and lane reference is suspect |
-| V3.2 | `world_source_osm_sha256` or `clipped_osm_sha256` differs | **refuse** | The SUMO net was built from the OSM; a different OSM is a different edge set even where the OpenDRIVE happens to match |
-| V3.3 | `world_origin_*` or `world_georeference` differs | **refuse** | The SUMO↔CARLA identity `sumo(x, y) = carla(x, −y)` *is* the pinned origin |
-| V3.4 | `netconvert_extra_args` differs | **refuse** | The edge filter decides whether private roads exist at all |
-| V3.5 | `blueprint_set_digest` differs | **refuse** | `C1` §3.11 |
-| V3.6 | `catalogue_digest` differs, set digest matches | **warn**, naming every moved entry | A dimension may have moved without the definition set moving |
-| V3.7 | `area_block_sha256` differs, everything else matches | **warn** | Doc 20 §8.4: an area edit changes no road geometry, so a recording made before it is still faithfully replayable |
-| V3.8 | `content_build_id` differs, all digests match | **warn** | The one staleness nothing cheap can detect |
-| V3.9 | `sumo_step_s` is not an integer multiple of `world_fixed_delta_s` | **refuse** | `C6` |
-| V3.10 | Any entry listed in §5.2 is absent | **refuse** | A package is complete or it is not a package |
-| V3.11 | `epoch` is absent, or `epoch_block_sha256` does not match the `epoch` object as carried | **refuse** | `C9` §11.12. A package whose epoch has been edited away from the one it was validated under is a package whose windows mean something other than what the author wrote |
-| V3.12 | `epoch` is present but fails any `C9` V9.* rule | **refuse** | The epoch is checked *as part of loading the package*, not at first use, so a run never gets as far as rendering a frame under an epoch that will not validate |
-| V3.13 | The world reports no sun — `get_solar_state` returns empty (`CesiumHeightSampler.cpp:760-763`, shim `None` at `carlanet/__init__.py:1527`) — and `illumination.require_sun` is true | **refuse** | `C9` §11.7. Running anyway would produce a corpus whose every frame is lit by something nobody declared |
-| V3.14 | The world's `OriginLongitude` differs from `world_origin_longitude` | already **refuse** by V3.3 | Restated here because the sun's position is computed from the world's origin (§11.3): the same digest that protects the coordinate identity also protects the sun |
-| V3.15 | `vocabulary_sha256` does not match `annotations/vocabulary.json` as carried | **refuse** | A term list edited after the annotation set was compiled against it still resolves every label, and resolves some of them to a meaning the author never wrote. The failure is invisible in both artifacts, which is the same property that puts the epoch at this tier ([`06`](06_Truth_And_Annotation.md) §8.7) |
+| V3.1 | The world the server has loaded is not the package's — OpenDRIVE digest, origin, bare-earth record | **refuse** | At run start, by the session's loaded-world check ([`03`](03_CoSimulation_Runtime.md) §7.2, D3.26) |
+| V3.2 | *Retired.* The clipped OSM's digest differs | — | The OSM is not carried (§5.1 finding 2); the network fingerprint of V3.4 is the binding |
+| V3.3 | The network is in another frame: its `convBoundary`, projection or `netOffset` against the package and its OpenDRIVE | **refuse** | At compile, checks 3, 4 and 5; at run start, the session's frame check |
+| V3.4 | The network the scenario runs is not the world package's, by canonical fingerprint | **refuse** | At compile, check 1 against the specification, and D7.32 for what is written; at run start, `ScenarioNetworkCheck` on the network the `.sumocfg` loads ([`03`](03_CoSimulation_Runtime.md) D3.28) |
+| V3.5 | `blueprint_set_digest` differs | **refuse** | At compile, checks 14 and 15 bind every type to the catalogue's measured body. At run start, not built: the session records the catalogue it loaded and does not compare it with the lock |
+| V3.6 | `catalogue_digest` differs, set digest matches | **warn**, naming every moved entry | Not built |
+| V3.7 | The areas of interest differ, everything else matches | **warn** | Not built. An area edit republishes the world package's table without a rebuild and without moving the network fingerprint (07 D7.28); a recompile re-resolves every area the supervision names (check 20) |
+| V3.8 | `content_build_id` differs, all digests match | **warn** | Not built |
+| V3.9 | `sumo_step_s` is not a whole multiple of the run's fixed delta | **refuse** | `C6`: the run's, not the package's |
+| V3.10 | A file the lock lists is absent, or its SHA-256 is not the lock's | **refuse** | Not built at run start: the session reads the `.sumocfg` and the network, not the lock |
+| V3.11 | The epoch is absent, or `epoch_block_sha256` does not match the epoch as carried | **refuse** | At compile, check 33: no lock is written without an epoch. At run start the session validates the epoch it is handed (`SolarEpoch`) — the lock is a file it can read one from (`run_sumo_drive.py --epoch <scenario_id>.lock.json`) — and does not compare the digest |
+| V3.12 | The epoch fails a `C9` V9.* rule | **refuse** | At compile, checks 33 and 34, through the session's own `SolarEpoch`; at run start, `SolarEpoch` again |
+| V3.13 | The world reports no sun and `illumination.require_sun` is true | **refuse** | At run start, by the session; `run_sumo_drive.py --no-sun-required` is `require_sun: false` |
+| V3.14 | The world's origin longitude differs from the lock's | already **refuse** by V3.1 and V3.3 | Restated because the sun's position is computed from the world's origin (§11.3) |
+| V3.15 | The vocabulary document the supervision plan carries does not match `vocabulary_digest` | **refuse** | At compile, the digest is computed over exactly what is published. At run start, not built |
 
-That tiering answers doc 20 §11 question 6 for this plan: **the area block is digested separately and
-an area-only difference is a warning.**
+That tiering answers doc 20 §11 question 6 for this plan — **an area-only difference is a warning** —
+and the warning is not yet built (V3.7).
 
-**Why the epoch is bound at the refuse tier and not warned about.** The world digests are refuse-tier
+**Why the epoch is bound at the refuse tier and not warned about.** The world bindings are refuse-tier
 because a different world silently relocates every position (§5.7). A different epoch silently relocates
 every *frame in time*: the same windows, the same vehicles, the same behaviour, rendered under a
 different sun, with the sidecar faithfully recording the sun it got. Both failures are invisible in
 every artifact because both sides stay internally consistent, which is the property that decides the
-tier. The epoch is therefore bound exactly as `world_opendrive_sha256` is — carried in the package,
-digested separately, and checked before the first tick.
+tier. The epoch is therefore bound as the world is — carried in the lock, digested separately, and
+checked before the first tick.
 
 ### 5.5 Versioning
 
-`scenario_package_version` is an integer, refused when unimplemented. Because the catalogue, the areas,
-the annotation set and the vocabulary that defines its terms are **embedded rather than referenced**, a
-scenario package is self-contained and reproducible from itself plus a matching world package. The only
-external dependency is the world, and that is bound by digest.
+`lock_version` is an integer, refused when unimplemented. The network, the routes, the configuration
+and the supervision plan with its vocabulary are **carried**; the world package and the catalogue are
+**referenced by digest**. A scenario package is therefore reproducible from itself plus the world package
+and catalogue it names, and a compile of the same specification against them gives the same bytes
+(07 D7.30).
 
 ### 5.6 A defect this closes
 
@@ -1562,8 +1548,8 @@ Re-resolved to the live path today: `CarlaControl/src/carlacontrol/NativeRecorde
 `run_id` and `seed` to `world.start_recording` and does not pass `scenario_id`. (Doc 20 §4.2 cites the
 deleted `SCTMV.py:1472-1479` for this; the finding holds at the new location.) Every sidecar recorded
 today therefore omits the scenario it was recorded under, and the run manifest joins to captures by
-exactly that field. `C3` makes `scenario_id` a required manifest field precisely so there is something
-to pass.
+exactly that field. `C3` makes `scenario_id` a required lock field precisely so there is something to
+pass.
 
 ### 5.7 What breaks if C3 is violated
 
@@ -1573,8 +1559,8 @@ to pass.
 - **The coordinate identity silently stops holding.** A different origin means `sumo(x, y)` no longer
   equals `carla(x, −y)`, and every rendered pose is offset by the difference — uniformly, so it looks
   like a georeferencing error rather than a binding error.
-- **A capture cannot be reproduced.** Without the embedded catalogue, areas and clipped OSM, a package
-  re-run a year later depends on four files nobody kept.
+- **A capture cannot be reproduced.** Without the lock's digests, a package re-run a year later depends on
+  a world, a catalogue and a vocabulary nobody can show are the ones it was compiled against.
 - **Captures cannot be joined to supervision**, because `scenario_id` is absent from the sidecar.
 - **Every label in the corpus becomes an opaque string, or a differently-meaning one.** With no
   vocabulary in the package, a consumer reading `bahonar:post_unmanned` a year later has the spelling
@@ -1850,9 +1836,9 @@ The source file is geographic. Two consumers need it in other frames, and neithe
 projection.
 
 - **Name and location:** `areas.resolved.json` in the **world package**, beside `areas.aoi.geojson`,
-  the source carried byte for byte ([`07`](07_Scenario_Authoring.md) §2.12). A scenario package embeds
-  both as `areas/areas.resolved.json` and `areas/areas.aoi.geojson` (`C3` §5.2), copied from the world
-  package it is built against rather than resolved again.
+  the source carried byte for byte ([`07`](07_Scenario_Authoring.md) §2.12). A scenario package does not
+  copy them: the compiler reads the world package's table, the supervision plan names areas by id, and
+  the lock binds the world package (`C3` §5.2).
 - **Written by:** the world build, after `CarlaNet.Map` writes the package, with the network and the
   manifest both in hand (`carlacontrol.AuthoringReferenceSet`); and by
   `CarlaControl/scripts/publish_reference_set.py` into an existing package.
@@ -1866,7 +1852,7 @@ projection.
 |---|---|---|---|---|
 | `resolved_version` | integer | — | yes | Schema shape. `1`; a reader refuses any other |
 | `source_file_name` | string | — | yes | The GeoJSON's file name; empty when none was declared |
-| `source_sha256` | string | — | yes | Digest of the `.aoi.geojson` bytes this was resolved from; equals `area_block_sha256` in `scenario.json`; empty when none was declared |
+| `source_sha256` | string | — | yes | Digest of the `.aoi.geojson` bytes this was resolved from; the digest a scenario lock would bind as `area_block_sha256`, which is not built (`C3` §5.3); empty when none was declared |
 | `world_map_name` | string | — | yes | `MapName` from the world package |
 | `world_georeference` | string | — | yes | The proj string, copied from the world package |
 | `world_origin_latitude`, `world_origin_longitude` | number | ° | yes | The origin the geographic frame was held at |
@@ -2076,7 +2062,8 @@ pedestrians (brief decision 5) and two-wheelers (`D4.40`). Bahonar's private roa
 - An area whose `kind` is not a declared term: carried through unchanged. There is no term list to
   check it against yet; when there is, this becomes a warning. Stratification terms are cheap to add
   and expensive to rename.
-- An area edit with no geometry change: **warn only**, by the digest tiering of `C3` §5.4 V3.7.
+- An area edit with no geometry change: **warn only**, by the digest tiering of `C3` §5.4 V3.7 — not
+  built; a recompile re-resolves every area the supervision names.
 - A property the validator does not read: warned about and not carried.
 
 **What the checks cannot see.** Whether an area is where the author meant: a polygon validated and
@@ -2134,7 +2121,9 @@ guarantee, because a guarantee is what the other seven contracts rely on.
 
 ### 8.2 Fields
 
-In `scenario.json` (`C3`):
+`sumo_step_s` is the scenario package's — the `step-length` of its `.sumocfg`, `traffic.step_length_s`
+in its lock (`C3` §5.3). The rest are the run's, given at run start
+([`12`](12_Operator_Control_Surface.md)); they are tabled together because `C6` binds them together:
 
 | Field | Type | Unit | Req. | Meaning |
 |---|---|---|---|---|
@@ -2290,7 +2279,7 @@ stop moving.
 | V6.1 | `sumo_step_s = k × world_fixed_delta_s` for integer `k ≥ 1`, within 1 µs | refuse at run start |
 | V6.2 | `sumo_step_s` is a whole number of milliseconds | refuse |
 | V6.3 | The world reports `synchronous_mode == true` and `fixed_delta_seconds == world_fixed_delta_s` | refuse |
-| V6.4 | The SUMO config's `<seed>` equals `scenario.json`'s `sumo_seed` | refuse |
+| V6.4 | The SUMO config's `<seed>` equals the lock's `traffic.sumo_seed` | refuse |
 | V6.5 | At every SUMO-step boundary, `\|world_elapsed_s − sumo_time_s\| ≤ 1 µs` | assertion; a violation fails the run |
 | V6.6 | `Δsolar_s`, `Δdir_deg` and `Δelev_corrected_deg` between the **declared** sun and the observed sun, within the §8.3a tolerances at every audited tick | **fail the run** at the first violation, naming the tick, both residuals, the expected and observed values, and the policy in force. Not a warning: the sun is not doing what it was told, so every frame from here on carries a `<_solar>` nothing predicted — an inherited sun, a wrapped date or engine drift, never an authored choice |
 | V6.6a | The commanded solar target equals the civil time the epoch derives for the tick, **unless** the run declares an illumination override | **warn and mark the corpus**, never fail. An operator may deliberately render a window under light its own clock does not imply; that is a parameterisation, not a defect, and the responsibility is theirs. The warning names the derived civil time, the commanded one and the gap; the manifest records `illumination_override` with both values so a consumer can filter on it. An **undeclared** gap is not this case — it is a bug in the driver and fails under V6.6 |
@@ -3528,12 +3517,12 @@ whatever date the run happened, and the sidecar records that faithfully.
 
 | | |
 |---|---|
-| **Artifact** | Two JSON objects, `epoch` and `illumination`, inside `scenario.json` in the scenario package (`C3` §5.3). Plus an `illumination` override supplied at run start, and the achieved state written into the run manifest (§11.8) |
+| **Artifact** | Two JSON objects, `epoch` and `illumination`, in the scenario package's lock (`C3` §5.3). Plus an `illumination` override supplied at run start, and the achieved state written into the run manifest (§11.8) |
 | **Written by** | `epoch` and `illumination` by the scenario package builder, from what the author declared. The override by the operator surface ([`12`](12_Operator_Control_Surface.md)). The manifest block by the solar clock, closed at run end |
 | **Read by** | The co-simulation driver and its solar clock at run start and every tick; the validator at package build and at run start; the corpus auditor; and — for the epoch and the per-frame solar state only — the observation writer (`C8` §10.4a) |
 | **Format** | UTF-8 JSON, canonicalised per §1 so `epoch_block_sha256` is well defined. Civil times are ISO-8601 with an **explicit numeric offset**; `Z` is permitted only where the offset genuinely is zero |
-| **Bound by** | `epoch_block_sha256` in `scenario.json`, at the refuse tier (`C3` §5.4 V3.11) |
-| **Built** | The scenario compiler reads both objects from the specification with the session's own readers and carries them verbatim, the epoch with its `epoch_block_sha256`, in `<scenario_id>.lock.json` ([`07`](07_Scenario_Authoring.md) §5.1). The `.csp` and its `scenario.json` (`C3` §5.2) are not built |
+| **Bound by** | `epoch_block_sha256` in the lock, at the refuse tier (`C3` §5.4 V3.11) |
+| **Built** | The scenario compiler reads both objects from the specification with the session's own readers and carries them verbatim, the epoch with its `epoch_block_sha256`, in `<scenario_id>.lock.json` ([`07`](07_Scenario_Authoring.md) §5.1). The session reads both from a JSON file that carries them, the lock among them (`run_sumo_drive.py --epoch`), and does not compare the digest at run start (`C3` V3.11) |
 
 ### 11.3 `epoch` fields
 
@@ -3690,7 +3679,7 @@ The rule that stops this contract from being decorative.
 
 | Situation | Response |
 |---|---|
-| A package at a `scenario_package_version` that includes `C9`, with `epoch` absent | **Refuse at run start** (`C3` V3.11). There is no honest default |
+| A scenario with no `epoch` | **Refused at compile** (check 33), so no lock carries none (`C3` V3.11). There is no honest default |
 | A legacy package predating `C9` | **Refuse by default.** An operator may opt in to `policy = "ignore"`, which stamps `epoch_declared: false` and `corpus_eligible: false` into the manifest and marks every sidecar's solar block as unbacked by an epoch — an added `<_solar>` attribute that [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) owns the shape of. It never guesses an epoch from trip identifiers, however regular they look — Measurement 6 shows the pattern is perfectly consistent and Measurement 7 shows it contradicts the only epoch anyone wrote down |
 | A bare `.sumocfg` run outside a package | Same as legacy. `C9` does not require a package to exist; it requires the declaration not to be fabricated |
 | A world with no `CesiumSunSky` | `require_sun: true` ⇒ refuse (`C3` V3.13). `require_sun: false` ⇒ run, with `no_sun: true` in the manifest and the audit skipped and **recorded as skipped**, never recorded as passed |
@@ -4029,7 +4018,7 @@ in still has a complete statement of what it was.
 | `session_id` | string | yes | The capture session ([`08`](08_Collection_And_EPoL.md) §3.5) |
 | `scenario_id` | string | yes | `C4`, and §5.6 is why it must actually be supplied |
 | `invocation_id` | string | no | Supplied by the caller and **echoed verbatim**; opaque to us. How an external process correlates a record with the invocation it made, without us inventing a job model |
-| `scenario_package_sha256`, `scenario_package_version` | string, integer | yes | `C3`. Which scenario is being run |
+| `scenario_package_sha256`, `scenario_package_version` | string, integer | yes | `C3`. Which scenario is being run: the SHA-256 of its `<scenario_id>.lock.json`, which digests every other file of the package, and the lock's `lock_version` |
 | `world_opendrive_sha256`, `catalogue_digest`, `blueprint_set_digest`, `epoch_block_sha256` | string | yes | `C3`, `C1`, `C9`. The bindings the run validated against at start |
 | `effective_configuration_sha256` | string | yes | The digest of the resolved configuration ([`12`](12_Operator_Control_Surface.md) §3.7 owns the resolution; `C10` carries its digest and nothing else) |
 | `seeds` | object | yes | Every seed the run consumed, by name |
@@ -4555,14 +4544,14 @@ sequenceDiagram
   SB->>SB: C1 V1.5-V1.19 · C5 V5.8-V5.12 · C4 V4.1-V4.3 · C9 V9.1-V9.10
   SB->>SB: emit one vType per member blueprint,<br/>one vTypeDistribution per class (C1 §3.6)
   SB->>SB: resolve areas to lanes + arc lengths (C5 §7.3)
-  SB-->>AU: <name>.csp with catalogue, areas, annotations,<br/>epoch and illumination embedded (C3)
+  SB-->>AU: <scenario_id>.lock.json and the files beside it:<br/>network, routes, sumocfg, supervision plan (C3)
 
   Note over DR,REC: Playback
-  OP->>DR: run <name>.csp against a loaded world,<br/>with an optional illumination override (12)
+  OP->>DR: run the package's .sumocfg against a loaded world,<br/>with an optional illumination override (12)
   DR->>SRV: get_actor_definitions
   DR->>DR: C3 V3.1-V3.14 — world binding, digests, epoch
   DR->>DR: C1 V1.14 — blueprint_set_digest
-  DR->>DR: C1 V1.14a — load the embedded catalogue;<br/>extents drive the pose conversion (D4.17)
+  DR->>DR: C1 V1.14a — load the catalogue the lock names;<br/>extents drive the pose conversion (D4.17)
   DR->>DR: C6 V6.1-V6.4, V6.10 — clock
   DR->>SC: hand over epoch + illumination_in_force
   SC->>SRV: get_solar_state — the sun as found, recorded as sun_time_zone_hours (C9 §11.8)
@@ -4670,7 +4659,7 @@ Stated as properties needed, not as requests.
 | **D4.36** | **Every artifact this plan produces is incrementally written, self-describing without a closing record, and valid at every instant.** A kill at an arbitrary point leaves a shorter artifact, never a corrupt one, and a reader distinguishes a complete artifact from an interrupted one by the presence of a terminal record, never by whether the file parses. Abrupt external termination is a normal operating mode, so "closed at the end" may never be what makes an artifact readable. §12.7 applies this artifact by artifact, with three writer rules and two declared exceptions |
 | **D4.37** | **A caller observes a run in progress through the surfaces that already exist** — a second client on the CARLA server, the live handover stream if one is open, and the incrementally written artifacts on disk. **This plan adds no status service, no progress RPC, no completion percentage and no callback to the caller.** Where an existing surface cannot answer a question, the gap is recorded as a gap (§12.8.4) rather than designed around, because a status service would be a fourth place a run's state is asserted (§12.8) |
 | **D4.38** | **Nothing in this contract requires a run to have a declared length.** A convenience limit may exist on the invocation surface; no field, rule, gate or reader here may assume one was set, and reaching the end of a limit is one ordinary way a run can end among several. The caller stops us, so a contract that needed a duration would be a contract that only worked for callers who did not want to use it that way (§12.9) |
-| **D4.39** | **The annotation vocabulary travels inside the scenario package and is bound by digest at the refuse tier, exactly as the annotation set and the epoch are.** A package that carries terms and not their definitions is a package whose labels only the author can read, and a vocabulary bound by nothing can be edited after the annotation set was compiled against it — after which every label still resolves, to a meaning nobody declared. `annotations/vocabulary.json` is an entry, `vocabulary_sha256` is a required field, and V3.15 refuses a mismatch. The **content** of the document — what the core holds, how an author term declares itself, how a namespace is versioned — is [`06`](06_Truth_And_Annotation.md) §3.7, §3.8 and §8.7's; this contract owns only that it travels, where, and what binds it (§5.2, §5.3, §5.4) |
+| **D4.39** | **The annotation vocabulary travels inside the scenario package and is bound by digest at the refuse tier, exactly as the annotation set and the epoch are.** A package that carries terms and not their definitions is a package whose labels only the author can read, and a vocabulary bound by nothing can be edited after the annotation set was compiled against it — after which every label still resolves, to a meaning nobody declared. The resolved vocabulary document is carried in the supervision plan, `<scenario_id>.supervision.json`; `vocabulary_digest` in the plan and in the lock binds it; and V3.15 refuses a mismatch. The **content** of the document — what the core holds, how an author term declares itself, how a namespace is versioned — is [`06`](06_Truth_And_Annotation.md) §3.7, §3.8 and §8.7's; this contract owns only that it travels, where, and what binds it (§5.2, §5.3, §5.4) |
 | **D4.40** | **Motorcycles, mopeds and bicycles are outside the vehicle mapping contract.** No catalogue class names one, no `vType` declares one, and an author asking for one is refused rather than substituted. A two-wheeler carries a rider and riders are not rendered; and the content build registers no two-wheeled blueprint for the sweep to measure (§3.1, V1.20) |
 
 ---
@@ -4691,11 +4680,12 @@ Each carries the options and a recommendation; none is decided here.
 2. **Whether the catalogue lives in the world package or the distribution.** It is a property of the
    content build, not of a world, so the distribution is right — but a world package handed to someone
    without the distribution then cannot be run. Options: distribution only; distribution plus an
-   embedded copy in every scenario package (what `C3` currently specifies); or all three.
-   **Recommend the current specification**, and record that a world package alone was never sufficient
-   anyway, since it does not carry the clipped OSM either (§5.1 finding 2). `D4.17` strengthens this:
-   because the bridge needs the catalogue *at runtime* for the pose conversion, a scenario package
-   without an embedded catalogue is not runnable at all, not merely unvalidatable.
+   embedded copy in every scenario package; or all three. The scenario package as built references the
+   catalogue by digest and does not embed it (`C3` §5.2), so today it is distribution only, with the
+   lock naming which catalogue a scenario needs. `D4.17` bears on the choice: because the bridge needs
+   the catalogue *at runtime* for the pose conversion, a scenario package handed over without its
+   catalogue is not runnable at all, not merely unvalidatable. **Recommend embedding a copy**, bound by
+   the digests the lock already records.
 3. **Whether `render_cap` is a count or a budget.** `C2` specifies a count because it is checkable at
    the admission pass with no measurement. A rendering-cost budget would be more honest — a fire truck
    is not a Mini — but it needs a per-blueprint cost the catalogue does not measure. Options: count

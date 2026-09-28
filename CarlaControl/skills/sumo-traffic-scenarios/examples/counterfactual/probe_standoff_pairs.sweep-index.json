@@ -1,0 +1,273 @@
+{
+  "sweep_version": 1,
+  "sweep_id": "probe_standoff_pairs",
+  "members": [
+    {
+      "member_id": "street_layout_probe.base",
+      "assignments": [],
+      "outcome": "compiled",
+      "specification": "street_layout_probe.base\\street_layout_probe.base.scenario.json",
+      "findings": [
+        {
+          "check": 17,
+          "outcome": "warn",
+          "subject": "vehicle class saloon",
+          "message": "draws one body, vehicle.lincoln.mkz, so every vehicle of the class looks the same and its appearance can become its label"
+        },
+        {
+          "check": 41,
+          "outcome": "warn",
+          "subject": "supervision",
+          "message": "I(band; supervision) / H(supervision) = 0.000 over 2 entries (captured by the declared windows). Expected in a pattern of life and never a refusal; the table, the usable bands and the remedies are in the resolution report, and the statistic is in the lock"
+        }
+      ],
+      "epoch_block_sha256": "9335fe33ca8330c53de6c5901cabbfaf8583ddd0b52fa5f2c5e076785c615c1b",
+      "illumination": {
+        "illumination_version": 1,
+        "policy": "freeze_at_window_start",
+        "note": "one lighting condition per window"
+      },
+      "files": {
+        "routes": "4af784db55e2cfb4ca5c80787f6e100d48934617fea6c0e074a3c8a4b4e63905",
+        "config": "a7b544fa42d83912edd6b8bfcfcd0c864347b711d61ff913ffacacba54fc974a",
+        "network": "09aa2a8cad92df5f08c0bb8259b23cb6d3303ec3e88ccf62f87e6133d460f9ae",
+        "supervision": "60663c3a53d75d1e2f2a0fd51dea53b753a5010d136d36cee8b6f86f2c4b75c8"
+      },
+      "windows": [
+        {
+          "id": "morning",
+          "civil_begin": "2026-03-21T07:00:00-06:00",
+          "civil_date": "2026-03-21",
+          "sun_open": {
+            "seconds": 3600.0,
+            "sun_date": "2026-03-21",
+            "sun_clock": "07:00:00",
+            "elevation_deg": -0.8498,
+            "geometric_elevation_deg": -1.1398,
+            "azimuth_deg": 88.7108
+          }
+        }
+      ]
+    },
+    {
+      "member_id": "street_layout_probe.base.cf.probe.nominal",
+      "assignments": [],
+      "outcome": "compiled",
+      "specification": "street_layout_probe.base.cf.probe.nominal\\street_layout_probe.base.cf.probe.nominal.scenario.json",
+      "findings": [
+        {
+          "check": 17,
+          "outcome": "warn",
+          "subject": "vehicle class saloon",
+          "message": "draws one body, vehicle.lincoln.mkz, so every vehicle of the class looks the same and its appearance can become its label"
+        },
+        {
+          "check": 41,
+          "outcome": "warn",
+          "subject": "supervision",
+          "message": "I(band; supervision) / H(supervision) = 0.000 over 2 entries (captured by the declared windows). Expected in a pattern of life and never a refusal; the table, the usable bands and the remedies are in the resolution report, and the statistic is in the lock"
+        }
+      ],
+      "epoch_block_sha256": "9335fe33ca8330c53de6c5901cabbfaf8583ddd0b52fa5f2c5e076785c615c1b",
+      "illumination": {
+        "illumination_version": 1,
+        "policy": "freeze_at_window_start",
+        "note": "one lighting condition per window"
+      },
+      "files": {
+        "routes": "af715561b786962b50931622a705fee8d9d56e4ba116e107f044edece00a7bd0",
+        "config": "896f2963695106d5e7284f97d7eaf090f6f7b3e805afe1fea931e2bf79ee6fb5",
+        "network": "09aa2a8cad92df5f08c0bb8259b23cb6d3303ec3e88ccf62f87e6133d460f9ae",
+        "supervision": "edf562c281eca4d35f9925a8c210d86a0eb2cfef508d71345db2992fa5a3eea1"
+      },
+      "windows": [
+        {
+          "id": "morning",
+          "civil_begin": "2026-03-21T07:00:00-06:00",
+          "civil_date": "2026-03-21",
+          "sun_open": {
+            "seconds": 3600.0,
+            "sun_date": "2026-03-21",
+            "sun_clock": "07:00:00",
+            "elevation_deg": -0.8498,
+            "geometric_elevation_deg": -1.1398,
+            "azimuth_deg": 88.7108
+          }
+        }
+      ],
+      "counterfactual": {
+        "counterfactual_pair_id": "street_layout_probe.base.cf.probe.nominal",
+        "base_member": "street_layout_probe.base",
+        "counterfactual_member": "street_layout_probe.base.cf.probe.nominal",
+        "actor": "probe",
+        "mode": "nominal",
+        "displaced_in": [],
+        "illumination_differs": false,
+        "trajectories_expected_to_match": false,
+        "statement": "identical inputs except one vehicle; a car-following model reacts to what is in front of it, so downstream trajectories are not expected to match"
+      }
+    },
+    {
+      "member_id": "street_layout_probe.base.cf.probe.absent",
+      "assignments": [],
+      "outcome": "compiled",
+      "specification": "street_layout_probe.base.cf.probe.absent\\street_layout_probe.base.cf.probe.absent.scenario.json",
+      "findings": [
+        {
+          "check": 17,
+          "outcome": "warn",
+          "subject": "vehicle class saloon",
+          "message": "draws one body, vehicle.lincoln.mkz, so every vehicle of the class looks the same and its appearance can become its label"
+        },
+        {
+          "check": 41,
+          "outcome": "warn",
+          "subject": "supervision",
+          "message": "I(band; supervision) / H(supervision) = undefined (one supervision state only) over 1 entry (captured by the declared windows). Expected in a pattern of life and never a refusal; the table, the usable bands and the remedies are in the resolution report, and the statistic is in the lock"
+        }
+      ],
+      "epoch_block_sha256": "9335fe33ca8330c53de6c5901cabbfaf8583ddd0b52fa5f2c5e076785c615c1b",
+      "illumination": {
+        "illumination_version": 1,
+        "policy": "freeze_at_window_start",
+        "note": "one lighting condition per window"
+      },
+      "files": {
+        "routes": "4a2c3b72b5d63969a687619b057d8f6c589454c6da3547a2dbb06b144ec4cc63",
+        "config": "147397139177543e4f8f3615a4b2481442443a71754318fbe6ba7d11ae926691",
+        "network": "09aa2a8cad92df5f08c0bb8259b23cb6d3303ec3e88ccf62f87e6133d460f9ae",
+        "supervision": "1e88040f7585a4cd7635ca20965e51e1810f96d33dec0bdc3ac1163c72a1a1f8"
+      },
+      "windows": [
+        {
+          "id": "morning",
+          "civil_begin": "2026-03-21T07:00:00-06:00",
+          "civil_date": "2026-03-21",
+          "sun_open": {
+            "seconds": 3600.0,
+            "sun_date": "2026-03-21",
+            "sun_clock": "07:00:00",
+            "elevation_deg": -0.8498,
+            "geometric_elevation_deg": -1.1398,
+            "azimuth_deg": 88.7108
+          }
+        }
+      ],
+      "counterfactual": {
+        "counterfactual_pair_id": "street_layout_probe.base.cf.probe.absent",
+        "base_member": "street_layout_probe.base",
+        "counterfactual_member": "street_layout_probe.base.cf.probe.absent",
+        "actor": "probe",
+        "mode": "absent",
+        "displaced_in": [],
+        "illumination_differs": false,
+        "trajectories_expected_to_match": false,
+        "statement": "identical inputs except one vehicle; a car-following model reacts to what is in front of it, so downstream trajectories are not expected to match"
+      }
+    },
+    {
+      "member_id": "street_layout_probe.base.cf.probe.displaced",
+      "assignments": [],
+      "outcome": "compiled",
+      "specification": "street_layout_probe.base.cf.probe.displaced\\street_layout_probe.base.cf.probe.displaced.scenario.json",
+      "findings": [
+        {
+          "check": 17,
+          "outcome": "warn",
+          "subject": "vehicle class saloon",
+          "message": "draws one body, vehicle.lincoln.mkz, so every vehicle of the class looks the same and its appearance can become its label"
+        },
+        {
+          "check": 41,
+          "outcome": "warn",
+          "subject": "supervision",
+          "message": "I(band; supervision) / H(supervision) = undefined (one supervision state only) over 1 entry (captured by the declared windows). Expected in a pattern of life and never a refusal; the table, the usable bands and the remedies are in the resolution report, and the statistic is in the lock"
+        }
+      ],
+      "epoch_block_sha256": "9335fe33ca8330c53de6c5901cabbfaf8583ddd0b52fa5f2c5e076785c615c1b",
+      "illumination": {
+        "illumination_version": 1,
+        "policy": "freeze_at_window_start",
+        "note": "one lighting condition per window"
+      },
+      "files": {
+        "routes": "22debabd7c74a0f78f634f1e268543ba57dccbeaa3196b9ce18822572fd800ec",
+        "config": "c04b0e0f49fb7d54fdf75ae93fe28da9b5f412fe787c3972eea7f4d7342aa989",
+        "network": "09aa2a8cad92df5f08c0bb8259b23cb6d3303ec3e88ccf62f87e6133d460f9ae",
+        "supervision": "90a178d5c54cf718c3ca8704a093259284febb412f9bb6bd510fadde79272da9"
+      },
+      "windows": [
+        {
+          "id": "morning",
+          "civil_begin": "2026-03-21T07:00:00-06:00",
+          "civil_date": "2026-03-21",
+          "sun_open": {
+            "seconds": 3600.0,
+            "sun_date": "2026-03-21",
+            "sun_clock": "07:00:00",
+            "elevation_deg": -0.8498,
+            "geometric_elevation_deg": -1.1398,
+            "azimuth_deg": 88.7108
+          }
+        }
+      ],
+      "counterfactual": {
+        "counterfactual_pair_id": "street_layout_probe.base.cf.probe.displaced",
+        "base_member": "street_layout_probe.base",
+        "counterfactual_member": "street_layout_probe.base.cf.probe.displaced",
+        "actor": "probe",
+        "mode": "displaced",
+        "displaced_in": [
+          "time"
+        ],
+        "illumination_differs": true,
+        "trajectories_expected_to_match": false,
+        "statement": "identical inputs except one vehicle; a car-following model reacts to what is in front of it, so downstream trajectories are not expected to match"
+      }
+    }
+  ],
+  "pairs": [
+    {
+      "counterfactual_pair_id": "street_layout_probe.base.cf.probe.nominal",
+      "base_member": "street_layout_probe.base",
+      "counterfactual_member": "street_layout_probe.base.cf.probe.nominal",
+      "actor": "probe",
+      "mode": "nominal",
+      "displaced_in": [],
+      "illumination_differs": false,
+      "trajectories_expected_to_match": false,
+      "statement": "identical inputs except one vehicle; a car-following model reacts to what is in front of it, so downstream trajectories are not expected to match"
+    },
+    {
+      "counterfactual_pair_id": "street_layout_probe.base.cf.probe.absent",
+      "base_member": "street_layout_probe.base",
+      "counterfactual_member": "street_layout_probe.base.cf.probe.absent",
+      "actor": "probe",
+      "mode": "absent",
+      "displaced_in": [],
+      "illumination_differs": false,
+      "trajectories_expected_to_match": false,
+      "statement": "identical inputs except one vehicle; a car-following model reacts to what is in front of it, so downstream trajectories are not expected to match"
+    },
+    {
+      "counterfactual_pair_id": "street_layout_probe.base.cf.probe.displaced",
+      "base_member": "street_layout_probe.base",
+      "counterfactual_member": "street_layout_probe.base.cf.probe.displaced",
+      "actor": "probe",
+      "mode": "displaced",
+      "displaced_in": [
+        "time"
+      ],
+      "illumination_differs": true,
+      "trajectories_expected_to_match": false,
+      "statement": "identical inputs except one vehicle; a car-following model reacts to what is in front of it, so downstream trajectories are not expected to match"
+    }
+  ],
+  "findings": [],
+  "base": "street_layout_probe.scenario.json",
+  "base_sha256": "12d2ed64a1d7c312f3b9de2527d8330e94a9491be59a9138ebaa86aac76a6e9f",
+  "pairing": "cross",
+  "illumination": "hold",
+  "axes": [],
+  "outcome": "compiled"
+}

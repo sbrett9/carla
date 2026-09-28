@@ -74,13 +74,14 @@
     {
       "id": 6,
       "group": "world_binding",
-      "title": "The SUMO release routing the scenario is the one that built the world",
+      "title": "The SUMO release routing the scenario is the one that built the world, by release number, unless the mismatch is explicitly accepted",
       "against": "world.json NetconvertVersion and the SUMO installation",
       "outcomes": [
+        "refuse",
         "warn"
       ],
       "status": "compiler",
-      "prevents": "Routes validated by one release against a network another built"
+      "prevents": "Traffic routed by one duarouter release on a network another built: a different release can route the same demand differently"
     },
     {
       "id": 7,

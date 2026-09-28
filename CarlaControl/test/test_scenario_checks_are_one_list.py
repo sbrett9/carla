@@ -64,10 +64,15 @@ def test_the_plan_states_each_checks_outcome_as_the_catalogue_does():
 
 
 def test_every_check_the_source_cites_is_in_the_catalogue():
+    """Every id the compiler reports is one the catalogue lists. The compiler's modules are the ones
+    that report into `CompileFindings`; another catalogue in the package -- the run configuration's
+    (`RunConfigurationCheckCatalogue`, doc 12) -- numbers its own checks in its own findings."""
     cited = set()
     pattern = re.compile(r"\.(?:refuse|warn)\(\s*(\d+)\s*,")
     for path in SOURCES.glob("*.py"):
-        cited |= {int(n) for n in pattern.findall(path.read_text(encoding="utf-8"))}
+        text = path.read_text(encoding="utf-8")
+        if "CompileFindings" in text:
+            cited |= {int(n) for n in pattern.findall(text)}
     constants = {"FORM_CHECK": 47, "SPAN_CHECK": 37, "ROTA_CHECK": 48}
     assert cited, "no check id cited in the compiler's source"
     assert cited | set(constants.values()) <= ScenarioCheckCatalogue.active_ids()

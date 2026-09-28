@@ -65,6 +65,7 @@ choice. §3.9 draws the boundary.
 | 2026-09-21 | Annotation vocabulary layered: core generated from types, author terms declared in the specification. |
 | 2026-09-25 | Areas of interest, the place index and the solar frame built and published in the world package (§2.5, §2.10–§2.12). |
 | 2026-09-28 | Epoch is the C9 object; the session writes the zone; compiler, checks, report, association and sweeps built. |
+| 2026-09-28 | Check 6 refuses a SUMO release mismatch; the fence is the world's type map (D7.33); the bands are doc 11's; route phases and point, gateway and movement places built; the Gardnerville generator writes a specification; the skill's examples and references written. |
 
 ---
 
@@ -121,8 +122,9 @@ That asymmetry is the finding this whole section turns on.
 Nothing else in those scripts checks anything. In particular nothing in them checks that a route is
 **routable** (as opposed to its endpoints existing), that a `via` list is honoured, that the network
 shares the CARLA map's frame, or that the network was built from the same OSM the world was. The
-compiler of §5 checks all of that for a specification; the three scripts write SUMO XML directly and
-do not yet write one.
+compiler of §5 checks all of that for a specification. Of the three scripts, `make_sumo_scenario.py`
+now writes a specification and compiles it (§3.4); the Arapahoe and Bahonar scripts still write SUMO
+XML directly.
 
 `make_bahonar_scenario.py:64` defines `WORLD_PACKAGE` and never reads it (*read*): the largest
 authored scenario has no binding to the world it is meant to run in.
@@ -255,12 +257,12 @@ states where it comes from, what it guarantees, and whether it exists.
 | 1 | `world.json` | `WorldBuilder._write_world_package` → `client.write_world_package` (`WorldBuilder.py:159-184`; shim `carlanet/__init__.py:2402-2420`) | **yes** | Origin lat/lon, the PROJ string, grid geometry, staging rectangle, `SourceOsmSha256`, `OpenDriveSha256`, `NetconvertExtraArgs`, generation time |
 | 2 | `map.xodr` | same | **yes** | The road network CARLA loads; carries street names on non-junction roads (§4.4) |
 | 3 | `bareearth.bin` | same, only under `--height-align drape` | **yes** | Per-cell bare-earth ellipsoidal height; the telemetry altitude and the only elevation the flat SUMO network can borrow |
-| 4 | The clipped `.osm` | `OsmClipper.clip_osm_to_bounds`, written to `Build/sumo-smoketest/<Name>_clipped.osm` (`WorldBuilder.py:106-115`) | **yes**, but not inside the package | The exact geometry netconvert saw. Referenced by name and digest in `world.json`, not carried |
+| 4 | The clipped `.osm` | `OsmClipper.clip_osm_to_bounds`, written to `Build/sumo-smoketest/<Name>_clipped.osm` (`WorldBuilder.py:106-115`) | **yes**, outside the package | The exact geometry netconvert saw. Referenced by name and digest in `world.json`; the world build's input, never read by the compiler (§2.2) |
 | 5 | **The world's `.net.xml`** | netconvert, same run as the `.xodr` | **no — deleted** (`OsmConverter.cs:146`) | §1.3. The single missing artifact that makes the rest sound |
 | 6 | **Place index** | `places.json` in the world package, derived from 5 alone (§2.5) | **yes** | Street name → the edges carrying it, each with heading, cardinal direction, length, lanes, speed and extent; the index's own coverage and warnings. An area id resolves through row 8. §2.5, §4 |
 | 7 | **Vehicle catalogue** | [`04_Contracts.md`](04_Contracts.md) contract 1; doc 20 §5.6 and D12 | **no** | Which vehicles exist, with real dimensions. §2.6 states what this section needs from it |
 | 8 | **Area-of-interest table** | `areas.resolved.json` and `areas.aoi.geojson` in the world package, resolved from `<extract>.aoi.geojson` at world build ([`04`](04_Contracts.md) C5, §2.11) | **yes** | Named, stable places a scenario and an annotation can both reference, in CARLA-local metres and on SUMO lanes |
-| 9 | **Annotation vocabulary** | [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §3.7–§3.8; the core generated from `CarlaNet.Types` | **no** | What a label means. Two halves: a closed, versioned core the pipeline's own code branches on, and the author terms this scenario declares or imports, each carrying its own definition |
+| 9 | **Annotation vocabulary** | [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §3.7–§3.8; the core written from 06 §3.7 in `AnnotationVocabulary`, its bands from `IlluminationBand` | **yes**, per compiled scenario, in its supervision plan (§8.3) | What a label means. Two halves: a closed, versioned core the pipeline's own code branches on, and the author terms this scenario declares or imports, each carrying its own definition |
 | 10 | **World digest** binding 1–9 | §2.7 | partially, and **unstable as recorded** | That a scenario and a run are talking about the same world |
 | 11 | **Site civil time zone** | new; derived from `world.json`'s origin lat/lon plus a time-zone database | **no** | The candidate civil offset for the epoch, and whether the site observes daylight saving. §2.8 |
 | 12 | **Illumination reference** | new; [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md), computed from origin lat/lon and the epoch's dates | **no** | Sunrise, sunset and sun elevation for every date the scenario spans, and the **night viability verdict**. §2.9 |
@@ -283,14 +285,16 @@ and the netconvert build version. The manifest records that the world used
 `--geometry.remove`, so the Python reimplementation of the base flag set cannot be verified against
 it — it can only be trusted.
 
-### 2.2 The clipped OSM is an input, not an output, and must travel
+### 2.2 The clipped OSM is the world build's input, and a scenario never reads it
 
-An author needs it because the network is rebuilt from it. It is referenced by
-`SourceOsmFileName`/`SourceOsmSha256` and lives outside the package in
-`Build/sumo-smoketest/`. Once §2.5 is adopted the network is carried and the OSM is no longer needed
-to *build* anything — but it is still needed to read access tags (the fence of `SKILL.md:128-141`
-reads `access=` straight off the OSM, `SumoScenarioBuilder.py:547-550`), so it should be carried in
-the package rather than referenced.
+It is referenced by `SourceOsmFileName`/`SourceOsmSha256` and lives outside the package in
+`Build/sumo-smoketest/`. The world build reads it — to clip, to convert, and to validate areas of
+interest against its `<bounds>` — and everything a scenario needs from it reaches the scenario through
+the world's network (§2.4): the edges, their names, their permitted classes. The one scenario-side reader
+there was, the fence of `SKILL.md:128-141`, read `access=` straight off the OSM to rewrite a network
+after the fact (`SumoScenarioBuilder.restrict_private_roads`); what a road admits is now the world's,
+set at world build by its type map (§9.8, D7.33), so the compiler does not read the OSM and a scenario
+package does not carry it.
 
 ### 2.3 `bareearth.bin` is the only elevation an author has
 
@@ -515,9 +519,11 @@ code doc 11 specifies, and each readable without a running server.
 2. **Elevation bands with names.** Doc 11 §4.4 defines six, against the refraction-corrected elevation a
    declaration is made by: `day` above +6°, `golden` +6° to 0°, `civil_twilight` 0° to −6°,
    `nautical_twilight` −6° to −12°, `astronomical_twilight` −12° to −18°, `night` below −18°.
-   `carlacontrol.IlluminationBand` implements them for the association statistic (check 41), each
-   band holding its upper edge. [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §3.7 lists the
-   core vocabulary's `illumination_band` values differently (§12 question 13).
+   `carlacontrol.IlluminationBand` implements them, each band holding its upper edge; the association
+   statistic (check 41) buckets by it, and the core vocabulary's `illumination_band` terms are its
+   names, so the supervision plan and the statistic read one table. Doc 11 is their definition and
+   [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §3.7 and §5.1 name them from it (§12
+   question 13).
 3. **The night viability verdict.** D11.7: night capture is not viable, and no window whose sun is below
    −6° may be declared corpus-eligible. Any time of day stays authorable — a night window still yields
    complete behavioural truth — so check 42 **warns and never refuses**, naming the verdict.
@@ -713,6 +719,25 @@ author means 07:00, the artifact needs 25 200, the author currently does the mul
 times per scenario (§1.4), and the meaning is then unrecoverable. A place resolves to an edge; an
 instant resolves to a second. One compiler, two resolvers, one report.
 
+**What is built of this.** The compiler is (§5). `make_sumo_scenario.py` writes the Gardnerville orbit
+as a specification — every edge it names a place, the orbit one actor in three phases, in held to each
+edge's posted limit, twenty laps held to 11 m/s, out on the vehicle's own speedFactor — and compiles it
+into `Import/`, under the file names the shipped scenario always had plus its specification, lock,
+supervision plan and resolution report. *Measured,* 2026-09-28, in SUMO against the world package's
+network: 775 vehicles inserted and none left waiting, as the SUMO-XML output of the same script gives;
+the orbiter drives the same 20 983 m route and arrives at 1 899.7 s against 1 919.3 s — the difference
+is SUMO routing the flows itself at insertion rather than running the routes `duarouter` fixed (D7.8),
+which moves where its random draws fall. The co-simulation session's network check admits the compiled
+package ([`03`](03_CoSimulation_Runtime.md) D3.28). The other two scripts still write SUMO XML, and the
+Arapahoe dwell cannot be a specification without changing the scenario: its vehicle types carry no
+catalogue body (so under SUMO drive they are simulated and never rendered), its incident is a rerouter
+in an additional file, and its opposite-lane pairs are a network edit, which is a world-build decision
+(D7.9). Its route file and configuration are regenerated by its script against the world package's
+network, which the session admits; the network it writes differs from the world's only in the two
+`opposite` attributes, which the network fingerprint does not cover. The Bahonar script's fourteen
+vehicle types are hand-sized with no catalogue body either, and its world is to be rebuilt with its type
+map (§9.8) before its guards can drive.
+
 ### 3.5 Shape of the specification
 
 A JSON document, `<Scenario>.scenario.json`, at `spec_version` 1. Its schema is the compiler's own,
@@ -732,19 +757,23 @@ simulation         { end, step_length_s }; t = 0 is the epoch, so the run begins
 catalogue          the measured vehicle catalogue                             04 C1
 vehicle_classes[]  class_id, blueprints[], sumo_vclass, behaviour{}, share, weights[], gui_*
 vehicle_mix        the id of the whole-mix distribution, when one is wanted
-places{}           named places: an edge, a lane with offset, an area, or a street one way  §4.2
+places{}           named places: an edge, a lane with offset, an area, a street one way     §4.2
+                   (at a cross street or near a point), a geographic point, a gateway,
+                   or a junction movement
 place_sets{}       named lists of places, which a rota's subjects may be
 instants{}         named instants, in civil time                                          §4.5
 flows[]            id, type, from, to, via[], vehs_per_hour, begin, end    — cohorts
-actors[]           id, type, depart, from/to/via[] or route[], stops[]     — entities
+actors[]           id, type, depart, from/to/via[] or route[] or phases[], stops[]  — entities
+                   phases[]: route[], repeat, hold (m/s, or "posted"): one waypoint per held edge
 rotas[]            days x civil clocks x subjects, with a skip list        §3.5.1
 vocabulary         { import[], namespaces[] }                              06 §3.8, checks 18, 45, 46
 supervision        instances[], cohorts[], series[], absences[]            §3.6
 capture_windows[]  CANDIDATE windows, in civil time                        §3.5.2
 ```
 
-Not in the schema: the network edits of §6 (the fence, opposite pairs, lane closures), which the Python
-builder still applies to a network it writes itself, and the sweep, which is its own file (§7.2).
+Not in the schema: what a road admits, which is the world's and set at world build by its type map (§9.8,
+§12 question 14); the network edits of §6 that remain — opposite pairs and lane closures — which the
+Python builder still applies to a network it writes itself; and the sweep, which is its own file (§7.2).
 
 Three properties are load-bearing:
 
@@ -817,10 +846,11 @@ compiler emits seconds (`carlacontrol.CivilTimeResolver`):
 `SolarEpoch.CivilInstantAt`; a civil instant that does not come back as written stops the compile as a
 defect, so the second a report prints beside `07:00` is the second the session will call 07:00.
 
-A **rota** is the one place the specification gains a repetition form, and it is deliberately not a
+A **rota** is one of two places the specification gains a repetition form, and it is deliberately not a
 loop: a cross product of declared days, declared civil clocks and declared subjects, with an explicit
-exclusion list (`carlacontrol.RotaExpander`). §12 question 6's objection to loop constructs is what keeps
-it that shape.
+exclusion list (`carlacontrol.RotaExpander`). The other is a route phase's `repeat` (§3.5), a count of
+identical passes over one declared list of edges, with nothing inside it varying. §12 question 6's
+objection to loop constructs is what keeps both that shape.
 
 ```jsonc
 "place_sets": {"guard_towers": ["tower_00", "tower_01", "...", "tower_15"]},
@@ -846,8 +876,9 @@ reproduces `make_bahonar_scenario.py`'s `tower_postings(7, 4, 7, 3)` exactly —
 same departure seconds (`test_rota_expander.py`). *Measured,* compiled against the real Bahonar world
 package, 2026-09-28: all 335 entries route through `duarouter`, pass the false-accept guard and compile
 in **0.64 s**, with the generator's ids and departure seconds — when the guard class is drawn as
-`delivery`, because the world's own network admits no other road class on the port's private roads
-(§12 question 14).
+`delivery`, because the shipped world's network admits no other road class on the port's service roads.
+With the class `army` it compiles on the network the world build now writes with the world's type map,
+and is refused by check 10 on all 335 entries against the shipped package (§9.8, §12 question 14).
 
 **What it does to the sizing scenario's readability.** *Measured against the shipped script and its
 output:*
@@ -1204,12 +1235,23 @@ needs one lane and a position.
 | Area of interest | `{"area": "drydock"}` | the area's inside and crossing lanes, from the world's area table; a stop uses the area's one lane, from its interval's start to its end | **yes** |
 | Street plus direction | `{"street": "East Arapahoe Road", "direction": "west"}` | the edges of that name heading that way, ordered, from the place index | **yes** |
 | Street plus a cross street | adds `"at": "South Yosemite Street"` | the one edge of that run arriving at a junction the cross street meets | **yes** |
-| Street plus a point | adds `"near": {"lat": …, "lon": …}` | narrows to one edge | no |
-| Gateway | `{"gateway": "south", "street": "I-25"}` | the fringe edge whose bearing matches | no |
-| Geographic point | `{"lat": …, "lon": …, "max_snap_m": 25}` | the nearest drivable lane, with the snap distance reported | no |
-| Junction movement | `{"from_street": …, "to_street": …}` | the pair of edges either side, never the internal edge | no |
+| Street plus a point | adds `"near": {"lat": …, "lon": …}` | the one edge of that run nearest the point | **yes** |
+| Gateway | `{"gateway": "south", "travel": "in", "street": "South Valley Highway"}` | the edges entering (`in`) or leaving (`out`) the world on that side: an end served by a single road within 10 m of the network's boundary | **yes** |
+| Geographic point | `{"lat": …, "lon": …, "max_snap_m": 25, "vclass": "army"}` | the position on the nearest lane admitting `vclass`, or any road vehicle when none is named, with the snap distance reported | **yes** |
+| Junction movement | `{"from_street": …, "to_street": …}`, optionally `from_direction`, `to_direction` | the pair of edges one connection joins, never the internal edge; a `via`, where it contributes both | **yes** |
 
-A form not built is refused by the schema (check 53) rather than half-resolved.
+A point is placed by `GeodeticFrame` at the world's origin — the WGS84 transform the telemetry and the
+imagery use, which agrees with the network's projection within 0.4 mm on every shipped world — and its
+lane position is SUMO's: the projected arc length scaled by the lane's `length` over its shape length. A
+gateway is not netconvert's `dead_end` type: a two-way road cut by the clip ends at a `priority` junction
+holding its turnaround. *Measured* on the three shipped networks, every end served by a single road that
+lies on the clip boundary is within 4.99 m of it, and the nearest such end inside a map — a cul-de-sac —
+is 45.77 m in; the 10 m margin sits between. *Measured* against the Arapahoe world package: the four
+gateways of South Valley Highway resolve to exactly the edges `make_arapahoe_scenario.py` reconnoitred by
+hand — `37722905` and `106308386` northbound in and out, `472478085` and `908324823` southbound — and the
+dwell's published coordinates, 39.600357 N 104.886490 W, snap 0.09 m to `218965860#0_0` at 88.63 m,
+against the 87.93 m the script authored; East Arapahoe Road onto South Yosemite Street is four
+connections, and is refused until a direction narrows it.
 
 The last row is doc 20 §11 question 8, answered for this surface: a movement through a junction is
 named by the roads either side. *Measured:* junction internals carry the converter's own identifier —
@@ -1231,7 +1273,9 @@ makes it safe for an assistant to use.
 | Place used on a vehicle whose class may not enter it | `allow`/`disallow` excludes the class | **refuse**, naming the class and the edges | **yes**, check 10 |
 | Direction is ambiguous | a street that curves through more than 90° | **refuse**, reporting the bearing range | no |
 | Map has no street names | *measured:* Bahonar — **47 of 1044 normal edges named (4.5 %)** | **warn at index build**: `places.json` carries the warning below half named (§2.5); a street place on such a map resolves against what little is named | **yes**, at world build |
-| Snap distance large | point resolution falls far from any road | **warn** past a stated threshold, **refuse** past `max_snap_m` | no |
+| Snap distance large | point resolution falls far from any road | **warn** past a stated threshold, **refuse** past `max_snap_m` | **refuse**, check 7, naming the distance; every snap distance is in the report. No warning threshold is stated, so none is built |
+| A point equidistant from two roads | lanes of two edges within 0.01 m of each other's distance | **refuse**, naming both | **yes**, check 7 |
+| A gateway or a turn that is several | several edges at one side, or several connections from one street onto another | **refuse**, listing them; `street`, `from_direction` and `to_direction` narrow | **yes**, check 7 |
 | Place is in the staging ring | inside the margin of the staging rectangle | **warn** — doc 20 §8.3 | no; for an area, the area table's V5.5/V5.6 warning is carried (check 27) |
 | Place is on a degenerate edge | lane length below a stated threshold | **refuse** — §6 | no |
 
@@ -1327,17 +1371,18 @@ place index, area table and solar frame — and the vehicle catalogue. Nothing e
 
 | File | Content |
 |---|---|
-| `<scenario_id>.rou.xml` | the vehicle types, one per measured body, and every actor and flow, **already routed** (§5.5), **departure-sorted**, times in **plain seconds**, and no supervision (§3.6) |
+| `<scenario_id>.rou.xml` | the vehicle types, one per measured body, and every actor and flow, **already routed** (§5.5), **departure-sorted** with entries that depart together in the specification's order, flows before actors — SUMO inserts, and draws its random numbers, in the order it reads, so that order decides the traffic as the seed does — times in **plain seconds**, and no supervision (§3.6) |
 | `<scenario_id>.sumocfg` | the run configuration: the network and route files, `begin` 0, `end` and `step-length` in plain seconds with the epoch restated as a comment above them, the SUMO seed, and the processing options that decide how the traffic moves — `time-to-teleport` −1, `max-depart-delay` 900, `collision.action` warn |
 | `<MapName>.net.xml` | the world package's own network, **byte for byte**, so the network SUMO runs is the world's; nothing about it is scenario-specific |
 | `<scenario_id>.supervision.json` | the supervision plan (§3.6), in the form of [`06`](06_Truth_And_Annotation.md) §8.1: instance ids `<scenario_id>/<name>`, intervals in seconds and civil time, every entity and cohort explicit, the vocabulary resolved with its digest, and the digests of the route file, network and configuration it was compiled against |
 | `<scenario_id>.resolution.json`, `.resolution.md` | **what it resolved** — §5.3 |
-| `<scenario_id>.lock.json` | the `scenario_id`; the specification's name and digest; the compiler and its version; the four files — routes, configuration, network, supervision plan — each with its SHA-256; the world binding (map name, network fingerprint, netconvert argument vector and version, OpenDRIVE and OSM digests, origin, georeference); the catalogue's id and digests; the vocabulary's core version, namespaces and digest; the traffic — SUMO seed, step, end, processing options, and the `duarouter` release that routed it; **the epoch verbatim and its digest, the authored illumination default, the candidate windows with their civil dates and times, the ephemeris, and the illumination–label association statistic** (§5.6) |
+| `<scenario_id>.lock.json` | the `scenario_id`; the specification's name and digest; the compiler and its version; the four files — routes, configuration, network, supervision plan — each with its SHA-256; the world binding (map name, network fingerprint, netconvert argument vector and version, OpenDRIVE and OSM digests, origin, georeference); the catalogue's id and digests; the vocabulary's core version, namespaces and digest; the traffic — SUMO seed, step, end, processing options, the `duarouter` release that routed it, the world's converter, how the two stand by release number and whether a mismatch was accepted (check 6); **the epoch verbatim and its digest, the authored illumination default, the candidate windows with their civil dates and times, the ephemeris, and the illumination–label association statistic** (§5.6) |
 
 **A refused compile writes only its resolution report**, marked refused, so every refusal can be read;
 no scenario file is written. **The same specification, seed and world give byte-identical scenario
-files**: no file carries a timestamp, a machine path or the specification's file name, and
-`test_scenario_compiler.py` compiles twice and compares.
+files**: no file carries a timestamp, a path on the compiling machine or the specification's file
+name — the world's netconvert argument list, which names the world build's own files, is copied into
+the lock as the package records it — and `test_scenario_compiler.py` compiles twice and compares.
 
 **Why the epoch is in the lock file and not only in the specification.** The lock is what a run reads
 and what the run manifest joins to; it survives when a specification is regenerated; and it is where
@@ -1362,7 +1407,7 @@ the same ids and outcomes.
 | 3 | The network's `convBoundary` equals the `.xodr` header's `north`/`south`/`east`/`west` | both files | **refuse** | A network in a different frame — the check `SKILL.md` used to ask an author to do by hand |
 | 4 | The network's `projParameter` equals `world.json`'s `GeoReferenceString` | both | **refuse** | Origin drift; the one check `make_arapahoe_scenario.py:283-290` performs, generalised |
 | 5 | The network's `netOffset` is `0.00,0.00` | the network | **refuse** | A network whose metres are displaced from the world's geographic frame. *Measured* (§12 question 12): a world built with `--road-offset-east/north` carries a `netOffset` equal to the offset while every lane shape and every `.xodr` road moves by the same amount, so SUMO (x, y) ≡ CARLA (x, −y) still holds for road geometry and SUMO's conversion of a latitude and longitude places it the offset away from the imagery. The co-simulation session refuses the same networks (`SumoDriveSession.RequireTheWorldSNetwork`), as does the area resolver for areas of interest ([`04`](04_Contracts.md) V5.12) |
-| 6 | The SUMO release routing the scenario is the one that built the world | `world.json` `NetconvertVersion` and the installation `duarouter` runs from | **warn** | *Measured:* `SUMO_HOME` on this machine is an external **1.27.1** while the repository stages **1.27.0**; `compile_scenario.py` routes with the staged installation unless told otherwise, and the release that routed is in the lock |
+| 6 | The SUMO release routing the scenario is the one that built the world, compared by release number with the co-simulation session's own function (`CarlaNet.Sumo.SumoReleaseCheck`, reached through `SumoInstallation.release_check`) | `world.json` `NetconvertVersion` and the installation `duarouter` runs from | **refuse**, naming both releases, the installation and the rule that found it; **warn** when the mismatch is accepted with `--allow-sumo-version-mismatch`, and the lock records the acceptance (`traffic.routed_by.release_agreement`, `mismatch_accepted`); **warn** when the package records no converter | A different `duarouter` release can route the same demand differently, so the traffic would not be the world's — the same rule the session refuses a run by ([`03`](03_CoSimulation_Runtime.md) §2.6). *Measured:* `SUMO_HOME` on this machine is an external **1.27.1** while the repository stages **1.27.0**; `compile_scenario.py` routes with the staged installation unless `--sumo-home` names another |
 | **References** ||||
 | 7 | Every declared place resolves, and to exactly one thing where one is needed | the resolver, §4.2 | **refuse**, with candidates | An authored place that silently becomes a different place |
 | 8 | Every reference names what the specification declares: places, instants, rotas, series, flows and counterfactuals | the specification | **refuse** | A typo becoming a valid-looking identifier |
@@ -1489,7 +1534,8 @@ flowchart TD
 
   subgraph BIND["1 · World binding"]
     P1["network fingerprint = the package's · 1<br/>one invocation, recorded = carried · 2<br/>convBoundary = .xodr header · 3<br/>projParameter = GeoReferenceString · 4<br/>netOffset = 0,0 · 5"] -->|differs| R1(["REFUSE"])
-    P1 --> P2["SUMO release that routes =<br/>the one that built the world · 6"] -->|differs| W1[/"WARN"/]
+    P1 --> P2["SUMO release that routes =<br/>the one that built the world · 6"] -->|differs| R1
+    P2 -->|"differs, accepted;<br/>or not recorded"| W1[/"WARN"/]
   end
 
   P2 --> P3
@@ -1724,7 +1770,7 @@ validator check, a compiler default, or stays documentation, and where the enfor
 
 | # | Gotcha (`SKILL.md`) | Becomes | Where |
 |---|---|---|---|
-| 1 | `<stop speed=>` caps speed only between its own `startPos`/`endPos` **on its own edge** (`:150-152`) | **Compiler default.** The specification says "hold this phase to 11 m/s"; the compiler emits one waypoint per edge in the phase | Not built: the specification has no speed-phase construct; `_waypoint_xml` (`SumoScenarioBuilder.py:783-799`) does it for orbits in the Python builder |
+| 1 | `<stop speed=>` caps speed only between its own `startPos`/`endPos` **on its own edge** (`:150-152`) | **Compiler default.** The specification says "hold this phase to 11 m/s"; the compiler emits one waypoint per edge in the phase | **Built**: an actor's `phases[]`, each with an optional `hold` — a speed capped at each edge's limit, or `posted` — and `repeat` (`ScenarioCompiler._resolve_phases`); a stop beside phases is refused, since on a repeated route it names no one pass. *Measured* by SUMO's own floating-car output: a held lap never exceeds its hold on a 201 m straight where the vehicle's speedFactor would take it past (`test_scenario_compiler.py`) |
 | 2 | A scalar `speedFactor` is a distribution unless `speedDev="0"` (`:153-154`) | **Compiler default + validator check**, warning on a scalar `speedFactor` with no `speedDev` | Not built; a class's `behaviour` is copied through verbatim |
 | 3 | Route file must be departure-sorted (`:155-157`) | **Compiler default + self-check.** The compiler merges actors and flows onto one timeline before writing and re-reads what it wrote | **Built**: `ScenarioCompiler._routes_xml`; check 29 |
 | 4 | `--opposites.guess` yields nothing on our output (`:158-161`) | **Compiler default + documentation.** Opposite pairs are named and applied by `allow_opposite_overtaking` (`SumoScenarioBuilder.py:622-659`). That it does not rescue a two-way jam stays documentation, a modelling judgement | Not built in the specification; the Python builder's network edit |
@@ -1734,7 +1780,7 @@ validator check, a compiler default, or stays documentation, and where the enfor
 | 8 | XML comments cannot contain `--` (`:169-170`) | **Compiler default + self-check.** The emitter escapes; the self-check re-reads | **Built**: `ScenarioCompiler._comment`; check 30 |
 | 9 | `--device.fcd.explicit` is comma-separated (`:171`) | **Compiler default.** An author never writes the flag | Not needed: the compiler writes no device options |
 | 10 | Validate with `duarouter`, not `sumolib` (`:145-149`) | **Validator check**, unconditionally, plus the false-accept guard of §5.5 | **Built**: `RouteValidator`; checks 11, 12 |
-| 11 | Restricting private roads must also clear internal junction-connector lanes (`:135-139`) | **Compiler default.** Correct in `restrict_private_roads` (`SumoScenarioBuilder.py:661-716`) | Not in the specification; the Python builder's network edit |
+| 11 | Restricting private roads must also clear internal junction-connector lanes (`:135-139`) | **Does not arise under a world-build type map.** netconvert gives an internal lane the intersection of the permissions of the lanes it joins as it builds them (`NBEdge.cpp:1760`), so permissions set by type reach the junctions with no clearing; the trap belongs to a rewrite after netconvert, which `restrict_private_roads` still is | **Built** at world build (§9.8): *measured,* all 335 guard routes pass `duarouter` through the port's junctions; `restrict_private_roads` keeps its clearing for the legacy generator |
 | 12 | **SUMO's `H:M:S` time literal is an elapsed offset, not a clock.** *Measured:* `sumo -n … --begin 7:00:00 --end 7:00:10 --summary-output` ran steps `time="25200.00"` to `time="25209.00"`, exit 0 | **Compiler default + self-check.** The specification's civil times are resolved against `epoch` (§4.5) and the compiler emits **plain seconds** into every SUMO file, with the epoch restated as a comment above `<begin>`; a bare clock on a multi-day run is refused before anything is emitted | **Built**: `CivilTimeResolver`; checks 47 and 44 |
 
 Two of these — #5 and #6 — are the visible edge of §1.3. Moving them to the world build is not
@@ -1770,7 +1816,7 @@ or fixed by the compiler, written into the scenario files, and bound in the lock
 | **The step length and the end** | `simulation.step_length_s` and `simulation.end`, in the `.sumocfg` and the lock |
 | **The processing options** | `time-to-teleport` −1 — a teleport is a position jump nothing downstream can reproduce — `max-depart-delay` 900 and `collision.action` warn, fixed by the compiler and recorded |
 | **The vehicle types** | one per measured body, from the catalogue, whose digests are in the lock |
-| **The SUMO release that routed** | recorded in the lock; a release other than the one that built the world is warned about (check 6) |
+| **The SUMO release that routed** | recorded in the lock; a release other than the one that built the world is refused unless explicitly accepted, and an acceptance is recorded in the lock (check 6) |
 
 Two seeds doc 20 anticipated are not declared, because nothing consumes them: an **appearance seed**
 (which body a category resolves to — SUMO's own seeded `vTypeDistribution` draw does this today) and an
@@ -2025,11 +2071,12 @@ Three further reasons are specific to this pipeline:
 | **Silent on time entirely** | **The epoch conventions** — §8.2.1 |
 | **Silent on illumination entirely** | **The illumination guidance** — §8.2.2 |
 
-`SKILL.md` 1.3.0 carries: the network as an input, the specification and `compile_scenario.py`, the
+`SKILL.md` 1.4.0 carries: the network as an input, the specification and `compile_scenario.py`, the
 epoch conventions of §8.2.1, the place forms, the rota, the supervision channel and the vocabulary's
-layering, the illumination guidance of §8.2.2, and sweeps with counterfactual pairs. Not yet: the
-reconnaissance report the recipe's step 3 would read (§4.1 builds two of its sections), and the gotchas
-split by enforcement site (§8.5).
+layering, the illumination guidance of §8.2.2, sweeps with counterfactual pairs, the fence as the
+world's type map (§9.8), route phases and the point, gateway and movement places, and — beside it — the
+examples and references of §8.3. Not yet: the reconnaissance report the recipe's step 3 would read (§4.1
+builds two of its sections).
 
 #### 8.2.1 The epoch conventions the skill must carry
 
@@ -2097,9 +2144,9 @@ shipped beside the skill, versioned with it:
 | `schemas/sweep.schema.json` | JSON Schema for a sweep | `ScenarioSweep`, written by `--write-sweep-schema` | **yes** |
 | `checks.json` | every check of §5.2 with its id, what it compares, its outcomes and where it is carried out | `ScenarioCheckCatalogue`, written by `--write-checks` | **yes** |
 | `vocabulary.json` | the term document a label resolves against: the closed core and every author namespace the scenario declares or imports | generated per compiled scenario and carried in its supervision plan with its digest. The core is written from [`06`](06_Truth_And_Annotation.md) §3.7 (`AnnotationVocabulary`), because `CarlaNet.Types` does not yet enumerate it | per scenario, in the plan; not beside the skill |
-| `examples/` | one minimal specification, one generated from a program, one with a counterfactual pair — each with its resolution report | the three shipped scenarios, re-expressed | no |
-| `references/gotchas.md`, `resolution.md`, `time.md`, `illumination.md` | the gotchas with their enforcement sites; the place forms; the epoch and civil-time conventions; the illumination guidance | §6, §4, §3.5.1, §5.6 | no |
-| `examples/epoch/` | one whole-hour, one **+03:30**, and one daylight-saving offset, each with its resolution report | §3.5.1 | no; the three offsets compile in `test_scenario_epoch.py` |
+| `examples/` | one minimal specification, one with every kind of supervision and a sweep pairing its annotated actor `nominal`, `absent` and `displaced` — each with its recorded resolution report or sweep index — on the compiler's fixture world; the one generated from a program is the Gardnerville orbit in `Import/`, written and compiled by `make_sumo_scenario.py` | written for the fixture world, and the generator | **yes** |
+| `references/gotchas.md`, `resolution.md`, `time.md`, `illumination.md` | the gotchas with their enforcement sites; the place and instant forms; the epoch and civil-time conventions; the illumination guidance, with doc 11's six bands | §6, §4, §3.5.1, §5.6 | **yes** |
+| `examples/epoch/` | one whole-hour, one daylight-saving and one **+03:30** offset, each with its recorded resolution report | §3.5.1 | **yes**; the +03:30 one declared on the Colorado fixture world, where checks 40 and 42 warn |
 
 The place index, the area table and the solar frame are **not** in the skill — they are per-world and
 travel in the world package (§2.12). Nor is the vehicle catalogue, which is per content build and lives
@@ -2135,18 +2182,24 @@ not intention.
   the **core** from the one table the compiler branches on (`AnnotationVocabulary`, from 06 §3.7), the
   **author half** from the compiled specification's `vocabulary` block, so a term an author declared
   cannot be missing from the document that defines it.
-- **The examples are compiled in the test suite.** Every example specification in `examples/` is to be
-  compiled against a fixture world in the ordinary test run and its resolution report compared against
-  the recorded one. The compiler's own fixture scenario (`CarlaControl/test/ScenarioWorldFixture.py`)
-  is compiled this way, and run through SUMO; the shipped examples are not written yet.
-- **The gotchas carry their enforcement site as a citation**, and a test asserts each cited site still
-  exists. Not built: `references/gotchas.md` is not written; §6's table names the sites.
+- **The examples are compiled in the test suite.** Every example specification in `examples/` is
+  compiled against the compiler's fixture world (`CarlaControl/test/ScenarioWorldFixture.py`) in the
+  ordinary test run, and what it resolves to is compared whole with the report recorded beside it, less
+  the path of the SUMO installation (`test_skill_examples.py`); the counterfactual sweep is compared
+  with its recorded index. The generated example is held to its generator byte for byte
+  (`test_gardnerville_generator.py`).
+- **The gotchas carry their enforcement site as a citation**, `path::symbol`, and a test asserts each
+  cited file holds the symbol and each cited check is live (`test_skill_references.py`). The same test
+  holds `references/resolution.md` to every place form the schema accepts and
+  `references/illumination.md`'s band table to `IlluminationBand`.
 - **The skill's `metadata.version` moves with the specification's `spec_version`.** Not built.
 - **The three shipped scenarios stay in the corpus as the regression set**, and re-expressing them under
   the epoch is the honest test of §3.5.1's readability claim: the sizing scenario must produce
   **byte-identical** departure seconds from civil-time literals. Built for the guard rota, the part the
   claim rests on: re-expressed as one rota block it reproduces `tower_postings` exactly
-  (`test_rota_expander.py`). The whole-scenario re-expressions are not written.
+  (`test_rota_expander.py`), and on a world converted with its type map it compiles, all 335 entries
+  (`test_netconvert_type_map.py`). The Gardnerville orbit is re-expressed whole (§3.4). The Arapahoe and
+  Bahonar re-expressions are not written, for the reasons §3.4 gives.
 - **The `+03:30` epoch is a test, not an illustration.** It compiles in `test_scenario_epoch.py` and
   `test_civil_time_resolver.py` beside +05:45, +12:45 and −03:30, so a regression to integer hours is a
   failing test rather than a corpus captured under the wrong sun.
@@ -2222,8 +2275,11 @@ the scenario side stops running netconvert at all and the skew disappears for au
 recorded version becomes part of the lock file, which is check 6.
 
 `duarouter` and `sumo` are staged beside `netconvert` in `Build/sumo-install/bin` (stage D), and
-`compile_scenario.py` routes with that installation unless `--sumo-home` names another, recording the
-release in the lock.
+`compile_scenario.py` routes with that installation unless `--sumo-home` names another. A release other
+than the world's converter is refused (check 6) unless `--allow-sumo-version-mismatch` accepts it, and
+the lock records the release, the converter and the acceptance. The comparison is
+`CarlaNet.Sumo.SumoRelease`'s, which `SumoInstallation` calls through `carlanet` rather than restating,
+so the compiler, the world-build tools and the co-simulation session apply one rule.
 
 ### 9.5 The world's time zone is written by the session
 
@@ -2269,6 +2325,35 @@ brief's decision 4 locks the traffic manager out while SUMO drives. The rule tha
 11's (D11.9); that the batch can carry it at no extra round trip is established
 (`SetVehicleLightStateCommand`, `carlanet/__init__.py`).
 
+### 9.8 A world whose roads admit what its scenarios drive
+
+What a road admits is part of the world, set at world build by the world's type map (§12 question 14):
+`<extract>.typ.xml` beside the extract, found by name as the areas of interest are, or `--type-map`.
+The world build validates it before anything is built — a file that is not a `<types>` document, a
+`<type>` with no id, a `--type-files` also passed through `--netconvert-arg`, or an installation with no
+`data/typemap/osmNetconvert.typ.xml` beside its netconvert refuses the build — then passes
+`--type-files <SUMO's map>,<the world's map>` after every other extra argument, so the world package's
+recorded argument list names both. A world built with the road filter (`--keep-edges.by-vclass
+passenger`) drops every road passenger vehicles may not drive before any of this matters, so a type map
+that admits other classes on such roads needs a world built with `--no-road-filter`, as Bahonar is.
+
+**The Bahonar world is to be rebuilt with its map** (`Import/Shahid_Bahonar_Port.typ.xml`). The shipped
+package predates it, so every scenario compiled against it refuses the guard rota. The command, from
+the package's recorded origin, extra arguments and height alignment, and the build log of 2026-09-21,
+run from `carla/` against a CARLA server:
+
+```
+python CarlaControl/scripts/run_SCTMV.py --osm Import/Shahid_Bahonar_Port.osm     --lat 27.15012 --lon 56.18065 --no-road-filter --height-align drape     --netconvert-arg "--remove-edges.by-type highway.footway,highway.path,highway.steps,highway.cycleway,highway.pedestrian,highway.bridleway"     --type-map Import/Shahid_Bahonar_Port.typ.xml     --emit-world-package Build/world-packages
+```
+
+`--type-map` restates what discovery beside the extract finds anyway. The build log shows the map as
+`road types : SUMO's own, then 1 from …`; the rebuilt package's `NetconvertArgv` ends in
+`--type-files …osmNetconvert.typ.xml,…Shahid_Bahonar_Port.typ.xml`. *Measured offline,* that argument
+list over the clipped extract gives network `3966113a…`, on which the guard rota compiles. A scenario
+compiled against the old package is refused by check 1 against the new one and is recompiled. The
+distribution copies `Import/*.osm` and not the files beside them, so a world built from the distribution
+has neither its areas nor its type map; that is stage D's to close.
+
 ---
 
 ## 10. What this section does not cover
@@ -2312,7 +2397,7 @@ brief's decision 4 locks the traffic manager out while SUMO drives. The rule tha
 | **D7.6** | **The compile step reports what it resolved, not only what it refused.** `sumo-gui` is the only preview and it knows nothing about annotations, areas, catalogue entries or supervision, so the resolution report is the sole place any of that can be checked. This is doc 20 §5.5's argument, stronger here (§3.6, §5.3) |
 | **D7.7** | **Route validation is a build step, unconditional, and "a `<vehicle>` came out" is not the test.** *Measured:* 52 routes validated in 0.27 s; and a trip whose destination edge does not exist produced a `<vehicle>` with a one-edge route. The check is that the routed result ends on the requested destination and contains every `via` edge in order (§5.5) |
 | **D7.8** | **Compile emits the routed route file, not trips,** so no routing decision is taken at run time and two runs of one scenario cannot diverge because of the router (§5.5) |
-| **D7.9** | **Netconvert options that change the graph are world-build decisions, never scenario decisions.** `--tls.default-type`, `--junctions.join-dist` and `--remove-edges.by-type` move to `OsmConverter.BuildArguments`. A world that wants actuated signals is a world that is rebuilt with them (§6, gotchas 5 and 6) |
+| **D7.9** | **Netconvert options that change the graph are world-build decisions, never scenario decisions.** `--tls.default-type`, `--junctions.join-dist` and `--remove-edges.by-type` move to `OsmConverter.BuildArguments`. A world that wants actuated signals is a world that is rebuilt with them (§6, gotchas 5 and 6). What a road admits is one of them: the world's type map (D7.33) |
 | **D7.10** | **`<param>` is identity transport, never an annotation channel.** *Measured:* `<param>` round-trips through `duarouter` and through `sumo --vehroute-output`. The compiled route file carries only the vehicle-type binding — `carla:blueprint`, `carla:class_id`, `carla:catalogue_digest` — and a vehicle's identity is its SUMO id ([`04`](04_Contracts.md) C4), so nothing else is emitted and check 52 refuses any other key. The annotation channel is [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) D6.1's supervision plan, adopted unchanged (§3.6) |
 | **D7.11** | **Everything that decides the traffic is declared or fixed at compile time and recorded in the lock** — the SUMO seed, required; the routed routes; the world's network; the step and the end; the processing options; the vehicle types; the SUMO release that routed. An appearance seed and an admission seed are declared when something reads them: SUMO's own seeded `vTypeDistribution` draw chooses the body, and the render set has no random element (§7.1) |
 | **D7.12** | **Counterfactual pairing is a declared mode of the sweep,** in three forms — `absent`, `nominal`, `displaced`. The manifest states explicitly that downstream trajectories are *not* expected to match, because a car-following model reacts to what is in front of it. `nominal` generates doc 20 §2.7's hard negatives at no authoring cost. This answers doc 20 §11 question 7 (§7.3) |
@@ -2333,9 +2418,10 @@ brief's decision 4 locks the traffic manager out while SUMO drives. The rule tha
 | **D7.27** | **The solar frame carries what the engine derives and nothing presented as a civil fact.** The origin latitude and longitude and `longitude / 15`, with the rule stated. A site civil zone is not derived: it needs a zone-boundary dataset and a time-zone database this machine does not have, and presenting one as a property of the world would be an assertion nobody made (§2.10) |
 | **D7.28** | **The reference set is published into the world package by the world build, and can be republished without a rebuild.** Areas are validated before anything is built, so a malformed file refuses the build; after it, areas the frame check refuses are left out and the place index and solar frame are published without them. Publishing replaces the whole set, and writing the world again drops it (§2.11, §2.12) |
 | **D7.29** | **The compiler re-implements none of the session's time rules.** It reads the epoch with `CarlaNet.CoSim.SolarEpoch` and the illumination default with `IlluminationPolicy`, and states every sun through `DeclaredSun` and `SolarPositionModel` — the functions the session binds and audits the sun with — so a scenario the compiler accepts is one the session accepts, with the same digest, the same civil instants and the same declared sun (§2.9, §3.5.1) |
-| **D7.30** | **The same specification, seed and world give byte-identical scenario files.** Everything that decides the traffic — the routed routes, the world's network, the seed, the step, the processing options, the vehicle types and the SUMO release that routed — is in the files and bound in the lock, and no file carries a timestamp, a machine path or the specification's file name (§5.1, §7.1) |
+| **D7.30** | **The same specification, seed and world give byte-identical scenario files.** Everything that decides the traffic — the routed routes, the world's network, the seed, the step, the processing options, the vehicle types and the SUMO release that routed — is in the files and bound in the lock, and no file carries a timestamp, a path on the compiling machine or the specification's file name — the world's recorded netconvert argument list is copied into the lock as the package records it (§5.1, §7.1) |
 | **D7.31** | **A refused compile writes only its resolution report**, marked refused and naming every refusal; no scenario file is written (§5.1) |
 | **D7.32** | **The network SUMO runs is the world's, copied byte for byte beside the configuration**, and the lock digests it; the compiler never builds or edits a network (§5.1) |
+| **D7.33** | **What a road admits is the world's, set at world build by the world's type map** — `<extract>.typ.xml` or `--type-map`, layered over SUMO's own OSM type map in the one netconvert run that writes the world's network and OpenDRIVE — never by a rewrite of a network after netconvert. *Measured* on Bahonar: the guard towers stand on untagged `highway=service` roads SUMO's map closes to `army`; one type-map line opens them, changes no other edge attribute, and compiles the 335-entry guard rota the shipped world refuses. A type map is keyed on road type, never on `access`, so an access-keyed fence is not expressible this way (§9.8, §12 question 14) |
 
 ---
 
@@ -2439,25 +2525,41 @@ brief's decision 4 locks the traffic manager out while SUMO drives. The rule tha
     latitude and longitude means in such a world, and by a live run of a road-offset world comparing a
     SUMO-driven vehicle's rendered position with the roadway in the imagery. Until then check 5 stays
     a refusal.
-13. **Which illumination bands are the core vocabulary's?** [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md)
-    §4.4 defines six — `day` above +6°, `golden`, `civil_twilight`, `nautical_twilight`,
-    `astronomical_twilight`, `night` below −18° — and [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md)
-    lists five, spelled two ways: `day · civil · nautical · astronomical · night` for the core family in
-    §3.7, and `day`, `civil_twilight`, `nautical_twilight`, `astronomical_twilight`, `night` with `day`
-    above 0° on `OBSERVED_SPAN` in §5.1. The association statistic buckets by doc 11's function, which
-    §2.9 item 2 names as the source of the band names, and the supervision plan's vocabulary carries
-    §3.7's list; so one compiled scenario states two of the three. Settled by the two sections agreeing on one list and its edges; until then the
-    statistic states its band source beside every table.
-14. **Where does the fence live?** The sizing scenario's guards, escort and shadow drive the port's
-    private roads as `army` vehicles, and they can because `SumoScenarioBuilder.restrict_private_roads`
-    rewrites the network's lane permissions after the scenario takes the network out of the world
-    package. The compiler runs the world's network byte for byte (D7.32) and the specification has no
-    network edits, so under it no such vehicle can drive there. *Measured* on the real Bahonar package:
-    the private edges carry `allow="pedestrian delivery bicycle"`, and a guard rota of class `army`
-    is refused by check 10 on all 335 entries (`26413425#5`, `-26413411`, …), while the same rota as
-    `delivery` compiles. Two answers keep one network: the world build writes the fence into the network
-    it publishes — beside the gates [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §3.9(f)
-    already wants derived there, and consistent with D7.9, since permissions are part of the network
-    fingerprint — or the specification gains `network_edits` and the network a scenario runs stops being
-    the world's, with its own fingerprint in the lock. The first keeps every scenario on one world
-    network; it needs a world-build option and a rebuild of the worlds that want a fence.
+13. **Which illumination bands are the core vocabulary's? — settled: doc 11's six.**
+    [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md) §4.4 is the single definition — `day`
+    above +6°, `golden` +6° to 0°, `civil_twilight` 0° to −6°, `nautical_twilight` −6° to −12°,
+    `astronomical_twilight` −12° to −18°, `night` below −18°. They are terms the pipeline derives and
+    branches on — the closed core — not author vocabulary, so the open v1 term list is untouched.
+    [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) names them and cites doc 11 wherever it
+    lists bands (§3.7, §5.1, the manifest of §8.4), and the built core takes its `illumination_band`
+    terms from `IlluminationBand.names()`, the function the statistic buckets by
+    (`test_illumination_label_association.py`, `test_scenario_compiler.py`). The core stays at
+    vocabulary version 1: no package outside the test suite was compiled with the five-band list. The
+    statistic still states its band source beside every table, as provenance.
+14. **Where does the fence live? — settled: in the world build.** A scenario runs on the world's own
+    network (D7.32), so what a road admits is decided by the netconvert run that writes the world's
+    network and its OpenDRIVE (D7.9), through the world's type map: `<extract>.typ.xml` beside the
+    extract, or `--type-map`, layered over SUMO's own OSM type map (`carlacontrol.NetconvertTypeMap`,
+    `WorldBuilder.load_type_map`). *Measured* on the real Bahonar extract, 2026-09-28: the guard towers
+    and the apron stand on `highway=service` roads carrying **no** `access` tag — what keeps `army` off
+    them is SUMO's type map, which opens `highway.service` to `delivery pedestrian bicycle` only, not
+    the port's `access=private`. The recorded invocation reproduces the shipped network's fingerprint
+    (`672554bd…`), and the guard rota of class `army` is refused by check 10 on all 335 entries; the same
+    invocation with `Import/Shahid_Bahonar_Port.typ.xml` — one line adding `army authority` to
+    `highway.service` — changes the permissions of the service edges and no other edge attribute, and
+    the rota compiles on the result: 335 entries with the generator's ids and departure seconds
+    (`test_netconvert_type_map.py`). The owner rebuilds the world to carry it (§9.8).
+    **What a type map cannot say** is which roads are private: netconvert 1.27 reads `access` only as
+    `access=no` (`NIImporter_OpenStreetMap.cpp:2118-2121`), so a type map sets what every road of a type
+    admits. The part of the scenario-side rewrite keyed on `access` — `private`, `no`, `military` and
+    `permit` roads admitting only `army authority`, every other road opened to all — is therefore not
+    in the world: *measured,* on the network converted with the type map civilians may still drive the
+    170 private `residential` and `tertiary` edges, `army` still may not drive the 89 `access=no` edges,
+    and public service roads stay closed to civilians. Whether a world should carry an access-keyed fence, and by
+    what netconvert input, is open; nothing compiled today needs it.
+    **`SumoScenarioBuilder.restrict_private_roads` now serves only the legacy Bahonar generator's
+    SUMO-only path** — `sumo-gui` and the SUMO-to-CoT telemetry tool. A network it rewrites is not the
+    world's: *measured,* it moves the Bahonar network's fingerprint from `672554bd…` to `09b2279b…`, so
+    the co-simulation session refuses a scenario on it ([`03`](03_CoSimulation_Runtime.md) D3.28) and the
+    compiler cannot express it (D7.32). When that generator emits a specification it has no caller and
+    goes.

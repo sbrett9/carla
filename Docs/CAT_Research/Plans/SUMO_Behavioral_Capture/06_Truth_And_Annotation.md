@@ -11,6 +11,7 @@ the real scenario artifacts. No code changed, no build run.
 | 3 · 2026-09-18 | Scope boundary applied: imagery, truth and labels are produced; nothing is scored. |
 | 4 · 2026-09-21 | Annotation vocabulary layered: a closed core, and author terms carried opaquely to the consumer. |
 | 5 · 2026-09-21 | Training export carries supervision per image, and the vocabulary without its subject pointers. |
+| 6 · 2026-09-28 | Illumination bands are doc 11 §4.4's six, defined there, in the core vocabulary and on every record that carries a band. |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -824,7 +825,7 @@ author term appears in that diff only as bytes.
 | `interval_onset` | `declared` · `committed` · `observed` | three separate producers write three separate fields | Three field names with three authorities, not a list an author picks from (§3.3) |
 | `closed_by` | the nine values of §3.4 | the interval lifecycle; consumer filtering, where `render_released` must never read as `entity_arrived` | The distinction the corpus exists to preserve (§3.4) |
 | `observability_outcome` | `observed` · `out_of_frame` · `occluded` · `not_rendered` · `site_unobserved` | the export step — D6.11 excludes `not_rendered` from the corpus's contents | A sixth value changes what the corpus claims to hold; D6.22 already reserves the slot for `unlit` (§5.1) |
-| `illumination_band` | `day` · `civil` · `nautical` · `astronomical` · `night` | the manifest writer — D6.23 stratifies every prevalence unit by it | Computed by us from `sun_elevation_deg`; an author never supplies it (§5.3) |
+| `illumination_band` | `day` · `golden` · `civil_twilight` · `nautical_twilight` · `astronomical_twilight` · `night` — [11](11_Time_And_Illumination.md) §4.4's six bands, defined there and nowhere else | the manifest writer — D6.23 stratifies every prevalence unit by it; the scenario compiler's illumination–label statistic buckets by it ([07](07_Scenario_Authoring.md) check 41) | Computed by us from `sun_elevation_deg`; an author never supplies it (§5.3). The built core takes these terms from the function that assigns the band (`carlacontrol.IlluminationBand`), so the vocabulary and the statistic read one table |
 | `cadence` form | `enumerated`, or `period_s` + `offsets_s[]` + `span` | the slot enumerator, which has to expand a series into slots | Without it a `RecurringSeries` cannot be compiled (§3.4) |
 | reserved `role` | `subject`, and nothing else | the compiler: an instance with exactly one participant must name that participant `subject` | One handle a consumer can rely on for "the participant this instance is about" |
 | reserved `phase` | `vacancy`, and nothing else | the absence writer emits it; no author writes it | Produced by the pipeline, so its spelling is ours (§3.5) |
@@ -1466,14 +1467,17 @@ beyond a band lookup.
 | Field on `OBSERVED_SPAN` | Value |
 |---|---|
 | `sun_elevation_deg` | the achieved elevation at the span's midpoint, and min/max across the span when the policy is `advancing` |
-| `illumination_band` | `day`, `civil_twilight`, `nautical_twilight`, `astronomical_twilight`, `night` |
+| `illumination_band` | one of [11](11_Time_And_Illumination.md) §4.4's six: `day`, `golden`, `civil_twilight`, `nautical_twilight`, `astronomical_twilight`, `night` |
 
-The bands are the standard twilight definitions — sun elevation above 0°, 0° to −6°, −6° to −12°,
-−12° to −18°, below −18° — chosen because they are conventional and therefore need no defence, not
-because they are known to be the right cut points for an electro-optical detector. **The manifest
-records the boundaries it used** (§8.4) so that a corpus is not left asserting a classification whose
-definition a later reader has to guess, and so that a boundary set derived from a real detector
-sensitivity can replace them without silently reinterpreting old corpora.
+The bands are [11](11_Time_And_Illumination.md) §4.4's, and doc 11 is their definition: `day` above
++6°, `golden` +6° to 0°, `civil_twilight` 0° to −6°, `nautical_twilight` −6° to −12°,
+`astronomical_twilight` −12° to −18°, `night` below −18°, by the sun elevation. Below the horizon they
+are the standard twilight boundaries, chosen because they are conventional and therefore need no
+defence; above it `golden` separates the low sun from the day. None of them is known to be the right
+cut point for an electro-optical detector. **The manifest records the boundaries it used** (§8.4) so
+that a corpus is not left asserting a classification whose definition a later reader has to guess, and
+so that a boundary set derived from a real detector sensitivity can replace them without silently
+reinterpreting old corpora.
 
 **The upgrade path is stated so the decision is reversible on evidence rather than on taste.** If
 [11](11_Time_And_Illumination.md) returns a measured elevation below which no detector can resolve a
@@ -1892,7 +1896,7 @@ erDiagram
         int end_tick
         string outcome "observed|out_of_frame|occluded|not_rendered|site_unobserved"
         float sun_elevation_deg "qualifier, not an outcome, see 5.1"
-        string illumination_band "day|civil|nautical|astronomical|night"
+        string illumination_band "day|golden|civil_twilight|nautical_twilight|astronomical_twilight|night"
     }
     SENSOR {
         string sensor_id PK
@@ -2224,10 +2228,11 @@ supervision rather than keeping every capture and losing the thing that explains
     // corpus captured before 11 fixes it is distinguishable from one captured after.
     "date_rollover_applied": false,
     "illumination_bands": {
-      "definition": "standard twilight boundaries by sun elevation",
-      "boundaries_deg": { "day": 0.0, "civil_twilight": -6.0,
+      "definition": "11_Time_And_Illumination.md §4.4",
+      // each band holds elevations above its value and up to the next band's
+      "boundaries_deg": { "day": 6.0, "golden": 0.0, "civil_twilight": -6.0,
                           "nautical_twilight": -12.0, "astronomical_twilight": -18.0 },
-      "captures_by_band": { "day": 0, "civil_twilight": 0, "nautical_twilight": 0,
+      "captures_by_band": { "day": 0, "golden": 0, "civil_twilight": 0, "nautical_twilight": 0,
                             "astronomical_twilight": 0, "night": 2400 }
     },
     "sidecars_missing_solar": 0                  // 4.5: nonzero fails the session
@@ -3132,7 +3137,7 @@ owner acts on it rather than rediscovers it.
 
 | Document | Required |
 |---|---|
-| [04](04_Contracts.md) | `C3`'s scenario package gains an `annotations/vocabulary.json` entry and a `vocabulary_sha256` field in `scenario.json`. It carries `annotations/scenario.annotations.json` and `annotations_sha256` today, and an annotation set whose terms are not digest-bound alongside it can resolve against a term list that has since changed meaning (§8.7) |
+| [04](04_Contracts.md) | `C3`'s scenario package carries the vocabulary document with the annotation set it was checked against, and binds it by digest: as built, the supervision plan (`<scenario_id>.supervision.json`) carries the resolved vocabulary and its `vocabulary_digest`, and the lock records the digest again. An annotation set whose terms are not digest-bound alongside it can resolve against a term list that has since changed meaning (§8.7) |
 | [07](07_Scenario_Authoring.md) | Check 18 gains two clauses: refuse a label whose `applies_to` excludes the subject kind it was asserted of, and refuse a namespace the specification neither declared nor imported (§8.7). §8.3's `vocabulary.json` is sourced as **generated** — its core half from `CarlaNet.Types`, its author half from the compiled specification — rather than written beside the skill, per that section's own §8.5 discipline. The specification's `vocabulary` block carries `import[]` and `terms[]` (§3.8) |
 | [08](08_Collection_And_EPoL.md) | `vocabulary.json` is placed in the **training export as well as the TRUTH root**. A training export carries labels, and a label without the definition and version that pin its meaning is an opaque string; §10.3's split is of fields and spans, and the vocabulary is neither withheld truth nor a leak (§8.7, §10.3) |
 | [13](13_Work_Breakdown.md) | §13.5's core column narrows: **role values are author space with one reserved term, `subject`** (§3.7). Closing the role list would refuse Bahonar's `guard` (`make_bahonar_scenario.py:238`, measured). What the core requires of a role is presence and arity, not a fixed word |
@@ -3165,7 +3170,7 @@ owner acts on it rather than rediscovers it.
 | **D6.20** | **Illumination is part of the truth record, and the record carries the declared civil instant, the asserted policy and the residual — not only the achieved sun.** `_solar` already carries nine achieved attributes in every sidecar and every PNG (`CotWriter.cs:52-65`, `SolarMetadata.cs:14-20`, measured). Four are added: `declared_civil_time` / `declared_civil_date` / `declared_utc_offset_h`, `solar_policy` with its rate and anchor tick, `solar_time_residual_s` with `sun_elevation_residual_deg`, and `illumination_band`. **The policy is asserted rather than read**, because `advancing` defaults to `false` when nothing ever configured the sun (`CesiumHeightSampler.cpp:784-796`, measured), so a deliberately frozen run and a never-configured run are otherwise indistinguishable. The residual is what makes the silent failure loud: an unset sun shows up as a multi-hour residual against an achieved `solar_time` of exactly `12.0`, the spawn default (§2.7, §4.5) |
 | **D6.21** | **Illumination is derived context of the same class as an area relation, and never supervision.** It is carried by the world-scoped `<_solar>` element, a sibling of world-scoped `<_supervision>`, and by no `<event>`, no `<_carla>` block and no supervision row. The code boundary is the type graph: `SupervisionPlan` has no solar field, the interval binder has no reader for the solar cache, and the scenario epoch compiles into a **separate** civil-time map consumed by the capture session. The deletion test is the enforcement — a consumer must be able to delete every `<_solar>` element and every `carla:solar` chunk and still have complete supervision, exactly as for `<_aoi>` (§3.6, §8.1) |
 | **D6.22** | **Darkness is a qualifier on the five observability outcomes, not a sixth outcome.** Every `OBSERVED_SPAN` carries `sun_elevation_deg` and `illumination_band`; the five outcomes are unchanged. Illumination is orthogonal to all three geometric tests, so a sixth exclusive value would force a precedence rule against `occluded` and destroy one of two independent facts; and minting an `unlit` outcome would mean choosing its threshold, which is the night-viability question [11](11_Time_And_Illumination.md) owns. The precedent is `occluded` itself, which is the post-cutoff name for a recorded number. **If 11 returns a measured resolvability cutoff, `unlit` becomes a sixth outcome at that point**, computed from a qualifier already present in every corpus captured before the finding (§5.1, §5.4) |
-| **D6.23** | **Prevalence and site coverage are reported per illumination band, and the band comes from the achieved sun.** All three prevalence units (§5.3) and `site_covered_fraction` (§5.2) gain a per-band breakdown, per sensor and unioned, over the captured span. The band is derived from `sun_elevation_deg` and never from the declared time, because stratifying by a declaration would sort the corpus by an assertion rather than by the light the frames were actually captured under. Bands with captures and no annotated mass keep their rows. The **boundaries used are recorded in the manifest**, since they are a convention (standard twilight elevations) rather than a measured detector property (§5.1, §5.3, §8.4) |
+| **D6.23** | **Prevalence and site coverage are reported per illumination band, and the band comes from the achieved sun.** All three prevalence units (§5.3) and `site_covered_fraction` (§5.2) gain a per-band breakdown, per sensor and unioned, over the captured span. The band is derived from `sun_elevation_deg` and never from the declared time, because stratifying by a declaration would sort the corpus by an assertion rather than by the light the frames were actually captured under. Bands with captures and no annotated mass keep their rows. The **boundaries used are recorded in the manifest**, since they are a convention — [11](11_Time_And_Illumination.md) §4.4's six bands — rather than a measured detector property (§5.1, §5.3, §8.4) |
 | **D6.24** | **Solar state travels with the manifest as epoch, policy and anchor, and a replay is verified frame by frame.** Restoring it is three existing RPCs during prewarm (`CarlaServer.cpp:614`, `:625`, `:661`); verifying it is a comparison against the original's `_solar` and `carla:solar`, which every capture already carries. A replay outside the §4.5 tolerance is a **failed replay** and is reported rather than shipped. Two carried defects are made explicit rather than silently reproduced: the advancing clock never rolls the date (`CesiumTimeOfDayController.cpp:34-36`, measured), so a replay sets the date explicitly at the anchor and the manifest records `date_rollover_applied`; and **CARLA's native recorder has no solar record type at all** (measured: nothing under `Carla/Source/Carla/Recorder/` mentions `Solar`, though it records scene and vehicle lights), so it is not a replay path for this mode (§7.3) |
 | **D6.25** | **The time-of-day confounder is an authoring rule and an export gate, not a warning.** §9.3 rule 5 requires an annotated instance's time of day to match the nominal population's unless time of day *is* the pattern. Because the capture window is chosen at run time and not at authoring, the compiler can only warn; the manifest settles it. So solar state is exported to the **training** export only when `prevalence_by_illumination` shows annotated mass in more than one band, or the plan declares time of day as the pattern; otherwise it stays in the full-truth export only. This fails closed, is auditable from the manifest alone, and names its own remedy — a second window in another band. Measured motivation: in the sizing scenario five of six anomalies depart between 08:00 and 11:11 and one at 02:30, while all 335 hard negatives fire at 07:00, 15:00 and 23:00 (§2.3, §5.3, §10.2) |
 | **D6.26** | **This section produces truth and labels and scores nothing, and the association is a published rule rather than a step.** Per [`_TEAM_BRIEF.md` §3b](_TEAM_BRIEF.md), the detect-and-track model and the estimated-pattern-of-life model are external to this effort. What this section delivers is (a) a **format guarantee** — truth is emitted per tick, positioned, timed, boxed, identified and qualified, so that supervision *can* be carried onto detector tracks — and (b) the **five-step transfer rule** by which a downstream team would carry it, published in the corpus documentation. **This pipeline never performs the association**, because every step of it needs model output this pipeline never holds. No component here runs a detector, tracker or model; computes a model metric; or produces an association-quality report, a scoreboard or a verdict. The observability accounting, the five outcomes, the prevalence units, the illumination qualifier and the rendered-span gate all remain in full — they describe what the corpus does and does not contain, which is the one thing a consumer cannot recover from the files themselves (§10.1, §10.3, §5) |
@@ -3274,13 +3279,13 @@ owner acts on it rather than rediscovers it.
     drive them. Recommendation: if they are driven, record the state per vehicle in the `_carla` block
     with `kinematics_source="sumo"`'s sibling provenance; if they are not, record that fact once in the
     manifest so a corpus's night imagery is not silently missing its strongest cue.
-12. **Whether the illumination bands should stay the standard twilight boundaries.** They were chosen
-    because they are conventional and need no defence (§5.1), not because they are known to be the
-    right cut points for this imagery and this detector stack. A sensor-derived set would stratify
-    better and would be arbitrary in a different way. Recommendation: keep the standard boundaries,
-    record them in every manifest so a later set can be applied retroactively to the recorded elevation
-    numbers, and revisit only if [11](11_Time_And_Illumination.md) produces a measured sensitivity
-    curve.
+12. **Whether the illumination bands should stay [11](11_Time_And_Illumination.md) §4.4's.** Which
+    bands exist is settled — doc 11's six, defined there — and this section, the core vocabulary and
+    the scenario compiler all use them. Whether they are the right cut points for this imagery and this
+    detector stack is not: they are conventional (§5.1), and a sensor-derived set would stratify better
+    and would be arbitrary in a different way. Recommendation: keep them, record them in every manifest
+    so a later set can be applied retroactively to the recorded elevation numbers, and revisit only if
+    doc 11 produces a measured sensitivity curve, changing the definition there.
 13. **Whether a capture window should ever straddle a band boundary.** An `advancing` policy across a
     dawn window is the most realistic capture this system can produce and the hardest to stratify: a
     single interval can be observed across three bands. §5.1's span-wise record handles it — the spans

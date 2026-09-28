@@ -1,0 +1,44 @@
+{
+  "spec_version": 1,
+  "scenario_id": "street_layout_minimal",
+  "scenario_name": "Street layout, minimal",
+  "description": "Ambient traffic runs east along West and East Street; one saloon enters from the west, halts five minutes at a surveyed point on East Street and drives on. No label is asserted.",
+  "world": {
+    "package": "StreetLayout.cwp",
+    "network_fingerprint": "44194b18d22c91a25e85babe0469d43d064f3fb9aabe15fa62a486cd8fb4e2e0"
+  },
+  "epoch": {
+    "epoch_version": 1,
+    "civil_datetime": "2026-03-21T06:00:00-06:00",
+    "utc_offset_hours": -6,
+    "utc_datetime": "2026-03-21T12:00:00Z",
+    "calendar_advances": true,
+    "dst_in_effect": true,
+    "time_zone_id": "America/Denver"
+  },
+  "illumination": {"illumination_version": 1, "policy": "freeze_at_window_start"},
+  "seeds": {"sumo": 42},
+  "simulation": {"end": "d0 08:00", "step_length_s": 0.05},
+  "catalogue": "../../../../catalogue/vehicles.catalogue.json",
+  "vehicle_classes": [
+    {"class_id": "car", "blueprints": ["vehicle.lincoln.mkz", "vehicle.dodge.charger", "vehicle.mini.cooper"],
+     "sumo_vclass": "passenger", "behaviour": {"maxSpeed": "40"}, "share": 1.0},
+    {"class_id": "saloon", "blueprints": ["vehicle.lincoln.mkz"], "sumo_vclass": "passenger",
+     "behaviour": {"maxSpeed": "40", "speedDev": "0"}, "share": 0.0}
+  ],
+  "vehicle_mix": "ambient_mix",
+  "places": {
+    "west_gate": {"gateway": "west", "travel": "in"},
+    "east_gate": {"gateway": "east", "travel": "out"},
+    "survey_point": {"lat": 39.49998486682519, "lon": -104.89941869548137, "max_snap_m": 5}
+  },
+  "flows": [
+    {"id": "ambient", "type": "ambient_mix", "from": "west_gate", "to": "east_gate",
+     "vehs_per_hour": 200, "begin": "d0 06:00", "end": "d0 08:00"}
+  ],
+  "actors": [
+    {"id": "probe", "type": "saloon", "depart": "d0 07:00", "from": "west_gate", "to": "east_gate",
+     "stops": [{"place": "survey_point", "duration": "5m"}]}
+  ],
+  "capture_windows": [{"id": "morning", "begin": "d0 06:55", "length": "15m"}]
+}

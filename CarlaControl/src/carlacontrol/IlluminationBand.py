@@ -7,9 +7,11 @@ includes its lower edge's upper side: `golden` is (0, 6], `civil_twilight` (-6, 
 elevation is the one a declaration is made against, refraction-corrected (`DeclaredSunElevation`).
 
 It is derived context, never a label (`06_Truth_And_Annotation.md` §3.6 point 6): nothing here reads
-or writes supervision. Doc 11 calls for one shared function; this is the only one in the tree, and
-`06_Truth_And_Annotation.md` lists the bands differently, and two ways itself (§3.7, §5.1) -- recorded
-as `07_Scenario_Authoring.md` §12 question 13, to be ruled on rather than resolved here.
+or writes supervision. Doc 11 calls for one shared function and this is the only one in the tree. Doc 11
+§4.4 is the single definition of the bands: `06_Truth_And_Annotation.md` names them from it, and the
+annotation vocabulary's closed core takes its `illumination_band` terms from `names` here, so a band
+spelled in a vocabulary and a band a statistic buckets by are one table (`07_Scenario_Authoring.md` §12
+question 13).
 """
 from __future__ import annotations
 
@@ -35,6 +37,11 @@ class IlluminationBand:
             if elevation_deg > floor:
                 return band
         return BANDS[-1][0]
+
+    @staticmethod
+    def names() -> list[str]:
+        """Every band, from the highest sun down."""
+        return [band for band, _ in BANDS]
 
     @staticmethod
     def edges() -> list[dict]:

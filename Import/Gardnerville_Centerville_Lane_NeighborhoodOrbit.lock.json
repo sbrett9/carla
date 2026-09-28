@@ -1,0 +1,133 @@
+{
+  "lock_version": 1,
+  "scenario_id": "Gardnerville_Centerville_Lane_NeighborhoodOrbit",
+  "scenario_name": "Gardnerville Centerville Lane neighbourhood orbit",
+  "spec_version": 1,
+  "specification": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json",
+  "specification_sha256": "868e44e5de390631d8db584e4f054c2450f8c10d009bd70cab59d25cd674a5d8",
+  "compiler": {
+    "name": "carlacontrol.ScenarioCompiler",
+    "version": "1.0.0"
+  },
+  "files": {
+    "routes": {
+      "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.rou.xml",
+      "sha256": "3556d033cc198870ab2aea7eedd5f312f55b4dd891a723e0763011961c8647ad"
+    },
+    "config": {
+      "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg",
+      "sha256": "34304150fb6f4406a61c0e863c7a9b6d074bc352742f0d737640011c9a47d980"
+    },
+    "network": {
+      "path": "Gardnerville_Centerville_Lane.net.xml",
+      "sha256": "20a6877216f222f877ad337f8da13b7fac4430441cafbbd8784f2353890457ef"
+    },
+    "supervision": {
+      "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.supervision.json",
+      "sha256": "35d81b67d6325dc14f0d280f3d798d2ef8278ded2536ffdc92d2e30e76948b83"
+    }
+  },
+  "world": {
+    "package": "Gardnerville_Centerville_Lane.cwp",
+    "map_name": "Gardnerville_Centerville_Lane",
+    "network_fingerprint": "a50ac5452330ef83485625a8ec89ff3dbec0d0d7b4fc7a9bfb50392ffb829bc6",
+    "netconvert_argv": [
+      "--osm-files",
+      "G:\\Projects\\CarlaUE_5_7_4\\carla\\Build\\sumo-smoketest\\Gardnerville_Centerville_Lane_clipped.osm",
+      "--opendrive-output",
+      "C:\\Users\\sbret\\AppData\\Local\\Temp\\carlanet_osm_38cda3e7f59c49088a42bdbea3045d62.xodr",
+      "--proj",
+      "+proj=tmerc +lat_0=38.91108 +lon_0=-119.7645965 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
+      "--default.lanewidth",
+      "3.35",
+      "--default.sidewalk-width",
+      "2.8",
+      "--tls.guess",
+      "true",
+      "--geometry.remove",
+      "--roundabouts.guess",
+      "--osm.turn-lanes",
+      "--output.street-names",
+      "true",
+      "--output.original-names",
+      "true",
+      "--offset.disable-normalization",
+      "--junctions.join",
+      "--tls.default-type",
+      "actuated",
+      "--output-file",
+      "C:\\Users\\sbret\\AppData\\Local\\Temp\\carlanet_osm_e4d520c6eb0740e8bdc530fb5ec0d595.net.xml",
+      "--junctions.join-dist",
+      "25",
+      "--keep-edges.by-vclass",
+      "passenger",
+      "--keep-edges.components",
+      "1",
+      "--remove-edges.isolated",
+      "true"
+    ],
+    "netconvert_version": "Eclipse SUMO netconvert 1.27.0",
+    "opendrive_sha256": "1f4ea253cb3c0052a8dba957adb1e86088b0496b6b8df8c6be78285f890f8fb0",
+    "source_osm_sha256": "ba6497623ef24431524b534753c9927be9de6cc2788da3aad8e342aff82c3904",
+    "origin_latitude": 38.91108,
+    "origin_longitude": -119.7645965,
+    "georeference": "+proj=tmerc +lat_0=38.91108 +lon_0=-119.7645965 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
+  },
+  "catalogue": {
+    "catalogue_id": "carla-0.10.0-windows",
+    "catalogue_digest": "771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a",
+    "blueprint_set_digest": "bd7624c8e474e86f73e6ecba1983b88b1c42050e21d68dbaea29e387a7db5fc1",
+    "content_build_id": "carla-0.10.0-windows"
+  },
+  "vocabulary": {
+    "core_version": 1,
+    "namespaces": [],
+    "vocabulary_digest": "f55740d1198fafffbee1a2d030dfaf57444434b083a44cc1fe87106503435edf"
+  },
+  "traffic": {
+    "sumo_seed": 42,
+    "step_length_s": 0.05,
+    "end_s": 2220.0,
+    "processing": {
+      "time-to-teleport": "-1",
+      "max-depart-delay": "900",
+      "collision.action": "warn"
+    },
+    "routed_by": {
+      "tool": "duarouter",
+      "version": "1.27.0",
+      "world_converter": "Eclipse SUMO netconvert 1.27.0",
+      "release_agreement": "SameRelease",
+      "mismatch_accepted": false
+    }
+  },
+  "epoch": {
+    "calendar_advances": false,
+    "civil_datetime": "2026-06-21T10:00:00-07:00",
+    "dst_in_effect": true,
+    "epoch_version": 1,
+    "note": "Gardnerville, Nevada: simulated second zero is 10:00 Pacific Daylight Time on the summer solstice",
+    "time_zone_id": "America/Los_Angeles",
+    "utc_datetime": "2026-06-21T17:00:00Z",
+    "utc_offset_hours": -7
+  },
+  "epoch_block_sha256": "3cb60fce65c132642954c1b12fc4d7276b18a2476cfe16d795073fdd79a94ac0",
+  "illumination": {
+    "illumination_version": 1,
+    "policy": "freeze_at_window_start"
+  },
+  "capture_windows": [],
+  "ephemeris": "CarlaNet.CoSim.DeclaredSun and SolarPositionModel.AtInstant",
+  "illumination_label_association": {
+    "normalized_mutual_information": null,
+    "bands": {
+      "day": {
+        "annotated": 0,
+        "nominal": 0,
+        "unlabelled": 31,
+        "total": 31
+      }
+    },
+    "entries": 31
+  }
+}

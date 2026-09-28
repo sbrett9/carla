@@ -1,1 +1,9 @@
 * text=auto
+
+# A compiled scenario's lock digests its network, route, configuration and supervision files byte for
+# byte, and the network is copied verbatim from the world package, line endings included. Store them
+# exactly as written so a checkout on any platform still matches its lock.
+Import/*.net.xml -text
+Import/*.rou.xml -text
+Import/*.sumocfg -text
+Import/*.json -text

@@ -1,0 +1,23 @@
+{
+  "sweep_version": 1,
+  "sweep_id": "probe_standoff_pairs",
+  "base": "street_layout_probe.scenario.json",
+  "counterfactuals": [
+    {
+      "actor": "probe",
+      "mode": "nominal",
+      "remove": [
+        "stops"
+      ]
+    },
+    {
+      "actor": "probe",
+      "mode": "absent"
+    },
+    {
+      "actor": "probe",
+      "mode": "displaced",
+      "shift": "30m"
+    }
+  ]
+}

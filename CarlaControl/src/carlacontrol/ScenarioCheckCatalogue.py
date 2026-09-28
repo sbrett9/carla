@@ -45,8 +45,10 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
     ScenarioCheck(5, "world_binding", "The network's netOffset is zero", "map.net.xml", _R, COMPILER,
                   "A network whose metres are displaced from the world's geographic frame"),
     ScenarioCheck(6, "world_binding", "The SUMO release routing the scenario is the one that built "
-                  "the world", "world.json NetconvertVersion and the SUMO installation", _W, COMPILER,
-                  "Routes validated by one release against a network another built"),
+                  "the world, by release number, unless the mismatch is explicitly accepted",
+                  "world.json NetconvertVersion and the SUMO installation", _RW, COMPILER,
+                  "Traffic routed by one duarouter release on a network another built: a different "
+                  "release can route the same demand differently"),
     # -- references --------------------------------------------------------------------------------
     ScenarioCheck(7, "references", "Every declared place resolves, and to exactly one thing",
                   "the network, the place index and the area table", _R, COMPILER,

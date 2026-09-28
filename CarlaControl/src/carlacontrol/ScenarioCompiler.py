@@ -27,6 +27,12 @@ failure a stage can see; a stage that refused stops the compile, because what fo
 and moves -- the routed routes, the network, the SUMO seed, the step length, the processing options,
 the vehicle types and the SUMO release that routed them -- is written into the scenario files and
 digested in the lock, so the same specification, seed and world give the same traffic.
+
+**The SUMO that routes is the world's converter's release, or the compile is refused** (check 6), by
+the comparison the co-simulation session refuses a mismatched SUMO with (`CarlaNet.Sumo.SumoRelease`,
+reached through `SumoInstallation.release_check`): a different `duarouter` release can route the same
+demand differently. `allow_sumo_version_mismatch` compiles anyway, warns, and records the acceptance in
+the lock; a world that records no converter warns and compiles.
 """
 from __future__ import annotations
 
@@ -41,6 +47,7 @@ from xml.sax.saxutils import quoteattr
 
 import carlanet  # noqa: F401  -- loads the CarlaNet assemblies the next import names
 from CarlaNet.CoSim import CoSimSessionRefusedException, IlluminationPolicy
+from CarlaNet.Sumo import SumoReleaseAgreement
 from lxml import etree
 
 from carlacontrol.AnnotationVocabulary import AnnotationVocabulary
@@ -105,8 +112,12 @@ logger = logging.getLogger(__name__)
 class ScenarioCompiler:
     """Compiles one specification into one scenario package."""
 
-    def __init__(self, installation: SumoInstallation) -> None:
+    def __init__(self, installation: SumoInstallation,
+                 allow_sumo_version_mismatch: bool = False) -> None:
         self.installation = installation
+        # Accepting a routing SUMO other than the world's converter is the operator's explicit
+        # decision, and the lock says it was taken (check 6).
+        self.allow_sumo_version_mismatch = bool(allow_sumo_version_mismatch)
 
     # =============================================================================================
     def compile(self, spec_path: str | Path, out_dir: str | Path) -> CompileResult:
@@ -203,17 +214,41 @@ class ScenarioCompiler:
             self.findings.refuse(5, "world", f"the network carries netOffset {offset}, so its metres "
                                  "are displaced from the world's geographic frame (a road-offset "
                                  "build); 07 §12 question 12")
-        release = self.installation.version or ""
         built_with = self.package.netconvert_version
-        if built_with and release and release not in built_with:
-            self.findings.warn(6, "world", f"the world was built by '{built_with}' and the routes "
-                               f"are validated by SUMO {release} at {self.installation.home}")
+        self._check_routing_release(built_with)
         self.report.set("world", {
             "package": package_path.name, "map_name": self.package.map_name,
             "network_fingerprint": carried, "netconvert_version": built_with,
             "origin": list(self.package.origin), "georeference": georeference,
-            "routing_sumo": {"home": str(self.installation.home), "version": release,
-                             "matched_by": self.installation.source}})
+            "routing_sumo": {"home": str(self.installation.home),
+                             "version": self.installation.version or "",
+                             "matched_by": self.installation.source,
+                             "release_agreement": self.release_agreement,
+                             "verdict": str(self.release_check.Verdict)}})
+
+    def _check_routing_release(self, built_with: str) -> None:
+        """Check 6: the SUMO that routes is the release that converted the world."""
+        self.release_check = self.installation.release_check(built_with or None,
+                                                             self.allow_sumo_version_mismatch)
+        agreement = self.release_check.Agreement
+        self.release_agreement = str(agreement)
+        installation = (f"SUMO {self.installation.version or 'of an unreadable release'} at "
+                        f"{self.installation.home} (matched by {self.installation.source})")
+        if agreement == SumoReleaseAgreement.Mismatch:
+            self.findings.refuse(6, "world", f"the world was converted by '{built_with}' and the "
+                                 f"routes would be routed by {installation}. A different duarouter "
+                                 "release can route the same demand differently, so the traffic "
+                                 "would not be the world's. Name the world's release with "
+                                 "--sumo-home, or accept the difference with "
+                                 "--allow-sumo-version-mismatch, which the lock records")
+        elif agreement == SumoReleaseAgreement.MismatchAccepted:
+            self.findings.warn(6, "world", f"the world was converted by '{built_with}' and the routes "
+                               f"are routed by {installation}; compiled because the mismatch was "
+                               "explicitly accepted, and the lock records that it was")
+        elif agreement == SumoReleaseAgreement.NotRecorded:
+            self.findings.warn(6, "world", f"the world package records no converter, so the routes "
+                               f"routed by {installation} are unchecked against it; rebuild the "
+                               "world to record one")
 
     # -- stage: resolution ------------------------------------------------------------------------------
     def _stage_resolution(self) -> None:
@@ -276,7 +311,7 @@ class ScenarioCompiler:
             table = {}
         self.areas = {area["id"]: area for area in table.get("areas", [])}
         self.places = PlaceResolver(self.network_text, self.package.place_index(), self.areas,
-                                    self.findings)
+                                    self.findings, origin=self.package.origin)
         resolved = self.places.resolve_all(self.spec.get("places", {}))
         self.report.set("places", {name: self._place_report(p) for name, p in resolved.items()})
         self.place_sets = self.spec.get("place_sets", {})
@@ -401,8 +436,12 @@ class ScenarioCompiler:
         actor = {"id": actor_id, "type": type_id, "depart": depart, "origin": origin, "where": where,
                  "depart_lane": declared.get("depart_lane", DEFAULT_DEPART_LANE),
                  "depart_speed": declared.get("depart_speed", DEFAULT_DEPART_SPEED),
-                 "arrival_speed": declared.get("arrival_speed"), "stops": [], "route": None}
-        if "route" in declared:
+                 "arrival_speed": declared.get("arrival_speed"), "stops": [], "route": None,
+                 "waypoints": [], "phases": []}
+        if "phases" in declared:
+            if not self._resolve_phases(declared, actor, where):
+                return
+        elif "route" in declared:
             if any(key in declared for key in ("from", "to", "via")):
                 self.findings.refuse(53, where, "gives both an explicit route and from/to/via")
                 return
@@ -419,7 +458,7 @@ class ScenarioCompiler:
                 return
             actor["from"] = self.places.single_edge(declared["from"], f"{where} from")
             actor["to"] = self.places.single_edge(declared["to"], f"{where} to")
-            actor["via"] = [self.places.single_edge(v, f"{where} via") for v in declared.get("via", [])]
+            actor["via"] = self._via(declared.get("via", []), where)
             if actor["from"] is None or actor["to"] is None or None in actor["via"]:
                 return
         dwell = 0.0
@@ -452,6 +491,48 @@ class ScenarioCompiler:
                                f"it is still out when the run ends at {self.end.civil}")
         self.actors.append(actor)
 
+    def _resolve_phases(self, declared: dict, actor: dict, where: str) -> bool:
+        """An explicit route in phases, each driven `repeat` times, a held phase waypointed per edge.
+
+        A SUMO waypoint -- a `<stop>` carrying `speed` -- holds a vehicle to that speed only between
+        its own start and end on its own edge (07 §6 gotcha 1), so holding a phase to a speed is one
+        waypoint spanning the whole of each of its edges, on the edge's first lane. `hold` is a speed
+        in m/s capped at each edge's limit, or `posted`, each edge's own limit. A stop is refused
+        beside phases: on a repeated route it names no one pass.
+        """
+        if any(key in declared for key in ("route", "from", "to", "via")):
+            self.findings.refuse(53, where, "gives phases and also route or from/to/via; an actor's "
+                                 "route is given one way")
+            return False
+        if declared.get("stops"):
+            self.findings.refuse(53, where, "gives stops beside phases; a stop on a repeated route "
+                                 "names no one pass of it")
+            return False
+        edges: list[str] = []
+        for index, phase in enumerate(declared["phases"]):
+            phase_edges = [self.places.single_edge(name, f"{where} phase {index}")
+                           for name in phase["route"]]
+            if None in phase_edges:
+                return False
+            repeat = int(phase.get("repeat", 1))
+            hold = phase.get("hold")
+            actor["phases"].append({"edges": len(phase_edges), "repeat": repeat, "hold": hold})
+            for _ in range(repeat):
+                edges.extend(phase_edges)
+                if hold is None:
+                    continue
+                for edge in phase_edges:
+                    lane_id = self.places.edge_lanes[edge][0]
+                    lane = self.places.lanes[lane_id]
+                    speed = lane.speed if hold == "posted" else min(float(hold), lane.speed)
+                    actor["waypoints"].append({"lane": lane_id, "end_pos": lane.length,
+                                               "speed": speed})
+        for a, b in self.places.unconnected(edges):
+            self.findings.refuse(13, where, f"route has no connection from {a} to {b}")
+        actor["route"] = edges
+        actor["from"], actor["to"], actor["via"] = edges[0], edges[-1], []
+        return True
+
     def _resolve_flows(self) -> None:
         self.flows: list[dict] = []
         for declared in self.spec.get("flows", []):
@@ -461,7 +542,7 @@ class ScenarioCompiler:
             end = self.resolver.instant(declared["end"], f"{where} end")
             edges = [self.places.single_edge(declared["from"], f"{where} from"),
                      self.places.single_edge(declared["to"], f"{where} to")]
-            via = [self.places.single_edge(v, f"{where} via") for v in declared.get("via", [])]
+            via = self._via(declared.get("via", []), where)
             if begin is None or end is None or None in edges or None in via:
                 continue
             if end.seconds <= begin.seconds:
@@ -481,6 +562,15 @@ class ScenarioCompiler:
                     "depart_speed": declared.get("depart_speed", DEFAULT_DEPART_SPEED)}
             self._check_permissions(flow)
             self.flows.append(flow)
+
+    def _via(self, names: list[str], where: str) -> list[str | None]:
+        """The edges a via list names, in order: a junction movement gives its two, any other place
+        its one, and a place that did not resolve a None, so the caller can see it failed."""
+        edges: list[str | None] = []
+        for name in names:
+            resolved = self.places.via_edges(name, f"{where} via")
+            edges.extend([None] if resolved is None else resolved)
+        return edges
 
     def _check_type(self, type_id: str, where: str) -> None:
         if not hasattr(self, "type_vclasses"):
@@ -570,8 +660,7 @@ class ScenarioCompiler:
                 where = f"rota {rota_id} skip {skip.entry_id}"
                 route = {key: self.places.single_edge(body[key], f"{where} {key}")
                          for key in ("from", "to") if key in body}
-                route["via"] = [self.places.single_edge(v, f"{where} via")
-                                for v in body.get("via", [])]
+                route["via"] = self._via(body.get("via", []), where)
                 routes[skip.entry_id] = route
         return routes
 
@@ -737,12 +826,21 @@ class ScenarioCompiler:
         self.report.set("lock", self.result.lock)
 
     def _routes_xml(self) -> str:
+        """The route file: departure-sorted, and equal departures in the specification's order.
+
+        SUMO inserts in the order it reads and draws its random numbers -- which member of a type
+        distribution, where a gap falls -- in that order too, so the order of entries that depart
+        together decides the traffic as much as the seed does. A stable sort on the departure alone
+        keeps the author's order among them, flows before actors as the Python builders write them.
+        Measured on the Gardnerville orbit: the same entries sorted by id instead gridlock the
+        neighbourhood by 1 000 s, where the authored order runs clear.
+        """
         entries = []
-        for actor in self.actors:
-            entries.append((actor["depart"].seconds, actor["id"], self._vehicle_xml(actor)))
         for flow in self.flows:
-            entries.append((flow["begin"].seconds, flow["id"], self._flow_xml(flow)))
-        entries.sort(key=lambda item: (item[0], item[1]))
+            entries.append((flow["begin"].seconds, self._flow_xml(flow)))
+        for actor in self.actors:
+            entries.append((actor["depart"].seconds, self._vehicle_xml(actor)))
+        entries.sort(key=lambda item: item[0])
         header = self._comment(
             f"{self.spec['scenario_name']}: compiled by {COMPILER} {__version__} from the "
             f"specification of {self.scenario_id}; edit that, not this. The epoch that gives these "
@@ -752,7 +850,7 @@ class ScenarioCompiler:
         return ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" + header + "\n"
                 "<routes xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" "
                 "xsi:noNamespaceSchemaLocation=\"http://sumo.dlr.de/xsd/routes_file.xsd\">\n\n"
-                + self.mix.to_xml() + "\n" + "\n".join(xml for _, _, xml in entries)
+                + self.mix.to_xml() + "\n" + "\n".join(xml for _, xml in entries)
                 + "\n\n</routes>\n")
 
     def _vehicle_xml(self, actor: dict) -> str:
@@ -775,6 +873,9 @@ class ScenarioCompiler:
                 stop_attributes += f" until=\"{stop['until'].seconds:.2f}\""
             stop_attributes += f" parking=\"{'true' if stop['parking'] else 'false'}\""
             lines.append(f"        <stop {stop_attributes}/>")
+        for waypoint in actor["waypoints"]:
+            lines.append(f"        <stop lane={quoteattr(waypoint['lane'])} startPos=\"0.00\" "
+                         f"endPos=\"{waypoint['end_pos']:.2f}\" speed=\"{waypoint['speed']:.2f}\"/>")
         lines.append("    </vehicle>")
         return "\n".join(lines)
 
@@ -916,7 +1017,11 @@ class ScenarioCompiler:
                         "step_length_s": self.step_length, "end_s": self.end.seconds,
                         "processing": PROCESSING_OPTIONS,
                         "routed_by": {"tool": "duarouter",
-                                      "version": self.routing.duarouter_version}},
+                                      "version": self.routing.duarouter_version,
+                                      "world_converter": self.package.netconvert_version,
+                                      "release_agreement": self.release_agreement,
+                                      "mismatch_accepted": self.release_agreement
+                                      == str(SumoReleaseAgreement.MismatchAccepted)}},
             "epoch": self.epoch.declaration,
             "epoch_block_sha256": self.epoch.digest,
             "illumination": self.spec.get("illumination"),
@@ -940,6 +1045,9 @@ class ScenarioCompiler:
                  "route_length_m": round(length, 2), "free_flow_s": round(free_flow, 1),
                  "stops": [{k: (v.to_dict() if isinstance(v, ResolvedInstant) else v)
                             for k, v in s.items()} for s in vehicle["stops"]]}
+        if vehicle.get("phases"):
+            entry["phases"] = vehicle["phases"]
+            entry["waypoints"] = len(vehicle["waypoints"])
         if "depart" in vehicle:
             entry["depart"] = vehicle["depart"].to_dict()
             entry["origin"] = vehicle["origin"]
