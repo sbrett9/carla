@@ -21,6 +21,7 @@ are on the critical path.
 | 2026-09-22 | The Unreal skills are vendored under `skills/third-party/` and excluded from the distribution. |
 | 2026-09-22 | Stage I: the road layer is suppressed alongside the signal layer, the session owns both, and the capture camera is aimed and its tiles pre-rolled before the first frame. |
 | 2026-09-25 | Stage I: a world handed back asynchronous must free-run. Stage K: pacing and a live picture from a camera follower are built; the rest of the live exercise is not. |
+| 2026-09-28 | Stages E and I state what is built: the authoring reference set, the session-written sun, and velocity for a pose-applied body, written and awaiting a build. |
 
 ---
 
@@ -121,10 +122,10 @@ re-issuing. Every other item repairs damage already done; this one prevents it.
 | | **Route or remove `anomaly_notes`.** Written by the generator, read by nothing | An absence anomaly reaches a consumer, or the field goes. A guard no-show has no vehicle, so it needs a record or it is not truth at all |
 | | **Set `sensor_tick`** — last of these, because it touches the occlusion path's frame pairing and deserves its own measurement | Sensor callbacks ≈ captures, with the depth camera on the same instants |
 
-Two engine-side families are grouped so they take one rebuild: the sun (a sunless world publishing
-midnight at lat 0 as fact, a loaded world inheriting the previous session's sun, an advancing sun that
-never rolls the date, and a clock that is local mean solar rather than civil) and the swallowed
-`get_vehicles_light_states` name mismatch.
+The engine-side items of this stage are built: a sunless world is distinguished from midnight at
+latitude 0, a loaded world's sun is reset to deterministic defaults, `set_solar_epoch` writes date,
+clock and civil offset together so neither the date nor a civil clock depends on the engine, and
+`get_vehicle_light_states` is called by the name the server binds.
 
 ## 4. Stage C — Measure the envelope
 
@@ -198,9 +199,9 @@ Already scouted; the build itself already compiles clean from the unmodified con
 | ⚑ | **The catalogue is a runtime dependency of the bridge**, because the bumper-to-centre pose shift needs the measured extent. A vehicle of unknown extent is **not rendered**, never rendered at a guess | |
 | | **Two-wheelers are outside the catalogue's scope.** No class names a motorcycle, moped or bicycle, no `vType` declares one, and an author asking for one is refused rather than given a car. A two-wheeler carries a rider and riders are not rendered; and the content build registers no two-wheeled blueprint for the sweep to measure | A scope boundary, not a defect to close later. [`04`](04_Contracts.md) `D4.40`, V1.20; the authoring skill carries it |
 | | **Lamp capability, measured optically.** `HasLights` is `true` on all 17 blueprints and `GetVehicleLightState` returns the *command*, so the API will confirm lamps that never lit | Rides the same sweep |
-| | **Areas of interest**: GeoJSON validated at build, resolved to CARLA metres *and* SUMO edges, held on an actor with a Set/Get pair | Required, not optional — an absence anomaly anchors to an area plus a window |
-| | **The place index**, carrying its own coverage caveat: 91% on the US maps, **5% on Bahonar**, one name mapping to 65 edges | |
-| | **The solar frame**: origin latitude and longitude and the zone the engine derives, published so a scenario's epoch can be checked offline | |
+| | **Areas of interest**: GeoJSON beside the extract or `--aoi`, validated before the world is built, resolved against the world's own network to CARLA metres and SUMO lane positions, published as `areas.resolved.json` and `areas.aoi.geojson` in the world package, republishable without a rebuild. **Built.** The engine holder and `set_/get_areas_of_interest` are specified ([`04`](04_Contracts.md) C5 §7.4) and not built | Required, not optional — an absence anomaly anchors to an area plus a window |
+| | **The place index**, `places.json`, carrying its own coverage: 91.2% on Gardnerville, 90.9% on Arapahoe, **4.5% on Bahonar (47 of 1,044 edges)**, one name mapping to 65 edges. **Built** | |
+| | **The solar frame**, `solar.json`: origin latitude and longitude and the zone the engine derives, so a scenario's epoch is checked offline. **Built** | The site's civil zone is not derived: there is no zone-boundary data or time-zone database, so the epoch declares it |
 | | **The world fingerprint** — a canonical fingerprint of the parsed network, **not a byte hash**: the same OSM clipped three times gives three digests and a byte-identical graph | |
 | | **The annotation vocabulary**, versioned | Contents are an open question below |
 
@@ -259,16 +260,17 @@ New `CarlaNet.CoSim` in C#, orchestrated from Python; one TraCI connection owned
 
 | ⚑ | Item | Notes |
 |---|---|---|
-| ⚑ | Batched pose application — one `apply_batch` per tick, no variable tail | All 22 command types supported; the .NET traffic manager already does exactly this. Carries `ApplyTransform` only: the `ApplyTargetVelocity` D3.5 specifies goes in when the engine change beside it lands, since on a non-simulating body it writes a physics body the getter will not read and the engine logs the call as invalid |
+| ⚑ | Batched pose application — one `apply_batch` per tick, no variable tail | All 22 command types supported; the .NET traffic manager already does exactly this. Carries `ApplyTransform`, and is to carry per rendered body an `ApplyTargetVelocity` after it, zero at check-in ([`03`](03_CoSimulation_Runtime.md) §5.4). The velocity reads back only on a server built with D3.5 |
 | ⚑ | **Spawn from the catalogue, physics and gravity off.** A vType naming no measured blueprint is never rendered and never substituted | The pool grows to demand; every body is spawned once at its own parking slot and destroyed only at the session's end |
 | ⚑ | **The commanded-versus-applied divergence, per vehicle per tick** | Free: the world observer streams every actor's transform every tick. Position in metres and the three angles as shortest arcs, with the worst named by vehicle and instant |
 | ⚑ | **The pitch and roll signs** | Settled from `Math::GetForwardVector` / `GetRightVector` and the `FRotator` conversion; both were inverted. The visual confirmation is still owed |
 | ⚑ | **The world's clock, taken and given back.** Synchronous mode at a fixed delta, read back to confirm the world took it, restored on every exit path including a failure | A world handed back asynchronous must free-run on its own: the engine's synchronous drain tests the mode on every pass, or the world reports asynchronous and stands still until something ticks it (`CarlaNet/python/test_sync_to_async_release.py`). A previous run left an editor stranded in synchronous mode; restoration is now a property of the lease rather than a step at the end of a good run |
-| ⚑ | **Bind the sun per window.** One write after the SUMO fast-forward and before the first tick, of the civil instant at `window.begin − prewarm`; `set_time_advance` after the clock is set | Without it, illumination depends on session history — a loaded world inherits the previous session's sun |
-| ⚑ | **The per-tick solar audit**, free from the observer cache | Declared civil time against observed sun; disagreement is a fault, never a silent correction |
-| ⚑ | **Engine: velocity for a pose-applied body.** `GetComponentVelocity` reads the physics body only when simulating and otherwise returns a field ChaosVehicles never writes | An engine change; a rebuild is not a cost. Kinematic truth comes from SUMO regardless — the fix makes the body agree with the record |
+| ⚑ | **Bind the sun per window.** One `set_solar_epoch` of date, clock and civil offset after the SUMO fast-forward and before the first tick, at the first rendered frame's instant, then `set_time_advance(false, 0)` under every policy; read back and audited before anything renders. **Built**: `SolarLease` | Without it, illumination depends on session history — a loaded world inherits the previous session's sun |
+| ⚑ | **The advancing sun, written by the session every tick** ([`11`](11_Time_And_Illumination.md) D11.19, the owner's ruling). One `set_solar_epoch` per tick after the pose batch and before the cue, at the whole second nearest the frame's instant plus 1 ms; the date carried across midnight or held; the engine's own advance off. **Built** | 0.128 ms median per write; no batch command sets the sun. `test_sun_binding.py --advance` holds across 07:01 and across midnight at both sites, and fails against the engine-driven advance at 07:00:59.45 |
+| ⚑ | **The per-tick solar audit**, free from the observer cache. **Built** | Declared instant against observed sun, 0.5 s and 0.01° at every rate; a disagreement is a fault, never a silent correction |
+| ⚑ | **Engine: velocity for a pose-applied body.** With the root not simulating, `APawn::GetVelocity` returns the Chaos vehicle movement component's `Velocity`, which nothing on the CARLA vehicle path writes. `set_actor_target_velocity` on a vehicle whose physics is disabled writes that field and the root's `ComponentVelocity` (D3.5); physics-simulated vehicles and every other actor are unchanged. **Written, not yet built or verified** | Plugin rebuild only. Done when a live probe reads back the commanded velocity on a kinematic vehicle every tick and a physics-simulated control is unchanged against the previous build. Kinematic truth still comes from SUMO; the fix makes the body agree with the record |
 | | **Lamps.** SUMO's brake and indicator signals mapped bitwise (**not cast** — the values collide); headlights from solar elevation, because SUMO models none | Measured ≈9.6 commands/tick at cap 128, +1.9% of batch bytes, zero extra round trips. A pooled actor inherits its predecessor's lamps, so check-out must rewrite them |
-| | **Civil-to-solar conversion**, and the date rollover the engine never performs | The team recommends an engine time-zone setter over client arithmetic; see the decisions below |
+| | **Civil time on the sun.** `set_solar_epoch` writes the declared offset as the zone (D11.5), and the session writes the date every frame, so no rollover depends on the engine. **Built** | |
 | | Windowed capture via SUMO fast-forward from t = 0 | Measured: the whole week is 140.41 s at 4,307×. `--begin` rejected — cold start 87.5% under-populated; state save/load does not compose with unrouted trips and flows |
 | | Region gate sized per scenario so the cap does not bind | The region gate is label-independent; the cap is not |
 | | **Suppress the road and signal layers for the session.** One `set_layer_visible` per layer before the first tick, fixed for the run, recorded on the run report and given back on every exit path | The session holds them, not the launcher: `LayerVisibilityLease`, taken beside the world-settings lease. The generated road surface is a flat grey ribbon over the photogrammetry of the real road and the signal meshes are frequently misaligned against it, so both are rendering artefacts in every frame. Hidden by default with an operator override per layer, decided at session start. World generation is untouched — the actors are hidden, not removed — and hiding is rendering-only, so the road keeps its collision and a hidden signal keeps its stop-line trigger |
