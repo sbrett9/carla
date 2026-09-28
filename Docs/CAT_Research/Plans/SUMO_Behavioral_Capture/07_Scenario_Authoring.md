@@ -63,6 +63,7 @@ choice. §3.9 draws the boundary.
 | Date | Change |
 |---|---|
 | 2026-09-21 | Annotation vocabulary layered: core generated from types, author terms declared in the specification. |
+| 2026-09-25 | Areas of interest, the place index and the solar frame built and published in the world package (§2.5, §2.10–§2.12). |
 
 ---
 
@@ -254,13 +255,14 @@ states where it comes from, what it guarantees, and whether it exists.
 | 3 | `bareearth.bin` | same, only under `--height-align drape` | **yes** | Per-cell bare-earth ellipsoidal height; the telemetry altitude and the only elevation the flat SUMO network can borrow |
 | 4 | The clipped `.osm` | `OsmClipper.clip_osm_to_bounds`, written to `Build/sumo-smoketest/<Name>_clipped.osm` (`WorldBuilder.py:106-115`) | **yes**, but not inside the package | The exact geometry netconvert saw. Referenced by name and digest in `world.json`, not carried |
 | 5 | **The world's `.net.xml`** | netconvert, same run as the `.xodr` | **no — deleted** (`OsmConverter.cs:146`) | §1.3. The single missing artifact that makes the rest sound |
-| 6 | **Place index** | new; derived from 2 + 5 | **no** | Street name, direction and area id → edge and lane. §4 |
+| 6 | **Place index** | `places.json` in the world package, derived from 5 alone (§2.5) | **yes** | Street name → the edges carrying it, each with heading, cardinal direction, length, lanes, speed and extent; the index's own coverage and warnings. An area id resolves through row 8. §2.5, §4 |
 | 7 | **Vehicle catalogue** | [`04_Contracts.md`](04_Contracts.md) contract 1; doc 20 §5.6 and D12 | **no** | Which vehicles exist, with real dimensions. §2.6 states what this section needs from it |
-| 8 | **Area-of-interest table** | doc 20 §8; GeoJSON beside the OSM | **no** | Named, stable places a scenario and an annotation can both reference |
+| 8 | **Area-of-interest table** | `areas.resolved.json` and `areas.aoi.geojson` in the world package, resolved from `<extract>.aoi.geojson` at world build ([`04`](04_Contracts.md) C5, §2.11) | **yes** | Named, stable places a scenario and an annotation can both reference, in CARLA-local metres and on SUMO lanes |
 | 9 | **Annotation vocabulary** | [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §3.7–§3.8; the core generated from `CarlaNet.Types` | **no** | What a label means. Two halves: a closed, versioned core the pipeline's own code branches on, and the author terms this scenario declares or imports, each carrying its own definition |
 | 10 | **World digest** binding 1–9 | §2.7 | partially, and **unstable as recorded** | That a scenario and a run are talking about the same world |
 | 11 | **Site civil time zone** | new; derived from `world.json`'s origin lat/lon plus a time-zone database | **no** | The candidate civil offset for the epoch, and whether the site observes daylight saving. §2.8 |
 | 12 | **Illumination reference** | new; [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md), computed from origin lat/lon and the epoch's dates | **no** | Sunrise, sunset and sun elevation for every date the scenario spans, and the **night viability verdict**. §2.9 |
+| 13 | **Solar frame** | `solar.json` in the world package, derived from 1 (§2.10) | **yes** | The origin latitude and longitude and the time zone the engine derives from them, so an epoch's declared offset is checked against the world without a running server (check 40) |
 
 ### 2.1 The world package is richer than the skill records
 
@@ -308,11 +310,55 @@ The pair must be **from the same invocation**, not merely from the same flags: t
 lane lengths, junction identity and edge identifiers correspond by construction rather than by
 agreement between two argument builders.
 
-### 2.5 The place index — new
+### 2.5 The place index
 
-The artifact that turns "eastbound on Centerville Lane" into an edge. Its content, resolver and
-failure modes are §4. It is a build-time derivative of the `.xodr` and the `.net.xml`, so it belongs
-in the world package, regenerated whenever either changes.
+The artifact that turns "eastbound on Centerville Lane" into edges. It is `places.json` in the world
+package, built by `carlacontrol.PlaceIndex` and published with the rest of the reference set
+(§2.12). The resolver that reads it, and the failure modes it refuses, are §4.
+
+**Derived from the network alone.** Every place form resolves to SUMO edges; the network carries each
+edge's street name because the world build always passes `--output.street-names`
+([`13`](13_Work_Breakdown.md) §2); and the OpenDRIVE's road names are written by the same netconvert
+invocation from the same OSM tags. Reading the `.xodr` as well would add a second source for one
+fact.
+
+**What it holds.**
+
+| Field | Meaning |
+|---|---|
+| `place_index_version` | `1`. A reader refuses any other and never reads one in part |
+| `network_fingerprint` | The `NetworkFingerprint` of the network it was derived from, so a stale index is detectable |
+| `coverage.normal_edges`, `.named_edges`, `.named_fraction` | Non-internal edges, how many carry a name, and the ratio |
+| `coverage.distinct_names`, `.names_by_script` | How many names, and the writing systems their letters come from, by Unicode character name |
+| `coverage.largest_name` | The name carried by the most edges, and how many |
+| `coverage.warn_below_named_fraction` | `0.5`: the threshold below which the index warns, stated beside the measurement so a reader sees what the warning meant |
+| `warnings[]` | Sparse coverage (below the threshold), and the one-to-many caveat whenever a name covers more than one edge |
+| `streets[]` | One per name, sorted by the name's UTF-8 bytes: `name`, `scripts`, `edge_count`, `length_m`, `extent_carla_m`, `directions`, `edges[]` |
+| `streets[].directions` | Edge ids grouped by cardinal direction (`north`/`east`/`south`/`west`), each group ordered along its direction of travel by where its edges start |
+| `streets[].edges[]` | `edge_id`, `from_junction`, `to_junction`, `bearing_deg`, `direction`, `length_m`, `lane_count`, `lane_ids`, `speed_mps`, `extent_carla_m` |
+
+`bearing_deg` is the chord of the edge's rightmost lane, start to end, in degrees clockwise from north
+in the network's frame (its +y is grid north; grid convergence is under 0.02° anywhere on the shipped
+maps). `direction` is the cardinal whose 90° sector the bearing falls in. `length_m` and `speed_mps`
+are the rightmost lane's SUMO values. Extents are CARLA-local metres, `carla(x, y) = sumo(x, −y)`, the
+frame the rest of the world package uses.
+
+**Measured on the shipped world packages, 2026-09-25:**
+
+| World | Normal edges | Named | Fraction | Distinct names | Largest name | Script |
+|---|---|---|---|---|---|---|
+| Gardnerville_Centerville_Lane | 57 | 52 | 91.2 % | 10 | `Centerville Lane`, 18 edges | Latin |
+| Arapahoe_I25 | 317 | 288 | 90.9 % | 32 | `South Yosemite Street`, **65** edges | Latin |
+| Shahid_Bahonar_Port | 1044 | 47 | **4.5 %** | 6 | `بزرگراه شهید رجایی`, 14 edges | Arabic |
+
+The Bahonar figures are the current world's: its network was rebuilt with the unified flag set, and the
+earlier measurement in §4.4 (48 of 1066) was taken on the network built before it. The Persian names
+are written in Arabic script, which is how Unicode names their letters.
+
+**What it cannot see.** Whether a name is the one people at the site use; whether two edges of one
+name are one road or two roads sharing a name; and, for a strongly curving edge, anything but its net
+displacement. The resolver's refusal of a direction on a street turning through more than a right
+angle (§4.3) is made against the network's shapes, not against this index.
 
 ### 2.6 What this section needs from the vehicle catalogue
 
@@ -511,6 +557,84 @@ running server** — a file in or beside the world package, not an RPC.
 looks like; without (3) an author cannot tell an unrenderable window from a renderable one and check
 42 has no threshold to test against. There is no version of this section that supplies its own
 ephemeris.
+
+### 2.10 The solar frame
+
+`solar.json` in the world package, built by `carlacontrol.SolarFrame`. It publishes the two facts about
+a world that an epoch is checked against, so the check needs no server:
+
+| Field | Meaning |
+|---|---|
+| `solar_frame_version` | `1`; a reader refuses any other |
+| `origin_latitude`, `origin_longitude` | The georeference origin the engine computes the sun from, copied from `world.json` |
+| `engine_time_zone_hours` | `clamp(origin_longitude, −180, 180) / 15`, from `SolarPositionModel.estimate_time_zone_for_longitude` — the zone the bridge sets whenever it configures the georeference, whether it spawned the sun or found one (`CesiumHeightSampler.cpp`, the configure path calling `EstimateTimeZoneForLongitude`) |
+| `engine_time_zone` | The same as signed `hh:mm:ss`: `+03:44:43` at Bahonar, `−06:59:32` at Arapahoe, `−07:59:04` at Gardnerville |
+| `engine_time_zone_rule` | The rule above, in words |
+| `engine_daylight_saving`, `engine_solar_time_at_configure_hours` | `false` and `12.0`, the other two values the configure path sets |
+
+It is local mean solar time at the origin's longitude, not the site's civil offset — at Bahonar
+14.72 minutes east of Iran's +03:30. The difference between it and an epoch's declared offset is what
+check 40 reports and [`04`](04_Contracts.md) V9.13 bounds, computable from this file and the epoch
+alone.
+
+**What it cannot see.** The zone *during a run*: a SUMO drive session writes the declared civil offset
+into the sun with `set_solar_epoch`, and an attached world holds whatever the last session left, so the
+run's zone is read from `get_solar_state` at run start ([`04`](04_Contracts.md) D4.19). Whether the
+world has a sun: the frame is written from the package, not read from a server. Reading the sun back
+at build time would go through the shim's world-observer cache (`get_solar_state`), and whether that
+cache reflects a world loaded moments earlier is unmeasured, so a reading from it is not recorded as a
+fact about the world. The site's civil zone (bundle row 11) is not built:
+deriving one from a position needs a zone-boundary dataset and a time-zone database, this machine has
+neither (`zoneinfo` resolves zero zones, §2.8), and a civil zone presented as a fact about the world
+would be an assertion nobody made.
+
+### 2.11 Areas of interest in the world build
+
+The contract is [`04`](04_Contracts.md) C5; this is how the world build carries it out.
+
+- **Supply.** `<extract>.aoi.geojson` beside the OSM extract given to `--osm`, or the file named by
+  `--aoi` (`CarlaControlArgumentParser`). No file means no areas, and says so in the build log.
+- **Validation before building.** `WorldBuilder.load_areas_of_interest` reads and validates the file
+  (`AreaOfInterestSource`) against the extract's `<bounds>` before netconvert or the server is asked
+  for anything. A file breaking V5.1–V5.4 refuses the build, naming every rule broken: a malformed file
+  costs one edit rather than minutes of building a world whose areas cannot be published. With no
+  `--emit-world-package` the areas are validated and not published.
+- **Resolution after building.** Once the package is written, the areas are resolved against the
+  package's own network (`AreaOfInterestResolver`) and published beside it (§2.12). An area the frame
+  check refuses (V5.12) is left out and the refusal logged; the place index and solar frame are still
+  published.
+
+### 2.12 How the reference set travels
+
+**In the world package, as the world does.** The world build writes the package with `CarlaNet.Map`
+and then `carlacontrol.AuthoringReferenceSet` publishes the set into it:
+
+| Entry | Written | Content |
+|---|---|---|
+| `areas.resolved.json` | always | The resolved area table ([`04`](04_Contracts.md) C5 §7.2); an empty `areas` list when none were declared, so "no areas" and "published before areas existed" read differently |
+| `areas.aoi.geojson` | when areas were declared | The GeoJSON they were resolved from, byte for byte, whose SHA-256 the table records as `source_sha256` |
+| `places.json` | always | The place index, §2.5 |
+| `solar.json` | always | The solar frame, §2.10 |
+
+Entries are named for their role, stored uncompressed (the editor's `FZipArchiveReader` reads stored
+entries only) and self-describing, each carrying its own schema version. The package is rewritten whole
+to `<name>.cwp.partial` and moved into place, the four entries `CarlaNet.Map` wrote copied across byte
+for byte. Publishing again replaces the whole set, so no entry outlives the declarations it described;
+`WorldPackage.Write` writing the world again drops the set until the build publishes it again, because
+a rebuilt world's network can differ. The vehicle catalogue is not in the package: it belongs to the
+content build, not to a world, and lives in `CarlaControl/catalogue/`.
+
+**Read offline, in both languages.** `WorldPackageReader.areas_of_interest()`, `.place_index()` and
+`.solar_frame()` in Python; `WorldPackage.TryReadAreasOfInterest`, `TryReadAreasOfInterestSource`,
+`TryReadPlaceIndex` and `TryReadSolarFrame` in C#. Absent entries read as "not published". Both readers
+refuse an area table whose `source_sha256` disagrees with the GeoJSON carried beside it (C5 V5.11), and
+the Python reader refuses any entry declaring a schema version it does not implement.
+
+**Republished without a rebuild.** `CarlaControl/scripts/publish_reference_set.py --package <cwp>`
+publishes the set into an existing package — a world built before the set existed, or one whose areas
+were declared or edited afterwards, which changes no road geometry. It takes areas from `--aoi`, then
+from beside the extract, then from the GeoJSON the package already carries; with no extract it checks
+envelopes against the network's `origBoundary`. `--output` publishes into a copy.
 
 ---
 
@@ -1076,7 +1200,13 @@ artifacts.
 
 Generated once per world, from `map.xodr` + `map.net.xml` + `bareearth.bin` + the area GeoJSON. It is
 what an author reads *before* writing anything, and it is designed to be read by an assistant as
-easily as by a person: a JSON document (`places.json`) with a rendered Markdown companion.
+easily as by a person: a JSON document with a rendered Markdown companion.
+
+**Built so far: two of its sections, as world-package entries of their own.** *Streets* is the place
+index, `places.json` (§2.5), and *Areas* is the area table, `areas.resolved.json` ([`04`](04_Contracts.md)
+C5). The report as a whole — frame, gateways, access classes, signals, health flags, elevation and the
+Markdown companion — is not built; when it is, it is a separate entry, `reconnaissance.json`, that
+cites those two by digest rather than copying them, so there is one source for each.
 
 | Section | Content | Answers |
 |---|---|---|
@@ -1124,7 +1254,7 @@ information to choose between them. That is the property that makes it safe for 
 | Name matches nothing | no candidate | **refuse**, list the nearest names by edit distance and the nearest edges by distance |
 | Name matches many | *measured:* `South Yosemite Street` is **65 edges**, `East Arapahoe Road` **26**, `Centerville Lane` **18** | **refuse**, list candidates with direction, extent and length; the author narrows with `direction`, `near` or `at` |
 | Direction is ambiguous | a street that curves through more than 90° | **refuse**, report the bearing range |
-| Map has no street names | *measured:* Bahonar — **48 of 1066 normal edges named (5 %)**, 6 distinct names, all Persian script | **warn at index build**: name resolution is unavailable on this map; §4.4 |
+| Map has no street names | *measured:* Bahonar — **47 of 1044 normal edges named (4.5 %)**, 6 distinct names, all Persian in Arabic script | **warn at index build**, built: `places.json` carries the warning whenever fewer than half the normal edges are named (§2.5); §4.4 |
 | Snap distance large | point resolution lands far from any road | **warn** past a stated threshold, **refuse** past `max_snap_m` |
 | Place is outside the world | envelope disjoint from `convBoundary` | **refuse** — doc 20 §8.3's most likely authoring mistake |
 | Place is in the staging ring | inside the margin of the staging rectangle | **warn** — doc 20 §8.3; traffic enters and leaves there |
@@ -1144,10 +1274,12 @@ suggests:
 | Arapahoe_I25 | 917 | 248 | 646 | 23 | **32** |
 | Shahid_Bahonar_Port | 3891 | 45 | 2868 | **978** | **6** |
 
-On the `.net.xml` side the same picture: 91 % of normal edges named on the two US maps, **5 % on
-Bahonar** — 48 of 1066, across six names, all in Persian script. The transliterations in the Bahonar
-script's own comments ("Shahid Rajaei Highway", "Pasdaran Boulevard",
-`make_bahonar_scenario.py:81-83`) appear nowhere in any artifact.
+On the `.net.xml` side the same picture. *Measured* on the current world packages by the place index
+(§2.5): 52 of 57 normal edges named on Gardnerville (91.2 %), 288 of 317 on Arapahoe (90.9 %), and
+**47 of 1044 on Bahonar (4.5 %)**, across six names, all Persian in Arabic script. (The network this
+table's `.xodr` columns were counted on, before the world was rebuilt with the unified flag set, had
+48 of 1066.) The transliterations in the Bahonar script's own comments ("Shahid Rajaei Highway",
+"Pasdaran Boulevard", `make_bahonar_scenario.py:81-83`) appear nowhere in any artifact.
 
 Two conclusions follow, and the second is the reason §4.1 is a *report* and not just a name index.
 
@@ -1293,7 +1425,7 @@ prevents. "Refuse" means the compile fails and nothing is emitted.
 | 37 | Every declared civil time resolves to a second inside `[begin, end]`, and no instant is negative | §4.5 | **refuse**, stating the epoch instant and the derived civil time | An instant that silently lands outside the run. *Measured,* the margin on the sizing scenario is 45 minutes: latest departure 602 100 s against `<end value="604800"/>` |
 | 38 | Every capture window lies inside the span and cuts no declared supervision interval | the specification and the supervision file | **refuse** | The delegation doc 10 already makes to this section: "at authoring time, `07`'s validator rejects a `capture_windows[]` entry that cuts a declared interval, naming the instance" (`10_Scale_And_Performance.md:504`). A partially observed positive teaches a truncated pattern |
 | 39 | `illumination` is well-formed if declared: `mode` in {`frozen`, `advancing`}; `rate` present and positive only with `advancing`; `rate` absent with `frozen` | the specification | **refuse** malformed; **warn** when `mode × rate × window length` sweeps the sun through more than a stated arc, naming the arc | A window authored as a controlled constant that is not one, and a `rate` silently ignored because the mode is `frozen`. The units are sun-clock seconds per **simulated** second (§2.9 item 5) |
-| 40 | The site's civil offset against the world's spawned `TimeZone` | `epoch.utc_offset` vs `world.json` origin longitude ÷ 15 | **warn**, with the derived elevation error at each declared window | *Measured:* the Bahonar origin's `lon / 15` is **3.745377 h**, **14 min 43 s** from Iran's +03:30 — and at the equinox that flips the sun across the horizon at 06:00 (**+1.74°** correct, **−1.53°** as spawned) and at 18:00. Warn, not refuse: the conversion of §2.8 makes it correctable at run time without an engine change, and the warning is how the author learns the correction is needed |
+| 40 | The site's civil offset against the world's spawned `TimeZone` | `epoch.utc_offset` vs `solar.json` `engine_time_zone_hours` (§2.10) | **warn**, with the derived elevation error at each declared window | *Measured:* the Bahonar origin's `lon / 15` is **3.745377 h**, **14 min 43 s** from Iran's +03:30 — and at the equinox that flips the sun across the horizon at 06:00 (**+1.74°** correct, **−1.53°** as spawned) and at 18:00. Warn, not refuse: the conversion of §2.8 makes it correctable at run time without an engine change, and the warning is how the author learns the correction is needed |
 | 41 | **Illumination–label association** across the entries a declared window will capture | the resolved instants, the supervision labels, and the ephemeris | **warn, always, and never refuse** | §5.6. *Measured on the shipped sizing scenario:* `I(hour; label) / H(label) = 0.600`, and two hours are **100 % annotated**. In a pattern of life this correlation exists by construction; the failure is discovering it after training |
 | 42 | Each declared capture window's illumination regime is reported, and named against doc 11's viability verdict | the night viability verdict (§2.9 item 3) | **warn, never refuse** — naming the regime, the computed sun elevation, and what doc 11 says imagery in that regime will and will not show. An author may capture any regime deliberately; the warning exists so nobody captures one *accidentally*, and so the manifest records that the regime was chosen with its consequences stated | Doc 10 recommends a **23:00** window on the sizing scenario (`10_Scale_And_Performance.md:175`). *Measured,* sun elevation at that instant at the Bahonar origin is **−59.6°** at the equinox, **−38.1°** in June, **−79.5°** in December — deep night on every date. Whether that is imagery is not this section's call, and this check is where doc 11's answer binds |
 | 43 | A sweep member's `epoch` and `illumination` equal its base's, unless illumination is a declared sweep axis | the sweep (§7.2) | **refuse** | §7.4. A behaviour sweep whose members were captured under different light is not a comparison |
@@ -2032,8 +2164,9 @@ shipped beside the skill, versioned with it:
 | `references/illumination.md` | the illumination guidance, the association statistic and how to read it, the sweep rule, and a pointer to doc 11 for the ephemeris and the night verdict | §5.6, §7.2.1, §7.4, §8.2.2 |
 | `examples/epoch/` | one specification declaring a whole-hour offset, one declaring **+03:30**, one declaring a `dst_policy` fork, each with its recorded resolution report | §3.5.1 |
 
-The vehicle catalogue, the place index and the area table are **not** in the skill — they are
-per-world and travel in the world package. The skill says how to read them. The **illumination
+The place index, the area table and the solar frame are **not** in the skill — they are per-world and
+travel in the world package (§2.12). Nor is the vehicle catalogue, which is per content build and lives
+in `CarlaControl/catalogue/`. The skill says how to read them. The **illumination
 reference** (§2.9) is in the same category: it is per-world and per-date, so the skill describes it and
 doc 11 produces it.
 
@@ -2268,7 +2401,7 @@ doc 11's design question; that they can is established.
 | **D7.2** | **A declarative traffic-scenario specification is the artifact that is compiled, validated, archived and run.** The Python builder is retained as a first-class generator, and it emits a **specification**, never SUMO XML — so every scenario, hand-written or generated, passes through one compiler and one set of checks (§3.4) |
 | **D7.3** | **Every place is named; no route contains a bare edge identifier.** Places are resolved at compile time from descriptions — street and direction, area, gateway, geographic point, junction movement — and the resolution is reported. The 45–55 opaque literals per scenario measured in §1.1 become a named, checked, documented table (§3.5, §4.2) |
 | **D7.4** | **The resolver refuses ambiguity; it never guesses.** *Measured:* one street name maps to 65 edges. A refusal lists the candidates with direction, extent and length so the author can narrow it (§4.3) |
-| **D7.5** | **Name resolution is one place form among several, not the mechanism.** *Measured:* 91 % of edges named on the two US maps, **5 % on Bahonar** (48 of 1066, six names, non-Latin script). Areas of interest, geographic point-snapping and gateways are first-class, because on some maps they are all there is (§4.4) |
+| **D7.5** | **Name resolution is one place form among several, not the mechanism.** *Measured:* 91 % of edges named on the two US maps, **4.5 % on Bahonar** (47 of 1044, six names, non-Latin script). Areas of interest, geographic point-snapping and gateways are first-class, because on some maps they are all there is (§4.4) |
 | **D7.6** | **The compile step reports what it resolved, not only what it refused.** `sumo-gui` is the only preview and it knows nothing about annotations, areas, catalogue entries or supervision, so the resolution report is the sole place any of that can be checked. This is doc 20 §5.5's argument, stronger here (§3.6, §5.3) |
 | **D7.7** | **Route validation is a build step, unconditional, and "a `<vehicle>` came out" is not the test.** *Measured:* 52 routes validated in 0.27 s; and a trip whose destination edge does not exist produced a `<vehicle>` with a one-edge route. The check is that the routed result ends on the requested destination and contains every `via` edge in order (§5.5) |
 | **D7.8** | **Compile emits the routed route file, not trips,** so no routing decision is taken at run time and two runs of one scenario cannot diverge because of the router (§5.5) |
@@ -2289,6 +2422,9 @@ doc 11's design question; that they can is established.
 | **D7.23** | **A sweep that varies behaviour holds illumination constant, and the compiler enforces it.** `illumination: "hold"` is the default and refuses any member differing from the base in epoch, window or policy; `"vary"` forbids a behavioural axis; `"factorial"` warns and records the crossed design. An axis is an illumination axis if its path touches `epoch`, `illumination` or a window's `begin`, whether it was declared one or not. **Sweep `epoch.date`, not the window hour**, when illumination is what is wanted: the date varies the sun while holding the population and every authored behaviour fixed (§7.2.1, §7.4) |
 | **D7.24** | **A counterfactual pair inherits its base member's epoch, window and illumination policy verbatim.** `absent` and `nominal` are lit identically to their base — which is what "same timing" now means, checkably. `displaced`-in-time deliberately moves the sun, so it carries `illumination_differs: true`, records both regimes, and is never presented as an illumination-controlled comparison — while being, at the same time, the authoring remedy §5.6.3 offers for a degenerate regime (§7.3, check 43) |
 | **D7.25** | **The vocabulary is authored in two halves and generated in two halves, and the compiler enforces both.** An author declares terms in the specification's `vocabulary` block — `import[]` for a shared or site vocabulary travelling in the bundle, `terms[]` for this scenario's own — so they are reviewed and versioned with the scenario, and nothing may declare a term at run time. The shipped `vocabulary.json` is generated: its core half from the enumerations in `CarlaNet.Types`, its author half from the compiled specification, under §8.5's discipline rather than written beside the skill. Two checks in the annotation group enforce it: **45** refuses a label whose `applies_to` excludes the subject kind it was asserted of, which is what makes [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) D6.2 enforceable for a term this compiler cannot interpret, and **46** refuses a namespace the specification neither declared nor imported. The term list's *content* is 06 §3.7–§3.8's; this section owns where it is written and what refuses it (§2, §3.5, §5.2, §8.3, §8.5) |
+| **D7.26** | **The place index is derived from the world's network alone and publishes its own coverage.** Every place form resolves to SUMO edges and the network carries each edge's name, so the `.xodr` is not read. The index states the fraction of normal edges named, the names by script and the largest one-to-many name, and warns below half named. *Measured:* 91.2 % Gardnerville, 90.9 % Arapahoe, **4.5 %** Bahonar; `South Yosemite Street` covers 65 edges (§2.5) |
+| **D7.27** | **The solar frame carries what the engine derives and nothing presented as a civil fact.** The origin latitude and longitude and `longitude / 15`, with the rule stated. A site civil zone is not derived: it needs a zone-boundary dataset and a time-zone database this machine does not have, and presenting one as a property of the world would be an assertion nobody made (§2.10) |
+| **D7.28** | **The reference set is published into the world package by the world build, and can be republished without a rebuild.** Areas are validated before anything is built, so a malformed file refuses the build; after it, areas the frame check refuses are left out and the place index and solar frame are published without them. Publishing replaces the whole set, and writing the world again drops it (§2.11, §2.12) |
 
 ---
 

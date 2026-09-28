@@ -4,11 +4,15 @@ import logging
 import os
 import shlex
 import time
+from pathlib import Path
 
 from CarlaNet.Map import OsmConversionOptions
 from System.Collections.Generic import List
 
+from carlacontrol.AreaOfInterestSource import AreaOfInterestError, AreaOfInterestSource
+from carlacontrol.AuthoringReferenceSet import AuthoringReferenceSet
 from carlacontrol.OsmClipper import OsmClipper
+from carlacontrol.SumoInstallation import SumoInstallation
 
 
 class WorldBuilder:
@@ -102,6 +106,9 @@ class WorldBuilder:
                 f"{args.road_offset_north:+.2f} m north "
                 "(moves the drivable surface only; imagery and telemetry stay pinned)"
             )
+        ok, areas = self.load_areas_of_interest(args)
+        if not ok:
+            return False
         self.logger.info(
             f"  ion asset  : {args.ion_asset_id} (photoreal)  ground: {args.ground_asset_id}  "
             f"token: {'set' if args.ion_token else 'MISSING'}"
@@ -169,10 +176,42 @@ class WorldBuilder:
         self.logger.info(f"        wrote elevated .xodr -> {save_path}")
 
         if args.emit_world_package:
-            self._write_world_package(client, args, osm_for_build, elevated)
+            self._write_world_package(client, args, osm_for_build, elevated, areas)
         return True
 
-    def _write_world_package(self, client, args, osm_for_build: str, elevated: str) -> None:
+    def load_areas_of_interest(self, args) -> tuple[bool, AreaOfInterestSource | None]:
+        """Find and validate the world's areas of interest before anything is built.
+
+        `--aoi` names the file; without it, `<extract>.aoi.geojson` beside `--osm` is used when it
+        exists. A file that fails validation refuses the build -- that costs one malformed file
+        rather than minutes of building a world whose areas cannot be published. Returns whether
+        to proceed, and the areas (None when none are declared).
+        """
+        explicit = getattr(args, "aoi", None)
+        path = Path(explicit) if explicit else AreaOfInterestSource.discover(args.osm)
+        if path is None:
+            self.logger.info("  areas      : none declared (no --aoi, and no %s beside the extract)",
+                             AreaOfInterestSource.beside(args.osm).name)
+            return True, None
+        if not path.is_file():
+            self.logger.error(f"areas of interest not found: {path}")
+            return False, None
+        bounds = OsmClipper.read_bounds(args.osm)
+        try:
+            areas = AreaOfInterestSource.load(path, bounds)
+        except AreaOfInterestError as refusal:
+            self.logger.error(f"areas of interest refused, so the world is not built: {path}")
+            for problem in refusal.problems:
+                self.logger.error(f"    {problem}")
+            return False, None
+        self.logger.info(
+            f"  areas      : {len(areas.areas)} from {path}"
+            + ("" if args.emit_world_package else " (validated; published only with "
+                                                  "--emit-world-package)"))
+        return True, areas
+
+    def _write_world_package(self, client, args, osm_for_build: str, elevated: str,
+                             areas: AreaOfInterestSource | None = None) -> None:
         """Record the built world on disk: road network, the grids that recover true ground height
         from driven height, and a manifest of the origin, imagery layers and build settings.
 
@@ -198,6 +237,32 @@ class WorldBuilder:
             self.logger.warning(f"world package not written: {ex}")
             return
         self.logger.info(f"        wrote world package -> {manifest_path}")
+        self._publish_reference_set(manifest_path, areas)
+
+    def _publish_reference_set(self, package_path: str,
+                               areas: AreaOfInterestSource | None) -> None:
+        """Publish the areas, the place index and the solar frame into the package just written.
+
+        Reported and swallowed on failure, for the same reason as the package itself: the world is
+        built, and losing part of its record is a lesser harm than discarding it. Areas that fail
+        resolution are refused by name in the log and left out; the rest is still published.
+        """
+        installation = None
+        try:
+            # The installation that converted the world, so the projection that places the areas is
+            # the one that placed the lanes.
+            installation = SumoInstallation.locate(explicit=Path(self.netconvert_path).parent.parent)
+        except FileNotFoundError as ex:
+            self.logger.warning(f"no SUMO installation beside {self.netconvert_path}: {ex}")
+        try:
+            report = AuthoringReferenceSet(package_path, installation, areas).publish()
+        except Exception as ex:
+            self.logger.warning(f"authoring reference set not published: {ex!r}")
+            return
+        if report.refusals:
+            self.logger.error(f"        areas of interest refused ({len(report.refusals)} "
+                              "problem(s) above); the rest of the reference set is published")
+        self.logger.info(f"        published reference set -> {', '.join(report.entries)}")
 
     @staticmethod
     def configure_sync_mode(world, sync: bool, fixed_delta: float = 0.05) -> None:

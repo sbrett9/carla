@@ -222,7 +222,18 @@ class CarlaControlArgumentParser:
             metavar="DIR",
             help="also write a durable record of the built world to DIR: the road network, the "
             "per-cell grids that convert driven height to true ground height, and a manifest "
-            "describing the origin, the imagery layers and how it was built",
+            "describing the origin, the imagery layers and how it was built. The authoring "
+            "reference set -- areas of interest, the place index and the solar frame -- is "
+            "published into the same package",
+        )
+        build.add_argument(
+            "--aoi",
+            default=None,
+            metavar="GEOJSON",
+            help="areas of interest for this world, as GeoJSON (RFC 7946, positions "
+            "[longitude, latitude]). Default: <extract>.aoi.geojson beside --osm, when one exists. "
+            "Validated before the build starts, which a malformed file refuses; resolved to CARLA "
+            "metres and SUMO lanes and published with --emit-world-package",
         )
         build.add_argument("--timeout", type=float, default=300.0, help="build RPC timeout (s)")
 

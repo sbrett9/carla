@@ -12,7 +12,10 @@
 // byte order varied per clip.
 using System;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using CarlaNet.Map.WorldPackage;
 
 namespace CarlaNet.Tests.Map;
@@ -237,6 +240,120 @@ public class WorldPackageTests : IDisposable
         string shortened = original.Replace("length=\"10\"", "length=\"11\"");
 
         Assert.NotEqual(WorldPackage.HashOpenDrive(original), WorldPackage.HashOpenDrive(shortened));
+    }
+
+    /// Publish entries into a written package as the world build does: stored, beside the world.
+    private void Publish(params (string Name, byte[] Data)[] entries)
+    {
+        using var archive = ZipFile.Open(Pkg, ZipArchiveMode.Update);
+        foreach (var (name, data) in entries)
+        {
+            archive.GetEntry(name)?.Delete();
+            using Stream stream = archive.CreateEntry(name, CompressionLevel.NoCompression).Open();
+            stream.Write(data);
+        }
+    }
+
+    private static byte[] Utf8(string text) => new UTF8Encoding(false).GetBytes(text);
+
+    private const string GeoJson =
+        "{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"geometry\":"
+        + "{\"type\":\"Point\",\"coordinates\":[-119.76,38.91]},\"properties\":{\"id\":\"kerb\","
+        + "\"name\":\"Kerb\",\"radius_m\":10}}]}";
+
+    private static string AreaTable(string sourceSha256)
+        => "{\"resolved_version\": 1, \"source_sha256\": \"" + sourceSha256 + "\", \"areas\": []}";
+
+    private void WriteWorld()
+    {
+        var (offset, ground) = MakeGrids(4, 4);
+        WorldPackage.Write(_dir, DrapedManifest(cols: 4, rows: 4), Xodr, Net, offset, ground);
+    }
+
+    [Fact]
+    public void APackageFromBeforeTheReferenceSetCarriesNone()
+    {
+        WriteWorld();
+
+        Assert.False(WorldPackage.TryReadAreasOfInterest(Pkg, out _));
+        Assert.False(WorldPackage.TryReadAreasOfInterestSource(Pkg, out _));
+        Assert.False(WorldPackage.TryReadPlaceIndex(Pkg, out _));
+        Assert.False(WorldPackage.TryReadSolarFrame(Pkg, out _));
+    }
+
+    [Fact]
+    public void TheReferenceSetReadsBackAsPublished()
+    {
+        WriteWorld();
+        byte[] source = Utf8(GeoJson);
+        string table = AreaTable(Convert.ToHexStringLower(SHA256.HashData(source)));
+        const string places = "{\"place_index_version\": 1, \"streets\": []}";
+        const string solar = "{\"solar_frame_version\": 1, \"engine_time_zone\": \"+03:44:43\"}";
+        Publish((WorldPackage.AreasOfInterestEntry, Utf8(table)),
+                (WorldPackage.AreasOfInterestSourceEntry, source),
+                (WorldPackage.PlaceIndexEntry, Utf8(places)),
+                (WorldPackage.SolarFrameEntry, Utf8(solar)));
+
+        Assert.True(WorldPackage.TryReadAreasOfInterest(Pkg, out string readTable));
+        Assert.Equal(table, readTable);
+        Assert.True(WorldPackage.TryReadAreasOfInterestSource(Pkg, out byte[] readSource));
+        Assert.Equal(source, readSource);
+        Assert.True(WorldPackage.TryReadPlaceIndex(Pkg, out string readPlaces));
+        Assert.Equal(places, readPlaces);
+        Assert.True(WorldPackage.TryReadSolarFrame(Pkg, out string readSolar));
+        Assert.Equal(solar, readSolar);
+        // The world itself still reads as it did.
+        Assert.Equal(Net, WorldPackage.ReadNetwork(Pkg));
+    }
+
+    [Fact]
+    public void AnEmptyAreaTableCarriesNoSource()
+    {
+        WriteWorld();
+        Publish((WorldPackage.AreasOfInterestEntry, Utf8(AreaTable(string.Empty))));
+
+        Assert.True(WorldPackage.TryReadAreasOfInterest(Pkg, out string table));
+        Assert.Contains("\"areas\": []", table);
+    }
+
+    [Fact]
+    public void AnAreaTableResolvedFromAnotherSourceIsRefused()
+    {
+        // C5 V5.11: the table records the digest of the GeoJSON it came from, and a different
+        // GeoJSON beside it means the table describes areas this package does not declare.
+        WriteWorld();
+        byte[] other = Utf8(GeoJson.Replace("\"kerb\"", "\"gate\""));
+        Publish((WorldPackage.AreasOfInterestEntry,
+                 Utf8(AreaTable(Convert.ToHexStringLower(SHA256.HashData(Utf8(GeoJson)))))),
+                (WorldPackage.AreasOfInterestSourceEntry, other));
+
+        var refusal = Assert.Throws<InvalidDataException>(
+            () => WorldPackage.TryReadAreasOfInterest(Pkg, out _));
+        Assert.Contains("not the areas this package declares", refusal.Message);
+    }
+
+    [Fact]
+    public void AnAreaTableWhoseSourceWentMissingIsRefused()
+    {
+        WriteWorld();
+        Publish((WorldPackage.AreasOfInterestEntry,
+                 Utf8(AreaTable(Convert.ToHexStringLower(SHA256.HashData(Utf8(GeoJson)))))));
+
+        Assert.Throws<InvalidDataException>(() => WorldPackage.TryReadAreasOfInterest(Pkg, out _));
+    }
+
+    [Fact]
+    public void WritingAWorldAgainDropsItsReferenceSet()
+    {
+        // A rebuilt world's network can differ; a place index derived from the old one must not
+        // survive into the new package.
+        WriteWorld();
+        Publish((WorldPackage.PlaceIndexEntry, Utf8("{\"place_index_version\": 1}")));
+        Assert.True(WorldPackage.TryReadPlaceIndex(Pkg, out _));
+
+        WriteWorld();
+
+        Assert.False(WorldPackage.TryReadPlaceIndex(Pkg, out _));
     }
 
     [Fact]

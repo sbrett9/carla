@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 10 | `C5` built at world build: resolved table in the world package, SUMO lane positions and intervals, V5.12 compares two implementations; the engine RPC pair specified |
 | 9 | `C6`: the session writes an advancing sun every tick, engine advance off; residual tolerances rate-independent |
 | 8 | The OpenSCENARIO catalogue projection leaves this plan; `C1` has one serialisation |
 | 7 | Two-wheelers are outside the vehicle mapping contract; `C1` refuses them rather than substituting |
@@ -1798,157 +1799,298 @@ Doc 20 §8 specifies GeoJSON beside the OSM extract, validated at build, held in
 dedicated actor with a Set/Get RPC pair mirroring staging bounds. Restated here as a contract and
 extended, because a SUMO scenario author sites behaviour on **edges**, not on metres.
 
-**Nothing of this exists yet.** A search of the tree for `areas_of_interest`, `AreaOfInterest` and
-`AreasOfInterest` outside `Docs/` and outside the vendored GDAL headers returns nothing.
+**Built:** the source, its validation at world build, the resolution to CARLA-local metres and to SUMO
+lanes, the resolved table in the world package, and readers in Python and C#. The classes are
+`carlacontrol.AreaOfInterestSource` (§7.1, V5.1–V5.4), `AreaOfInterestResolver` (§7.2–§7.3,
+V5.5–V5.7, V5.12), `AuthoringReferenceSet` (publication), `WorldPackageReader` and
+`CarlaNet.Map.WorldPackage` (reading, V5.11). **Not built:** the engine's areas-of-interest actor and
+its RPC pair, specified in §7.4 so they can be; the scenario-build rules V5.8–V5.10, which are
+stage F's; and the `<userData>` copy in the `.xodr` (§7.6).
 
 ### 7.1 Artifact: the source definitions
 
-- **Name and location:** `<extract>.aoi.geojson`, beside the OSM extract, discovered by name and
-  overridable by argument — mirroring how the extract itself is supplied
-  (`--osm`, `CarlaControl/src/carlacontrol/CarlaControlArgumentParser.py:88`; doc 20 cites the deleted
-  `SCTMV.py:225`, re-resolved here).
+- **Name and location:** `<extract>.aoi.geojson`, beside the OSM extract given to `--osm`, discovered
+  by name; overridden by `--aoi <file>` (`CarlaControl/src/carlacontrol/CarlaControlArgumentParser.py`),
+  mirroring how the extract itself is supplied. No file means no areas.
 - **Format:** GeoJSON, RFC 7946. A `FeatureCollection`. WGS84 by mandate of the standard, which is the
   datum this project locked end to end.
 
 | Shape | Encoding | Use |
 |---|---|---|
-| Polygon | `Polygon` / `MultiPolygon` geometry | A car park, a block, a compound — anything whose extent matters |
+| Polygon | `Polygon` / `MultiPolygon` geometry, holes allowed in either | A car park, a block, a compound — anything whose extent matters |
 | Centre and radius | `Point` geometry with `properties.radius_m` | A standoff ring, a site whose extent is unknown. A circle is not a GeoJSON primitive, so this is the conventional encoding |
 
 **Per-feature `properties`:**
 
 | Field | Type | Unit | Req. | Meaning |
 |---|---|---|---|---|
-| `id` | string | — | yes | Stable, referenced by scenarios and annotations. `[a-z][a-z0-9_]{0,63}` |
-| `name` | string | — | yes | Human |
-| `kind` | string | — | no | A declared term, for stratification |
-| `radius_m` | number | m | Point only | Must be > 0 |
+| `id` | string | — | yes | Stable, referenced by scenarios and annotations. `[a-z][a-z0-9_]{0,63}`. A Feature-level `id` member is not read |
+| `name` | string | — | yes | Human; non-empty |
+| `kind` | string | — | no | A declared term, for stratification. Carried through unchecked: the vocabulary's term list is not settled ([`13`](13_Work_Breakdown.md) §13.5) |
+| `radius_m` | number | m | Point only | Must be > 0. **Refused on a polygon**, which would ignore it |
 
-Heights are deliberately absent: these are ground footprints and vehicles are on the ground.
+Any other property is warned about and not carried. A third position component (altitude) is warned
+about and ignored. A `crs` member is warned about — RFC 7946 removed it — and positions are read as
+WGS84 degrees regardless. Heights are deliberately absent: these are ground footprints and vehicles
+are on the ground.
 
 > **The ordering trap.** GeoJSON positions are **`[longitude, latitude]`**. Every internal signature
 > here is the opposite: `Geodesy.GeodeticToCarlaLocal` takes a `GeoLocation(Latitude, Longitude,
 > Altitude)` (`CarlaNet/src/CarlaNet.Types/Geom/Geodesy.cs:104`, the record at
 > `CarlaNet.Types/Geom/GeoLocation.cs`). Every reader must transpose, and §7.5 requires the validator
-> to diagnose the transposition by name.
+> to diagnose the transposition by name. The two Python conversions the resolver uses —
+> `SumoNetworkQuery.to_sumo` and `GeodeticFrame.to_carla` — take `longitude` and `latitude` as
+> keyword-only arguments, so a positional call cannot hide the swap.
 
 ### 7.2 Artifact: the resolved table
 
 The source file is geographic. Two consumers need it in other frames, and neither may re-implement a
 projection.
 
-- **Name and location:** `areas/areas.resolved.json` inside the scenario package (`C3` §5.2). Also
-  written beside the world package for tooling that has no scenario.
-- **Written by:** the scenario package builder, at build time, with the network and the world package
-  both in hand.
+- **Name and location:** `areas.resolved.json` in the **world package**, beside `areas.aoi.geojson`,
+  the source carried byte for byte ([`07`](07_Scenario_Authoring.md) §2.12). A scenario package embeds
+  both as `areas/areas.resolved.json` and `areas/areas.aoi.geojson` (`C3` §5.2), copied from the world
+  package it is built against rather than resolved again.
+- **Written by:** the world build, after `CarlaNet.Map` writes the package, with the network and the
+  manifest both in hand (`carlacontrol.AuthoringReferenceSet`); and by
+  `CarlaControl/scripts/publish_reference_set.py` into an existing package.
+- **Always written.** A world with no areas declared carries a table with an empty `areas` list and an
+  empty `source_sha256`, so "no areas" reads differently from "published before areas existed", which
+  carries no table at all.
+- **Deterministic.** No timestamp; keys sorted; areas in source order; lanes and edges in UTF-8 id
+  order. The same GeoJSON against the same world gives the same bytes.
 
 | Field | Type | Unit | Req. | Meaning |
 |---|---|---|---|---|
-| `resolved_version` | integer | — | yes | Schema shape |
-| `source_sha256` | string | — | yes | Digest of the `.aoi.geojson` this was resolved from; equals `area_block_sha256` in `scenario.json` |
-| `world_georeference` | string | — | yes | The proj string used, copied from the world package |
-| `areas[]` | array | — | yes | One per feature |
-| `areas[].id` | string | — | yes | From `properties.id` |
-| `areas[].name` | string | — | yes | |
-| `areas[].kind` | string | — | no | |
+| `resolved_version` | integer | — | yes | Schema shape. `1`; a reader refuses any other |
+| `source_file_name` | string | — | yes | The GeoJSON's file name; empty when none was declared |
+| `source_sha256` | string | — | yes | Digest of the `.aoi.geojson` bytes this was resolved from; equals `area_block_sha256` in `scenario.json`; empty when none was declared |
+| `world_map_name` | string | — | yes | `MapName` from the world package |
+| `world_georeference` | string | — | yes | The proj string, copied from the world package |
+| `world_origin_latitude`, `world_origin_longitude` | number | ° | yes | The origin the geographic frame was held at |
+| `network_fingerprint` | string | — | yes | `NetworkFingerprint` of the network the lanes were read from |
+| `near_m` | number | m | yes | The distance that made a lane `near` (§7.3) |
+| `frame` | object | — | yes | How the areas were placed: `carla_from_sumo` (`"carla(x, y) = sumo(x, -y)"`), `projected_by` (the SUMO release and call), `net_offset_m`, `geodesy_agreement_limit_m`, `geodesy_worst_residual_m` (V5.12) |
+| `areas[]` | array | — | yes | One per feature, in source order |
+| `areas[].id`, `.name`, `.kind` | string | — | yes | From `properties`; `kind` is `null` when undeclared |
 | `areas[].geographic` | object | — | yes | The source geometry verbatim, `[lon, lat]` |
-| `areas[].carla_local` | object | — | yes | `{ polygon: [[x, y], …] }` or `{ centre: [x, y], radius_m }`, CARLA-local metres, via `Geodesy.GeodeticToCarlaLocal` |
+| `areas[].carla_local` | object | m | yes | GeoJSON-shaped, in CARLA-local metres to the millimetre: `{"type": "Polygon", "coordinates": [[[x, y], …], …]}`, the same for `MultiPolygon`, or `{"type": "Circle", "centre": [x, y], "radius_m": r}` |
+| `areas[].envelope_carla_m` | array | m | yes | `[min_x, min_y, max_x, max_y]` in CARLA-local metres |
 | `areas[].sumo` | object | — | yes | §7.3 |
+| `areas[].warnings` | array of string | — | yes | V5.5–V5.7 as they fired for this area, each prefixed with its rule id |
 
 ### 7.3 Resolution to SUMO edges and lanes
 
-> **D4.10 — an area resolves to a lane-and-arc-length table, not to a list of edge ids.** An edge id
+> **D4.10 — an area resolves to a lane-and-position table, not to a list of edge ids.** An edge id
 > alone cannot be turned into a `<stop>`; `laneId`, `startPos` and `endPos` can.
 
 ```
 areas[].sumo = {
   "edges": [ { "edge_id": "26413459", "containment": "crossing" }, … ],
   "lanes": [ { "lane_id": "26413459_0", "edge_id": "26413459",
-               "containment": "crossing", "s_begin_m": 41.8, "s_end_m": 76.3,
-               "allowed_vclasses": ["passenger","taxi","truck","bus","army","authority"] }, … ]
+               "containment": "crossing", "s_begin_m": 33.9, "s_end_m": 63.94,
+               "intervals_m": [[33.9, 63.94]],
+               "allowed_vclasses": ["pedestrian", "delivery", "bicycle"] },
+             { "lane_id": "-26413425#3_0", "edge_id": "-26413425#3",
+               "containment": "near", "distance_m": 37.79,
+               "allowed_vclasses": ["pedestrian", "delivery", "bicycle"] }, … ]
 }
 ```
+
+That is Bahonar's guard tower 3 as a 25 m circle: its scenario parks the guard at position 58.9 on
+`26413459` (`CarlaControl/scripts/make_bahonar_scenario.py`, `TOWER_POSTS[3]`), and the contained
+stretch begins at 58.9 − 25 = 33.9.
 
 | Field | Type | Unit | Meaning |
 |---|---|---|---|
 | `lane_id` | string | — | SUMO lane id, `<edge>_<index>` |
 | `edge_id` | string | — | The lane's edge |
 | `containment` | string | — | `inside` \| `crossing` \| `near` |
-| `s_begin_m`, `s_end_m` | number | m | Arc length along the lane shape, from the lane start, bounding the contained portion. Absent for `near` |
-| `allowed_vclasses` | array of string | — | The lane's permission set, read from the network |
+| `s_begin_m`, `s_end_m` | number | m | Bounds of the contained portion, in SUMO lane-position metres — the values a `<stop startPos endPos>` takes. Absent for `near` |
+| `intervals_m` | array of `[s0, s1]` | m | Every contained stretch, in lane-position metres. More than one when the lane leaves the area and comes back. Absent for `near` |
+| `distance_m` | number | m | For `near` only: the shortest distance from the lane to the area |
+| `allowed_vclasses` | array of string | — | The classes SUMO admits on the lane, `traci.lane.getAllowed`'s expansion of the lane's `allow`/`disallow`, in SUMO's order; `["all"]` for a lane declaring neither that SUMO reports as unrestricted |
 
 **The resolution rule, stated so two implementations agree:**
 
-1. Read every lane's shape polyline from the `.net.xml`. Shapes are in the network's projected metres.
-2. Convert each area's geographic geometry into that same frame **through SUMO's own projection** —
-   `sumolib.net.convertLonLat2XY` offline, `traci.simulation.convertGeo` at runtime. Never through a
-   second implementation: the pipeline's existing rule is that coordinates convert through the running
-   simulation's own PROJ, and divergence between two implementations of one transform is a failure
-   this project has already paid for.
-3. A lane is `inside` when every vertex of its shape is inside the polygon (or within `radius_m` of the
-   point); `crossing` when the shape enters and leaves; `near` when its nearest point is within
-   `near_m` (a parameter, valued in [`10`](10_Scale_And_Performance.md)) but no part is inside.
-4. `s_begin_m`/`s_end_m` are the arc-length bounds of the contained portion, computed by walking the
-   polyline and clipping each segment against the boundary.
-5. An edge is `inside` when all its lanes are, `crossing` when any lane is `crossing` or the lanes
-   disagree, `near` otherwise.
+1. Read every non-internal lane's shape polyline from the world's `map.net.xml`. Shapes are in the
+   network's projected metres.
+2. Convert each area vertex (a circle's centre) into that frame **through SUMO's own projection**:
+   `traci.simulation.convertGeo(lon, lat, fromGeo=True)` against a SUMO process holding the world's own
+   network (`carlacontrol.SumoNetworkQuery`) — the transform, and the PROJ, that placed every lane. No
+   CARLA server is involved; the process never steps. `sumolib`'s offline `convertLonLat2XY` is not
+   used: it needs `pyproj`, which is not a dependency here and would bring a second PROJ build. Measured:
+   starting SUMO on the three shipped networks takes 0.53–0.68 s, a conversion about 60 µs.
+3. CARLA-local metres are the co-simulation bridge's identity, `carla(x, y) = sumo(x, −y)`. An area, a
+   lane and a rendered road are then in one frame by construction.
+4. Clip each lane's shape against the area's boundary: split every segment where it meets a ring edge
+   (or the circle), and keep the pieces whose midpoint is inside, even-odd over all rings of a
+   polygon so a hole is outside, and inside any member of a `MultiPolygon`. A lane is `inside` when the
+   kept pieces cover its whole length, `crossing` when they cover part, and `near` when there are none
+   but its shape passes within `near_m` of the area — measured on the shape, not on its bounding box.
+5. Positions are the kept pieces' arc lengths scaled by the lane's `length` over its shape length,
+   which is how SUMO maps a position onto a shape. *Measured:* the two lengths differ by up to
+   **5.76 m** on Arapahoe (`223207869#0_1`, 204.10 against 209.86) and 2.37 m on Bahonar, and by more
+   than 0.1 m on 151 of Arapahoe's 657 normal lanes, so an unscaled arc length would put a stop metres
+   from the area it was sited in. Rounded to the centimetre, as SUMO writes positions.
+6. An edge is `inside` when all its lanes are listed and all are `inside`; `crossing` when any listed
+   lane is `inside` or `crossing`; `near` otherwise. A lane of the edge that is not listed at all —
+   further than `near_m` — counts as disagreeing.
 
-The CARLA-local view is the *other* projection of the same source, and the two are consistent by the
-measured identity `sumo(x, y) = carla(x, −y)` ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §5), which the
-validator checks on a sample of vertices.
+**`near_m` = 50 m**, the resolver's default and recorded in every table. [`10`](10_Scale_And_Performance.md)
+does not value it; it is set equal to `aoi_halo_m` so that a vehicle on a lane the table calls `near`
+is, at the lane's closest point, one the truth producer counts as an `aoi_member` (`C2` §4.2). A guess by the
+same reasoning as `aoi_halo_m`'s, and overridable per publication.
 
 ### 7.4 At runtime in the world
 
-Doc 20 §8.4's precedent is exact and should be copied rather than redesigned. Staging bounds are held
-on a dedicated, geometry-free, non-ticking actor with a blueprint-library accessor
+Doc 20 §8.4's precedent is exact and is copied rather than redesigned. Staging bounds are held on a
+dedicated, geometry-free, non-ticking actor with a blueprint-library accessor
 (`Unreal/CarlaUnreal/Plugins/CesiumCarlaBridge/Source/CesiumCarlaBridge/Public/StagingBounds.h:21-65`)
 and a pair of RPCs bound side by side — `set_staging_bounds` and `get_staging_bounds` at
-`Unreal/.../Carla/Server/CarlaServer.cpp:808-842` (doc 20 cites `:727-760`; re-resolved here) — with
-shim wrappers at `CarlaNet/python/carlanet/__init__.py:1589` and `:1596` (doc 20 cites `:1562` and
-`:1569`; re-resolved here).
+`Unreal/.../Carla/Server/CarlaServer.cpp:831-865` — with shim wrappers beside them. The shape
+[`05`](05_CarlaNet_Capability_Audit.md) §11 describes — flat primitives over `R<T>`, a tagged holder
+actor, empty-result-means-absent — is followed exactly, and no LibCarla file is touched.
 
-Areas of interest are the same kind of object, and get the same treatment: an areas-of-interest actor,
-a `Set`/`Get` blueprint library, `set_areas_of_interest` / `get_areas_of_interest` beside the
-staging-bounds pair, and shim wrappers.
+**Not built.** The engine side belongs to the Unreal plugin, which another engineer holds; this is the
+interface it is to be built to.
 
-**What crosses the RPC:** ids plus geometry **already resolved to CARLA-local metres** — never the
-GeoJSON. Sending the source would put a JSON parser and a second geodesy implementation in the engine.
-The source geographic definition rides along as one opaque string for provenance. `get_areas_of_interest`
-returns an empty list for a world that was loaded rather than generated, exactly as
-`get_staging_bounds` returns an empty vector (`CarlaServer.cpp:838-840`).
+**What crosses the RPC:** ids and geometry **already resolved to CARLA-local metres**, as flat arrays
+the engine can draw without parsing anything, plus the resolved table itself as **one opaque string**
+the engine stores and returns byte for byte. Never the GeoJSON, and nothing the engine must parse:
+sending either would put a JSON parser and a second geodesy implementation in the engine. The opaque
+table is what lets a client that did not build the world — the truth producer, an attached session —
+recover the SUMO lanes and the provenance, not just the outlines.
+
+**The engine.** In `CesiumCarlaBridge`, beside `StagingBounds.h`:
+
+```cpp
+/** Holder for the world's areas of interest. No geometry, no tick, hidden; tagged "areas_of_interest". */
+UCLASS() class CESIUMCARLABRIDGE_API AAreasOfInterestActor : public AActor {
+  UPROPERTY() FString ResolvedJson;        // areas.resolved.json, verbatim; opaque to the engine
+  UPROPERTY() FString ResolvedSha256;      // lowercase hex SHA-256 of ResolvedJson's UTF-8 bytes
+  UPROPERTY() TArray<FString> Ids;         // per area, in table order
+  UPROPERTY() TArray<double>  RadiiMeters; // per area: > 0 a circle, 0 a polygon
+  UPROPERTY() TArray<int32>   RingCounts;  // per area: rings it holds (1 for a circle)
+  UPROPERTY() TArray<int32>   RingRoles;   // per ring: 0 exterior (starts a polygon), 1 hole of it
+  UPROPERTY() TArray<int32>   RingSizes;   // per ring: vertices, NOT repeating the first
+  UPROPERTY() TArray<double>  XY;          // per vertex: x, y interleaved, CARLA-local metres
+};
+
+UCLASS() class CESIUMCARLABRIDGE_API UAreasOfInterest : public UBlueprintFunctionLibrary {
+  /** Record (or replace) the areas. Destroys any existing holder first. Returns the actor, or
+      nullptr -- leaving any existing record untouched -- when there is no world or the arrays are
+      inconsistent (below). */
+  static AAreasOfInterestActor* Set(UObject* WorldContextObject, const FString& ResolvedJson,
+      const FString& ResolvedSha256, const TArray<FString>& Ids, const TArray<double>& RadiiMeters,
+      const TArray<int32>& RingCounts, const TArray<int32>& RingRoles,
+      const TArray<int32>& RingSizes, const TArray<double>& XY);
+  /** Read the record. False (outputs untouched) when this world has none -- any world loaded
+      rather than generated. */
+  static bool Get(UObject* WorldContextObject, FString& OutResolvedJson, FString& OutResolvedSha256);
+};
+```
+
+`Set` refuses — returns `nullptr`, logs which rule, keeps any existing record — unless:
+`Ids`, `RadiiMeters` and `RingCounts` have one element per area; `RingRoles` and `RingSizes` have
+`sum(RingCounts)` elements; `XY` has `2 × sum(RingSizes)`; a circle has `RadiiMeters > 0`, one ring of
+role 0 and size 1; a polygon has `RadiiMeters == 0`, its first ring of role 0 and every ring of size
+≥ 3; every value in `XY` and `RadiiMeters` is finite. The engine does not check the digest or parse the
+table; the client does both.
+
+**The RPCs,** bound beside `set_staging_bounds` / `get_staging_bounds` in `CarlaServer.cpp`:
+
+```cpp
+BIND_SYNC(set_areas_of_interest) << [this](
+    std::string resolved_json, std::string resolved_sha256,
+    std::vector<std::string> ids, std::vector<double> radii_m,
+    std::vector<int32_t> ring_counts, std::vector<int32_t> ring_roles,
+    std::vector<int32_t> ring_sizes, std::vector<double> xy) -> R<bool>;
+    // RESPOND_ERROR on no world, or when UAreasOfInterest::Set refuses; true otherwise.
+
+BIND_SYNC(get_areas_of_interest) << [this]() -> R<std::vector<std::string>>;
+    // {resolved_sha256, resolved_json}; an EMPTY vector for a world with no record.
+    // RESPOND_ERROR only on no world.
+```
+
+An empty table (no areas declared) is set with all arrays empty; `get` then returns the two strings,
+distinguishing "generated with no areas" from "loaded, no record".
+
+**The client** does the flattening and the checking, once:
+
+- `CarlaClient.SetAreasOfInterestAsync(string resolvedJson) → Task<bool>` parses the table with
+  `System.Text.Json`, flattens `areas[].carla_local` into the arrays above (a polygon's rings in order,
+  each without its closing repeat; a `MultiPolygon`'s polygons in order), computes the SHA-256 and calls
+  `set_areas_of_interest`.
+- `CarlaClient.GetAreasOfInterestAsync() → Task<string?>` calls `get_areas_of_interest`, returns
+  `null` for an empty vector, recomputes the digest of the returned table and throws on a mismatch.
+- Shim: `world.set_areas_of_interest(resolved_json: str) -> bool` and
+  `world.get_areas_of_interest() -> dict | None`, the parsed table.
+- **Call site:** the world build, straight after publishing the reference set — `WorldBuilder` reads
+  `areas.resolved.json` from the package it just wrote (`WorldPackageReader.areas_of_interest`, which
+  applies V5.11) and sets it. A world whose areas were refused sets the empty table.
+
+**The engine's own use** is modest and worth having: a debug draw of the outlines, so an operator can
+see a mis-sited area in the viewport, which is how one gets noticed at all. It reads only the flat
+arrays.
 
 ### 7.5 Validation and failure modes
 
-Checked at world build (`W`), at scenario package build (`S`), or at run start (`R`).
+Checked at world build (`W`), at scenario package build (`S`), when a package is read (`P`), or at run
+start (`R`). **Built** marks what exists; V5.8–V5.10 are stage F's.
 
-| # | Rule | Where | Response |
-|---|---|---|---|
-| V5.1 | Ids unique, non-empty, no whitespace, no case-only collisions | W | refuse |
-| V5.2 | Polygon rings closed, ≥ 4 positions, non-self-intersecting, positive area; `radius_m > 0` | W | refuse |
-| V5.3 | Envelope intersects the OSM `<bounds>` | W | refuse if disjoint |
-| V5.4 | **Transposition check** — if the envelope is disjoint from the bounds but *would* intersect with every position's components swapped, the message must say so by name: "positions appear to be `[latitude, longitude]`; GeoJSON requires `[longitude, latitude]`" | W | refuse, with that message |
-| V5.5 | Wholly inside the staging rectangle | W | warn if it crosses the edge |
-| V5.6 | Not wholly inside the staging ring (the margin band) | W | warn — traffic enters and exits there (`TrafficController.py:74-95`; doc 20 cites the deleted `SCTMV.py:555-574`, re-resolved here) |
-| V5.7 | Some drivable road within, or within `near_m` of, the area | W | warn — an area no vehicle can reach produces zero relations and reads as a broken pipeline |
-| V5.8 | An area referenced by a scenario for **siting behaviour** resolves to ≥ 1 lane with `containment` `inside` or `crossing` | S | **refuse** — this is the case V5.7 only warns about, promoted because the scenario now depends on it |
-| V5.9 | Every lane an area sites behaviour on permits the referencing class's `sumo_vclass` | S | **refuse**, naming the vClass and the lane. Measured relevance: the fence workflow sets private edges to allow only `army authority`, so a `passenger` flow sited there cannot run |
-| V5.10 | Every `aoi` reference in an annotation names a declared area | S | refuse |
-| V5.11 | `source_sha256` in the resolved table matches the embedded GeoJSON | S, R | refuse |
-| V5.12 | Sampled vertices satisfy `carla_x == sumo_x` and `carla_y == −sumo_y` within 0.05 m | S | refuse — the frames have diverged |
+| # | Rule | Where | Response | Built |
+|---|---|---|---|---|
+| V5.1 | Ids present in `properties`, match `[a-z][a-z0-9_]{0,63}`, unique. The pattern admits lower case only, so no two ids differ only in case | W | refuse, naming both features for a duplicate | yes |
+| V5.2 | Rings closed, ≥ 4 positions, ≥ 3 distinct vertices, not crossing or touching themselves, enclosing ≥ 1 m²; a hole inside its exterior and not crossing or touching another ring of its polygon; `radius_m` a number > 0 on a Point, absent elsewhere | W | refuse | yes |
+| V5.3 | Positions are WGS84 degrees, and the envelope (a circle's widened by its radius) intersects the OSM `<bounds>` — or, for an extract with none, the network's `origBoundary` once the world exists | W | refuse if disjoint; "not projected metres" when out of degree range | yes |
+| V5.4 | **Transposition check** — if the envelope is disjoint from the bounds but *would* intersect with every position's components swapped, the message must say so by name: "positions appear to be `[latitude, longitude]`; GeoJSON requires `[longitude, latitude]`" | W | refuse, with that message | yes |
+| V5.5 | Wholly inside the staging rectangle | W | warn if it crosses the edge, or lies wholly outside | yes |
+| V5.6 | Not wholly inside the staging ring (the margin band) | W | warn — traffic enters and exits there (`TrafficController.in_ring`) | yes |
+| V5.7 | Some lane admitting a four-wheeled road class lies inside, crosses, or passes within `near_m` of the area | W | warn — an area no vehicle can reach produces zero relations and reads as a broken pipeline | yes |
+| V5.8 | An area referenced by a scenario for **siting behaviour** resolves to ≥ 1 lane with `containment` `inside` or `crossing` | S | **refuse** — this is the case V5.7 only warns about, promoted because the scenario now depends on it | no |
+| V5.9 | Every lane an area sites behaviour on permits the referencing class's `sumo_vclass` — in the scenario's own network, since a scenario may rewrite permissions | S | **refuse**, naming the vClass and the lane. Measured relevance: the fence workflow sets private edges to allow only `army authority`, so a `passenger` flow sited there cannot run | no |
+| V5.10 | Every `aoi` reference in an annotation names a declared area | S | refuse | no |
+| V5.11 | `source_sha256` in the resolved table matches the GeoJSON carried beside it — empty when none is carried | P, S, R | refuse | yes, both readers |
+| V5.12 | Every area vertex placed by SUMO's projection (§7.3), with y negated, lies within **0.05 m** of the same vertex placed by `GeodeticFrame` — CarlaNet's `Geodesy`, the frame the telemetry, the drape and the Cesium imagery share | W | refuse the areas; the rest of the reference set is published | yes |
+
+**V5.12 compares two implementations, not one with itself.** CARLA-local metres are derived from SUMO's
+by the identity, so checking the identity on the published numbers would pass by construction. What can
+diverge is the network's frame and the world's geographic frame. *Measured* over the three shipped
+worlds' whole staging rectangles, the two agree to 0.005 mm (Gardnerville), 0.010 mm (Arapahoe) and
+0.397 mm (Bahonar, corners 4 km from the origin), so the limit has two orders of magnitude of headroom.
+It fires on a manifest whose origin is 1 × 10⁻⁶ ° (0.11 m) from the network's, and on a network carrying
+a road offset (`netOffset` non-zero): there the network is shifted from the geographic frame on purpose,
+and an area drawn on the imagery and the same area placed on the network sit apart by the offset, so
+which one the author meant is not decidable here.
+
+**V5.7's classes.** `private`, `emergency`, `authority`, `army`, `vip`, `passenger`, `hov`, `taxi`, `bus`,
+`coach`, `delivery`, `truck`, `trailer`, `evehicle`, `custom1`, `custom2`: SUMO's road classes without
+pedestrians (brief decision 5) and two-wheelers (`D4.40`). Bahonar's private roads admit
+`pedestrian delivery bicycle` in the world network, which `delivery` makes reachable.
 
 **Failure modes not covered by a rule:**
 
-- An area whose `kind` is not a declared term: **warn**, and the term is carried through unchanged.
-  Stratification terms are cheap to add and expensive to rename.
+- An area whose `kind` is not a declared term: carried through unchanged. There is no term list to
+  check it against yet; when there is, this becomes a warning. Stratification terms are cheap to add
+  and expensive to rename.
 - An area edit with no geometry change: **warn only**, by the digest tiering of `C3` §5.4 V3.7.
+- A property the validator does not read: warned about and not carried.
+
+**What the checks cannot see.** Whether an area is where the author meant: a polygon validated and
+placed exactly as written can still be drawn around the wrong building. The permissions reported are
+the world network's, not a scenario's rewritten ones (V5.9 is the scenario's check). V5.1–V5.4 run in
+degrees, which preserves every topological property they test at the scale of one world; the square-
+metre floor converts with a spherical approximation used only to reject the degenerate.
 
 ### 7.6 Versioning
 
-`resolved_version` on the resolved table; the source GeoJSON is versioned by its digest alone, which is
-what `area_block_sha256` carries. Areas should additionally be written into the generated `.xodr` under
-`<header><userData>`, where the build recipe is also planned to go, so the world carries its own area
-definitions and they cannot be separated from it. Neither the recipe nor a `<userData>` emitter exists
-yet — a search of `CarlaNet/src` finds no `<userData>` writer — so these are new together.
+`resolved_version` on the resolved table, `1`; both readers refuse any other value rather than read a
+table in part. The source GeoJSON is versioned by its digest alone, which is what `area_block_sha256`
+carries. Areas should additionally be written into the generated `.xodr` under `<header><userData>`,
+where the build recipe is also planned to go, so the world carries its own area definitions and they
+cannot be separated from it. Neither the recipe nor a `<userData>` emitter exists yet — a search of
+`CarlaNet/src` finds no `<userData>` writer — so these are new together.
 
 ### 7.7 What breaks if C5 is violated
 
@@ -1967,6 +2109,8 @@ yet — a search of `CarlaNet/src` finds no `<userData>` writer — so these are
 - **A scenario sites behaviour on a lane its vehicle class cannot use**, and the flow silently fails to
   route — which surfaces as "no valid route" at SUMO load if you are lucky, and as a missing vehicle if
   you are not.
+- **A stop is sited metres from its area**, when a position is taken as arc length along the shape
+  rather than as a SUMO lane position — up to 5.76 m on the shipped maps.
 
 ---
 
@@ -4497,7 +4641,7 @@ Stated as properties needed, not as requests.
 | **D4.7** | **Behavioural truth exists for every SUMO vehicle; imagery truth only for rendered ones; every SUMO vehicle carries an explicit `render_state` with a reason and its rendered and observed spans.** Absence never carries that fact (§4.5) |
 | **D4.8** | **`sumo_vehicle_id` → `actor_id` is one-to-many.** A released and re-admitted vehicle is a new actor with the same SUMO id; `rendered_spans[]` is how the mapping stays recoverable (§6.2) |
 | **D4.9** | **`role_name` is a provenance field and carries the authority class** — `autopilot`, `scenario`, `sumo`. `hero` and `ego` are never used, because they change what the simulation does (§6.4) |
-| **D4.10** | **An area resolves to a lane-and-arc-length table, not to a list of edge ids**, because `laneId`/`startPos`/`endPos` is what a `<stop>` needs and an edge id is not (§7.3) |
+| **D4.10** | **An area resolves to a lane-and-position table, not to a list of edge ids**, because `laneId`/`startPos`/`endPos` is what a `<stop>` needs and an edge id is not. Positions are SUMO lane positions, not arc lengths along the shape — measured, the two differ by up to 5.76 m (§7.3) |
 | **D4.11** | **The co-simulation driver is the sole owner of the advance of simulated time** (§8.1) |
 | **D4.12** | **If either side stalls, the driver stops advancing both and fails the run.** A world that ticks without SUMO produces a plausible lie (§8.5) |
 | **D4.13** | **Truth velocity for a SUMO-driven actor is SUMO's, converted to the CARLA frame — never `GetActor()->GetVelocity()`.** Verified: the observer reads the physics velocity (`WorldObserver.cpp:373`) and `SetActorTargetVelocity` writes `SetPhysicsLinearVelocity` (`CarlaActor.cpp:392-411`), which is inert with simulation off, so the obvious workaround does not work either (§9.2) |

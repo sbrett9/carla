@@ -6,11 +6,23 @@
 // can be rebuilt, inspected, or turned into an editable level later, by something that was not
 // present when it was generated.
 //
-// One file per world -- <name>.cwp -- which is a zip archive holding four entries:
+// One file per world -- <name>.cwp -- which is a zip archive. Write produces the world itself:
 //   world.json      the manifest: datum, height reconciliation, layers, sandbox, provenance
 //   map.xodr        the elevated OpenDRIVE, exactly as the server received it
 //   map.net.xml     the SUMO network from the SAME netconvert run as map.xodr
 //   bareearth.bin   the per-cell surface reconciliation grids, float32 (see the format below)
+//
+// The world build then publishes the authoring reference set into the same archive
+// (carlacontrol.AuthoringReferenceSet), rewriting it whole and copying these four entries across
+// byte for byte:
+//   areas.resolved.json   areas of interest in CARLA metres and on SUMO lanes; always written
+//   areas.aoi.geojson     the GeoJSON those areas were resolved from, when any were declared
+//   places.json           the place index: street names to edges, and its coverage
+//   solar.json            the solar frame: the origin and the time zone the engine derives
+// Each is self-describing JSON carrying its own schema version, and is read here as text; the
+// schemas are in 04_Contracts.md C5 and 07_Scenario_Authoring.md section 2. Write replaces the
+// archive, so writing a world again drops its reference set until the build publishes it again --
+// a rebuilt world's network can differ, and a set derived from the old one must not survive it.
 //
 // map.net.xml is carried rather than regenerated because it cannot be regenerated. Asking netconvert
 // for OpenDRIVE output makes it default rectangular-lane-cut to true, which feeds junction shape
@@ -202,6 +214,18 @@ public static class WorldPackage
     private const string NetworkEntry = "map.net.xml";
     private const string GridEntry = "bareearth.bin";
 
+    /// <summary>The resolved area table of the authoring reference set.</summary>
+    public const string AreasOfInterestEntry = "areas.resolved.json";
+
+    /// <summary>The GeoJSON the area table was resolved from, byte for byte.</summary>
+    public const string AreasOfInterestSourceEntry = "areas.aoi.geojson";
+
+    /// <summary>The place index of the authoring reference set.</summary>
+    public const string PlaceIndexEntry = "places.json";
+
+    /// <summary>The solar frame of the authoring reference set.</summary>
+    public const string SolarFrameEntry = "solar.json";
+
     /// <summary>The package a world of this name occupies inside a directory.</summary>
     public static string PackagePath(string directory, string mapName)
         => Path.Combine(directory, mapName + Extension);
@@ -345,6 +369,93 @@ public static class WorldPackage
     {
         using var archive = ZipFile.OpenRead(packagePath);
         return archive.GetEntry(NetworkEntry) is not null;
+    }
+
+    /// <summary>
+    /// The resolved area table, as the JSON text the package carries. False when the package has no
+    /// reference set; an empty area list when the world was built with no areas declared.
+    /// </summary>
+    /// <remarks>
+    /// Throws when the table's <c>source_sha256</c> does not match the GeoJSON carried beside it
+    /// (C5 V5.11): the table would then describe areas other than the ones the package declares, and
+    /// a reader that returned it anyway would be the one component nobody checks.
+    /// </remarks>
+    public static bool TryReadAreasOfInterest(string packagePath, out string resolvedJson)
+    {
+        resolvedJson = string.Empty;
+        using var archive = ZipFile.OpenRead(packagePath);
+        ZipArchiveEntry? table = archive.GetEntry(AreasOfInterestEntry);
+        if (table is null)
+        {
+            return false;
+        }
+        using (var reader = new StreamReader(table.Open(), new UTF8Encoding(false)))
+        {
+            resolvedJson = reader.ReadToEnd();
+        }
+
+        string recorded;
+        using (JsonDocument document = JsonDocument.Parse(resolvedJson))
+        {
+            recorded = document.RootElement.TryGetProperty("source_sha256", out JsonElement digest)
+                ? digest.GetString() ?? string.Empty
+                : string.Empty;
+        }
+        ZipArchiveEntry? source = archive.GetEntry(AreasOfInterestSourceEntry);
+        string carried = string.Empty;
+        if (source is not null)
+        {
+            using Stream stream = source.Open();
+            carried = Convert.ToHexStringLower(SHA256.HashData(stream));
+        }
+        if (!string.Equals(recorded, carried, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException(
+                $"{packagePath}: {AreasOfInterestEntry} was resolved from a source with digest "
+                + $"{(recorded.Length > 0 ? recorded : "(none)")}, but the package carries "
+                + $"{(carried.Length > 0 ? carried : "no " + AreasOfInterestSourceEntry)}; the areas "
+                + "it describes are not the areas this package declares. Republish the reference set.");
+        }
+        return true;
+    }
+
+    /// <summary>The GeoJSON the area table was resolved from, byte for byte, when any was declared.</summary>
+    public static bool TryReadAreasOfInterestSource(string packagePath, out byte[] geoJson)
+    {
+        geoJson = [];
+        using var archive = ZipFile.OpenRead(packagePath);
+        ZipArchiveEntry? entry = archive.GetEntry(AreasOfInterestSourceEntry);
+        if (entry is null)
+        {
+            return false;
+        }
+        using Stream stream = entry.Open();
+        using var buffer = new MemoryStream();
+        stream.CopyTo(buffer);
+        geoJson = buffer.ToArray();
+        return true;
+    }
+
+    /// <summary>The place index, as JSON text. False when the package has no reference set.</summary>
+    public static bool TryReadPlaceIndex(string packagePath, out string placeIndexJson)
+        => TryReadText(packagePath, PlaceIndexEntry, out placeIndexJson);
+
+    /// <summary>The solar frame, as JSON text. False when the package has no reference set.</summary>
+    public static bool TryReadSolarFrame(string packagePath, out string solarFrameJson)
+        => TryReadText(packagePath, SolarFrameEntry, out solarFrameJson);
+
+    private static bool TryReadText(string packagePath, string entryName, out string text)
+    {
+        text = string.Empty;
+        using var archive = ZipFile.OpenRead(packagePath);
+        ZipArchiveEntry? entry = archive.GetEntry(entryName);
+        if (entry is null)
+        {
+            return false;
+        }
+        using var reader = new StreamReader(entry.Open(), new UTF8Encoding(false));
+        text = reader.ReadToEnd();
+        return true;
     }
 
     /// <summary>Every world a directory holds, by name, for a caller offering a choice.</summary>
