@@ -227,12 +227,12 @@ public sealed class ScenarioNetworkCheckTests : IDisposable
     }
 
     [ShippedWorldPackagesFact]
-    public void TheShippedScenariosAreRefusedAgainstTheWorldsTheyWereWrittenFor()
+    public void TheShippedScenariosRunOnTheirWorldsOwnNetworks()
     {
-        // Each network in Import/ is a separate conversion of its world's area, measured: Arapahoe's
-        // agrees with its world on projection, offset and boundary and differs in 894 canonical rows,
-        // lanes moving by up to 3.2 m; Gardnerville's was converted a month before its world was
-        // rebuilt, and differs in its edges and in how its projection string is written.
+        // Gardnerville is compiled into Import/ with its package's network written beside the
+        // configuration; Arapahoe's generator writes its package's network with two `opposite`
+        // attributes added, which the fingerprint does not cover. Each was a separate conversion of
+        // its world's area before it was regenerated, and refused.
         (string Scenario, string Package)[] shipped =
         [
             (RepositoryFile("Import", "Arapahoe_I25_UnderpassDwell.sumocfg"),
@@ -243,21 +243,14 @@ public sealed class ScenarioNetworkCheckTests : IDisposable
 
         foreach ((string scenario, string package) in shipped)
         {
-            CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
-                () => ScenarioNetworkCheck.Require(scenario, package));
-
-            _output.WriteLine(refused.Message);
-            _output.WriteLine(string.Empty);
-            Assert.Contains("different road graphs", refused.Message, StringComparison.Ordinal);
+            ScenarioNetworkCheck.Require(scenario, package);
         }
 
-        // Arapahoe's is the case nothing else at session start sees: its network passes every
-        // comparison the frame checks make.
-        SumoRoadNetwork theirs = SumoRoadNetwork.Load(RepositoryFile("Import", "Arapahoe_I25.net.xml"));
-        SumoRoadNetwork ours = SumoRoadNetwork.FromWorldPackage(ShippedWorldPackagesFactAttribute.Arapahoe!);
-        Assert.Equal(ours.Projection, theirs.Projection);
-        Assert.Equal(ours.NetOffset, theirs.NetOffset);
-        Assert.Equal(ours.ConvBoundary, theirs.ConvBoundary);
+        // And each is refused against the other's world, which shares nothing with it.
+        CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+            () => ScenarioNetworkCheck.Require(shipped[0].Scenario, shipped[1].Package));
+        _output.WriteLine(refused.Message);
+        Assert.Contains("different road graphs", refused.Message, StringComparison.Ordinal);
     }
 
     /// <inheritdoc/>

@@ -12,7 +12,8 @@ namespace CarlaNet.CoSim;
 public sealed class PopulationAuthorityHeldException : CoSimSessionRefusedException
 {
     public PopulationAuthorityHeldException(PopulationMode requested, PopulationLease held)
-        : base($"Population authority over this world is held by {held}. {requested} was refused: "
+        : base(CoSimSessionStage.Authority,
+               $"Population authority over this world is held by {held}. {requested} was refused: "
                + "two components generating vehicles in one world produce imagery carrying both "
                + "populations and a truth record carrying one, which nothing downstream can "
                + "separate. Stop the holder, or run against a different world.")

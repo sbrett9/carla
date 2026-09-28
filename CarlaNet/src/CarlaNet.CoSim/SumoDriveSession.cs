@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using CarlaNet.Map.WorldPackage;
 using CarlaNet.Recording;
 using CarlaNet.Sumo;
@@ -28,8 +29,16 @@ namespace CarlaNet.CoSim;
 /// </remarks>
 public sealed class SumoDriveSession : IDisposable
 {
+    /// <summary>
+    /// How near a tick's instant may sit below the window's opening and still be the window's: the
+    /// rendered clock is a running sum of the world's delta, so it reaches a whole instant to within
+    /// rounding rather than exactly.
+    /// </summary>
+    private const double WindowOpenTolerance = 1e-6;
+
     private readonly SumoDriveSessionOptions _options;
     private readonly SumoConnection _sumo;
+    private readonly SumoConsoleTail _console;
     private readonly SubscribedPopulation _population;
     private readonly RenderSetManager _renderSet;
     private readonly VehicleTypeBinder _binder;
@@ -59,7 +68,10 @@ public sealed class SumoDriveSession : IDisposable
 
     private SumoDriveSession(SumoDriveSessionOptions options,
                              SumoConnection sumo,
+                             SumoConsoleTail console,
                              SumoReleaseCheck release,
+                             ScenarioLockCheck compiled,
+                             TeleportingCheck teleporting,
                              CoSimClock clock,
                              SumoRoadNetwork network,
                              GroundSurface ground,
@@ -73,6 +85,7 @@ public sealed class SumoDriveSession : IDisposable
         _options = options;
         _origin = origin;
         _sumo = sumo;
+        _console = console;
         _network = network;
         _lease = lease;
         _settings = settings;
@@ -103,6 +116,8 @@ public sealed class SumoDriveSession : IDisposable
             WorldPackagePath = options.WorldPackagePath,
             CatalogueDigest = catalogue.CatalogueDigest,
             Sumo = release,
+            CompileLock = compiled,
+            Teleporting = teleporting,
             SumoStepOverrideSeconds = options.SumoStepOverrideSeconds,
             Pacing = _pacer,
             LayerVisibility = layers?.Applied ?? new Dictionary<string, bool>(),
@@ -117,8 +132,21 @@ public sealed class SumoDriveSession : IDisposable
     /// <summary>What the run has established so far.</summary>
     public CoSimRunReport Report { get; }
 
-    /// <summary>The simulated instant the last world tick rendered.</summary>
+    /// <summary>The simulated instant the next world tick renders.</summary>
     public double RenderedTimeSeconds { get; private set; }
+
+    /// <summary>
+    /// The simulated instant of the first frame the session renders: where SUMO was fast-forwarded
+    /// to, on SUMO's own step.
+    /// </summary>
+    public double FirstRenderedSeconds { get; private set; }
+
+    /// <summary>
+    /// The simulated instant the capture window opens: <see cref="SumoDriveSessionOptions.WindowOpensAtSimulatedSecond"/>,
+    /// or the first rendered frame's where none was given. The frames rendered before it are the
+    /// prewarm's; a sun frozen at the window's start is pinned here.
+    /// </summary>
+    public double WindowOpensAtSeconds { get; private set; }
 
     /// <summary>The vehicles that would hold a rendered actor right now.</summary>
     public IReadOnlyCollection<string> RenderedVehicleIds => _renderSet.RenderedVehicleIds;
@@ -155,16 +183,56 @@ public sealed class SumoDriveSession : IDisposable
     /// installation holds no <c>sumo</c>, or the SUMO about to be launched is not the release the
     /// world package records as its converter and the mismatch was not accepted; the scenario's
     /// network is not the one the world package carries, or the package carries a network other than
-    /// the one it records; the clock does not divide, the world is asynchronous, the network is not in
+    /// the one it records; a compile lock beside the scenario binds other files, another catalogue or
+    /// another epoch; the scenario lets SUMO teleport a blocked vehicle and that was not accepted; the
+    /// clock does not divide, the world is asynchronous, the network is not in
     /// the world's frame, something else already holds the world's population, or the world's sun
-    /// could not be bound.
+    /// could not be bound; or SUMO could not load the scenario or failed during its fast-forward.
+    /// Its <see cref="CoSimSessionRefusedException.Stage"/> says how far the start had got, and
+    /// everything taken before it has been given back.
     /// </exception>
     public static SumoDriveSession Start(SumoDriveSessionOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+
+        // How far the start has got, assigned to every refusal that leaves it, so a caller can say
+        // what the world went through without reading a message. Every refusal gives back everything
+        // taken before it, whatever its stage.
+        CoSimSessionStage stage = CoSimSessionStage.Validation;
+        var console = new SumoConsoleTail(options.SumoOutput);
+        try
+        {
+            return Begin(options, console, ref stage);
+        }
+        catch (CoSimSessionRefusedException refused)
+        {
+            refused.Stage = stage;
+            throw;
+        }
+        catch (Exception failed) when (failed is FatalTraCIError or TraCIException)
+        {
+            throw new CoSimSessionRefusedException(
+                stage,
+                (stage == CoSimSessionStage.Launch
+                    ? $"SUMO could not be started on the scenario {options.ScenarioPath}"
+                    : "SUMO failed while it was fast-forwarded to "
+                      + options.WarmUpToSimulatedSecond.ToString("0.###", CultureInfo.InvariantCulture)
+                      + " s or while the step of lookahead after it was read")
+                + $": {failed.Message}. {console.Describe()}. The session has given back everything "
+                + "it took.",
+                failed);
+        }
+    }
+
+    /// <summary>The start sequence, with <paramref name="stage"/> kept at how far it has got.</summary>
+    private static SumoDriveSession Begin(SumoDriveSessionOptions options,
+                                          SumoConsoleTail console,
+                                          ref CoSimSessionStage stage)
+    {
         RequireADeclaredIllumination(options);
         RequireAUsablePace(options);
         RequireOneWayToAdvanceTheWorld(options);
+        RequireAWindowTheSessionRenders(options);
 
         WorldPackageManifest manifest = WorldPackage.ReadManifest(options.WorldPackagePath);
         GroundSurface ground = GroundSurface.FromWorldPackage(options.WorldPackagePath);
@@ -184,25 +252,41 @@ public sealed class SumoDriveSession : IDisposable
         SumoInstallation installation = ResolveSumo(options);
         SumoReleaseCheck release = RequireTheWorldSConverter(installation, manifest, options);
 
+        // Whether the package's network is in the world's frame. It needs nothing but the package,
+        // so it is settled here rather than once SUMO is running.
+        RequireTheWorldSNetwork(manifest, network, options);
+
         // And whether the network SUMO would drive is the one the session reads its lanes from. The
-        // frame checks below compare the package's network with the package; this is the one that
-        // looks at the scenario's.
+        // frame check compares the package's network with the package; this is the one that looks at
+        // the scenario's.
         ScenarioNetworkCheck.Require(options.ScenarioPath, options.WorldPackagePath);
+
+        // Whether the files SUMO would run are the ones the scenario's compile lock binds, compiled
+        // against this catalogue and this epoch -- or, with no lock beside them, that the scenario is
+        // an uncompiled one, which runs and is reported as such.
+        ScenarioLockCheck compiled = ScenarioLockCheck.Require(options.ScenarioPath, catalogue,
+                                                               options.Epoch);
+
+        // And whether SUMO would teleport a blocked vehicle, which the interpolation would render as a
+        // body dragged along its route.
+        TeleportingCheck teleporting = TeleportingCheck.Require(options.ScenarioPath,
+                                                                options.AllowTeleporting);
 
         List<string> extraArguments = [];
         if (options.SumoStepOverrideSeconds is { } forced)
         {
             extraArguments.Add("--step-length");
-            extraArguments.Add(forced.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            extraArguments.Add(forced.ToString(CultureInfo.InvariantCulture));
         }
 
+        stage = CoSimSessionStage.Launch;
         SumoConnection sumo = SumoConnection.Start(
             installation,
             options.ScenarioPath,
             new SumoLaunchOptions
             {
                 ExtraArguments = extraArguments,
-                Output = options.SumoOutput ?? (_ => { }),
+                Output = console.Add,
             });
 
         WorldSettingsLease? settings = null;
@@ -237,28 +321,31 @@ public sealed class SumoDriveSession : IDisposable
                 settings is { } held ? held.FixedDeltaSeconds : options.WorldDeltaSeconds,
                 options.CaptureRateHz,
                 settings is { } asked ? asked.Applied.SynchronousMode : options.WorldIsSynchronous);
-            RequireTheWorldSNetwork(manifest, network, options);
 
+            stage = CoSimSessionStage.Authority;
             PopulationLease lease = WorldDriveAuthority.ForWorld(options.WorldKey)
                 .Acquire(PopulationMode.SumoDrivenPlayback, options.Holder);
 
-            VehicleBodyPool? pool = options.World is { } world
-                ? new VehicleBodyPool(world, VehicleParking.BeyondTheSurface(ground),
-                                      options.MaximumBodies)
-                : null;
-
-            var session = new SumoDriveSession(options, sumo, release, clock, network, ground,
-                                               catalogue, lease, settings, layers, pool,
-                                               (manifest.OriginLatitude, manifest.OriginLongitude));
+            stage = CoSimSessionStage.PreRoll;
+            VehicleBodyPool? pool = null;
+            SumoDriveSession? session = null;
             try
             {
+                pool = options.World is { } world
+                    ? new VehicleBodyPool(world, VehicleParking.BeyondTheSurface(ground),
+                                          options.MaximumBodies)
+                    : null;
+                session = new SumoDriveSession(options, sumo, console, release, compiled, teleporting,
+                                               clock, network, ground, catalogue, lease, settings,
+                                               layers, pool,
+                                               (manifest.OriginLatitude, manifest.OriginLongitude));
                 session.Prime();
                 session.BindTheSun();
                 return session;
             }
             catch
             {
-                session._sun?.Dispose();
+                session?._sun?.Dispose();
                 pool?.DestroyAll();
                 lease.Dispose();
                 throw;
@@ -293,10 +380,55 @@ public sealed class SumoDriveSession : IDisposable
     /// <para>Under an advancing sun, the sun for the frame is written here too, beside the poses and
     /// before the cue, so it is executed in the same drain and the frame is lit by it.</para>
     /// </remarks>
+    /// <exception cref="CoSimSessionRefusedException">
+    /// The run cannot go on honestly: the world produced no frame, the sun disagreed with its
+    /// declaration or refused its write, the server offered no blueprint for a body the pool needed,
+    /// or SUMO failed. Its <see cref="CoSimSessionRefusedException.Stage"/> is
+    /// <see cref="CoSimSessionStage.PreRoll"/> for a tick rendered before the window opens and
+    /// <see cref="CoSimSessionStage.Window"/> from then on. The caller disposes the session, which
+    /// gives everything back.
+    /// </exception>
     public bool Advance()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        try
+        {
+            return AdvanceOneStep();
+        }
+        catch (CoSimSessionRefusedException refused)
+        {
+            refused.Stage = StageOfTheTickBeingRendered();
+            throw;
+        }
+        catch (Exception failed) when (failed is FatalTraCIError or TraCIException)
+        {
+            throw new CoSimSessionRefusedException(
+                StageOfTheTickBeingRendered(),
+                "SUMO failed at simulated "
+                + RenderedTimeSeconds.ToString("0.###", CultureInfo.InvariantCulture)
+                + $" s: {failed.Message}. {_console.Describe()}. A world that keeps ticking without "
+                + "SUMO renders a timeline nothing simulated, so the run stops here; dispose the session "
+                + "to give the world back.",
+                failed);
+        }
+    }
 
+    /// <summary>
+    /// <see cref="CoSimSessionStage.PreRoll"/> while the session is rendering the prewarm, before the
+    /// window's opening instant; <see cref="CoSimSessionStage.Window"/> from that instant on.
+    /// </summary>
+    /// <remarks>
+    /// A prewarm frame is rendered and never captured as the window, so a run that stops during the
+    /// prewarm stopped before its window opened -- the same outcome as a refusal before the first
+    /// tick, and it says so.
+    /// </remarks>
+    private CoSimSessionStage StageOfTheTickBeingRendered() =>
+        RenderedTimeSeconds < WindowOpensAtSeconds - WindowOpenTolerance
+            ? CoSimSessionStage.PreRoll
+            : CoSimSessionStage.Window;
+
+    private bool AdvanceOneStep()
+    {
         for (int tick = 0; tick < Clock.WorldTicksPerSumoStep; tick++)
         {
             _bridgeClock.Start();
@@ -396,17 +528,26 @@ public sealed class SumoDriveSession : IDisposable
         _population.Seed(_sumo.Vehicles.Ids);
         ReconcileAndRead();
         RenderedTimeSeconds = _sumo.Time;
+        FirstRenderedSeconds = RenderedTimeSeconds;
+        WindowOpensAtSeconds = _options.WindowOpensAtSimulatedSecond ?? RenderedTimeSeconds;
+        Report.FirstRenderedSeconds = FirstRenderedSeconds;
+        Report.WindowOpensAtSeconds = WindowOpensAtSeconds;
         AdvanceSumo();
     }
 
     /// <summary>
-    /// Bind the world's sun to the civil instant of the first frame the session will render.
+    /// Bind the world's sun to the civil instant the window opens.
     /// </summary>
     /// <remarks>
-    /// Here, and nowhere earlier: SUMO has been fast-forwarded, so the instant of the first rendered
-    /// frame is known, and the world has not yet ticked, so no frame has been rendered under whatever
-    /// sun it was holding. Nothing ticks the world during the fast-forward, so nothing could have
-    /// moved the sun in between either.
+    /// <para>Here, and nowhere earlier: SUMO has been fast-forwarded, so the instant of the first
+    /// rendered frame is known, and the world has not yet ticked, so no frame has been rendered under
+    /// whatever sun it was holding. Nothing ticks the world during the fast-forward, so nothing could
+    /// have moved the sun in between either.</para>
+    ///
+    /// <para>The instant is the window's opening, which a prewarm renders up to: a sun frozen at the
+    /// window's start is pinned there and holds through the prewarm, and an advancing sun is anchored
+    /// there and written for every prewarm frame at that frame's own instant. With no prewarm the
+    /// window opens at the first rendered frame.</para>
     /// </remarks>
     private void BindTheSun()
     {
@@ -431,7 +572,7 @@ public sealed class SumoDriveSession : IDisposable
             return;
         }
 
-        _sun = SolarLease.Take(world, new DeclaredSun(_options.Epoch!, policy, RenderedTimeSeconds));
+        _sun = SolarLease.Take(world, new DeclaredSun(_options.Epoch!, policy, WindowOpensAtSeconds));
         Report.Sun = _sun;
         if (_sun.AtWindowOpen is { } opened)
         {
@@ -553,6 +694,36 @@ public sealed class SumoDriveSession : IDisposable
         _renderSet.ReconcileRenderSet(_sumo.Time, _next);
         Report.Admissions = _renderSet.Admissions;
         Report.CapacityDeclines = _renderSet.CapacityDeclines;
+        PublishTheAdmissionPass();
+    }
+
+    /// <summary>
+    /// Publish the pass just made -- the population, the eligible, the admitted and the shed -- on
+    /// the report and to the caller's writer, as it happens.
+    /// </summary>
+    /// <remarks>
+    /// Once per SUMO step, not per tick: the render set is decided when SUMO's state is read and holds
+    /// for the ticks the step is worth. A new record each time, replaced whole, so a reader between
+    /// two advances reads one pass.
+    /// </remarks>
+    private void PublishTheAdmissionPass()
+    {
+        int admitted = _renderSet.RenderedVehicleIds.Count;
+        var pass = new AdmissionPass(
+            _tickIndex,
+            _sumo.Time,
+            _positions.Count,
+            _population.PromotedVehicleIds.Count,
+            _renderSet.LastEligible,
+            admitted,
+            _renderSet.LastShed,
+            _options.RenderSet.Capacity,
+            _renderSet.LastNewlyAdmitted,
+            _renderSet.LastReleased,
+            _renderSet.Admissions,
+            _renderSet.CapacityDeclines);
+        Report.LastAdmissionPass = pass;
+        _options.OnAdmissionPass?.Invoke(pass);
     }
 
     private void ComputePoses(double fraction)
@@ -857,6 +1028,32 @@ public sealed class SumoDriveSession : IDisposable
                 + "of simulated time on both sides, so exactly one thing may advance the world: "
                 + "give the world to drive it, or the delegate to compute every pose and apply "
                 + "none of them.");
+        }
+    }
+
+    /// <summary>
+    /// Refuse a window that opens before the first instant the session renders, or at no instant.
+    /// </summary>
+    /// <remarks>
+    /// The window's opening is where a frozen sun is pinned and an advancing one anchored. One before
+    /// the fast-forward's end is an instant no frame of the session is rendered at, so its sun would
+    /// light nothing the run captures as the window's start.
+    /// </remarks>
+    private static void RequireAWindowTheSessionRenders(SumoDriveSessionOptions options)
+    {
+        if (options.WindowOpensAtSimulatedSecond is not { } opens)
+        {
+            return;
+        }
+
+        if (!double.IsFinite(opens) || opens < options.WarmUpToSimulatedSecond)
+        {
+            throw new CoSimSessionRefusedException(
+                $"The window is declared to open at {opens.ToString("0.###", CultureInfo.InvariantCulture)} s "
+                + "and the session renders from "
+                + options.WarmUpToSimulatedSecond.ToString("0.###", CultureInfo.InvariantCulture)
+                + " s, where SUMO is fast-forwarded to. A window opens on an instant the session renders: at "
+                + "the first rendered frame, or after the prewarm that precedes it.");
         }
     }
 

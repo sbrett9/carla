@@ -49,6 +49,23 @@ public sealed class CoSimRunReport
     public required SumoReleaseCheck Sumo { get; init; }
 
     /// <summary>
+    /// The scenario's compile lock: whether one sat beside the configuration, and where it did, the
+    /// scenario it binds, the SUMO release that routed its demand and the world it was compiled for.
+    /// </summary>
+    /// <remarks>
+    /// Checked before SUMO was started, so a run that has a report ran the files, the catalogue and
+    /// the epoch its lock binds. A scenario with no lock ran as an uncompiled one, and this says so:
+    /// its traffic is described by nothing but its own files.
+    /// </remarks>
+    public required ScenarioLockCheck CompileLock { get; init; }
+
+    /// <summary>
+    /// Whether SUMO could teleport a blocked vehicle in this run -- its <c>time-to-teleport</c>, as
+    /// declared or by SUMO's default -- and, where it could, that the run accepted it explicitly.
+    /// </summary>
+    public required TeleportingCheck Teleporting { get; init; }
+
+    /// <summary>
     /// Which rendering layers the session wrote before its first tick, and what it wrote them to.
     /// </summary>
     /// <remarks>
@@ -82,6 +99,15 @@ public sealed class CoSimRunReport
 
     /// <summary>What simulated second zero meant in civil time, as the run declared it.</summary>
     public SolarEpoch? Epoch { get; init; }
+
+    /// <summary>The simulated instant of the first frame the session rendered.</summary>
+    public double FirstRenderedSeconds { get; internal set; }
+
+    /// <summary>
+    /// The simulated instant the capture window opened. Frames rendered before it are the prewarm's;
+    /// a sun frozen at the window's start is pinned here.
+    /// </summary>
+    public double WindowOpensAtSeconds { get; internal set; }
 
     /// <summary>What the run declared its sun would do.</summary>
     /// <remarks>
@@ -129,11 +155,27 @@ public sealed class CoSimRunReport
     /// <summary>Vehicle-ticks skipped because the vehicle's type has no measured body.</summary>
     public long VehicleTicksWithNoMeasuredBody { get; internal set; }
 
-    /// <summary>Distinct vehicles that ever held a place in the render set.</summary>
+    /// <summary>
+    /// Admissions to the render set since the session started, as of the last pass: a vehicle
+    /// released and admitted again counts each time.
+    /// </summary>
     public long Admissions { get; internal set; }
 
-    /// <summary>Admissions the render-set capacity declined, counted per step per vehicle.</summary>
+    /// <summary>
+    /// Admissions the render-set capacity declined, counted per step per vehicle, as of the last pass.
+    /// </summary>
     public long CapacityDeclines { get; internal set; }
+
+    /// <summary>
+    /// The render set's most recent admission pass -- population, subscribed, eligible, admitted,
+    /// shed and capacity -- replaced once per SUMO step as the pass is made. Null only before the
+    /// session's first pass, which it makes while starting.
+    /// </summary>
+    /// <remarks>
+    /// Live, so a monitor reads the shedding ledger's row between advances rather than waiting for the
+    /// end of the run; the counts above are the same pass's running totals.
+    /// </remarks>
+    public AdmissionPass? LastAdmissionPass { get; internal set; }
 
     /// <summary>CARLA actors the session owns, spawned once each and never during a tick.</summary>
     public long BodiesSpawned { get; internal set; }
@@ -357,6 +399,15 @@ public sealed class CoSimRunReport
             text.AppendLine($"epoch              {epoch}; digest {epoch.Digest[..12]}");
         }
 
+        double prewarm = WindowOpensAtSeconds - FirstRenderedSeconds;
+        text.AppendLine($"window             opens at t={Seconds(WindowOpensAtSeconds)} s"
+                        + (Epoch is { } civil
+                            ? $" ({SolarEpoch.FormatCivil(civil.CivilInstantAt(WindowOpensAtSeconds))})"
+                            : string.Empty)
+                        + (prewarm > 1e-6
+                            ? $"; rendered from t={Seconds(FirstRenderedSeconds)} s, {Seconds(prewarm)} s of prewarm first"
+                            : "; its first frame is the first rendered"));
+
         if (Illumination is not { } policy)
         {
             return;
@@ -447,6 +498,9 @@ public sealed class CoSimRunReport
         }
     }
 
+    private static string Seconds(double value) =>
+        value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+
     /// <summary>The bridge's own cost per world tick, in milliseconds.</summary>
     public double BridgeMillisecondsPerTick =>
         Ticks == 0 ? 0.0 : BridgeSecondsOnTicks * 1000.0 / Ticks;
@@ -464,6 +518,14 @@ public sealed class CoSimRunReport
         text.AppendLine($"catalogue          {CatalogueDigest}");
         text.AppendLine($"sumo               {Sumo.Installation}");
         text.AppendLine($"  world converter  {Sumo.Verdict}");
+        text.AppendLine($"compile lock       {CompileLock}");
+        if (CompileLock.Compiled)
+        {
+            text.AppendLine($"  routed by        {CompileLock.RoutedByText}");
+            text.AppendLine($"  compiled for     {CompileLock.WorldText}");
+        }
+
+        text.AppendLine($"teleporting        {Teleporting}");
         text.AppendLine($"clock              {Clock}");
         if (SumoStepOverrideSeconds is { } forced)
         {
@@ -485,6 +547,10 @@ public sealed class CoSimRunReport
         text.AppendLine($"  no ground        {PosesRefusedForMissingGround}");
         text.AppendLine($"  no measured body {VehicleTicksWithNoMeasuredBody} vehicle-ticks");
         text.AppendLine($"admissions         {Admissions}, capacity declines {CapacityDeclines}");
+        if (LastAdmissionPass is { } pass)
+        {
+            text.AppendLine($"  last pass        {pass}");
+        }
         text.AppendLine($"bodies             {BodiesSpawned} spawned, {PoseDeclinesForNoBody} "
                         + "vehicle-ticks with no body to write to");
         text.AppendLine($"batches            {Batches} for {Ticks} ticks, {CommandsWritten} "

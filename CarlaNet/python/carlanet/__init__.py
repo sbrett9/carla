@@ -2025,12 +2025,14 @@ class World:
     def start_sumo_drive(self, scenario, world_package, catalogue,
                          region_centre=(0.0, 0.0), admit_radius_m=400.0, hysteresis_m=60.0,
                          capacity=128, maximum_bodies=192, fixed_delta=0.05, record_hz=2.0,
-                         warm_up_to=0.0, step_length=None,
+                         warm_up_to=0.0, window_opens_at=None, step_length=None,
                          road_layer_visible=False, signal_layer_visible=False,
                          epoch=None, illumination=None,
                          real_time_factor=0.0, pacing_window_s=5.0,
                          sumo_home=None, allow_sumo_version_mismatch=False,
-                         on_pose=None, on_release=None, on_divergence=None):
+                         allow_teleporting=False,
+                         on_pose=None, on_release=None, on_divergence=None,
+                         on_admission_pass=None):
         """Drive this world's vehicles from a SUMO microsimulation. Returns the session, or None if
         the co-simulation assemblies are not loaded.
 
@@ -2073,10 +2075,19 @@ class World:
         `freeze_at_civil_time`) or 'ignore'. **There is no default**, because a frozen run and an
         unconfigured one write identical records: a session that renders a world and declares no
         policy is refused. 'freeze_at_window_start' is the recommended one -- the sun is set, after
-        SUMO's fast-forward and before the first tick, to the civil instant of the first rendered
-        frame, read back to confirm the world took it, and held there. The sun the world was found
-        with is given back when the session ends. `session.Sun` says what was bound and what the
-        world reported.
+        SUMO's fast-forward and before the first tick, to the civil instant the window opens, read
+        back to confirm the world took it, and held there. The sun the world was found with is given
+        back when the session ends. `session.Sun` says what was bound and what the world reported.
+
+        `window_opens_at` is the simulated second the capture window opens -- its first captured
+        frame -- where the session renders a prewarm from `warm_up_to` before it; left as None, the
+        window opens at the first rendered frame. A frozen sun is pinned there and an advancing one
+        anchored there, so a run that renders five minutes of prewarm before a 10:05:00 window pins
+        its sun at 10:05:00, not 10:00:00, and each prewarm frame's illumination declaration says it
+        was lit by that sun. A window before `warm_up_to` is refused. A refusal raised by
+        `session.Advance()` on a prewarm tick, before the window opens, is at 'PreRoll'; from the
+        window's opening on, at 'Window'. `session.WindowOpensAtSeconds` and
+        `session.FirstRenderedSeconds` say which instants the session took.
 
         `real_time_factor` holds the world's ticks to the wall clock: simulated seconds per
         wall-clock second, so 1.0 is the pace of real traffic, 0.5 half of it and 2.0 twice it. 0,
@@ -2105,10 +2116,42 @@ class World:
         it and how it stood against the world's converter -- an accepted mismatch and an unchecked
         world included.
 
+        A compiled scenario carries a compile lock beside its configuration (`<stem>.lock.json`, as
+        the scenario compiler writes it). The session refuses, before SUMO is started, a scenario
+        whose configuration, route file or network is not the one the lock digests, or whose lock
+        records another catalogue digest than `catalogue` declares, or another epoch than `epoch`
+        digests as -- naming every disagreement. A scenario with no lock beside it runs as an
+        uncompiled one. `session.Report.CompileLock` says which, and for a compiled scenario the
+        SUMO release that routed it and the world it was compiled for.
+
+        The session also refuses a scenario whose configuration lets SUMO teleport a blocked vehicle:
+        a positive `time-to-teleport`, or none, which SUMO takes as 300 s. `-1` and `0` disable it,
+        as the scenario compiler writes. `allow_teleporting` runs anyway, and
+        `session.Report.Teleporting` records that it was accepted.
+
+        Every refusal -- from this call or from `session.Advance()` -- is a
+        `CarlaNet.CoSim.CoSimSessionRefusedException` (a held population is its subclass
+        `PopulationAuthorityHeldException`, with `HeldBy`; a failed solar audit is
+        `SolarAuditFailedException`) whose `Stage` says how far the session had got, and whose
+        `StageName` gives it as text: 'Validation' (nothing started or written), 'Launch' (SUMO started
+        and the world's clock and layers taken; no lease), 'Authority' (the lease is held by another),
+        'PreRoll' (the lease taken, before the first tick: the fast-forward, the sun's binding and its
+        read-back) or 'Window' (from `Advance`). A SUMO failure is such a refusal too, quoting what SUMO
+        last wrote to its console. Whatever the stage, everything the session took is given back.
+
         The three callbacks are handed a record per vehicle per tick from the tick thread and must
         not block: `on_pose` the computed pose, `on_release` a completed render interval, and
         `on_divergence` the commanded pose and velocity against the transform and velocity the world
         reported for the body. The run's summary is on `session.Report` either way.
+
+        The render set's admission pass is published as it is made, once per SUMO step:
+        `session.Report.LastAdmissionPass` holds the latest, replaced whole -- `Population` (every
+        vehicle SUMO has), `Subscribed`, `Eligible` (inside the region), `Admitted` (holding a place,
+        the eligible up to the capacity), `Shed` (the eligible the capacity declined), `Capacity`,
+        `NewlyAdmitted` and `Released` at that pass, and the running `TotalAdmissions` and
+        `TotalCapacityDeclines`. Read it between advances for a live monitor; `on_admission_pass` is
+        handed every pass, including the two made while the session starts, for a writer that keeps
+        the whole ledger. It is called from the tick thread once per SUMO step and must not block.
 
         Every pose the session writes carries its velocity: SUMO's speed along the lane, pointed along
         the body's yaw, climbing with the ground it is seated on. A vehicle whose physics is disabled
@@ -2120,8 +2163,8 @@ class World:
             print("SUMO co-simulation unavailable: CarlaNet.CoSim assembly not loaded "
                   "(rebuild the wheel/DLLs).", file=sys.stderr)
             return None
-        from CarlaNet.CoSim import (CarlaClientWorld, CoSimPoseRecord, IlluminationPolicy,
-                                    PoseDivergence, RegionRenderSetPolicy,
+        from CarlaNet.CoSim import (AdmissionPass, CarlaClientWorld, CoSimPoseRecord,
+                                    IlluminationPolicy, PoseDivergence, RegionRenderSetPolicy,
                                     RenderedVehicleInterval, SolarEpoch, SumoDriveSession,
                                     SumoDriveSessionOptions)
         from System import Action
@@ -2138,6 +2181,8 @@ class World:
         options.WorldDeltaSeconds = float(fixed_delta)
         options.CaptureRateHz = float(record_hz)
         options.WarmUpToSimulatedSecond = float(warm_up_to)
+        if window_opens_at is not None:
+            options.WindowOpensAtSimulatedSecond = float(window_opens_at)
         if step_length is not None:
             options.SumoStepOverrideSeconds = float(step_length)
         options.RoadLayerVisible = bool(road_layer_visible)
@@ -2147,6 +2192,7 @@ class World:
         if sumo_home is not None:
             options.SumoHome = str(sumo_home)
         options.AllowSumoVersionMismatch = bool(allow_sumo_version_mismatch)
+        options.AllowTeleporting = bool(allow_teleporting)
         # Both are read by the C# side, which is the one validator: a declaration checked twice is
         # a declaration two implementations will eventually disagree about.
         if epoch is not None:
@@ -2166,6 +2212,8 @@ class World:
             options.OnRelease = Action[RenderedVehicleInterval](on_release)
         if on_divergence is not None:
             options.OnDivergence = Action[PoseDivergence](on_divergence)
+        if on_admission_pass is not None:
+            options.OnAdmissionPass = Action[AdmissionPass](on_admission_pass)
         return SumoDriveSession.Start(options)
 
     def stop_recording(self):

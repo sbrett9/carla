@@ -46,8 +46,9 @@ public sealed class DeclaredSun
     /// <param name="epoch">What simulated second zero means in civil time.</param>
     /// <param name="policy">What the window does with the sun.</param>
     /// <param name="windowOpensAtSimulatedSecond">
-    /// The simulated instant of the first frame the session renders: where SUMO was fast-forwarded
-    /// to. With one SUMO process per window, that is the instant the window opens.
+    /// The simulated instant the window opens: its first captured frame. A session that prewarms
+    /// renders from earlier than this, and every prewarm frame is declared from here like any other
+    /// -- under a freeze, lit by this instant's sun; under an advance, by its own instant's.
     /// </param>
     public DeclaredSun(SolarEpoch epoch, IlluminationPolicy policy, double windowOpensAtSimulatedSecond)
     {
@@ -72,10 +73,10 @@ public sealed class DeclaredSun
     /// <summary>What the window does with the sun.</summary>
     public IlluminationPolicy Policy { get; }
 
-    /// <summary>The simulated instant of the window's first rendered frame.</summary>
+    /// <summary>The simulated instant the window opens: its first captured frame.</summary>
     public double WindowOpensAtSimulatedSecond { get; }
 
-    /// <summary>The civil instant of the window's first rendered frame.</summary>
+    /// <summary>The civil instant the window opens.</summary>
     public DateTimeOffset WindowOpenCivil { get; }
 
     /// <summary>

@@ -1,5 +1,4 @@
 using System.Xml;
-using System.Xml.Linq;
 using CarlaNet.Map;
 using CarlaNet.Map.WorldPackage;
 
@@ -123,40 +122,21 @@ public static class ScenarioNetworkCheck
     public static string NetworkFileOf(string configurationPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(configurationPath);
-        string configuration = Path.GetFullPath(configurationPath);
+        return NetworkFileOf(SumoConfiguration.Load(
+            configurationPath, "the network it runs on cannot be compared with the world's"),
+            configurationPath);
+    }
 
-        XDocument document;
-        try
-        {
-            document = XDocument.Load(configuration);
-        }
-        catch (Exception unreadable) when (unreadable is IOException or UnauthorizedAccessException
-                                               or XmlException)
-        {
-            throw new CoSimSessionRefusedException(
-                $"The scenario {configurationPath} cannot be read as a SUMO configuration, so the "
-                + $"network it runs on cannot be compared with the world's: {unreadable.Message}",
-                unreadable);
-        }
-
-        List<string> named = [];
-        foreach (XElement option in document.Descendants())
-        {
-            if (!NetworkOptionNames.Contains(option.Name.LocalName, StringComparer.Ordinal))
-            {
-                continue;
-            }
-
-            // SUMO takes the value from either attribute, or failing both from the element's text,
-            // and ignores an empty one.
-            string value = (string?)option.Attribute("value")
-                           ?? (string?)option.Attribute("v")
-                           ?? option.Value.Trim();
-            if (value.Length > 0)
-            {
-                named.Add(value);
-            }
-        }
+    /// <summary>The network file an already-read configuration loads, as a full path.</summary>
+    /// <param name="configuration">The configuration, read.</param>
+    /// <param name="configurationPath">How the caller named it, for a refusal to repeat.</param>
+    /// <exception cref="CoSimSessionRefusedException">
+    /// The configuration sets no network, or sets it more than once.
+    /// </exception>
+    public static string NetworkFileOf(SumoConfiguration configuration, string configurationPath)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        IReadOnlyList<string> named = configuration.ValuesOf(NetworkOptionNames);
 
         if (named.Count == 0)
         {
@@ -175,7 +155,7 @@ public static class ScenarioNetworkCheck
                 + "world's network is not the configuration's to leave open.");
         }
 
-        return Path.GetFullPath(named[0], Path.GetDirectoryName(configuration)!);
+        return configuration.Resolve(named[0]);
     }
 
     /// <summary>The canonical fingerprint of the network a scenario names, or a refusal saying why not.</summary>

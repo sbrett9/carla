@@ -33,8 +33,9 @@ What a run needs on disk:
 The sun's policy has no default. A frozen run and a run nobody configured write identical records,
 so the session refuses to render a world whose run does not say what its sun is doing.
 `--illumination freeze_at_window_start` is the recommended one: after SUMO is fast-forwarded and
-before the first tick, the sun is set to the civil instant of the first rendered frame, read back to
-confirm the world took it, and held there. The sun the world was found with is given back at the end.
+before the first tick, the sun is set to the civil instant the window opens -- `--window-opens-at`, or
+the first rendered frame -- read back to confirm the world took it, and held there. The sun the world
+was found with is given back at the end.
 
 Usage:
 
@@ -69,6 +70,13 @@ installation's release against the converter the world package records, by relea
 before SUMO is started, naming both. `--allow-sumo-version-mismatch` runs anyway, and the report
 records that it did; a package that records no converter runs, and is reported unchecked. The
 installation, its release and how it stood against the world's converter are logged every run.
+
+A compiled scenario is checked against the compile lock the compiler wrote beside its configuration
+(`<stem>.lock.json`) before SUMO is started: its configuration, route file and network must be the
+ones the lock digests, and the catalogue and epoch given here the ones it was compiled against. A
+scenario with no lock runs and is logged as uncompiled. A scenario whose configuration lets SUMO
+teleport a blocked vehicle -- a positive `time-to-teleport`, or none, which SUMO takes as 300 s -- is
+refused unless `--allow-teleporting` is given.
 
 One thing happens between the session starting and the recorder starting: the camera is aimed at the
 vehicles rather than at the middle of the rendered region, because a corridor scenario puts its
@@ -117,6 +125,10 @@ def parse_args() -> argparse.Namespace:
                         help="run with a SUMO whose release is not the one that converted the world, "
                              "instead of refusing. The run report records that the mismatch was "
                              "accepted and names both releases")
+    parser.add_argument("--allow-teleporting", action="store_true",
+                        help="run a scenario whose configuration lets SUMO teleport a blocked vehicle "
+                             "(a positive time-to-teleport, or none, which SUMO takes as 300 s) "
+                             "instead of refusing it. The run report records that it was accepted")
 
     parser.add_argument("--steps", type=int, default=600,
                         help="SUMO steps to run. 0 runs until the scenario ends -- until SUMO has "
@@ -129,6 +141,10 @@ def parse_args() -> argparse.Namespace:
                              "fast-forward of --warm-up is never paced")
     parser.add_argument("--warm-up", type=float, default=0.0,
                         help="simulated second to fast-forward SUMO to before the first tick")
+    parser.add_argument("--window-opens-at", type=float, default=None,
+                        help="simulated second the capture window opens, where the ticks from "
+                             "--warm-up to it are a prewarm: a frozen sun is pinned here and an "
+                             "advancing one anchored here. Default: the first rendered frame")
     parser.add_argument("--step-length", type=float, default=None,
                         help="override the scenario's SUMO step length (behaviour-changing)")
     parser.add_argument("--fixed-delta", type=float, default=0.05,
@@ -396,6 +412,11 @@ class PacingProgress:
                     "%.4f m/s", steps, session.RenderedTimeSeconds,
                     session.RenderedVehicleIds.Count, self.achieved(pacing), worst_metres,
                     session.Report.WorstVelocityDivergenceMetresPerSecond)
+        admission = session.Report.LastAdmissionPass
+        if admission is not None:
+            logger.info("  sumo population %d, eligible %d, admitted %d, shed %d, cap %d",
+                        admission.Population, admission.Eligible, admission.Admitted,
+                        admission.Shed, admission.Capacity)
 
 
 def camera_transform(args: argparse.Namespace, centre: tuple[float, float]) -> carla.Transform:
@@ -481,6 +502,7 @@ def main() -> int:
             fixed_delta=args.fixed_delta,
             record_hz=args.record_hz,
             warm_up_to=args.warm_up,
+            window_opens_at=args.window_opens_at,
             step_length=args.step_length,
             road_layer_visible=args.show_road_mesh,
             signal_layer_visible=args.show_signals,
@@ -489,6 +511,7 @@ def main() -> int:
             real_time_factor=args.real_time_factor,
             sumo_home=sumo.home,
             allow_sumo_version_mismatch=args.allow_sumo_version_mismatch,
+            allow_teleporting=args.allow_teleporting,
             # Bound only where the aim needs it: the session hands out a pose per rendered
             # vehicle per tick, and a callback that spends the whole run declining them is a
             # crossing into Python per vehicle per tick for nothing.
@@ -503,6 +526,14 @@ def main() -> int:
         launched = session.Report.Sumo
         (logger.info if launched.Agrees else logger.warning)(
             "sumo: %s; %s", launched.Installation, launched.Verdict)
+        # A compiled scenario was checked against its lock before SUMO started; an uncompiled one
+        # ran with nothing to check it against, and says so louder.
+        compiled = session.Report.CompileLock
+        (logger.info if compiled.Compiled else logger.warning)("compile lock: %s", compiled)
+        if compiled.Compiled:
+            logger.info("routed by: %s", compiled.RoutedByText)
+        teleporting = session.Report.Teleporting
+        (logger.warning if teleporting.Enabled else logger.info)("teleporting: %s", teleporting)
         logger.info("clock: %s", session.Clock)
         # The pace as the session declared it, not as this script asked for it: the session read
         # the factor once and is the one thing that holds the run to it.
@@ -533,6 +564,21 @@ def main() -> int:
                     centre = aim.centre()
                     logger.info("aimed at %d rendered vehicles", aim.count)
             camera = spawn_camera(world, args, centre)
+
+            # The prewarm is ticked with the camera in the world, so its tiles stream, and recorded by
+            # nothing: the window's first capture is the frame at the instant it opens.
+            prewarm_steps = 0
+            while session.RenderedTimeSeconds < session.WindowOpensAtSeconds - 1e-6:
+                if not session.Advance():
+                    logger.error("the scenario ended at t=%.2f s, before the window opened at "
+                                 "t=%.2f s", session.RenderedTimeSeconds,
+                                 session.WindowOpensAtSeconds)
+                    return 1
+                prewarm_steps += 1
+            if prewarm_steps:
+                steps += prewarm_steps
+                logger.info("prewarmed %d SUMO steps; the window opens at t=%.2f s",
+                            prewarm_steps, session.WindowOpensAtSeconds)
 
             os.makedirs(args.record_dir, exist_ok=True)
             # Every capture carries the declaration of its own frame's sun and the audit's residual

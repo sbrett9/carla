@@ -3,7 +3,10 @@ namespace CarlaNet.CoSim;
 /// <summary>What a co-simulation session is pointed at, and what it is allowed to do.</summary>
 /// <param name="ScenarioPath">
 /// The scenario's SUMO configuration. The network it names must be the one the world package
-/// carries, compared by canonical fingerprint before SUMO is started (<see cref="ScenarioNetworkCheck"/>).
+/// carries, compared by canonical fingerprint before SUMO is started (<see cref="ScenarioNetworkCheck"/>);
+/// where a compile lock sits beside it, the files it runs must be the ones the lock binds
+/// (<see cref="ScenarioLockCheck"/>); and it must not let SUMO teleport a blocked vehicle unless
+/// <see cref="AllowTeleporting"/> (<see cref="TeleportingCheck"/>).
 /// </param>
 /// <param name="WorldPackagePath">
 /// The world package: the ground surface the poses are seated on, and the road network they are
@@ -112,6 +115,17 @@ public sealed record SumoDriveSessionOptions(
     public bool AllowSumoVersionMismatch { get; set; }
 
     /// <summary>
+    /// Run a scenario whose configuration lets SUMO teleport a blocked vehicle, rather than refusing.
+    /// </summary>
+    /// <remarks>
+    /// A teleport moves a vehicle straight to a lane further along its route, which renders as a body
+    /// dragged across the map; the runtime jump detector releases and re-admits such a vehicle rather
+    /// than interpolating across the gap, whether or not this is set. Not silent: the report records
+    /// the wait SUMO teleports after and that it was accepted (<see cref="TeleportingCheck"/>).
+    /// </remarks>
+    public bool AllowTeleporting { get; set; }
+
+    /// <summary>
     /// Height of the actor origin above the contact surface per blueprint, where it has been
     /// measured by settling a body on level ground rather than taken from its bounding box.
     /// </summary>
@@ -135,6 +149,23 @@ public sealed record SumoDriveSessionOptions(
     /// clock. Pacing starts at the first tick cue.
     /// </remarks>
     public double WarmUpToSimulatedSecond { get; set; }
+
+    /// <summary>
+    /// The simulated second the capture window opens -- its first captured frame -- where the session
+    /// renders from earlier than that, or null where the window opens at the first frame the session
+    /// renders.
+    /// </summary>
+    /// <remarks>
+    /// <para>A run that prewarms renders from <see cref="WarmUpToSimulatedSecond"/> and captures from
+    /// here, so the two are different instants: a 300 s prewarm before a window at 10:05:00 renders
+    /// from 10:00:00. A sun frozen at the window's start is pinned here, and an advancing sun is
+    /// anchored here, so the window's first captured frame is lit by its own instant whatever the
+    /// prewarm.</para>
+    ///
+    /// <para>Refused where it is before <see cref="WarmUpToSimulatedSecond"/> or not a number: a
+    /// window cannot open on an instant the session never renders.</para>
+    /// </remarks>
+    public double? WindowOpensAtSimulatedSecond { get; set; }
 
     /// <summary>
     /// Simulated seconds per wall-clock second the world's tick cues are held to: 1.0 is the pace of
@@ -190,7 +221,8 @@ public sealed record SumoDriveSessionOptions(
     /// <remarks>
     /// Under any policy that binds the sun, the session writes the date, the civil clock, the civil
     /// offset, the advancing flag and the rate once, after SUMO has been fast-forwarded and before
-    /// the first world tick, for the civil instant of the first frame it renders -- and reads the
+    /// the first world tick, for the civil instant the window opens (<see cref="WindowOpensAtSimulatedSecond"/>,
+    /// the first rendered frame's where none is given) -- and reads the
     /// sun back to confirm the world took it. The sun the world was found with is given back when the
     /// session ends, on its failure paths as on its normal one.
     /// </remarks>
@@ -238,6 +270,14 @@ public sealed record SumoDriveSessionOptions(
     /// thread. The summary a run needs is on the report either way.
     /// </remarks>
     public Action<PoseDivergence>? OnDivergence { get; set; }
+
+    /// <summary>Where each admission pass goes: one per SUMO step, the shedding ledger's row.</summary>
+    /// <remarks>
+    /// The same record <see cref="CoSimRunReport.LastAdmissionPass"/> holds, handed out as it is made
+    /// so a writer can keep every row -- including the two made while the session starts, before the
+    /// caller's first advance. From the tick thread, once per SUMO step; it must not block.
+    /// </remarks>
+    public Action<AdmissionPass>? OnAdmissionPass { get; set; }
 
     /// <summary>Where SUMO's own console output goes.</summary>
     public Action<string>? SumoOutput { get; set; }

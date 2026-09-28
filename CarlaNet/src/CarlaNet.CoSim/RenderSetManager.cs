@@ -37,11 +37,26 @@ public sealed class RenderSetManager
     /// <summary>The vehicles holding a rendered actor right now.</summary>
     public IReadOnlyCollection<string> RenderedVehicleIds => _admittedAt.Keys;
 
-    /// <summary>How many vehicles have been admitted since the session started.</summary>
+    /// <summary>
+    /// How many admissions have been made since the session started. A vehicle released and admitted
+    /// again counts each time.
+    /// </summary>
     public long Admissions { get; private set; }
 
     /// <summary>How many admissions the capacity refused, counted per step per vehicle.</summary>
     public long CapacityDeclines { get; private set; }
+
+    /// <summary>At the last pass: the vehicles the predicate admitted a place to.</summary>
+    public int LastEligible { get; private set; }
+
+    /// <summary>At the last pass: the vehicles that took up a place.</summary>
+    public int LastNewlyAdmitted { get; private set; }
+
+    /// <summary>At the last pass: the vehicles that gave one up, for any reason.</summary>
+    public int LastReleased { get; private set; }
+
+    /// <summary>At the last pass: the eligible the capacity declined.</summary>
+    public int LastShed { get; private set; }
 
     /// <summary>
     /// Bring the subscription tier into line with the policy, from the positions every vehicle in
@@ -91,6 +106,9 @@ public sealed class RenderSetManager
                                    IReadOnlyDictionary<string, CoSimVehicleFrame> frames)
     {
         ArgumentNullException.ThrowIfNull(frames);
+        LastNewlyAdmitted = 0;
+        LastReleased = 0;
+        LastShed = 0;
 
         // A vehicle that was rendered and is no longer in the frames is one SUMO removed, or one
         // demoted out of the subscription margin. Either way it is out of the render set, and which
@@ -138,6 +156,7 @@ public sealed class RenderSetManager
         });
 
         int capacity = _policy.Capacity;
+        LastEligible = _candidates.Count;
         for (int index = 0; index < _candidates.Count; index++)
         {
             string vehicleId = _candidates[index].Id;
@@ -146,11 +165,13 @@ public sealed class RenderSetManager
                 if (_admittedAt.TryAdd(vehicleId, simulatedTimeSeconds))
                 {
                     Admissions++;
+                    LastNewlyAdmitted++;
                 }
             }
             else
             {
                 CapacityDeclines++;
+                LastShed++;
                 if (_admittedAt.ContainsKey(vehicleId))
                 {
                     Release(vehicleId, simulatedTimeSeconds, RenderSetReleaseReason.Capacity);
@@ -180,6 +201,8 @@ public sealed class RenderSetManager
         {
             return;
         }
+
+        LastReleased++;
 
         // The actor is filled in by whoever holds the pool: this manager decides who is rendered and
         // knows nothing about which body renders them.
