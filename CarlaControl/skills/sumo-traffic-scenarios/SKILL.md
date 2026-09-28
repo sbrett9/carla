@@ -1,8 +1,8 @@
 ---
 name: sumo-traffic-scenarios
-description: Use when building a SUMO traffic scenario or a Cursor-on-Target (CoT) telemetry dataset for a CARLA world generated from OpenStreetMap — including orbit/dwell/pattern-of-life scenarios, planted anomalies, ambient traffic, guard postings, fenced (access-restricted) road networks, or standalone scenario zips. Also use when the question is about how the OSM → world package (.xodr + bareearth.bin drape) → SUMO network → routes → CoT pipeline fits together, how run_SCTMV.py and CarlaNet produce the world, or which of the make_*_scenario.py / sumo_cot_telemetry.py tools to reach for. Covers the netconvert flags, coordinate alignment, which vehicles a scenario may ask for, and the measured gotchas that make routes actually work.
+description: Use when building a SUMO traffic scenario or a Cursor-on-Target (CoT) telemetry dataset for a CARLA world generated from OpenStreetMap — including orbit/dwell/pattern-of-life scenarios, planted anomalies, ambient traffic, guard postings, fenced (access-restricted) road networks, or standalone scenario zips. Also use when the question is about how the OSM → world package (.xodr + bareearth.bin drape) → SUMO network → routes → CoT pipeline fits together, how run_SCTMV.py and CarlaNet produce the world, or which of the make_*_scenario.py / sumo_cot_telemetry.py tools to reach for. Covers the netconvert flags, coordinate alignment, which vehicles a scenario may ask for, and the measured gotchas that make routes actually work. Also use when writing or compiling a scenario specification (compile_scenario.py): the epoch that says what civil time t = 0 is, civil-time literals, named places, rotas, supervision labels and vocabulary, capture windows, the illumination default, sweeps and counterfactual pairs.
 metadata:
-  version: 1.2.0
+  version: 1.3.0
 ---
 
 # SUMO traffic scenarios for generated CARLA worlds
@@ -14,9 +14,11 @@ simulation's own output, and validate routes with SUMO's own router, not a graph
 
 ## The pipeline in one picture
 
-There are two stages. They are joined by one invariant: the SUMO network is rebuilt from the *same*
-clipped OSM and the *same* pinned origin the CARLA world was built from, so their coordinate frames
-coincide — **SUMO (x, y) equals CARLA (x, -y)**, with no offset arithmetic.
+There are two stages. They are joined by one invariant: the SUMO network comes out of the *same*
+netconvert invocation as the CARLA world's OpenDRIVE, at the *same* pinned origin, and travels in the
+world package, so the two are one road graph in one frame — **SUMO (x, y) equals CARLA (x, -y)**, with
+no offset arithmetic. The network is never rebuilt: a second netconvert run with identical flags gives
+a different graph.
 
 ```
   OSM extract (Import/<Name>.osm)
@@ -31,11 +33,15 @@ coincide — **SUMO (x, y) equals CARLA (x, -y)**, with no offset arithmetic.
     · world.json   origin lat/lon, origin height, grid geometry, netconvert extra args, build settings
     · map.xodr     the elevated OpenDRIVE the CARLA map loads
     · bareearth.bin  per-cell ellipsoidal ground height (the "drape" grid) — the telemetry's altitude
+    · map.net.xml  the SUMO network, from the same netconvert run as map.xodr
+    · places.json, areas.resolved.json, solar.json  the authoring reference set
         │
-        │  STAGE 2 — SUMO scenario + telemetry (pure Python + SUMO; NO CARLA needed)
-        │  make_<name>_scenario.py  →  SumoScenarioBuilder / SumoPatternOfLifeBuilder
-        │    · netconvert rebuilds the SUMO .net.xml from <Name>_clipped.osm at the SAME origin
-        │    · write routes (.rou.xml), config (.sumocfg), and a labels sidecar (.labels.json)
+        │  STAGE 2 — SUMO scenario (pure Python + SUMO; NO CARLA needed)
+        │  <Scenario>.scenario.json  →  compile_scenario.py  (ScenarioCompiler)
+        │    · resolve places and civil times, route with duarouter, check, emit
+        │    · .rou.xml (routed) · .sumocfg · the world's .net.xml · .supervision.json · .lock.json
+        │    · .resolution.json — what everything resolved to
+        │  (or the older make_<name>_scenario.py builders, which write SUMO XML directly)
         ▼
   scenario files in carla/Import/  →  sumo_cot_telemetry.py (drives SUMO over TraCI)
     · reads bareearth.bin for each vehicle's ellipsoidal height
@@ -71,12 +77,131 @@ Key flags (`CarlaControlArgumentParser`, "world build" group):
 - `--ion-asset-id` (photoreal, default 2275207) and `--ground-asset-id` (bare-earth heights,
   default 1 = Cesium World Terrain).
 
-Outputs land in `Build/sumo-smoketest/<Name>_clipped.osm` + `<Name>_elevated.xodr` and, with the
+Outputs are written to `Build/sumo-smoketest/<Name>_clipped.osm` + `<Name>_elevated.xodr` and, with the
 package flag, `Build/world-packages/<Name>.cwp` (newer maps: a zip) or loose files (older maps).
 The `world.json` records the exact **origin latitude/longitude** and the **NetconvertExtraArgs** —
 copy those into Stage 2 so the frames align.
 
-## Stage 2 — the reusable SUMO tooling (carla/CarlaControl/src/carlacontrol/)
+## Stage 2 — write a scenario specification and compile it
+
+A scenario is a **specification**, `<Scenario>.scenario.json`, compiled against the world package by
+one compiler that checks everything it can before a capture is spent:
+
+```bash
+python carla/CarlaControl/scripts/compile_scenario.py Import/<Scenario>.scenario.json \
+    --out-dir Build/scenarios/<Scenario>
+```
+
+It writes, into the output directory: `<scenario_id>.rou.xml` (every vehicle and flow **already routed**
+by `duarouter`, times in plain seconds, no supervision), `<scenario_id>.sumocfg`, the world's own
+`<MapName>.net.xml` copied byte for byte, `<scenario_id>.supervision.json` (the only place labels go),
+`<scenario_id>.lock.json` (every digest, the seed, the epoch) and `<scenario_id>.resolution.json` /
+`.md` — **what everything resolved to, and every warning**. A refused compile writes only the report,
+naming every refusal by check id. Read the report back and check it against what was meant; it is the
+only place an annotation, a date or a sun can be checked, because `sumo-gui` shows elapsed seconds.
+
+The schema is `schemas/scenario.schema.json` beside this file; every check, with its id, what it
+compares and whether it refuses or warns, is `checks.json`. Both are generated from the compiler. The
+design is `Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/07_Scenario_Authoring.md` §3.5–§7.
+
+**The blocks.** `world` (the package path and the network fingerprint it was authored against), `epoch`,
+`illumination`, `seeds` (`sumo`), `simulation` (`end`, `step_length_s`), `catalogue`, `vehicle_classes`
+and `vehicle_mix` (the vehicle mapping contract below, as data), `places`, `place_sets`, `instants`,
+`flows`, `actors`, `rotas`, `vocabulary`, `supervision`, `capture_windows`. A field the schema does not
+name is refused.
+
+### The epoch — ask for it, never assume it
+
+Every scenario declares what civil instant `t = 0` is — the `epoch` object:
+
+```json
+{"epoch_version": 1, "civil_datetime": "2026-03-21T00:00:00+03:30", "utc_offset_hours": 3.5,
+ "utc_datetime": "2026-03-20T20:30:00Z", "calendar_advances": true, "dst_in_effect": false,
+ "time_zone_id": "Asia/Tehran"}
+```
+
+1. **If the author has not said what civil date and time `t = 0` is, ask**, offering a candidate from
+   the site. A guessed epoch compiles and asserts the wrong thing.
+2. **Write civil times; never multiply.** `"d0 07:00"`, not `25200`. Forms: seconds; `"dN HH:MM[:SS]"`;
+   `"HH:MM"` alone only on a run of one day or less; `"2026-03-21T07:00:00+03:30"` at the epoch's own
+   offset; durations `"8h"`, `"30m"`, `"1h30m"`, `"7d"`; `{"instant": "name"}`; either with
+   `"plus": <duration>`.
+3. `t = 0` is conventionally midnight, and need not be: day N is the epoch's date plus N days.
+4. **Never write a SUMO `H:M:S` literal anywhere**, even on a command line: `--begin 7:00:00` is step
+   25 200, an offset that looks like a clock.
+5. **Half-hour and quarter-hour offsets are ordinary** — Bahonar is Iran, **+03:30**. The offset is a
+   whole number of quarter hours; the zone name is carried and never resolved.
+6. **Declare the offset in force on the scenario's dates**, with `dst_in_effect` saying whether it
+   includes daylight saving: Colorado in late March is −06:00 with `dst_in_effect: true`. One offset holds
+   for the whole run.
+
+The utc_datetime must be the civil instant minus the offset; the commonest error — the offset applied
+in the wrong direction — is refused and named.
+
+### Places — name them, describe them, let the compiler resolve them
+
+A route never carries a bare edge id: flows and actors name places. A place is `{"edge": …}` (optionally
+`"offset_m"`), `{"lane": …, "offset_m": …}`, `{"area": "<area of interest id>"}`, or
+`{"street": "East Arapahoe Road", "direction": "west", "at": "<cross street>"}`. A street name is never
+one edge (`South Yosemite Street` is 65), so narrow it with `direction` and `at`; the compiler refuses
+ambiguity and lists the candidates rather than guessing. A stop needs a lane position: a lane with an
+offset, an edge with an offset, or an area holding one lane. On a map with few street names (Bahonar:
+4.5 %), use areas and explicit lanes.
+
+### Repetition — a rota, not a loop
+
+```json
+{"id": "guard_posting", "days": "0..6", "at": ["07:00", "15:00", "23:00"],
+ "subjects": {"place_set": "guard_towers"}, "id_pattern": "guard_d{day}_h{hour}_t{subject_index}",
+ "template": {"type": "guard", "from": "guard_base", "to": "guard_base", "via": ["$subject"],
+              "stops": [{"place": "$subject", "duration": "8h", "parking": true}]},
+ "skip": [{"day": 4, "at": "07:00", "subject_index": 3, "because": "the no-show anomaly"}]}
+```
+
+A skip must match exactly one occasion and say why: it is how an absence is planted.
+
+### Supervision — the only annotation channel, and the author's words
+
+Labels go in the `supervision` block and reach only `<scenario_id>.supervision.json`; the route file
+carries none, and the compiler refuses a route file carrying anything but the vehicle-type binding.
+
+- **Three states:** `annotated` (executing the named pattern), `nominal` (executing no target pattern —
+  a hard negative), `unlabelled` (no assertion; everything not declared). A flow may be `annotated`
+  whole-life or `unlabelled`, **never `nominal`** and never with intervals.
+- `instances[]` carry participants (`actor`, `role`), `intervals` in civil time, `aoi_refs`, `labels`.
+  A one-participant instance names its participant `subject`. Never author the phase `vacancy`.
+- `series[]` reads a rota as a recurring series; `absences[]` annotate a skipped occasion — an anomaly
+  with no vehicle.
+- **Terms are the author's**, declared in `vocabulary.namespaces[]` as `<namespace>:<name>` with a
+  definition, `applies_to` (`entity`/`cohort`/`slot`), `realisation` (`present`/`absent`), `since` and
+  `status`. **Invent no terms on the author's behalf** — the label is a contract between the author and
+  the model trainer, and this pipeline carries it without judging it. Ask for the author's words.
+- Some subject should be `nominal` when any is `annotated` — hard negatives are the most valuable output.
+
+### Light — derived context, never a label
+
+- `illumination` is **required** and is the authored default the operator may override:
+  `freeze_at_window_start` (recommended), `advance` with `rate_sun_s_per_sim_s`, `freeze_at` with
+  `freeze_at_civil_time`, or `ignore`.
+- `capture_windows[]` are **candidates**, not run instructions; a window may not cut a declared
+  interval. The report states each window's civil date and the sun it opens under.
+- **Expect the illumination–label association (check 41) to be non-zero, and report it to the author
+  in words** with its degenerate bands and remedies. In a pattern of life the correlation is
+  structural — the sizing scenario measures 0.600 — and it is a warning, never a refusal.
+- A window below −6° is not corpus-eligible (doc 11 D11.7): night gives complete behavioural truth and
+  no usable imagery. It warns; the choice stays the author's.
+
+### Sweeps and counterfactual pairs
+
+`compile_scenario.py --sweep <Sweep>.sweep.json --out-dir …` compiles every member in full
+(`schemas/sweep.schema.json`). A sweep that varies behaviour **holds illumination** unless it says
+`vary` or `factorial`; the compiler decides which axes change the light (`epoch…`, `illumination…`, a
+window's `begin`). **To sweep illumination, sweep `epoch.date`, not the window hour**: the date moves
+the sun while the traffic stays identical. Counterfactuals: `absent`, `nominal` (with the fields the
+author names in `remove`), `displaced` (a `shift` in time, a `places` substitution in space). A pair is
+identical inputs, never identical trajectories.
+
+## The Python builders (carla/CarlaControl/src/carlacontrol/)
 
 All pure standard library. One public class per file (repo convention, see `carla/AGENTS.md`).
 
@@ -163,6 +288,8 @@ stays internally consistent.
 
 ## The recipe for a new scenario
 
+Prefer a specification compiled with `compile_scenario.py` (above): it resolves places, routes and checks everything below itself. This recipe is for the Python builders, which write SUMO XML directly.
+
 1. **Get the world package** (Stage 1), or confirm one exists in `Build/world-packages/`. Read its
    `world.json` for `OriginLatitude`/`OriginLongitude` and `NetconvertExtraArgs`.
 2. **Build the network** with `SumoScenarioBuilder.build_network` using a `NetconvertSettings` that
@@ -201,6 +328,8 @@ When a map's interior is `access=private` (a port, a base), model it as two vehi
   vehicles move everywhere; the gates are the junctions where public meets private.
 
 ## Measured gotchas (each cost real time; do not relearn them)
+
+The compiler enforces four of these on a specification — departure order, `--` in comments, `duarouter` validation with the false-accept guard, and plain seconds instead of `H:M:S` — and the rest remain judgements.
 
 - **Validate routes with `duarouter`, not `sumolib.getShortestPath`.** sumolib gives false positives
   (it will traverse one-way edges the real router refuses), so hand-picked routes then fail at SUMO

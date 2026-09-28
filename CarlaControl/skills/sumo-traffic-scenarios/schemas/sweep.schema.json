@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://carla.local/schemas/sweep.schema.json",
+  "title": "Scenario sweep",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sweep_version",
+    "sweep_id",
+    "base"
+  ],
+  "properties": {
+    "sweep_version": {
+      "const": 1
+    },
+    "sweep_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+    },
+    "base": {
+      "type": "string",
+      "minLength": 1
+    },
+    "axes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "values"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "values": {
+            "type": "array",
+            "minItems": 1
+          },
+          "kind": {
+            "enum": [
+              "illumination",
+              "behaviour"
+            ]
+          }
+        }
+      }
+    },
+    "pairing": {
+      "enum": [
+        "cross",
+        "zip"
+      ]
+    },
+    "illumination": {
+      "enum": [
+        "hold",
+        "vary",
+        "factorial"
+      ]
+    },
+    "counterfactuals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actor",
+          "mode"
+        ],
+        "properties": {
+          "actor": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mode": {
+            "enum": [
+              "absent",
+              "nominal",
+              "displaced"
+            ]
+          },
+          "remove": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "stops",
+                "via"
+              ]
+            }
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "shift": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "places": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,632 @@
+"""The scenario compiler: one specification in, a routed, locked scenario package out -- or a refusal.
+
+Every check the compiler claims is exercised here against a specification or a world package broken in
+exactly the way the check exists to catch, and the refusal is asserted by its check id; the success path
+is asserted against what SUMO itself does with the output. Three properties are held above the rest,
+because they are why the compiler exists:
+
+* **the route file carries no supervision** -- labels travel only in the supervision plan (06 D6.1);
+* **every time is plain seconds with its civil meaning recoverable** from the report and the plan;
+* **the same specification, seed and world give byte-identical scenario files** -- reproducible
+  traffic is the priority, so the routed routes and everything that decides the traffic are fixed at
+  compile time and bound in the lock.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import shutil
+import subprocess
+import sys
+import xml.etree.ElementTree as ET
+import zipfile
+from pathlib import Path
+
+import pytest
+
+_REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from ScenarioWorldFixture import EPOCH, NETWORK, ScenarioWorldFixture  # noqa: E402
+
+from carlacontrol.CompileFindings import CompileFindings  # noqa: E402
+from carlacontrol.NetworkFingerprint import NetworkFingerprint  # noqa: E402
+from carlacontrol.RouteValidator import RouteRequest, RouteValidator  # noqa: E402
+from carlacontrol.ScenarioCompiler import ScenarioCompiler  # noqa: E402
+from carlacontrol.ScenarioEpoch import ScenarioEpoch  # noqa: E402
+
+
+@pytest.fixture(scope="module")
+def installation():
+    try:
+        return ScenarioWorldFixture.locate_sumo()
+    except FileNotFoundError as missing:
+        pytest.skip(f"no SUMO with duarouter: {missing}")
+
+
+@pytest.fixture(scope="module")
+def world(tmp_path_factory, installation) -> ScenarioWorldFixture:
+    return ScenarioWorldFixture(tmp_path_factory.mktemp("world"), installation)
+
+
+def compile_spec(fixture, installation, tmp_path, name="spec", **changes):
+    spec = fixture.write(fixture.specification(**changes), f"{name}.{tmp_path.name}.scenario.json")
+    return ScenarioCompiler(installation).compile(spec, tmp_path / "out")
+
+
+def checks(result, outcome="refuse") -> set[int]:
+    return {f.check_id for f in result.findings.findings if f.outcome == outcome}
+
+
+def messages(result, check: int) -> str:
+    return " || ".join(f.message for f in result.findings.by_check(check))
+
+
+def rewrite_package(source: Path, destination: Path, changes: dict[str, bytes]) -> Path:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(source) as old, zipfile.ZipFile(destination, "w", zipfile.ZIP_STORED) as new:
+        for info in old.infolist():
+            new.writestr(info.filename, changes.get(info.filename, old.read(info.filename)))
+    return destination
+
+
+# ---- the success path ------------------------------------------------------------------------------
+
+def test_the_fixture_compiles_and_writes_the_whole_package(world, installation, tmp_path):
+    result = compile_spec(world, installation, tmp_path)
+    assert not result.refused, [str(f) for f in result.findings.refusals]
+    assert checks(result, "warn") == {17, 41}
+    for role in ("routes", "config", "network", "supervision", "lock", "resolution",
+                 "resolution_md"):
+        assert result.files[role].exists(), role
+    assert result.files["network"].read_text(encoding="utf-8") == NETWORK
+
+
+def test_the_route_file_is_routed_sorted_in_seconds_and_carries_no_supervision(world, installation,
+                                                                                tmp_path):
+    result = compile_spec(world, installation, tmp_path)
+    text = result.files["routes"].read_text(encoding="utf-8")
+    root = ET.fromstring(text)
+    entries = [e for e in root if e.tag in ("vehicle", "flow")]
+    times = [float(e.get("depart") or e.get("begin")) for e in entries]
+    assert times == sorted(times)
+    assert all(e.find("route") is not None and e.find("route").get("edges") for e in entries)
+    assert {e.get("id"): float(e.get("depart")) for e in entries if e.tag == "vehicle"} == {
+        "patrol_d0_h6": 900.0, "probe": 3600.0, "hauler": 5400.0}
+    # No label, term, supervision state or instance reaches the route file.
+    for forbidden in ("fixture:", "annotated", "nominal", "probe_standoff", "marked"):
+        assert forbidden not in text
+    assert {p.get("key") for p in root.iter("param")} <= {"carla:blueprint", "carla:class_id",
+                                                           "carla:catalogue_digest"}
+
+
+def test_sumo_runs_the_compiled_scenario_and_stops_where_the_report_says(world, installation,
+                                                                       tmp_path):
+    result = compile_spec(world, installation, tmp_path)
+    stops = tmp_path / "stops.xml"
+    completed = subprocess.run(
+        [str(installation.sumo), "-c", str(result.files["config"]), "--end", "4000",
+         "--stop-output", str(stops), "--no-step-log", "true"],
+        capture_output=True, text=True, timeout=300, check=False)
+    assert completed.returncode == 0, completed.stderr
+    probe = [line for line in stops.read_text(encoding="utf-8").splitlines() if 'id="probe"' in line]
+    assert probe and 'lane="901#0_0"' in probe[0] and 'pos="51.50"' in probe[0]
+    kerb = result.report["places"]["kerb"]
+    assert (kerb["lane"], kerb["end_pos"]) == ("901#0_0", 51.5)
+
+
+def test_compiling_twice_gives_byte_identical_scenario_files(world, installation, tmp_path):
+    first = compile_spec(world, installation, tmp_path / "a", name="twice")
+    second = compile_spec(world, installation, tmp_path / "b", name="twice")
+    for role in ("routes", "config", "network", "supervision"):
+        assert first.files[role].read_bytes() == second.files[role].read_bytes(), role
+    assert first.lock["files"] == second.lock["files"]
+
+
+def test_the_lock_binds_the_four_files_the_epoch_and_the_traffic(world, installation, tmp_path):
+    result = compile_spec(world, installation, tmp_path)
+    lock = result.lock
+    for role in ("routes", "config", "network", "supervision"):
+        path = result.files[role]
+        assert lock["files"][role] == {"path": path.name,
+                                       "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+    assert lock["epoch"] == EPOCH
+    assert lock["epoch_block_sha256"] == ScenarioEpoch.read(EPOCH).digest
+    assert lock["traffic"]["sumo_seed"] == 42 and lock["traffic"]["step_length_s"] == 0.05
+    assert lock["traffic"]["routed_by"]["version"] == installation.version
+    assert "sumo-install" not in json.dumps(lock), "the lock names no machine path"
+    plan = result.plan
+    assert plan["routes_digest"] == lock["files"]["routes"]["sha256"]
+
+
+def test_the_plan_states_every_subject_explicitly(world, installation, tmp_path):
+    plan = compile_spec(world, installation, tmp_path).plan
+    assert {row["entity_id"]: row["supervision"] for row in plan["entities"]} == {
+        "hauler": ["nominal"], "patrol_d0_h6": ["nominal"], "probe": ["annotated"]}
+    assert plan["cohorts"] == [{"flow_id": "ambient", "supervision": "unlabelled", "labels": []}]
+    absence = next(i for i in plan["instances"] if i["realisation"] == "absent")
+    assert absence["participants"] == [] and absence["slot_ref"] == "patrol_d0_h8"
+    assert absence["expected"]["route"] == {"from": "900", "to": "901#1", "via": []}
+    assert absence["intervals"][0]["phase"] == "vacancy"
+    assert absence["intervals"][0]["declared_start_civil"] == "2026-03-21T08:15:00-06:00"
+    assert absence["counter_evidence"] == {"series_slots_total": 2, "series_slots_realised": 1}
+    assert plan["vocabulary"]["core"]["terms"]["supervision_state"] == ["annotated", "nominal",
+                                                                       "unlabelled"]
+    assert "solar" not in json.dumps(plan) and "epoch" not in plan
+
+
+def test_the_report_states_every_time_in_seconds_and_civil(world, installation, tmp_path):
+    report = compile_spec(world, installation, tmp_path).report
+    assert report["epoch"]["statement"].startswith("t = 0 is 2026-03-21T06:00:00-06:00")
+    probe = next(r for r in report["routes"] if r["id"] == "probe")
+    assert probe["depart"] == {"authored": {"instant": "probe_time"}, "form": "day_clock",
+                               "seconds": 3600.0, "civil": "2026-03-21T07:00:00-06:00"}
+    window = report["capture_windows"][0]
+    assert window["civil_date"] == "2026-03-21" and window["sun_open"]["sun_date"] == "2026-03-21"
+    assert report["rotas"][0]["skips"][0]["because"] == "the second patrol does not come"
+
+
+# ---- the specification and the world binding ----------------------------------------------------
+
+def test_an_unknown_field_is_refused_under_check_53(world, installation, tmp_path):
+    result = compile_spec(world, installation, tmp_path, dst_policy="fixed_offset")
+    assert checks(result) == {53}
+    assert not (tmp_path / "out" / "street_layout_probe.rou.xml").exists()
+    assert result.files["resolution"].exists()
+
+
+def test_a_different_network_fingerprint_is_refused_under_check_1(world, installation, tmp_path):
+    result = compile_spec(world, installation, tmp_path,
+                          world={"package": "StreetLayout.cwp", "network_fingerprint": "0" * 64})
+    assert 1 in checks(result)
+
+
+def test_a_package_carrying_a_network_it_does_not_record_is_refused_under_check_2(
+        world, installation, tmp_path):
+    manifest = json.loads(zipfile.ZipFile(world.package).read("world.json"))
+    manifest["NetworkFingerprint"] = "f" * 64
+    rewrite_package(world.package, tmp_path / "w" / "StreetLayout.cwp",
+                    {"world.json": json.dumps(manifest).encode()})
+    spec = world.specification()
+    spec["world"]["package"] = str(tmp_path / "w" / "StreetLayout.cwp")
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c2.scenario.json"),
+                                                    tmp_path / "out")
+    assert 2 in checks(result)
+
+
+@pytest.mark.parametrize(("entry", "change", "check"), [
+    ("map.xodr", ("north=\"99.92\"", "north=\"109.92\""), 3),
+    ("world.json", ("+lat_0=39.5 ", "+lat_0=39.6 "), 4),
+])
+def test_a_package_in_another_frame_is_refused(world, installation, tmp_path, entry, change, check):
+    raw = zipfile.ZipFile(world.package).read(entry).decode("utf-8")
+    rewrite_package(world.package, tmp_path / "w" / "StreetLayout.cwp",
+                    {entry: raw.replace(*change).encode()})
+    spec = world.specification()
+    spec["world"]["package"] = str(tmp_path / "w" / "StreetLayout.cwp")
+    result = ScenarioCompiler(installation).compile(world.write(spec, f"frame{check}.scenario.json"),
+                                                    tmp_path / "out")
+    assert check in checks(result)
+
+
+def test_a_network_carrying_a_road_offset_is_refused_under_check_5(world, installation, tmp_path):
+    shifted = NETWORK.replace('netOffset="0.00,0.00"', 'netOffset="5.00,-3.00"')
+    manifest = json.loads(zipfile.ZipFile(world.package).read("world.json"))
+    manifest["NetworkFingerprint"] = NetworkFingerprint.of_text(shifted)
+    rewrite_package(world.package, tmp_path / "w" / "StreetLayout.cwp",
+                    {"map.net.xml": shifted.encode(), "world.json": json.dumps(manifest).encode()})
+    spec = world.specification()
+    spec["world"] = {"package": str(tmp_path / "w" / "StreetLayout.cwp"),
+                     "network_fingerprint": manifest["NetworkFingerprint"]}
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c5.scenario.json"),
+                                                    tmp_path / "out")
+    assert checks(result) == {5}
+    assert "5.0, -3.0" in messages(result, 5)
+
+
+# ---- the epoch and civil time -----------------------------------------------------------------------
+
+def test_no_epoch_is_refused_under_check_33(world, installation, tmp_path):
+    spec = world.specification()
+    del spec["epoch"]
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c33.scenario.json"),
+                                                    tmp_path / "out")
+    assert checks(result) == {33}
+
+
+def test_an_offset_that_is_not_a_quarter_hour_is_refused_under_check_34(world, installation,
+                                                                       tmp_path):
+    result = compile_spec(world, installation, tmp_path, epoch=dict(EPOCH, utc_offset_hours=-6.1))
+    assert 34 in checks(result)
+
+
+def test_a_missing_or_malformed_illumination_default_is_refused_under_check_39(world, installation,
+                                                                              tmp_path):
+    spec = world.specification()
+    del spec["illumination"]
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c39.scenario.json"),
+                                                    tmp_path / "out")
+    assert checks(result) == {39}
+    rate_on_freeze = compile_spec(world, installation, tmp_path / "rate", illumination={
+        "illumination_version": 1, "policy": "freeze_at_window_start", "rate_sun_s_per_sim_s": 1.0})
+    assert "rate_sun_s_per_sim_s" in messages(rate_on_freeze, 39)
+
+
+def test_a_clock_alone_on_a_multi_day_run_is_refused_under_check_47(world, installation, tmp_path):
+    result = compile_spec(world, installation, tmp_path,
+                          simulation={"end": "d2 00:00", "step_length_s": 0.05},
+                          instants={"probe_time": "07:00"})
+    assert 47 in checks(result) and "d0 07:00" in messages(result, 47)
+
+
+def test_a_departure_outside_the_run_is_refused_under_check_37(world, installation, tmp_path):
+    spec = world.specification()
+    spec["actors"][1]["depart"] = "d0 09:30"
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c37.scenario.json"),
+                                                    tmp_path / "out")
+    assert 37 in checks(result) and "after the run ends" in messages(result, 37)
+
+
+def test_a_skip_that_plants_nothing_is_refused_under_check_48(world, installation, tmp_path):
+    spec = world.specification()
+    spec["rotas"][0]["skip"][0]["at"] = "07:15"
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c48.scenario.json"),
+                                                    tmp_path / "out")
+    assert 48 in checks(result)
+
+
+# ---- references and places --------------------------------------------------------------------------
+
+def test_an_ambiguous_street_is_refused_with_its_candidates_under_check_7(world, installation,
+                                                                        tmp_path):
+    spec = world.specification()
+    spec["places"]["east_before_cross"] = {"street": "East Street", "direction": "east"}
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c7.scenario.json"),
+                                                    tmp_path / "out")
+    assert 7 in checks(result)
+    assert "901#0" in messages(result, 7) and "901#1" in messages(result, 7)
+
+
+def test_an_unknown_edge_is_refused_with_the_nearest_names_under_check_7(world, installation,
+                                                                       tmp_path):
+    spec = world.specification()
+    spec["places"]["west_gate"] = {"edge": "9000"}
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c7b.scenario.json"),
+                                                    tmp_path / "out")
+    assert 7 in checks(result) and "nearest" in messages(result, 7)
+
+
+def test_an_undeclared_place_or_instant_is_refused_under_check_8(world, installation, tmp_path):
+    spec = world.specification()
+    spec["actors"][1]["to"] = "nowhere"
+    spec["actors"][0]["depart"] = {"instant": "never"}
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c8.scenario.json"),
+                                                    tmp_path / "out")
+    assert 8 in checks(result)
+    assert "nowhere" in messages(result, 8) and "never" in messages(result, 8)
+
+
+def test_a_stop_beyond_its_lane_is_refused_under_check_9(world, installation, tmp_path):
+    spec = world.specification()
+    spec["places"]["kerb"] = {"lane": "901#0_0", "offset_m": 500.0}
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c9.scenario.json"),
+                                                    tmp_path / "out")
+    assert 9 in checks(result)
+
+
+def test_a_class_barred_from_an_edge_is_refused_under_check_10(world, installation, tmp_path):
+    spec = world.specification()
+    spec["vehicle_classes"].append({"class_id": "tramcar", "blueprints": ["vehicle.mini.cooper",
+                                                                         "vehicle.lincoln.mkz"],
+                                    "sumo_vclass": "tram", "share": 0.0})
+    spec["actors"][1]["type"] = "tramcar"
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c10.scenario.json"),
+                                                    tmp_path / "out")
+    assert 10 in checks(result) and "tram" in messages(result, 10)
+
+
+def test_an_explicit_route_with_a_gap_is_refused_under_check_13(world, installation, tmp_path):
+    spec = world.specification()
+    spec["places"]["cross_north_in"] = {"edge": "-902#1"}
+    spec["actors"][1] = {"id": "hauler", "type": "car", "depart": "d0 07:30",
+                         "route": ["west_gate", "cross_south"]}
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c13.scenario.json"),
+                                                    tmp_path / "out")
+    assert 13 in checks(result) and "900 to 902#1" in messages(result, 13)
+
+
+def test_a_duplicate_vehicle_id_is_refused_under_check_54(world, installation, tmp_path):
+    spec = world.specification()
+    spec["actors"][1]["id"] = "patrol_d0_h6"
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c54.scenario.json"),
+                                                    tmp_path / "out")
+    assert 54 in checks(result)
+
+
+# ---- vehicles ----------------------------------------------------------------------------------------
+
+def test_a_body_the_catalogue_did_not_measure_is_refused_under_check_14(world, installation,
+                                                                       tmp_path):
+    spec = world.specification()
+    spec["vehicle_classes"][0]["blueprints"].append("vehicle.harley.lowrider")
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c14.scenario.json"),
+                                                    tmp_path / "out")
+    assert 14 in checks(result)
+
+
+def test_an_undeclared_type_is_refused_under_check_16(world, installation, tmp_path):
+    spec = world.specification()
+    spec["actors"][1]["type"] = "pickup"
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c16.scenario.json"),
+                                                    tmp_path / "out")
+    assert 16 in checks(result)
+
+
+# ---- routes ----------------------------------------------------------------------------------------
+
+def test_duarouter_false_accept_is_refused_under_check_12(installation, tmp_path):
+    network = tmp_path / "net.xml"
+    network.write_text(NETWORK, encoding="utf-8")
+    findings = CompileFindings()
+    requests = [RouteRequest("vehicle", "good", "car", 0.0, "900", "901#1"),
+                RouteRequest("vehicle", "typo", "car", 1.0, "900", "NOT_AN_EDGE"),
+                RouteRequest("flow", "typo_flow", "car", 0.0, "900", "NOT_AN_EDGE",
+                             flow_end=100.0, vehs_per_hour=100.0)]
+    result = RouteValidator(installation, findings).route(
+        network, '<vType id="car" vClass="passenger"/>', requests, 42)
+    assert result.routes == {"good": ("900", "901#0", "901#1")}
+    guarded = {f.subject for f in findings.by_check(12)}
+    assert guarded == {"vehicle typo", "flow typo_flow"}
+    assert "ends on 900" in findings.by_check(12)[0].message
+
+
+def test_a_request_with_no_route_is_refused_under_check_11(installation, tmp_path):
+    network = tmp_path / "net.xml"
+    network.write_text(NETWORK, encoding="utf-8")
+    findings = CompileFindings()
+    requests = [RouteRequest("vehicle", "tram", "tramtype", 0.0, "900", "901#1")]
+    RouteValidator(installation, findings).route(
+        network, '<vType id="tramtype" vClass="tram"/>', requests, 42)
+    assert [f.check_id for f in findings.findings] == [11]
+
+
+def test_the_guard_checks_via_and_stop_order():
+    request = RouteRequest("vehicle", "x", "car", 0.0, "a", "d", via=("c", "b"),
+                           stops=(("b_0", 5.0),))
+    problems = RouteValidator._guard(request, ("a", "b", "c", "d"))
+    assert any("via edge b" in p for p in problems)
+    assert RouteValidator._guard(request, ("a", "c", "b", "d")) == []
+
+
+# ---- supervision ------------------------------------------------------------------------------------
+
+def supervision_with(world, **changes) -> dict:
+    block = world.specification()["supervision"]
+    block.update(changes)
+    return block
+
+
+def test_a_label_in_an_undeclared_namespace_is_refused_under_check_46(world, installation, tmp_path):
+    block = supervision_with(world)
+    block["instances"][0]["labels"] = ["elsewhere:standoff"]
+    result = compile_spec(world, installation, tmp_path, supervision=block)
+    assert 46 in checks(result)
+
+
+def test_an_undeclared_term_is_refused_under_check_18(world, installation, tmp_path):
+    block = supervision_with(world)
+    block["instances"][0]["labels"] = ["fixture:loiter"]
+    result = compile_spec(world, installation, tmp_path, supervision=block)
+    assert 18 in checks(result)
+
+
+def test_a_term_on_the_wrong_kind_of_subject_is_refused_under_check_45(world, installation,
+                                                                      tmp_path):
+    block = supervision_with(world)
+    block["instances"][0]["labels"] = ["fixture:patrol_missed"]
+    result = compile_spec(world, installation, tmp_path, supervision=block)
+    assert 45 in checks(result)
+    assert "applies to ['slot']" in messages(result, 45)
+
+
+def test_a_participant_that_is_not_an_actor_is_refused_under_check_19(world, installation, tmp_path):
+    block = supervision_with(world)
+    block["instances"][0]["participants"] = [{"actor": "ambient", "role": "subject"}]
+    result = compile_spec(world, installation, tmp_path, supervision=block)
+    assert 19 in checks(result) and "cohort" in messages(result, 19)
+
+
+def test_an_unknown_area_is_refused_under_check_20(world, installation, tmp_path):
+    block = supervision_with(world)
+    block["instances"][0]["aoi_refs"] = ["drydock"]
+    result = compile_spec(world, installation, tmp_path, supervision=block)
+    assert 20 in checks(result)
+
+
+def test_a_duplicate_instance_is_refused_under_check_21(world, installation, tmp_path):
+    block = supervision_with(world)
+    block["instances"].append(dict(block["instances"][1]))
+    result = compile_spec(world, installation, tmp_path, supervision=block)
+    assert 21 in checks(result)
+
+
+def test_an_interval_before_its_vehicle_departs_is_warned_under_check_22(world, installation,
+                                                                        tmp_path):
+    block = supervision_with(world)
+    block["instances"][0]["intervals"][0]["begin"] = "d0 06:50"
+    result = compile_spec(world, installation, tmp_path, supervision=block,
+                          capture_windows=[{"id": "later", "begin": "d0 07:30", "length": "15m"}])
+    assert not result.refused and 22 in checks(result, "warn")
+
+
+def test_a_cohort_with_an_interval_or_nominal_is_refused_under_checks_23_and_49(world, installation,
+                                                                             tmp_path):
+    block = supervision_with(world, cohorts=[{"flow": "ambient", "supervision": "nominal",
+                                              "intervals": [{"phase": "x"}]}])
+    result = compile_spec(world, installation, tmp_path, supervision=block)
+    assert {23, 49} <= checks(result)
+
+
+def test_reserved_words_are_enforced_under_check_50(world, installation, tmp_path):
+    block = supervision_with(world)
+    block["instances"][0]["participants"][0]["role"] = "fixture:patroller"
+    block["instances"][0]["intervals"][0]["phase"] = "vacancy"
+    result = compile_spec(world, installation, tmp_path, supervision=block)
+    assert 50 in checks(result)
+    assert "subject" in messages(result, 50) and "vacancy" in messages(result, 50)
+
+
+def test_annotating_without_any_nominal_subject_is_warned_under_check_24(world, installation,
+                                                                        tmp_path):
+    block = supervision_with(world)
+    block["instances"] = block["instances"][:1]
+    block["series"][0]["supervision"] = "unlabelled"
+    block["series"][0]["labels"] = []
+    result = compile_spec(world, installation, tmp_path, supervision=block)
+    assert not result.refused and 24 in checks(result, "warn")
+
+
+# ---- capture windows and the sun --------------------------------------------------------------------
+
+def test_a_window_cutting_an_interval_is_refused_under_check_38(world, installation, tmp_path):
+    result = compile_spec(world, installation, tmp_path,
+                          capture_windows=[{"id": "cut", "begin": "d0 07:03", "length": "10m"}])
+    assert 38 in checks(result) and "probe_standoff" in messages(result, 38)
+
+
+def test_a_window_past_the_run_is_refused_under_check_38(world, installation, tmp_path):
+    result = compile_spec(world, installation, tmp_path,
+                          capture_windows=[{"id": "late", "begin": "d0 08:50", "length": "30m"}])
+    assert 38 in checks(result)
+
+
+def test_a_night_window_warns_under_check_42_and_never_refuses(world, installation, tmp_path):
+    result = compile_spec(world, installation, tmp_path,
+                          capture_windows=[{"id": "dark", "begin": "d0 06:00", "length": "5m"}])
+    assert not result.refused and 42 in checks(result, "warn")
+    assert "D11.7" in messages(result, 42)
+
+
+def test_an_advancing_default_names_the_arc_under_check_39(world, installation, tmp_path):
+    result = compile_spec(world, installation, tmp_path, illumination={
+        "illumination_version": 1, "policy": "advance", "rate_sun_s_per_sim_s": 1.0})
+    assert not result.refused and 39 in checks(result, "warn")
+    window = result.report["capture_windows"][0]
+    assert window["sun_close"]["elevation_deg"] > window["sun_open"]["elevation_deg"]
+
+
+def test_a_held_calendar_warns_when_a_window_falls_on_another_date_under_check_36(
+        world, installation, tmp_path):
+    held = dict(EPOCH, calendar_advances=False)
+    result = compile_spec(world, installation, tmp_path, epoch=held,
+                          simulation={"end": "d2 00:00", "step_length_s": 0.05},
+                          capture_windows=[{"id": "next_day", "begin": "d1 07:00", "length": "15m"}])
+    assert not result.refused and 36 in checks(result, "warn")
+    window = result.report["capture_windows"][0]
+    assert (window["civil_date"], window["sun_open"]["sun_date"]) == ("2026-03-22", "2026-03-21")
+
+
+def test_an_offset_far_from_the_world_warns_under_check_40(world, installation, tmp_path):
+    iran = {"epoch_version": 1, "civil_datetime": "2026-03-21T06:00:00+03:30",
+            "utc_offset_hours": 3.5, "utc_datetime": "2026-03-21T02:30:00Z",
+            "calendar_advances": True, "dst_in_effect": False}
+    result = compile_spec(world, installation, tmp_path, epoch=iran)
+    assert 40 in checks(result, "warn")
+
+
+def test_a_flow_past_the_run_warns_under_check_32_and_a_long_stop_under_check_31(
+        world, installation, tmp_path):
+    spec = world.specification()
+    spec["flows"][0]["end"] = "d0 10:00"
+    spec["actors"][1]["stops"] = [{"place": "kerb", "duration": "3h"}]
+    spec["actors"][1]["to"] = "east_end"
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c31.scenario.json"),
+                                                    tmp_path / "out")
+    assert {31, 32} <= checks(result, "warn")
+
+
+# ---- emission ----------------------------------------------------------------------------------------
+
+def test_a_route_file_sumo_would_not_load_is_refused_under_check_51(world, installation, tmp_path):
+    spec = world.specification()
+    spec["actors"][1]["depart_lane"] = "sideways"
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c51.scenario.json"),
+                                                    tmp_path / "out")
+    assert 51 in checks(result)
+    assert not (tmp_path / "out" / "street_layout_probe.rou.xml").exists()
+
+
+def test_a_name_with_a_double_hyphen_is_escaped_rather_than_breaking_the_file(world, installation,
+                                                                            tmp_path):
+    result = compile_spec(world, installation, tmp_path, scenario_name="probe -- kerb")
+    assert not result.refused
+    assert "--" not in "".join(
+        part for part in result.files["routes"].read_text(encoding="utf-8").split("<!--")[1:]
+        for part in [part.split("-->")[0]])
+
+
+@pytest.mark.parametrize(("routes", "check"), [
+    ('<routes><vehicle id="b" depart="9.00"><route edges="900"/></vehicle>'
+     '<vehicle id="a" depart="1.00"><route edges="900"/></vehicle></routes>', 29),
+    ('<routes><!-- a -- b --><vehicle id="a" depart="1.00"><route edges="900"/></vehicle></routes>',
+     30),
+    ('<routes><vehicle id="a" depart="7:00:00"><route edges="900"/></vehicle></routes>', 44),
+    ('<routes><vType id="t"><param key="capture:instance_id" value="x"/></vType></routes>', 52),
+])
+def test_the_self_checks_refuse_a_defective_route_file(installation, tmp_path, routes, check):
+    compiler = ScenarioCompiler(installation)
+    compiler.findings = CompileFindings()
+    compiler._self_check(routes, "<configuration/>")
+    assert check in {f.check_id for f in compiler.findings.refusals}
+
+
+def test_the_compiler_and_its_cli_agree(world, installation, tmp_path):
+    spec = world.write(world.specification(), "cli.scenario.json")
+    script = _REPO / "CarlaControl" / "scripts" / "compile_scenario.py"
+    completed = subprocess.run([sys.executable, str(script), str(spec), "--out-dir",
+                                str(tmp_path / "out"), "--sumo-home", str(installation.home)],
+                               capture_output=True, text=True, timeout=600, check=False)
+    assert completed.returncode == 0, completed.stderr[-2000:]
+    assert (tmp_path / "out" / "street_layout_probe.lock.json").exists()
+    shutil.rmtree(tmp_path / "out")
+
+
+# ---- assertions the mutation runs showed were missing -------------------------------------------
+
+def test_a_street_narrowed_with_at_names_the_edge_arriving_at_the_cross_street(world, installation,
+                                                                             tmp_path):
+    report = compile_spec(world, installation, tmp_path).report
+    assert report["places"]["east_before_cross"]["edges"] == ["901#0"]
+
+
+def test_an_absence_naming_a_realised_occasion_is_refused_under_check_8(world, installation,
+                                                                      tmp_path):
+    block = supervision_with(world)
+    block["absences"][0]["entry"] = "patrol_d0_h6"
+    result = compile_spec(world, installation, tmp_path, supervision=block)
+    assert 8 in checks(result) and "does not skip" in messages(result, 8)
+
+
+def test_an_actor_nobody_supervises_is_written_unlabelled(world, installation, tmp_path):
+    block = supervision_with(world)
+    block["instances"] = block["instances"][:1]
+    plan = compile_spec(world, installation, tmp_path, supervision=block).plan
+    assert {row["entity_id"]: row["supervision"] for row in plan["entities"]}["hauler"] == \
+        ["unlabelled"]
+
+
+def test_an_undeclared_role_in_a_declared_namespace_is_refused_under_check_18(world, installation,
+                                                                            tmp_path):
+    block = supervision_with(world)
+    block["series"][0]["member_role"] = "fixture:guard"
+    result = compile_spec(world, installation, tmp_path, supervision=block)
+    assert 18 in checks(result) and "fixture:guard" in messages(result, 18)
+
+
+def test_an_interval_ending_after_the_run_is_warned_under_check_31(world, installation, tmp_path):
+    block = supervision_with(world)
+    block["instances"][0]["intervals"][0]["end"] = "d0 09:30"
+    result = compile_spec(world, installation, tmp_path, supervision=block,
+                          capture_windows=[{"id": "later", "begin": "d0 06:30", "length": "15m"}])
+    assert not result.refused and "scenario_end" in messages(result, 31)

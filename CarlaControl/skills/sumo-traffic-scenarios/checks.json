@@ -1,0 +1,603 @@
+{
+  "checks_version": 1,
+  "outcomes": {
+    "refuse": "the compile fails and nothing is emitted",
+    "warn": "the compile goes on and the warning is carried in full into the resolution report"
+  },
+  "checks": [
+    {
+      "id": 53,
+      "group": "specification",
+      "title": "The specification is well formed at a spec_version this compiler implements: known fields only, each of its declared type",
+      "against": "the specification schema",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A field nobody reads, which its author will later believe was honoured"
+    },
+    {
+      "id": 1,
+      "group": "world_binding",
+      "title": "The network fingerprint the specification names equals the world package's",
+      "against": "the world package",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "Authoring against a road graph other than the one that renders"
+    },
+    {
+      "id": 2,
+      "group": "world_binding",
+      "title": "The package's network and OpenDRIVE came from one netconvert invocation, and the network it carries is the one it records",
+      "against": "world.json NetconvertArgv and NetworkFingerprint",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A network and a map from two runs, which disagree about lanes"
+    },
+    {
+      "id": 3,
+      "group": "world_binding",
+      "title": "The network's convBoundary equals the OpenDRIVE header's north, south, east and west",
+      "against": "map.net.xml and map.xodr",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A network in a different frame from the map"
+    },
+    {
+      "id": 4,
+      "group": "world_binding",
+      "title": "The network's projParameter equals world.json's GeoReferenceString",
+      "against": "map.net.xml and world.json",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "Origin drift between the network and the world"
+    },
+    {
+      "id": 5,
+      "group": "world_binding",
+      "title": "The network's netOffset is zero",
+      "against": "map.net.xml",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A network whose metres are displaced from the world's geographic frame"
+    },
+    {
+      "id": 6,
+      "group": "world_binding",
+      "title": "The SUMO release routing the scenario is the one that built the world",
+      "against": "world.json NetconvertVersion and the SUMO installation",
+      "outcomes": [
+        "warn"
+      ],
+      "status": "compiler",
+      "prevents": "Routes validated by one release against a network another built"
+    },
+    {
+      "id": 7,
+      "group": "references",
+      "title": "Every declared place resolves, and to exactly one thing",
+      "against": "the network, the place index and the area table",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "An authored place that silently becomes a different place"
+    },
+    {
+      "id": 8,
+      "group": "references",
+      "title": "Every reference names what the specification declares: places, instants, rotas, series, flows and counterfactuals",
+      "against": "the specification",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A typo becoming a valid-looking identifier"
+    },
+    {
+      "id": 54,
+      "group": "references",
+      "title": "Every actor, rota entry, flow and capture window id is unique",
+      "against": "the specification",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "Two vehicles SUMO would read as one, or a window cited ambiguously"
+    },
+    {
+      "id": 9,
+      "group": "references",
+      "title": "Every stop position lies within its lane's length",
+      "against": "map.net.xml",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A dwell clamped to somewhere other than where it was authored"
+    },
+    {
+      "id": 10,
+      "group": "references",
+      "title": "Every vehicle's class may drive every edge of its route",
+      "against": "lane allow and disallow in map.net.xml",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A route through a fence the vehicle cannot pass"
+    },
+    {
+      "id": 11,
+      "group": "routes",
+      "title": "Every origin, destination and via routes",
+      "against": "duarouter",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "No valid route at SUMO load, after a capture was scheduled"
+    },
+    {
+      "id": 12,
+      "group": "routes",
+      "title": "Each routed result ends on the requested destination and passes every via and stop edge in order",
+      "against": "the routed output",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "duarouter's false accept: a trip to a nonexistent edge routes as one edge"
+    },
+    {
+      "id": 13,
+      "group": "routes",
+      "title": "An explicit edge list is connected end to end",
+      "against": "map.net.xml connections",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A break that appears only where the list is used"
+    },
+    {
+      "id": 14,
+      "group": "vehicles",
+      "title": "Every vehicle class names only blueprints the catalogue measured",
+      "against": "the vehicle catalogue",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A type with no body, discovered at spawn"
+    },
+    {
+      "id": 15,
+      "group": "vehicles",
+      "title": "Every emitted vType's length, width and height are its blueprint's measured box",
+      "against": "the vehicle catalogue",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "SUMO's gaps and CARLA's rendering disagreeing by the difference"
+    },
+    {
+      "id": 16,
+      "group": "vehicles",
+      "title": "Every type a flow or actor names is a declared class, one of its member types, or the mix",
+      "against": "the specification",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A vehicle drawn from a type nothing declares"
+    },
+    {
+      "id": 17,
+      "group": "vehicles",
+      "title": "A vehicle class draws from more than one body",
+      "against": "the specification",
+      "outcomes": [
+        "warn"
+      ],
+      "status": "compiler",
+      "prevents": "Appearance becoming the label: every member of the class is the same car"
+    },
+    {
+      "id": 18,
+      "group": "annotation",
+      "title": "Every label is a declared term and every role but subject a declared role; an annotation carries a label; the declarations resolve inside the published vocabulary",
+      "against": "the vocabulary block",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A label spelled three ways in one corpus, or one no consumer can read"
+    },
+    {
+      "id": 45,
+      "group": "annotation",
+      "title": "Every label's applies_to includes the subject kind, and its realisation the instance's realisation",
+      "against": "the vocabulary block",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A per-member term on a flow, or an absence term on a vehicle"
+    },
+    {
+      "id": 46,
+      "group": "annotation",
+      "title": "Every namespace in a label, role, phase or area kind was declared or imported",
+      "against": "the vocabulary block",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A term no published vocabulary defines"
+    },
+    {
+      "id": 19,
+      "group": "annotation",
+      "title": "Every participant names a declared actor",
+      "against": "the specification",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "An instance whose participant never exists"
+    },
+    {
+      "id": 20,
+      "group": "annotation",
+      "title": "Every aoi_ref names an area in the world's area table",
+      "against": "areas.resolved.json",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "An annotation naming a place only its author can see"
+    },
+    {
+      "id": 21,
+      "group": "annotation",
+      "title": "Instance ids are derived from the scenario id and the authored name, and unique",
+      "against": "the specification",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "Sweep members that cannot be joined"
+    },
+    {
+      "id": 22,
+      "group": "annotation",
+      "title": "No annotated interval begins before its participant departs",
+      "against": "the resolved departures",
+      "outcomes": [
+        "warn"
+      ],
+      "status": "compiler",
+      "prevents": "An interval no vehicle could have been in"
+    },
+    {
+      "id": 23,
+      "group": "annotation",
+      "title": "A cohort carries only a whole-life annotation, never an interval",
+      "against": "06 D6.2",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A phase asserted over a generator whose members are unknown until the run"
+    },
+    {
+      "id": 49,
+      "group": "annotation",
+      "title": "No cohort is nominal",
+      "against": "06 D6.2",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A negative asserted of vehicles nobody authored one by one"
+    },
+    {
+      "id": 50,
+      "group": "annotation",
+      "title": "A one-participant instance names its participant subject; the phase vacancy is never authored",
+      "against": "06 §3.7 reserved words",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A consumer guessing which track an instance is about"
+    },
+    {
+      "id": 24,
+      "group": "annotation",
+      "title": "Some subject is nominal when any is annotated",
+      "against": "the specification",
+      "outcomes": [
+        "warn"
+      ],
+      "status": "compiler",
+      "prevents": "A corpus with no hard negatives"
+    },
+    {
+      "id": 25,
+      "group": "areas",
+      "title": "Area ids unique, rings closed and not self-intersecting, radius positive",
+      "against": "04 C5 V5.1-V5.4",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "world_build",
+      "prevents": "Undefined containment; the compiler reads only a table the world build validated"
+    },
+    {
+      "id": 26,
+      "group": "areas",
+      "title": "An area's envelope intersects the world",
+      "against": "04 C5",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "world_build",
+      "prevents": "An area outside the world entirely"
+    },
+    {
+      "id": 27,
+      "group": "areas",
+      "title": "A referenced area is not in the staging ring",
+      "against": "the area table's V5.5 and V5.6 warnings",
+      "outcomes": [
+        "warn"
+      ],
+      "status": "compiler",
+      "prevents": "A pattern sited where traffic spawns and despawns"
+    },
+    {
+      "id": 28,
+      "group": "areas",
+      "title": "A referenced area can be reached by a road vehicle",
+      "against": "the area table's V5.7 warning",
+      "outcomes": [
+        "warn"
+      ],
+      "status": "compiler",
+      "prevents": "An area no vehicle can reach"
+    },
+    {
+      "id": 33,
+      "group": "epoch_and_illumination",
+      "title": "The epoch is present and accepted by CarlaNet.CoSim.SolarEpoch under every 04 C9 epoch rule",
+      "against": "the specification",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A scenario whose seconds mean no civil time"
+    },
+    {
+      "id": 34,
+      "group": "epoch_and_illumination",
+      "title": "utc_offset_hours is a whole number of quarter hours in [-12, +14]",
+      "against": "the specification, through SolarEpoch",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "An offset no civil zone uses, or one the engine would clamp"
+    },
+    {
+      "id": 35,
+      "group": "epoch_and_illumination",
+      "title": "The zone name's offset agrees with utc_offset_hours",
+      "against": "none: time_zone_id is carried and never resolved",
+      "outcomes": [],
+      "status": "retired",
+      "prevents": "Retired: 04 §11.3 and 11 D11.1 make the zone name provenance only"
+    },
+    {
+      "id": 47,
+      "group": "epoch_and_illumination",
+      "title": "Every authored time is in an accepted form, names its day on a multi-day scenario, and carries the epoch's offset when absolute",
+      "against": "the specification",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A clock-shaped literal that is really an offset"
+    },
+    {
+      "id": 48,
+      "group": "epoch_and_illumination",
+      "title": "Every rota expands to entries, and every skip matches an entry it would have produced",
+      "against": "the rota",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "An absence that was never planted"
+    },
+    {
+      "id": 37,
+      "group": "epoch_and_illumination",
+      "title": "Every resolved instant lies in [0, end]",
+      "against": "the resolved instants",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "An instant that silently falls outside the run"
+    },
+    {
+      "id": 36,
+      "group": "epoch_and_illumination",
+      "title": "A window's civil date differs from the date its sun is written with",
+      "against": "the epoch's calendar_advances and the policy",
+      "outcomes": [
+        "warn"
+      ],
+      "status": "compiler",
+      "prevents": "A window rendered under another date's seasonal sun without notice"
+    },
+    {
+      "id": 38,
+      "group": "epoch_and_illumination",
+      "title": "Every capture window lies in the span and cuts no supervision interval",
+      "against": "the specification and the supervision plan",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A partially observed positive teaching a truncated pattern"
+    },
+    {
+      "id": 39,
+      "group": "epoch_and_illumination",
+      "title": "The illumination default is accepted by CarlaNet.CoSim.IlluminationPolicy; an advancing sun's arc per window is named",
+      "against": "the specification",
+      "outcomes": [
+        "refuse",
+        "warn"
+      ],
+      "status": "compiler",
+      "prevents": "A window authored as a constant that is not one"
+    },
+    {
+      "id": 40,
+      "group": "epoch_and_illumination",
+      "title": "The declared offset is within an hour of the zone the world's georeference configures",
+      "against": "solar.json engine_time_zone_hours",
+      "outcomes": [
+        "warn"
+      ],
+      "status": "compiler",
+      "prevents": "A declared offset that is not this place's"
+    },
+    {
+      "id": 42,
+      "group": "epoch_and_illumination",
+      "title": "A window whose sun is below -6 degrees is named as not corpus-eligible",
+      "against": "11 D11.7",
+      "outcomes": [
+        "warn"
+      ],
+      "status": "compiler",
+      "prevents": "A night window captured by accident"
+    },
+    {
+      "id": 41,
+      "group": "epoch_and_illumination",
+      "title": "The illumination-label association over the declared windows",
+      "against": "the resolved instants, the supervision plan and the sun",
+      "outcomes": [
+        "warn"
+      ],
+      "status": "compiler",
+      "prevents": "Discovering after training that the light carried the label"
+    },
+    {
+      "id": 43,
+      "group": "epoch_and_illumination",
+      "title": "A sweep holds illumination while it varies behaviour, varies only illumination when it says so, and names a crossed design; a counterfactual pair shares its base's epoch, windows and illumination unless displaced in time",
+      "against": "the sweep",
+      "outcomes": [
+        "refuse",
+        "warn"
+      ],
+      "status": "compiler",
+      "prevents": "A behaviour sweep captured under different light"
+    },
+    {
+      "id": 29,
+      "group": "emission",
+      "title": "The route file is departure-sorted",
+      "against": "the emitted file",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "SUMO dropping out-of-order entries with only a warning"
+    },
+    {
+      "id": 30,
+      "group": "emission",
+      "title": "No XML comment contains --",
+      "against": "the emitted files",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "SUMO rejecting the file"
+    },
+    {
+      "id": 44,
+      "group": "emission",
+      "title": "No emitted SUMO file carries an H:M:S time",
+      "against": "the emitted files",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "An offset wearing a clock's clothes"
+    },
+    {
+      "id": 51,
+      "group": "emission",
+      "title": "The route file is valid against SUMO's routes_file.xsd",
+      "against": "the emitted file",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A route file SUMO will not load"
+    },
+    {
+      "id": 52,
+      "group": "emission",
+      "title": "The route file carries no parameter but the vehicle-type binding's",
+      "against": "the emitted file",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "Supervision leaking into the route file, the channel it must never use"
+    },
+    {
+      "id": 31,
+      "group": "emission",
+      "title": "The run ends after every declared interval and departure",
+      "against": "the resolved instants",
+      "outcomes": [
+        "warn"
+      ],
+      "status": "compiler",
+      "prevents": "A behaviour truncated by the run ending"
+    },
+    {
+      "id": 32,
+      "group": "emission",
+      "title": "Every flow's window lies inside the run",
+      "against": "the specification",
+      "outcomes": [
+        "warn"
+      ],
+      "status": "compiler",
+      "prevents": "A flow that never fires"
+    }
+  ]
+}

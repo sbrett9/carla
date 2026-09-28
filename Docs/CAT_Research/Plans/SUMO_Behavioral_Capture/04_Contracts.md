@@ -31,6 +31,8 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 12 | `C9`'s package-build rules carried out by the scenario compiler with the session's own readers |
+| 11 | `C9`: `set_solar_epoch` writes the declared offset as the sun's zone; no client-side conversion; one advance mechanism |
 | 10 | `C5` built at world build: resolved table in the world package, SUMO lane positions and intervals, V5.12 compares two implementations; the engine RPC pair specified |
 | 9 | `C6`: the session writes an advancing sun every tick, engine advance off; residual tolerances rate-independent |
 | 8 | The OpenSCENARIO catalogue projection leaves this plan; `C1` has one serialisation |
@@ -1531,7 +1533,7 @@ Every check runs at run start, against the world actually loaded.
 | V3.11 | `epoch` is absent, or `epoch_block_sha256` does not match the `epoch` object as carried | **refuse** | `C9` §11.12. A package whose epoch has been edited away from the one it was validated under is a package whose windows mean something other than what the author wrote |
 | V3.12 | `epoch` is present but fails any `C9` V9.* rule | **refuse** | The epoch is checked *as part of loading the package*, not at first use, so a run never gets as far as rendering a frame under an epoch that will not validate |
 | V3.13 | The world reports no sun — `get_solar_state` returns empty (`CesiumHeightSampler.cpp:760-763`, shim `None` at `carlanet/__init__.py:1527`) — and `illumination.require_sun` is true | **refuse** | `C9` §11.7. Running anyway would produce a corpus whose every frame is lit by something nobody declared |
-| V3.14 | The world's `OriginLongitude` differs from `world_origin_longitude` | already **refuse** by V3.3 | Restated here because `C9`'s civil-to-sun-clock conversion is a function of it (§11.4): the same digest that protects the coordinate identity also protects the sun |
+| V3.14 | The world's `OriginLongitude` differs from `world_origin_longitude` | already **refuse** by V3.3 | Restated here because the sun's position is computed from the world's origin (§11.3): the same digest that protects the coordinate identity also protects the sun |
 | V3.15 | `vocabulary_sha256` does not match `annotations/vocabulary.json` as carried | **refuse** | A term list edited after the annotation set was compiled against it still resolves every label, and resolves some of them to a meaning the author never wrote. The failure is invisible in both artifacts, which is the same property that puts the epoch at this tier ([`06`](06_Truth_And_Annotation.md) §8.7) |
 
 That tiering answers doc 20 §11 question 6 for this plan: **the area block is digested separately and
@@ -2627,7 +2629,7 @@ flowchart LR
 ```
 
 The arrows out are the whole of `C8`'s runtime behaviour. **Exactly one arrow carries data in** — the
-transcript's — and it lands in a store that nothing of ours reads, which is why §10.10 is the precise
+transcript's — and it goes into a store that nothing of ours reads, which is why §10.10 is the precise
 statement of the one-directional guarantee rather than an exception to it. The dotted arrow from the
 external process carries an *invocation*, not data, and the surface it uses is
 [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md)'s; what it reads back is the `C10`
@@ -2891,7 +2893,7 @@ Three properties, each checkable:
    anything an external consumer returns. The live mode makes this sentence carry more weight rather
    than less, because bytes genuinely can arrive: a live exercise may receive tracks or reports. The
    guarantee is therefore stated over **artifacts**, not over sockets — *no artifact this system
-   produces has any inbound path* — and the one place inbound bytes may land is a store that no producer
+   produces has any inbound path* — and the one place inbound bytes may go is a store that no producer
    of ours reads (§10.10, `D4.32`). A feedback path needs a reader; there is none, and V8.20 is the
    build-time check that keeps it that way.
 4. **In the live mode the same isolation binds the emitter.** One endpoint per root, never one stream
@@ -3115,9 +3117,9 @@ point of `D4.29`.
               "run_id": "cap-20260321-2300", "image_sha256": "9f1c…", "frame": "<bytes>",
               "sensor_pose": { "…": "§10.3" }, "intrinsics": { "…": "§10.3" },
               "radiometry": { "…": "§10.3" },
-              "solar": { "solar_time": 23.245377, "date": "2026-03-21", "time_zone": 3.7453767,
+              "solar": { "solar_time": 23.0000002778, "date": "2026-03-21", "time_zone": 3.5,
                          "lat": 27.15012, "lon": 56.18065,
-                         "sun_elevation_deg": -39.1, "sun_azimuth_deg": 22.4 },
+                         "sun_elevation_deg": -59.6, "sun_azimuth_deg": 333.5 },
               "epoch": { "civil_datetime": "2026-03-21T00:00:00+03:30", "utc_offset_hours": 3.5,
                          "utc_datetime": "2026-03-20T20:30:00Z" } } }
 
@@ -3414,8 +3416,8 @@ container is ours and the content is not (`D4.32`).
   to prevent.
 - **A hard example stays unexplained.** Without the label-quality block of §10.7, a label that was
   crowded, half-occluded or lamp-only is indistinguishable from a clean one, and the corpus cannot tell
-  anyone which of its labels were weak. Doc 20 §7.6 asked for exactly this, and `D4.28` is where it
-  lands now that there is no assignment to hang it on.
+  anyone which of its labels were weak. Doc 20 §7.6 asked for exactly this, and `D4.28` is where it is
+  recorded now that there is no assignment to hang it on.
 - **The corpus's own denominators are wrong.** `C2` §4.5 exists so that counts taken over imagery use
   `observed_union_s` and not `sumo_span_s`; `C8` is where those numbers are published. Publishing the
   wrong one makes every prevalence figure in the corpus description a misstatement about the corpus, and
@@ -3531,6 +3533,7 @@ whatever date the run happened, and the sidecar records that faithfully.
 | **Read by** | The co-simulation driver and its solar clock at run start and every tick; the validator at package build and at run start; the corpus auditor; and — for the epoch and the per-frame solar state only — the observation writer (`C8` §10.4a) |
 | **Format** | UTF-8 JSON, canonicalised per §1 so `epoch_block_sha256` is well defined. Civil times are ISO-8601 with an **explicit numeric offset**; `Z` is permitted only where the offset genuinely is zero |
 | **Bound by** | `epoch_block_sha256` in `scenario.json`, at the refuse tier (`C3` §5.4 V3.11) |
+| **Built** | The scenario compiler reads both objects from the specification with the session's own readers and carries them verbatim, the epoch with its `epoch_block_sha256`, in `<scenario_id>.lock.json` ([`07`](07_Scenario_Authoring.md) §5.1). The `.csp` and its `scenario.json` (`C3` §5.2) are not built |
 
 ### 11.3 `epoch` fields
 
@@ -3552,83 +3555,81 @@ world's georeference (`GetSolarState` reads it from the default georeference,
 (`C3` §5.4 V3.3). A second copy here could disagree with the first, and there would be no way to say
 which was right.
 
-### 11.4 The conversion from civil time to the sun, and why it is not the identity
+### 11.4 Civil time on the sun, and why the zone is written with the clock
 
 This is the part an implementer will get wrong if the contract does not write it down, because both
 quantities are called "hours" and both look like a time of day.
 
-**Measured — `set_solar_time` does not take civil hours.** Three readings:
+**Measured — the sun reads its clock in its own zone.** Three readings:
 
 1. `ACesiumSunSky::EstimateTimeZoneForLongitude` sets `TimeZone = clamp(longitude, −180, 180) / 15.0`
    (`Unreal/CarlaUnreal/Plugins/CesiumForUnreal/Source/CesiumRuntime/Private/CesiumSunSky.cpp:570-572`)
-   — a **continuous** value, not a rounded civil zone — and the world's sun is spawned with exactly that
-   (`CesiumHeightSampler.cpp:411-412`).
+   — a **continuous** value, not a rounded civil zone — and configuring a world's georeference sets
+   exactly that (`CesiumHeightSampler.cpp:423-424`).
 2. `UpdateSun` passes `TimeZone` and the hours-minutes-seconds decomposition of `SolarTime` into
    `USunPositionFunctionLibrary::GetSunPosition` (`CesiumSunSky.cpp:420-434`), which computes
    `TrueSolarTime = clockMinutes + EqOfTime + 4·Longitude − 60·TimeZone`
    (`UE_5_7_4/Engine/Plugins/Runtime/SunPosition/Source/SunPosition/Private/SunPosition.cpp:97`).
-3. With `TimeZone = longitude / 15`, the `4·Longitude − 60·TimeZone` terms cancel exactly. **So
-   `SolarTime` is local apparent solar time at the map origin**, and `12.0` is local solar noon — which
-   is precisely what the spawn comment claims it is doing (`CesiumHeightSampler.cpp:392-395`).
+3. With `TimeZone = longitude / 15`, the `4·Longitude − 60·TimeZone` terms cancel exactly. **So in a
+   world whose sun nobody has bound, `SolarTime` is local apparent solar time at the map origin**, not
+   civil time.
 
-Civil time is offset from that by the difference between the longitude-derived zone and the site's
-actual civil offset:
+**The zone is written in the same call as the date and the clock.** `set_solar_epoch(year, month,
+day, hours, utc_offset_hours)` (`CarlaServer.cpp:644`; `UCesiumHeightSampler::SetSolarEpoch`,
+`CesiumHeightSampler.cpp:778`; shim `carlanet/__init__.py:1523`) sets `TimeZone` to the declared
+offset together with the date and `SolarTime`, turns the engine's daylight-saving rule off and
+recomputes the sun once ([`11`](11_Time_And_Illumination.md) D11.5). With the sun's zone equal to the
+declared civil offset, `SolarTime` **is** the civil clock, so the arithmetic carries no conversion
+between zones:
 
 ```
-sun_time_zone_hours   = get_solar_state()["time_zone"]        # = OriginLongitude / 15, READ never assumed
-solar_clock_hours     = civil_hours + (sun_time_zone_hours − epoch.utc_offset_hours)
+sun zone   = epoch.utc_offset_hours
+sun clock  = the declared instant's civil clock, written one millisecond past its whole second (C6 §8.3a)
+sun date   = the declared instant's civil date, under C6 G11's effective date rule
 ```
+
+The session writes it once when the window opens and, under `advance`, again for every tick (§11.6,
+[`11`](11_Time_And_Illumination.md) D11.19). It reads the sun back after the first write and refuses
+the session on any field that differs, the zone included (`SolarLease`, V9.12), and the per-tick
+audit compares the observed zone with `epoch.utc_offset_hours` exactly (`C6` §8.3a, `Δpolicy`).
 
 **Worked, on the sizing scenario.** Origin `lat 27.15012, lon 56.18065`
-(`CarlaControl/scripts/make_bahonar_scenario.py:69`), Iran's civil offset +03:30, no DST:
+(`CarlaControl/scripts/make_bahonar_scenario.py:69`), Iran's civil offset +03:30, no daylight saving:
 
 | | |
 |---|---|
-| `sun_time_zone_hours` | `56.18065 / 15` = **3.7453767 h** (+03:44.7) |
-| `epoch.utc_offset_hours` | **3.5** (+03:30) |
-| Correction | **+0.2453767 h = +14.72 minutes = 883.4 s** |
-| As solar hour angle | **3.68°** |
-| Civil 23:00 day 0 (`t = 82,800`) | `set_solar_time(23.245377)` |
-| Civil 07:00 day 4 (`t = 370,800`) | `set_solar_time(7.245377)`, `set_solar_date(2026, 3, 25)` |
+| The zone configuring the georeference sets | `56.18065 / 15` = **3.7453767 h** (+03:44.7) |
+| `epoch.utc_offset_hours`, the zone the session writes | **3.5** (+03:30) |
+| Difference | **+0.2453767 h = +14.72 minutes = 883.4 s = 3.68° of hour angle** |
+| Civil 23:00 day 0 (`t = 82,800`) | `set_solar_epoch(2026, 3, 21, 23.0000002778, 3.5)` — 23:00:00.001 |
+| Civil 07:00 day 4 (`t = 370,800`), date held on the epoch's | `set_solar_epoch(2026, 3, 21, 7.0000002778, 3.5)` |
 
 **Why 14.7 minutes matters.** The site sits 3.68° of longitude east of its zone meridian, so the sun
-crosses the meridian a quarter of an hour before the civil clock says noon. Passing civil hours straight
-through puts the sun a quarter of an hour from where the declared time says it is, **in every frame, in
-the same direction** — a systematic bias in shadow direction and length, and worst exactly where the
-sizing scenario's windows are. At this latitude the sun's elevation changes at most
-`15·cos(27.15°) = 13.35°` per hour, so near sunrise 14.7 minutes is up to **3.3° of solar elevation**
-(computed, not measured) — around the 07:00 shift-change window that is the difference between civil
-twilight and the sun being up. It is a small number that is never noise.
+crosses the meridian a quarter of an hour before the civil clock says noon. A sun given civil hours
+while its zone is left at `longitude / 15` sits a quarter of an hour from where the declared time says
+it is, **in every frame, in the same direction** — a systematic bias in shadow direction and length,
+and worst exactly where the sizing scenario's windows are. At this latitude the sun's elevation
+changes at most `15·cos(27.15°) = 13.35°` per hour, so near sunrise 14.7 minutes is up to **3.3° of
+solar elevation** (computed, not measured) — around the 07:00 shift-change window that is the
+difference between civil twilight and the sun being up. It is a small number that is never noise.
 
-> **D4.19 — the sun-clock write is derived from the declared civil time and the *observed* sun time
-> zone, never from either alone. `sun_time_zone_hours` is read from `get_solar_state` at run start and
-> recorded in the manifest.** Reading it rather than recomputing `longitude / 15` means the contract
-> survives a world whose sun was configured some other way, and means the manifest records which
-> convention was actually in force.
-
-**The gap this exposes, and what `C9` does about it.** There is **no RPC to set the sun's time zone**.
-`time_zone` is readable — field 4 of `get_solar_state` (`CesiumHeightSampler.cpp:779`, shim key at
-`carlanet/__init__.py:1529`), carried on every world-observer snapshot (`WorldObserver.cpp:333`), written
-into every sidecar (`CotWriter.cs:58`) — and writable nowhere. Searched: `CarlaServer.cpp` binds
-`set_solar_time`, `set_solar_date`, `get_solar_state` and `set_time_advance` (`:614`, `:625`, `:640`,
-`:661`) and nothing else about the sun. So today the correction is mandatory and client-side. If a
-`set_solar_time_zone` RPC is added — recommended to [`11`](11_Time_And_Illumination.md) and
-[`05`](05_CarlaNet_Capability_Audit.md) as open question 9 — the correction collapses to zero and
-**not one declared field changes**, because the declaration is civil time either way. That is the
-reason the conversion belongs in the contract rather than in the operator's head.
+> **D4.19 — the sun is written with the declared civil offset as its zone, in the same call as the
+> date and the civil clock, and read back before anything renders. No component converts a civil time
+> into another zone's clock.** The zone the world's sun held when the session found it is recorded
+> (§11.8), because a loaded world keeps whatever the last session or configuration left — `longitude /
+> 15` once its georeference is configured — and the session gives it back on every path out.
 
 ```mermaid
 flowchart LR
   T["simulated t<br/>(C6 tick)"] --> CIV
   EP[/"C9 epoch<br/>civil_datetime · utc_offset_hours<br/>calendar_advances"/] --> CIV
-  CIV["civil instant<br/>date + hours, at the site"] --> CONV
-  TZ[/"sun_time_zone_hours<br/>READ from get_solar_state"/] --> CONV
-  CONV["+ (sun_tz − utc_offset)<br/>§11.4"] --> SC["sun-clock hours"]
-  SC --> W["set_solar_date + set_solar_time"]
+  CIV["civil instant<br/>date + clock, at the declared offset"] --> DS
+  IL[/"C9 illumination<br/>policy · rate · freeze fields"/] --> DS
+  DS["declared sun<br/>C6 §8.3a · G11"] --> W["set_solar_epoch<br/>date · clock · zone = utc_offset_hours"]
   W --> SUN["CesiumSunSky"]
   SUN --> OBS["solar block on the<br/>world-observer snapshot"]
   OBS --> AUD{"C6 §8.3a audit<br/>Δsolar_s · Δdir_deg · Δpolicy"}
-  CIV --> AUD
+  DS --> AUD
   AUD -->|in tolerance| REC["frame recorded with &lt;_solar&gt;"]
   AUD -->|out of tolerance| FAIL["fail the run, V6.6"]
 ```
@@ -3647,17 +3648,14 @@ flowchart LR
 | `solar_audit_tolerance_elev_deg` | number | ° | no | Same, for the elevation residual |
 | `note` | string | — | no | Why this policy, in one human sentence |
 
-**`rate` is per *simulated* second, and that is measured, not assumed.** The advance is
-`DeltaHours = DeltaSeconds × Rate / 3600` applied in the controller's `Tick`
-(`Unreal/CarlaUnreal/Plugins/CesiumCarlaBridge/Source/CesiumCarlaBridge/Private/CesiumTimeOfDayController.cpp:34`).
-`DeltaSeconds` is the world tick's delta, which under synchronous ticking is exactly
-`world_fixed_delta_s` — so under the synchronous mode every windowed capture runs in (`C6` V6.3), a
-`rate` of 1.0 is one sun-clock second per simulated second. The shim and the server both say the same
-in prose ("tracks wall-clock in asynchronous mode and simulation time under synchronous ticking",
-`carlanet/__init__.py:1535-1540`, `CarlaServer.cpp:658-660`); the arithmetic above is where it is
-actually decided. **In asynchronous mode the same field means wall-clock seconds**, which is why `C6`
-V6.3 refusing anything but synchronous mode is a precondition of this contract and not merely of the
-tick loop.
+**`rate` is per *simulated* second, because the session applies it.** Under `advance` each frame's
+declared instant is the window's opening instant carried forward by the frame's elapsed simulated time
+times the rate (`DeclaredSun.SunAt`), and the session writes that sun before the frame's tick cue
+(`SolarLease.WriteForFrame`), so a `rate` of 1.0 is one sun-clock second per simulated second. The
+engine's own advance — `DeltaHours = DeltaSeconds × Rate / 3600` in the controller's `Tick`
+(`Unreal/CarlaUnreal/Plugins/CesiumCarlaBridge/Source/CesiumCarlaBridge/Private/CesiumTimeOfDayController.cpp`),
+on the world tick's delta — is set off by the session under every policy (`set_time_advance(false,
+0)`, `DeclaredSun.EngineAdvances`), so nothing about the sun depends on the world's clock mode.
 
 ### 11.6 The four policies, and what each guarantees
 
@@ -3719,10 +3717,9 @@ append-only rows, so what was already true survives a kill at any instant (`D4.3
 | `illumination_in_force` | object | — | yes | Which one won, resolved. **Always written even when there was no override**, so no consumer has to re-derive precedence |
 | `epoch_honoured` | boolean | — | yes | True when the policy wrote the sun from the epoch — i.e. `advance` or `freeze_at_window_start`. False under `freeze_at` and `ignore` |
 | `corpus_eligible` | boolean | — | yes | False whenever `epoch_declared` is false, `policy == "ignore"`, `no_sun` is true, or the audit failed. The single field a corpus builder filters on |
-| `sun_time_zone_hours` | number | h | yes | Read at run start (§11.4). Recorded because the conversion is a function of it |
-| `civil_to_solar_correction_h` | number | h | yes | `sun_time_zone_hours − epoch.utc_offset_hours`. Recorded separately because it is the number an implementer most often gets wrong, and a manifest that states it is auditable without re-deriving it |
+| `sun_time_zone_hours` | number | h | yes | The zone the world's sun held when the session found it, read before the first write (§11.4, D4.19). The zone written is `epoch.utc_offset_hours`; this records what the world held beforehand — `longitude / 15` once its georeference is configured, or whatever the last session left — and is given back on exit |
 | `no_sun` | boolean | — | yes | True when the world had no `CesiumSunSky` |
-| `advance_mechanism` | string | — | yes | `per_tick_write` or `engine_advance` — which mechanism [`03`](03_CoSimulation_Runtime.md) used. Not a policy choice and not declarable; recorded because two corpora produced by different mechanisms have different residual characteristics |
+| `advance_mechanism` | string | — | yes | `per_tick_write`, the only value: under `advance` the session writes the sun for every tick and the engine's own advance is off under every policy ([`03`](03_CoSimulation_Runtime.md), [`11`](11_Time_And_Illumination.md) D11.19). Not a policy choice and not declarable; recorded so a corpus states the mechanism its residuals come from |
 | `solar_achieved[]` | array | — | yes | One entry per capture window, §11.8.1 |
 | `solar_residual` | object | — | yes | The run's worst case, §11.8.2 |
 | `lamp_gaps[]` | array | — | yes | `{ class_id, blueprint_id, lamp, verdict }` for every V1.18 / V1.18a warning that fired. Empty array when none, never absent |
@@ -3795,27 +3792,27 @@ which is 23:00–23:30 on day 0, the night shift:
 | Step | Value | Where it comes from |
 |---|---|---|
 | `t = 82,800 s` | day 0, 23:00 | `C6` `t_render` |
-| Civil instant | `2026-03-21T23:00:00+03:30` | `epoch.civil_datetime + t` |
-| `sun_time_zone_hours` | `3.7453767` | read from `get_solar_state` at run start (§11.4) |
-| Correction | `3.7453767 − 3.5 = +0.2453767 h` | §11.4 |
-| Written | `set_solar_date(2026, 3, 21)`; `set_solar_time(23.245377)`; `set_time_advance(false, 1.0)` | `carlanet/__init__.py:1506`, `:1500`, `:1535` |
-| Audited every capture tick | observed `solar_time ≈ 23.245377`, `advancing == false`, date `2026-03-21` | `C6` §8.3a |
+| Civil instant | `2026-03-21T23:00:00+03:30` | `epoch.civil_datetime + t` (`SolarEpoch.CivilInstantAt`) |
+| Zone as found | `3.7453767` — `longitude / 15`, from configuring the georeference | read before the first write and recorded as `sun_time_zone_hours` (§11.8); written over, and given back on exit |
+| Written | `set_solar_epoch(2026, 3, 21, 23.0000002778, 3.5)` — 23:00:00.001 at +03:30; then `set_time_advance(false, 0)` | `carlanet/__init__.py:1523`, `:1575`; `C6` §8.3a for the millisecond |
+| Audited every capture tick | observed `solar_time ≈ 23.0000002778`, `time_zone == 3.5`, `advancing == false`, date `2026-03-21` | `C6` §8.3a |
 | Recorded | `declared_civil_vs_solar_delta_h: 0.0`, `epoch_honoured: true`, `corpus_eligible: true` | §11.8 |
 
 **And for the day-4 shift change**, `t = 370,800` — the instant the shipped `.labels.json` gives as the
 start of the guard-no-show anomaly (`begin_s: 370800`) — the civil instant is
-`2026-03-25T07:00:00+03:30` and the sun-clock write is `set_solar_time(7.245377)` either way. The
-**date** is where the two declarations in the example above meet: `calendar_advances: true` says the
-civil date is 25 March, and `freeze_date_advances: false` says the frozen sun keeps the epoch's date, so
-`set_solar_date` is **not** re-issued and `solar_achieved[]` records `solar_date_begin: "2026-03-21"`
-beside `civil_begin: "2026-03-25T07:00:00+03:30"`. Declaring `freeze_date_advances: true` instead writes
-`set_solar_date(2026, 3, 25)`, and `C6` V6.8 then checks it exactly. Both are legitimate; what is not
-legitimate is leaving it undeclared, because the engine's advance would silently pick the first.
+`2026-03-25T07:00:00+03:30` and the clock written is 07:00:00.001 at +03:30 either way. The **date** is
+where the two declarations in the example above meet: `calendar_advances: true` says the civil date is
+25 March, and `freeze_date_advances: false` says the frozen sun keeps the epoch's date, so the write is
+`set_solar_epoch(2026, 3, 21, 7.0000002778, 3.5)` and `solar_achieved[]` records
+`solar_date_begin: "2026-03-21"` beside `civil_begin: "2026-03-25T07:00:00+03:30"`. Declaring
+`freeze_date_advances: true` instead writes `set_solar_epoch(2026, 3, 25, 7.0000002778, 3.5)`, and `C6`
+V6.8 then checks it exactly. Both are legitimate, and the manifest records which date was written.
 
-**The same window with no epoch declared**, for comparison: `set_solar_time` never called, sun at
-`SolarTime = 12.0` from the spawn (`CesiumHeightSampler.cpp:409`) on the host's date
-(`WorldBuilder.py:229-230`), `<_solar>` recording noon, the scenario asserting 23:00, and nothing
-anywhere reporting a problem.
+**The same window with no epoch declared**, for comparison: a session with no epoch can declare only
+`ignore` (`IlluminationPolicy.Ignore`), so it writes no sun and the world renders whatever it holds —
+`ACesiumSunSky`'s class-default date 2019-09-21, or what the last session or operator left — with
+`<_solar>` recording it faithfully and the scenario asserting 23:00. The manifest's
+`epoch_declared: false` and `corpus_eligible: false` are what keep that run out of a corpus (§11.7).
 
 ### 11.10 Validation
 
@@ -3835,12 +3832,14 @@ where a rule is a per-tick assertion (`T`).
 | V9.9 | Every `capture_windows[]` entry's civil span is computable from the epoch, and the whole span lies within `[epoch, epoch + sumocfg end]` | S | refuse — a window whose civil time is outside the scenario's own span is an authoring error |
 | V9.10 | `epoch_block_sha256` matches the `epoch` object as carried | S, R | refuse (`C3` V3.11) |
 | V9.11 | The world reports a sun, or `require_sun` is false | R | refuse (`C3` V3.13) |
-| V9.12 | `sun_time_zone_hours` read at run start is within `0.001 h` of `world_origin_longitude / 15` | R | **warn**, recording both. A disagreement means the world's sun was configured by something other than the spawn path, which is legal and worth knowing |
-| V9.13 | `\|civil_to_solar_correction_h\| ≤ 1.0` | R | **warn**, naming the number. A correction larger than an hour means the declared offset and the map are probably not the same place; below that it is ordinary, and 0.245 h is the sizing scenario's real value |
+| V9.12 | The sun read back after the first write holds the zone `utc_offset_hours`, the date and the clock written | R | **refuse**, naming each field that differs, and give the sun back. A write is not the world having it; the read-back is taken on demand, not from the observer cache, which predates the write (`SolarLease`) |
+| V9.13 | `\|utc_offset_hours − engine_time_zone_hours\| ≤ 1.0`, where `engine_time_zone_hours` is `longitude / 15` as the world package's solar frame publishes it (`solar.json`, [`07`](07_Scenario_Authoring.md) §2.10) | S | **warn**, naming both. The session writes the declared offset as the sun's zone, so the difference moves no sun; more than an hour means the declared offset and the map are probably not the same place. 0.245 h is the sizing site's value. [`07`](07_Scenario_Authoring.md) check 40 |
 | V9.14 | Any tolerance override is `> 0` and within the bound valued in [`10`](10_Scale_And_Performance.md) | S | refuse — an override is not an off switch |
 | V9.15 | Under `C6` G11's effective date rule, the driver wrote a date for every civil midnight the run crossed — and under a held date, wrote none after the first | T | assertion; a miss is a bug, and `C6` V6.8 catches its effect independently |
 | V9.16 | Under any freeze policy, no `set_solar_time` is issued between the window's first and last capture tick | T | assertion — a write inside a frozen window is a second owner of the sun (`D4.25`) |
 | V9.17 | `illumination_in_force` is written to the manifest whether or not an override was supplied | R | refuse to close the manifest without it |
+
+At `S` the scenario compiler carries these out: V9.1–V9.8 by handing both objects to the session's own readers, `CarlaNet.CoSim.SolarEpoch` and `IlluminationPolicy` ([`07`](07_Scenario_Authoring.md) checks 33, 34 and 39), so the compiler and the session cannot disagree about either; V9.9 as check 38; and V9.13 as check 40. V9.10 and V9.14 need the package and the bound on overrides, neither of which exists; the session refuses the tolerance overrides until the bound does.
 
 ### 11.11 Failure modes
 
@@ -3884,7 +3883,6 @@ Stated as properties needed, not as requests, in the style of §14.
 | The solar-elevation thresholds at which `Position`, `LowBeam` and `Fog` are commanded, in the `sun_elevation_deg` convention (degrees above the horizon), **not** the CARLA weather convention the traffic manager's constants are written in (`Constants.cs:202-205`) | A threshold is a rendering judgement. `C7` §9.4 fixes only that the input is the real sun and that the value is scene-scoped |
 | Whether `freeze_date_advances` should default `true` or `false` | `C9` defaults it `false` and says why; the opposite is defensible and the choice is about seasonal geometry, which is `11`'s |
 | Whether illumination is a declared corpus stratifier, and the solar-bin edges for `C8` V8.6 | A stratification decision. `C9` requires the bins to exist; [`10`](10_Scale_And_Performance.md) values them |
-| Whether to pursue a `set_solar_time_zone` RPC (open question 9) | An engine-surface decision with [`05`](05_CarlaNet_Capability_Audit.md). `C9`'s declared fields are unchanged either way |
 
 ### 11.14 What breaks if C9 is violated
 
@@ -3903,12 +3901,14 @@ Stated as properties needed, not as requests, in the style of §14.
   (`WorldBuilder.py:229-230`), the same scenario run in March and in September has different sun
   elevations, different shadow lengths and different apparent contrast — a difference that looks like
   model variance and is calendar variance.
-- **The sun is 15 minutes out even when everything else is right.** §11.4's correction is not optional
-  and is not visible: passing civil hours into `set_solar_time` at the sizing site puts every shadow
-  3.68° of hour angle from where the declared time says it should be, in every frame, in one direction.
-- **The seventh day is lit like the first.** The engine's advance never touches the date
-  (`CesiumTimeOfDayController.cpp:35`), so a week-long scenario that delegates the calendar renders six
-  days under day 0's seasonal sun while the behavioural record correctly says day 6.
+- **The sun is 15 minutes out even when everything else is right.** A sun handed civil hours while its
+  zone is left at `longitude / 15` puts every shadow at the sizing site 3.68° of hour angle from where
+  the declared time says it should be, in every frame, in one direction, and nothing in the imagery
+  shows it. D4.19's write of the zone with the clock, and the audit's exact comparison of the zone, are
+  what prevent it.
+- **The seventh day is lit like the first.** A driver that sets the date once and lets the clock run
+  renders six days of a week-long scenario under day 0's seasonal sun while the behavioural record
+  correctly says day 6. The date is written with every clock (§11.6), and `C6` V6.8 checks it exactly.
 - **The epoch is re-invented incompatibly in every tool.** One already exists, is UTC-only, defaults to
   the wall clock, and contradicts the scenario's own identifiers by 3.5 hours (Measurement 7). Without
   one declaration that everything reads, the next tool adds a second.
@@ -4007,7 +4007,7 @@ each of these holds exactly as its own section states it:
 | The process was killed outright — `SIGKILL`, the server killed under us, the host lost | `run_opened` … whatever had been appended | The run was interrupted at an unknown instant. The last appended row bounds how far it got; the run manifest and the artifacts on disk are the record of what exists |
 | Nothing at all | *(no file)* | The run never reached its first irreversible step. Nothing was produced under this `run_id`, and no corpus exists to be misread |
 
-**A trailing partial line is expected and is not corruption.** A kill can land in the middle of an
+**A trailing partial line is expected and is not corruption.** A kill can arrive in the middle of an
 append. A reader parses lines until one fails to parse, discards that one and stops. Every complete line
 before it is a complete fact. This is the mechanical form of `D4.36` for this artifact, and V10.6 is the
 rule.
@@ -4565,7 +4565,7 @@ sequenceDiagram
   DR->>DR: C1 V1.14a — load the embedded catalogue;<br/>extents drive the pose conversion (D4.17)
   DR->>DR: C6 V6.1-V6.4, V6.10 — clock
   DR->>SC: hand over epoch + illumination_in_force
-  SC->>SRV: get_solar_state — read sun_time_zone_hours (C9 §11.4)
+  SC->>SRV: get_solar_state — the sun as found, recorded as sun_time_zone_hours (C9 §11.8)
   SC->>SC: C9 V9.11-V9.14
   alt any refuse-tier mismatch
     DR-->>OP: refuse, naming the artifact and the field
@@ -4579,7 +4579,7 @@ sequenceDiagram
       RS->>SRV: destroy released, release instant recorded (C2 §4.3)
       loop k world sub-steps
         SC->>SC: civil(n) from the epoch (C6 G8)
-        SC->>SRV: set_solar_date / set_solar_time when the policy says so (C9 §11.6)
+        SC->>SRV: set_solar_epoch — date, clock and zone — at window open,<br/>and for every tick under advance (C9 §11.4, §11.6)
         DR->>SRV: set_actor_transform, interpolated,<br/>bumper shift undone, Z from drape (C7)
         DR->>SRV: SetVehicleLightStateCommand on change —<br/>brake and blinkers from SUMO, conspicuity from the sun (C7 §9.4)
         DR->>SRV: world tick
@@ -4617,7 +4617,7 @@ Stated as properties needed, not as requests.
 | Section | Property this section needs it to have |
 |---|---|
 | [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) | A single advance entry point that satisfies G1–G11 and implements the stall rule `D4.12`. A mechanism by which SUMO's velocity reaches the truth producer per actor (`D4.13`). A solar clock that derives civil time from the tick alone (`D4.25`), writes the sun under whichever policy is in force, writes the **date** at every civil midnight the effective date rule of G11 calls for, and reports which advance mechanism it used. A light mapper that reads SUMO's signal bits and the tick's solar elevation and emits `SetVehicleLightStateCommand` in the pose batch (`D4.22`). A **real-time factor on the world tick**, computed against an absolute target in the manner of `SumoCotBridge.py:243-246` rather than as a per-step sleep, with the achieved factor reported per window — and never a function of consumer state (`D4.30`, §10.9.5) |
-| [`05_CarlaNet_Capability_Audit.md`](05_CarlaNet_Capability_Audit.md) | Whether the Python shim exposes a spawned actor's bounding box (needed by the sweep, §3.2); whether `set_actor_transform`, `set_actor_simulate_physics` and `apply_batch_sync` are implemented end to end. For `C9`: the solar surface is present and complete end to end (`carlanet/__init__.py:1500`, `:1506`, `:1511`, `:1535`; `CarlaClient.cs:1043`, `:1049`, `:1053`, `:1058`, `GetCachedSolarState` at `:1991`; `CarlaServer.cpp:614`, `:625`, `:640`, `:661`) — what is needed is confirmation that **no time-zone setter exists** and a view on adding one (open question 9). For `C7`: `SetVehicleLightStateCommand` is present at every layer — C# record (`Command.cs:94`), formatter (`CommandFormatter.cs:64`), client methods (`CarlaClient.cs:1615`, `:1621`), shim command wrapper (`carlanet/__init__.py:1141-1147`), shim actor methods (`:781`, `:786`) — so §9.4 needs nothing built on the transport side. What is needed is confirmation that nothing else in the engine writes light state for an actor the bridge owns |
+| [`05_CarlaNet_Capability_Audit.md`](05_CarlaNet_Capability_Audit.md) | Whether the Python shim exposes a spawned actor's bounding box (needed by the sweep, §3.2); whether `set_actor_transform`, `set_actor_simulate_physics` and `apply_batch_sync` are implemented end to end. For `C9`: the solar surface is present and complete end to end, including the one call the session writes the sun with, `set_solar_epoch` (`carlanet/__init__.py:1523`, `CarlaClient.SetSolarEpochAsync` at `CarlaClient.cs:1117`, `CarlaServer.cpp:644`), beside `set_solar_time`, `set_solar_date`, `get_solar_state` and `set_time_advance` (`carlanet/__init__.py:1512`, `:1518`, `:1541`, `:1575`). For `C7`: `SetVehicleLightStateCommand` is present at every layer — C# record (`Command.cs:94`), formatter (`CommandFormatter.cs:64`), client methods (`CarlaClient.cs:1615`, `:1621`), shim command wrapper (`carlanet/__init__.py:1141-1147`), shim actor methods (`:781`, `:786`) — so §9.4 needs nothing built on the transport side. What is needed is confirmation that nothing else in the engine writes light state for an actor the bridge owns |
 | [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) | An `AnnotationSet` payload whose `entity_id` and `instance_id` match `C4`'s grammars; `<_supervision>` identical across sensors at one tick; the sidecar carrying `sumo_id` and `entity_id` on `_carla`. The `<_solar>` element already exists (`CotWriter.cs:52-65`) and needs no change; what is needed is the container additionally carrying the scenario's `epoch` so a sidecar states its own civil time without the manifest |
 | [`07_Scenario_Authoring.md`](07_Scenario_Authoring.md) | An authoring surface that emits only catalogue classes, never bare vTypes; area references rather than raw edge ids where an area exists; and an `epoch` that is **authored**, not defaulted — the authoring surface is where the 3.5-hour contradiction of Measurement 7 gets fixed at source |
 | [`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md) | **Two** artifact roots, not three (`D4.26`) — `08` owns the collection rationale for how they are laid out, named and sessioned; `C8` owns the ruling that there is no third. An observation writer with no reference to truth artifacts, and the split performed at the writer rather than by a stripping step (`D4.16`, and `08`'s own `D8.17` mechanism 2). A `context` block whose `solar` and `epoch` fields are exactly §10.4a's allow-list, taken from the sidecar and the PNG chunk rather than from the run manifest (`D4.21`). The per-label quality fields of `D4.28` — `occlusion`, `visible_signature`, `label_crowding`, `nearest_label_px`, `supervision_transfer_ambiguous` — computed from truth and the rendered frame alone and written onto the label record. If `08` reserves a partition whose truth is not released, that the corpus manifest declares it (V8.9). **And for the live delivery mode** (`D4.29`): a transport binding satisfying §10.9.1's three properties; one endpoint per root, with the truth endpoint off by default (`08` §11.4, guarantee L7); drop-oldest at the emitter with a per-sensor counter and the covered-but-not-delivered coverage row (`08` §11.3, V8.16); a real-time factor observed rather than owned (`08` §11.1); and one world-observer snapshot per tick behind every stream (`08` §3.4, guarantee L6) |
@@ -4650,7 +4650,7 @@ Stated as properties needed, not as requests.
 | **D4.16** | **The `OBSERVATION` root is written by a component that holds no reference to any truth artifact, and the two roots are written as separate files by separate writers from the first byte.** A structural guarantee, not a policy (§10.5). No join between truth and model output is produced here at all, which is `D4.27` |
 | **D4.17** | **The catalogue is a runtime dependency of the co-simulation bridge, not only an authoring aid.** SUMO's reference point is the front bumper centre and CARLA's is the actor origin, so the pose conversion needs the measured `length_m` and `bbox_centre_m`; SUMO has neither. A vehicle whose extent is unknown is **not rendered** and is recorded as `simulated_only` with reason `unknown_extent`. The bridge must never substitute SUMO's declared length (§3.2) |
 | **D4.18** | **A scenario declares the civil instant `t = 0` corresponds to, with an explicit UTC offset, carried in the scenario package.** Never inferred from identifiers, never defaulted from the host clock, never left to a run setting. Measured: 335 of 335 `guard_dD_hH_tN` trips satisfy `depart == D×86400 + H×3600` exactly, so the mapping is asserted perfectly consistently — and **only inside identifiers**, while the one epoch that does exist is UTC-only, defaults to `datetime.now(UTC)` (`SumoCotBridge.py:197`) and contradicts those identifiers by 3.5 hours (§11.1) |
-| **D4.19** | **The sun-clock write is derived from the declared civil time and the *observed* sun time zone, never from either alone.** `set_solar_time` takes hours in a zone equal to `longitude / 15` (`CesiumSunSky.cpp:570-572`, cancelling the longitude terms at `SunPosition.cpp:97`), not the civil offset. Measured on the sizing site: the correction is **+14.72 minutes, 3.68° of hour angle**. `sun_time_zone_hours` is read at run start and recorded, so the arithmetic is auditable from the manifest (§11.4) |
+| **D4.19** | **The sun is written with the declared civil offset as its zone, in the same call as the date and the civil clock (`set_solar_epoch`), and read back before anything renders; no component converts a civil time into another zone's clock.** A sun whose zone is left at `longitude / 15` (`CesiumSunSky.cpp:570-572`, cancelling the longitude terms at `SunPosition.cpp:97`) reads civil hours as local apparent solar time: measured on the sizing site, **14.72 minutes, 3.68° of hour angle** out. The zone the world held when the session found it is recorded as `sun_time_zone_hours` (§11.4, §11.8) |
 | **D4.20** | **The general admission rule for an input that is neither truth about the scene nor pixels: it may be placed in the `OBSERVATION` root only if it is fieldable, scene-independent, supervision-blind, *and* reachable from the observation side without opening a truth artifact.** The fourth test is about the path rather than the value, and it is the one that is easy to miss: a legitimate field that lives only in the run manifest still stays out, because reaching it would breach `D4.16` (§10.4a). *Unaffected by the scope decision — it always governed our own data* |
 | **D4.21** | **Solar state and the scenario epoch are placed in the `OBSERVATION` root as collection context, in the frozen field set of §10.4a, written from the sidecar's `<_solar>` and the PNG's `carla:solar` chunk — never copied from the run manifest.** `advancing`, `rate`, the policy and the residual stay out: they describe the experiment, not the world. The element goes in; not all of it does (§10.4a) |
 | **D4.22** | **The bridge owns a SUMO-driven vehicle's light state, in two disjoint halves** — SUMO owns brake and indicators because they are consequences of the driving it simulated; the illumination policy owns position and low beam because SUMO has no headlight model. Measured: `VEH_SIGNAL_FRONTLIGHT`, `FOGLIGHT`, `HIGHBEAM` and `BACKDRIVE` appear only in the enum declaration (`MSVehicle.h:1110-1138`) and are never set anywhere in SUMO. Everything else is **undefined and must be left alone** (§9.4) |
@@ -4739,18 +4739,9 @@ Each carries the options and a recommendation; none is decided here.
    Whether a stable derived junction name is worth minting, and whether it should be minted once and
    carried in both artifacts, is open. It affects `C5`, because an area sited on a junction resolves to
    lanes whose ids change on rebuild.
-9. **Whether to add a `set_solar_time_zone` RPC.** Measured: the sun's zone is `longitude / 15`
-   (`CesiumSunSky.cpp:570-572`), it is readable everywhere and writable nowhere, and the resulting
-   civil-to-sun-clock correction is +14.72 minutes on the sizing site (§11.4). Options: (a) keep the
-   client-side correction, which every implementation must get right and which the manifest's
-   `civil_to_solar_correction_h` at least makes auditable; (b) add one setter RPC beside the existing
-   four (`CarlaServer.cpp:614-670`), set `TimeZone = utc_offset_hours` at run start, and let
-   `set_solar_time` take civil hours directly. **Recommend (b)**: it removes an arithmetic step from
-   every future client rather than documenting it, `TimeZone` is already a `double` so +03:30 and +05:45
-   are representable, and **not one declared field in `C9` changes either way** — which is the test of
-   whether a mechanism belongs in a contract. Rebuilds are neutral
-   ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §4). Belongs jointly to
-   [`11`](11_Time_And_Illumination.md) and [`05`](05_CarlaNet_Capability_Audit.md).
+9. **The sun's time zone is written, not converted around.** `set_solar_epoch` sets the declared
+   offset as the sun's zone with the date and the clock (D4.19, [`11`](11_Time_And_Illumination.md)
+   D11.5); nothing about it is open.
 10. **Whether a freeze should freeze the date as well as the clock.** `C9` defaults
     `freeze_date_advances` to `false` on the argument that a freeze meant to hold illumination constant
     should not let the seasonal angle drift across a week. The counter-argument is real: under a

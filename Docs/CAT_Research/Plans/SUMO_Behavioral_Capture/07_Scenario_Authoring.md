@@ -2,8 +2,8 @@
 
 **Status:** Plan section. Redrafted against the added time-of-day requirement
 ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3a). Source audit against the working tree plus read-only
-measurement of the shipped world packages, networks and route files. No code changed, no build run,
-no engine started.
+measurement of the shipped world packages, networks and route files. The reference set (§2.5, §2.10–
+§2.12) and the compiler (§3.5–§7) are built, and each section states what is built and what is not.
 **Date:** 2026-09-18
 **Scope:** How a SUMO-driven behavioural-capture scenario comes into existence — what an author is
 given, what they write, how a described place becomes an edge, **what civil instant a simulated
@@ -64,6 +64,7 @@ choice. §3.9 draws the boundary.
 |---|---|
 | 2026-09-21 | Annotation vocabulary layered: core generated from types, author terms declared in the specification. |
 | 2026-09-25 | Areas of interest, the place index and the solar frame built and published in the world package (§2.5, §2.10–§2.12). |
+| 2026-09-28 | Epoch is the C9 object; the session writes the zone; compiler, checks, report, association and sweeps built. |
 
 ---
 
@@ -117,10 +118,11 @@ That asymmetry is the finding this whole section turns on.
 - `SumoPatternOfLifeBuilder._validate` (`SumoPatternOfLifeBuilder.py:150-167`) — raises if any flow
   or scheduled vehicle references an edge absent from the network. Existence only; no reachability.
 
-Nothing else is checked anywhere. In particular nothing checks that a route is **routable** (as
-opposed to its endpoints existing), that a `via` list is honoured, that the network shares the
-CARLA map's frame, that the vehicle types resolve to anything CARLA can spawn, or that the network
-was built from the same OSM the world was.
+Nothing else in those scripts checks anything. In particular nothing in them checks that a route is
+**routable** (as opposed to its endpoints existing), that a `via` list is honoured, that the network
+shares the CARLA map's frame, or that the network was built from the same OSM the world was. The
+compiler of §5 checks all of that for a specification; the three scripts write SUMO XML directly and
+do not yet write one.
 
 `make_bahonar_scenario.py:64` defines `WORLD_PACKAGE` and never reads it (*read*): the largest
 authored scenario has no binding to the world it is meant to run in.
@@ -464,99 +466,70 @@ At local noon the error is nil; at the horizon it decides whether the sun has ri
 a different image depending on whether the offset was declared or derived, and nothing in the pipeline
 would report the substitution.
 
-**There is no way to correct it in the engine, and none is needed.** *Measured,* grepping the whole
-stack: the solar surface is exactly four entry points —
-`SetSolarTime`, `SetSolarDate`, `GetSolarState`, `SetTimeAdvance`
-(`CesiumHeightSampler.h:193,200,210,220`; server binds at `CarlaServer.cpp:614,625,640,661`; client at
-`CarlaClient.cs:1043,1048,1053,1058`; shim at `carlanet/__init__.py:1500,1506,1511,1535`).
-**No RPC sets `TimeZone`.** It is fixed at spawn from longitude and is thereafter read-only.
-
-*Inference, and it is the design decision this section takes:* because the world's zone is a fixed
-`double` the client can *read* (`get_solar_state()["time_zone"]`, or `GetCachedSolarState`
-at `CarlaClient.cs:1991`, free and tick-paired), a declared civil instant can be driven correctly with
-no new RPC and no engine change, by converting through UTC:
-
-```
-solar_time_hours = (civil_time_hours − epoch.utc_offset_hours) + world_time_zone_hours
-```
-
-where `world_time_zone_hours` is what the world reports, not what the author declared. This section's
-obligation is therefore to make the epoch's **numeric offset** a declared, checked field, so that
-arithmetic is possible. Performing it is
-[`11_Time_And_Illumination.md`](11_Time_And_Illumination.md)'s and
-[`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md)'s.
+**The session writes the declared offset as the sun's zone.** `set_solar_epoch(year, month, day,
+hours, utc_offset_hours)` (`CarlaServer.cpp:644`; `UCesiumHeightSampler::SetSolarEpoch`,
+`CesiumHeightSampler.cpp:778`) sets `TimeZone` to the declared offset together with the date and the
+clock, turns the engine's daylight-saving rule off and recomputes the sun once
+([`11_Time_And_Illumination.md`](11_Time_And_Illumination.md) D11.5). A SUMO drive session writes it
+when the capture window opens and, under `advance`, for every tick (D11.19), reads it back before
+anything renders and compares the zone on every tick, so the sun's clock is the civil clock the epoch
+declares and no component converts a civil time into another zone's clock
+([`04_Contracts.md`](04_Contracts.md) D4.19). The longitude estimate above is what a world holds before
+a session binds its sun, and what the session gives back when it ends; it is not what a capture renders
+under. This section's obligation is to make the epoch's **numeric offset** a declared, checked field,
+because that number is what the session writes.
 
 **Daylight saving is off in the engine, by deliberate choice.** *Read:*
 `SunSky->UseDaylightSavingTime = false` at `CesiumHeightSampler.cpp:410`, commented "Disable DST for a
 deterministic clock". Cesium's own DST machinery exists and is fixed-date rather than rule-based
 (`CesiumSunSky.cpp:411-416, 587-609` — `IsDST(UseDaylightSavingTime, DSTStartMonth, DSTStartDay,
-DSTEndMonth, DSTEndDay, …)`), which could not express a real zone's rules anyway. So **the engine will
-never apply a DST rule**, and any DST a scenario needs must be resolved by the compiler into offsets
-before anything is handed to the world. That is check 36.
+DSTEndMonth, DSTEndDay, …)`), which could not express a real zone's rules anyway. So **the engine never
+applies a DST rule**: `set_solar_epoch` turns it off every time it binds the sun, and daylight saving is
+carried by the declared offset, with `dst_in_effect` saying whether that offset includes it
+([`11_Time_And_Illumination.md`](11_Time_And_Illumination.md) D11.3, [`04_Contracts.md`](04_Contracts.md)
+§11.3).
 
-**A time-zone database is not present and must be declared as a dependency.** *Measured* on this
+**A time-zone database is not present, and nothing needs one.** *Measured* on this
 machine: Python **3.14.4**; `import tzdata` raises `ModuleNotFoundError`;
 `zoneinfo.ZoneInfo("Asia/Tehran")` raises `ZoneInfoNotFoundError`; `zoneinfo.available_timezones()`
 returns **0** entries. Windows ships no IANA database and CPython's `zoneinfo` falls back to the
 `tzdata` wheel, which is not installed. *Read:* `CarlaControl/pyproject.toml:12-15` declares
-`carlanet>=0.1.0` and `numpy>=1.24.0` and nothing else. So a compiler that *required* an IANA zone
-name would refuse every scenario on a clean Windows box. This is why §3.5.1 makes the **numeric offset
-normative and the zone name an optional cross-check**, and why `tzdata` is named as a packaging
-dependency in §9.6.
+`carlanet>=0.1.0` and `numpy>=1.24.0` and nothing else. So a compiler or a session that *required*
+an IANA zone name would refuse every scenario on a clean Windows box, and two hosts with different
+databases would disagree about what a corpus's frames were lit by. This is why the **numeric offset is
+normative and the zone name, `time_zone_id`, is provenance only — carried and never resolved**
+([`04_Contracts.md`](04_Contracts.md) §11.3, [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md)
+D11.1).
 
-### 2.9 What this section needs from `11_Time_And_Illumination.md`
+### 2.9 What this section takes from `11_Time_And_Illumination.md`
 
-Stated as a dependency rather than a design, in the same form as §2.6's catalogue dependency. All five
-are things an author has to reason about *before* writing, so all five must be readable **without a
-running server** — a file in or beside the world package, not an RPC.
+Five things an author has to reason about before writing, each supplied by doc 11 or by the session
+code doc 11 specifies, and each readable without a running server.
 
-1. **An authoritative sunrise, sunset and sun-elevation function** for the world's origin lat/lon over
-   any date the scenario spans. The arithmetic in §2.8 is a sizing estimate written for this document;
-   it must not be the thing the compiler ships, because the compiler's numbers go into a resolution
-   report an author acts on and into a corpus-stratification field a trainer uses. One
-   implementation, owned by doc 11, called by this section's compiler.
-2. **Elevation bands with names**, so the compile report and the sweep axis can speak in regimes
-   rather than degrees: the boundary elevations for night, astronomical/nautical/civil twilight, low
-   sun, and high sun. This section uses them as opaque labels; it must not invent them, because doc 8
-   and doc 6 will stratify a corpus on the same labels.
-3. **The night viability verdict — does the world render usable EO imagery at night at all?** The
-   verdict informs the author; it never forbids them. **Any time of day is authorable, including one
-   the renderer serves poorly** — the tooling's job is to say what the imagery will look like, not to
-   decide which parameters a user may explore, and a night window still produces complete behavioural
-   truth and a sidecar whatever the pixels show. So check 42 **warns and records the regime, and
-   never refuses**. Where the verdict is yes-with-conditions, the conditions are authoring inputs
-   (street lighting present or absent, whether vehicle headlights are driven, what sensor
-   configuration is required). *Read,* the
-   reason this cannot be assumed either way: the only existing sun-driven headlight rule is
-   `VehicleLightStage.cs:228-236`, which switches beams and position lamps from
-   `_weather.SunAltitudeAngle` — but that is a **.NET traffic-manager** stage, and the brief's decision
-   4 locks the traffic manager out while SUMO drives, and `CarlaServer.cpp:610-612` records CARLA's own
-   weather as inert in a georeferenced world. So under SUMO drive nothing switches a headlight on
-   unless doc 11 says what does.
-4. **Whether the solar date advances on its own across a multi-day run, and if not, what does.**
-   *Measured, and this is why the question is not rhetorical:* the advance controller's tick is
-   `SunSky->SolarTime = Fmod(Fmod(SunSky->SolarTime + DeltaHours, 24.0) + 24.0, 24.0)`
-   (`Unreal/CarlaUnreal/Plugins/CesiumCarlaBridge/Source/CesiumCarlaBridge/Private/CesiumTimeOfDayController.cpp:35`)
-   — it **wraps the clock at midnight and never touches `Year`/`Month`/`Day`**, which change only on an
-   explicit `SetSolarDate` (`CesiumHeightSampler.cpp:735-751`). `SetSolarTime` wraps the same way
-   (`:730`). So on a seven-day scenario left to advance, day 6 renders under day 0's seasonal sun and
-   the `<_solar date=…>` in every sidecar reports day 0's date. *Measured,* the size of the seasonal
-   half of that error at the Bahonar origin, 07:00, over a six-day span: **+1.51°** near the March
-   equinox, −0.28° near the June solstice, −0.59° near the December solstice — smaller than §2.8's
-   zone error but in the same class, and the *date* in the truth record is simply wrong regardless of
-   the angle. This section's response is check 36, which makes the compiler derive and report the
-   civil date of every declared window so the operator surface has a date to set; whose job it is to
-   set it is doc 11's and doc 12's.
-5. **Confirmation of what `set_time_advance`'s `rate` means under synchronous ticking**, expressed as
-   sun-clock seconds per *simulated* second, so a sweep axis can be declared in those units. The brief
-   (§3a) and the shim docstring (`carlanet/__init__.py:1535-1542`) both say the advance tracks
-   simulation time under synchronous ticking; this section needs the settled statement, not the
-   docstring, because §7.2 makes `rate` a declarable sweep axis.
-
-**Dependency stated:** without (1) and (2) the compile report can state a civil time but not what it
-looks like; without (3) an author cannot tell an unrenderable window from a renderable one and check
-42 has no threshold to test against. There is no version of this section that supplies its own
-ephemeris.
+1. **The ephemeris.** The engine's own solar algorithm is ported to C# as
+   `CarlaNet.CoSim.SolarPositionModel`, and a window's declared instant under a policy is
+   `CarlaNet.CoSim.DeclaredSun` — the two functions the session writes the sun from and audits it
+   against. The compiler states every sun through them (`carlacontrol.WindowSun`), so the elevation a
+   resolution report gives for a window is the elevation the session will declare for it. There is no
+   second ephemeris: the low-precision calculation of §2.8 sized the effect and is not shipped.
+2. **Elevation bands with names.** Doc 11 §4.4 defines six, against the refraction-corrected elevation a
+   declaration is made by: `day` above +6°, `golden` +6° to 0°, `civil_twilight` 0° to −6°,
+   `nautical_twilight` −6° to −12°, `astronomical_twilight` −12° to −18°, `night` below −18°.
+   `carlacontrol.IlluminationBand` implements them for the association statistic (check 41), each
+   band holding its upper edge. [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §3.7 lists the
+   core vocabulary's `illumination_band` values differently (§12 question 13).
+3. **The night viability verdict.** D11.7: night capture is not viable, and no window whose sun is below
+   −6° may be declared corpus-eligible. Any time of day stays authorable — a night window still yields
+   complete behavioural truth — so check 42 **warns and never refuses**, naming the verdict.
+4. **Whose job the date is.** The session writes the date with every clock — at window open, and under
+   `advance` for every tick — under the effective date rule of [`04`](04_Contracts.md) `C6` G11
+   (D11.2, D11.19); nothing waits on the engine to roll a date. A window's sun is therefore written on
+   the window's civil date when the epoch's calendar advances and the policy lets the date move, and on
+   the epoch's own date otherwise. Check 36 reports both dates for every window and warns where they
+   differ.
+5. **What `rate` means.** Sun-clock seconds per **simulated** second, applied by the session itself
+   (`DeclaredSun.SunAt`, [`04`](04_Contracts.md) §11.5), so a sweep axis declared in those units means
+   the same thing in any clock mode.
 
 ### 2.10 The solar frame
 
@@ -675,7 +648,7 @@ any replacement that loses them is worse.
   *measured*, the emitted `labels.json` carries exactly one such note). Doc 20 §2.3 requires pattern
   instances with participants, roles and intervals; none of that is expressible.
 - **The scenario does not say what time it is.** §1.4. Sixteen sites in the largest script multiply a
-  civil hour into seconds; 533 of the 610 emitted entries land on an exact civil hour; and the only
+  civil hour into seconds; 533 of the 610 emitted entries fall on an exact civil hour; and the only
   surviving trace of what those hours *were* is the substring `_h7_` in a vehicle id. Every author
   hand-computes the arithmetic, and no consumer can undo it.
 - **The world binding is a comment.** §1.2.
@@ -742,128 +715,139 @@ instant resolves to a second. One compiler, two resolvers, one report.
 
 ### 3.5 Shape of the specification
 
-A JSON document, `<Scenario>.scenario.json`, with a `spec_version`. Sketched only far enough to make
-the checks in §5 concrete; the field list is settled with
-[`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) for the annotation half.
+A JSON document, `<Scenario>.scenario.json`, at `spec_version` 1. Its schema is the compiler's own,
+held once in `carlacontrol.ScenarioSchema` and published from there as
+`CarlaControl/skills/sumo-traffic-scenarios/schemas/scenario.schema.json`; a field the schema does not
+name is refused (check 53).
 
 ```
-world              package path or map name + network fingerprint (§2.7)
-epoch              { date, time_of_day, utc_offset, zone?, dst_policy }   §3.5.1 — REQUIRED
-seeds              { sumo, appearance, admission }                        §7.1
-vehicle_types[]    verbatim SUMO vType/vTypeDistribution, plus catalogue_entry per type
-places{}           named places: each an edge, a lane+offset, an area id, or a described
-                   place the resolver resolves (§4.2). Every later reference is by name.
-instants{}         named instants: each a civil time, an absolute civil instant, or a
-                   plain second. Every later reference is by name.             §4.5
-rotas[]            repeat blocks — days x civil times x subjects; the compiler expands
-                   them to departures. The sizing scenario's guard rota is one. §3.5.1
-flows[]            id, from, to, via[], type, rate, window                 — cohorts
-actors[]           id, type, depart, route (places), stops[], params{}     — entities
-network_edits[]    fence, opposite pairs, lane closures — the measured post-processors
-supervision        instances[] with participants, roles, phases, labels    — compiles to
-                   <Scenario>.supervision.json; see 06_Truth_And_Annotation.md §3.1
-vocabulary         { import[], terms[] } — the author terms this scenario declares and the
-                   shared or site vocabularies it imports, each term self-describing. The
-                   core is generated and is never declared here.  06 §3.8, checks 45–46
-capture_windows[]  CANDIDATE windows, in civil time. Authored defaults the operator
-                   selects from or overrides; checked here.                    §3.5.2
-illumination       the authored DEFAULT policy for those windows.               §3.5.2
-sweep              the swept parameter set, if this is a sweep member           §7.2
+spec_version       1
+scenario_id        stable across runs; the recorder's scenario_id
+scenario_name, description
+world              { package, network_fingerprint }                          checks 1-5
+epoch              the 04 C9 epoch object, read by CarlaNet.CoSim.SolarEpoch  §3.5.1, checks 33-34
+illumination       the 04 C9 illumination object: the authored default        §3.5.2, check 39
+seeds              { sumo }                                                   §7.1
+simulation         { end, step_length_s }; t = 0 is the epoch, so the run begins at 0
+catalogue          the measured vehicle catalogue                             04 C1
+vehicle_classes[]  class_id, blueprints[], sumo_vclass, behaviour{}, share, weights[], gui_*
+vehicle_mix        the id of the whole-mix distribution, when one is wanted
+places{}           named places: an edge, a lane with offset, an area, or a street one way  §4.2
+place_sets{}       named lists of places, which a rota's subjects may be
+instants{}         named instants, in civil time                                          §4.5
+flows[]            id, type, from, to, via[], vehs_per_hour, begin, end    — cohorts
+actors[]           id, type, depart, from/to/via[] or route[], stops[]     — entities
+rotas[]            days x civil clocks x subjects, with a skip list        §3.5.1
+vocabulary         { import[], namespaces[] }                              06 §3.8, checks 18, 45, 46
+supervision        instances[], cohorts[], series[], absences[]            §3.6
+capture_windows[]  CANDIDATE windows, in civil time                        §3.5.2
 ```
+
+Not in the schema: the network edits of §6 (the fence, opposite pairs, lane closures), which the Python
+builder still applies to a network it writes itself, and the sweep, which is its own file (§7.2).
 
 Three properties are load-bearing:
 
-- **Every reference is a name, and every name is resolved at compile time.** A specification never
-  contains a bare edge identifier in a route; it contains a place name, and the compiled output
-  contains the edge. The 45–55 opaque literals per scenario become a named, documented, checked table
-  that lives in the specification's `places` block and is reported back (§5.3).
-- **A place may be described rather than named.** `{"street": "East Arapahoe Road", "direction":
-  "west", "near": {"lat": …, "lon": …}}` is a valid place, resolved by §4. An assistant writes that;
-  the compiler turns it into `427819541#0` and says so.
-- **The same is true of an instant.** `{"at": "d0 07:00"}` is a valid departure. The compiler turns it
-  into `25200` and says so. Every one of the 533 exact-hour departures measured in §1.4 becomes a
-  civil-time literal, and the sixteen arithmetic sites go to zero.
+- **Every reference is a name, and every name is resolved at compile time.** A route never carries a
+  bare edge id: a flow or actor names places, and the compiled route file carries the edges they
+  resolved to. The 45–55 opaque literals per scenario become a named, checked table in `places`,
+  reported back (§5.3).
+- **A place may be described rather than named.** `{"street": "East Street", "direction": "east", "at":
+  "Cross Street"}` is a place; the compiler turns it into `901#0` and says so.
+- **The same is true of an instant.** `"d0 07:00"` is a departure; the compiler turns it into seconds
+  under the epoch and says which civil instant that is.
 
 ### 3.5.1 The epoch declaration, and writing civil time
 
-**`epoch` is required.** A specification without one is refused (check 33). It is one small block, and
-it is the whole of what makes everything else in this subsection possible.
+**`epoch` is required.** It is the `epoch` object of [`04_Contracts.md`](04_Contracts.md) §11.3, and the
+compiler reads it with the session's own reader, `CarlaNet.CoSim.SolarEpoch` (`ScenarioEpoch`), so a
+scenario the compiler accepts is one the session accepts, with the same digest and the same civil
+instant for every simulated second:
 
 ```jsonc
 "epoch": {
-  "date":        "2026-03-21",   // civil calendar date on which t = 0 falls
-  "time_of_day": "00:00:00",     // civil clock time that t = 0 corresponds to
-  "utc_offset":  "+03:30",       // REQUIRED, normative. Half-hour offsets are ordinary.
-  "zone":        "Asia/Tehran",  // OPTIONAL. Provenance and a cross-check, never the authority.
-  "dst_policy":  "fixed_offset"  // "fixed_offset" (default) | "civil_clock"        see below
+  "epoch_version":     1,
+  "civil_datetime":    "2026-03-21T00:00:00+03:30",  // the civil instant t = 0 is, with its offset
+  "utc_offset_hours":  3.5,                          // normative: signed hours, whole quarter hours
+  "utc_datetime":      "2026-03-20T20:30:00Z",       // the same instant in UTC, cross-checked
+  "calendar_advances": true,                         // whether the civil date moves at midnight
+  "dst_in_effect":     false,                        // whether the offset includes daylight saving
+  "time_zone_id":      "Asia/Tehran"                 // optional provenance, never resolved
 }
 ```
 
-**Why the numeric offset is normative and the zone name is not.** Three measurements, all in §2.8.
-The engine has no zone database and no DST rule it could honour (`UseDaylightSavingTime = false`,
-`CesiumHeightSampler.cpp:410`; Cesium's own DST is fixed-date, `CesiumSunSky.cpp:587-609`). The world's
-own `TimeZone` is a longitude estimate the client can only read, never set, so driving a declared
-instant is arithmetic on a number and needs a number. And `zoneinfo` has **zero** zones on this
-machine (*measured*, §2.8), so requiring a name would refuse every scenario until `tzdata` ships. The
-name is kept because it is the only place a reader learns *which* +03:30 this is, and because where a
-zone database is present the compiler can check the two against each other (check 35).
+A refusal names every rule broken — a missing epoch or field, an offset applied in the wrong direction,
+a date that is not a calendar date, an unknown field — under check 33, and an offset that is not a whole
+number of quarter hours in [−12, +14] under check 34.
 
-**Iran's +03:30 is not a special case anywhere.** `SunSky->TimeZone` is a `double` set by a continuous
-division (`CesiumSunSky.cpp:571`), `get_solar_state` returns it as a `double`, `CotWriter.cs:57`
-serialises it to four decimals. The offset field is therefore parsed and stored as a signed number of
-minutes, and the schema accepts any offset that is a whole number of minutes — which covers +03:30,
-+05:45 and +12:45 without a branch. What must *not* happen is an integer-hours representation
-anywhere, and check 34 exists to catch one being introduced.
+**Why the numeric offset is normative and the zone name is not.** The engine has no zone database and
+no DST rule it could honour (`UseDaylightSavingTime = false`, `CesiumHeightSampler.cpp:410`); the
+session writes the declared offset as the sun's zone (§2.8); and `zoneinfo` has **zero** zones on this
+machine (§2.8), so a required name would refuse every scenario. The name is carried because it is the
+only place a reader learns *which* +03:30 this is.
 
-**`dst_policy` is a declared fork, not an inference, because it changes the emitted seconds.**
+**Iran's +03:30 is not a special case anywhere.** `SunSky->TimeZone` is a `double`
+(`CesiumSunSky.cpp:571`), `get_solar_state` returns it as a `double`, and `utc_offset_hours` is a number,
+so +03:30, +05:45 and +12:45 need no branch; `test_scenario_epoch.py` compiles all three.
 
-| Value | What a declared civil time means | Emitted seconds |
-|---|---|---|
-| `fixed_offset` (default) | The epoch's offset applies for the whole run. Simulated seconds map linearly to UTC. After a daylight-saving transition the civil labels are an hour off the clock people at the site keep, and the report says so. | `(civil − epoch) / 1 s`, uniform |
-| `civil_clock` | A declared civil time resolves through the zone's rules, so `d3 07:00` is genuinely 07:00 local on day 3 even across a transition. The day containing the transition is 23 or 25 hours long. | non-uniform; one day differs by 3 600 s |
-
-`fixed_offset` is the default because it is what every existing scenario already assumes — *read*,
-`make_bahonar_scenario.py:233`, `depart = day * DAY + hour * HOUR` with `DAY = 24 * HOUR` (`:77`) — and
-because it is the only policy that keeps `t % 86400` a meaningful hour-of-day, which §5.6's confounder
-statistic and doc 10's per-day repeatability finding (`10_Scale_And_Performance.md:168`) both rely on.
-`civil_clock` is refused without a resolvable `zone` (check 36), because there is nothing to resolve
-the rule against. The sizing scenario is unaffected either way: Iran does not currently observe
-daylight saving, so both policies emit identical seconds for it — which is precisely why the check
-must fire on the *site*, not on the one scenario that exists.
+**Daylight saving is carried by the declared offset** ([`04`](04_Contracts.md) §11.3,
+[`11`](11_Time_And_Illumination.md) D11.3). One offset holds for the whole run, so simulated seconds map
+linearly onto civil time and `t mod 86400` stays an hour of the day on a midnight epoch — which §5.6's
+statistic and doc 10's per-day repeatability finding (`10_Scale_And_Performance.md:168`) rely on. A span
+that crosses a daylight-saving transition at the site keeps the declared offset, so its civil labels after
+the transition are an hour from the clocks people there keep; the compiler cannot see the transition,
+because it resolves no zone, and the author declares the offset for the dates the scenario means.
+Iran does not observe daylight saving, so the sizing scenario is unaffected.
 
 **Writing civil time.** Wherever the specification takes a time, it takes any of these forms, and the
-compiler emits seconds:
+compiler emits seconds (`carlacontrol.CivilTimeResolver`):
 
 | Form | Example | Resolves to |
 |---|---|---|
-| Plain seconds | `25200` | itself — always accepted, never deprecated |
-| Day plus civil clock | `"d0 07:00"`, `"d6 02:30"` | `day × 86400 + clock`, under `epoch` |
-| Civil clock alone | `"07:00"` | day 0 — refused if the span exceeds one day, to make the day explicit |
-| Absolute civil instant | `"2026-03-21T07:00:00+03:30"` | offset from the epoch; **refused** if its offset disagrees with `epoch.utc_offset` under `fixed_offset` |
-| Duration | `"8h"`, `"30m"`, `"5m"` | seconds — for a stop, a window length, a phase |
-| Named instant | `{"instant": "night_shift_start"}` | whatever `instants{}` declared it to be (§4.5) |
-| Rota | see below | a set of seconds |
+| Plain seconds | `25200` | itself — always accepted |
+| Day plus civil clock | `"d0 07:00"`, `"d6 02:30:15"`, `"d0 24:00"` | that clock on the epoch's civil date plus N days, at the epoch's offset |
+| Civil clock alone | `"07:00"` | day 0 — **refused** (check 47) when the run spans more than one day, naming the day form |
+| Absolute civil instant | `"2026-03-21T07:00:00+03:30"` | its distance from the epoch — **refused** (check 47) at any offset but the epoch's |
+| Duration | `"8h"`, `"30m"`, `"1h30m"`, `"7d"`, `300` | seconds, for a stop, a window length or a slot |
+| Named instant | `{"instant": "night_shift"}` | what `instants{}` declares |
+| Offset from either | `{"instant": "night_shift", "plus": "15m"}`, `{"at": "d2 11:00", "plus": 274}` | that second plus the duration |
+| Rota | below | a set of seconds |
 
-A **rota** is the construct the sizing scenario is made of, and it is the one place the specification
-gains a repetition form. It is deliberately not a loop: it has no body, no variables and no
-conditionals — it is a cross product of declared days, declared civil times and declared subjects,
-with an explicit exclusion list. §12 question 6's standing objection to loop constructs is what keeps
+**The session's function is the authority.** Every day-clock and absolute instant is handed back to
+`SolarEpoch.CivilInstantAt`; a civil instant that does not come back as written stops the compile as a
+defect, so the second a report prints beside `07:00` is the second the session will call 07:00.
+
+A **rota** is the one place the specification gains a repetition form, and it is deliberately not a
+loop: a cross product of declared days, declared civil clocks and declared subjects, with an explicit
+exclusion list (`carlacontrol.RotaExpander`). §12 question 6's objection to loop constructs is what keeps
 it that shape.
 
 ```jsonc
+"place_sets": {"guard_towers": ["tower_00", "tower_01", "...", "tower_15"]},
 "rotas": [{
   "id": "guard_posting",
   "days": "0..6",
-  "at": ["07:00", "15:00", "23:00"],          // reads exactly like SHIFT_HOURS
-  "subjects": {"place_set": "guard_towers"},   // the sixteen posts, named in places{}
-  "template": {"type": "guard", "from": "guard_base", "to": "guard_base",
-               "via": ["$subject"], "stop": {"lane": "$subject_lane",
-                                             "end_pos": "$subject_pos", "duration": "8h"}},
+  "at": ["07:00", "15:00", "23:00"],
+  "subjects": {"place_set": "guard_towers"},
+  "template": {"type": "guard", "from": "guard_base", "to": "guard_base", "via": ["$subject"],
+               "stops": [{"place": "$subject", "duration": "8h", "parking": true}]},
   "id_pattern": "guard_d{day}_h{hour}_t{subject_index}",
-  "skip": [{"day": 4, "at": "07:00", "subject_index": 11,
+  "skip": [{"day": 4, "at": "07:00", "subject_index": 3,
             "because": "the no-show anomaly: this post is not manned this shift"}]
 }]
 ```
+
+`$subject` in the template is replaced by the subject's place name; `id_pattern` may use `{day}`,
+`{hour}`, `{minute}`, `{subject_index}` and `{subject}`. Each entry departs at `d<day> <clock>`. A skip
+must match exactly one occasion and must say why (check 48): a skip that matches nothing is an anomaly
+that was never planted, and the whole of the sizing scenario's no-show rests on one `continue` firing
+(*read*, `make_bahonar_scenario.py:236`). *Measured:* the block above, over sixteen tower places,
+reproduces `make_bahonar_scenario.py`'s `tower_postings(7, 4, 7, 3)` exactly — the same 335 ids with the
+same departure seconds (`test_rota_expander.py`). *Measured,* compiled against the real Bahonar world
+package, 2026-09-28: all 335 entries route through `duarouter`, pass the false-accept guard and compile
+in **0.64 s**, with the generator's ids and departure seconds — when the guard class is drawn as
+`delivery`, because the world's own network admits no other road class on the port's private roads
+(§12 question 14).
 
 **What it does to the sizing scenario's readability.** *Measured against the shipped script and its
 output:*
@@ -873,37 +857,37 @@ output:*
 | Civil-hour-to-seconds arithmetic sites | **16** (`make_bahonar_scenario.py`, `grep '\* HOUR\|\* DAY'`) | **0** |
 | Emitted entries whose civil meaning is recoverable from the artifact | **0 of 610** (only from the `_h7_` substring in an id) | **610 of 610** |
 | The guard rota — 335 entries | a triple loop with a `continue`, `:232-242` | one `rotas[]` block with one `skip` entry carrying its reason |
-| The no-show anomaly | a `continue` and a comment (`:236`) | a `skip` entry whose `because` is a field, reported in §5.3 and joinable to the supervision record |
+| The no-show anomaly | a `continue` and a comment (`:236`) | a `skip` whose `because` is a field, reported in §5.3, and the slot an absence names (§3.6) |
 | `SHIFT_HOURS = [7, 15, 23]` (`:164`) | a constant multiplied out at `:233`, `:188`, `:204` | the literal text `"at": ["07:00", "15:00", "23:00"]` |
 | `FERRY_HOURS = [6, 8, …, 18]` (`:163`) | multiplied out at `:252` | a second rota |
-| The diurnal rates, `[(0,6,20), (6,10,180), …]` (`:169`) | multiplied out at `:175`, `:179` | flow windows `"06:00".."10:00"` |
+| The diurnal rates, `[(0,6,20), (6,10,180), …]` (`:169`) | multiplied out at `:175`, `:179` | flow windows `"d0 06:00"`..`"d0 10:00"` |
 | The perimeter shadow, `6*DAY + 2*HOUR + 30*60` (`:285`) | three multiplications | `"d6 02:30"` |
 | The stay-behind, `1*DAY + 8*HOUR` (`:293`) | two multiplications | `"d1 08:00"` |
-| The probe's per-day jitter, `day * 137` (`:275`) | arithmetic, and the resulting instant is never stated anywhere | `{"at": "d2 11:00", "jitter_s": 274}` — and the report states that it resolved to **d2 11:04:34** and **d5 11:11:25** |
+| The probe's per-day offset, `day * 137` (`:275`) | arithmetic, and the resulting instant is stated nowhere | `{"at": "d2 11:00", "plus": 274}` — and the report states that it resolved to **2026-03-23T11:04:34+03:30**, and d5's to **11:11:25** (`test_civil_time_resolver.py`) |
 | The annotation's own interval, `"begin_s"/"end_s"` (`:371-377`) | seconds in a file with no epoch | civil times, resolved against the same epoch as the traffic |
 
 The generator does not disappear and is not meant to. Bahonar's sixteen tower positions still come
 from a survey and still need a program to project them onto edges. What changes is that the program
-stops doing arithmetic the compiler can do, and the thing it writes now says what it means.
+stops doing arithmetic the compiler can do, and the thing it writes says what it means.
 
 **One thing the epoch deliberately does not do: it does not become a supervision signal.** The brief's
 standing constraint (§3a) is that illumination is derived context and never a label. The epoch is an
-input to illumination, so the same rule binds it. It may be read by the compile report, by the
-sweep's stratification and by a trainer; the annotation vocabulary (doc 20 §6.2) gains no time term,
-and check 41 exists precisely to surface the case where the two have become entangled anyway.
+input to illumination, so the same rule binds it: the supervision plan carries no epoch and no solar
+field (06 §8.1), the vocabulary gains no time term, and check 41 exists to surface the case where time
+and label have become entangled anyway.
 
 ### 3.5.2 Capture windows and illumination policy: authored candidates, operator choice
 
-Two fields sit on the boundary and must be labelled as such, because getting this wrong would put a
+Two fields sit on the boundary and are labelled as such, because getting this wrong would put a
 run-time decision under version control.
 
 **`capture_windows[]` are authored candidates.** An author knows where the interesting hours are —
 they built them. Doc 10 identifies the sizing scenario's three peaks from the scenario source
-(`10_Scale_And_Performance.md:173-175`) and already delegates one check to this section: "at authoring
-time, `07`'s validator rejects a `capture_windows[]` entry that cuts a declared interval, naming the
-instance" (`:504`). So the windows are declared here, in civil time, and checked here (checks 37, 38).
-What they are **not** is a run instruction. The operator selects among them, or supplies one of their
-own, in [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md).
+(`10_Scale_And_Performance.md:173-175`) and delegates one check to this section: "at authoring time,
+`07`'s validator rejects a `capture_windows[]` entry that cuts a declared interval, naming the instance"
+(`:504`). So the windows are declared here, in civil time, and checked here (checks 36, 38, 42). What
+they are **not** is a run instruction: the operator selects among them, or supplies one of their own, in
+[`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md).
 
 ```jsonc
 "capture_windows": [
@@ -913,22 +897,26 @@ own, in [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md).
 ]
 ```
 
-**`illumination` is an authored default, in the same sense.**
+**`illumination` is an authored default, in the same sense**, and **required**: a frozen run and an
+unconfigured one write identical records, so there is no default to assume (D11.6, check 39). It is the
+`illumination` object of [`04_Contracts.md`](04_Contracts.md) §11.5, read by the session's own
+`CarlaNet.CoSim.IlluminationPolicy`:
 
 ```jsonc
 "illumination": {
-  "mode": "frozen",        // "frozen" | "advancing"
-  "rate": 1.0,             // sun-clock seconds per SIMULATED second; only with "advancing"
-  "rationale": "a sweep varying dwell duration must hold the sun still"   // free text, reported
+  "illumination_version": 1,
+  "policy": "freeze_at_window_start",   // | "advance" (with rate_sun_s_per_sim_s) | "freeze_at" | "ignore"
+  "note": "a sweep varying dwell duration must hold the sun still"
 }
 ```
 
-`frozen` means the sun is set once, at the window's first instant, and does not move — illumination is
-a controlled constant. `advancing` means it tracks simulated time. Both are legitimate; the brief's
-§3a requirement 2 says so; and the choice belongs to the run. The specification declares which one the
-scenario was *designed* around, and the resolution report states it, so that an operator overriding it
-is making a visible decision rather than an accidental one. The override lands in the run manifest,
-not in the scenario.
+`freeze_at_window_start` sets the sun once, at the window's opening instant; `advance` carries it forward
+at a declared number of sun-clock seconds per simulated second, written by the session every tick;
+`freeze_at` holds it at a declared civil time of day; `ignore` writes no sun. The choice belongs to the
+run. The specification declares which one the scenario was *designed* around, the resolution report
+states it as an authored default the operator may override, and the override is recorded in the run
+manifest, not in the scenario. Under `advance`, check 39 warns per window with the elevation at the
+window's open and close, because such a window is not one lighting condition.
 
 **Why the authored default is worth having at all, rather than leaving it wholly to the operator.**
 Because a sweep is compiled here, not run here (§7.2), and a sweep that varies behaviour while the sun
@@ -938,84 +926,63 @@ the specification states what it intended.
 ### 3.6 Where the behavioural annotation lives
 
 **The annotation channel is settled by [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) and
-this section adopts it unchanged.** That section's D6.1 amends doc 20 decision 6 for the SUMO
-surface: the companion file `<scenario>.supervision.json` becomes the *sole* channel, because SUMO
-has no counterpart to OpenSCENARIO's `UserDefinedAction` and because the route file is generated
-rather than authored. Its D6.2 adds a third kind of subject — the **cohort**, a `<flow>` id standing
-for every vehicle SUMO names `<flow id>.<n>` — which may carry only a whole-life annotation.
+this section adopts it unchanged.** D6.1 makes the companion file `<Scenario>.supervision.json` the
+*sole* channel, because SUMO has no counterpart to OpenSCENARIO's `UserDefinedAction` and because the
+route file is generated rather than authored. D6.2 adds the **cohort** — a `<flow>` standing for every
+vehicle SUMO names `<flow id>.<n>` — which may carry only a whole-life annotation.
 
-Two alignments between that and the surface proposed here, worth stating because they were reached
-independently:
+An author writes supervision in the specification's `supervision` block, and the compiler
+(`carlacontrol.SupervisionPlanCompiler`) turns it into the plan of 06 §8.1:
 
-- **The specification's `flows[]` / `actors[]` split is exactly D6.2's cohort / entity split.** A
-  `flows[]` entry is a cohort and may carry a whole-life annotation; an `actors[]` entry is an entity
-  and may carry phased intervals. The compiler enforces that, which is check 23 in §5.2.
+| Declared | Compiles to |
+|---|---|
+| `instances[]` — `annotated` or `nominal`, with `labels`, `participants` (actor and role), `intervals` (participant, phase, begin, end or duration, in civil time), `aoi_refs`, `parameters`, `counterfactual` | a pattern instance, id `<scenario_id>/<name>`, with its participants and its intervals in seconds and civil time |
+| `cohorts[]` — a flow, `annotated` whole-life or `unlabelled` | a cohort row; `nominal` (check 49) and intervals (check 23) refuse |
+| `series[]` — a rota read as a recurring series, with the members' role, the slot length, each subject's area and the members' state | a series with one slot per occasion, realised by the rota's entry or unrealised where the rota skips; each realised member is an entity in the declared state |
+| `absences[]` — a skipped rota occasion, annotated | an instance with `realisation: absent`, no participant, one `vacancy` interval over the slot, its `expected` route in edges, and the series' realised count as counter-evidence |
+
+Every actor not in an instance or a series, and every flow not in `cohorts`, is written explicitly as
+`unlabelled`: absence of an element must not stand for an asserted negative (06 §3.1). The set of rows is
+fixed at compile time; the runtime may only bind them (06 §3.6). The plan carries the resolved,
+import-flattened vocabulary with its digest, and the digests of the route file, the network and the
+configuration it was compiled against. It carries no epoch and no solar field.
+
+Two alignments between that and the surface proposed here:
+
+- **The specification's `flows[]` / `actors[]` split is exactly D6.2's cohort / entity split.** A flow
+  is a cohort and may carry a whole-life annotation; an actor is an entity and may carry phased
+  intervals. The compiler enforces that (checks 23, 49).
 - **D7.2 strengthens rather than contradicts D6.1's second argument.** That argument is that putting
-  authored intent into a generated file makes the generator the only author. Under D7.2 the route
-  file is *wholly* generated from the specification, so no authored intent lives in it at all, and
-  the authored artifact — the specification — is the thing under review and in version control.
+  authored intent into a generated file makes the generator the only author. Under D7.2 the route file
+  is *wholly* generated from the specification, so no authored intent lives in it at all, and the
+  authored artifact — the specification — is the thing under review and in version control.
 
-What remains for this section is one narrower question the annotation channel does not answer: how
-**static identity** — `entity_id`, `instance_id`, the participant role, the catalogue entry — reaches
-a CARLA spawn attribute, which doc 20 D7 requires because an attribute survives record and replay
-where an in-process registry cannot. SUMO has an exact analogue of doc 20 §5.1's entity
-`<Properties>`, and it is better than it looks.
+**The route file carries no supervision, and the compiler checks that it does not.** *Measured.* SUMO's
+`<param key= value=/>` round-trips end to end: a route file carrying `<param>` on a `<vType>` and on a
+`<trip>` was passed through `duarouter` 1.27.0 (params preserved on both the `vType` and the emitted
+`<vehicle>`) and then through `sumo` 1.27.0 with `--vehroute-output` (params preserved on the arrived
+vehicle, arrival 96.00 s); TraCI carries per-object parameters on every domain
+(`Build/sumo-install/tools/traci/domain.py:254,278`). That makes `<param>` fit for **identity
+transport** and unfit for an annotation channel, for 06 §3.1's reason: it is a flat store SUMO's own
+device and model code reads keys out of. The compiled route file carries exactly the vehicle-type
+binding — `carla:blueprint`, `carla:class_id` and `carla:catalogue_digest` on each `<vType>`
+([`04`](04_Contracts.md) C1) — and a vehicle's identity is its SUMO id ([`04`](04_Contracts.md) C4), so
+nothing else is emitted. Check 52 re-reads the route file before it is written and refuses any other
+key; `test_scenario_compiler.py` asserts that no label, term, state or instance name appears in it.
 
-*Measured.* SUMO's `<param key= value=/>` child element round-trips end to end. A route file carrying
-`<param>` on a `<vType>` and on a `<trip>` was passed through `duarouter` 1.27.0 (params preserved on
-both the `vType` and the emitted `<vehicle>`) and then through `sumo` 1.27.0 with
-`--vehroute-output` (params preserved on the arrived vehicle, arrival 96.00 s). *Read:* TraCI carries
-per-object parameters on every domain, `getParameter` and `setParameter`
-(`Build/sumo-install/tools/traci/domain.py:254,278`).
+One asymmetry to record: **a scenario previewed in `sumo-gui` shows the motion faithfully and the
+annotation not at all**, and its clock reads elapsed seconds — §1.4 measured SUMO resolving `7:00:00` to
+step 25 200 with no notion of what 25 200 is. So a preview can show that the guard arrives; only the
+resolution report can show that he arrives at 07:00 on a Tuesday under a +15° sun, and only the report
+can show which instance he belongs to. That is the argument for §5.3 existing.
 
-So the path from an authored identity to a CARLA spawn attribute is complete with no new transport:
-the compiler writes `<param key="…" value="…"/>` into the route file, SUMO carries it, the .NET
-bridge reads it with `getParameter`, and it becomes the custom spawn attribute doc 20 D7 requires —
-which the engine stores unvalidated and the recorder preserves through record and replay (doc 20
-§4.5).
+### 3.6.1 Identity travels in the SUMO id; the epoch travels in the lock
 
-**`<param>` is identity transport, not an annotation channel, and the distinction is the point.**
-[`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §3.1 declines `<param>` for supervision on
-the grounds that it "attaches only to certain elements and is consumed by device and model code, not
-reserved for vendors". Both halves are right and neither blocks this use. The elements it attaches to
-are exactly the ones needed (*measured:* `vType` and `vehicle`/`trip`), and the collision risk with
-SUMO's own consumed keys — `device.*`, `has.*`, car-following parameters — is removed by requiring a
-declared namespace prefix on every key the compiler emits, which the compiler owns because nothing is
-hand-written. A key outside the declared namespace in a compiled route file is a compiler bug.
-
-It carries only what is **static** for the life of a vehicle: `entity_id`, `instance_id`, participant
-role, catalogue entry. It cannot carry intervals, phases or multi-participant structure, for the same
-reason `role_name` could not (doc 20 §4.3): a parameter is one string, and although SUMO's parameters
-are mutable at runtime they are not *recorded* per tick. That belongs to
-[`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md)'s `WorldSupervisionState`. The authoring
-side's obligation is only to make every reference in the supervision file resolvable and checkable,
-which is §5.
-
-One asymmetry to record, because it is the SUMO version of doc 20 §5.5's: **a scenario previewed in
-`sumo-gui` shows the motion faithfully and the annotation not at all.** `sumo-gui` is the only
-preview available, and it has no concept of a pattern instance. That is acceptable — the annotation
-changes no motion — but it means the compile step's report is the *only* place an annotation can be
-checked, which is the argument for §5.3 existing.
-
-**The same asymmetry applies twice over to time, and that is the second argument for §5.3.** `sumo-gui`
-renders a clock, but it renders elapsed seconds — §1.4 measured SUMO resolving `7:00:00` to step
-25 200 with no notion of what 25 200 is. It has no sun, no date and no idea what illumination a
-capture will be made under. So a preview can show that the guard arrives; only the resolution report
-can show that he arrives at 07:00 on a Tuesday under a +15° sun. And the annotation inherits the same
-gap: *read*, `make_bahonar_scenario.py:371-377` writes the no-show interval into the labels file as
-`"begin_s"` / `"end_s"`, so the supervision record carries the identical epochless seconds the route
-file does. One epoch has to interpret both, which is why it sits at the top of the specification
-rather than beside the traffic.
-
-### 3.6.1 Identity travels with `<param>`; the epoch does not
-
-A related question, answered here so it is not asked at the wrong layer. `<param>` carries what is
-static about a *vehicle* (§3.6): `entity_id`, `instance_id`, participant role, catalogue entry. The
-epoch is static about the *scenario*, so it does not belong on a vehicle and is not written 610 times.
-It travels in `<Scenario>.lock.json` and `<Scenario>.resolution.json` (§5.1), which are the artifacts a
-run already reads and the run manifest already joins to. *Inference,* but a cheap one: putting the
-epoch on every `<param>` would make it 610 restatements of one fact, each of which could disagree with
-the others, and would still not reach anything that reads the `.sumocfg`.
+The epoch is static about the *scenario*, so it does not belong on a vehicle and is not written 610
+times. It travels in `<Scenario>.lock.json` and `<Scenario>.resolution.json` (§5.1), which are the
+artifacts a run reads and the run manifest joins to, and it is restated as a comment in the `.sumocfg`
+for a person opening the file. The route file carries none of it, so a sweep over `epoch.date` changes
+the lock and the configuration and leaves the traffic the route file declares identical (§7.2.1).
 
 ### 3.7 The end-to-end workflow
 
@@ -1041,7 +1008,7 @@ flowchart TB
     T1["make_place_index:<br/>street names, directions,<br/>gateways, areas → edges"]
     T2["Reconnaissance report<br/>for this world"]
     T6["Illumination reference<br/>(11_Time_And_Illumination):<br/>sunrise · sunset · elevation<br/>per date · night verdict"]
-    T3["compile_sumo_scenario:<br/>resolve places · resolve instants ·<br/>validate · emit"]
+    T3["compile_scenario.py:<br/>resolve places · resolve instants ·<br/>validate · route · emit"]
     T4["Resolution report<br/>+ refusals and warnings<br/>+ illumination–label association"]
     T5[("Scenario package:<br/>.rou.xml (routed) · .sumocfg ·<br/>.supervision.json · resolution.json ·<br/>.lock.json (carries the epoch)")]
   end
@@ -1108,7 +1075,7 @@ sequenceDiagram
     AI->>User: "Which Yosemite bridge — the one over<br/>Arapahoe Road, or over the ground-level<br/>roadway at 39.6004N 104.8865W?"
     User-->>AI: the ground-level roadway
     Note over AI,User: The epoch is asked, never assumed.<br/>"05:30" is meaningless without it, and<br/>a default would be a silent decision.
-    AI->>User: "What civil date and offset is t = 0?<br/>I will take 2026-03-21 00:00 −06:00<br/>(America/Denver, no DST until 08 Mar) unless you say otherwise."
+    AI->>User: "What civil date and offset is t = 0?<br/>I will take 2026-03-21 00:00 −06:00<br/>(America/Denver, daylight saving in effect from 8 March) unless you say otherwise."
     User-->>AI: that date, and yes that offset
     AI->>AI: write <Scenario>.scenario.json<br/>(epoch, places by description, instants<br/>by civil time, flows, actors,<br/>annotations, capture windows, seeds)
     AI->>Comp: compile
@@ -1138,7 +1105,7 @@ the 07:00 one changes nothing about the guards, so the window choice is the oper
 flowchart TB
   subgraph AUTHOR["Author — this section (07)"]
     direction TB
-    AU1["Declare the epoch:<br/>date · time_of_day · utc_offset ·<br/>zone? · dst_policy"]
+    AU1["Declare the epoch:<br/>civil_datetime · utc_offset_hours ·<br/>utc_datetime · calendar_advances ·<br/>dst_in_effect"]
     AU2["Write instants in civil time;<br/>write rotas as days x times"]
     AU3["Declare CANDIDATE capture windows<br/>and the DEFAULT illumination policy"]
     AU4["Compile: every civil time resolves<br/>to a second inside the span;<br/>every window is checked"]
@@ -1157,7 +1124,7 @@ flowchart TB
     direction TB
     OP1["Pick ONE window:<br/>an authored candidate,<br/>or a new one"]
     OP2["Pick the policy for THIS run:<br/>frozen at the window start,<br/>or advancing at a rate"]
-    OP3["Run. Overrides land in the<br/>run manifest, never in the scenario"]
+    OP3["Run. Overrides are recorded in the<br/>run manifest, never in the scenario"]
   end
 
   AU1 --> AU2 --> AU3 --> AU4 --> AU5
@@ -1174,7 +1141,7 @@ Three consequences of drawing it this way, each of which is a rule the compiler 
 enforces:
 
 - **An operator can never silently contradict the author.** The run manifest carries both the authored
-  default and the value used, so a capture made under `advancing` on a scenario authored `frozen` is a
+  default and the value used, so a capture made under `advance` on a scenario authored `freeze_at_window_start` is a
   visible fact rather than a forensic exercise. The mechanism is doc 12's; the obligation to emit the
   authored value into the lock file is this section's (§5.1).
 - **An author can never pin a run to one window.** `capture_windows[]` is a list of candidates, and a
@@ -1184,8 +1151,9 @@ enforces:
   choice away.
 - **Neither side owns the ephemeris.** Both call doc 11's. If the compile report says the window opens
   at +15.1° and the run renders +11.8°, that is a bug in one implementation, not a disagreement
-  between two — which is only true if there is one implementation. (*Inference,* and the reason §2.9
-  item 1 is phrased as a dependency rather than as a utility this section could write.)
+  between two — which is only true if there is one implementation. It is built that way: the
+  compiler states every sun through `DeclaredSun` and `SolarPositionModel`, the session's own
+  functions (§2.9 item 1).
 
 ---
 
@@ -1225,42 +1193,47 @@ junctions and 3004 request rows. A report over that is a small file, not a corpu
 
 ### 4.2 The resolver
 
-Turns a described place into an edge, a lane, or a lane-and-offset. Accepted forms, in the order the
-compiler tries them:
+Turns a described place into an edge, a lane, or a lane position (`carlacontrol.PlaceResolver`). What a
+place is used for decides what it must resolve to: an origin, destination or via needs one edge; a stop
+needs one lane and a position.
 
-| Form | Example | Resolves to |
-|---|---|---|
-| Explicit edge or lane | `{"edge": "218965860#0"}`, `{"lane": "218965860#0_0", "offset_m": 87.93}` | itself, after existence and geometry checks |
-| Area of interest | `{"area": "drydock"}` | the drivable edges inside the area, or the nearest one |
-| Street plus direction | `{"street": "East Arapahoe Road", "direction": "west"}` | the edge run carrying that name in that heading |
-| Street plus position | adds `"near": {"lat": …, "lon": …}` or `"at": "South Yosemite Street"` | narrows to one edge |
-| Gateway | `{"gateway": "south", "street": "I-25"}` | the fringe edge whose bearing matches |
-| Geographic point | `{"lat": …, "lon": …, "max_snap_m": 25}` | the nearest drivable lane, with the snap distance reported |
-| Junction movement | `{"from_street": …, "to_street": …}` | the pair of edges either side, never the internal edge |
+| Form | Example | Resolves to | Built |
+|---|---|---|---|
+| Explicit edge | `{"edge": "218965860#0"}`, optionally `"offset_m": 87.93` | itself, after an existence check; with an offset, that position on its rightmost lane | **yes** |
+| Lane and offset | `{"lane": "26413459_0", "offset_m": 58.9}` | that position, checked against the lane's length (check 9) | **yes** |
+| Area of interest | `{"area": "drydock"}` | the area's inside and crossing lanes, from the world's area table; a stop uses the area's one lane, from its interval's start to its end | **yes** |
+| Street plus direction | `{"street": "East Arapahoe Road", "direction": "west"}` | the edges of that name heading that way, ordered, from the place index | **yes** |
+| Street plus a cross street | adds `"at": "South Yosemite Street"` | the one edge of that run arriving at a junction the cross street meets | **yes** |
+| Street plus a point | adds `"near": {"lat": …, "lon": …}` | narrows to one edge | no |
+| Gateway | `{"gateway": "south", "street": "I-25"}` | the fringe edge whose bearing matches | no |
+| Geographic point | `{"lat": …, "lon": …, "max_snap_m": 25}` | the nearest drivable lane, with the snap distance reported | no |
+| Junction movement | `{"from_street": …, "to_street": …}` | the pair of edges either side, never the internal edge | no |
+
+A form not built is refused by the schema (check 53) rather than half-resolved.
 
 The last row is doc 20 §11 question 8, answered for this surface: a movement through a junction is
-named by the roads either side, and the resolver produces that pair. *Measured:* junction internals
-carry the converter's own identifier — 646 of Arapahoe's 917 `.xodr` roads, 2868 of Bahonar's 3891 —
-so there is nothing else to name them by. Whether junctions want stable derived names remains open
-(§12).
+named by the roads either side. *Measured:* junction internals carry the converter's own identifier —
+646 of Arapahoe's 917 `.xodr` roads, 2868 of Bahonar's 3891 — so there is nothing else to name them by.
+Whether junctions want stable derived names remains open (§12).
 
-**The resolver never guesses when it is ambiguous.** It refuses and lists the candidates with enough
-information to choose between them. That is the property that makes it safe for an assistant to use.
+**The resolver never guesses when it is ambiguous.** It refuses and lists the candidates — edge,
+direction, length and extent — with enough to choose between them (check 7). That is the property that
+makes it safe for an assistant to use.
 
 ### 4.3 Failure modes
 
-| Failure | How it shows | Response |
-|---|---|---|
-| Name matches nothing | no candidate | **refuse**, list the nearest names by edit distance and the nearest edges by distance |
-| Name matches many | *measured:* `South Yosemite Street` is **65 edges**, `East Arapahoe Road` **26**, `Centerville Lane` **18** | **refuse**, list candidates with direction, extent and length; the author narrows with `direction`, `near` or `at` |
-| Direction is ambiguous | a street that curves through more than 90° | **refuse**, report the bearing range |
-| Map has no street names | *measured:* Bahonar — **47 of 1044 normal edges named (4.5 %)**, 6 distinct names, all Persian in Arabic script | **warn at index build**, built: `places.json` carries the warning whenever fewer than half the normal edges are named (§2.5); §4.4 |
-| Snap distance large | point resolution lands far from any road | **warn** past a stated threshold, **refuse** past `max_snap_m` |
-| Place is outside the world | envelope disjoint from `convBoundary` | **refuse** — doc 20 §8.3's most likely authoring mistake |
-| Place is in the staging ring | inside the margin of the staging rectangle | **warn** — doc 20 §8.3; traffic enters and leaves there |
-| Place is on a degenerate edge | lane length below a stated threshold | **refuse** — §6 |
-| Place is on an edge the actor's class may not enter | `allow`/`disallow` excludes it | **refuse**, name the class and the gates |
-| Resolved edge disagrees with the world graph | edge absent from, or length differing in, `map.net.xml` | **refuse** — §1.3 |
+| Failure | How it shows | Response | Built |
+|---|---|---|---|
+| Name matches nothing | no candidate | **refuse**, listing the nearest names by similarity | **yes**, check 7 |
+| Name matches many where one is needed | *measured:* `South Yosemite Street` is **65 edges**, `East Arapahoe Road` **26**, `Centerville Lane` **18** | **refuse**, listing candidates with direction, extent and length; the author narrows with `direction` and `at` | **yes**, check 7 |
+| A stop at a place naming no position | an edge with no offset, a street, an area of several lanes | **refuse**, naming the forms that give a position | **yes**, check 7 |
+| Offset beyond the lane | `offset_m` greater than the lane's length | **refuse** | **yes**, check 9 |
+| Place used on a vehicle whose class may not enter it | `allow`/`disallow` excludes the class | **refuse**, naming the class and the edges | **yes**, check 10 |
+| Direction is ambiguous | a street that curves through more than 90° | **refuse**, reporting the bearing range | no |
+| Map has no street names | *measured:* Bahonar — **47 of 1044 normal edges named (4.5 %)** | **warn at index build**: `places.json` carries the warning below half named (§2.5); a street place on such a map resolves against what little is named | **yes**, at world build |
+| Snap distance large | point resolution falls far from any road | **warn** past a stated threshold, **refuse** past `max_snap_m` | no |
+| Place is in the staging ring | inside the margin of the staging rectangle | **warn** — doc 20 §8.3 | no; for an area, the area table's V5.5/V5.6 warning is carried (check 27) |
+| Place is on a degenerate edge | lane length below a stated threshold | **refuse** — §6 | no |
 
 ### 4.4 Name resolution is a strong tool on some maps and unavailable on others
 
@@ -1294,49 +1267,46 @@ Two conclusions follow, and the second is the reason §4.1 is a *report* and not
 
 ### 4.5 The time resolver
 
-The second resolver, deliberately built the same way as the first, so that the compile report has one
-shape and an author learns one idea. A place resolves to an edge; an instant resolves to a second;
-both refuse rather than guess; both report what they became.
+The second resolver, built the same way as the first (`carlacontrol.CivilTimeResolver`), so that the
+compile report has one shape and an author learns one idea. A place resolves to an edge; an instant
+resolves to a second; both refuse rather than guess; both report what they became.
 
 It is smaller than the place resolver for a good reason: **there is no ambiguity to adjudicate.** Given
 an epoch, `"d0 07:00"` has exactly one answer. The place resolver's hard cases come from a map having
-65 edges called South Yosemite Street (§4.3); the time resolver's hard cases all come from the epoch
-being absent, wrong, or contradicted — which is why almost every entry below is a refusal about the
-epoch rather than about the instant.
+65 edges called South Yosemite Street (§4.3); the time resolver's all come from the epoch being absent,
+wrong, or contradicted — which is why almost every entry below is a refusal about the epoch rather than
+about the instant.
 
 | Form accepted | Example | Resolves to |
 |---|---|---|
 | Plain seconds | `25200` | itself |
-| Day plus civil clock | `"d0 07:00"`, `"d6 02:30"`, `"d3 23:00:00"` | `day × 86400 + clock − epoch.time_of_day`, under `dst_policy` |
-| Civil clock alone | `"07:00"` | day 0, and only when the span is one day or less |
-| Absolute civil instant | `"2026-03-21T07:00:00+03:30"` | `instant − epoch instant`, in seconds |
-| Duration | `"8h"`, `"30m"`, `"274s"` | seconds |
+| Day plus civil clock | `"d0 07:00"`, `"d6 02:30"`, `"d3 23:00:00"`, `"d0 24:00"` | the clock on the epoch's civil date plus N days, at the epoch's offset, less the epoch instant |
+| Civil clock alone | `"07:00"` | day 0, and only when the run is one day or less |
+| Absolute civil instant | `"2026-03-21T07:00:00+03:30"` | the instant less the epoch instant, in seconds |
+| Duration | `"8h"`, `"30m"`, `"274s"`, `"1h30m"`, `"7d"` | seconds |
 | Named instant | `{"instant": "night_shift_start"}` | what `instants{}` declared |
-| Offset from a named instant | `{"instant": "night_shift_start", "plus": "15m"}` | that second plus the duration |
+| Offset from a named or written instant | `{"instant": "night_shift_start", "plus": "15m"}`, `{"at": "d2 11:00", "plus": 274}` | that second plus the duration |
 | Rota expansion | §3.5.1 | a set of seconds, each reported individually |
 
 Failure modes, in the same form as §4.3's:
 
 | Failure | How it shows | Response |
 |---|---|---|
-| No `epoch` | the field is absent | **refuse** — check 33. Every other row here is unanswerable without it, and a default would be a silent assertion about what the scenario means |
-| `epoch.utc_offset` missing or not a whole number of minutes | parse | **refuse** — check 34, and the check that keeps +03:30 working |
-| `epoch.zone` unknown, or its offset at the epoch instant disagrees with `utc_offset` | tz database | **refuse** on disagreement; **warn** and skip if no tz database is installed (*measured* on this machine: zero zones available, §2.8) — check 35 |
-| A civil clock alone on a multi-day scenario | `"07:00"` with `end` > 86 400 | **refuse**, naming the day form. This is the SUMO `H:M:S` trap of §1.4 caught at the specification layer |
-| Absolute instant whose offset ≠ `epoch.utc_offset` under `fixed_offset` | parse | **refuse** — an author who writes two different offsets means something the policy cannot express |
-| A resolved second outside `[begin, end]` | arithmetic | **refuse** — check 37. *Measured,* how easy this is: the sizing scenario's latest departure is 602 100 s against an `end` of 604 800 — 45 minutes of margin on a seven-day run |
-| A resolved second negative | an instant before `t = 0` | **refuse**, and say what the epoch instant is, because the author has almost certainly mistaken the epoch for a start-of-interest rather than a start-of-simulation |
-| Span crosses a daylight-saving transition under `fixed_offset` | the zone's rules | **warn**, naming the transition instant and stating that civil labels after it are an hour off — check 36 |
-| `dst_policy: "civil_clock"` with no resolvable zone | no tz database, or no `zone` | **refuse** — there is no rule to resolve against |
-| Span crosses midnight | `end − begin` spans a date boundary, or any instant does | **warn** with the derived date of every window, because *measured* the solar date does not advance on its own (`CesiumTimeOfDayController.cpp:35`, §2.9 item 4) |
-| Rota `skip` entry matches nothing | the expansion | **refuse** — a skip that matches nothing is an anomaly that was never planted, and *read*, `make_bahonar_scenario.py:236` shows the whole no-show anomaly resting on one `continue` firing |
-| Rota expands to zero entries | `days` or `at` empty | **refuse** |
+| No `epoch` | the field is absent | **refuse** — check 33. Every other row is unanswerable without it, and a default would be a silent assertion about what the scenario means |
+| The epoch breaks a rule | `SolarEpoch` refuses it | **refuse**, naming every rule broken — check 33; the offset rule is check 34, the check that keeps +03:30 working |
+| A civil clock alone on a multi-day run | `"07:00"` with `end` past 86 400 | **refuse**, naming the day form — check 47. This is the SUMO `H:M:S` trap of §1.4 caught at the specification layer |
+| An absolute instant at another offset | parse | **refuse** — check 47. One offset holds for the whole run, so an instant at another means something the epoch cannot express |
+| A form the resolver does not accept, an unknown named instant, a circular definition | parse, lookup | **refuse** — checks 47 and 8 |
+| A resolved second after the run | arithmetic | **refuse** for a departure, a stop's `until` or an interval's begin — check 37; *measured,* how easy this is: the sizing scenario's latest departure is 602 100 s against an `end` of 604 800 — 45 minutes of margin on a seven-day run. A flow or an interval ending after the run is warned about instead (checks 32, 31) |
+| A resolved second negative | an instant before `t = 0` | **refuse** — check 37, stating the epoch instant, because the author has almost certainly mistaken the epoch for a start of interest rather than the start of the simulation |
+| A window on another date than its sun | the epoch's calendar held, or a freeze holding the date | **warn**, naming both dates — check 36 |
+| Rota `skip` entry matches nothing, or has no reason | the expansion | **refuse** — check 48; *read*, `make_bahonar_scenario.py:236` shows the whole no-show anomaly resting on one `continue` firing |
+| Rota expands to zero entries | `days` or `at` empty | **refuse** — check 48 |
 
 **One property is worth stating because it is not obvious.** The resolver runs **before** route
-validation, not after, even though route validation is the expensive stage. The reason is that a
-refused instant is almost always an epoch error, and an epoch error invalidates every instant in the
-file at once — so reporting it first turns one compile into one fix, rather than one compile into 610
-individually wrong departures. (*Inference.*)
+validation, even though route validation is the expensive stage. A refused instant is almost always an
+epoch error, and an epoch error invalidates every instant in the file at once — so reporting it first
+turns one compile into one fix, rather than one compile into 610 individually wrong departures.
 
 ---
 
@@ -1349,107 +1319,118 @@ equivalent, with the traffic half added.
 
 ### 5.1 What compile consumes and emits
 
-**Consumes:** the specification, the world package (including `map.net.xml` and `places.json`), the
-vehicle catalogue, the annotation vocabulary, the area table, and the illumination reference (§2.9).
+**Consumes:** the specification, the world package — its `map.net.xml`, `map.xodr` header, `world.json`,
+place index, area table and solar frame — and the vehicle catalogue. Nothing else, and no server.
 
-**Emits a scenario package**, all of it generated, none of it hand-edited:
+**Emits a scenario package** into one directory, all of it generated, none of it hand-edited
+(`carlacontrol.ScenarioCompiler`; `CarlaControl/scripts/compile_scenario.py`):
 
 | File | Content |
 |---|---|
-| `<Scenario>.rou.xml` | vehicle types, flows and actors, **departure-sorted**, with `<param>` identity, and **already routed** (§5.5). Times in **plain seconds**, never `H:M:S` — §6 gotcha 12 |
-| `<Scenario>.sumocfg` | the run configuration, with the SUMO seed and step length. `<begin>`/`<end>` in plain seconds, with the epoch restated as an XML comment above them for a human opening the file |
-| `<Scenario>.add.xml` | rerouters, lane closures, detectors — when the specification declares any |
-| `<Scenario>.supervision.json` | the supervision record, in the form [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §3.1 defines, with instance ids assigned deterministically from the scenario id and the authored instance name. Intervals carry **both** the resolved second and the derived civil time, because *read* `make_bahonar_scenario.py:371-377` today writes only `begin_s`/`end_s` |
-| `<Scenario>.resolution.json` | **what it resolved** — §5.3 |
-| `<Scenario>.lock.json` | the `scenario_id`; digests of the `.net.xml`, the `.rou.xml`, the `.sumocfg` and the supervision file — the four-way binding [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §8.1 requires, because the plan is compiled against all four; plus the world fingerprint, the netconvert argument vector and version, the catalogue version, the vocabulary's core version, every author namespace with its version, and the vocabulary digest `C3` binds ([`04_Contracts.md`](04_Contracts.md)), the seeds, the compiler version, **the epoch verbatim, the candidate capture windows with their derived civil dates and times, the authored default illumination policy, the ephemeris version, and the illumination–label association statistic of §5.6** |
+| `<scenario_id>.rou.xml` | the vehicle types, one per measured body, and every actor and flow, **already routed** (§5.5), **departure-sorted**, times in **plain seconds**, and no supervision (§3.6) |
+| `<scenario_id>.sumocfg` | the run configuration: the network and route files, `begin` 0, `end` and `step-length` in plain seconds with the epoch restated as a comment above them, the SUMO seed, and the processing options that decide how the traffic moves — `time-to-teleport` −1, `max-depart-delay` 900, `collision.action` warn |
+| `<MapName>.net.xml` | the world package's own network, **byte for byte**, so the network SUMO runs is the world's; nothing about it is scenario-specific |
+| `<scenario_id>.supervision.json` | the supervision plan (§3.6), in the form of [`06`](06_Truth_And_Annotation.md) §8.1: instance ids `<scenario_id>/<name>`, intervals in seconds and civil time, every entity and cohort explicit, the vocabulary resolved with its digest, and the digests of the route file, network and configuration it was compiled against |
+| `<scenario_id>.resolution.json`, `.resolution.md` | **what it resolved** — §5.3 |
+| `<scenario_id>.lock.json` | the `scenario_id`; the specification's name and digest; the compiler and its version; the four files — routes, configuration, network, supervision plan — each with its SHA-256; the world binding (map name, network fingerprint, netconvert argument vector and version, OpenDRIVE and OSM digests, origin, georeference); the catalogue's id and digests; the vocabulary's core version, namespaces and digest; the traffic — SUMO seed, step, end, processing options, and the `duarouter` release that routed it; **the epoch verbatim and its digest, the authored illumination default, the candidate windows with their civil dates and times, the ephemeris, and the illumination–label association statistic** (§5.6) |
 
-The network is **not** emitted. It is the world's, carried in the world package. Any scenario that
-would need a different network needs a different world.
+**A refused compile writes only its resolution report**, marked refused, so every refusal can be read;
+no scenario file is written. **The same specification, seed and world give byte-identical scenario
+files**: no file carries a timestamp, a machine path or the specification's file name, and
+`test_scenario_compiler.py` compiles twice and compares.
 
 **Why the epoch is in the lock file and not only in the specification.** The lock is what a run reads
-and what the run manifest joins to; it is also the artifact that survives when a specification is
-regenerated. Doc 20 §7.5 already wants the `.xodr` digest in the run manifest for the same reason. And
-concretely: [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md) needs the epoch and the
-window's civil date to drive `set_solar_date` — which, *measured*, nothing else will do for it
-(`CesiumTimeOfDayController.cpp:35` never touches the date, §2.9 item 4) — so the epoch has to be in a
-file the operator surface reads, not in one the author edits.
+and what the run manifest joins to; it survives when a specification is regenerated; and it is where
+[`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md) reads the epoch and a window's civil
+date from, to hand the session what it binds the sun with (`set_solar_epoch`, §2.8).
 
 ### 5.2 The checks
 
 Every check states what it compares against, whether it refuses or warns, and the concrete failure it
-prevents. "Refuse" means the compile fails and nothing is emitted.
+prevents. "Refuse" means the compile fails and nothing but the resolution report is written. The list is
+held once, in `carlacontrol.ScenarioCheckCatalogue`, and shipped as the skill's `checks.json`, generated
+from it; `test_scenario_checks_are_one_list.py` holds this table, the shipped list and the compiler to
+the same ids and outcomes.
 
 | # | Check | Against | Outcome | Prevents |
 |---|---|---|---|---|
+| **Specification** ||||
+| 53 | The specification is well formed at a `spec_version` this compiler implements: known fields only, each of its declared type | the compiler's schema, `schemas/scenario.schema.json` | **refuse**, naming every departure | A field nobody reads, which its author will later believe was honoured |
 | **World binding** ||||
-| 1 | Network fingerprint in the specification equals the world package's | §2.7 | **refuse** | Authoring against a different road graph from the one that will render (§1.3) |
-| 2 | `.net.xml` and `map.xodr` came from the same netconvert invocation | a token written by the world build into both | **refuse** | The 352 m → 2.60 m lane disagreement of §1.3 |
-| 3 | Network `convBoundary` equals the `.xodr` header `north`/`south`/`east`/`west` | both files | **refuse** | A network in a different frame — the check `SKILL.md:112-113` asks an author to do by hand |
-| 4 | `<location projParameter>` equals `world.json`'s `GeoReferenceString` | both | **refuse** | Origin drift; the one check `make_arapahoe_scenario.py:283-290` already performs, generalised |
-| 5 | `netOffset` is `0.00,0.00` | the network | **refuse** | A normalised network, where SUMO (x, y) ≠ CARLA (x, −y) |
-| 6 | netconvert version recorded in the world package equals the one on this machine | `world.json`, `netconvert --version` | **warn** | *Measured:* `SUMO_HOME` on this machine is an external **1.27.1** while the repo stages **1.27.0**, and `SumoInstallation.locate` prefers `SUMO_HOME` (`SumoInstallation.py:36`) — so today every scenario build uses a different netconvert from the world build |
+| 1 | The network fingerprint the specification names equals the network the world package carries | §2.7 | **refuse** | Authoring against a different road graph from the one that will render (§1.3) |
+| 2 | The package's network and OpenDRIVE came from one netconvert invocation, and the network it carries is the one it records | `world.json` `NetconvertArgv` — both outputs in one argument list — and `NetworkFingerprint` | **refuse** | The 352 m → 2.60 m lane disagreement of §1.3, and a package assembled from two builds |
+| 3 | The network's `convBoundary` equals the `.xodr` header's `north`/`south`/`east`/`west` | both files | **refuse** | A network in a different frame — the check `SKILL.md` used to ask an author to do by hand |
+| 4 | The network's `projParameter` equals `world.json`'s `GeoReferenceString` | both | **refuse** | Origin drift; the one check `make_arapahoe_scenario.py:283-290` performs, generalised |
+| 5 | The network's `netOffset` is `0.00,0.00` | the network | **refuse** | A network whose metres are displaced from the world's geographic frame. *Measured* (§12 question 12): a world built with `--road-offset-east/north` carries a `netOffset` equal to the offset while every lane shape and every `.xodr` road moves by the same amount, so SUMO (x, y) ≡ CARLA (x, −y) still holds for road geometry and SUMO's conversion of a latitude and longitude places it the offset away from the imagery. The co-simulation session refuses the same networks (`SumoDriveSession.RequireTheWorldSNetwork`), as does the area resolver for areas of interest ([`04`](04_Contracts.md) V5.12) |
+| 6 | The SUMO release routing the scenario is the one that built the world | `world.json` `NetconvertVersion` and the installation `duarouter` runs from | **warn** | *Measured:* `SUMO_HOME` on this machine is an external **1.27.1** while the repository stages **1.27.0**; `compile_scenario.py` routes with the staged installation unless told otherwise, and the release that routed is in the lock |
 | **References** ||||
-| 7 | Every place in `places` resolves, unambiguously | the resolver, §4.2 | **refuse**, with candidates | An authored place that silently becomes a different place |
-| 8 | Every flow, actor, stop and annotation references a declared place name | the specification | **refuse** | A typo becoming a valid-looking edge id |
-| 9 | Every `<stop lane=>` offset lies within that lane's length | `map.net.xml` | **refuse** | A dwell clamped to somewhere other than where it was authored — today `write_dwell_routes` silently clamps (`SumoScenarioBuilder.py:399`) |
-| 10 | Every actor's vehicle class may enter every edge on its route | edge `allow`/`disallow` | **refuse**, naming the class and the gate junctions | The fenced-network fragmentation of `SKILL.md:135-139` |
+| 7 | Every declared place resolves, and to exactly one thing where one is needed | the resolver, §4.2 | **refuse**, with candidates | An authored place that silently becomes a different place |
+| 8 | Every reference names what the specification declares: places, instants, rotas, series, flows and counterfactuals | the specification | **refuse** | A typo becoming a valid-looking identifier |
+| 54 | Every actor, rota entry, flow and capture window id is unique | the specification | **refuse** | Two vehicles SUMO would read as one, or a window cited ambiguously |
+| 9 | Every stop position lies within its lane's length | `map.net.xml` | **refuse** | A dwell clamped to somewhere other than where it was authored — `write_dwell_routes` clamps silently (`SumoScenarioBuilder.py:533`) |
+| 10 | Every vehicle's class may drive every edge of its route | lane `allow`/`disallow`, before routing and on the routed edges | **refuse**, naming the class and the edges | The fenced-network fragmentation the skill records |
 | **Routes** ||||
 | 11 | Every origin–destination–via triple routes | `duarouter`, §5.5 | **refuse** | "No valid route" at SUMO load, after a capture has been scheduled |
-| 12 | Each routed result **ends on the requested destination and contains every `via` edge in order** | the routed output | **refuse** | *Measured:* the false accept of §5.5 |
-| 13 | Explicit edge lists are connected end to end | `check_drivable` (`SumoScenarioBuilder.py:151-160`), applied to **all** laps, not the first two | **refuse** | A lap-count-dependent break that only appears late in a run |
+| 12 | Each routed result starts on the requested origin, ends on the requested destination, and passes every via and stop edge in order | the routed output | **refuse** | *Measured:* the false accept of §5.5 |
+| 13 | An explicit edge list is connected end to end | `map.net.xml` connections | **refuse** | A break that appears only where the list is used |
 | **Vehicles** ||||
-| 14 | Every `vType` names a catalogue entry that exists | the catalogue | **refuse** | A `vType` with no blueprint, discovered at spawn |
-| 15 | Every `vType`'s `length`/`width` match its catalogue entry's bounding box within a stated tolerance | the catalogue | **refuse** past tolerance, **warn** within it | *Read:* fourteen hand-written Bahonar lengths, none checked; SUMO's gaps and CARLA's rendering disagreeing by the difference everywhere (doc 23 §6.8) |
-| 16 | Every `vTypeDistribution`'s probabilities sum to 1 and name declared types | the specification | **refuse** | A silently renormalised mix |
-| 17 | Category-resolved appearance draws from a set, seeded | §7.1, doc 20 §2.6 | **warn** if a category resolves to one entry | Appearance becoming the label |
+| 14 | Every vehicle class names only blueprints the catalogue measured, and no two-wheeler | the catalogue, through `ScenarioVehicleMix` | **refuse** | A `vType` with no blueprint, discovered at spawn |
+| 15 | Every emitted `vType`'s length, width and height are its blueprint's measured box | the route file read back as the bridge reads it (`ScenarioVehicleMix.check_route_file`) | **refuse** | *Read:* fourteen hand-written Bahonar lengths, none checked; SUMO's gaps and CARLA's rendering disagreeing by the difference everywhere. A class restating a dimension is refused when it is built |
+| 16 | Every type a flow or actor names is a declared class, one of its member types, or the mix | the specification | **refuse** | A vehicle drawn from a type nothing declares. Class shares are weights, normalised by design (`ScenarioVehicleMix`), so a class the content build has no body for redistributes in the proportions authored |
+| 17 | A vehicle class draws from more than one body | the specification | **warn** | Appearance becoming the label: every member of the class is the same car |
 | **Annotation** ||||
-| 18 | Every label is in the declared vocabulary at the declared version | the vocabulary | **refuse** | A corpus in which `loiter` is spelled three ways (doc 20 §6.2) |
-| 45 | Every label's `applies_to` includes the subject kind it was asserted of | the declared vocabulary, and the kind of the subject it is attached to | **refuse** | A per-member behavioural term attached to a `<flow>`, which asserts something about every member nobody looked at. This is how [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) D6.2 reaches a term the compiler cannot interpret; check 23 catches the phased case, this catches the term's own declaration (06 §3.8) |
-| 46 | Every namespace appearing in a label, role, phase or area kind was declared in `vocabulary.terms[]` or named in `vocabulary.import[]` | the specification | **refuse** | A term resolving against a namespace that travels in nobody's bundle, so the published vocabulary cannot define it and the corpus ships a label no consumer can read (06 §8.7) |
-| 19 | Every annotation participant names a declared actor | the specification | **refuse** | An instance with a participant that never exists |
-| 20 | Every `aoi_ref` names a validated area | the area table | **refuse** | An annotation naming a place only the author can see (doc 20 §8.1) |
-| 21 | Instance ids are deterministic and unique | scenario id + authored name, no counter, no timestamp | **refuse** on collision | Sweep members that cannot be joined (doc 20 §7.1) |
-| 22 | Every annotated actor's intervals lie within its depart-to-arrival span | the routed result | **warn** | An interval that no vehicle could have been in |
-| 23 | A **cohort** — a `flows[]` entry — carries only a whole-life annotation, never a phased interval | [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) D6.2 | **refuse** | A phase asserted over a generator, whose member count is not known until the run |
-| 24 | At least one actor is `nominal` when any is `annotated` | the specification | **warn** | The missing hard negatives of doc 20 §2.7 |
+| 18 | Every label is a declared term and every role but `subject` a declared role; an annotation carries a label; the declarations resolve inside the published vocabulary | the vocabulary block | **refuse** | A corpus in which `loiter` is spelled three ways (doc 20 §6.2), or a label no consumer can read |
+| 45 | Every label's `applies_to` includes the subject kind, and its `realisation` the instance's | the vocabulary | **refuse** | A per-member term on a `<flow>`, or an absence term on a vehicle. This is how [`06`](06_Truth_And_Annotation.md) D6.2 reaches a term the compiler cannot interpret |
+| 46 | Every namespace appearing in a label, role, phase or area kind was declared in `vocabulary.namespaces[]` or imported | the specification | **refuse** | A term resolving against a namespace that travels in nobody's bundle (06 §8.7) |
+| 19 | Every participant names a declared actor | the specification | **refuse** | An instance with a participant that never exists |
+| 20 | Every `aoi_ref`, and every slot's area, names an area in the world's area table | `areas.resolved.json` | **refuse** | An annotation naming a place only the author can see (doc 20 §8.1) |
+| 21 | Instance ids are `<scenario_id>/<name>`, deterministic and unique | the specification | **refuse** on collision | Sweep members that cannot be joined (doc 20 §7.1) |
+| 22 | No annotated interval begins before its participant departs | the resolved departures | **warn** | An interval no vehicle could have been in. Its end is not checked: only the run knows when a vehicle arrives |
+| 23 | A **cohort** carries only a whole-life annotation, never an interval | [`06`](06_Truth_And_Annotation.md) D6.2 | **refuse** | A phase asserted over a generator, whose member count is not known until the run |
+| 49 | No cohort is `nominal` | [`06`](06_Truth_And_Annotation.md) D6.2 | **refuse** | A negative asserted of vehicles nobody authored one by one |
+| 50 | A one-participant instance names its participant `subject`; the phase `vacancy` is never authored | [`06`](06_Truth_And_Annotation.md) §3.7 | **refuse** | A consumer guessing which track an instance is about, or a spelling the absence writer owns |
+| 24 | Some subject is `nominal` when any is `annotated` | the plan | **warn** | The missing hard negatives of doc 20 §2.7 |
 | **Areas** ||||
-| 25 | Area ids unique, rings closed and non-self-intersecting, `radius_m > 0` | doc 20 §8.3 | **refuse** | Undefined containment tests |
-| 26 | Area envelope intersects the world | `convBoundary` | **refuse** | An area outside the world entirely |
-| 27 | Area wholly inside the staging rectangle, and not inside the staging margin | `world.json` staging fields | **warn** | A pattern sited where traffic spawns and despawns |
-| 28 | Some drivable edge within or near each area | `map.net.xml` | **warn** | An area no vehicle can reach |
+| 25 | Area ids unique, rings closed and non-self-intersecting, `radius_m > 0` | [`04`](04_Contracts.md) C5 V5.1–V5.4 | **refuse** — carried out by `AreaOfInterestSource` when the world is built; the compiler reads only a table the world build validated | Undefined containment tests |
+| 26 | An area's envelope intersects the world | [`04`](04_Contracts.md) C5 | **refuse** — at world build | An area outside the world entirely |
+| 27 | A referenced area lies out of the staging ring | the area table's V5.5 and V5.6 warnings, carried for every area the supervision references | **warn** | A pattern sited where traffic spawns and despawns |
+| 28 | A referenced area can be reached by a road vehicle | the area table's V5.7 warning | **warn** | An area no vehicle can reach |
 | **Epoch and illumination** ||||
-| 33 | `epoch` is present, and `date`, `time_of_day` and `utc_offset` all parse | the specification | **refuse** | *Measured,* §1.4: today nothing states that `t = 0` is midnight, so nothing can set a sun from it and a 23:00 window renders at whatever the world spawned in — solar noon, `CesiumHeightSampler.cpp:409` |
-| 34 | `utc_offset` is a whole number of minutes in `[−12:00, +14:00]`, stored as minutes | the specification | **refuse** | An integer-hours representation creeping in. **Iran is +03:30** and the sizing scenario's site is in it; *read,* `SunSky->TimeZone` is a `double` set by `lon / 15.0` (`CesiumSunSky.cpp:571`) so the stack has no integer assumption to protect |
-| 35 | `epoch.zone`, if declared, exists in the time-zone database, and its offset at the epoch instant equals `utc_offset` | `zoneinfo` | **refuse** on disagreement; **warn and skip** when no database is installed | A zone name and an offset that describe different places. *Measured:* `zoneinfo.available_timezones()` returns **0** on this machine and `ZoneInfo("Asia/Tehran")` raises `ZoneInfoNotFoundError`, so the warn-and-skip branch is the one that fires today (§9.6) |
-| 36 | The scenario's span resolved against the calendar: the derived civil date of `begin`, of `end`, and of every capture window; whether the date advances; whether a daylight-saving transition falls inside | the ephemeris and, for DST, the zone | **warn** when the span crosses midnight or a transition under `fixed_offset`, naming the instant; **refuse** `dst_policy: "civil_clock"` with no resolvable zone | *Measured:* the advance controller wraps the clock with `Fmod(…, 24.0)` and **never advances the date** (`CesiumTimeOfDayController.cpp:35`), so day 6 of a seven-day run renders under day 0's seasonal sun — **+1.51°** of elevation error at 07:00 near the March equinox at the Bahonar origin — and every sidecar's `<_solar date=…>` (`CotWriter.cs:56-57`) reports the wrong day. The warning is what gives doc 12 a date to set |
-| 37 | Every declared civil time resolves to a second inside `[begin, end]`, and no instant is negative | §4.5 | **refuse**, stating the epoch instant and the derived civil time | An instant that silently lands outside the run. *Measured,* the margin on the sizing scenario is 45 minutes: latest departure 602 100 s against `<end value="604800"/>` |
-| 38 | Every capture window lies inside the span and cuts no declared supervision interval | the specification and the supervision file | **refuse** | The delegation doc 10 already makes to this section: "at authoring time, `07`'s validator rejects a `capture_windows[]` entry that cuts a declared interval, naming the instance" (`10_Scale_And_Performance.md:504`). A partially observed positive teaches a truncated pattern |
-| 39 | `illumination` is well-formed if declared: `mode` in {`frozen`, `advancing`}; `rate` present and positive only with `advancing`; `rate` absent with `frozen` | the specification | **refuse** malformed; **warn** when `mode × rate × window length` sweeps the sun through more than a stated arc, naming the arc | A window authored as a controlled constant that is not one, and a `rate` silently ignored because the mode is `frozen`. The units are sun-clock seconds per **simulated** second (§2.9 item 5) |
-| 40 | The site's civil offset against the world's spawned `TimeZone` | `epoch.utc_offset` vs `solar.json` `engine_time_zone_hours` (§2.10) | **warn**, with the derived elevation error at each declared window | *Measured:* the Bahonar origin's `lon / 15` is **3.745377 h**, **14 min 43 s** from Iran's +03:30 — and at the equinox that flips the sun across the horizon at 06:00 (**+1.74°** correct, **−1.53°** as spawned) and at 18:00. Warn, not refuse: the conversion of §2.8 makes it correctable at run time without an engine change, and the warning is how the author learns the correction is needed |
-| 41 | **Illumination–label association** across the entries a declared window will capture | the resolved instants, the supervision labels, and the ephemeris | **warn, always, and never refuse** | §5.6. *Measured on the shipped sizing scenario:* `I(hour; label) / H(label) = 0.600`, and two hours are **100 % annotated**. In a pattern of life this correlation exists by construction; the failure is discovering it after training |
-| 42 | Each declared capture window's illumination regime is reported, and named against doc 11's viability verdict | the night viability verdict (§2.9 item 3) | **warn, never refuse** — naming the regime, the computed sun elevation, and what doc 11 says imagery in that regime will and will not show. An author may capture any regime deliberately; the warning exists so nobody captures one *accidentally*, and so the manifest records that the regime was chosen with its consequences stated | Doc 10 recommends a **23:00** window on the sizing scenario (`10_Scale_And_Performance.md:175`). *Measured,* sun elevation at that instant at the Bahonar origin is **−59.6°** at the equinox, **−38.1°** in June, **−79.5°** in December — deep night on every date. Whether that is imagery is not this section's call, and this check is where doc 11's answer binds |
-| 43 | A sweep member's `epoch` and `illumination` equal its base's, unless illumination is a declared sweep axis | the sweep (§7.2) | **refuse** | §7.4. A behaviour sweep whose members were captured under different light is not a comparison |
+| 33 | The epoch is present and accepted by `CarlaNet.CoSim.SolarEpoch` under every [`04`](04_Contracts.md) C9 epoch rule | the specification | **refuse**, naming every rule broken | *Measured,* §1.4: nothing in a shipped scenario states that `t = 0` is midnight, so nothing can set a sun from it |
+| 34 | `utc_offset_hours` is a whole number of quarter hours in `[−12, +14]` | the specification, through `SolarEpoch` | **refuse** | An offset no civil zone uses, one the engine's zone would clamp without a word, or an integer-hours representation creeping in. **Iran is +03:30** and the sizing scenario's site is in it; *read,* `SunSky->TimeZone` is a `double` (`CesiumSunSky.cpp:571`) ([`04`](04_Contracts.md) V9.3) |
+| 35 | *Retired.* The zone name's offset against `utc_offset_hours` | — | — | `time_zone_id` is carried and never resolved ([`04`](04_Contracts.md) §11.3, [`11`](11_Time_And_Illumination.md) D11.1); a check resolving it would make a compile's verdict depend on the host's zone database, and this machine has none (§9.6) |
+| 47 | Every authored time is in an accepted form, names its day on a multi-day run, and carries the epoch's offset when absolute | §4.5 | **refuse** | A clock-shaped literal that is really an offset — SUMO's `H:M:S` trap of §1.4 |
+| 48 | Every rota expands to entries, and every skip matches exactly one occasion and says why | the rota | **refuse** | An absence that was never planted |
+| 37 | Every resolved departure, stop `until` and interval begin lies in `[0, end]` | §4.5 | **refuse**, stating the epoch instant and the civil time | An instant that silently falls outside the run. *Measured,* the margin on the sizing scenario is 45 minutes: latest departure 602 100 s against `<end value="604800"/>` |
+| 36 | A capture window's civil date and the date its sun is written with | the epoch's `calendar_advances` and the policy, through `DeclaredSun` | **warn** when they differ, naming both | A window rendered under another date's seasonal sun without notice. The session writes the date (§2.9 item 4), so a difference is a declared choice — a held calendar, or a freeze holding the date — and the warning makes it visible |
+| 38 | Every capture window lies inside the run and cuts no declared supervision interval | the specification and the supervision plan | **refuse**, naming the instance | The delegation doc 10 makes to this section: "at authoring time, `07`'s validator rejects a `capture_windows[]` entry that cuts a declared interval, naming the instance" (`10_Scale_And_Performance.md:504`). A partially observed positive teaches a truncated pattern |
+| 39 | The illumination default is present and accepted by `CarlaNet.CoSim.IlluminationPolicy`; under `advance`, each window's arc is named | the specification | **refuse** when absent or malformed; **warn** per window under `advance`, with the elevation at its open and close | A window authored as a controlled constant that is not one, and a `rate` silently ignored because the policy is a freeze. The units are sun-clock seconds per **simulated** second (§2.9 item 5) |
+| 40 | The declared offset is within an hour of the zone the world's georeference configures | `epoch.utc_offset_hours` vs `solar.json` `engine_time_zone_hours` (§2.10) | **warn** past 1.0 h, naming both ([`04`](04_Contracts.md) V9.13); the difference is reported for every scenario | A declared offset that is not this place's. *Measured:* the Bahonar origin's `lon / 15` is **3.745377 h**, **14 min 43 s** from Iran's +03:30 — at the equinox the difference between a sun above the horizon at 06:00 (**+1.74°**) and one below it (**−1.53°**). The session writes the declared offset as the sun's zone ([`04`](04_Contracts.md) D4.19), so a difference of that size moves no sun at run time |
+| 42 | A window whose sun reaches below −6° is named as not corpus-eligible | [`11`](11_Time_And_Illumination.md) D11.7, through `WindowSun` | **warn, never refuse**, naming the elevation and the verdict. An author may capture any regime deliberately; the warning exists so nobody captures one *accidentally* | Doc 10 recommends a **23:00** window on the sizing scenario (`10_Scale_And_Performance.md:175`). *Measured,* sun elevation at that instant at the Bahonar origin is **−59.6°** at the equinox, **−38.1°** in June, **−79.5°** in December — deep night on every date |
+| 41 | The illumination–label association over the declared windows, and over the span | the resolved instants, the supervision plan and the declared sun | **warn, always, and never refuse** | §5.6. *Measured on the shipped sizing scenario:* `I(hour; label) / H(label) = 0.600`, and two hours are **100 % annotated**. In a pattern of life this correlation exists by construction; the failure is discovering it after training |
+| 43 | A sweep holds illumination while it varies behaviour, varies only illumination when it says so, and names a crossed design; a counterfactual pair shares its base's epoch, windows and illumination unless displaced in time | the sweep (§7.2) | **refuse**; **warn** for a factorial design, naming its cells | §7.4. A behaviour sweep whose members were captured under different light is not a comparison |
 | **Emission** ||||
-| 29 | Route file is departure-sorted across flows and actors | the emitted file | **refuse** (it is a compiler bug if it fires) | *Carried forward,* `SKILL.md:155-157`: SUMO drops out-of-order entries with only a warning |
-| 30 | No XML comment contains `--` | the emitted files | **refuse** | *Carried forward,* `SKILL.md:169-170`: SUMO rejects the file |
-| 31 | Simulation end time covers every declared interval and every actor's arrival | the routed result | **warn** | An orbit or dwell truncated by the run ending, recorded as if it completed (doc 20 §6.1 `closed_by`) |
+| 29 | The route file is departure-sorted | the file, before it is written | **refuse** (a compiler bug if it fires) | *Carried forward,* the skill: SUMO drops out-of-order entries with only a warning |
+| 30 | No XML comment contains `--` | the files, before they are written | **refuse** (a compiler bug: the emitter escapes) | SUMO rejects the file |
+| 44 | No attribute of an emitted SUMO file is a clock | the files, before they are written | **refuse** (a compiler bug) | §6 gotcha 12. *Measured:* SUMO resolves `--begin 7:00:00` to step 25 200 — an **offset** wearing a clock's clothes. The epoch restated in a comment is not an attribute |
+| 51 | The route file is valid against SUMO's `routes_file.xsd` | the staged SUMO's schema | **refuse** | A route file SUMO will not load — a `departLane` SUMO does not accept, for one |
+| 52 | The route file carries no parameter but the vehicle-type binding's | the file, before it is written | **refuse** | Supervision reaching the channel it must never use (§3.6) |
+| 31 | The run ends after every declared interval and every stop | the resolved instants | **warn** | A behaviour truncated by the run ending, recorded as if it completed (doc 20 §6.1 `closed_by`) |
 | 32 | Every flow's window lies inside the run | the specification | **warn** | Flows that never fire |
-| 44 | No emitted SUMO artifact contains an `H:M:S` time literal | the emitted files | **refuse** (compiler bug) | §6 gotcha 12. *Measured:* SUMO resolves `--begin 7:00:00` to step 25 200 — an **offset** wearing a clock's clothes. Emitting seconds means the file cannot be misread |
 
 **Two notes on the table.**
 
-*On placement.* The seventh group runs after annotation and before emission, because check 41 needs
-the labels and check 38 needs the resolved intervals. Checks 33–37 are cheap enough to run at
-resolution time and §5.4 shows them there; they are *reported* first when they fail, for the reason in
-§4.5 — one epoch error is one fix, not 610.
+*On placement.* The table is in pipeline order. The epoch is read in the resolution stage, before any
+route is validated, because an epoch error invalidates every instant at once (§4.5); the windows and
+the association run after supervision, because check 38 needs the plan's intervals and check 41 its
+states.
 
 *On numbering.* **A check id is a stable identifier, not a position.** The table is in pipeline order
 and an id records the order in which ids were assigned, so the two diverge wherever a check belongs to
-an earlier group than its id: the epoch-and-illumination group's ids (33–43) sit ahead of the emission
-group's (29–32, 44), and the two vocabulary checks (45–46) sit inside the annotation group. That is
-deliberate: `checks.json` ships with the skill (§8.3), a resolution report cites check ids, and a corpus
-filtered on "members that warned on check 41" has to keep meaning the same thing a year later. Ids are
-assigned once and never reused; a removed check leaves a gap.
+an earlier group than its id. That is deliberate: `checks.json` ships with the skill (§8.3), a
+resolution report cites check ids, and a corpus filtered on "members that warned on check 41" has to
+keep meaning the same thing a year later. Ids are assigned once and never reused; a removed check stays
+in the table as retired.
 
 ### 5.3 Reporting what it resolved
 
@@ -1457,135 +1438,103 @@ Doc 20 §5.5 argues for this on the storyboard side because a preview cannot che
 SUMO the argument is stronger: `sumo-gui` is the only preview and it knows nothing about pattern
 instances, areas, catalogue entries or supervision (§3.6). **And it is stronger again for time:**
 *measured* (§1.4), `sumo-gui`'s clock reads elapsed seconds, so a preview cannot show a civil time, a
-date, a sun angle or an illumination regime. Everything in the epoch half of this section is checkable
-in exactly one place, and this is it.
+date, a sun angle or an illumination band. Everything in the epoch half of this section is checkable in
+exactly one place, and this is it.
 
-`<Scenario>.resolution.json`, with a rendered Markdown companion, states:
+`<scenario_id>.resolution.json`, with a rendered Markdown companion (`carlacontrol.ResolutionReport`),
+states:
 
-- **every place**, its authored description, the edge or lane it became, that edge's street name,
-  direction, length, speed limit, permitted classes, lat/lon of its midpoint, and bare-earth height;
-- **the epoch**, verbatim: the civil date and clock time `t = 0` corresponds to, the numeric UTC
-  offset, the zone name if one was declared and whether it was checkable, the `dst_policy`, and — in
-  one sentence a human can read without arithmetic — *"`t = 0` is 2026-03-21 00:00:00 +03:30
-  (Asia/Tehran); the run ends at 2026-03-28 00:00:00 +03:30"*;
-- **every declared instant and every resolved departure**, its authored form, the second it became,
-  and the civil date and time that second is — including the ones the author did not write by hand:
-  the sizing scenario's probe jitter resolves to **d2 11:04:34** and **d5 11:11:25** from
-  `{"at": "d2 11:00", "jitter_s": 274}`, and *read*, `make_bahonar_scenario.py:275`'s `day * 137` states
-  those instants nowhere today;
-- **every rota**, its expansion count, and every `skip` entry with its `because` text — so the
-  deliberate absence that is the sizing scenario's anomaly (*read*, `make_bahonar_scenario.py:236`) is
-  an item in the report rather than a `continue` in a loop;
-- **every capture window**, its authored civil begin and length, the seconds it became, its derived
-  **civil date** (check 36, because the date does not advance on its own), the sun elevation and
-  azimuth at its first and last instant, the named illumination regime, and whether doc 11 certifies
-  that regime renderable;
-- **the illumination policy** the scenario was authored around, with its `rationale` text, marked
-  explicitly as *an authored default the operator may override* (§3.9);
-- **the illumination–label association**, in full — §5.6;
-- **every route**, its authored endpoints, the full edge sequence `duarouter` produced, its length
-  and free-flow duration, and which `via` edges it honoured;
-- **every vehicle type**, its catalogue entry, the blueprint that entry names, and the
-  catalogue-versus-`vType` dimension comparison;
-- **every annotation instance**, its participants and their resolved actors, its labels and their
-  vocabulary version, its areas, and **its intervals in both seconds and civil time**;
-- **every area**, its resolved local-metre geometry and the edges inside it;
-- **every warning**, in full, because warnings are the failures that a human has to adjudicate;
-- **the lock**: fingerprint, argument vector, versions, seeds, epoch, ephemeris version.
+- **the outcome and every finding**, in full, with its check id — warnings are the failures a human has
+  to adjudicate;
+- **the epoch**, verbatim, with its digest, and in one sentence a human can read without arithmetic —
+  *"t = 0 is 2026-03-21T00:00:00+03:30 (2026-03-20T20:30:00Z), UTC+03:30, calendar advances,
+  Asia/Tehran; the run ends at 2026-03-28T00:00:00+03:30"* — and that the zone name was not resolved;
+- **the sun's zone**: the declared offset, the zone the world's georeference configures, and that the
+  session writes the declared one;
+- **the illumination default**, marked as *an authored default the operator may override* (§3.9);
+- **every capture window**: its civil begin and end, the seconds, its civil date, the date its sun is
+  written with, and the declared sun at its open and close — both elevations and the azimuth;
+- **the illumination–label association**, in full (§5.6);
+- **every declared instant**, its authored form, the second it became, and its civil time;
+- **every place**, its authored description, the edges or lane position it became, each edge's street,
+  length and speed limit;
+- **every rota**, its entry count, and every skip with its civil time and its `because`;
+- **every route**, its authored endpoints, the edge sequence `duarouter` produced, its length and
+  free-flow duration, and its departure — authored form, seconds and civil time — or a flow's window;
+- **every vehicle type**, the body it binds with its measured box, each class's bodies, and the mix's
+  normalised probabilities;
+- **every supervision instance**, its participants and roles, its labels, and its intervals in seconds
+  and civil time; every annotated cohort; every series;
+- **the world** it bound to and the SUMO that routed it; **the lock**.
 
-This is the artifact a human reads before spending a capture run, and it is the artifact an assistant
-reads back to check its own work against what it intended. It is also the thing that makes a
-scenario auditable years later, when the author is gone and the comment is all that is left — and,
-now, the only place anyone can discover that the scenario they are about to capture asserts 23:00.
+Not stated, because not built: each place's latitude, longitude and bare-earth height, and each edge's
+permitted classes.
+
+This is the artifact a human reads before spending a capture run, and the artifact an assistant reads
+back to check its own work against what it intended. It is also what makes a scenario auditable years
+later, when the author is gone — and, now, the only place anyone can discover that the scenario they are
+about to capture asserts 23:00.
 
 ### 5.4 The compile pipeline
 
+Each stage's checks all run, so one compile reports every failure a stage can see; a stage that refused
+stops the compile, because what follows depends on it.
+
 ```mermaid
 flowchart TD
-  IN["<Scenario>.scenario.json<br/>(hand-written or generated)"] --> P0
+  IN["&lt;Scenario&gt;.scenario.json<br/>(hand-written or generated)"] --> P0
 
-  P0["Parse against schema<br/>+ spec_version"] -->|malformed| R0(["REFUSE"])
+  P0["Parse against the schema<br/>at spec_version 1 · check 53"] -->|malformed| R0(["REFUSE"])
   P0 --> P1
 
   subgraph BIND["1 · World binding"]
-    P1["network fingerprint<br/>= world package"] -->|differs| R1(["REFUSE"])
-    P1 --> P2["same netconvert invocation<br/>for .net.xml and .xodr"] -->|differs| R1
-    P2 --> P3["convBoundary = .xodr header<br/>projParameter = GeoReferenceString<br/>netOffset = 0,0"] -->|differs| R1
-    P3 --> P4["netconvert version matches"] -->|differs| W1[/"WARN"/]
+    P1["network fingerprint = the package's · 1<br/>one invocation, recorded = carried · 2<br/>convBoundary = .xodr header · 3<br/>projParameter = GeoReferenceString · 4<br/>netOffset = 0,0 · 5"] -->|differs| R1(["REFUSE"])
+    P1 --> P2["SUMO release that routes =<br/>the one that built the world · 6"] -->|differs| W1[/"WARN"/]
+  end
+
+  P2 --> P3
+
+  subgraph RES["2 · Resolution"]
+    P3["epoch through SolarEpoch · 33, 34<br/>illumination through IlluminationPolicy · 39"] -->|refused| R2(["REFUSE:<br/>every rule broken"])
+    P3 --> P4["instants · 47, 37<br/>places · 7, 8, 9<br/>vehicle classes through ScenarioVehicleMix · 14, 17<br/>rotas · 48<br/>actors and flows · 8, 10, 13, 16, 31, 32, 37<br/>ids · 54"] -->|refused| R2
   end
 
   P4 --> P5
 
-  subgraph RES["2 · Resolution"]
-    P5["resolve every place"] -->|no candidate| R2(["REFUSE:<br/>nearest names + edges"])
-    P5 -->|many candidates| R2b(["REFUSE:<br/>list candidates"])
-    P5 --> P5T["epoch parses;<br/>resolve every instant;<br/>expand every rota"] -->|no epoch /<br/>bad offset /<br/>outside span| R2c(["REFUSE:<br/>state the epoch instant<br/>and the derived civil time"])
-    P5T --> P6["offsets within lane length;<br/>class may enter every edge"] -->|no| R2
-    P6 --> P7["snap distance;<br/>staging ring; degenerate edges"] -->|far / inside / degenerate| W2[/"WARN or REFUSE<br/>per threshold"/]
-  end
-
-  P7 --> P8
-  W2 --> P8
-
   subgraph ROUTE["3 · Routes"]
-    P8["duarouter, one batch<br/>(0.27 s for 52 routes, measured)"] -->|no valid route| R3(["REFUSE"])
-    P8 --> P9["routed result ends on the<br/>requested destination AND<br/>contains every via in order"] -->|no| R3
-    P9 --> P10["explicit edge lists connected,<br/>all laps"] -->|no| R3
+    P5["duarouter once, --ignore-errors --keep-flows,<br/>seeded · 11"] -->|no valid route| R3(["REFUSE"])
+    P5 --> P6["starts on the origin, ends on the destination,<br/>passes every via and stop in order · 12<br/>class may drive the routed edges · 10"] -->|no| R3
   end
 
-  P10 --> P11
+  P6 --> P7
 
-  subgraph CAT["4 · Vehicles"]
-    P11["every vType names a<br/>catalogue entry"] -->|no| R4(["REFUSE"])
-    P11 --> P12["vType length/width vs<br/>catalogue bounding box"] -->|past tolerance| R4
-    P12 -->|within tolerance| W3[/"WARN"/]
-    P12 --> P13["distribution probabilities;<br/>appearance draws from a set"] -->|invalid| R4
-    P13 -->|single entry| W3
+  subgraph ANN["4 · Supervision"]
+    P7["vocabulary: declared, resolving, namespaced · 18, 46<br/>labels fit their subject · 45<br/>participants, areas, ids · 19, 20, 21<br/>cohorts, reserved words · 23, 49, 50<br/>series and absences · 8, 20"] -->|refused| R4(["REFUSE"])
+    P7 --> P8["intervals vs departures · 22<br/>interval past the run · 31<br/>hard negatives present · 24<br/>referenced areas' warnings · 27, 28"] --> W4[/"WARN"/]
   end
 
-  P13 --> P14
+  P8 --> P9
 
-  subgraph ANN["5 · Annotation and areas"]
-    P14["labels in vocabulary;<br/>participants declared;<br/>aoi_refs validated"] -->|no| R5(["REFUSE"])
-    P14 --> P15["instance ids deterministic<br/>and unique"] -->|collision| R5
-    P15 --> P16["area geometry valid;<br/>envelope intersects world"] -->|no| R5
-    P16 --> P17["areas vs staging ring;<br/>drivable edge nearby;<br/>intervals within actor life;<br/>a nominal actor exists"] -->|no| W4[/"WARN"/]
+  subgraph TIME["5 · Epoch and illumination"]
+    P9["declared offset vs the world's zone · 40"] -->|over an hour| W6[/"WARN"/]
+    P9 --> P10["each window inside the run,<br/>cutting no interval · 38"] -->|no| R5(["REFUSE"])
+    P10 --> P11["each window's declared sun through DeclaredSun:<br/>civil date vs sun date · 36<br/>below -6 degrees · 42<br/>an advancing arc · 39"] --> W6
+    P11 --> P12["illumination-label association<br/>over the windows and over the span · 41"] --> W7[/"WARN, ALWAYS"/]
   end
 
-  P17 --> P20
-  W4 --> P20
+  P12 --> P13
 
-  subgraph TIME["6 · Epoch and illumination"]
-    P20["zone name agrees with offset<br/>(skipped if no tz database)"] -->|disagrees| R7(["REFUSE"])
-    P20 --> P21["illumination policy well-formed;<br/>sweep member inherits base<br/>epoch and policy"] -->|malformed /<br/>differs| R7
-    P21 --> P22["derive civil date of span<br/>and of every window;<br/>DST transition inside?"] -->|crosses midnight<br/>or a transition| W6[/"WARN:<br/>the date does not advance<br/>on its own"/]
-    P22 --> P23["window regime vs<br/>doc 11 night verdict"] -->|not renderable| R7
-    P23 -->|renderable with conditions| W6
-    P23 --> P24["site offset vs world's<br/>spawned lon/15 TimeZone"] -->|differs| W6
-    P24 --> P25["illumination–label<br/>association statistic"] --> W7[/"WARN, ALWAYS:<br/>I(regime;label)/H(label),<br/>per-regime label rates,<br/>degenerate regimes"/]
+  subgraph EMIT["6 · Emit"]
+    P13["build the routed .rou.xml and the .sumocfg<br/>in memory, then read them back:<br/>sorted · 29, no -- in comments · 30,<br/>no clock attribute · 44, schema-valid · 51,<br/>only the binding's params · 52,<br/>every type its measured body · 15"] -->|fails| R6(["REFUSE — nothing written"])
+    P13 --> P14["write the network, routes, configuration,<br/>supervision plan and lock"]
   end
 
-  P25 --> P18
-  W6 --> P18
-  W7 --> P18
+  P14 --> OUT[("Scenario package")]
 
-  subgraph EMIT["7 · Emit"]
-    P18["write routed .rou.xml,<br/>departure-sorted,<br/>with param identity,<br/>times in plain seconds"] --> P19["self-check: sort order,<br/>no '--' in comments,<br/>no H:M:S literals,<br/>end time covers every interval"]
-    P19 -->|fails| R6(["REFUSE — compiler bug"])
-    P19 -->|end time short| W5[/"WARN"/]
-  end
-
-  P19 --> OUT[("Scenario package<br/>.rou.xml · .sumocfg · .add.xml ·<br/>.supervision.json · .resolution.json ·<br/>.lock.json — epoch, windows,<br/>policy, association")]
-  W5 --> OUT
-
-  W1 -.-> REP
-  W2 -.-> REP
-  W3 -.-> REP
-  W4 -.-> REP
-  W5 -.-> REP
-  W6 -.-> REP
-  W7 -.-> REP
-  REP[/"All warnings collected into<br/>the resolution report"/] -.-> OUT
+  R0 & R1 & R2 & R3 & R4 & R5 & R6 -.-> REP
+  W1 & W4 & W6 & W7 -.-> REP
+  P14 -.-> REP
+  REP[/"resolution report:<br/>everything resolved, every finding"/]
 ```
 
 ### 5.5 `duarouter` as a build step, and the false accept it hides
@@ -1616,15 +1565,24 @@ appears in order* rather than as *a vehicle came out*.
 
 *Measured,* the other lever: **without** `--ignore-errors`, duarouter exits **1** and quits on the
 first bad reference; with it, exit **0** regardless. So exit code alone is a gate that stops at the
-first error. The compiler should run **with** `--ignore-errors` and validate each emitted route
-against its request, so one compile reports every broken route rather than the first.
+first error. The compiler runs it **with** `--ignore-errors` and validates each emitted route against
+its request, so one compile reports every broken route rather than the first
+(`carlacontrol.RouteValidator`).
 
-**Compile emits the routed file.** duarouter's output replaces `<trip>` with `<vehicle>` carrying an
-explicit `<route edges="…">` (*measured*, §3.6's param test shows the substitution). Emitting that,
-rather than trips, removes the router from the run: two runs of the same scenario cannot diverge
-because of a routing decision, and a run does not fail at load for a reason the compile step already
-checked. Flows stay flows — SUMO's insertion model is the point of them (doc 23 §3.1) — but their
-routes are validated the same way.
+*Measured again,* 2026-09-28, on the staged `duarouter` 1.27.0 against the CarlaNet fixture network
+(`street_names_true.net.xml`): a trip and a flow whose destination edge does not exist each come back
+with the one-edge route `900`, exit 0; a trip with a `via` is routed through it; a trip with a stop is
+routed through the stop's edge; and `--keep-flows` keeps a flow as one `<flow>` carrying one routed
+`<route>`. Without it, a flow is expanded into its members.
+
+**Compile emits the routed file.** Every actor becomes a `<vehicle>` and every flow a `<flow>`, each
+carrying the explicit `<route edges="…">` `duarouter` produced and the guard accepted. That removes the
+router from the run: two runs of one scenario cannot diverge because of a routing decision, and a run
+does not fail at load for a reason the compile already checked. `duarouter` is run once over all of a
+scenario's trips and flows, with the scenario's SUMO seed, so the one choice it makes per flow — which
+member of a type distribution to route it with — is reproducible too; check 10 then holds every member
+class of a flow's type to the routed edges. An actor given an explicit edge list (`route`) is not
+routed; its list is checked for connection end to end instead (check 13).
 
 ### 5.6 The confounder: if behaviour correlates with hour, illumination correlates with the label
 
@@ -1697,32 +1655,35 @@ The same scenario therefore scores differently in December than in June, which i
 
 #### 5.6.3 What the check computes, and what it emits
 
-Over the entries each declared capture window will actually capture — not over the whole seven days,
-because a corpus is made of windows:
+`carlacontrol.IlluminationLabelAssociation` computes two tables. **Over the windows** — every entry each
+declared capture window captures, because a corpus is made of windows: an actor is taken as present from
+its departure for its free-flow route time plus its stop durations, a flow from its begin to its end, and
+an entry is captured by each window it overlaps, under the window's declared sun at the entry's first
+instant inside it. The presence span is an estimate and is labelled one; congestion lengthens it, and
+only the run knows exactly who was in frame. **Over the span** — every entry at its own departure, the
+scenario-wide picture §5.6.1 measured. For each:
 
-1. **A contingency table** of illumination regime against doc 20's three-valued supervision
-   (`annotated` / `nominal` / `unlabelled`), with counts and per-regime label rates against the base
-   rate.
-2. **The normalized mutual information** `I(regime; label) / H(label)`, reported to three decimals with
-   the counts it was computed from, so it is reproducible and so a reader can see when it rests on
-   two entries.
-3. **Every degenerate regime** — a regime in which the annotated rate is 0 or 1 — named explicitly,
-   because those are the cases where the regime *determines* the label and no amount of statistical
-   care recovers a comparison from them.
-4. **The usable subset**: the regimes in which both labels occur, with their counts. This is the only
-   stratum from which an illumination-controlled comparison can be drawn, and computing it is the
-   difference between a complaint and a remedy.
-5. **The remedies the compiler can name**, because a warning that offers nothing is one a reader learns
-   to skip: the `displaced` counterfactual pairing mode of §7.3 (which holds *the behaviour happened*
-   constant and varies where and when, so the same annotation appears in a second regime); adding a
-   `nominal` twin inside the annotated regime (§7.3, doc 20 §2.7's hard negative); and adding a capture
-   window in a regime where the annotated class is absent, which converts a degenerate regime into a
-   populated one.
+1. **A contingency table** of illumination band against the three-valued supervision state
+   (`annotated` / `nominal` / `unlabelled`), with counts, per-band annotated rates and the base rate. The
+   band is doc 11 §4.4's (`IlluminationBand`), of the declared sun (`WindowSun`), so the statistic rests
+   on the sun the session will bind.
+2. **The normalized mutual information** `I(band; supervision) / H(supervision)`, in bits, to three
+   decimals, with the counts it was computed from — so a reader can see when it rests on two entries. It
+   is *undefined*, not zero, when the entries carry one state only. *Measured:* fed §5.6.1's published
+   contingency table, the computation returns **0.600** (`test_illumination_label_association.py`).
+3. **Every degenerate band** — a band in which the annotated rate is 0 or 1 — named explicitly, because
+   there the band determines the label and no amount of statistical care recovers a comparison.
+4. **The usable subset**: the bands in which both occur. This is the only stratum from which an
+   illumination-controlled comparison can be drawn.
+5. **The remedies**, because a warning that offers nothing is one a reader learns to skip: a
+   `displaced`-in-time counterfactual (§7.3), which puts the same annotation in a second band; a
+   `nominal` twin inside the annotated band, doc 20 §2.7's hard negative; and a capture window in a
+   band where the annotated class is absent.
 
-All of it goes into `<Scenario>.resolution.json` and the statistic goes into `<Scenario>.lock.json`, so
-a corpus can be **filtered and stratified on it later** rather than argued about. That is the actual
-point: doc 20 §6.1's `PatternInstance.parameters` is what a trainer stratifies on, and this is the
-same idea applied to the covariate nobody declared.
+The warning carries the number and the degenerate bands; the tables and the remedies are in
+`<scenario_id>.resolution.json`, and the statistic with its table is in `<scenario_id>.lock.json`, so a
+corpus can be **filtered and stratified on it later** rather than argued about. Under an `ignore`
+default no sun is declared, and the tables say they were not computed rather than guessing a sun.
 
 #### 5.6.4 Why it warns and never refuses
 
@@ -1763,18 +1724,18 @@ validator check, a compiler default, or stays documentation, and where the enfor
 
 | # | Gotcha (`SKILL.md`) | Becomes | Where |
 |---|---|---|---|
-| 1 | `<stop speed=>` caps speed only between its own `startPos`/`endPos` **on its own edge** (`:150-152`) | **Compiler default.** The specification says "hold this phase to 11 m/s"; the compiler emits one waypoint per edge in the phase. The per-edge rule is never an author's problem again | Route emitter. Today `_waypoint_xml` (`SumoScenarioBuilder.py:649-665`) already does this correctly for orbits only — generalise it |
-| 2 | A scalar `speedFactor` is a distribution unless `speedDev="0"` (`:153-154`) | **Compiler default + validator check.** A `vType` whose specification declares an exact multiple gets `speedDev="0"` emitted; a hand-written `vType` with a scalar `speedFactor` and no `speedDev` **warns**, naming the measured 1.25 → 1.31 | Type emitter; check in the vehicle group of §5.2 |
-| 3 | Route file must be departure-sorted (`:155-157`) | **Compiler default + self-check.** The compiler merges flows and actors onto one timeline before writing — as `SumoPatternOfLifeBuilder.write_routes` (`:99-106`) already does — and then re-reads its own output to confirm. Check 29 | Route emitter; self-check |
-| 4 | `--opposites.guess` yields nothing on our output (`:158-161`) | **Compiler default + documentation.** The flag is never emitted; opposite pairs are named in the specification's `network_edits` and applied by `allow_opposite_overtaking` (`SumoScenarioBuilder.py:489-526`). The *second* half — that it does not rescue a two-way jam — stays documentation, because it is a modelling judgement, not a rule | Network post-processor; skill |
-| 5 | Guessed traffic lights are fixed-time 90 s programs a busy interchange cannot discharge (`:162-163`) | **Moves to the world build, then becomes a validator check.** Because the scenario no longer builds the network (§5.1), `--tls.default-type actuated` must be a **world-build** decision. The compile step then **warns** when a scenario routes substantial flow through a fixed-time signal | `OsmConverter.BuildArguments`; check in the world-binding group |
-| 6 | A near-zero-length edge spanning real geometry blocks merging (`:164-165`) | **Validator check, both sides.** The reconnaissance report flags every edge below a stated length whose geometric span exceeds it; the resolver **refuses** to site a place on one. `--junctions.join-dist` moves to the world build for the same reason as #5 | Reconnaissance health flags; resolver; `OsmConverter.BuildArguments` |
-| 7 | A long dwell in a running lane blocks the road (`:166-168`) | **Compiler default + validator check.** A stop whose duration exceeds a stated threshold on a single-lane edge with ambient flow across it gets `parking="true"` by default, and **warns** if the specification explicitly overrides it. The measured consequence — 12.9 m/s to 0.6 (`make_arapahoe_scenario.py:238-243`) — goes in the warning text | Route emitter; check |
-| 8 | XML comments cannot contain `--` (`:169-170`) | **Compiler default + self-check.** The emitter escapes; the self-check re-reads. Check 30. Authors never hand-edit emitted XML, so this stops being an authoring concern at all | Emitter; self-check |
-| 9 | `--device.fcd.explicit` is comma-separated (`:171`) | **Compiler default.** The specification lists ids; the emitter joins them. An author never writes the flag | Config emitter |
-| 10 | Validate with `duarouter`, not `sumolib` (`:145-149`) | **Validator check**, unconditionally, plus the false-accept guard of §5.5 | Route validation stage |
-| 11 | Restricting private roads must also clear internal junction-connector lanes (`:135-139`) | **Compiler default.** Already correct in `restrict_private_roads` (`SumoScenarioBuilder.py:558-568`). Becomes a `network_edits` entry in the specification, and the reconnaissance report shows the resulting gates so the author can see the fence | Network post-processor; report |
-| 12 | **SUMO's `H:M:S` time literal is an elapsed offset, not a clock.** *Measured here, new:* `sumo -n … --begin 7:00:00 --end 7:00:10 --summary-output` ran steps `time="25200.00"` to `time="25209.00"`, exit 0. `7:00:00` means 25 200 s after `t = 0`, which is 07:00 only when the epoch says `t = 0` is midnight | **Compiler default + self-check.** The specification's civil times are resolved against `epoch` (§4.5) and the compiler emits **plain seconds** into every SUMO artifact, with the epoch restated as a comment above `<begin>`. The self-check refuses an emitted file containing an `H:M:S` literal. Authors never hand-edit emitted XML, so the trap stops being reachable | Config and route emitters; check 44 |
+| 1 | `<stop speed=>` caps speed only between its own `startPos`/`endPos` **on its own edge** (`:150-152`) | **Compiler default.** The specification says "hold this phase to 11 m/s"; the compiler emits one waypoint per edge in the phase | Not built: the specification has no speed-phase construct; `_waypoint_xml` (`SumoScenarioBuilder.py:783-799`) does it for orbits in the Python builder |
+| 2 | A scalar `speedFactor` is a distribution unless `speedDev="0"` (`:153-154`) | **Compiler default + validator check**, warning on a scalar `speedFactor` with no `speedDev` | Not built; a class's `behaviour` is copied through verbatim |
+| 3 | Route file must be departure-sorted (`:155-157`) | **Compiler default + self-check.** The compiler merges actors and flows onto one timeline before writing and re-reads what it wrote | **Built**: `ScenarioCompiler._routes_xml`; check 29 |
+| 4 | `--opposites.guess` yields nothing on our output (`:158-161`) | **Compiler default + documentation.** Opposite pairs are named and applied by `allow_opposite_overtaking` (`SumoScenarioBuilder.py:622-659`). That it does not rescue a two-way jam stays documentation, a modelling judgement | Not built in the specification; the Python builder's network edit |
+| 5 | Guessed traffic lights are fixed-time 90 s programs a busy interchange cannot discharge (`:162-163`) | **A world-build decision.** The world build passes `--tls.default-type actuated` (`OsmConverter.BuildArguments`; the recorded argument list of every shipped package) | **Built** at world build; a warning on flow through a fixed-time signal is not built |
+| 6 | A near-zero-length edge spanning real geometry blocks merging (`:164-165`) | **A world-build decision, then a resolver refusal.** `--junctions.join-dist 25` is passed by the world build; the resolver refusing a place on a degenerate edge is not built | World build: **built**; resolver: not built |
+| 7 | A long dwell in a running lane blocks the road (`:166-168`) | **Compiler default + validator check**: `parking="true"` by default for a long stop on a single-lane edge with traffic across it | Not built; a stop's `parking` is the author's, written as declared |
+| 8 | XML comments cannot contain `--` (`:169-170`) | **Compiler default + self-check.** The emitter escapes; the self-check re-reads | **Built**: `ScenarioCompiler._comment`; check 30 |
+| 9 | `--device.fcd.explicit` is comma-separated (`:171`) | **Compiler default.** An author never writes the flag | Not needed: the compiler writes no device options |
+| 10 | Validate with `duarouter`, not `sumolib` (`:145-149`) | **Validator check**, unconditionally, plus the false-accept guard of §5.5 | **Built**: `RouteValidator`; checks 11, 12 |
+| 11 | Restricting private roads must also clear internal junction-connector lanes (`:135-139`) | **Compiler default.** Correct in `restrict_private_roads` (`SumoScenarioBuilder.py:661-716`) | Not in the specification; the Python builder's network edit |
+| 12 | **SUMO's `H:M:S` time literal is an elapsed offset, not a clock.** *Measured:* `sumo -n … --begin 7:00:00 --end 7:00:10 --summary-output` ran steps `time="25200.00"` to `time="25209.00"`, exit 0 | **Compiler default + self-check.** The specification's civil times are resolved against `epoch` (§4.5) and the compiler emits **plain seconds** into every SUMO file, with the epoch restated as a comment above `<begin>`; a bare clock on a multi-day run is refused before anything is emitted | **Built**: `CivilTimeResolver`; checks 47 and 44 |
 
 Two of these — #5 and #6 — are the visible edge of §1.3. Moving them to the world build is not
 incidental tidying; it is the mechanism by which the author's graph and the rendered graph stay the
@@ -1797,178 +1758,150 @@ reproducible and if two runs differ only where they were meant to.
 
 ### 7.1 What makes a run reproducible
 
-Four seeds, and today one of them exists.
+**Reproducible SUMO-driven traffic is the priority**: the same scenario, seed and world must place and
+move the traffic the same way. So everything that decides the traffic is declared in the specification
+or fixed by the compiler, written into the scenario files, and bound in the lock (§5.1).
 
-| Seed | Governs | State today |
-|---|---|---|
-| **SUMO seed** | flow insertion times, `speedFactor` draws, `vTypeDistribution` draws, lane-change stochasticity (`sigma`) | *Read:* written into the `.sumocfg` at `SumoScenarioBuilder.py:473`, default 42 on all three scenarios |
-| **Appearance seed** | which blueprint each catalogue category resolves to (§2.6 property 4, doc 20 §2.6) | does not exist |
-| **Admission seed** | any non-deterministic element in choosing which SUMO vehicles become CARLA actors, if the render-set contract has one | does not exist; [`04_Contracts.md`](04_Contracts.md) contract 2 |
-| **CARLA world seed** | ambient traffic — **irrelevant here**, because the brief's decision 4 requires the .NET traffic manager to be unavailable while SUMO drives | n/a by design |
+| Decides the traffic | Where it is fixed |
+|---|---|
+| **The SUMO seed** — flow insertion times, `speedFactor` draws, `vTypeDistribution` draws, lane-change stochasticity | `seeds.sumo`, required; written as `<seed>` in the `.sumocfg`, handed to `duarouter`, recorded in the lock |
+| **The routes** | routed at compile time and written into the route file (§5.5), so no routing happens at load |
+| **The network** | the world's own, written byte for byte beside the configuration and digested in the lock |
+| **The step length and the end** | `simulation.step_length_s` and `simulation.end`, in the `.sumocfg` and the lock |
+| **The processing options** | `time-to-teleport` −1 — a teleport is a position jump nothing downstream can reproduce — `max-depart-delay` 900 and `collision.action` warn, fixed by the compiler and recorded |
+| **The vehicle types** | one per measured body, from the catalogue, whose digests are in the lock |
+| **The SUMO release that routed** | recorded in the lock; a release other than the one that built the world is warned about (check 6) |
 
-They are separate seeds, not one seed, for a reason that matters to the corpus: **a counterfactual
-pair must be able to hold the ambient population fixed while changing one thing** (§7.3). One seed
-makes that impossible, because changing anything reshuffles everything.
+Two seeds doc 20 anticipated are not declared, because nothing consumes them: an **appearance seed**
+(which body a category resolves to — SUMO's own seeded `vTypeDistribution` draw does this today) and an
+**admission seed** (the render set of [`04_Contracts.md`](04_Contracts.md) C2 has no random element). A
+field nothing reads is one somebody will later believe was honoured, so each is added when something
+reads it. The **CARLA world seed** is irrelevant by design: the traffic manager is locked out while SUMO
+drives.
 
-Determinism also requires, beyond seeds:
+Illumination is not seeded — it is *determined*, by the epoch, the window and the policy — but it is as
+capable of making two runs differ. So the epoch and the authored default are in the lock, and the run's
+actual policy in the run manifest ([`04`](04_Contracts.md) C9 §11.8), beside the seed and for the same
+reason.
 
-- **A routed route file** (§5.5), so no routing happens at load.
-- **A fixed SUMO step length and a stated relationship to the CARLA fixed delta** —
-  [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) contract 3. Note *measured*: the three
-  shipped scenarios use step lengths of 0.05, 0.05 and **1.0** s; the last is the seven-day case, and
-  the brief already records that a one-second step is far coarser than any capture rate.
-- **`time-to-teleport` at `-1`**, already the default (`SumoScenarioBuilder.py:477`), because a
-  teleport is a position jump nothing downstream can reproduce.
-- **The idle cull suppressed or its policy recorded** — doc 20 D14 and §2.8. It is a .NET traffic
-  manager mechanism and the brief's decision 4 locks that out, so under SUMO drive it should be
-  *absent* rather than merely off. The lock file records which.
-- **The lock file itself** (§5.1), so a run's inputs are recoverable from its outputs.
-- **A declared epoch and a recorded illumination policy.** Illumination is not seeded — it is
-  *determined*, by the epoch, the window and the policy — but it is exactly as capable of making two
-  runs differ, and it is not currently recorded anywhere a rerun would read. Two runs of one scenario
-  with the same four seeds and different sun are not the same run, and *measured* (§1.4) the truth
-  sidecar would record the difference faithfully (`CotWriter.cs:50-66`) without anything flagging it as
-  unintended. So the epoch and the run's actual policy both go in the lock and the run manifest,
-  beside the seeds and for the same reason.
+*Measured:* compiling the fixture scenario twice gives byte-identical route, configuration, network and
+supervision files (`test_scenario_compiler.py`).
 
 ### 7.2 A sweep as an artifact
 
-A sweep is a single file, `<Sweep>.sweep.json`, that names a base specification and the axes varied
-over it. It is itself compiled: each member is a full compile, with its own resolution report and its
-own lock file, and the sweep's output is a directory of scenario packages plus an index.
+A sweep is a single file, `<Sweep>.sweep.json`, that names a base specification and the axes varied over
+it (`carlacontrol.ScenarioSweep`; `compile_scenario.py --sweep`; schema
+`CarlaControl/skills/sumo-traffic-scenarios/schemas/sweep.schema.json`). It is itself compiled: **each
+member is a full compile**, into its own directory, with its own route file, supervision plan,
+resolution report and lock, and the sweep's output is those directories plus
+`<sweep_id>.sweep-index.json`.
 
+```jsonc
+{"sweep_version": 1, "sweep_id": "probe_dwell",
+ "base": "probe.scenario.json",
+ "axes": [{"path": "actors.probe.stops[0].duration", "values": ["5m", "10m", "20m"]},
+          {"path": "seeds.sumo",                     "values": [42, 43, 44]},
+          {"path": "epoch.date",                     "values": ["2026-03-21", "2026-06-21"]},
+          {"path": "capture_windows.night_shift.begin", "values": ["d3 07:00", "d3 23:00"]}],
+ "pairing": "cross",          // cross | zip
+ "illumination": "hold",      // hold (default) | vary | factorial        §7.4
+ "counterfactuals": [{"actor": "probe", "mode": "nominal", "remove": ["stops"]}]}   // §7.3
 ```
-base              path to the base <Scenario>.scenario.json
-axes[]            { path: "actors.marked.stops[0].duration_s", values: [600, 1800, 3600] }
-                  { path: "seeds.sumo",                        values: [42, 43, 44] }
-                  { path: "capture_windows.night_shift.begin",
-                    values: ["d3 07:00", "d3 15:00", "d3 23:00"], kind: "illumination" }
-                  { path: "illumination.mode", values: ["frozen", "advancing"],
-                    kind: "illumination" }
-                  { path: "epoch.date", values: ["2026-03-21", "2026-06-21", "2026-12-21"],
-                    kind: "illumination" }
-pairing           "cross" | "zip" | "counterfactual"           §7.3
-illumination      "hold" (default) | "vary" | "factorial"      §7.4
-member_id         deterministic from the base scenario id and the axis values
-```
+
+An axis path walks the specification: a key, a list entry by its `id` (or `name`, `class_id`,
+`series_id`, `flow`), and `[n]` for a position. `epoch.date` moves the date the epoch falls on,
+rewriting `civil_datetime` and `utc_datetime` together so the epoch stays valid; its offset is unchanged,
+and a date across a daylight-saving transition at the site needs its offset declared by the author.
 
 Four properties:
 
-- **Member ids are deterministic**, derived from the base scenario id and the axis values with no
-  counter and no timestamp — the same rule doc 20 §7.1 applies to instance ids, and for the same
-  reason: sweep members must be joinable across a rebuild.
-- **The swept values land in `PatternInstance.parameters`** (doc 20 §6.1), not in the label. Doc 20
-  §6.2 is explicit that magnitudes stay out of the vocabulary; a sweep is the mechanism that makes
-  that rule pay, because `parameters` is what a trainer stratifies on.
-- **Compile is per member**, so a sweep that would produce an unroutable member fails at compile, not
-  at run number seventeen of forty.
-- **An axis is tagged `kind: "illumination"` when varying it changes the light**, and the compiler
-  decides that tag rather than trusting it: any axis whose `path` touches `epoch`, `illumination` or a
-  capture window's `begin` is an illumination axis whether it was declared one or not. §7.4 is what the
-  tag is for.
+- **Member ids are deterministic**, the base scenario id and a digest of the member's axis values, with
+  no counter and no timestamp — so sweep members are joinable across a rebuild.
+- **The swept values are recorded per member** in the index, beside the member's epoch digest, its
+  illumination default, its file digests, and each window's civil date and the sun it opens under.
+- **Compile is per member**, so a member that would not route fails at compile, not at run seventeen of
+  forty; a refused member refuses the sweep, with the member's own findings.
+- **An axis is an illumination axis when varying it changes the light**, and the compiler decides that
+  rather than trusting it: any axis whose path touches `epoch`, `illumination` or a capture window's
+  `begin` is one, and an axis declared `"kind": "behaviour"` on such a path is refused (check 43).
 
 ### 7.2.1 Illumination as an axis in its own right
 
-It is worth saying plainly that this is not only a hazard to be guarded against — it is the axis the
-corpus most needs, and the requirement is what makes it declarable.
+This is not only a hazard to be guarded against — it is the axis the corpus most needs, and the epoch
+is what makes it declarable.
 
 The brief's §3a records the reason: illumination is the single largest covariate an electro-optical
 detector faces, and a corpus captured entirely at noon cannot validate a model that must work at dusk.
-*Measured* (§5.6.2), the sizing scenario's own recommended windows already span +5.0° to +46.5° to
-−79.5° depending on hour and date — three regimes and a night — so the variation is available at zero
-authoring cost the moment the epoch exists. Before the epoch it was not expressible at all: there was
-no field to sweep, because there was no field.
-
-Three axis shapes, each doing something the others cannot:
+*Measured* (§5.6.2), the sizing scenario's own recommended windows span +5.0° to +46.5° to −79.5°
+depending on hour and date — three regimes and a night.
 
 | Axis | Holds constant | Varies | Use |
 |---|---|---|---|
 | `capture_windows.<id>.begin` across hours of one day | date, season, population statistics (doc 10 measured day-to-day peaks flat to 1.5 %) | sun elevation and azimuth | the cheapest illumination sweep; but it also varies **which vehicles are out**, which is §7.4's whole problem |
-| `epoch.date` across seasons, window hour held | hour of day, and every authored behaviour | sun elevation at that hour, day length | **the clean one** — the same 07:00 shift change at +5.0°, +15.1° and +25.9°, with the identical population. This is the axis to reach for first |
-| `illumination.mode` frozen vs advancing | everything else | whether the light moves during the window | tests a detector's tolerance of changing light within one track |
+| `epoch.date` across seasons, window hour held | hour of day, and every authored behaviour | sun elevation at that hour, day length | **the clean one** — the same 07:00 shift change under a different sun, with the identical population. This is the axis to reach for first |
+| `illumination.policy` freeze against advance | everything else | whether the light moves during the window | tests a detector's tolerance of changing light within one track |
 
-The middle row is the finding: **sweeping the date rather than the hour varies illumination without
-varying behaviour**, because the scenario's behaviour is indexed on hour-of-day and the sun is indexed
-on both. It is the one illumination axis that is not confounded by construction, and it exists only
-because the epoch carries a date.
+**Sweeping the date rather than the hour varies illumination without varying behaviour**, because the
+scenario's behaviour is indexed on the civil clock and the sun on both. *Measured:* a `vary` sweep of the
+fixture scenario over 21 March, 21 June and 21 September moves its 07:00 window's sun through three
+elevations while the vehicles and flows its three route files declare are identical
+(`test_scenario_sweep.py`); the epoch is stated in each member's configuration and lock, not in its
+route file (§3.6.1).
 
 ### 7.3 Counterfactual pairing
 
 Doc 20 §11 question 7 asks whether counterfactual pairing is worth building into the sweep: the same
-seed, the same ambient population, one instance's behaviour switched off, so the authored behaviour
-is the only difference between two runs.
+seed, the same ambient population, one instance's behaviour switched off, so the authored behaviour is
+the only difference between two runs. **It is built as a declared part of the sweep**, because:
 
-**Answer: yes, and the authoring surface should support it as a declared pairing mode rather than as
-a convention.** The reasons are stronger under SUMO drive than they were on the storyboard side.
-
-- **It is nearly free here.** The ambient population is `flows[]`, the authored behaviour is
-  `actors[]`, and they are already separate blocks of the specification. A counterfactual member is
-  the same specification with one actor's entry removed or replaced by its `nominal` twin, and every
-  seed held.
+- **It is nearly free here.** The ambient population is `flows[]` and the authored behaviour is
+  `actors[]`, separate blocks of the specification, so a counterfactual member is the same
+  specification with one actor changed and every seed held.
 - **It is the strongest validation signal available** for an EPoL detector, because it isolates the
   phenomenon from the scene.
-- **It has one mechanism that must be got right, and it is an authoring concern.** Removing a vehicle
-  from a SUMO scenario does not leave the rest of the traffic unchanged: a car-following model reacts
-  to what is in front of it, so deleting the loiterer changes the trajectory of everything that would
-  have passed it. The pair is therefore *not* "identical except one vehicle"; it is "identical inputs
-  except one vehicle". That distinction has to be stated in the manifest or a consumer will assume
-  the former.
+- **It has one mechanism that must be got right.** Removing a vehicle does not leave the rest of the
+  traffic unchanged: a car-following model reacts to what is in front of it. So the pair is *identical
+  inputs except one vehicle*, never identical trajectories, and every pair in the index says
+  `trajectories_expected_to_match: false` with that sentence beside it.
 
-So the specification declares the pairing, and the compiler emits **both** members with a shared
-`counterfactual_pair_id`, a recorded statement of which actor differs, and an explicit note that
-downstream trajectories are not expected to match. Three pairing modes:
+Each declared counterfactual is paired with every axis member, as `<member_id>.cf.<actor>.<mode>`,
+compiled in full, and recorded in the index with its base member, the actor, the mode, whether it moved
+in time or space, and `illumination_differs`.
 
 | Mode | The counterfactual member | What it does about time of day |
 |---|---|---|
-| `absent` | the actor is not inserted at all | **Nothing — and that is the requirement.** Epoch, window and policy are inherited verbatim from the base member. Check 43 refuses a pair whose two members differ in either |
-| `nominal` | the actor is inserted with the same type, route and timing, but its anomalous element removed and its supervision set to `nominal` — doc 20 §2.7's hard negative, generated rather than hand-authored | **Same instant, same sun.** "Same timing" now means something checkable: the twin's departure resolves to the same second from the same epoch, so the pair is lit identically. Before the epoch, "same timing" was two integers an author had to keep in step by hand |
-| `displaced` | the actor performs the same behaviour at a different place or time, so "the behaviour happened" is held constant and "where" is varied | **This is the one mode that deliberately moves time, and it therefore moves the sun.** The member's own illumination regime is computed and recorded, the pair carries `illumination_differs: true`, and the report states both regimes. A `displaced`-in-time pair is *not* an illumination-controlled comparison and must never be presented as one |
+| `absent` | the actor is not inserted, and an instance it was the only participant of goes with it | **Nothing — and that is the requirement.** Epoch, windows and policy are the base's verbatim; check 43 refuses a pair that differs in any |
+| `nominal` | the actor keeps its type, route and timing; the fields the author names in `remove` — its `stops`, its `via` — are dropped, its instances are replaced by one `nominal` instance with the author's `labels` | **Same instant, same sun.** The twin departs at the same second from the same epoch, so the pair is lit identically. The pipeline does not decide what the anomalous element is: the author names it |
+| `displaced` | the actor moves by a declared `shift` in time — its departure and every interval of its instances shifted together — and/or a declared `places` substitution in space | **The one mode that deliberately moves time, and so the sun.** Displaced in time, the pair carries `illumination_differs: true` and must never be presented as an illumination-controlled comparison; displaced only in space, it shares the base's sun |
 
-`nominal` is the most valuable of the three, because it is the pairing that generates hard negatives
-at no authoring cost, and doc 20 §2.7 records hard negatives as the single most valuable output of
-the whole apparatus.
-
-**`displaced` is also the remedy §5.6.3 offers for the confounder, and the two facts sit together.**
-Displacing an annotated behaviour in time is exactly how a corpus gets the same annotation under a
-second illumination regime — it is the authoring tool that breaks a degenerate regime. But the pair it
-produces is a *behavioural* counterfactual, not an *illumination* counterfactual, and conflating the
-two would be the same mistake in a new place. So the compiler records which kind each pair is, and the
-resolution report says so in words: a `displaced`-in-space pair is illumination-controlled; a
-`displaced`-in-time pair is not.
+`nominal` is the most valuable, because it generates hard negatives at no authoring cost, and doc 20 §2.7
+records hard negatives as the single most valuable output of the whole apparatus. `displaced` in time is
+also the remedy §5.6.3 offers for a degenerate band, and the two facts sit together: it puts the same
+annotation under a second band, and the pair it produces is a *behavioural* counterfactual, not an
+*illumination* one.
 
 ### 7.4 A sweep that varies behaviour must hold illumination constant
 
-The warning the requirement attaches to the illumination axis, stated as a compiler rule because a
-warning nobody is forced to read is a comment.
-
-**The rule.** A sweep's `illumination` field takes one of three values, and the compiler infers which
-axes are illumination axes rather than trusting the declaration (§7.2):
+The rule the requirement attaches to the illumination axis, enforced by the compiler (check 43), with
+the illumination axes decided as §7.2 says:
 
 | `illumination` | Meaning | Compiler behaviour |
 |---|---|---|
-| `hold` (default) | No axis may vary illumination. Every member inherits the base's epoch, window and policy. | **Refuse** any member whose epoch, capture window or policy differs from the base — check 43 |
-| `vary` | Illumination is the *only* thing varied. No behavioural axis may be present. | **Refuse** if a non-illumination axis is also declared |
-| `factorial` | Both are varied deliberately, and the analysis is expected to account for it. | **Warn**, stating the cell count and that behaviour and illumination are crossed; record the design in the sweep index so a consumer cannot mistake it for a controlled comparison |
+| `hold` (default) | No axis may vary illumination | **Refuse** any illumination axis |
+| `vary` | Illumination is the *only* thing varied | **Refuse** any behaviour axis |
+| `factorial` | Both are varied deliberately | **Warn**, stating the cells and that behaviour and illumination are crossed; the index records the design so a consumer cannot mistake it for a controlled comparison |
 
-The default is `hold` because that is what a sweep is usually for — doc 20 §11 question 7's
-counterfactual pairing, and §7.2's dwell-duration and seed axes, are all behavioural — and because the
-cost of the default being wrong is asymmetric. A `hold` sweep that should have been `factorial` produces
-a refusal at compile time and a five-second fix. A `factorial` sweep silently treated as `hold` produces
-a corpus in which a dwell of 1 800 s was captured at +51.9° and a dwell of 3 600 s at +37.7°, and the
-difference the model learns is the shadow length.
+The default is `hold` because that is what a sweep is usually for — counterfactual pairing, dwell
+durations and seeds are all behavioural — and because the cost of the default being wrong is
+asymmetric. A `hold` sweep that should have been `factorial` produces a refusal at compile time and a
+five-second fix. A `factorial` sweep silently treated as `hold` produces a corpus in which a dwell of
+1 800 s was captured at +51.9° and a dwell of 3 600 s at +37.7°, and the difference the model learns is
+the shadow length.
 
-**Why this cannot be left to the operator.** Because a sweep is compiled here (§7.2) and each member is
-a separate scenario package with its own lock file, the contamination is baked in before any run
-happens: it is in the members' epochs and windows, not in the runs' settings. The operator can override
-a policy for a run, but they cannot un-cross a factorial design that was compiled as one. *Inference,*
-and it is the reason §3.5.2 gives the authoring surface an illumination field at all rather than
-leaving the whole subject to doc 12.
-
-**What the sweep index records**, per member and once for the sweep: the epoch, the window's derived
-civil date and time, the sun elevation and azimuth at the window's first and last instant, the named
-regime, the policy, and — for the sweep as a whole — whether illumination is held, varied or crossed.
-That turns "was this comparison contaminated?" from an argument into a lookup, which is the same move
-§5.6.3 makes for the per-scenario case.
+**Why this cannot be left to the operator.** A sweep is compiled here and each member is a separate
+scenario package with its own lock, so the contamination is baked in before any run happens: it is in
+the members' epochs and windows, not in the runs' settings. The operator can override a policy for a
+run, but cannot un-cross a factorial design that was compiled as one.
 
 ### 7.5 The scenario artifact's lifecycle
 
@@ -2088,9 +2021,15 @@ Three further reasons are specific to this pipeline:
 | Route validation described as a discipline | Route validation described as something the compiler did, including the §5.5 false accept |
 | No mention of annotation beyond `.labels.json`'s three keys | The annotation vocabulary, pattern instances, three-valued supervision, and the hard-negative requirement (doc 20 §2.2, §2.7) |
 | No mention of areas of interest | Areas as a first-class place form (§4.2) and the GeoJSON `[lon, lat]` trap (doc 20 §8.2) |
-| Silent on determinism | The four seeds, the lock file, and counterfactual pairing (§7) |
+| Silent on determinism | The seed and everything else that decides the traffic, the lock file, and counterfactual pairing (§7) |
 | **Silent on time entirely** | **The epoch conventions** — §8.2.1 |
 | **Silent on illumination entirely** | **The illumination guidance** — §8.2.2 |
+
+`SKILL.md` 1.3.0 carries: the network as an input, the specification and `compile_scenario.py`, the
+epoch conventions of §8.2.1, the place forms, the rota, the supervision channel and the vocabulary's
+layering, the illumination guidance of §8.2.2, and sweeps with counterfactual pairs. Not yet: the
+reconnaissance report the recipe's step 3 would read (§4.1 builds two of its sections), and the gotchas
+split by enforcement site (§8.5).
 
 #### 8.2.1 The epoch conventions the skill must carry
 
@@ -2114,10 +2053,11 @@ Six, and they are ordered by what an assistant gets wrong first.
 5. **A half-hour offset is ordinary.** The largest shipped scenario's site is in Iran, **+03:30**. The
    skill states this with the example, because "time zone" plus an assistant's priors produces an
    integer.
-6. **Ask for `dst_policy` only when the site observes daylight saving**, and say which policy changes
-   the emitted seconds and how (§3.5.1). An assistant that offers the fork on an Iranian scenario is
-   wasting the author's attention; one that omits it on a Colorado scenario spanning March is
-   producing a scenario whose civil labels quietly shift by an hour.
+6. **Declare the offset in force on the scenario's dates, and say whether it includes daylight
+   saving.** One offset holds for the whole run (§3.5.1), so a Colorado scenario in March declares
+   −06:00 with `dst_in_effect: true`, and one spanning the March transition is an hour off local clocks
+   on one side of it unless the author splits it. An Iranian scenario needs no question: Iran does not
+   observe daylight saving.
 
 #### 8.2.2 The illumination guidance the skill must carry
 
@@ -2151,24 +2091,19 @@ Five, and the first two are the ones that stop a corpus being wasted.
 A skill that is only prose degrades into folklore. Each of these is a file an author or a tool reads,
 shipped beside the skill, versioned with it:
 
-| Artifact | What it is | Source |
-|---|---|---|
-| `schemas/scenario.schema.json` | JSON Schema for the traffic-scenario specification | the compiler's own schema — one source, not a copy |
-| `schemas/sweep.schema.json` | JSON Schema for a sweep | same |
-| `vocabulary.json` | the term document a label resolves against: the closed core, and every author namespace the scenario declares or imports, with each term's definition | **generated**, in two halves — the core from the enumerations in `CarlaNet.Types`, the author half from the compiled specification's `vocabulary` block. Never written beside the skill (§8.5; [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §8.7) |
-| `checks.json` | every check in §5.2 with its id, what it compares, and refuse/warn | generated from the compiler, so it cannot drift |
-| `examples/` | one minimal specification, one generated from a program, one with a counterfactual pair — each with its resolution report | the three shipped scenarios, re-expressed |
-| `references/gotchas.md` | the measured gotchas with the measurement that produced each, and its enforcement site | §6 |
-| `references/resolution.md` | the place forms and their failure modes | §4 |
-| `references/time.md` | the epoch conventions, the civil-time forms, the rota construct, and the `H:M:S` trap with the measurement that found it | §3.5.1, §4.5, §6 gotcha 12, §8.2.1 |
-| `references/illumination.md` | the illumination guidance, the association statistic and how to read it, the sweep rule, and a pointer to doc 11 for the ephemeris and the night verdict | §5.6, §7.2.1, §7.4, §8.2.2 |
-| `examples/epoch/` | one specification declaring a whole-hour offset, one declaring **+03:30**, one declaring a `dst_policy` fork, each with its recorded resolution report | §3.5.1 |
+| Artifact | What it is | Source | Built |
+|---|---|---|---|
+| `schemas/scenario.schema.json` | JSON Schema for the scenario specification | the compiler's own schema (`ScenarioSchema`), written by `compile_scenario.py --write-schema` | **yes** |
+| `schemas/sweep.schema.json` | JSON Schema for a sweep | `ScenarioSweep`, written by `--write-sweep-schema` | **yes** |
+| `checks.json` | every check of §5.2 with its id, what it compares, its outcomes and where it is carried out | `ScenarioCheckCatalogue`, written by `--write-checks` | **yes** |
+| `vocabulary.json` | the term document a label resolves against: the closed core and every author namespace the scenario declares or imports | generated per compiled scenario and carried in its supervision plan with its digest. The core is written from [`06`](06_Truth_And_Annotation.md) §3.7 (`AnnotationVocabulary`), because `CarlaNet.Types` does not yet enumerate it | per scenario, in the plan; not beside the skill |
+| `examples/` | one minimal specification, one generated from a program, one with a counterfactual pair — each with its resolution report | the three shipped scenarios, re-expressed | no |
+| `references/gotchas.md`, `resolution.md`, `time.md`, `illumination.md` | the gotchas with their enforcement sites; the place forms; the epoch and civil-time conventions; the illumination guidance | §6, §4, §3.5.1, §5.6 | no |
+| `examples/epoch/` | one whole-hour, one **+03:30**, and one daylight-saving offset, each with its resolution report | §3.5.1 | no; the three offsets compile in `test_scenario_epoch.py` |
 
 The place index, the area table and the solar frame are **not** in the skill — they are per-world and
 travel in the world package (§2.12). Nor is the vehicle catalogue, which is per content build and lives
-in `CarlaControl/catalogue/`. The skill says how to read them. The **illumination
-reference** (§2.9) is in the same category: it is per-world and per-date, so the skill describes it and
-doc 11 produces it.
+in `CarlaControl/catalogue/`. The skill says how to read them.
 
 ### 8.4 Where it lives
 
@@ -2185,43 +2120,36 @@ Two locations, one source. The move into the repository is authorised and is a *
   bundles (*carried forward,* doc 23 §6.12: `MakeDistribution.ps1:237` already creates `tools\sumo\`;
   §1.1 of the same document records the slot). A distribution that ships the compiler and not the
   conventions ships a tool nobody can drive. Per the standing rule, the `Scripts/Linux/*.sh`
-  counterpart lands in the same change.
+  counterpart is part of the same change.
 
 ### 8.5 How it stays true
 
-This is the part that decides whether a packaged skill is an asset or a liability, so it is
-mechanism, not intention.
+This is the part that decides whether a packaged skill is an asset or a liability, so it is mechanism,
+not intention.
 
-- **The schemas, `checks.json` and `vocabulary.json` are generated, not written beside the skill.** A
-  check added to the compiler appears in the shipped skill without anyone remembering to update it; a
-  check removed disappears. The vocabulary is generated in two halves and neither is hand-maintained:
-  the **core** comes from the enumerations in `CarlaNet.Types` that the binder and the writers switch
-  on, so a new `closed_by` value or a sixth observability outcome reaches every shipped copy on its
-  own; the **author half** comes from the compiled specification's `vocabulary` block, so a term an
-  author declared cannot be missing from the document that defines it. A stale copy here is the one
-  stale copy that misdescribes a corpus already handed over
-  ([`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §8.7).
-- **The examples are compiled in the test suite.** Every example specification in `examples/` is
-  compiled against a fixture world as part of the ordinary test run, and its resolution report is
-  compared against the recorded one. An example that stops compiling is a failing test, not a stale
-  document. This is the mechanism that replaces the skill's own recipe step 8 — "regression-check the
-  other scenarios still regenerate identically after any shared-code edit; Gardnerville is the
-  canary" — and generalises it.
-- **The gotchas carry their enforcement site as a citation.** `references/gotchas.md` cites
-  `path:line` for each enforcement, and a test asserts each cited site still exists. A gotcha whose
-  enforcement was refactored away fails the build rather than silently becoming folklore again.
-- **The skill's `metadata.version` moves with the specification's `spec_version`.** A specification
-  declaring a version the skill does not describe is a refusal, not a guess.
-- **The three shipped scenarios stay in the corpus as the regression set.** They are the only
-  evidence of what authoring costs, and the moment they stop being regenerable the measurements in
-  §1 stop being checkable. Re-expressing them under the epoch is also the only honest test of
-  §3.5.1's readability claim: the sizing scenario must produce **byte-identical** departure seconds
-  from civil-time literals, or the rota construct does not express what the triple loop expressed.
-- **The `+03:30` example is a test, not an illustration.** *Measured:* the whole stack carries the
-  offset as a `double` (§2.8), so nothing should break — which is exactly the kind of claim that stops
-  being true when someone introduces an integer-hours field. The example compiles in the test suite
-  like every other, so a regression to integer hours is a failing test rather than a corpus captured
-  under the wrong sun.
+- **The schemas and `checks.json` are generated, never written beside the skill.** A check added to the
+  compiler reaches the shipped list through the generator, and `test_scenario_checks_are_one_list.py`
+  fails when the skill's copies differ from what the generators produce now, when the table in §5.2
+  lists other checks or other outcomes than the catalogue, or when the compiler cites a check id the
+  catalogue does not hold. The vocabulary is generated in two halves and neither is hand-maintained:
+  the **core** from the one table the compiler branches on (`AnnotationVocabulary`, from 06 §3.7), the
+  **author half** from the compiled specification's `vocabulary` block, so a term an author declared
+  cannot be missing from the document that defines it.
+- **The examples are compiled in the test suite.** Every example specification in `examples/` is to be
+  compiled against a fixture world in the ordinary test run and its resolution report compared against
+  the recorded one. The compiler's own fixture scenario (`CarlaControl/test/ScenarioWorldFixture.py`)
+  is compiled this way, and run through SUMO; the shipped examples are not written yet.
+- **The gotchas carry their enforcement site as a citation**, and a test asserts each cited site still
+  exists. Not built: `references/gotchas.md` is not written; §6's table names the sites.
+- **The skill's `metadata.version` moves with the specification's `spec_version`.** Not built.
+- **The three shipped scenarios stay in the corpus as the regression set**, and re-expressing them under
+  the epoch is the honest test of §3.5.1's readability claim: the sizing scenario must produce
+  **byte-identical** departure seconds from civil-time literals. Built for the guard rota, the part the
+  claim rests on: re-expressed as one rota block it reproduces `tower_postings` exactly
+  (`test_rota_expander.py`). The whole-scenario re-expressions are not written.
+- **The `+03:30` epoch is a test, not an illustration.** It compiles in `test_scenario_epoch.py` and
+  `test_civil_time_resolver.py` beside +05:45, +12:45 and −03:30, so a regression to integer hours is a
+  failing test rather than a corpus captured under the wrong sun.
 
 ---
 
@@ -2271,7 +2199,7 @@ Two further consequences that belong to this section specifically:
 fixed before any authored scenario is treated as behavioural truth**, and doc 23's plan already
 sequences it into the read-only-bridge phase, before any SUMO decision is applied to a CARLA vehicle.
 The fix is small — carry `<relation>` elements whose members survive the clip, and drop members that
-do not — and lands in both copies of the clipper, which should be reduced to one while it is open.
+do not — and belongs in both copies of the clipper, which should be reduced to one while it is open.
 
 ### 9.2 The world's `.net.xml` must be kept
 
@@ -2293,74 +2221,53 @@ different converters, and nothing says so. Once the network is carried in the wo
 the scenario side stops running netconvert at all and the skew disappears for authoring — but the
 recorded version becomes part of the lock file, which is check 6.
 
-*Also measured, and worth a line:* `duarouter` exists only at `Build/sumo-src/bin/duarouter.exe` and
-is **not** staged into `Build/sumo-install/bin`, which holds `netconvert.exe` alone. Making route
-validation a compile step requires doc 23 §6.1's staging work — the toolchain phase of that
-document's plan, which stages the built binaries and sets `SUMO_HOME`. Naming it here so it is not discovered when the compiler first runs on a clean machine.
+`duarouter` and `sumo` are staged beside `netconvert` in `Build/sumo-install/bin` (stage D), and
+`compile_scenario.py` routes with that installation unless `--sumo-home` names another, recording the
+release in the lock.
 
-### 9.5 The world's time zone cannot be set, and does not need to be
+### 9.5 The world's time zone is written by the session
 
-*Measured,* §2.8: the solar surface is four entry points and none of them writes `TimeZone`
-(`CesiumHeightSampler.h:193,200,210,220`; `CarlaServer.cpp:614,625,640,661`;
-`CarlaClient.cs:1043,1048,1053,1058`; `carlanet/__init__.py:1500,1506,1511,1535`). It is set once at
-spawn to `origin_longitude / 15.0` (`CesiumHeightSampler.cpp:409-412` calling
-`CesiumSunSky.cpp:570-573`) and is read-only thereafter — 3.745377 h at the Bahonar origin, 14 min 43 s
-from Iran's civil +03:30, enough to put the sun on the wrong side of the horizon at 06:00 and 18:00.
+*Read,* §2.8: configuring a world's georeference sets the sun's zone to `origin_longitude / 15`
+(`CesiumHeightSampler.cpp:423-424` calling `CesiumSunSky.cpp:570-573`) — 3.745377 h at the Bahonar
+origin, 14 min 43 s from Iran's civil +03:30, enough to put the sun on the wrong side of the horizon at
+06:00 and 18:00. `set_solar_epoch` writes the declared offset over it with the date and the clock, and
+the session reads the sun back and compares the zone on every tick ([`04`](04_Contracts.md) D4.19,
+[`11`](11_Time_And_Illumination.md) D11.5, D11.19). The dependency this section states is that **the
+epoch must reach the session**, which is why it is in the lock file (§5.1), and why check 40 compares
+the declared offset with the zone the world's solar frame publishes: the write makes a small difference
+harmless, and a difference of more than an hour says the declared offset is probably not this place's.
 
-**No new RPC is required, and this section does not ask for one.** Because `get_solar_state` returns
-the world's `TimeZone` and the cached read is free and tick-paired (`CarlaClient.cs:1991`), a declared
-civil instant converts correctly with the arithmetic of §2.8. The dependency this section states is
-narrower: **the epoch must reach whoever performs that conversion**, which is why it is in the lock
-file (§5.1) and why check 40 warns when the two zones differ rather than pretending they do not.
-
-*Stated so it is not mistaken for a recommendation against changing anything:* adding a `set_solar_zone`
-RPC would be a perfectly reasonable thing to do, and per the standing rule a rebuild is not a cost. It
-is simply not this section's call — doc 11 owns whether the world's zone should be settable or whether
-the client-side conversion is the better contract, and this section is correct either way because it
-declares an offset rather than a zone.
-
-### 9.6 A time-zone database must be a declared dependency
+### 9.6 No time-zone database is needed
 
 *Measured* on this machine, 2026-09-18: Python **3.14.4**; `import tzdata` raises
 `ModuleNotFoundError`; `zoneinfo.ZoneInfo("Asia/Tehran")` raises `ZoneInfoNotFoundError`;
 `zoneinfo.available_timezones()` returns **0** entries. Windows ships no IANA database and CPython's
-`zoneinfo` falls back to the `tzdata` wheel. *Read:* `CarlaControl/pyproject.toml:12-15` declares
-`carlanet>=0.1.0` and `numpy>=1.24.0`.
+`zoneinfo` falls back to the `tzdata` wheel.
 
-Three consequences, all of them authoring-visible:
+Nothing in the authoring or run path resolves a zone name: the numeric offset is normative, daylight
+saving is carried by it, and `time_zone_id` is carried for a reader and never resolved (§2.8,
+[`04`](04_Contracts.md) §11.3). So the absence of a database limits nothing, and `tzdata` is not a
+dependency of `CarlaControl`. A site's civil offset for a given date is the author's to declare (§8.2.1).
 
-- **Check 35 warns and skips rather than refusing** when no database is present, because otherwise
-  every scenario declaring a zone name would be refused on a clean Windows box for a reason that has
-  nothing to do with the scenario.
-- **`dst_policy: "civil_clock"` is unavailable without one**, and check 36 refuses it rather than
-  silently resolving as `fixed_offset`.
-- **`tzdata` belongs in `CarlaControl`'s dependency list**, which is
-  [`09_Toolchain_And_Packaging.md`](09_Toolchain_And_Packaging.md)'s to add and this section's to name.
-  It is a pure-Python wheel with no build step. The numeric offset being normative (§3.5.1) is what
-  keeps the absence of the database from being blocking rather than merely limiting.
+### 9.7 The night viability verdict
 
-### 9.7 The night viability verdict is a hard input, not a nicety
+§2.9 item 3. Doc 11 has given it: **D11.7 — night capture is not viable, and no window whose sun is
+below −6° may be declared corpus-eligible.** The limit is not exposure; at those instants the scene
+contains no light source at all and the photoreal surfaces carry baked daytime radiance
+([`11`](11_Time_And_Illumination.md) §5).
 
-§2.9 item 3. Restated here because it is a prerequisite in the same sense issue #12 is: a check
-cannot be written without it.
+Check 42 carries it into authoring as a warning that names the window's lowest declared elevation and
+the verdict, and never a refusal: any time of day stays authorable, a night window still yields complete
+behavioural truth and a full sidecar, and the choice of what to capture is the user's
+([`13`](13_Work_Breakdown.md) §13 decision 1). Doc 10's recommended **23:00** window at the sizing site
+(`10_Scale_And_Performance.md:175`) is −38° to −80° below the horizon on every date (§5.6.2), so it
+warns there on every date.
 
-Check 42 asks whether a declared capture window's illumination regime produces usable imagery. Doc 10
-recommends a **23:00** window on the sizing scenario (`10_Scale_And_Performance.md:175`); *measured*,
-that is −38° to −80° below the horizon depending on date (§5.6.2). If doc 11's verdict is that the
-world renders nothing usable there, then that window is not authorable and check 42 must refuse it —
-and a substantial part of doc 10's windowing plan needs revisiting, which is better discovered at
-compile time than after a 313 GB capture (`10_Scale_And_Performance.md:523`). If the verdict is
-usable-under-conditions, the conditions become authoring inputs and the check warns while naming them.
-
-**This section cannot supply the verdict and must not guess it.** The one thing it can record is that
-the obvious mechanism is currently absent: *read,* the only sun-driven headlight rule in the tree is
-`VehicleLightStage.cs:228-236`, a .NET traffic-manager stage switching beams from
-`_weather.SunAltitudeAngle`, and the brief's decision 4 locks the traffic manager out under SUMO drive
-while `CarlaServer.cpp:610-612` records CARLA's own weather as inert in a georeferenced world. *Read,*
-the mechanism that could replace it exists and is cheap — `Actor.set_light_state`
-(`carlanet/__init__.py:781`) and `SetVehicleLightStateCommand` as one of the batch commands (`:487`),
-so headlights could ride the existing per-tick batch at no extra round trip. Whether they should is
-doc 11's design question; that they can is established.
+*Read,* the obvious mechanism for headlights at dusk is absent under SUMO drive: the only sun-driven
+headlight rule in the tree is `VehicleLightStage.cs:228-236`, a .NET traffic-manager stage, and the
+brief's decision 4 locks the traffic manager out while SUMO drives. The rule that replaces it is doc
+11's (D11.9); that the batch can carry it at no extra round trip is established
+(`SetVehicleLightStateCommand`, `carlanet/__init__.py`).
 
 ---
 
@@ -2406,25 +2313,29 @@ doc 11's design question; that they can is established.
 | **D7.7** | **Route validation is a build step, unconditional, and "a `<vehicle>` came out" is not the test.** *Measured:* 52 routes validated in 0.27 s; and a trip whose destination edge does not exist produced a `<vehicle>` with a one-edge route. The check is that the routed result ends on the requested destination and contains every `via` edge in order (§5.5) |
 | **D7.8** | **Compile emits the routed route file, not trips,** so no routing decision is taken at run time and two runs of one scenario cannot diverge because of the router (§5.5) |
 | **D7.9** | **Netconvert options that change the graph are world-build decisions, never scenario decisions.** `--tls.default-type`, `--junctions.join-dist` and `--remove-edges.by-type` move to `OsmConverter.BuildArguments`. A world that wants actuated signals is a world that is rebuilt with them (§6, gotchas 5 and 6) |
-| **D7.10** | **Static authored identity travels in SUMO's own `<param>` element, under a declared namespace prefix.** *Measured:* `<param>` round-trips through `duarouter` and through `sumo --vehroute-output`, and the generated C# TraCI binding exposes `Vehicle.getParameter`/`setParameter` — so identity reaches the CARLA spawn attribute doc 20 D7 requires with no new transport. `<param>` is **identity transport, not an annotation channel**: the annotation channel is [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) D6.1's companion supervision file, adopted here unchanged (§3.6) |
-| **D7.11** | **Four separate seeds — SUMO, appearance, admission, and none for ambient traffic —** recorded in a per-run lock file. Separate rather than one, because a counterfactual pair must hold the ambient population fixed while changing one thing (§7.1) |
+| **D7.10** | **`<param>` is identity transport, never an annotation channel.** *Measured:* `<param>` round-trips through `duarouter` and through `sumo --vehroute-output`. The compiled route file carries only the vehicle-type binding — `carla:blueprint`, `carla:class_id`, `carla:catalogue_digest` — and a vehicle's identity is its SUMO id ([`04`](04_Contracts.md) C4), so nothing else is emitted and check 52 refuses any other key. The annotation channel is [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) D6.1's supervision plan, adopted unchanged (§3.6) |
+| **D7.11** | **Everything that decides the traffic is declared or fixed at compile time and recorded in the lock** — the SUMO seed, required; the routed routes; the world's network; the step and the end; the processing options; the vehicle types; the SUMO release that routed. An appearance seed and an admission seed are declared when something reads them: SUMO's own seeded `vTypeDistribution` draw chooses the body, and the render set has no random element (§7.1) |
 | **D7.12** | **Counterfactual pairing is a declared mode of the sweep,** in three forms — `absent`, `nominal`, `displaced`. The manifest states explicitly that downstream trajectories are *not* expected to match, because a car-following model reacts to what is in front of it. `nominal` generates doc 20 §2.7's hard negatives at no authoring cost. This answers doc 20 §11 question 7 (§7.3) |
 | **D7.13** | **The authoring conventions ship as a packaged skill with the distribution,** accompanied by machine-readable artifacts — the specification and sweep schemas, the vocabulary, the generated check list, worked examples and their recorded resolution reports. This answers doc 20 §11 question 9 (§8) |
 | **D7.14** | **The skill stays true by mechanism, not intention:** schemas and the check list are generated from the compiler; every example is compiled in the test suite and its resolution report diffed; every gotcha cites its enforcement site and a test asserts the site still exists (§8.5) |
 | **D7.15** | **The world binding is a network fingerprint over canonical graph content, not a file digest.** *Measured:* the same OSM clipped three times gives three digests and three `.net.xml` digests, while the graph — 55 edges, 202 internal edges, 68 junctions, 257 lane shapes — is byte-identical. File digests stay as provenance; the fingerprint is what gates (§2.7) |
 | **D7.16** | **[Issue #12](https://github.com/sbrett9/carla/issues/12) is a hard prerequisite for treating any authored scenario as behavioural truth.** *Measured:* 22 `type=restriction` relations in the raw Arapahoe extract, **0** after clipping. It is an authoring trap as well as a runtime one — every compile check passes on a scenario built around a turn that does not exist (§9.1) |
-| **D7.17** | **Every scenario declares an `epoch` — civil date, civil clock time at `t = 0`, numeric UTC offset, optional zone name, and a `dst_policy` — and a specification without one is refused.** *Measured:* the sizing scenario's guard shifts depart at 25 200 / 54 000 / 82 800 s, so `t = 0` is midnight of day 0, and that fact survives only inside trip identifiers (`guard_d0_h7_t3`) and in the author's head; the emitted configuration says only `<begin value="0"/>` (§1.4). Nothing machine-readable states it, so nothing can set a sun from it (§3.5.1, check 33) |
-| **D7.18** | **The numeric UTC offset is normative; the IANA zone name is provenance and a cross-check.** *Measured:* the engine has no zone database and DST is deliberately disabled (`CesiumHeightSampler.cpp:410`); `zoneinfo` resolves **zero** zones on this machine, so a required zone name would refuse every scenario; and the offset is a `double` end to end, so **+03:30 needs no special case anywhere** (`CesiumSunSky.cpp:571`, `get_solar_state` index 4, `CotWriter.cs:57`). Offsets are stored as whole minutes and check 34 refuses an integer-hours representation (§2.8, §3.5.1) |
-| **D7.19** | **An author writes civil times and the compiler emits seconds.** Day-plus-clock, absolute civil instant, duration, named instant and a non-looping `rotas[]` cross product are all accepted; the resolution report states the second and the civil time for every one. *Measured,* the gain on the sizing scenario: **sixteen** civil-hour-to-seconds arithmetic sites go to **zero**, and the civil meaning of **610 of 610** emitted entries becomes recoverable from the artifact instead of **0 of 610** (§3.5.1) |
+| **D7.17** | **Every scenario declares an `epoch` — the [`04`](04_Contracts.md) C9 object: the civil instant `t = 0` is with its offset, the offset as signed hours, the same instant in UTC, whether the calendar advances, whether the offset includes daylight saving, and an optional zone name — and a specification without one is refused.** *Measured:* the sizing scenario's guard shifts depart at 25 200 / 54 000 / 82 800 s, so `t = 0` is midnight of day 0, and that fact survives only inside trip identifiers (`guard_d0_h7_t3`) and in the author's head; the emitted configuration says only `<begin value="0"/>` (§1.4). The compiler reads the object with the session's own `SolarEpoch` (§3.5.1, checks 33, 34) |
+| **D7.18** | **The numeric UTC offset is normative; the IANA zone name is provenance only and is never resolved.** *Measured:* the engine has no zone database and DST is deliberately disabled (`CesiumHeightSampler.cpp:410`); `zoneinfo` resolves **zero** zones on this machine, so a required zone name would refuse every scenario; and the offset is a `double` end to end, so **+03:30 needs no special case anywhere** (`CesiumSunSky.cpp:571`, `get_solar_state` index 4, `CotWriter.cs:57`). The offset is declared as `utc_offset_hours`, a whole number of quarter hours in [−12, +14], and check 34 refuses any other (§2.8, §3.5.1; [`04`](04_Contracts.md) V9.3) |
+| **D7.19** | **An author writes civil times and the compiler emits seconds.** Day-plus-clock, absolute civil instant, duration, named instant, an offset from either, and a non-looping `rotas[]` cross product are accepted (`CivilTimeResolver`, `RotaExpander`); every day-clock and absolute instant is confirmed against `SolarEpoch.CivilInstantAt`, and the report states the second and the civil time of every one. *Measured,* the gain on the sizing scenario: **sixteen** civil-hour-to-seconds arithmetic sites go to **zero**, the civil meaning of **610 of 610** emitted entries becomes recoverable instead of **0 of 610**, and the guard rota as one block reproduces the generator's 335 ids and departure seconds exactly (§3.5.1) |
 | **D7.20** | **The author declares what the scenario's time means; the operator chooses the window and the policy.** `capture_windows[]` and `illumination` are authored *candidates and defaults*, checked here (checks 38, 39) and selected or overridden at run time by [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md). The test: if changing a field changes what the scenario asserts it is authored; if it changes only what was captured of an unchanged scenario it is the operator's. Both the authored default and the value used go in the run manifest (§3.9, §5.1) |
-| **D7.21** | **The compile step gains a seventh check group — epoch and illumination — of eleven checks (33–43), each stating refuse or warn.** Epoch present and well-formed; offset valid to the minute; zone agreeing with offset where a database exists; the span resolved against the calendar including multi-day date advance and daylight-saving transitions; every civil time inside the span; capture windows inside the span and cutting no interval; illumination policy well-formed; the site offset against the world's spawned `lon / 15` zone; the illumination–label association; the window's regime against doc 11's night verdict; and sweep-member inheritance (§5.2) |
-| **D7.22** | **The illumination–label association is computed at compile time, reported in full, recorded in the lock file, and never refuses.** *Measured on the shipped sizing scenario:* `I(hour; label) / H(label) = 0.600`; at 02:00 and 11:00 **every** entry is annotated; and the three hours doc 10 recommends capturing carry **377 of 610 entries and zero annotations**. It warns rather than refuses because in a pattern of life the correlation is structural — doc 20's class 4 is *defined* by its hour — so a refusing threshold would forbid the requirement and be switched off. Bucketing is by **illumination regime**, not hour, because *measured* 07:00 is +5.0° in December and +25.9° in June at the sizing scenario's site (§5.6) |
-| **D7.23** | **A sweep that varies behaviour holds illumination constant, and the compiler enforces it.** `illumination: "hold"` is the default and refuses any member differing from the base in epoch, window or policy; `"vary"` forbids a behavioural axis; `"factorial"` warns and records the crossed design. An axis is an illumination axis if its path touches `epoch`, `illumination` or a window's `begin`, whether it was declared one or not. **Sweep `epoch.date`, not the window hour**, when illumination is what is wanted: the date varies the sun while holding the population and every authored behaviour fixed (§7.2.1, §7.4) |
-| **D7.24** | **A counterfactual pair inherits its base member's epoch, window and illumination policy verbatim.** `absent` and `nominal` are lit identically to their base — which is what "same timing" now means, checkably. `displaced`-in-time deliberately moves the sun, so it carries `illumination_differs: true`, records both regimes, and is never presented as an illumination-controlled comparison — while being, at the same time, the authoring remedy §5.6.3 offers for a degenerate regime (§7.3, check 43) |
+| **D7.21** | **The epoch and illumination group is checks 33, 34, 36–43, 47 and 48, each stating refuse or warn; 35 is retired.** The epoch present and accepted by `SolarEpoch`; the offset in whole quarter hours; every time in an accepted form and naming its day; every rota expanding and every skip planting what it names; every instant inside the run; each window's civil date against its sun's date; windows inside the run and cutting no interval; the illumination default accepted by `IlluminationPolicy`, with an advancing arc named; the declared offset against the world's zone; the window's sun against D11.7; the illumination–label association; and sweep inheritance (§5.2). A zone name is never resolved, so no check compares it |
+| **D7.22** | **The illumination–label association is computed at compile time, reported in full, recorded in the lock file, and never refuses.** *Measured on the shipped sizing scenario:* `I(hour; label) / H(label) = 0.600`; at 02:00 and 11:00 **every** entry is annotated; and the three hours doc 10 recommends capturing carry **377 of 610 entries and zero annotations**. It warns rather than refuses because in a pattern of life the correlation is structural — doc 20's class 4 is *defined* by its hour — so a refusing threshold would forbid the requirement and be switched off. Bucketing is by doc 11 §4.4's **illumination band** of the declared sun, not by hour, over the windows and over the span (§5.6) |
+| **D7.23** | **A sweep that varies behaviour holds illumination constant, and the compiler enforces it.** `hold` is the default and refuses an illumination axis; `vary` refuses a behaviour axis; `factorial` warns and records the crossed design. An axis is an illumination axis if its path touches `epoch`, `illumination` or a window's `begin`, whatever it is declared. **Sweep `epoch.date`, not the window hour**, when illumination is what is wanted: the date moves the sun while the traffic the route files declare stays identical — measured on the fixture scenario (§7.2.1, §7.4) |
+| **D7.24** | **A counterfactual pair holds the inputs fixed except one actor, and inherits its base member's epoch, windows and illumination verbatim unless displaced in time.** `absent` removes the actor; `nominal` keeps its type, route and timing, drops what the author names in `remove`, and states it `nominal` — the pipeline does not decide what the anomaly is; `displaced` moves it by a declared shift and/or place substitution, and displaced in time carries `illumination_differs: true`. Every pair states that trajectories are not expected to match (§7.3, check 43) |
 | **D7.25** | **The vocabulary is authored in two halves and generated in two halves, and the compiler enforces both.** An author declares terms in the specification's `vocabulary` block — `import[]` for a shared or site vocabulary travelling in the bundle, `terms[]` for this scenario's own — so they are reviewed and versioned with the scenario, and nothing may declare a term at run time. The shipped `vocabulary.json` is generated: its core half from the enumerations in `CarlaNet.Types`, its author half from the compiled specification, under §8.5's discipline rather than written beside the skill. Two checks in the annotation group enforce it: **45** refuses a label whose `applies_to` excludes the subject kind it was asserted of, which is what makes [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) D6.2 enforceable for a term this compiler cannot interpret, and **46** refuses a namespace the specification neither declared nor imported. The term list's *content* is 06 §3.7–§3.8's; this section owns where it is written and what refuses it (§2, §3.5, §5.2, §8.3, §8.5) |
 | **D7.26** | **The place index is derived from the world's network alone and publishes its own coverage.** Every place form resolves to SUMO edges and the network carries each edge's name, so the `.xodr` is not read. The index states the fraction of normal edges named, the names by script and the largest one-to-many name, and warns below half named. *Measured:* 91.2 % Gardnerville, 90.9 % Arapahoe, **4.5 %** Bahonar; `South Yosemite Street` covers 65 edges (§2.5) |
 | **D7.27** | **The solar frame carries what the engine derives and nothing presented as a civil fact.** The origin latitude and longitude and `longitude / 15`, with the rule stated. A site civil zone is not derived: it needs a zone-boundary dataset and a time-zone database this machine does not have, and presenting one as a property of the world would be an assertion nobody made (§2.10) |
 | **D7.28** | **The reference set is published into the world package by the world build, and can be republished without a rebuild.** Areas are validated before anything is built, so a malformed file refuses the build; after it, areas the frame check refuses are left out and the place index and solar frame are published without them. Publishing replaces the whole set, and writing the world again drops it (§2.11, §2.12) |
+| **D7.29** | **The compiler re-implements none of the session's time rules.** It reads the epoch with `CarlaNet.CoSim.SolarEpoch` and the illumination default with `IlluminationPolicy`, and states every sun through `DeclaredSun` and `SolarPositionModel` — the functions the session binds and audits the sun with — so a scenario the compiler accepts is one the session accepts, with the same digest, the same civil instants and the same declared sun (§2.9, §3.5.1) |
+| **D7.30** | **The same specification, seed and world give byte-identical scenario files.** Everything that decides the traffic — the routed routes, the world's network, the seed, the step, the processing options, the vehicle types and the SUMO release that routed — is in the files and bound in the lock, and no file carries a timestamp, a machine path or the specification's file name (§5.1, §7.1) |
+| **D7.31** | **A refused compile writes only its resolution report**, marked refused and naming every refusal; no scenario file is written (§5.1) |
+| **D7.32** | **The network SUMO runs is the world's, copied byte for byte beside the configuration**, and the lock digests it; the compiler never builds or edits a network (§5.1) |
 
 ---
 
@@ -2471,13 +2382,11 @@ doc 11's design question; that they can is established.
    specification wants its own loop constructs for rotas and diurnal windows, is the one design
    question in §3 that measurement does not settle. Leaning strongly against loop constructs, on the
    grounds that every configuration format that grew them regretted it.
-7. **Should the epoch be allowed to declare a `t = 0` that is not midnight at all?** Every shipped
-   scenario uses midnight and the `dst_policy` table, the `t mod 86400` hour bucketing in §5.6 and
-   doc 10's per-day repeatability finding all read more simply when it is. Forbidding anything else
-   would remove a class of confusion at the cost of forcing an author who cares about a 06:00-to-06:00
-   day to shift every departure by 21 600 s — which is exactly the hand arithmetic D7.19 exists to
-   abolish. Leaning towards allowing it and making the report state the hour-of-day convention
-   explicitly wherever it is used, but the simplification is real and someone should weigh it.
+7. **A `t = 0` that is not midnight is allowed, and nothing about it is open.** Day N is the epoch's
+   civil date plus N days and a clock is read at the epoch's offset, so an author who wants a
+   06:00-to-06:00 day writes an epoch at 06:00 and `"d0 07:00"` is one hour in; the report states every
+   civil time beside its second, and the association statistic buckets on the sun rather than the hour
+   (§3.5.1, §4.5, §5.6).
 8. **Does the epoch belong to the scenario or to the world?** It is declared in the scenario here,
    because the same world can host a morning scenario and a night one and because an epoch is a claim
    about the modelled situation rather than about the terrain. But the *site's* civil offset is a
@@ -2486,7 +2395,7 @@ doc 11's design question; that they can is established.
    offset and zone derived from the origin (§2.8, bundle row 11), the scenario declares the normative
    one, and check 40 warns when they differ — which is what is written above. The alternative,
    inheriting silently from the world, was rejected because it makes an assertion no one wrote.
-9. **Should a `frozen` policy freeze at the window's start or at its midpoint?** The brief's §3a says
+9. **Should a freeze hold the sun at the window's start or at its midpoint?** The brief's §3a says
    "the window's start instant", and that is what §3.5.2 declares. The counter-argument is that a
    1 800 s window (`10_Scale_And_Performance.md:978`) advances the sun by 7.5° of hour angle, so
    freezing at the start systematically biases every capture towards the earlier light, whereas
@@ -2511,3 +2420,44 @@ doc 11's design question; that they can is established.
    the resolved edges in the lock file so a rebuild can be diffed place by place, should be decided
    with [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md)'s world-binding needs in hand
    rather than separately.
+12. **Should a world built with a road offset be authorable?** Check 5 refuses any network whose
+    `netOffset` is not zero, and a world built with `--road-offset-east/north` has one. *Measured*
+    2026-09-28 with the staged netconvert 1.27.0 over
+    `Build/sumo-smoketest/Gardnerville_Centerville_Lane_clipped.osm` under the Gardnerville world's
+    recorded argument list, once as recorded and once with `--offset.x 5 --offset.y -3` added — what
+    `--road-offset-east 5 --road-offset-north -3` passes (`WorldBuilder.py:56-62`): the network's
+    `netOffset` becomes `5.00,-3.00`; all 57 normal lane shapes and all 217 `.xodr` road starts move by
+    exactly (5.00, −3.00); `convBoundary` still equals the `.xodr` header, so check 3 passes; and the
+    `.xodr` gains `<offset x="-5.00" y="3.00">` beside an unchanged `geoReference`, an element neither
+    LibCarla's nor CarlaNet's OpenDRIVE reader reads (`GeoReferenceParser.cpp:66`,
+    `GeoReferenceParser.cs:24-26`). So the roads CARLA renders and the SUMO network share one frame,
+    and check 5, the co-simulation session and — for areas — V5.12 refuse the world anyway. What is
+    not established is which geographic frame a road-offset world's authored places and SUMO-derived
+    telemetry belong to: SUMO converts a latitude and longitude through its projection and
+    `netOffset`, placing it `(east, north)` metres from where the imagery shows the same point, which is
+    the displacement the offset exists to create. Settled by deciding what a place written as a
+    latitude and longitude means in such a world, and by a live run of a road-offset world comparing a
+    SUMO-driven vehicle's rendered position with the roadway in the imagery. Until then check 5 stays
+    a refusal.
+13. **Which illumination bands are the core vocabulary's?** [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md)
+    §4.4 defines six — `day` above +6°, `golden`, `civil_twilight`, `nautical_twilight`,
+    `astronomical_twilight`, `night` below −18° — and [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md)
+    lists five, spelled two ways: `day · civil · nautical · astronomical · night` for the core family in
+    §3.7, and `day`, `civil_twilight`, `nautical_twilight`, `astronomical_twilight`, `night` with `day`
+    above 0° on `OBSERVED_SPAN` in §5.1. The association statistic buckets by doc 11's function, which
+    §2.9 item 2 names as the source of the band names, and the supervision plan's vocabulary carries
+    §3.7's list; so one compiled scenario states two of the three. Settled by the two sections agreeing on one list and its edges; until then the
+    statistic states its band source beside every table.
+14. **Where does the fence live?** The sizing scenario's guards, escort and shadow drive the port's
+    private roads as `army` vehicles, and they can because `SumoScenarioBuilder.restrict_private_roads`
+    rewrites the network's lane permissions after the scenario takes the network out of the world
+    package. The compiler runs the world's network byte for byte (D7.32) and the specification has no
+    network edits, so under it no such vehicle can drive there. *Measured* on the real Bahonar package:
+    the private edges carry `allow="pedestrian delivery bicycle"`, and a guard rota of class `army`
+    is refused by check 10 on all 335 entries (`26413425#5`, `-26413411`, …), while the same rota as
+    `delivery` compiles. Two answers keep one network: the world build writes the fence into the network
+    it publishes — beside the gates [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §3.9(f)
+    already wants derived there, and consistent with D7.9, since permissions are part of the network
+    fingerprint — or the specification gains `network_edits` and the network a scenario runs stops being
+    the world's, with its own fingerprint in the lock. The first keeps every scenario on one world
+    network; it needs a world-build option and a rebuild of the worlds that want a fence.
