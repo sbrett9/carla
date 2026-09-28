@@ -1,0 +1,468 @@
+"""A configuration that cannot work is refused at launch, naming why, not at minute forty.
+
+Plan 12 §6. Each test here is one thing wrong with an otherwise launchable configuration, and asserts
+the check that refuses it and a phrase an operator can act on. Where the session has a validator of
+its own for a rule -- the clock ratio, the illumination object, the epoch -- the offline checks must reach the
+same verdict offline, so those tests pass values the session itself refuses. The unattended caller's
+two mechanisms (checks 34 and 35) are exercised on both sides: a warning with no adjudication is
+refused, one adjudicated in writing proceeds, and an expectation that disagrees is refused naming
+both values.
+
+The server checks run against a stand-in world: it is handed a blueprint library and a sun, and nothing may be
+spawned or written.
+"""
+from __future__ import annotations
+
+import json
+import sys
+from collections import namedtuple
+from pathlib import Path
+
+import pytest
+
+_REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
+sys.path.insert(0, str(_REPO / "CarlaControl" / "test"))
+
+from RunCaptureFixture import (  # noqa: E402
+    AN_ORBIT,
+    CATALOGUE,
+    Layout,
+    run_document,
+    write_scenario_package,
+)
+
+from carlacontrol.LaunchEcho import LaunchEcho  # noqa: E402
+from carlacontrol.RunConfiguration import RunConfiguration  # noqa: E402
+from carlacontrol.RunConfigurationFindings import RunConfigurationFindings  # noqa: E402
+from carlacontrol.RunConfigurationResolver import RunConfigurationResolver  # noqa: E402
+from carlacontrol.RunConfigurationValidator import RunConfigurationValidator  # noqa: E402
+from carlacontrol.SiteProfile import SiteProfile  # noqa: E402
+
+Usage = namedtuple("Usage", "total used free")
+PLENTY = 10**13
+
+
+@pytest.fixture
+def layout(tmp_path: Path) -> Layout:
+    return Layout(tmp_path)
+
+
+def resolve(layout: Layout, document=None, overrides=(), profile_path=None, environ=None):
+    profile = SiteProfile.discover(layout.root, profile_path or layout.write_profile(),
+                                   environ=environ or {})
+    run = RunConfiguration.from_document(document if document is not None else run_document(),
+                                         "fixture.run.json")
+    parsed = [(*RunConfiguration.parse_override(text), f"--set {text}") for text in overrides]
+    return RunConfigurationResolver(profile).resolve(run, parsed)
+
+
+def offline(layout: Layout, document=None, overrides=(), free=PLENTY, result=None, **resolve_kw):
+    effective = resolve(layout, document, overrides, **resolve_kw)
+    validator = RunConfigurationValidator(disk_usage=lambda _path: Usage(free, 0, free))
+    result_path = result or layout.runs_root / "run.result.json"
+    capture = layout.capture_root / "cap-test"
+    findings = validator.validate_offline(effective, result_path, capture)
+    return effective, validator, findings, result_path, capture
+
+
+def launch(layout: Layout, document=None, overrides=(), free=PLENTY, **resolve_kw):
+    """The offline checks in full: the configuration, the echo, then checks 35 and 34."""
+    effective, validator, findings, result_path, capture = offline(layout, document, overrides,
+                                                                   free, **resolve_kw)
+    if not findings.refused:
+        free_bytes, headroom = validator.headroom(effective, capture)
+        codes = [RunConfigurationFindings.warning_code(f) for f in findings.warnings]
+        echo = LaunchEcho.compute(effective, "cap-test", capture, result_path, free_bytes,
+                                  headroom, validator.bytes_per_captured_second(effective), codes)
+        validator.validate_launch(effective, echo.values(), findings)
+    return findings
+
+
+def checks(findings, outcome="refuse") -> set[int]:
+    return {f.check_id for f in findings.findings if f.outcome == outcome}
+
+
+def only(findings, check_id: int):
+    matching = findings.by_check(check_id)
+    assert len(matching) == 1, [str(f) for f in findings.findings]
+    return matching[0]
+
+
+def test_the_fixture_configuration_launches_clean(layout):
+    findings = launch(layout)
+    assert findings.findings == []
+
+
+# -- the window --------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize(("window", "begin", "end"), [
+    ("morning", 25200.0, 27000.0), ("3600:5400", 3600.0, 5400.0), ("80000:", 80000.0, 86400.0)])
+def test_a_window_resolves_by_name_pair_or_open_end(layout, window, begin, end):
+    effective, *_ = offline(layout, overrides=[f"capture.window={window}"])
+    assert (effective.window.begin_s, effective.window.end_s) == (begin, end)
+
+
+def test_an_undeclared_window_is_refused_listing_the_declared_ones(layout):
+    *_, findings, _, _ = offline(layout, overrides=["capture.window=dusk"])
+    finding = only(findings, 7)
+    assert "morning" in finding.message and "night" in finding.message
+
+
+def test_a_window_past_the_scenario_s_end_is_refused(layout):
+    *_, findings, _, _ = offline(layout, overrides=["capture.window=86000:90000"])
+    assert "end time 86400" in only(findings, 7).message
+
+
+def test_no_window_at_all_is_check_2_naming_the_declared_windows(layout):
+    document = run_document()
+    del document["capture"]["window"]
+    *_, findings, _, _ = offline(layout, document)
+    finding = only(findings, 2)
+    assert finding.subject == "capture.window" and "morning, night" in finding.message
+
+
+def test_a_prewarm_longer_than_the_window_s_start_warns(layout):
+    *_, findings, _, _ = offline(layout, overrides=["capture.window=100:400"])
+    finding = only(findings, 8)
+    assert finding.outcome == "warn" and "clipped to 100" in finding.message
+
+
+# -- the clock, the sun, the epoch ---------------------------------------------------------------
+
+def test_a_world_delta_that_does_not_divide_the_step_is_refused(layout):
+    *_, findings, _, _ = offline(layout, overrides=["capture.world_delta_s=0.03"])
+    assert "not a whole number" in only(findings, 9).message
+
+
+def test_a_capture_rate_that_is_not_whole_ticks_is_refused(layout):
+    *_, findings, _, _ = offline(layout, overrides=["capture.capture_hz=3"])
+    assert 9 in checks(findings)
+
+
+def test_an_advancing_sun_at_another_rate_is_refused(layout, tmp_path):
+    illumination = {"illumination_version": 1, "policy": "advance", "rate_sun_s_per_sim_s": 60.0}
+    write_scenario_package(layout.scenario_root, illumination=illumination)
+    *_, findings, _, _ = offline(layout)
+    assert "D12.8" in only(findings, 15).message
+
+
+def test_an_illumination_field_beside_the_wrong_policy_is_refused(layout):
+    *_, findings, _, _ = offline(layout, overrides=["solar.policy=advance",
+                                                    "solar.freeze_date_advances=true"])
+    assert 15 in checks(findings)
+
+
+def test_the_ignore_policy_warns(layout):
+    *_, findings, _, _ = offline(layout, overrides=["solar.policy=ignore"])
+    finding = only(findings, 15)
+    assert finding.outcome == "warn" and "honours no epoch" in finding.message
+
+
+def test_a_scenario_with_no_epoch_is_refused(layout):
+    write_scenario_package(layout.scenario_root, epoch=None)
+    *_, findings, _, _ = offline(layout)
+    assert 12 in checks(findings)
+
+
+def test_an_epoch_the_session_would_refuse_is_refused_offline(layout):
+    epoch = {"epoch_version": 1, "civil_datetime": "2026-03-21T00:00:00-07:00",
+             "utc_offset_hours": -7.1, "utc_datetime": "2026-03-21T07:06:00Z",
+             "calendar_advances": True, "dst_in_effect": True}
+    write_scenario_package(layout.scenario_root, epoch=epoch)
+    *_, findings, _, _ = offline(layout)
+    assert 13 in checks(findings)
+
+
+# -- channels -----------------------------------------------------------------------------------------
+
+def test_a_stare_with_nowhere_to_look_is_refused(layout):
+    document = run_document()
+    document["capture"]["channels"] = [{"sensor_id": "OVERWATCH-1"}]
+    *_, findings, _, _ = offline(layout, document)
+    assert "somewhere to look" in only(findings, 47).message
+
+
+def test_an_orbit_measuring_occlusion_is_refused_and_passes_without_it(layout):
+    document = run_document()
+    document["capture"]["channels"] = [AN_ORBIT]
+    *_, findings, _, _ = offline(layout, document)
+    assert "occlusion.enabled false" in only(findings, 47).message
+    *_, findings, _, _ = offline(layout, document, overrides=["occlusion.enabled=false"])
+    assert findings.findings == []
+
+
+def test_two_channels_must_name_distinct_sensors(layout):
+    document = run_document()
+    first = dict(document["capture"]["channels"][0])
+    document["capture"]["channels"] = [first, dict(first)]
+    *_, findings, _, _ = offline(layout, document)
+    assert "both name" in only(findings, 11).message
+    document["capture"]["channels"][1].pop("sensor_id")
+    *_, findings, _, _ = offline(layout, document)
+    assert "no sensor_id" in only(findings, 11).message
+
+
+# -- render, pacing, mode ------------------------------------------------------------------------
+
+def test_no_render_region_is_check_20(layout):
+    document = run_document()
+    del document["capture"]["render_region"]
+    *_, findings, _, _ = offline(layout, document)
+    assert "never defaulted" in only(findings, 20).message
+
+
+def test_a_cap_above_the_hard_cap_is_refused(layout):
+    *_, findings, _, _ = offline(layout, overrides=["capture.render_cap=200"])
+    assert "exceeds render_cap_hard" in only(findings, 20).message
+
+
+def test_a_real_time_factor_as_available_is_refused(layout):
+    *_, findings, _, _ = offline(layout, overrides=["pacing.real_time_factor=1.0"])
+    assert "as_available" in only(findings, 41).message
+
+
+def test_wall_clock_needs_a_floor(layout):
+    *_, findings, _, _ = offline(layout, overrides=["pacing.mode=wall_clock"])
+    finding = only(findings, 2)
+    assert finding.subject == "pacing.min_achieved_factor"
+    assert "below which the live run has failed" in finding.message
+
+
+def test_a_floor_above_the_factor_is_refused(layout):
+    *_, findings, _, _ = offline(layout, overrides=["pacing.mode=wall_clock",
+                                                    "pacing.min_achieved_factor=1.5"])
+    assert "exceeds" in only(findings, 41).message
+
+
+def test_another_mode_is_refused_pointing_at_run_sctmv(layout):
+    *_, findings, _, _ = offline(layout, overrides=["mode=traffic_manager_ambient"])
+    assert "run_SCTMV.py" in only(findings, 4).message
+
+
+# -- bindings and packages ------------------------------------------------------------------------
+
+def test_a_world_package_the_scenario_was_not_compiled_against_is_refused(layout):
+    world = layout.scenario_root / "gardnerville_fixture"
+    lock = write_scenario_package(layout.scenario_root)
+    text = lock.read_text(encoding="utf-8").replace('"origin_latitude": 38.91108',
+                                                    '"origin_latitude": 38.5')
+    lock.write_text(text, encoding="utf-8")
+    assert world.is_dir()
+    *_, findings, _, _ = offline(layout)
+    assert "origin latitude" in only(findings, 5).message
+
+
+def test_a_lock_of_another_version_is_refused(layout):
+    write_scenario_package(layout.scenario_root, lock_version=2)
+    *_, findings, _, _ = offline(layout)
+    assert 6 in checks(findings)
+
+
+def test_a_catalogue_of_another_digest_is_refused(layout, tmp_path):
+    other = tmp_path / "other.catalogue.json"
+    other.write_text(CATALOGUE.read_text(encoding="utf-8").replace(
+        '"catalogue_digest": "', '"catalogue_digest": "0'), encoding="utf-8")
+    profile = layout.profile_document()
+    profile["paths"]["catalogue"] = str(other)
+    path = tmp_path / "profile.json"
+    path.write_text(json.dumps(profile), encoding="utf-8")
+    *_, findings, _, _ = offline(layout, profile_path=path)
+    assert "compiled against" in only(findings, 48).message
+
+
+def test_an_empty_site_path_is_refused(layout, tmp_path):
+    profile = layout.profile_document()
+    profile["paths"]["runs_root"] = ""
+    path = tmp_path / "profile.json"
+    path.write_text(json.dumps(profile), encoding="utf-8")
+    *_, findings, _, _ = offline(layout, profile_path=path)
+    assert only(findings, 37).subject == "paths.runs_root"
+
+
+def test_a_null_site_path_is_refused(layout, tmp_path):
+    profile = layout.profile_document()
+    profile["paths"]["capture_root"] = None
+    path = tmp_path / "profile.json"
+    path.write_text(json.dumps(profile), encoding="utf-8")
+    *_, findings, _, _ = offline(layout, profile_path=path)
+    assert only(findings, 37).subject == "paths.capture_root"
+
+
+def test_a_result_inside_the_capture_root_is_refused(layout):
+    *_, findings, _, _ = offline(layout, result=layout.capture_root / "x" / "run.result.json")
+    assert "inside the capture root" in only(findings, 40).message
+
+
+# -- disk --------------------------------------------------------------------------------------------
+
+def test_a_declared_window_that_does_not_fit_on_disk_is_refused(layout):
+    *_, findings, _, _ = offline(layout, free=10**9)
+    assert "GB" in only(findings, 19).message and only(findings, 19).outcome == "refuse"
+
+
+def test_an_open_window_that_may_outrun_the_disk_warns(layout):
+    *_, findings, _, _ = offline(layout, overrides=["capture.window=25200:"], free=10**9)
+    finding = only(findings, 19)
+    assert finding.outcome == "warn" and "declares no end" in finding.message
+
+
+# -- the unattended caller -----------------------------------------------------------------------
+
+def test_an_unattended_warning_without_adjudication_is_refused(layout):
+    findings = launch(layout, overrides=["caller=unattended", "solar.policy=ignore",
+                                         f"result_path={layout.runs_root / 'r.result.json'}"])
+    finding = only(findings, 34)
+    assert "on_warning.lighting_honours_no_epoch" in finding.message
+
+
+def test_an_unattended_warning_adjudicated_proceed_proceeds(layout):
+    findings = launch(layout, overrides=[
+        "caller=unattended", "solar.policy=ignore",
+        f"result_path={layout.runs_root / 'r.result.json'}",
+        'on_warning={"lighting_honours_no_epoch": "proceed"}'])
+    assert not findings.refused
+    assert checks(findings, "warn") == {15}
+
+
+def test_a_warning_adjudicated_refuse_is_refused_even_attended(layout):
+    findings = launch(layout, overrides=['on_warning={"lighting_honours_no_epoch": "refuse"}',
+                                         "solar.policy=ignore"])
+    assert 34 in checks(findings)
+
+
+def test_unattended_needs_a_result_path(layout):
+    findings = launch(layout, overrides=["caller=unattended"])
+    assert only(findings, 2).subject == "result_path"
+
+
+def test_an_unattended_run_does_not_inherit_undeclared_host_state(layout, tmp_path):
+    profile = layout.profile_document()
+    del profile["sumo"]
+    path = tmp_path / "profile.json"
+    path.write_text(json.dumps(profile), encoding="utf-8")
+    overrides = ["caller=unattended", f"result_path={layout.runs_root / 'r.result.json'}"]
+    findings = launch(layout, overrides=overrides, profile_path=path)
+    assert "SUMO_HOME" in only(findings, 36).message
+    profile["environment"] = ["SUMO_HOME", "PATH"]
+    path.write_text(json.dumps(profile), encoding="utf-8")
+    assert 36 not in checks(launch(layout, overrides=overrides, profile_path=path))
+
+
+def test_an_expectation_that_disagrees_is_refused_naming_both(layout):
+    findings = launch(layout, overrides=[
+        'expect={"launch_echo.civil.begin": "2026-03-21T23:00:00-07:00"}'])
+    finding = only(findings, 35)
+    assert "23:00:00" in finding.message and "07:00:00" in finding.message
+
+
+def test_an_expectation_that_holds_changes_nothing(layout):
+    findings = launch(layout, overrides=[
+        'expect={"launch_echo.civil.begin": "2026-03-21T07:00:00-07:00", '
+        '"capture.capture_hz": 2.0, "launch_echo.sun.at_begin.elevation_deg": {"at_most": 6.0}}'])
+    assert findings.findings == []
+
+
+def test_an_expectation_bound_that_fails_is_refused(layout):
+    findings = launch(layout, overrides=[
+        'expect={"launch_echo.sun.at_begin.elevation_deg": {"at_least": 10.0}}'])
+    assert 35 in checks(findings)
+
+
+def test_an_expectation_naming_nothing_is_refused(layout):
+    findings = launch(layout, overrides=['expect={"launch_echo.civil.begun": "x"}'])
+    assert "neither a configuration field" in only(findings, 35).message
+
+
+# -- the server checks -------------------------------------------------------------------------------------------
+
+class _Blueprint:
+    def __init__(self, blueprint_id: str, attributes: set[str]) -> None:
+        self.id = blueprint_id
+        self._attributes = attributes
+
+    def has_attribute(self, name: str) -> bool:
+        return name in self._attributes
+
+
+class _Library:
+    def __init__(self, blueprints: list[_Blueprint]) -> None:
+        self._blueprints = blueprints
+
+    def find(self, blueprint_id: str) -> _Blueprint:
+        for blueprint in self._blueprints:
+            if blueprint.id == blueprint_id:
+                return blueprint
+        raise KeyError(blueprint_id)
+
+    def __iter__(self):
+        return iter(self._blueprints)
+
+
+class _World:
+    """A world that answers the server checks' two reads and refuses every write."""
+
+    RGB = {"image_size_x", "image_size_y", "fov", "sensor_tick", "post_process_profile"}
+    DEPTH = {"image_size_x", "image_size_y", "fov", "sensor_tick", "max_range"}
+
+    def __init__(self, sun=True, rgb=None, depth=None, vehicles=("vehicle.lincoln.mkz",
+                                                                "vehicle.dodge.charger")) -> None:
+        self.sun = {"solar_time": 12.0} if sun else None
+        self.library = _Library([_Blueprint("sensor.camera.rgb", self.RGB if rgb is None else rgb),
+                                 _Blueprint("sensor.camera.depth",
+                                            self.DEPTH if depth is None else depth),
+                                 *(_Blueprint(v, set()) for v in vehicles)])
+
+    def get_solar_state(self):
+        return self.sun
+
+    def get_blueprint_library(self):
+        return self.library
+
+    def __getattr__(self, name):
+        raise AssertionError(f"the server checks called world.{name}")
+
+
+def server(layout, world, document=None, overrides=()):
+    effective = resolve(layout, document, overrides)
+    return RunConfigurationValidator().validate_against_server(effective, world)
+
+
+def test_the_server_checks_pass_against_a_world_that_has_what_the_run_needs(layout):
+    assert server(layout, _World()).findings == []
+
+
+def test_a_world_with_no_sun_is_refused(layout):
+    assert "no CesiumSunSky" in only(server(layout, _World(sun=False)), 23).message
+
+
+def test_a_world_with_no_sun_is_accepted_when_nothing_needs_one(layout):
+    findings = server(layout, _World(sun=False), overrides=["solar.policy=ignore",
+                                                            "solar.require_sun=false"])
+    assert 23 not in checks(findings)
+
+
+def test_a_camera_attribute_the_build_lacks_is_refused_by_name(layout):
+    findings = server(layout, _World(rgb=_World.RGB - {"post_process_profile"}))
+    assert "post_process_profile" in only(findings, 24).message
+
+
+def test_the_depth_camera_is_checked_only_when_occlusion_is_measured(layout):
+    world = _World(depth=_World.DEPTH - {"max_range"})
+    assert "max_range" in only(server(layout, world), 24).message
+    assert 24 not in checks(server(layout, world, overrides=["occlusion.enabled=false"]))
+
+
+def test_a_vehicle_blueprint_the_server_lacks_is_refused(layout):
+    findings = server(layout, _World(vehicles=("vehicle.lincoln.mkz",)))
+    assert "vehicle.dodge.charger" in only(findings, 25).message
+
+
+# -- pre-roll -----------------------------------------------------------------------------------------
+
+def test_a_prewarm_that_fell_below_the_floor_refuses_the_window(layout):
+    effective = resolve(layout, overrides=["pacing.mode=wall_clock",
+                                           "pacing.min_achieved_factor=0.8"])
+    assert RunConfigurationValidator.preroll_pace(effective, 0.31).by_check(44)
+    assert not RunConfigurationValidator.preroll_pace(effective, 0.95).findings
+    assert not RunConfigurationValidator.preroll_pace(resolve(layout), 0.1).findings

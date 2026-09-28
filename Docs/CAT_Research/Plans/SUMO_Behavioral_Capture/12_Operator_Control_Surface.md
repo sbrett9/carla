@@ -1,11 +1,14 @@
 # 12 — The operator control surface
 
-**Status:** Plan section. Specification of a control surface. Of the classes in §3.9,
-`ChannelDescription`, `StareAim` and the camera follower are built; the rest are not. Every measurement in §1 was taken read-only by introspecting
+**Status:** Plan section. Specification of a control surface. Built: `run_capture` and every class in
+§3.9 but `WorldBuildConfiguration`, with the source-tree launchers of §10 on both platforms; §3.9, §5.2
+and §6.2.1 say what each built piece does and what it has no source for. The distribution launchers
+are not built. Every measurement in §1 was taken read-only by introspecting
 the live parser object and grepping the live source tree on 2026-09-18; the further measurements in
 §3.5, §3.10.1, §3.10.2, §5.2 and §7.6 were taken the same way, and each says where.
 **Date:** 2026-09-18
 **Revisions:**
+`2026-09-28` — `run_capture` built: layered resolution, validation, echo, capture, result, termination, monitor, both launchers.
 `2026-09-25` — Stare pose and orbit centre fields; `ChannelDescription` and the camera follower built.
 `2026-09-18` — Termination under external kill made first class; aggregate verdict removed; in-run observability stated.
 `2026-09-18` — Unattended caller, live-exercise pacing and transcript, exposure-profile correction.
@@ -443,25 +446,37 @@ is itself a valid run configuration.** Reproducing a run is reading it back, not
 
 ### 3.7 What the effective configuration looks like
 
-One field, in full, to fix the shape:
+Four fields, in full, to fix the shape. The document keys each field by its dotted path; this is
+`EffectiveRunConfiguration.to_document()` for a run given `--solar advance --set capture.render_cap=96`:
 
 ```jsonc
-"render_cap": {
-  "value": 128,
-  "layer": "scenario_package",
-  "provenance": "bahonar_pattern_of_life@a91c3f :: capture.render_cap",
-  "tool_default": 128,
-  "overridden": null
+"capture.render_cap": {
+  "value": 96, "layer": "operator_override", "provenance": "--set capture.render_cap=96",
+  "tool_default": 128, "overridden": null
 },
-"solar": {
-  "policy":  { "value": "advance", "layer": "tool_default", "tool_default": "advance" },
-  "epoch":   { "value": {"date": "2026-03-04", "time_zone": "+03:30", "t0_civil": "00:00:00"},
-               "layer": "scenario_package", "provenance": "bahonar…@a91c3f :: epoch" },
-  "rate":    { "value": 1.0, "layer": "pinned_by_policy", "note": "advance pins rate to 1.0; see 12 D12.8" },
-  "vehicle_lights": { "value": "from_sumo", "layer": "run_configuration",
-                      "note": "conditional requirement: window sun elevation reaches -11.4 deg" }
+"solar.policy": {
+  "value": "advance", "layer": "operator_override", "provenance": "--solar advance",
+  // no "tool_default" key: the policy has no tool default (§4.4)
+  "overridden": [ { "layer": "scenario_package", "value": "freeze_at_window_start",
+                    "provenance": "scenario gardnerville_fixture@d0bffc2099d8 :: illumination.policy" } ]
+},
+"solar.rate_sun_s_per_sim_s": {
+  "value": 1.0, "layer": "pinned_by_policy",
+  "provenance": "advance pins the rate to one sun-second per simulated second (12 D12.8)",
+  "tool_default": null, "overridden": null
+},
+"solar.freeze_date_advances": {
+  "value": null, "layer": "not_applicable",
+  "provenance": "--solar advance set policy 'advance', which does not take it",
+  "dropped": [ { "layer": "scenario_package", "value": false,
+                 "provenance": "scenario gardnerville_fixture@d0bffc2099d8 :: illumination.freeze_date_advances" } ]
 }
 ```
+
+A field's `layer` is one of the six of §3.5, or `derived` (the world package's path, from the site
+profile's root and the name the scenario lock records), `pinned_by_policy`, `not_applicable` (a field
+the chosen mode or policy does not take) or `unsupplied` (no layer gave a value; check 2 refuses it).
+A value read from an environment variable carries `environment_variable`.
 
 Three properties, each doing a job:
 
@@ -481,21 +496,32 @@ common cases, in full:
 
 ```
 run_capture --scenario bahonar_pattern_of_life --window night_shift
-run_capture --scenario bahonar_pattern_of_life --window night_shift --solar freeze
+run_capture --scenario bahonar_pattern_of_life --window night_shift --solar freeze_at_window_start
 run_capture --run configs/bahonar_night_sweep.run.json
 run_capture --run configs/bahonar_night_sweep.run.json --set capture.render_cap=192
-run_capture --replay manifests/cap-20260105-2300/manifest.json
+run_capture --run runs/cap-20260105-230000-1f2e3d/run.effective.json
 ```
 
-Everything else is either declared by the scenario (the epoch, the windows, the step, the supervision
-plan), fixed by the site profile (host, ports, roots), or bound by the world package (origin, digest).
-`--window` takes a name the scenario declared or an explicit `begin_s:end_s` pair — which is
+`run_capture` is `CarlaControl/scripts/run_capture.py`, launched on either platform by
+`Scripts/Windows/RunCapture.ps1` or `Scripts/Linux/RunCapture.sh` (§10). The short options are
+generated from the fields that carry an alias — `--scenario` (`scenario_package`), `--window`
+(`capture.window`), `--solar` (`solar.policy`), `--caller`, `--caller-label` and `--result`
+(`result_path`) — and are applied before `--set`, which is applied in the order given. A run is
+reproduced by handing the effective configuration the run wrote beside its result back to `--run`
+(§3.6): it names the scenario by id, carries every binding, and resolves to the same digest.
+`--emit-run-configuration` (§9.5) and `--run-list` (§13 question 1) are not built.
+
+Everything else is either declared by the scenario (the epoch, the windows, the step, the seed, the
+illumination default), fixed by the site profile (host, port, the paths), or bound by the world package
+(origin, digest). `--window` takes a name the scenario declared or an explicit `begin_s:end_s` pair — which is
 [`01`](01_Architecture.md) open question 3's and [`02`](02_Use_Cases.md) open question 2's recommended
 answer, adopted here and recorded as D12.4 so those two can be closed together.
 
 There is deliberately **no** `--dry-run`. Validation is not optional and not a mode: §6's phase 0 runs
-on every launch, and a `--validate-only` flag stops after it. The difference matters because a
-`--dry-run` that people forget to use is theatre.
+on every launch, and a `--validate-only` flag stops after it — writing the resolution report and the
+lock, exiting 0 when the offline checks accept, and writing a `refused_offline` result when they
+do not. The
+difference matters because a `--dry-run` that people forget to use is theatre.
 
 **The unattended forms are the same line with the caller declared and a result path given**, because
 the machine's needs are two fields and a contract, not a second program (§3.10):
@@ -526,26 +552,32 @@ PascalCase, modern union hints, absolute imports outside the package, all import
 
 | File | Public class | Responsibility |
 |---|---|---|
-| `RunConfiguration.py` | `RunConfiguration` | The parsed, unresolved document. Schema-validated; knows nothing about worlds or servers |
-| `SiteProfile.py` | `SiteProfile` | Layer 2. Machine facts, discovered or read from one file per machine |
-| `RunConfigurationResolver.py` | `RunConfigurationResolver` | Applies layers 1–6 in order, records provenance per field, refuses an override of a binding |
-| `EffectiveRunConfiguration.py` | `EffectiveRunConfiguration` | The resolved, immutable object of §3.7. Serialises itself; is re-readable as layer 5 |
-| `RunConfigurationValidator.py` | `RunConfigurationValidator` | §6's checks, split by phase; emits refusals and warnings in [`07`](07_Scenario_Authoring.md) §5.2's vocabulary |
-| `LaunchEcho.py` | `LaunchEcho` | §6.4's pre-commit statement: computes the block, renders it for a human, and serialises it into the resolution report for a machine. One computation, two renderings |
-| `SessionMonitor.py` | `SessionMonitor` | §7.1's live view and §7.4's live-run variant; reads only fields the manifest also carries, and degrades to line-oriented logging when standard output is not a terminal |
-| `RunCloseoutReport.py` | `RunCloseoutReport` | §7.2's gate records. Computed continuously and renderable at any instant, not created at the end — a run that is killed has already published everything this would have rendered |
-| `RunResult.py` | `RunResult` | §3.10.3's result artifact, whose *fields* are [`04`](04_Contracts.md)'s `C10`. Written in **every** terminal outcome the tool survives, including a refusal that produced no session; the process exit status is read from it rather than computed beside it |
-| `RunTerminationSequence.py` | `RunTerminationSequence` | §3.10.2's ordered flush. Installed as the handler for every signal the platform delivers *and* as the session's `finally`, so one code path serves a stop, a signal and a fault. Idempotent, time-boxed at every step, and re-entrant: a second signal abandons the remaining steps |
+| `RunConfiguration.py` | `RunConfiguration` | **Built.** The parsed, unresolved document (layer 5), and the one field table every layer is checked against: each field's path, shape, tool default, mutability class and help. Publishes `CarlaControl/schemas/run_configuration.schema.json` and generates `run_capture --help`. Knows nothing about worlds or servers |
+| `SiteProfile.py` | `SiteProfile` | **Built.** Layer 2. Machine facts, read from a site-profile file when one is named, otherwise derived from the layout the tool runs from; every value names its source and, where it was read from an environment variable, the variable |
+| `RunConfigurationResolver.py` | `RunConfigurationResolver` | **Built.** Applies layers 1–6 in order, records provenance per field, refuses an override of a binding |
+| `EffectiveRunConfiguration.py` | `EffectiveRunConfiguration` | **Built.** The resolved, immutable object of §3.7. Serialises itself; is re-readable as layer 5 |
+| `RunConfigurationValidator.py` | `RunConfigurationValidator` | **Built.** §6's checks, split by phase; emits refusals and warnings in [`07`](07_Scenario_Authoring.md) §5.2's vocabulary — the compiler's own `CompileFinding` |
+| `LaunchEcho.py` | `LaunchEcho` | **Built.** §6.4's pre-commit statement: computes the block, renders it for a human, and serialises it into the resolution report for a machine. One computation, two renderings |
+| `RunConfigurationCheckCatalogue.py` | `RunConfigurationCheckCatalogue` | **Built.** §6.2's checks by their stable numbers, each with the phase it runs in and where it is carried out (§6.2.1) |
+| `RunConfigurationFindings.py` | `RunConfigurationFindings` | **Built.** One launch's findings: the compiler's `CompileFinding`, cited against this catalogue, with a warning's `on_warning` code |
+| `ScenarioPackage.py` | `ScenarioPackage` | **Built.** A compiled scenario re-bound by its lock rather than recompiled: the lock's layer-4 declarations, and a refusal of any file the lock no longer digests (check 49) |
+| `SessionMonitor.py` | `SessionMonitor` | **Built.** §7.1's live view and §7.4's `pace` row; formats `RunCloseoutReport`'s snapshot and holds no reference to the session or a recorder, and degrades to line-oriented logging when standard output is not a terminal |
+| `RunCloseoutReport.py` | `RunCloseoutReport` | **Built.** The one computation of what a run has established — a snapshot of the session and the recorders at any instant — and §7.2's gate records read from it. With no run manifest to append to, the records reach disk in `RunResult` at the terminal outcome (§7.2) |
+| `RunResult.py` | `RunResult` | **Built.** §3.10.3's result artifact. Written in **every** terminal outcome the tool survives, including a refusal that produced no session, to a temporary name renamed into place; the process exit status is read from its outcome rather than computed beside it |
+| `RunTerminationSequence.py` | `RunTerminationSequence` | **Built.** §3.10.2's ordered flush. Installed as the handler for `SIGINT`, `SIGTERM` and, on Windows, `SIGBREAK` *and* run as the session's `finally`, so one code path serves a stop, a signal and a fault. Idempotent, time-boxed at every step that can block on the server, and re-entrant: a second signal abandons the remaining steps |
 | `WorldBuildConfiguration.py` | `WorldBuildConfiguration` | §9.2's single definition of the 24 world-build inputs, produced by both front ends |
 | `ChannelDescription.py` | `ChannelDescription` | **Built.** One camera channel: §5.2's per-channel fields and their defaults, defined once and validated on construction. §9.2's typed channel description |
 | `StareAim.py` | `StareAim` | **Built.** The pose a stare channel holds, from a look-at point or an explicit pose |
 | `CameraFollower.py` | `CameraFollower` | **Built.** A viewer that places one camera from a `ChannelDescription` and shows its picture live; a camera-follower process in [`01`](01_Architecture.md) D1.1's sense — it never cues, never writes episode settings, and never records ([`08`](08_Collection_And_EPoL.md) §3.4). Its camera, window and frame-stall notice are `FollowerCamera`, `FollowerWindow` and `FrameStallWatch` |
-| `scripts/run_capture.py` | — | Thin `main`: resolve, validate, construct `CaptureSession`, run, close out |
+| `CaptureSession.py` | `CaptureSession` | **Built.** One capture run, [`01`](01_Architecture.md) §2.3's component in the process that drives the world: it resolves and validates the invocation, prints the echo, writes the resolution report and the lock, starts `SumoDriveSession`, places each channel's cameras, prewarms, starts one recorder per channel under one session id, advances the window, and ends through `RunTerminationSequence` |
+| `scripts/run_capture.py` | — | **Built.** Thin `main`: parses the command line, discovers the site profile, constructs `CaptureSession`, runs it, and returns the exit status its `RunResult` carries |
 | `scripts/run_camera_follower.py` | — | **Built.** Thin `main` for `CameraFollower` |
 
-`CaptureSession`, `PlaybackClock`, `RenderSetSelector`, `RunManifestWriter` and `SumoSession` are
-[`01`](01_Architecture.md) §2.3's components and are not redefined here; this section constructs them
-and hands them one object.
+`PlaybackClock`, `RenderSetSelector` and `SumoSession` are [`01`](01_Architecture.md) §2.3's
+components; in the tree they are one object, `CarlaNet.CoSim.SumoDriveSession`, which
+`CaptureSession` constructs with the effective configuration's values. `RunManifestWriter` is not
+built: no run manifest is written, so the monitor, the gate records and the run result read the
+session and the recorders directly (§7.1, §7.2).
 
 ### 3.10 The caller that starts us and stops us
 
@@ -703,6 +735,25 @@ Three things about that table are deliberate.
   configuration — the world is busy — and that is legible because the result names the holder, not
   because this section recommends anything.
 
+**As built** (`RunResult`, `CaptureSession`):
+
+- `usage_error` is every refusal raised while the invocation is read and resolved — checks 1, 3, 16,
+  38 and 49 (§6.2.1): an unknown key, a malformed override, an override of a binding, a scenario or
+  world package that cannot be bound. A missing `scenario_package` is check 2, `refused_offline`.
+- `refused_server` also covers a server that cannot be reached, and every refusal the session raises
+  while starting other than the two typed ones (§6.3 says why that is coarser than this table).
+- A run that stops for any reason carries `closed_by`, one of: `window_end` and `scenario_end`
+  (with `run_finished`); `signal:SIGINT`, `signal:SIGTERM`, `signal:SIGBREAK`, `operator_stop`,
+  `loud:recorder_dropped`, `loud:pace_below_floor`, `write_headroom`, and `fault:<exception>` for a
+  refusal the session raises mid-window — the world producing no frame, the solar audit failing, SUMO
+  ending — (with `run_stopped`); `aborted_at_preroll` (with `refused_preroll`). A run whose window
+  declares no end closes with `scenario_end`, whether SUMO ran out of vehicles or the scenario's
+  declared end was reached.
+- A signal is acted on at the next SUMO step boundary: the Python handler runs when the blocking
+  `Advance` call returns, so at most one step is rendered after it arrives. On Windows, `taskkill`
+  without `/F` delivers nothing a Python process can catch; a caller stops a run with Ctrl+C or with
+  `CTRL_BREAK_EVENT` sent to the run's process group.
+
 ```mermaid
 stateDiagram-v2
     direction LR
@@ -792,6 +843,31 @@ around it**, which is four rules:
 }
 ```
 
+**As built**, `RunResult` carries `result_version`, `outcome`, `exit_status`, `closed_by`, a one-line
+`detail`, `caller`, `caller_label`, `session_id`, `tool_version`, `schema_version`,
+`effective_configuration_digest`, the paths of the `resolution_report`, the `lock` and the replayable
+`effective_configuration`, the `launch_echo`, `authority_holder`, `refusals`, `warnings` (each with
+its `adjudication` and `adjudicated_by`), `expectations_declared` (§13 question 9's recommendation),
+and `produced`: the capture directory, `closed_by`, the window (`begin_s`, `end_declared_s`,
+`end_reached_s`, where the end came from, and the civil instants of the begin and the end reached),
+each channel's counters, the gate records, the session's clock, SUMO release, pace, sun and layers,
+the prewarm's achieved factor, the run id every recorder was given, and each termination step as it
+ran. Three differences from the sketch above, each a fact about the tree:
+
+- **One root, not two.** The recorder writes a capture's image and sidecar into one directory, so
+  `produced` names `capture_directory`, with one directory per channel inside it.
+- **`captured` is null.** The recorder counts captures written (`Saved`) and captures its queue had no
+  room for (`Dropped`), and none accepted into the queue, so the difference a kill leaves (K4) cannot
+  be stated; the gate `capture.captured_minus_written` is recorded as skipped with that reason.
+- **The gate records are written once, at the terminal outcome.** There is no run manifest to append
+  them to as they change (§7.2), so a run killed with no chance to flush leaves its lock, its resolution
+  report and its captures, and no gate records.
+
+`C10`'s `run_record.jsonl` is not written. `C10` makes it the run manifest's owner's to write, and
+most of its required rows project the run manifest, which does not exist; its `run_closed.completion`
+values also have no counterpart for a window's declared end or for a loud condition's self-stop, which
+`closed_by` above carries.
+
 Four properties, each the machine's version of something §7.2 does for a reader:
 
 - **`produced` is a pointer set, not a copy** (rule 3 above).
@@ -866,85 +942,89 @@ merely annoying: the record is trustworthy and the value in it is wrong.
 
 ### 4.3 How an operator expresses it
 
-One block, four fields, in the run configuration:
+The `solar` block of the run configuration is the scenario's `illumination` object
+([`04`](04_Contracts.md) C9 §11.5), field for field, because that object is what the session reads
+(`CarlaNet.CoSim.IlluminationPolicy`) and a second vocabulary beside it would be a second thing to
+disagree with:
 
 ```jsonc
 "solar": {
-  "epoch": null,                  // layer 4 only; an operator override here is a refusal
-  "policy": "advance",            // advance | freeze | accelerated
-  "freeze_at": "window_start",    // policy=freeze only: window_start | an explicit civil time
-  "vehicle_lights": null          // off | from_sumo ; conditional requirement, see 4.4
+  "policy": "freeze_at_window_start",   // freeze_at_window_start | advance | freeze_at | ignore
+  "rate_sun_s_per_sim_s": null,         // advance only; pinned to 1.0 in a capture run
+  "freeze_at_civil_time": null,         // freeze_at only: HH:MM:SS
+  "freeze_date_advances": false,        // a freeze only: whether the sun's date follows the calendar
+  "require_sun": null,                  // null means required
+  "note": "one lighting condition per window"
 }
 ```
 
-and one short alias, `--solar freeze | advance`, because it is the one field an operator flips run to
-run — which is the requirement [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3a item 2 states.
+Every field resolves at layer 4 from the scenario's illumination default — the compiler refuses a
+scenario that declares none ([`07`](07_Scenario_Authoring.md) check 39) — and a higher layer may
+override it, the override recorded against the value it replaced (§3.7). One short alias exists,
+`--solar <policy>`, because the policy is the one field an operator flips run to run — which is the
+requirement [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3a item 2 states. An illumination field that belongs
+to the policy an override replaced is dropped and recorded as dropped (`RunConfigurationResolver`),
+so `--solar advance` over a scenario that freezes does not carry `freeze_date_advances` into a policy
+that would refuse it.
 
-**The epoch is a binding, not a choice.** It comes from the scenario package (layer 4) and an operator
-cannot override it, for the same reason they cannot override the world digest: a scenario that asserts
-23:00 and a run that renders 12:00 produce a corpus that contradicts itself, and the whole point of
-§3.5's layer-3/4 distinction is to make that unrepresentable. Its shape — civil date, time zone, and
-the civil instant `t = 0` denotes — is [`11`](11_Time_And_Illumination.md)'s to define; §4.6 states
-what this section needs it to support.
+**The epoch is a binding, not a choice.** It comes from the scenario package (layer 4) as
+`scenario.epoch` and an operator cannot override it, for the same reason they cannot override the
+world digest: a scenario that asserts 23:00 and a run that renders 12:00 produce a corpus that
+contradicts itself, and the whole point of §3.5's layer-3/4 distinction is to make that
+unrepresentable. Its shape — civil date, time zone, and the civil instant `t = 0` denotes — is
+[`11`](11_Time_And_Illumination.md)'s to define; §4.6 states what this section needs it to support.
 
-**The three policies, and what each pins.**
+**The four policies, and what each pins in a capture run.**
 
-| Policy | Sun behaviour | `rate` | Permitted in |
+| Policy | Sun behaviour | `rate_sun_s_per_sim_s` | In a capture run |
 |---|---|---|---|
-| `advance` | Tracks simulated time. The session writes the sun for every tick at that frame's instant, with the engine's own advance off ([`11`](11_Time_And_Illumination.md) D11.19); the sun advances one sun-second per simulated second | **Pinned to 1.0**, not operator-settable | Any run |
-| `freeze` | Held at the window's civil instant (or at `freeze_at`). `set_solar_time(instant)`, `set_time_advance(False, …)` | n/a | Any run |
-| `accelerated` | `set_time_advance(True, rate)` with `rate ≠ 1.0` | Operator-set | **Refused for a capture run**; available in the interactive path (§9) |
+| `freeze_at_window_start` | Held at the civil instant of the first frame the session renders — the render prewarm's first, `capture.prewarm_s` before the window's begin — with its date held or following the calendar per `freeze_date_advances` | n/a | Permitted; the recommended policy ([`00`](00_Overview.md) §6) |
+| `advance` | Tracks simulated time. The session writes the sun for every tick at that frame's instant, with the engine's own advance off ([`11`](11_Time_And_Illumination.md) D11.19) | **Pinned to 1.0** (`pinned_by_policy`), not operator-settable (check 3); a scenario default at another rate is refused (check 15) | Permitted |
+| `freeze_at` | Held at `freeze_at_civil_time` whatever instant the window opens at | n/a | Permitted |
+| `ignore` | Left as the world holds it; the run's lighting honours no epoch | n/a | Permitted with a warning, `lighting_honours_no_epoch` (check 15) |
 
-`accelerated` exists today as `--time-rate` (`:264-270`) and is genuinely useful for look development
-— watching a site through a day in a minute. It is **refused for a capture run, not removed**, because
-under it the recorded `<_solar solar_time=…>` of successive frames no longer corresponds to the
-scenario's own clock, which is the precise contradiction this whole requirement exists to prevent.
-Confining a capability to the mode it is correct in is not losing it
-([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §4).
+An advancing sun at any rate other than 1.0 — `accelerated` in the interactive path, today's
+`--time-rate` (`:264-270`) — is genuinely useful for look development, watching a site through a day in
+a minute. It is **refused for a capture run, not removed**, because under it the recorded
+`<_solar solar_time=…>` of successive frames no longer corresponds to the scenario's own clock, which
+is the precise contradiction this whole requirement exists to prevent. Confining a capability to the
+mode it is correct in is not losing it ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §4).
 
-**What `rate = 1.0` means, pinned down.** `set_time_advance` "advances with the world tick"
-(`carlanet/__init__.py:1538-1540`), so under synchronous ticking the sun advances by
-`rate × world_delta_s` of sun-clock per cued tick. Under [`01`](01_Architecture.md) D1.1 the
-`PlaybackClock` cues the world exactly once per `world_delta_s` of simulated time and per D1.13 the
-SUMO step, the world delta and the capture rate are in integer ratio. Therefore **one tick is one
-`world_delta_s` of simulated time, and `rate = 1.0` makes one sun-second equal one simulated second —
-the same second the scenario's `t` counts in.** Any other rate breaks that identity. This is the
-statement [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3a asks for, and it holds only because the clock
-contract holds; §6 check 9 re-checks the ratio at launch for that reason.
+**What `rate = 1.0` means, pinned down.** Under [`01`](01_Architecture.md) D1.1 the session cues the
+world exactly once per `world_delta_s` of simulated time and per D1.13 the SUMO step, the world delta
+and the capture rate are in integer ratio. Therefore **one tick is one `world_delta_s` of simulated
+time, and `rate = 1.0` makes one sun-second equal one simulated second — the same second the
+scenario's `t` counts in.** Any other rate breaks that identity. This is the statement
+[`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3a asks for, and it holds only because the clock contract holds;
+§6 check 9 re-checks the ratio at launch for that reason.
 
-### 4.4 Defaults, and why `advance` is the safe one
+### 4.4 No default, and why the policy is always stated
 
-The default must be safe. Safe here means: **an operator who did not think about it does not get a
-record that is physically impossible.**
+A frozen run and an unconfigured run are byte-identical ([`06`](06_Truth_And_Annotation.md)), so the
+policy may never be absent: **there is no tool default** ([`00`](00_Overview.md) §6). The scenario
+states one, the compiler refuses a scenario that does not, and a run takes it or overrides it — so
+every run's policy has a provenance, and none is a default nobody chose.
 
-- Default `advance`: a 1,800 s window ([`10`](10_Scale_And_Performance.md) D10.3) advances the sun by
-  30 minutes. At dawn or dusk that is a visible illumination change across the window, and every
-  frame's `<_solar>` records it correctly. An operator who wanted a controlled constant gets a corpus
-  that varies slightly and *says so*, per frame, in two places.
-- Default `freeze`: illumination is constant and recorded as constant. An operator who wanted the
-  light to change gets 1,800 simulated seconds under a stationary sun — a state that cannot occur —
-  and nothing flags it, because a constant `<_solar>` block is exactly what `freeze` is supposed to
-  produce.
+The reason it must be stated rather than defaulted is the asymmetry between the two ways an unstated
+policy fails:
 
-The failure modes are asymmetric: one is a small, self-describing, correct variation; the other is an
-internally consistent physical impossibility. **Default `advance`.** `freeze` is a deliberate
-experimental control — hold illumination constant across a sweep so it is not a covariate — and a
-deliberate control should be asked for.
+- A run that wanted constant illumination and got an advancing sun: a 1,800 s window
+  ([`10`](10_Scale_And_Performance.md) D10.3) advances the sun by 30 minutes, visibly at dawn or dusk,
+  and every frame's `<_solar>` records it correctly — a small, self-describing variation.
+- A run that wanted changing light and got a frozen one: 1,800 simulated seconds under a stationary
+  sun — a state that cannot occur — and nothing flags it, because a constant `<_solar>` block is
+  exactly what a freeze is supposed to produce.
 
-**Vehicle lights are a conditional requirement.** Default `off`, which preserves today's behaviour
-exactly. But when the compiler computes the sun elevation across the requested window (it can: the
-epoch plus the window plus the world's origin latitude and longitude are all in hand before anything
-starts) and finds it below −6° — civil twilight — for any part of the window, **`vehicle_lights` has
-no default and the run is refused until it is stated**. Both values are then legitimate and neither is
-silent: a dark corpus with unlit vehicles is a deliberate choice, and a dark corpus with lit vehicles
-is a deliberate choice, but nobody gets either by forgetting. The cost of `from_sumo` is zero extra
-round trips — `SetVehicleLightStateCommand` rides the per-tick batch that
-[`03`](03_CoSimulation_Runtime.md) already issues (`carlanet/__init__.py:487, :1147`).
+`freeze_at_window_start` is the recommended value because a window is meant to be one lighting
+condition; it is recommended, not silent.
 
-*Inference, labelled:* brake and indicator state is the most detectable vehicle signature available to
-a night EO detector, so this choice plausibly dominates a night corpus's usefulness. That is an
-argument for making it explicit, which is what the conditional requirement does; it is not an argument
-for choosing it here, which belongs to whoever captures the first night window.
+**Vehicle lights are not offered.** The session writes no vehicle lamps — no light-state command is
+issued anywhere in `CarlaNet.CoSim` — so there is no `solar.vehicle_lights` field to state and check 14
+has nothing to compare. When lamps are built, the field is a conditional requirement: default `off`,
+and no default in a window whose sun falls below −6°, so that a dark corpus with unlit vehicles and a
+dark corpus with lit ones are both deliberate choices. *Inference, labelled:* brake and indicator state
+is the most detectable vehicle signature available to a night EO detector, so the choice plausibly
+dominates a night corpus's usefulness; it belongs to whoever captures the first night window.
 
 ### 4.5 What reaches the manifest
 
@@ -1028,85 +1108,90 @@ written before the first capture is the only evidence guaranteed to exist.
 
 ### 5.2 The inventory
 
-Defaults marked **—** have no default: the run is refused until the field is supplied (R5). Defaults
-marked **cond.** are conditional requirements (§3.5).
+Each row's first cell is a field's path in the run configuration, as `RunConfiguration.FIELDS`
+names it and the published schema (`CarlaControl/schemas/run_configuration.schema.json`) states it;
+its second is the tool default, which a test holds equal to the field table. Defaults marked **—** have
+no tool default: a package or the site profile supplies the value, or the run is refused until the
+field is supplied (R5). Defaults marked **cond.** are conditional requirements (§3.5). A row whose
+default reads *not offered* is a toggle this section specifies and the tree has nothing to set it on;
+the reason is given, and check 1 refuses the key.
 
 #### Mode and authority
 
-| Toggle | Values | Default | Class | Source |
-|---|---|---|---|---|
-| `mode` | `sumo_driven_playback` \| `traffic_manager_ambient` \| `storyboard_execution` \| `recorded_replay` | **—** | Session-fixed | [`01`](01_Architecture.md) §5.1 |
-| `ambient_traffic` | *not a field in `sumo_driven_playback`* | n/a | Bound | [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3 item 4 |
-| `storyboard` | path \| null | `null` | Session-fixed; refused with `sumo_driven_playback` until SUMO mirroring exists | [`01`](01_Architecture.md) §5.2 |
-| `caller` | `attended` \| `unattended` | `attended` | Session-fixed — a corpus whose warnings were adjudicated by a file is not the same object as one that was watched (§5.1) | §3.10, §6.4 |
-| `caller_label` | an opaque caller-supplied string | `null` | Session-fixed, recorded in the lock; **never interpreted by the tool**, and used only to derive a repeatable seed draw when the caller asks for one | §3.10.4 |
-| `world_build` | *not a field in a capture run* | n/a | **Bound** — a capture run binds a world package, it does not build one | §3.10.4; [`09`](09_Toolchain_And_Packaging.md) D9.9; [`02`](02_Use_Cases.md) UC-6 |
+| Toggle | Default | Class | Source |
+|---|---|---|---|
+| `mode` | **—** from the tool; a scenario package implies `sumo_driven_playback` (layer 4) | Session-fixed | [`01`](01_Architecture.md) §5.1. The schema names all four modes; check 4 refuses every one but `sumo_driven_playback`, and the traffic-manager path is `run_SCTMV.py` |
+| `ambient_traffic` | *not a field in `sumo_driven_playback`* | Bound | [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3 item 4; the session's population lease |
+| `storyboard` | *not offered*: `run_capture` runs `sumo_driven_playback` only, and storyboard execution under SUMO drive is refused until SUMO mirroring exists | — | [`01`](01_Architecture.md) §5.2 |
+| `caller` | `attended` | Session-fixed — a corpus whose warnings were adjudicated by a file is not the same object as one that was watched (§5.1) | §3.10, §6.4 |
+| `caller_label` | `null` | Launch provenance, recorded in the lock; **never interpreted by the tool** | §3.10.4 |
+| `scenario_package` | **—** | Session-fixed (the choice); its contents are Bound | a scenario id, found as `<id>/<id>.lock.json` under `paths.scenario_root`; a package directory; or its `.lock.json` |
+| `world_package` | `null` | Session-fixed (the choice); its contents are Bound | resolves, as `derived`, to the package the scenario lock names under `paths.world_package_root` |
+| `world_build` | *not a field in a capture run*; refused (check 38) | **Bound** — a capture run binds a world package, it does not build one | §3.10.4; [`09`](09_Toolchain_And_Packaging.md) D9.9; [`02`](02_Use_Cases.md) UC-6 |
 
 #### Pacing, live handover and transcript
 
 The drop policy is deliberately absent from this table as a choice: it is Bound (§5.1).
 
-| Toggle | Values | Default | Class | Source |
-|---|---|---|---|---|
-| `pacing.mode` | `as_available` \| `wall_clock` | `as_available` for a corpus, `wall_clock` for a live exercise | Session-fixed | [`08`](08_Collection_And_EPoL.md) §11.1 |
-| `pacing.real_time_factor` | float > 0; sun-and-world simulated seconds per wall-clock second | `1.0`; not a field under `as_available` | Session-fixed — an unevenly-paced run is a fact about the data ([`08`](08_Collection_And_EPoL.md) §11.1) | `SumoCotBridge.py:184-194`'s `real_time_factor`, exposed at `sumo_cot_telemetry.py:83` |
-| `pacing.min_achieved_factor` | float | **—** under `wall_clock` (§7.5 property L3) | Session-fixed | [`08`](08_Collection_And_EPoL.md) §11.1 |
-| `pacing.on_consumer_slow` | *not a field* | n/a | **Bound** to drop-oldest-and-count | [`08`](08_Collection_And_EPoL.md) §11.3, D8.23 |
-| `handover.enabled` | bool | `false` | Session-fixed — coverage's *covered but not delivered* flag ([`08`](08_Collection_And_EPoL.md) §11.3) is uninterpretable if the socket came and went mid-run | [`02`](02_Use_Cases.md) UC-8 |
-| `handover.endpoint` / `handover.transport` | address; transport name | **—** when `handover.enabled` | Session-fixed | [`08`](08_Collection_And_EPoL.md) §11.2 |
-| `handover.channels[]` | declared `sensor_id`s | all declared channels | Session-fixed | [`08`](08_Collection_And_EPoL.md) §11.2 |
-| `handover.queue_depth` | int | `1`, which makes drop-oldest immediate | Session-fixed — it sets the drop rate, and the drop rate is in the coverage record | [`08`](08_Collection_And_EPoL.md) §11.3 |
-| `transcript.enabled` | bool | `false` | Session-fixed — a gap in a transcript must mean *they said nothing*, never *we stopped listening* | [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c; [`02`](02_Use_Cases.md) UC-8 step 4, D2.24 |
-| `transcript.root` | path | **—** when enabled; **refused inside either corpus root** | Session-fixed | §7.4.3; [`08`](08_Collection_And_EPoL.md) D8.38's precedent |
-| `transcript.sources[]` | `{source_id, listen, content_type}` | **—** when enabled | Session-fixed | [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c — an opaque blob with a timestamp, a source id and a content type, and nothing else |
+| Toggle | Default | Class | Source |
+|---|---|---|---|
+| `pacing.mode` | `as_available` | Session-fixed | [`08`](08_Collection_And_EPoL.md) §11.1 |
+| `pacing.real_time_factor` | `1.0` | Session-fixed. Applies under `wall_clock`; under `as_available` it resolves `not_applicable` and a value given is refused (check 41) | the session's `real_time_factor` (`RealTimePacer`, [`03`](03_CoSimulation_Runtime.md) D3.25) |
+| `pacing.min_achieved_factor` | **cond.** — no default under `wall_clock` (§7.5 property L3); not a field under `as_available` | Session-fixed | checked against the prewarm (check 44) and loud while the run proceeds (§7.4.1) |
+| `pacing.window_s` | `5.0` | Session-fixed | the session's `pacing_window_s`, the wall-clock span the achieved factor is measured over |
+| `pacing.on_consumer_slow` | *not a field* | **Bound** to drop-oldest-and-count | [`08`](08_Collection_And_EPoL.md) §11.3, D8.23 |
+| `handover.enabled`, `handover.endpoint`, `handover.transport`, `handover.channels`, `handover.queue_depth` | *not offered*: no handover transport exists | — | [`02`](02_Use_Cases.md) UC-8; [`08`](08_Collection_And_EPoL.md) §11.2, §11.3 |
+| `transcript.enabled`, `transcript.root`, `transcript.sources` | *not offered*: no transcript writer exists | — | [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c; §7.4.3 |
 
 #### Bindings
 
+Every row here is supplied by a package and can be restated by a higher layer only with the package's
+own value (check 3). A replayed effective configuration carries them, so a replay against a package
+that has since changed is refused naming both values.
+
 | Toggle | Default | Class |
 |---|---|---|
-| `world_package` | **—** | Session-fixed (the choice); its contents are Bound |
-| `scenario_package` | **—** in `sumo_driven_playback` | Session-fixed (the choice); its contents are Bound |
-| `world_digest`, `network_fingerprint`, `origin_lat`, `origin_lon`, `staging_rect`, `netconvert_argv`, `netconvert_version` | from the world package | **Bound** |
-| `catalogue_version`, `vocabulary_version`, `supervision_plan` | from the packages | **Bound** |
-| `sumo_step_s` | from the scenario | **Bound** |
+| `world.map_name`, `world.network_fingerprint`, `world.opendrive_sha256`, `world.origin_latitude`, `world.origin_longitude`, `world.netconvert_version` | **—**: the world package's `world.json` | **Bound** |
+| `scenario.scenario_id`, `scenario.lock_sha256`, `scenario.epoch`, `scenario.epoch_block_sha256`, `scenario.sumo_step_s`, `scenario.sumo_seed`, `scenario.end_s`, `scenario.catalogue_digest` | **—**: the scenario lock | **Bound** |
+| the vocabulary and the supervision plan | not fields: the lock digests the supervision plan and the files that carry the vocabulary, and check 49 refuses a file it no longer digests | **Bound** |
 
 #### Clock and window
 
 | Toggle | Default | Class | Source |
 |---|---|---|---|
-| `world_delta_s` | `0.05` | Session-fixed | today's `--fixed-delta` (`:68-74`) |
-| `capture_hz` | `2.0` | Session-fixed; **Degradation-only** downward | today's `--record-hz` (`:512-518`); [`10`](10_Scale_And_Performance.md) §7 row 4 |
-| `synchronous` | `true`, and not a field in a capture run | **Bound** | [`10`](10_Scale_And_Performance.md) D10.10 |
-| `window` | **—** (a scenario-declared name, an explicit `begin_s:end_s` pair, or an explicit `begin_s:` with no end) | Session-fixed | [`01`](01_Architecture.md) OQ3 / [`02`](02_Use_Cases.md) OQ2, resolved as D12.4 |
-| `window.end_s` | absent means **no declared end**: the run continues until the scenario ends or the caller stops it. Nothing in this surface depends on an end existing | Session-fixed | D12.35 |
-| `prewarm_s` | `300` | Session-fixed | [`10`](10_Scale_And_Performance.md) §8 |
+| `capture.world_delta_s` | `0.05` | Session-fixed | today's `--fixed-delta` (`:68-74`) |
+| `capture.capture_hz` | `2.0` | Session-fixed; **Degradation-only** downward when the shedding ladder exists | today's `--record-hz` (`:512-518`); [`10`](10_Scale_And_Performance.md) §7 row 4 |
+| `synchronous` | *not a field in a capture run*: the session takes the world's clock | **Bound** | [`10`](10_Scale_And_Performance.md) D10.10 |
+| `capture.window` | **—** (a scenario-declared name, an explicit `begin_s:end_s` pair, or `begin_s:` with no end) | Session-fixed | [`01`](01_Architecture.md) OQ3 / [`02`](02_Use_Cases.md) OQ2, resolved as D12.4. A window with no end resolves to the scenario's `end_s`, and the echo says so |
+| `capture.prewarm_s` | `300` | Session-fixed | [`10`](10_Scale_And_Performance.md) §8. The session fast-forwards SUMO to `begin_s − prewarm_s`, renders from there, and the recorders start at `begin_s` |
 
 #### Render set
 
 | Toggle | Default | Class | Source |
 |---|---|---|---|
-| `render_region` | **—** (never defaulted) | Session-fixed | [`10`](10_Scale_And_Performance.md) D10.5 |
-| `render_cap` | `128` | Session-fixed | D10.4 |
-| `render_cap_hard` | `192` | Session-fixed | D10.4 |
-| `entry_lead_m` / `exit_lag_m` / `exit_lag_s` | `200` / `100` / `5.0` | Session-fixed | §8 |
-| `frustum_lead_s` / `aoi_halo_m` | `3.0` / `50` | Session-fixed | §8 |
-| `aoi_max_relations_per_vehicle` | `4` | Session-fixed | D10.8 |
-| `rendered_fraction_floor` | from the scenario; **—** if the scenario declares none | Session-fixed | [`10`](10_Scale_And_Performance.md) §7 |
+| `capture.render_region` | **—** (never defaulted): `x_m`, `y_m` in CARLA's frame, `radius_m` | Session-fixed | [`10`](10_Scale_And_Performance.md) D10.5; the session's region, whose y is negated once at the call |
+| `capture.render_hysteresis_m` | `60.0` | Session-fixed | the session's `hysteresis_m`: how much further out a rendered vehicle is released |
+| `capture.render_cap` | `128` | Session-fixed | D10.4; the session's `capacity` |
+| `capture.render_cap_hard` | `192` | Session-fixed | D10.4; the session's `maximum_bodies` |
+| `capture.road_layer_visible`, `capture.signal_layer_visible` | `false`, `false` | Session-fixed; written once by the session before the first tick and given back on every exit path | [`13`](13_Work_Breakdown.md) §10, `LayerVisibilityLease` |
+| `entry_lead_m`, `exit_lag_m`, `exit_lag_s`, `frustum_lead_s`, `aoi_halo_m`, `aoi_max_relations_per_vehicle` | *not offered*: the session's render set is a circle with a release hysteresis, and none of these exists in it | — | [`10`](10_Scale_And_Performance.md) §8, D10.8 |
+| `rendered_fraction_floor` | *not offered*: the session publishes no rendered fraction | — | [`10`](10_Scale_And_Performance.md) §7 |
 | admission priority order | not a field — the selector's rule | Bound | [`01`](01_Architecture.md) D1.14 |
 
 #### Camera rig — per channel
 
 | Toggle | Default | Class | Source |
 |---|---|---|---|
+| `capture.channels` | **—**: one object per channel, at least one | Session-fixed; every channel is recorded | the rows below are each object's fields |
 | `sensor_id` | **—** when more than one channel | Session-fixed | [`08`](08_Collection_And_EPoL.md) D8.4 |
 | `pattern` | `stare` | Session-fixed; a camera is not re-aimed during an interval it covers | [`08`](08_Collection_And_EPoL.md) §3.3, D8.16a |
 | `fov` / `width` / `height` | `90.0` / `1280` / `720` | Session-fixed | today's `:236, :272-273` |
 | `capture_rgb` | `true` | Bound — a channel without it is not a channel | [`08`](08_Collection_And_EPoL.md) D8.2 |
-| `capture_depth` | `true` for a corpus, `false` for a live exercise | Session-fixed | D8.2 |
-| `capture_segmentation` | `false` | Session-fixed | [`08`](08_Collection_And_EPoL.md) OQ2 |
-| `depth_max_range_m` | `20000.0` | Session-fixed | `:274-285`; and see §1.5's divergent second default |
-| `sensor_tick` | `1 / capture_hz`, gated on measurement M1 | Session-fixed | set nowhere today; `ActorBlueprintFunctionLibrary.cpp:248` |
-| `post_process_profile` | `Default` (EV100 +12.32, measured by [`08`](08_Collection_And_EPoL.md) §2.9) | Session-fixed, and **recorded as the digest of the JSON the server actually loaded**, not as the name that was asked for | [`08`](08_Collection_And_EPoL.md) D8.27, D8.28; see the correction below |
+| `capture_depth` | *not offered*: the recorder writes no depth imagery; a depth camera is spawned at a stare channel's pose only to measure occlusion (`occlusion.enabled`) | — | D8.2 |
+| `capture_segmentation` | *not offered*: the recorder writes no segmentation | — | [`08`](08_Collection_And_EPoL.md) OQ2 |
+| `depth_max_range_m` | *not offered per channel*: `occlusion.depth_max_range_m`, one range for every depth camera | — | `:274-285`; and see §1.5's divergent second default |
+| `sensor_tick` | *not a field*: `1 / capture_hz` on every camera, so a camera renders only the frames the recorder keeps | Session-fixed | `ActorBlueprintFunctionLibrary.cpp:248`; check 10 holds by construction |
+| `post_process_profile` | `Default` (EV100 +12.32, measured by [`08`](08_Collection_And_EPoL.md) §2.9) | Session-fixed. Set on the camera by name, spelt with the file's own case; the digest of the JSON the server loaded is not readable, so check 43 is not built | [`08`](08_Collection_And_EPoL.md) D8.27, D8.28; see the correction below |
 | `exposure` (a numeric exposure value) | **not offered** — no numeric exposure attribute exists on any camera blueprint (§1.3) | — | measured; check 16 names `post_process_profile` as the field that does the job |
 | `orbit_radius_m`, `orbit_altitude_m`, `orbit_period_s` | `200.0`, `518.2`, `240.0` | Session-fixed | today's `:598-615`, **converted to metres** (§1.5) |
 | `orbit_centre_x_m`, `orbit_centre_y_m` | **cond.** — required when `pattern` is `orbit`; refused with `stare` | Session-fixed | today's `--orbit-x` / `--orbit-y`, which fall back to the start pose when absent (`OrbitSensorController.py:235-242`) |
@@ -1126,9 +1211,9 @@ picture. An orbit circles its centre at `orbit_radius_m`, `orbit_altitude_m` abo
 `orbit_centre_z_m`, with the boresight held on the centre. A field the chosen pattern would ignore is
 refused rather than dropped. The single definition of every row in this table that is built is
 `ChannelDescription` (`CarlaControl/src/carlacontrol/ChannelDescription.py`), whose defaults a test
-holds equal to this table; the stare geometry is `StareAim`. `capture_rgb`, `capture_depth`,
-`capture_segmentation`, `depth_max_range_m`, `sensor_tick` and `post_process_profile` are not yet in
-it — they arrive with §9.2's `SensorRig` conversion, which has not been made.
+holds equal to this table; the stare geometry is `StareAim`. `post_process_profile` is not yet in it:
+it is a field of a run configuration's channel object, defined once in `RunConfiguration`, until
+§9.2's `SensorRig` conversion moves it into the description.
 
 **`post_process_profile` is the exposure control, and its default is a hidden host-dependent value of
 exactly the kind M2 forbids.** No camera blueprint publishes a *numeric* exposure attribute (§1.3), but
@@ -1160,46 +1245,53 @@ it was asked for rather than what it did will eventually be asked for something 
 
 #### Solar
 
+The `solar` block is the scenario's `illumination` object, field for field (§4.3).
+
 | Toggle | Default | Class | Source |
 |---|---|---|---|
-| `solar.epoch` | from the scenario; **—** if absent | **Bound** | §4.3 |
-| `solar.policy` | `advance` | Session-fixed | §4.4, D12.7 |
-| `solar.rate` | pinned `1.0` under `advance`; operator-set only under `accelerated`, which a capture run refuses | Bound under `advance` | §4.3, D12.8 |
-| `solar.freeze_at` | `window_start` | Session-fixed | §4.3 |
-| `solar.vehicle_lights` | `off`; **cond.** — no default when the window is darker than −6° | Session-fixed | §4.4 |
+| `solar.policy` | **—** from the tool; the scenario's illumination default (layer 4) | Session-fixed; an override is recorded against the value it replaced | §4.3, §4.4, D12.7 |
+| `solar.rate_sun_s_per_sim_s` | `null` | **Bound**: pinned to `1.0` under `advance`; not operator-settable (check 3); another rate refused (check 15) | §4.3, D12.8 |
+| `solar.freeze_at_civil_time` | `null` | Session-fixed; `freeze_at` only | [`04`](04_Contracts.md) C9 §11.5 |
+| `solar.freeze_date_advances` | `null` | Session-fixed; a freeze only | [`04`](04_Contracts.md) C9 §11.5 |
+| `solar.require_sun` | `null` | Session-fixed; `null` means required | check 23 |
+| `solar.note` | `null` | Session-fixed | [`04`](04_Contracts.md) C9 §11.5 |
+| `scenario.epoch` | **—**: the scenario lock | **Bound** | §4.3, D12.9 |
+| `solar.vehicle_lights` | *not offered*: the session writes no vehicle lamps | — | §4.4 |
 
 #### Telemetry and occlusion
 
 | Toggle | Default | Class | Source |
 |---|---|---|---|
-| `telemetry.enabled` | `false` | **Run-mutable** — it changes nothing about the corpus | today's `Y` hotkey (`PygameInterface.py:306`) |
-| `telemetry.host` / `port` / `ttl` / `rate_hz` / `stale_s` / `affiliation` | `239.2.3.1` / `6969` / `1` / `5.0` / `3.0` / `n` | Session-fixed | `:465-484` |
+| `telemetry.enabled`, `telemetry.host`, `telemetry.port`, `telemetry.ttl`, `telemetry.rate_hz`, `telemetry.stale_s`, `telemetry.affiliation`, `telemetry.truth_endpoint` | *not offered*: `run_capture` starts no Cursor-on-Target feed; each capture's truth is its sidecar | — | `:465-484` |
 | `telemetry.on_tick_thread` | `false`, and not a field | **Bound** | [`10`](10_Scale_And_Performance.md) D10.11 |
-| `telemetry.truth_endpoint` | `null` in a live exercise | Session-fixed | [`08`](08_Collection_And_EPoL.md) D8.23 |
-| `occlusion.enabled` | `true` | Session-fixed — **not** run-mutable (§5.1) | `:542-552`; [`08`](08_Collection_And_EPoL.md) D8.19 |
-| `occlusion.margin_m` / `occlusion.samples` | `1.0` / `24` | Session-fixed, recorded in the manifest | `:553-569`; [`08`](08_Collection_And_EPoL.md) OQ1 |
+| `occlusion.enabled` | `true` | Session-fixed — **not** run-mutable (§5.1). Measured on stare channels only; an orbit with it on is refused (check 47) | `:542-552`; [`08`](08_Collection_And_EPoL.md) D8.19 |
+| `occlusion.margin_m`, `occlusion.samples` | `1.0`, `24` | Session-fixed | `:553-569`; [`08`](08_Collection_And_EPoL.md) OQ1 |
+| `occlusion.depth_max_range_m` | `20000.0` | Session-fixed | `:274-285`; the depth camera's `max_range` |
 
-#### Roots, seeds, diagnostics
+#### Roots, seeds, the machine, diagnostics
 
 | Toggle | Default | Class | Source |
 |---|---|---|---|
-| `roots.observation` / `roots.truth` | derived from the site profile's base + session id; **—** if the two resolve equal or nested | Session-fixed | [`08`](08_Collection_And_EPoL.md) D8.17, [`04`](04_Contracts.md) D4.26 — **two roots, not three**: model output is neither produced nor consumed here, so no root holds it |
-| `seeds.sumo` / `seeds.appearance` / `seeds.admission` | **—** (explicit; no nondeterministic default) | Session-fixed | [`07`](07_Scenario_Authoring.md) D7.11 |
-| `log_path` | `<session_root>/session.log` | Session-fixed | today's `--log` (`:493-499`) |
-| `result_path` | `<session_root>/run.result.json`; **—** under `caller: unattended`, and refused inside either corpus root | Session-fixed, written once at the terminal outcome — and possibly never, because a kill with no chance to flush writes nothing (§3.10.2) | §3.10.3 |
-| `on_warning.<code>` | `proceed` in an attended run once the echo is acknowledged; **—** under `caller: unattended` for every code actually raised | Session-fixed — which warnings a corpus proceeded past is a fact a consumer needs (§5.1) | §6.4 |
-| `expect.<path>` | none declared | Session-fixed; recorded in the lock, never in the corpus description | §6.4 |
-| `write_headroom_floor` | `600` captured seconds | Session-fixed — the one bound the tool imposes on itself, because a full disk is physics rather than policy (check 46) | §6.2 check 46, D12.35 |
-| `diagnostics` | `off` | **Run-mutable** | today's `]` hotkey; `:439-449` |
-| `monitor` | `on`; line-oriented rather than a panel when standard output is not a terminal | **Run-mutable** | §7.1, §3.10.1 M1 |
+| `roots.observation`, `roots.truth` | *not offered*: the recorder writes a capture's image and its sidecar into one directory, so a run has one root, `paths.capture_root`, and the two-root split is stage K's (check 17 not built) | — | [`08`](08_Collection_And_EPoL.md) D8.17, [`04`](04_Contracts.md) D4.26 |
+| `paths.capture_root`, `paths.runs_root`, `paths.scenario_root`, `paths.world_package_root`, `paths.catalogue` | **—**: the site profile (layer 2) | Session-fixed | §3.5; a session writes `<paths.capture_root>/<session id>/<sensor_id>/` |
+| `server.host`, `server.port`, `server.timeout_s` | `127.0.0.1`, `2000`, `30.0` | Session-fixed; a site profile may set them | `run_sumo_drive.py`'s connection |
+| `sumo.home` | `null` | Session-fixed; the site profile names it, or the session searches `SUMO_HOME` and then `PATH` (check 36 refuses that under `caller: unattended`) | [`09`](09_Toolchain_And_Packaging.md) D9.6 |
+| `sumo.allow_version_mismatch` | `false` | Session-fixed; the session records an accepted mismatch | check 26 |
+| `seeds.sumo` | *not a run field*: `scenario.sumo_seed`, bound by the scenario package, whose SUMO configuration carries it | **Bound** | [`07`](07_Scenario_Authoring.md) D7.11 |
+| `seeds.appearance`, `seeds.admission` | *not offered*: nothing consumes them — appearance is drawn by SUMO's own seed and admission is the region's deterministic rule | — | [`07`](07_Scenario_Authoring.md) D7.11 |
+| `log_path` | *not offered*: `run_capture` logs to standard output | — | today's `--log` (`:493-499`) |
+| `result_path` | `null` | Session-fixed; `null` is `<paths.runs_root>/<session id>/run.result.json`; **—** under `caller: unattended`, and refused inside the capture root (check 40) | §3.10.3 |
+| `on_warning` | `{}` | Session-fixed — which warnings a corpus proceeded past is a fact a consumer needs (§5.1); **—** under `caller: unattended` for every code actually raised | §6.4 |
+| `expect` | `{}` | Launch provenance; recorded in the lock, never in the corpus description | §6.4 |
+| `write_headroom_floor_s` | `600` | Session-fixed — the one bound the tool imposes on itself, in captured seconds (check 46) | §6.2 check 46, D12.35 |
+| `diagnostics` | *not offered*: `run_capture` has no diagnostics output of its own | — | today's `]` hotkey; `:439-449` |
+| `monitor` | `on` | **Run-mutable**; line-oriented rather than a panel when standard output is not a terminal | §7.1, §3.10.1 M1 |
+| `run_configuration_version` | `1` | — | the schema version a document is written against |
 
-`seeds.*` having no default is a deliberate change from today, where `--seed` defaults to `None` and
-is documented "default: nondeterministic" (`:310-316`). A nondeterministic default is incompatible
-with R1. Today's behaviour is preserved by `--set seeds.sumo=random`, which resolves to a drawn value
-**and records the drawn value before the first capture**, so a run stopped at any instant afterwards is
-still explicable. Where `caller_label` is supplied the draw is a deterministic function of the
-effective-configuration digest and that label, so the same invocation can be repeated deliberately
-without first reading a manifest back (§3.10.4).
+**No run-level seed exists.** The only seed a run consumes is SUMO's, and it is the scenario's: the
+compiler writes it into the SUMO configuration the lock digests, so it cannot change without the
+traffic changing and the lock refusing the file. Checks 18 and 39 therefore hold by construction, and
+reproducible traffic follows from reproducible inputs rather than from a seed a run could vary.
 
 ### 5.3 The structural exclusions
 
@@ -1237,6 +1329,17 @@ re-bound by its lock rather than recompiled.
 Three things are inherited rather than re-specified: **refuse** means nothing is emitted and no session
 starts; **warn** means it proceeds and the warning appears in full in the report; and the report states
 what resolved, not only what was rejected.
+
+**As built**, the reuse is of the vocabulary and the validators rather than of one class.
+`RunConfigurationValidator` reports in the compiler's own finding record, `CompileFinding`, with its
+two outcomes; checks a field's shape with the scenario schema's validator
+(`ScenarioSchema.validate_against`); and calls the session's validators for the rules the session owns
+(`CoSimClock.ForSession`, `IlluminationPolicy.FromJson`, `SolarEpoch`). Its checks carry this
+section's numbers, in their own catalogue (`RunConfigurationCheckCatalogue`), because the compiler's
+numbers are a different stable sequence. The compiler's `ResolutionReport` names the scenario's
+sections only, so the run writes its own `<run>.resolution.json` — the findings, the launch echo, the
+effective configuration and the site profile — and its own `<run>.lock.json`, beside its result. A
+scenario is re-bound by its lock (`ScenarioPackage`), never recompiled.
 
 ### 6.2 The checks
 
@@ -1327,6 +1430,9 @@ the sequence rather than sitting inside a phase's table, and each states its own
 | 44 | 3 | Under `pacing.mode: wall_clock`, the pre-roll's achieved real-time factor is measured and compared against `min_achieved_factor` | refuse | `pre-roll held 0.31 of real time against a requested 1.0 and a floor of 0.8. A live exercise that cannot hold its rate should not open its window.` — the live analogue of check 21: predict before spending, not after |
 | 45 | 3 | Under `handover.enabled`, the handover transport opens, and every `transcript.sources[]` listener binds | refuse | `handover transport could not open tcp://…: connection refused. Nothing has been captured.` |
 | 46 | 0, then continuous | Write headroom under `roots.observation`, in **captured seconds** at the configured rate and channel count, stays above `write_headroom_floor` | refuse at launch when a declared window does not fit (check 19); **stop the run cleanly** when it falls below the floor while running | at launch `at 24 GB/h, 31 GB free at /data is 1 h 17 m of capture against a declared window of 8 h.`; while running `write headroom is 9 min of capture and the floor is 10 min; stopping cleanly at t=372 480 (closed_by: write_headroom).` |
+| 47 | 0 | Every channel is a valid `ChannelDescription`, and occlusion is measured only on a stare | refuse | `capture.channels[0]: channel description refused: a stare needs somewhere to look: give stare_look_at_x_m and stare_look_at_y_m, or all of stare_x_m, …` and `occlusion is measured against a depth camera held at the channel's pose, and an orbit moves its camera with one call at a time … Set occlusion.enabled false for a run with an orbit, or make this channel a stare` |
+| 48 | 0 | The catalogue at `paths.catalogue` is the one the scenario was compiled against | refuse | `…/vehicles.catalogue.json has catalogue_digest 771f…; scenario gardnerville@d0bf… was compiled against 0771…. The session would seat bodies of other dimensions than the routes were built for` |
+| 49 | resolution | The scenario package and the world package resolve, and the scenario's files are the ones its lock digests — a scenario compiled earlier is re-bound by its lock, not recompiled (§6.1) | refuse | `routes file gardnerville.rou.xml digests 5a1c…, not the 9c07… its lock recorded: it changed after the compile. Recompile the specification` |
 
 Checks 34, 35, 44 and 46 are the four that earn their place. **34 and 35 are §6.4's whole mechanism** —
 the machine's substitute for a human reading an echo — and **44 moves the live run's dominant failure
@@ -1339,6 +1445,63 @@ that fills is different: it produces truncated files, which is the one outcome �
 outright. A clean self-stop with `closed_by: write_headroom` is a convenience limit in the brief's
 sense — **nothing depends on it**, a caller that stops us first never sees it, and its floor is a field
 an operator can set (§5.2).
+
+#### 6.2.1 Where each check is carried out
+
+`RunConfigurationCheckCatalogue` holds every check above by its number, and a test holds this table equal to it. **resolution** is the first of the offline checks: a check there ends the launch before anything is
+resolved, with outcome `usage_error` (§3.10.2). A check the co-simulation session runs as part of starting — `SumoDriveSession.Start` — is run there and nowhere else, because the session is its one validator; `run_capture` maps the session's refusal onto the run's outcome. A check marked *by construction* guards something the configuration cannot express; one marked **not built** compares a thing nothing in the tree publishes, and the last column says what.
+
+| # | Phase | Carried out by | Where, or what is missing |
+|---:|---|---|---|
+| 1 | resolution | `run_capture` | RunConfiguration, when a document or an override is read |
+| 2 | offline | `run_capture` | RunConfigurationValidator |
+| 3 | resolution | `run_capture` | RunConfigurationResolver |
+| 4 | offline | `run_capture` | RunConfigurationValidator; only sumo_driven_playback is built here, and the traffic-manager path is run_SCTMV.py |
+| 5 | offline | `run_capture` | RunConfigurationValidator |
+| 6 | offline | `run_capture` | RunConfigurationValidator |
+| 7 | offline | `run_capture` | EffectiveRunConfiguration.window |
+| 8 | offline | `run_capture` | RunConfigurationValidator |
+| 9 | offline | `run_capture` | CarlaNet.CoSim.CoSimClock.ForSession, the session's own validator, called offline |
+| 10 | offline | by construction | sensor_tick is not a field; every camera's is set to 1 / capture_hz |
+| 11 | offline | `run_capture` | RunConfigurationValidator |
+| 12 | offline | `run_capture` | RunConfigurationValidator |
+| 13 | offline | `run_capture` | ScenarioEpoch, which reads the epoch with the session's SolarEpoch |
+| 14 | offline | **not built** | the session writes no vehicle lamps, so there is no field to state |
+| 15 | offline | `run_capture` | RunConfigurationValidator |
+| 16 | resolution | `run_capture` | RunConfiguration; the refusal names post_process_profile, the field that exists |
+| 17 | offline | **not built** | the recorder writes each capture's image and sidecar into one directory; the two-root split is stage K's and no writer makes it |
+| 18 | offline | by construction | the only seed the run consumes is SUMO's, bound by the scenario package |
+| 19 | offline | `run_capture` | RunConfigurationValidator, from doc 10's measured capture sizes |
+| 20 | offline | `run_capture` | RunConfigurationValidator |
+| 21 | offline | **not built** | no headless population profile of a scenario is published |
+| 22 | server | the session | SumoDriveSession.Start, LoadedWorldCheck, before SUMO is started |
+| 23 | server | `run_capture` | RunConfigurationValidator.validate_against_server |
+| 24 | server | `run_capture` | RunConfigurationValidator.validate_against_server |
+| 25 | server | `run_capture` | RunConfigurationValidator.validate_against_server |
+| 26 | server | the session | SumoDriveSession.Start; sumo.allow_version_mismatch runs anyway and is reported |
+| 27 | server | **not built** | the server publishes no count of attached clients |
+| 28 | authority | the session | SumoDriveSession.Start; PopulationAuthorityHeldException names the holder |
+| 29 | authority | **not built** | the session holds a population lease and no per-actor motion lease |
+| 30 | pre-roll | the session | SumoDriveSession.Start, its fast-forward |
+| 31 | pre-roll | the session | SumoDriveSession.Start, SolarLease and the window-open audit; SolarAuditFailedException |
+| 32 | pre-roll | **not built** | the recorder publishes no count of frames received |
+| 33 | pre-roll | **not built** | the session publishes admissions and capacity declines only when disposed |
+| 34 | offline | `run_capture` | RunConfigurationValidator |
+| 35 | offline | `run_capture` | RunConfigurationValidator, against the configuration and the launch echo |
+| 36 | offline | `run_capture` | RunConfigurationValidator |
+| 37 | offline | `run_capture` | RunConfigurationValidator |
+| 38 | resolution | `run_capture` | RunConfiguration |
+| 39 | offline | by construction | no seed is drawn; the SUMO seed is the scenario package's |
+| 40 | offline | `run_capture` | RunConfigurationValidator |
+| 41 | offline | `run_capture` | RunConfigurationValidator |
+| 42 | offline | **not built** | no handover or transcript writer exists |
+| 43 | server | **not built** | nothing reads back which profile a camera loaded |
+| 44 | pre-roll | `run_capture` | CaptureSession, from the session's RealTimePacer |
+| 45 | pre-roll | **not built** | no handover transport exists |
+| 46 | offline, then continuous | `run_capture` | RunConfigurationValidator at launch; CaptureSession while the run proceeds |
+| 47 | offline | `run_capture` | ChannelDescription, RunConfigurationValidator |
+| 48 | offline | `run_capture` | RunConfigurationValidator |
+| 49 | resolution | `run_capture` | ScenarioPackage, RunConfigurationResolver |
 
 ### 6.3 Launch, from command to first capture
 
@@ -1425,6 +1588,26 @@ server; everything that can be checked before acquiring authority is checked bef
 authority; and the sun is applied and read back before the first capture, not after.** Phase 2 is
 marked as the first irreversible step because it is the first one another operator can notice.
 
+**As built**, the authority and pre-roll checks happen inside one call. `SumoDriveSession.Start` checks the world package
+against the loaded world, resolves the SUMO installation and refuses a release other than the world's
+converter, starts SUMO, takes the world's clock, hides the road and signal layers, checks the clock
+ratio and the network, takes the population lease, fast-forwards SUMO to the prewarm's first instant
+(`capture.window` begin less `capture.prewarm_s`) and binds the sun there, reading it back. It refuses
+by exception, and `CaptureSession` maps the exception's type onto the outcome:
+`PopulationAuthorityHeldException` is `refused_authority` with the holder named,
+`SolarAuditFailedException` is `refused_preroll`, any other `CoSimSessionRefusedException` is
+`refused_server`, and anything else is `internal_error`. **The mapping is coarser than §3.10.2's
+table**, because the session's refusals carry no stage: a sun that the world did not take when it was
+written, and read back different, is refused after the lease with the same `CoSimSessionRefusedException`
+a package that is not the loaded world is refused with before it, and a SUMO error during the
+fast-forward surfaces as whatever TraCI raised. Such a run reports `refused_server` or
+`internal_error` where the table says `refused_preroll`, with the session's own message naming what
+failed. The session restores everything it took on every exit path either way, so a start that failed
+leaves the world as it was found. Then
+`CaptureSession` places the cameras, ticks the prewarm through the session with nothing recording,
+checks the prewarm's pace under `wall_clock` (check 44), and starts the recorders at the window's
+begin. The CLI never sets the sun or the world's settings itself: the session is their one owner.
+
 ### 6.4 The echo before commit, and what replaces it for a machine
 
 [`01`](01_Architecture.md) §10.2 item 3 asks this section for "an echo before a long run commits" —
@@ -1460,6 +1643,17 @@ the population from check 21's lookup; the size from check 19; the roots from th
 echo is a rendering of a block, not a computation** — the same rule D12.14 applies to the monitor, one
 layer earlier, and the block is serialised as `launch_echo` in `<run>.resolution.json` and in
 `RunResult` (§3.10.3) whether anybody reads it or not.
+
+**As built** (`LaunchEcho`), the block carries the simulated span and where its end came from, the
+captures per channel and per hour, the civil span, the sun at the window's first and last captured
+instants with their illumination bands (`IlluminationBand`), the world, the render region and caps,
+the estimated disk cost and headroom (check 19's figures), where the run writes, the pacing, and the
+warning codes raised. The sun is evaluated with the window opening at the **first frame the session
+renders** — the prewarm's first, `capture.prewarm_s` before the window's begin — because that is where
+`SumoDriveSession` pins a frozen sun; the echo states that instant (`held_at`) rather than the
+window's begin, which at dawn differs by most of a degree at the default prewarm. Two figures are
+stated as not predicted: the wall-clock duration (no measured tick rate exists for a configuration
+before it runs) and the in-region population (check 21 is not built).
 
 #### 6.4.2 When it blocks, for a human
 
@@ -1584,6 +1778,18 @@ the corpus is no longer what was asked for:
    run introduces and explains why it is not loud.
 3. The rendered fraction falls below the declared floor → [`10`](10_Scale_And_Performance.md) §7.
 
+**As built** (`SessionMonitor`, `RunCloseoutReport`), the panel shows the simulated time, the window's
+progress, the newest frame's declared civil instant, declared sun elevation and policy — read from the
+session's illumination source, the same declaration every capture's `<_illumination>` carries — the
+requested and achieved real-time factor and the last pacing window's, the vehicles rendered now, the
+ticks, the SUMO steps and the batch failures, and per channel the captures written, the recorder's
+`Dropped`, the captures without their illumination declaration, and occlusion measured and unmatched.
+Every figure is in the snapshot the run result's `produced` block is taken from. Two of the three
+loud conditions are observable — a recorder's `Dropped` becoming non-zero, and in a live run the
+achieved factor falling below its floor; the participant admission guarantee and the rendered
+fraction read quantities nothing in the tree publishes. The shedding ledger, the rendered fraction
+against its floor and the manifest's last flush have no source and are not shown.
+
 Nothing else interrupts. Diagnostics verbosity stays Run-mutable (§5.2) precisely so that the loud
 conditions are not buried, which is the reason `--traffic-diagnostics` is off by default today
 (`:439-449`).
@@ -1635,18 +1841,35 @@ it is the reader's decision — which is [`08`](08_Collection_And_EPoL.md) open 
 recommendation applied to more than the closed flag. A corpus is described the same way whether the run
 finished or was stopped; the difference between those two is `closed_by`, not a change of tone.
 
+**As built**, the gate records `RunCloseoutReport` evaluates are `capture.recorder_dropped[<sensor>]`
+(threshold 0), `capture.illumination_unpaired[<sensor>]` (captures written without their frame's
+illumination declaration, threshold 0), `clock.ratio_recorded`, `pacing.achieved_factor` under
+`wall_clock`, `solar.applied_equals_confirmed` (the solar audit's worst angle against its tolerance;
+skipped where the policy binds no sun) and `launch.warnings_adjudicated`. Four are recorded as
+`skipped`, each with its reason, so that *not measured* never reads as *met*:
+`capture.captured_minus_written`, `render_accounting.rendered_fraction`,
+`radiometry.profile_digest_present` and `supervision.manifest_closing_record`. A record carries `id`,
+`name`, `owner`, `status` (`evaluated` or `skipped`), `observed`, `threshold`, `comparison` and `met`.
+**With no run manifest in the tree, the records are not appended as they change**: they are computed
+from the live session and recorders at any instant, rendered by the closeout, and written into the run
+result at the terminal outcome. Appending them as they change waits for `RunManifestWriter`.
+
 ### 7.3 The two silent failures this closes
 
 Both are recorded in [`00_Overview.md`](00_Overview.md) §5 and neither is a new mechanism; they are
 readers for values that already exist.
 
-- **`FrameRecorder.Dropped` has no reader.** It is incremented today and read nowhere. The monitor
-  reads it per channel per second; the closeout reads it at window close; a non-zero value fails the
-  gate. A thin corpus stops looking like a normal one.
-- **The clock ratio is recorded nowhere.** [`10`](10_Scale_And_Performance.md) §7 measures it as
-  non-constant across sessions — 84%, 99%, 29.5% — so a window that ran at 15% produced the same
-  imagery as one that ran at 90% at six times the cost, and nothing in the corpus says which. The
-  monitor shows it live and the manifest records it per window.
+- **`FrameRecorder.Dropped` is incremented at `FrameRecorder.cs:184`, and outside a capture run
+  nothing reads it but the log line `run_sumo_drive.py` prints at its end.** `RunCloseoutReport`
+  reads it per channel in every snapshot: the monitor shows it, a non-zero value is a loud condition, and the gate record
+  `capture.recorder_dropped` carries it into the run result. A thin corpus stops looking like a normal
+  one.
+- **The clock ratio is recorded in no capture artifact.** [`10`](10_Scale_And_Performance.md) §7
+  measures it as non-constant across sessions — 84%, 99%, 29.5% — so a window that ran at 15%
+  produces the same imagery as one that ran at 90% at six times the cost, and nothing in the corpus
+  says which. The
+  session measures it (`RealTimePacer`, whether or not the run is paced), the monitor shows it live,
+  and the run result records the achieved factor over the run and over the prewarm.
 
 ### 7.4 The live run: how pacing is expressed, and what is shown while it runs
 
@@ -2046,6 +2269,33 @@ Three properties are required of the launchers, all because the underlying tool 
   The `run-capture` launchers must also pass `--result` through unchanged, since it is the only path on
   which a refusal leaves a readable artifact.
 
+**As built.** `Scripts/Windows/RunCapture.ps1` and `Scripts/Linux/RunCapture.sh` run
+`CarlaControl/scripts/run_capture.py` with every argument but their own `--python-exe` passed through
+unchanged — `--result` included — and return its exit status unchanged. `--help` (and `-h`, `-Help`)
+prints the launcher's one option and then `run_capture --help`, whose field list is generated from
+`RunConfiguration.FIELDS`. The interpreter is the platform's Python 3: `python3` then `python` on
+Linux, `python` then the `py` launcher on Windows, where `python3` is usually the Microsoft Store's
+installer stub. The Linux launcher `exec`s `run_capture`, so a signal sent to the launcher reaches the
+run directly; the Windows launcher runs it as a child in the same console, which Ctrl+C and
+`CTRL_BREAK_EVENT` reach. `CarlaControl/test/test_run_capture_launchers.py` is the parity check: it runs
+both launchers with `--help` and compares their option sets, and runs both with a configuration the offline
+checks refuse and with a malformed override, comparing each exit status (2 and 1) with the status in the
+result written at the `--result` path passed through. It runs wherever PowerShell 7 and bash are both
+installed; whether CI runs it is the CI's owner's to decide. `Scripts/Linux/RunCapture.sh` must be
+committed with mode `100755`, as the other Linux scripts are.
+
+The distribution launchers (`run-capture.ps1`, `run-capture.sh`), the distribution's contents and the
+`MakeDistribution` header comments of the table above are not built. What `MakeDistribution` has to do
+for them, on both platforms in the same change: bundle the `carlacontrol` wheel (the Windows script
+bundles only `carlanet` today); copy `run_capture.py`; write a launcher beside `run-sctmv` that runs it
+exactly as the source-tree launchers do; ship `CarlaControl/schemas/run_configuration.schema.json`, a
+site-profile template (`run_capture --write-site-profile`), the vehicle catalogue and the staged SUMO
+installation; and either lay the distribution out so the site profile's derived paths hold —
+`Build/scenarios`, `Build/world-packages`, `CarlaControl/catalogue/vehicles.catalogue.json`,
+`Build/captures`, `Build/runs` and `Build/sumo-install` under the directory two levels above
+`run_capture.py` — or ship a site profile naming the distribution's own paths, with
+`CARLANET_SUMO_HOME` declared in its `environment` list if the distribution sets it.
+
 The site profile (§3.5 layer 2) is what keeps the run configuration itself platform-neutral: paths,
 the SUMO install, the ion token and the export root bases live there, so a run configuration authored
 on Windows runs unedited on Linux.
@@ -2106,12 +2356,12 @@ them by number ([`08`](08_Collection_And_EPoL.md) §15 cites check 17).
 | **D12.2** | **The control surface is layered resolution, not an extended flat command line and not a bare configuration file.** Six layers in strict precedence: tool defaults, site profile, world-package bindings, scenario declarations, run configuration, operator overrides. Rejected: the flat command line, because a recorded argv is not a reproducible run description once a default changes — *measured:* `--fade` already flipped; and the bare file, because one scenario's 4–8 windows times a counterfactual sweep produces 8–16 near-identical documents (§3.2–3.4) |
 | **D12.3** | **The recorded artifact is the `EffectiveRunConfiguration`, and every field in it carries its value, its layer, the tool default it would have had, and what any override replaced.** The manifest's copy is itself a valid run configuration, so reproducing a run is reading it back rather than reconstructing it. This is what makes layering safe: "where did this come from" is answered by the artifact, not by re-derivation (§3.6, §3.7) |
 | **D12.4** | **A capture window is chosen by name from the scenario's declarations, or given explicitly by the operator, and the manifest records which.** A window may also declare a begin and **no end**, in which case the run continues until the scenario ends or the caller stops it. This closes [`01`](01_Architecture.md) open question 3 and [`02`](02_Use_Cases.md) open question 2 together, in the way both recommended (§3.8, §5.2) |
-| **D12.5** | **Run-configuration validation is a further phase of [`07`](07_Scenario_Authoring.md) §5's compiler, not a second validator.** Same refuse/warn vocabulary, same resolution report, same lock-file shape. Phase 0 — 31 of the 46 checks — needs no server, no GPU and no SUMO, preserving [`02`](02_Use_Cases.md) D2.2's property one layer up (§6.1, §6.2) |
+| **D12.5** | **Run-configuration validation is a further phase of [`07`](07_Scenario_Authoring.md) §5's compiler, not a second validator.** Same refuse/warn vocabulary, same resolution report, same lock-file shape. Phase 0 — 34 of the 49 checks — needs no server, no GPU and no SUMO, preserving [`02`](02_Use_Cases.md) D2.2's property one layer up (§6.1, §6.2) |
 | **D12.6** | **Two mutual-exclusion mechanisms, both required.** A configuration naming a block of a non-selected mode is refused at compile time with no server involved; a world whose population authority is held refuses the session start naming the holder. The first catches a wrong request, the second catches a busy world; neither substitutes for the other (§5.3) |
-| **D12.7** | **The default solar policy is `advance`.** The failure modes are asymmetric: a run that wanted constant illumination and got `advance` records a small, correct, self-describing variation, while a run that wanted changing light and got `freeze` records a physically impossible constant that nothing flags. `freeze` is a deliberate experimental control and is asked for (§4.4) |
+| **D12.7** | **The solar policy has no tool default: the scenario states it, and a run takes it or overrides it with the override recorded.** A frozen run and an unconfigured run are byte-identical, so absence is made impossible rather than defaulted ([`00`](00_Overview.md) §6). The failure modes of an unstated policy are asymmetric: a run that wanted constant illumination and got an advancing sun records a small, correct, self-describing variation, while a run that wanted changing light and got a frozen one records a physically impossible constant that nothing flags. `freeze_at_window_start` is the recommended value, not a silent one (§4.3, §4.4) |
 | **D12.8** | **Under `advance`, `rate` is pinned to 1.0 and is not operator-settable**, because the session writes each tick's own instant ([`11`](11_Time_And_Illumination.md) D11.19) and [`01`](01_Architecture.md) D1.1/D1.13 make one tick exactly `world_delta_s` of simulated time — so 1.0 is the only value under which one sun-second is one scenario-second. `accelerated` (any other rate) is **refused for a capture run and retained in the interactive path**, where it is useful and harmless (§4.3) |
 | **D12.9** | **The solar epoch is a binding, not a choice.** It comes from the scenario package and an operator override of it is a refusal, for the same reason the world digest is: a scenario asserting 23:00 rendered at 12:00 is a self-contradicting corpus, and the surface must not be able to express the request (§4.3) |
-| **D12.10** | **A field whose correct value depends on a condition has no default under that condition** — the *conditional requirement*. Its first use: `solar.vehicle_lights` defaults to `off`, but in a window whose sun elevation falls below −6° it has no default and the run is refused until it is stated. This is how the surface stays short in the ordinary case without letting an important choice be implicit (§3.5, §4.4) |
+| **D12.10** | **A field whose correct value depends on a condition has no default under that condition** — the *conditional requirement*. Built: `pacing.min_achieved_factor` has no default under `pacing.mode: wall_clock` and is not a field under `as_available`. Specified for when vehicle lamps exist: `solar.vehicle_lights` defaults to `off`, but in a window whose sun elevation falls below −6° it has no default and the run is refused until it is stated. This is how the surface stays short in the ordinary case without letting an important choice be implicit (§3.5, §4.4) |
 | **D12.11** | **Seeds have no nondeterministic default.** Today `--seed` defaults to `None`, documented "nondeterministic" (`:310-316`), which is incompatible with reproducing a run from its record. `random` is still available and resolves to a drawn value that is then recorded (§5.2) |
 | **D12.12** | **The solar state is read back from the world and recorded before the first capture, and a disagreement with what was requested refuses the run.** Today `WorldBuilder.py:238-247` logs what it asked for and never reads back, and a world with no CesiumSunSky produces a warning and a run that continues (`:244-245`) (§4.5, §6.2 checks 23 and 31) |
 | **D12.13** | **Four mutability classes — Bound, Session-fixed, Degradation-only, Run-mutable — decided by one question: would a consumer reading the corpus be wrong if this changed and they did not know?** The occlusion estimator is Session-fixed rather than Run-mutable for exactly this reason, although it is a runtime toggle today. **Bound** reads *fixed by an artifact, or by a ruling in a sibling section that this surface expresses rather than re-offers*, which is what `synchronous` (D10.10), `telemetry.on_tick_thread` (D10.11) and the external-chain drop policy ([`08`](08_Collection_And_EPoL.md) §11.3) all need. **There is no fifth class**: `caller` and `on_warning.*` are Session-fixed by the governing question, and `caller_label` and `expect.*` are recorded in the lock as launch provenance rather than given a class of their own (§5.1, §5.2) |
@@ -2167,7 +2417,10 @@ them by number ([`08`](08_Collection_And_EPoL.md) §15 cites check 17).
    already are (`run_SCTMV.py:60-78`); or derived from the distribution's own layout with no file at
    all. **Recommend the third with the first as an override**, since a distribution already knows
    where its own `tools/sumo` is — but it interacts with [`09`](09_Toolchain_And_Packaging.md) D9.6's
-   `SUMO_HOME` precedence and should not be decided without it.
+   `SUMO_HOME` precedence and should not be decided without it. *Built as recommended, pending that decision:*
+   `SiteProfile` derives every path from the layout `run_capture` runs from, a file named by
+   `--site-profile` overrides it, and `sumo.home` falls back to `CARLANET_SUMO_HOME` and then the
+   layout's staged SUMO — the session's own order — before leaving the session to search `SUMO_HOME`.
 
 3. **Should `solar.vehicle_lights` default to `from_sumo` in a dark window rather than being a
    conditional requirement?** D12.10 refuses to choose and forces the operator to. The argument for
@@ -2239,7 +2492,8 @@ them by number ([`08`](08_Collection_And_EPoL.md) §15 cites check 17).
    report the count of declared expectations, so `expectations declared: 0` is a line somebody reads
    rather than an absence nobody notices — and revisit once one unattended run has happened. The case
    for mandating it is stronger than it looks, because a run the caller will stop at an unknown instant
-   cannot be cheaply inspected in its first minute and re-launched.
+   cannot be cheaply inspected in its first minute and re-launched. *Built as recommended:* the run result carries
+   `expectations_declared`, and nothing makes an expectation mandatory.
 10. **What `pattern` is the interactive viewer's camera once §9.2 converts it?** run_SCTMV's one camera
    starts as a stare and becomes an orbit on the `O` key or under `--orbit`, with the orbit's centre
    defaulting to the start pose (`OrbitSensorController.py:235-242`). `ChannelDescription` holds one

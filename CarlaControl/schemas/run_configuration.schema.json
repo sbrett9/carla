@@ -1,0 +1,866 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://carla.local/schemas/run_configuration.schema.json",
+  "title": "SUMO behavioural-capture run configuration",
+  "description": "12_Operator_Control_Surface.md §3-§6. Positions are in CARLA's frame: metres, x east, y south.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "run_configuration_version": {
+      "const": 1,
+      "description": "The version of this schema the document is written against.",
+      "default": 1,
+      "x-mutability": "launch_provenance",
+      "x-supplied-by": "tool"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "sumo_driven_playback",
+        "traffic_manager_ambient",
+        "storyboard_execution",
+        "recorded_replay"
+      ],
+      "description": "Which authority drives the world. A scenario package implies sumo_driven_playback, the only mode this front end runs; the traffic-manager path is run_SCTMV.py.",
+      "x-mutability": "session_fixed",
+      "x-supplied-by": "scenario"
+    },
+    "caller": {
+      "type": "string",
+      "enum": [
+        "attended",
+        "unattended"
+      ],
+      "description": "attended: a person reads the launch echo and adjudicates warnings at the terminal. unattended: warnings are adjudicated in advance by on_warning, and result_path is required. Recorded, because a corpus whose warnings a file adjudicated is not one a person watched.",
+      "default": "attended",
+      "x-mutability": "session_fixed",
+      "x-supplied-by": "tool"
+    },
+    "caller_label": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "An opaque label the caller recognises its own run by. Recorded and never interpreted.",
+      "default": null,
+      "x-mutability": "launch_provenance",
+      "x-supplied-by": "tool"
+    },
+    "scenario_package": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The compiled scenario: a scenario id (found as <id>/<id>.lock.json under paths.scenario_root), a scenario package directory, or its .lock.json. A capture binds a compiled scenario; it never compiles one.",
+      "x-mutability": "session_fixed",
+      "x-supplied-by": "tool"
+    },
+    "world_package": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The .cwp the world was built as. Unset, it is the package the scenario lock names, under paths.world_package_root. Its contents are bound, never overridden.",
+      "default": null,
+      "x-mutability": "session_fixed",
+      "x-supplied-by": "tool"
+    },
+    "result_path": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Where the run result is written, outside the capture root. Unset, it is <paths.runs_root>/<session id>/run.result.json; required under caller unattended. The resolution report, the lock and the replayable effective configuration are written beside it.",
+      "default": null,
+      "x-mutability": "session_fixed",
+      "x-supplied-by": "tool"
+    },
+    "write_headroom_floor_s": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Captured seconds of free disk below which the run stops itself cleanly, closed_by write_headroom. The one bound the tool imposes on a run.",
+      "default": 600.0,
+      "x-mutability": "session_fixed",
+      "x-supplied-by": "tool"
+    },
+    "monitor": {
+      "type": "string",
+      "enum": [
+        "on",
+        "off"
+      ],
+      "description": "The live monitor: a panel on a terminal, a log line every few seconds otherwise.",
+      "default": "on",
+      "x-mutability": "run_mutable",
+      "x-supplied-by": "tool"
+    },
+    "on_warning": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "enum": [
+          "proceed",
+          "refuse"
+        ]
+      },
+      "description": "The adjudication of a warning, by code, made in advance: proceed or refuse. Under caller unattended every warning raised must have one.",
+      "default": {},
+      "x-mutability": "session_fixed",
+      "x-supplied-by": "tool"
+    },
+    "expect": {
+      "type": "object",
+      "description": "What the caller believes a field or a launch-echo value resolves to, by path. A value is compared for equality; {\"at_most\": x} or {\"at_least\": x} bounds a number. An expectation never supplies a value; a failed one refuses the launch.",
+      "default": {},
+      "x-mutability": "launch_provenance",
+      "x-supplied-by": "tool"
+    },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "window": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Which simulated time to render: a window the scenario declares, by id; '<begin_s>:<end_s>'; or '<begin_s>:' with no end, which runs to the scenario's end unless the caller stops it first.",
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "prewarm_s": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Simulated seconds rendered before the window opens and not recorded, so the render set and the camera's tiles fill before the first capture (10 §8).",
+          "default": 300.0,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "world_delta_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Simulated seconds per world tick. The SUMO step must be a whole number of them.",
+          "default": 0.05,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "capture_hz": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Captures per simulated second, on every channel. One capture must be a whole number of world ticks.",
+          "default": 2.0,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "render_region": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x_m",
+            "y_m",
+            "radius_m"
+          ],
+          "properties": {
+            "x_m": {
+              "type": "number"
+            },
+            "y_m": {
+              "type": "number"
+            },
+            "radius_m": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "description": "The circle vehicles are rendered inside, in CARLA's frame (x east, y south, metres). Never defaulted (10 D10.5): sized per scenario so the render cap does not bind.",
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "render_hysteresis_m": {
+          "type": "number",
+          "minimum": 0,
+          "description": "How much further out than the region's radius a rendered vehicle is released.",
+          "default": 60.0,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "render_cap": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many vehicles may be rendered at once.",
+          "default": 128,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "render_cap_hard": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many CARLA actors the session may own.",
+          "default": 192,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "road_layer_visible": {
+          "type": "boolean",
+          "description": "Draw the generated road surface. Hidden by default: it is a flat ribbon over the photogrammetry of the real road, so drawn it is an artefact in every frame.",
+          "default": false,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "signal_layer_visible": {
+          "type": "boolean",
+          "description": "Draw the generated traffic-light and sign meshes. Hidden by default; SUMO simulates the signals either way.",
+          "default": false,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "channels": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "sensor_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The channel's name, required when there is more than one channel; it names the channel's capture directory and the platform track.",
+                "default": null,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "pattern": {
+                "type": "string",
+                "description": "stare holds one pose; orbit circles a centre with the view held on it.",
+                "default": "stare",
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "fov": {
+                "type": "number",
+                "description": "Horizontal field of view, degrees.",
+                "default": 90.0,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "width": {
+                "type": "integer",
+                "description": "Picture width, pixels.",
+                "default": 1280,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "height": {
+                "type": "integer",
+                "description": "Picture height, pixels.",
+                "default": 720,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "orbit_centre_x_m": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Orbit: the centre it circles, x metres. Required for an orbit.",
+                "default": null,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "orbit_centre_y_m": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Orbit: the centre it circles, y metres (south). Required for an orbit.",
+                "default": null,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "orbit_centre_z_m": {
+                "type": "number",
+                "description": "Orbit: the height the altitude is measured from, metres.",
+                "default": 0.0,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "orbit_radius_m": {
+                "type": "number",
+                "description": "Orbit: radius, metres.",
+                "default": 200.0,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "orbit_altitude_m": {
+                "type": "number",
+                "description": "Orbit: height above the centre, metres.",
+                "default": 518.2,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "orbit_period_s": {
+                "type": "number",
+                "description": "Orbit: wall-clock seconds per revolution.",
+                "default": 240.0,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "stare_look_at_x_m": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Stare: the point looked at, x metres; with stare_look_at_y_m, or give the five stare pose fields instead.",
+                "default": null,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "stare_look_at_y_m": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Stare: the point looked at, y metres (south).",
+                "default": null,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "stare_look_at_z_m": {
+                "type": "number",
+                "description": "Stare: the height of that point, metres.",
+                "default": 0.0,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "stare_altitude_m": {
+                "type": "number",
+                "description": "Stare: height above the point, metres.",
+                "default": 304.8,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "stare_standoff_m": {
+                "type": "number",
+                "description": "Stare: horizontal distance back from the point, metres; 0 looks straight down.",
+                "default": 0.0,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "stare_bearing_deg": {
+                "type": "number",
+                "description": "Stare: the compass direction the camera looks along, degrees clockwise from north.",
+                "default": 0.0,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "stare_x_m": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Stare pose: x metres; all five pose fields or none.",
+                "default": null,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "stare_y_m": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Stare pose: y metres (south).",
+                "default": null,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "stare_z_m": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Stare pose: z metres.",
+                "default": null,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "stare_pitch_deg": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Stare pose: pitch, degrees; negative looks down.",
+                "default": null,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "stare_yaw_deg": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Stare pose: yaw, degrees; 0 faces east, -90 north.",
+                "default": null,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "post_process_profile": {
+                "type": "string",
+                "enum": [
+                  "Default",
+                  "GoPro",
+                  "Town10HD_Opt",
+                  "Town_C"
+                ],
+                "description": "The post-process profile the camera spawns with, which sets its exposure: Default, GoPro, Town10HD_Opt or Town_C. Named with the file's own case, so it resolves on a case-sensitive file system.",
+                "default": "Default",
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              }
+            }
+          },
+          "description": "The cameras, one object each; see the channel fields below. Every channel is recorded.",
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        }
+      }
+    },
+    "occlusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Measure per-vehicle occlusion against a depth camera at each stare channel's pose. Session-fixed: turning it off mid-run would change the unoccluded denominator.",
+          "default": true,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "margin_m": {
+          "type": "number",
+          "minimum": 0,
+          "description": "How much nearer than a vehicle's own surface something must be to block it, metres.",
+          "default": 1.0,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "samples": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How finely each vehicle's outline is sampled.",
+          "default": 24,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "depth_max_range_m": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "The depth camera's range, metres. A surface beyond it reads as sky.",
+          "default": 20000.0,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        }
+      }
+    },
+    "pacing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "as_available",
+            "wall_clock"
+          ],
+          "description": "as_available: the world ticks as fast as the machine allows. wall_clock: ticks are held to the wall clock at pacing.real_time_factor.",
+          "default": "as_available",
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "real_time_factor": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Under wall_clock, simulated seconds per wall-clock second. Not a field under as_available.",
+          "default": 1.0,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "min_achieved_factor": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Under wall_clock, required: the achieved factor below which the prewarm refuses the window and the run is loud. Not a field under as_available.",
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "window_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Wall-clock seconds the achieved factor is measured over.",
+          "default": 5.0,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        }
+      }
+    },
+    "solar": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "policy": {
+          "type": "string",
+          "enum": [
+            "freeze_at_window_start",
+            "advance",
+            "freeze_at",
+            "ignore"
+          ],
+          "description": "What the sun does across the window: freeze_at_window_start, advance, freeze_at or ignore. The scenario's illumination default supplies it; an override is recorded against the value it replaced.",
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "scenario"
+        },
+        "rate_sun_s_per_sim_s": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Under advance, pinned to 1.0: one sun-second per simulated second is the only rate under which recorded solar time is the scenario's clock (12 D12.8).",
+          "default": null,
+          "x-mutability": "bound",
+          "x-supplied-by": "scenario"
+        },
+        "freeze_at_civil_time": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-2][0-9]:[0-5][0-9]:[0-5][0-9]$"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Under freeze_at, the civil time of day the sun is held at, HH:MM:SS.",
+          "default": null,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "scenario"
+        },
+        "freeze_date_advances": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Under a freeze, whether the sun's date follows the civil date when the epoch's calendar advances.",
+          "default": null,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "scenario"
+        },
+        "require_sun": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Whether a world with no sun refuses the run. Unset means required.",
+          "default": null,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "scenario"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Why this policy, in one sentence.",
+          "default": null,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "scenario"
+        }
+      }
+    },
+    "sumo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allow_version_mismatch": {
+          "type": "boolean",
+          "description": "Run with a SUMO release other than the one that converted the world, instead of refusing. The session records that it did.",
+          "default": false,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "home": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The SUMO installation to launch, the directory holding bin/sumo. Unset, the session searches SUMO_HOME and then PATH.",
+          "default": null,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "site"
+        }
+      }
+    },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The CARLA server's address.",
+          "default": "127.0.0.1",
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "site"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The CARLA server's RPC port.",
+          "default": 2000,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "site"
+        },
+        "timeout_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Seconds to wait for the server to answer a request.",
+          "default": 30.0,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "site"
+        }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scenario_root": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where compiled scenario packages are found by id.",
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "site"
+        },
+        "world_package_root": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where world packages are found by the name a scenario lock records.",
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "site"
+        },
+        "catalogue": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The measured vehicle catalogue. Its digest must be the scenario lock's.",
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "site"
+        },
+        "capture_root": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where captures are written, one directory per session and one per channel inside it.",
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "site"
+        },
+        "runs_root": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where a run's result, resolution report and lock are written by default.",
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "site"
+        }
+      }
+    },
+    "world": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "map_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The world's map, from world.json.",
+          "x-mutability": "bound",
+          "x-supplied-by": "world"
+        },
+        "network_fingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "The canonical fingerprint of the SUMO network the world carries.",
+          "x-mutability": "bound",
+          "x-supplied-by": "world"
+        },
+        "opendrive_sha256": {
+          "type": "string",
+          "description": "The digest of the world's OpenDRIVE.",
+          "x-mutability": "bound",
+          "x-supplied-by": "world"
+        },
+        "origin_latitude": {
+          "type": "number",
+          "description": "The latitude pinned to the map's origin.",
+          "x-mutability": "bound",
+          "x-supplied-by": "world"
+        },
+        "origin_longitude": {
+          "type": "number",
+          "description": "The longitude pinned to the map's origin.",
+          "x-mutability": "bound",
+          "x-supplied-by": "world"
+        },
+        "netconvert_version": {
+          "type": "string",
+          "description": "The netconvert that converted the world.",
+          "x-mutability": "bound",
+          "x-supplied-by": "world"
+        }
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scenario_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The scenario's id, from its lock.",
+          "x-mutability": "bound",
+          "x-supplied-by": "scenario"
+        },
+        "lock_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "The digest of the scenario lock the run binds.",
+          "x-mutability": "bound",
+          "x-supplied-by": "scenario"
+        },
+        "epoch": {
+          "type": "object",
+          "description": "What simulated second zero means in civil time. A binding: a run that rendered another time would contradict its own scenario (12 D12.9).",
+          "x-mutability": "bound",
+          "x-supplied-by": "scenario"
+        },
+        "epoch_block_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "The epoch's digest.",
+          "x-mutability": "bound",
+          "x-supplied-by": "scenario"
+        },
+        "sumo_step_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "SUMO's step. Never changed to suit the renderer (03 D3.6).",
+          "x-mutability": "bound",
+          "x-supplied-by": "scenario"
+        },
+        "sumo_seed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "SUMO's seed, compiled into the scenario's configuration.",
+          "x-mutability": "bound",
+          "x-supplied-by": "scenario"
+        },
+        "end_s": {
+          "type": "number",
+          "minimum": 0,
+          "description": "The simulated second the scenario ends at.",
+          "x-mutability": "bound",
+          "x-supplied-by": "scenario"
+        },
+        "catalogue_digest": {
+          "type": "string",
+          "description": "The digest of the catalogue the scenario was compiled against.",
+          "x-mutability": "bound",
+          "x-supplied-by": "scenario"
+        }
+      }
+    }
+  }
+}
