@@ -1,7 +1,10 @@
 namespace CarlaNet.CoSim;
 
 /// <summary>What a co-simulation session is pointed at, and what it is allowed to do.</summary>
-/// <param name="ScenarioPath">The scenario's SUMO configuration.</param>
+/// <param name="ScenarioPath">
+/// The scenario's SUMO configuration. The network it names must be the one the world package
+/// carries, compared by canonical fingerprint before SUMO is started (<see cref="ScenarioNetworkCheck"/>).
+/// </param>
 /// <param name="WorldPackagePath">
 /// The world package: the ground surface the poses are seated on, and the road network they are
 /// interpolated along.

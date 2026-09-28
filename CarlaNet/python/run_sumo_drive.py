@@ -10,7 +10,11 @@ What a run needs on disk:
   * a CARLA server with the world already built and loaded, built with `--emit-world-package` so
     there is a `.cwp` carrying the ground surface the poses are seated on and the road network they
     are interpolated along;
-  * the `.sumocfg` of a scenario authored against **that** network;
+  * the `.sumocfg` of a scenario whose network is **that** package's network -- a scenario compiled
+    against the package (CarlaControl/scripts/compile_scenario.py), which writes the package's own
+    network beside its configuration. The session compares the two by canonical fingerprint, the
+    parsed graph rather than the bytes, and refuses any other network before SUMO is started, naming
+    both;
   * the measured vehicle catalogue, and a `carla:blueprint` parameter on every vType that is meant
     to be rendered. A vType naming no measured blueprint is simulated and never rendered -- no body
     of another shape stands in for it, so a scenario whose types carry no such parameter produces an
@@ -35,7 +39,7 @@ confirm the world took it, and held there. The sun the world was found with is g
 Usage:
 
     python run_sumo_drive.py \\
-        --scenario ../../Import/Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg \\
+        --scenario <scenario dir>/<scenario_id>.sumocfg \\
         --world-package <build dir>/Gardnerville_Centerville_Lane.cwp \\
         --catalogue ../../CarlaControl/catalogue/vehicles.catalogue.json \\
         --epoch gardnerville.epoch.json --illumination freeze_at_window_start \\

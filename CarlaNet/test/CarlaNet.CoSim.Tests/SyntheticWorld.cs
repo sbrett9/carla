@@ -53,11 +53,17 @@ internal sealed class SyntheticWorld : IDisposable
     /// The converter the manifest records, as a world build writes it -- what netconvert printed,
     /// <c>Eclipse SUMO netconvert 1.27.0</c> -- or empty for a package that records none.
     /// </param>
+    /// <param name="recordedNetworkFingerprint">
+    /// The network fingerprint the manifest records, as a world build writes it from the network it
+    /// converted, or empty for a package that records none.
+    /// </param>
     public static SyntheticWorld Write(Func<(double X, double Y), double> heightAbove,
                                        string networkPath,
                                        string geoReference,
-                                       string netconvertVersion = "") =>
-        Write(heightAbove, networkPath, geoReference, CellSize, MinX, Columns, netconvertVersion);
+                                       string netconvertVersion = "",
+                                       string recordedNetworkFingerprint = "") =>
+        Write(heightAbove, networkPath, geoReference, CellSize, MinX, Columns, netconvertVersion,
+              recordedNetworkFingerprint);
 
     /// <summary>
     /// A package whose ground surface is a square grid of the caller's choosing, for a test that
@@ -70,6 +76,9 @@ internal sealed class SyntheticWorld : IDisposable
     /// <param name="min">The grid's lowest x and lowest y in the CARLA frame, metres.</param>
     /// <param name="cells">Cells along each side.</param>
     /// <param name="netconvertVersion">The converter the manifest records, or empty for none.</param>
+    /// <param name="recordedNetworkFingerprint">
+    /// The network fingerprint the manifest records, or empty for none.
+    /// </param>
     /// <remarks>
     /// A session accepts a network that overhangs the grid by up to one cell, so a coarse grid a
     /// little smaller than the network is a world the session starts on and in which a vehicle near
@@ -81,7 +90,8 @@ internal sealed class SyntheticWorld : IDisposable
                                        double cellSize,
                                        double min,
                                        int cells,
-                                       string netconvertVersion = "")
+                                       string netconvertVersion = "",
+                                       string recordedNetworkFingerprint = "")
     {
         string directory = Path.Combine(Path.GetTempPath(),
                                         "carlanet-cosim-" + Guid.NewGuid().ToString("n"));
@@ -101,6 +111,7 @@ internal sealed class SyntheticWorld : IDisposable
             GridNumCols = cells,
             GridNumRows = cells,
             NetconvertVersion = netconvertVersion,
+            NetworkFingerprint = recordedNetworkFingerprint,
         };
 
         float[] offset = new float[cells * cells];

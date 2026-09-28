@@ -13,8 +13,9 @@ public enum IlluminationPolicyKind
     FreezeAtWindowStart,
 
     /// <summary>
-    /// Set to the civil instant the window opens, then carried forward by the engine at a declared
-    /// number of sun-clock seconds per simulated second.
+    /// Set to the civil instant the window opens, then carried forward at a declared number of
+    /// sun-clock seconds per simulated second: the session writes the sun for every frame, before
+    /// that frame's tick cue, with the engine's own advance off.
     /// </summary>
     Advance,
 

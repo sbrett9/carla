@@ -36,6 +36,7 @@ advancement policy, the headlight predicate),
 | 2026-09-25 | §9: sun bound by `set_solar_epoch`; under `advance` written every tick, engine advance off; audit as built. |
 | 2026-09-28 | §5.4: velocity sent and checked per tick, measured live; §5.5 angular velocity and acceleration measured. |
 | 2026-09-28 | §2.6, D3.27: the session names the SUMO it launches, reports it, refuses a release other than the world's converter. |
+| 2026-09-28 | §7.2, D3.28: the session refuses a scenario whose network is not the world package's, by canonical fingerprint. |
 
 ---
 
@@ -375,10 +376,15 @@ copy outside the repository — where an installed wheel's assemblies are — ag
 | installation named by `run_sumo_drive.SessionSumo` | `Build/sumo-install`, 1.27.0, `explicit` | runs, the same release |
 | no installation named, mismatch accepted | `G:\Sumo\`, 1.27.1, matched by `SUMO_HOME` | runs, reported as accepted |
 
+These outcomes are the release comparison's alone. The session refuses this scenario against this
+package on its network, in the check that follows the release comparison (§7.2): the network it names
+is not the one the package carries.
+
 **What it cannot see.** A release number names a release, not a build: two builds of one release with
 different patches or build options compare equal, and anything a development build prints after the
 number is dropped. It compares against the converter that built the *world*; whether the scenario's
-own network is the world's is measured by the lane-geometry residual (§7.2), not here.
+own network is the world's is the network-identity check's (§7.2, D3.28), made after this one and
+also before SUMO is started.
 
 **Where the comparison is defined.** `CarlaNet.Sumo.SumoRelease` for the session.
 `carlacontrol.SumoInstallation.require_version` makes the same comparison for the world-build and
@@ -1283,14 +1289,65 @@ the network overhangs the grid by **0.2 mm** at one edge. A vehicle that genuine
 of the surface is counted at the tick it happens, which is where an overhang of any size shows up.
 
 **And the frame check is not the network-identity check**, which is a different question with a
-different answer. Two networks can share a projection, an offset and a boundary and still be
+different answer. The frame check reads the package's own network; SUMO drives the one the scenario's
+configuration names. Two networks can share a projection, an offset and a boundary and still be
 different graphs: the world's `map.net.xml` and the `Import/` network the shipped Arapahoe scenario
-is authored against agree on all three and differ in 6,806 bytes. What separates them is measured at
-runtime by the ghost's **lane-geometry residual** — the lane polyline evaluated at a frame's reported
-lane position against the position SUMO reported. Measured 2026-09-22 over 193,426 frames: **0.000 m**
-on the world's own network, **mean 0.258 m and worst 1.342 m** on the other, plus 68 spurious
-discontinuities. That is what a scenario built against a network the world does not have costs, and
-it is a silent quarter-metre systematic offset.
+is authored against agree on all three and differ in 894 of their 4,993 canonical rows each way. The
+cost is measured at runtime by the ghost's **lane-geometry residual** — the lane polyline evaluated at
+a frame's reported lane position against the position SUMO reported. Measured 2026-09-22 over 193,426
+frames: **0.000 m** on the world's own network, **mean 0.258 m and worst 1.342 m** on the other, plus
+68 spurious discontinuities. That is what a scenario built against a network the world does not have
+costs, and it is a silent quarter-metre systematic offset.
+
+**So the session refuses a scenario whose network is not the package's**, before SUMO is started
+(`ScenarioNetworkCheck`, called from `SumoDriveSession.Start` after the release comparison of §2.6;
+D3.28). It reads the network the configuration loads the way SUMO reads it — the `net-file` option
+under any of the three names SUMO takes it by, `net-file`, `net` and `n` (`MSFrame.cpp:78-79`), at any
+depth, from a `value` or `v` attribute or the element's text (`OptionsLoader.cpp`), a relative path
+taken against the configuration's own directory (`OptionsCont::relocateFiles`) — and compares its
+canonical fingerprint (`CarlaNet.Map.NetworkFingerprint`: the parsed graph, not the bytes, because
+netconvert stamps each output with the moment it ran and the paths it was handed) with the fingerprint
+of the package's `map.net.xml`. Where the manifest records `NetworkFingerprint`, the network the package
+carries must also be that one: the world build writes it from the network it converted, beside the
+OpenDRIVE digest the loaded-world check compares, so a package carrying another was assembled from two
+builds. The refusal names both networks and both fingerprints. A configuration that names no network,
+names it twice, or names a file that is not there or does not parse is refused too.
+
+| Scenario, `Import/` | World package | Outcome |
+|---|---|---|
+| `Arapahoe_I25_UnderpassDwell.sumocfg`, network `Arapahoe_I25.net.xml`, `0e1c69ce…` | `Arapahoe_I25.cwp`, `ac83aa8b…`, recorded and carried | **refused**. Same projection, offset and boundary; 18 edges exclusive to each side, 657 of 1,676 shared lanes reshaped, lane lengths moved by up to 3.2 m — a second conversion of the same area |
+| `Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg`, network `Gardnerville_Centerville_Lane.net.xml`, `7343c1e7…`, converted 2026-08-27 | `Gardnerville_Centerville_Lane.cwp`, `a50ac545…`, recorded and carried, converted 2026-09-28 | **refused**. 24 edges exclusive to the scenario's network and 31 to the package's, and the projection written differently: `+lon_0=-119.76459650000001` against `-119.7645965` |
+
+Each shipped package carries the network it records, and each package's own network written beside a
+configuration — which is what the scenario compiler emits (`07` §5.1) — is admitted. The lane-geometry
+residual stays on the report as the runtime measurement of the same property: lane shapes are inside
+the fingerprint, so it reads zero on a network the check admits, and it is what would show a network
+changed on disk between the check and SUMO reading it.
+
+**What it cannot see.** What the fingerprint leaves out: it covers edges, lanes (id, index, speed,
+length, width, permissions, shape), junctions (id, type, position, lanes), every attribute of every
+connection, each signal programme's type and phase states, and the location. Networks that differ only
+elsewhere pass — in a signal programme's phase durations, a junction's right-of-way rows (`<request>`),
+a lane's `changeLeft`, `changeRight` or `acceleration`, a drawn junction or edge shape, a
+`<roundabout>` — all of which the shipped networks carry, and some of which change how traffic moves.
+Route and additional files are not read, and an additional file can carry signal programmes of its own.
+SUMO's substitutions in a path (`${…}`, a leading `~`) are taken literally, so a network named that way
+is refused as absent even where SUMO would find it, and a compressed network is refused as unreadable.
+It is taken once, at session start.
+
+**Exercised by** `ScenarioNetworkCheckTests`: the fixture scenario and a package recording its own
+network admitted; a network with one junction lane moved by 0.1 m — identical in projection, offset and
+boundary — refused, naming both networks and both fingerprints; the same graph re-stamped, reordered,
+given street names and re-serialised, admitted; a package recording another network refused; each of the
+four ways SUMO reads the option resolved against the configuration's directory; no network, two, and a
+missing one refused; a session on another network refused with SUMO never launched; each shipped
+world's own network admitted, and both shipped scenarios refused. Each was seen failing against a wrong
+implementation: one that never refuses, a byte comparison, one that reads only `net-file`, one that
+ignores `v` and the element's text, one that resolves against the working directory, one that takes the
+first of two, one that counts an empty value, one that skips the package's record, one that refuses any
+package that records a fingerprint, one that compares the scenario with the record instead of the
+network carried, a refusal naming only one fingerprint, a check made after SUMO has started, and a
+session that never makes it.
 
 **Both of those check the network against the world package. Neither checks the package against the
 world the server has loaded**, and when one process builds and views a world and another drives it,
@@ -1321,8 +1378,11 @@ level-restored path for any of the values.
 
 **What it cannot see.** The `.net.xml` never reaches the server, so the loaded world is tied to it
 only through the package (the loaded OpenDRIVE is the package's, and the package's network came from
-the same netconvert run by construction); the frame check and the lane-geometry residual above are
-what see a network swapped inside a package. The server publishes nothing about which imagery it
+the same netconvert run by construction); the network-identity check above refuses a network swapped
+inside a package that records the fingerprint of the one it was written with. In a package that
+records none, only the frame check sees a swapped network, and only where its projection, offset or
+extent differ: a scenario compiled from that package runs on the swapped network too, so SUMO and the
+session agree and the lane-geometry residual reads zero. The server publishes nothing about which imagery it
 streams. It accepts a record from any client and does not tie it to the roads it loaded, so the record
 is taken as the world's statement about itself. And it is checked once, at session start.
 
@@ -2121,6 +2181,9 @@ sun was, and never has to trust the bridge's own arithmetic about it.
 session.start():
     assert f is finite and f >= 0                         # the real-time factor, read once, §9.9
     assert the world package describes the loaded world   # record, grids, origin, OpenDRIVE, §7.2
+    assert sumo release == the package's converter        # unless accepted; before SUMO starts, §2.6
+    assert fingerprint(sumocfg's network) == fingerprint(package's map.net.xml)
+                                                          # and == the one it records; before SUMO starts, §7.2
     assert world.settings.synchronous_mode and world.settings.fixed_delta_seconds == Δw
     Δs = Simulation.getDeltaT();  R = Δs / Δw;  assert R is a positive integer
     assert 1 / captureRateHz is a whole number of Δw      # a frame lands on the tick it is stamped
@@ -2780,6 +2843,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.25** | **Real-time pacing is a factor the session reads once at start**, 0 by default and unconstrained, applied immediately before every world tick cue against the absolute schedule `T0 + n·Δw/f` counted from the first cue, so an overrun is absorbed rather than accumulated and the SUMO fast-forward is never paced. The session times every cue, paced or not, and publishes the achieved factor per window of wall clock (default 5 s), for the whole run and for the worst window, with the slip behind schedule, on `CoSimRunReport.Pacing`. It never stops or slows a run for falling behind: the floor is undecided and the consumer-side response is `08` §11.3's (§9.9). |
 | **D3.26** | **A session given a world refuses a world package that does not describe the world the server has loaded, and a world that carries no bare-earth reference record**, before SUMO is started and before anything on the server is written: the record's drape flag, grid and both grids against the package's, the georeference origin against the manifest's, and the served OpenDRIVE against the package's by normalised digest (§7.2). |
 | **D3.27** | **A session refuses to launch a SUMO whose release is not the converter the world package records**, compared by release number and settled before SUMO is started, naming both releases, the installation and the rule that found it. `AllowSumoVersionMismatch` accepts the difference. An accepted mismatch and a package that records no converter both run, and the run report names either; it carries the installation, its release and the rule that found it on every run. `run_sumo_drive.py` names the installation — the repository's pinned build first — rather than leaving it to `SUMO_HOME` (§2.6). |
+| **D3.28** | **A session refuses a scenario whose network is not the one the world package carries**, compared by canonical fingerprint (`NetworkFingerprint`, the parsed graph rather than the bytes) and settled before SUMO is started, naming both networks and both fingerprints. It also refuses a package whose carried network does not fingerprint as the `NetworkFingerprint` its manifest records. The scenario's network is read the way SUMO reads the configuration. There is no override: a scenario for another network is compiled against this world's package, and the compiler writes the package's own network beside the configuration (§7.2). |
 
 ---
 

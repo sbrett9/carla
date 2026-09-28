@@ -144,18 +144,20 @@ public sealed class SumoDriveSession : IDisposable
 
     /// <summary>
     /// Start a session: check the world package is the loaded world's, check the SUMO it launches is
-    /// the release that converted the world, validate the clock, check the
-    /// network is the world's, take the population lease, and buffer the one SUMO step of lookahead
-    /// every sub-step pose is interpolated inside.
+    /// the release that converted the world, check the scenario runs on the world package's network,
+    /// validate the clock, check that network is in the world's frame, take the population lease, and
+    /// buffer the one SUMO step of lookahead every sub-step pose is interpolated inside.
     /// </summary>
     /// <exception cref="CoSimSessionRefusedException">
     /// The session renders a world and declares no illumination policy, or a policy that binds the
     /// sun and no epoch to bind it from; the real-time factor or its window is not a usable number;
     /// the world package does not describe the world the server has loaded; the named SUMO
     /// installation holds no <c>sumo</c>, or the SUMO about to be launched is not the release the
-    /// world package records as its converter and the mismatch was not accepted; the clock does not
-    /// divide, the world is asynchronous, the network is not the one the world was built from,
-    /// something else already holds the world's population, or the world's sun could not be bound.
+    /// world package records as its converter and the mismatch was not accepted; the scenario's
+    /// network is not the one the world package carries, or the package carries a network other than
+    /// the one it records; the clock does not divide, the world is asynchronous, the network is not in
+    /// the world's frame, something else already holds the world's population, or the world's sun
+    /// could not be bound.
     /// </exception>
     public static SumoDriveSession Start(SumoDriveSessionOptions options)
     {
@@ -181,6 +183,11 @@ public sealed class SumoDriveSession : IDisposable
         // started, like every other refusal that needs no simulation to find out.
         SumoInstallation installation = ResolveSumo(options);
         SumoReleaseCheck release = RequireTheWorldSConverter(installation, manifest, options);
+
+        // And whether the network SUMO would drive is the one the session reads its lanes from. The
+        // frame checks below compare the package's network with the package; this is the one that
+        // looks at the scenario's.
+        ScenarioNetworkCheck.Require(options.ScenarioPath, options.WorldPackagePath);
 
         List<string> extraArguments = [];
         if (options.SumoStepOverrideSeconds is { } forced)
@@ -966,7 +973,7 @@ public sealed class SumoDriveSession : IDisposable
     }
 
     /// <summary>
-    /// Refuse a network the world was not built from.
+    /// Refuse a network that is not in the world's frame.
     /// </summary>
     /// <remarks>
     /// <para>Three things make the frame conversion a sign on the northing and no offset at all, and
@@ -977,6 +984,10 @@ public sealed class SumoDriveSession : IDisposable
     /// <para>A network built at a different origin converts to a position several hundred metres
     /// away that is inside the sandbox and looks entirely ordinary, which is why this is a refusal
     /// rather than a warning.</para>
+    ///
+    /// <para>This compares the package's network with the package. That the scenario drives the
+    /// same network is <see cref="ScenarioNetworkCheck"/>'s, settled before SUMO was started: two
+    /// networks can agree on all three of these and still be different graphs.</para>
     /// </remarks>
     private static void RequireTheWorldSNetwork(WorldPackageManifest manifest,
                                                 SumoRoadNetwork network,

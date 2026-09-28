@@ -53,8 +53,10 @@ namespace CarlaNet.CoSim;
 /// <item><b>The SUMO network itself.</b> The <c>.net.xml</c> never reaches the server, so the loaded
 /// world is tied to it only through the package: the loaded OpenDRIVE is the package's, and the
 /// package's network came from the same netconvert run by the way the package is written. A package
-/// whose <c>map.net.xml</c> was replaced after it was written passes here; the network's own checks
-/// in the session, and the lane-geometry residual, are what see that.</item>
+/// whose <c>map.net.xml</c> was replaced after it was written passes here; the session's
+/// <see cref="ScenarioNetworkCheck"/> refuses it where the package records the fingerprint of the
+/// network it was written with. Where it records none, only the session's frame check sees the
+/// replacement, and only where the projection, offset or extent differ.</item>
 /// <item><b>The imagery.</b> The server publishes nothing about which tilesets it streams, so a
 /// world rebuilt over other imagery with the same network, origin and surface passes.</item>
 /// <item><b>Who published the record.</b> The server accepts a record from any client and does not
