@@ -387,8 +387,9 @@ own network is the world's is the network-identity check's (§7.2, D3.28), made 
 also before SUMO is started.
 
 **Where the comparison is defined.** `CarlaNet.Sumo.SumoRelease` for the session.
-`carlacontrol.SumoInstallation.require_version` makes the same comparison for the world-build and
-authoring tools with its own Python reduction (`_release`, `SumoInstallation.py:47-61`).
+`carlacontrol.SumoInstallation.require_version` calls it through `carlanet` for the world-build and
+authoring tools, so there is one comparison, and the scenario compiler's check 6 refuses a mismatch as
+the session does.
 
 **Exercised by** `SumoReleaseCheckTests` (the comparison and the verdict, nothing launched),
 `SumoInstallationTests` (a named installation, and a named directory holding no `sumo`) and
@@ -1315,8 +1316,9 @@ names it twice, or names a file that is not there or does not parse is refused t
 
 | Scenario, `Import/` | World package | Outcome |
 |---|---|---|
-| `Arapahoe_I25_UnderpassDwell.sumocfg`, network `Arapahoe_I25.net.xml`, `0e1c69ce…` | `Arapahoe_I25.cwp`, `ac83aa8b…`, recorded and carried | **refused**. Same projection, offset and boundary; 18 edges exclusive to each side, 657 of 1,676 shared lanes reshaped, lane lengths moved by up to 3.2 m — a second conversion of the same area |
-| `Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg`, network `Gardnerville_Centerville_Lane.net.xml`, `7343c1e7…`, converted 2026-08-27 | `Gardnerville_Centerville_Lane.cwp`, `a50ac545…`, recorded and carried, converted 2026-09-28 | **refused**. 24 edges exclusive to the scenario's network and 31 to the package's, and the projection written differently: `+lon_0=-119.76459650000001` against `-119.7645965` |
+| `Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg`, compiled by the scenario compiler | `Gardnerville_Centerville_Lane.cwp`, `a50ac545…` | **admitted**: its network is the package's own |
+| `Arapahoe_I25_UnderpassDwell.sumocfg`, generated against its package's network | `Arapahoe_I25.cwp`, `ac83aa8b…` | **admitted**: the package's network plus two `opposite` attributes, which the fingerprint does not cover |
+| A second conversion of Arapahoe's area, `0e1c69ce…` | `Arapahoe_I25.cwp`, `ac83aa8b…` | **refused**. Same projection, offset and boundary; 18 edges exclusive to each side, 657 of 1,676 shared lanes reshaped, lane lengths moved by up to 3.2 m |
 
 Each shipped package carries the network it records, and each package's own network written beside a
 configuration — which is what the scenario compiler emits (`07` §5.1) — is admitted. The lane-geometry
