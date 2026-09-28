@@ -14,13 +14,13 @@ dotted paths under `launch_echo.`.
 
 **Every figure comes from the code that will act on it.** The civil instants are
 `ScenarioEpoch.civil_instant_at` (the session's `SolarEpoch`); the sun is `WindowSun` (the session's
-`DeclaredSun` and `SolarPositionModel`), evaluated with the window opening at the first frame the
-session renders -- which is where it pins a frozen sun, the prewarm's first frame, so the echo states
-that instant rather than the window's begin; the disk figure is check 19's.
+`DeclaredSun` and `SolarPositionModel`), evaluated with the window opening at its own begin -- the
+instant `CaptureSession` hands the session as `window_opens_at`, where it pins a frozen sun and
+anchors an advancing one, the prewarm before it lit by that same sun; the disk figure is check 19's.
 
 What it does not predict, and says so: the wall-clock duration (no measured tick rate exists for a
-configuration before it runs) and the in-region population (no population profile is published,
-check 21).
+configuration before it runs), the in-region population (no population profile is published,
+check 21), and, where a stare is aimed at the rendered traffic, where it will look.
 """
 from __future__ import annotations
 
@@ -41,6 +41,9 @@ NOT_PREDICTED = (
     "wall-clock duration: no measured tick rate exists for a configuration before it runs",
     "in-region population: no population profile of the scenario is published (check 21)",
 )
+NOT_PREDICTED_TRAFFIC_AIM = ("where a stare aimed at the rendered traffic will look: the point is "
+                             "measured on the last frame before the window opens, and the run "
+                             "result records it")
 
 
 class LaunchEcho:
@@ -100,7 +103,10 @@ class LaunchEcho:
                        "real_time_factor": effective.value("pacing.real_time_factor"),
                        "min_achieved_factor": effective.value("pacing.min_achieved_factor")},
             "warnings": list(warning_codes),
-            "not_predicted": list(NOT_PREDICTED),
+            "not_predicted": list(NOT_PREDICTED) + (
+                [NOT_PREDICTED_TRAFFIC_AIM] if any(
+                    effective.channel_description(i).aims_at_rendered_traffic()
+                    for i in range(channels)) else []),
         }
         return cls(block)
 
@@ -115,7 +121,7 @@ class LaunchEcho:
         origin = (float(effective.value("world.origin_latitude")),
                   float(effective.value("world.origin_longitude")))
         sun = WindowSun(epoch, policy, origin[0], origin[1])
-        opens_at = effective.first_rendered_s
+        opens_at = window.begin_s
         at_begin = sun.at(opens_at, window.begin_s)
         at_end = sun.at(opens_at, window.end_s)
         block = {"policy": name, "binds": True, "advances": bool(policy.Advances),
@@ -128,8 +134,11 @@ class LaunchEcho:
         if not bool(policy.Advances):
             block["held_at"] = f"{at_begin.sun_date} {at_begin.sun_clock}"
             if name == "freeze_at_window_start":
-                block["held_at_note"] = ("the session pins the sun at the first frame it renders, "
-                                         f"the prewarm's first, t={opens_at:g}")
+                first = effective.first_rendered_s
+                block["held_at_note"] = (f"the session pins the sun at the window's opening, "
+                                         f"t={opens_at:g}"
+                                         + (f", and the prewarm from t={first:g} is lit by it"
+                                            if first < opens_at else ""))
         return block
 
     # -- reading ---------------------------------------------------------------------------------------

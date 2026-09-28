@@ -14,9 +14,9 @@ Eight outcomes, each a name that stands alone, whose one live distinction is *fi
 | 0 | `run_finished` | the run reached the end it was given: the window's end or the scenario's |
 | 1 | `usage_error` | the invocation could not be resolved: an unknown key, an unreadable package, an override of a binding |
 | 2 | `refused_offline` | the offline checks refused; no server was contacted |
-| 3 | `refused_server` | the server checks refused, or the session refused to start |
+| 3 | `refused_server` | the server checks refused, or the session refused at its `Validation` or `Launch` stage |
 | 4 | `refused_authority` | the population lease is held by another, named in `authority_holder` |
-| 5 | `refused_preroll` | the lease was taken and given back before the window: the fast-forward, the sun's read-back, the cameras, the prewarm's pace |
+| 5 | `refused_preroll` | the lease was taken and given back before the window: the session's `PreRoll` stage -- the fast-forward, the sun's read-back, a prewarm tick -- or the cameras, the prewarm's pace, the traffic a stare aims at, the render cap at the window's begin |
 | 6 | `run_stopped` | the run ended before that end; `closed_by` says by what |
 | 7 | `internal_error` | an unhandled fault -- not a signal |
 

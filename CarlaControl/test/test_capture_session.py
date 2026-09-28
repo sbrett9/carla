@@ -9,7 +9,13 @@ ends in. No server is contacted.
 
 The values asserted are read from the fixture and the plan, not from the code under test: the
 session's region is the render region with y negated (SUMO's frame), its warm-up is the window's
-begin less the prewarm, and a stare camera stands where `StareAim` puts it.
+begin less the prewarm, the window opens at its own begin, and a stare camera stands where `StareAim`
+puts it.
+
+Every refusal the session raises carries the stage it had reached (03 §11.10), and the run's outcome
+is read from that stage alone (12 §6.3). The refusals here are the real `CarlaNet.CoSim` exceptions,
+given the stage the session would give them; the setter is the session's own, so a test sets it the
+way the session does, by reflection over the property.
 """
 from __future__ import annotations
 
@@ -25,9 +31,11 @@ _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 sys.path.insert(0, str(_REPO / "CarlaControl" / "test"))
 
-from CaptureFakes import FakeServer  # noqa: E402
+import carlanet  # noqa: E402, F401  -- loads the CarlaNet assemblies the next imports name
+from CaptureFakes import FakeCompileLock, FakeServer, FakeTeleporting  # noqa: E402
 from CarlaNet.CoSim import (  # noqa: E402
     CoSimSessionRefusedException,
+    CoSimSessionStage,
     PopulationAuthorityHeldException,
     PopulationMode,
     SolarAuditFailedException,
@@ -41,6 +49,7 @@ from RunCaptureFixture import (  # noqa: E402
     Layout,
     run_document,
 )
+from System import Enum  # noqa: E402
 
 from carlacontrol.CaptureSession import CaptureSession  # noqa: E402
 from carlacontrol.ChannelDescription import ChannelDescription  # noqa: E402
@@ -88,6 +97,16 @@ def started_with(server: FakeServer) -> dict:
     return {"scenario": event[1], "world_package": event[2], "catalogue": event[3], **event[4]}
 
 
+def staged(refusal, stage: str):
+    """A session refusal carrying the stage the session would give it as it leaves."""
+    refusal.GetType().GetProperty("Stage").SetValue(refusal, getattr(CoSimSessionStage, stage))
+    return refusal
+
+
+def refusal_at(stage: str, message: str = "the session refused"):
+    return CoSimSessionRefusedException(getattr(CoSimSessionStage, stage), message, None)
+
+
 # -- the session is started with what the configuration resolved ---------------------------------
 
 def test_a_run_to_the_window_s_end_finishes(layout, server):
@@ -107,11 +126,20 @@ def test_the_session_is_started_from_the_compiled_package_and_the_resolved_field
     assert (started["capacity"], started["maximum_bodies"]) == (128, 192)
     assert (started["fixed_delta"], started["record_hz"]) == (0.05, 2.0)
     assert started["warm_up_to"] == 25200.0 - 300.0
+    assert started["window_opens_at"] == 25200.0
     assert started["epoch"] == EPOCH
     assert started["illumination"]["policy"] == "freeze_at_window_start"
     assert started["real_time_factor"] == 0.0
     assert (started["road_layer_visible"], started["signal_layer_visible"]) == (False, False)
     assert started["sumo_home"] == str(layout.root / "sumo")
+
+
+def test_every_admission_pass_is_asked_for_and_poses_only_where_a_stare_aims_at_traffic(
+        layout, server):
+    capture(layout, server)
+    started = started_with(server)
+    assert callable(started["on_admission_pass"])
+    assert started["on_pose"] is None
 
 
 def test_the_render_region_is_handed_over_in_sumo_s_frame(layout, server):
@@ -243,16 +271,56 @@ def test_a_held_population_lease_refuses_naming_the_holder(layout, server):
 
 
 def test_a_sun_that_did_not_bind_refuses_at_preroll(layout, server):
-    server.start_raises = SolarAuditFailedException("requested 06:55, world reports 12:00", None)
+    server.start_raises = staged(
+        SolarAuditFailedException("requested 07:00, world reports 12:00", None), "PreRoll")
     _, result = capture(layout, server)
     assert (result.outcome, result.closed_by) == ("refused_preroll", "aborted_at_preroll")
 
 
-def test_any_other_session_refusal_is_refused_server(layout, server):
-    server.start_raises = CoSimSessionRefusedException("the package is not the loaded world")
+# The session's stages, and the outcome each is the run's (12 §6.3). The refusal's type plays no part:
+# a solar audit that failed as the window opened, raised as its start's PreRoll, and the same class of
+# refusal before anything was written are told apart by the stage alone.
+START_STAGES = {
+    "Validation": ("refused_server", None, 3),
+    "Launch": ("refused_server", None, 3),
+    "PreRoll": ("refused_preroll", "aborted_at_preroll", 5),
+}
+
+
+@pytest.mark.parametrize("stage", list(START_STAGES))
+def test_a_start_refusal_is_concluded_by_its_stage(layout, server, stage):
+    server.start_raises = refusal_at(stage, "the package is not the loaded world")
     _, result = capture(layout, server)
-    assert (result.outcome, result.detail) == ("refused_server",
-                                               "the package is not the loaded world")
+    outcome, closed_by, status = START_STAGES[stage]
+    assert (result.outcome, result.closed_by, result.exit_status) == (outcome, closed_by, status)
+    assert result.detail == f"the session refused at {stage}: the package is not the loaded world"
+    assert server.events.of("spawn") == []
+
+
+def test_the_same_exception_type_at_another_stage_is_another_outcome(layout):
+    early = FakeServer()
+    early.start_raises = staged(SolarAuditFailedException("a declaration refused", None),
+                                "Validation")
+    _, result = capture(layout, early)
+    assert result.outcome == "refused_server"
+
+
+def test_a_refusal_on_a_prewarm_tick_refuses_at_preroll(layout, server):
+    server.fault_at = (25000.0, refusal_at("PreRoll", "SUMO failed at simulated 25000 s"))
+    _, result = capture(layout, server)
+    assert (result.outcome, result.closed_by) == ("refused_preroll", "aborted_at_preroll")
+    assert "PreRoll" in result.detail and "SUMO failed" in result.detail
+    assert server.events.of("start_recording") == []
+    assert server.session.disposed and all(actor.destroyed for actor in server.actors)
+
+
+def test_a_stage_this_tool_does_not_know_is_an_internal_error(layout, server):
+    refusal = refusal_at("Validation")
+    refusal.GetType().GetProperty("Stage").SetValue(
+        refusal, Enum.ToObject(refusal.Stage.GetType(), 9))
+    server.start_raises = refusal
+    _, result = capture(layout, server)
+    assert result.outcome == "internal_error"
 
 
 def test_missing_co_simulation_assemblies_are_refused_server(layout, server):
@@ -292,10 +360,11 @@ def test_a_malformed_override_is_a_usage_error_with_a_result(layout, server):
 
 
 def test_a_world_that_stops_ticking_mid_window_stops_the_run(layout, server):
-    server.fault_at = (26000.0, CoSimSessionRefusedException("the world produced no frame"))
+    server.fault_at = (26000.0, refusal_at("Window", "the world produced no frame"))
     _, result = capture(layout, server)
     assert result.outcome == "run_stopped"
     assert result.closed_by == "fault:CoSimSessionRefusedException"
+    assert result.detail == "the session refused at Window: the world produced no frame"
     assert server.session.disposed
 
 
@@ -304,6 +373,43 @@ def test_an_unexpected_fault_is_an_internal_error_and_still_cleans_up(layout, se
     _, result = capture(layout, server)
     assert (result.outcome, result.exit_status) == ("internal_error", 7)
     assert server.session.disposed and all(a.destroyed for a in server.actors)
+
+
+def test_a_failure_that_is_not_a_session_refusal_is_an_internal_error(layout, server):
+    # A dropped CARLA connection is not one of the session's refusals and carries no stage.
+    server.fault_at = (25000.0, ConnectionError("the server closed the connection"))
+    _, result = capture(layout, server)
+    assert result.outcome == "internal_error"
+
+
+# -- what the session checked before SUMO started ----------------------------------------------------
+
+def test_the_compile_lock_and_teleporting_reach_the_result_and_the_closeout(layout, server, caplog):
+    caplog.set_level("INFO")
+    _, result = capture(layout, server)
+    session = result.produced["session"]
+    assert session["compile_lock"] == {
+        "compiled": True, "lock_path": server.session.Report.CompileLock.ExpectedLockPath,
+        "statement": str(server.session.Report.CompileLock),
+        "routed_by": server.session.Report.CompileLock.RoutedByText,
+        "compiled_for": server.session.Report.CompileLock.WorldText}
+    assert session["teleporting"] == {"enabled": False, "accepted": False, "seconds": -1.0,
+                                      "declared": "-1", "statement": "disabled (time-to-teleport '-1')"}
+    text = caplog.text
+    assert "compile lock: gardnerville_fixture, compiled by" in text
+    assert "routed by duarouter 1.27.0" in text
+    assert "teleporting: disabled (time-to-teleport '-1')" in text
+
+
+def test_an_uncompiled_scenario_and_an_accepted_teleport_are_said_louder(layout, server, caplog):
+    server.compile_lock = FakeCompileLock(compiled=False)
+    server.teleporting = FakeTeleporting(seconds=300.0, accepted=True)
+    _, result = capture(layout, server)
+    warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+    assert any(m.startswith("compile lock: none at") for m in warnings)
+    assert any(m.startswith("teleporting: ENABLED after 300 s") for m in warnings)
+    assert result.produced["session"]["compile_lock"]["compiled"] is False
+    assert result.produced["session"]["teleporting"]["accepted"] is True
 
 
 # -- the echo and the artifacts written before the window --------------------------------------------

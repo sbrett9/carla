@@ -28,9 +28,10 @@ Exit status, read from the run result's outcome:
   0 run_finished       the window's end, or the scenario's, was reached
   1 usage_error        the invocation could not be resolved
   2 refused_offline    the offline checks refused; no server was contacted
-  3 refused_server     the server checks, or the session's own checks, refused
+  3 refused_server     the server checks refused, or the session did before its lease
   4 refused_authority  another holds the world's population lease; the result names it
-  5 refused_preroll    refused after the lease: the fast-forward, the sun, the cameras, the pace
+  5 refused_preroll    refused after the lease, before the window: the fast-forward, the sun,
+                       a prewarm tick, the cameras, the pace, the traffic a stare aims at
   6 run_stopped        stopped before its end: a signal, a loud condition, write headroom
   7 internal_error     an unhandled fault
 

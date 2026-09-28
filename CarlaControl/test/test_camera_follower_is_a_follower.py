@@ -513,6 +513,16 @@ def test_a_camera_that_cannot_be_placed_leaves_the_world_untouched():
     assert session.window.closed
 
 
+def test_a_stare_at_the_rendered_traffic_is_refused_before_the_world_is_touched(caplog):
+    session = _Session(ChannelDescription(sensor_id="TRAFFIC-1",
+                                          stare_look_at_target="rendered_traffic"))
+
+    assert session.run() == 1
+
+    assert session.calls == [] and session.window.opened is None
+    assert "as_look_at_point" in caplog.text
+
+
 def test_the_stall_watch_speaks_once_per_stall():
     clock = _Clock()
     watch = FrameStallWatch(3.0, clock)

@@ -8,6 +8,7 @@ the live parser object and grepping the live source tree on 2026-09-18; the furt
 §3.5, §3.10.1, §3.10.2, §5.2 and §7.6 were taken the same way, and each says where.
 **Date:** 2026-09-18
 **Revisions:**
+`2026-09-28` — Staged refusals, the window's own instant, live admission passes and check 33 read; stare aimed at rendered traffic.
 `2026-09-28` — `run_capture` built: layered resolution, validation, echo, capture, result, termination, monitor, both launchers.
 `2026-09-25` — Stare pose and orbit centre fields; `ChannelDescription` and the camera follower built.
 `2026-09-18` — Termination under external kill made first class; aggregate verdict removed; in-run observability stated.
@@ -567,7 +568,9 @@ PascalCase, modern union hints, absolute imports outside the package, all import
 | `RunTerminationSequence.py` | `RunTerminationSequence` | **Built.** §3.10.2's ordered flush. Installed as the handler for `SIGINT`, `SIGTERM` and, on Windows, `SIGBREAK` *and* run as the session's `finally`, so one code path serves a stop, a signal and a fault. Idempotent, time-boxed at every step that can block on the server, and re-entrant: a second signal abandons the remaining steps |
 | `WorldBuildConfiguration.py` | `WorldBuildConfiguration` | §9.2's single definition of the 24 world-build inputs, produced by both front ends |
 | `ChannelDescription.py` | `ChannelDescription` | **Built.** One camera channel: §5.2's per-channel fields and their defaults, defined once and validated on construction. §9.2's typed channel description |
-| `StareAim.py` | `StareAim` | **Built.** The pose a stare channel holds, from a look-at point or an explicit pose |
+| `StareAim.py` | `StareAim` | **Built.** The pose a stare channel holds, from a look-at point or an explicit pose, or around the point a stare aimed at the rendered traffic resolves to |
+| `RenderedTrafficCentre.py` | `RenderedTrafficCentre` | **Built.** The centre of the vehicles a prewarm step's last frame rendered, from the session's `on_pose` records of poses written to bodies: what a stare aimed at the rendered traffic follows through the prewarm, and the point it resolves to (§5.2) |
+| `WindowAdmissions.py` | `WindowAdmissions` | **Built.** The session's admission passes as the window saw them, from `on_admission_pass`: the pass for the window's begin, which check 33 reads, and a count of the passes rendered inside the window and of those that shed |
 | `CameraFollower.py` | `CameraFollower` | **Built.** A viewer that places one camera from a `ChannelDescription` and shows its picture live; a camera-follower process in [`01`](01_Architecture.md) D1.1's sense — it never cues, never writes episode settings, and never records ([`08`](08_Collection_And_EPoL.md) §3.4). Its camera, window and frame-stall notice are `FollowerCamera`, `FollowerWindow` and `FrameStallWatch` |
 | `CaptureSession.py` | `CaptureSession` | **Built.** One capture run, [`01`](01_Architecture.md) §2.3's component in the process that drives the world: it resolves and validates the invocation, prints the echo, writes the resolution report and the lock, starts `SumoDriveSession`, places each channel's cameras, prewarms, starts one recorder per channel under one session id, advances the window, and ends through `RunTerminationSequence` |
 | `scripts/run_capture.py` | — | **Built.** Thin `main`: parses the command line, discovers the site profile, constructs `CaptureSession`, runs it, and returns the exit status its `RunResult` carries |
@@ -740,13 +743,16 @@ Three things about that table are deliberate.
 - `usage_error` is every refusal raised while the invocation is read and resolved — checks 1, 3, 16,
   38 and 49 (§6.2.1): an unknown key, a malformed override, an override of a binding, a scenario or
   world package that cannot be bound. A missing `scenario_package` is check 2, `refused_offline`.
-- `refused_server` also covers a server that cannot be reached, and every refusal the session raises
-  while starting other than the two typed ones (§6.3 says why that is coarser than this table).
+- `refused_server` also covers a server that cannot be reached, and a refusal the session raises at
+  its `Validation` or `Launch` stage, before it takes the lease (§6.3). `refused_preroll` covers the
+  session's `PreRoll` stage, whether its start or a prewarm tick raised it, and, from `run_capture`
+  itself, a camera that could not be placed, the prewarm's pace (check 44), a stare aimed at the
+  rendered traffic with no vehicle to aim at (§5.2), and check 33 refused by its adjudication.
 - A run that stops for any reason carries `closed_by`, one of: `window_end` and `scenario_end`
   (with `run_finished`); `signal:SIGINT`, `signal:SIGTERM`, `signal:SIGBREAK`, `operator_stop`,
   `loud:recorder_dropped`, `loud:pace_below_floor`, `write_headroom`, and `fault:<exception>` for a
-  refusal the session raises mid-window — the world producing no frame, the solar audit failing, SUMO
-  ending — (with `run_stopped`); `aborted_at_preroll` (with `refused_preroll`). A run whose window
+  refusal the session raises at its `Window` stage — the world producing no frame, the solar audit
+  failing, SUMO failing — (with `run_stopped`); `aborted_at_preroll` (with `refused_preroll`). A run whose window
   declares no end closes with `scenario_end`, whether SUMO ran out of vehicles or the scenario's
   declared end was reached.
 - A signal is acted on at the next SUMO step boundary: the Python handler runs when the blocking
@@ -850,9 +856,14 @@ around it**, which is four rules:
 its `adjudication` and `adjudicated_by`), `expectations_declared` (§13 question 9's recommendation),
 and `produced`: the capture directory, `closed_by`, the window (`begin_s`, `end_declared_s`,
 `end_reached_s`, where the end came from, and the civil instants of the begin and the end reached),
-each channel's counters, the gate records, the session's clock, SUMO release, pace, sun and layers,
-the prewarm's achieved factor, the run id every recorder was given, and each termination step as it
-ran. Three differences from the sketch above, each a fact about the tree:
+each channel's counters, where every camera looked (`cameras`: a stare's pose and how it was declared,
+an orbit's centre, and for a stare aimed at the rendered traffic the point it resolved to, the
+vehicles and frame it was measured on, how far its camera moved at the last step, and the same point
+as the three look-at fields), the gate records, the admission pass for the window's begin and a count
+of the window's passes and of those that shed (`admissions`), the session's clock, SUMO release, pace,
+sun and layers, its compile lock — whether the scenario was compiled, the SUMO release that routed it
+and the world it was compiled for — and whether SUMO could teleport a blocked vehicle, the prewarm's
+achieved factor, the run id every recorder was given, and each termination step as it ran. Three differences from the sketch above, each a fact about the tree:
 
 - **One root, not two.** The recorder writes a capture's image and sidecar into one directory, so
   `produced` names `capture_directory`, with one directory per channel inside it.
@@ -978,7 +989,7 @@ unrepresentable. Its shape — civil date, time zone, and the civil instant `t =
 
 | Policy | Sun behaviour | `rate_sun_s_per_sim_s` | In a capture run |
 |---|---|---|---|
-| `freeze_at_window_start` | Held at the civil instant of the first frame the session renders — the render prewarm's first, `capture.prewarm_s` before the window's begin — with its date held or following the calendar per `freeze_date_advances` | n/a | Permitted; the recommended policy ([`00`](00_Overview.md) §6) |
+| `freeze_at_window_start` | Held at the civil instant the window opens — `capture.window`'s begin, which `run_capture` gives the session as `window_opens_at` — with its date held or following the calendar per `freeze_date_advances`; the render prewarm before it is lit by the same sun | n/a | Permitted; the recommended policy ([`00`](00_Overview.md) §6) |
 | `advance` | Tracks simulated time. The session writes the sun for every tick at that frame's instant, with the engine's own advance off ([`11`](11_Time_And_Illumination.md) D11.19) | **Pinned to 1.0** (`pinned_by_policy`), not operator-settable (check 3); a scenario default at another rate is refused (check 15) | Permitted |
 | `freeze_at` | Held at `freeze_at_civil_time` whatever instant the window opens at | n/a | Permitted |
 | `ignore` | Left as the world holds it; the run's lighting honours no epoch | n/a | Permitted with a warning, `lighting_honours_no_epoch` (check 15) |
@@ -1196,10 +1207,11 @@ that has since changed is refused naming both values.
 | `orbit_radius_m`, `orbit_altitude_m`, `orbit_period_s` | `200.0`, `518.2`, `240.0` | Session-fixed | today's `:598-615`, **converted to metres** (§1.5) |
 | `orbit_centre_x_m`, `orbit_centre_y_m` | **cond.** — required when `pattern` is `orbit`; refused with `stare` | Session-fixed | today's `--orbit-x` / `--orbit-y`, which fall back to the start pose when absent (`OrbitSensorController.py:235-242`) |
 | `orbit_centre_z_m` | `0.0` | Session-fixed | today's fixed `center_z` (`OrbitSensorController.py:215`) |
-| `stare_look_at_x_m`, `stare_look_at_y_m` | **cond.** — a stare gives these or the five `stare_*` pose fields below, exactly one of the two; refused with `orbit` | Session-fixed | [`08`](08_Collection_And_EPoL.md) §3.3 |
-| `stare_look_at_z_m` | `0.0` | Session-fixed | the implicit look-at height of `camera_transform` in `CarlaNet/python/run_sumo_drive.py` |
+| `stare_look_at_x_m`, `stare_look_at_y_m` | **cond.** — a stare gives these, or `stare_look_at_target`, or the five `stare_*` pose fields below: exactly one of the three; refused with `orbit` | Session-fixed | [`08`](08_Collection_And_EPoL.md) §3.3 |
+| `stare_look_at_z_m` | `0.0` | Session-fixed; not used with `stare_look_at_target`, whose point carries the vehicles' own height | the implicit look-at height of `camera_transform` in `CarlaNet/python/run_sumo_drive.py` |
+| `stare_look_at_target` | **cond.** — `rendered_traffic`, in place of a look-at point or a pose; refused with `orbit`, and with a prewarm shorter than one SUMO step (check 47) | Session-fixed; the camera follows the traffic through the prewarm and holds one pose for the whole window | `run_sumo_drive.py`'s `--camera-aim traffic` (`RenderedVehicleCentre`); D12.37 |
 | `stare_altitude_m`, `stare_standoff_m`, `stare_bearing_deg` | `304.8`, `0.0`, `0.0` | Session-fixed | altitude and standoff are today's start pose — `--z` 1000 ft **converted to metres**, looking straight down (`CarlaControlArgumentParser.py:232-234`, `SensorRig.py:62`); the bearing puts north at the top of the picture, where the start pose's `yaw=0.0` puts east there |
-| `stare_x_m`, `stare_y_m`, `stare_z_m`, `stare_pitch_deg`, `stare_yaw_deg` | **cond.** — all five or none; the alternative to a look-at point | Session-fixed | §9.1: a stare is sited by flying there first, and what flying produces is a pose |
+| `stare_x_m`, `stare_y_m`, `stare_z_m`, `stare_pitch_deg`, `stare_yaw_deg` | **cond.** — all five or none; the alternative to a look-at point or target | Session-fixed | §9.1: a stare is sited by flying there first, and what flying produces is a pose |
 
 **How a stare and an orbit are placed.** All positions are in CARLA's frame — metres, x east, y south,
 so north is −y — and angles are CARLA's: yaw 0 faces east and −90 faces north, and a negative pitch looks
@@ -1214,6 +1226,24 @@ refused rather than dropped. The single definition of every row in this table th
 holds equal to this table; the stare geometry is `StareAim`. `post_process_profile` is not yet in it:
 it is a field of a run configuration's channel object, defined once in `RunConfiguration`, until
 §9.2's `SensorRig` conversion moves it into the description.
+
+**A stare aimed at the rendered traffic** (`"stare_look_at_target": "rendered_traffic"`) stands off
+the same way from a point that is measured rather than given: the mean position, height included, of
+the vehicles the session rendered on the last frame before the window opens, taken from the poses the
+session wrote to bodies (`RenderedTrafficCentre`, fed by `on_pose`, which `run_capture` binds only
+when a channel needs it). Its camera is spawned over the render region's centre at CARLA's origin
+height and follows the traffic through the prewarm: after each step it is moved, with its depth
+camera, to the pose around the centre of that step's last frame, so the view whose tiles and picture
+settle during the prewarm is the view the window holds to within one step's traffic motion — a cold
+view takes on the order of a hundred ticks to settle ([`03`](03_CoSimulation_Runtime.md) §9.5.1), and
+a camera moved only as the window opened would spend the window's first captures settling. The last
+step's centre is the point, and the pose around it is held for the whole window. The run result
+records it (`produced.cameras[]`): the point, the vehicles and the frame it was measured on, the pose,
+how far the camera moved at the last step, and the point again as `as_look_at_point`, the three
+look-at fields, so the view is reproducible from the record as an ordinary look-at stare. It needs a
+prewarm of at least one SUMO step (check 47); a last frame that rendered no vehicle refuses the run at
+pre-roll, naming the channel; and a camera follower refuses the form, because only the process
+driving the session sees the poses.
 
 **`post_process_profile` is the exposure control, and its default is a hidden host-dependent value of
 exactly the kind M2 forbids.** No camera blueprint publishes a *numeric* exposure attribute (§1.3), but
@@ -1407,7 +1437,7 @@ captured is run), so the population inside a candidate region at every step is a
 | 30 | SUMO reaches `window.begin_s − prewarm_s` | refuse on a SUMO error, naming its own message | [`10`](10_Scale_And_Performance.md) D10.2 |
 | 31 | Applied solar state matches the requested one, read back from `get_solar_state()` | refuse | `requested solar_time 23.00, world reports 12.00.` — §4.5's `confirmed` |
 | 32 | The first cued tick delivers a frame on every channel | refuse | `channel OVERWATCH-2 delivered no frame within 5 cues.` — [`02`](02_Use_Cases.md) UC-7's session fault, applied before the window rather than during it |
-| 33 | Actual in-region population at `window.begin_s` against `render_cap` | warn, with the number | closes the loop on check 21 with the real figure |
+| 33 | Actual in-region population at `window.begin_s` against `render_cap` | warn, with the number; refuse where `on_warning.render_cap_bound_at_window_open` refuses it, or the caller is unattended and has not adjudicated it (§6.4.2) | `at the window's begin, t=25200, 140 vehicles were inside the render region against render_cap 128, so 12 were not rendered: the cap binds, and a binding cap makes scene density a function of the label (00 §6).` — closes the loop on check 21 with the real figure |
 
 #### Further checks, each naming its own phase
 
@@ -1430,7 +1460,7 @@ the sequence rather than sitting inside a phase's table, and each states its own
 | 44 | 3 | Under `pacing.mode: wall_clock`, the pre-roll's achieved real-time factor is measured and compared against `min_achieved_factor` | refuse | `pre-roll held 0.31 of real time against a requested 1.0 and a floor of 0.8. A live exercise that cannot hold its rate should not open its window.` — the live analogue of check 21: predict before spending, not after |
 | 45 | 3 | Under `handover.enabled`, the handover transport opens, and every `transcript.sources[]` listener binds | refuse | `handover transport could not open tcp://…: connection refused. Nothing has been captured.` |
 | 46 | 0, then continuous | Write headroom under `roots.observation`, in **captured seconds** at the configured rate and channel count, stays above `write_headroom_floor` | refuse at launch when a declared window does not fit (check 19); **stop the run cleanly** when it falls below the floor while running | at launch `at 24 GB/h, 31 GB free at /data is 1 h 17 m of capture against a declared window of 8 h.`; while running `write headroom is 9 min of capture and the floor is 10 min; stopping cleanly at t=372 480 (closed_by: write_headroom).` |
-| 47 | 0 | Every channel is a valid `ChannelDescription`, and occlusion is measured only on a stare | refuse | `capture.channels[0]: channel description refused: a stare needs somewhere to look: give stare_look_at_x_m and stare_look_at_y_m, or all of stare_x_m, …` and `occlusion is measured against a depth camera held at the channel's pose, and an orbit moves its camera with one call at a time … Set occlusion.enabled false for a run with an orbit, or make this channel a stare` |
+| 47 | 0 | Every channel is a valid `ChannelDescription`, occlusion is measured only on a stare, and a stare aimed at the rendered traffic has a prewarm of at least one SUMO step to measure it over | refuse | `capture.channels[0]: channel description refused: a stare needs somewhere to look: give stare_look_at_x_m and stare_look_at_y_m, or stare_look_at_target 'rendered_traffic', or all of stare_x_m, …`, `occlusion is measured against a depth camera held at the channel's pose, and an orbit moves its camera with one call at a time … Set occlusion.enabled false for a run with an orbit, or make this channel a stare` and `this stare aims at the rendered traffic, which is measured on the last frame the prewarm renders before the window opens; the prewarm is 0 s … and one SUMO step is 1 s, so no frame would be rendered to measure it on` |
 | 48 | 0 | The catalogue at `paths.catalogue` is the one the scenario was compiled against | refuse | `…/vehicles.catalogue.json has catalogue_digest 771f…; scenario gardnerville@d0bf… was compiled against 0771…. The session would seat bodies of other dimensions than the routes were built for` |
 | 49 | resolution | The scenario package and the world package resolve, and the scenario's files are the ones its lock digests — a scenario compiled earlier is re-bound by its lock, not recompiled (§6.1) | refuse | `routes file gardnerville.rou.xml digests 5a1c…, not the 9c07… its lock recorded: it changed after the compile. Recompile the specification` |
 
@@ -1485,7 +1515,7 @@ resolved, with outcome `usage_error` (§3.10.2). A check the co-simulation sessi
 | 30 | pre-roll | the session | SumoDriveSession.Start, its fast-forward |
 | 31 | pre-roll | the session | SumoDriveSession.Start, SolarLease and the window-open audit; SolarAuditFailedException |
 | 32 | pre-roll | **not built** | the recorder publishes no count of frames received |
-| 33 | pre-roll | **not built** | the session publishes admissions and capacity declines only when disposed |
+| 33 | pre-roll | `run_capture` | CaptureSession, from the session's admission pass for the window's begin (on_admission_pass, WindowAdmissions) |
 | 34 | offline | `run_capture` | RunConfigurationValidator |
 | 35 | offline | `run_capture` | RunConfigurationValidator, against the configuration and the launch echo |
 | 36 | offline | `run_capture` | RunConfigurationValidator |
@@ -1589,24 +1619,28 @@ authority; and the sun is applied and read back before the first capture, not af
 marked as the first irreversible step because it is the first one another operator can notice.
 
 **As built**, the authority and pre-roll checks happen inside one call. `SumoDriveSession.Start` checks the world package
-against the loaded world, resolves the SUMO installation and refuses a release other than the world's
-converter, starts SUMO, takes the world's clock, hides the road and signal layers, checks the clock
-ratio and the network, takes the population lease, fast-forwards SUMO to the prewarm's first instant
-(`capture.window` begin less `capture.prewarm_s`) and binds the sun there, reading it back. It refuses
-by exception, and `CaptureSession` maps the exception's type onto the outcome:
-`PopulationAuthorityHeldException` is `refused_authority` with the holder named,
-`SolarAuditFailedException` is `refused_preroll`, any other `CoSimSessionRefusedException` is
-`refused_server`, and anything else is `internal_error`. **The mapping is coarser than §3.10.2's
-table**, because the session's refusals carry no stage: a sun that the world did not take when it was
-written, and read back different, is refused after the lease with the same `CoSimSessionRefusedException`
-a package that is not the loaded world is refused with before it, and a SUMO error during the
-fast-forward surfaces as whatever TraCI raised. Such a run reports `refused_server` or
-`internal_error` where the table says `refused_preroll`, with the session's own message naming what
-failed. The session restores everything it took on every exit path either way, so a start that failed
-leaves the world as it was found. Then
-`CaptureSession` places the cameras, ticks the prewarm through the session with nothing recording,
-checks the prewarm's pace under `wall_clock` (check 44), and starts the recorders at the window's
-begin. The CLI never sets the sun or the world's settings itself: the session is their one owner.
+against the loaded world and the scenario's files against its compile lock, refuses a scenario that
+lets SUMO teleport a blocked vehicle, resolves the SUMO installation and refuses a release other than
+the world's converter, starts SUMO, takes the world's clock, hides the road and signal layers, checks
+the clock ratio and the network, takes the population lease, fast-forwards SUMO to the prewarm's first
+instant (`capture.window` begin less `capture.prewarm_s`), and binds the sun for the window's opening,
+reading it back: `CaptureSession` gives it the window's begin as `window_opens_at`, so a frozen sun is
+pinned there and the prewarm is lit by it. It refuses by exception, and **every refusal carries the
+stage the session had reached** ([`03`](03_CoSimulation_Runtime.md) §11.10), which `CaptureSession`
+maps onto the outcome, from `start_sumo_drive` and from `Advance` alike: `Validation` and `Launch` are
+`refused_server`; `Authority` is `refused_authority`, with the holder a held lease names (`HeldBy`) in
+`authority_holder`; `PreRoll` — the fast-forward, the sun's binding and read-back, or a refusal on a
+prewarm tick — is `refused_preroll`, closed `aborted_at_preroll`; `Window` is `run_stopped`, closed
+`fault:<exception>`. A SUMO failure is such a refusal, quoting SUMO's console, and the result's
+`detail` names the stage. Anything else raised — a dropped CARLA connection among them, which the
+session does not wrap — is `internal_error`. The session restores everything it took on every exit
+path, so a start that failed leaves the world as it was found. Then `CaptureSession` places the
+cameras, ticks the prewarm through the session with nothing recording — moving each stare aimed at
+the rendered traffic after every step (§5.2) — checks the prewarm's pace under `wall_clock` (check 44)
+and the vehicles inside the render region at the window's begin against the render cap (check 33),
+records the point each stare aimed at the traffic resolved to, and starts the recorders at the
+window's begin. The CLI never sets the sun or the world's settings itself: the session is their one
+owner.
 
 ### 6.4 The echo before commit, and what replaces it for a machine
 
@@ -1648,17 +1682,25 @@ layer earlier, and the block is serialised as `launch_echo` in `<run>.resolution
 captures per channel and per hour, the civil span, the sun at the window's first and last captured
 instants with their illumination bands (`IlluminationBand`), the world, the render region and caps,
 the estimated disk cost and headroom (check 19's figures), where the run writes, the pacing, and the
-warning codes raised. The sun is evaluated with the window opening at the **first frame the session
-renders** — the prewarm's first, `capture.prewarm_s` before the window's begin — because that is where
-`SumoDriveSession` pins a frozen sun; the echo states that instant (`held_at`) rather than the
-window's begin, which at dawn differs by most of a degree at the default prewarm. Two figures are
-stated as not predicted: the wall-clock duration (no measured tick rate exists for a configuration
-before it runs) and the in-region population (check 21 is not built).
+warning codes raised. The sun is evaluated with the window opening at **its own begin**, because that
+is the instant `run_capture` gives the session as `window_opens_at` and where the session pins a frozen
+sun and anchors an advancing one; `held_at` states it, and says the prewarm before it is lit by the
+same sun. Three figures are stated as not predicted: the wall-clock duration (no measured tick rate
+exists for a configuration before it runs), the in-region population (check 21 is not built; check 33
+measures it at pre-roll), and, where a stare is aimed at the rendered traffic, where it will look.
 
 #### 6.4.2 When it blocks, for a human
 
 **It prints on every attended launch, and it blocks on exactly one condition: a phase-0 warning was
 raised.** With no warnings it prints and the run proceeds.
+
+**A warning raised at pre-roll is adjudicated by the same codes, and nobody is asked.** Check 33 is
+evaluated after the prewarm, with the lease held and the world's clock the session's, so a prompt then
+would hold both, and an operator who has stepped away would hold them indefinitely.
+`on_warning.<code>` `refuse` refuses and `proceed` proceeds, as in phase 0; with no adjudication an
+unattended caller is refused at pre-roll, and an attended run proceeds with the warning said at once as
+a loud condition and carried unadjudicated into the result, where the `launch.warnings_adjudicated`
+gate records it.
 
 The rule is not arbitrary. [`07`](07_Scenario_Authoring.md) §5.3 states the principle this section
 inherits — warnings appear in the report in full "because warnings are the failures that a human has to
@@ -1781,14 +1823,18 @@ the corpus is no longer what was asked for:
 **As built** (`SessionMonitor`, `RunCloseoutReport`), the panel shows the simulated time, the window's
 progress, the newest frame's declared civil instant, declared sun elevation and policy — read from the
 session's illumination source, the same declaration every capture's `<_illumination>` carries — the
-requested and achieved real-time factor and the last pacing window's, the vehicles rendered now, the
-ticks, the SUMO steps and the batch failures, and per channel the captures written, the recorder's
+requested and achieved real-time factor and the last pacing window's, the session's latest admission
+pass — population, subscribed, eligible, admitted, shed and cap, read off `Report.LastAdmissionPass`
+between advances — the vehicles rendered now, the ticks, the SUMO steps and the batch failures, and
+per channel the captures written, the recorder's
 `Dropped`, the captures without their illumination declaration, and occlusion measured and unmatched.
 Every figure is in the snapshot the run result's `produced` block is taken from. Two of the three
 loud conditions are observable — a recorder's `Dropped` becoming non-zero, and in a live run the
 achieved factor falling below its floor; the participant admission guarantee and the rendered
-fraction read quantities nothing in the tree publishes. The shedding ledger, the rendered fraction
-against its floor and the manifest's last flush have no source and are not shown.
+fraction read quantities nothing in the tree publishes. The rendered fraction against its floor and
+the manifest's last flush have no source and are not shown; the shedding ledger is shown as its
+latest row, and the run result keeps the pass at the window's begin and a count of the window's
+passes rather than every row.
 
 Nothing else interrupts. Diagnostics verbosity stays Run-mutable (§5.2) precisely so that the loud
 conditions are not buried, which is the reason `--traffic-diagnostics` is off by default today
@@ -1831,7 +1877,7 @@ rendering of the manifest, never a second computation, for the same reason the m
 | **Radiometry** | per channel: the profile asked for and the digest of the profile the server loaded | `radiometry.profile_digest_present` — observed channels carrying a digest, threshold: all ([`08`](08_Collection_And_EPoL.md) D8.28) |
 | **Pacing** | requested mode and real-time factor; achieved factor per window | `pacing.factor_recorded` — under `wall_clock`, observed: recorded or not. `pacing.achieved_factor` — observed the achieved factor, threshold `min_achieved_factor` |
 | **Handover** | per channel: frames offered, handover drops, last delivered tick; transcript sources, blobs received, last stamp | **no gate.** A handover drop is expected by design ([`08`](08_Collection_And_EPoL.md) §11.3) and the coverage record already carries it as *covered but not delivered* |
-| **Launch provenance** | caller, caller label, every warning with its adjudication and the artifact that granted it, every declared expectation and that it held | `launch.warnings_adjudicated` — observed warnings with no adjudication, threshold 0; that combination can arise only from a bug in §6.4 |
+| **Launch provenance** | caller, caller label, every warning with its adjudication and the artifact that granted it, every declared expectation and that it held | `launch.warnings_adjudicated` — observed warnings with no adjudication, threshold 0; an attended run's pre-roll warning that nobody adjudicated in writing misses it (§6.4.2), and otherwise only a bug in §6.4 can |
 | **Supervision** | instances, intervals, per-interval observability, prevalence in all three units | `supervision.manifest_closing_record` — observed: present or absent. A run killed with no chance to flush has none, and this record is what says so |
 | **Corpus-affecting events** | SUMO collisions, teleports, emergency stops, reconciliation refusals | recorded, not compared — [`01`](01_Architecture.md) OQ6 |
 
@@ -1852,7 +1898,10 @@ skipped where the policy binds no sun) and `launch.warnings_adjudicated`. Four a
 `name`, `owner`, `status` (`evaluated` or `skipped`), `observed`, `threshold`, `comparison` and `met`.
 **With no run manifest in the tree, the records are not appended as they change**: they are computed
 from the live session and recorders at any instant, rendered by the closeout, and written into the run
-result at the terminal outcome. Appending them as they change waits for `RunManifestWriter`.
+result at the terminal outcome. Appending them as they change waits for `RunManifestWriter`. Beside
+them, recorded and not compared, the run result carries whether SUMO could teleport a blocked vehicle
+and whether that was accepted (`produced.session.teleporting`), the scenario's compile lock
+(`produced.session.compile_lock`), and the window's admission passes (`produced.admissions`).
 
 ### 7.3 The two silent failures this closes
 
@@ -2388,6 +2437,7 @@ them by number ([`08`](08_Collection_And_EPoL.md) §15 cites check 17).
 | **D12.34** | **A kill with no chance to flush is normal, and the record makes its cost visible.** What is on disk is what exists and the last complete record is the authority. At most `max(4, n × 2)` captures per channel are lost from the encode queue (`FrameRecorder.cs:115-121`) and `Dropped` counts none of them (`:184-185`), so the manifest carries **captured** and **written** per channel and their difference is the loss. A capture is two files written to their final paths in sequence (`:222-227`, `:228-230`), so atomic publication and a stated publication order are required from [`04`](04_Contracts.md), with the sidecar published first so that the only torn state is one a reader can detect and disregard (§3.10.2, §3.10.3 K2–K4) |
 | **D12.35** | **A run has no length of ours.** There is no `--duration` and no `--frames`; a window may declare no end; and nothing in this surface depends on a run reaching an end. The single bound the tool imposes on itself is **write headroom**, expressed in captured seconds rather than bytes and re-evaluated while the run proceeds (check 46), because a disk that fills produces truncated files — the one outcome D12.33 forbids outright. A clean self-stop carries `closed_by: write_headroom`, its floor is an operator-settable field, and a caller that stops us first never sees it (§3.8, §5.2, §6.2 check 46) |
 | **D12.36** | **What a caller can watch while a run proceeds is two surfaces that already exist, and one boundary that is not a gap.** Through CarlaNet and the Python shim, after an explicit `Client.start_observer()` (`carlanet/__init__.py:2233-2239`), three cache reads are free and cost the tick nothing — `get_sim_time` (`:2017`), `get_actor_ids` (`:2027`) and `get_solar_state` (`:1511`) — while `get_actors` (`:2038`) is a blocking RPC per call; [`10`](10_Scale_And_Performance.md) D10.10 is why the distinction matters, and an observer reads the push stream rather than polling. **The server holds no capture state**, so frames written, intervals closed, area covered and gate records are answerable only from the incrementally written artifacts — the same fields, from the same source, that D12.14 already binds the monitor to (§7.6) |
+| **D12.37** | **A stare can aim at the rendered traffic instead of at coordinates, and the point it resolves to is recorded.** `stare_look_at_target: rendered_traffic` is a third stare form beside a look-at point and a pose — exactly one of the three — with the look-at form's altitude, standoff and bearing. The point is the mean position, height included, of the vehicles the session rendered on the last frame before the window opens, measured from the poses it wrote to bodies, because the middle of a render region is not where a corridor scenario's traffic is. It is declared as a named target rather than a flag so that the look-at fields name what the boresight passes through in one place, and a second target is a new value rather than a new field. It is resolved as the window opens because the window is what it frames, and the camera follows the traffic through the prewarm so that the view which settles is the view the window holds. The run result records the point as look-at fields, so a run is reproducible from its record by an ordinary look-at stare, and a process with no session — a camera follower — refuses the form (§5.2) |
 
 ---
 

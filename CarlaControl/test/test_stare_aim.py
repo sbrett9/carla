@@ -67,6 +67,28 @@ def test_the_boresight_passes_through_the_look_at_point(bearing_deg, standoff_m)
     assert -180.0 < aim.yaw_deg <= 180.0
 
 
+def test_a_stare_at_the_rendered_traffic_has_no_pose_of_its_own():
+    channel = ChannelDescription(stare_look_at_target="rendered_traffic")
+    with pytest.raises(ValueError, match="rendered traffic"):
+        StareAim.from_channel(channel)
+
+
+@pytest.mark.parametrize("bearing_deg", [0.0, 45.0, 200.0])
+def test_a_point_found_later_is_aimed_at_with_the_channel_s_own_standoff(bearing_deg):
+    channel = ChannelDescription(stare_look_at_target="rendered_traffic", stare_altitude_m=250.0,
+                                 stare_standoff_m=300.0, stare_bearing_deg=bearing_deg)
+    aim = StareAim.aimed_at(channel, *LOOK_AT)
+    assert _boresight_hits(aim) == pytest.approx(LOOK_AT, abs=1e-6)
+    assert aim == StareAim.looking_at(*LOOK_AT, altitude_m=250.0, standoff_m=300.0,
+                                      bearing_deg=bearing_deg)
+
+
+def test_an_orbit_is_not_aimed_at_a_point():
+    orbit = ChannelDescription(pattern="orbit", orbit_centre_x_m=1.0, orbit_centre_y_m=2.0)
+    with pytest.raises(ValueError, match="orbit"):
+        StareAim.aimed_at(orbit, *LOOK_AT)
+
+
 def test_no_standoff_looks_straight_down_with_the_bearing_at_the_top_of_the_picture():
     aim = StareAim.looking_at(*LOOK_AT, altitude_m=304.8, standoff_m=0.0, bearing_deg=0.0)
 

@@ -55,6 +55,10 @@ class CameraFollower:
     until something does. Until then, record from the process that drives the world.
 
     A map load removes every actor, this camera included; restart the follower after one.
+
+    A stare aimed at the rendered traffic is refused: its point is measured from the poses the
+    co-simulation session writes, and only the process driving that session sees them. The run
+    that resolved one records the point, which a follower takes as a look-at point.
     """
 
     STALL_AFTER_S = 3.0
@@ -125,6 +129,14 @@ class CameraFollower:
         return "unnamed camera"
 
     def _run(self) -> int:
+        if self.channel.aims_at_rendered_traffic():
+            self.logger.error(
+                "this stare aims at the rendered traffic, whose point exists only in the process "
+                "that drives the co-simulation session: it is measured from the poses that session "
+                "writes, on the last frame before its window opens. A follower has no session. "
+                "Give the point that run's result records (produced.cameras[].as_look_at_point) as "
+                "--stare-look-at and --stare-look-at-z-m instead")
+            return 1
         try:
             world = self.client.get_world()
         except Exception as failure:

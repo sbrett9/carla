@@ -73,6 +73,7 @@ CONFIG = ('<?xml version="1.0" encoding="UTF-8"?>\n<configuration>\n'
           f'  <input><net-file value="{MAP_NAME}.net.xml"/>'
           f'<route-files value="{SCENARIO_ID}.rou.xml"/></input>\n'
           f'  <time><step-length value="{STEP_S!r}"/></time>\n'
+          '  <processing><time-to-teleport value="-1"/></processing>\n'
           f'  <random_number><seed value="{SEED}"/></random_number>\n</configuration>\n')
 SUPERVISION = json.dumps({"supervision_plan_version": 1, "plan_id": SCENARIO_ID,
                           "instances": [], "cohorts": [], "series": []}, indent=2) + "\n"
@@ -117,7 +118,10 @@ def lock_document(world_package_name: str, files: dict[str, dict], **changes) ->
         "vocabulary": {"core_version": 1, "namespaces": {}, "vocabulary_digest": "3" * 64},
         "traffic": {"sumo_seed": SEED, "step_length_s": STEP_S, "end_s": END_S,
                     "processing": {"time-to-teleport": "-1"},
-                    "routed_by": {"tool": "duarouter", "version": "1.27.0"}},
+                    "routed_by": {"tool": "duarouter", "version": "1.27.0",
+                                  "world_converter": MANIFEST["NetconvertVersion"],
+                                  "release_agreement": "SameRelease",
+                                  "mismatch_accepted": False}},
         "epoch": EPOCH,
         "epoch_block_sha256": hashlib.sha256(
             json.dumps(EPOCH, sort_keys=True, indent=2).encode("utf-8")).hexdigest(),

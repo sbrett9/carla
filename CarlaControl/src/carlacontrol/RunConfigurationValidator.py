@@ -17,7 +17,8 @@ by construction, and which have nothing in the tree to compare.
   the server --
   the sun, the camera blueprints' attributes, the vehicle blueprints -- before anything is spawned.
 * **Pre-roll** (`preroll_pace`) compares the prewarm's achieved real-time factor with the floor a
-  live run declares (check 44).
+  live run declares (check 44), and (`window_open_population`) the vehicles inside the render region
+  at the window's begin with the render cap, from the session's admission pass (check 33).
 
 **What the disk figures rest on.** Check 19 and check 46 express free space in captured seconds from
 doc 10's measured capture sizes: 2.25 MB per 1280x720 PNG (10 §4.6, read as MiB, the larger of the two
@@ -280,6 +281,8 @@ class RunConfigurationValidator:
                                 "(SensorRig.set_transform measured 25 of 65 captures lost that "
                                 "way). Set occlusion.enabled false for a run with an orbit, or "
                                 "make this channel a stare")
+            if description.aims_at_rendered_traffic():
+                RunConfigurationValidator._traffic_prewarm(effective, subject, findings)
             sensor_id = description.sensor_id
             if count > 1:
                 if not sensor_id:
@@ -290,6 +293,26 @@ class RunConfigurationValidator:
                                     f"sensor_id '{sensor_id}'")
                 else:
                     seen[sensor_id] = index
+
+    @staticmethod
+    def _traffic_prewarm(effective: EffectiveRunConfiguration, subject: str,
+                         findings: RunConfigurationFindings) -> None:
+        """A stare aimed at the rendered traffic measures it on the prewarm's last frame, so the
+        prewarm has to render at least one SUMO step before the window opens."""
+        step = effective.value("scenario.sumo_step_s")
+        if step is None or effective.value("capture.window") is None:
+            return
+        try:
+            prewarm = effective.prewarm_s
+        except WindowResolutionError:
+            return
+        if prewarm + 1e-9 < float(step):
+            findings.refuse(47, subject, f"this stare aims at the rendered traffic, which is "
+                            f"measured on the last frame the prewarm renders before the window "
+                            f"opens; the prewarm is {prewarm:g} s (capture.prewarm_s, clipped to "
+                            f"the window's begin) and one SUMO step is {float(step):g} s, so no "
+                            "frame would be rendered to measure it on. Give a prewarm of at least "
+                            "one SUMO step, or aim the channel at a point or a pose")
 
     # -- checks 12 and 13 -------------------------------------------------------------------------
     @staticmethod
@@ -550,6 +573,44 @@ class RunConfigurationValidator:
     # =============================================================================================
     # pre-roll
     # =============================================================================================
+    @staticmethod
+    def window_open_population(effective: EffectiveRunConfiguration,
+                               at_window_open: dict | None) -> RunConfigurationFindings:
+        """Check 33: the vehicles inside the render region at the window's begin against the cap.
+
+        `at_window_open` is the session's admission pass for the window's begin, as
+        `WindowAdmissions.describe` states it. Where more vehicles were eligible than the capacity,
+        it warns with the numbers; the warning is then adjudicated as a phase-0 warning is, except
+        that nobody is asked: `on_warning.<code>` `refuse` refuses, `proceed` proceeds, and with no
+        adjudication an unattended caller refuses (12 §6.4) and an attended one proceeds with the
+        warning on record, unadjudicated. With no pass it concludes nothing.
+        """
+        findings = RunConfigurationFindings()
+        if at_window_open is None:
+            return findings
+        eligible, capacity = at_window_open["eligible"], at_window_open["capacity"]
+        if eligible <= capacity:
+            return findings
+        message = (f"at the window's begin, t={at_window_open['sim_time_s']:g}, {eligible} vehicles "
+                   f"were inside the render region against render_cap {capacity}, so "
+                   f"{at_window_open['shed']} were not rendered: the cap binds, and a binding cap "
+                   "makes scene density a function of the label (00 §6). Narrow "
+                   "capture.render_region, or raise capture.render_cap (render_cap_hard is "
+                   f"{effective.value('capture.render_cap_hard')})")
+        findings.warn(33, "capture.render_cap", message)
+        code = RunConfigurationFindings.warning_code(findings.warnings[0])
+        decision = (effective.value("on_warning") or {}).get(code)
+        if decision == "refuse":
+            findings.refuse(33, f"on_warning.{code}", f"warning '{code}' was raised and "
+                            f"on_warning.{code} is 'refuse': {message}")
+        elif decision is None and effective.value("caller") == "unattended":
+            findings.refuse(33, f"on_warning.{code}", f"warning '{code}' was raised and the caller "
+                            f"is unattended. Set on_warning.{code} to 'proceed' -- which is "
+                            "recorded against this configuration -- or change what raised it. An "
+                            f"unattended run does not proceed past an unadjudicated warning "
+                            f"(12 §6.4): {message}")
+        return findings
+
     @staticmethod
     def preroll_pace(effective: EffectiveRunConfiguration,
                      achieved: float | None) -> RunConfigurationFindings:

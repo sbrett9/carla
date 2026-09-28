@@ -65,13 +65,18 @@ class StareAim:
 
     @classmethod
     def from_channel(cls, channel: ChannelDescription) -> StareAim:
-        """The pose a stare channel declares, in whichever of its two forms it was declared.
+        """The pose a stare channel declares, where it declares one: a look-at point or a pose.
 
         Raises:
-            ValueError: when the channel is not a stare.
+            ValueError: when the channel is not a stare, or when it aims at the rendered traffic,
+                whose point exists only once a session has rendered it (`aimed_at` takes it then).
         """
         if channel.pattern != ChannelDescription.STARE:
             raise ValueError(f"a {channel.pattern} channel has no stare pose")
+        if channel.aims_at_rendered_traffic():
+            raise ValueError("a stare aimed at the rendered traffic has no pose until a "
+                             "co-simulation session has rendered that traffic; the process "
+                             "driving the session resolves it when the window opens")
         if channel.declares_pose():
             return cls(
                 x_m=channel.stare_x_m,
@@ -89,6 +94,23 @@ class StareAim:
             channel.stare_bearing_deg,
         )
 
+    @classmethod
+    def aimed_at(cls, channel: ChannelDescription, x_m: float, y_m: float,
+                 z_m: float) -> StareAim:
+        """The pose a stare channel holds around a point it did not declare itself.
+
+        The point is the one a channel aimed at the rendered traffic resolves to; the camera stands
+        off from it by the channel's own altitude, standoff and bearing, exactly as it would from a
+        declared look-at point.
+
+        Raises:
+            ValueError: when the channel is not a stare.
+        """
+        if channel.pattern != ChannelDescription.STARE:
+            raise ValueError(f"a {channel.pattern} channel has no stare pose")
+        return cls.looking_at(x_m, y_m, z_m, channel.stare_altitude_m, channel.stare_standoff_m,
+                              channel.stare_bearing_deg)
+
     @staticmethod
     def yaw_for_bearing(bearing_deg: float) -> float:
         """CARLA's yaw for a compass bearing, folded into -180 < yaw <= 180."""
@@ -99,3 +121,8 @@ class StareAim:
         """One line for a log."""
         return (f"({self.x_m:.1f}, {self.y_m:.1f}, {self.z_m:.1f}) m, "
                 f"pitch {self.pitch_deg:.1f}, yaw {self.yaw_deg:.1f}")
+
+    def to_dict(self) -> dict:
+        """The pose as a run record states it."""
+        return {"x_m": self.x_m, "y_m": self.y_m, "z_m": self.z_m, "pitch_deg": self.pitch_deg,
+                "yaw_deg": self.yaw_deg}

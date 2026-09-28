@@ -10,8 +10,9 @@ caller's log -- it writes one line every `line_interval_s` through `logging`, so
 display (§3.10.1 M1). A loud condition is written at once, at `WARNING`, whatever the interval.
 
 The panel is the capture operator's (§7.4.1): it shows the declared sun's elevation and the policy
-because that is how a wrong sun is made visible. An exercised operator's picture is a different
-display and never this one (D12.31).
+because that is how a wrong sun is made visible, and the session's latest admission pass --
+population, subscribed, eligible, admitted, shed and cap -- because that is how a binding render cap
+is made visible. An exercised operator's picture is a different display and never this one (D12.31).
 """
 from __future__ import annotations
 
@@ -95,9 +96,15 @@ class SessionMonitor:
                         f"{cls._n(pacing['last_window_factor'], '.3f')}"
                         + (f"  behind {pacing['behind_schedule_s']:.1f} s"
                            if pacing["paced"] else ""))
+        admission = snapshot.get("admission")
+        if admission is not None:
+            rows.append(f"sumo  population {admission['population']}   subscribed "
+                        f"{admission['subscribed']}   eligible {admission['eligible']}   admitted "
+                        f"{admission['admitted']}   shed {admission['shed']}   cap "
+                        f"{admission['capacity']}")
         render = snapshot["render"]
         if render is not None:
-            rows.append(f"sumo  rendered now {render['rendered_now']}   ticks {render['ticks']:,}"
+            rows.append(f"rend  rendered now {render['rendered_now']}   ticks {render['ticks']:,}"
                         f"   steps {render['sumo_steps']:,}   batch failures "
                         f"{render['batch_failures']}")
         for channel in snapshot["channels"]:
@@ -117,11 +124,16 @@ class SessionMonitor:
                              f"{cls._n(c['recorder_dropped'], 'd')} dropped"
                              for c in snapshot["channels"])
         progress = snapshot["window"].get("progress")
+        admission = snapshot.get("admission")
+        population = "" if admission is None else (
+            f"; eligible {admission['eligible']} admitted {admission['admitted']} shed "
+            f"{admission['shed']} cap {admission['capacity']}")
         return (f"t={cls._n(snapshot['sim_time_s'], '.1f')} "
                 f"({'-' if progress is None else f'{100.0 * progress:.1f}%'}) civil "
                 f"{illumination.get('declared_civil') or '-'} sun "
                 f"{cls._n(illumination.get('sun_elevation_deg'), '+.2f')} deg; pace "
-                f"{cls._n(pacing.get('achieved_factor'), '.3f')}; {channels or 'no channel'}")
+                f"{cls._n(pacing.get('achieved_factor'), '.3f')}{population}; "
+                f"{channels or 'no channel'}")
 
     @staticmethod
     def _policy_flag(snapshot: dict) -> str:

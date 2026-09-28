@@ -2,11 +2,13 @@
 
 `12_Operator_Control_Surface.md` §7.2, D12.16. Computed at any instant from the objects that hold the
 facts -- the co-simulation session (`SumoDriveSession`: its clock, its pacing, the sun's audit, the
-newest frame's illumination declaration) and each channel's recorder (`FrameRecorder`: captures
-written, captures dropped, illumination pairing, occlusion pairing) -- never at the end only, so a run
-stopped at minute nine has everything it knew at minute nine. `snapshot()` is the one computation:
-the live monitor renders it (D12.14), the loud conditions are read from it, and the run result carries
-the last one taken. Nothing here measures anything of its own.
+newest frame's illumination declaration, its latest admission pass, and the compile lock and
+teleporting checks it made before SUMO started), the window's admission passes (`WindowAdmissions`)
+and each channel's recorder (`FrameRecorder`: captures written, captures dropped, illumination
+pairing, occlusion pairing) -- never at the end only, so a run stopped at minute nine has everything
+it knew at minute nine. `snapshot()` is the one computation: the live monitor renders it (D12.14), the
+loud conditions are read from it, and the run result carries the last one taken. Nothing here
+measures anything of its own.
 
 **Gate records are observations, never a verdict.** Each names what it observed, the threshold it
 compared against, the comparison, and whether it was met; nothing sums them. A gate whose input the
@@ -40,6 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from carlacontrol.EffectiveRunConfiguration import EffectiveRunConfiguration
+from carlacontrol.WindowAdmissions import WindowAdmissions
 
 SKIPPED = {
     "capture.captured_minus_written": ("captures accepted but not written",
@@ -73,12 +76,40 @@ class RunCloseoutReport:
         self.effective = effective
         self.clock = clock
         self.session: Any = None
+        self.admissions: WindowAdmissions | None = None
+        self.scenario_checks: dict | None = None
         self.channels: list[ChannelCapture] = []
         self.started_at: float | None = None
 
-    def attach(self, session: Any) -> None:
+    def attach(self, session: Any, admissions: WindowAdmissions | None = None) -> None:
+        """Read from `session` from now on, and from the window's admission passes where given.
+
+        The compile lock and teleporting checks are read here, once: the session made both before
+        SUMO started, and neither changes while it runs.
+        """
         self.session = session
+        self.admissions = admissions
+        self.scenario_checks = self.scenario_checks_of(session.Report)
         self.started_at = self.clock()
+
+    @staticmethod
+    def scenario_checks_of(report: Any) -> dict:
+        """The session's compile lock and teleporting checks, as a run record states them."""
+        lock = report.CompileLock
+        teleporting = report.Teleporting
+        return {
+            "compile_lock": {"compiled": bool(lock.Compiled),
+                             "lock_path": str(lock.ExpectedLockPath),
+                             "statement": str(lock),
+                             "routed_by": str(lock.RoutedByText),
+                             "compiled_for": str(lock.WorldText)},
+            "teleporting": {"enabled": bool(teleporting.Enabled),
+                            "accepted": bool(teleporting.Accepted),
+                            "seconds": float(teleporting.Seconds),
+                            "declared": None if teleporting.Declared is None
+                            else str(teleporting.Declared),
+                            "statement": str(teleporting)},
+        }
 
     def add_channel(self, channel: ChannelCapture) -> None:
         self.channels.append(channel)
@@ -96,6 +127,9 @@ class RunCloseoutReport:
             "illumination": None,
             "pacing": None,
             "render": None,
+            "admission": None,
+            "admissions": None if self.admissions is None else self.admissions.to_dict(),
+            "scenario_checks": self.scenario_checks,
             "channels": [self._channel(channel) for channel in self.channels],
             "wall_elapsed_s": None if self.started_at is None else self.clock() - self.started_at,
         }
@@ -121,6 +155,7 @@ class RunCloseoutReport:
                               "ticks": int(report.Ticks), "sumo_steps": int(report.SumoSteps),
                               "poses_computed": int(report.PosesComputed),
                               "batch_failures": int(report.BatchFailures)}
+        snapshot["admission"] = WindowAdmissions.describe(report.LastAdmissionPass)
         audit = session.SunAudit
         snapshot["solar_audit"] = None if audit is None else {
             "worst_angle_deg": self._number(report.WorstSolarResidualDegrees),
@@ -252,6 +287,26 @@ class RunCloseoutReport:
         if snapshot["sim_time_s"] is not None:
             lines.append(f"  reached t={snapshot['sim_time_s']:,.1f} s of "
                          f"{snapshot['window']['begin_s']:,.0f} - {snapshot['window']['end_s']:,.0f}")
+        checks = snapshot.get("scenario_checks")
+        if checks:
+            lock = checks["compile_lock"]
+            lines.append(f"  compile lock: {lock['statement']}")
+            if lock["compiled"]:
+                lines.append(f"    routed by {lock['routed_by']}")
+                lines.append(f"    compiled for {lock['compiled_for']}")
+            lines.append(f"  teleporting: {checks['teleporting']['statement']}")
+        admissions = snapshot.get("admissions")
+        if admissions:
+            opening = admissions["at_window_open"]
+            if opening is not None:
+                lines.append(f"  admission at the window's begin, t={opening['sim_time_s']:g}: "
+                             f"population {opening['population']}, eligible "
+                             f"{opening['eligible']}, admitted {opening['admitted']}, shed "
+                             f"{opening['shed']}, cap {opening['capacity']}")
+            window = admissions["window"]
+            lines.append(f"  admission passes in the window: {window['passes']}, "
+                         f"{window['passes_shedding']} shedding; most eligible "
+                         f"{window['most_eligible']}, most shed {window['most_shed']}")
         for channel in snapshot["channels"]:
             lines.append(f"  channel {channel['sensor_id']}: written {channel['written']}, "
                          f"recorder-dropped {channel['recorder_dropped']}, illumination unpaired "

@@ -153,8 +153,10 @@ _CHECKS: tuple[RunCheck, ...] = (
              "RunConfigurationValidator"),
     RunCheck(42, OFFLINE, "Handover channels are declared channels; the transcript root lies "
              "outside the corpus", (), NOT_BUILT, "no handover or transcript writer exists"),
-    RunCheck(47, OFFLINE, "Every channel is a valid ChannelDescription, and occlusion is measured "
-             "only on a stare", _R, RUN_CAPTURE, "ChannelDescription, RunConfigurationValidator"),
+    RunCheck(47, OFFLINE, "Every channel is a valid ChannelDescription, occlusion is measured "
+             "only on a stare, and a stare aimed at the rendered traffic has a prewarm of at least "
+             "one SUMO step to measure it over", _R, RUN_CAPTURE,
+             "ChannelDescription, RunConfigurationValidator"),
     RunCheck(48, OFFLINE, "The catalogue at paths.catalogue is the one the scenario was compiled "
              "against", _R, RUN_CAPTURE, "RunConfigurationValidator"),
     # -- the server --------------------------------------------------------------------------
@@ -185,8 +187,10 @@ _CHECKS: tuple[RunCheck, ...] = (
              "SolarAuditFailedException"),
     RunCheck(32, PRE_ROLL, "The first cued tick delivers a frame on every channel", (), NOT_BUILT,
              "the recorder publishes no count of frames received"),
-    RunCheck(33, PRE_ROLL, "The in-region population at the window's begin against render_cap", (),
-             NOT_BUILT, "the session publishes admissions and capacity declines only when disposed"),
+    RunCheck(33, PRE_ROLL, "The in-region population at the window's begin against render_cap", _RW,
+             RUN_CAPTURE, "CaptureSession, from the session's admission pass for the window's "
+             "begin; refused only as on_warning or an unattended caller requires",
+             warning_code="render_cap_bound_at_window_open"),
     RunCheck(44, PRE_ROLL, "Under pacing.mode wall_clock, the prewarm held min_achieved_factor", _R,
              RUN_CAPTURE, "CaptureSession, from the session's RealTimePacer"),
     RunCheck(45, PRE_ROLL, "The handover transport opens", (), NOT_BUILT,

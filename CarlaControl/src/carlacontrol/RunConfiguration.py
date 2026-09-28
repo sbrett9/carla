@@ -353,10 +353,16 @@ _CHANNEL_HELP = {
     "orbit_radius_m": "Orbit: radius, metres.",
     "orbit_altitude_m": "Orbit: height above the centre, metres.",
     "orbit_period_s": "Orbit: wall-clock seconds per revolution.",
-    "stare_look_at_x_m": "Stare: the point looked at, x metres; with stare_look_at_y_m, or give "
-                         "the five stare pose fields instead.",
+    "stare_look_at_x_m": "Stare: the point looked at, x metres; with stare_look_at_y_m. Or name "
+                         "stare_look_at_target, or give the five stare pose fields instead.",
     "stare_look_at_y_m": "Stare: the point looked at, y metres (south).",
-    "stare_look_at_z_m": "Stare: the height of that point, metres.",
+    "stare_look_at_z_m": "Stare: the height of that point, metres. Not used with "
+                         "stare_look_at_target, whose point carries the vehicles' own height.",
+    "stare_look_at_target": "Stare: a point named instead of given. rendered_traffic is the centre "
+                            "of the vehicles the session rendered on the last frame before the "
+                            "window opens; the camera follows it through the prewarm, holds the "
+                            "pose it resolves to for the whole window, and the run result records "
+                            "that point. Needs a prewarm of at least one SUMO step.",
     "stare_altitude_m": "Stare: height above the point, metres.",
     "stare_standoff_m": "Stare: horizontal distance back from the point, metres; 0 looks "
                         "straight down.",

@@ -44,6 +44,7 @@ A_STARE = {"stare_look_at_x_m": 120.0, "stare_look_at_y_m": -340.0}
 AN_ORBIT = {"pattern": "orbit", "orbit_centre_x_m": 120.0, "orbit_centre_y_m": -340.0}
 A_POSE = {"stare_x_m": 120.0, "stare_y_m": 60.0, "stare_z_m": 300.0,
           "stare_pitch_deg": -37.0, "stare_yaw_deg": -90.0}
+AT_TRAFFIC = {"stare_look_at_target": "rendered_traffic", "stare_standoff_m": 300.0}
 
 
 class _CameraRigTable:
@@ -115,11 +116,18 @@ def test_default_of_refuses_a_name_that_is_not_a_field():
         ChannelDescription.default_of("orbit_radius")
 
 
-@pytest.mark.parametrize("fields", [A_STARE, A_POSE, AN_ORBIT], ids=["look-at", "pose", "orbit"])
+@pytest.mark.parametrize("fields", [A_STARE, A_POSE, AT_TRAFFIC, AN_ORBIT],
+                         ids=["look-at", "pose", "at the rendered traffic", "orbit"])
 def test_a_complete_description_is_accepted(fields):
     channel = ChannelDescription(**fields)
     for name, value in fields.items():
         assert getattr(channel, name) == value
+
+
+def test_only_a_stare_at_the_rendered_traffic_says_it_aims_at_it():
+    assert ChannelDescription(**AT_TRAFFIC).aims_at_rendered_traffic()
+    for fields in (A_STARE, A_POSE, AN_ORBIT):
+        assert not ChannelDescription(**fields).aims_at_rendered_traffic()
 
 
 # Each case is one thing wrong with an otherwise workable description, and a phrase the refusal must
@@ -139,9 +147,19 @@ REFUSED = {
     "an unknown pattern": ({**A_STARE, "pattern": "hover"}, "pattern"),
     "an unnameable sensor": ({**A_STARE, "sensor_id": "overwatch 1"}, "sensor_id"),
     "an empty sensor name": ({**A_STARE, "sensor_id": ""}, "sensor_id"),
-    "a stare with nowhere to look": ({}, "needs somewhere to look"),
+    "a stare with nowhere to look": ({}, "stare_look_at_target 'rendered_traffic'"),
     "a look-at point missing y": ({"stare_look_at_x_m": 1.0}, "stare_look_at_y_m"),
-    "both stare forms": ({**A_STARE, **A_POSE}, "not both"),
+    "both stare forms": ({**A_STARE, **A_POSE}, "not a look-at point and an explicit pose"),
+    "a point and the traffic": ({**A_STARE, **AT_TRAFFIC},
+                                "not a look-at point and a look-at target"),
+    "the traffic and a pose": ({**AT_TRAFFIC, **A_POSE},
+                               "not a look-at target and an explicit pose"),
+    "a target that is not one": ({"stare_look_at_target": "the tallest building"},
+                                 "'rendered_traffic'"),
+    "a target that is not text": ({"stare_look_at_target": 3},
+                                  "stare_look_at_target must be text"),
+    "the traffic on an orbit": ({**AN_ORBIT, "stare_look_at_target": "rendered_traffic"},
+                                "given for an orbit"),
     "a pose missing its yaw": ({k: v for k, v in A_POSE.items() if k != "stare_yaw_deg"},
                                "stare_yaw_deg"),
     "a pitch past straight down": ({**A_POSE, "stare_pitch_deg": -120.0}, "stare_pitch_deg"),

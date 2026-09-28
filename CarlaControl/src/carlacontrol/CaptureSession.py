@@ -12,27 +12,42 @@ world (D1.12):
 * **Echo.** An attended launch prints the echo, and blocks only when a warning was raised that no
   `on_warning` adjudicates (§6.4.2); with no terminal to ask, it refuses rather than guessing.
 * **Connect and check the server.**
-* **Start the session** (`world.start_sumo_drive`), which checks the loaded world is the package's,
-  starts the SUMO release that converted the world, takes the world's clock and the population lease,
-  hides the layers, fast-forwards SUMO to the prewarm's first instant and binds the sun there. Its
-  refusals are mapped by type, because they carry no stage: a lease held by another
-  (`PopulationAuthorityHeldException`) is `refused_authority`, a failed solar audit
-  (`SolarAuditFailedException`) is `refused_preroll`, and every other refusal is `refused_server` --
-  including the few the session raises after its lease, such as a sun the world did not take.
+* **Start the session** (`world.start_sumo_drive`), which checks the loaded world is the package's
+  and the scenario's files are the ones its compile lock digests, refuses a scenario that lets SUMO
+  teleport, starts the SUMO release that converted the world, takes the world's clock and the
+  population lease, hides the layers, fast-forwards SUMO to the prewarm's first instant, and binds
+  the sun for the window's opening -- `window_opens_at`, the window's begin, so a frozen sun is
+  pinned there and the prewarm is lit by it. It is handed `on_admission_pass`, so every admission
+  pass reaches `WindowAdmissions`, and -- only where a channel aims at the rendered traffic --
+  `on_pose`, feeding `RenderedTrafficCentre`.
+* **Map every refusal by its stage.** A refusal from the session's start or from `Advance` is a
+  `CoSimSessionRefusedException` whose `StageName` says how far the session had got: `Validation`
+  and `Launch` are `refused_server`; `Authority` is `refused_authority`, with the holder a held
+  population lease names (`HeldBy`); `PreRoll` -- from the start, or from an `Advance` of the
+  prewarm -- is `refused_preroll`, closed `aborted_at_preroll`; `Window` is `run_stopped`, closed
+  `fault:<type>`. A SUMO failure is such a refusal. Anything else raised is `internal_error`.
 * **Place the cameras**: each channel's RGB camera at its stare pose -- or above its orbit's centre,
   flown by `OrbitSensorController` -- with `sensor_tick` at the capture interval and the
   post-process profile set by name; and, where occlusion is measured, a depth camera at the stare's
   pose. The cameras exist through the prewarm, so the tiles their views select are streamed before
-  the first capture.
-* **Prewarm**: advance until the window's begin without recording. Under `wall_clock` the pace the
-  prewarm held is checked against the floor (check 44).
+  the first capture. A stare aimed at the rendered traffic starts over the render region's centre.
+* **Prewarm**: advance until the window's begin without recording. A stare aimed at the rendered
+  traffic follows it: after each prewarm step its cameras are moved to the pose around the centre of
+  the vehicles that step's last frame rendered, so the view whose tiles settle is the one the window
+  will hold, and the last step's centre is the point it resolves to -- recorded, and held for the
+  whole window; a last frame that rendered nothing refuses at pre-roll. Under `wall_clock` the pace
+  the prewarm held is checked against the floor (check 44); and, whatever the pacing, the vehicles
+  inside the render region at the window's begin are checked against the render cap (check 33), from
+  the session's admission pass for that instant.
 * **Record**: one recorder per channel, each started from its own `World` handle because the shim
   holds one recorder per handle, all given this session's id as their run id and the session's
   illumination source.
 * **Advance** until the window's end, the scenario's end, a stop, a loud condition under an
   unattended caller, or write headroom running out (check 46).
 * **Terminate** through `RunTerminationSequence`: drain the recorders, take the closing snapshot and
-  gate records, write the run result, and only then destroy the cameras and dispose the session.
+  gate records, write the run result -- with the session's compile lock and teleporting checks, the
+  admission passes of the window, and where every camera looked -- and only then destroy the cameras
+  and dispose the session.
 
 The recorders are not given the scenario id or the seed: both would enter every PNG's `carla:capture`
 chunk, and whether the observation side may carry either is open (`04_Contracts.md` open question 15);
@@ -52,15 +67,13 @@ from pathlib import Path
 from typing import Any
 
 import carlanet as carla
-from CarlaNet.CoSim import (
-    CoSimSessionRefusedException,
-    PopulationAuthorityHeldException,
-    SolarAuditFailedException,
-)
+from CarlaNet.CoSim import CoSimSessionRefusedException
 
+from carlacontrol.ChannelDescription import ChannelDescription
 from carlacontrol.EffectiveRunConfiguration import EffectiveRunConfiguration
 from carlacontrol.LaunchEcho import LaunchEcho
 from carlacontrol.OrbitSensorController import OrbitSensorController
+from carlacontrol.RenderedTrafficCentre import RenderedTrafficCentre
 from carlacontrol.RunCloseoutReport import ChannelCapture, RunCloseoutReport
 from carlacontrol.RunConfiguration import RunConfiguration
 from carlacontrol.RunConfigurationFindings import (
@@ -85,6 +98,7 @@ from carlacontrol.ScenarioEpoch import ScenarioEpoch
 from carlacontrol.SessionMonitor import SessionMonitor
 from carlacontrol.SiteProfile import SiteProfile
 from carlacontrol.StareAim import StareAim
+from carlacontrol.WindowAdmissions import WindowAdmissions
 
 SESSION_ID_PREFIX = "cap"
 SIM_EPSILON_S = 1e-6
@@ -96,6 +110,15 @@ DISPOSE_TIMEOUT_S = 60.0
 # before the session gives back its bodies, its lease and the world's clock.
 ORDER_ORBIT, ORDER_CAMERA, ORDER_SESSION, ORDER_REPORT = 0, 1, 2, 3
 ADJUDICATED_AT_TERMINAL = "the operator at the terminal"
+# How far the session had got when it refused (CoSimSessionStage), and the outcome that makes the
+# run's. A refusal at the Window stage is the run stopping, not a refusal: see _conclude_refusal.
+SESSION_STAGE_OUTCOMES = {
+    "Validation": ("refused_server", None),
+    "Launch": ("refused_server", None),
+    "Authority": ("refused_authority", None),
+    "PreRoll": ("refused_preroll", "aborted_at_preroll"),
+}
+SESSION_STAGE_WINDOW = "Window"
 
 
 class _RefusedError(Exception):
@@ -120,11 +143,20 @@ class ChannelRig:
     sensor_id: str
     directory: Path
     world: Any
+    description: ChannelDescription | None = None
     camera: Any = None
     depth: Any = None
     orbit: OrbitSensorController | None = None
     recorder: Any = None
+    aim: StareAim | None = None
+    aim_record: dict = field(default_factory=dict)
+    moves: int = 0
+    last_move_m: float | None = None
     notes: list[str] = field(default_factory=list)
+
+    @property
+    def aims_at_rendered_traffic(self) -> bool:
+        return self.description is not None and self.description.aims_at_rendered_traffic()
 
 
 class CaptureSession:
@@ -168,6 +200,8 @@ class CaptureSession:
         self.result_path: Path | None = None
         self.capture_directory: Path | None = None
         self.session_facts: dict = {}
+        self.admissions: WindowAdmissions | None = None
+        self.traffic: RenderedTrafficCentre | None = None
         self.end_reached_s: float | None = None
         self.preroll_pace: float | None = None
 
@@ -211,10 +245,8 @@ class CaptureSession:
             self.termination.request_stop("operator_stop")
             self.result.conclude("run_stopped", closed_by=self.termination.closed_by,
                                  detail="interrupted")
-        except CoSimSessionRefusedException as fault:
-            self.result.conclude("run_stopped",
-                                 closed_by=f"fault:{type(fault).__name__}",
-                                 detail=str(fault.Message))
+        except CoSimSessionRefusedException as refused:
+            self._conclude_refusal(refused)
         except Exception as fault:
             self.logger.exception("internal error")
             self.result.conclude("internal_error", detail=repr(fault))
@@ -224,6 +256,30 @@ class CaptureSession:
             if self.monitor is not None:
                 self.monitor.close()
         return self.result
+
+    def _conclude_refusal(self, refused: Any) -> None:
+        """Conclude the run from a session refusal, by the stage the session had reached.
+
+        From the start and from a prewarm `Advance` alike: nothing of the window was rendered below
+        `Window`, and everything the session took has been given back (the start) or is given back
+        when it is disposed (an `Advance`). A stage this tool does not know is a defect, and is
+        reported as one rather than guessed at.
+        """
+        stage = str(refused.StageName)
+        detail = f"the session refused at {stage}: {refused.Message}"
+        if stage == SESSION_STAGE_WINDOW:
+            self.result.conclude("run_stopped", closed_by=f"fault:{type(refused).__name__}",
+                                 detail=detail)
+            return
+        if stage not in SESSION_STAGE_OUTCOMES:
+            self.logger.error("the session refused at a stage this tool does not know: %s", stage)
+            self.result.conclude("internal_error", detail=detail)
+            return
+        outcome, closed_by = SESSION_STAGE_OUTCOMES[stage]
+        holder = getattr(refused, "HeldBy", None)
+        if holder is not None:
+            self.result.authority_holder = str(holder)
+        self.result.conclude(outcome, closed_by=closed_by, detail=detail)
 
     # -- resolve and validate ----------------------------------------------------------------------
     def _parse(self) -> None:
@@ -355,39 +411,42 @@ class CaptureSession:
         self._check_stop()
 
     def _start_session(self) -> None:
+        """Start the co-simulation session. A refusal it raises is concluded by `run`, by stage."""
         effective = self.effective
         region = effective.value("capture.render_region")
         paced = effective.value("pacing.mode") == "wall_clock"
+        window = effective.window
+        self.admissions = WindowAdmissions(window.begin_s, window.end_s,
+                                           float(effective.value("scenario.sumo_step_s")))
+        if any(effective.channel_description(index).aims_at_rendered_traffic()
+               for index in range(effective.channel_count)):
+            self.traffic = RenderedTrafficCentre()
         world = self.client.get_world()
-        try:
-            session = world.start_sumo_drive(
-                str(effective.scenario.config_path), str(effective.value("world_package")),
-                str(effective.value("paths.catalogue")),
-                # The session's region is in SUMO's frame, whose y is CARLA's negated.
-                region_centre=(float(region["x_m"]), -float(region["y_m"])),
-                admit_radius_m=float(region["radius_m"]),
-                hysteresis_m=float(effective.value("capture.render_hysteresis_m")),
-                capacity=int(effective.value("capture.render_cap")),
-                maximum_bodies=int(effective.value("capture.render_cap_hard")),
-                fixed_delta=float(effective.value("capture.world_delta_s")),
-                record_hz=float(effective.value("capture.capture_hz")),
-                warm_up_to=float(effective.first_rendered_s),
-                road_layer_visible=bool(effective.value("capture.road_layer_visible")),
-                signal_layer_visible=bool(effective.value("capture.signal_layer_visible")),
-                epoch=effective.epoch_object(),
-                illumination=effective.illumination_object(),
-                real_time_factor=float(effective.value("pacing.real_time_factor")) if paced else 0.0,
-                pacing_window_s=float(effective.value("pacing.window_s")),
-                sumo_home=effective.value("sumo.home"),
-                allow_sumo_version_mismatch=bool(effective.value("sumo.allow_version_mismatch")))
-        except PopulationAuthorityHeldException as held:
-            self.result.authority_holder = str(held.HeldBy)
-            raise _RefusedError("refused_authority", str(held.Message)) from None
-        except SolarAuditFailedException as failed:
-            raise _RefusedError("refused_preroll", str(failed.Message),
-                           closed_by="aborted_at_preroll") from None
-        except CoSimSessionRefusedException as refused:
-            raise _RefusedError("refused_server", str(refused.Message)) from None
+        session = world.start_sumo_drive(
+            str(effective.scenario.config_path), str(effective.value("world_package")),
+            str(effective.value("paths.catalogue")),
+            # The session's region is in SUMO's frame, whose y is CARLA's negated.
+            region_centre=(float(region["x_m"]), -float(region["y_m"])),
+            admit_radius_m=float(region["radius_m"]),
+            hysteresis_m=float(effective.value("capture.render_hysteresis_m")),
+            capacity=int(effective.value("capture.render_cap")),
+            maximum_bodies=int(effective.value("capture.render_cap_hard")),
+            fixed_delta=float(effective.value("capture.world_delta_s")),
+            record_hz=float(effective.value("capture.capture_hz")),
+            warm_up_to=float(effective.first_rendered_s),
+            window_opens_at=float(window.begin_s),
+            road_layer_visible=bool(effective.value("capture.road_layer_visible")),
+            signal_layer_visible=bool(effective.value("capture.signal_layer_visible")),
+            epoch=effective.epoch_object(),
+            illumination=effective.illumination_object(),
+            real_time_factor=float(effective.value("pacing.real_time_factor")) if paced else 0.0,
+            pacing_window_s=float(effective.value("pacing.window_s")),
+            sumo_home=effective.value("sumo.home"),
+            allow_sumo_version_mismatch=bool(effective.value("sumo.allow_version_mismatch")),
+            # Bound only where a channel aims at the traffic: the session reads its callbacks once
+            # and hands this a record per rendered vehicle per tick for the whole run.
+            on_pose=None if self.traffic is None else self.traffic.collect,
+            on_admission_pass=self.admissions.observe)
         if session is None:
             raise _RefusedError("refused_server", "the co-simulation assemblies are not loaded "
                            "(CarlaNet.CoSim)")
@@ -397,7 +456,7 @@ class CaptureSession:
         self.termination.add_step(RELEASE_WORLD, "report the session", self._log_session_report,
                                   CAMERA_TIMEOUT_S, ORDER_REPORT)
         self.closeout = RunCloseoutReport(effective, self.clock)
-        self.closeout.attach(session)
+        self.closeout.attach(session, self.admissions)
         self.monitor = self.monitor_override or SessionMonitor(
             enabled=effective.value("monitor") == "on", clock=self.clock)
         self.termination.add_step(CLOSE_RECORD, "take the closing snapshot",
@@ -405,7 +464,21 @@ class CaptureSession:
         self.session_facts = self._session_facts(session)
         for key, value in self.session_facts.items():
             self.logger.info("%s: %s", key, value)
+        self._log_scenario_checks(self.closeout.scenario_checks)
         self._check_stop()
+
+    def _log_scenario_checks(self, checks: dict) -> None:
+        """Say what the session found of the compile lock and teleporting -- an uncompiled scenario
+        and an accepted teleport louder than their ordinary cases."""
+        lock = checks["compile_lock"]
+        (self.logger.info if lock["compiled"] else self.logger.warning)(
+            "compile lock: %s", lock["statement"])
+        if lock["compiled"]:
+            self.logger.info("routed by: %s", lock["routed_by"])
+            self.logger.info("compiled for: %s", lock["compiled_for"])
+        teleporting = checks["teleporting"]
+        (self.logger.warning if teleporting["enabled"] else self.logger.info)(
+            "teleporting: %s", teleporting["statement"])
 
     @staticmethod
     def _session_facts(session: Any) -> dict:
@@ -437,6 +510,7 @@ class CaptureSession:
         effective = self.effective
         values = effective.channel_values(rig.index)
         description = effective.channel_description(rig.index)
+        rig.description = description
         library = rig.world.get_blueprint_library()
         tick = 1.0 / float(effective.value("capture.capture_hz"))
         rgb = library.find(RGB_BLUEPRINT)
@@ -445,7 +519,7 @@ class CaptureSession:
         rgb.set_attribute("fov", str(description.fov))
         rgb.set_attribute("sensor_tick", str(tick))
         rgb.set_attribute("post_process_profile", str(values["post_process_profile"]))
-        transform = self._start_transform(description)
+        transform = self._start_transform(rig)
         rig.camera = rig.world.spawn_actor(rgb, transform)
         self.termination.add_step(RELEASE_WORLD, f"destroy camera {rig.sensor_id}",
                                   rig.camera.destroy, CAMERA_TIMEOUT_S, ORDER_CAMERA)
@@ -474,16 +548,66 @@ class CaptureSession:
             rig.orbit.start_updater()
             rig.orbit.set_enabled(True)
 
-    @staticmethod
-    def _start_transform(description) -> carla.Transform:
-        if description.pattern == "stare":
-            aim = StareAim.from_channel(description)
-            return carla.Transform(carla.Location(x=aim.x_m, y=aim.y_m, z=aim.z_m),
-                                   carla.Rotation(pitch=aim.pitch_deg, yaw=aim.yaw_deg, roll=0.0))
+    def _start_transform(self, rig: ChannelRig) -> carla.Transform:
+        """Where a channel's camera is spawned, recording what it declared in `rig.aim_record`.
+
+        A stare aimed at the rendered traffic has no point yet: it starts over the render region's
+        centre, at CARLA's origin height, and follows the traffic from the prewarm's first step.
+        """
+        description = rig.description
+        record: dict = {"sensor_id": rig.sensor_id, "pattern": description.pattern}
+        if description.pattern == ChannelDescription.STARE:
+            if description.aims_at_rendered_traffic():
+                region = self.effective.value("capture.render_region")
+                aim = StareAim.aimed_at(description, float(region["x_m"]), float(region["y_m"]),
+                                        0.0)
+                record.update({"form": ChannelDescription.RENDERED_TRAFFIC,
+                               "placed_before_the_prewarm": {
+                                   "look_at": {"x_m": float(region["x_m"]),
+                                               "y_m": float(region["y_m"]), "z_m": 0.0,
+                                               "source": "the render region's centre"},
+                                   "pose": aim.to_dict()}})
+            else:
+                aim = StareAim.from_channel(description)
+                if description.declares_pose():
+                    record["form"] = "pose"
+                else:
+                    record.update({"form": "look_at_point",
+                                   "look_at": {"x_m": description.stare_look_at_x_m,
+                                               "y_m": description.stare_look_at_y_m,
+                                               "z_m": description.stare_look_at_z_m}})
+                record["pose"] = aim.to_dict()
+            rig.aim = aim
+            rig.aim_record = record
+            return self._transform_of(aim)
+        record.update({"centre": {"x_m": description.orbit_centre_x_m,
+                                  "y_m": description.orbit_centre_y_m,
+                                  "z_m": description.orbit_centre_z_m},
+                       "radius_m": description.orbit_radius_m,
+                       "altitude_m": description.orbit_altitude_m,
+                       "period_s": description.orbit_period_s})
+        rig.aim_record = record
         return carla.Transform(
             carla.Location(x=description.orbit_centre_x_m, y=description.orbit_centre_y_m,
                            z=description.orbit_centre_z_m + description.orbit_altitude_m),
             carla.Rotation(pitch=-90.0, yaw=0.0, roll=0.0))
+
+    @staticmethod
+    def _transform_of(aim: StareAim) -> carla.Transform:
+        return carla.Transform(carla.Location(x=aim.x_m, y=aim.y_m, z=aim.z_m),
+                               carla.Rotation(pitch=aim.pitch_deg, yaw=aim.yaw_deg, roll=0.0))
+
+    def _move(self, rig: ChannelRig, aim: StareAim) -> None:
+        """Put a stare's cameras -- the RGB camera and its depth camera -- at a new pose."""
+        transform = self._transform_of(aim)
+        rig.camera.set_transform(transform)
+        if rig.depth is not None:
+            rig.depth.set_transform(transform)
+        previous = rig.aim
+        rig.last_move_m = None if previous is None else math.dist(
+            (previous.x_m, previous.y_m, previous.z_m), (aim.x_m, aim.y_m, aim.z_m))
+        rig.aim = aim
+        rig.moves += 1
 
     @staticmethod
     def _describe(transform: Any) -> str:
@@ -498,7 +622,13 @@ class CaptureSession:
         started = float(session.RenderedTimeSeconds)
         while float(session.RenderedTimeSeconds) < window.begin_s - SIM_EPSILON_S:
             self._check_stop()
-            if not session.Advance():
+            if self.traffic is not None:
+                self.traffic.begin_step()
+            more = session.Advance()
+            if self.traffic is not None:
+                self.traffic.end_step()
+                self._follow_traffic()
+            if not more:
                 raise _RefusedError("refused_preroll", f"the scenario ended at "
                                f"t={float(session.RenderedTimeSeconds):g}, before the window "
                                f"opened at t={window.begin_s:g}", closed_by="aborted_at_preroll")
@@ -510,7 +640,83 @@ class CaptureSession:
         if findings.refused:
             raise _RefusedError("refused_preroll", self._first_refusal(),
                            closed_by="aborted_at_preroll")
+        self._check_window_open_population()
+        if self.traffic is not None:
+            self._resolve_traffic_aim()
         self._check_stop()
+
+    def _follow_traffic(self) -> None:
+        """Move every stare aimed at the rendered traffic to the pose around the centre of the
+        vehicles the step just rendered showed on its last frame. A step that rendered nothing
+        leaves them where they are."""
+        centre = self.traffic.centre()
+        if centre is None:
+            return
+        for rig in self.channels:
+            if rig.aims_at_rendered_traffic:
+                self._move(rig, StareAim.aimed_at(rig.description, *centre))
+
+    def _resolve_traffic_aim(self) -> None:
+        """Record the point each stare aimed at the rendered traffic resolved to, and the pose it
+        now holds for the whole window: the last prewarm step's centre, which `_follow_traffic`
+        has just moved it to.
+
+        Raises:
+            _RefusedError: `refused_preroll` where the last frame before the window rendered no
+                vehicle, so there is nothing to aim at.
+        """
+        rigs = [rig for rig in self.channels if rig.aims_at_rendered_traffic]
+        measured = self.traffic.to_dict()
+        if measured is None:
+            labels = ", ".join(rig.sensor_id for rig in rigs)
+            raise _RefusedError(
+                "refused_preroll", f"channel(s) {labels} aim at the rendered traffic, and the "
+                "prewarm's last step, which ended as the window opened at "
+                f"t={float(self.session.RenderedTimeSeconds):g}, rendered no vehicle with a body: "
+                "there is nothing to aim at. Aim the channel at a point or a pose, move or widen "
+                "capture.render_region, or open the window where the scenario has traffic",
+                closed_by="aborted_at_preroll")
+        point = {key: measured[key] for key in ("x_m", "y_m", "z_m")}
+        for rig in rigs:
+            rig.aim_record.update({
+                "look_at": point,
+                "measured_on": {key: measured[key]
+                                for key in ("vehicles", "frame_tick", "frame_s")},
+                "pose": rig.aim.to_dict(),
+                "moves_before_the_window": rig.moves,
+                "last_move_m": rig.last_move_m,
+                "as_look_at_point": {"stare_look_at_x_m": point["x_m"],
+                                     "stare_look_at_y_m": point["y_m"],
+                                     "stare_look_at_z_m": point["z_m"]}})
+            self.logger.info("channel %s: aimed at %d rendered vehicles centred on (%.1f, %.1f, "
+                             "%.1f) m at t=%g; camera at %s, held for the window", rig.sensor_id,
+                             measured["vehicles"], point["x_m"], point["y_m"], point["z_m"],
+                             measured["frame_s"], rig.aim.describe())
+
+    def _check_window_open_population(self) -> None:
+        """Check 33, from the session's admission pass for the window's begin."""
+        at_open = self.admissions.at_window_open if self.admissions is not None else None
+        if at_open is None:
+            self.logger.warning("the session published no admission pass for the window's begin; "
+                                "check 33 is not evaluated")
+            return
+        findings = self.validator.window_open_population(self.effective, at_open)
+        self.findings.extend(findings)
+        if findings.refused:
+            raise _RefusedError("refused_preroll", self._first_refusal(),
+                                closed_by="aborted_at_preroll")
+        written = self.effective.value("on_warning") or {}
+        for warning in findings.warnings:
+            code = RunConfigurationFindings.warning_code(warning)
+            if written.get(code) == "proceed":
+                self.adjudications.append({
+                    "code": code, "adjudication": "proceed",
+                    "adjudicated_by": self.effective.resolution("on_warning").provenance})
+            else:
+                # Attended and unadjudicated: said at once, and carried unadjudicated into the
+                # result, where the launch.warnings_adjudicated gate records it. Nobody is asked:
+                # a prompt now would hold the world's clock with the lease taken.
+                self.monitor.loud(code, warning.message)
 
     # -- recording ----------------------------------------------------------------------------------------
     def _record(self) -> None:
@@ -586,6 +792,10 @@ class CaptureSession:
     def _close_the_record(self) -> None:
         """The closing snapshot and gate records: the run result's `produced` block."""
         snapshot = self.closeout.snapshot()
+        # The result's warnings are read from its findings and adjudications, which must be the
+        # run's before the gate counts the unadjudicated ones.
+        self.result.findings = self.findings.to_list()
+        self.result.adjudications = list(self.adjudications)
         unadjudicated = len([w for w in self.result.warnings if not w.get("adjudication")])
         gates = self.closeout.gates(snapshot, unadjudicated)
         window = self.effective.window
@@ -601,18 +811,27 @@ class CaptureSession:
                                  None if reached is None or not math.isfinite(reached)
                                  else epoch.civil_instant_at(reached)]},
             "channels": snapshot["channels"],
+            "cameras": [dict(rig.aim_record) for rig in self.channels],
             "gates": gates,
-            "session": {**self.session_facts, "last_snapshot": {
-                key: snapshot[key] for key in ("pacing", "render", "illumination",
-                                               "solar_audit") if key in snapshot}},
+            "admissions": snapshot["admissions"],
+            "session": {**self.session_facts, **(snapshot["scenario_checks"] or {}),
+                        "last_snapshot": {
+                            key: snapshot[key] for key in ("pacing", "render", "admission",
+                                                           "illumination", "solar_audit")
+                            if key in snapshot}},
             "preroll_achieved_factor": self.preroll_pace,
             "recorder_run_id": self.session_id,
         }
         self.logger.info("\n%s\n", RunCloseoutReport.render(snapshot, gates))
 
     def _log_session_report(self) -> None:
-        """The session's own report, read once it has given everything back -- its admission and
-        capacity counts are completed only when it is disposed."""
+        """The session's own report, logged once it has given everything back.
+
+        Its counts are live throughout -- the admissions and capacity declines are the latest
+        admission pass's running totals (03 §8.8), and the run result carries that pass and the
+        window's -- and it is read after disposal only so that the text includes what disposal
+        tallies last: the refused vehicle types, the bodies and the time spent.
+        """
         self.logger.info("%s", self.session.Report)
 
     def _write_result(self) -> None:

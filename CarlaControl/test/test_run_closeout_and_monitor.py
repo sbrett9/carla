@@ -28,6 +28,7 @@ from carlacontrol.RunConfiguration import RunConfiguration  # noqa: E402
 from carlacontrol.RunConfigurationResolver import RunConfigurationResolver  # noqa: E402
 from carlacontrol.SessionMonitor import SessionMonitor  # noqa: E402
 from carlacontrol.SiteProfile import SiteProfile  # noqa: E402
+from carlacontrol.WindowAdmissions import WindowAdmissions  # noqa: E402
 
 
 @pytest.fixture
@@ -44,7 +45,7 @@ def closeout(layout: Layout, overrides=(), policy="freeze_at_window_start"):
     session = FakeSession(server, {"warm_up_to": 25200.0, "real_time_factor": 0.0,
                                    "illumination": {"policy": policy}})
     report = RunCloseoutReport(effective, clock=iter(range(0, 10**6, 10)).__next__)
-    report.attach(session)
+    report.attach(session, WindowAdmissions(25200.0, 27000.0, 1.0))
     recorder = FakeRecorder(2.0)
     server.recorders.append(recorder)
     report.add_channel(ChannelCapture("OVERWATCH-1", layout.capture_root / "c", recorder))
@@ -65,6 +66,22 @@ def test_the_snapshot_reads_the_session_and_the_recorders(layout):
     assert snapshot["channels"][0]["written"] == 1800 == recorder.Saved
     assert snapshot["illumination"]["declared_civil"] == "t=26100"
     assert snapshot["pacing"]["achieved_factor"] == 3.2
+    # The newest pass is one step ahead of the rendered clock.
+    assert snapshot["admission"]["sim_time_s"] == 26101.0
+    assert (snapshot["admission"]["eligible"], snapshot["admission"]["capacity"]) == (7, 128)
+
+
+def test_the_snapshot_carries_the_session_s_checks_and_the_closeout_shows_them(layout):
+    report, session, _ = closeout(layout)
+    session.Advance()
+    snapshot = report.snapshot()
+    assert snapshot["scenario_checks"]["compile_lock"]["compiled"] is True
+    assert snapshot["scenario_checks"]["teleporting"]["enabled"] is False
+    text = RunCloseoutReport.render(snapshot, report.gates(snapshot, 0))
+    assert f"compile lock: {session.Report.CompileLock}" in text
+    assert f"routed by {session.Report.CompileLock.RoutedByText}" in text
+    assert "teleporting: disabled (time-to-teleport '-1')" in text
+    assert "admission passes in the window: 0, 0 shedding" in text
 
 
 def test_a_clean_run_meets_every_measured_gate(layout):
@@ -147,6 +164,9 @@ SNAPSHOT = {
                "completed_windows": 3},
     "render": {"rendered_now": 41, "ticks": 9000, "sumo_steps": 450, "poses_computed": 1,
                "batch_failures": 0},
+    "admission": {"sim_time_s": 25651.0, "world_tick": 9000, "population": 139, "subscribed": 101,
+                  "eligible": 96, "admitted": 90, "shed": 6, "capacity": 90, "newly_admitted": 2,
+                  "released": 1, "total_admissions": 400, "total_capacity_declines": 30},
     "channels": [{"sensor_id": "OVERWATCH-1", "directory": "d", "captured": None, "written": 900,
                   "recorder_dropped": 2, "illumination_paired": 900, "illumination_unpaired": 0,
                   "occlusion_measured": 880, "occlusion_unmatched": 20}],
@@ -159,7 +179,8 @@ def test_the_panel_shows_the_snapshot_s_figures_as_given():
     SessionMonitor(stream=stream, is_terminal=True).update(SNAPSHOT)
     text = stream.getvalue()
     for figure in ("0.777", "2026-03-21T07:07:30-07:00", "+1.23", "25.0%", "written 900",
-                   "recorder-dropped 2", "[advance]"):
+                   "recorder-dropped 2", "[advance]",
+                   "population 139   subscribed 101   eligible 96   admitted 90   shed 6   cap 90"):
         assert figure in text, figure
     assert "4.5" not in text
 
@@ -170,6 +191,7 @@ def test_off_a_terminal_it_logs_lines_and_writes_no_escape_codes(caplog):
         SessionMonitor(stream=stream, is_terminal=False).update(SNAPSHOT)
     assert stream.getvalue() == ""
     assert any("t=25650.0" in record.message and "\x1b" not in record.message
+               and "eligible 96 admitted 90 shed 6 cap 90" in record.message
                for record in caplog.records)
 
 

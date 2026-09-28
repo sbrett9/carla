@@ -4,8 +4,8 @@ Plan 12 §6.4: a multi-hour run states its first capture's civil instant and sun
 starts, because discovering afterwards that the sun was wrong is the most expensive failure there is.
 The figures must be the ones the session will act on: the civil span from the scenario's epoch, and the
 sun from the session's own declared-sun function with the window opening where the session opens it --
-at the first frame it renders, the prewarm's first. Under a frozen sun that is five minutes before the
-window's begin at the default prewarm, and at dawn five minutes is most of a degree, so the test
+at the window's own begin, which run_capture hands the session as `window_opens_at`, not at the
+prewarm's first frame five minutes earlier. At dawn five minutes is most of a degree, so the test
 evaluates the sun independently with the engine's algorithm in Python at both instants and holds the
 echo to the right one.
 
@@ -65,13 +65,15 @@ def test_the_civil_span_is_the_epoch_s(layout):
 
 def test_a_frozen_sun_is_stated_at_the_instant_the_session_pins_it(layout):
     sun = echo_for(layout).to_dict()["sun"]
-    pinned = corrected_elevation(6, 55)
-    at_begin = corrected_elevation(7, 0)
-    assert abs(pinned - at_begin) > 0.5, "the fixture must tell the two instants apart"
+    first_rendered = corrected_elevation(6, 55)
+    pinned = corrected_elevation(7, 0)
+    assert abs(pinned - first_rendered) > 0.5, "the fixture must tell the two instants apart"
+    assert sun["window_open_s"] == 25200.0
     assert sun["at_begin"]["elevation_deg"] == pytest.approx(pinned, abs=0.02)
     assert sun["at_end"]["elevation_deg"] == pytest.approx(pinned, abs=0.02)
-    assert sun["held_at"] == "2026-03-21 06:55:00"
-    assert "prewarm" in sun["held_at_note"]
+    assert sun["held_at"] == "2026-03-21 07:00:00"
+    assert "window's opening, t=25200" in sun["held_at_note"]
+    assert "prewarm from t=24900 is lit by it" in sun["held_at_note"]
 
 
 def test_an_advancing_sun_is_stated_at_the_window_s_two_ends(layout):
@@ -85,6 +87,11 @@ def test_an_advancing_sun_is_stated_at_the_window_s_two_ends(layout):
 def test_a_zero_prewarm_pins_the_sun_at_the_window_s_begin(layout):
     sun = echo_for(layout, ["capture.prewarm_s=0"]).to_dict()["sun"]
     assert sun["at_begin"]["elevation_deg"] == pytest.approx(corrected_elevation(7, 0), abs=0.02)
+
+
+def test_a_zero_prewarm_says_nothing_of_a_prewarm(layout):
+    sun = echo_for(layout, ["capture.prewarm_s=0"]).to_dict()["sun"]
+    assert sun["held_at"] == "2026-03-21 07:00:00" and "prewarm" not in sun["held_at_note"]
 
 
 def test_an_ignored_sun_says_the_lighting_honours_no_epoch(layout):

@@ -23,7 +23,7 @@ class ChannelDescription:
     height above a centre with the boresight held on that centre, run by `OrbitSensorController`.
     A transit pattern is not built and is refused.
 
-    **Declaring a stare.** Exactly one of two forms:
+    **Declaring a stare.** Exactly one of three forms:
 
     * *aimed at a point* -- `stare_look_at_x_m` and `stare_look_at_y_m` (with `stare_look_at_z_m`,
       default 0.0) name the point the boresight passes through, in CARLA's frame: metres, x east,
@@ -31,6 +31,14 @@ class ChannelDescription:
       `stare_bearing_deg`, and `stare_altitude_m` above it. The bearing is the compass direction the
       camera looks along, in degrees clockwise from north. A standoff of 0 looks straight down, with
       the bearing at the top of the picture. `StareAim` turns this into a pose.
+    * *aimed at the rendered traffic* -- `stare_look_at_target` set to `rendered_traffic`. The
+      point is not known when the channel is declared: it is the centre of the vehicles a
+      co-simulation session has rendered on the last frame before the capture window opens, their
+      mean position including their height, and the camera stands off from it by the same
+      `stare_altitude_m`, `stare_standoff_m` and `stare_bearing_deg` as a point. `stare_look_at_z_m`
+      is not used, because the vehicles' own height is the point's. Only the process that drives the
+      session can resolve it (`CaptureSession`, which records the point it resolved to); a viewer
+      with no session refuses it.
     * *an explicit pose* -- `stare_x_m`, `stare_y_m`, `stare_z_m`, `stare_pitch_deg` and
       `stare_yaw_deg`, all five, in CARLA's frame and CARLA's angle convention (yaw 0 faces east,
       -90 faces north; negative pitch looks down). This is the form for a view found by flying
@@ -50,7 +58,8 @@ class ChannelDescription:
     and `run_SCTMV.py`'s argument parser are made to build their rig from this class -- work that
     belongs to the operator control surface (section 9.2 of the same document) and has not been
     done. Until then `SensorRig` still reads its own `args`, and nothing here changes what
-    `run_SCTMV.py` does. The one consumer today is `CameraFollower`.
+    `run_SCTMV.py` does. The consumers today are `CameraFollower` and `run_capture`'s run
+    configuration, whose channel objects are this class's fields plus `post_process_profile`.
 
     Raises:
         ValueError: when the description is invalid. Every problem found is named in the one
@@ -60,6 +69,9 @@ class ChannelDescription:
     STARE: ClassVar[str] = "stare"
     ORBIT: ClassVar[str] = "orbit"
     PATTERNS: ClassVar[tuple[str, ...]] = (STARE, ORBIT)
+
+    RENDERED_TRAFFIC: ClassVar[str] = "rendered_traffic"
+    STARE_LOOK_AT_TARGETS: ClassVar[tuple[str, ...]] = (RENDERED_TRAFFIC,)
 
     # The grammar 04_Contracts.md section 6.3 gives an authored sensor_id.
     SENSOR_ID_GRAMMAR: ClassVar[re.Pattern[str]] = re.compile(r"[A-Za-z0-9_.:-]{1,63}")
@@ -80,6 +92,7 @@ class ChannelDescription:
     stare_look_at_x_m: float | None = None
     stare_look_at_y_m: float | None = None
     stare_look_at_z_m: float = 0.0
+    stare_look_at_target: str | None = None
     stare_altitude_m: float = 304.8
     stare_standoff_m: float = 0.0
     stare_bearing_deg: float = 0.0
@@ -96,6 +109,7 @@ class ChannelDescription:
         "stare_x_m", "stare_y_m", "stare_z_m", "stare_pitch_deg", "stare_yaw_deg",
     )
     INTEGER_FIELDS: ClassVar[tuple[str, ...]] = ("width", "height")
+    TEXT_FIELDS: ClassVar[tuple[str, ...]] = ("sensor_id", "pattern", "stare_look_at_target")
 
     def __post_init__(self) -> None:
         problems = self._problems()
@@ -124,6 +138,14 @@ class ChannelDescription:
     def declares_look_at(self) -> bool:
         """Whether a look-at point was supplied (either coordinate counts as supplied)."""
         return any(getattr(self, name) is not None for name in self.STARE_LOOK_AT_FIELDS)
+
+    def declares_look_at_target(self) -> bool:
+        """Whether a named look-at target was supplied in place of a point."""
+        return self.stare_look_at_target is not None
+
+    def aims_at_rendered_traffic(self) -> bool:
+        """Whether this is a stare whose point is the centre of the rendered traffic."""
+        return self.pattern == self.STARE and self.stare_look_at_target == self.RENDERED_TRAFFIC
 
     def declares_pose(self) -> bool:
         """Whether any part of an explicit stare pose was supplied."""
@@ -175,8 +197,11 @@ class ChannelDescription:
             problems.append(f"sensor_id must be text, got {type(self.sensor_id).__name__}")
         if not isinstance(self.pattern, str):
             problems.append(f"pattern must be text, got {type(self.pattern).__name__}")
+        if self.stare_look_at_target is not None and not isinstance(self.stare_look_at_target, str):
+            problems.append(f"stare_look_at_target must be text naming a target, got "
+                            f"{self.stare_look_at_target!r}")
         for name in self.field_names():
-            if name in ("sensor_id", "pattern"):
+            if name in self.TEXT_FIELDS:
                 continue
             value = getattr(self, name)
             if value is None and self.default_of(name) is None:
@@ -194,16 +219,27 @@ class ChannelDescription:
     def _stare_problems(self) -> list[str]:
         problems: list[str] = []
         look_at = self.declares_look_at()
+        target = self.declares_look_at_target()
         pose = self.declares_pose()
         if self.declares_orbit_centre():
             problems.append(
                 "an orbit centre was given for a stare; set pattern to 'orbit' or drop it")
-        if look_at and pose:
-            problems.append("a stare takes a look-at point or an explicit pose, not both")
-        elif not look_at and not pose:
+        forms = [name for name, given in (("a look-at point", look_at),
+                                          ("a look-at target", target),
+                                          ("an explicit pose", pose)) if given]
+        if len(forms) > 1:
+            problems.append(f"a stare takes one of a look-at point, a look-at target or an "
+                            f"explicit pose, not {' and '.join(forms)}")
+        elif not forms:
             problems.append(
                 "a stare needs somewhere to look: give stare_look_at_x_m and stare_look_at_y_m, "
-                "or all of stare_x_m, stare_y_m, stare_z_m, stare_pitch_deg, stare_yaw_deg")
+                f"or stare_look_at_target '{self.RENDERED_TRAFFIC}', or all of stare_x_m, "
+                "stare_y_m, stare_z_m, stare_pitch_deg, stare_yaw_deg")
+        if target and self.stare_look_at_target not in self.STARE_LOOK_AT_TARGETS:
+            problems.append(f"stare_look_at_target {self.stare_look_at_target!r} is not a target "
+                            f"this channel can aim at; the one that exists is "
+                            f"'{self.RENDERED_TRAFFIC}', the centre of the vehicles the session "
+                            "has rendered when the window opens")
         missing_look_at = [n for n in self.STARE_LOOK_AT_FIELDS if getattr(self, n) is None]
         if look_at and missing_look_at:
             problems.append(
@@ -216,9 +252,9 @@ class ChannelDescription:
 
     def _orbit_problems(self) -> list[str]:
         problems: list[str] = []
-        if self.declares_look_at() or self.declares_pose():
-            problems.append("a stare look-at point or pose was given for an orbit; "
-                            "set pattern to 'stare' or drop it")
+        if self.declares_look_at() or self.declares_look_at_target() or self.declares_pose():
+            problems.append("a stare look-at point, look-at target or pose was given for an "
+                            "orbit; set pattern to 'stare' or drop it")
         missing = [n for n in self.ORBIT_CENTRE_FIELDS if getattr(self, n) is None]
         if missing:
             problems.append(f"an orbit needs a centre; missing {', '.join(missing)}")
