@@ -1,4 +1,5 @@
 using System.Text;
+using CarlaNet.Sumo;
 
 namespace CarlaNet.CoSim;
 
@@ -35,6 +36,17 @@ public sealed class CoSimRunReport
 
     /// <summary>The catalogue's declared digest, so a run can be tied to the measurements it used.</summary>
     public required string CatalogueDigest { get; init; }
+
+    /// <summary>
+    /// The SUMO the run launched -- its root, its release and the rule that found it -- and how that
+    /// release stood against the converter the world package records.
+    /// </summary>
+    /// <remarks>
+    /// A run's traffic is one SUMO release's behaviour on one netconvert's network, and nothing in
+    /// the imagery or the truth says which. An accepted mismatch and a world that records no converter
+    /// both run, and both are named here rather than left for a log nobody kept.
+    /// </remarks>
+    public required SumoReleaseCheck Sumo { get; init; }
 
     /// <summary>
     /// Which rendering layers the session wrote before its first tick, and what it wrote them to.
@@ -450,6 +462,8 @@ public sealed class CoSimRunReport
         text.AppendLine($"scenario           {ScenarioPath}");
         text.AppendLine($"world              {WorldPackagePath}");
         text.AppendLine($"catalogue          {CatalogueDigest}");
+        text.AppendLine($"sumo               {Sumo.Installation}");
+        text.AppendLine($"  world converter  {Sumo.Verdict}");
         text.AppendLine($"clock              {Clock}");
         if (SumoStepOverrideSeconds is { } forced)
         {

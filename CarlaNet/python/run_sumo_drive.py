@@ -56,6 +56,16 @@ stops a run that falls behind, and the final report says by how much it did. The
 world package that does not describe the world the server has loaded, so a package from another
 build of the world cannot put the traffic somewhere the world is not.
 
+Which SUMO runs is named, not left to the environment. The session launches the installation this
+script names: `--sumo-home` where given, otherwise `CARLANET_SUMO_HOME`, otherwise this repository's
+pinned build (`Build/sumo-install`, then `Build/sumo-src`); only where none of those holds a `sumo`
+does the session search `SUMO_HOME` and then PATH itself. The session then compares that
+installation's release against the converter the world package records, by release number --
+`Eclipse SUMO netconvert 1.27.0` and `1.27.0` are the same release -- and refuses a different one
+before SUMO is started, naming both. `--allow-sumo-version-mismatch` runs anyway, and the report
+records that it did; a package that records no converter runs, and is reported unchecked. The
+installation, its release and how it stood against the world's converter are logged every run.
+
 One thing happens between the session starting and the recorder starting: the camera is aimed at the
 vehicles rather than at the middle of the rendered region, because a corridor scenario puts its
 traffic nowhere near that middle.
@@ -74,15 +84,10 @@ import os
 import sys
 import time
 
+import carlanet as carla
+
 _THIS = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.normpath(os.path.join(_THIS, "..", ".."))
-_INSTALL = os.path.join(_REPO, "Build", "sumo-install")
-# The bridge launches SUMO itself and resolves the installation the same way the rest of the
-# toolchain does: the repository's own pinned build first, then SUMO_HOME. Default the latter so a
-# machine with no system-wide SUMO still runs against the build that converted the world.
-os.environ.setdefault("SUMO_HOME", _INSTALL)
-
-import carlanet as carla  # noqa: E402 -- SUMO_HOME must be set before the bridge resolves its toolchain
 
 logger = logging.getLogger("run_sumo_drive")
 
@@ -99,6 +104,15 @@ def parse_args() -> argparse.Namespace:
                         default=os.path.join(_REPO, "CarlaControl", "catalogue",
                                              "vehicles.catalogue.json"),
                         help="the measured vehicle catalogue")
+    parser.add_argument("--sumo-home",
+                        help="the SUMO installation to launch: the directory holding bin/sumo. "
+                             "Default: CARLANET_SUMO_HOME if it holds one, else this repository's "
+                             "pinned build (Build/sumo-install, then Build/sumo-src). SUMO_HOME is "
+                             "consulted only when none of those holds a sumo")
+    parser.add_argument("--allow-sumo-version-mismatch", action="store_true",
+                        help="run with a SUMO whose release is not the one that converted the world, "
+                             "instead of refusing. The run report records that the mismatch was "
+                             "accepted and names both releases")
 
     parser.add_argument("--steps", type=int, default=600,
                         help="SUMO steps to run. 0 runs until the scenario ends -- until SUMO has "
@@ -195,6 +209,53 @@ def region_centre(args: argparse.Namespace) -> tuple[float, float]:
     the bridge applies to every vehicle.
     """
     return args.region_x, -args.region_y
+
+
+class SessionSumo:
+    """Which SUMO installation this script names for the session, and the rule that chose it.
+
+    Named rather than left to the session's own search, because that search finds the repository by
+    walking upward from the CarlaNet assemblies, and assemblies loaded from an installed wheel sit in
+    site-packages with no repository above them: the walk finds nothing and `SUMO_HOME` decides --
+    on a machine with a system-wide SUMO, a different release from the one that converted the world.
+    The rules and their order are the session's own (`CarlaNet.Sumo.SumoInstallation`):
+    `CARLANET_SUMO_HOME`, the repository's staged build, its source build. `--sumo-home` goes ahead
+    of all of them and is passed on as given, so a directory with no SUMO in it is refused by the
+    session by name rather than skipped here. Where no rule finds a `sumo`, nothing is named and the
+    session searches `SUMO_HOME`, then PATH.
+
+    This chooses the installation and nothing else. Whether its release is the world's converter is
+    decided by the session, which is the one place that comparison is made.
+    """
+
+    OVERRIDE_VARIABLE = "CARLANET_SUMO_HOME"
+    EXECUTABLE = "sumo.exe" if os.name == "nt" else "sumo"
+    REPOSITORY_BUILDS = (
+        ("this repository's staged build", os.path.join(_REPO, "Build", "sumo-install")),
+        ("this repository's source build", os.path.join(_REPO, "Build", "sumo-src")),
+    )
+
+    def __init__(self, explicit: str | None) -> None:
+        self.home: str | None = None
+        self.rule = "no rule found one"
+        if explicit:
+            self.home, self.rule = explicit, "--sumo-home"
+            return
+        candidates = ((self.OVERRIDE_VARIABLE, os.environ.get(self.OVERRIDE_VARIABLE)),
+                      *self.REPOSITORY_BUILDS)
+        for rule, home in candidates:
+            if home and os.path.isfile(os.path.join(home, "bin", self.EXECUTABLE)):
+                self.home, self.rule = os.path.abspath(home), rule
+                return
+
+    def announce(self) -> None:
+        """Say which installation is being named, before anything is started."""
+        if self.home is None:
+            logger.info("SUMO: none named -- no --sumo-home, %s holds none and this repository has "
+                        "no build under Build/ -- so the session searches SUMO_HOME, then PATH",
+                        self.OVERRIDE_VARIABLE)
+        else:
+            logger.info("SUMO: naming %s for the session (%s)", self.home, self.rule)
 
 
 class SunDeclaration:
@@ -381,6 +442,8 @@ def main() -> int:
             return 2
 
     sun = SunDeclaration(args)
+    sumo = SessionSumo(args.sumo_home)
+    sumo.announce()
 
     client = carla.Client(args.host, args.port)
     client.set_timeout(30.0)
@@ -420,6 +483,8 @@ def main() -> int:
             epoch=sun.epoch,
             illumination=sun.illumination,
             real_time_factor=args.real_time_factor,
+            sumo_home=sumo.home,
+            allow_sumo_version_mismatch=args.allow_sumo_version_mismatch,
             # Bound only where the aim needs it: the session hands out a pose per rendered
             # vehicle per tick, and a callback that spends the whole run declining them is a
             # crossing into Python per vehicle per tick for nothing.
@@ -428,6 +493,12 @@ def main() -> int:
         if session is None:
             return 1
 
+        # What the session launched and how it stood against the world's converter, as the session
+        # established it. An accepted mismatch and an unchecked world both ran, and both are said
+        # louder than a match.
+        launched = session.Report.Sumo
+        (logger.info if launched.Agrees else logger.warning)(
+            "sumo: %s; %s", launched.Installation, launched.Verdict)
         logger.info("clock: %s", session.Clock)
         # The pace as the session declared it, not as this script asked for it: the session read
         # the factor once and is the one thing that holds the run to it.

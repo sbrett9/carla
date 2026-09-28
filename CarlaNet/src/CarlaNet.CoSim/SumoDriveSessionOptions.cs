@@ -83,6 +83,32 @@ public sealed record SumoDriveSessionOptions(
     public string Holder { get; set; } = "CarlaNet.CoSim playback bridge";
 
     /// <summary>
+    /// The SUMO installation to launch: the directory holding <c>bin/sumo</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>Null or blank resolves one by <see cref="CarlaNet.Sumo.SumoInstallation.Locate"/>'s rules:
+    /// <c>CARLANET_SUMO_HOME</c>, then the repository's pinned build found upward from the running
+    /// assemblies, then <c>SUMO_HOME</c>, then the executable search path. A runtime loaded from an
+    /// installed wheel has no repository above its assemblies, so there it is <c>SUMO_HOME</c> that
+    /// decides; a caller that knows which installation converted the world names it here.</para>
+    ///
+    /// <para>Whichever it is, the session compares its release against the converter the world
+    /// package records before starting it, and the report names the installation, its release and
+    /// the rule that found it.</para>
+    /// </remarks>
+    public string? SumoHome { get; set; }
+
+    /// <summary>
+    /// Run with a SUMO whose release differs from the converter that built the world, rather than
+    /// refusing.
+    /// </summary>
+    /// <remarks>
+    /// For an operator with a reason to accept the risk. It is not silent: the report records that
+    /// the mismatch was accepted and names both releases.
+    /// </remarks>
+    public bool AllowSumoVersionMismatch { get; set; }
+
+    /// <summary>
     /// Height of the actor origin above the contact surface per blueprint, where it has been
     /// measured by settling a body on level ground rather than taken from its bounding box.
     /// </summary>

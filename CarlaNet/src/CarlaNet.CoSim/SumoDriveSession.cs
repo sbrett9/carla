@@ -59,6 +59,7 @@ public sealed class SumoDriveSession : IDisposable
 
     private SumoDriveSession(SumoDriveSessionOptions options,
                              SumoConnection sumo,
+                             SumoReleaseCheck release,
                              CoSimClock clock,
                              SumoRoadNetwork network,
                              GroundSurface ground,
@@ -101,6 +102,7 @@ public sealed class SumoDriveSession : IDisposable
             ScenarioPath = options.ScenarioPath,
             WorldPackagePath = options.WorldPackagePath,
             CatalogueDigest = catalogue.CatalogueDigest,
+            Sumo = release,
             SumoStepOverrideSeconds = options.SumoStepOverrideSeconds,
             Pacing = _pacer,
             LayerVisibility = layers?.Applied ?? new Dictionary<string, bool>(),
@@ -141,14 +143,17 @@ public sealed class SumoDriveSession : IDisposable
     public IIlluminationSource Illumination => _illumination;
 
     /// <summary>
-    /// Start a session: check the world package is the loaded world's, validate the clock, check the
+    /// Start a session: check the world package is the loaded world's, check the SUMO it launches is
+    /// the release that converted the world, validate the clock, check the
     /// network is the world's, take the population lease, and buffer the one SUMO step of lookahead
     /// every sub-step pose is interpolated inside.
     /// </summary>
     /// <exception cref="CoSimSessionRefusedException">
     /// The session renders a world and declares no illumination policy, or a policy that binds the
     /// sun and no epoch to bind it from; the real-time factor or its window is not a usable number;
-    /// the world package does not describe the world the server has loaded; the clock does not
+    /// the world package does not describe the world the server has loaded; the named SUMO
+    /// installation holds no <c>sumo</c>, or the SUMO about to be launched is not the release the
+    /// world package records as its converter and the mismatch was not accepted; the clock does not
     /// divide, the world is asynchronous, the network is not the one the world was built from,
     /// something else already holds the world's population, or the world's sun could not be bound.
     /// </exception>
@@ -172,6 +177,11 @@ public sealed class SumoDriveSession : IDisposable
             LoadedWorldCheck.Require(options.WorldPackagePath, loaded.DescribeLoadedWorld());
         }
 
+        // Which SUMO, and whether it is the release that converted this world: settled before it is
+        // started, like every other refusal that needs no simulation to find out.
+        SumoInstallation installation = ResolveSumo(options);
+        SumoReleaseCheck release = RequireTheWorldSConverter(installation, manifest, options);
+
         List<string> extraArguments = [];
         if (options.SumoStepOverrideSeconds is { } forced)
         {
@@ -180,7 +190,7 @@ public sealed class SumoDriveSession : IDisposable
         }
 
         SumoConnection sumo = SumoConnection.Start(
-            SumoInstallation.LocateOrThrow(),
+            installation,
             options.ScenarioPath,
             new SumoLaunchOptions
             {
@@ -230,8 +240,8 @@ public sealed class SumoDriveSession : IDisposable
                                       options.MaximumBodies)
                 : null;
 
-            var session = new SumoDriveSession(options, sumo, clock, network, ground, catalogue,
-                                               lease, settings, layers, pool,
+            var session = new SumoDriveSession(options, sumo, release, clock, network, ground,
+                                               catalogue, lease, settings, layers, pool,
                                                (manifest.OriginLatitude, manifest.OriginLongitude));
             try
             {
@@ -841,6 +851,69 @@ public sealed class SumoDriveSession : IDisposable
                 + "give the world to drive it, or the delegate to compute every pose and apply "
                 + "none of them.");
         }
+    }
+
+    /// <summary>
+    /// The SUMO installation the session will launch: the one the caller named, or the one the
+    /// search resolves.
+    /// </summary>
+    private static SumoInstallation ResolveSumo(SumoDriveSessionOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.SumoHome))
+        {
+            return SumoInstallation.LocateOrThrow();
+        }
+
+        try
+        {
+            return SumoInstallation.At(options.SumoHome);
+        }
+        catch (DirectoryNotFoundException missing)
+        {
+            throw new CoSimSessionRefusedException(
+                $"The session was told to launch the SUMO installation at {options.SumoHome}, and "
+                + $"there is no sumo there to launch. {missing.Message}", missing);
+        }
+    }
+
+    /// <summary>
+    /// Refuse a SUMO whose release is not the one that converted the world, unless the mismatch was
+    /// accepted.
+    /// </summary>
+    /// <remarks>
+    /// <para>The world's network is one netconvert's output and the scenario was authored against
+    /// it; a different release is not guaranteed to read it, route on it or drive it the same way,
+    /// and nothing in the imagery says which SUMO produced the traffic in it. More than one SUMO is
+    /// commonly installed -- the repository pins one, and a system-wide installer leaves another in
+    /// <c>SUMO_HOME</c> -- so this is checked every run rather than assumed.</para>
+    ///
+    /// <para>Compared by release number (<see cref="SumoRelease"/>): the package records what the
+    /// converter printed and the installation reports its release, and the two are the same release
+    /// however each was written. A package that records no converter is not evidence of a mismatch
+    /// and proceeds; the report says the release went unchecked. An accepted mismatch proceeds and
+    /// the report says that too.</para>
+    /// </remarks>
+    private static SumoReleaseCheck RequireTheWorldSConverter(SumoInstallation installation,
+                                                              WorldPackageManifest manifest,
+                                                              SumoDriveSessionOptions options)
+    {
+        SumoReleaseCheck release = SumoReleaseCheck.Of(installation, manifest.NetconvertVersion,
+                                                       options.AllowSumoVersionMismatch);
+        if (release.Refused)
+        {
+            throw new CoSimSessionRefusedException(
+                $"The world package {options.WorldPackagePath} was converted by "
+                + $"'{release.RecordedConverter}', and the SUMO the session would launch is "
+                + (release.Release is { } found ? $"release {found}" : "of a release that could not be read")
+                + $" at {release.Home} (matched by {release.Source}). Two SUMO releases are not "
+                + "guaranteed to build the same network from the same OSM or to drive it the same way, "
+                + "so SUMO has not been started. Name an installation of the world's release (SumoHome; "
+                + "run_sumo_drive.py --sumo-home), rebuild the world with this one, or accept the "
+                + "mismatch explicitly (AllowSumoVersionMismatch; run_sumo_drive.py "
+                + "--allow-sumo-version-mismatch), which the run report then records.");
+        }
+
+        return release;
     }
 
     /// <summary>

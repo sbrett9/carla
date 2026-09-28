@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text.RegularExpressions;
 
 namespace CarlaNet.Sumo;
 
@@ -45,11 +44,6 @@ public sealed class SumoInstallation
     /// </summary>
     private const string SourceBuild = "Build/sumo-src";
 
-    // `Eclipse SUMO sumo 1.27.0` -- the first line of any SUMO tool's --version output. A
-    // development build appends a git description, which is not part of the release number.
-    private static readonly Regex VersionLine = new(@"Eclipse SUMO \S+ v?(\d+(?:\.\d+)*)",
-                                                    RegexOptions.Compiled);
-
     private static readonly object LocateGate = new();
     private static SumoInstallation? _located;
     private static bool _locateAttempted;
@@ -68,7 +62,8 @@ public sealed class SumoInstallation
     public string Home { get; }
 
     /// <summary>
-    /// Which rule matched: <c>CARLANET_SUMO_HOME</c>, <c>staged</c>, <c>source-build</c>,
+    /// Which rule matched: <c>explicit</c> for an installation a caller named (<see cref="At"/>), or
+    /// the search rule -- <c>CARLANET_SUMO_HOME</c>, <c>staged</c>, <c>source-build</c>,
     /// <c>SUMO_HOME</c> or <c>PATH</c>. The path alone says what resolved but not why, which is the
     /// question asked when it is the wrong one.
     /// </summary>
@@ -115,6 +110,39 @@ public sealed class SumoInstallation
     /// <summary>Full path to one of SUMO's executables in this installation.</summary>
     public string Executable(string name) =>
         Path.Combine(BinaryDirectory, OperatingSystem.IsWindows() ? name + ".exe" : name);
+
+    /// <summary>
+    /// The installation rooted at <paramref name="home"/>, named by the caller rather than searched
+    /// for.
+    /// </summary>
+    /// <remarks>
+    /// <para>The way to launch one particular SUMO whatever the environment holds. The search in
+    /// <see cref="Locate"/> finds the repository's pinned build by walking upward from the running
+    /// assemblies, and a hosted runtime loaded from an installed wheel has no repository above them:
+    /// the walk finds nothing, <c>SUMO_HOME</c> decides, and on a machine with a system-wide SUMO that
+    /// is a different release from the one that converted the world. A caller that knows which
+    /// installation it wants names it here, and <see cref="Source"/> says so.</para>
+    ///
+    /// <para>Not cached and not recorded in <see cref="SearchedDirectories"/>: naming an installation
+    /// is not a search, and it leaves what <see cref="Locate"/> resolves untouched.</para>
+    /// </remarks>
+    /// <exception cref="DirectoryNotFoundException">
+    /// <paramref name="home"/> holds no <c>bin/sumo</c>, so there is nothing there to launch.
+    /// </exception>
+    public static SumoInstallation At(string home)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(home);
+        string full = Path.GetFullPath(home);
+        string executable = Path.Combine(full, "bin", OperatingSystem.IsWindows() ? "sumo.exe" : "sumo");
+        if (!File.Exists(executable))
+        {
+            throw new DirectoryNotFoundException(
+                $"{full} is not a SUMO installation: there is no {executable} to launch. Name the "
+                + "directory that holds SUMO's bin/ directory.");
+        }
+
+        return new SumoInstallation(full, "explicit");
+    }
 
     /// <summary>
     /// The installation this process will use, or <see langword="null"/> when none resolves.
@@ -290,8 +318,7 @@ public sealed class SumoInstallation
 
             string output = process.StandardOutput.ReadToEnd();
             process.WaitForExit();
-            Match match = VersionLine.Match(output);
-            return match.Success ? match.Groups[1].Value : null;
+            return SumoRelease.FromToolOutput(output);
         }
         catch (Exception exception) when (exception is IOException
                                               or System.ComponentModel.Win32Exception

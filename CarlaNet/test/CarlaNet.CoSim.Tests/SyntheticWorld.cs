@@ -49,10 +49,15 @@ internal sealed class SyntheticWorld : IDisposable
     /// <param name="geoReference">
     /// The projection the manifest declares, which a session requires the network's own to equal.
     /// </param>
+    /// <param name="netconvertVersion">
+    /// The converter the manifest records, as a world build writes it -- what netconvert printed,
+    /// <c>Eclipse SUMO netconvert 1.27.0</c> -- or empty for a package that records none.
+    /// </param>
     public static SyntheticWorld Write(Func<(double X, double Y), double> heightAbove,
                                        string networkPath,
-                                       string geoReference) =>
-        Write(heightAbove, networkPath, geoReference, CellSize, MinX, Columns);
+                                       string geoReference,
+                                       string netconvertVersion = "") =>
+        Write(heightAbove, networkPath, geoReference, CellSize, MinX, Columns, netconvertVersion);
 
     /// <summary>
     /// A package whose ground surface is a square grid of the caller's choosing, for a test that
@@ -64,6 +69,7 @@ internal sealed class SyntheticWorld : IDisposable
     /// <param name="cellSize">Grid spacing, metres.</param>
     /// <param name="min">The grid's lowest x and lowest y in the CARLA frame, metres.</param>
     /// <param name="cells">Cells along each side.</param>
+    /// <param name="netconvertVersion">The converter the manifest records, or empty for none.</param>
     /// <remarks>
     /// A session accepts a network that overhangs the grid by up to one cell, so a coarse grid a
     /// little smaller than the network is a world the session starts on and in which a vehicle near
@@ -74,7 +80,8 @@ internal sealed class SyntheticWorld : IDisposable
                                        string geoReference,
                                        double cellSize,
                                        double min,
-                                       int cells)
+                                       int cells,
+                                       string netconvertVersion = "")
     {
         string directory = Path.Combine(Path.GetTempPath(),
                                         "carlanet-cosim-" + Guid.NewGuid().ToString("n"));
@@ -93,6 +100,7 @@ internal sealed class SyntheticWorld : IDisposable
             GridCellSizeMeters = cellSize,
             GridNumCols = cells,
             GridNumRows = cells,
+            NetconvertVersion = netconvertVersion,
         };
 
         float[] offset = new float[cells * cells];

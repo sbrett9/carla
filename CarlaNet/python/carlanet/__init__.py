@@ -2029,6 +2029,7 @@ class World:
                          road_layer_visible=False, signal_layer_visible=False,
                          epoch=None, illumination=None,
                          real_time_factor=0.0, pacing_window_s=5.0,
+                         sumo_home=None, allow_sumo_version_mismatch=False,
                          on_pose=None, on_release=None, on_divergence=None):
         """Drive this world's vehicles from a SUMO microsimulation. Returns the session, or None if
         the co-simulation assemblies are not loaded.
@@ -2091,6 +2092,19 @@ class World:
         loaded -- another build's origin, surface grid or road network -- and a world that carries no
         bare-earth record at all, which is any stock map. It checks before it touches the world.
 
+        `sumo_home` is the SUMO installation to launch, the directory holding `bin/sumo`. Left as
+        None, the session searches: `CARLANET_SUMO_HOME`, then the repository's pinned build found
+        upward from the CarlaNet assemblies, then `SUMO_HOME`, then PATH. Loaded from an installed
+        wheel, the assemblies sit in site-packages with no repository above them, so it is
+        `SUMO_HOME` that decides -- name the installation that converted the world rather than
+        leaving it to that. Whichever it is, the session compares its release against the converter
+        the world package records, by release number (`Eclipse SUMO netconvert 1.27.0` and `1.27.0`
+        are the same release), and refuses a different one before SUMO is started, naming both.
+        `allow_sumo_version_mismatch` runs anyway. A package that records no converter runs
+        unchecked. `session.Report.Sumo` carries the installation, its release, the rule that found
+        it and how it stood against the world's converter -- an accepted mismatch and an unchecked
+        world included.
+
         The three callbacks are handed a record per vehicle per tick from the tick thread and must
         not block: `on_pose` the computed pose, `on_release` a completed render interval, and
         `on_divergence` the commanded pose and velocity against the transform and velocity the world
@@ -2130,6 +2144,9 @@ class World:
         options.SignalLayerVisible = bool(signal_layer_visible)
         options.RealTimeFactor = float(real_time_factor)
         options.PacingWindowSeconds = float(pacing_window_s)
+        if sumo_home is not None:
+            options.SumoHome = str(sumo_home)
+        options.AllowSumoVersionMismatch = bool(allow_sumo_version_mismatch)
         # Both are read by the C# side, which is the one validator: a declaration checked twice is
         # a declaration two implementations will eventually disagree about.
         if epoch is not None:

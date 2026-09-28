@@ -432,6 +432,14 @@ flowchart TD
     G -- "no expectation given" --> H
 ```
 
+**The co-simulation session resolves and checks its own SUMO**, separately from the order above
+([`03`](03_CoSimulation_Runtime.md) §2.6, D3.27). `CarlaNet.Sumo.SumoInstallation.Locate` puts the
+repository's pinned build ahead of `SUMO_HOME`, and finds it only from assemblies that sit inside the
+repository; `run_sumo_drive.py` therefore names the installation explicitly, `Build/sumo-install`
+first. The session compares whatever it launches against the world package's recorded converter by
+release number, before SUMO is started, and refuses a different release unless
+`--allow-sumo-version-mismatch` accepts it.
+
 ### 3.4 What must be staged, and what changes once the real type map exists
 
 Doc 23 §6.2 and doc 07 §1.3 (`07_RoadNetwork_Filtering.md:84-96`) already measured why this matters:

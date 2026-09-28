@@ -77,6 +77,41 @@ public class SumoInstallationTests(ITestOutputHelper output)
         output.WriteLine(string.Join(Environment.NewLine, SumoInstallation.SearchedDirectories));
     }
 
+    /// <summary>
+    /// An installation a caller names is the one used, whatever the search would have found, and it
+    /// says it was named rather than found.
+    /// </summary>
+    [RequiresSumoFact]
+    public void ANamedInstallationIsTheOneUsedAndSaysItWasNamed()
+    {
+        SumoInstallation found = SumoInstallation.LocateOrThrow();
+
+        SumoInstallation named = SumoInstallation.At(found.Home + Path.DirectorySeparatorChar);
+
+        Assert.Equal(Path.TrimEndingDirectorySeparator(found.Home),
+                     Path.TrimEndingDirectorySeparator(named.Home));
+        Assert.Equal("explicit", named.Source);
+        Assert.Equal(found.Release, named.Release);
+        Assert.Same(found, SumoInstallation.Locate());
+    }
+
+    [Fact]
+    public void ANamedDirectoryWithNoSumoInItIsRefusedByName()
+    {
+        string empty = Path.Combine(Path.GetTempPath(), "carlanet-no-sumo-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(Path.Combine(empty, "bin"));
+        try
+        {
+            DirectoryNotFoundException refused =
+                Assert.Throws<DirectoryNotFoundException>(() => SumoInstallation.At(empty));
+            Assert.Contains(empty, refused.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(empty, recursive: true);
+        }
+    }
+
     [Fact]
     public void AnExecutableNameGetsThePlatformsExtension()
     {

@@ -35,6 +35,7 @@ advancement policy, the headlight predicate),
 | 2026-09-25 | Real-time pacing on the world tick, achieved factor published per window (§9.9); package checked against the loaded world (§7.2). |
 | 2026-09-25 | §9: sun bound by `set_solar_epoch`; under `advance` written every tick, engine advance off; audit as built. |
 | 2026-09-28 | §5.4: velocity sent and checked per tick, measured live; §5.5 angular velocity and acceleration measured. |
+| 2026-09-28 | §2.6, D3.27: the session names the SUMO it launches, reports it, refuses a release other than the world's converter. |
 
 ---
 
@@ -148,14 +149,14 @@ policy: `SolarClock` turns a simulated instant into a solar-clock write and audi
 
 ## 2. Language and binding choice
 
-### 2.1 What is actually on disk (measured 2026-09-17)
+### 2.1 What is actually on disk (measured 2026-09-17; staging and `SUMO_HOME` 2026-09-28)
 
 | Thing | Where | State |
 |---|---|---|
 | `sumo.exe`, `duarouter.exe`, `netconvert.exe` | `Build/sumo-src/bin/` | all three present; `sumo --version` reports `Eclipse SUMO sumo 1.27.0` |
 | SUMO's reference TraCI client, in Python | `Build/sumo-src/tools/traci/` | complete, pure Python — no native module anywhere in it |
-| Staged into `Build/sumo-install/bin/` | — | **`netconvert.exe` only** |
-| `SUMO_HOME` | — | set nowhere in the repo |
+| Staged into `Build/sumo-install/` | — | `bin/` holds `sumo.exe`, `duarouter.exe` and `netconvert.exe`, each reporting 1.27.0; `tools/` holds `traci` and `sumolib`, `data/` holds `typemap` and `xsd` |
+| `SUMO_HOME` | — | set by no script in the repository; on this machine the environment holds `G:\Sumo\`, an independent SUMO whose `sumo --version` reports `Eclipse SUMO sumo 1.27.1` (§2.6) |
 
 **The interface is a wire protocol, not a library.** `sumo --remote-port N` is a TraCI server; a client
 connects over TCP and exchanges length-prefixed frames. `CarlaNet.Sumo` speaks it directly from C#,
@@ -325,6 +326,72 @@ steps from t = 1 000 s, 388 vehicles, the subscribed set maintained against depa
 **8.86 ms** subscribed and read. The shape matches doc 23 §6.11's measurement through the generated
 binding — the subscription is most of the step and the read is a fraction of it — and the totals sit
 below it: 8.86 ms against 10.43 ms for the same work.
+
+### 2.6 Which SUMO a session launches
+
+More than one SUMO is installed on this machine, and nothing in the binaries says which one a process
+picked. `Build/sumo-install` holds the pinned build (1.27.0); `SUMO_HOME` names `G:\Sumo\`, an
+independent official installation (1.27.1; [`09`](09_Toolchain_And_Packaging.md) §3.3). All three
+packages in `Build/world-packages` record `Eclipse SUMO netconvert 1.27.0` as their converter
+(`WorldPackageManifest.NetconvertVersion`, `WorldPackage.cs:163`), and `NetconvertPath` names
+`Build/sumo-install/bin/netconvert.exe` on all three.
+
+**Which installation.** `SumoDriveSessionOptions.SumoHome` names it, and `SumoInstallation.At` takes
+it as given, with `Source` `explicit`. Left unset, `SumoInstallation.Locate` searches, in order:
+`CARLANET_SUMO_HOME`; `Build/sumo-install`, then `Build/sumo-src`, each found by walking upward from
+the application's base directory and from the CarlaNet assembly's own; `SUMO_HOME`; `sumo` on `PATH`.
+The upward walk finds the repository only when the assemblies sit inside it. Loaded from an installed
+wheel they sit in `site-packages`, the walk finds nothing, and `SUMO_HOME` decides. So
+`run_sumo_drive.py` names the installation rather than leaving it to that search (`SessionSumo`):
+`--sumo-home` as given; otherwise `CARLANET_SUMO_HOME` where it holds a `sumo`; otherwise
+`Build/sumo-install`, then `Build/sumo-src`. Only where none of those holds a `sumo` does it name
+nothing, and the session searches `SUMO_HOME` and `PATH` itself.
+
+**The comparison.** After the loaded-world check (§7.2) and before `SumoConnection.Start`,
+`SumoDriveSession.Start` reads the installation's release from `sumo --version` and compares it with
+the manifest's `NetconvertVersion` by release number (`SumoReleaseCheck`). `SumoRelease.Of` reduces
+`Eclipse SUMO netconvert 1.27.0`, `Eclipse SUMO sumo 1.27.0`, `1.27.0` and `v1.27.0` alike to
+`1.27.0` before the two meet.
+
+| The package records | Outcome |
+|---|---|
+| the installation's release, however written | runs; reported as the same release |
+| another release, or the installation's release cannot be read | **refused** with `CoSimSessionRefusedException` naming the recorded converter, the installation's release, its path and the rule that found it; SUMO is not started |
+| another release, with `AllowSumoVersionMismatch` (`--allow-sumo-version-mismatch`) | runs; reported as a different release, run because the mismatch was explicitly accepted |
+| no converter — a package written before the converter was recorded | runs; reported as unchecked |
+
+**On every run** the report carries the installation, its release, the rule that found it and the
+outcome (`CoSimRunReport.Sumo`, printed as the `sumo` and `world converter` lines).
+`run_sumo_drive.py` logs the installation it names before it connects, and the session's line once the
+session has started — at warning level for an accepted mismatch or an unchecked world.
+
+**Measured 2026-09-28**, offline, with `SUMO_HOME=G:\Sumo\` and the CarlaNet assemblies loaded from a
+copy outside the repository — where an installed wheel's assemblies are — against
+`Gardnerville_Centerville_Lane.cwp` and `Import/Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg`:
+
+| Session | Launches | Outcome |
+|---|---|---|
+| no installation named | `G:\Sumo\`, 1.27.1, matched by `SUMO_HOME` | refused against `Eclipse SUMO netconvert 1.27.0` |
+| installation named by `run_sumo_drive.SessionSumo` | `Build/sumo-install`, 1.27.0, `explicit` | runs, the same release |
+| no installation named, mismatch accepted | `G:\Sumo\`, 1.27.1, matched by `SUMO_HOME` | runs, reported as accepted |
+
+**What it cannot see.** A release number names a release, not a build: two builds of one release with
+different patches or build options compare equal, and anything a development build prints after the
+number is dropped. It compares against the converter that built the *world*; whether the scenario's
+own network is the world's is measured by the lane-geometry residual (§7.2), not here.
+
+**Where the comparison is defined.** `CarlaNet.Sumo.SumoRelease` for the session.
+`carlacontrol.SumoInstallation.require_version` makes the same comparison for the world-build and
+authoring tools with its own Python reduction (`_release`, `SumoInstallation.py:47-61`).
+
+**Exercised by** `SumoReleaseCheckTests` (the comparison and the verdict, nothing launched),
+`SumoInstallationTests` (a named installation, and a named directory holding no `sumo`) and
+`SumoDriveSessionReleaseTests` (six session starts naming the installation the test process resolves,
+with the package's recorded converter varied). Each was seen failing against a wrong implementation:
+one that never refuses, one that ignores the acceptance, one that records an accepted mismatch as a
+match, one that refuses an unrecorded converter and one that passes it as a match, a verbatim string
+comparison, a check made after SUMO has started, a tool-output parser that accepts a line naming no
+release, and a named directory taken without looking for a `sumo` in it.
 
 ---
 
@@ -2643,7 +2710,7 @@ solar and light-state paths. They are handed to
 | **G6** | `apply_batch(do_tick_cue=True)` returns before the frame exists; only `world.tick()` waits. | `CarlaClient.cs:1779-1780` vs `:403-417`; `CarlaServer.cpp:393-399` | A caller that assumes the combined form is synchronous will capture against a frame that has not rendered. Worth a docstring at minimum. |
 | **G7** | `ActorDefinition` carries no bounding box; `BoundingBox` exists only on a spawned `Actor`. | `ActorDefinition.cs:5-9`; `Actor.cs:8-15` | The vType ↔ blueprint dimension map (§7.4, and [`04_Contracts.md`](04_Contracts.md)) needs a spawn-and-measure pass against a running server. |
 | **G8** | `ACarlaWheeledVehicle::SetWheelSteerDirection` is stubbed in this port — the physics-off branch's only effective line is commented out — and `GetWheelSteerAngle` is inside `#if 0 // @CARLAUE5`. | `CarlaWheeledVehicle.cpp:717-731`, `:733-740` | Wheel steer is unavailable for teleported vehicles, and for everything else. Wheel *spin* has no control surface at all. Both are visible in oblique EO imagery. |
-| **G9** | `sumo` and `duarouter` are built in `Build/sumo-src/bin/` but **only `netconvert.exe` is staged** into `Build/sumo-install/bin/`; `SUMO_HOME` is set nowhere, and `tools/traci` — which the client is ported from — is unstaged. | directory listings, 2026-09-17; `CarlaSetup.ps1:677` builds only the `netconvert` target | Doc 23 §6.1/§6.2 already record this. Belongs to [`09_Toolchain_And_Packaging.md`](09_Toolchain_And_Packaging.md); repeated because the bridge cannot run without it. |
+| **G9** | **Closed.** `netconvert`, `sumo` and `duarouter` are built together and staged into `Build/sumo-install/bin/`, with the named `data/` and `tools/` subsets beside them, `tools/traci` among them. `SUMO_HOME` is set by no script in the repository; on this machine it names an independent SUMO 1.27.1. | directory listing, 2026-09-28; `CarlaSetup.ps1:713`, `:724`; `CarlaSetup.sh:309` | The session launches the staged `sumo` when it is named, and compares whatever it launches against the world's converter (§2.6). Belongs to [`09_Toolchain_And_Packaging.md`](09_Toolchain_And_Packaging.md). |
 | **G10** | **Closed.** `CarlaNet.CoSim.SumoRoadNetwork` reads lane shapes, lane lengths and the connection table out of the `map.net.xml` a world package carries, and `WorldPackage` carries it. It keeps only what an interpolation needs and skips the rest while parsing. | `CarlaNet.CoSim/SumoRoadNetwork.cs`, `CarlaNet.Map/WorldPackage/WorldPackage.cs` | Note that `RedundantJunctionCollapser.Collapse` rewrites the `.xodr` *after* netconvert produced the `.net.xml` (`CarlaClient.cs:568-573`), so the two files share a frame but not junction identity. |
 | **G11** | Nothing asserts that the SUMO step is an integer multiple of the world delta, or that the `.net.xml` frame matches the `.xodr` frame. | no such check exists | §9's `R` and §7.2's frame identity are silent preconditions today. The session should assert both. |
 | **G12** | Chaos does not retain a written angular velocity on a kinematic particle. **Measured**: a kinematic vehicle turned at 30°/s by transforms reads zero angular velocity with a 30°/s target angular velocity written every tick, and every driven body reads zero while it turns (§5.5). `FWorldObserver_GetAngularVelocity` reads the body with no `IsSimulatingPhysics()` guard, unlike the linear path. | `WorldObserver.cpp:249-262` vs `Pawn.cpp:242`; `PBDRigidsEvolutionGBF.cpp:1180-1223` | No client call supplies an angular velocity for a pose-applied body. Nothing in the truth record reads it; a consumer that needs it needs an angular counterpart to D3.5 in the engine. |
@@ -2712,6 +2779,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.24** | **A SUMO-drive session renders neither the generated road surface nor the traffic-light and sign actors, and writes no traffic-light state.** No `SetTrafficLightStateCommand` in any batch, no traffic-light RPC, no `tlLogic` subscription. The `road` and `signals` layers are each written once at session start with `set_layer_visible` (`CarlaClient.cs:1077-1078` → `CarlaServer.cpp:697`; the `road` arm at `:729-738`, the `signals` arm at `:739-751` → `TrafficLightManager.cpp:618-628`), **fixed for the session's lifetime** with an operator override per layer that is a session-start decision and not a toggle, and given back on every exit path by `LayerVisibilityLease`. The run report records what was in frame. `set_layer_visible` joins the RPCs the episode drive-mode flag refuses to a client without the drive lease (§10.2 mechanism 4). Suppression is at the session, not at the source: `SignInjector` and native `SpawnSignals` are untouched, because the world build is shared with other modes (§3.4). SUMO's `tlLogic` programs, its right-of-way rows and the actuated netconvert setting are unaffected, and its vehicles still obey them. Vehicle lamps are a separate mechanism and are unchanged (D3.17). |
 | **D3.25** | **Real-time pacing is a factor the session reads once at start**, 0 by default and unconstrained, applied immediately before every world tick cue against the absolute schedule `T0 + n·Δw/f` counted from the first cue, so an overrun is absorbed rather than accumulated and the SUMO fast-forward is never paced. The session times every cue, paced or not, and publishes the achieved factor per window of wall clock (default 5 s), for the whole run and for the worst window, with the slip behind schedule, on `CoSimRunReport.Pacing`. It never stops or slows a run for falling behind: the floor is undecided and the consumer-side response is `08` §11.3's (§9.9). |
 | **D3.26** | **A session given a world refuses a world package that does not describe the world the server has loaded, and a world that carries no bare-earth reference record**, before SUMO is started and before anything on the server is written: the record's drape flag, grid and both grids against the package's, the georeference origin against the manifest's, and the served OpenDRIVE against the package's by normalised digest (§7.2). |
+| **D3.27** | **A session refuses to launch a SUMO whose release is not the converter the world package records**, compared by release number and settled before SUMO is started, naming both releases, the installation and the rule that found it. `AllowSumoVersionMismatch` accepts the difference. An accepted mismatch and a package that records no converter both run, and the run report names either; it carries the installation, its release and the rule that found it on every run. `run_sumo_drive.py` names the installation — the repository's pinned build first — rather than leaving it to `SUMO_HOME` (§2.6). |
 
 ---
 
