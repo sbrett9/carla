@@ -249,7 +249,7 @@ GAP B's traffic-light half is present, audited, and **not required** by this pla
 | 14 | `SetVehicleLightState` in batch | P | P | `apply_batch` | P | **Present** | shim wrapper does not coerce an `int` to the flags enum (§15.6) |
 | 14 | Light state on a **physics-disabled** actor | P | P | as above | P | **Present** | none — no layer consults physics (§15.2) |
 | 14 | Light state through record **and** replay | p | P | recorder RPCs | P | **Present** | none |
-| 14 | **Bulk** read of every vehicle's light state | — | **broken** | `get_vehicle_light_states` | P | **Absent in C#** | C# sends `get_vehicles_light_states`, which no server binds (§15.5) |
+| 14 | **Bulk** read of every vehicle's light state | — | present | `get_vehicle_light_states` | P | present in C# | `CarlaClient.GetVehiclesLightStatesAsync` sends the bound name (`CarlaClient.cs:1733`, §15.5) |
 | 14 | Light state on the episode-state stream | — | — | n/a | — | **Absent** | engine — the vehicle union carries no light field (§15.5) |
 | 14 | Automatic (weather-driven) vehicle lighting | — | p | n/a | — | **Absent in practice** | three independent causes (§15.7) |
 | 15 | CARLA weather set / read / enabled | P | P | `set_weather_parameters`, `get_weather_parameters`, `is_weather_enabled` | — | **Absent in practice** | engine + content — no map places an `AWeather` actor (§16) |
@@ -1663,60 +1663,11 @@ registry and returns one `(ActorId, uint32)` pair per non-dormant vehicle
 at `LibCarla/source/carla/client/World.cpp:40-42`), and the Python API exposes it as
 `world.get_vehicles_light_states` (`PythonAPI/carla/src/World.cpp:308`).
 
-**CarlaNet sends a different string:**
-
-```csharp
-// CarlaNet/src/CarlaNet.Transport/CarlaClient.cs
-1630:    public Task<IReadOnlyList<(ActorId, VehicleLightStateFlags)>> GetVehiclesLightStatesAsync()
-1631:        => _rpc.CallAsync<IReadOnlyList<(ActorId, VehicleLightStateFlags)>>("get_vehicles_light_states");
-```
-
-`get_vehicle**s**_light_states` — the C# method name and the *Python API's* method name, not the RPC
-name. A search of the server for `vehicles_light_states` across `.cpp` and `.h` finds **no binding**;
-the only occurrence anywhere outside CarlaNet is the boost-python method name at
-`PythonAPI/carla/src/World.cpp:308`, which is a client-side label. `#define BIND_SYNC(name)`
-stringifies the C++ identifier (`CarlaServer.cpp:278`), so the bound name is `get_vehicle_light_states`
-and nothing aliases it.
-
-**Read — what the server does with an unknown name.** rpclib's dispatcher returns an error response,
-`"rpclib: server could not find function '{0}' with argument count {1}."`
-(`Build/_deps/rpclib-src/lib/rpc/dispatcher.cc:81-85`), and CarlaNet's reader turns a non-nil error
-field into a thrown `CarlaRpcException` (`MsgPackRpc/MsgPackRpcClient.cs:144-148`). So the call throws
-every time, on every server.
-
-**Read — where that lands.** The only caller is the .NET traffic manager's light stage, and it
-swallows the exception without logging:
-
-```csharp
-// CarlaNet/src/CarlaNet.TrafficManager/Stages/VehicleLightStage.cs
-107:            try
-108:            {
-109:                _allLightStates = _client.GetVehiclesLightStatesAsync().GetAwaiter().GetResult();
-110:            }
-111:            catch (Exception)
-112:            {
-113:                _allLightStates = Array.Empty<(ActorId, VehicleLightStateFlags)>();
-114:            }
-```
-
-(`VehicleLightStage.cs:107-114`, inside the refresh guard at `:104-115`; the outer call site in
-`TrafficManagerLocal.cs:514-518` has a logger, but this inner `catch` never reaches it.)
-
-**Inferred — why nobody noticed, and what would happen if they enabled it.** The stage's `Update`
-returns immediately unless a vehicle has `update_vehicle_lights` set, and
-`Parameters.GetUpdateVehicleLights` defaults to **false** (`Parameters.cs:437-438`). So today the
-whole stage is a no-op and the broken call has no visible effect: the defect is **latent**. If it
-were enabled, `_allLightStates` being empty means the linear search at
-`VehicleLightStage.cs:175-183` never finds the vehicle and leaves the "current" state at its sentinel
-`(VehicleLightStateFlags)uint.MaxValue`. The composed mask then clears only the seven bits the stage
-computes (`:258-286`), leaving `Reverse`, `Interior`, `Special1` and `Special2` **set on every
-vehicle**, and the change test `newLightStates != lightStates` at `:289` compares against a
-fictitious value that can never match — so a `SetVehicleLightStateCommand` is appended to the control
-frame for every managed vehicle on every tick.
-
-**This is the audit's only true port defect.** Everything
-else in the gap register is a shim omission, an engine omission, or a design consequence; this is one
-string in `CarlaClient.cs`. Gap G5.13.
+**CarlaNet sends the same name.** `CarlaClient.GetVehiclesLightStatesAsync` calls
+`get_vehicle_light_states` (`CarlaNet/src/CarlaNet.Transport/CarlaClient.cs:1728-1733`), and its
+comment records why the method's own name differs: `get_vehicles_light_states` is the Python API's
+label for the client call (`PythonAPI/carla/src/World.cpp:308`), not the server binding. G5.13 is
+closed.
 
 **The second half of the same problem: there is no free path to light state at all.** The
 episode-state stream's per-actor type-dependent union carries, for a vehicle, only
@@ -1860,7 +1811,7 @@ number.
 | **G5.10** | Three recorder/replay RPCs unwrapped in the shim; `PythonAPI/util/start_replaying.py` breaks (§12.1) | **Shim** | Replay utilities and recorder inspection from Python | Three two-line wrappers. |
 | **G5.11** | No map-side light lookup (`get_traffic_lights_from_waypoint` and siblings); no `Waypoint`/`Junction`/`Landmark` in the shim (§12.2) | **C#** | Asking "what controls this vehicle's next junction" from a client. **Not required by this plan** (§3e); would be sidesteppable by keying off `sign_id` if ever needed | Large — surfacing `CarlaNet.Map`'s already-parsed graph. |
 | **G5.12** | `try_spawn_actor` swallows every exception, not only collision (§6.1) | **Shim** | Distinguishing "spawn point occupied" from a transport fault at scale | Catch the collision message specifically, or use the batch path, which returns per-entry errors. |
-| **G5.13** | **`CarlaClient.GetVehiclesLightStatesAsync` sends the RPC name `get_vehicles_light_states`; the server binds `get_vehicle_light_states`** (§15.5). rpclib answers "could not find function"; the client throws; the sole caller swallows it silently | **C#** | Any bulk read of vehicle light state. Latent today only because `update_vehicle_lights` defaults to false — with it on, every managed vehicle would be commanded `Reverse`+`Interior`+`Special1`+`Special2` on, and re-commanded every tick | **One string** in `CarlaClient.cs:1631`. Nothing else changes. The audit's only true port defect. |
+| **G5.13** | **Closed.** `CarlaClient.GetVehiclesLightStatesAsync` sends `get_vehicle_light_states`, the name the server binds (`CarlaClient.cs:1728-1733`, §15.5). Before it did, it sent `get_vehicles_light_states`, which no server binds. rpclib answers "could not find function"; the client throws; the sole caller swallows it silently | **C#** | Any bulk read of vehicle light state. Latent today only because `update_vehicle_lights` defaults to false — with it on, every managed vehicle would be commanded `Reverse`+`Interior`+`Special1`+`Special2` on, and re-commanded every tick | **One string** in `CarlaClient.cs:1631`. Nothing else changes. The audit's only true port defect. |
 | **G5.14** | Vehicle light state is absent from the episode-state stream's vehicle union (`ActorDynamicState.h:59-68`), so reading it always costs an RPC (§15.5) | **Engine / wire** | A free per-tick read of who has their lights on, the way solar state and traffic-light state are free | Add a `uint32` to `VehicleData` and fill it in `FWorldObserver_GetActorState`; the union is already 54 bytes of type-dependent space. Engine + LibCarla + the C# parser move together. **Not needed** if the SUMO runtime is the sole author of lights (§15.5). |
 | **G5.15** | The sun's time zone cannot be set by any client. `TimeZone` is `longitude / 15` written once at world configuration (`CesiumSunSky.cpp:570-573`, called from `CesiumHeightSampler.cpp:412`); no `set_solar_time_zone` exists anywhere (§14.6) | **Engine / RPC** | Expressing a civil time zone — including the sizing scenario's **+03:30**, which differs from its longitude zone by ~14.7 min. Also leaves a hand-placed sun stuck on Cesium's `-5.0` default | Either a `set_solar_time_zone` RPC in the staging-bounds shape (§11 — flat primitives, no LibCarla file touched), or a documented mandatory client-side civil→solar conversion. The first is the honest one. |
 | **G5.16** | The advancing solar clock **never rolls the calendar date**: `ACesiumTimeOfDayController::Tick` wraps `SolarTime` mod 24 and never touches `Day` (`CesiumTimeOfDayController.cpp:34-36`) (§14.6) | **Engine** | Any run spanning midnight. Six of the sizing scenario's seven days would render at day 0's seasonal sun and be recorded with day 0's date | Carry the whole days out of the `Fmod` and increment `Year/Month/Day` with a real calendar. Engine-side, self-contained. A client-side midnight watcher is a workaround, not a fix, and must be owned explicitly if chosen. |
@@ -1871,7 +1822,7 @@ number.
 | **G5.21** | `command.SetVehicleLightState` passes its argument straight to the C# enum parameter, while `Actor.set_light_state` converts explicitly (`__init__.py:1141-1147` vs `:782-783`) (§15.6) | **Shim** | Probably the batch form from Python with a plain `int` or the shim's own `VehicleLightState`. **Unconfirmed** — needs one line of measurement (open question 10) | One line: the same `VehicleLightStateFlags(int(state))` coercion. |
 | **G5.22** | `SumoCotBridge._height_at(x, y)` is called with the **raw SUMO** position (`CarlaControl/src/carlacontrol/SumoCotBridge.py:311`) and indexes a grid in the CARLA frame (`BareEarthGrid.height_at`, `:115-120`), so every off-centre height is read from the row mirrored about the grid's Y origin. Handed over by [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) §7; verified here | **Control-side Python** | Correct ellipsoidal height in the existing CARLA-free CoT datasets. Invisible in bounds terms — a mirrored row is always inside the grid — so it produces plausible wrong numbers | Negate Y at the call site, matching what the very next lines of that file already say the contract's frame is (`:314-315`). One line, plus regeneration of any dataset that depends on it. |
 
-**Exactly one gap sits in the C# client's RPC coverage — G5.13 — and it is a single string.**
+**No gap remains in the C# client's RPC coverage: G5.13, a single string, is closed.**
 Everything else is a shim omission, an engine omission, or a design consequence; no wire-protocol or
 serialisation defect was found anywhere in the port.
 
@@ -1896,11 +1847,8 @@ two places where a port of this kind usually fails both check out:
   ([`_TEAM_BRIEF.md` §3e](_TEAM_BRIEF.md)) — but the parity is a fact about the client and engine on
   its own merits.
 
-**The one exception:** `get_vehicle_light_states` — the bulk read of every
-vehicle's lights — is sent by the C# client under a name no server binds, so it always fails and the
-failure is always swallowed (§15.5, G5.13). LibCarla's C++ client sends the right name. This is the
-audit's only true port omission, it is one string in `CarlaClient.cs:1631`, and it is latent today
-only because the sole caller is disabled by default.
+**The one exception the audit found is closed:** the C# client's bulk read of every vehicle's
+lights, `get_vehicle_light_states`, is sent under the name the server binds (§15.5, G5.13).
 
 Where CarlaNet otherwise falls short of upstream's *Python* client, it falls short **in the Python
 shim**, not in the port. The shim exposes 8 of 22 batch commands and leaves `TrafficLight` an empty
@@ -1959,7 +1907,7 @@ number. `D5.13`–`D5.20` all concern time of day, illumination and vehicle ligh
 | **D5.13** | **A run that wants reproducible illumination sets `fixed_delta_seconds`.** The sun advances by `Σ (world frame delta × rate)` and never reads the wall clock (`CesiumTimeOfDayController.cpp:34`, §14.4). With a fixed delta the sun is a pure function of the tick count, so two runs of the same window are lit identically; without one, it is not — **in synchronous mode as well as asynchronous**. State the coupling as `fixed_delta_seconds`, never as "synchronous mode", and correct the three places that say otherwise (`__init__.py:1538-1540`, `CarlaClient.cs:1057`, `CarlaControlArgumentParser.py:255-262`). |
 | **D5.14** | **`rate = 1.0` means one sun-clock second per simulated second.** At `Δ = 0.05` that is twenty ticks per sun-second. To hold the sun to a SUMO clock of step length `L` applied every `K` CARLA ticks, the identity the runtime must satisfy is `rate = L / (K × Δ)`. [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md) owns the choice; this audit supplies the identity (§14.4). |
 | **D5.15** | **A frozen-sun capture sets the instant and leaves `set_time_advance` off; it does not set `rate = 0`.** Both work arithmetically, but `advancing` is published in the solar block (index 9) and reaches truth as a boolean (`CotWriter.cs:63`), so the state of the run is self-describing only if the flag carries the intent (§14.5). |
-| **D5.16** | **The runtime is the sole author of vehicle lights under SUMO drive, and never reads them back.** Reading is either one RPC per vehicle or the broken bulk call (§15.5), while the author already knows the state it sent. Keep a client-side map and emit `SetVehicleLightStateCommand` only on change, in the same batch as the pose (variant index 18 beside index 6, §4.1). This makes G5.13 and G5.14 irrelevant to the critical path without making them acceptable. |
+| **D5.16** | **The runtime is the sole author of vehicle lights under SUMO drive, and never reads them back.** Reading is one RPC per vehicle or one bulk call (§15.5), while the author already knows the state it sent. Keep a client-side map and emit `SetVehicleLightStateCommand` only on change, in the same batch as the pose (variant index 18 beside index 6, §4.1). This keeps G5.14 off the critical path without making it acceptable. |
 | **D5.17** | **Vehicle lights are safe to design on for physics-disabled actors.** No layer from `CarlaServer.cpp:1985` to `ACarlaWheeledVehicle::SetVehicleLightState` consults physics, the body instance or the movement component (§15.2), and replay uses the same entry point (§15.3). The night design does not have to change to accommodate teleported bodies. |
 | **D5.18** | **"Is it dark" is decided from `sun_elevation_deg`, index 7 of the solar block — never from `WeatherParameters.SunAltitudeAngle`.** The latter reads zero on every map in this fork because there is no weather actor to read (§16), and a caller that skips `is_weather_enabled` gets that zero as though it were a measurement. The solar block is free, real, and published every tick (§14.5). |
 | **D5.19** | **Nothing may treat the tick-stream solar block as authoritative until it can express absence.** Today a sunless world publishes midnight of year 0 and the shim returns it as fact (G5.18). Until that is fixed, any consumer must either check `month != 0` or use the RPC, which answers correctly. This is a precondition on [`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md)'s use of the same publication mechanism for other world-scoped state: **the mechanism is sound, but every payload carried on it needs its own way of saying "absent".** |

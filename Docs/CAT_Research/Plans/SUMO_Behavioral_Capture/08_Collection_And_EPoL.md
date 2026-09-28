@@ -1778,14 +1778,13 @@ later reader will treat it as simulator output.
   declaration**: only a `simulated` pose is exact, and the corpus publishes the interpolation rule and a
   stated positional bound for the others, so a consumer knows the precision of every label they are
   given rather than assuming all labels are equal.
-- **Truth velocity must be the derivative of the pose that was rendered.** `WorldObserver.cpp:373`
-  serialises `View->GetActor()->GetVelocity()` — verified by reading the file — and a `set_transform`
-  on a non-simulating body does not update it, so a teleported vehicle reports zero speed into the CoT
-  truth record and into anything derived from it. Team brief §3.2 calls that a problem to solve, and
-  [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) **D3.5** solves it at source: write
-  `ComponentVelocity` on a non-simulating root primitive and have the bridge emit an
-  `ApplyTargetVelocityCommand` beside every transform command. This section depends on that and proposes
-  nothing to replace it.
+- **Truth velocity must be the derivative of the pose that was rendered.** `WorldObserver.cpp:385`
+  serialises `View->GetActor()->GetVelocity()`, and a `set_transform` on a non-simulating body does not
+  update it. [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) **D3.5** solves it at source: a
+  vehicle whose physics is disabled reports the velocity it is given (the movement component's
+  `Velocity`, which `APawn::GetVelocity` reads), and the bridge writes an `ApplyTargetVelocityCommand`
+  after every transform. Measured on Gardnerville, every moving vehicle's CoT truth row carries SUMO's own
+  speed to 0.01 m/s. This section depends on that and proposes nothing to replace it.
 
   **But D3.5 writes SUMO's interpolated speed, and D3.6 derives the pose from linear along-lane
   interpolation, so the two are not the same quantity** (§6.3). The requirement this section adds is a
