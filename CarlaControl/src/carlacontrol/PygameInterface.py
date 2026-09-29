@@ -62,7 +62,10 @@ class PygameInterface:
         self.height = args.height
         self.target_fps = (1.0 / args.fixed_delta) if sync else 60.0
         self.world = world
-        self.solar_poll_frame = 0
+        # The sun clock is polled every 30 frames and shown on every frame in between; it starts
+        # due, so the first frame asks rather than waiting half a second to.
+        self.solar_poll_frame = 30
+        self.solar_hud = ""
         self.sync = sync
         self.time_rate = args.time_rate
 
@@ -510,7 +513,6 @@ class PygameInterface:
             agl_str = "   --"
 
         # poll solar for time
-        solar_hud = ""  # "HH:MM" refreshed from get_solar_state at low frequency
         self.solar_poll_frame += 1
         if self.solar_poll_frame >= 30:
             self.solar_poll_frame = 0
@@ -518,10 +520,10 @@ class PygameInterface:
                 _ss = self.world.get_solar_state()
                 if _ss:
                     _h = _ss["solar_time"]
-                    solar_hud = f"{int(_h) % 24:02d}:{int((_h % 1) * 60) % 60:02d}"
+                    self.solar_hud = f"{int(_h) % 24:02d}:{int((_h % 1) * 60) % 60:02d}"
             except Exception:
                 pass
-        time_str = f"{solar_hud or '--:--'}" + (
+        time_str = f"{self.solar_hud or '--:--'}" + (
             f" >{self.time_rate:g}x" if self.get_flag("time_advancing") else ""
         )
 
