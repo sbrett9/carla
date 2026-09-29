@@ -692,8 +692,9 @@ section: a stated intent that nothing honours and nothing reports.
 `advance` without a positive rate, a `freeze_at` without its time, any field belonging to another
 policy, and any field it does not read are refused, each by name. The contract's audit-tolerance
 overrides are refused too, because the bound [`04`](04_Contracts.md) `C9` places on them has not been
-valued and an unbounded override is an off switch. The corpus-eligibility rule for a non-unit rate and
-the headlight thresholds belong with the corpus and the lamps, which are not built.
+valued and an unbounded override is an off switch. The corpus-eligibility rule for a non-unit rate
+belongs with the corpus, which is not built; the headlight thresholds are built with the lamps
+(on below +3°, off above +6° of reported sun elevation, D11.9).
 
 `illumination_band` is a derived, coarse stratification key computed from the sun elevation by one
 shared function — `day` above +6°, `golden` +6° to 0°, `civil_twilight` 0° to −6°,

@@ -2341,11 +2341,47 @@ registered by its own publisher, so tiles are selected for the sensor's frustum 
 spectator's. A wait that does not tick renders nothing and streams nothing, so this readiness is
 counted in ticks and never in seconds.
 
-Measured at three camera poses whose ground had not been looked at before: the first frame written
-with no ticked pre-roll is an empty sky and the imagery takes two to three frames to fill in, while
-a first frame written after 120 ticks is indistinguishable from the sixth. Between an unsettled view
-and a settled one the frame's mean grey level differs by 83 to 112 levels, and the difference goes
-flat at about 120 ticks.
+Measured over 27 placements on Gardnerville, synchronous at 0.05 s; ticks count from the camera's
+spawn, and the residual is the worst 80-pixel block's grey-level difference from the run's settled frame:
+
+| Condition (runs) | Ticks until the tiles are in | Wall clock | Residual then | Settled to ≤ 0.5 at tick |
+|---|---|---|---|---|
+| Cold, 450 m nadir, 1280×720 (6) | 30–45 | 2.4–3.4 s | 1.0–3.5 | 49–69 |
+| Tiles already in memory (3) | 9–14 | 0.8–1.2 s | 2.1–3.2 | 29–38 |
+| 150 m (2) / 900 m (1) | 30–32 / 28 | 2.4–2.6 s | 5.2–7.7 / 3.4 | 65–69 / 55 |
+| 640×360 (2) / 1920×1080 (2) | 32–37 / 49–82 | 1.4 s / 6–10 s | 4.3–6.8 / 0.2–4.1 | 68–69 / 67–81 |
+| Oblique, horizon in view (2) | 75–124 | 5.2–8.0 s | 1.5–2.5 | 91–151 |
+| 0.2 s added to every tick (2) | 11–18 | 3.3–5.1 s | 4.5–6.7 | 37–62 |
+| One request stalled on DNS (1) | 1,258 | 61.5 s | about 75% of the frame empty | — |
+
+Four measured facts each rule out a simpler rule. **The tick count follows the network, not the
+scene**: 0.2 s added per tick cut it from 30–45 to 11–18 while wall clock barely moved, because Cesium
+receives HTTP responses on the game thread only when the world ticks, while the network runs in wall
+time. **The picture cannot witness the tiles**, because a view waiting on the network does not change;
+image-only rules let through frames up to 177 levels from settled. **`LoadProgress` alone cannot
+either**: it reads 100 for up to 8 ticks before a new camera is published, and after a failure, since a
+failed tile is never retried and counts as done — the DNS stall ended with three-quarters of the frame
+empty at 100. **And tiles being in is not the picture being settled**: the renderer moves the worst
+block by up to 7.7 levels for up to 39 frames, counted in frames the camera renders.
+
+Readiness is therefore two conditions from two witnesses. The **tiles** are in when the camera is among
+the views `ACesiumSensorViewPublisher` published on the last tick and every visible tileset reports
+`LoadProgress` 100 with no failed tile in view; only the server can say this. The **picture** has
+settled when the camera's frame differs from its frame ten frames earlier by at most 0.5 grey levels in
+its worst 80-pixel block; only the camera can say this. Each stage has a ceiling in the unit it
+progresses in, and a ceiling only fails the run: 90 s of wall clock for the tiles, above the 60 s
+request timeout so a stalled request shows first as a failed tile, and 120 of the camera's frames for
+the picture. Neither is a count a caller supplies.
+
+**What the server reports.** `get_view_readiness(actor_id)` reads the tilesets' state as of the end of
+the last tick. The camera counts only once `ACesiumSensorViewPublisher` has written its view on that
+tick, because a tileset with no view for the camera selects nothing for it and reads fully loaded. For
+each tileset it gives `LoadProgress`, the load queues and kicked tiles behind it, and two failure
+counts: among the tiles it draws, and across its loaded tree. A failed tile is drawn empty and counts
+as loaded, so `LoadProgress` 100 with a failure in view is a frame with a hole. An unknown or
+non-camera actor is an error. The figures come from one view group holding every registered view, so a
+camera follower flying during the wait holds `LoadProgress` below 100. The RPC is written and awaits a
+build; the client method and the check in the capture are not built.
 
 **The attended path never had this problem, because a person is its settle.** In `run_SCTMV.py`
 recording starts on a key press — `CarlaControl/src/carlacontrol/PygameInterface.py:308` binds
@@ -2353,11 +2389,6 @@ recording starts on a key press — `CarlaControl/src/carlacontrol/PygameInterfa
 the same view the recorder will write. Nobody presses the key over an empty sky. An unattended
 capture has no such person, which is why the first frames of a cold view are this section's problem
 and were never SCTMV's.
-
-**How many ticks it takes is a property of the network and of what the tile cache already holds, not
-of the scene**, so no caller can know it and a run must not be asked for it. Whatever establishes
-imagery readiness has to read it from the tileset's own state — the thing the warm-up waits for is
-an observation, not an elapsed count.
 
 ### 9.6 What this section needs from `11_Time_And_Illumination.md`
 
