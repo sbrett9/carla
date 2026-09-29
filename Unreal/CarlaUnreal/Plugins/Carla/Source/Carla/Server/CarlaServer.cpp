@@ -957,6 +957,28 @@ void FCarlaServer::FPimpl::BindActions()
     return std::vector<float>(Grid.GetData(), Grid.GetData() + Grid.Num());
   };
 
+  // The SHA-1 of each bare-earth grid, lowercase hexadecimal, as [offset_grid_sha1, dtm_grid_sha1]:
+  // each over the grid's float32 values as little-endian bytes, row-major -- the bytes a world
+  // package's bareearth.bin holds -- computed when the record is set. It lets a client prove the
+  // loaded world's grids are a package's bit for bit without transferring them: on the Bahonar world
+  // each grid is 7,611,381 floats, and the two fetches above took 146 s and 153 s. Empty when the
+  // world has no record or was not draped.
+  BIND_SYNC(get_bare_earth_digest) << [this]() -> R<std::vector<std::string>>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to read a bare-earth digest from");
+    }
+    FString OffsetSha1, DtmSha1;
+    if (!UBareEarthReference::GetGridDigests(World, OffsetSha1, DtmSha1) || OffsetSha1.IsEmpty())
+    {
+      return std::vector<std::string>{};   // no record, or a constant shift with no grids
+    }
+    return std::vector<std::string>{ cr::FromFString(OffsetSha1), cr::FromFString(DtmSha1) };
+  };
+
   // Returns the Cesium georeference origin (latitude, longitude, ellipsoidal height in m),
   // so a client can turn a local Unreal Z into a true elevation (originHeight + localZ).
   BIND_SYNC(get_cesium_origin) << [this]() -> R<cg::GeoLocation>

@@ -22,6 +22,16 @@
 // Grids are row-major [row * NumCols + col], metres, with grid corner cell (0,0) at world
 // (MinXMeters, MinYMeters); +col is +X, +row is +Y, spacing CellSizeMeters. This is the same
 // convention as the draped collision heightfield in DrapedTerrain.h, and the same grid.
+//
+// Each grid also carries its SHA-1, over the grid's float32 values as little-endian bytes in
+// row-major order: exactly the bytes a world package's bareearth.bin holds for that grid. A client
+// holding a package proves the loaded world's grids are the package's bit for bit by comparing
+// digests, rather than by fetching the grids -- 7,611,381 floats each on the Bahonar world, whose
+// two fetches took 146 s and 153 s. SHA-1 because it is the strongest digest the engine's Core
+// computes on Windows and Linux that .NET also has built in: Core's SHA-256 entry point has no
+// Windows or Linux implementation, every working SHA-256 in the engine is OpenSSL's, and Core's
+// BLAKE3 has no .NET counterpart. The digest tells a grid from another build's, not from an
+// adversary's; the server accepts a record from any client regardless.
 
 #pragma once
 
@@ -59,6 +69,18 @@ public:
 
 	/** Per-cell bare-earth ground height, ellipsoidal metres. Reported as the ground under a vehicle. */
 	UPROPERTY() TArray<float> BareEarthDtmMeters;
+
+	/**
+	 * SHA-1 of OffsetMeters and of BareEarthDtmMeters, lowercase hexadecimal, each over the grid's
+	 * float32 values as little-endian bytes, row-major. Empty when the record is not draped.
+	 *
+	 * Not serialised, because they are a function of the grids and a stored copy could only
+	 * disagree with them: UBareEarthReference::Set computes them as it stores the grids, and a record
+	 * that came into being any other way -- one a saved level carried -- has them computed on the
+	 * first read. Nothing but Set writes the grids, and Set replaces the whole record.
+	 */
+	UPROPERTY(Transient) FString OffsetSha1;
+	UPROPERTY(Transient) FString BareEarthDtmSha1;
 };
 
 UCLASS()
@@ -102,6 +124,15 @@ public:
 	/** Per-cell bare-earth ground height, empty when this world has no record or was not draped. */
 	UFUNCTION(BlueprintCallable, Category = "CesiumCarla", meta = (WorldContext = "WorldContextObject"))
 	static const TArray<float>& GetBareEarthDtmGrid(UObject* WorldContextObject);
+
+	/**
+	 * The SHA-1 of each grid, lowercase hexadecimal, over its float32 values as little-endian bytes,
+	 * row-major. Returns false (outputs untouched) when this world has no record; both are empty
+	 * when it has one that was not draped.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CesiumCarla", meta = (WorldContext = "WorldContextObject"))
+	static bool GetGridDigests(
+		UObject* WorldContextObject, FString& OutOffsetSha1, FString& OutBareEarthDtmSha1);
 
 private:
 	/** The single record for a world, or nullptr when it has none. */
