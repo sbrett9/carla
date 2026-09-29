@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 14 | `C1`: the registry carries corrected class metadata and the European HGV; the content's unregistered blueprints inventoried; the Fuso Rosa is a bus; the default class set stated |
 | 13 | `C3` is the directory of loose files the scenario compiler writes, bound by its lock; the clipped OSM is not carried, and each validation rule states where it is enforced |
 | 12 | `C9`'s package-build rules carried out by the scenario compiler with the session's own readers |
 | 11 | `C9`: `set_solar_epoch` writes the declared offset as the sun's zone; no client-side conversion; one advance mechanism |
@@ -278,12 +279,14 @@ onto CARLA blueprints.
 blueprint, which is why a five-car convoy is five identical cars. The preference table is
 `BlueprintChooser.cs:16-25`.
 
-Three measurements make the defect sharper than doc 20 §5.6 records.
+These measurements make the defect sharper than doc 20 §5.6 records.
 
-**Measurement 1 — the content build offers seventeen vehicles, and its own metadata is wrong.** The
+**Measurement 1 — the content build's vehicle registry is hand-edited, and was measured wrong.** The
 vehicle blueprint set is loaded at runtime from a JSON file
 (`Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Actor/Factory/VehicleActorFactory.cpp:19-26`), read
-here at `Unreal/CarlaUnreal/Content/Carla/Config/VehicleParameters.json`. Parsed with `json`:
+here at `Unreal/CarlaUnreal/Content/Carla/Config/VehicleParameters.json`, plus an optional per-map
+`Config/<map>/Vehicles.json` appended to it (`:22-24`). Parsed with `json` when the published
+catalogue was swept:
 
 | Property | Measured |
 |---|---|
@@ -294,13 +297,42 @@ here at `Unreal/CarlaUnreal/Content/Carla/Config/VehicleParameters.json`. Parsed
 | Entries with at least one `RecommendedColors` entry | **17 of 17** |
 | Motorcycle or bicycle blueprints | **none** |
 
-Seven blueprints that are plainly cars are declared `bus` — `ue4.ford.mustang`, `ue4.ford.crown`,
-`ue4.bmw.grantourer`, `ue4.audi.tt`, `ue4.mercedes.ccc`, `ue4.chevrolet.impala` — and `fuso.mitsubishi`,
-which is a lorry, is also `bus`. `sprinter.mercedes` has no `BaseType` at all, so the truth producer's
-fallback reports it as `car` (`CarlaNet.Recording/VehicleTelemetryService.cs:100-102`). Every
-`special_type` is empty, so [doc 09 §4](../../Findings/09_Telemetry_CoT_Contract.md)'s
-`special_type=emergency` mapping has nothing to fire on even for the ambulance, the police Charger and
-the fire truck.
+Six of the seven `bus` declarations were plainly cars — `ue4.ford.mustang`, `ue4.ford.crown`,
+`ue4.bmw.grantourer`, `ue4.audi.tt`, `ue4.mercedes.ccc`, `ue4.chevrolet.impala`. The seventh,
+`fuso.mitsubishi`, is the Mitsubishi Fuso Rosa light bus, and upstream CARLA publishes it as a bus.
+`sprinter.mercedes` had no `BaseType` at all, so the truth producer's fallback reported it as `car`
+(`CarlaNet.Recording/VehicleTelemetryService.cs:100-102`). Every `special_type` was empty, so
+[doc 09 §4](../../Findings/09_Telemetry_CoT_Contract.md)'s `special_type=emergency` mapping had nothing
+to fire on even for the ambulance, the police Charger and the fire truck. The Lincoln's blueprint wires
+four wheels, not three.
+
+The registry now declares the corrected values — `car` on the six saloons, `van` on the Sprinter and the
+ambulance, `emergency` on the ambulance, the police Charger and the fire appliance, `taxi` on the taxi,
+four wheels on the Lincoln — and an eighteenth entry, `vehicle.carlamotors.european_hgv`. The catalogue
+still derives each blueprint's kind from its measurement (§3.2) rather than reading these, because the
+file is hand-edited and nothing checks it against the bodies.
+
+**Measurement 1a — the content holds more vehicle blueprints than it registers, and most of the rest
+cannot spawn.** `Content/Carla/Blueprints/Vehicles/` holds thirty vehicle blueprint folders and a
+`2Wheeled` folder, read offline from each blueprint's own name table and the packages it references:
+
+| Blueprints | Registered | Why |
+|---|---|---|
+| The seventeen of the table above, and `EuropeanHGV` | globally, 18 entries | `EuropeanHGV` derives from `BaseVehiclePawnNW` and wires six wheel blueprints on three axles; one skeletal mesh, no trailer |
+| `MiningTruck` | only on `Mine_01`, as `vehicle.miningtruck.miningtruck` in `Config/Mine_01/Vehicles.json` | an off-highway haul truck the content scopes to its map; registering it globally would declare the id twice there |
+| `2Wheeled/` — `CrossBike`, `Harley`, `KawasakiNinja`, `LeisureBike`, `RoadBike`, `Vespa`, `Yamaha` | no | two-wheelers, outside this contract (`D4.40`) |
+| `AudiA2`, `AudiETron`, `BmwIsetta`, `CitroenC3`, `Cybertruck`, `JeepWranglerRubicon`, `NissanMicra`, `SeatLeon`, `Tesla`, `ToyotaPrius`, `VolkswagenT2` | no | no wheel is wired in |
+
+The last row's folders each hold four wheel blueprints, but no vehicle blueprint references one: none
+serialises `WheelSetups`, `BaseVehiclePawn` sets none, and `UChaosWheeledVehicleMovementComponent`
+starts with none. `ACarlaWheeledVehicle::BeginPlay` passes the vehicle to
+`FAckermannController::UpdateVehiclePhysics`, which calls `GetMaximumSteerAngle`, which asserts
+`check(Wheels.Num() > 0)` (`Vehicle/CarlaWheeledVehicle.cpp:164`, `:285-289`;
+`Vehicle/AckermannController.cpp:217-218`).
+Spawning one would assert, so registering one would put a server-stopping body into every client's
+random draw. The `Cybertruck` also references two glass meshes that are not in the content. Wiring the
+wheel setups in the editor is what makes these registrable; until then an author asking for a Jeep
+Wrangler or a Volkswagen T2 is refused (§3.10), not given the nearest body.
 
 **Measurement 2 — half the preference table matches nothing.** Definition ids are lowercased
 (`Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Actor/ActorBlueprintFunctionLibrary.cpp:203-206`), so
@@ -332,8 +364,9 @@ Two independent reasons, and either alone settles it:
   ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3.5), so a motorcycle in this corpus would be a riderless body
   moving down a road at motorcycle speed — an object that exists nowhere outside the imagery, which is
   a worse thing to train a detector on than an absent vehicle class.
-- **The content build registers none.** Measurement 1: `VehicleParameters.json` holds 17 vehicles and
-  not one of them is a two-wheeler, and the two-wheeler identifiers the client carries elsewhere —
+- **The content build registers none.** Measurement 1: `VehicleParameters.json` holds 18 vehicles and
+  not one of them is a two-wheeler — the seven two-wheeled blueprints in the content are deliberately
+  left unregistered (Measurement 1a) — and the two-wheeler identifiers the client carries elsewhere —
   `harley`, `kawasaki`, `yamaha`, `vespa`, `omafiets`, `crossbike`, `diamondback`, `gazelle`
   (`CarlaControl/src/carlacontrol/TrafficController.py:36-48`) — match nothing the server returns
   (Measurement 2). Nothing is registered, so the sweep has nothing to spawn and nothing to measure.
@@ -368,8 +401,9 @@ turns are where behaviour is legible — a corpus is made of the manoeuvres, not
 plausible-looking lorry that corners impossibly is worse than an absent vehicle class, for the same
 reason a riderless motorcycle is.
 
-The content also registers none: the sweep found no articulated body among the 17, and the two lorries
-it did measure — 8.00 m and 10.17 m — are rigid. So the boundary costs nothing today. It is recorded
+The content also registers none: the sweep found no articulated body among the 17, the largest bodies
+it measured — the 8.00 m lorry and the 10.17 m bus — are rigid, and the European HGV the registry adds
+is a rigid three-axle lorry with no trailer. So the boundary costs nothing today. It is recorded
 because the first attempt to add a semi will otherwise reach for the nearest long body and discover
 the problem in the imagery rather than in the contract.
 
@@ -415,14 +449,14 @@ notices.
 
 This is also why upstream ships a static `vtypes.json` rather than deriving one
 ([doc 23 §6.8](../../Findings/23_SUMO_Traffic_Integration.md)): upstream measured its blueprint set once
-and froze the result. Our blueprint set differs — 17 entries, none of them upstream's default Audi set
+and froze the result. Our blueprint set differs — 18 entries, none of them upstream's default Audi set
 — so ours is new work rather than a file to copy, and freezing it is exactly what §3.11's digests exist
 to make safe.
 
 **Measurement 4 — the sweep's output already exists in this tree, incidentally.** Fifty-four recorded
 truth sidecars in `carla/Build/SCTMV_recordings/*.xml` were parsed for distinct
-`<_carla type_id="vehicle.*">` elements. They cover **all 17** blueprints and carry exactly the
-measurement a sweep would produce:
+`<_carla type_id="vehicle.*">` elements. They cover **all 17** blueprints the registry held when they
+were recorded, and carry exactly the measurement a sweep would produce:
 
 | blueprint | length_m | width_m | height_m | `base_type` reported | recommended colours |
 |---|---|---|---|---|---|
@@ -431,7 +465,7 @@ measurement a sweep would produce:
 | `vehicle.dodge.charger` | 5.01 | 1.88 | 1.54 | car | 7 |
 | `vehicle.dodgecop.charger` | 5.24 | 1.92 | 1.64 | car | 1 |
 | `vehicle.firetruck.actors` | 8.58 | 2.90 | 3.83 | truck | 1 |
-| `vehicle.fuso.mitsubishi` | 10.17 | 3.93 | 4.24 | **bus** (wrong) | 6 |
+| `vehicle.fuso.mitsubishi` | 10.17 | 3.93 | 4.24 | bus (a light bus) | 6 |
 | `vehicle.lincoln.mkz` | 4.89 | 1.84 | 1.52 | car | 1 |
 | `vehicle.mini.cooper` | 4.55 | 2.10 | 1.77 | car | 4 |
 | `vehicle.nissan.patrol` | 5.59 | 2.15 | 2.06 | car | 6 |
@@ -446,9 +480,9 @@ measurement a sweep would produce:
 
 Every number in the worked examples below is one of these, so the example is a real catalogue entry
 rather than an invented one. Two consequences for the sweep's specification fall straight out: it must
-**record the measured dimensions and disregard `base_type`**, because `base_type` is demonstrably
-unreliable in this content build; and it must carry a **curated** class assignment in the catalogue, so
-the wrong `bus` values never reach SUMO's `vClass`.
+**record the measured dimensions and disregard `base_type`**, because `base_type` is hand-edited and
+was measured wrong on seven of this content build's entries; and it must carry a **curated** class
+assignment in the catalogue, so a wrong declared value never reaches SUMO's `vClass`.
 
 #### The sweep tool, specified
 
@@ -500,10 +534,12 @@ the wrong `bus` values never reach SUMO's `vClass`.
   that gap means reading wheel geometry off the actor, which is an engine change nothing here needs.
 - **What it emits:** `vehicles.catalogue.json` (§3.3), plus a one-page
   human-readable report listing every blueprint, its measured dimensions, and every discrepancy
-  between the measurement and the blueprint's own declared metadata — which, on the measured content
-  build, is seven wrong `base_type` values, one empty one, seventeen empty `special_type` values and
-  one wrong wheel count. The report is what makes Measurement 1's defect visible to the person who can
-  fix it in the content.
+  between the blueprint's own declared `base_type` and `special_type` and the catalogue's derived and
+  curated ones — which, on the registry the published catalogue measured, was six wrong `base_type`
+  values, one empty one and seventeen empty `special_type` values. It says nothing about wheel counts:
+  the sweep has no source for one. It also writes `VehicleParameters.corrected.json`, the registry with
+  those two fields set from the catalogue, which is what makes Measurement 1's defect fixable by the
+  person who owns the content.
 - **What it must not do:** infer a dimension, fall back to a default, or skip a blueprint that failed
   to spawn. A blueprint that will not spawn is written with `"measurement": "failed"` and a reason, and
   the catalogue is still emitted — a partial catalogue that says which entries are missing is more
@@ -710,9 +746,9 @@ rule of §1 to be well defined.
 | `width_m` | number | m | yes if measured | `2 × bounding_box.extent.y` |
 | `height_m` | number | m | yes if measured | `2 × bounding_box.extent.z` |
 | `bbox_centre_m` | `[x,y,z]` | m | yes if measured | `bounding_box.location`, actor-local. Needed for the bumper-shift of `C7` and for any projected box |
-| `declared_base_type` | string | — | yes | The blueprint's own `base_type` attribute, **verbatim and untrusted** — measured wrong for 7 of 17 |
-| `declared_special_type` | string | — | yes | The blueprint's own `special_type` attribute, verbatim. Measured empty for all 17 |
-| `number_of_wheels` | integer | — | yes | Verbatim. Measured `3` for `vehicle.lincoln.mkz`, which is wrong; carried as data, never used to classify |
+| `declared_base_type` | string | — | yes | The blueprint's own `base_type` attribute, **verbatim and untrusted** — a hand-edited value, measured wrong or absent for 7 of 17 when first swept (§3.1) |
+| `declared_special_type` | string | — | yes | The blueprint's own `special_type` attribute, verbatim. Measured empty for all 17 when first swept |
+| `number_of_wheels` | integer | — | yes | Verbatim. `3` for `vehicle.lincoln.mkz` when first swept, which was wrong; `6` for `vehicle.carlamotors.european_hgv`. Carried as data, never used to classify |
 | `generation` | integer | — | yes | Verbatim |
 | `settable_attributes` | array of object | — | yes | `{ id, type, restrict_to_recommended, recommended_values[] }` for every *variation* the definition declares |
 | `colour_settable` | boolean | — | yes | True when a `color` variation is declared. Measured true for all 17 |
@@ -731,7 +767,7 @@ become SUMO `<vType>`s.
 | `class_id` | string | — | yes | The name an author writes. Matches `[a-z][a-z0-9_]{0,31}`. Becomes the `vTypeDistribution` id |
 | `description` | string | — | yes | One human sentence. This is what an assistant author reads to choose |
 | `sumo_vclass` | string | — | yes | A SUMO vehicle class, e.g. `passenger`, `truck`, `bus`, `delivery`, `taxi`, `authority`, `army`. **Curated, never taken from `declared_base_type`** |
-| `cot_base_type` | string | — | yes | The truth record's `base_type` for members of this class — `car`, `truck`, `van`, `bus`, `motorcycle`, `bicycle`. Curated, and it **overrides** the blueprint's wrong `base_type` in truth |
+| `cot_base_type` | string | — | yes | The truth record's `base_type` for members of this class — `car`, `truck`, `van`, `bus`, `motorcycle`, `bicycle`. Curated, and it **overrides** the blueprint's declared `base_type` in truth |
 | `cot_special_type` | string | — | no | The truth record's `special_type`, e.g. `emergency`, `taxi`. Curated, because the content build declares none |
 | `members` | array of object | — | yes | `{ blueprint_id, weight }`; `weight` is a positive number, normalised across the class |
 | `max_speed_mps` | number | m/s | yes | SUMO `maxSpeed` |
@@ -746,6 +782,32 @@ become SUMO `<vType>`s.
 | `render_colour_policy` | string | — | yes | `palette` (draw from the member blueprint's `colour_palette`) or `fixed` (§3.7) |
 | `render_colour` | string | — | only if `fixed` | `"R,G,B"` integers 0–255 |
 | `lamps_expected` | array of string | — | no | Lamp names this class is expected to show **in addition to** the ones `C7` §9.4 commands for every vehicle — a beacon on an emergency class, for example. Checked against `lamp_capability` by V1.18. Absent means "the common set only" |
+
+#### 3.4.4 The default classes
+
+The sweep's own curation (`VehicleClassAssignment.DEFAULT_CLASSES`) files every registered blueprint in
+exactly one class, and refuses to emit a catalogue in which a measured blueprint reaches none or a class
+names a blueprint the sweep did not measure:
+
+| `class_id` | `sumo_vclass` | `cot_base_type` / `cot_special_type` | Members |
+|---|---|---|---|
+| `civ_car` | `passenger` | `car` | the six `ue4.*` saloons, `dodge.charger`, `lincoln.mkz`, `mini.cooper`, `nissan.patrol` |
+| `civ_van` | `delivery` | `van` | `sprinter.mercedes` |
+| `civ_truck` | `truck` | `truck` | `carlacola.actors` — a two-axle rigid box lorry |
+| `heavy_truck` | `truck` | `truck` | `carlamotors.european_hgv` — a three-axle rigid lorry |
+| `bus` | `bus` | `bus` | `fuso.mitsubishi` — the Fuso Rosa, curated to `bus` because no box tells a bus from a lorry |
+| `taxi` | `taxi` | `car` / `taxi` | `taxi.ford` |
+| `police` | `authority` | `car` / `emergency` | `dodgecop.charger` |
+| `ambulance` | `emergency` | `van` / `emergency` | `ambulance.ford` |
+| `fire_appliance` | `emergency` | `truck` / `emergency` | `firetruck.actors` |
+
+No class is defined for a body the content cannot yet spawn (Measurement 1a), because a class with no
+measured member is refused (V1.7). When those blueprints are wired and registered they belong as
+follows: the Jeep Wrangler in an `offroad` class of its own, distinct from the Patrol's sport utility in
+`civ_car`; the Volkswagen T2 in `civ_van`; the A2, Isetta, C3, Micra, Leon and Prius in `civ_car`, with
+the Tesla Model 3 and the e-tron beside them unless the truth record is to carry upstream's
+`special_type=electric`, which would need a class of its own; the Cybertruck wherever its measured box
+and a curated reason place it.
 
 ### 3.5 Worked example
 

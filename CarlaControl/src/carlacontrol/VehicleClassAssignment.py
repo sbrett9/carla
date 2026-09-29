@@ -1,23 +1,25 @@
 """What kind of vehicle each blueprint is, derived from its measured box and curated where a box cannot say.
 
-The content build declares a `BaseType` per vehicle and it is not reliable: seven of the seventeen
-blueprints call themselves `bus` and none of them is one, an eighth declares nothing at all, and every
-one of the seventeen leaves `SpecialType` empty, so the ambulance, the fire truck and the police car
-are indistinguishable from a hatchback in the truth record. The catalogue therefore carries its own
-answer and the truth producer takes it from there rather than from the blueprint.
+The content build declares a `BaseType` and a `SpecialType` per vehicle in a hand-edited file, and
+nothing checks them against the bodies. When they were first measured, six saloons declared `bus`, a
+van declared nothing, and every special type was empty, so the ambulance, the fire truck and the
+police car were indistinguishable from a hatchback in the truth record (doc 04, C1 Measurement 1).
+The catalogue therefore carries its own answer, derived from what the sweep measures, rather than
+repeating the file.
 
 Two sources, in this order:
 
   * **Derived from the measurement.** The bounding box measured by the sweep separates a car from a
-    van from a truck cleanly on this content set -- the measured heights fall into three groups with
-    wide gaps between them (1.30-1.77 m, 2.06-2.73 m, 3.83-4.24 m), so the band edges sit in empty
-    space rather than through a cluster. The derivation never produces `bus`, because no measurement
-    distinguishes a bus from a lorry of the same size and this content build contains neither a bus
-    nor anything shaped like one.
+    van from a truck cleanly on the published catalogue's seventeen bodies -- their heights fall into
+    three groups with wide gaps between them (1.30-1.77 m, 2.06-2.73 m, 3.83-4.24 m), so the band
+    edges sit in empty space rather than through a cluster. The derivation never produces `bus`,
+    because no measurement distinguishes a bus from a lorry of the same size; the one bus in the
+    content, the Fuso Rosa, is curated.
   * **A curated override**, for the things a box cannot see: that a tall estate car is a sport utility
-    and not a van, that a van with a red cross on it is an ambulance. Every override is validated
-    against the swept blueprint set and the published vocabularies, and one that contradicts the
-    derivation must carry a reason, so the file cannot quietly become a second, unexplained truth.
+    and not a van, that a van with a red cross on it is an ambulance, that a large box with seats is a
+    bus. Every override is validated against the swept blueprint set and the published vocabularies,
+    and one that contradicts the derivation must carry a reason, so the file cannot quietly become a
+    second, unexplained truth.
 
 An override that merely restates what the measurement already says is rejected. Left unchecked, that
 is how a curation file grows into a full table that nobody re-derives and everybody trusts.
@@ -105,12 +107,17 @@ class VehicleClassAssignment:
     """
 
     # The corrections this content build needs. Everything not named here takes the derivation
-    # unchanged, which is eleven of the seventeen blueprints.
+    # unchanged, which is twelve of the eighteen registered blueprints.
     DEFAULT_OVERRIDES: tuple[VehicleClassOverride, ...] = (
         VehicleClassOverride(
             "vehicle.nissan.patrol", base_type="car",
             reason="sport utility on a car chassis; its 2.06 m roof reads as a van to the height "
                    "band, and it is the only measured body within 0.06 m of that edge"),
+        VehicleClassOverride(
+            "vehicle.fuso.mitsubishi", base_type="bus",
+            reason="Mitsubishi Fuso Rosa light bus; a box cannot tell a bus from a lorry of the "
+                   "same size, so the height band files it as a truck. The content declares it a "
+                   "bus and upstream CARLA publishes it as one"),
         VehicleClassOverride(
             "vehicle.ambulance.ford", special_type="emergency",
             reason="ambulance; the box measures as a van and the emergency role is not visible in it"),
@@ -160,13 +167,41 @@ class VehicleClassAssignment:
         },
         {
             "class_id": "civ_truck",
-            "description": "Rigid lorries. Slower, longer and taller than anything civilian.",
+            "description": "Two-axle rigid lorries: a box truck. Slower, longer and taller than "
+                           "anything civilian.",
             "sumo_vclass": "truck",
             "cot_base_type": "truck",
-            "members": ["vehicle.carlacola.actors", "vehicle.fuso.mitsubishi"],
+            "members": ["vehicle.carlacola.actors"],
             "max_speed_mps": 25.0, "accel_mps2": 1.3, "decel_mps2": 4.0, "sigma": 0.5,
             "speed_factor_mean": 1.0, "speed_factor_dev": 0.05, "min_gap_m": 3.0,
             "gui_shape": "truck", "gui_colour": "#8C7B5A",
+        },
+        {
+            # SUMO's truck defaults, as for the two-axle lorries; a separate class so an author can
+            # ask for a heavy goods vehicle by name rather than draw one by chance.
+            "class_id": "heavy_truck",
+            "description": "Three-axle rigid heavy goods vehicles: a cab-over lorry. Not "
+                           "articulated -- there is no trailer.",
+            "sumo_vclass": "truck",
+            "cot_base_type": "truck",
+            "members": ["vehicle.carlamotors.european_hgv"],
+            "max_speed_mps": 25.0, "accel_mps2": 1.3, "decel_mps2": 4.0, "sigma": 0.5,
+            "speed_factor_mean": 1.0, "speed_factor_dev": 0.05, "min_gap_m": 3.0,
+            "gui_shape": "truck", "gui_colour": "#6D6552",
+        },
+        {
+            # SUMO's bus defaults, except the speed deviation: SUMO leaves it at zero for a bus,
+            # which would drive every bus at exactly the same multiple of the limit, so it takes the
+            # 0.05 SUMO gives the other heavy classes, as the emergency classes here do.
+            "class_id": "bus",
+            "description": "Buses. The content's one bus is a light bus modelled at the size of a "
+                           "lorry.",
+            "sumo_vclass": "bus",
+            "cot_base_type": "bus",
+            "members": ["vehicle.fuso.mitsubishi"],
+            "max_speed_mps": 25.0, "accel_mps2": 1.2, "decel_mps2": 4.0, "sigma": 0.5,
+            "speed_factor_mean": 1.0, "speed_factor_dev": 0.05, "min_gap_m": 3.0,
+            "gui_shape": "bus", "gui_colour": "#4F7CAC",
         },
         {
             "class_id": "taxi",

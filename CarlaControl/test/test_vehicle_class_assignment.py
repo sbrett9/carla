@@ -1,13 +1,15 @@
 """What the measured box says a vehicle is, and what a curated override may and may not change.
 
-The content build's own `BaseType` is wrong on seven of its seventeen vehicles and absent on an
-eighth, so the catalogue derives the kind from the measurement instead. A derivation from a box cannot
-see everything -- it cannot tell a tall estate car from a van, or an ambulance from the van it is built
-on -- so a curation file corrects it. These exercise both halves: that the derivation puts the
+The content build's own `BaseType` is hand-edited and nothing checks it against the bodies -- when
+first measured it was wrong on seven of seventeen vehicles and absent on an eighth -- so the catalogue
+derives the kind from the measurement instead. A derivation from a box cannot see everything -- it
+cannot tell a tall estate car from a van, an ambulance from the van it is built on, or a bus from a
+lorry -- so a curation file corrects it. These exercise both halves: that the derivation puts the
 measured bodies where they belong, and that the curation cannot become a second, unexplained truth.
 
 The boxes below are the measured ones, so a change in the content that moved a body across a band edge
-would show up here rather than only in a regenerated catalogue.
+would show up here rather than only in a regenerated catalogue. A body the content registers but the
+sweep has not yet measured has no box, and is listed apart rather than given an invented one.
 """
 from __future__ import annotations
 
@@ -45,31 +47,59 @@ MEASURED = {
     "vehicle.ue4.mercedes.ccc": (4.6736, 1.8118, 1.4423),
 }
 
+# Registered in the content and named by a default class, but not yet swept, so there is no box to
+# put in MEASURED. Its entry moves there once the sweep has measured it.
+AWAITING_MEASUREMENT = frozenset({"vehicle.carlamotors.european_hgv"})
+
+
+def classes_over_measured_bodies() -> tuple[dict, ...]:
+    """The default classes with every body awaiting measurement taken out, dropping emptied classes."""
+    kept = []
+    for template in VehicleClassAssignment.DEFAULT_CLASSES:
+        members = [m for m in template["members"] if m not in AWAITING_MEASUREMENT]
+        if members:
+            kept.append(dict(template, members=members))
+    return tuple(kept)
+
 
 @pytest.fixture
 def records():
     return VehicleClassAssignment().assign(MEASURED)
 
 
-def test_the_three_lorries_are_derived_from_their_boxes(records):
+def test_the_three_largest_bodies_are_derived_as_trucks_from_their_boxes(records):
     for blueprint_id in ("vehicle.carlacola.actors", "vehicle.firetruck.actors",
                          "vehicle.fuso.mitsubishi"):
         assert records[blueprint_id].derived_base_type == "truck"
 
 
 def test_the_derivation_never_produces_a_bus():
-    """Seven blueprints declare `bus` and none of them is one; no box in this set derives it either."""
+    """A box cannot tell a bus from a lorry of the same size, so no measured box derives `bus`."""
     derived = {VehicleClassAssignment.derive_base_type(*box) for box in MEASURED.values()}
     assert "bus" not in derived
 
 
-def test_the_seven_blueprints_declaring_bus_all_derive_as_cars(records):
-    declared_bus = ("vehicle.fuso.mitsubishi", "vehicle.ue4.audi.tt", "vehicle.ue4.bmw.grantourer",
-                    "vehicle.ue4.chevrolet.impala", "vehicle.ue4.ford.crown",
-                    "vehicle.ue4.ford.mustang", "vehicle.ue4.mercedes.ccc")
-    kinds = {blueprint_id: records[blueprint_id].base_type for blueprint_id in declared_bus}
-    assert kinds["vehicle.fuso.mitsubishi"] == "truck"
-    assert all(kind == "car" for name, kind in kinds.items() if name != "vehicle.fuso.mitsubishi")
+def test_the_six_saloons_the_content_declared_as_buses_derive_as_cars(records):
+    saloons = ("vehicle.ue4.audi.tt", "vehicle.ue4.bmw.grantourer", "vehicle.ue4.chevrolet.impala",
+               "vehicle.ue4.ford.crown", "vehicle.ue4.ford.mustang", "vehicle.ue4.mercedes.ccc")
+    assert {records[blueprint_id].base_type for blueprint_id in saloons} == {"car"}
+    assert all(records[blueprint_id].base_type_is_derived for blueprint_id in saloons)
+
+
+def test_the_light_bus_is_curated_out_of_the_truck_band(records):
+    record = records["vehicle.fuso.mitsubishi"]
+    assert record.derived_base_type == "truck"
+    assert record.base_type == "bus"
+    assert not record.base_type_is_derived
+    assert "bus" in record.override_reason
+
+
+def test_the_light_bus_is_the_only_member_of_the_bus_class(records):
+    classes = VehicleClassAssignment(classes=classes_over_measured_bodies()).build_classes(records)
+    by_id = {entry["class_id"]: entry for entry in classes}
+    assert [m["blueprint_id"] for m in by_id["bus"]["members"]] == ["vehicle.fuso.mitsubishi"]
+    assert (by_id["bus"]["sumo_vclass"], by_id["bus"]["cot_base_type"]) == ("bus", "bus")
+    assert "vehicle.fuso.mitsubishi" not in [m["blueprint_id"] for m in by_id["civ_truck"]["members"]]
 
 
 def test_the_blueprint_with_no_declared_type_measures_as_a_van(records):
@@ -124,29 +154,39 @@ def test_an_override_that_changes_a_type_without_saying_why_is_refused():
 
 
 def test_every_measured_blueprint_reaches_exactly_one_class(records):
-    classes = VehicleClassAssignment().build_classes(records)
+    classes = VehicleClassAssignment(classes=classes_over_measured_bodies()).build_classes(records)
     members = [member["blueprint_id"] for entry in classes for member in entry["members"]]
     assert sorted(members) == sorted(MEASURED)
     assert len(members) == len(set(members))
 
 
+def test_the_default_classes_refuse_a_sweep_that_did_not_measure_a_registered_body(records):
+    """What a sweep against a server still reading the previous registry would meet: a refusal that
+    names the missing body, rather than a catalogue quietly short of it."""
+    if not AWAITING_MEASUREMENT:
+        pytest.skip("every body the default classes name has been measured")
+    with pytest.raises(ValueError, match="which the sweep did not measure") as refused:
+        VehicleClassAssignment().build_classes(records)
+    assert any(blueprint_id in str(refused.value) for blueprint_id in AWAITING_MEASUREMENT)
+
+
 def test_a_class_whose_published_kind_disagrees_with_its_members_is_refused(records):
     """Truth would otherwise carry two different answers for the same vehicle."""
-    classes = list(VehicleClassAssignment.DEFAULT_CLASSES)
+    classes = list(classes_over_measured_bodies())
     classes[0] = dict(classes[0], cot_base_type="truck")
     with pytest.raises(ValueError, match="two different answers"):
         VehicleClassAssignment(classes=tuple(classes)).build_classes(records)
 
 
 def test_a_class_naming_a_vehicle_class_sumo_does_not_define_is_refused(records):
-    classes = list(VehicleClassAssignment.DEFAULT_CLASSES)
+    classes = list(classes_over_measured_bodies())
     classes[0] = dict(classes[0], sumo_vclass="saloon")
     with pytest.raises(ValueError, match="which SUMO does not define"):
         VehicleClassAssignment(classes=tuple(classes)).build_classes(records)
 
 
 def test_a_blueprint_reaching_no_class_is_refused(records):
-    classes = list(VehicleClassAssignment.DEFAULT_CLASSES)
+    classes = list(classes_over_measured_bodies())
     classes[0] = dict(classes[0], members=classes[0]["members"][:-1])
     with pytest.raises(ValueError, match="reach no class"):
         VehicleClassAssignment(classes=tuple(classes)).build_classes(records)
