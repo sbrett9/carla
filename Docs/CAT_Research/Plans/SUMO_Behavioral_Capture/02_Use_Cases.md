@@ -492,8 +492,9 @@ authoring runs on any machine with SUMO ([`sumo-traffic-scenarios/SKILL.md`](../
    at load with "no valid route" (measured gotcha, recorded in the skill).
 5. Assistant writes the demand: flows for the ordinary population, scheduled vehicles for the ones with a
    story. Everything is merged onto **one departure-sorted timeline**, because SUMO silently drops
-   out-of-order entries with only a warning (measured gotcha; `SumoPatternOfLifeBuilder` merges for
-   exactly this reason). Every departure instant the author thinks of as an *hour* is written as a
+   out-of-order entries with only a warning (measured gotcha; `ScenarioCompiler`, which compiles the
+   specification the Bahonar generator emits, writes the route file departure-sorted and refuses one
+   that is not, check 29 of [07](07_Scenario_Authoring.md) §5.2, for exactly this reason). Every departure instant the author thinks of as an *hour* is written as a
    simulated second **through the epoch**, so the two can never disagree.
 6. Assistant writes the configuration: step length, seed, end time, and the SUMO-side policies that affect
    reproducibility — the sizing scenario sets `time-to-teleport` to `-1` so a jam stays a jam

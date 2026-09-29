@@ -44,6 +44,7 @@ import math
 import struct
 import sys
 import time
+import xml.etree.ElementTree as ET
 import zipfile
 from array import array
 from dataclasses import dataclass, field
@@ -52,6 +53,7 @@ from pathlib import Path
 
 from carlacontrol.CotUdpEmitter import CotUdpEmitter
 from carlacontrol.SumoInstallation import SumoInstallation
+from carlacontrol.VehicleCatalogue import CLASS_PARAM
 
 # SUMO's own vehicle classes carry enough to fill the contract's base_type without a per-scenario
 # lookup table. Anything unlisted is reported as it comes.
@@ -195,11 +197,17 @@ class CotOutputSettings:
     # in this set is treated exactly like `marked_vehicle`. Empty keeps the single-vehicle
     # behaviour above.
     marked_ids: frozenset[str] = frozenset()
-    # CoT affiliation per SUMO vehicle-type id, so a mixed population carries the affiliations its
-    # populations would really have -- civilian neutral, military friendly. A type absent from the
-    # map falls back to `affiliation`. A planted vehicle takes the affiliation of the population it
-    # is hiding in, exactly as its neighbours do, so the affiliation never announces it.
+    # CoT affiliation per vehicle population -- the run's display convention, `CotDisplayConvention`
+    # -- so a mixed population carries the affiliations its populations would really have: civilian
+    # neutral, military friendly. A population is the class a compiled scenario's vType names in its
+    # `carla:class_id` parameter or, where a type names none, the SUMO vehicle-type id itself; one
+    # absent from the map falls back to `affiliation`. A planted vehicle takes the affiliation of
+    # the population it is hiding in, exactly as its neighbours do, so the affiliation never
+    # announces it.
     affiliation_by_type: dict[str, str] = field(default_factory=dict)
+    # The file that convention came from, recorded ahead of the XML's events so the dataset says
+    # which convention drew it. Empty when the run was given none.
+    display_convention: str = ""
     # Give the planted vehicles a different affiliation **in the live feed only**, so an operator
     # watching a TAK client can see which vehicle the scenario planted. It reaches the UDP stream
     # and never the XML or CSV, because those are the corpus and a planted vehicle that announces
@@ -251,6 +259,8 @@ class SumoCotBridge:
         self.constant_hae = constant_hae
         self.use_gui = use_gui
         self.off_grid_heights = 0
+        # The population each vehicle type belongs to, read once per type per run.
+        self._population_of: dict[str, str] = {}
         self.logger = logging.getLogger(__name__)
 
     def run(self, settings: CotOutputSettings, end_time: float | None = None,
@@ -267,6 +277,7 @@ class SumoCotBridge:
         traci = self.installation.import_traci()
         report = RunReport()
         self.off_grid_heights = 0
+        self._population_of = {}
         epoch = settings.epoch or datetime.now(UTC)
         report.epoch = epoch
 
@@ -283,6 +294,7 @@ class SumoCotBridge:
             xml_file.write('<?xml version="1.0" encoding="UTF-8"?>\n<events source="sumo" '
                            f'scenario="{self.config_path.stem}" '
                            f'epoch="{CotUdpEmitter.format_cot_timestamp(epoch)}">\n')
+            xml_file.write("  " + self._display_convention_xml(settings) + "\n")
         for name, on in (("UDP", udp), ("XML", xml_file), ("CSV", csv_file)):
             if on:
                 report.sinks.append(name)
@@ -335,8 +347,7 @@ class SumoCotBridge:
                         seen_marked.add(vehicle_id)
                     # A planted vehicle takes its population's affiliation like any other member of
                     # it, so that the CoT type carries affiliation and nothing else.
-                    affiliation = settings.affiliation_by_type.get(
-                        record["type_id"], settings.affiliation)
+                    affiliation = self._affiliation(traci, record["type_id"], settings)
                     # The written files are the truth sidecar and carry the whole record; the
                     # datagram feed is a moving-map display and carries what a display needs.
                     event = CotUdpEmitter.vehicle_telemetry_to_cot(
@@ -430,6 +441,36 @@ class SumoCotBridge:
             "x": x,
             "y": y,
         }
+
+    def _affiliation(self, traci, type_id: str, settings: CotOutputSettings) -> str:
+        """The affiliation the run's display convention gives a vehicle of this type.
+
+        The convention names populations. A compiled scenario's vType is one body of a class and
+        says which in its `carla:class_id` parameter, read back here rather than parsed out of the
+        type id; a hand-written type names no class and is a population of its own. A type's
+        parameters do not change during a run, so each type is asked once.
+        """
+        if not settings.affiliation_by_type:
+            return settings.affiliation
+        population = self._population_of.get(type_id)
+        if population is None:
+            population = traci.vehicletype.getParameter(type_id, CLASS_PARAM) or type_id
+            self._population_of[type_id] = population
+        return settings.affiliation_by_type.get(population, settings.affiliation)
+
+    @staticmethod
+    def _display_convention_xml(settings: CotOutputSettings) -> str:
+        """The run's display convention, written once ahead of the events it drew.
+
+        An affiliation is the run's choice and not the scenario's, so the file it styled says which
+        convention was in force: without it, a population the convention drew neutral and one that
+        took the default read the same.
+        """
+        element = ET.Element("_display_convention", {
+            "source": settings.display_convention, "default_affiliation": settings.affiliation})
+        for population, affiliation in sorted(settings.affiliation_by_type.items()):
+            ET.SubElement(element, "population", {"type": population, "affiliation": affiliation})
+        return ET.tostring(element, encoding="unicode")
 
     def _height_at(self, x: float, y: float) -> float:
         """Bare-earth height under a SUMO position, which is in the projection's metres.

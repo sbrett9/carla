@@ -25,12 +25,11 @@ from xml.sax.saxutils import escape, quoteattr
 
 from lxml import etree
 
-from carlacontrol.VehicleCatalogue import BLUEPRINT_PARAM
+from carlacontrol.VehicleCatalogue import BLUEPRINT_PARAM, CLASS_PARAM
 
 # SUMO's route-file schema, relative to a SUMO installation's `data` directory.
 ROUTES_SCHEMA_RELATIVE_PATH = Path("xsd") / "routes_file.xsd"
 
-CLASS_PARAM = "carla:class_id"
 CATALOGUE_DIGEST_PARAM = "carla:catalogue_digest"
 
 logger = logging.getLogger(__name__)

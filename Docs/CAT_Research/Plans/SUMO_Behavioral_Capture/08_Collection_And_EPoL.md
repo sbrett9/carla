@@ -2722,8 +2722,8 @@ distinction itself in `StopData.intendedArrival` versus `arrival`. **This sectio
 that decomposition, and adds nothing to it.** Two consequences land on the corpus:
 
 - **An onset can be legitimately absent, which doc 20's schema had no case for.** 06 §3.3 measured that
-  all 338 stops in the sizing scenario use `duration` and none uses `until`, so there is no declared
-  instant at all — only a declared *length*. And the observed onset is absent whenever the participant
+  337 of the 338 stops in the sizing scenario use `duration`, and the stay-behind's uses `until` the
+  run's end, so for those 337 there is no declared instant at all — only a declared *length*. And the observed onset is absent whenever the participant
   was never rendered. **The corpus therefore records the absence explicitly and never substitutes:** an
   interval with no declared onset carries an absent field with a stated reason, not a zero and not a
   quiet fallback to another onset. A silent fallback would mix two labelling conventions inside one

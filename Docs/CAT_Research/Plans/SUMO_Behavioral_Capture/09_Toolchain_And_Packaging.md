@@ -551,8 +551,9 @@ What a consuming .NET project needs, concretely:
 ### 4.2 The Python path — needed regardless of `03`'s C#-vs-Python decision
 
 `03_CoSimulation_Runtime.md` decides whether the *per-tick bridge* is C# or Python. Independent of that:
-today's **working** SUMO tooling (`SumoScenarioBuilder`, `SumoPatternOfLifeBuilder`, `SumoCotBridge`, the
-`make_*_scenario.py` CLIs) is Python, uses `carlacontrol.SumoInstallation` (§3.2) to resolve `traci`/
+today's **working** SUMO tooling (`SumoScenarioBuilder`, `ScenarioCompiler`, `SumoCotBridge`, the
+`make_*_scenario.py` CLIs, of which the Bahonar and Gardnerville generators emit a specification
+`ScenarioCompiler` compiles, [`07_Scenario_Authoring.md`](07_Scenario_Authoring.md) §3.4.1) is Python, uses `carlacontrol.SumoInstallation` (§3.2) to resolve `traci`/
 `sumolib` from `$SUMO_HOME/tools`, and will keep needing that regardless of what `03` decides for the
 bridge. Once §2/§3 stage `data/` and `tools/` into `Build/sumo-install`, this path needs nothing new
 structurally — `SumoInstallation.tools` already resolves to `<home>/tools` and `import_traci()` already
@@ -566,7 +567,7 @@ currently works end-to-end for this path (§3.2).
 `Findings/22_Digital_Twin_Feature_Port.md` §14 records `CarlaControl/` as SNC proprietary and to be
 excluded from any external distribution. **That label came from a plan that did not manifest; there is
 no exclusion to honour**, and the row is corrected at its source. `carlacontrol.SumoInstallation`,
-`SumoScenarioBuilder`, `SumoPatternOfLifeBuilder` and every `make_*_scenario.py` CLI live in
+`SumoScenarioBuilder`, `ScenarioCompiler` and every `make_*_scenario.py` CLI live in
 `CarlaControl/` and ship in the single distribution (`D9.7`), as do `12`'s operator-surface classes
 (§5.6).
 

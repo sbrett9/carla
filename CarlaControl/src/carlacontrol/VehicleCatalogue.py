@@ -31,6 +31,10 @@ from pathlib import Path
 # un-namespaced key: SUMO's own devices read `<param>` the same way and never interpret this one.
 BLUEPRINT_PARAM = "carla:blueprint"
 
+# The `<param>` on the same `<vType>` naming the authoring class the body was drawn for. A class draws
+# several bodies, one type each, so this is what tells a reader which population a vehicle belongs to.
+CLASS_PARAM = "carla:class_id"
+
 # Schema shape this reader implements. A catalogue declaring anything else is refused rather than
 # read on a best-effort basis, because a field that moved silently is worse than one that is absent.
 SUPPORTED_CATALOGUE_VERSION = 1

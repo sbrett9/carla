@@ -134,7 +134,7 @@ or by reading the SUMO source staged at `carla/Build/sumo-src`. They are measure
 | Explicit `<vehicle>` elements | **0** |
 | `<vType>` / `<vTypeDistribution>` | **14** / **3** |
 | `<stop>` elements | **338** — 336 `parking="true"`, 2 `parking="false"` |
-| `<stop>` elements using `until` | **0**. Every stop is specified by `duration` |
+| `<stop>` elements using `until` | **0**. Every stop is specified by `duration`. Compiled from its specification ([07 §3.4.1](07_Scenario_Authoring.md)), the stay-behind's stop uses `until` the run's end, 604 800 s, and the other 337 use `duration` (measured 2026-09-29) |
 | Distinct stop durations | 28 800 s x 335, 300 s x 2, 489 000 s x 1 |
 | Trip departure range | 25 200 s to 601 200 s |
 | Vehicles the flow rates imply | **68 880**, summing `vehsPerHour x (end - begin) / 3600` over all 245 flows |
@@ -385,8 +385,11 @@ and the three states survive verbatim.
 | `unlabelled` | No assertion either way | Everything else; the default, always written explicitly |
 
 **Today's ground truth is binary, and the binary collapse is measurable.** `ScheduledVehicle.marked`
-is a `bool` (`CarlaControl/src/carlacontrol/SumoPatternOfLifeBuilder.py:66`) and `write_routes` returns
-`[v.veh_id for v in scheduled if v.marked]` (`:121`), which is the whole of `marked_ids`. So the 335
+was a `bool` in the builder that wrote the shipped scenario
+(`CarlaControl/src/carlacontrol/SumoPatternOfLifeBuilder.py:66` at `e4fd64d19`, removed when the
+Bahonar generator moved to a specification `ScenarioCompiler` compiles,
+[07 §3.4.1](07_Scenario_Authoring.md)) and `write_routes` returned
+`[v.veh_id for v in scheduled if v.marked]` (`:121`), which is the whole of the shipped `marked_ids`. So the 335
 guard postings and the 21 routine hauls — 356 deliberately authored ordinary behaviours — are
 indistinguishable from the 68 880 ambient flow vehicles, and both are indistinguishable from "not
 asserted".
@@ -414,8 +417,10 @@ in-file channel does not exist:
   simulation behaviour, which is the failure [20 §4.3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)
   identified when it rejected `role_name`. `<param>` is fit for **identity transport** and unfit for
   an annotation channel.
-- The route file is **generated**, never hand-edited — every one in the repository carries "Generated
-  by `carlacontrol.SumoPatternOfLifeBuilder`; edit that, not this" (`rou.xml:3`, `sumocfg:2`). Putting
+- The route file is **generated**, never hand-edited — a compiled scenario's carries "compiled by
+  `carlacontrol.ScenarioCompiler` … from the specification of …; edit that, not this"
+  (`Gardnerville_Centerville_Lane_NeighborhoodOrbit.rou.xml:2`, and its `.sumocfg:2`), and the
+  Bahonar pattern of life is compiled from a specification ([07 §3.4.1](07_Scenario_Authoring.md)). Putting
   authored intent into a generated file makes the generator the only author.
 - Doc 20's second argument for the companion file applies with more force here: run identity, the
   world digest and the vocabulary version describe a *capture*, not a scenario, and the scenario
@@ -482,8 +487,8 @@ lines up with doc 20's exactly.
 
 **Four consequences, and they change the justification for decision 5 rather than the decision.**
 
-1. **The declared onset can be legitimately absent.** Measured: all 338 stops in the Bahonar scenario
-   use `duration` and none uses `until` (§2.1). A `duration` stop declares a *length*, anchored
+1. **The declared onset can be legitimately absent.** Measured: 337 of the 338 stops in the Bahonar
+   scenario use `duration`, and the stay-behind's uses `until` the run's end (§2.1). A `duration` stop declares a *length*, anchored
    wherever SUMO happens to arrive, so there is no declared instant to record. The record must carry
    `declared_duration_s` with `declared_start_tick` absent, and a consumer must distinguish "not
    declared" from "declared at tick 0". Doc 20's schema had no such case; every onset there was always
@@ -1922,7 +1927,9 @@ The properties the plan must have, each for a reason already established:
 - **Every reference resolves or the compile fails** — unknown entity, unknown flow, unknown area,
   unknown vocabulary term, a phased annotation on a cohort (§3.2), and a `<trip>` id in the plan that
   the route file does not contain. The measured authoring surface already validates edge references
-  this way (`CarlaControl/src/carlacontrol/SumoPatternOfLifeBuilder.py:150-167` raises on an edge not in the network), so the stance
+  this way (`ScenarioCompiler` refuses a place naming an edge that is not in the world's network,
+  check 7 of [07 §5.2](07_Scenario_Authoring.md), and the Bahonar generator's specification is
+  compiled by it), so the stance
   is established in this codebase.
 - **The plan is digest-bound to the four scenario files** it was compiled against. A route file is
   regenerated whenever the network is (`rou.xml:3`, measured), so a plan compiled against an older
@@ -2412,7 +2419,7 @@ boundary is not a diagram convention: everything above it is built here, and not
 sequenceDiagram
     autonumber
     participant Author
-    participant Builder as SumoScenarioBuilder /<br/>SumoPatternOfLifeBuilder
+    participant Builder as SumoScenarioBuilder /<br/>ScenarioCompiler
     participant Compiler as SupervisionCompiler
     participant Bridge as SUMO bridge
     participant Sumo as sumo
@@ -2803,9 +2810,11 @@ supervision rows carry, and both are what those rows point at.
 **Five things this expresses that `marked_ids` and `anomaly_notes` between them could not**, each of
 them a fact the generator already holds and today discards:
 
-1. **The 356 authored ordinary vehicles say what they are.** `ScheduledVehicle.marked` is a `bool`
-   (`CarlaControl/src/carlacontrol/SumoPatternOfLifeBuilder.py:66`) and every unmarked vehicle
-   disappears from the ground truth (`:121`, measured). Under this vocabulary a guard posting is a
+1. **The 356 authored ordinary vehicles say what they are.** `ScheduledVehicle.marked` was a `bool`
+   (`CarlaControl/src/carlacontrol/SumoPatternOfLifeBuilder.py:66` at `e4fd64d19`, gone with the
+   SUMO-XML generator now that the Bahonar generator emits a specification `ScenarioCompiler`
+   compiles, [07 §3.4.1](07_Scenario_Authoring.md)) and every unmarked vehicle disappears from the
+   shipped ground truth (`:121`, measured). Under this vocabulary a guard posting is a
    `nominal` subject carrying `bahonar:tower_posting`, readable from the manifest and — under §8.2 —
    from a sidecar alone.
 2. **The hard negatives say what they are negatives *for*.** `bahonar:tower_posting` is the matched
@@ -3038,7 +3047,7 @@ from the SUMO surface and the section is given.
 | 2 — supervision is three-valued, always written | **Survives unchanged** | Today's `marked` bool is the binary collapse doc 20 warned about, measured (§3.1) |
 | 3 — authored intent versus derived context | **Survives, restated operationally, and extended to a second class of context** | SUMO hands the runtime a one-line label, so the rule gains a testable invariant: the triple set is identical across runs (§3.6). Illumination joins area relations as derived context — a legitimate covariate, a legitimate input to a fielded system that knows the time and its own location, and never a label. The invariant extends with it: two runs under *different solar policies* must still produce identical triples (§3.6) |
 | 4 — the unit is the pattern instance; the manifest is authoritative | **Survives unchanged** | §3.4, §8.4 |
-| 5 — record all three onsets | **Survives; onsets renamed and one made optional** | `declared` / `committed` / `observed`. `declared_start_tick` is absent for a `duration` stop — all 338 stops here (§3.3). The justification inverts: one gap is a measured congestion output, the other a seam property |
+| 5 — record all three onsets | **Survives; onsets renamed and one made optional** | `declared` / `committed` / `observed`. `declared_start_tick` is absent for a `duration` stop — 337 of the 338 stops here; the stay-behind's uses `until` the run's end (§3.3). The justification inverts: one gap is a measured congestion output, the other a seam property |
 | 6 — `CustomCommandAction` primary, companion file equal-status | **Changed** | SUMO has no vendor extension point and route files are generated. The companion file becomes the sole channel (§3.1) |
 | 7 — static identity as a custom spawn attribute | **Survives, with a caveat** | Still the right carrier for `entity_id` and role, and it still survives record and replay. The caveat is that under SUMO the identity already exists as the vehicle id, so the attribute carries rather than creates it (§7.1) |
 | 8 — `role_name` stays provenance | **Survives; already honoured** | The SUMO producer sets it to the flow or trip id (`SumoCotBridge.py:329`), which is exactly a provenance value |
@@ -3151,7 +3160,7 @@ owner acts on it rather than rediscovers it.
 | **D6.1** | **The behavioural annotation travels in a companion supervision file beside the `.sumocfg`, and that is the only channel.** SUMO has no sanctioned vendor extension point in a route file, and route files are generated rather than hand-edited (measured). This **changes [20 decision 6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)**, which made an in-file custom action primary; everything else about that decision — one compiled representation, unknown terms are errors, name conventions never the sole carrier — stands (§3.1) |
 | **D6.2** | **Supervision has three kinds of subject: entity, cohort and slot.** A cohort names a `<flow>` and may carry only `unlabelled` or a whole-life annotation. **A cohort may never be `nominal`**: `nominal` asserts that a subject is not executing any target pattern, and a flow's members are generated rather than individually reasoned about, so one blocked member can contradict the assertion silently. `nominal` is assertable only of a subject the author wrote one by one — an entity or a `<trip>`. A phased annotation on a cohort is a compile error, and so is `nominal` on one. A slot names an occasion in a recurring series and is the only subject that can be unrealised (§3.2) |
 | **D6.3** | **The three interval onsets are renamed for the authority that produces each — `declared`, `committed`, `observed` — and all three are still recorded.** [20 decision 5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) survives; its justification is replaced. The declared-to-committed gap is a measured congestion output (`getDepartDelay`, `arrival - intendedArrival`); the committed-to-observed gap is a property of the co-simulation seam and a free health check (§3.3) |
-| **D6.4** | **A declared onset may be legitimately absent.** A `duration` stop declares a length, not a time; all 338 stops in the sizing scenario are of that kind (measured). The record carries `declared_duration_s` with no `declared_start_tick`, and a consumer must distinguish absent from zero (§3.3) |
+| **D6.4** | **A declared onset may be legitimately absent.** A `duration` stop declares a length, not a time; 337 of the 338 stops in the sizing scenario are of that kind, and the stay-behind's uses `until` the run's end (measured). The record carries `declared_duration_s` with no `declared_start_tick`, and a consumer must distinguish absent from zero (§3.3) |
 | **D6.5** | **`RecurringSeries` and `SeriesSlot` are added above `PatternInstance`.** A cadence is a first-class record, its realisations are its members, and the 335 realised guard postings are the evidence that makes the 336th slot's vacancy meaningful (§3.4) |
 | **D6.6** | **An absence is a pattern instance with `realisation: absent`, no participants, an `expected` block, and a `slot_ref`.** It is anchored to an area of interest and a window rather than to a track. It is **world-scoped**: it appears in the manifest and as a child of the sidecar's `<events>` container, and **never as a CoT `<event>`**, because emitting an event for a vehicle that does not exist is fabricating a detection (§3.5) |
 | **D6.7** | **An area of interest is a hard prerequisite for an absence**, not a later tier as in [20 §8](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md). An absence with no area cannot be expressed, and its observability is computed over the site, including the vehicles that *were* observed there (§3.5, §5.2) |

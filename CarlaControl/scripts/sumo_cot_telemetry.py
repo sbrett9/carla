@@ -17,6 +17,14 @@ What the sinks carry is what an observer could have measured. Which vehicles a s
 the author's own names for its vehicle types and flows, stay in the scenario's `*.labels.json`: the
 dataset describes the traffic, not the answer.
 
+Each vehicle's CoT affiliation comes from the run's display convention (`--display-convention`), a
+file giving each vehicle population the affiliation a TAK client draws it with: civilian traffic
+neutral and military friendly, say. It is a run setting and not part of the scenario, and it names
+populations -- a compiled scenario's vehicle classes, or a hand-written route file's vehicle
+types -- never vehicles. The Bahonar pattern of life's sits beside its specification in `Import/`.
+A legacy `*.labels.json` given without one supplies the display half of its own affiliation map;
+the `u` it gave every anomaly type was the answer written into the CoT type, and is not applied.
+
 An anomaly that is an *absence* -- a guard who never arrives -- has no vehicle to attach to either
 channel, so the run writes the scenario's described gaps to a supervision sidecar beside its output,
 with each window placed on the epoch this run stamped.
@@ -30,6 +38,11 @@ Examples:
 
     # live to one listener, and keep the dataset at the same time
     python sumo_cot_telemetry.py --udp 127.0.0.1:6969 --csv orbit_cot.csv
+
+    # the Bahonar port live, civilian traffic neutral and the naval base friendly
+    python sumo_cot_telemetry.py --config ../../Import/Shahid_Bahonar_Port_PatternOfLife.sumocfg \\
+        --display-convention ../../Import/Shahid_Bahonar_Port_PatternOfLife.display.json \\
+        --udp 239.2.3.1:6969
 """
 import argparse
 import json
@@ -42,6 +55,7 @@ _THIS = Path(__file__).resolve().parent
 _REPO = _THIS.parent.parent
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
+from carlacontrol.CotDisplayConvention import CotDisplayConvention  # noqa: E402
 from carlacontrol.SumoCotBridge import (  # noqa: E402  (needs the path above)
     BareEarthGrid,
     CotOutputSettings,
@@ -78,8 +92,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stale", type=float, default=3.0,
                         help="seconds before an event goes stale (default 3.0)")
     parser.add_argument("--affiliation", default="n",
-                        help="CoT affiliation for ambient traffic: n neutral, f friend, h hostile, "
-                             "u unknown (default n)")
+                        help="CoT affiliation for a vehicle population the display convention does "
+                             "not name, and for every vehicle when there is none: n neutral, "
+                             "f friend, h hostile, u unknown (default n)")
+    parser.add_argument("--display-convention", type=Path, metavar="FILE",
+                        help="the run's display convention: a JSON file giving each vehicle "
+                             "population its CoT affiliation, so a TAK client draws, say, civilian "
+                             "traffic neutral and military friendly. A population is a compiled "
+                             "scenario's vehicle class, or a hand-written route file's vehicle "
+                             "type. A run setting, not part of the scenario; it replaces the "
+                             "affiliations a --labels file carries")
     parser.add_argument("--marked-affiliation",
                         help="show the planted vehicles with a different affiliation in the live "
                              "feed, so an operator watching a TAK client can pick them out. It "
@@ -90,9 +112,11 @@ def parse_args() -> argparse.Namespace:
                              "and recorded in the labels sidecar; the written dataset does not "
                              "distinguish it from the traffic it is hiding in (default orbiter)")
     parser.add_argument("--labels", type=Path,
-                        help="a scenario's *.labels.json: names several planted vehicles at once "
-                             "and assigns a CoT affiliation per vehicle type, so each population "
-                             "carries the affiliation it would really have")
+                        help="a legacy scenario's *.labels.json: names several planted vehicles at "
+                             "once, and gives the display affiliation per vehicle type when no "
+                             "--display-convention does. The u it gives every anomaly type is not "
+                             "applied: it is the answer written into the CoT type, not a display "
+                             "affiliation, and those types take --affiliation")
     parser.add_argument("--supervision", type=Path,
                         help="write the scenario's described supervision gaps -- the anomalies that "
                              "are absences, with no vehicle to attach them to -- to this file, with "
@@ -160,14 +184,16 @@ def main() -> int:
 
     labels: dict = {}
     marked_ids: frozenset[str] = frozenset()
-    affiliation_by_type: dict[str, str] = {}
     if args.labels:
         labels = json.loads(args.labels.read_text(encoding="utf-8"))
         marked_ids = frozenset(labels.get("marked_ids", []))
-        affiliation_by_type = labels.get("affiliation_by_type", {})
-        logging.info("labels %s: %d marked ids, %d typed affiliations, %d described gap(s)",
-                     args.labels.name, len(marked_ids), len(affiliation_by_type),
-                     len(labels.get(LABELS_KEY) or []))
+        logging.info("labels %s: %d marked ids, %d described gap(s)",
+                     args.labels.name, len(marked_ids), len(labels.get(LABELS_KEY) or []))
+    try:
+        convention = display_convention(args, labels)
+    except (OSError, ValueError) as error:
+        logging.error("%s", error)
+        return 1
 
     try:
         installation = SumoInstallation.locate(args.sumo_home, extra_candidates=[REPO_SUMO])
@@ -183,8 +209,8 @@ def main() -> int:
         affiliation=args.affiliation, uid_prefix=args.uid_prefix,
         marked_vehicle=args.marked_vehicle,
         marked_affiliation=args.marked_affiliation,
-        marked_ids=marked_ids, affiliation_by_type=affiliation_by_type,
-        epoch=epoch)
+        marked_ids=marked_ids, affiliation_by_type=convention.affiliation_by_type,
+        display_convention=convention.source, epoch=epoch)
 
     try:
         report = bridge.run(settings, end_time=args.end,
@@ -203,6 +229,33 @@ def main() -> int:
         logging.info("  sent to %s:%d", host, port)
     _write_supervision(args, labels, report)
     return 0
+
+
+def display_convention(args: argparse.Namespace, labels: dict) -> CotDisplayConvention:
+    """The display convention this run draws with, and which one it is, said in the log.
+
+    A convention file wins outright. Without one, a legacy labels file supplies the display half of
+    its own affiliation map and never the anomaly half; without either, every vehicle takes
+    `--affiliation`.
+    """
+    if args.display_convention:
+        convention = CotDisplayConvention.from_file(args.display_convention)
+        logging.info("display convention %s: %d populations; any other takes %s",
+                     convention.source, len(convention), args.affiliation)
+        if args.labels and labels.get("affiliation_by_type"):
+            logging.info("  it replaces the affiliations in %s", args.labels.name)
+        return convention
+    if args.labels:
+        convention = CotDisplayConvention.from_legacy_labels(labels, source=args.labels.name)
+        logging.info("display affiliations from %s: %d types; any other takes %s",
+                     convention.source, len(convention), args.affiliation)
+        if convention.withheld:
+            logging.warning(
+                "  not applying the u %s gives %s: in a labels file u marks an anomaly type, and a "
+                "CoT type carries display affiliation, not the answer. They take %s",
+                convention.source, ", ".join(convention.withheld), args.affiliation)
+        return convention
+    return CotDisplayConvention({})
 
 
 def _write_supervision(args: argparse.Namespace, labels: dict,

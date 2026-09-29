@@ -383,8 +383,10 @@ Verified by reading the tree on 2026-09-17 unless marked otherwise.
   `bareearth.bin` per-cell bare-earth height grid).
 - **SUMO scenario authoring, with no CARLA in the loop** — `carlacontrol.SumoScenarioBuilder`
   (netconvert settings, network build, road-network reader, ambient flows, private-road fencing,
-  opposite-lane overtaking, config writer), `SumoPatternOfLifeBuilder` (multi-day timelines), and
-  the CLIs `make_sumo_scenario.py`, `make_arapahoe_scenario.py`, `make_bahonar_scenario.py`.
+  opposite-lane overtaking, config writer), `ScenarioCompiler` (compiles a scenario
+  specification into SUMO's files; the Bahonar generator's multi-day timeline is one, doc 07
+  §3.4.1), and the CLIs `make_sumo_scenario.py`, `make_arapahoe_scenario.py`,
+  `make_bahonar_scenario.py`.
 - **SUMO-to-CoT telemetry, with no CARLA in the loop** — `carlacontrol.SumoCotBridge` drives a
   scenario over TraCI (Python) and emits Cursor-on-Target to UDP, XML and CSV, reading `bareearth.bin`
   for ellipsoidal height and a `.labels.json` sidecar for ground truth.

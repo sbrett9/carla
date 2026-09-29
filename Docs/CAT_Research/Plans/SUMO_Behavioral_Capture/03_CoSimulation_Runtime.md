@@ -285,7 +285,7 @@ and that is the argument that was already decisive.
 |---|---|
 | **C# — `CarlaNet.CoSim`** | the TraCI connection; `simulationStep`; subscription reads; the pose buffer and interpolator; pose conversion; the render set and actor pool; the batch write; cueing the world tick; the per-step record of every SUMO vehicle |
 | **Python — a new `carlacontrol` CLI and module** | resolving the scenario and world package; launching the server and the session; the operator surface (start, stop, seek, status); wiring the sensor rig, the recorder and the CoT sink; reporting at the end of the run |
-| **Python — unchanged** | `SumoScenarioBuilder`, `SumoPatternOfLifeBuilder`, `make_*_scenario.py` (authoring); `SumoCotBridge` + `sumo_cot_telemetry.py` (the CARLA-free telemetry path, which stays a supported product — see §12 L4) |
+| **Python — unchanged** | `SumoScenarioBuilder`, `ScenarioCompiler`, `make_*_scenario.py` (authoring; the Bahonar generator emits a specification `ScenarioCompiler` compiles, [`07`](07_Scenario_Authoring.md) §3.4.1); `SumoCotBridge` + `sumo_cot_telemetry.py` (the CARLA-free telemetry path, which stays a supported product — see §12 L4) |
 
 The Python side never calls TraCI while a session is live. It reads the bridge's per-step record.
 This is what keeps one clock and one SUMO connection, and it is also what makes the zero-velocity fix

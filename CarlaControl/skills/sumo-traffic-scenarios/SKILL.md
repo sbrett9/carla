@@ -268,7 +268,8 @@ All pure standard library. One public class per file (repo convention, see `carl
 | `NetconvertTypeMap.py` | The world's own road types (`<extract>.typ.xml`, `--type-map`), validated before a build and passed to netconvert after SUMO's own map: the fence as a world-build decision. |
 | `ScenarioVehicleMix.py` | `VehicleClassSpec` (one kind of vehicle a scenario asks for: which measured blueprints it draws, its share of the traffic, and the author's own driving attributes), `VehicleMixSpec` (a named population drawn from declared classes at its own shares) and `ScenarioVehicleMix`, which writes those as `<vType>`s sized from the catalogue plus the per-class, whole-mix and named-mix `<vTypeDistribution>`s. `check_route_file` reads a written `.rou.xml` back and refuses one whose types name no measured body. This is how a scenario satisfies the mapping contract below. |
 | `VehicleCatalogue.py` | Read side of `vehicles.catalogue.json`: measured extent per blueprint, the bumper-to-origin shift the pose conversion needs, and the refusal reason for a type it cannot answer for. |
-| `SumoCotBridge.py` | Drives a scenario through **TraCI** and emits CoT. `BareEarthGrid` (reads `bareearth.bin`, loose or inside a `.cwp`), per-type affiliation + multi-marked support, real-time pacing. |
+| `SumoCotBridge.py` | Drives a scenario through **TraCI** and emits CoT. `BareEarthGrid` (reads `bareearth.bin`, loose or inside a `.cwp`), per-population affiliation (a compiled type's class, read from its `carla:class_id`) + multi-marked support, real-time pacing. |
+| `CotDisplayConvention.py` | A run's display convention: the CoT affiliation per vehicle population, read from a file beside the scenario, never part of it. Refuses a file naming vehicles; reads a legacy `.labels.json`'s display half and withholds its anomaly `u`. |
 | `CotUdpEmitter.py` | The CoT event formatter (shared with the CARLA truth producer, so datasets are comparable) and the UDP socket. Schema: `Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md`. |
 
 CLIs in `carla/CarlaControl/scripts/`:
@@ -283,6 +284,9 @@ CLIs in `carla/CarlaControl/scripts/`:
 - `sumo_cot_telemetry.py` — run any `.sumocfg`, emit CoT to `--udp` / `--xml` / `--csv`, with
   `--labels <name>.labels.json` for a legacy scenario's ground truth and `--bare-earth <grid>` for
   height. A compiled scenario's ground truth is its `.supervision.json`, which this tool does not read.
+  `--display-convention <name>.display.json` gives each vehicle class its CoT affiliation, a run
+  setting kept beside the scenario (the Bahonar port's is
+  `Import/Shahid_Bahonar_Port_PatternOfLife.display.json`).
 - `listen_cot.py` (in the bundles) — a minimal UDP receiver to confirm the live feed.
 
 Each scenario is also shipped as a **standalone zip at the workspace root** (`GardnervilleOrbit.zip`,
@@ -454,9 +458,12 @@ comparable. A compiled scenario's ground truth is its `.supervision.json` (insta
 absences, cohorts), which this tool does not read. A legacy scenario's rides in the `.labels.json` the
 telemetry tool reads:
 
-- `marked_ids` — vehicle IDs flagged as anomalies (`marked=1`, and a distinct affiliation).
+- `marked_ids` — vehicle IDs flagged as anomalies (`marked=1`; a distinct affiliation only on the
+  live feed, and only with `--marked-affiliation`).
 - `affiliation_by_type` — CoT affiliation per SUMO vehicle type: civilian `n` (neutral), military
-  `f` (friendly), anomaly `u` (unknown). The letter appears in `cot_type` = `a-<letter>-G-E-V`.
+  `f` (friendly). The letter appears in `cot_type` = `a-<letter>-G-E-V`. It is the run's display
+  convention when no `--display-convention` is given. The `u` it gave every anomaly type is not
+  applied: that letter wrote the answer into the CoT type (06 §9.1).
 - `anomaly_notes` — anomalies that are *absences* (e.g. a guard who never arrives) have no vehicle,
   so they are documented here as a described gap (location + time window). A run carries them out to
   a `*.supervision.json` beside its dataset, each window placed on the epoch that run stamped

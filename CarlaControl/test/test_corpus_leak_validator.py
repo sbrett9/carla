@@ -150,6 +150,8 @@ class _ScenarioPlayback:
         self.vehicletype = types.SimpleNamespace(
             getColor=lambda type_id: self.table.types[type_id]["color"],
             getVehicleClass=lambda type_id: self.table.types[type_id]["vehicle_class"],
+            # The shipped route file's types carry no <param>, and TraCI answers "" for one unset.
+            getParameter=lambda type_id, key: "",
         )
 
     # -- what the bridge calls on the module itself --

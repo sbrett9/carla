@@ -121,9 +121,10 @@ That asymmetry is the finding this whole section turns on.
 - `RoadNetwork.check_drivable` (`SumoScenarioBuilder.py:151-160`) — raises if an edge is absent from
   the network, or if consecutive edges in an explicit edge list have no connection between them.
   Used only by `write_routes` (`SumoScenarioBuilder.py:353`), and only on the orbit's first two laps.
-- `SumoPatternOfLifeBuilder._validate` (`SumoPatternOfLifeBuilder.py:150-167`, which went with the
-  SUMO-XML Bahonar generator) — raised if any flow or scheduled vehicle referenced an edge absent from
-  the network. Existence only; no reachability.
+- `SumoPatternOfLifeBuilder._validate` (`SumoPatternOfLifeBuilder.py:150-167` at `e4fd64d19`, which
+  went with the SUMO-XML Bahonar generator; that generator now emits a specification
+  `ScenarioCompiler` compiles, §3.4.1) — raised if any flow or scheduled vehicle referenced an edge
+  absent from the network. Existence only; no reachability.
 
 Nothing else in those scripts checks anything. In particular nothing in them checks that a route is
 **routable** (as opposed to its endpoints existing), that a `via` list is honoured, that the network
