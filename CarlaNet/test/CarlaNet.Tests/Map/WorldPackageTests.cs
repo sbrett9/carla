@@ -117,8 +117,12 @@ public class WorldPackageTests : IDisposable
     [Fact]
     public void ManifestRoundTripsEveryField()
     {
+        var (offset, ground) = MakeGrids(4, 4);
         var manifest = DrapedManifest(cols: 4, rows: 4) with
         {
+            // Written from the grids whatever the caller sets, so set to what they will be.
+            BareEarthOffsetSha1 = WorldPackage.HashGrid(offset),
+            BareEarthDtmSha1 = WorldPackage.HashGrid(ground),
             OpenDriveSha256 = WorldPackage.HashText(Xodr),
             SampleStepMeters = 10.0,
             TerrainResolutionMeters = 8.0,
@@ -131,13 +135,100 @@ public class WorldPackageTests : IDisposable
             NetconvertPath = @"C:\sumo\bin\netconvert.exe",
             NetconvertVersion = "Eclipse SUMO netconvert Version 1.27.0",
         };
-        var (offset, ground) = MakeGrids(4, 4);
 
         WorldPackage.Write(_dir, manifest, Xodr, Net, offset, ground);
         var read = WorldPackage.ReadManifest(Pkg);
 
         Assert.True(manifest.ValueEquals(read),
                     "manifest did not survive the JSON round trip unchanged");
+    }
+
+    [Fact]
+    public void TheGridDigestIsSha1OverLittleEndianFloat32InTheOrderGiven()
+    {
+        // Pinned against an independent implementation, Python's hashlib over struct.pack('<3f', ...):
+        // bytes 0000803f 000020c0 8553b144. The server digests the same bytes with the engine's
+        // FSHA1, so a layout or byte-order slip on this side would show here first.
+        Assert.Equal("95415533ef5ac8f2aae801a8e2192171b48cd946",
+                     WorldPackage.HashGrid([1.0f, -2.5f, 1418.61f]));
+        Assert.Equal("da39a3ee5e6b4b0d3255bfef95601890afd80709", WorldPackage.HashGrid([]));
+    }
+
+    [Fact]
+    public void WritingRecordsTheDigestOfEachGridItWrites()
+    {
+        var (offset, ground) = MakeGrids(21, 13);
+
+        // Whatever the caller's manifest says, the one written describes the grids written.
+        var stale = DrapedManifest(cols: 21, rows: 13) with
+        {
+            BareEarthOffsetSha1 = "not a digest",
+            BareEarthDtmSha1 = WorldPackage.HashGrid(offset),
+        };
+        WorldPackage.Write(_dir, stale, Xodr, Net, offset, ground);
+
+        var read = WorldPackage.ReadManifest(Pkg);
+        Assert.Equal(WorldPackage.HashGrid(offset), read.BareEarthOffsetSha1);
+        Assert.Equal(WorldPackage.HashGrid(ground), read.BareEarthDtmSha1);
+        Assert.NotEqual(read.BareEarthOffsetSha1, read.BareEarthDtmSha1);
+    }
+
+    [Fact]
+    public void TheGridEntryHashesAsTheGridsItHolds()
+    {
+        var (offset, ground) = MakeGrids(21, 13);
+        WorldPackage.Write(_dir, DrapedManifest(cols: 21, rows: 13), Xodr, Net, offset, ground);
+
+        // Hashed from the entry's bytes without decoding a value, and equal to the digest of the
+        // grids the entry decodes to.
+        Assert.True(WorldPackage.TryReadGridDigests(Pkg, out string offsetSha1, out string groundSha1));
+        Assert.Equal(WorldPackage.HashGrid(offset), offsetSha1);
+        Assert.Equal(WorldPackage.HashGrid(ground), groundSha1);
+    }
+
+    [Fact]
+    public void AConstantShiftRecordsNoDigestsAndCarriesNoneToRead()
+    {
+        var constant = DrapedManifest(cols: 4, rows: 4) with
+        {
+            HeightAlignMode = "area",
+            DrapeActive = false,
+            HeightAlignOffsetMeters = -1.0938002549446537,
+            GridNumCols = 0,
+            GridNumRows = 0,
+            GridCellSizeMeters = 0.0,
+            BareEarthOffsetSha1 = "left over from a draped build",
+        };
+        WorldPackage.Write(_dir, constant, Xodr, Net, [], []);
+
+        var read = WorldPackage.ReadManifest(Pkg);
+        Assert.Equal(string.Empty, read.BareEarthOffsetSha1);
+        Assert.Equal(string.Empty, read.BareEarthDtmSha1);
+        Assert.False(WorldPackage.TryReadGridDigests(Pkg, out string offsetSha1, out string groundSha1));
+        Assert.Equal(string.Empty, offsetSha1);
+        Assert.Equal(string.Empty, groundSha1);
+    }
+
+    [Fact]
+    public void APackageWrittenBeforeTheDigestsReadsWithNone()
+    {
+        // A manifest as it was written before these fields existed: the fields are simply absent.
+        WriteWorld();
+        string json;
+        using (var archive = ZipFile.OpenRead(Pkg))
+        using (var reader = new StreamReader(archive.GetEntry("world.json")!.Open()))
+        {
+            json = reader.ReadToEnd();
+        }
+        string[] kept = json.Split('\n')
+            .Where(line => !line.Contains("\"BareEarthOffsetSha1\"") && !line.Contains("\"BareEarthDtmSha1\""))
+            .ToArray();
+        Assert.Equal(json.Split('\n').Length - 2, kept.Length);
+        Publish(("world.json", Utf8(string.Join('\n', kept))));
+
+        var read = WorldPackage.ReadManifest(Pkg);
+        Assert.Equal(string.Empty, read.BareEarthOffsetSha1);
+        Assert.Equal(string.Empty, read.BareEarthDtmSha1);
     }
 
     [Fact]

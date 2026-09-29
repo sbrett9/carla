@@ -44,10 +44,12 @@
 // cannot open. It costs perhaps three times the bytes on disk; the alternative is a package that
 // writes cleanly and fails to import, which is a far worse trade.
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -87,6 +89,25 @@ public sealed record WorldPackageManifest
     public double GridCellSizeMeters { get; init; }
     public int GridNumCols { get; init; }
     public int GridNumRows { get; init; }
+
+    /// <summary>
+    /// SHA-1 of the offset grid the companion binary carries (<see cref="WorldPackage.HashGrid"/>):
+    /// lowercase hexadecimal, over its float32 values as little-endian bytes, row-major -- the same
+    /// digest a server holding this world serves for its record's grid (<c>get_bare_earth_digest</c>).
+    /// Empty when no drape grid exists, and on a package written before the digests were recorded.
+    /// </summary>
+    /// <remarks>
+    /// Written by <see cref="WorldPackage.Write"/> from the grid it writes, replacing whatever the
+    /// caller set. It is the grid's recorded identity, for a reader with no server to ask. Nothing
+    /// requires it to be present, since older packages have none; where it is, the co-simulation
+    /// session's loaded-world check requires it to be what the grid entry hashes to.
+    /// </remarks>
+    public string BareEarthOffsetSha1 { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Likewise for the bare-earth ground grid (<see cref="BareEarthOffsetSha1"/>).
+    /// </summary>
+    public string BareEarthDtmSha1 { get; init; } = string.Empty;
 
     // Streamed imagery layers. The Cesium ion access token is deliberately NOT recorded: it is a
     // credential, and a world package is meant to be copied around.
@@ -237,6 +258,9 @@ public static class WorldPackage
     /// <paramref name="offsetMeters"/> and <paramref name="bareEarthDtmMeters"/>
     /// are row-major [row * NumCols + col] and must both be NumCols*NumRows long when the manifest
     /// says a drape is active; they are ignored otherwise, since a constant shift needs no grid.
+    /// The manifest is written with <see cref="WorldPackageManifest.BareEarthOffsetSha1"/> and
+    /// <see cref="WorldPackageManifest.BareEarthDtmSha1"/> set to the digests of the grids written,
+    /// or empty where none are.
     /// </summary>
     public static void Write(
         string directory,
@@ -267,6 +291,13 @@ public static class WorldPackage
                     + $"expected {expected}", nameof(offsetMeters));
             }
         }
+
+        // The digests describe the grids this call writes, whatever the caller's manifest carried.
+        manifest = manifest with
+        {
+            BareEarthOffsetSha1 = manifest.DrapeActive ? HashGrid(offsetMeters) : string.Empty,
+            BareEarthDtmSha1 = manifest.DrapeActive ? HashGrid(bareEarthDtmMeters) : string.Empty,
+        };
 
         Directory.CreateDirectory(Path.GetFullPath(directory));
         string package = PackagePath(directory, manifest.MapName);
@@ -494,6 +525,56 @@ public static class WorldPackage
         // is consumed as it comes.
         using var stream = grid.Open();
         using var reader = new BinaryReader(stream, new UTF8Encoding(false), leaveOpen: false);
+        (int numCols, int numRows) = ReadGridHeader(reader, packagePath);
+        int count = numCols * numRows;
+
+        offsetMeters = new float[count];
+        bareEarthDtmMeters = new float[count];
+        for (int i = 0; i < count; i++) { offsetMeters[i] = reader.ReadSingle(); }
+        for (int i = 0; i < count; i++) { bareEarthDtmMeters[i] = reader.ReadSingle(); }
+        return true;
+    }
+
+    /// <summary>
+    /// The digest of each per-cell grid the package carries (<see cref="HashGrid"/>), taken from the
+    /// grid entry's bytes as they stand. Returns false with empty outputs when the package has no
+    /// grid file, as <see cref="TryReadGrids"/> does.
+    /// </summary>
+    /// <remarks>
+    /// The entry holds each grid as float32 little-endian values, row-major, which are the bytes the
+    /// digest is defined over, so they are hashed as they are read: no value is decoded and neither
+    /// grid is held in memory. This is what the entry holds, whatever the manifest records.
+    /// </remarks>
+    public static bool TryReadGridDigests(
+        string packagePath, out string offsetSha1, out string bareEarthDtmSha1)
+    {
+        offsetSha1 = string.Empty;
+        bareEarthDtmSha1 = string.Empty;
+
+        using var archive = ZipFile.OpenRead(packagePath);
+        ZipArchiveEntry? grid = archive.GetEntry(GridEntry);
+        if (grid is null)
+        {
+            return false;
+        }
+
+        // BinaryReader reads exactly the bytes each value needs and nothing ahead of them, so once
+        // the header is read the stream stands at the first offset value.
+        using var stream = grid.Open();
+        using var reader = new BinaryReader(stream, new UTF8Encoding(false), leaveOpen: true);
+        (int numCols, int numRows) = ReadGridHeader(reader, packagePath);
+        long bytes = (long)numCols * numRows * sizeof(float);
+        offsetSha1 = HashNext(stream, bytes, packagePath);
+        bareEarthDtmSha1 = HashNext(stream, bytes, packagePath);
+        return true;
+    }
+
+    /// <summary>
+    /// Read the grid entry's header, leaving the reader at the first offset value, and answer the
+    /// grid's columns and rows.
+    /// </summary>
+    private static (int Columns, int Rows) ReadGridHeader(BinaryReader reader, string packagePath)
+    {
         if (reader.ReadInt32() != GridMagic)
         {
             throw new InvalidDataException($"not a world-package grid: {packagePath}");
@@ -506,17 +587,58 @@ public static class WorldPackage
         reader.ReadDouble();   // cell size
         int numCols = reader.ReadInt32();
         int numRows = reader.ReadInt32();
-        int count = numCols * numRows;
         if (numCols < 2 || numRows < 2)
         {
             throw new InvalidDataException($"degenerate grid {numCols}x{numRows} in {packagePath}");
         }
+        return (numCols, numRows);
+    }
 
-        offsetMeters = new float[count];
-        bareEarthDtmMeters = new float[count];
-        for (int i = 0; i < count; i++) { offsetMeters[i] = reader.ReadSingle(); }
-        for (int i = 0; i < count; i++) { bareEarthDtmMeters[i] = reader.ReadSingle(); }
-        return true;
+    /// <summary>SHA-1 of the next <paramref name="count"/> bytes of a grid entry, which must hold them.</summary>
+    private static string HashNext(Stream stream, long count, string packagePath)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
+        byte[] buffer = new byte[1 << 20];
+        while (count > 0)
+        {
+            int read = stream.Read(buffer, 0, (int)Math.Min(buffer.Length, count));
+            if (read == 0)
+            {
+                throw new InvalidDataException($"world-package grid ends before its last cell: {packagePath}");
+            }
+            hash.AppendData(buffer, 0, read);
+            count -= read;
+        }
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+
+    /// <summary>
+    /// Lowercase hexadecimal SHA-1 of a per-cell grid: its float32 values as little-endian bytes, in
+    /// the order given, which for every grid here is row-major [row * NumCols + col].
+    /// </summary>
+    /// <remarks>
+    /// <para>These are the bytes <c>bareearth.bin</c> holds for the grid, and the bytes a server
+    /// holding the world digests for its bare-earth record (<c>get_bare_earth_digest</c>), so equal
+    /// digests are equal grids, bit for bit, without either side sending the other a grid.</para>
+    ///
+    /// <para>SHA-1 rather than the SHA-256 this class uses elsewhere because the server has to compute
+    /// it too, and the engine's Core has no SHA-256 that runs on Windows or Linux without bringing in
+    /// OpenSSL. It is there to tell one build's grids from another's, not to resist an adversary: the
+    /// server takes its record from any client.</para>
+    /// </remarks>
+    public static string HashGrid(ReadOnlySpan<float> grid)
+    {
+        if (BitConverter.IsLittleEndian)
+        {
+            return Convert.ToHexStringLower(SHA1.HashData(MemoryMarshal.AsBytes(grid)));
+        }
+
+        byte[] bytes = new byte[grid.Length * sizeof(float)];
+        for (int i = 0; i < grid.Length; i++)
+        {
+            BinaryPrimitives.WriteSingleLittleEndian(bytes.AsSpan(i * sizeof(float)), grid[i]);
+        }
+        return Convert.ToHexStringLower(SHA1.HashData(bytes));
     }
 
     /// <summary>Lowercase hexadecimal SHA-256 of a file's bytes, or an empty string if unreadable.</summary>
