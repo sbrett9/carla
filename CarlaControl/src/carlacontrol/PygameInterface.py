@@ -66,6 +66,9 @@ class PygameInterface:
         # due, so the first frame asks rather than waiting half a second to.
         self.solar_poll_frame = 30
         self.solar_hud = ""
+        # The georeference origin, read once: it is fixed for as long as the world is loaded, and
+        # the display needs it on every frame.
+        self._origin: tuple[float, float, float] | None = None
         self.sync = sync
         self.time_rate = args.time_rate
 
@@ -432,10 +435,7 @@ class PygameInterface:
         # handle pick request
         if events["pick_request"] and self.sensors:
             try:
-                try:
-                    lat0, lon0, origin_h = self.world.get_cesium_origin()
-                except Exception:
-                    lat0 = lon0 = origin_h = None
+                lat0, lon0, origin_h = self._georeference_origin() or (None, None, None)
                 pick_result = self.sensors.pick_world_point(
                     events["pick_request"][0],
                     events["pick_request"][1],
@@ -481,6 +481,15 @@ class PygameInterface:
         return False
 
 
+    def _georeference_origin(self) -> tuple[float, float, float] | None:
+        """The world's origin as (lat, lon, height), asked of the server until it first answers."""
+        if self._origin is None and self.world is not None:
+            try:
+                self._origin = tuple(self.world.get_cesium_origin())
+            except Exception:
+                return None
+        return self._origin
+
     def render(self):
         # blit surface from sensor subsystem
         if self.sensors:
@@ -499,10 +508,8 @@ class PygameInterface:
             self.render_boundary_overlays(cam_xyz, cam_pose.yaw, cam_pose.pitch)
 
             ft_per_m = self.sensors.FT_PER_M
-            try:
-                _, _, origin_h = self.world.get_cesium_origin()
-            except Exception:
-                origin_h = 0.0
+            origin = self._georeference_origin()
+            origin_h = origin[2] if origin else 0.0
             elev_ft = (origin_h + cam_pose.z) * ft_per_m
             gz = self.sensors.ground_z
             agl_ft = (cam_pose.z - gz) * ft_per_m if gz is not None else None
