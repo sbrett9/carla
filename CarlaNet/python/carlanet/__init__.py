@@ -1651,6 +1651,38 @@ class World:
         g = _sync(self._client.GetCesiumOriginAsync())
         return (g.Latitude, g.Longitude, g.Altitude)
 
+    def get_view_readiness(self, actor):
+        """Whether a camera's photoreal tiles have arrived, as of the end of the last tick.
+
+        Returns {"frame", "published", "tilesets": [{"ion_asset_id", "visible", "load_progress",
+        "loading": {"worker_queue", "main_queue", "kicked"}, "failed_in_view", "failed_loaded"}]},
+        one entry per tileset in the world, hidden ones included and flagged. "published" says the
+        camera's view drove the tilesets' selection on that tick; until it does, a tileset reads fully
+        loaded for a view it never had. A failed tile is drawn empty and counts as loaded, so
+        load_progress 100 with failed_in_view above zero is a frame with a hole.
+
+        An unknown, dormant or non-camera actor raises; it is never answered as None, which a caller
+        could mistake for ready.
+        """
+        actor_id = int(getattr(actor, "id", actor))
+        packed = list(_sync(self._client.GetViewReadinessAsync(actor_id)))
+        if len(packed) < 4 or packed[3] < 8 or len(packed) < 4 + int(packed[2]) * int(packed[3]):
+            raise RuntimeError(f"get_view_readiness answered a malformed reply: {packed!r}")
+        count, row_length = int(packed[2]), int(packed[3])
+        tilesets = []
+        for index in range(count):
+            row = packed[4 + index * row_length: 4 + index * row_length + 8]
+            tilesets.append({
+                "ion_asset_id": int(row[0]),
+                "visible": row[1] != 0.0,
+                "load_progress": float(row[2]),
+                "loading": {"worker_queue": int(row[3]), "main_queue": int(row[4]),
+                            "kicked": int(row[5])},
+                "failed_in_view": int(row[6]),
+                "failed_loaded": int(row[7]),
+            })
+        return {"frame": int(packed[0]), "published": packed[1] != 0.0, "tilesets": tilesets}
+
     def ground_z_below(self, x, y, z, search=4000.0):
         """Raycast straight down from (x, y, z) metres; return the surface Z (metres) hit
         below, or None if nothing was hit within `search` metres. Used for AGL readout."""

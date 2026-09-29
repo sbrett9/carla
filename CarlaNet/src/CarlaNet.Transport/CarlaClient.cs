@@ -1208,6 +1208,14 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<IReadOnlyList<double>> GetBareEarthReferenceAsync()
         => _rpc.CallAsync<IReadOnlyList<double>>("get_bare_earth_reference");
 
+    /// Whether a camera's photoreal tiles have arrived, as of the end of the last tick, packed as
+    /// [frame, published, tileset_count, row_length, then per tileset: ion_asset_id, visible,
+    /// load_progress, worker_queue, main_queue, kicked, failed_in_view, failed_loaded]. Index rows by
+    /// row_length, which may grow as columns are appended. An unknown, dormant or non-camera actor,
+    /// and a world whose tilesets have no sensor-view publisher, are errors, never an empty answer.
+    public Task<IReadOnlyList<double>> GetViewReadinessAsync(ActorId cameraId)
+        => _rpc.CallAsync<IReadOnlyList<double>>("get_view_readiness", cameraId);
+
     /// Per-cell surface shift, row-major metres. Empty unless the world was generated draped.
     public Task<IReadOnlyList<float>> GetBareEarthOffsetGridAsync()
         => _rpc.CallAsync<IReadOnlyList<float>>("get_bare_earth_offset_grid");
