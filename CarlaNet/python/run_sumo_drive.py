@@ -141,10 +141,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=2000)
     parser.add_argument("--setup-timeout", type=float, default=600.0,
                         help="seconds each server call may take while the session checks the "
-                             "loaded world and starts. The check reads the server's bare-earth "
-                             "grids, and on a large world they take minutes: Bahonar's two "
-                             "grids of 7.6 million cells took 146 s and 153 s. Once the session "
-                             "has started, every call gets 30 s again")
+                             "loaded world and starts. The check reads the loaded world's "
+                             "OpenDRIVE, 8.3 MB on Bahonar, and the digests of its bare-earth "
+                             "grids rather than the grids, whose two fetches took 146 s and 153 s "
+                             "there. Once the session has started, every call gets 30 s again")
     parser.add_argument("--scenario", required=True, help="the scenario's .sumocfg")
     parser.add_argument("--world-package", required=True,
                         help="the .cwp the world was built as")

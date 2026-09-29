@@ -2143,7 +2143,11 @@ class World:
 
         The session also refuses a `world_package` that does not describe the world this server has
         loaded -- another build's origin, surface grid or road network -- and a world that carries no
-        bare-earth record at all, which is any stock map. It checks before it touches the world.
+        bare-earth record at all, which is any stock map. It checks before it touches the world, and
+        compares the bare-earth grids by the digests the server computes of them rather than by
+        fetching them. Once it has admitted the package it gives this client the package's grids for
+        its truth telemetry, where the server's digests match, so a recorder started on this client
+        never fetches them either.
 
         `sumo_home` is the SUMO installation to launch, the directory holding `bin/sumo`. Left as
         None, the session searches: `CARLANET_SUMO_HOME`, then the repository's pinned build found
