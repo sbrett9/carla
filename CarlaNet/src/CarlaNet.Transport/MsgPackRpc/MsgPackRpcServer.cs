@@ -2,7 +2,7 @@
 //
 // WIRE FORMAT (verified — see CarlaNetSupplementary.md §1):
 //   rpclib uses raw msgpack streaming with NO length prefix.
-//   MessagePackStreamReader handles message boundary detection on the receive side.
+//   MsgPackMessageFramer handles message boundary detection on the receive side.
 //
 // Request:  [0, msg_id, "method_name", [[false], arg0, arg1, ...]]
 //             (the outer [false] is the Metadata::MakeSync wrapper — every
@@ -181,24 +181,25 @@ public sealed class MsgPackRpcServer : IAsyncDisposable
         {
             var stream = client.GetStream();
             var writeLock = new SemaphoreSlim(1, 1);
-            var reader = new MessagePackStreamReader(stream);
+            var framer = new MsgPackMessageFramer(stream);
             try
             {
                 while (!ct.IsCancellationRequested)
                 {
-                    ReadOnlySequence<byte>? msgSeq;
+                    ReadOnlyMemory<byte>? message;
                     try
                     {
-                        msgSeq = await reader.ReadAsync(ct).ConfigureAwait(false);
+                        message = await framer.ReadAsync(ct).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException) { break; }
                     catch (IOException) { break; }
 
-                    if (msgSeq is null) break; // peer closed
+                    if (message is null) break; // peer closed
 
-                    // MessagePackStreamReader reuses internal buffers — snapshot before async dispatch.
-                    var snapshot = new ReadOnlySequence<byte>(msgSeq.Value.ToArray());
-                    _ = Task.Run(() => DispatchAsync(snapshot, stream, writeLock, ct), ct);
+                    // The framer never writes to a message's bytes once returned, so async dispatch
+                    // can read them after the next read.
+                    var request = new ReadOnlySequence<byte>(message.Value);
+                    _ = Task.Run(() => DispatchAsync(request, stream, writeLock, ct), ct);
                 }
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
