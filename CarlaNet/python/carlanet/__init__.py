@@ -2030,9 +2030,12 @@ class World:
                          epoch=None, illumination=None,
                          real_time_factor=0.0, pacing_window_s=5.0,
                          sumo_home=None, allow_sumo_version_mismatch=False,
-                         allow_teleporting=False,
+                         allow_teleporting=False, sumo_answer_timeout_s=60.0,
+                         vehicle_lamps=True, headlight_on_below_deg=3.0,
+                         headlight_off_above_deg=6.0,
                          on_pose=None, on_release=None, on_divergence=None,
-                         on_admission_pass=None):
+                         on_admission_pass=None, on_collision=None,
+                         on_vehicle_not_inserted=None):
         """Drive this world's vehicles from a SUMO microsimulation. Returns the session, or None if
         the co-simulation assemblies are not loaded.
 
@@ -2127,7 +2130,15 @@ class World:
         The session also refuses a scenario whose configuration lets SUMO teleport a blocked vehicle:
         a positive `time-to-teleport`, or none, which SUMO takes as 300 s. `-1` and `0` disable it,
         as the scenario compiler writes. `allow_teleporting` runs anyway, and
-        `session.Report.Teleporting` records that it was accepted.
+        `session.Report.Teleporting` records that it was accepted. It refuses, with no override, a
+        scenario that sets `ignore-route-errors`: SUMO then keeps a vehicle it cannot route standing at
+        the end of the last edge it can reach and says nothing, where by default it stops at the route
+        and names it, and the run stops with it.
+
+        `sumo_answer_timeout_s` bounds how long the session waits for SUMO to answer any one command,
+        a step included. A SUMO that has hung keeps its socket open and never answers; past the bound
+        the run stops as for any other SUMO failure and everything is given back. It must exceed the
+        slowest step the scenario produces -- measured steps are milliseconds -- and be positive.
 
         Every refusal -- from this call or from `session.Advance()` -- is a
         `CarlaNet.CoSim.CoSimSessionRefusedException` (a held population is its subclass
@@ -2135,14 +2146,46 @@ class World:
         `SolarAuditFailedException`) whose `Stage` says how far the session had got, and whose
         `StageName` gives it as text: 'Validation' (nothing started or written), 'Launch' (SUMO started
         and the world's clock and layers taken; no lease), 'Authority' (the lease is held by another),
-        'PreRoll' (the lease taken, before the first tick: the fast-forward, the sun's binding and its
-        read-back) or 'Window' (from `Advance`). A SUMO failure is such a refusal too, quoting what SUMO
-        last wrote to its console. Whatever the stage, everything the session took is given back.
+        'PreRoll' (the lease taken, before the window opens: the fast-forward, the sun's binding and
+        its read-back, and a prewarm tick) or 'Window' (from `Advance`, from the window's opening on).
+        A SUMO failure is such a refusal too, quoting what SUMO last wrote to its console, and so is a
+        failure of the connection to this CARLA server -- a dropped socket, or a call such as the tick
+        cue left unanswered past the client's timeout -- with that failure as its `InnerException`.
+        `CauseName` says which side failed: 'sumo-connection-lost' (SUMO died, closed the connection,
+        stopped answering within `sumo_answer_timeout_s`, or refused a command), 'world-connection-lost',
+        'world-tick-timeout' (the tick was answered and its frame never arrived),
+        'solar-state-disagreement' (the sun disagreed, was absent from a snapshot, or refused a frame's
+        write), 'missing-blueprint', or 'none' for a refusal of something the session was given. A run
+        stopped from `Advance` stays stopped -- advancing it again refuses without touching either side
+        -- and `session.Report.Stopped` records the stage, the cause and the last frame whose truth
+        holds. Whatever the stage, everything the session took is given back; what only an unreachable
+        server could hold is named instead, in the refusal's `GiveBackFailures` for a start and in the
+        exception `Dispose()` raises for a run.
 
         The three callbacks are handed a record per vehicle per tick from the tick thread and must
         not block: `on_pose` the computed pose, `on_release` a completed render interval, and
         `on_divergence` the commanded pose and velocity against the transform and velocity the world
-        reported for the body. The run's summary is on `session.Report` either way.
+        reported for the body. The run's summary is on `session.Report` either way. A render interval
+        says why it ended in `ReleaseReason`: 'Vanished' is a vehicle that stopped reporting without
+        SUMO listing it as arrived -- taken out between two steps -- whose body was parked wherever it
+        happened to be.
+
+        `vehicle_lamps` drives each body's lamps: SUMO's brake and indicator signals mapped bit by bit
+        (SUMO's right blinker is 1 where CARLA's is 0x10, so a cast would light the parking lights), and
+        headlights from the sun -- on once the geometric elevation the world reports falls below
+        `headlight_on_below_deg`, off once it rises above `headlight_off_above_deg`, driven only where the
+        session binds the sun. A body's lamps are written when it is lent, whatever they are, when they
+        change, and switched off when it is given back; every pose record carries the vehicle's raw
+        `Signals` word and the `Lamps` its body holds. Off, no lamp is ever written, as a control.
+
+        `on_collision` is handed each collision SUMO registered once it is over (`CollisionSpan`: the
+        collider, the victim, SUMO's `Kind`, lane and position, `BeganAtSeconds`, `EndedAtSeconds` and
+        the bodies that rendered both). A collision does not stop the run; it is a fact about the
+        corpus to filter on. `session.Report.CollisionHandling` says what SUMO did about it -- `warn` is
+        what the compiler writes; SUMO's default `teleport` moves the collider, and `none` registers
+        nothing to record. `on_vehicle_not_inserted` is handed each vehicle SUMO gave up inserting --
+        it drops one past `max-depart-delay` without a word, so this is the only account of it.
+        `session.Report.SumoWarnings` counts SUMO's console warnings and keeps the first few.
 
         The render set's admission pass is published as it is made, once per SUMO step:
         `session.Report.LastAdmissionPass` holds the latest, replaced whole -- `Population` (every
@@ -2163,10 +2206,10 @@ class World:
             print("SUMO co-simulation unavailable: CarlaNet.CoSim assembly not loaded "
                   "(rebuild the wheel/DLLs).", file=sys.stderr)
             return None
-        from CarlaNet.CoSim import (AdmissionPass, CarlaClientWorld, CoSimPoseRecord,
+        from CarlaNet.CoSim import (AdmissionPass, CarlaClientWorld, CollisionSpan, CoSimPoseRecord,
                                     IlluminationPolicy, PoseDivergence, RegionRenderSetPolicy,
                                     RenderedVehicleInterval, SolarEpoch, SumoDriveSession,
-                                    SumoDriveSessionOptions)
+                                    SumoDriveSessionOptions, VehicleNotInserted)
         from System import Action
 
         options = SumoDriveSessionOptions(
@@ -2193,6 +2236,10 @@ class World:
             options.SumoHome = str(sumo_home)
         options.AllowSumoVersionMismatch = bool(allow_sumo_version_mismatch)
         options.AllowTeleporting = bool(allow_teleporting)
+        options.SumoAnswerTimeoutSeconds = float(sumo_answer_timeout_s)
+        options.VehicleLampsDriven = bool(vehicle_lamps)
+        options.HeadlightOnBelowDegrees = float(headlight_on_below_deg)
+        options.HeadlightOffAboveDegrees = float(headlight_off_above_deg)
         # Both are read by the C# side, which is the one validator: a declaration checked twice is
         # a declaration two implementations will eventually disagree about.
         if epoch is not None:
@@ -2214,6 +2261,10 @@ class World:
             options.OnDivergence = Action[PoseDivergence](on_divergence)
         if on_admission_pass is not None:
             options.OnAdmissionPass = Action[AdmissionPass](on_admission_pass)
+        if on_collision is not None:
+            options.OnCollision = Action[CollisionSpan](on_collision)
+        if on_vehicle_not_inserted is not None:
+            options.OnVehicleNotInserted = Action[VehicleNotInserted](on_vehicle_not_inserted)
         return SumoDriveSession.Start(options)
 
     def stop_recording(self):

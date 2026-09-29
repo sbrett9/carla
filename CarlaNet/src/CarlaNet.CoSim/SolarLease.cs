@@ -204,18 +204,33 @@ public sealed class SolarLease : IDisposable
                 + $"{sun:yyyy-MM-dd HH:mm:ss.fff} at UTC{SolarEpoch.FormatOffset(Declared.Epoch.UtcOffset)}. "
                 + "set_solar_epoch answers false only when there is no sun or the date is not a "
                 + "calendar date, and a frame rendered under the previous sun is lit by an instant "
-                + "nothing declared for it.");
+                + "nothing declared for it.")
+            {
+                Cause = CoSimStopCause.SolarStateDisagreement,
+            };
         }
 
         FrameWrites++;
     }
 
     /// <summary>
+    /// Whether the world had no sun left to give back to when the session ended -- its sun went away
+    /// part-way through the run, so nothing in it holds the session's writes.
+    /// </summary>
+    public bool SunGoneWhenGivenBack { get; private set; }
+
+    /// <summary>
     /// Put the sun back as it was found. Doing it twice does nothing the second time.
     /// </summary>
+    /// <remarks>
+    /// A world whose sun went away during the run has nothing holding what the session wrote, so there
+    /// is nothing to give back; that is recorded (<see cref="SunGoneWhenGivenBack"/>) rather than raised,
+    /// because it is the run's failure -- which stopped it -- and not a second one of the shutdown's.
+    /// </remarks>
     /// <exception cref="InvalidOperationException">
-    /// The world would not take the sun it was found with back -- a date that is not a calendar date
-    /// can be held by a sun but not written to one. The advance setting is restored regardless.
+    /// The world has a sun and would not take the one it was found with back -- a date that is not a
+    /// calendar date can be held by a sun but not written to one. The advance setting is restored
+    /// regardless.
     /// </exception>
     public void Dispose()
     {
@@ -232,13 +247,21 @@ public sealed class SolarLease : IDisposable
 
         bool epochRestored = _world.WriteSolarEpoch(found.Year, found.Month, found.Day,
                                                     found.SolarTimeHours, found.TimeZoneHours);
-        _world.WriteTimeAdvance(found.Advancing, found.Rate);
-        if (!epochRestored)
+        bool advanceRestored = _world.WriteTimeAdvance(found.Advancing, found.Rate);
+        if (epochRestored)
         {
-            throw new InvalidOperationException(
-                $"The world would not take back the sun it was found with ({found}). Its advance "
-                + "setting was restored; its date and clock hold the session's.");
+            return;
         }
+
+        if (!advanceRestored && SolarReading.From(_world.ReadSolarState()) is null)
+        {
+            SunGoneWhenGivenBack = true;
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"The world would not take back the sun it was found with ({found}). Its advance "
+            + "setting was restored; its date and clock hold the session's.");
     }
 
     /// <summary>What was bound, what the world reported back, and what it was found holding.</summary>

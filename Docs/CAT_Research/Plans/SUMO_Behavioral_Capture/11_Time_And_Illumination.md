@@ -16,6 +16,7 @@ possible. Assumes familiarity with the fork but not with the conversation that p
 |---|---|
 | 2026-09-25 | Epoch, sun binding, asserted policy, per-tick audit and per-frame record built; engine clock decomposition measured. |
 | 2026-09-25 | Under `advance` the session writes the sun every tick, engine advance off (D11.19); audit tolerances rate-independent. |
+| 2026-09-28 | §8.3: a sun absent from a snapshot after binding stops the run as built, and the shutdown does not fail for it. |
 
 Capture windows are placed in simulated time, and the sun must be bound to them. This section owns the
 epoch that maps simulated seconds to civil time, the policy governing whether the sun is frozen or
@@ -1347,7 +1348,12 @@ by post-processing**, so continuing produces only more unusable frames.
 **The absent block is also a failure.** A snapshot that carries no sun after one was bound stops the
 run — a capture with no `_solar` is exactly as unusable as one with a wrong sun, and `CotWriter` and
 `SolarMetadata` omit the block silently when there is none, which is right for a frame and wrong for
-a run.
+a run. As built, the observer marks a snapshot that carries a sun (`SolarStateValid`,
+`WorldObserver.cpp:328-337`) and the client caches no block where the mark is absent, so the audit reads
+an empty block and stops the run on that tick; under `advance` the world refuses the sun written for the
+frame first, before the frame renders. Either way the refusal names the cause `solar-state-disagreement`,
+and on the way out the session records that no sun was left to give back rather than failing for it
+([`03`](03_CoSimulation_Runtime.md) §11.7).
 
 **What the audit cannot see.** It reads the sun's state, not the light: a second directional light
 added to the level, a sky re-lit, or exposure that compensated the change away all leave the sun

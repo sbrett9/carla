@@ -49,4 +49,29 @@ public class CoSimSessionRefusedException : InvalidOperationException
     /// <c>PreRoll</c> or <c>Window</c> -- for a caller that compares text rather than the enum.
     /// </summary>
     public string StageName => Stage.ToString();
+
+    /// <summary>
+    /// Which side failed, where the refusal is a failure of SUMO, of the CARLA server or of the world's
+    /// sun rather than of something the session was given; <see cref="CoSimStopCause.None"/> otherwise.
+    /// </summary>
+    public CoSimStopCause Cause { get; internal set; }
+
+    /// <summary>
+    /// <see cref="Cause"/> as the runtime's failure paths write it -- <c>sumo-connection-lost</c>,
+    /// <c>world-connection-lost</c>, <c>world-tick-timeout</c>, <c>solar-state-disagreement</c>,
+    /// <c>missing-blueprint</c> or <c>none</c>.
+    /// </summary>
+    public string CauseName => Cause.Code();
+
+    /// <summary>
+    /// What the session tried to give back on its way out of a start that failed, and could not --
+    /// empty where everything it took was given back.
+    /// </summary>
+    /// <remarks>
+    /// Every give-back is attempted whatever the ones before it did, so a server that dropped the
+    /// connection costs the world's clock, layers and sun -- which only the server can hold -- and never
+    /// the population lease or the SUMO process, which are this process's own. Each failure is kept
+    /// here rather than raised in place of the refusal, because the refusal is why the start failed.
+    /// </remarks>
+    public IReadOnlyList<Exception> GiveBackFailures { get; internal set; } = [];
 }

@@ -209,7 +209,7 @@ public sealed class SumoDriveSessionTests
     }
 
     [RequiresSumoFact]
-    public void EveryTickWritesEachPoseThenItsVelocityInOneBatchAndNothingElse()
+    public void EveryTickWritesEachPoseThenItsVelocityInOneBatchAndOnlyLampsBeside()
     {
         // A surface that climbs both eastwards and southwards, so every arm of the cross has a
         // vertical velocity for the batch to carry.
@@ -236,17 +236,21 @@ public sealed class SumoDriveSessionTests
                     $"{session.Report.Batches} batches for {session.Report.Ticks} ticks");
         Assert.Equal(0, session.Report.BatchFailures);
 
-        // What a tick writes is pairs: a transform, then a target velocity for the same body. A
-        // posed body's velocity is the one its own pose carries, climb included; a parked body's is
-        // zero. Each pose is matched to the tick it was computed on, which is the tick the world was
-        // on when the batch arrived.
+        // What a tick writes is pairs: a transform, then a target velocity for the same body, with a
+        // body's lamps beside them where they are written (their own tests say when). A posed body's
+        // velocity is the one its own pose carries, climb included; a parked body's is zero. Each pose
+        // is matched to the tick it was computed on, which is the tick the world was on when the batch
+        // arrived.
         Dictionary<(long Tick, uint Actor), VehiclePose> posed = computed
             .Where(record => record.Actor != 0)
             .ToDictionary(record => (record.TickIndex, record.Actor), record => record.Pose);
         int poses = 0;
         int parkings = 0;
-        foreach ((IReadOnlyList<Command> batch, long tick) in carla.DrivenBatches)
+        int lamps = 0;
+        foreach ((IReadOnlyList<Command> written, long tick) in carla.DrivenBatches)
         {
+            lamps += written.Count(command => command is SetVehicleLightStateCommand);
+            List<Command> batch = [.. written.Where(command => command is not SetVehicleLightStateCommand)];
             Assert.Equal(0, batch.Count % 2);
             for (int index = 0; index < batch.Count; index += 2)
             {
@@ -271,10 +275,11 @@ public sealed class SumoDriveSessionTests
             }
         }
 
-        // Every pose that had a body to go to, and every body given back, and nothing else.
+        // Every pose that had a body to go to, every body given back, their lamps, and nothing else.
         Assert.Equal(posed.Count, poses);
         Assert.Equal(released.Count(each => each.Actor != 0), parkings);
-        Assert.Equal(2 * (poses + parkings), session.Report.CommandsWritten);
+        Assert.Equal(session.Report.LampCommandsWritten, lamps);
+        Assert.Equal((2 * (poses + parkings)) + lamps, session.Report.CommandsWritten);
 
         // The slope reached the batch, both ways.
         Assert.Contains(posed.Values, pose => pose.VelocityZ > 0.1);
@@ -481,8 +486,12 @@ public sealed class SumoDriveSessionTests
 
             Assert.Fail("the run should have failed on the dropped connection");
         }
-        catch (IOException)
+        catch (CoSimSessionRefusedException refused)
         {
+            // A dropped connection is the run's refusal, carrying the connection's own failure.
+            Assert.IsType<IOException>(refused.InnerException);
+            Assert.Equal(CoSimStopCause.WorldConnectionLost, refused.Cause);
+
             // What an operator's harness does next, and the only thing it can do.
             session.Dispose();
         }
@@ -585,7 +594,7 @@ public sealed class SumoDriveSessionTests
             session.Advance();
             Assert.Fail("the run should have failed on the dropped connection");
         }
-        catch (IOException)
+        catch (CoSimSessionRefusedException refused) when (refused.InnerException is IOException)
         {
             session.Dispose();
         }

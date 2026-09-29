@@ -1,6 +1,7 @@
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Commands;
 using CarlaNet.Types.Rpc.Environment;
+using CarlaNet.Types.Rpc.Lighting;
 
 using ActorId = uint;
 
@@ -35,11 +36,14 @@ internal class RecordedWorld : ICarlaWorld
     private readonly Dictionary<ActorId, Transform> _actors = [];
     private readonly Dictionary<ActorId, Vector3D> _velocities = [];
     private readonly HashSet<ActorId> _simulating = [];
+    private readonly Dictionary<ActorId, VehicleLightStateFlags> _lamps = [];
     private readonly List<IReadOnlyList<Command>> _batches = [];
     private readonly List<long> _batchTicks = [];
     private readonly List<(string Layer, bool Visible, long AtTick)> _layerWrites = [];
     private readonly List<(string Call, long AtTick)> _solarWrites = [];
     private ActorId _nextActor = 1;
+    private (string Operation, Exception Failure)? _severAt;
+    private Exception? _severedWith;
 
     /// <summary>
     /// What the world answers when asked which world it has loaded. A stock map by default: an
@@ -82,6 +86,26 @@ internal class RecordedWorld : ICarlaWorld
     /// <summary>Set to have the next tick throw, as a dropped connection does.</summary>
     public Exception? ThrowOnTick { get; set; }
 
+    /// <summary>
+    /// Whether the connection has dropped, so every call throws the failure it dropped with.
+    /// </summary>
+    public bool Severed => _severedWith is not null;
+
+    /// <summary>How many calls were made after the connection dropped, each of which threw.</summary>
+    public int CallsAfterSevering { get; private set; }
+
+    /// <summary>
+    /// Drop the connection at the next call to <paramref name="operation"/>: that call and every call
+    /// after it, of any operation, throws <paramref name="failure"/>, as a client whose server has gone
+    /// does -- the write that finds the socket closed, and every one after it.
+    /// </summary>
+    /// <param name="operation">An operation's name, as <see cref="ICarlaWorld"/> spells it.</param>
+    /// <param name="failure">What each call throws.</param>
+    public void SeverAt(string operation, Exception failure) => _severAt = (operation, failure);
+
+    /// <summary>Drop the connection now.</summary>
+    public void Sever(Exception failure) => _severedWith = failure;
+
     /// <summary>Every layer visibility written, with the tick the world was on when it arrived.</summary>
     public IReadOnlyList<(string Layer, bool Visible, long AtTick)> LayerWrites => _layerWrites;
 
@@ -102,6 +126,12 @@ internal class RecordedWorld : ICarlaWorld
 
     /// <summary>Every write to the sun, by call, with the tick the world was on when it arrived.</summary>
     public IReadOnlyList<(string Call, long AtTick)> SolarWrites => _solarWrites;
+
+    /// <summary>
+    /// The lamps an actor holds, as the server holds them on the actor: off when spawned, and whatever
+    /// was last written to it after that, whoever it was written for.
+    /// </summary>
+    public VehicleLightStateFlags LampsOf(ActorId actor) => _lamps.GetValueOrDefault(actor);
 
     /// <summary>Batches carrying at least one transform, which is what a driven tick writes.</summary>
     public IEnumerable<IReadOnlyList<Command>> PoseBatches =>
@@ -138,16 +168,22 @@ internal class RecordedWorld : ICarlaWorld
     /// <inheritdoc/>
     public LoadedWorld DescribeLoadedWorld()
     {
+        Connected(nameof(DescribeLoadedWorld));
         Descriptions++;
         return Loaded;
     }
 
     /// <inheritdoc/>
-    public EpisodeSettings ReadSettings() => Settings;
+    public EpisodeSettings ReadSettings()
+    {
+        Connected(nameof(ReadSettings));
+        return Settings;
+    }
 
     /// <inheritdoc/>
     public void WriteSettings(EpisodeSettings settings)
     {
+        Connected(nameof(WriteSettings));
         SettingsWrites.Add(settings);
         if (!IgnoresSettingsWrites)
         {
@@ -158,6 +194,7 @@ internal class RecordedWorld : ICarlaWorld
     /// <inheritdoc/>
     public ActorId Spawn(string blueprintId, Transform at)
     {
+        Connected(nameof(Spawn));
         Spawned.Add(blueprintId);
         ActorId actor = _nextActor++;
         _actors[actor] = at;
@@ -165,6 +202,7 @@ internal class RecordedWorld : ICarlaWorld
         // A vehicle is spawned simulating, as the server spawns one.
         _simulating.Add(actor);
         _velocities[actor] = Still;
+        _lamps[actor] = VehicleLightStateFlags.None;
         return actor;
     }
 
@@ -175,6 +213,7 @@ internal class RecordedWorld : ICarlaWorld
     /// </remarks>
     public IReadOnlyList<CommandResponse> ApplyBatch(IReadOnlyList<Command> commands)
     {
+        Connected(nameof(ApplyBatch));
         // A copy, because the session reuses its batch from one tick to the next.
         _batches.Add([.. commands]);
         _batchTicks.Add(Ticks);
@@ -212,8 +251,13 @@ internal class RecordedWorld : ICarlaWorld
                     _velocities[physics.Actor] = Still;
                     responses.Add(CommandResponse.Success(physics.Actor));
                     break;
+                case SetVehicleLightStateCommand lamps:
+                    _lamps[lamps.Actor] = lamps.LightState;
+                    responses.Add(CommandResponse.Success(lamps.Actor));
+                    break;
                 case DestroyActorCommand destroy:
                     _actors.Remove(destroy.Actor);
+                    _lamps.Remove(destroy.Actor);
                     _velocities.Remove(destroy.Actor);
                     _simulating.Remove(destroy.Actor);
                     responses.Add(CommandResponse.Success(destroy.Actor));
@@ -230,6 +274,7 @@ internal class RecordedWorld : ICarlaWorld
     /// <inheritdoc/>
     public Transform? ObservedTransform(ActorId actor)
     {
+        Connected(nameof(ObservedTransform));
         if (!_actors.TryGetValue(actor, out Transform held))
         {
             return null;
@@ -245,13 +290,17 @@ internal class RecordedWorld : ICarlaWorld
     }
 
     /// <inheritdoc/>
-    public Vector3D? ObservedVelocity(ActorId actor) =>
-        _velocities.TryGetValue(actor, out Vector3D velocity) ? velocity : null;
+    public Vector3D? ObservedVelocity(ActorId actor)
+    {
+        Connected(nameof(ObservedVelocity));
+        return _velocities.TryGetValue(actor, out Vector3D velocity) ? velocity : null;
+    }
 
     /// <inheritdoc/>
     /// <remarks>The frame is the tick count, which is what a server's frame counter is to a session.</remarks>
     public ulong? Tick()
     {
+        Connected(nameof(Tick));
         if (ThrowOnTick is { } failure)
         {
             throw failure;
@@ -274,15 +323,23 @@ internal class RecordedWorld : ICarlaWorld
     /// is half of what the session promises about it: a layer written at tick zero was fixed before
     /// the first frame existed, and one written later changed the imagery mid-capture.
     /// </remarks>
-    public virtual void WriteLayerVisible(string layer, bool visible) =>
+    public virtual void WriteLayerVisible(string layer, bool visible)
+    {
+        Connected(nameof(WriteLayerVisible));
         _layerWrites.Add((layer, visible, Ticks));
+    }
 
     /// <inheritdoc/>
-    public IReadOnlyList<double> ReadSolarState() => Sun?.Read() ?? [];
+    public IReadOnlyList<double> ReadSolarState()
+    {
+        Connected(nameof(ReadSolarState));
+        return Sun?.Read() ?? [];
+    }
 
     /// <inheritdoc/>
     public bool WriteSolarEpoch(int year, int month, int day, double hours, double utcOffsetHours)
     {
+        Connected(nameof(WriteSolarEpoch));
         _solarWrites.Add(("set_solar_epoch", Ticks));
         return Sun?.WriteEpoch(year, month, day, hours, utcOffsetHours) ?? false;
     }
@@ -290,6 +347,7 @@ internal class RecordedWorld : ICarlaWorld
     /// <inheritdoc/>
     public bool WriteTimeAdvance(bool advancing, double rate)
     {
+        Connected(nameof(WriteTimeAdvance));
         _solarWrites.Add(("set_time_advance", Ticks));
         return Sun?.WriteAdvance(advancing, rate) ?? false;
     }
@@ -297,6 +355,7 @@ internal class RecordedWorld : ICarlaWorld
     /// <inheritdoc/>
     public IReadOnlyList<double> ObservedSolarState()
     {
+        Connected(nameof(ObservedSolarState));
         if (Sun is null || ObserverPublishesNoSun)
         {
             return [];
@@ -304,5 +363,22 @@ internal class RecordedWorld : ICarlaWorld
 
         IReadOnlyList<double> block = Sun.Read();
         return ObserverCarriesCorrectedElevation ? block : block.Take(SolarReading.RequiredValues).ToArray();
+    }
+
+    /// <summary>
+    /// Throw the failure the connection dropped with, where it has dropped or drops at this call.
+    /// </summary>
+    private void Connected(string operation)
+    {
+        if (_severedWith is null && _severAt is { } planned && planned.Operation == operation)
+        {
+            _severedWith = planned.Failure;
+        }
+
+        if (_severedWith is { } failure)
+        {
+            CallsAfterSevering++;
+            throw failure;
+        }
     }
 }

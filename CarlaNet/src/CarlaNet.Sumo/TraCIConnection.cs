@@ -39,6 +39,12 @@ public sealed class TraCIConnection : IDisposable
     /// <summary>SUMO's result codes, from the status envelope in front of every answer.</summary>
     private const int ResultSuccess = 0x00;
 
+    /// <summary>
+    /// The longest a close waits for SUMO's answer, whatever <see cref="ReceiveTimeout"/> is: a SUMO
+    /// that answers at all answers a close at once.
+    /// </summary>
+    public static readonly TimeSpan CloseAnswerBound = TimeSpan.FromSeconds(5);
+
     private readonly Socket _socket;
     private readonly TraCIWriter _writer = new();
     private readonly TraCIReader _reader = new();
@@ -49,10 +55,17 @@ public sealed class TraCIConnection : IDisposable
     private int _busy;
     private bool _closed;
 
-    private TraCIConnection(Socket socket)
+    private TraCIConnection(Socket socket, TimeSpan? receiveTimeout)
     {
         _socket = socket;
+        ReceiveTimeout = receiveTimeout;
     }
+
+    /// <summary>
+    /// How long an answer is waited for before the connection is given up on, or
+    /// <see langword="null"/> where it is waited for indefinitely.
+    /// </summary>
+    public TimeSpan? ReceiveTimeout { get; }
 
     /// <summary>
     /// Variables SUMO refused inside the last step's subscription results, one entry per variable
@@ -68,6 +81,12 @@ public sealed class TraCIConnection : IDisposable
 
     /// <summary>Whether the connection has been closed, by <see cref="Close"/> or by SUMO.</summary>
     public bool IsClosed => _closed;
+
+    /// <summary>
+    /// Whether the connection was given up on because SUMO did not answer within
+    /// <see cref="ReceiveTimeout"/> -- a SUMO that is hung, not one that has gone.
+    /// </summary>
+    public bool StoppedAnswering { get; private set; }
 
     /// <summary>
     /// Connect to a TraCI server that is already listening.
@@ -103,12 +122,15 @@ public sealed class TraCIConnection : IDisposable
                 // this one's answer, so there is never another to wait for.
                 socket.NoDelay = true;
                 socket.Connect(host, port);
-                if (receiveTimeout is { } timeout && timeout != Timeout.InfiniteTimeSpan)
+                TimeSpan? bounded = receiveTimeout is { } timeout && timeout != Timeout.InfiniteTimeSpan
+                    ? timeout
+                    : null;
+                if (bounded is { } wait)
                 {
-                    socket.ReceiveTimeout = (int)timeout.TotalMilliseconds;
+                    socket.ReceiveTimeout = (int)Math.Max(1.0, Math.Ceiling(wait.TotalMilliseconds));
                 }
 
-                return new TraCIConnection(socket);
+                return new TraCIConnection(socket, bounded);
             }
             catch (SocketException exception)
             {
@@ -204,7 +226,36 @@ public sealed class TraCIConnection : IDisposable
     {
         ArgumentNullException.ThrowIfNull(objectId);
         TraCIVariables.EnsureDecodable(getCommandId, variableId);
+        return ExchangeGet(getCommandId, variableId, objectId).ReadTypedValue(variableId);
+    }
 
+    /// <summary>
+    /// Read one variable whose value SUMO writes as a compound of fields the generic decoder cannot
+    /// place, answering the reader positioned at the value's type byte for a decoder written for it.
+    /// </summary>
+    /// <remarks>
+    /// The reader is the connection's own and is overwritten by the next exchange, so the caller
+    /// decodes the whole value before it sends anything else.
+    /// </remarks>
+    internal TraCIReader GetVariableForDedicatedDecoder(int getCommandId, int variableId, string objectId)
+    {
+        ArgumentNullException.ThrowIfNull(objectId);
+        if (TraCIVariables.IsDecodable(getCommandId, variableId))
+        {
+            throw new ArgumentException(
+                $"TraCI variable 0x{variableId:x2} of domain 0x{getCommandId:x2} is read generically; "
+                + "GetVariable is the way to read it.", nameof(variableId));
+        }
+
+        return ExchangeGet(getCommandId, variableId, objectId);
+    }
+
+    /// <summary>
+    /// Send a get command and check the answer names the command, the variable and the object asked
+    /// about, leaving the reader at the value's type byte.
+    /// </summary>
+    private TraCIReader ExchangeGet(int getCommandId, int variableId, string objectId)
+    {
         _writer.BeginCommand(getCommandId, variableId, objectId);
         TraCIReader reader = Exchange(getCommandId);
         reader.ReadLength();
@@ -220,7 +271,7 @@ public sealed class TraCIConnection : IDisposable
                 + $"0x{response:x2}/0x{returnedVariable:x2} for '{returnedObject}'.");
         }
 
-        return reader.ReadTypedValue(variableId);
+        return reader;
     }
 
     /// <summary>
@@ -372,10 +423,16 @@ public sealed class TraCIConnection : IDisposable
 
         try
         {
+            // SUMO answers a close and then exits, so the answer is worth waiting for -- but not for
+            // longer than a close takes: a SUMO that is hung never answers it, and a caller shutting
+            // down must not be held by the thing it is shutting down.
+            TimeSpan wait = ReceiveTimeout is { } bound && bound < CloseAnswerBound ? bound : CloseAnswerBound;
+            _socket.ReceiveTimeout = (int)Math.Max(1.0, Math.Ceiling(wait.TotalMilliseconds));
             _writer.BeginBareCommand(TraCIConstants.CMD_CLOSE);
             Exchange(TraCIConstants.CMD_CLOSE);
         }
-        catch (Exception exception) when (exception is FatalTraCIError or TraCIException or SocketException)
+        catch (Exception exception) when (exception is FatalTraCIError or TraCIException or SocketException
+                                              or ObjectDisposedException)
         {
             // SUMO having gone already is the outcome this method wants. Anything it says on the
             // way out changes nothing, and raising here would mask whatever sent the caller here.
@@ -468,6 +525,19 @@ public sealed class TraCIConnection : IDisposable
             try
             {
                 received = _socket.Receive(destination[read..]);
+            }
+            catch (SocketException exception) when (exception.SocketErrorCode == SocketError.TimedOut
+                                                    && ReceiveTimeout is { } waited)
+            {
+                // An answer that arrives after this would be read as the answer to the next command,
+                // so the stream is out of step from here on whatever SUMO does next.
+                _closed = true;
+                StoppedAnswering = true;
+                throw new FatalTraCIError(
+                    $"SUMO did not answer within {waited.TotalSeconds:0.###} s. A microsimulation that "
+                    + "has hung, been suspended or is stepping far slower than this bound allows looks "
+                    + "exactly like this from here, and an answer arriving later would be read as the "
+                    + "answer to a different command, so the connection is closed.", exception);
             }
             catch (SocketException exception)
             {

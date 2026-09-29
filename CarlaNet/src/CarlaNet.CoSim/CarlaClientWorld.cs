@@ -113,7 +113,10 @@ public sealed class CarlaClientWorld : ICarlaWorld
                 + $"measurement for it, so the catalogue was measured against a content build this "
                 + $"server does not have. The server offers {_blueprints.Count} blueprints. A body "
                 + "of another shape is not a substitute: the truth record would describe the "
-                + "vehicle the scenario asked for and the imagery would show something else.");
+                + "vehicle the scenario asked for and the imagery would show something else.")
+            {
+                Cause = CoSimStopCause.MissingBlueprint,
+            };
         }
 
         Actor actor = _client.SpawnActorAsync(description, at).GetAwaiter().GetResult();

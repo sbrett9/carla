@@ -12,7 +12,10 @@ namespace CarlaNet.CoSim;
 /// </param>
 /// <param name="AdmittedAtSeconds">Simulated second the vehicle entered the render set.</param>
 /// <param name="ReleasedAtSeconds">Simulated second it left, or the session's end.</param>
-/// <param name="ReleaseReason">Why it left: the policy, the capacity, or SUMO removing it.</param>
+/// <param name="ReleaseReason">
+/// Why it left: the policy, the capacity, SUMO listing it as arrived, it vanishing without being listed,
+/// or the session ending.
+/// </param>
 /// <remarks>
 /// <para>These two instants are what lets anyone later reconcile "SUMO simulated sixty-eight
 /// thousand vehicles" against "the collect shows N tracks", and they are the only honest account of

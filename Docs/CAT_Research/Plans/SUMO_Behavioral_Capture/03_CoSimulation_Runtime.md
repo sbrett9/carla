@@ -41,6 +41,8 @@ advancement policy, the headlight predicate),
 | 2026-09-28 | §11.10, D3.30: every refusal carries the stage it was raised at; SUMO failures are refusals quoting SUMO. |
 | 2026-09-28 | §9.5, D3.21, Q3.10 settled: the window opens at its own instant; a frozen sun is pinned there and an advancing one anchored there. |
 | 2026-09-28 | §8.8, D3.31: each admission pass is published as it is made. |
+| 2026-09-28 | §3.5.3, §8.2: vehicle lamps as built — SUMO's signals mapped bit by bit, headlights from the reported sun, written on a loan and on a change, darkened on release. |
+| 2026-09-28 | §11.1–§11.7, §11.10, D3.30, D3.32–D3.35: the failure paths as built — SUMO's answers bounded, a dropped CARLA connection a refusal of its stage, the stop recorded, vanished vehicles, route errors, uninsertable vehicles, collision spans and a sun that goes away. §12 G15 closed. |
 
 ---
 
@@ -835,6 +837,42 @@ per-vehicle RPC.
   (`CarlaClient.cs:170-175`). If the truth record wants light state, it takes it from the bridge, not
   from the actor. That is [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md)'s call; the
   bridge can supply it at no cost.
+
+**As built.** `VehicleLampMapping.FromSumo` is the bit-by-bit table — [`11`](11_Time_And_Illumination.md)
+D11.8's, which is §3.5.2's with the bits SUMO declares and never writes mapped where CARLA has a lamp —
+and `HeadlightRule` is D11.9: `Position | LowBeam` once the sun's elevation falls below
+`HeadlightOnBelowDegrees` (+3°) and cleared once it rises above `HeadlightOffAboveDegrees` (+6°), a band
+that is empty or inverted refused at `Validation`, and a window opening inside the band starting with the
+lamps off. The elevation is the geometric one the world reports — the `sun_elevation_deg` of a frame's
+solar record — from the read-back when the sun is bound and then each tick's audited snapshot, so under a
+freeze every frame's lamps follow exactly the sun its record carries, and under `advance` a tick's lamps,
+written before its frame renders, follow the previous frame's sun, a twentieth of a second earlier.
+Headlights are driven only where the session binds and audits the sun. Each tick, a body's lamps are
+SUMO's signals at the SUMO frame the tick is rendered from, with the headlights, written in the batch
+after the body's pose pair when the body is newly lent to the vehicle — whatever the lamps,
+`None` included — or when they differ from the last written for that vehicle on that body; a body given
+back is darkened after its parking pair; the pose record carries the raw `Signals` and the `Lamps` the
+body holds; `VehicleLampsDriven` false writes no lamp at all, a control condition. The report says what
+was driven, the rule, the switches and the commands written. **What it cannot see:** whether a lamp
+lights — the optical survey found 16 of the 17 catalogue blueprints change no pixel on any lamp bit, so
+the mapping matters for the one that does and for content that adds lamps.
+
+**Exercised by** `VehicleLampMappingTests` (every measured word, the cast it replaces, the bits SUMO never
+writes, no word ever lighting a headlight, high beam, fog lamp or interior), `HeadlightRuleTests` (the
+first elevation, the band both ways, a sun wandering inside it, an empty band refused) and
+`SumoDriveSessionLampTests` on the fixture: each body's signals equal to what a second SUMO running the
+same scenario alone reported at the tick's frame, mapped; lamps written exactly on a loan and on a change;
+at night every body lit, every parking followed by darkening, a body lent on wearing its new vehicle's
+lamps, nothing parked left lit; a body lent at midday to a vehicle showing nothing still written dark; a
+vehicle admitted again to the body it gave back holding its lamps again, checked by replaying every lamp
+command; a sun crossing +3° under `advance` switching every body's headlights on the same tick; lamps not
+driven writing none; an unbound sun driving no headlights; and an empty band refused. Each was seen
+failing against a wrong implementation: the word cast; the blinkers swapped; the brake light dropped; no
+band; a start inside the band switching the lamps on; the next SUMO frame's signals; lamps written every
+tick; a loan with no lamps lit left unwritten; a body not darkened; a released vehicle's lamps
+remembered; headlights never driven; headlights frozen at the window-open sun; headlights following an
+unbound sun; lamps written when not driven; the darkening ahead of the parking pair; and an empty band
+accepted.
 
 **One capability this quietly restores.** `VehicleLightStage`'s whole sun-and-weather block is inside
 `if (_isWeatherEnabled)` (`VehicleLightStage.cs:228`), and `is_weather_enabled` returns false when
@@ -1679,15 +1717,13 @@ clear parking pose, and never spawn again during the run.
   state cleared to `None`**. A parked actor costs one entry in the world-observer snapshot per tick
   and nothing else. No opacity call is involved: it is out of sight because of where it is, not
   because of what it looks like.
-- **Every check-out re-writes the light state, unconditionally** — *not implemented, and not
-  currently reachable.* Nothing writes a lamp bit in this mode (the lamp item is deferred: measured,
-  16 of 17 blueprints change no pixel on any light bit), so a pooled body's lights are whatever they
-  were spawned as, which is off, and there is no predecessor's state to inherit. The rule stands and
-  becomes load-bearing the moment anything drives a lamp. `InputControl.LightState` lives on
+- **Every check-out re-writes the light state, unconditionally** — built, with the lamps (§3.5.3): a
+  body newly lent to a vehicle has that vehicle's lamps written with its first pose, `None` included, and
+  a body given back is darkened with its parking pose. `InputControl.LightState` lives on
   the actor and survives reuse (`CarlaWheeledVehicle.cpp:684-700`), so a recycled actor would
   otherwise inherit whatever its predecessor was showing — night headlights on a vehicle admitted at
-  noon, or a brake light on a vehicle admitted at speed. This is one more command in the admission
-  batch (§3.5.3) and it is not optional.
+  noon, or a brake light on a vehicle admitted at speed. Measured, 16 of 17 catalogue blueprints change
+  no pixel on any light bit, so for them the write is invisible and costs one batch entry.
 - **The pool stands without qualification.** There is a latent defect in the arrival latch that would
   otherwise interact with actor reuse: `IsActorEstablished` is cleared only when an actor id leaves
   the world-observer snapshot (`CarlaClient.cs:1901-1908`), and a pooled actor never leaves it, so a
@@ -2186,20 +2222,18 @@ any disagreement:                          raise SolarAuditFailedException
 > divergence — a wrong epoch mapping or a second client touching the sun — and this is precisely the
 > failure mode `_TEAM_BRIEF.md` §3a calls out as "silently and in the worst possible way".
 
-**One trap in the cached path, and the bridge must not fall into it.** The header's solar fields
-default to zero with `solar_rate = 1.0` (`EpisodeStateSerializer.h:48-58`) and `FWorldObserver` leaves
-them at those defaults when `GetSolarState` returns empty — which is exactly the no-`CesiumSunSky`
-case (`WorldObserver.cpp:326-328`; `CesiumHeightSampler.cpp:760-762`). But `CarlaClient` always parses
-eleven doubles (`CarlaClient.cs:1851-1855`), so `GetCachedSolarState()` never comes back empty once
-the observer is running, and the shim's `get_solar_state()` — which accepts the cache on
-`cached.Count >= 9` (`carlanet/__init__.py:1515-1517`) — returns a **plausible-looking dict of zeros
-instead of `None`**. A world with no sun is indistinguishable from midnight, from the cache alone.
+**A world with no sun is an empty cached block, not a midnight.** The header's solar fields default to
+zero with `solar_rate = 1.0` (`EpisodeStateSerializer.h:48-58`), a well-formed reading of midnight in
+year 0 at latitude 0, so presence is carried by a flag rather than by the values: the observer sets
+`SolarStateValid` only where `GetSolarState` answered in full (`WorldObserver.cpp:328-337`), and the
+client caches no block where it is clear (`EpisodeStateLayout.cs:64-70`). §12 G15 records the trap this
+closed.
 
-> The session therefore establishes sun presence from an **on-demand `get_solar_state`**, which
-> answers empty when there is no `CesiumSunSky` (`CesiumHeightSampler.cpp:760-762`), and from the
-> return value of `set_solar_epoch`, which is `false` in the same case — never from the observer
-> cache (`SolarLease.Take`). A snapshot whose date is year 0 fails the per-tick audit as not a
-> calendar date. Recorded as §12 G15.
+> The session establishes sun presence from an **on-demand `get_solar_state`**, which answers empty when
+> there is no `CesiumSunSky` (`CesiumHeightSampler.cpp:760-762`), and from the return value of
+> `set_solar_epoch`, which is `false` in the same case — never from the observer cache, which predates
+> the write (`SolarLease.Take`). A snapshot with no block after the sun was bound fails the per-tick audit
+> (§11.7).
 
 ### 9.5 The warm-up — where a silently wrong first frame would come from
 
@@ -2708,6 +2742,42 @@ used again. On a fatal error:
 *possible* — but it is a separate feature with its own determinism argument, and it belongs in
 [`13_Work_Breakdown.md`](13_Work_Breakdown.md), not in the failure path.
 
+**A SUMO that stops answering is a SUMO that has failed.** A hung or suspended `sumo` keeps its socket
+open and simply never answers, and a session waiting on it forever holds the world in synchronous mode
+with nothing ticking it. So every answer is bounded: `SumoDriveSessionOptions.SumoAnswerTimeoutSeconds`
+(`run_sumo_drive.py --sumo-answer-timeout`, `sumo_answer_timeout_s` on `start_sumo_drive`), 60 s by
+default, positive or refused at `Validation`. It bounds one exchange, a step included, and the
+fast-forward steps one at a time, so it has to exceed the slowest single step — measured steps are
+milliseconds (§2.5), so the default is thousands of times the slowest seen. Past it,
+`TraCIConnection` raises `FatalTraCIError` naming the bound ("SUMO did not answer within 60 s"),
+closes the connection — an answer arriving later would be read as the answer to a different command —
+and records `StoppedAnswering`, so the shutdown kills that `sumo` at once rather than giving it the
+grace a `sumo` that is exiting gets. A close never waits longer than `TraCIConnection.CloseAnswerBound`
+(5 s) for SUMO's answer, whatever the bound, so no shutdown is held by the process it is shutting down.
+
+**As built.** Every TraCI failure while SUMO is started, fast-forwarded or stepped is a refusal of that
+stage (§11.10) with cause `sumo-connection-lost`, the TraCI error inside it and SUMO's last console lines
+in its message. SUMO writes why it closed the connection a moment before the socket closes, and that line
+reaches the client from another thread, so the session waits for a `sumo` that closed the connection to
+exit and deliver its output (`SumoConnection.WaitForExit`, bounded at 5 s) before it quotes it; without
+that wait the refusal intermittently reported "SUMO wrote nothing to its console" (measured on the
+unconnected-route scenario of §11.4). Of the four steps above: no world tick is cued once SUMO has failed,
+and a stopped run refuses any further `Advance` without touching either side; the render set's intervals
+are closed and every body destroyed in one batch when the caller disposes the session; the report's
+`Stopped` records the stage, the cause and the last complete frame — the step record that would carry
+`terminated:` belongs to behavioural truth and is not built, so the report carries it meanwhile; and nothing restarts `sumo`.
+
+**Exercised by** `SumoDriveSessionFailureTests`: a real `sumo` suspended mid-run (`NtSuspendProcess` on
+Windows, `SIGSTOP` on Linux) under a 1 s bound — a `Window` refusal naming the bound, no tick after it,
+the last complete frame recorded, the world, bodies, sun and lease given back, and the process ended in
+under 5 s; a `sumo` killed mid-run; and a bound that is no length of time, refused before anything is
+touched. `TraCIConnectionFailureTests` gives the client a socket that accepts and never answers, one that
+hangs up, and a close to each. Each was seen failing against a wrong implementation: a session that passes
+no bound (it waited on the suspended SUMO past the test's 30 s); a timeout reported as any socket failure;
+a hung SUMO given the full grace; a close that waits without bound; SUMO quoted before its output arrived;
+a stopped run advanced again; a stop not recorded; the last complete frame not tracked; and no check of
+the bound.
+
 ### 11.2 CARLA stall
 
 `SendTickCueAsync` waits in `WaitForFrame`, which on timeout logs *"Timed out waiting for frame…"*
@@ -2721,6 +2791,39 @@ The bridge treats a null frame observation as `TickFault`: stop, park, close the
 (`CarlaClient.cs:293-300`) and must be set deliberately for a capture session rather than inherited
 from a viewer default.
 
+**Three ways the world stops, told apart.** A tick the server answered whose frame never reached the
+world observer is `world-tick-timeout`: `CarlaClientWorld.Tick` answers null and the session refuses. A
+call the server never answers — the tick cue among them — is a `TimeoutException` from the client once its
+per-call timeout passes (`MsgPackRpcClient.CallAsync`, `WaitAsync(_timeout)`), and a socket the server
+closed or reset is an `IOException` or `SocketException`; both are `world-connection-lost`. Every call the
+session makes on the world passes through `WorldConnectionGuard`, which turns exactly those three into
+`WorldConnectionLostException` and lets everything else through — so an `IOException` from a world package
+or catalogue that cannot be read is never reported as a dropped server, and a server that answers with an
+error is not one either. The session refuses with the stage it had reached — `Validation` while it reads
+the loaded world, `Launch` while it takes the clock and layers, `PreRoll` while it binds the sun or renders
+the prewarm, `Window` from the window's opening — with the connection's own failure as the inner
+exception (§11.10).
+
+**What an unreachable server costs on the way out.** Every give-back step is attempted whatever the ones
+before it did, at a failed start as at a disposal: the world's sun, bodies, layers and settings can only
+be given back over the connection, and each that fails is named — on the refusal's `GiveBackFailures` for
+a start, in the `AggregateException` `Dispose` raises for a run, each carrying the connection's failure —
+while the population lease and the `sumo` process, which are this process's own, are released regardless.
+**The server does not release synchronous
+mode itself when a client disconnects** — nothing in `CarlaServer.cpp` or `CarlaEngine.cpp` handles a
+client going away — so a world whose connection dropped stays synchronous until something else resets it.
+
+**Exercised by** `SumoDriveSessionFailureTests`, against `RecordedWorld`, which can drop its connection at
+a named call and keep it dropped: a tick cue answered by a timeout (`Window`, the timeout inside, the stop
+recorded with the last complete frame, everything given back); a connection dropped mid-run (`Window`,
+the four server-side give-backs named with the failure inside, the lease released, SUMO told to terminate);
+dropped while the layers are written (`Launch`, the settings named, SUMO stopped), while the sun is bound
+(`PreRoll`, the lease released, SUMO stopped) and while the loaded world is read (`Validation`); and a
+catalogue that cannot be read, which is not a dropped server. Each was seen failing against a wrong
+implementation: a dropped connection passed through unwrapped; the world not guarded; a timeout not
+counted as a connection failure; any `IOException` at start called a dropped server; and a failed start
+that gives back only until the first failure.
+
 ### 11.3 A vehicle SUMO removes while CARLA still holds it
 
 On the normal path the lookahead prevents it (§8.4). When it happens anyway — an arrival the
@@ -2730,17 +2833,92 @@ instant with `released: vanished` so the count is visible rather than inferred. 
 where a vehicle disappears mid-scene without the lookahead having placed the release outside a camera
 footprint (§8.5), which is exactly why the reason code matters.
 
+**Where it happens, measured.** SUMO lists as arrivals only the vehicles it removed during the step: a
+vehicle taken out between two steps — by a TraCI `vehicle.remove`, as another client would — has its
+arrival recorded against the client and then cleared when the client sends its next `simulationStep`,
+before that step's arrivals are collected (`TraCIServer.cpp:1185-1194`), and its subscription goes with
+it. So it is in neither the arrival list nor the subscription results, and that is the whole signature.
+Every other removal — a vehicle reaching the end of its route, `collision.action remove`, a teleport past
+the end of the route — goes through `MSVehicleControl::removePending` and is listed as an arrival
+(`MSVehicleControl.cpp:165`), and is released as `LeftTheSimulation`.
+
+**As built.** `SubscribedPopulation.LastVanished` names the subscribed vehicles that delivered nothing and
+were not listed as arrived, and the render set releases a rendered one as `RenderSetReleaseReason.Vanished`
+at the SUMO frame that showed it; `CoSimRunReport.Releases` counts releases by reason. The frames already
+buffered are ones in which the vehicle existed, so it is rendered up to the last of them, and its body
+leaves wherever that put it — possibly in frame, which is why the reason is recorded. From the release
+on, nothing is written for it: its body is checked back in and written to its slot, with zero
+velocity, at the head of the next tick's batch, and every later write to that body is the pose of a
+vehicle it was lent to afterwards.
+
+**Exercised by** `SumoDriveSessionFailureTests` (a rendered vehicle removed through the session's own
+connection between two advances: one `Vanished` release naming its body, nothing posed for it after, its
+body parked at the head of the next batch, the other releases `LeftTheRegion` or `LeftTheSimulation`) and
+`RenderSetManagerTests` (a vanished and an arrived vehicle in one pass). Each was seen failing against a
+wrong implementation: a population that does not name what vanished; a render set that ignores it; and a
+released body that is not parked.
+
 The inverse — CARLA loses an actor SUMO still has — shows up as the actor id disappearing from the
 world-observer snapshot (`CarlaClient.cs:1901-1908`). The bridge detects the absent id, removes it
 from the pool, records `actor: lost`, and admits the SUMO vehicle to a different pool actor if
-capacity allows.
+capacity allows. **Not built**: a body the world stops reporting is counted per vehicle-tick as
+`VehicleTicksWithNoReadBack`, and the session goes on writing to it.
 
 ### 11.4 Route errors mid-run
 
-SUMO reports a route error as a warning and, depending on `--ignore-route-errors`, removes the
-vehicle. Either way it reaches the bridge as a removal (§11.3). The bridge counts route errors from
-SUMO's own output and reports them in the run summary. It does not attempt a reroute: rerouting is an
-authoring decision, and a run whose routes fail is a scenario defect the author needs to see.
+A route SUMO cannot follow stops SUMO by default, and the run with it; a route that becomes impossible at
+run time, on a reroute, is a warning on SUMO's console, and the vehicle keeps its old route. The bridge
+does not attempt a reroute: rerouting is an authoring decision, and a run whose routes fail is a scenario
+defect the author needs to see.
+
+**What SUMO 1.27.0 actually does, measured on the fixture network**, with a vehicle routed from `ahead`
+to `approach`, which no connection joins, departing at t = 31:
+
+| Configuration | What SUMO does | What the session does |
+|---|---|---|
+| default | quits: `Error: Vehicle 'broken' has no valid route. No connection between edge 'ahead' and edge 'approach'.` | stops the run at the stage it is in, cause `sumo-connection-lost`, quoting that line (§11.1) |
+| `ignore-route-errors` true | inserts the vehicle, which drives `ahead` and **stands at its end until the run ends**, with nothing on its console and its end-of-run statistics counting it as running | refuses the scenario at `Validation`, before SUMO is started (`RouteErrorCheck`) |
+| a route naming an edge the network lacks | quits, with or without the option: `The edge 'nowhere' within the route for vehicle 'late' is not known.` | stops the run, quoting it (§11.10) |
+
+The option does not remove the vehicle: it keeps a vehicle SUMO cannot route standing where
+its route breaks, which renders as a vehicle parked at a junction that nothing authored, with truth saying
+it chose to stand there. The option is refused rather than recorded, because nothing SUMO reports tells a
+vehicle stranded that way from one queued, and a run whose routes fail is the scenario defect the paragraph
+above says the author needs to see. It is read as SUMO reads a boolean (`StringUtils::toBool`); set twice,
+or to something SUMO does not read as true or false, it is refused too. No shipped scenario and nothing the
+compiler writes sets it.
+
+**A vehicle SUMO cannot insert is dropped without a word.** Past `max-depart-delay`, or on an edge being
+vaporised, `MSInsertionControl::tryInsert` deletes it with no warning and no state change. Measured with a
+vehicle whose start is blocked for the whole run and `max-depart-delay` 3: it is in SUMO's pending list
+from 1.05 s to 4.05 s and gone from it at 4.1 s, never departed, and SUMO's statistics say only
+`Inserted: 2 (Loaded: 3)`. The session reads the pending list each SUMO step and records a vehicle that
+leaves it without departing (`VehicleNotInserted`: the vehicle, the last frame it was waiting and the first
+it was gone; `OnVehicleNotInserted`, `on_vehicle_not_inserted`; counted and sampled on the report with the
+number still waiting at the last frame). The queue the fast-forward leaves is taken as it stands, so a drop
+on the first step after it is recorded and one during it is not — that vehicle could not have been in any
+frame. **What it cannot see:** a vehicle refused on its very first attempt for a start lane it may not use
+is dropped before it is ever listed as pending; the compiler's route validation is what catches that.
+
+**What the two reads cost.** The pending list and the collisions are one getter each per SUMO step (the
+collisions are not asked for where SUMO registers none, and a subscription cannot carry them, §11.5):
+measured with the managed client on the compiled Gardnerville scenario from t = 300 s at 41 vehicles,
+0.097 ms per step for both against 0.355 ms for the step and the three getters it already made. The
+session reads SUMO's clock once per step where it read it twice, which is one round trip of the same kind
+back.
+
+**SUMO's warnings are kept in its own words.** A reroute that finds no path, a teleport, a collision and an
+emergency stop are each a `Warning:` line on SUMO's console and nowhere a client can ask for them, so the
+report counts every warning line and keeps the first ten verbatim (`SumoWarnings`, `SumoWarningSamples`),
+without reading meaning into them.
+
+**Exercised by** `SumoDriveSessionFailureTests` (the option refused with SUMO never started; the same route
+under the default stopping the run quoting SUMO; the blocked vehicle recorded at 4.05 and 4.10, including
+when the fast-forward ends at 4.05; none recorded for the fixture, whose every vehicle is inserted) and
+`RouteErrorCheckTests` (every word SUMO reads as true refused, every word it reads as false run, the option
+absent, garbled or set twice, and the shipped scenarios). Each was seen failing against a wrong
+implementation: a check that never refuses; true words accepted; a drop not recorded; a vehicle still
+waiting taken for dropped; the fast-forward's queue not taken; and SUMO's warnings not counted.
 
 Related, already open: [issue #12](https://github.com/sbrett9/carla/issues/12) — `osm_clip.py` drops
 all OSM relations, so turn restrictions never reach netconvert. Doc 23 §6.6 calls it a prerequisite,
@@ -2754,6 +2932,54 @@ The Bahonar config sets `<collision.action value="warn"/>`, so SUMO reports a co
 is a **behavioural event**, not a fault: the bridge records it into the step record with both vehicle
 ids and the simulated time, and does nothing else. Whether it becomes an annotated event is
 [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md)'s call.
+
+**What SUMO reports, read from 1.27.0.** `getCollisions` answers the collisions of the step just taken,
+and a collision whose two vehicles stay in contact is reported again on every step it lasts, with the
+roles it was first registered with, and forgotten on the first step they are not
+(`MSNet::registerCollision`, `MSNet::removeOutdatedCollisions`). Its value is a compound whose declared
+member count is one plus four per collision while one plus nine typed fields follow
+(`TraCIServerAPI_Simulation.cpp`, `VAR_COLLISIONS`), so the generic decoder stops part-way through the
+first collision; `SumoSimulationDomain.Collisions` decodes it field by field, as SUMO's own client does,
+into `SumoCollision` (collider, victim, their types and speeds, SUMO's name for it — `collision`,
+`frontal`, `side`, `junction` — the lane and the position). What SUMO counts as a collision is its rule:
+a gap below the follower's `minGap` unless `collision.mingap-factor` lowers it.
+
+**What the session does with one** (decision 5 of [`13`](13_Work_Breakdown.md) §13: record it, mark the
+span, never stop). Each SUMO step it opens a span for a pair reported for the first time and closes the
+span on the first frame that no longer reports it, handing the closed span out once
+(`CollisionSpan`, `OnCollision`, `on_collision`): the collision as first reported, the simulated seconds
+it began and ended at, and the body that rendered each vehicle while it lasted — a vehicle admitted on the
+step its collision began takes up its body on the next tick, so a body not yet named is named then. The
+report counts collisions once each, keeps the first ten, and says what SUMO does about them. Nothing is
+asked of SUMO where it registers none.
+
+**Whether the compiled scenario sets the action: it does.** The compiler writes `collision.action warn`
+into every configuration and records it in the lock (`PROCESSING_OPTIONS`, `ScenarioCompiler.py`), and both
+shipped scenarios set `warn`. The fixture, and any hand-written configuration that names no action, gets
+SUMO's default `teleport` (`MSFrame.cpp:399`). The report's `collisions` line names which governed the run
+(`SumoCollisionHandling`), because the same collision renders differently under each:
+
+| Action | What SUMO does | What the session can record |
+|---|---|---|
+| `warn` | registers it, writes a warning, both vehicles carry on | the span, both bodies |
+| `teleport` | registers it and moves the collider to the next edge of its route | the span; the collider's jump is a discontinuity (§6.4) |
+| `remove` | registers it and takes both vehicles out | the span; both leave the render set as arrivals |
+| `none`, or `ignore-accidents` set | the lane's check returns before registering anything (`MSLane::detectCollisions`) | nothing — and the report says none can be |
+
+`TeleportingCheck` does not refuse a `collision.action` of `teleport` (§11.6), and the session does not
+refuse `none`; which actions a corpus may carry belongs to behavioural truth's enumeration of SUMO's
+distribution-editing behaviours ([`13`](13_Work_Breakdown.md) §11).
+
+**Exercised by** `SumoDriveSessionFailureTests` (on the fixture under `warn`, a vehicle moved over the rear
+of another, as a client moving it would: one span, collider and victim as SUMO registered them, the lane,
+beginning on the frame after the move and lasting more than one step, both bodies named and distinct, the
+run going on, and SUMO's warning kept on the report; the fixture itself recording none and naming SUMO's
+default), `SumoCollisionHandlingTests` (each action, the default, `ignore-accidents`, the compiled
+scenario) and `SumoCollisionDecodingTests` (the layout SUMO's server writes, none, the generic reading
+stopping part-way, a value that is not a compound, a field of the wrong kind). Each was seen failing
+against a wrong implementation: a new span on every step; a span closed on the step it began; a body not
+held when it began never named; the collisions decoded as the compound they declare; the count field
+skipped; any field kind accepted; SUMO's default taken as `warn`; and `ignore-accidents` not read.
 
 ### 11.6 `time-to-teleport`
 
@@ -2830,12 +3056,29 @@ a measurement.
 > (`CesiumHeightSampler.cpp:396-419`).
 
 The probe is an **on-demand `get_solar_state`**, which answers empty when there is no sun, and the
-return value of `set_solar_epoch`; never the cached read, for the reason in §9.4: the cached read
-cannot express "no sun" and will hand back a plausible midnight instead (§12 G15). A run that
+return value of `set_solar_epoch`; never the cached read, for the reason in §9.4: the cache is paired to
+the last tick and so predates the write. A run that
 declares `require_sun: false` is the one exception, and it binds and audits nothing. If a
 non-Cesium world ever becomes a legitimate target for this mode — a stock town, say — that is a
 different illumination authority and a decision for
 [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md), not a relaxation of this refusal.
+
+**A sun that goes away mid-run stops the run** ([`11`](11_Time_And_Illumination.md) §8.3, "the absent
+block is also a failure"). The observer marks a snapshot that carries a sun with `SolarStateValid`
+(`WorldObserver.cpp:328-337`), and the client caches no block where the flag is clear
+(`EpisodeStateLayout.ReadSolar`), so a world whose sun has gone publishes an empty block, and the per-tick
+audit stops the run on it (`SolarAudit.AuditTick`, "published no sun") at the stage the tick is in, cause
+`solar-state-disagreement`. Under `advance` it is caught one step earlier, before the frame renders: the
+world refuses the sun written for the frame (`SolarLease.WriteForFrame`), and nothing is ticked. On the
+way out there is no sun left holding what the session wrote, so there is nothing to give back:
+`SolarLease` records `SunGoneWhenGivenBack` rather than failing the shutdown, and the settings, layers,
+bodies and lease are given back as on any other path. A snapshot that stops carrying the sun while the
+sun is still there stops the run the same way, and the sun is then given back as it was found.
+
+**Exercised by** `SumoDriveSessionFailureTests` (the sun removed mid-run under a freeze and under
+`advance`, and a snapshot that stops carrying a sun that is still there) and `SolarAuditTests` (the absent
+block). Each was seen failing against a wrong implementation: a shutdown that fails because the sun it
+would give back has gone.
 
 ### 11.8 A solar state that disagrees with the scenario
 
@@ -2883,8 +3126,8 @@ flowchart TD
 
   subgraph LANE_SUMO["SUMO over TraCI"]
     B1[Simulation.step] --> B2["getAllSubscriptionResults<br/>pose, speed, lane, type, SIGNALS"]
-    B2 --> B3[getDepartedIDList<br/>getArrivedIDList<br/>getCollisions]
-    B1 -.->|FatalTraCIError| AERR
+    B2 --> B3[getDepartedIDList<br/>getArrivedIDList<br/>getPendingVehicles<br/>getCollisions]
+    B1 -.->|"FatalTraCIError,<br/>or no answer within the bound"| AERR
   end
 
   subgraph LANE_SUN["SolarLease and SolarAudit, per tick"]
@@ -2940,6 +3183,8 @@ flowchart TD
   G4 -->|no| E2
   E2 --> E3
   E3 -->|no| AERR
+  E1 -.->|"connection failed"| AERR
+  E2 -.->|"connection failed,<br/>or cue unanswered"| AERR
   E3 -->|yes| E4
   E4 --> G1
   G1 --> G2
@@ -2956,7 +3201,9 @@ flowchart TD
 
 The solar lane's write sits between the batch and the cue, so the frame is rendered under the sun
 written for it, and its audit sits on the frame the tick delivered, so the run stops at the first frame
-whose sun disagrees with its declaration.
+whose sun disagrees with its declaration. Every edge into the fault is a refusal of the stage the tick is
+in, with the cause named (§11.10); a collision, a vehicle SUMO gave up inserting and a vehicle that
+vanished are records, not edges into it.
 
 ### 11.10 How far a refusal got
 
@@ -2970,13 +3217,23 @@ refusals too and carry it the same way. A refusal raised by a check or a declara
 session — `SolarEpoch.FromJson`, `IlluminationPolicy.FromJson`, the lockout refusing ambient traffic —
 has started nothing and says `Validation`, except the lockout's, which says `Authority`.
 
+A refusal that is a failure of one side rather than of something the session was given also says
+**which side failed** (`CoSimSessionRefusedException.Cause`, a `CoSimStopCause`; `CauseName` gives the text
+the failure paths write): `sumo-connection-lost` (§11.1), `world-connection-lost` and `world-tick-timeout`
+(§11.2), `solar-state-disagreement` (§9.4, §11.7) or `missing-blueprint`; `none` for everything else. A
+refusal from `Advance` also stops the run for good: the report's `Stopped` records the stage, the cause,
+the last complete frame — written, rendered, observed and audited — and the message, and any further
+`Advance` refuses with the same stage and cause without ticking the world or stepping SUMO. A refusal from
+`Start` lists on `GiveBackFailures` whatever it tried to give back and could not, which is only ever what an
+unreachable server holds (§11.2).
+
 | Stage | Where in the sequence | What the refusals are | What it had taken, all given back |
 |---|---|---|---|
-| `Validation` | before SUMO is started and before anything on the server is written | the declarations (policy, epoch, pace, the ways to advance the world); the package, its drape and its frame (§7.2); the catalogue; the loaded world (read, not written; D3.26); the SUMO installation and its release (§2.6); the scenario's network (§7.2) and compile lock (§2.7); `time-to-teleport` (§11.6) | nothing |
-| `Launch` | SUMO started on the scenario; the world's clock and layers taken; no lease | SUMO could not load the scenario; the world would not hold synchronous mode at the delta asked; the SUMO step, the delta and the capture rate do not divide | SUMO, the world's settings, the layers |
+| `Validation` | before SUMO is started and before anything on the server is written | the declarations (policy, epoch, pace, the ways to advance the world, the bound on SUMO's answers); the package, its drape and its frame (§7.2); the catalogue; the loaded world (read, not written; D3.26), or the connection failing while it is read; the SUMO installation and its release (§2.6); the scenario's network (§7.2) and compile lock (§2.7); `time-to-teleport` (§11.6); `ignore-route-errors` (§11.4) | nothing |
+| `Launch` | SUMO started on the scenario; the world's clock and layers taken; no lease | SUMO could not load the scenario; the world would not hold synchronous mode at the delta asked; the SUMO step, the delta and the capture rate do not divide; the connection failed while the clock or the layers were written | SUMO, the world's settings, the layers |
 | `Authority` | the population lease | another holds it, named (`PopulationAuthorityHeldException.HeldBy`) | as above |
-| `PreRoll` | the lease held, before the window opens: in `Start`, and in `Advance` on a prewarm tick (§9.5) | from `Start`, SUMO failing during the fast-forward or the step of lookahead, or the sun refused, read back other than written, or disagreeing with the declaration for the window's opening; from `Advance`, any `Window` refusal raised on a prewarm tick | from `Start`, as above plus the lease, the sun and any bodies; from `Advance`, the caller disposes the session |
-| `Window` | from `Advance`, on a tick at or after the window's opening instant | the world produced no frame; the sun disagreed on a tick or refused a frame's write; the server has no blueprint for a body the pool needs; SUMO failed mid-run | the caller disposes the session, which gives everything back |
+| `PreRoll` | the lease held, before the window opens: in `Start`, and in `Advance` on a prewarm tick (§9.5) | from `Start`, SUMO failing or not answering during the fast-forward or the step of lookahead, the sun refused, read back other than written, or disagreeing with the declaration for the window's opening, or the connection failing while the sun is bound; from `Advance`, any `Window` refusal raised on a prewarm tick | from `Start`, as above plus the lease, the sun and any bodies; from `Advance`, the caller disposes the session |
+| `Window` | from `Advance`, on a tick at or after the window's opening instant | the world produced no frame; the connection failed or a call on it, the tick cue among them, went unanswered; the sun disagreed on a tick, was absent from its snapshot or refused a frame's write; the server has no blueprint for a body the pool needs; SUMO failed, died or stopped answering mid-run | the caller disposes the session, which gives back everything it can reach |
 
 The frame check (§7.2) reads nothing but the package, so it runs before SUMO is started, with the other
 `Validation` checks.
@@ -2990,14 +3247,21 @@ names an edge the network lacks, behind one departing at t = 20: SUMO reads its 
 ahead of its clock, meets the bad route at t = 20 and quits, and the refusal ends
 `SUMO's console ended: Error: The edge 'nowhere' within the route for vehicle 'late' is not known. | The
 route can not be build. | Quitting (on error).` — at `PreRoll` from a fast-forward to 40 s, at `Window`
-from a session that started at zero. Other exceptions — a dropped CARLA connection, a defect — are
-not wrapped: they are not the session's refusals, and a caller that reports them as internal errors
-is reporting them truthfully.
+from a session that started at zero.
+
+**A failure of the connection to the CARLA server is a refusal too, of the stage it happens in** —
+`Validation`, `Launch`, `PreRoll` or `Window` — with the connection's own failure as its inner exception
+and cause `world-connection-lost` (§11.2). A dropped server mid-window is a run that stopped with a
+fault, and the refusal says so rather than leaving a caller to report an internal error. Every other
+exception — a defect, a server that answered a call with an error — passes through unwrapped: it is not
+the session's refusal, and a caller that reports it as an internal error is reporting it truthfully.
 
 **What a caller reads, from Python.** `refused.Stage == CoSimSessionStage.PreRoll` holds through
 pythonnet, and `str(refused.StageName)` is `"PreRoll"` — checked against a scratch build of these
 assemblies loaded through `CARLANET_PUBLISH_DIR`, on the late-route scenario beside the Gardnerville
-package.
+package. `CauseName` is a string property of the same shape as `StageName`, and
+`session.Report.Stopped` carries `Stage`, `Cause`, `LastCompleteSeconds` and `CompleteTicks`; neither
+has been read through pythonnet yet, which needs a published build of these assemblies.
 
 **Exercised by** `SumoDriveSessionStageTests`: at least one real refusal per stage — a declaration and
 another build's package (`Validation`, nothing written), a network outside the world's frame refused
@@ -3010,6 +3274,10 @@ implementation: a start that never assigns a stage; one that never enters `Launc
 `PreRoll`; one that enters `PreRoll` before the lease; SUMO failures left unwrapped at start and
 mid-run; an `Advance` that never assigns `Window`; a console tail that quotes nothing; a lockout
 refusal with no stage of its own; and the frame check made once SUMO is running.
+`SumoDriveSessionFailureTests` adds a connection failure at `Validation`, `Launch`, `PreRoll` and
+`Window`, the causes, the stop record and a stopped run refusing to advance (§11.1–§11.7). The two
+tests that drop the connection mid-run in `SumoDriveSessionTests` receive the refusal with the
+`IOException` inside it.
 
 ---
 
@@ -3035,7 +3303,7 @@ solar and light-state paths. They are handed to
 | **G12** | Chaos does not retain a written angular velocity on a kinematic particle. **Measured**: a kinematic vehicle turned at 30°/s by transforms reads zero angular velocity with a 30°/s target angular velocity written every tick, and every driven body reads zero while it turns (§5.5). `FWorldObserver_GetAngularVelocity` reads the body with no `IsSimulatingPhysics()` guard, unlike the linear path. | `WorldObserver.cpp:249-262` vs `Pawn.cpp:242`; `PBDRigidsEvolutionGBF.cpp:1180-1223` | No client call supplies an angular velocity for a pose-applied body. Nothing in the truth record reads it; a consumer that needs it needs an angular counterpart to D3.5 in the engine. |
 | **G13** *(not required by this mode — recorded for the audit)* | The Python shim has **no traffic-light surface at all** — `class TrafficLight(TrafficSign): pass`. All ten traffic-light RPCs exist in C# and are bound server-side. | shim `carlanet/__init__.py:1002-1004`; C# `CarlaClient.cs:1659-1689`; server `CarlaServer.cpp:2648-2884` | **This mode writes no traffic-light state from any binding (D3.24)**, so nothing here depends on it. It stays on the list because it is a real capability the .NET path has and the Python path does not, and it is the audit's to scope. |
 | **G14** *(not required by this mode — recorded for the audit)* | A CARLA traffic-light actor's **OpenDRIVE signal id is not reachable from a client**. The server holds it as `USignComponent::SignId` and uses it for lookup, but no RPC exposes it. | `Traffic/SignComponent.h:80`, `SignComponent.cpp:35-41`; `Traffic/TrafficLightManager.cpp:150-155`, `:216`; no `sign_id`/`signal_id` binding in `CarlaServer.cpp` | **Nothing in this mode needs to turn an OpenDRIVE signal id into an actor id**, because no client here addresses a traffic-light actor at all (D3.24) — the layer is suppressed wholesale by `set_layer_visible`, which takes a layer name and no ids. The observation is accurate and stays recorded; it is a gap for any *other* client that wants to address a signal individually, and the cheapest fix there is one getter RPC returning the sign id per traffic-light actor. |
-| **G15** | **The cached solar path cannot express "no sun", and the shim returns a plausible midnight instead of `None`.** `FWorldObserver` leaves the header's solar fields at their defaults (zeros, `solar_rate = 1.0`) when `GetSolarState` comes back empty, but `CarlaClient` unconditionally parses 11 doubles out of the header, so `GetCachedSolarState()` is never empty once the observer is running — and the shim accepts the cache on `cached.Count >= 9`. | `EpisodeStateSerializer.h:48-58`; `WorldObserver.cpp:326-328`; `CesiumHeightSampler.cpp:760-762`; `CarlaClient.cs:1851-1855`; `carlanet/__init__.py:1511-1533` | Any client that tests `get_solar_state()` for `None` to decide whether the world has a sun gets the wrong answer, and a truth record built from the cache would carry year 0 / midnight / elevation 0 as though measured. The bridge sidesteps it by probing on demand and with the write (D3.22), but the shim's contract is wrong as written. Cheapest fixes: have the observer write a sentinel (`solar_year = 0` is already the de-facto one — document it), or have the shim reject `year == 0` from the cache. |
+| **G15** | **Closed.** The observer marks a snapshot that carries a sun with `SolarStateValid` and the client caches no block where the flag is clear (`WorldObserver.cpp:328-337`; `EpisodeStateLayout.cs:64-70`), so `GetCachedSolarState()` is empty for a world with no sun and the shim falls through to the on-demand read, which answers `None`. As first found: **the cached solar path cannot express "no sun", and the shim returns a plausible midnight instead of `None`.** `FWorldObserver` leaves the header's solar fields at their defaults (zeros, `solar_rate = 1.0`) when `GetSolarState` comes back empty, but `CarlaClient` unconditionally parses 11 doubles out of the header, so `GetCachedSolarState()` is never empty once the observer is running — and the shim accepts the cache on `cached.Count >= 9`. | `EpisodeStateSerializer.h:48-58`; `WorldObserver.cpp:326-328`; `CesiumHeightSampler.cpp:760-762`; `CarlaClient.cs:1851-1855`; `carlanet/__init__.py:1511-1533` | Any client that tests `get_solar_state()` for `None` to decide whether the world has a sun gets the wrong answer, and a truth record built from the cache would carry year 0 / midnight / elevation 0 as though measured. The bridge sidesteps it by probing on demand and with the write (D3.22), but the shim's contract is wrong as written. Cheapest fixes: have the observer write a sentinel (`solar_year = 0` is already the de-facto one — document it), or have the shim reject `year == 0` from the cache. |
 | **G16** | **Closed.** `set_solar_epoch` writes the sun's zone with its date and clock ([`11`](11_Time_And_Illumination.md) D11.5). Configuring the georeference still sets `longitude / 15.0` with no rounding to a civil zone. | `CarlaServer.cpp:644`; `CesiumHeightSampler.cpp:778-817`; `CesiumSunSky.cpp:570-573` | The session writes the declared civil offset, so the recorded `time_zone` is the declared one. **Measured on Bahonar** (`lon_0 = 56.18065`, Iran `+03:30`): the longitude zone is 0.245377 h = 14 min 43 s = 3.68° of hour angle from civil time, which the per-tick audit names if anything puts it back (§9.3). |
 | **G17** | **Closed.** `ACesiumTimeOfDayController::Tick` carries whole days onto the date (`RollSolarDate`); `SetSolarTime` still wraps the clock and leaves the date. | `CesiumTimeOfDayController.cpp:53-91`; `CesiumHeightSampler.cpp:755` | The session does not rely on either: under `advance` it writes the date with every frame's clock (D3.19), carried across midnight when the calendar advances and held when it does not. |
 | **G18** | **Vehicle headlights never come on in a generated world, under any client, at any hour.** The .NET traffic manager's entire sun/precipitation/fog block is gated on `_isWeatherEnabled`, and `is_weather_enabled` returns false when the episode has no weather actor — which is the generated-map case, and is precisely why `CesiumSunSky` is spawned. | `VehicleLightStage.cs:228-254`; `CarlaServer.cpp:1281-1290`; `CesiumHeightSampler.cpp:385-388` | Every night collect produced by any existing path shows unlit vehicles. It is a pre-existing capability hole that this mode is the first to fill (§3.5.3), and the general fix — point the light stage at `get_solar_state()` instead of at the inert weather — would fix it for the traffic-manager path too. Note the convention trap: the stage's thresholds (15 / 165 / 35 / 145, `Constants.cs:202-205`) are in CARLA's weather convention, not `CesiumSunSky::Elevation`'s. |
@@ -3088,12 +3356,12 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.13** | The lockout is **four mechanisms**: per-actor server-side control authority (the one that actually stops the .NET TM, which drives via `ApplyControlToVehicle`), an episode-level drive-mode flag that refuses `set_actor_autopilot` for *any* actor (the one that stops a second process), a client-side lease for a legible error at the call site, and the same episode flag refusing **`set_solar_time` / `set_solar_date` / `set_solar_epoch` / `set_time_advance`** to anyone but the lease holder — because illumination is world-scoped state that a capture records, and today those RPCs have no ownership check whatever. |
 | **D3.14** | A session refuses to start against a configuration whose `time-to-teleport` enables teleporting — a positive value, or none, which SUMO takes as 300 s; measured, `0` disables it as `-1` does (§11.6) — unless the run accepts it explicitly, which the report records; and carries a non-overridable runtime jump detector that releases and re-admits rather than interpolating across a discontinuity. |
 | **D3.15** | Any fault that makes the truth record unreliable — SUMO connection loss, a world-tick timeout — **stops the run**. It does not degrade, does not restart `sumo`, and does not keep ticking a frozen pose buffer. |
-| **D3.17** | **Vehicle light state rides the existing per-tick `apply_batch`** as `SetVehicleLightStateCommand` (variant **18**), emitted only on a change, with the last written flags held client-side because the getter is an RPC and the snapshot carries no light state. Brake and indicator bits come from SUMO's `VAR_SIGNALS`, read at zero extra cost in the subscription the bridge already makes; `Position` and `LowBeam` come from sun elevation, because **SUMO has no headlight model at all** (§3.5.1). Measured batching cost: mean 14.44 / p90 31 / max 47 extra commands in one of the 20 sub-step batches per SUMO step — **0.72 amortised per tick, and zero extra RPCs**. |
+| **D3.17** | **Vehicle light state rides the existing per-tick `apply_batch`** as `SetVehicleLightStateCommand` (variant **18**), emitted when a body is lent and on a change, and `None` when it is given back, with the last written flags held client-side because the getter is an RPC and the snapshot carries no light state. **Built** (§3.5.3). Brake and indicator bits come from SUMO's `VAR_SIGNALS`, read at zero extra cost in the subscription the bridge already makes; `Position` and `LowBeam` come from sun elevation, because **SUMO has no headlight model at all** (§3.5.1). Measured batching cost: mean 14.44 / p90 31 / max 47 extra commands in one of the 20 sub-step batches per SUMO step — **0.72 amortised per tick, and zero extra RPCs**. |
 | **D3.18** | **The session owns the solar clock**, because the sun is a function of simulated time and only the clock owner knows what instant a frame is. It binds the sun at window open, writes it for every frame under `advance` with the engine's own advance off, and audits it every tick. No other component in a SUMO-drive session calls `set_solar_time`, `set_solar_date`, `set_solar_epoch` or `set_time_advance`. |
 | **D3.19** | **Under `advance` the session writes the sun for every frame inside the RPC drain of that frame's tick** — one `set_solar_epoch` of date, clock and zone, after `apply_batch`, before `sendTickCue`, at the whole second nearest the frame's declared instant and a millisecond past it; the engine's own advance is off ([`11`](11_Time_And_Illumination.md) D11.19). Established from the engine, not assumed: the drain (`CarlaEngine.cpp:333-341`) precedes the actor ticks, which precede both the observer snapshot and the sensor capture (`CarlaEngine.cpp:424-425`). A frame therefore cannot render under the previous tick's sun. One RPC per tick, measured at a 0.128 ms median round trip; no batch command sets the sun. |
 | **D3.20** | **The session audits the sun against the scenario epoch on every world tick**, from the snapshot that tick delivered (`CarlaClient.GetCachedSolarState`, no round trip) — zone, engine advance and rate exactly, the held instant within 0.5 s, the direction and corrected elevation within 0.01°, the same at every rate — and treats a disagreement as a fault, never as something to correct silently. |
 | **D3.21** | **The sun is bound for the window's opening instant** — its first captured frame, `WindowOpensAtSimulatedSecond`, or the first rendered frame's where none is given — after the SUMO fast-forward and before the first world tick, and `set_time_advance(false, 0)` is issued **after** the clock is written, under every policy. A frozen sun is pinned there and holds through a render prewarm; under `advance` the sun is anchored there and written for every frame, prewarm frames included, at that frame's own instant. The fast-forward itself cannot move the sun — in synchronous mode no tick cue means no actor tick, so the controller never runs (§9.5) — but that is a property of the tick loop, not of the sun, and the audit is what keeps it true if the loop ever changes. A refusal raised on a prewarm tick is at `PreRoll`, from the window's opening on at `Window` (§11.10). |
-| **D3.22** | **A session refuses to start when the world reports no sun**, unless the run declares `require_sun: false`. Presence is probed with an on-demand `get_solar_state` and the return value of `set_solar_epoch`, never with the cached read, because the cached read cannot express "no sun" (G15). |
+| **D3.22** | **A session refuses to start when the world reports no sun**, unless the run declares `require_sun: false`. Presence is probed with an on-demand `get_solar_state` and the return value of `set_solar_epoch`, never with the cached read, which is paired to the last tick and so predates the write (§9.4). A sun that goes away after it was bound stops the run at the next tick's audit, and the shutdown does not fail for the sun it can no longer give back (§11.7). |
 | **D3.23** | **A `SolarDisagreement` has the same consequence as a `TickFault`**: stop, park the render set, close the step record with `terminated: solar-state-disagreement`, fail the run. Same governing principle as D3.15 — a run that cannot produce honest truth must stop, not degrade. |
 | **D3.24** | **A SUMO-drive session renders neither the generated road surface nor the traffic-light and sign actors, and writes no traffic-light state.** No `SetTrafficLightStateCommand` in any batch, no traffic-light RPC, no `tlLogic` subscription. The `road` and `signals` layers are each written once at session start with `set_layer_visible` (`CarlaClient.cs:1077-1078` → `CarlaServer.cpp:697`; the `road` arm at `:729-738`, the `signals` arm at `:739-751` → `TrafficLightManager.cpp:618-628`), **fixed for the session's lifetime** with an operator override per layer that is a session-start decision and not a toggle, and given back on every exit path by `LayerVisibilityLease`. The run report records what was in frame. `set_layer_visible` joins the RPCs the episode drive-mode flag refuses to a client without the drive lease (§10.2 mechanism 4). Suppression is at the session, not at the source: `SignInjector` and native `SpawnSignals` are untouched, because the world build is shared with other modes (§3.4). SUMO's `tlLogic` programs, its right-of-way rows and the actuated netconvert setting are unaffected, and its vehicles still obey them. Vehicle lamps are a separate mechanism and are unchanged (D3.17). |
 | **D3.25** | **Real-time pacing is a factor the session reads once at start**, 0 by default and unconstrained, applied immediately before every world tick cue against the absolute schedule `T0 + n·Δw/f` counted from the first cue, so an overrun is absorbed rather than accumulated and the SUMO fast-forward is never paced. The session times every cue, paced or not, and publishes the achieved factor per window of wall clock (default 5 s), for the whole run and for the worst window, with the slip behind schedule, on `CoSimRunReport.Pacing`. It never stops or slows a run for falling behind: the floor is undecided and the consumer-side response is `08` §11.3's (§9.9). |
@@ -3101,8 +3369,12 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.27** | **A session refuses to launch a SUMO whose release is not the converter the world package records**, compared by release number and settled before SUMO is started, naming both releases, the installation and the rule that found it. `AllowSumoVersionMismatch` accepts the difference. An accepted mismatch and a package that records no converter both run, and the run report names either; it carries the installation, its release and the rule that found it on every run. `run_sumo_drive.py` names the installation — the repository's pinned build first — rather than leaving it to `SUMO_HOME` (§2.6). |
 | **D3.28** | **A session refuses a scenario whose network is not the one the world package carries**, compared by canonical fingerprint (`NetworkFingerprint`, the parsed graph rather than the bytes) and settled before SUMO is started, naming both networks and both fingerprints. It also refuses a package whose carried network does not fingerprint as the `NetworkFingerprint` its manifest records. The scenario's network is read the way SUMO reads the configuration. There is no override: a scenario for another network is compiled against this world's package, and the compiler writes the package's own network beside the configuration (§7.2). |
 | **D3.29** | **A session refuses a compiled scenario that is not the one its compile lock binds**, before SUMO is started: the configuration, the route file and the network by SHA-256 of their bytes, the catalogue by its declared digest, and the epoch by `SolarEpoch.Digest` where the session declares one, every disagreement named in one refusal. A scenario with no `<stem>.lock.json` beside it runs and is recorded as uncompiled. The lock's routing release and world identity are recorded on every compiled run's report, not compared (§2.7). |
-| **D3.30** | **Every refusal a session raises carries the stage it was raised at** — `Validation`, `Launch`, `Authority`, `PreRoll` or `Window`, named by what the session had taken — so a caller maps it onto an outcome without reading the message; a SUMO failure while SUMO is started, fast-forwarded or stepped is such a refusal, quoting SUMO's console, and every other exception passes through unwrapped (§11.10). |
+| **D3.30** | **Every refusal a session raises carries the stage it was raised at** — `Validation`, `Launch`, `Authority`, `PreRoll` or `Window`, named by what the session had taken — so a caller maps it onto an outcome without reading the message. A SUMO failure while SUMO is started, fast-forwarded or stepped is such a refusal, quoting SUMO's console; so is a failure of the connection to the CARLA server — a socket closed or reset, or a call left unanswered past the client's timeout — at the stage it happens in, with the connection's failure as its inner exception. A failure of one side also names the side (`Cause`), and a refusal from `Advance` stops the run for good and is recorded on the report with the last complete frame. Every other exception passes through unwrapped (§11.10). |
 | **D3.31** | **Each render-set admission pass is published as it is made**, once per SUMO step: the population SUMO has, the subscribed, the eligible, the admitted, the shed, the capacity, the pass's admissions and releases and the running totals, as an immutable `AdmissionPass` replaced whole on `CoSimRunReport.LastAdmissionPass` and handed to `OnAdmissionPass` — the shedding ledger's row (`10` §7), live (§8.8). |
+| **D3.32** | **Every answer SUMO owes the session is bounded** (`SumoAnswerTimeoutSeconds`, 60 s by default), and one that does not come stops the run as any other SUMO failure does; the `sumo` that stopped answering is ended at shutdown without the grace an exiting one gets, and no close waits longer than 5 s for SUMO's answer. A hung SUMO keeps its socket open, so without a bound a session would hold the world in synchronous mode indefinitely with nothing ticking it (§11.1). |
+| **D3.33** | **A collision SUMO registers is recorded as one span and never stops the run** — the collision as first registered, the simulated seconds it began and ended at, and the bodies that rendered both vehicles — handed out once it is over and counted on the report, with the `collision.action` that governed the run. SUMO reports an ongoing collision on every step it lasts, so a span, not a report, is the unit. Which actions a corpus may carry belongs to behavioural truth ([`13`](13_Work_Breakdown.md) §11; §11.5). |
+| **D3.34** | **A route SUMO cannot follow stops the run, and a vehicle SUMO cannot insert is recorded.** A scenario setting `ignore-route-errors` is refused before SUMO starts, because SUMO then keeps an unroutable vehicle standing at the end of an edge and says nothing (measured); a vehicle that leaves SUMO's insertion queue without departing is recorded with the frame it was last waiting and the first it was gone, because SUMO drops it without a word; SUMO's console warnings are counted and kept verbatim (§11.4). |
+| **D3.35** | **A rendered vehicle that stops reporting without SUMO listing it as arrived is released as `Vanished`**, its body parked at the head of the next batch and written to for nothing else of that vehicle's; it is the one release the lookahead cannot place, so it has its own reason (§11.3). |
 
 ---
 

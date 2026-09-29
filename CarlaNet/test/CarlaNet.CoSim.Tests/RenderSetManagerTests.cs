@@ -85,6 +85,25 @@ public sealed class RenderSetManagerTests
     }
 
     [Fact]
+    public void AVehicleThatVanishedWithoutArrivingIsReleasedAndSaidToHaveVanished()
+    {
+        List<RenderedVehicleInterval> released = [];
+        var policy = new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 100.0,
+                                               hysteresisMetres: 10.0, capacity: 8);
+        var manager = new RenderSetManager(policy, released.Add);
+
+        // Both gone from the frames; only one of them is named as having gone without arriving.
+        manager.ReconcileRenderSet(1.0, Frames(At("arrived", 10.0, 0.0), At("vanished", -10.0, 0.0)));
+        manager.ReconcileRenderSet(2.0, new Dictionary<string, CoSimVehicleFrame>(), ["vanished"]);
+
+        Assert.Equal(RenderSetReleaseReason.Vanished,
+                     Assert.Single(released, interval => interval.VehicleId == "vanished").ReleaseReason);
+        Assert.Equal(RenderSetReleaseReason.LeftTheSimulation,
+                     Assert.Single(released, interval => interval.VehicleId == "arrived").ReleaseReason);
+        Assert.All(released, interval => Assert.Equal(2.0, interval.ReleasedAtSeconds));
+    }
+
+    [Fact]
     public void TwoIdenticallyRankedVehiclesAreAdmittedInAnOrderThatDoesNotDependOnADictionary()
     {
         var policy = new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 100.0,

@@ -64,6 +64,7 @@ public sealed class SubscribedPopulation
     private readonly HashSet<string> _screened = [];
     private readonly HashSet<string> _promoted = [];
     private readonly List<string> _scratch = [];
+    private readonly HashSet<string> _vanished = [];
 
     /// <param name="connection">
     /// The session's one TraCI connection. The subscription is driven through it directly rather
@@ -82,6 +83,18 @@ public sealed class SubscribedPopulation
 
     /// <summary>Every vehicle subscribed to the full state set.</summary>
     public IReadOnlyCollection<string> PromotedVehicleIds => _promoted;
+
+    /// <summary>
+    /// At the last <see cref="ReadPositions"/>: the vehicles that were subscribed, had not been listed
+    /// among the step's arrivals, and delivered nothing -- so SUMO no longer has them.
+    /// </summary>
+    /// <remarks>
+    /// SUMO drops a vehicle's subscription with the vehicle, and reports as arrivals only the vehicles
+    /// it removed during the step. One taken out between two steps -- by a TraCI command, which clears
+    /// its state change before the next step's arrivals are collected -- is in neither list, and this is
+    /// where it shows.
+    /// </remarks>
+    public IReadOnlyCollection<string> LastVanished => _vanished;
 
     /// <summary>Subscribe commands sent since the session started, by tier.</summary>
     public long ScreeningSubscribes { get; private set; }
@@ -149,15 +162,17 @@ public sealed class SubscribedPopulation
     /// first, and return how many delivered one.
     /// </summary>
     /// <remarks>
-    /// A subscribed vehicle absent from the results has left the simulation between this step's
-    /// arrival list and now -- which does not happen on the normal path, but does after a route
-    /// error. It is dropped here rather than being carried as a stale position.
+    /// A subscribed vehicle absent from the results has left the simulation without being listed
+    /// among the step's arrivals -- which does not happen on the normal path, but does to a vehicle
+    /// taken out between two steps. It is dropped here rather than being carried as a stale position,
+    /// and named in <see cref="LastVanished"/>.
     /// </remarks>
     public int ReadPositions(IDictionary<string, (double X, double Y)> into)
     {
         ArgumentNullException.ThrowIfNull(into);
         into.Clear();
         _scratch.Clear();
+        _vanished.Clear();
 
         foreach (string vehicleId in _screened)
         {
@@ -175,6 +190,7 @@ public sealed class SubscribedPopulation
         foreach (string vehicleId in _scratch)
         {
             Forget(vehicleId);
+            _vanished.Add(vehicleId);
         }
 
         return into.Count;

@@ -42,6 +42,7 @@ public sealed class SumoConnection : IDisposable
     {
         _traci = traci;
         _process = process;
+        ProcessId = process?.Id;
         ApiVersion = apiVersion;
         ServerVersion = serverVersion;
         Simulation = new SumoSimulationDomain(traci);
@@ -74,6 +75,15 @@ public sealed class SumoConnection : IDisposable
 
     /// <summary>The connection underneath, for a domain this class does not wrap.</summary>
     public TraCIConnection TraCI => _traci;
+
+    /// <summary>
+    /// The operating system's id for the <c>sumo</c> this session started, or <see langword="null"/>
+    /// for one it attached to.
+    /// </summary>
+    /// <remarks>
+    /// What an operator needs to find the process when a run reports that SUMO stopped answering.
+    /// </remarks>
+    public int? ProcessId { get; }
 
     /// <summary>Simulated seconds since the configuration's begin.</summary>
     public double Time => Simulation.Time;
@@ -158,6 +168,39 @@ public sealed class SumoConnection : IDisposable
     }
 
     /// <summary>
+    /// Wait up to <paramref name="bound"/> for the <c>sumo</c> this session started to exit, and then
+    /// until every line it wrote has been handed to <see cref="SumoLaunchOptions.Output"/>.
+    /// </summary>
+    /// <returns>Whether it exited; true for a <c>sumo</c> this session did not start.</returns>
+    /// <remarks>
+    /// SUMO says why it closed the connection on its console a moment before the socket closes, and
+    /// that line reaches <see cref="SumoLaunchOptions.Output"/> from another thread, so a caller that
+    /// quotes SUMO after the connection failed waits here first rather than racing the pipe.
+    /// </remarks>
+    public bool WaitForExit(TimeSpan bound)
+    {
+        if (_process is null || _disposed)
+        {
+            return true;
+        }
+
+        try
+        {
+            if (!_process.WaitForExit(bound))
+            {
+                return false;
+            }
+
+            _process.WaitForExit();
+            return true;
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or SystemException)
+        {
+            return true;
+        }
+    }
+
+    /// <summary>
     /// Close the connection, which ends the simulation, and wait for the <c>sumo</c> this session
     /// started to exit.
     /// </summary>
@@ -178,7 +221,15 @@ public sealed class SumoConnection : IDisposable
 
         try
         {
-            if (!_process.WaitForExit(ShutdownGrace))
+            // A SUMO that stopped answering is hung, and waiting for it to notice the socket close is
+            // waiting on the thing that already failed to happen.
+            if (_process.WaitForExit(_traci.StoppedAnswering ? TimeSpan.Zero : ShutdownGrace))
+            {
+                // Exited; the wait with no bound returns once the last of its output has been handed
+                // to Output, so nothing it said on the way out is lost.
+                _process.WaitForExit();
+            }
+            else
             {
                 // SUMO exits when its last client disconnects. One that has not after the socket
                 // closed is wedged, and leaving it running would hold the port and the output files.

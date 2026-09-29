@@ -76,7 +76,16 @@ A compiled scenario is checked against the compile lock the compiler wrote besid
 ones the lock digests, and the catalogue and epoch given here the ones it was compiled against. A
 scenario with no lock runs and is logged as uncompiled. A scenario whose configuration lets SUMO
 teleport a blocked vehicle -- a positive `time-to-teleport`, or none, which SUMO takes as 300 s -- is
-refused unless `--allow-teleporting` is given.
+refused unless `--allow-teleporting` is given, and one that sets `ignore-route-errors` is refused
+outright, because SUMO then keeps a vehicle it cannot route standing at the end of an edge and says
+nothing.
+
+If either side fails part-way -- SUMO dies, closes the connection or does not answer within
+`--sumo-answer-timeout`, the server drops the connection or leaves a tick unanswered, or the sun
+disagrees with its declaration or goes away -- both stop together: the script logs the stage and the
+cause, prints the report with the last frame whose truth holds, gives back everything it can reach and
+exits 1. A collision does not stop the run; the report counts them, with the vehicles SUMO gave up
+inserting and SUMO's own warnings.
 
 One thing happens between the session starting and the recorder starting: the camera is aimed at the
 vehicles rather than at the middle of the rendered region, because a corridor scenario puts its
@@ -97,6 +106,11 @@ import sys
 import time
 
 import carlanet as carla
+
+# isort: split
+# The .NET namespaces exist only once carlanet has loaded their assemblies, so this import has to
+# follow it; an import sorter would put it first and break the script at start.
+from CarlaNet.CoSim import CoSimSessionRefusedException
 
 _THIS = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.normpath(os.path.join(_THIS, "..", ".."))
@@ -129,6 +143,19 @@ def parse_args() -> argparse.Namespace:
                         help="run a scenario whose configuration lets SUMO teleport a blocked vehicle "
                              "(a positive time-to-teleport, or none, which SUMO takes as 300 s) "
                              "instead of refusing it. The run report records that it was accepted")
+    parser.add_argument("--no-vehicle-lamps", action="store_true",
+                        help="write no lamp to any body: no brake lights or indicators from SUMO and no "
+                             "headlights from the sun. A control condition; lamps are driven by default")
+    parser.add_argument("--headlight-on-below", type=float, default=3.0,
+                        help="sun elevation in degrees below which every vehicle's headlights come on "
+                             "(default 3)")
+    parser.add_argument("--headlight-off-above", type=float, default=6.0,
+                        help="sun elevation in degrees above which they go off again; above the first "
+                             "(default 6)")
+    parser.add_argument("--sumo-answer-timeout", type=float, default=60.0,
+                        help="seconds to wait for SUMO to answer any one command, a step included, "
+                             "before the run stops because SUMO has stopped answering. Must exceed "
+                             "the slowest step the scenario produces (default 60)")
 
     parser.add_argument("--steps", type=int, default=600,
                         help="SUMO steps to run. 0 runs until the scenario ends -- until SUMO has "
@@ -512,6 +539,10 @@ def main() -> int:
             sumo_home=sumo.home,
             allow_sumo_version_mismatch=args.allow_sumo_version_mismatch,
             allow_teleporting=args.allow_teleporting,
+            sumo_answer_timeout_s=args.sumo_answer_timeout,
+            vehicle_lamps=not args.no_vehicle_lamps,
+            headlight_on_below_deg=args.headlight_on_below,
+            headlight_off_above_deg=args.headlight_off_above,
             # Bound only where the aim needs it: the session hands out a pose per rendered
             # vehicle per tick, and a callback that spends the whole run declining them is a
             # crossing into Python per vehicle per tick for nothing.
@@ -591,11 +622,19 @@ def main() -> int:
             logger.info("recording -> %s", args.record_dir)
 
         started = time.time()
-        while session.Advance():
-            steps += 1
-            if args.steps and steps >= args.steps:
-                break
-            progress.after_step(session, steps, worst["metres"])
+        try:
+            while session.Advance():
+                steps += 1
+                if args.steps and steps >= args.steps:
+                    break
+                progress.after_step(session, steps, worst["metres"])
+        except CoSimSessionRefusedException as refused:
+            # SUMO, the server or the sun failed part-way, and both sides stopped together. The report
+            # says where, and which frame was the last whose truth holds.
+            logger.error("\nthe run stopped at %s (%s): %s", refused.StageName, refused.CauseName,
+                         refused.Message)
+            logger.info("%s", session.Report)
+            return 1
 
         elapsed = time.time() - started
         pacing = session.Report.Pacing

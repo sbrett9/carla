@@ -281,4 +281,68 @@ public sealed record SumoDriveSessionOptions(
 
     /// <summary>Where SUMO's own console output goes.</summary>
     public Action<string>? SumoOutput { get; set; }
+
+    /// <summary>
+    /// How long, in seconds, the session waits for SUMO to answer any one command -- a step included
+    /// -- before it decides SUMO has stopped answering and stops the run.
+    /// </summary>
+    /// <remarks>
+    /// <para>A SUMO that has hung or been suspended keeps its socket open and simply never answers, and
+    /// a session waiting on it forever holds the world in synchronous mode with nothing ever ticking it.
+    /// A bound turns that into a refusal like any other SUMO failure, and everything is given back.</para>
+    ///
+    /// <para>It has to exceed the slowest step the scenario will ever produce, because a step's answer
+    /// takes as long as the step. Measured steps are milliseconds -- 9.26 ms at 388 vehicles on the
+    /// Arapahoe network with the bridge's subscriptions -- so the default of 60 s is thousands of times
+    /// the slowest seen and still stops a hung run within a minute. Must be a positive number of
+    /// seconds.</para>
+    /// </remarks>
+    public double SumoAnswerTimeoutSeconds { get; set; } = 60.0;
+
+    /// <summary>
+    /// Whether the session drives each body's lamps: SUMO's brake and indicator signals, mapped bit by
+    /// bit, and headlights from the sun.
+    /// </summary>
+    /// <remarks>
+    /// On by default: the cost is a command in the tick's batch when a vehicle's lamps change and none
+    /// otherwise, and imagery with dark lamps is knowably wrong about something the simulation knows.
+    /// Off is a control condition for a sweep that wants to isolate the effect -- no lamp is then written
+    /// at all, so every body keeps the lamps it was spawned with, which are off.
+    /// </remarks>
+    public bool VehicleLampsDriven { get; set; } = true;
+
+    /// <summary>
+    /// The elevation of the sun, degrees, below which every rendered vehicle has its headlights on.
+    /// </summary>
+    /// <remarks>
+    /// Read against the geometric elevation the world reports; see <see cref="HeadlightRule"/>.
+    /// Headlights are driven only where the session binds the sun, so that the sun they follow is the
+    /// declared one.
+    /// </remarks>
+    public double HeadlightOnBelowDegrees { get; set; } = HeadlightRule.DefaultOnBelowDegrees;
+
+    /// <summary>
+    /// The elevation of the sun, degrees, above which headlights go off again. Above
+    /// <see cref="HeadlightOnBelowDegrees"/>, or the session is refused.
+    /// </summary>
+    public double HeadlightOffAboveDegrees { get; set; } = HeadlightRule.DefaultOffAboveDegrees;
+
+    /// <summary>
+    /// Where each collision SUMO registered goes, once it is over: the two vehicles, what SUMO called
+    /// it, where, the span of simulated time it lasted and the bodies that rendered the vehicles.
+    /// </summary>
+    /// <remarks>
+    /// A collision does not stop the run. It is a fact about the corpus a consumer filters on, and this
+    /// is the record it filters on. From the tick thread, once per collision; it must not block.
+    /// </remarks>
+    public Action<CollisionSpan>? OnCollision { get; set; }
+
+    /// <summary>
+    /// Where each vehicle SUMO gave up trying to insert goes, as the session notices it.
+    /// </summary>
+    /// <remarks>
+    /// SUMO drops such a vehicle without a word, so this is the only account of it. From the tick
+    /// thread; it must not block.
+    /// </remarks>
+    public Action<VehicleNotInserted>? OnVehicleNotInserted { get; set; }
 }

@@ -24,6 +24,7 @@ public sealed class CoSimRunReport
 {
     private readonly Dictionary<LaneInterpolationCase, long> _cases = [];
     private readonly Dictionary<UnrenderableReason, long> _refusedTypes = [];
+    private readonly Dictionary<RenderSetReleaseReason, long> _releases = [];
 
     /// <summary>The clock the session resolved.</summary>
     public required CoSimClock Clock { get; init; }
@@ -64,6 +65,18 @@ public sealed class CoSimRunReport
     /// declared or by SUMO's default -- and, where it could, that the run accepted it explicitly.
     /// </summary>
     public required TeleportingCheck Teleporting { get; init; }
+
+    /// <summary>
+    /// That a route SUMO cannot follow stops the run: the configuration does not tell SUMO to carry on
+    /// past one, which it would do silently.
+    /// </summary>
+    public required RouteErrorCheck RouteErrors { get; init; }
+
+    /// <summary>
+    /// What SUMO does about a collision in this run -- whether it registers one, and what it does to the
+    /// two vehicles -- as the configuration sets it or SUMO's default leaves it.
+    /// </summary>
+    public required SumoCollisionHandling CollisionHandling { get; init; }
 
     /// <summary>
     /// Which rendering layers the session wrote before its first tick, and what it wrote them to.
@@ -136,6 +149,71 @@ public sealed class CoSimRunReport
 
     /// <summary>The largest difference in refraction-corrected elevation, degrees, where it was carried.</summary>
     public double? WorstSolarCorrectedResidualDegrees => SunAudit?.WorstCorrected?.CorrectedResidualDegrees;
+
+    /// <summary>
+    /// How the run stopped, where it stopped because SUMO, the CARLA server or the world's sun failed
+    /// part-way -- the stage, which side, and the last frame whose truth still holds. Null for a run
+    /// that has not stopped that way.
+    /// </summary>
+    public CoSimRunStop? Stopped { get; internal set; }
+
+    /// <summary>
+    /// Collisions SUMO registered while the session read it, each counted once however many steps it
+    /// lasted.
+    /// </summary>
+    public long Collisions { get; internal set; }
+
+    /// <summary>The first few collisions, as closed spans.</summary>
+    public IReadOnlyList<CollisionSpan> CollisionSamples => _collisions;
+
+    /// <summary>
+    /// Vehicles SUMO was trying to insert and gave up on, which it does without a word.
+    /// </summary>
+    public long VehiclesNotInserted { get; internal set; }
+
+    /// <summary>The first few of those.</summary>
+    public IReadOnlyList<VehicleNotInserted> VehiclesNotInsertedSamples => _notInserted;
+
+    /// <summary>
+    /// Vehicles whose departure time had come and that SUMO had still not inserted, at the last SUMO
+    /// frame the session read.
+    /// </summary>
+    public int VehiclesAwaitingInsertion { get; internal set; }
+
+    /// <summary>
+    /// Render-set releases, by why each vehicle stopped holding a place -- the region, the capacity,
+    /// SUMO listing it as arrived, it vanishing without being listed, or the session ending.
+    /// </summary>
+    public IReadOnlyDictionary<RenderSetReleaseReason, long> Releases => _releases;
+
+    /// <summary>How many warnings SUMO wrote to its console, the fast-forward's included.</summary>
+    /// <remarks>
+    /// SUMO says on its console, and nowhere a client can ask, when it reroutes a vehicle it could not
+    /// route, teleports one, registers a collision or stops one in an emergency. Counted and sampled
+    /// rather than interpreted. Read live; a warning arrives a moment after the step that caused it.
+    /// </remarks>
+    public long SumoWarnings => Console?.WarningCount ?? 0;
+
+    /// <summary>The first few warnings SUMO wrote, as it wrote them.</summary>
+    public IReadOnlyList<string> SumoWarningSamples => Console?.WarningSamples ?? [];
+
+    /// <summary>SUMO's console, which the warnings are read from.</summary>
+    internal SumoConsoleTail? Console { get; init; }
+
+    /// <summary>Whether the session drove each body's lamps.</summary>
+    public bool VehicleLampsDriven { get; init; }
+
+    /// <summary>
+    /// The rule the headlights followed, and what it did, where the session drove lamps and bound the
+    /// sun; null where headlights were not driven, so every body's headlights stayed off.
+    /// </summary>
+    public HeadlightRule? Headlights { get; internal set; }
+
+    /// <summary>
+    /// Lamp commands written: one per body lent, one per change of a vehicle's lamps, one per body
+    /// given back and darkened.
+    /// </summary>
+    public long LampCommandsWritten { get; internal set; }
 
     /// <summary>World ticks the session ran.</summary>
     public long Ticks { get; internal set; }
@@ -316,9 +394,13 @@ public sealed class CoSimRunReport
 
     private const int DiscontinuitySampleLimit = 20;
     private const int BatchFailureSampleLimit = 10;
+    private const int CollisionSampleLimit = 10;
+    private const int NotInsertedSampleLimit = 10;
 
     private readonly List<string> _batchFailures = [];
     private readonly List<string> _discontinuities = [];
+    private readonly List<CollisionSpan> _collisions = [];
+    private readonly List<VehicleNotInserted> _notInserted = [];
     private double _positionDivergenceTotal;
     private double _velocityDivergenceTotal;
     private double _commandedSpeedTotal;
@@ -378,6 +460,26 @@ public sealed class CoSimRunReport
     internal void CountCase(LaneInterpolationCase which) =>
         _cases[which] = _cases.GetValueOrDefault(which) + 1;
 
+    internal void CountRelease(RenderSetReleaseReason reason) =>
+        _releases[reason] = _releases.GetValueOrDefault(reason) + 1;
+
+    internal void SampleCollision(in CollisionSpan span)
+    {
+        if (_collisions.Count < CollisionSampleLimit)
+        {
+            _collisions.Add(span);
+        }
+    }
+
+    internal void AddNotInserted(in VehicleNotInserted vehicle)
+    {
+        VehiclesNotInserted++;
+        if (_notInserted.Count < NotInsertedSampleLimit)
+        {
+            _notInserted.Add(vehicle);
+        }
+    }
+
     internal void CountRefusedType(UnrenderableReason reason) =>
         _refusedTypes[reason] = _refusedTypes.GetValueOrDefault(reason) + 1;
 
@@ -427,6 +529,11 @@ public sealed class CoSimRunReport
         {
             text.AppendLine("sun                the world has none; not audited");
             return;
+        }
+
+        if (sun.SunGoneWhenGivenBack)
+        {
+            text.AppendLine("  given back       the world had no sun left at the end, so nothing held the session's writes");
         }
 
         text.AppendLine($"  found holding    {sun.AsFound}");
@@ -513,6 +620,11 @@ public sealed class CoSimRunReport
     public override string ToString()
     {
         var text = new StringBuilder();
+        if (Stopped is { } stopped)
+        {
+            text.AppendLine($"STOPPED            {stopped}");
+        }
+
         text.AppendLine($"scenario           {ScenarioPath}");
         text.AppendLine($"world              {WorldPackagePath}");
         text.AppendLine($"catalogue          {CatalogueDigest}");
@@ -526,6 +638,8 @@ public sealed class CoSimRunReport
         }
 
         text.AppendLine($"teleporting        {Teleporting}");
+        text.AppendLine($"route errors       {RouteErrors}");
+        text.AppendLine($"collisions         {CollisionHandling}");
         text.AppendLine($"clock              {Clock}");
         if (SumoStepOverrideSeconds is { } forced)
         {
@@ -551,8 +665,40 @@ public sealed class CoSimRunReport
         {
             text.AppendLine($"  last pass        {pass}");
         }
+
+        if (_releases.Count > 0)
+        {
+            text.AppendLine("releases           "
+                            + string.Join(", ", _releases.OrderBy(entry => entry.Key)
+                                .Select(entry => $"{entry.Key} {entry.Value}")));
+        }
+
+        text.AppendLine($"collided           {Collisions} collision(s) registered");
+        foreach (CollisionSpan collision in _collisions)
+        {
+            text.AppendLine($"  collision        {collision}");
+        }
+
+        text.AppendLine($"not inserted       {VehiclesNotInserted} vehicle(s) SUMO gave up inserting; "
+                        + $"{VehiclesAwaitingInsertion} still waiting at the last frame read");
+        foreach (VehicleNotInserted dropped in _notInserted)
+        {
+            text.AppendLine($"  not inserted     {dropped}");
+        }
+
+        text.AppendLine($"sumo warnings      {SumoWarnings}");
+        foreach (string warning in SumoWarningSamples)
+        {
+            text.AppendLine($"  warning          {warning}");
+        }
         text.AppendLine($"bodies             {BodiesSpawned} spawned, {PoseDeclinesForNoBody} "
                         + "vehicle-ticks with no body to write to");
+        text.AppendLine("lamps              "
+                        + (!VehicleLampsDriven
+                            ? "not driven; every body kept the lamps it was spawned with"
+                            : $"SUMO's signals mapped bit by bit; "
+                              + (Headlights is { } rule ? rule.ToString() : "headlights not driven, no bound sun")
+                              + $"; {LampCommandsWritten} lamp commands"));
         text.AppendLine($"batches            {Batches} for {Ticks} ticks, {CommandsWritten} "
                         + $"commands, {BatchFailures} refused");
         foreach (string sample in _batchFailures)

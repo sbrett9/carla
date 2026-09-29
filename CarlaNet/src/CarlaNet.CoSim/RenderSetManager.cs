@@ -102,8 +102,13 @@ public sealed class RenderSetManager
     /// </summary>
     /// <param name="simulatedTimeSeconds">The simulated instant the decision is recorded at.</param>
     /// <param name="frames">Every promoted vehicle's state for this step.</param>
+    /// <param name="vanished">
+    /// The vehicles that stopped reporting a state this step without SUMO listing them among its
+    /// arrivals (<see cref="SubscribedPopulation.LastVanished"/>), or null where there were none.
+    /// </param>
     public void ReconcileRenderSet(double simulatedTimeSeconds,
-                                   IReadOnlyDictionary<string, CoSimVehicleFrame> frames)
+                                   IReadOnlyDictionary<string, CoSimVehicleFrame> frames,
+                                   IReadOnlyCollection<string>? vanished = null)
     {
         ArgumentNullException.ThrowIfNull(frames);
         LastNewlyAdmitted = 0;
@@ -112,7 +117,8 @@ public sealed class RenderSetManager
 
         // A vehicle that was rendered and is no longer in the frames is one SUMO removed, or one
         // demoted out of the subscription margin. Either way it is out of the render set, and which
-        // it was is what the reason records.
+        // it was is what the reason records: SUMO listed it as arrived, or it vanished without being
+        // listed.
         _leaving.Clear();
         foreach (string vehicleId in _admittedAt.Keys)
         {
@@ -124,7 +130,10 @@ public sealed class RenderSetManager
 
         foreach (string vehicleId in _leaving)
         {
-            Release(vehicleId, simulatedTimeSeconds, RenderSetReleaseReason.LeftTheSimulation);
+            Release(vehicleId, simulatedTimeSeconds,
+                    vanished is not null && vanished.Contains(vehicleId)
+                        ? RenderSetReleaseReason.Vanished
+                        : RenderSetReleaseReason.LeftTheSimulation);
         }
 
         _candidates.Clear();

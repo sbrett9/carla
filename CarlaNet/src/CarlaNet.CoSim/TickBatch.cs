@@ -1,5 +1,6 @@
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Commands;
+using CarlaNet.Types.Rpc.Lighting;
 
 using ActorId = uint;
 
@@ -22,6 +23,11 @@ namespace CarlaNet.CoSim;
 /// carries two pairs for one actor -- a body given back by one vehicle and lent to the next in the
 /// same tick -- the later pair is what the actor holds when the frame renders. Bodies given back are
 /// therefore written at the head of the next tick's batch, and every pose after them.</para>
+///
+/// <para><b>Lamps ride the same batch, after the pose they belong to.</b> A body lent to a vehicle has
+/// its lamps written with its first pose whatever they are -- the actor keeps whatever the vehicle that
+/// held it last was showing -- and afterwards only when they change; a body given back is darkened after
+/// its parking pair, so nothing parked beyond the sandbox is lit.</para>
 ///
 /// <para><b>Placing a new body writes no velocity.</b> The pool disables a body's physics before the
 /// body is ever lent, and disabling it zeroes the velocity. A velocity written while physics was still
@@ -47,10 +53,17 @@ internal sealed class TickBatch
     /// ticks, and a parking pose is a pose like any other: it costs an entry in the next batch rather
     /// than a round trip of its own.
     /// </remarks>
-    public void Park(ActorId actor, Transform parking)
+    /// <param name="actor">The body.</param>
+    /// <param name="parking">Its slot.</param>
+    /// <param name="darken">Also switch its lamps off, where the session drives lamps.</param>
+    public void Park(ActorId actor, Transform parking, bool darken = false)
     {
         _parked.Add(new ApplyTransformCommand(actor, parking));
         _parked.Add(new ApplyTargetVelocityCommand(actor, Still));
+        if (darken)
+        {
+            _parked.Add(new SetVehicleLightStateCommand(actor, VehicleLightStateFlags.None));
+        }
     }
 
     /// <summary>Start a tick's batch with every body given back since the last one.</summary>
@@ -67,6 +80,10 @@ internal sealed class TickBatch
         _commands.Add(new ApplyTransformCommand(actor, TransformOf(pose)));
         _commands.Add(new ApplyTargetVelocityCommand(actor, VelocityOf(pose)));
     }
+
+    /// <summary>Write a body's lamps.</summary>
+    public void Lamps(ActorId actor, VehicleLightStateFlags lamps) =>
+        _commands.Add(new SetVehicleLightStateCommand(actor, lamps));
 
     /// <summary>
     /// A body a vehicle holds and that gets no pose this tick: it is not moved, so it is told it is

@@ -14,6 +14,7 @@ public sealed class SolarAuditFailedException : CoSimSessionRefusedException
     public SolarAuditFailedException(string message, SolarAuditSample? sample) : base(message)
     {
         Sample = sample;
+        Cause = CoSimStopCause.SolarStateDisagreement;
     }
 
     /// <summary>The comparison that failed, or null where there was no sun to compare.</summary>

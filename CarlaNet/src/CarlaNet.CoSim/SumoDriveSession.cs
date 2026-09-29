@@ -4,6 +4,7 @@ using CarlaNet.Map.WorldPackage;
 using CarlaNet.Recording;
 using CarlaNet.Sumo;
 using CarlaNet.Types.Rpc.Commands;
+using CarlaNet.Types.Rpc.Lighting;
 
 using ActorId = uint;
 
@@ -36,9 +37,17 @@ public sealed class SumoDriveSession : IDisposable
     /// </summary>
     private const double WindowOpenTolerance = 1e-6;
 
+    /// <summary>
+    /// How long a SUMO that closed the connection is given to exit and deliver the last lines it wrote,
+    /// which say why, before the refusal quoting them is composed without them.
+    /// </summary>
+    private static readonly TimeSpan SumoLastWordsBound = TimeSpan.FromSeconds(5);
+
     private readonly SumoDriveSessionOptions _options;
+    private readonly ICarlaWorld? _world;
     private readonly SumoConnection _sumo;
     private readonly SumoConsoleTail _console;
+    private readonly SumoCollisionHandling _collisionHandling;
     private readonly SubscribedPopulation _population;
     private readonly RenderSetManager _renderSet;
     private readonly VehicleTypeBinder _binder;
@@ -59,19 +68,33 @@ public sealed class SumoDriveSession : IDisposable
     private readonly Stopwatch _bridgeClock = new();
     private readonly Stopwatch _sumoClock = new();
     private readonly RealTimePacer _pacer;
+    private readonly Dictionary<(string Collider, string Victim), CollisionSpan> _collisions = [];
+    private readonly HashSet<(string Collider, string Victim)> _collisionsReported = [];
+    private readonly List<(string Collider, string Victim)> _collisionsOver = [];
+    private readonly HashSet<string> _awaitingInsertion = [];
+    private readonly HashSet<string> _stillAwaiting = [];
+    private readonly HeadlightRule? _headlights;
+    private readonly Dictionary<string, (ActorId Actor, VehicleLightStateFlags Lamps)> _lampsWritten = [];
 
     private readonly (double Latitude, double Longitude) _origin;
     private SolarLease? _sun;
     private SolarAudit? _sunAudit;
     private long _tickIndex;
+    private double _frameSeconds;
+    private double? _lastCompleteSeconds;
+    private double? _reportedSunElevation;
     private bool _disposed;
 
     private SumoDriveSession(SumoDriveSessionOptions options,
+                             ICarlaWorld? world,
                              SumoConnection sumo,
                              SumoConsoleTail console,
                              SumoReleaseCheck release,
                              ScenarioLockCheck compiled,
                              TeleportingCheck teleporting,
+                             RouteErrorCheck routeErrors,
+                             SumoCollisionHandling collisionHandling,
+                             HeadlightRule? headlights,
                              CoSimClock clock,
                              SumoRoadNetwork network,
                              GroundSurface ground,
@@ -83,9 +106,12 @@ public sealed class SumoDriveSession : IDisposable
                              (double Latitude, double Longitude) origin)
     {
         _options = options;
+        _world = world;
         _origin = origin;
         _sumo = sumo;
         _console = console;
+        _collisionHandling = collisionHandling;
+        _headlights = headlights;
         _network = network;
         _lease = lease;
         _settings = settings;
@@ -94,8 +120,8 @@ public sealed class SumoDriveSession : IDisposable
         // A delegate that only counts has no frames of its own, so its ticks are numbered by the
         // session; nothing records a frame of a world that does not exist.
         Func<bool> counted = options.TickWorld ?? (() => true);
-        _tickWorld = options.World is { } world
-            ? world.Tick
+        _tickWorld = world is { } driven
+            ? driven.Tick
             : () => counted() ? (ulong)(_tickIndex + 1) : null;
         _population = new SubscribedPopulation(sumo.TraCI);
         _renderSet = new RenderSetManager(options.RenderSet, Release);
@@ -118,6 +144,10 @@ public sealed class SumoDriveSession : IDisposable
             Sumo = release,
             CompileLock = compiled,
             Teleporting = teleporting,
+            RouteErrors = routeErrors,
+            CollisionHandling = collisionHandling,
+            VehicleLampsDriven = options.VehicleLampsDriven,
+            Console = console,
             SumoStepOverrideSeconds = options.SumoStepOverrideSeconds,
             Pacing = _pacer,
             LayerVisibility = layers?.Applied ?? new Dictionary<string, bool>(),
@@ -171,6 +201,12 @@ public sealed class SumoDriveSession : IDisposable
     public IIlluminationSource Illumination => _illumination;
 
     /// <summary>
+    /// The SUMO this session drives, for a test that has to act on it as something outside the
+    /// session would -- take a vehicle out between two steps, suspend the process.
+    /// </summary>
+    internal SumoConnection Sumo => _sumo;
+
+    /// <summary>
     /// Start a session: check the world package is the loaded world's, check the SUMO it launches is
     /// the release that converted the world, check the scenario runs on the world package's network,
     /// validate the clock, check that network is in the world's frame, take the population lease, and
@@ -187,9 +223,11 @@ public sealed class SumoDriveSession : IDisposable
     /// another epoch; the scenario lets SUMO teleport a blocked vehicle and that was not accepted; the
     /// clock does not divide, the world is asynchronous, the network is not in
     /// the world's frame, something else already holds the world's population, or the world's sun
-    /// could not be bound; or SUMO could not load the scenario or failed during its fast-forward.
-    /// Its <see cref="CoSimSessionRefusedException.Stage"/> says how far the start had got, and
-    /// everything taken before it has been given back.
+    /// could not be bound; the scenario tells SUMO to carry on past a route it cannot follow; SUMO could
+    /// not load the scenario or failed during its fast-forward; or the connection to the CARLA server
+    /// failed. Its <see cref="CoSimSessionRefusedException.Stage"/> says how far the start had got, and
+    /// everything taken before it has been given back -- or, for what only an unreachable server could
+    /// hold, named in <see cref="CoSimSessionRefusedException.GiveBackFailures"/>.
     /// </exception>
     public static SumoDriveSession Start(SumoDriveSessionOptions options)
     {
@@ -200,13 +238,15 @@ public sealed class SumoDriveSession : IDisposable
         // taken before it, whatever its stage.
         CoSimSessionStage stage = CoSimSessionStage.Validation;
         var console = new SumoConsoleTail(options.SumoOutput);
+        List<Exception> giveBack = [];
         try
         {
-            return Begin(options, console, ref stage);
+            return Begin(options, console, ref stage, giveBack);
         }
         catch (CoSimSessionRefusedException refused)
         {
             refused.Stage = stage;
+            refused.GiveBackFailures = giveBack;
             throw;
         }
         catch (Exception failed) when (failed is FatalTraCIError or TraCIException)
@@ -218,21 +258,62 @@ public sealed class SumoDriveSession : IDisposable
                     : "SUMO failed while it was fast-forwarded to "
                       + options.WarmUpToSimulatedSecond.ToString("0.###", CultureInfo.InvariantCulture)
                       + " s or while the step of lookahead after it was read")
-                + $": {failed.Message}. {console.Describe()}. The session has given back everything "
-                + "it took.",
-                failed);
+                + $": {failed.Message}. {console.Describe()}. " + GaveBack(giveBack),
+                failed)
+            {
+                Cause = CoSimStopCause.SumoConnectionLost,
+                GiveBackFailures = giveBack,
+            };
+        }
+        catch (WorldConnectionLostException lost)
+        {
+            throw new CoSimSessionRefusedException(
+                stage,
+                $"The connection to the CARLA server failed while the session {WhatTheStartWasDoing(stage)} "
+                + $"({lost.Operation}): {lost.InnerException!.Message}. A server that cannot be reached "
+                + "cannot render the run. " + GaveBack(giveBack),
+                lost.InnerException)
+            {
+                Cause = CoSimStopCause.WorldConnectionLost,
+                GiveBackFailures = giveBack,
+            };
         }
     }
+
+    /// <summary>What the start sequence was doing at a stage, for a refusal to finish a sentence with.</summary>
+    private static string WhatTheStartWasDoing(CoSimSessionStage stage) => stage switch
+    {
+        CoSimSessionStage.Validation => "was checking the world the server has loaded",
+        CoSimSessionStage.Launch => "was taking the world's clock and rendering layers",
+        CoSimSessionStage.Authority => "was taking the population lease",
+        _ => "was binding the world's sun, before the first tick",
+    };
+
+    /// <summary>What a failed start gave back, as the sentence that ends its refusal.</summary>
+    private static string GaveBack(IReadOnlyList<Exception> failures) =>
+        failures.Count == 0
+            ? "The session has given back everything it took."
+            : "The session gave back everything it could reach; " + failures.Count + " give-back step(s) "
+              + "failed and are listed on the refusal: " + string.Join("; ", failures.Select(failure => failure.Message));
 
     /// <summary>The start sequence, with <paramref name="stage"/> kept at how far it has got.</summary>
     private static SumoDriveSession Begin(SumoDriveSessionOptions options,
                                           SumoConsoleTail console,
-                                          ref CoSimSessionStage stage)
+                                          ref CoSimSessionStage stage,
+                                          List<Exception> giveBack)
     {
         RequireADeclaredIllumination(options);
         RequireAUsablePace(options);
         RequireOneWayToAdvanceTheWorld(options);
         RequireAWindowTheSessionRenders(options);
+        RequireABoundOnSumoSAnswers(options);
+        HeadlightRule? headlights = options.VehicleLampsDriven
+            ? new HeadlightRule(options.HeadlightOnBelowDegrees, options.HeadlightOffAboveDegrees)
+            : null;
+
+        // Every call the session makes on the world goes through the guard, so that a connection that
+        // failed is told apart from a file that could not be read on the way.
+        ICarlaWorld? world = options.World is { } given ? new WorldConnectionGuard(given) : null;
 
         WorldPackageManifest manifest = WorldPackage.ReadManifest(options.WorldPackagePath);
         GroundSurface ground = GroundSurface.FromWorldPackage(options.WorldPackagePath);
@@ -242,7 +323,7 @@ public sealed class SumoDriveSession : IDisposable
         // Before SUMO is started and before anything on the server is written: a package that is not
         // the loaded world's is refused with the world exactly as it was found, and it costs no
         // process to find out.
-        if (options.World is { } loaded)
+        if (world is { } loaded)
         {
             LoadedWorldCheck.Require(options.WorldPackagePath, loaded.DescribeLoadedWorld());
         }
@@ -272,6 +353,13 @@ public sealed class SumoDriveSession : IDisposable
         TeleportingCheck teleporting = TeleportingCheck.Require(options.ScenarioPath,
                                                                 options.AllowTeleporting);
 
+        // And whether a route SUMO cannot follow stops SUMO, and so the run, as it does by default.
+        RouteErrorCheck routeErrors = RouteErrorCheck.Require(options.ScenarioPath);
+
+        // What SUMO will do about a collision, which the report carries and which decides whether
+        // there is anything to ask SUMO for on each step.
+        SumoCollisionHandling collisionHandling = SumoCollisionHandling.Read(options.ScenarioPath);
+
         List<string> extraArguments = [];
         if (options.SumoStepOverrideSeconds is { } forced)
         {
@@ -287,6 +375,7 @@ public sealed class SumoDriveSession : IDisposable
             {
                 ExtraArguments = extraArguments,
                 Output = console.Add,
+                ReceiveTimeout = TimeSpan.FromSeconds(options.SumoAnswerTimeoutSeconds),
             });
 
         WorldSettingsLease? settings = null;
@@ -296,7 +385,7 @@ public sealed class SumoDriveSession : IDisposable
             // Take the world's clock before anything else is checked against it: the settings the
             // session validates its own against have to be the ones the world is holding, not the
             // ones the caller asked for.
-            settings = options.World is { } claimed
+            settings = world is { } claimed
                 ? WorldSettingsLease.Take(claimed, options.WorldDeltaSeconds)
                 : null;
 
@@ -308,7 +397,7 @@ public sealed class SumoDriveSession : IDisposable
             // its collision and a hidden signal keeps its stop-line trigger -- so nothing here
             // removes a surface to drive on. Nothing in this mode would notice if it did: a
             // SUMO-driven body is teleported with its physics off.
-            layers = options.World is { } rendered
+            layers = world is { } rendered
                 ? LayerVisibilityLease.Take(rendered, new Dictionary<string, bool>
                 {
                     [LayerVisibilityLease.RoadLayer] = options.RoadLayerVisible,
@@ -331,23 +420,26 @@ public sealed class SumoDriveSession : IDisposable
             SumoDriveSession? session = null;
             try
             {
-                pool = options.World is { } world
-                    ? new VehicleBodyPool(world, VehicleParking.BeyondTheSurface(ground),
+                pool = world is { } bodies
+                    ? new VehicleBodyPool(bodies, VehicleParking.BeyondTheSurface(ground),
                                           options.MaximumBodies)
                     : null;
-                session = new SumoDriveSession(options, sumo, console, release, compiled, teleporting,
-                                               clock, network, ground, catalogue, lease, settings,
-                                               layers, pool,
-                                               (manifest.OriginLatitude, manifest.OriginLongitude));
+                session = new SumoDriveSession(options, world, sumo, console, release, compiled,
+                                               teleporting, routeErrors, collisionHandling, headlights, clock,
+                                               network, ground, catalogue, lease, settings, layers,
+                                               pool, (manifest.OriginLatitude, manifest.OriginLongitude));
                 session.Prime();
                 session.BindTheSun();
                 return session;
             }
             catch
             {
-                session?._sun?.Dispose();
-                pool?.DestroyAll();
-                lease.Dispose();
+                // Each step is attempted whatever the one before it did: a server that dropped the
+                // connection fails every step that writes to it, and none of those may stop the lease
+                // -- this process's own -- from being given back.
+                Attempt(giveBack, "give back the world's sun", () => session?._sun?.Dispose());
+                Attempt(giveBack, "destroy the bodies the session spawned", () => pool?.DestroyAll());
+                Attempt(giveBack, "give back the population lease", lease.Dispose);
                 throw;
             }
         }
@@ -356,10 +448,11 @@ public sealed class SumoDriveSession : IDisposable
             // Everything this method changed, given back, in the reverse order it was taken. A
             // session that failed to start must leave the world exactly as it found it: an operator
             // whose editor is stranded in synchronous mode is waiting on a tick from a process that
-            // never started.
-            layers?.Dispose();
-            settings?.Dispose();
-            sumo.Dispose();
+            // never started. Each step is attempted whatever the others did, so an unreachable
+            // server costs what only the server can hold and never the SUMO process.
+            Attempt(giveBack, "draw the rendering layers again", () => layers?.Dispose());
+            Attempt(giveBack, "give back the world's settings", () => settings?.Dispose());
+            Attempt(giveBack, "stop SUMO", sumo.Dispose);
             throw;
         }
     }
@@ -382,15 +475,32 @@ public sealed class SumoDriveSession : IDisposable
     /// </remarks>
     /// <exception cref="CoSimSessionRefusedException">
     /// The run cannot go on honestly: the world produced no frame, the sun disagreed with its
-    /// declaration or refused its write, the server offered no blueprint for a body the pool needed,
-    /// or SUMO failed. Its <see cref="CoSimSessionRefusedException.Stage"/> is
+    /// declaration, was absent or refused its write, the server offered no blueprint for a body the pool
+    /// needed, SUMO failed or stopped answering, or the connection to the CARLA server failed -- or the
+    /// run had already stopped for one of those. Its <see cref="CoSimSessionRefusedException.Stage"/> is
     /// <see cref="CoSimSessionStage.PreRoll"/> for a tick rendered before the window opens and
-    /// <see cref="CoSimSessionStage.Window"/> from then on. The caller disposes the session, which
-    /// gives everything back.
+    /// <see cref="CoSimSessionStage.Window"/> from then on, its
+    /// <see cref="CoSimSessionRefusedException.Cause"/> says which side failed, and the report's
+    /// <see cref="CoSimRunReport.Stopped"/> records it with the last frame whose truth holds. The caller
+    /// disposes the session, which gives everything back.
     /// </exception>
     public bool Advance()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        if (Report.Stopped is { } stopped)
+        {
+            // One side has already failed, and neither may be advanced without the other: a world
+            // ticked again after SUMO has gone renders a frozen pose buffer as though every vehicle
+            // stood still.
+            throw new CoSimSessionRefusedException(
+                stopped.Stage,
+                $"The run has already stopped ({stopped.Cause.Code()}), and a stopped run is not "
+                + "advanced again: dispose the session to give the world back.")
+            {
+                Cause = stopped.Cause,
+            };
+        }
+
         try
         {
             return AdvanceOneStep();
@@ -398,19 +508,53 @@ public sealed class SumoDriveSession : IDisposable
         catch (CoSimSessionRefusedException refused)
         {
             refused.Stage = StageOfTheTickBeingRendered();
-            throw;
+            throw Stop(refused);
         }
         catch (Exception failed) when (failed is FatalTraCIError or TraCIException)
         {
-            throw new CoSimSessionRefusedException(
+            // A SUMO that closed the connection is exiting, and what it said about why is still on its
+            // way through the pipe; one that is hung, or only refused a command, is not exiting.
+            if (failed is FatalTraCIError && !_sumo.TraCI.StoppedAnswering)
+            {
+                _sumo.WaitForExit(SumoLastWordsBound);
+            }
+
+            throw Stop(new CoSimSessionRefusedException(
                 StageOfTheTickBeingRendered(),
                 "SUMO failed at simulated "
                 + RenderedTimeSeconds.ToString("0.###", CultureInfo.InvariantCulture)
                 + $" s: {failed.Message}. {_console.Describe()}. A world that keeps ticking without "
                 + "SUMO renders a timeline nothing simulated, so the run stops here; dispose the session "
                 + "to give the world back.",
-                failed);
+                failed)
+            {
+                Cause = CoSimStopCause.SumoConnectionLost,
+            });
         }
+        catch (WorldConnectionLostException lost)
+        {
+            throw Stop(new CoSimSessionRefusedException(
+                StageOfTheTickBeingRendered(),
+                "The connection to the CARLA server failed at simulated "
+                + RenderedTimeSeconds.ToString("0.###", CultureInfo.InvariantCulture)
+                + $" s ({lost.Operation}): {lost.InnerException!.Message}. SUMO stepping on without a "
+                + "world to render it produces truth no frame shows, so the run stops here; dispose the "
+                + "session to give back what can still be reached.",
+                lost.InnerException)
+            {
+                Cause = CoSimStopCause.WorldConnectionLost,
+            });
+        }
+    }
+
+    /// <summary>
+    /// Record that the run stopped, on the refusal that stopped it, and answer the refusal.
+    /// </summary>
+    private CoSimSessionRefusedException Stop(CoSimSessionRefusedException refused)
+    {
+        Report.Stopped ??= new CoSimRunStop(refused.Stage, refused.Cause, _lastCompleteSeconds,
+                                            Report.Ticks, refused.Message);
+        return refused;
     }
 
     /// <summary>
@@ -445,11 +589,15 @@ public sealed class SumoDriveSession : IDisposable
             {
                 throw new CoSimSessionRefusedException(
                     $"The CARLA world produced no frame for tick {_tickIndex}. A world that stops "
-                    + "ticking while SUMO keeps stepping renders a timeline nothing simulated.");
+                    + "ticking while SUMO keeps stepping renders a timeline nothing simulated.")
+                {
+                    Cause = CoSimStopCause.WorldTickTimeout,
+                };
             }
 
             AuditTheSun(frame);
             MeasureDivergence();
+            _lastCompleteSeconds = RenderedTimeSeconds;
             _tickIndex++;
             Report.Ticks++;
             RenderedTimeSeconds += Clock.WorldDeltaSeconds;
@@ -481,8 +629,9 @@ public sealed class SumoDriveSession : IDisposable
 
         _disposed = true;
         List<Exception> failures = [];
-        Attempt(failures, () => _renderSet.CloseAll(RenderedTimeSeconds));
-        Attempt(failures, () =>
+        Attempt(failures, "close the rendered intervals", () => _renderSet.CloseAll(RenderedTimeSeconds));
+        Attempt(failures, "close the collisions still in progress", CloseEveryCollision);
+        Attempt(failures, "complete the report", () =>
         {
             Report.Admissions = _renderSet.Admissions;
             Report.CapacityDeclines = _renderSet.CapacityDeclines;
@@ -499,12 +648,12 @@ public sealed class SumoDriveSession : IDisposable
                 Report.BodyDeclines = counted.Exhaustions;
             }
         });
-        Attempt(failures, () => _sun?.Dispose());
-        Attempt(failures, () => _pool?.DestroyAll());
-        Attempt(failures, () => _layers?.Dispose());
-        Attempt(failures, () => _settings?.Dispose());
-        Attempt(failures, _lease.Dispose);
-        Attempt(failures, _sumo.Dispose);
+        Attempt(failures, "give back the world's sun", () => _sun?.Dispose());
+        Attempt(failures, "destroy the bodies the session spawned", () => _pool?.DestroyAll());
+        Attempt(failures, "draw the rendering layers again", () => _layers?.Dispose());
+        Attempt(failures, "give back the world's settings", () => _settings?.Dispose());
+        Attempt(failures, "give back the population lease", _lease.Dispose);
+        Attempt(failures, "stop SUMO", _sumo.Dispose);
 
         if (failures.Count > 0)
         {
@@ -526,8 +675,14 @@ public sealed class SumoDriveSession : IDisposable
         }
 
         _population.Seed(_sumo.Vehicles.Ids);
-        ReconcileAndRead();
-        RenderedTimeSeconds = _sumo.Time;
+        _frameSeconds = _sumo.Time;
+        IReadOnlyList<string> departed = ReconcileAndRead();
+
+        // The queue as the fast-forward left it: what SUMO gives up on from here is noticed against it.
+        // Whatever it gave up on during the fast-forward was before the first frame, and no frame of
+        // this session could have held it.
+        NoticeTheInsertionQueue(departed, seeding: true);
+        RenderedTimeSeconds = _frameSeconds;
         FirstRenderedSeconds = RenderedTimeSeconds;
         WindowOpensAtSeconds = _options.WindowOpensAtSimulatedSecond ?? RenderedTimeSeconds;
         Report.FirstRenderedSeconds = FirstRenderedSeconds;
@@ -551,7 +706,7 @@ public sealed class SumoDriveSession : IDisposable
     /// </remarks>
     private void BindTheSun()
     {
-        if (_options.World is not { } world || _options.Illumination is not { } policy)
+        if (_world is not { } world || _options.Illumination is not { } policy)
         {
             return;
         }
@@ -576,6 +731,9 @@ public sealed class SumoDriveSession : IDisposable
         Report.Sun = _sun;
         if (_sun.AtWindowOpen is { } opened)
         {
+            // The first frame's headlights follow the sun the world reported once it was bound.
+            _reportedSunElevation = opened.ElevationDegrees;
+            Report.Headlights = _headlights;
             // The one comparison that sees the refraction-corrected elevation whatever the server's
             // observer header carries, taken before anything is rendered under it.
             _sunAudit = new SolarAudit(_sun.Declared, _origin.Latitude, _origin.Longitude);
@@ -612,7 +770,7 @@ public sealed class SumoDriveSession : IDisposable
     /// </remarks>
     private void AuditTheSun(ulong frame)
     {
-        if (_options.World is not { } world || _options.Illumination is not { } policy)
+        if (_world is not { } world || _options.Illumination is not { } policy)
         {
             return;
         }
@@ -623,6 +781,7 @@ public sealed class SumoDriveSession : IDisposable
             if (_sunAudit is { } audit)
             {
                 sample = audit.AuditTick(_tickIndex, RenderedTimeSeconds, world.ObservedSolarState());
+                _reportedSunElevation = sample.Observed.ElevationDegrees;
             }
         }
         catch (SolarAuditFailedException failed)
@@ -678,23 +837,162 @@ public sealed class SumoDriveSession : IDisposable
         int remaining = _sumo.Simulation.ExpectedVehicleCount;
         _sumoClock.Stop();
 
+        double waitingAt = _frameSeconds;
+        _frameSeconds = _sumo.Time;
         CopyFrames(_next, _previous);
-        ReconcileAndRead();
+        IReadOnlyList<string> departed = ReconcileAndRead();
+        NoticeTheInsertionQueue(departed, seeding: false, waitingAt);
         MeasureLaneGeometry();
         return remaining > 0;
     }
 
-    private void ReconcileAndRead()
+    /// <summary>
+    /// Read the SUMO frame just stepped to: who departed and arrived, where everyone is, the render set
+    /// that follows, and the collisions SUMO registered. Answers the departures, which the insertion
+    /// queue is compared against.
+    /// </summary>
+    private IReadOnlyList<string> ReconcileAndRead()
     {
-        _population.Reconcile(_sumo.Simulation.DepartedVehicleIds,
-                              _sumo.Simulation.ArrivedVehicleIds);
+        IReadOnlyList<string> departed = _sumo.Simulation.DepartedVehicleIds;
+        _population.Reconcile(departed, _sumo.Simulation.ArrivedVehicleIds);
         _population.ReadPositions(_positions);
         _renderSet.ReconcileSubscriptions(_population, _positions);
         _population.ReadFrames(_next);
-        _renderSet.ReconcileRenderSet(_sumo.Time, _next);
+        _renderSet.ReconcileRenderSet(_frameSeconds, _next, _population.LastVanished);
         Report.Admissions = _renderSet.Admissions;
         Report.CapacityDeclines = _renderSet.CapacityDeclines;
         PublishTheAdmissionPass();
+        RecordCollisions();
+        return departed;
+    }
+
+    /// <summary>
+    /// Open a span for every collision SUMO reports for the first time, and close and hand out every
+    /// one it no longer reports.
+    /// </summary>
+    /// <remarks>
+    /// <para>A collision is a fact about the corpus, not a failure of the run, so nothing here stops
+    /// anything: the run goes on as SUMO simulates it, and the span is what a consumer filters on.
+    /// SUMO reports a collision again on each step its two vehicles stay in contact, keeping the roles
+    /// it first gave them, so a pair seen before is the same collision still going on.</para>
+    ///
+    /// <para>Nothing is asked where SUMO registers no collisions at all -- <c>collision.action none</c>,
+    /// or <c>ignore-accidents</c> -- which the report states, so an empty record is not mistaken for
+    /// a run in which nothing collided.</para>
+    /// </remarks>
+    private void RecordCollisions()
+    {
+        if (!_collisionHandling.Registered)
+        {
+            return;
+        }
+
+        _collisionsReported.Clear();
+        foreach (SumoCollision collision in _sumo.Simulation.Collisions)
+        {
+            (string Collider, string Victim) pair = (collision.ColliderId, collision.VictimId);
+            _collisionsReported.Add(pair);
+            if (_collisions.TryGetValue(pair, out CollisionSpan open))
+            {
+                // A vehicle admitted on the step its collision began is given its body on the next
+                // tick, so a body not yet named is named once the vehicle holds one.
+                if (open.ColliderActor == 0 || open.VictimActor == 0)
+                {
+                    _collisions[pair] = open with
+                    {
+                        ColliderActor = open.ColliderActor != 0 ? open.ColliderActor : BodyOf(pair.Collider),
+                        VictimActor = open.VictimActor != 0 ? open.VictimActor : BodyOf(pair.Victim),
+                    };
+                }
+
+                continue;
+            }
+
+            Report.Collisions++;
+            _collisions[pair] = new CollisionSpan(collision, _frameSeconds, _frameSeconds,
+                                                  BodyOf(collision.ColliderId), BodyOf(collision.VictimId));
+        }
+
+        _collisionsOver.Clear();
+        foreach ((string Collider, string Victim) pair in _collisions.Keys)
+        {
+            if (!_collisionsReported.Contains(pair))
+            {
+                _collisionsOver.Add(pair);
+            }
+        }
+
+        foreach ((string Collider, string Victim) pair in _collisionsOver)
+        {
+            CloseCollision(pair, _frameSeconds);
+        }
+    }
+
+    /// <summary>Close every collision still in progress, which is what the end of a session does to them.</summary>
+    private void CloseEveryCollision()
+    {
+        foreach ((string Collider, string Victim) pair in _collisions.Keys.ToList())
+        {
+            CloseCollision(pair, _frameSeconds);
+        }
+    }
+
+    private void CloseCollision((string Collider, string Victim) pair, double endedAtSeconds)
+    {
+        if (!_collisions.Remove(pair, out CollisionSpan open))
+        {
+            return;
+        }
+
+        CollisionSpan closed = open with { EndedAtSeconds = endedAtSeconds };
+        Report.SampleCollision(closed);
+        _options.OnCollision?.Invoke(closed);
+    }
+
+    /// <summary>The body a vehicle holds, or zero where it holds none.</summary>
+    private ActorId BodyOf(string vehicleId) =>
+        _pool is { } pool && pool.TryGetHeld(vehicleId, out PooledBody body) ? body.Actor : 0;
+
+    /// <summary>
+    /// Compare SUMO's insertion queue with the one the previous frame had, and record every vehicle
+    /// that left it without departing.
+    /// </summary>
+    /// <param name="departed">The vehicles SUMO inserted in the step just taken.</param>
+    /// <param name="seeding">Take the queue as it stands, with nothing before it to compare against.</param>
+    /// <param name="waitingAtSeconds">The simulated second of the previous frame.</param>
+    /// <remarks>
+    /// SUMO drops a vehicle it could not insert within <c>max-depart-delay</c> without a warning or a
+    /// state change, so a vehicle that was waiting and is neither waiting nor departed now is the only
+    /// sign of it. The authored population is then smaller than the scenario says, and nothing else in
+    /// the run would show it.
+    /// </remarks>
+    private void NoticeTheInsertionQueue(IReadOnlyList<string> departed, bool seeding,
+                                         double waitingAtSeconds = 0.0)
+    {
+        _stillAwaiting.Clear();
+        foreach (string vehicleId in _sumo.Simulation.PendingVehicleIds)
+        {
+            _stillAwaiting.Add(vehicleId);
+        }
+
+        if (!seeding)
+        {
+            foreach (string vehicleId in _awaitingInsertion)
+            {
+                if (_stillAwaiting.Contains(vehicleId) || departed.Contains(vehicleId))
+                {
+                    continue;
+                }
+
+                var dropped = new VehicleNotInserted(vehicleId, waitingAtSeconds, _frameSeconds);
+                Report.AddNotInserted(dropped);
+                _options.OnVehicleNotInserted?.Invoke(dropped);
+            }
+        }
+
+        _awaitingInsertion.Clear();
+        _awaitingInsertion.UnionWith(_stillAwaiting);
+        Report.VehiclesAwaitingInsertion = _awaitingInsertion.Count;
     }
 
     /// <summary>
@@ -711,7 +1009,7 @@ public sealed class SumoDriveSession : IDisposable
         int admitted = _renderSet.RenderedVehicleIds.Count;
         var pass = new AdmissionPass(
             _tickIndex,
-            _sumo.Time,
+            _frameSeconds,
             _positions.Count,
             _population.PromotedVehicleIds.Count,
             _renderSet.LastEligible,
@@ -733,6 +1031,7 @@ public sealed class SumoDriveSession : IDisposable
         // vehicle's pose and velocity once the batch has been applied.
         _batch.Begin();
         _commanded.Clear();
+        VehicleLightStateFlags headlights = HeadlightsForThisTick();
 
         foreach (string vehicleId in _renderSet.RenderedVehicleIds)
         {
@@ -787,6 +1086,7 @@ public sealed class SumoDriveSession : IDisposable
                 BumperResidual(applied, extent, state.X, state.Y));
 
             ActorId actor = 0;
+            VehicleLightStateFlags lamps = VehicleLightStateFlags.None;
             if (_pool is { } pool)
             {
                 if (pool.TryCheckOut(vehicleId, extent.BlueprintId, out PooledBody body))
@@ -794,6 +1094,7 @@ public sealed class SumoDriveSession : IDisposable
                     actor = body.Actor;
                     _batch.Pose(actor, applied);
                     _commanded.Add((vehicleId, actor, applied));
+                    lamps = WriteTheLamps(vehicleId, actor, from.Signals, headlights);
                 }
                 else
                 {
@@ -803,7 +1104,7 @@ public sealed class SumoDriveSession : IDisposable
 
             _options.OnPose?.Invoke(new CoSimPoseRecord(
                 _tickIndex, RenderedTimeSeconds, Clock.IsCaptureTick(_tickIndex), actor, applied,
-                state.Case, state.X, state.Y, state.HeadingDegrees));
+                state.Case, state.X, state.Y, state.HeadingDegrees, from.Signals, lamps));
         }
 
         if (_pool is { } counted)
@@ -811,6 +1112,51 @@ public sealed class SumoDriveSession : IDisposable
             Report.BodiesSpawned = counted.Bodies.Count;
             Report.BodyDeclines = counted.Exhaustions;
         }
+    }
+
+    /// <summary>
+    /// The headlights every rendered vehicle shows this tick, from the sun the world last reported;
+    /// none where the session drives no lamps or binds no sun.
+    /// </summary>
+    /// <remarks>
+    /// Only a sun the session bound and audits drives them: under the policy that leaves the sun alone
+    /// nothing says the sun in the imagery is the declared one, and a lamp rule fed by it would inherit
+    /// whatever the world was holding.
+    /// </remarks>
+    private VehicleLightStateFlags HeadlightsForThisTick() =>
+        _headlights is { } rule && _sunAudit is not null && _reportedSunElevation is { } elevation
+            ? rule.Update(elevation)
+            : VehicleLightStateFlags.None;
+
+    /// <summary>
+    /// Write a body's lamps where they differ from what the session last wrote for this vehicle on
+    /// this body, and answer the lamps it holds.
+    /// </summary>
+    /// <remarks>
+    /// A body newly lent to a vehicle has nothing written for that vehicle yet, so its lamps are written
+    /// whatever they are, <see cref="VehicleLightStateFlags.None"/> included: the actor keeps the lamps
+    /// of the last vehicle that held it, and a car admitted at noon must not wear the headlights of the
+    /// one that drove it at dusk. After that only a change is written, so a tick's batch carries a lamp
+    /// command only for a vehicle whose signals changed at that SUMO frame or when the headlights switch.
+    /// </remarks>
+    private VehicleLightStateFlags WriteTheLamps(string vehicleId, ActorId actor, SumoVehicleSignals signals,
+                                                 VehicleLightStateFlags headlights)
+    {
+        if (!_options.VehicleLampsDriven)
+        {
+            return VehicleLightStateFlags.None;
+        }
+
+        VehicleLightStateFlags lamps = VehicleLampMapping.FromSumo(signals) | headlights;
+        if (!_lampsWritten.TryGetValue(vehicleId, out (ActorId Actor, VehicleLightStateFlags Lamps) last)
+            || last.Actor != actor || last.Lamps != lamps)
+        {
+            _batch.Lamps(actor, lamps);
+            _lampsWritten[vehicleId] = (actor, lamps);
+            Report.LampCommandsWritten++;
+        }
+
+        return lamps;
     }
 
     /// <summary>
@@ -829,9 +1175,16 @@ public sealed class SumoDriveSession : IDisposable
         if (_pool is { } pool && pool.TryCheckIn(interval.VehicleId, out PooledBody body))
         {
             actor = body.Actor;
-            _batch.Park(actor, body.Parking);
+            _batch.Park(actor, body.Parking, darken: _options.VehicleLampsDriven);
+            if (_options.VehicleLampsDriven)
+            {
+                Report.LampCommandsWritten++;
+            }
         }
 
+        _lampsWritten.Remove(interval.VehicleId);
+
+        Report.CountRelease(interval.ReleaseReason);
         _options.OnRelease?.Invoke(interval with { Actor = actor });
     }
 
@@ -861,7 +1214,7 @@ public sealed class SumoDriveSession : IDisposable
     /// </remarks>
     private void WriteTheBatch()
     {
-        if (_options.World is not { } world || _batch.Commands.Count == 0)
+        if (_world is not { } world || _batch.Commands.Count == 0)
         {
             return;
         }
@@ -899,7 +1252,7 @@ public sealed class SumoDriveSession : IDisposable
     /// </remarks>
     private void MeasureDivergence()
     {
-        if (_options.World is not { } world)
+        if (_world is not { } world)
         {
             return;
         }
@@ -920,7 +1273,14 @@ public sealed class SumoDriveSession : IDisposable
         }
     }
 
-    private static void Attempt(List<Exception> failures, Action step)
+    /// <summary>
+    /// Run one step of giving the world back, keeping its failure rather than letting it stop the
+    /// steps after it.
+    /// </summary>
+    /// <param name="failures">Where a failure is kept.</param>
+    /// <param name="what">The step, in words that finish "could not ...".</param>
+    /// <param name="step">The step.</param>
+    private static void Attempt(List<Exception> failures, string what, Action step)
     {
         try
         {
@@ -928,7 +1288,9 @@ public sealed class SumoDriveSession : IDisposable
         }
         catch (Exception failure)
         {
-            failures.Add(failure);
+            // A connection that failed is kept as the connection's own failure, named by the step.
+            Exception cause = failure is WorldConnectionLostException lost ? lost.InnerException! : failure;
+            failures.Add(new InvalidOperationException($"Could not {what}: {cause.Message}", cause));
         }
     }
 
@@ -1007,6 +1369,26 @@ public sealed class SumoDriveSession : IDisposable
             throw new CoSimSessionRefusedException(
                 "The session was given no wall clock to pace against and time its ticks by. Leave "
                 + "it at the system's unless a test is standing one in.");
+        }
+    }
+
+    /// <summary>
+    /// Refuse a bound on SUMO's answers that is not a positive length of time.
+    /// </summary>
+    /// <remarks>
+    /// A session with no bound waits forever on a SUMO that has hung, holding the world in synchronous
+    /// mode with nothing ticking it. A bound that is zero, negative or not a number is not rounded to
+    /// one that works: whichever that was, nobody asked for it.
+    /// </remarks>
+    private static void RequireABoundOnSumoSAnswers(SumoDriveSessionOptions options)
+    {
+        if (!double.IsFinite(options.SumoAnswerTimeoutSeconds) || options.SumoAnswerTimeoutSeconds <= 0.0)
+        {
+            throw new CoSimSessionRefusedException(
+                $"SUMO's answers are bounded at {options.SumoAnswerTimeoutSeconds} s. The bound is how "
+                + "long the session waits for SUMO to answer one command, a step included, before it "
+                + "decides SUMO has stopped answering and stops the run, so it has to be a positive "
+                + "number of seconds longer than the slowest step the scenario produces.");
         }
     }
 

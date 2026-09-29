@@ -1,3 +1,6 @@
+using CarlaNet.Sumo;
+using CarlaNet.Types.Rpc.Lighting;
+
 using ActorId = uint;
 
 namespace CarlaNet.CoSim;
@@ -17,6 +20,14 @@ namespace CarlaNet.CoSim;
 /// <param name="SumoX">Where SUMO said the front bumper was, for a reader checking the conversion.</param>
 /// <param name="SumoY">The same, northing.</param>
 /// <param name="SumoHeadingDegrees">And the heading SUMO reported, clockwise from north.</param>
+/// <param name="Signals">
+/// SUMO's signal word for the vehicle at the SUMO frame this tick is rendered from -- the raw word, so a
+/// reader can tell what the simulation said from what the rendering made of it.
+/// </param>
+/// <param name="Lamps">
+/// The lamps the body holds after this tick's batch: <see cref="Signals"/> mapped bit by bit, and the
+/// headlights the sun asserts; <see cref="VehicleLightStateFlags.None"/> where the session drives no lamps.
+/// </param>
 public readonly record struct CoSimPoseRecord(
     long TickIndex,
     double SimulatedTimeSeconds,
@@ -26,4 +37,6 @@ public readonly record struct CoSimPoseRecord(
     LaneInterpolationCase Case,
     double SumoX,
     double SumoY,
-    double SumoHeadingDegrees);
+    double SumoHeadingDegrees,
+    SumoVehicleSignals Signals = SumoVehicleSignals.None,
+    VehicleLightStateFlags Lamps = VehicleLightStateFlags.None);
