@@ -237,10 +237,12 @@ class SensorRig:
             ground_z: Ground elevation in local Z, or None to clear
         """
         self.ground_z = ground_z
+        # Refreshed several times a second while the camera flies, and shown in the heads-up
+        # display as its height above ground, so the log carries it only when asked for.
         if ground_z is not None:
-            self.logger.info(f"ground z set: {ground_z:.2f}m")
+            self.logger.debug(f"ground z set: {ground_z:.2f}m")
         else:
-            self.logger.info("ground z cleared")
+            self.logger.debug("ground z cleared")
 
     def store_depth(self, img, fallback_pose: Pose | None = None) -> None:
         """Process and store the latest depth frame.
