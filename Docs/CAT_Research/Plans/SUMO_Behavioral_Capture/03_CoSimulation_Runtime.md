@@ -44,6 +44,7 @@ advancement policy, the headlight predicate),
 | 2026-09-28 | §3.5.3, §8.2: vehicle lamps as built — SUMO's signals mapped bit by bit, headlights from the reported sun, written on a loan and on a change, darkened on release. |
 | 2026-09-28 | §11.1–§11.7, §11.10, D3.30, D3.32–D3.35: the failure paths as built — SUMO's answers bounded, a dropped CARLA connection a refusal of its stage, the stop recorded, vanished vehicles, route errors, uninsertable vehicles, collision spans and a sun that goes away. §12 G15 closed. |
 | 2026-09-29 | §2.6, D3.36: a session can launch `sumo-gui` in place of `sumo`, from the same installation and held to the release pin by its own release; the report names the binary that ran. |
+| 2026-09-29 | §7.2, D3.26: the bare-earth grids are compared by digest (`get_bare_earth_digest`), not fetched — measured 146 s and 153 s for Bahonar's two; the manifest records them; the session's telemetry takes the package's grids. |
 
 ---
 
@@ -1523,20 +1524,53 @@ sides:
 |---|---|---|
 | the bare-earth reference record (`get_bare_earth_reference`), published by the building client and again by a world restored from its level | — | present, or the session is refused: a stock map has none |
 | the record's drape flag, grid corner, cell size, columns and rows | `DrapeActive`, `GridMinX/YMeters`, `GridCellSizeMeters`, `GridNumCols/Rows` | equal, positions within 1 mm |
-| the record's offset and bare-earth grids (`get_bare_earth_offset_grid`, `get_bare_earth_dtm_grid`) | `bareearth.bin` | bit for bit — the session seats vehicles on the package's grids and the world's collision surface and telemetry use the record's |
+| the SHA-1 of the record's offset and bare-earth grids (`get_bare_earth_digest`), computed by the server when the record is set | the SHA-1 of each grid in `bareearth.bin`, hashed from the entry's bytes (`WorldPackage.HashGrid`) | equal, which is bit for bit — the session seats vehicles on the package's grids and the world's collision surface and telemetry use the record's |
+| — | `BareEarthOffsetSha1`, `BareEarthDtmSha1` in `world.json`, where the package records them | equal to what its `bareearth.bin` hashes to; a package written before they were recorded has none, and nothing depends on them |
 | the georeference origin (`get_cesium_origin`) | `OriginLatitude/Longitude`, `OriginHeightMeters` | within 1e-9° and 1 mm |
 | the OpenDRIVE served for the loaded map (`get_map_data`) | `map.xodr` | `WorldPackage.HashOpenDrive` of each; this is what tells two builds of one area apart when origin and grid coincide |
 
 The grids are compared bit for bit because a second client's copy of the record is byte-identical to
 the building client's (`CarlaNet/python/test_bare_earth_reference.py`) and the package's grids are
-written from the same arrays. The manifest's `OpenDriveSha256` is that same normalised digest of `map.xodr`, **measured
+written from the same arrays. **They are compared by digest because fetching them is what the check
+cost.** On the Bahonar world each grid is 3,609 × 2,109 = 7,611,381 floats, and the two fetches
+(`get_bare_earth_offset_grid`, `get_bare_earth_dtm_grid`) took **146 s and 153 s**; most of that is the
+client's message framing, but even framed well it is 61 MB sent to establish that two copies are equal.
+So the server computes the SHA-1 of each grid once, when the record is set — by the building client's
+`set_bare_earth_reference` or by `GeoreferencedWorldInitializer` on a level load, both through
+`UBareEarthReference::Set` — caches it with the record, and serves both digests on
+`get_bare_earth_digest`; the check hashes the package's grids locally and compares. Both sides hash the
+same bytes, each grid's float32 values little-endian and row-major as `bareearth.bin` holds them, so a
+differing digest is a differing grid, in one bit of one cell or in all of them; a refusal names both
+digests, since a digest cannot say which cell differs. SHA-1 because the server computes it with the
+engine's own Core (`FSHA1`): Core's SHA-256 entry point has no Windows or Linux implementation and every
+working SHA-256 in the engine is OpenSSL's, a dependency the plugin does not have, while .NET computes
+SHA-1 natively. It tells one build's grids from another's; an adversary is outside what the check can
+see anyway, since the server takes a record from any client. A draped world whose server publishes no
+digest — one built before the call existed — is refused and named, not admitted on silence.
+`WorldPackage.Write` records both digests in `world.json` from the grids it writes, as the grids'
+identity for a reader with no server; the check verifies them where present and does not need them.
+
+The digests also spare the recorder a fetch. A capture run's recorders share the session's client, and
+their truth telemetry recovered the record with `EnsureBareEarthReference`, which fetched the same two
+grids once per world. In `run_sumo_drive.py` that fetch ran after the session had started, under the
+30 s per-call timeout, so on Bahonar it could not finish, and `EnsureBareEarthReference` swallows the
+failure and leaves bare-earth truth unknown — read from the code, not seen in a run. Once the check has
+admitted the package, the session hands the package's grids to
+that client (`ICarlaWorld.AdoptBareEarthGrids` → `CarlaClient.AdoptBareEarthReference`), which takes them
+only where the server's digests still match, and otherwise changes nothing, so the telemetry fetches as
+it did. A client with no package keeps the fetch.
+
+The manifest's `OpenDriveSha256` is that same normalised digest of `map.xodr`, **measured
 equal on all three packages in `Build/world-packages`**. The staging bounds are not compared: on all
 three they equal the drape grid's extent exactly, so they add nothing a draped world does not already
 carry. The margins on doubles are not measurements — an unchanged world returns the identical double —
 and exist so a value that has passed through a restored level's settings asset is not refused over
 its last bit. **Not yet measured against a running server:** the server's leg of the OpenDRIVE
-comparison (the text it received, written to a file or held by a level, and served back), and the
-level-restored path for any of the values.
+comparison (the text it received, written to a file or held by a level, and served back), the server's
+grid digests (`test_bare_earth_reference.py` asserts them against `hashlib` of the grids fetched the
+slow way and of the package's `bareearth.bin`, and `--package` does so for a world already loaded), and
+the level-restored path for any of the values. Offline, the .NET digest of Bahonar's two grids equals
+`hashlib`'s over the entry's bytes.
 
 **What it cannot see.** The `.net.xml` never reaches the server, so the loaded world is tied to it
 only through the package (the loaded OpenDRIVE is the package's, and the package's network came from
@@ -1548,11 +1582,18 @@ session agree and the lane-geometry residual reads zero. The server publishes no
 streams. It accepts a record from any client and does not tie it to the roads it loaded, so the record
 is taken as the world's statement about itself. And it is checked once, at session start.
 
-**Exercised by** `LoadedWorldCheckTests` — each value changed alone is refused and named; each of the
-three shipped packages describes the world it was written from, and Gardnerville's package against a
-server holding Arapahoe is refused on its grid, its origin and its OpenDRIVE — and by two session tests
-showing that a refusal, for a world with no record or for another build's ground, leaves the world
-untouched. Each was seen failing against a check with that comparison removed.
+**Exercised by** `LoadedWorldCheckTests` — each value changed alone is refused and named, a grid
+differing in one bit of one cell refused naming both digests, a draped world publishing no digest
+refused, a constant-shift world compared by its constant alone, a manifest recording another grid than
+it carries refused and one recording none admitted; each of the three shipped packages describes the
+world it was written from, its grid entry hashes as its decoded grids do, and Gardnerville's package
+against a server holding Arapahoe is refused on its grid, its origin and its OpenDRIVE — by two session
+tests showing that a refusal, for a world with no record or for another build's ground, leaves the world
+untouched and hands nothing to the telemetry, and one showing an admitted package handed over once,
+after the check; by `WorldPackageTests` for the digest's byte layout, pinned against `hashlib`, and the
+manifest's digests; and by `BareEarthDigestRpcTests`, a stand-in server showing a client take a
+package's grids without a grid fetch, and fetch as before where a digest, the grid's shape or the call
+itself is missing. Each was seen failing against an implementation with that comparison removed.
 
 ### 7.3 Yaw
 
@@ -2468,7 +2509,7 @@ sun was, and never has to trust the bridge's own arithmetic about it.
 ```
 session.start():
     assert f is finite and f >= 0                         # the real-time factor, read once, §9.9
-    assert the world package describes the loaded world   # record, grids, origin, OpenDRIVE, §7.2
+    assert the world package describes the loaded world   # record, grid digests, origin, OpenDRIVE, §7.2
     assert sumo release == the package's converter        # unless accepted; before SUMO starts, §2.6
     assert netxml.projParameter == world.geoReference     # frame identity, from the package alone, §7.2
     assert netxml.netOffset == (0, 0) and its bounds sit inside the drape grid
@@ -3451,7 +3492,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.23** | **A `SolarDisagreement` has the same consequence as a `TickFault`**: stop, park the render set, close the step record with `terminated: solar-state-disagreement`, fail the run. Same governing principle as D3.15 — a run that cannot produce honest truth must stop, not degrade. |
 | **D3.24** | **A SUMO-drive session renders neither the generated road surface nor the traffic-light and sign actors, and writes no traffic-light state.** No `SetTrafficLightStateCommand` in any batch, no traffic-light RPC, no `tlLogic` subscription. The `road` and `signals` layers are each written once at session start with `set_layer_visible` (`CarlaClient.cs:1077-1078` → `CarlaServer.cpp:697`; the `road` arm at `:729-738`, the `signals` arm at `:739-751` → `TrafficLightManager.cpp:618-628`), **fixed for the session's lifetime** with an operator override per layer that is a session-start decision and not a toggle, and given back on every exit path by `LayerVisibilityLease`. The run report records what was in frame. `set_layer_visible` joins the RPCs the episode drive-mode flag refuses to a client without the drive lease (§10.2 mechanism 4). Suppression is at the session, not at the source: `SignInjector` and native `SpawnSignals` are untouched, because the world build is shared with other modes (§3.4). SUMO's `tlLogic` programs, its right-of-way rows and the actuated netconvert setting are unaffected, and its vehicles still obey them. Vehicle lamps are a separate mechanism and are unchanged (D3.17). |
 | **D3.25** | **Real-time pacing is a factor the session reads once at start**, 0 by default and unconstrained, applied immediately before every world tick cue against the absolute schedule `T0 + n·Δw/f` counted from the first cue, so an overrun is absorbed rather than accumulated and the SUMO fast-forward is never paced. The session times every cue, paced or not, and publishes the achieved factor per window of wall clock (default 5 s), for the whole run and for the worst window, with the slip behind schedule, on `CoSimRunReport.Pacing`. It never stops or slows a run for falling behind: the floor is undecided and the consumer-side response is `08` §11.3's (§9.9). |
-| **D3.26** | **A session given a world refuses a world package that does not describe the world the server has loaded, and a world that carries no bare-earth reference record**, before SUMO is started and before anything on the server is written: the record's drape flag, grid and both grids against the package's, the georeference origin against the manifest's, and the served OpenDRIVE against the package's by normalised digest (§7.2). |
+| **D3.26** | **A session given a world refuses a world package that does not describe the world the server has loaded, and a world that carries no bare-earth reference record**, before SUMO is started and before anything on the server is written: the record's drape flag, grid and both grids against the package's — the grids by the SHA-1 the server computes when the record is set (`get_bare_earth_digest`), never by fetching them — the georeference origin against the manifest's, and the served OpenDRIVE against the package's by normalised digest (§7.2). An admitted package's grids are handed to the session's client for its truth telemetry, which takes them only where the server's digests match. |
 | **D3.27** | **A session refuses to launch a SUMO whose release is not the converter the world package records**, compared by release number and settled before SUMO is started, naming both releases, the installation and the rule that found it. `AllowSumoVersionMismatch` accepts the difference. An accepted mismatch and a package that records no converter both run, and the run report names either; it carries the installation, its release and the rule that found it on every run. `run_sumo_drive.py` names the installation — the repository's pinned build first — rather than leaving it to `SUMO_HOME` (§2.6). |
 | **D3.28** | **A session refuses a scenario whose network is not the one the world package carries**, compared by canonical fingerprint (`NetworkFingerprint`, the parsed graph rather than the bytes) and settled before SUMO is started, naming both networks and both fingerprints. It also refuses a package whose carried network does not fingerprint as the `NetworkFingerprint` its manifest records. The scenario's network is read the way SUMO reads the configuration. There is no override: a scenario for another network is compiled against this world's package, and the compiler writes the package's own network beside the configuration (§7.2). |
 | **D3.29** | **A session refuses a compiled scenario that is not the one its compile lock binds**, before SUMO is started: the configuration, the route file and the network by SHA-256 of their bytes, the catalogue by its declared digest, and the epoch by `SolarEpoch.Digest` where the session declares one, every disagreement named in one refusal. A scenario with no `<stem>.lock.json` beside it runs and is recorded as uncompiled. The lock's routing release and world identity are recorded on every compiled run's report, not compared (§2.7). |

@@ -846,7 +846,7 @@ returning `null` outside the grid or when no drape is active. Helpers at `:265-2
 **Per-call cost:** eight array reads and about ten floating-point operations. Safe at any per-vehicle,
 per-step rate. This is the Z source a teleported pose needs, and it costs nothing.
 
-The grid is loaded once, by one of two paths:
+The grid is loaded once, by one of three paths:
 
 - The client that generated the world latches it during
   `GenerateWorldFromOsmWithElevationAsync` (`CarlaClient.cs:953-960`; `LastDrapeActive` cleared for
@@ -854,7 +854,12 @@ The grid is loaded once, by one of two paths:
 - A client that merely connected pulls it with **three RPCs, once per world**:
   `get_bare_earth_reference`, `get_bare_earth_offset_grid`, `get_bare_earth_dtm_grid`, via
   `EnsureBareEarthReference` (`CarlaClient.cs:1152-1198`, memoised, invalidated on episode load at
-  `:373`).
+  `:373`). On the Bahonar world the two grid fetches took 146 s and 153 s.
+- A client holding the world's package takes the grids from the package with
+  `AdoptBareEarthReference`, where the server's digests of its record's grids
+  (`get_bare_earth_digest`) equal the package's, and fetches nothing. A SUMO-drive session does this
+  for its client once its loaded-world check has admitted the package
+  ([`03`](03_CoSimulation_Runtime.md) §7.2), so the recorders sharing that client never fetch.
 
 **One defect.** The shim's `World.drape_ground_elevation` (`__init__.py:1627-1634`) calls
 `SampleDrapeGroundElevation` **without** first calling `EnsureBareEarthReference`. On a reconnected
