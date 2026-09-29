@@ -219,16 +219,15 @@ AMBIENT_CLASSES = (
              "of any class here, at 0.02 m."),
     VehicleClassSpec(
         class_id="truck",
-        # The European heavy goods vehicle, a rigid six-wheeler the content now registers, joins
-        # this class when the catalogue has measured it; a body the catalogue lacks is refused.
-        blueprints=("vehicle.carlacola.actors",),
+        blueprints=("vehicle.carlacola.actors", "vehicle.carlamotors.european_hgv"),
         sumo_vclass="truck",
         behaviour={"maxSpeed": "35", "speedFactor": "normc(0.90,0.06,0.75,1.05)"},
         share=0.05,
         gui_shape="truck",
-        note="The rigid lorry in the content build, measuring 8.00 m against the 9.5 m this class "
-             "was designed around, so every lorry here is 1.50 m shorter than intended. The Fuso "
-             "Rosa is a light bus, not a lorry, and is not drawn as one."),
+        note="The two rigid lorries in the content build, a two-axle box truck measuring 8.00 m and "
+             "a three-axle heavy goods vehicle measuring 7.92 m, drawn equally. Both are about 1.5 m "
+             "shorter than the 9.5 m this class was designed around. The Fuso Rosa is a light bus, "
+             "not a lorry, and is not drawn as one."),
 )
 
 # The marked vehicle's body. Everything about how it drives is set from the command line and written

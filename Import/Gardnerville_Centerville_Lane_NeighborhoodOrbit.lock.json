@@ -4,7 +4,7 @@
   "scenario_name": "Gardnerville Centerville Lane neighbourhood orbit",
   "spec_version": 1,
   "specification": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json",
-  "specification_sha256": "81e68ba60d21bd4aaec039cac98bf64788f8159e3c76eef288ed6a4c7c32dc36",
+  "specification_sha256": "84864407e01a2f65af863a66229e31184824bc29119e7505eaa8d2009189ba06",
   "compiler": {
     "name": "carlacontrol.ScenarioCompiler",
     "version": "1.0.0"
@@ -12,7 +12,7 @@
   "files": {
     "routes": {
       "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.rou.xml",
-      "sha256": "9925e0d5a57a9abaa35d0cec6c8c9e2bdc6df7d08af5ee838907f17330c53329"
+      "sha256": "36663363c98beeb0c28b116520b7ab155612913ad930fdfebb4f76ab3be82f6d"
     },
     "config": {
       "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg",
@@ -24,7 +24,7 @@
     },
     "supervision": {
       "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.supervision.json",
-      "sha256": "d4e9cba028a63c8ea794b029cd714259e78492a9edd0433b471380d6b76c29f4"
+      "sha256": "7307b94928522006f31c0f7f820353c72cf22320c9d030c393785f8852142ae7"
     }
   },
   "world": {
@@ -75,8 +75,8 @@
   },
   "catalogue": {
     "catalogue_id": "carla-0.10.0-windows",
-    "catalogue_digest": "771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a",
-    "blueprint_set_digest": "bd7624c8e474e86f73e6ecba1983b88b1c42050e21d68dbaea29e387a7db5fc1",
+    "catalogue_digest": "c31294d8410a313d21b9e1f4343f293b9d590f51f3eba4843de4950ecf4a9850",
+    "blueprint_set_digest": "a51cfaacc5ceb15351f445575e8d3208e47dfe5c4c239c9805717be6cc9770b4",
     "content_build_id": "carla-0.10.0-windows"
   },
   "vocabulary": {

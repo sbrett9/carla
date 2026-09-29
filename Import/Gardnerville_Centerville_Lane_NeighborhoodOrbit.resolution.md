@@ -10,7 +10,6 @@ One marked vehicle, orbiter, enters on Centerville Lane at the posted limit, dri
 |---|---|---|---|
 | 17 | warn | vehicle class suv | draws one body, vehicle.nissan.patrol, so every vehicle of the class looks the same and its appearance can become its label |
 | 17 | warn | vehicle class van | draws one body, vehicle.sprinter.mercedes, so every vehicle of the class looks the same and its appearance can become its label |
-| 17 | warn | vehicle class truck | draws one body, vehicle.carlacola.actors, so every vehicle of the class looks the same and its appearance can become its label |
 | 17 | warn | vehicle class orbiter | draws one body, vehicle.lincoln.mkz, so every vehicle of the class looks the same and its appearance can become its label |
 | 41 | warn | supervision | I(band; supervision) / H(supervision) = undefined (one supervision state only) over 31 entries (at their departures; no capture window is declared). Expected in a pattern of life and never a refusal; the table, the usable bands and the remedies are in the resolution report, and the statistic is in the lock |
 
@@ -147,7 +146,7 @@ Remedies:
 {
   "routes": {
     "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.rou.xml",
-    "sha256": "9925e0d5a57a9abaa35d0cec6c8c9e2bdc6df7d08af5ee838907f17330c53329"
+    "sha256": "36663363c98beeb0c28b116520b7ab155612913ad930fdfebb4f76ab3be82f6d"
   },
   "config": {
     "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg",
@@ -159,7 +158,7 @@ Remedies:
   },
   "supervision": {
     "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.supervision.json",
-    "sha256": "d4e9cba028a63c8ea794b029cd714259e78492a9edd0433b471380d6b76c29f4"
+    "sha256": "7307b94928522006f31c0f7f820353c72cf22320c9d030c393785f8852142ae7"
   }
 }
 ```

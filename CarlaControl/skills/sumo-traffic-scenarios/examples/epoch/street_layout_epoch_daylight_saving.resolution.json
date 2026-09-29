@@ -351,8 +351,8 @@
     "catalogue": {
       "path": "vehicles.catalogue.json",
       "catalogue_id": "carla-0.10.0-windows",
-      "catalogue_digest": "771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a",
-      "blueprint_set_digest": "bd7624c8e474e86f73e6ecba1983b88b1c42050e21d68dbaea29e387a7db5fc1"
+      "catalogue_digest": "c31294d8410a313d21b9e1f4343f293b9d590f51f3eba4843de4950ecf4a9850",
+      "blueprint_set_digest": "a51cfaacc5ceb15351f445575e8d3208e47dfe5c4c239c9805717be6cc9770b4"
     },
     "classes": [
       "car: 3 measured bodies, length 4.55-5.01 m, mean 4.82 m, share 1",
@@ -419,7 +419,7 @@
     "files": {
       "routes": {
         "path": "street_layout_epoch_daylight_saving.rou.xml",
-        "sha256": "dffe355648e758bc4e65ede88ff7470b6333dc14fd8accb8eec790e2c51f79f4"
+        "sha256": "5b8f2ad0e3e63c5062d4c4226a780c758166680344e8f8faa1dd374848873023"
       },
       "config": {
         "path": "street_layout_epoch_daylight_saving.sumocfg",
@@ -431,7 +431,7 @@
       },
       "supervision": {
         "path": "street_layout_epoch_daylight_saving.supervision.json",
-        "sha256": "fdb9084bec44c6d27c8bdc7ad200c6932023019ec90c0a96685b9c6e599da4bd"
+        "sha256": "7f84f41183dda2e69c1d9aa168977174ead3a20f2acc9edf1dce968e8d457d03"
       }
     },
     "world": {
@@ -482,8 +482,8 @@
     },
     "catalogue": {
       "catalogue_id": "carla-0.10.0-windows",
-      "catalogue_digest": "771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a",
-      "blueprint_set_digest": "bd7624c8e474e86f73e6ecba1983b88b1c42050e21d68dbaea29e387a7db5fc1",
+      "catalogue_digest": "c31294d8410a313d21b9e1f4343f293b9d590f51f3eba4843de4950ecf4a9850",
+      "blueprint_set_digest": "a51cfaacc5ceb15351f445575e8d3208e47dfe5c4c239c9805717be6cc9770b4",
       "content_build_id": "carla-0.10.0-windows"
     },
     "vocabulary": {

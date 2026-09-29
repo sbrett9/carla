@@ -6,7 +6,7 @@
     "scenario_name": "Gardnerville Centerville Lane neighbourhood orbit",
     "description": "One marked vehicle, orbiter, enters on Centerville Lane at the posted limit, drives the Rock Terrace Drive block 20 times held to 11 m/s, and leaves west at 1.25 times the posted limit, among directional corridor traffic and neighbourhood through traffic. Written by CarlaControl/scripts/make_sumo_scenario.py; edit that, not this.",
     "specification": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json",
-    "specification_sha256": "81e68ba60d21bd4aaec039cac98bf64788f8159e3c76eef288ed6a4c7c32dc36",
+    "specification_sha256": "84864407e01a2f65af863a66229e31184824bc29119e7505eaa8d2009189ba06",
     "spec_version": 1
   },
   "findings": [
@@ -21,12 +21,6 @@
       "outcome": "warn",
       "subject": "vehicle class van",
       "message": "draws one body, vehicle.sprinter.mercedes, so every vehicle of the class looks the same and its appearance can become its label"
-    },
-    {
-      "check": 17,
-      "outcome": "warn",
-      "subject": "vehicle class truck",
-      "message": "draws one body, vehicle.carlacola.actors, so every vehicle of the class looks the same and its appearance can become its label"
     },
     {
       "check": 17,
@@ -2346,14 +2340,14 @@
     "catalogue": {
       "path": "vehicles.catalogue.json",
       "catalogue_id": "carla-0.10.0-windows",
-      "catalogue_digest": "771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a",
-      "blueprint_set_digest": "bd7624c8e474e86f73e6ecba1983b88b1c42050e21d68dbaea29e387a7db5fc1"
+      "catalogue_digest": "c31294d8410a313d21b9e1f4343f293b9d590f51f3eba4843de4950ecf4a9850",
+      "blueprint_set_digest": "a51cfaacc5ceb15351f445575e8d3208e47dfe5c4c239c9805717be6cc9770b4"
     },
     "classes": [
       "car: 9 measured bodies, length 4.18-5.37 m, mean 4.82 m, share 0.45",
       "suv: 1 measured body, length 5.59-5.59 m, mean 5.59 m, share 0.18",
       "van: 1 measured body, length 5.92-5.92 m, mean 5.92 m, share 0.07",
-      "truck: 1 measured body, length 8.00-8.00 m, mean 8.00 m, share 0.05",
+      "truck: 2 measured bodies, length 7.92-8.00 m, mean 7.96 m, share 0.05",
       "orbiter: 1 measured body, length 4.89-4.89 m, mean 4.89 m, share 0"
     ],
     "mix": {
@@ -2370,7 +2364,8 @@
         "car.vehicle.ue4.ford.crown": 0.06666666666666667,
         "suv.vehicle.nissan.patrol": 0.24,
         "van.vehicle.sprinter.mercedes": 0.09333333333333334,
-        "truck.vehicle.carlacola.actors": 0.06666666666666667
+        "truck.vehicle.carlacola.actors": 0.03333333333333333,
+        "truck.vehicle.carlamotors.european_hgv": 0.03333333333333333
       }
     },
     "mixes": [],
@@ -2446,6 +2441,12 @@
         "length_m": 8.0037,
         "width_m": 2.9118,
         "height_m": 4.0546
+      },
+      "truck.vehicle.carlamotors.european_hgv": {
+        "blueprint": "vehicle.carlamotors.european_hgv",
+        "length_m": 7.9241,
+        "width_m": 2.8647,
+        "height_m": 3.7833
       },
       "orbiter.vehicle.lincoln.mkz": {
         "blueprint": "vehicle.lincoln.mkz",
@@ -2617,7 +2618,7 @@
     "scenario_name": "Gardnerville Centerville Lane neighbourhood orbit",
     "spec_version": 1,
     "specification": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json",
-    "specification_sha256": "81e68ba60d21bd4aaec039cac98bf64788f8159e3c76eef288ed6a4c7c32dc36",
+    "specification_sha256": "84864407e01a2f65af863a66229e31184824bc29119e7505eaa8d2009189ba06",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
       "version": "1.0.0"
@@ -2625,7 +2626,7 @@
     "files": {
       "routes": {
         "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.rou.xml",
-        "sha256": "9925e0d5a57a9abaa35d0cec6c8c9e2bdc6df7d08af5ee838907f17330c53329"
+        "sha256": "36663363c98beeb0c28b116520b7ab155612913ad930fdfebb4f76ab3be82f6d"
       },
       "config": {
         "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg",
@@ -2637,7 +2638,7 @@
       },
       "supervision": {
         "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.supervision.json",
-        "sha256": "d4e9cba028a63c8ea794b029cd714259e78492a9edd0433b471380d6b76c29f4"
+        "sha256": "7307b94928522006f31c0f7f820353c72cf22320c9d030c393785f8852142ae7"
       }
     },
     "world": {
@@ -2688,8 +2689,8 @@
     },
     "catalogue": {
       "catalogue_id": "carla-0.10.0-windows",
-      "catalogue_digest": "771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a",
-      "blueprint_set_digest": "bd7624c8e474e86f73e6ecba1983b88b1c42050e21d68dbaea29e387a7db5fc1",
+      "catalogue_digest": "c31294d8410a313d21b9e1f4343f293b9d590f51f3eba4843de4950ecf4a9850",
+      "blueprint_set_digest": "a51cfaacc5ceb15351f445575e8d3208e47dfe5c4c239c9805717be6cc9770b4",
       "content_build_id": "carla-0.10.0-windows"
     },
     "vocabulary": {

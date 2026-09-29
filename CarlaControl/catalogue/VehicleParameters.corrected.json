@@ -4,7 +4,7 @@
 			"Make": "Lincoln",
 			"Model": "Mkz",
 			"Class": "/Game/Carla/Blueprints/Vehicles/LincolnMKZ/BP_LincolnMKZ.BP_LincolnMKZ_C",
-			"NumberOfWheels": 3,
+			"NumberOfWheels": 4,
 			"Generation": -1,
 			"ObjectType": "",
 			"BaseType": "car",
@@ -262,7 +262,7 @@
 			"NumberOfWheels": 4,
 			"Generation": 3,
 			"ObjectType": "",
-			"BaseType": "truck",
+			"BaseType": "bus",
 			"SpecialType": "",
 			"HasDynamicDoors": false,
 			"HasLights": true,
@@ -607,6 +607,34 @@
 					"A": 255
 				}
 			],
+			"SupportedDrivers": []
+		},
+		{
+			"Make": "CarlaMotors",
+			"Model": "European_HGV",
+			"Class": "/Game/Carla/Blueprints/Vehicles/EuropeanHGV/BP_EuropeanHGV.BP_EuropeanHGV_C",
+			"NumberOfWheels": 6,
+			"Generation": 2,
+			"ObjectType": "",
+			"BaseType": "truck",
+			"SpecialType": "",
+			"HasDynamicDoors": true,
+			"HasLights": true,
+			"RecommendedColors": [],
+			"SupportedDrivers": []
+		},
+		{
+			"Make": "Jeep",
+			"Model": "Wrangler_Rubicon",
+			"Class": "/Game/Carla/Blueprints/Vehicles/JeepWranglerRubicon/BP_JeepWranglerRubicon.BP_JeepWranglerRubicon_C",
+			"NumberOfWheels": 4,
+			"Generation": 1,
+			"ObjectType": "",
+			"BaseType": "car",
+			"SpecialType": "",
+			"HasDynamicDoors": false,
+			"HasLights": false,
+			"RecommendedColors": [],
 			"SupportedDrivers": []
 		}
 	]

@@ -56,7 +56,7 @@
     {
       "class_id": "civ_pickup",
       "blueprints": [
-        "vehicle.nissan.patrol"
+        "vehicle.jeep.wrangler_rubicon"
       ],
       "sumo_vclass": "passenger",
       "behaviour": {
@@ -140,7 +140,7 @@
     {
       "class_id": "mil_jeep",
       "blueprints": [
-        "vehicle.nissan.patrol"
+        "vehicle.jeep.wrangler_rubicon"
       ],
       "sumo_vclass": "army",
       "behaviour": {
@@ -168,7 +168,7 @@
     {
       "class_id": "guard",
       "blueprints": [
-        "vehicle.nissan.patrol"
+        "vehicle.jeep.wrangler_rubicon"
       ],
       "sumo_vclass": "army",
       "behaviour": {

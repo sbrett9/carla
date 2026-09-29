@@ -1,6 +1,6 @@
 {
-  "blueprint_set_digest": "bd7624c8e474e86f73e6ecba1983b88b1c42050e21d68dbaea29e387a7db5fc1",
-  "catalogue_digest": "771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a",
+  "blueprint_set_digest": "a51cfaacc5ceb15351f445575e8d3208e47dfe5c4c239c9805717be6cc9770b4",
+  "catalogue_digest": "c31294d8410a313d21b9e1f4343f293b9d590f51f3eba4843de4950ecf4a9850",
   "catalogue_id": "carla-0.10.0-windows",
   "catalogue_version": 1,
   "classes": [
@@ -64,6 +64,28 @@
     },
     {
       "accel_mps2": 2.6,
+      "class_id": "offroad",
+      "cot_base_type": "car",
+      "decel_mps2": 4.5,
+      "description": "Short-wheelbase four-wheel-drive utility vehicles: an open-topped jeep.",
+      "gui_colour": "#6B7A55",
+      "gui_shape": "passenger/wagon",
+      "max_speed_mps": 35.0,
+      "members": [
+        {
+          "blueprint_id": "vehicle.jeep.wrangler_rubicon",
+          "weight": 1.0
+        }
+      ],
+      "min_gap_m": 2.5,
+      "render_colour_policy": "palette",
+      "sigma": 0.5,
+      "speed_factor_dev": 0.1,
+      "speed_factor_mean": 1.0,
+      "sumo_vclass": "passenger"
+    },
+    {
+      "accel_mps2": 2.6,
       "class_id": "civ_van",
       "cot_base_type": "van",
       "decel_mps2": 4.5,
@@ -89,7 +111,7 @@
       "class_id": "civ_truck",
       "cot_base_type": "truck",
       "decel_mps2": 4.0,
-      "description": "Rigid lorries. Slower, longer and taller than anything civilian.",
+      "description": "Two-axle rigid lorries: a box truck. Slower, longer and taller than anything civilian.",
       "gui_colour": "#8C7B5A",
       "gui_shape": "truck",
       "max_speed_mps": 25.0,
@@ -97,7 +119,47 @@
         {
           "blueprint_id": "vehicle.carlacola.actors",
           "weight": 1.0
-        },
+        }
+      ],
+      "min_gap_m": 3.0,
+      "render_colour_policy": "palette",
+      "sigma": 0.5,
+      "speed_factor_dev": 0.05,
+      "speed_factor_mean": 1.0,
+      "sumo_vclass": "truck"
+    },
+    {
+      "accel_mps2": 1.3,
+      "class_id": "heavy_truck",
+      "cot_base_type": "truck",
+      "decel_mps2": 4.0,
+      "description": "Three-axle rigid heavy goods vehicles: a cab-over lorry. Not articulated -- there is no trailer.",
+      "gui_colour": "#6D6552",
+      "gui_shape": "truck",
+      "max_speed_mps": 25.0,
+      "members": [
+        {
+          "blueprint_id": "vehicle.carlamotors.european_hgv",
+          "weight": 1.0
+        }
+      ],
+      "min_gap_m": 3.0,
+      "render_colour_policy": "palette",
+      "sigma": 0.5,
+      "speed_factor_dev": 0.05,
+      "speed_factor_mean": 1.0,
+      "sumo_vclass": "truck"
+    },
+    {
+      "accel_mps2": 1.2,
+      "class_id": "bus",
+      "cot_base_type": "bus",
+      "decel_mps2": 4.0,
+      "description": "Buses. The content's one bus is a light bus modelled at the size of a lorry.",
+      "gui_colour": "#4F7CAC",
+      "gui_shape": "bus",
+      "max_speed_mps": 25.0,
+      "members": [
         {
           "blueprint_id": "vehicle.fuso.mitsubishi",
           "weight": 1.0
@@ -108,7 +170,7 @@
       "sigma": 0.5,
       "speed_factor_dev": 0.05,
       "speed_factor_mean": 1.0,
-      "sumo_vclass": "truck"
+      "sumo_vclass": "bus"
     },
     {
       "accel_mps2": 2.6,
@@ -204,7 +266,7 @@
     }
   ],
   "content_build_id": "carla-0.10.0-windows",
-  "generated_at_utc": "2026-09-22T00:23:41.022Z",
+  "generated_at_utc": "2026-09-29T19:13:25.921Z",
   "generator": "carlacontrol.VehicleCatalogueBuilder/1.0.0",
   "lamp_probe": {
     "average_frames": 5,
@@ -231,7 +293,7 @@
     ],
     "luminance_threshold": 24,
     "minimum_lit_pixels": 8,
-    "positive_control_pixels": 158467,
+    "positive_control_pixels": 157082,
     "ran": true,
     "region": [
       0.0,
@@ -241,7 +303,7 @@
     ],
     "solar_date": "2026-03-21",
     "solar_time_hours": 1.0,
-    "sun_elevation_deg": -48.4493408203125
+    "sun_elevation_deg": -59.88318634033203
   },
   "server_version": "0.10.0",
   "vehicles": [
@@ -257,9 +319,9 @@
         "255,255,255"
       ],
       "colour_settable": true,
-      "declared_base_type": "truck",
+      "declared_base_type": "van",
       "declared_has_lights": true,
-      "declared_special_type": "",
+      "declared_special_type": "emergency",
       "generation": 3,
       "height_m": 2.431,
       "lamp_capability": {
@@ -409,6 +471,77 @@
     },
     {
       "bbox_centre_m": [
+        0.0168,
+        -0.0,
+        1.8919
+      ],
+      "blueprint_id": "vehicle.carlamotors.european_hgv",
+      "colour_applied": "unknown",
+      "colour_palette": [],
+      "colour_settable": false,
+      "declared_base_type": "truck",
+      "declared_has_lights": true,
+      "declared_special_type": "",
+      "generation": 2,
+      "height_m": 3.7833,
+      "lamp_capability": {
+        "brake": "unlit",
+        "fog": "unlit",
+        "high_beam": "unlit",
+        "interior": "unlit",
+        "left_blinker": "unlit",
+        "low_beam": "unlit",
+        "position": "unlit",
+        "reverse": "unlit",
+        "right_blinker": "unlit",
+        "special_1": "unlit",
+        "special_2": "unlit"
+      },
+      "length_m": 7.9241,
+      "measurement": "measured",
+      "number_of_wheels": 6,
+      "settable_attributes": [
+        {
+          "id": "role_name",
+          "recommended_values": [
+            "autopilot",
+            "scenario",
+            "ego_vehicle"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "ros_name",
+          "recommended_values": [
+            "vehicle.carlamotors.european_hgv"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "sticky_control",
+          "recommended_values": [
+            "true"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        },
+        {
+          "id": "terramechanics",
+          "recommended_values": [
+            "false"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        }
+      ],
+      "tags": "vehicle,carlamotors,european_hgv",
+      "uid": 18,
+      "width_m": 2.8647
+    },
+    {
+      "bbox_centre_m": [
         -0.0062,
         0.0,
         0.7628
@@ -514,7 +647,7 @@
       "colour_settable": true,
       "declared_base_type": "car",
       "declared_has_lights": true,
-      "declared_special_type": "",
+      "declared_special_type": "emergency",
       "generation": 3,
       "height_m": 1.644,
       "lamp_capability": {
@@ -595,7 +728,7 @@
       "colour_settable": true,
       "declared_base_type": "truck",
       "declared_has_lights": true,
-      "declared_special_type": "",
+      "declared_special_type": "emergency",
       "generation": 3,
       "height_m": 3.8268,
       "lamp_capability": {
@@ -755,6 +888,77 @@
     },
     {
       "bbox_centre_m": [
+        0.0002,
+        0.001,
+        0.9323
+      ],
+      "blueprint_id": "vehicle.jeep.wrangler_rubicon",
+      "colour_applied": "unknown",
+      "colour_palette": [],
+      "colour_settable": false,
+      "declared_base_type": "car",
+      "declared_has_lights": false,
+      "declared_special_type": "",
+      "generation": 1,
+      "height_m": 1.8779,
+      "lamp_capability": {
+        "brake": "unlit",
+        "fog": "unlit",
+        "high_beam": "unlit",
+        "interior": "unlit",
+        "left_blinker": "unlit",
+        "low_beam": "unlit",
+        "position": "unlit",
+        "reverse": "unlit",
+        "right_blinker": "unlit",
+        "special_1": "unlit",
+        "special_2": "unlit"
+      },
+      "length_m": 3.8662,
+      "measurement": "measured",
+      "number_of_wheels": 4,
+      "settable_attributes": [
+        {
+          "id": "role_name",
+          "recommended_values": [
+            "autopilot",
+            "scenario",
+            "ego_vehicle"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "ros_name",
+          "recommended_values": [
+            "vehicle.jeep.wrangler_rubicon"
+          ],
+          "restrict_to_recommended": false,
+          "type": "String"
+        },
+        {
+          "id": "sticky_control",
+          "recommended_values": [
+            "true"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        },
+        {
+          "id": "terramechanics",
+          "recommended_values": [
+            "false"
+          ],
+          "restrict_to_recommended": false,
+          "type": "Bool"
+        }
+      ],
+      "tags": "vehicle,jeep,wrangler_rubicon",
+      "uid": 19,
+      "width_m": 1.9052
+    },
+    {
+      "bbox_centre_m": [
         -0.0062,
         0.0,
         0.7632
@@ -785,7 +989,7 @@
       },
       "length_m": 4.892,
       "measurement": "measured",
-      "number_of_wheels": 3,
+      "number_of_wheels": 4,
       "settable_attributes": [
         {
           "id": "color",
@@ -1028,7 +1232,7 @@
         "28,51,83"
       ],
       "colour_settable": true,
-      "declared_base_type": "",
+      "declared_base_type": "van",
       "declared_has_lights": true,
       "declared_special_type": "",
       "generation": 3,
@@ -1115,7 +1319,7 @@
       "colour_settable": true,
       "declared_base_type": "car",
       "declared_has_lights": true,
-      "declared_special_type": "",
+      "declared_special_type": "taxi",
       "generation": 3,
       "height_m": 1.5752,
       "lamp_capability": {
@@ -1198,7 +1402,7 @@
         "108,108,108"
       ],
       "colour_settable": true,
-      "declared_base_type": "bus",
+      "declared_base_type": "car",
       "declared_has_lights": true,
       "declared_special_type": "",
       "generation": 2,
@@ -1287,7 +1491,7 @@
         "108,108,108"
       ],
       "colour_settable": true,
-      "declared_base_type": "bus",
+      "declared_base_type": "car",
       "declared_has_lights": true,
       "declared_special_type": "",
       "generation": 2,
@@ -1376,7 +1580,7 @@
         "108,108,108"
       ],
       "colour_settable": true,
-      "declared_base_type": "bus",
+      "declared_base_type": "car",
       "declared_has_lights": true,
       "declared_special_type": "",
       "generation": 2,
@@ -1461,7 +1665,7 @@
         "254,211,0"
       ],
       "colour_settable": true,
-      "declared_base_type": "bus",
+      "declared_base_type": "car",
       "declared_has_lights": true,
       "declared_special_type": "",
       "generation": -1,
@@ -1546,7 +1750,7 @@
         "108,108,108"
       ],
       "colour_settable": true,
-      "declared_base_type": "bus",
+      "declared_base_type": "car",
       "declared_has_lights": true,
       "declared_special_type": "",
       "generation": -1,
@@ -1634,7 +1838,7 @@
         "230,216,205"
       ],
       "colour_settable": true,
-      "declared_base_type": "bus",
+      "declared_base_type": "car",
       "declared_has_lights": true,
       "declared_special_type": "",
       "generation": 2,
