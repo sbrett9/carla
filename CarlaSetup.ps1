@@ -600,11 +600,14 @@ Set it to the root of your UE 5.7.4 source build, e.g.:
 # ---------------------------------------------------------------------------
 # CarlaNet shells out to stock SUMO `netconvert` at runtime to convert OSM maps to
 # OpenDRIVE, replacing CARLA's old in-tree osm2odr fork; `sumo` runs the traffic
-# microsimulation, and `duarouter` validates authored routes. All three come from
-# SUMO release v1_27_0 (commit e238ea04). CarlaNet talks to `sumo` over the TraCI
-# wire protocol from managed code, so nothing native is built for it here.
-# On Windows the build deps (Xerces-C, PROJ, sqlite3, ...) come from the prebuilt
-# DLR-TS SUMOLibraries bundle; the build copies the needed DLLs next to the binaries.
+# microsimulation, and `duarouter` validates authored routes. `sumo-gui` is the same
+# microsimulation with SUMO's own view of it, which the co-simulation session can launch
+# in place of `sumo` so a developer watches the simulation the drive is stepping. All
+# four come from SUMO release v1_27_0 (commit e238ea04). CarlaNet talks to `sumo` over
+# the TraCI wire protocol from managed code, so nothing native is built for it here.
+# On Windows the build deps (Xerces-C, PROJ, sqlite3, the FOX GUI toolkit, ...) come from
+# the prebuilt DLR-TS SUMOLibraries bundle; the build copies the needed DLLs next to the
+# binaries.
 
 $sumoSrc     = Join-Path $RepoRoot 'Build\sumo-src'
 $sumoBuild   = Join-Path $RepoRoot 'Build\sumo-build'
@@ -640,7 +643,10 @@ $netconvert = Join-Path $sumoInstall 'bin\netconvert.exe'
 # dependable "newest" output to test -- a partial failure leaves an arbitrary subset staged, and a
 # guard keyed on one member reports success for a half toolchain. Check the whole set, and name the
 # members that are missing so the reason is in the log rather than in someone's head.
-$sumoRequiredBinaries = @('netconvert.exe', 'sumo.exe', 'duarouter.exe')
+$sumoRequiredBinaries = @('netconvert.exe', 'sumo.exe', 'duarouter.exe', 'sumo-gui.exe')
+# sumo-gui is staged for development: watching a co-simulation drive. MakeDistribution's own list
+# leaves it out, because whether a distribution carries it is an open decision that turns on FOX's
+# LGPL (Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/09_Toolchain_And_Packaging.md section 5.4).
 # A NAMED SUBSET of data/ and tools/, not the whole of either. Measured: the full copy is 89 MB to
 # deliver the 3.2 MB anything here consumes, and tools\contributed alone is 47 MB of third-party
 # contributions that would each need a row in the distribution's licence manifest. Add a directory
@@ -700,7 +706,7 @@ if ($sumoMissing.Count -eq 0) {
         git -C $sumoSrc checkout $sumoSrcPin
     }
 
-    # Configure + build the required targets (Release) with the VS generator. One invocation, three
+    # Configure + build the required targets (Release) with the VS generator. One invocation, four
     # targets: CMake skips objects it has already built, so this is not a full rebuild in practice.
     # jtrrouter and polyconvert are deliberately left out -- nothing in this repository invokes
     # either, so building them by default would lengthen every clean build for no consumer.
@@ -709,8 +715,14 @@ if ($sumoMissing.Count -eq 0) {
         cmake -B $sumoBuild -S $sumoSrc -G $cmakeGenerator `
             -T v143,version=14.44 -A x64 -DCHECK_OPTIONAL_LIBS=false
     }
+    # sumo-gui is a target only where SUMO's configure found the FOX toolkit -- here the pinned
+    # bundle's fox-1.6.59. Without it the build below stops on an unknown target and says nothing
+    # about why, so say it here.
+    if (-not (Select-String -Quiet -Pattern '^#define HAVE_FOX' -Path (Join-Path $sumoBuild 'src\config.h'))) {
+        throw "SUMO's configure found no FOX toolkit under `"$sumoLibs`", so there is no sumo-gui to build. The pinned SUMOLibraries bundle carries fox-1.6.59; re-run with -CleanAll to clone it again."
+    }
     Invoke-Checked 'cmake build sumo toolchain' {
-        cmake --build $sumoBuild --target netconvert sumo duarouter --config Release -- -m
+        cmake --build $sumoBuild --target netconvert sumo duarouter sumo-gui --config Release -- -m
     }
 
     # The build emits the binaries + their runtime DLLs into Build\sumo-src\bin.

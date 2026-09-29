@@ -118,6 +118,10 @@ public sealed class SumoDriveSessionReleaseTests
         Assert.Equal(Path.GetFullPath(installation.Home), session.Report.Sumo.Home);
         Assert.Contains($"sumo               {installation.Home}", report, StringComparison.OrdinalIgnoreCase);
         Assert.Contains($"release {installation.Release}", report, StringComparison.Ordinal);
+
+        // Which binary ran is on the report, since an installation can hold sumo-gui beside sumo.
+        Assert.Equal(installation.Sumo, session.Report.Sumo.Binary);
+        Assert.Contains($"  launched         {installation.Sumo}", report, StringComparison.OrdinalIgnoreCase);
     }
 
     [RequiresSumoFact]

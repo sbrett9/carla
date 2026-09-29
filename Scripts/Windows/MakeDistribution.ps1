@@ -398,6 +398,9 @@ $sumoInstall = Join-Path $BuildDir 'sumo-install'
 $sumoBin     = Join-Path $sumoInstall 'bin'
 $sumoDest    = Join-Path $dist 'tools\sumo'
 $sumoExecutables = @('netconvert.exe', 'sumo.exe', 'duarouter.exe')
+# sumo-gui.exe is staged beside these by CarlaSetup and deliberately not bundled: whether a
+# distribution carries it is an open decision that turns on FOX's LGPL (09_Toolchain_And_Packaging.md
+# section 5.4). Add it here only once that is decided.
 $sumoNativeStaged = @()   # the DLLs actually copied; the licence inventory covers exactly these
 $sumoVersion = 'unknown'
 $nc = Join-Path $sumoBin 'netconvert.exe'

@@ -38,6 +38,17 @@ public sealed record SumoReleaseCheck(string Home,
     /// <summary>The release number the recorded converter names.</summary>
     public string? RecordedRelease => SumoRelease.Of(RecordedConverter);
 
+    /// <summary>
+    /// The executable the run launches, as a full path, where the check was made for one -- and then
+    /// <see cref="Release"/> is that binary's own. Null for a check composed from a release alone
+    /// (<see cref="Compare"/>).
+    /// </summary>
+    /// <remarks>
+    /// Recorded because an installation holds more than one simulation binary: <c>sumo</c>, and
+    /// <c>sumo-gui</c> where it was built. Which of them ran is part of what the run was.
+    /// </remarks>
+    public string? Binary { get; init; }
+
     /// <summary>Whether the caller must refuse: the releases differ and nobody accepted it.</summary>
     public bool Refused => Agreement == SumoReleaseAgreement.Mismatch;
 
@@ -66,18 +77,39 @@ public sealed record SumoReleaseCheck(string Home,
     };
 
     /// <summary>
-    /// How <paramref name="installation"/> stands against <paramref name="recordedConverter"/>.
+    /// How <paramref name="installation"/>'s <c>sumo</c> stands against <paramref name="recordedConverter"/>.
     /// </summary>
     /// <param name="installation">The SUMO about to be launched. Its release is probed if it has not been.</param>
     /// <param name="recordedConverter">What the world package records; empty or null where it records none.</param>
     /// <param name="allowMismatch">Accept a different release rather than calling it a mismatch.</param>
     public static SumoReleaseCheck Of(SumoInstallation installation,
                                       string? recordedConverter,
+                                      bool allowMismatch) =>
+        Of(installation, SumoInstallation.SumoName, recordedConverter, allowMismatch);
+
+    /// <summary>
+    /// How one of <paramref name="installation"/>'s executables -- the binary a run is about to
+    /// launch -- stands against <paramref name="recordedConverter"/>.
+    /// </summary>
+    /// <param name="installation">The installation the binary is launched from.</param>
+    /// <param name="name">The executable, without the platform's extension:
+    /// <see cref="SumoInstallation.SumoName"/>, or <see cref="SumoInstallation.SumoGuiName"/> for a run
+    /// that launches the GUI in its place. Its own release is the one compared, probed from it if it
+    /// has not been, so the pin holds for whichever binary actually runs.</param>
+    /// <param name="recordedConverter">What the world package records; empty or null where it records none.</param>
+    /// <param name="allowMismatch">Accept a different release rather than calling it a mismatch.</param>
+    public static SumoReleaseCheck Of(SumoInstallation installation,
+                                      string name,
+                                      string? recordedConverter,
                                       bool allowMismatch)
     {
         ArgumentNullException.ThrowIfNull(installation);
-        return Compare(installation.Home, installation.Source, installation.Release, recordedConverter,
-                       allowMismatch);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        return Compare(installation.Home, installation.Source, installation.ReleaseOf(name),
+                       recordedConverter, allowMismatch) with
+        {
+            Binary = installation.Executable(name),
+        };
     }
 
     /// <summary>
@@ -100,5 +132,6 @@ public sealed record SumoReleaseCheck(string Home,
     }
 
     /// <inheritdoc/>
-    public override string ToString() => $"{Installation}; {Verdict}";
+    public override string ToString() =>
+        Installation + (Binary is { } launched ? $", launching {launched}" : string.Empty) + $"; {Verdict}";
 }

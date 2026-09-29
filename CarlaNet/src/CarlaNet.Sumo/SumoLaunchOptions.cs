@@ -9,6 +9,21 @@ public sealed record SumoLaunchOptions
     public IReadOnlyList<string> ExtraArguments { get; init; } = [];
 
     /// <summary>
+    /// Launch the installation's <c>sumo-gui</c> in place of <c>sumo</c>: the same simulation, drawn.
+    /// </summary>
+    /// <remarks>
+    /// <para>It is one process either way, the one the connection steps, so the window shows exactly
+    /// the simulation the client is driving. It receives every argument <c>sumo</c> would, and
+    /// <see cref="SumoConnection.GuiArguments"/> after them: what lets it follow a client without
+    /// anyone at the window, close itself when the client does, and keep writing its warnings to the
+    /// console <see cref="Output"/> reads.</para>
+    ///
+    /// <para>The window is live, and whoever is at it can halt the simulation: paused, it answers no
+    /// command until it is resumed, and closed, the connection ends as though SUMO had died.</para>
+    /// </remarks>
+    public bool Gui { get; init; }
+
+    /// <summary>
     /// The port to tell <c>sumo</c> to listen on, or <see langword="null"/> to take one the
     /// operating system says is free. A fixed port is worth asking for only when something outside
     /// this process has to find the server too.

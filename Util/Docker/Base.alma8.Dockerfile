@@ -114,9 +114,10 @@ ENV LC_ALL=en_US.UTF-8
 # Toolchain + libraries.
 #   - Development Tools group: gcc/g++/make/autoconf/automake/libtool/...
 #   - ninja-build, nasm, patchelf: CARLA + cesium-native (vcpkg) build helpers
-#   - xerces-c-devel, proj-devel: the SUMO toolchain -- netconvert, sumo and duarouter (proj-devel
-#     pulls proj, which provides proj.db at /usr/share/proj; there is no separate proj-data package
-#     on EL8, unlike Debian/Ubuntu). Anything the SUMO build needs must be declared BOTH here and in
+#   - xerces-c-devel, proj-devel: the SUMO toolchain -- netconvert, sumo, duarouter and sumo-gui
+#     (proj-devel pulls proj, which provides proj.db at /usr/share/proj; there is no separate
+#     proj-data package on EL8, unlike Debian/Ubuntu). sumo-gui also needs the FOX toolkit, built in
+#     its own step below. Anything the SUMO build needs must be declared BOTH here and in
 #     Util/SetupUtils/InstallPrerequisites.sh: the CI job runs CarlaSetup.sh --skip-prerequisites,
 #     so that script never runs against this image and this is the only place CI can get it from
 #   - openssl-devel: Fast-DDS (ROS2) build
@@ -142,6 +143,40 @@ RUN dnf -y groupinstall "Development Tools" \
     && dnf clean all
 
 RUN git lfs install --system
+
+# ---------------------------------------------------------------------------
+# FOX toolkit 1.6, which SUMO's sumo-gui is built on (InstallPrerequisites.sh installs Ubuntu's
+# libfox-1.6-dev for the same purpose). EL8 packages no FOX -- neither its own repositories nor EPEL
+# carry fox-devel; Fedora does -- so it is built from upstream source, which is the recipe SUMO's own
+# build_config/install_dependencies.sh uses on AlmaLinux 8 (manylinux_2_28), including the X11, GL,
+# GLU and font development packages FOX builds against. Upstream serves the tarball over plain HTTP,
+# so it is pinned by checksum: the SHA-256 below is of the tarball whose SHA-512 Fedora's fox
+# package records (c5b94947...cd188a0). Installed under /usr/local, which EL8's loader does not
+# search, hence the ld.so.conf entry. Once SUMO's configure finds FOX it also links it into sumo and
+# duarouter, for their worker threads, exactly as the Windows build already does.
+# ---------------------------------------------------------------------------
+ARG FOX_VERSION=1.6.59
+ARG FOX_SHA256=48f33d2dd5371c2d48f6518297f0ef5bbf3fcd37719e99f815dc6fc6e0f928ae
+RUN set -eux; \
+    dnf -y install \
+        libX11-devel libXext-devel libXft-devel libXcursor-devel libXrandr-devel libXinerama-devel \
+        mesa-libGL-devel mesa-libGLU-devel freetype-devel fontconfig-devel \
+        zlib-devel bzip2-devel; \
+    dnf clean all; \
+    cd /tmp; \
+    curl --fail -L -o "fox-${FOX_VERSION}.tar.gz" "http://www.fox-toolkit.org/ftp/fox-${FOX_VERSION}.tar.gz"; \
+    echo "${FOX_SHA256}  fox-${FOX_VERSION}.tar.gz" | sha256sum -c -; \
+    tar -xzf "fox-${FOX_VERSION}.tar.gz"; \
+    cd "fox-${FOX_VERSION}"; \
+    ./configure --prefix=/usr/local --disable-static --enable-shared; \
+    make -j"$(nproc)"; \
+    make install; \
+    echo /usr/local/lib > /etc/ld.so.conf.d/fox.conf; \
+    ldconfig; \
+    ldconfig -p | grep -q 'libFOX-1.6'; \
+    command -v fox-config; \
+    cd /; \
+    rm -rf "/tmp/fox-${FOX_VERSION}" "/tmp/fox-${FOX_VERSION}.tar.gz"
 
 # ---------------------------------------------------------------------------
 # CMake >= 3.28 (CARLA's configure enforces it). AlmaLinux 8 ships an older CMake, so install the

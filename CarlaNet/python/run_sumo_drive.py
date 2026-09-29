@@ -71,6 +71,19 @@ before SUMO is started, naming both. `--allow-sumo-version-mismatch` runs anyway
 records that it did; a package that records no converter runs, and is reported unchecked. The
 installation, its release and how it stood against the world's converter are logged every run.
 
+`--sumo-gui` launches that installation's `sumo-gui` in place of `sumo`, so SUMO's own window shows
+the very simulation the session is stepping, beside the CARLA world -- one SUMO process, not a second
+one. The release pin holds for it by its own release, and the log names the binary that ran. An
+installation with no `sumo-gui` is refused before anything starts; CarlaSetup.ps1 or CarlaSetup.sh
+builds and stages it. To watch a drive at the pace of real traffic:
+
+    python run_sumo_drive.py --scenario ... --world-package ... --epoch ... \\
+        --illumination freeze_at_window_start --no-record --real-time-factor 1.0 --steps 0 --sumo-gui
+
+The window is live: pausing it pauses the drive, and a pause longer than `--sumo-answer-timeout`
+stops the run as a SUMO that stopped answering; closing it stops the run as a SUMO that died. On
+Linux it needs a display.
+
 A compiled scenario is checked against the compile lock the compiler wrote beside its configuration
 (`<stem>.lock.json`) before SUMO is started: its configuration, route file and network must be the
 ones the lock digests, and the catalogue and epoch given here the ones it was compiled against. A
@@ -148,6 +161,11 @@ def parse_args() -> argparse.Namespace:
                         help="run with a SUMO whose release is not the one that converted the world, "
                              "instead of refusing. The run report records that the mismatch was "
                              "accepted and names both releases")
+    parser.add_argument("--sumo-gui", action="store_true",
+                        help="launch the installation's sumo-gui in place of sumo, to watch the "
+                             "simulation the session is stepping. Refused before anything starts "
+                             "where the installation has none (CarlaSetup builds and stages it). "
+                             "Pausing the window pauses the drive; closing it stops the run")
     parser.add_argument("--allow-teleporting", action="store_true",
                         help="run a scenario whose configuration lets SUMO teleport a blocked vehicle "
                              "(a positive time-to-teleport, or none, which SUMO takes as 300 s) "
@@ -304,14 +322,17 @@ class SessionSumo:
                 self.home, self.rule = os.path.abspath(home), rule
                 return
 
-    def announce(self) -> None:
-        """Say which installation is being named, before anything is started."""
+    def announce(self, gui: bool) -> None:
+        """Say which installation is being named, and which of its binaries, before anything is
+        started. Whether the installation has a `sumo-gui` is the session's to say."""
+        binary = "sumo-gui in place of sumo" if gui else "sumo"
         if self.home is None:
             logger.info("SUMO: none named -- no --sumo-home, %s holds none and this repository has "
-                        "no build under Build/ -- so the session searches SUMO_HOME, then PATH",
-                        self.OVERRIDE_VARIABLE)
+                        "no build under Build/ -- so the session searches SUMO_HOME, then PATH, and "
+                        "launches %s", self.OVERRIDE_VARIABLE, binary)
         else:
-            logger.info("SUMO: naming %s for the session (%s)", self.home, self.rule)
+            logger.info("SUMO: naming %s for the session (%s), which launches %s", self.home,
+                        self.rule, binary)
 
 
 class SunDeclaration:
@@ -504,7 +525,7 @@ def main() -> int:
 
     sun = SunDeclaration(args)
     sumo = SessionSumo(args.sumo_home)
-    sumo.announce()
+    sumo.announce(args.sumo_gui)
 
     client = carla.Client(args.host, args.port)
     client.set_timeout(RUN_TIMEOUT_S)
@@ -548,6 +569,7 @@ def main() -> int:
             real_time_factor=args.real_time_factor,
             sumo_home=sumo.home,
             allow_sumo_version_mismatch=args.allow_sumo_version_mismatch,
+            sumo_gui=args.sumo_gui,
             allow_teleporting=args.allow_teleporting,
             sumo_answer_timeout_s=args.sumo_answer_timeout,
             vehicle_lamps=not args.no_vehicle_lamps,
@@ -562,12 +584,12 @@ def main() -> int:
         if session is None:
             return 1
 
-        # What the session launched and how it stood against the world's converter, as the session
-        # established it. An accepted mismatch and an unchecked world both ran, and both are said
-        # louder than a match.
+        # What the session launched -- which installation, and which of its binaries -- and how that
+        # binary stood against the world's converter, as the session established it. An accepted
+        # mismatch and an unchecked world both ran, and both are said louder than a match.
         launched = session.Report.Sumo
         (logger.info if launched.Agrees else logger.warning)(
-            "sumo: %s; %s", launched.Installation, launched.Verdict)
+            "sumo: %s, launching %s; %s", launched.Installation, launched.Binary, launched.Verdict)
         # A compiled scenario was checked against its lock before SUMO started; an uncompiled one
         # ran with nothing to check it against, and says so louder.
         compiled = session.Report.CompileLock

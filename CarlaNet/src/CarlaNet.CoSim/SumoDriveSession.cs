@@ -216,8 +216,9 @@ public sealed class SumoDriveSession : IDisposable
     /// The session renders a world and declares no illumination policy, or a policy that binds the
     /// sun and no epoch to bind it from; the real-time factor or its window is not a usable number;
     /// the world package does not describe the world the server has loaded; the named SUMO
-    /// installation holds no <c>sumo</c>, or the SUMO about to be launched is not the release the
-    /// world package records as its converter and the mismatch was not accepted; the scenario's
+    /// installation holds no <c>sumo</c>, or no <c>sumo-gui</c> where the GUI was asked for, or the
+    /// binary about to be launched is not the release the world package records as its converter and
+    /// the mismatch was not accepted; the scenario's
     /// network is not the one the world package carries, or the package carries a network other than
     /// the one it records; a compile lock beside the scenario binds other files, another catalogue or
     /// another epoch; the scenario lets SUMO teleport a blocked vehicle and that was not accepted; the
@@ -328,9 +329,11 @@ public sealed class SumoDriveSession : IDisposable
             LoadedWorldCheck.Require(options.WorldPackagePath, loaded.DescribeLoadedWorld());
         }
 
-        // Which SUMO, and whether it is the release that converted this world: settled before it is
-        // started, like every other refusal that needs no simulation to find out.
+        // Which SUMO, whether it has the binary the session is to launch, and whether that binary is
+        // the release that converted this world: settled before it is started, like every other
+        // refusal that needs no simulation to find out.
         SumoInstallation installation = ResolveSumo(options);
+        RequireTheGui(installation, options);
         SumoReleaseCheck release = RequireTheWorldSConverter(installation, manifest, options);
 
         // Whether the package's network is in the world's frame. It needs nothing but the package,
@@ -376,6 +379,7 @@ public sealed class SumoDriveSession : IDisposable
                 ExtraArguments = extraArguments,
                 Output = console.Add,
                 ReceiveTimeout = TimeSpan.FromSeconds(options.SumoAnswerTimeoutSeconds),
+                Gui = options.SumoGui,
             });
 
         WorldSettingsLease? settings = null;
@@ -1463,6 +1467,34 @@ public sealed class SumoDriveSession : IDisposable
     }
 
     /// <summary>
+    /// Refuse a session asked to show its simulation in <c>sumo-gui</c> where the installation it
+    /// launches from has none.
+    /// </summary>
+    /// <remarks>
+    /// Settled before anything is started, like the release. Left to the launch, the failure would
+    /// be the operating system's word for a missing file, naming neither the option that asked for
+    /// the GUI nor what builds it. The GUI is looked for in the installation already resolved, never
+    /// elsewhere: a <c>sumo-gui</c> from another installation would be another SUMO, and the
+    /// simulation it showed would not be the one the world's converter was checked against.
+    /// </remarks>
+    private static void RequireTheGui(SumoInstallation installation, SumoDriveSessionOptions options)
+    {
+        if (!options.SumoGui || installation.HasSumoGui)
+        {
+            return;
+        }
+
+        throw new CoSimSessionRefusedException(
+            "The session was asked to launch sumo-gui in place of sumo (SumoGui; run_sumo_drive.py "
+            + $"--sumo-gui), and the SUMO installation at {installation.Home} (matched by "
+            + $"{installation.Source}) has no {installation.SumoGui}. SUMO builds it only where the FOX "
+            + "toolkit is found, and the repository's setup script builds and stages it with the rest of "
+            + "the SUMO toolchain: run CarlaSetup.ps1 on Windows or CarlaSetup.sh on Linux, which rebuilds "
+            + "a staged installation that is missing it. Or name an installation that has one (SumoHome; "
+            + "run_sumo_drive.py --sumo-home), or run without the GUI. SUMO has not been started.");
+    }
+
+    /// <summary>
     /// Refuse a SUMO whose release is not the one that converted the world, unless the mismatch was
     /// accepted.
     /// </summary>
@@ -1478,20 +1510,28 @@ public sealed class SumoDriveSession : IDisposable
     /// however each was written. A package that records no converter is not evidence of a mismatch
     /// and proceeds; the report says the release went unchecked. An accepted mismatch proceeds and
     /// the report says that too.</para>
+    ///
+    /// <para>The release is the one the binary about to be launched reports -- <c>sumo-gui</c>'s own
+    /// where the session launches it in place of <c>sumo</c> -- because that is the program whose
+    /// reading of the network the run is.</para>
     /// </remarks>
     private static SumoReleaseCheck RequireTheWorldSConverter(SumoInstallation installation,
                                                               WorldPackageManifest manifest,
                                                               SumoDriveSessionOptions options)
     {
-        SumoReleaseCheck release = SumoReleaseCheck.Of(installation, manifest.NetconvertVersion,
-                                                       options.AllowSumoVersionMismatch);
+        SumoReleaseCheck release = SumoReleaseCheck.Of(
+            installation,
+            options.SumoGui ? SumoInstallation.SumoGuiName : SumoInstallation.SumoName,
+            manifest.NetconvertVersion,
+            options.AllowSumoVersionMismatch);
         if (release.Refused)
         {
             throw new CoSimSessionRefusedException(
                 $"The world package {options.WorldPackagePath} was converted by "
-                + $"'{release.RecordedConverter}', and the SUMO the session would launch is "
+                + $"'{release.RecordedConverter}', and the SUMO the session would launch, "
+                + $"{release.Binary}, is "
                 + (release.Release is { } found ? $"release {found}" : "of a release that could not be read")
-                + $" at {release.Home} (matched by {release.Source}). Two SUMO releases are not "
+                + $" (the installation at {release.Home}, matched by {release.Source}). Two SUMO releases are not "
                 + "guaranteed to build the same network from the same OSM or to drive it the same way, "
                 + "so SUMO has not been started. Name an installation of the world's release (SumoHome; "
                 + "run_sumo_drive.py --sumo-home), rebuild the world with this one, or accept the "

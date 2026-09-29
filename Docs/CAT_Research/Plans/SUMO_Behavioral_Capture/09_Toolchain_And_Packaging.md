@@ -36,6 +36,7 @@ specifies only their packaging shape.
 | 2026-09-21 | TraCI client is a managed socket client: no SWIG, no `libtracics`, no native staging or bundling. |
 | 2026-09-22 | Setup is two scripts, `CarlaSetup.ps1` and `CarlaSetup.sh`; §3.1's environment citations re-resolved. |
 | 2026-09-22 | The Unreal skills are vendored under `skills/third-party/` and excluded from the distribution. |
+| 2026-09-29 | The setup scripts build and stage `sumo-gui` for development (§2.5); FOX a Linux prerequisite in both homes; bundling it is an open decision (§5.4, Open question 5). |
 
 ---
 
@@ -238,7 +239,8 @@ libraries `netconvert` already does — Xerces-C and PROJ, present in `Util/Setu
 (`libxerces-c-dev`, `libproj-dev`) and in `Util/Docker/Base.alma8.Dockerfile`'s package block
 (`xerces-c-devel`, `proj-devel`) — and the TraCI client compiles as ordinary managed code with no native
 prerequisite at all (§4.1). The target-list change is therefore reachable from a clean clone and a clean
-CI container as they stand.
+CI container as they stand. (`sumo-gui`, added to the set on 2026-09-29, is the exception: it needs the
+FOX toolkit, which is now declared in both Linux homes, §2.5.)
 
 **The structural finding underneath that is worth keeping, because the next prerequisite will hit it.**
 There are **two** places a Linux build prerequisite has to be declared, and only one of them is obvious:
@@ -294,6 +296,48 @@ The one thing that *is* new on account of §3a, and is emphatically not a SUMO m
 dependency for civil-time handling on the scenario-authoring side — §4.4. The other new thing — the
 operator control surface's distribution footprint — is not a toolchain matter either, but it is a
 packaging one, and it is addressed at §5.6.
+
+### 2.5 `sumo-gui`, built and staged for development (2026-09-29)
+
+The co-simulation session can launch `sumo-gui` in place of `sumo`, so a developer watches the
+simulation a drive is stepping ([`03`](03_CoSimulation_Runtime.md) §2.6, D3.36). It is resolved from
+the same installation as `sumo` and held to the same release pin, so it has to be in that installation:
+it joins the set both setup scripts build and stage, in the same change. Written on 2026-09-29 and not
+yet run on either platform: the owner builds it.
+
+| | Windows (`CarlaSetup.ps1`) | Linux (`CarlaSetup.sh`) |
+|---|---|---|
+| Build | `--target netconvert sumo duarouter sumo-gui` | the same four targets |
+| Stage | `sumo-gui.exe` into `Build\sumo-install\bin\` with the others. The DLLs it imports, `fox-16.dll` among them, were already staged by the `bin\*.dll` glob, because `sumo` and `duarouter` import FOX too | `sumo-gui` into `Build/sumo-install/bin/` |
+| Guard (`D9.2`) | `sumo-gui.exe` is a member of `$sumoRequiredBinaries`, so a tree without it rebuilds and restages the toolchain and names `bin\sumo-gui.exe` as missing | `sumo-gui` is a member of `sumo_required_binaries`, likewise |
+| FOX | the pinned SUMOLibraries bundle's `fox-1.6.59`, found by the configure as it stands: the configured tree already holds `src/sumo-gui.vcxproj` | `libfox-1.6-dev` in `InstallPrerequisites.sh`, which depends on the `libgl1-mesa-dev` and `libglu1-mesa-dev` SUMO's configure also requires; the CI image builds FOX 1.6.59 from source (below) |
+| No FOX found | the script stops after the configure, naming the bundle, rather than failing on an unknown target | the script stops after the configure, naming the package and the image |
+
+`sumo-gui` is a target only where SUMO's configure found FOX with OpenGL and GLU
+(`CMakeLists.txt:476-491`, `src/CMakeLists.txt:74`), and the scripts read that verdict from
+`HAVE_FOX` in the generated `src/config.h`.
+
+**The Linux prerequisite has two homes, and EL8 has no package for it.** Neither AlmaLinux 8's own
+repositories nor EPEL carry `fox-devel` (Fedora does), so `Util/Docker/Base.alma8.Dockerfile` builds FOX
+1.6.59 from upstream source. That is SUMO's own recipe for AlmaLinux 8
+(`build_config/install_dependencies.sh`, which it runs on `manylinux_2_28`), with the X11, GL, GLU and
+font development packages FOX builds against. Upstream serves the tarball over plain HTTP, so it is
+pinned by SHA-256, taken from the tarball whose SHA-512 Fedora's `fox` package records. FOX installs
+under `/usr/local`, and `/usr/local/lib` is registered with the loader, which does not search it on
+EL8. **The image must be rebuilt before the next Linux CI run.** CI's persistent `Build/` tree has no
+`sumo-gui` staged, so the guard rebuilds, and on the old image the configure finds no FOX and the step
+stops, saying so (`D9.8`).
+
+**What finding FOX changes on Linux beyond `sumo-gui`.** SUMO links FOX into every binary that
+simulates vehicles, for its worker threads — `commonvehiclelibs` carries `${FOX_LIBRARY}`
+(`CMakeLists.txt:686-687`), and `sumo` and `duarouter` link it (`src/CMakeLists.txt:71`,
+`src/duarouter/CMakeLists.txt:12`). So on Linux `sumo` and `duarouter` import FOX from now on, as
+`sumo.exe` and `duarouter.exe` already import `fox-16.dll` on Windows (§5.4). That is the platforms
+moving to parity, and it reaches the distribution: `MakeDistribution.sh`'s `ldd` walk bundles every
+library a binary resolves bar the loader's own (§5.4), so a Linux distribution built after this change
+carries `libFOX-1.6` and the X11, GL and font libraries it links, each needing its `MANIFEST.md` row.
+**Not yet measured** — no Linux build has run with FOX — and it is to be read on the first one; whether
+the GL libraries belong beside libc in the walk's exclusions is Open question 5's second half.
 
 ---
 
@@ -722,6 +766,17 @@ binaries has a delay-load import directory, so the plain import table is the who
 Each staged binary is then run from the staged directory, which is the direct check that the list is
 not short.
 
+**`sumo-gui` is staged for development and not bundled, and whether a distribution carries it is an open
+decision for the owner (Open question 5).** Both `MakeDistribution` scripts copy an explicit list of
+executables, and `sumo-gui` is absent from it, with a comment beside each list saying why. What the
+decision turns on is FOX's licence, stated here as facts: FOX is LGPL-2.1-or-later with an addendum that
+exempts only statically linked, unmodified copies from relinking (`SUMOLibraries/fox-1.6.59/LICENSE`,
+`LICENSE_ADDENDUM`); `fox-16.dll` already ships, because `sumo.exe` and `duarouter.exe` import it, so the
+toolchain carries the LGPL obligation either way (above, and `13` §13.2); `sumo-gui` would add a binary
+that is itself a FOX application — every window it draws is FOX's — and, on Linux, the X11, GL and font
+libraries FOX draws with (§2.5). A distribution recipient drives SUMO from the session, which never
+needs a window, so nothing in the shipped tools requires it.
+
 **The native bundle is the same size whether or not a SWIG binding is in it**, so no licence obligation
 in §6 is retired by dropping one. Measured: `libtracics.dll`'s own imports are the MSVC runtime,
 `kernel32` and `ws2_32`, every one of which `sumo.exe` already imports, so it contributes nothing to
@@ -734,6 +789,7 @@ equivalent, which it gets by reading the PE import table directly.
 | Artifact | Windows source | Linux source | Destination |
 |---|---|---|---|
 | `sumo`, `duarouter`, `netconvert` + runtime DLLs/`.so`s | `Build\sumo-install\bin\*` | `Build/sumo-install/bin/*` (Linux already walks `ldd` per-binary at `:125-144`; extend the walk to all three, not just `netconvert`) | `tools\sumo\` |
+| `sumo-gui` — **not bundled**, pending Open question 5. Staged for development only (§2.5) | — | — | not shipped |
 | SUMO `data/`, **named subset**: `typemap`, `xsd` | `Build\sumo-install\data\{typemap,xsd}` | same | `tools\sumo\data\` |
 | SUMO `tools/`, **named subset**: `traci`, `sumolib` — the Python authoring path imports them, and `traci` is the reference the C# client is ported from (§3.4, §4.1) | `Build\sumo-install\tools\{traci,sumolib}` | same | `tools\sumo\tools\` |
 | PROJ data | already bundled | already bundled | `tools\sumo\proj\` (unchanged) |
@@ -928,6 +984,7 @@ Extending that to every binding choice this plan puts in front of the user:
 |---|---|---|---|
 | `netconvert` (already shipped) | compiled binary only | separate process, invoked by argv | notice + source offer (doc 22's existing conclusion, unchanged) |
 | `sumo` + `duarouter` (new) | compiled binaries only | separate processes | same as `netconvert` — no new category |
+| `sumo-gui` (staged for development; **not redistributed**, §5.4) | nothing today; were it bundled, a compiled binary built on FOX | separate process | EPL-2.0 as for `sumo`, plus FOX's LGPL-2.1-or-later for a binary that is a FOX application. Whether to ship it is Open question 5, the owner's decision |
 | **SUMO's Python tools (`tools/traci`, `tools/sumolib`)** | **EPL-2.0 source files, verbatim and unmodified**, carrying SUMO's own copyright and SPDX headers (`tools/traci/storage.py:1-12`) | staged by `D9.3`, bundled by §5.4, imported by `carlacontrol` at run time | notice plus source offer, as for the binaries — and this is the row that keeps the **source** half of the obligation alive. Verbatim redistribution under the same licence is the case EPL-2.0 addresses most directly; the headers must survive the copy, which a `cp -a` / `Copy-Item -Recurse` of whole directories does |
 | **`CarlaNet.Sumo` (the TraCI client)** | our own C# **ported from** `tools/traci`'s EPL-2.0 `connection.py`, `storage.py` and the domain calls it needs (doc 23 §6.3) | out-of-process TraCI protocol between our code and the `sumo` process. No SUMO binary or source is linked, loaded or embedded — the coupling is the wire format | the run-time boundary is the cleanest of any option here: a socket, and nothing of SUMO's inside our process. What is **not** settled is whether a translation of an EPL-2.0 source file into another language is a Modified Work of that file — EPL-2.0 is file-level copyleft, and a port is closer to a modification than a call is. **Flagged for legal review, not decided here**, and the cheap mitigation is available now: attribute the ported files to their SUMO originals in a header, keep the pinned commit beside the attribution, and let the review decide whether more is owed |
 | `libsumo` / `libtracics` (SUMO's own bindings) | a native library plus generated C# proxies, redistributed as binary *and* as source | `libtracics` is out of process but loads native code into ours; `libsumo` additionally links SUMO statically into the module our own code loads | not taken (doc 23 §6.3). The licensing posture agreed with that on its own: shipping generated EPL-2.0-derived source inside our build, and for `libsumo` static linking into the same binary, are both wider boundaries than a socket |
@@ -978,7 +1035,9 @@ this section:
    nothing native. The image's `swig` is surplus rather than required, and it costs nothing until the
    next rebuild drops it. Whether the workflow's tag reference should move to a digest pin, so a future
    base-image change cannot silently ride into a build, is a standing question independent of this plan
-   (`D9.8`).
+   (`D9.8`). **`sumo-gui` changed this on 2026-09-29 (§2.5):** the image now builds the FOX toolkit
+   from pinned source, and it has to be rebuilt before the next Linux CI run, because the SUMO step
+   stops on an image without FOX, naming it.
 2. **No workflow change is needed to trigger the new targets.** `CarlaSetup.sh --skip-prerequisites`
    (the only build-relevant flag the workflow passes) skips `InstallPrerequisites.sh`, not the SUMO build
    block — the two are separate steps in the script. Once §2's target-list change lands, the existing
@@ -1108,20 +1167,21 @@ this document's scope to verify (§2.4).
 
 | # | Decision |
 |---|---|
-| D9.1 | Build target list becomes `netconvert`, `sumo`, `duarouter` (required, staged together) on both platforms — three binaries and **no native library**, since the TraCI client is managed code (`D9.4`). `jtrrouter`/`polyconvert` stay out of the default target list — nothing in this plan consumes them. The build needs no prerequisite `netconvert` does not already need, on either platform (§2.3). |
+| D9.1 | Build target list becomes `netconvert`, `sumo`, `duarouter` (required, staged together) on both platforms — three binaries and **no native library**, since the TraCI client is managed code (`D9.4`). `jtrrouter`/`polyconvert` stay out of the default target list — nothing in this plan consumes them. The build needs no prerequisite `netconvert` does not already need, on either platform (§2.3). `sumo-gui` joined the list on 2026-09-29 as a fourth, development-only member, and it does need one: the FOX toolkit (`D9.15`). |
 | D9.2 | The idempotence guard checks **presence of the entire required set** — the three binaries and the staged `data`/`tools` subset — not the freshness of a single "newest" file. It reports *which* members are missing rather than only that the check failed. **Measured: the guard is firing on a developer machine today** — `netconvert.exe` is staged, so `CarlaSetup` prints "Skipping SUMO build" and `sumo` and `duarouter` are never built. The block exists in the **two** setup scripts, `CarlaSetup.ps1` and `CarlaSetup.sh`, which is exactly the pair the parity rule covers (`D9.13`) — parallel (`-m`/`-j`) builds have no dependable single last-built artifact, and CI's persistent `Build/` tree makes a wrong guard a standing, silent CI defect, not just a developer inconvenience. |
 | D9.3 | A **named subset** of `data/` and `tools/` is staged into `Build/sumo-install/{data,tools}` by the same build step, on both platforms: `data/typemap`, `data/xsd`, `tools/traci`, `tools/sumolib`. Measured: the full copy is 89 MB to deliver the 3.2 MB anything in this plan consumes, and `tools/contributed` alone is 47 MB of third-party contributions that would each need a `MANIFEST.md` row (§4.3). Directories are added when something consumes them, with the reason recorded beside the list. `tools/traci` earns its place twice: `carlacontrol` imports it, and it is the reference `CarlaNet.Sumo` is ported from (§3.4). |
 | D9.4 | **The C# path is a managed TraCI client speaking the wire protocol over a TCP socket to an out-of-process `sumo`** (doc 23 §6.3). Nothing of SUMO's is loaded into the CarlaNet process, so the crash isolation holds and the licensing boundary is a socket (§6). SUMO's own `libtracics`/`libsumocs` bindings are not built, staged or shipped: measured at no speed advantage, with a version mismatch that loads and steps rather than failing, and 35,767 lines to carry. |
 | D9.5 | A new, dependency-free `CarlaNet/src/CarlaNet.Sumo` project holds the transport and the domain calls the bridge uses, hand-written in C#. It builds from a clean clone on a machine with no SUMO, so nothing in `CarlaNet.sln` depends on the SUMO toolchain having been built first, and it ships inside the `carlanet` wheel with every other CarlaNet assembly rather than in a slot of its own (§4.1, §5.4). Any co-simulation bridge (`03`'s `CarlaNet.CoSim` or equivalent) depends on it; it depends on nothing CARLA-specific. |
 | D9.6 | `SUMO_HOME` precedence in `SumoInstallation.locate` is **not** reordered — `SUMO_HOME` continues to win, matching raw `traci`'s own convention. Instead: resolution is always logged (home + version), a `.version` property is added, and a version-mismatch between the netconvert that built a world and the SUMO installation resolved to author/run a scenario against it becomes a **hard-refusing** condition with an explicit override flag. The consumer-side refuse-vs-warn UX is `07_Scenario_Authoring.md`'s call to finalize against `SumoScenarioBuilder`. Corroborated independently by `07` §9.4 (§3.5); its interaction with `12`'s proposed site profile is answered generically in §3.5. |
 | D9.7 | **There is one distribution and it contains all of the tools**, and both platforms produce it (`13` §13.2). Neither script gains an internal/external packaging mode: there is no second distribution for one to gate, and an unused mode is a switch that eventually gets flipped by accident. The `carlacontrol` wheel ships on both platforms — which `12`'s capture launcher makes unavoidable regardless of §5.2 (§5.6). `Findings/22` §14's exclusion of `CarlaControl/` came from a plan that did not manifest and is corrected at source. What the package must carry instead is a **generated `MANIFEST.md` and a `licenses/` directory** (§4.3, §5.4), driven by third-party obligations the distribution meets none of today: 42 native DLLs spanning nine or more licences including LGPL, SUMO's EPL-2.0 notice and source offer, and ODbL on the OSM extracts and generated `.xodr`. Where the package may go is governed by access to the channel it is published to. |
-| D9.8 | **A Linux build prerequisite must be declared in two places**, `Util/SetupUtils/InstallPrerequisites.sh` and `Util/Docker/Base.alma8.Dockerfile`, in the same change: CI pulls the image pre-built and calls `CarlaSetup.sh --skip-prerequisites`, so the script never runs against it and a package added only there fails the first time a clean `Build/` tree forces a configure (§2.3). `D9.1`'s target set needs nothing new in either file. Whether `carla-base:alma8`'s by-tag reference in `build-carla-ue5.yml:51` should move to a digest pin, so a future base-image change cannot silently ride into a build, is an open question (below) and stands on its own. |
+| D9.8 | **A Linux build prerequisite must be declared in two places**, `Util/SetupUtils/InstallPrerequisites.sh` and `Util/Docker/Base.alma8.Dockerfile`, in the same change: CI pulls the image pre-built and calls `CarlaSetup.sh --skip-prerequisites`, so the script never runs against it and a package added only there fails the first time a clean `Build/` tree forces a configure (§2.3). `D9.1`'s original target set needed nothing new in either file; `sumo-gui` added FOX to both (`D9.15`). Whether `carla-base:alma8`'s by-tag reference in `build-carla-ue5.yml:51` should move to a digest pin, so a future base-image change cannot silently ride into a build, is an open question (below) and stands on its own. |
 | D9.9 | `CarlaControl/src/carlacontrol/OsmClipper.py:154,219`'s non-deterministic `set`-ordered node emission is a real reproducibility hazard for anything that hashes its output, and the proprietary tools are part of the shipped system (`D9.7`), so it is this plan's defect to fix. The fix is: the fix is `sorted(used_orig, key=int)` (or equivalent) at the emission site; until it lands, no reproducibility or acceptance check in this plan hashes OSM-clip-derived file bytes (§7.3). |
 | D9.10 | **Every skill an assistant reads in this workspace has a commit behind it, and only the first-party ones ship.** Ours lives at `carla/CarlaControl/skills/sumo-traffic-scenarios/SKILL.md`, beside the compiler `07` §8 says generates most of its contents, and ships from there (§5.4); the workspace copy is a stub naming the canonical path, not a directory junction — a junction is invisible in `git status` and does not survive a fresh clone. **The 27 `ue-*` directories are third-party and are vendored under `carla/CarlaControl/skills/third-party/unreal-engine-skills/`**, byte-identical to `quodsoler/unreal-engine-skills` at commit `231c8571be6f3335685edc566a28ec6f9621361d`, with the upstream MIT `LICENSE` copied verbatim beside them and a `PROVENANCE.md` carrying the URL, the commit and the update procedure; the `third-party` path segment is what marks whose they are. They are **excluded from `MakeDistribution` on both platforms**, because a distribution recipient writes no engine C++, shipping 1.3 MB of somebody else's MIT content would attach an attribution obligation to material the bundle has no use for, and it would falsify the `skills/` manifest row's single provenance and licence. The `.agents/skills/` copies are what the harness loads and are left exactly as they are. A **stage A item** (`13` §13.3): `07` §8.4 depends on the skill's repository home. |
 | D9.11 | **The operator control surface's distribution footprint is packaged generically only where `12` had not yet fixed a shape; where it has, this document packages that shape as fact.** The new capture launcher (`run-capture.ps1`/`.sh`) coexists beside `run-sctmv.ps1`/`.sh` rather than replacing it; the run-configuration schema and site-profile template stage alongside the vehicle catalogue and vocabulary (§5.5); the broken-launcher repair (§5.2) and the new launcher's introduction land as one change, not two, because they touch the same lines of the same scripts (§5.6); and `12`'s launcher makes bundling `carlacontrol` unavoidable on both platforms, which `D9.7` settles on both platforms. |
 | D9.12 | **`tzdata` is added to `CarlaControl/pyproject.toml`'s dependencies once `07`/`11` settle whether IANA zone resolution is required or merely an optional cross-check (§4.4, Open question 4).** It needs no new packaging mechanism — it resolves through the same `pip install` step that already installs `numpy` and `pygame` for every distribution recipient — and it introduces no SUMO dependency, no native code, and no new distribution slot. |
 | D9.13 | **There are two setup scripts, `CarlaSetup.ps1` and `CarlaSetup.sh`, and every build change lands in both.** The charter's parity rule covers exactly that pair, and `Docs/build_windows_ue5.md:20` names `CarlaSetup.ps1` as the Windows entry point. A third copy is what a maintained port costs and what drift is made of: the SUMO block is duplicated once, not twice, and the `SUMOLibraries` pin (`CarlaSetup.ps1:621-623`, with `:614-620`'s comment recording exactly how an unpinned clone breaks the SUMO build) has one place to be wrong rather than two. |
 | D9.14 | **`SUMO_HOME` resolution is logged unconditionally, once per process, and a mismatch against the world's converter refuses.** Without it, `SUMO_HOME` silently outranks the repo-pinned install — measured on a developer machine, worlds built by the pinned **1.27.0** while every scenario tool resolved an unrelated **1.27.1**, with no log line saying which ran. `SumoInstallation` carries a `version` parsed from `netconvert --version` (not `sumo` — `_is_installation` accepts a netconvert-only directory), a `source` naming which rule matched, an `INFO` line stating path, version and source before `locate` returns (`SumoInstallation.py:120-128`), and `require_version` (`:158`). Precedence is **not** reordered; `D9.6` stands. The escapes are `--sumo-home`, `--allow-version-mismatch`, and a world package recording no converter, which warns rather than refuses. **Releases are compared by number, not by printed string**: a package records what the tool printed (`Eclipse SUMO netconvert 1.27.0`) while the installation carries the release alone, and comparing them verbatim refuses a matched pair — a false refusal with no escape but disabling the check. |
+| D9.15 | **`sumo-gui` is built and staged with the toolchain, on both platforms, for development, and is not bundled.** The co-simulation session launches it in place of `sumo` from the same installation, pinned by its own release (`03` D3.36), so it belongs in that installation: it is a member of both scripts' required set, so a tree without it rebuilds, restages and names it missing (`D9.2`). Its prerequisite is the FOX toolkit with OpenGL and GLU — on Windows the pinned SUMOLibraries bundle's, on Ubuntu `libfox-1.6-dev`, and in the EL8 CI image FOX 1.6.59 built from source pinned by checksum, because EL8 and EPEL package none (`D9.8`) — and a configure that finds none stops the setup naming it. On Linux, finding FOX also links it into `sumo` and `duarouter`, as on Windows. Neither `MakeDistribution` bundles `sumo-gui`: whether a distribution carries it turns on FOX's LGPL and is the owner's decision (§5.4, Open question 5). |
 
 ## Open questions
 
@@ -1146,3 +1206,10 @@ this document's scope to verify (§2.4).
    under that policy. This document packages either answer identically, so it is not blocked on the
    outcome — but `07` and `11` should agree on the wording before an author-facing error message has to
    explain why a scenario declaring `zone_database` refuses on a machine without `tzdata` installed.
+5. **Does a distribution carry `sumo-gui` (§5.4, `D9.15`)?** An owner decision, not an engineer's. It
+   is staged for development and neither `MakeDistribution` script bundles it. For it: a recipient could
+   watch a drive as a developer does. Against it: it is a binary that is itself a FOX application, under
+   FOX's LGPL-2.1-or-later, and nothing a recipient runs needs a window. Either way the LGPL row already
+   exists, because `sumo` and `duarouter` import FOX. The second half is Linux-only and measured on the
+   first Linux build with FOX: `sumo` and `duarouter` now link FOX there, and whether the X11 and GL
+   libraries the `ldd` walk then bundles belong beside libc in its exclusions (§2.5).

@@ -30,6 +30,48 @@ public sealed class SumoConnection : IDisposable
     /// <summary>How long to give <c>sumo</c> to exit on its own after the connection closes.</summary>
     private static readonly TimeSpan ShutdownGrace = TimeSpan.FromSeconds(10);
 
+    /// <summary>
+    /// What <c>sumo-gui</c> is given beyond <c>sumo</c>'s arguments, so that it serves a client the way
+    /// <c>sumo</c> does (<see cref="SumoLaunchOptions.Gui"/>).
+    /// </summary>
+    /// <remarks>
+    /// <para>Each is read from SUMO's own source at the pinned release, not assumed from the name:</para>
+    /// <list type="bullet">
+    /// <item><c>--start</c>. The GUI runs a simulation only once its play button is pressed, and a
+    /// TraCI server inside it answers nothing until then (<c>docs/web/docs/TraCI/index.md</c>), so
+    /// without it the connection's first command waits on a person.</item>
+    /// <item><c>--quit-on-end</c>. When the client closes the connection the simulation ends, and the
+    /// GUI then asks in a modal dialog whether to close its views and stays open
+    /// (<c>GUIApplicationWindow::handleEvent_SimulationEnded</c>) -- a process that never exits, which
+    /// <see cref="Dispose"/> would kill after its grace. With it the GUI exits as <c>sumo</c> does. It
+    /// cannot close the GUI in the middle of a run: while a client is connected SUMO overrides every
+    /// ending state but the connection's own closing to "running" (<c>MSNet::adaptToState</c>). And a
+    /// configuration the GUI cannot load exits it at once rather than leaving a window with an error
+    /// in it and the connection waiting out its timeout.</item>
+    /// <item><c>--delay 0</c>. The GUI sleeps this long between steps, and a gui-settings file the
+    /// configuration names can raise it from zero (<c>GUISettingsHandler::getDelay</c>); given on the
+    /// command line it wins. The pace of a run belongs to whoever steps it, not to the window.</item>
+    /// <item><c>--message-log stdout --error-log stderr</c>. A GUI build removes the console from
+    /// SUMO's message handlers before it loads anything ("within gui-based applications, nothing is
+    /// reported to the console", <c>GUILoadThread::run</c>) and writes to its own message window
+    /// instead, so without these <see cref="SumoLaunchOptions.Output"/> would receive nothing: no
+    /// warnings to count, and no last words to quote when SUMO fails. These put the console back
+    /// exactly as <c>sumo</c> has it -- warnings and errors on stderr, messages on stdout only when
+    /// verbose (<c>MsgHandler::initOutputOptions</c>) -- and the window keeps its own copy.</item>
+    /// </list>
+    /// <para>Not given: <c>--game</c>, which replaces the view with SUMO's traffic-light game, and
+    /// <c>--window-size</c> and <c>--window-pos</c>, which the GUI otherwise restores from where its
+    /// last window was.</para>
+    /// </remarks>
+    internal static readonly IReadOnlyList<string> GuiArguments =
+    [
+        "--start",
+        "--quit-on-end",
+        "--delay", "0",
+        "--message-log", "stdout",
+        "--error-log", "stderr",
+    ];
+
     private readonly TraCIConnection _traci;
     private readonly Process? _process;
     private bool _disposed;
@@ -91,7 +133,8 @@ public sealed class SumoConnection : IDisposable
     /// <summary>
     /// Start <c>sumo</c> on a configuration and connect to it.
     /// </summary>
-    /// <param name="installation">The SUMO whose <c>sumo</c> binary is launched.</param>
+    /// <param name="installation">The SUMO whose <c>sumo</c> binary -- or <c>sumo-gui</c>, under
+    /// <see cref="SumoLaunchOptions.Gui"/> -- is launched.</param>
     /// <param name="configurationPath">A <c>.sumocfg</c>. SUMO resolves the network and route files
     /// it names relative to its own directory, so it may sit anywhere.</param>
     /// <param name="options">How to launch and connect; the defaults suit a scenario run.</param>
@@ -104,24 +147,34 @@ public sealed class SumoConnection : IDisposable
         options ??= new SumoLaunchOptions();
 
         int port = options.Port ?? FreePort();
-        ProcessStartInfo start = new(installation.Sumo)
+        (string executable, IReadOnlyList<string> arguments) =
+            CommandLine(installation, configurationPath, port, options);
+        // CreateNoWindow suppresses a console window only; a graphical sumo-gui still opens its own.
+        ProcessStartInfo start = new(executable)
         {
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = options.Output is not null,
             RedirectStandardError = options.Output is not null,
         };
-        start.ArgumentList.Add("-c");
-        start.ArgumentList.Add(configurationPath);
-        start.ArgumentList.Add("--remote-port");
-        start.ArgumentList.Add(port.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        foreach (string argument in options.ExtraArguments)
+        foreach (string argument in arguments)
         {
             start.ArgumentList.Add(argument);
         }
 
-        Process process = Process.Start(start)
-                          ?? throw new FatalTraCIError($"Could not start {installation.Sumo}.");
+        Process process;
+        try
+        {
+            process = Process.Start(start)
+                      ?? throw new FatalTraCIError($"Could not start {executable}.");
+        }
+        catch (System.ComponentModel.Win32Exception failed)
+        {
+            // The operating system would not run the file -- it is not there, not executable, or not a
+            // program for this platform. That is SUMO failing to start, and is reported as such rather
+            // than as an exception nobody calling a launch has reason to expect.
+            throw new FatalTraCIError($"Could not start {executable}: {failed.Message}", failed);
+        }
 
         if (options.Output is not null)
         {
@@ -245,6 +298,34 @@ public sealed class SumoConnection : IDisposable
         {
             _process.Dispose();
         }
+    }
+
+    /// <summary>
+    /// The executable <see cref="Start"/> launches and the arguments it gives it, in order.
+    /// </summary>
+    /// <remarks>
+    /// <c>sumo-gui</c> is given <c>sumo</c>'s arguments unchanged and <see cref="GuiArguments"/> after
+    /// them, so the configuration, the port and every caller's override reach it exactly as they would
+    /// reach <c>sumo</c>. The caller's own arguments come last in both, as the overrides they are.
+    /// </remarks>
+    internal static (string Executable, IReadOnlyList<string> Arguments) CommandLine(
+        SumoInstallation installation,
+        string configurationPath,
+        int port,
+        SumoLaunchOptions options)
+    {
+        List<string> arguments =
+        [
+            "-c", configurationPath,
+            "--remote-port", port.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        ];
+        if (options.Gui)
+        {
+            arguments.AddRange(GuiArguments);
+        }
+
+        arguments.AddRange(options.ExtraArguments);
+        return (options.Gui ? installation.SumoGui : installation.Sumo, arguments);
     }
 
     private static SumoConnection Attach(Process? process, string host, int port, SumoLaunchOptions options)

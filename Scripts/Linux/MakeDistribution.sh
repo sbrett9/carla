@@ -201,6 +201,9 @@ sumo_install="$root/Build/sumo-install"
 sumo_bin="$sumo_install/bin"
 sumo_dest="$dist/tools/sumo"
 sumo_executables="netconvert sumo duarouter"
+# sumo-gui is staged beside these by CarlaSetup and deliberately not bundled: whether a distribution
+# carries it is an open decision that turns on FOX's LGPL (09_Toolchain_And_Packaging.md section 5.4).
+# Add it here only once that is decided.
 sumo_version="unknown"
 
 # Bundle every library the given binary resolves, except the ones tied to the target's own

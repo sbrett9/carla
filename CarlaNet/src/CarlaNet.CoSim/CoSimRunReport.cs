@@ -39,8 +39,9 @@ public sealed class CoSimRunReport
     public required string CatalogueDigest { get; init; }
 
     /// <summary>
-    /// The SUMO the run launched -- its root, its release and the rule that found it -- and how that
-    /// release stood against the converter the world package records.
+    /// The SUMO the run launched -- its root, the binary (<c>sumo</c>, or <c>sumo-gui</c> in its
+    /// place), that binary's release and the rule that found the installation -- and how that release
+    /// stood against the converter the world package records.
     /// </summary>
     /// <remarks>
     /// A run's traffic is one SUMO release's behaviour on one netconvert's network, and nothing in
@@ -629,6 +630,11 @@ public sealed class CoSimRunReport
         text.AppendLine($"world              {WorldPackagePath}");
         text.AppendLine($"catalogue          {CatalogueDigest}");
         text.AppendLine($"sumo               {Sumo.Installation}");
+        if (Sumo.Binary is { } launched)
+        {
+            text.AppendLine($"  launched         {launched}");
+        }
+
         text.AppendLine($"  world converter  {Sumo.Verdict}");
         text.AppendLine($"compile lock       {CompileLock}");
         if (CompileLock.Compiled)

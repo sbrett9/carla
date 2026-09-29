@@ -115,6 +115,26 @@ public sealed record SumoDriveSessionOptions(
     public bool AllowSumoVersionMismatch { get; set; }
 
     /// <summary>
+    /// Launch the installation's <c>sumo-gui</c> in place of <c>sumo</c>, so SUMO's own view of the
+    /// simulation the session is stepping is on screen beside the CARLA world.
+    /// </summary>
+    /// <remarks>
+    /// <para>It replaces <c>sumo</c> rather than joining it: one SUMO process, the one the session
+    /// drives, launched from the same installation with the same arguments and the ones that let it
+    /// follow the session with nobody at the window (<see cref="CarlaNet.Sumo.SumoLaunchOptions.Gui"/>).
+    /// The release pin applies to it as it does to <c>sumo</c>: the release compared against the
+    /// world's converter is the one <c>sumo-gui</c> itself reports, and the report names the binary
+    /// that ran.</para>
+    ///
+    /// <para>An installation without one is refused before anything is started, naming the file and
+    /// the setup script that builds and stages it. Pausing the GUI pauses the run -- SUMO answers
+    /// nothing while it is paused, so a pause longer than <see cref="SumoAnswerTimeoutSeconds"/>
+    /// stops the run as a SUMO that stopped answering -- and closing its window stops the run as a
+    /// SUMO that died. Its delay control slows every step while it is raised.</para>
+    /// </remarks>
+    public bool SumoGui { get; set; }
+
+    /// <summary>
     /// Run a scenario whose configuration lets SUMO teleport a blocked vehicle, rather than refusing.
     /// </summary>
     /// <remarks>

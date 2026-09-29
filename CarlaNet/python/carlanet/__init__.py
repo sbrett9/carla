@@ -2068,7 +2068,7 @@ class World:
                          road_layer_visible=False, signal_layer_visible=False,
                          epoch=None, illumination=None,
                          real_time_factor=0.0, pacing_window_s=5.0,
-                         sumo_home=None, allow_sumo_version_mismatch=False,
+                         sumo_home=None, allow_sumo_version_mismatch=False, sumo_gui=False,
                          allow_teleporting=False, sumo_answer_timeout_s=60.0,
                          vehicle_lamps=True, headlight_on_below_deg=3.0,
                          headlight_off_above_deg=6.0,
@@ -2157,6 +2157,18 @@ class World:
         unchecked. `session.Report.Sumo` carries the installation, its release, the rule that found
         it and how it stood against the world's converter -- an accepted mismatch and an unchecked
         world included.
+
+        `sumo_gui` launches the installation's `sumo-gui` in place of `sumo`: one SUMO process, the
+        one the session steps, so SUMO's own window shows exactly the simulation driving this world.
+        It gets `sumo`'s arguments and `--start --quit-on-end --delay 0 --message-log stdout
+        --error-log stderr`, so it runs without anyone pressing play, closes when the session does,
+        never paces the run, and still writes the warnings the report counts to the console. The
+        release compared against the world's converter is the one `sumo-gui` itself reports, and
+        `session.Report.Sumo.Binary` names the binary that ran. An installation with no `sumo-gui` is
+        refused before anything starts, naming the file; the repository's setup script
+        (CarlaSetup.ps1 / CarlaSetup.sh) builds and stages it. Pausing the GUI pauses the run -- past
+        `sumo_answer_timeout_s` it stops as a SUMO that stopped answering -- and closing its window
+        stops the run as a SUMO that died.
 
         A compiled scenario carries a compile lock beside its configuration (`<stem>.lock.json`, as
         the scenario compiler writes it). The session refuses, before SUMO is started, a scenario
@@ -2274,6 +2286,8 @@ class World:
         if sumo_home is not None:
             options.SumoHome = str(sumo_home)
         options.AllowSumoVersionMismatch = bool(allow_sumo_version_mismatch)
+        if sumo_gui:
+            options.SumoGui = True
         options.AllowTeleporting = bool(allow_teleporting)
         options.SumoAnswerTimeoutSeconds = float(sumo_answer_timeout_s)
         options.VehicleLampsDriven = bool(vehicle_lamps)

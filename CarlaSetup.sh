@@ -242,14 +242,19 @@ fi
 #    route validation and the TraCI client library) ─────────────────────────────
 # CarlaNet shells out to stock SUMO `netconvert` at runtime to convert OSM maps
 # to OpenDRIVE, replacing CARLA's old in-tree osm2odr fork; `sumo` runs the traffic
-# microsimulation, and `duarouter` validates authored routes. All three come from
-# SUMO release v1_27_0; their real dependencies are Xerces-C and PROJ (FOX/GUI and
-# GDAL are NOT needed). CarlaNet talks to `sumo` over the TraCI wire protocol from
-# managed code, so nothing native is built for it here. The apt prerequisites
-# (cmake g++ libxerces-c-dev libproj-dev; proj.db ships with libproj-dev/proj-data)
-# are installed by Util/SetupUtils/InstallPrerequisites.sh, and the CI container
-# gets them from Util/Docker/Base.alma8.Dockerfile, which never runs that script --
-# a prerequisite added to one of those two files and not the other fails in CI.
+# microsimulation, and `duarouter` validates authored routes. `sumo-gui` is the same
+# microsimulation with SUMO's own view of it, which the co-simulation session can
+# launch in place of `sumo` so a developer watches the simulation the drive is
+# stepping. All four come from SUMO release v1_27_0. Their dependencies are Xerces-C
+# and PROJ, and the FOX GUI toolkit with OpenGL/GLU for `sumo-gui` (GDAL is NOT
+# needed). Once FOX is found SUMO also links it into `sumo` and `duarouter`, for their
+# worker threads, exactly as the Windows build already does. CarlaNet talks to `sumo`
+# over the TraCI wire protocol from managed code, so nothing native is built for it
+# here. The apt prerequisites (cmake g++ libxerces-c-dev libproj-dev libfox-1.6-dev;
+# proj.db ships with libproj-dev/proj-data) are installed by
+# Util/SetupUtils/InstallPrerequisites.sh, and the CI container gets them from
+# Util/Docker/Base.alma8.Dockerfile, which never runs that script -- a prerequisite
+# added to one of those two files and not the other fails in CI.
 sumo_src=$workspace_path/Build/sumo-src
 sumo_build=$workspace_path/Build/sumo-build
 sumo_install=$workspace_path/Build/sumo-install
@@ -267,7 +272,10 @@ fi
 # "newest" output to test -- a partial failure leaves an arbitrary subset staged, and a guard keyed on
 # one member reports success for a half toolchain. Check the whole set, and name the members that are
 # missing so the reason is in the log rather than in someone's head.
-sumo_required_binaries="netconvert sumo duarouter"
+sumo_required_binaries="netconvert sumo duarouter sumo-gui"
+# sumo-gui is staged for development: watching a co-simulation drive. MakeDistribution's own list
+# leaves it out, because whether a distribution carries it is an open decision that turns on FOX's
+# LGPL (Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/09_Toolchain_And_Packaging.md section 5.4).
 # A NAMED SUBSET of data/ and tools/, not the whole of either. Measured: the full copy is 89 MB to
 # deliver the 3.2 MB anything here consumes, and tools/contributed alone is 47 MB of third-party
 # contributions that would each need a row in the distribution's licence manifest. Add a directory to
@@ -301,12 +309,20 @@ else
     fi
     # Pin the exact commit (the tag already points here; this is an explicit guard).
     git -C "$sumo_src" checkout e238ea04b7150ba23a348a285d3048919fa4830b
-    # Configure + build the required targets (Release). One invocation, three targets: CMake skips
+    # Configure + build the required targets (Release). One invocation, four targets: CMake skips
     # objects it has already built, so this is not a full rebuild in practice. jtrrouter and
     # polyconvert are deliberately left out -- nothing in this repository invokes either, so building
     # them by default would lengthen every clean build for no consumer.
     cmake -B "$sumo_build" -S "$sumo_src" -DCMAKE_BUILD_TYPE=Release
-    cmake --build "$sumo_build" --target netconvert sumo duarouter -j"$(nproc)"
+    # sumo-gui is a target only where SUMO's configure found the FOX toolkit. Without it the build
+    # below stops on an unknown target and says nothing about why, so say it here.
+    if ! grep -q '^#define HAVE_FOX' "$sumo_build/src/config.h"; then
+        echo "ERROR: SUMO's configure found no FOX toolkit, so there is no sumo-gui to build." >&2
+        echo "       Install libfox-1.6-dev (Util/SetupUtils/InstallPrerequisites.sh does) and re-run." >&2
+        echo "       The CI image builds FOX itself: rebuild it from Util/Docker/Base.alma8.Dockerfile." >&2
+        exit 1
+    fi
+    cmake --build "$sumo_build" --target netconvert sumo duarouter sumo-gui -j"$(nproc)"
     # The SUMO build emits its binaries into Build/sumo-src/bin. Stage them, the named data/ and
     # tools/ subsets and (below) the PROJ data under Build/sumo-install, so that directory is a
     # complete SUMO_HOME rather than one netconvert can be run out of.

@@ -43,6 +43,9 @@ else
 fi
 
 # -- INSTALL APT PACKAGES --
+# libxerces-c-dev, libproj-dev and proj-data build the SUMO toolchain, and libfox-1.6-dev is the FOX
+# toolkit sumo-gui is built on (it brings the X11, GL and GLU headers SUMO's configure also asks for).
+# The CI image never runs this script: Util/Docker/Base.alma8.Dockerfile declares the same set.
 echo "Installing Ubuntu Packages..."
 sudo apt-get update
 sudo apt-get -y install \
@@ -70,6 +73,7 @@ sudo apt-get -y install \
     libxerces-c-dev \
     libproj-dev \
     proj-data \
+    libfox-1.6-dev \
     nasm \
     patchelf \
     xdg-user-dirs

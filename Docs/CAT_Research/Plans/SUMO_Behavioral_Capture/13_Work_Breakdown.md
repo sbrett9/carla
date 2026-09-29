@@ -34,6 +34,7 @@ are on the critical path.
 | 2026-09-28 | Stage G: run_capture reads staged refusals, the window instant, admission passes and check 33; a stare aimed at the traffic. |
 | 2026-09-28 | Stage I: the failure paths and the vehicle lamps built in the session. |
 | 2026-09-29 | Stage I: `get_view_readiness` verified live on Bahonar; the capture's wait on it is not built. |
+| 2026-09-29 | Stage D: the setup scripts build and stage `sumo-gui` for development on both platforms, FOX declared in both Linux homes, not bundled. The session can launch it in place of `sumo`, pinned by its own release. Written; awaiting a build. |
 
 ---
 
@@ -202,6 +203,7 @@ Already scouted; the build itself already compiles clean from the unmodified con
 | | Set `SUMO_HOME` where the other tool paths are set. The build set needs no prerequisite `netconvert` does not already have on either platform, and the TraCI client needs none at all — but **a Linux prerequisite has two homes**, `InstallPrerequisites.sh` and `Util/Docker/Base.alma8.Dockerfile`, because CI runs `--skip-prerequisites` against a pre-built image (`09` §2.3, `D9.8`) | A clean clone and a clean CI container both build it |
 | | Bundle the toolchain and the new artifacts, both platforms. `CarlaNet.Sumo` needs no slot of its own — it is managed code and rides the `carlanet` wheel | The acceptance check passes from an installed distribution |
 | | **Acceptance check**, run rather than remembered | `sumo --version` from the staged install; a test steps an empty simulation over TraCI against a `sumo` it started; the version handshake refuses a mismatched install; `duarouter` validates a known route |
+| | **Build and stage `sumo-gui` for development**, both platforms, as a member of the required set, so a developer can watch the simulation a drive steps ([`03`](03_CoSimulation_Runtime.md) §2.6). Its prerequisite, FOX, is declared in both Linux homes; EL8 packages none, so the CI image builds it from pinned source (`09` §2.5, `D9.15`). **Written; not yet built** | `sumo-gui` is in `Build/sumo-install/bin` after setup on both platforms and a clean CI container builds it. It is not bundled: whether a distribution carries it is the owner's decision (`09` §5.4, Open question 5) |
 
 `duarouter` is **required**: route validation becomes an unconditional compile step, measured at
 0.27 s for all 52 Arapahoe routes.

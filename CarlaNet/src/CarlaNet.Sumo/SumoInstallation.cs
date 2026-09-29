@@ -34,6 +34,14 @@ public sealed class SumoInstallation
     /// <summary>SUMO's own convention for the root holding <c>bin/</c> and <c>tools/</c>.</summary>
     public const string HomeVariable = "SUMO_HOME";
 
+    /// <summary>The microsimulation's executable name, without the platform's extension.</summary>
+    public const string SumoName = "sumo";
+
+    /// <summary>
+    /// The graphical build of the same microsimulation, without the platform's extension.
+    /// </summary>
+    public const string SumoGuiName = "sumo-gui";
+
     /// <summary>Where <c>CarlaSetup</c> stages the pinned toolchain, relative to the repository root.</summary>
     private const string StagedInstallation = "Build/sumo-install";
 
@@ -49,13 +57,27 @@ public sealed class SumoInstallation
     private static bool _locateAttempted;
     private static string[] _searched = [];
 
-    private string? _release;
-    private bool _releaseProbed;
+    private readonly Func<string, string?> _probe;
+    private readonly Dictionary<string, string?> _releases = [];
 
     private SumoInstallation(string home, string source)
+        : this(home, source, ReadRelease)
+    {
+    }
+
+    /// <summary>
+    /// An installation whose executables' releases are read by <paramref name="probe"/>, handed an
+    /// executable's full path, rather than by running it.
+    /// </summary>
+    /// <remarks>
+    /// For a test that needs an installation whose binaries disagree about their release, which no
+    /// real installation on the machine is guaranteed to have.
+    /// </remarks>
+    internal SumoInstallation(string home, string source, Func<string, string?> probe)
     {
         Home = home;
         Source = source;
+        _probe = probe;
     }
 
     /// <summary>The installation root, holding <c>bin/</c> and, in a complete installation, <c>tools/</c>.</summary>
@@ -69,7 +91,10 @@ public sealed class SumoInstallation
     /// </summary>
     public string Source { get; }
 
-    /// <summary>The directory holding <c>sumo</c>, <c>duarouter</c> and <c>netconvert</c>.</summary>
+    /// <summary>
+    /// The directory holding <c>sumo</c>, <c>duarouter</c> and <c>netconvert</c>, and <c>sumo-gui</c>
+    /// where it was built.
+    /// </summary>
     public string BinaryDirectory => Path.Combine(Home, "bin");
 
     /// <summary>
@@ -80,7 +105,22 @@ public sealed class SumoInstallation
     public string ToolsDirectory => Path.Combine(Home, "tools");
 
     /// <summary>The microsimulation binary, launched as a child process and spoken to over TraCI.</summary>
-    public string Sumo => Executable("sumo");
+    public string Sumo => Executable(SumoName);
+
+    /// <summary>
+    /// The graphical build of the microsimulation, in the same directory as <see cref="Sumo"/>. It
+    /// serves TraCI exactly as <c>sumo</c> does and draws what it simulates, so launched in place of
+    /// <c>sumo</c> it shows the very simulation a client is stepping.
+    /// </summary>
+    /// <remarks>
+    /// Not every installation has one: SUMO builds it only where the FOX toolkit was found, and the
+    /// repository's setup scripts stage it for development. <see cref="HasSumoGui"/> says whether
+    /// this one does.
+    /// </remarks>
+    public string SumoGui => Executable(SumoGuiName);
+
+    /// <summary>Whether <see cref="SumoGui"/> is there to launch.</summary>
+    public bool HasSumoGui => File.Exists(SumoGui);
 
     /// <summary>The route validator scenario authoring runs.</summary>
     public string Duarouter => Executable("duarouter");
@@ -92,18 +132,31 @@ public sealed class SumoInstallation
     /// The SUMO release this installation reports, or <see langword="null"/> when <c>sumo</c> could
     /// not be run. Probed once, from <c>sumo --version</c>.
     /// </summary>
-    public string? Release
+    public string? Release => ReleaseOf(SumoName);
+
+    /// <summary>
+    /// The release one of this installation's executables reports, or <see langword="null"/> when it
+    /// could not be run. Probed once per executable, from its own <c>--version</c>.
+    /// </summary>
+    /// <param name="name">The executable, without the platform's extension: <see cref="SumoName"/>,
+    /// <see cref="SumoGuiName"/>, <c>netconvert</c>.</param>
+    /// <remarks>
+    /// Asked of the binary that will actually run rather than of <c>sumo</c> on its behalf. Two
+    /// executables in one directory are usually one build, but nothing makes them so -- a copy
+    /// dropped in beside the others is another release that shares their path.
+    /// </remarks>
+    public string? ReleaseOf(string name)
     {
-        get
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        lock (_releases)
         {
-            if (_releaseProbed)
+            if (!_releases.TryGetValue(name, out string? release))
             {
-                return _release;
+                release = _probe(Executable(name));
+                _releases[name] = release;
             }
 
-            _releaseProbed = true;
-            _release = ReadRelease(Sumo);
-            return _release;
+            return release;
         }
     }
 

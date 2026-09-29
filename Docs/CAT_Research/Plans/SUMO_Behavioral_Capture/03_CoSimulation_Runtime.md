@@ -43,6 +43,7 @@ advancement policy, the headlight predicate),
 | 2026-09-28 | §8.8, D3.31: each admission pass is published as it is made. |
 | 2026-09-28 | §3.5.3, §8.2: vehicle lamps as built — SUMO's signals mapped bit by bit, headlights from the reported sun, written on a loan and on a change, darkened on release. |
 | 2026-09-28 | §11.1–§11.7, §11.10, D3.30, D3.32–D3.35: the failure paths as built — SUMO's answers bounded, a dropped CARLA connection a refusal of its stage, the stop recorded, vanished vehicles, route errors, uninsertable vehicles, collision spans and a sun that goes away. §12 G15 closed. |
+| 2026-09-29 | §2.6, D3.36: a session can launch `sumo-gui` in place of `sumo`, from the same installation and held to the release pin by its own release; the report names the binary that ran. |
 
 ---
 
@@ -162,7 +163,7 @@ policy: `SolarClock` turns a simulated instant into a solar-clock write and audi
 |---|---|---|
 | `sumo.exe`, `duarouter.exe`, `netconvert.exe` | `Build/sumo-src/bin/` | all three present; `sumo --version` reports `Eclipse SUMO sumo 1.27.0` |
 | SUMO's reference TraCI client, in Python | `Build/sumo-src/tools/traci/` | complete, pure Python — no native module anywhere in it |
-| Staged into `Build/sumo-install/` | — | `bin/` holds `sumo.exe`, `duarouter.exe` and `netconvert.exe`, each reporting 1.27.0; `tools/` holds `traci` and `sumolib`, `data/` holds `typemap` and `xsd` |
+| Staged into `Build/sumo-install/` | — | `bin/` holds `sumo.exe`, `duarouter.exe` and `netconvert.exe`, each reporting 1.27.0; `tools/` holds `traci` and `sumolib`, `data/` holds `typemap` and `xsd`. `sumo-gui` joined the required set on 2026-09-29 (§2.6, [`09`](09_Toolchain_And_Packaging.md) §2) and is not staged here until setup runs again |
 | `SUMO_HOME` | — | set by no script in the repository; on this machine the environment holds `G:\Sumo\`, an independent SUMO whose `sumo --version` reports `Eclipse SUMO sumo 1.27.1` (§2.6) |
 
 **The interface is a wire protocol, not a library.** `sumo --remote-port N` is a TraCI server; a client
@@ -405,6 +406,60 @@ one that never refuses, one that ignores the acceptance, one that records an acc
 match, one that refuses an unrecorded converter and one that passes it as a match, a verbatim string
 comparison, a check made after SUMO has started, a tool-output parser that accepts a line naming no
 release, and a named directory taken without looking for a `sumo` in it.
+
+**`sumo-gui` in place of `sumo`** (D3.36). `SumoDriveSessionOptions.SumoGui`
+(`run_sumo_drive.py --sumo-gui`, `start_sumo_drive(sumo_gui=True)`) launches the installation's
+`sumo-gui` instead of `sumo`. It is the same microsimulation with SUMO's own view of it, serving TraCI
+as `sumo` does, so there is still one SUMO process and one connection (D3.1): the window shows the
+simulation the session is stepping, not a second copy running beside it. Q3.5's attach-by-port option
+is what a separately started GUI would need, and it is not built.
+
+It is taken from the installation already resolved and from nowhere else: `SumoInstallation.SumoGui`,
+`bin/sumo-gui` beside `bin/sumo`. A `sumo-gui` from another installation would be another SUMO. An
+installation without one is refused at `Validation`, before the release comparison and before anything
+is started, naming the file and the setup script that builds and stages it (`CarlaSetup.ps1`,
+`CarlaSetup.sh`).
+
+**The release pin holds for the binary that runs.** The comparison above reads the release from the
+launched binary's own `--version` -- `sumo-gui`'s, which prints `Eclipse SUMO GUI 1.27.0`
+(`guisim_main.cpp`) -- rather than from `sumo`'s on its behalf (`SumoInstallation.ReleaseOf`,
+`SumoReleaseCheck.Of(installation, name, …)`). Two executables in one directory are usually one build,
+but nothing makes them so. The refusal names the binary, `CoSimRunReport.Sumo.Binary` records which
+one ran on every run -- printed as the report's `launched` line, for `sumo` as for `sumo-gui` -- and
+`run_sumo_drive.py` logs it beside the installation.
+
+**What it is given.** `sumo`'s arguments unchanged -- the configuration, the port, the step override --
+then `SumoConnection.GuiArguments`, each chosen from SUMO's source at the pin:
+
+| Argument | Why |
+|---|---|
+| `--start` | A GUI runs only once its play button is pressed, and a TraCI server inside it processes no command until then (`docs/web/docs/TraCI/index.md`). Without it the handshake waits on a person and times out |
+| `--quit-on-end` | When the session closes the connection the simulation ends, and without it the GUI opens a modal "Simulation ended" dialog and keeps running (`GUIApplicationWindow::handleEvent_SimulationEnded`) -- a process `SumoConnection.Dispose` kills after its 10 s grace. It cannot end a live run early: while a client is connected, SUMO turns every ending state but the connection's own closing back into running (`MSNet::adaptToState`). It also makes a configuration the GUI cannot load exit at once, rather than leave a window holding the error while the connection times out |
+| `--delay 0` | The GUI sleeps this long between steps, and a gui-settings file the configuration names can raise it from zero (`GUISettingsHandler::getDelay`); the command line wins. The pace of a run is the session's (§9.9), never the window's |
+| `--message-log stdout --error-log stderr` | A GUI build detaches SUMO's messages from the console before it loads anything ("within gui-based applications, nothing is reported to the console", `GUILoadThread::run`), so the session's console tail would count no warnings and a refusal would quote no last words. These restore exactly `sumo`'s console -- warnings and errors on stderr, messages on stdout only when verbose (`MsgHandler::initOutputOptions`) -- and the window keeps its own copy |
+
+Not given: `--game`, which replaces the view with SUMO's interactive traffic-light game, and
+`--window-size` / `--window-pos`, which the GUI otherwise restores from its last window.
+
+**What the window can do to a run.** It is live. Paused, SUMO answers nothing, so a pause longer than
+`SumoAnswerTimeoutSeconds` stops the run as a SUMO that stopped answering (D3.32); closed, the
+connection ends and the run stops as a SUMO that died (§11.1). Its delay control, raised, slows every
+step, which the published pace shows (§9.9). On Linux it needs a display. A binary the operating system
+will not run -- missing, not executable, not a program for the platform -- is refused at `Launch` as
+SUMO failing to start: `SumoConnection.Start` reports it as a `FatalTraCIError` naming the file, for
+`sumo` as for `sumo-gui`, where before it escaped as the operating system's own exception.
+
+**Built and exercised offline; not yet run.** `sumo-gui` is not staged on this machine yet, so no
+session has launched it. `SumoGuiTests` asserts the command line, where the binary is looked for, and
+that the pin reads the GUI's own release, with nothing launched; `SumoDriveSessionGuiTests` asserts the
+up-front refusal, the binary the pin names and the binary the launch starts, against placeholder
+installations whose binaries cannot run, so no test can ever open a window. Each was seen failing
+against a wrong implementation: a session with no up-front check, one pinning `sumo`'s release for the
+GUI, one checking the GUI and launching `sumo`, and a check that probes `sumo` whatever binary it is
+asked about. `sumo-gui.exe` is linked as a Windows GUI-subsystem program (`src/CMakeLists.txt`); that
+its `--version` and its console reach the session's redirected handles is expected and not yet
+measured. Were they not to, its release would read as unreadable and the session would refuse it rather
+than run unpinned.
 
 ### 2.7 Which scenario files a session runs: the compile lock
 
@@ -3406,6 +3461,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.33** | **A collision SUMO registers is recorded as one span and never stops the run** — the collision as first registered, the simulated seconds it began and ended at, and the bodies that rendered both vehicles — handed out once it is over and counted on the report, with the `collision.action` that governed the run. SUMO reports an ongoing collision on every step it lasts, so a span, not a report, is the unit. Which actions a corpus may carry belongs to behavioural truth ([`13`](13_Work_Breakdown.md) §11; §11.5). |
 | **D3.34** | **A route SUMO cannot follow stops the run, and a vehicle SUMO cannot insert is recorded.** A scenario setting `ignore-route-errors` is refused before SUMO starts, because SUMO then keeps an unroutable vehicle standing at the end of an edge and says nothing (measured); a vehicle that leaves SUMO's insertion queue without departing is recorded with the frame it was last waiting and the first it was gone, because SUMO drops it without a word; SUMO's console warnings are counted and kept verbatim (§11.4). |
 | **D3.35** | **A rendered vehicle that stops reporting without SUMO listing it as arrived is released as `Vanished`**, its body parked at the head of the next batch and written to for nothing else of that vehicle's; it is the one release the lookahead cannot place, so it has its own reason (§11.3). |
+| **D3.36** | **A session can launch `sumo-gui` in place of `sumo`** (`SumoGui`; `run_sumo_drive.py --sumo-gui`), from the installation it resolved and no other, with `sumo`'s arguments followed by `--start --quit-on-end --delay 0 --message-log stdout --error-log stderr`, so the one SUMO process the session steps is on screen, follows the session with nobody at the window, exits when the session closes it, never sets the pace and keeps the console the session reads. The release pin holds for the binary that runs: the release compared with the world's converter is `sumo-gui`'s own. An installation without `sumo-gui` is refused before anything starts, naming the file and the setup script that stages it. The report records the binary that ran on every run (§2.6). |
 
 ---
 
@@ -3419,7 +3475,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **Q3.2** | Should the bridge also push CARLA's real poses **back** into SUMO with `moveToXY`, as doc 23 §4.1 step 1 does? | (a) no — under teleport CARLA has no independent pose, so the push is a no-op that costs an RPC per vehicle; (b) yes, for scenario actors that CARLA *does* drive independently (doc 23 §6.9) | (a) for pure SUMO drive; (b) becomes necessary the moment a storyboard actor shares the world, which is doc 23's Phase 5 and not this section's. |
 | **Q3.3** | Does a scenario ever need a **different** SUMO step at playback than at authoring? | (a) never — refuse; (b) allow with a manifest entry and a loud warning | (b), given the measured 62% change in mean time loss (§6.3) is a behaviour change and not a rendering one. The knob must be visible in the truth manifest so a corpus can be filtered on it. |
 | **Q3.4** | How is the **one-step lookahead latency** expressed in the truth record? | (a) invisible — everything is stamped `t_render`; (b) an explicit `lookahead_s` field in the run manifest | (b). It costs one field and it is the difference between a reader being able to reconstruct the pipeline and guessing at it. Belongs to [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md). |
-| **Q3.5** | Should the bridge run its own `sumo` process, or attach to one started elsewhere? | (a) own it — `Simulation.start` spawns and the session owns the lifetime; (b) attach by port, so an operator can run `sumo-gui` alongside | (a) by default for determinism and clean teardown; (b) behind a flag, because watching the SUMO GUI beside the CARLA viewer is worth a great deal during bring-up. |
+| **Q3.5** | Should the bridge run its own `sumo` process, or attach to one started elsewhere? | (a) own it — `Simulation.start` spawns and the session owns the lifetime; (b) attach by port, so an operator can run `sumo-gui` alongside | (a) by default for determinism and clean teardown; (b) behind a flag, because watching the SUMO GUI beside the CARLA viewer is worth a great deal during bring-up. **Watching no longer needs (b):** under (a) the session launches `sumo-gui` in place of `sumo` (D3.36, §2.6), so the GUI is the process the session owns and steps. (b) is not built, and stays open only for a SUMO that something else must start. |
 | **Q3.6** | Does the angular-velocity path need the same fix as the linear one (G12)? | (a) an angular counterpart to D3.5 in the engine; (b) none, while nothing reads angular velocity | **Measured**: a written angular velocity does not read back on a kinematic vehicle, so it would need an engine change of its own (§5.5). Nothing in the truth record reads angular velocity; the change waits on a consumer that does. |
 | **Q3.7** | What is the right `_frameWaitTimeout` for a capture session? | inherited from the RPC timeout today (`CarlaClient.cs:293-300`), which `run_SCTMV.py` sets to 20 s | Needs a number from [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md): long enough that a heavy Cesium-streaming frame is not a fault, short enough that a real stall is caught inside one run. |
 | **Q3.9** | Should the Python shim's missing command and traffic-light surface (G1, G13) be closed as part of this work? | (a) yes — surface parity is worth having regardless; (b) no — the C# bridge does not need it, so it is unrelated scope | (b) for *this* section's critical path, (a) as a separate item. Stated explicitly so nobody reads D3.1 as a reason to leave the shim gap open: the shim gap is a real defect and the binding choice does not depend on it. Owner: [`05_CarlaNet_Capability_Audit.md`](05_CarlaNet_Capability_Audit.md). |
