@@ -67,6 +67,30 @@ _NETCONVERT = os.path.join(_INSTALL, "bin",
                            "netconvert.exe" if os.name == "nt" else "netconvert")
 _PROJ = os.path.join(_INSTALL, "share", "proj")
 
+# A straight two-lane road, 100 m long, and nothing else: a world generated from it was never built
+# from OSM and publishes no bare-earth record.
+ONE_ROAD_XODR = """<?xml version="1.0" standalone="yes"?>
+<OpenDRIVE>
+  <header revMajor="1" revMinor="4" name="" version="1.00" date="" north="10" south="-10" east="100" west="0"/>
+  <road name="" length="100.0" id="1" junction="-1">
+    <link/>
+    <type s="0" type="town"/>
+    <planView><geometry s="0.0" x="0.0" y="0.0" hdg="0.0" length="100.0"><line/></geometry></planView>
+    <elevationProfile><elevation s="0" a="0" b="0" c="0" d="0"/></elevationProfile>
+    <lateralProfile/>
+    <lanes>
+      <laneSection s="0.0">
+        <left><lane id="1" type="driving" level="false"><link/><width sOffset="0" a="3.5" b="0" c="0" d="0"/></lane></left>
+        <center><lane id="0" type="driving" level="false"><link/></lane></center>
+        <right><lane id="-1" type="driving" level="false"><link/><width sOffset="0" a="3.5" b="0" c="0" d="0"/></lane></right>
+      </laneSection>
+    </lanes>
+    <objects/>
+    <signals/>
+  </road>
+</OpenDRIVE>
+"""
+
 ap = argparse.ArgumentParser()
 ap.add_argument("--osm", default=os.path.join(_REPO, "Import", "Gardnerville_Centerville_Lane.osm"))
 ap.add_argument("--lat", type=float, default=None, help="origin lat (default: OSM bounds center)")
@@ -82,9 +106,6 @@ ap.add_argument("--terrain-res", type=float, default=8.0, help="drape: heightfie
 ap.add_argument("--terrain-margin", type=float, default=30.48, help="drape: sandbox margin past OSM (m)")
 ap.add_argument("--drape-cache-dir", default=os.path.join(_REPO, "Build", "drape-cache"),
                 help="drape: grid sampling cache dir (speeds re-runs)")
-ap.add_argument("--stock-map", default="Town10HD_Opt",
-                help="a map that was never generated from OSM, loaded first so the 'no record' "
-                     "check does not read a record left by an earlier run on the same server")
 ap.add_argument("--package", default=None,
                 help="skip the build: check the world the server already holds against this .cwp")
 ap.add_argument("--slow", action="store_true",
@@ -342,18 +363,19 @@ class BareEarthReferenceTest:
         print(f"   server: {client.get_server_version()}")
         builder = client._inner
 
-        print(f"[1] a world that was never built from OSM carries no record ({args.stock_map})")
-        # Load the stock map explicitly rather than trusting whatever the server happens to hold: a
-        # previous generated world would still carry its record, and the check below would read that
-        # as a failure. Loading also exercises the invalidation path, since a new world must clear
-        # any reference cached for the previous one.
+        print("[1] a world generated from OpenDRIVE alone, never from OSM, carries no record")
+        # Load one explicitly rather than trusting whatever the server happens to hold: a previous
+        # generated world would still carry its record, and the check below would read that as a
+        # failure. Loading also exercises the invalidation path, since a new world must clear any
+        # reference cached for the previous one. A world built from OpenDRIVE text alone publishes no
+        # record, so no stock map is needed for this.
         # Hold the generous timeout across the query too: the server is still streaming the level in
         # when load_world returns, and a short timeout here fails on map size rather than on anything
         # this test is about.
         client.set_timeout(args.timeout)
-        client.load_world(args.stock_map)
+        client.generate_opendrive_world(ONE_ROAD_XODR)
         scalars = builder.GetBareEarthReferenceAsync().GetAwaiter().GetResult()
-        self.check("stock map reports no bare-earth record",
+        self.check("a world not built from OSM reports no bare-earth record",
                    scalars is None or scalars.Count == 0,
                    f"count={0 if scalars is None else scalars.Count}")
         self.check("client reports truth as unknown rather than a zero shift",
