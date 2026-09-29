@@ -10,8 +10,8 @@ repeating the file.
 Two sources, in this order:
 
   * **Derived from the measurement.** The bounding box measured by the sweep separates a car from a
-    van from a truck cleanly on the published catalogue's seventeen bodies -- their heights fall into
-    three groups with wide gaps between them (1.30-1.77 m, 2.06-2.73 m, 3.83-4.24 m), so the band
+    van from a truck cleanly on the published catalogue's nineteen bodies -- their heights fall into
+    three groups with gaps between them (1.30-1.88 m, 2.06-2.73 m, 3.78-4.24 m), so the band
     edges sit in empty space rather than through a cluster. The derivation never produces `bus`,
     because no measurement distinguishes a bus from a lorry of the same size; the one bus in the
     content, the Fuso Rosa, is curated.
@@ -62,8 +62,8 @@ SUMO_GUI_SHAPES = frozenset({
 })
 
 # Where the derivation cuts, in metres of measured height. Both edges sit in a gap in the measured
-# distribution rather than inside a cluster: the tallest car measures 1.77 m and the shortest van
-# 2.06 m; the tallest van measures 2.73 m and the shortest truck 3.83 m.
+# distribution rather than inside a cluster: the tallest car, the Jeep Wrangler, measures 1.88 m and the
+# shortest van 2.06 m; the tallest van measures 2.73 m and the shortest truck, the European HGV, 3.78 m.
 CAR_HEIGHT_CEILING_M = 2.0
 VAN_HEIGHT_CEILING_M = 3.0
 
@@ -107,7 +107,7 @@ class VehicleClassAssignment:
     """
 
     # The corrections this content build needs. Everything not named here takes the derivation
-    # unchanged, which is twelve of the eighteen registered blueprints.
+    # unchanged, which is thirteen of the nineteen registered blueprints.
     DEFAULT_OVERRIDES: tuple[VehicleClassOverride, ...] = (
         VehicleClassOverride(
             "vehicle.nissan.patrol", base_type="car",

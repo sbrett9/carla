@@ -159,6 +159,9 @@ class VehicleLampProbe:
         try:
             self._begin_synchronous()
             self._set_sun(self.settings.solar_time_hours)
+            # The sky takes a requested instant on the next tick, not when it is asked: read before
+            # one and the answer is whatever sun the world already had.
+            self._tick(self.settings.solar_settle_ticks)
             state = self.world.get_solar_state()
             elevation = state.get("sun_elevation_deg")
             header["sun_elevation_deg"] = elevation
@@ -167,7 +170,6 @@ class VehicleLampProbe:
                     False, header,
                     f"the sun is {elevation} degrees above the horizon at solar hour "
                     f"{self.settings.solar_time_hours}, so a lamp would be measured against daylight")
-            self._tick(self.settings.solar_settle_ticks)
             result = LampProbeResult(True, header)
             for index, blueprint_id in enumerate(blueprint_ids):
                 verdicts, evidence, control = self._probe_one(

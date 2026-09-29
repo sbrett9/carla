@@ -30,10 +30,12 @@ from carlacontrol.VehicleClassAssignment import (  # noqa: E402
 MEASURED = {
     "vehicle.ambulance.ford": (6.3567, 2.3512, 2.4313),
     "vehicle.carlacola.actors": (8.0036, 2.9118, 4.0546),
+    "vehicle.carlamotors.european_hgv": (7.9241, 2.8647, 3.7833),
     "vehicle.dodge.charger": (5.0058, 1.8813, 1.5403),
     "vehicle.dodgecop.charger": (5.2372, 1.9241, 1.6436),
     "vehicle.firetruck.actors": (8.5803, 2.9007, 3.8274),
     "vehicle.fuso.mitsubishi": (10.1737, 3.9276, 4.2414),
+    "vehicle.jeep.wrangler_rubicon": (3.8662, 1.9052, 1.8779),
     "vehicle.lincoln.mkz": (4.8924, 1.8356, 1.5241),
     "vehicle.mini.cooper": (4.5526, 2.0956, 1.7725),
     "vehicle.nissan.patrol": (5.5909, 2.1469, 2.0593),
@@ -49,7 +51,7 @@ MEASURED = {
 
 # Registered in the content and named by a default class, but not yet swept, so there is no box to
 # put in MEASURED. An entry moves there once the sweep has measured it.
-AWAITING_MEASUREMENT = frozenset({"vehicle.carlamotors.european_hgv", "vehicle.jeep.wrangler_rubicon"})
+AWAITING_MEASUREMENT: frozenset[str] = frozenset()
 
 
 def classes_over_measured_bodies() -> tuple[dict, ...]:
@@ -160,14 +162,23 @@ def test_every_measured_blueprint_reaches_exactly_one_class(records):
     assert len(members) == len(set(members))
 
 
-def test_the_default_classes_refuse_a_sweep_that_did_not_measure_a_registered_body(records):
+def test_the_default_classes_refuse_a_sweep_that_did_not_measure_a_registered_body():
     """What a sweep against a server still reading the previous registry would meet: a refusal that
     names the missing body, rather than a catalogue quietly short of it."""
-    if not AWAITING_MEASUREMENT:
-        pytest.skip("every body the default classes name has been measured")
+    missing = "vehicle.jeep.wrangler_rubicon"
+    short = {blueprint_id: box for blueprint_id, box in MEASURED.items() if blueprint_id != missing}
     with pytest.raises(ValueError, match="which the sweep did not measure") as refused:
-        VehicleClassAssignment().build_classes(records)
-    assert any(blueprint_id in str(refused.value) for blueprint_id in AWAITING_MEASUREMENT)
+        VehicleClassAssignment().build_classes(VehicleClassAssignment().assign(short))
+    assert missing in str(refused.value)
+
+
+def test_the_two_bodies_registered_last_take_the_derivation_unchanged(records):
+    """The jeep reads as a car and the three-axle lorry as a truck from their boxes alone, so their
+    classes need no curated override to agree with the truth record."""
+    assert records["vehicle.jeep.wrangler_rubicon"].base_type == "car"
+    assert records["vehicle.jeep.wrangler_rubicon"].base_type_is_derived
+    assert records["vehicle.carlamotors.european_hgv"].base_type == "truck"
+    assert records["vehicle.carlamotors.european_hgv"].base_type_is_derived
 
 
 def test_a_class_whose_published_kind_disagrees_with_its_members_is_refused(records):
