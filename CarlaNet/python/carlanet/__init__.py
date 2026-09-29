@@ -676,8 +676,9 @@ class BlueprintLibrary:
 # ── Map wrapper ───────────────────────────────────────────────────────────────
 
 class Map:
-    def __init__(self, name: str, spawn_points):
+    def __init__(self, name: str, spawn_points, client=None):
         self.name = name
+        self._client = client
         # Wrap each C# Transform into the mutable Python Transform so callers
         # can safely do `sp.location.z += 2.0` without the C# init-only struct
         # silently swallowing the write.
@@ -692,6 +693,12 @@ class Map:
         # callers — upstream libcarla's get_spawn_points() returns independent
         # Transform values.
         return [Transform(sp.location, sp.rotation) for sp in self._spawn_points]
+
+    def to_opendrive(self) -> str:
+        """The OpenDRIVE text the server serves for this map, as upstream's Map.to_opendrive."""
+        if self._client is None:
+            raise RuntimeError("this Map was built without a client, so it cannot fetch its OpenDRIVE")
+        return str(_sync(self._client.GetMapDataAsync()) or "")
 
     def __repr__(self):
         return f"Map(name={self.name!r}, spawn_points={len(self._spawn_points)})"
@@ -1478,7 +1485,7 @@ class World:
 
     def get_map(self) -> Map:
         info = _sync(self._client.GetMapInfoAsync())
-        return Map(str(info.Name), info.RecommendedSpawnPoints)
+        return Map(str(info.Name), info.RecommendedSpawnPoints, self._client)
 
     def get_spectator(self) -> Actor:
         return _wrap_actor(_sync(self._client.GetSpectatorAsync()), self._client)
