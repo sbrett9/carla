@@ -19,10 +19,15 @@ as a run display convention, and deletes the half that gave every anomaly type `
 * **A legacy labels file keeps its display half.** The shipped Bahonar labels' `u` for the four
   anomaly types is withheld; the CoT type the same shipped scenario then produces no longer names
   the planted vehicles, where the map applied whole names all nine.
-
-What these cannot see: `--marked-affiliation`, which draws the planted vehicles of a legacy labels
-file differently on the live feed by the operator's explicit choice, and the truth columns the
-written files carry; both are about the labels file's planted ids, not the display convention.
+* **A scenario's own convention is found beside it.** Without `--display-convention`,
+  `sumo_cot_telemetry.py` draws with `<scenario>.display.json` beside the `.sumocfg` and says so;
+  a found file behaves as a named one, so it wins over a labels file's affiliations and is refused
+  when it does not read; a named file wins over a found one; with neither, the run says so.
+* **A planted vehicle is marked in the files and nowhere else** (06 D6.18, 08 D8.23). Its
+  `special_type` is its kind, empty as every SUMO vehicle's is, in every sink. The XML and CSV
+  carry `marked`; the datagrams carry neither field, and draw a planted vehicle apart only when
+  `--marked-affiliation` asks, which never reaches a file. A compiled scenario marks none, and its
+  planted vehicles are the supervision plan's, found in the sidecar by vehicle id.
 """
 from __future__ import annotations
 
@@ -30,6 +35,7 @@ import argparse
 import csv
 import importlib.util
 import json
+import logging
 import socket
 import sys
 import types
@@ -270,7 +276,8 @@ class _Listener:
 
 
 def _run(tmp_path: Path, roster, table, affiliation_by_type: dict[str, str],
-         source: str = "", affiliation: str = "n", udp: bool = False):
+         source: str = "", affiliation: str = "n", udp: bool = False,
+         marked_ids: frozenset[str] = frozenset(), marked_affiliation: str | None = None):
     """Drive the bridge over the roster; return the report, the rows, the XML and the datagrams."""
     playback = _Playback(roster, table)
     listener = _Listener() if udp else None
@@ -278,6 +285,7 @@ def _run(tmp_path: Path, roster, table, affiliation_by_type: dict[str, str],
     report = SumoCotBridge(_Installation(playback), tmp_path / f"{SCENARIO}.sumocfg",
                            constant_hae=12.0).run(CotOutputSettings(
         csv_path=csv_path, xml_path=xml_path, uid_prefix=UID_PREFIX, marked_vehicle="",
+        marked_ids=marked_ids, marked_affiliation=marked_affiliation,
         affiliation=affiliation, affiliation_by_type=affiliation_by_type,
         display_convention=source,
         udp_host="127.0.0.1" if udp else None, udp_port=listener.port if udp else 6969))
@@ -509,15 +517,34 @@ def _script():
     return module
 
 
+def _arguments(config: Path, display_convention: Path | None = None,
+               labels: Path | None = None) -> argparse.Namespace:
+    """The arguments `display_convention` reads, as the script's parser would give them."""
+    return argparse.Namespace(config=config, display_convention=display_convention, labels=labels,
+                              affiliation="n")
+
+
+def _write_convention(path: Path, affiliation_by_type: dict[str, str]) -> Path:
+    path.write_text(json.dumps({"convention_version": 1,
+                                "affiliation_by_type": affiliation_by_type}), encoding="utf-8")
+    return path
+
+
+def _info(caplog) -> str:
+    return "\n".join(record.getMessage() for record in caplog.records
+                     if record.levelno == logging.INFO)
+
+
 def test_the_script_draws_with_the_convention_file_and_else_with_the_labels(tmp_path):
     """A convention file wins outright; labels alone give their display half; neither, none."""
     script = _script()
     labels = json.loads(SHIPPED_LABELS.read_text(encoding="utf-8"))
+    # A configuration with nothing beside it, so only what is named is drawn with.
+    config = tmp_path / f"{SCENARIO}.sumocfg"
 
     def chosen(display_convention, labels_path):
-        return script.display_convention(argparse.Namespace(
-            display_convention=display_convention, labels=labels_path, affiliation="n"),
-            labels if labels_path else {})
+        return script.display_convention(_arguments(config, display_convention, labels_path),
+                                          labels if labels_path else {})
 
     bahonar = CotDisplayConvention.from_file(CONVENTION).affiliation_by_type
     both = chosen(CONVENTION, SHIPPED_LABELS)
@@ -529,3 +556,147 @@ def test_the_script_draws_with_the_convention_file_and_else_with_the_labels(tmp_
 
     neither = chosen(None, None)
     assert (neither.source, neither.affiliation_by_type) == ("", {})
+
+
+# ---- a scenario's own convention, found beside it ------------------------------------------------
+
+def test_the_bahonar_run_finds_its_convention_beside_its_configuration(caplog):
+    """No flag: the file beside the Bahonar `.sumocfg` draws the run, and the log names the file."""
+    config = _REPO / "Import" / f"{SCENARIO}.sumocfg"
+    assert CotDisplayConvention.beside(config) == CONVENTION
+
+    with caplog.at_level(logging.INFO):
+        found = _script().display_convention(_arguments(config), {})
+
+    assert found.source == CONVENTION.name
+    assert found.affiliation_by_type == \
+        CotDisplayConvention.from_file(CONVENTION).affiliation_by_type
+    assert f"display convention {CONVENTION}, found beside the configuration" in _info(caplog)
+
+
+def test_a_found_convention_behaves_as_a_named_one(tmp_path, caplog):
+    """A named file wins over a found one; a found one wins over labels, and is refused unread.
+
+    Found or named, the convention is the one file the run draws with, so a labels file's display
+    half gives way to it whichever way it arrived, and one that names a vehicle stops the run.
+    """
+    script = _script()
+    labels = json.loads(SHIPPED_LABELS.read_text(encoding="utf-8"))
+    config = tmp_path / "Port.sumocfg"
+    found = _write_convention(tmp_path / "Port.display.json", {"civ_car": "h"})
+    named = _write_convention(tmp_path / "exercise.display.json", {"civ_car": "f"})
+
+    with caplog.at_level(logging.INFO):
+        drawn = script.display_convention(_arguments(config, display_convention=named), {})
+    assert (drawn.source, drawn.affiliation_by_type) == (named.name, {"civ_car": "f"})
+    assert f"display convention {named}:" in _info(caplog)
+    assert "found beside" not in _info(caplog)
+
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        drawn = script.display_convention(_arguments(config, labels=SHIPPED_LABELS), labels)
+    assert (drawn.source, drawn.affiliation_by_type, drawn.withheld) == \
+        (found.name, {"civ_car": "h"}, ())
+    assert f"display convention {found}, found beside the configuration" in _info(caplog)
+    assert f"it replaces the affiliations in {SHIPPED_LABELS.name}" in _info(caplog)
+
+    found.write_text(json.dumps({"convention_version": 1, "affiliation_by_type": {"civ_car": "n"},
+                                 "marked_ids": ["probe_d2"]}), encoding="utf-8")
+    with pytest.raises(ValueError, match="names planted vehicles"):
+        script.display_convention(_arguments(config), {})
+
+
+def test_without_a_convention_the_run_says_none_was_found(tmp_path, caplog):
+    """Nothing named and nothing beside: a labels file's display half, else the default for all."""
+    script = _script()
+    labels = json.loads(SHIPPED_LABELS.read_text(encoding="utf-8"))
+    config = tmp_path / "Port.sumocfg"
+    missing = "no display convention: none given and no Port.display.json beside the configuration"
+
+    with caplog.at_level(logging.INFO):
+        drawn = script.display_convention(_arguments(config), {})
+    assert (drawn.source, drawn.affiliation_by_type) == ("", {})
+    assert f"{missing}; every vehicle takes n" in _info(caplog)
+
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        drawn = script.display_convention(_arguments(config, labels=SHIPPED_LABELS), labels)
+    assert drawn.source == SHIPPED_LABELS.name and len(drawn.withheld) == 4
+    assert missing in _info(caplog)
+    assert "every vehicle takes" not in _info(caplog)
+
+
+# ---- the planted vehicles in each sink -----------------------------------------------------------
+
+def _values(records: list[dict], field: str, vehicles=None) -> set[str]:
+    """Every value a field takes across the records, `<absent>` where a record lacks it."""
+    return {record.get(field, "<absent>") for record in records
+            if vehicles is None or record["uid"].removeprefix(f"{UID_PREFIX}-") in vehicles}
+
+
+@pytest.mark.parametrize("marked_affiliation", [None, "h"])
+def test_a_legacy_planted_vehicle_is_marked_in_the_files_and_is_its_own_kind(tmp_path,
+                                                                            marked_affiliation):
+    """The shipped labels' nine: `marked` in the XML and CSV, and `special_type` never the answer.
+
+    A planted vehicle's `special_type` is what any vehicle SUMO drives carries, in every sink. The
+    XML and CSV say which vehicles were planted in `marked`, exactly the nine; the datagrams carry
+    neither field. Its CoT type in the files is its population's, asked for or not, and on the
+    datagrams it is the operator's `--marked-affiliation` only when one was asked for.
+    """
+    labels = json.loads(SHIPPED_LABELS.read_text(encoding="utf-8"))
+    planted = frozenset(labels["marked_ids"])
+    roster, table = _shipped_roster()
+    convention = CotDisplayConvention.from_legacy_labels(labels, source=SHIPPED_LABELS.name)
+
+    report, rows, xml_path, datagrams, _ = _run(
+        tmp_path, roster, table, convention.affiliation_by_type, source=convention.source,
+        udp=True, marked_ids=planted, marked_affiliation=marked_affiliation)
+
+    assert report.marked_vehicles == len(planted) == 9
+    files = {"csv": rows, "xml": _xml_records(xml_path)}
+    udp = _datagram_records(tmp_path, datagrams)
+    for name, records in files.items():
+        assert len(records) == report.events, name
+        assert _values(records, "special_type") == {""}, name
+        assert {record["uid"].removeprefix(f"{UID_PREFIX}-") for record in records
+                if record["marked"] == "1"} == planted, name
+        assert _values(records, "cot_type", planted) == {NEUTRAL}, name
+    assert len(udp) == report.events
+    assert _values(udp, "special_type") == _values(udp, "marked") == {"<absent>"}
+    shown = "a-h-G-E-V" if marked_affiliation else NEUTRAL
+    assert _values(udp, "cot_type", planted) == {shown}
+    assert shown == NEUTRAL or shown not in _values(
+        udp, "cot_type", {vehicle_id for vehicle_id, _ in roster} - planted)
+
+
+def test_a_compiled_scenario_marks_nothing_and_its_plan_names_the_planted_by_id(tmp_path,
+                                                                                specification,
+                                                                                compiled):
+    """Bahonar compiled: no vehicle marked, no kind, and every planted one found by its plan's id.
+
+    A compiled scenario writes no labels file, so the sidecar sets `marked` on nothing and
+    `special_type` is empty for all. Its labels are in `*.supervision.json`: each annotated
+    participant's SUMO id is a vehicle the sidecar carries, so the plan joins to the rows by id and
+    nothing the labels say is lost.
+    """
+    roster, table = compiled
+    convention = CotDisplayConvention.from_file(CONVENTION)
+    report, rows, xml_path, datagrams, _ = _run(
+        tmp_path, roster, table, convention.affiliation_by_type, source=convention.source,
+        udp=True)
+
+    assert report.marked_vehicles == 0
+    for name, records in {"csv": rows, "xml": _xml_records(xml_path)}.items():
+        assert _values(records, "special_type") == {""}, name
+        assert _values(records, "marked") == {"0"}, name
+    udp = _datagram_records(tmp_path, datagrams)
+    assert _values(udp, "special_type") == _values(udp, "marked") == {"<absent>"}
+
+    plan = json.loads((_REPO / "Import" / f"{SCENARIO}.supervision.json").read_text(
+        encoding="utf-8"))
+    annotated = {participant["sumo_id"] for instance in plan["instances"]
+                 if instance["supervision"] == "annotated"
+                 for participant in instance.get("participants", [])}
+    assert annotated == _planted(specification)
+    assert annotated <= {row["uid"].removeprefix(f"{UID_PREFIX}-") for row in rows}

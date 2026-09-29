@@ -13,17 +13,23 @@ The events use the same formatter as the CARLA truth producer, so they follow th
 directly. Positions are converted by the running simulation itself, and heights come from the world
 package's bare-earth grid when one is found next to the scenario.
 
-What the sinks carry is what an observer could have measured. Which vehicles a scenario planted, and
-the author's own names for its vehicle types and flows, stay in the scenario's `*.labels.json`: the
-dataset describes the traffic, not the answer.
+The XML and CSV are the truth sidecar and carry the whole record: the author's own names for its
+vehicle types and flows, and which vehicles it planted, in a `marked` field of their own. A
+vehicle's `special_type` is its kind and nothing else, planted or not. The UDP feed is a moving-map
+display and carries what a display needs. A compiled scenario's labels are its
+`*.supervision.json`, joined to the sidecar by vehicle id; a legacy scenario names its planted
+vehicles in the `*.labels.json` given to `--labels`.
 
-Each vehicle's CoT affiliation comes from the run's display convention (`--display-convention`), a
-file giving each vehicle population the affiliation a TAK client draws it with: civilian traffic
-neutral and military friendly, say. It is a run setting and not part of the scenario, and it names
-populations -- a compiled scenario's vehicle classes, or a hand-written route file's vehicle
-types -- never vehicles. The Bahonar pattern of life's sits beside its specification in `Import/`.
-A legacy `*.labels.json` given without one supplies the display half of its own affiliation map;
-the `u` it gave every anomaly type was the answer written into the CoT type, and is not applied.
+Each vehicle's CoT affiliation comes from the run's display convention, a file giving each vehicle
+population the affiliation a TAK client draws it with: civilian traffic neutral and military
+friendly, say. It is a run setting and not part of the scenario, and it names populations -- a
+compiled scenario's vehicle classes, or a hand-written route file's vehicle types -- never vehicles.
+`--display-convention` names one; without it the run uses `<scenario>.display.json` beside the
+`.sumocfg` when there is one, as the Bahonar pattern of life's is, and says which file it used.
+Either way the convention wins outright over a `--labels` file's affiliations. Without a convention,
+a legacy `*.labels.json` supplies the display half of its own affiliation map; the `u` it gave every
+anomaly type was the answer written into the CoT type, and is not applied. Without either, every
+vehicle takes `--affiliation`.
 
 An anomaly that is an *absence* -- a guard who never arrives -- has no vehicle to attach to either
 channel, so the run writes the scenario's described gaps to a supervision sidecar beside its output,
@@ -39,9 +45,9 @@ Examples:
     # live to one listener, and keep the dataset at the same time
     python sumo_cot_telemetry.py --udp 127.0.0.1:6969 --csv orbit_cot.csv
 
-    # the Bahonar port live, civilian traffic neutral and the naval base friendly
+    # the Bahonar port live, civilian traffic neutral and the naval base friendly: the convention
+    # beside the configuration, Shahid_Bahonar_Port_PatternOfLife.display.json, is found by name
     python sumo_cot_telemetry.py --config ../../Import/Shahid_Bahonar_Port_PatternOfLife.sumocfg \\
-        --display-convention ../../Import/Shahid_Bahonar_Port_PatternOfLife.display.json \\
         --udp 239.2.3.1:6969
 """
 import argparse
@@ -100,23 +106,26 @@ def parse_args() -> argparse.Namespace:
                              "population its CoT affiliation, so a TAK client draws, say, civilian "
                              "traffic neutral and military friendly. A population is a compiled "
                              "scenario's vehicle class, or a hand-written route file's vehicle "
-                             "type. A run setting, not part of the scenario; it replaces the "
-                             "affiliations a --labels file carries")
+                             "type. A run setting, not part of the scenario. Default: "
+                             "<scenario>.display.json beside --config when there is one. Given or "
+                             "found, it replaces the affiliations a --labels file carries")
     parser.add_argument("--marked-affiliation",
                         help="show the planted vehicles with a different affiliation in the live "
                              "feed, so an operator watching a TAK client can pick them out. It "
-                             "reaches --udp only, never --xml or --csv, because a planted vehicle "
-                             "that announces itself in the recorded data is the answer key")
+                             "reaches --udp only, never --xml or --csv: a recorded CoT type "
+                             "carries the population's affiliation and nothing else, and the files "
+                             "say which vehicles were planted in their marked field")
     parser.add_argument("--marked-vehicle", default="orbiter",
                         help="the vehicle this scenario planted. It is counted in the run summary "
-                             "and recorded in the labels sidecar; the written dataset does not "
-                             "distinguish it from the traffic it is hiding in (default orbiter)")
+                             "and recorded in the written files' marked field; its special_type, "
+                             "and its CoT type in the files, are those of any vehicle of its kind "
+                             "(default orbiter)")
     parser.add_argument("--labels", type=Path,
                         help="a legacy scenario's *.labels.json: names several planted vehicles at "
                              "once, and gives the display affiliation per vehicle type when no "
-                             "--display-convention does. The u it gives every anomaly type is not "
-                             "applied: it is the answer written into the CoT type, not a display "
-                             "affiliation, and those types take --affiliation")
+                             "display convention is given or found. The u it gives every anomaly "
+                             "type is not applied: it is the answer written into the CoT type, not "
+                             "a display affiliation, and those types take --affiliation")
     parser.add_argument("--supervision", type=Path,
                         help="write the scenario's described supervision gaps -- the anomalies that "
                              "are absences, with no vehicle to attach them to -- to this file, with "
@@ -234,28 +243,40 @@ def main() -> int:
 def display_convention(args: argparse.Namespace, labels: dict) -> CotDisplayConvention:
     """The display convention this run draws with, and which one it is, said in the log.
 
-    A convention file wins outright. Without one, a legacy labels file supplies the display half of
-    its own affiliation map and never the anomaly half; without either, every vehicle takes
+    `--display-convention` names one. Without it, `<scenario>.display.json` beside the configuration
+    is used when it exists, and is then treated exactly as though it had been named: a file that
+    does not read is refused, and it wins outright over a labels file's affiliations. So a scenario
+    kept with its convention draws the same whether or not the operator remembers the flag, and
+    the log says which file drew it. Without a convention, a legacy labels file supplies the display
+    half of its own affiliation map and never the anomaly half; without either, every vehicle takes
     `--affiliation`.
     """
-    if args.display_convention:
-        convention = CotDisplayConvention.from_file(args.display_convention)
-        logging.info("display convention %s: %d populations; any other takes %s",
-                     convention.source, len(convention), args.affiliation)
+    path = args.display_convention
+    beside = CotDisplayConvention.beside(args.config)
+    if path is None and beside.is_file():
+        path = beside
+    if path is not None:
+        convention = CotDisplayConvention.from_file(path)
+        logging.info("display convention %s%s: %d populations; any other takes %s", path,
+                     "" if args.display_convention else ", found beside the configuration",
+                     len(convention), args.affiliation)
         if args.labels and labels.get("affiliation_by_type"):
             logging.info("  it replaces the affiliations in %s", args.labels.name)
         return convention
-    if args.labels:
-        convention = CotDisplayConvention.from_legacy_labels(labels, source=args.labels.name)
-        logging.info("display affiliations from %s: %d types; any other takes %s",
-                     convention.source, len(convention), args.affiliation)
-        if convention.withheld:
-            logging.warning(
-                "  not applying the u %s gives %s: in a labels file u marks an anomaly type, and a "
-                "CoT type carries display affiliation, not the answer. They take %s",
-                convention.source, ", ".join(convention.withheld), args.affiliation)
-        return convention
-    return CotDisplayConvention({})
+    missing = f"no display convention: none given and no {beside.name} beside the configuration"
+    if not args.labels:
+        logging.info("%s; every vehicle takes %s", missing, args.affiliation)
+        return CotDisplayConvention({})
+    logging.info("%s", missing)
+    convention = CotDisplayConvention.from_legacy_labels(labels, source=args.labels.name)
+    logging.info("display affiliations from %s: %d types; any other takes %s",
+                 convention.source, len(convention), args.affiliation)
+    if convention.withheld:
+        logging.warning(
+            "  not applying the u %s gives %s: in a labels file u marks an anomaly type, and a "
+            "CoT type carries display affiliation, not the answer. They take %s",
+            convention.source, ", ".join(convention.withheld), args.affiliation)
+    return convention
 
 
 def _write_supervision(args: argparse.Namespace, labels: dict,

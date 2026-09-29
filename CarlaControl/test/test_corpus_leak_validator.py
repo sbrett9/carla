@@ -1,15 +1,16 @@
-"""The corpus a Bahonar run writes must not say which of its vehicles were planted.
+"""What the truth sidecar a Bahonar run writes says about its planted vehicles, and in which field.
 
 A corpus is generated here rather than asserted about in the abstract: the sizing scenario's own
 definitions -- the vehicle types, trips, flows and labels it shipped with,
 `fixtures/Shahid_Bahonar_Port_PatternOfLife.shipped.rou.xml` and `.shipped.labels.json` -- drive the
 real `SumoCotBridge` writers through a stand-in for TraCI, so what is checked is the file the
-pipeline actually produces. Three things are asserted, and the
-middle one is the reason the other two mean anything:
+pipeline actually produces. Asserted:
 
-  * the corpus written today carries no field by which its planted vehicles can be told apart,
-  * the corpus the pipeline wrote before this was repaired is **rejected**, on every one of the six
-    fields that gave the answer away, and
+  * the XML and CSV are the truth sidecar and name the planted vehicles, in `marked` and in the
+    author's own type and flow names,
+  * `special_type` never does: it is the vehicle's kind (06 D6.18), and the same corpus with the
+    `special_type="marked"` the writer used to give a planted vehicle is caught on that field, so
+    the check's silence on it is measured rather than assumed, and
   * an author who gives five vehicles the only length in the map that no other vehicle has is caught
     by the same check, without anybody having thought of that case in advance.
 """
@@ -314,11 +315,21 @@ def test_written_columns_carry_the_authoring_fields():
 
 
 def test_the_written_csv_carries_which_vehicles_were_planted(corpus, marked_ids):
-    """Companion to the XML case: both written sinks are the sidecar and both carry the answer."""
+    """Companion to the XML case: both written sinks are the sidecar and both carry the answer.
+
+    They carry it in `marked`, the sidecar's own field, and never in `special_type`, which says what
+    kind of vehicle it is and is the same empty kind for every vehicle SUMO drives.
+    """
     csv_path, _ = corpus
     validator = CorpusLeakValidator(marked_ids, fields=LABEL_FIELDS, uid_prefix=UID_PREFIX)
-    fields = {finding.field for finding in validator.identifying(validator.check_csv(csv_path))}
-    assert {"type_id", "special_type", "marked"} <= fields
+    findings = validator.identifying(validator.check_csv(csv_path))
+    fields = {finding.field for finding in findings}
+    assert {"type_id", "marked"} <= fields
+    assert "special_type" not in fields, CorpusLeakValidator.describe(findings)
+    rows = _rows(csv_path)
+    assert {row["special_type"] for row in rows} == {""}
+    assert {row["uid"].removeprefix(f"{UID_PREFIX}-") for row in rows
+            if row["marked"] == "1"} == marked_ids
 
 
 def test_the_written_sidecar_carries_which_vehicles_were_planted(corpus, marked_ids):
@@ -326,26 +337,58 @@ def test_the_written_sidecar_carries_which_vehicles_were_planted(corpus, marked_
 
     The check reports the fields that separate the two groups; on the sidecar that is a description
     of the artifact rather than a defect in it. What the tool is for is an artifact where the
-    separation would be a defect, and there is none of those in the tree yet.
+    separation would be a defect, and there is none of those in the tree yet. The XML says which
+    vehicles were planted in its own `marked` attribute, as the CSV does in its column, so taking
+    the answer out of `special_type` took nothing out of the file.
     """
     _, xml_path = corpus
     validator = CorpusLeakValidator(marked_ids, fields=LABEL_FIELDS, uid_prefix=UID_PREFIX)
-    fields = {finding.field for finding in validator.identifying(validator.check_xml(xml_path))}
+    findings = validator.identifying(validator.check_xml(xml_path))
+    fields = {finding.field for finding in findings}
     assert "type_id" in fields, "the sidecar was expected to name the planted vehicles' type"
+    assert [(finding.value, set(finding.vehicles)) for finding in findings
+            if finding.field == "marked"] == [("1", marked_ids)]
+    assert "special_type" not in fields, CorpusLeakValidator.describe(findings)
+    records = list(CorpusLeakValidator.records_from_xml(xml_path))
+    assert {record["special_type"] for record in records} == {""}
 
 
 def test_the_check_names_every_field_that_separates_the_two_groups(corpus, marked_ids):
     """What the tool is for, stated against a corpus that does separate them.
 
-    The sidecar separates them on every label field, which is what a sidecar is supposed to do. The
-    same check over an artifact where that separation would be a defect is the use; this pins that
-    the check finds all of it rather than the first one.
+    The sidecar separates them on every label field but `special_type`, which is what a sidecar is
+    supposed to do. The same check over an artifact where that separation would be a defect is the
+    use; this pins that the check finds all of it rather than the first one.
     """
     csv_path, _ = corpus
     validator = CorpusLeakValidator(marked_ids, fields=LABEL_FIELDS, uid_prefix=UID_PREFIX)
     findings = validator.identifying(validator.check_csv(csv_path))
     assert {finding.field for finding in findings} == {
-        "type_id", "special_type", "role_name", "marked", "color", "cot_type"},         CorpusLeakValidator.describe(findings)
+        "type_id", "role_name", "marked", "color", "cot_type"}, \
+        CorpusLeakValidator.describe(findings)
+
+
+@pytest.mark.parametrize("sink", ["csv", "xml"])
+def test_the_check_still_catches_a_special_type_that_says_marked(corpus, marked_ids, sink):
+    """The control: the corpus as the writer produced it before D6.18 is caught on `special_type`.
+
+    The writer used to give every planted vehicle `special_type="marked"`, the answer in the
+    contract's vehicle-kind field. Put that value back into either written sink and the check names
+    it, on all nine planted vehicles and no other, so its silence on the corpus written today is
+    measured rather than assumed.
+    """
+    csv_path, xml_path = corpus
+    records = _rows(csv_path) if sink == "csv" else list(
+        CorpusLeakValidator.records_from_xml(xml_path))
+    validator = CorpusLeakValidator(marked_ids, fields=("special_type",), uid_prefix=UID_PREFIX)
+    assert validator.identifying(validator.check_records(records)) == []
+
+    for record in records:
+        if validator.vehicle_id(record) in marked_ids:
+            record["special_type"] = "marked"
+    findings = validator.identifying(validator.check_records(records))
+    assert [(finding.value, finding.vehicles) for finding in findings] == [
+        ("marked", tuple(sorted(marked_ids)))], CorpusLeakValidator.describe(findings)
 
 
 def test_a_corpus_that_separates_nothing_yields_nothing(corpus, marked_ids):
@@ -386,7 +429,7 @@ def test_an_unmodified_corpus_passes_the_same_dimension_check(corpus, marked_ids
 
 def test_the_run_report_counts_the_planted_vehicles_it_saw(tmp_path, scenario, table, roster,
                                                            marked_ids):
-    """The record still knows the truth; only the written output does not."""
+    """The record knows which vehicles were planted, and the run report counts them."""
     playback = _ScenarioPlayback(roster, table)
     bridge = SumoCotBridge(_StubInstallation(playback), tmp_path / "scenario.sumocfg",
                            constant_hae=12.0)

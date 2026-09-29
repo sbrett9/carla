@@ -269,7 +269,7 @@ All pure standard library. One public class per file (repo convention, see `carl
 | `ScenarioVehicleMix.py` | `VehicleClassSpec` (one kind of vehicle a scenario asks for: which measured blueprints it draws, its share of the traffic, and the author's own driving attributes), `VehicleMixSpec` (a named population drawn from declared classes at its own shares) and `ScenarioVehicleMix`, which writes those as `<vType>`s sized from the catalogue plus the per-class, whole-mix and named-mix `<vTypeDistribution>`s. `check_route_file` reads a written `.rou.xml` back and refuses one whose types name no measured body. This is how a scenario satisfies the mapping contract below. |
 | `VehicleCatalogue.py` | Read side of `vehicles.catalogue.json`: measured extent per blueprint, the bumper-to-origin shift the pose conversion needs, and the refusal reason for a type it cannot answer for. |
 | `SumoCotBridge.py` | Drives a scenario through **TraCI** and emits CoT. `BareEarthGrid` (reads `bareearth.bin`, loose or inside a `.cwp`), per-population affiliation (a compiled type's class, read from its `carla:class_id`) + multi-marked support, real-time pacing. |
-| `CotDisplayConvention.py` | A run's display convention: the CoT affiliation per vehicle population, read from a file beside the scenario, never part of it. Refuses a file naming vehicles; reads a legacy `.labels.json`'s display half and withholds its anomaly `u`. |
+| `CotDisplayConvention.py` | A run's display convention: the CoT affiliation per vehicle population, read from a file beside the scenario (`<scenario>.display.json`, `beside()` names it), never part of it. Refuses a file naming vehicles; reads a legacy `.labels.json`'s display half and withholds its anomaly `u`. |
 | `CotUdpEmitter.py` | The CoT event formatter (shared with the CARLA truth producer, so datasets are comparable) and the UDP socket. Schema: `Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md`. |
 
 CLIs in `carla/CarlaControl/scripts/`:
@@ -286,7 +286,10 @@ CLIs in `carla/CarlaControl/scripts/`:
   height. A compiled scenario's ground truth is its `.supervision.json`, which this tool does not read.
   `--display-convention <name>.display.json` gives each vehicle class its CoT affiliation, a run
   setting kept beside the scenario (the Bahonar port's is
-  `Import/Shahid_Bahonar_Port_PatternOfLife.display.json`).
+  `Import/Shahid_Bahonar_Port_PatternOfLife.display.json`). Without the flag the tool uses
+  `<scenario>.display.json` beside the `--config` `.sumocfg` when there is one and logs which file it
+  used, or that there was none; a named file wins over a found one, and either wins outright over a
+  `--labels` file's affiliations.
 - `listen_cot.py` (in the bundles) — a minimal UDP receiver to confirm the live feed.
 
 Each scenario is also shipped as a **standalone zip at the workspace root** (`GardnervilleOrbit.zip`,
@@ -454,16 +457,19 @@ The compiler enforces four of these on a specification — departure order, `--`
 Events are CoT `<event>`s (schema in `Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md`),
 emitted identically to UDP, an XML file, and a 31-column CSV (one row per vehicle per update). The
 `_carla` detail block name is kept even though the source is SUMO, so the two producers are directly
-comparable. A compiled scenario's ground truth is its `.supervision.json` (instances, series,
-absences, cohorts), which this tool does not read. A legacy scenario's rides in the `.labels.json` the
-telemetry tool reads:
+comparable. The XML and CSV are the truth sidecar: they say which vehicles were planted in `marked`
+(`1`/`0`, a `_carla` attribute in the XML and a column in the CSV, not a contract field), and
+`special_type` is the vehicle's kind and nothing else, empty for every SUMO vehicle (06 D6.18). The
+UDP feed carries neither. A compiled scenario's ground truth is its `.supervision.json` (instances,
+series, absences, cohorts), which this tool does not read and which joins to the sidecar by vehicle
+id. A legacy scenario's rides in the `.labels.json` the telemetry tool reads:
 
 - `marked_ids` — vehicle IDs flagged as anomalies (`marked=1`; a distinct affiliation only on the
   live feed, and only with `--marked-affiliation`).
 - `affiliation_by_type` — CoT affiliation per SUMO vehicle type: civilian `n` (neutral), military
   `f` (friendly). The letter appears in `cot_type` = `a-<letter>-G-E-V`. It is the run's display
-  convention when no `--display-convention` is given. The `u` it gave every anomaly type is not
-  applied: that letter wrote the answer into the CoT type (06 §9.1).
+  convention when no display convention is given or found beside the scenario. The `u` it gave every
+  anomaly type is not applied: that letter wrote the answer into the CoT type (06 §9.1).
 - `anomaly_notes` — anomalies that are *absences* (e.g. a guard who never arrives) have no vehicle,
   so they are documented here as a described gap (location + time window). A run carries them out to
   a `*.supervision.json` beside its dataset, each window placed on the epoch that run stamped

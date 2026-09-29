@@ -29,12 +29,13 @@ wants, and unlike a course derived from velocity it stays meaningful for a stopp
 
 **Two channels, split here rather than downstream.** Sampling a vehicle produces a *record*, which is
 ground truth and knows everything, including which vehicles a scenario author planted and what the
-author called them. The events and CSV rows written from that record are what a consumer reads, and
-they carry only what an observer could measure: position, course, speed, observable class, size,
-colour and affiliation. The fields named in `AUTHORED_TRUTH_FIELDS` exist only because somebody wrote
-a scenario, so they never cross into the written output; a corpus that carries them is a corpus whose
-answer key is one of its own columns. The durable form of that truth is the scenario's
-`*.labels.json` sidecar, which lists the annotated vehicle ids and nothing else does.
+author called them. The XML and CSV are the truth sidecar and are written from the whole record. The
+datagram feed is a moving-map display and is given what a display needs, which leaves out the fields
+named in `AUTHORED_TRUTH_FIELDS`. A field means one thing in every sink: `special_type` is the
+vehicle's kind as the contract spells it and never the author's marking, which the sidecar carries
+in `marked`, a field of its own and not of the contract (`06_Truth_And_Annotation.md` D6.18). A
+compiled scenario marks nothing here; its labels are its `*.supervision.json`, joined to the
+sidecar by vehicle id.
 """
 from __future__ import annotations
 
@@ -79,20 +80,19 @@ CSV_COLUMNS = [
     "role_name", "marked", "edge", "lane", "sumo_x", "sumo_y", "carla_x", "carla_y",
 ]
 
-# Record fields that exist only because a scenario author wrote them, and which therefore never
-# reach an event or a CSV row:
+# Record fields the datagram feed is not given. The XML and CSV are the truth sidecar and carry
+# every one of them; a moving-map display has no use for them:
 #
-#   `special_type` and `marked` say that this vehicle is one the author planted, which is the whole
-#       question a behavioural model is being given;
+#   `marked` says that this vehicle is one the author planted, which is the whole question a
+#       behavioural model is being given. It is the sidecar's own field and not the contract's;
+#   `special_type` is the contract's vehicle kind -- emergency, taxi, electric -- which SUMO does
+#       not report, so a record carries it empty whatever the vehicle is, planted or not;
 #   `type_id` is the SUMO vehicle-type id and `role_name` the flow the vehicle was generated from,
 #       which are the author's own names for their populations. A planted vehicle needs a vehicle
 #       type of its own to carry its behaviour -- a reduced speed factor, say -- so its type id is
 #       unique to it no matter what it is called, and a flow written for one vehicle names that one
 #       vehicle. Neither can be made indistinguishable while the behaviour stays intact, so they
 #       stay on the truth side.
-#
-# What remains in the written output is what a sensor could have measured. The mapping from a
-# vehicle id back to these is the scenario's `*.labels.json`.
 AUTHORED_TRUTH_FIELDS = ("type_id", "special_type", "role_name", "marked")
 
 
@@ -190,8 +190,9 @@ class CotOutputSettings:
     stale_seconds: float = 3.0
     affiliation: str = "n"
     uid_prefix: str = "SUMO-TRUTH"
-    # The vehicle the scenario planted. It is recorded as truth and counted in the run report; it
-    # is not distinguishable in the written output, which is the point of planting it.
+    # The vehicle the scenario planted. It is recorded in the sidecar's `marked` field and counted
+    # in the run report; its `special_type`, and its CoT type in the files, are those of any
+    # vehicle of its kind.
     marked_vehicle: str = "orbiter"
     # A scenario with more than one planted vehicle flags several at once: any vehicle whose id is
     # in this set is treated exactly like `marked_vehicle`. Empty keeps the single-vehicle
@@ -210,8 +211,9 @@ class CotOutputSettings:
     display_convention: str = ""
     # Give the planted vehicles a different affiliation **in the live feed only**, so an operator
     # watching a TAK client can see which vehicle the scenario planted. It reaches the UDP stream
-    # and never the XML or CSV, because those are the corpus and a planted vehicle that announces
-    # itself there is the answer key. Leave it unset for an unmarked live feed as well.
+    # and never the XML or CSV: a recorded CoT type carries the population's affiliation and
+    # nothing else, and the files say which vehicles were planted in `marked`. Leave it unset for
+    # an unmarked live feed as well.
     marked_affiliation: str | None = None
     # Wall-clock instant that simulation time zero maps to. Pin it for a reproducible dataset;
     # leave it unset to stamp events from the clock when the run starts.
@@ -226,8 +228,8 @@ class RunReport:
     updates: int = 0
     vehicles: int = 0
     # How many of those vehicles the scenario's labels flagged. Zero against a labelled scenario
-    # means the label ids and the route file have drifted apart, which nothing in the written
-    # output can show, since the output deliberately does not distinguish them.
+    # means the label ids and the route file have drifted apart, which the written files show
+    # only as a `marked` field that is never set.
     marked_vehicles: int = 0
     # Events whose height fell back to the configured constant because the vehicle was outside the
     # bare-earth grid. A run with any of these has heights of two different kinds in one file.
@@ -391,8 +393,8 @@ class SumoCotBridge:
                                 100.0 * report.off_grid_heights / max(1, report.events))
         expected_marked = len(settings.marked_ids) or 1
         if report.marked_vehicles:
-            self.logger.info("%d of %d labelled vehicles appeared; which ones is recorded only in "
-                             "the labels sidecar", report.marked_vehicles, expected_marked)
+            self.logger.info("%d of %d labelled vehicles appeared; the written files record which "
+                             "in their marked field", report.marked_vehicles, expected_marked)
         elif settings.marked_ids:
             self.logger.warning("none of the %d labelled vehicle ids appeared in the run: the "
                                 "labels and the route file name different vehicles",
@@ -427,7 +429,9 @@ class SumoCotBridge:
             "vz": 0.0,
             "base_type": BASE_TYPE_BY_VEHICLE_CLASS.get(vehicle_class, vehicle_class),
             "type_id": type_id,
-            "special_type": "marked" if marked else "",
+            # The contract's vehicle kind, which SUMO does not report: empty for every vehicle.
+            # Whether the author planted this one is `marked`, never this (06 D6.18).
+            "special_type": "",
             "marked": marked,
             "length_m": traci.vehicle.getLength(vehicle_id),
             "width_m": traci.vehicle.getWidth(vehicle_id),

@@ -6,7 +6,7 @@ CoT-aware systems. Supports both unicast and multicast.
 
 import socket
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 
 class CotUdpEmitter:
@@ -73,9 +73,9 @@ class CotUdpEmitter:
         """Convert vehicle telemetry record to CoT XML event string.
 
         Args:
-            rec: Telemetry dict from world.get_vehicle_telemetry(). `type_id`, `special_type` and
-                `role_name` are optional: each is written only when the record carries it, so a
-                producer whose categories are ground truth can withhold them at source.
+            rec: Telemetry dict from world.get_vehicle_telemetry(). `type_id`, `special_type`,
+                `role_name` and `marked` are optional: each is written only when the record carries
+                it, so a producer whose categories are ground truth can withhold them at source.
             affiliation: CoT affiliation code (n=neutral, f=friendly, h=hostile)
             stale_seconds: How long until event is considered stale
             source: Source type ("truth" for ground truth, "m-f" for fusion)
@@ -86,7 +86,7 @@ class CotUdpEmitter:
         Returns:
             CoT XML event string
         """
-        now = when or datetime.now(timezone.utc)
+        now = when or datetime.now(UTC)
         stale = now + timedelta(seconds=stale_seconds)
 
         ev = ET.Element(
@@ -131,11 +131,11 @@ class CotUdpEmitter:
             },
         )
         # `type_id`, `special_type` and `role_name` are written only when the caller supplies them.
-        # A CARLA vehicle has all three as blueprint facts. A SUMO-driven one does not: there they
-        # are the scenario author's own categories and its annotation, which stay on the truth side
-        # of the corpus, so the bridge hands over a record without them (SumoCotBridge's
-        # AUTHORED_TRUTH_FIELDS). Writing them empty instead would still mark which records were
-        # withheld, so the attribute is omitted rather than blanked.
+        # A CARLA vehicle has all three as blueprint facts. A SUMO-driven one does not: there
+        # `type_id` and `role_name` are the scenario author's own names and SUMO reports no kind,
+        # so the bridge writes all three to its truth sidecar and hands its datagram feed a record
+        # without them (SumoCotBridge's AUTHORED_TRUTH_FIELDS). Writing them empty instead would
+        # still mark which records were withheld, so the attribute is omitted rather than blanked.
         carla = {"source": source, "actor_id": str(rec["id"])}
         if "type_id" in rec:
             carla["type_id"] = rec["type_id"]
@@ -148,6 +148,12 @@ class CotUdpEmitter:
         carla["color"] = rec["color"]
         if "role_name" in rec:
             carla["role_name"] = rec["role_name"]
+        # `marked` is not a contract field. The SUMO bridge's truth sidecar supplies it to say
+        # which vehicles the author planted, 1 or 0 as in its CSV column, and so leaves
+        # `special_type` to say what kind of vehicle it is (06 D6.18). No CARLA record and no
+        # datagram carries it.
+        if "marked" in rec:
+            carla["marked"] = "1" if rec["marked"] else "0"
         carla["vx"] = f"{rec['vx']:.2f}"
         carla["vy"] = f"{rec['vy']:.2f}"
         carla["vz"] = f"{rec['vz']:.2f}"

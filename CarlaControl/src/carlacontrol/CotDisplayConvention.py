@@ -6,7 +6,9 @@ traffic friendly is what makes a live picture of the port readable at a glance. 
 about how one run is displayed and says nothing about what the scenario asserts, so it is not part
 of the specification, not covered by its digest and not checked by the compiler
 (`06_Truth_And_Annotation.md` §9.1, `07_Scenario_Authoring.md` §3.4.1). It is a file the run is
-given, kept beside the scenario it suits, and the run records which one it drew with.
+given, kept beside the scenario it suits as `<scenario>.display.json` -- named for the stem of the
+scenario's `.sumocfg`, so a run of that scenario finds it without being told (`beside`) -- and the
+run records which one it drew with.
 
 A convention names **populations**, as the telemetry can tell them apart: in a compiled scenario,
 the vehicle class a vType carries in its `carla:class_id` parameter -- a class draws several
@@ -31,6 +33,9 @@ from collections.abc import Mapping
 from pathlib import Path
 
 CONVENTION_VERSION = 1
+
+# A scenario's own convention is `<scenario>.display.json` beside its `<scenario>.sumocfg`.
+SUFFIX = ".display.json"
 
 # The keys a convention file carries. Anything else is refused.
 VERSION_KEY = "convention_version"
@@ -72,6 +77,16 @@ class CotDisplayConvention:
 
     def __len__(self) -> int:
         return len(self.affiliation_by_type)
+
+    @staticmethod
+    def beside(config_path: str | Path) -> Path:
+        """Where a scenario's own convention sits: `<scenario>.display.json` beside its `.sumocfg`.
+
+        The scenario is the configuration's stem, which for a compiled scenario is its
+        `scenario_id`. The path is returned whether or not a file is there.
+        """
+        config_path = Path(config_path)
+        return config_path.with_name(config_path.stem + SUFFIX)
 
     @classmethod
     def from_file(cls, path: str | Path) -> CotDisplayConvention:

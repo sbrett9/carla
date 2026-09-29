@@ -239,6 +239,13 @@ answer key stapled to the front.
 | CoT affiliation is assigned per `vType`, and every anomaly `vType` maps to `u` | `.labels.json` `affiliation_by_type`; applied at `SumoCotBridge.py:263-265` | Exactly what [20 decision 9](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) prohibits: the label becomes readable from the CoT `type` string, which a detector-derived track can never produce |
 | Anomaly `vType`s carry conspicuous colours and distinct ids | `rou.xml:29-33`; colours `1.00,0.45,0.00`, `1.00,0.10,0.10`, `1.00,0.20,0.60` | [20 §2.6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s appearance confounder. [01 D1.6](01_Architecture.md) already blocks the colour reaching a blueprint; the `type_id` string still reaches the truth record, at `CotUdpEmitter.py:137` |
 
+**Status, 2026-09-29: the first two are fixed in the standalone producer (D6.18).** `special_type`
+carries the vehicle's kind and nothing else — `SumoCotBridge` writes it empty for every vehicle,
+planted or not, because SUMO reports no kind (`SumoCotBridge.py:434`) — and a legacy labels file's
+`u` is withheld (`CotDisplayConvention.from_legacy_labels`). The author's marking is not gone from
+the truth sidecar: the XML and CSV carry it in their own `marked` field, which is not a CoT contract
+field (§8.3).
+
 A fourth, subtler one: `anomaly_escort` declares `length="6.0" width="2.3"` against `mil_jeep`'s
 `4.8`/`2.0` (`rou.xml:24`, `:31`). Dimensions are respected by design ([01 §4.3](01_Architecture.md))
 because they change car-following gaps — so an annotated vehicle whose dimensions differ gratuitously
@@ -2085,8 +2092,8 @@ Notes, each carrying a decision:
   neighbourhood is when the vehicle entered and left the render set, so `admitted_tick` is emitted
   instead and `released_tick` is recorded in the manifest, where a release is known only after it
   happens. If fade is ever restored, `opacity` returns alongside it and is meaningful again.
-- **`special_type` is a class field and carries no supervision.** The `"marked"` value of
-  `SumoCotBridge.py:321-322` is removed (§9).
+- **`special_type` is a class field and carries no supervision.** The `"marked"` value the
+  standalone producer wrote at `SumoCotBridge.py:321-322` is removed (§9.1, D6.18).
 - **The CoT `type` affiliation is untouched**: every vehicle stays `a-n-G-E-V` unless an author
   overrides for display reasons unrelated to supervision. The `affiliation_by_type` mapping of
   anomaly types to `u` is removed (§9). Doc 20 decision 9, enforced rather than restated.
@@ -2127,9 +2134,10 @@ rate of §5.3 is computed over a population that was silently filtered by the re
 
 Its record shape is `SumoCotBridge`'s existing 31-column CSV (`SumoCotBridge.py:59-65`, measured
 against the shipped sample: 2000 rows, 31 columns), plus the columns §8.2 adds and minus the two
-leaked ones. Keeping the shape identical is deliberate: it makes the standalone CARLA-free path and
-the capture path produce comparable datasets, which is the same reason the `_carla` block keeps its
-name.
+leaked values (D6.18): `special_type` carries the kind alone, and the author's marking is in its own
+`marked` column rather than in a field that means something else. Keeping the shape identical is
+deliberate: it makes the standalone CARLA-free path and the capture path produce comparable
+datasets, which is the same reason the `_carla` block keeps its name.
 
 **It also carries the illumination, and for a reason specific to this artifact.** §5.3 stratifies
 prevalence by band, and the *denominator* of the base rate is computed from this track rather than from
@@ -2151,6 +2159,25 @@ amendment to that decision is needed and is narrow:** the two label leaks of §2
 wherever that code produces ground truth, including in the standalone path, because a corpus produced
 standalone has the answer written into a field that is supposed to say only what kind of vehicle it is.
 That is a defect fix, not a change of role.
+
+**Both are fixed in the standalone path (2026-09-29), and the fix keeps the sidecar whole.** What
+`8d3eafc5d` established stands: the XML and CSV `SumoCotBridge` writes are the truth sidecar and
+carry the whole record, the author's marking included; only the datagram feed, a moving-map
+display, is given less. What D6.18 removes is the marking from a field that means something else,
+not from the sidecar:
+
+- `special_type` means the kind of vehicle and nothing else. SUMO reports no kind, so it is empty for
+  every vehicle, planted or not, in every sink (`SumoCotBridge.py:434`).
+- The marking travels in `marked`, the sidecar's own field and not a CoT contract field: a column of
+  the CSV as before, and an attribute of the XML's `_carla` block (`1` or `0`,
+  `CotUdpEmitter.py:156`). Measured before the fix, the XML had no `marked`; the marking reached it
+  only through `special_type="marked"`, so removing that alone would have taken it out of the file.
+  The datagram feed carries neither field (`SumoCotBridge._published`).
+- A legacy labels file's `u` is withheld and its display half kept
+  (`CotDisplayConvention.from_legacy_labels`, §9.1).
+- A compiled scenario marks nothing in the sidecar. Its labels are its `*.supervision.json`, whose
+  participants name SUMO ids, joined to the sidecar's rows by vehicle id — so no information is lost
+  (`test_cot_display_convention.py`, measured on the Bahonar plan's nine annotated participants).
 
 ### 8.4 The run supervision manifest
 
@@ -2687,8 +2714,8 @@ Each key migrates to a different place, and two of them are deleted rather than 
 |---|---|---|
 | `marked_ids` — 9 flat ids | **Five pattern instances plus one absence instance** (§9.2) | A flat id list cannot say that five of them are one convoy, that two of them are separate instances of one pattern, or that a sixth anomaly has no id at all |
 | `affiliation_by_type` — **display** half (civilian neutral, military friendly) | Kept, as a display convention in the run manifest | Legitimate: it is what makes a TAK view readable and it says nothing about supervision |
-| `affiliation_by_type` — **supervision** half (every `anomaly_*` type to `u`) | **Deleted** | [20 decision 9](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md): a detector-derived track cannot produce an affiliation, so encoding the label there breaks the truth-versus-detection comparison the identical-shape contract exists for |
-| `special_type = "marked"` (`SumoCotBridge.py:321-322`) | **Deleted** | It writes the answer into a field whose entire job is to say what kind of vehicle this is ([09 §5](../../Findings/09_Telemetry_CoT_Contract.md)) |
+| `affiliation_by_type` — **supervision** half (every `anomaly_*` type to `u`) | **Deleted** — done: withheld when a legacy labels file is read (`CotDisplayConvention.from_legacy_labels`, D6.18) | [20 decision 9](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md): a detector-derived track cannot produce an affiliation, so encoding the label there breaks the truth-versus-detection comparison the identical-shape contract exists for |
+| `special_type = "marked"` (`SumoCotBridge.py:321-322`) | **Deleted** — done: `special_type` is the vehicle's kind for every vehicle, planted or not, and the truth sidecar's XML and CSV say which vehicles were planted in their own `marked` field (D6.18, §8.3) | It writes the answer into a field whose entire job is to say what kind of vehicle this is ([09 §5](../../Findings/09_Telemetry_CoT_Contract.md)) |
 | `anomaly_notes` — free text | **A `RecurringSeries` with an unrealised slot, plus an absence instance** (§3.5) | Free text joins to nothing. The series joins to the 335 realisations that are its evidence |
 | nothing | **`nominal` on 356 scheduled vehicles** (335 guard postings, 21 hauls) | The hard negatives that make the corpus teach that duration alone is not the signal (§3.1) |
 | nothing | **`unlabelled`, explicitly, on every flow member** | Doc 20 §2.2: absence of an element must not stand for "asserted negative" |
@@ -3051,7 +3078,7 @@ from the SUMO surface and the section is given.
 | 6 — `CustomCommandAction` primary, companion file equal-status | **Changed** | SUMO has no vendor extension point and route files are generated. The companion file becomes the sole channel (§3.1) |
 | 7 — static identity as a custom spawn attribute | **Survives, with a caveat** | Still the right carrier for `entity_id` and role, and it still survives record and replay. The caveat is that under SUMO the identity already exists as the vehicle id, so the attribute carries rather than creates it (§7.1) |
 | 8 — `role_name` stays provenance | **Survives; already honoured** | The SUMO producer sets it to the flow or trip id (`SumoCotBridge.py:329`), which is exactly a provenance value |
-| 9 — CoT affiliation not overloaded | **Survives, and is violated today** | `affiliation_by_type` maps every anomaly type to `u`, measured. Deleted in migration (§9.1) |
+| 9 — CoT affiliation not overloaded | **Survives for every recorded output; qualified on the live display feed** | `affiliation_by_type` mapped every anomaly type to `u`, measured; that half is withheld from a legacy labels file (§9.1, D6.18). No recorded output — the truth sidecar's XML and CSV, a capture sidecar — overloads the affiliation. The one qualification is [08](08_Collection_And_EPoL.md) D8.23's: an operator may explicitly opt in to a distinct affiliation for planted vehicles on the live display feed only (`--marked-affiliation`), off by default and never recorded |
 | 10 — areas of interest adopted as GeoJSON | **Survives, and is promoted** | For absences an area is a **hard prerequisite**, not a later tier (§3.5) |
 | 11 — the annotation registry is process-local | **Superseded** | By [01 D1.10](01_Architecture.md), which publishes world-scoped state to the server. This is the direction doc 20 preferred; not re-litigated here |
 | 12 — catalogue reference versus category-to-a-set | **Survives, re-seated** | The selection surface is the `vType`, not `vehicleCategory`. [04](04_Contracts.md) owns the binding; §9.3 owns the confounder rules |
@@ -3174,7 +3201,7 @@ owner acts on it rather than rediscovers it.
 | **D6.15** | **The corpus is written as two separate artifacts by a corpus export step: a `training export` and a `full-truth export`**, and a downstream trainer is given a path only to the first. Truth may define the target and may filter which examples are included; it may never travel with an example as a field the model can read (§10.2, §10.3). **The split survives the scope narrowing of [`_TEAM_BRIEF.md` §3b](_TEAM_BRIEF.md) as a held-back partition of our own data: of *fields and spans*, not a held-out test set of examples, which is a downstream team's choice to make.** It was never a measurement, so nothing about it depended on scoring; what changed is that the second artifact is named for what it contains rather than for what somebody might do with it, and that no component here writes, reads or checks a model's output |
 | **D6.16** | **A span in which the render-set cap bound is withheld from the training export and kept in the full-truth export.** Prioritising annotated participants under the cap makes scene density a function of the label; recording `cap_bound_ticks` turns that from an invisible confound into an auditable one (§10.4) |
 | **D6.17** | **Four artifacts, one writer each**: the supervision plan (compile time), the capture truth sidecar (per camera per capture), the world truth track (per run, every SUMO vehicle), and the run supervision manifest (per session, authoritative). The world truth track is new and is what keeps the base rate from being computed over a render-filtered population (§8) |
-| **D6.18** | **The two label leaks in the existing producer are defects and are fixed wherever that code produces ground truth**, including the standalone CARLA-free path: `special_type = "marked"` (`SumoCotBridge.py:321-322`) and the anomaly-to-`u` affiliation mapping. This is a narrow amendment to [01 D1.18](01_Architecture.md)'s "retained unchanged" — unchanged in role, corrected in these two places (§2.4, §8.3, §9.1) |
+| **D6.18** | **The two label leaks in the existing producer are defects and are fixed wherever that code produces ground truth**, including the standalone CARLA-free path: `special_type = "marked"` (`SumoCotBridge.py:321-322`) and the anomaly-to-`u` affiliation mapping. This is a narrow amendment to [01 D1.18](01_Architecture.md)'s "retained unchanged" — unchanged in role, corrected in these two places (§2.4, §8.3, §9.1). **Both are fixed in the standalone path (2026-09-29).** `special_type` means the kind of vehicle and nothing else: empty for every SUMO vehicle, planted or not, because SUMO reports no kind. A legacy labels file's `u` is withheld. **This reconciles with `8d3eafc5d`**, which made the XML and CSV the truth sidecar carrying the whole record: the marking leaves the field that means something else, not the sidecar. Both files carry it in their own `marked` field (`1`/`0`), which is not a CoT contract field — a CSV column as before, and a `_carla` attribute the XML gained with this fix, since measured before it the XML carried the marking only through `special_type`. The datagram feed carries neither. A compiled scenario marks nothing there; its labels are its `*.supervision.json`, joined to the sidecar by vehicle id, so no information is lost (§8.3) |
 | **D6.19** | **Vehicle fade is not designed around, and the rendered span replaces it.** The user has demoted fade for this mode — it is a client-side computation pushed one blocking RPC per vehicle per reconcile, and `--fade` carries `default=False` (`CarlaControl/src/carlacontrol/CarlaControlArgumentParser.py:317-328`). Vehicles spawn fully opaque, so `VehicleTelemetryService.cs:73`'s arrival gate is inert (`CarlaClient.cs:1571`), there is no *arriving* vehicle state, and `VehicleTelemetry.Opacity` is a constant 1.0 (`VehicleTelemetryService.cs:112`, `CarlaClient.cs:1562`) and is **not emitted**. What truth records instead is the **admission and release instant per vehicle**, which is exact because there is no ramp. This is a simplification of the onset model, not a loss: the committed-to-observed gap becomes purely the co-simulation seam, with no fade duration mixed into it (§3.3, §4.4, §5.1, §8.2) |
 | **D6.20** | **Illumination is part of the truth record, and the record carries the declared civil instant, the asserted policy and the residual — not only the achieved sun.** `_solar` already carries nine achieved attributes in every sidecar and every PNG (`CotWriter.cs:52-65`, `SolarMetadata.cs:14-20`, measured). Four are added: `declared_civil_time` / `declared_civil_date` / `declared_utc_offset_h`, `solar_policy` with its rate and anchor tick, `solar_time_residual_s` with `sun_elevation_residual_deg`, and `illumination_band`. **The policy is asserted rather than read**, because `advancing` defaults to `false` when nothing ever configured the sun (`CesiumHeightSampler.cpp:784-796`, measured), so a deliberately frozen run and a never-configured run are otherwise indistinguishable. The residual is what makes the silent failure loud: an unset sun shows up as a multi-hour residual against an achieved `solar_time` of exactly `12.0`, the spawn default (§2.7, §4.5) |
 | **D6.21** | **Illumination is derived context of the same class as an area relation, and never supervision.** It is carried by the world-scoped `<_solar>` element, a sibling of world-scoped `<_supervision>`, and by no `<event>`, no `<_carla>` block and no supervision row. The code boundary is the type graph: `SupervisionPlan` has no solar field, the interval binder has no reader for the solar cache, and the scenario epoch compiles into a **separate** civil-time map consumed by the capture session. The deletion test is the enforcement — a consumer must be able to delete every `<_solar>` element and every `carla:solar` chunk and still have complete supervision, exactly as for `<_aoi>` (§3.6, §8.1) |
