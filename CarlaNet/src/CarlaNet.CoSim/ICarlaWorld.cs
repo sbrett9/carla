@@ -10,9 +10,10 @@ namespace CarlaNet.CoSim;
 /// Everything the playback bridge asks of a CARLA world, and nothing else.
 /// </summary>
 /// <remarks>
-/// <para>Thirteen operations. The bridge asks which world is loaded, places bodies, writes their
-/// poses and velocities in one batch, reads back where the world says they went and how fast it says
-/// they are moving, advances the world a tick, reads and
+/// <para>Fourteen operations. The bridge asks which world is loaded, hands the world's truth
+/// telemetry the package's ground once the package is established as that world's, places bodies,
+/// writes their poses and velocities in one batch, reads back where the world says they went and how
+/// fast it says they are moving, advances the world a tick, reads and
 /// writes the episode settings so it can hand the world back as it found it, shows or hides the
 /// rendering layers whose presence is a property of the imagery, and reads and writes the sun the
 /// imagery is lit by. Anything larger
@@ -28,14 +29,32 @@ public interface ICarlaWorld
 {
     /// <summary>
     /// What the server says about the world it has loaded: its georeference origin, the OpenDRIVE it
-    /// serves, and the bare-earth reference record published for it, grids included.
+    /// serves, and the bare-earth reference record published for it, with the server's digest of each
+    /// of its grids in place of the grid.
     /// </summary>
     /// <remarks>
-    /// Several round trips, and the grids are the size of the drape -- sixty megabytes for the
-    /// largest world in <c>Build/world-packages</c> -- so it is asked once, when a session starts,
-    /// and never on the tick thread.
+    /// Several round trips and the whole OpenDRIVE, so it is asked once, when a session starts, and
+    /// never on the tick thread. The grids stay on the server: they are the size of the drape -- sixty
+    /// megabytes for the largest world in <c>Build/world-packages</c>, whose two grids took 146 s and
+    /// 153 s to fetch -- and their digests prove equality as strictly.
     /// </remarks>
     LoadedWorld DescribeLoadedWorld();
+
+    /// <summary>
+    /// Give the world's truth telemetry the bare-earth grids of a world package, so that nothing on
+    /// this connection fetches them from the server, where the server's digests show they are its
+    /// record's; answer whether they were taken.
+    /// </summary>
+    /// <remarks>
+    /// <para>The session asks once, after <see cref="LoadedWorldCheck"/> has admitted the package: the
+    /// recorder that captures beside it reports bare-earth truth from the same record, and would
+    /// otherwise fetch the grids the check just proved it already has.</para>
+    ///
+    /// <para>Declining changes nothing: the telemetry then fetches the record's own grids when truth
+    /// is first asked for, as it does on a connection with no package. So a world that declines is
+    /// slower, never wrong, and the session does not refuse it.</para>
+    /// </remarks>
+    bool AdoptBareEarthGrids(string packagePath);
 
     /// <summary>The episode settings as the server currently holds them.</summary>
     EpisodeSettings ReadSettings();

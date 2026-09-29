@@ -327,6 +327,11 @@ public sealed class SumoDriveSession : IDisposable
         if (world is { } loaded)
         {
             LoadedWorldCheck.Require(options.WorldPackagePath, loaded.DescribeLoadedWorld());
+
+            // The package's grids are now known to be the record's, so the truth telemetry beside the
+            // session takes them from the package instead of fetching them. It writes nothing to the
+            // server, and a world that declines is only slower: the telemetry then fetches as before.
+            loaded.AdoptBareEarthGrids(options.WorldPackagePath);
         }
 
         // Which SUMO, whether it has the binary the session is to launch, and whether that binary is

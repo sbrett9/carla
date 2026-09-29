@@ -133,13 +133,43 @@ internal sealed class SyntheticWorld : IDisposable
     }
 
     /// <summary>
+    /// A package whose surface was shifted by one constant rather than draped: no grid entry, and a
+    /// manifest that says so. It carries no network, so it is for the checks that need none.
+    /// </summary>
+    /// <param name="offsetMetres">The constant surface shift the manifest records.</param>
+    public static SyntheticWorld WriteShiftedByAConstant(double offsetMetres)
+    {
+        string directory = Path.Combine(Path.GetTempPath(),
+                                        "carlanet-cosim-" + Guid.NewGuid().ToString("n"));
+        var manifest = new WorldPackageManifest
+        {
+            MapName = "SyntheticConstant",
+            OriginLatitude = 0.0,
+            OriginLongitude = 0.0,
+            OriginHeightMeters = OriginHeight,
+            HeightAlignMode = "area",
+            DrapeActive = false,
+            HeightAlignOffsetMeters = offsetMetres,
+        };
+
+        WorldPackage.Write(directory, manifest, "<OpenDRIVE/>", string.Empty, [], []);
+        return new SyntheticWorld(directory, WorldPackage.PackagePath(directory, manifest.MapName));
+    }
+
+    /// <summary>
     /// What a server holding this world answers when asked which world it has loaded: the origin
     /// the package declares, the OpenDRIVE it carries, and the bare-earth record its build published
-    /// -- the same values and the same grids, as the building client sends them.
+    /// -- the same values, and the digests the server computes of the same grids, as the building
+    /// client sends them.
     /// </summary>
     public LoadedWorld AsLoaded() => Describe(PackagePath);
 
     /// <summary>What a server holding the world a package was written from answers.</summary>
+    /// <remarks>
+    /// The digests are taken from the grids as decoded, not from the entry's bytes, which is what a
+    /// server does with the floats it was sent; the check takes the package's from the entry. Equal
+    /// answers from the two are part of what an admitted package shows.
+    /// </remarks>
     public static LoadedWorld Describe(string packagePath)
     {
         WorldPackageManifest manifest = WorldPackage.ReadManifest(packagePath);
@@ -147,8 +177,10 @@ internal sealed class SyntheticWorld : IDisposable
             ? new BareEarthRecord(manifest.HeightAlignOffsetMeters, manifest.DrapeActive,
                                   manifest.GridMinXMeters, manifest.GridMinYMeters,
                                   manifest.GridCellSizeMeters, manifest.GridNumCols,
-                                  manifest.GridNumRows, offset, ground)
-            : new BareEarthRecord(manifest.HeightAlignOffsetMeters, false, 0.0, 0.0, 0.0, 0, 0, [], []);
+                                  manifest.GridNumRows, WorldPackage.HashGrid(offset),
+                                  WorldPackage.HashGrid(ground))
+            : new BareEarthRecord(manifest.HeightAlignOffsetMeters, false, 0.0, 0.0, 0.0, 0, 0,
+                                  string.Empty, string.Empty);
         return new LoadedWorld(manifest.OriginLatitude, manifest.OriginLongitude,
                                manifest.OriginHeightMeters, WorldPackage.ReadOpenDrive(packagePath),
                                record);

@@ -1224,6 +1224,15 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<IReadOnlyList<float>> GetBareEarthDtmGridAsync()
         => _rpc.CallAsync<IReadOnlyList<float>>("get_bare_earth_dtm_grid");
 
+    /// The SHA-1 of each bare-earth grid, lowercase hexadecimal, as [offsetGrid, groundGrid]: each
+    /// over the grid's float32 values as little-endian bytes, row-major, which is what
+    /// WorldPackage.HashGrid computes and what a package's bareearth.bin holds. The server computes
+    /// them when the record is set, so equal digests prove a package's grids are the record's bit for
+    /// bit without fetching the grids above (7,611,381 floats each on the Bahonar world, whose two
+    /// fetches took 146 s and 153 s). Empty when the loaded world has no record or was not draped.
+    public Task<IReadOnlyList<string>> GetBareEarthDigestAsync()
+        => _rpc.CallAsync<IReadOnlyList<string>>("get_bare_earth_digest");
+
     // Set once a fetch has been tried for the loaded world, so a telemetry loop running at 5 Hz does
     // not re-query a world that genuinely has no record.
     private bool _bareEarthFetchAttempted;
@@ -1249,9 +1258,7 @@ public sealed class CarlaClient : IAsyncDisposable
             bool drape = scalars[1] != 0.0;
             if (!drape)
             {
-                LastHeightAlignOffset = scalars[0];
-                LastDrapeActive = false;
-                HasBareEarthReference = true;
+                TakeConstantBareEarthReference(scalars);
                 return true;
             }
 
@@ -1263,16 +1270,7 @@ public sealed class CarlaClient : IAsyncDisposable
             if (offsets is null || ground is null || offsets.Count != need || ground.Count != need)
                 return false;
 
-            LastDrapeMinX = scalars[2];
-            LastDrapeMinY = scalars[3];
-            LastDrapeCellSize = scalars[4];
-            LastDrapeNumCols = numCols;
-            LastDrapeNumRows = numRows;
-            LastDrapedOffsetBytes = ToFloatBytes(offsets);
-            LastDrapedDtmBytes = ToFloatBytes(ground);
-            LastHeightAlignOffset = 0.0;   // the per-cell field is authoritative when draped
-            LastDrapeActive = true;
-            HasBareEarthReference = true;
+            TakeDrapedBareEarthReference(scalars, ToFloatBytes(offsets), ToFloatBytes(ground));
             return true;
         }
         catch
@@ -1281,6 +1279,87 @@ public sealed class CarlaClient : IAsyncDisposable
             // which the caller reports as such; it must not degrade into an assumed zero shift.
             return false;
         }
+    }
+
+    /// <summary>
+    /// Take the loaded world's bare-earth reference from a world package rather than from the server,
+    /// where the server's own digests show the package's grids are its record's, bit for bit. The
+    /// state set is what <see cref="EnsureBareEarthReference"/> would have fetched, and afterwards it
+    /// answers from it without asking the server again.
+    /// </summary>
+    /// <remarks>
+    /// <para>What it saves is the grids: the record's scalars and the two digests are three small
+    /// answers, where the grids are the size of the drape -- 7,611,381 floats each on the Bahonar
+    /// world, whose two fetches took 146 s and 153 s. A world whose surface was shifted by a constant
+    /// carries no grids, so its record is taken as the fetch would take it.</para>
+    ///
+    /// <para>Nothing is taken on trust. The grid geometry is the server's, and the grids are the
+    /// package's only where the server's digests (<see cref="GetBareEarthDigestAsync"/>) equal the
+    /// package's (<see cref="WorldPackage.HashGrid"/>) and the package's grid has the record's cell
+    /// count. Where they do not, or the world has no record, or the server publishes no digests -- one
+    /// built before it did answers the call with an error -- nothing is changed and false is returned,
+    /// so <see cref="EnsureBareEarthReference"/> still fetches the record's own grids when truth is
+    /// first asked for. A failure of the connection itself is not caught.</para>
+    /// </remarks>
+    /// <returns>True when the reference is now known, from the package or from the record's scalars.</returns>
+    public bool AdoptBareEarthReference(string packagePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(packagePath);
+
+        IReadOnlyList<double> scalars = GetBareEarthReferenceAsync().GetAwaiter().GetResult();
+        if (scalars is null || scalars.Count < 7) return false;   // world has no record
+        if (scalars[1] == 0.0)
+        {
+            TakeConstantBareEarthReference(scalars);
+            return true;
+        }
+
+        IReadOnlyList<string>? digests;
+        try
+        {
+            digests = GetBareEarthDigestAsync().GetAwaiter().GetResult();
+        }
+        catch (CarlaRpcException)
+        {
+            return false;   // a server that publishes no digests
+        }
+        if (digests is null || digests.Count < 2) return false;
+
+        if (!WorldPackage.TryReadGrids(packagePath, out float[] offsets, out float[] ground)) return false;
+        int need = (int)scalars[5] * (int)scalars[6];
+        if (offsets.Length != need
+            || !string.Equals(WorldPackage.HashGrid(offsets), digests[0], StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(WorldPackage.HashGrid(ground), digests[1], StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        TakeDrapedBareEarthReference(scalars, ToFloatBytes(offsets), ToFloatBytes(ground));
+        _bareEarthFetchAttempted = true;
+        return true;
+    }
+
+    /// Hold a record whose surface was shifted by one constant, from its scalars.
+    private void TakeConstantBareEarthReference(IReadOnlyList<double> scalars)
+    {
+        LastHeightAlignOffset = scalars[0];
+        LastDrapeActive = false;
+        HasBareEarthReference = true;
+    }
+
+    /// Hold a draped record: the geometry from its scalars, the grids as row-major float32 LE bytes.
+    private void TakeDrapedBareEarthReference(IReadOnlyList<double> scalars, byte[] offsets, byte[] ground)
+    {
+        LastDrapeMinX = scalars[2];
+        LastDrapeMinY = scalars[3];
+        LastDrapeCellSize = scalars[4];
+        LastDrapeNumCols = (int)scalars[5];
+        LastDrapeNumRows = (int)scalars[6];
+        LastDrapedOffsetBytes = offsets;
+        LastDrapedDtmBytes = ground;
+        LastHeightAlignOffset = 0.0;   // the per-cell field is authoritative when draped
+        LastDrapeActive = true;
+        HasBareEarthReference = true;
     }
 
     /// <summary>

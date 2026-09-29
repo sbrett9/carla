@@ -1,4 +1,5 @@
 using CarlaNet.Transport;
+using CarlaNet.Transport.MsgPackRpc;
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Actors;
 using CarlaNet.Types.Rpc.Commands;
@@ -68,8 +69,13 @@ public sealed class CarlaClientWorld : ICarlaWorld
 
     /// <inheritdoc/>
     /// <remarks>
-    /// The record's grids are fetched only where the record says the surface is draped, which is the
-    /// only case in which the server holds any.
+    /// <para>The record's grid digests are asked for only where the record says the surface is draped,
+    /// which is the only case in which the server holds any grids. The grids themselves are never
+    /// fetched: the digests are what the check compares.</para>
+    ///
+    /// <para>A server built before it published the digests answers that call with an error. The
+    /// record is then described with no digests, which the check refuses under a drape and names,
+    /// rather than the start failing on an error that says nothing about the world.</para>
     /// </remarks>
     public LoadedWorld DescribeLoadedWorld()
     {
@@ -81,14 +87,31 @@ public sealed class CarlaClientWorld : ICarlaWorld
         if (scalars is { Count: >= 7 })
         {
             bool draped = scalars[1] != 0.0;
+            IReadOnlyList<string> digests = draped ? ReadGridDigests() : [];
             record = new BareEarthRecord(
                 scalars[0], draped, scalars[2], scalars[3], scalars[4], (int)scalars[5], (int)scalars[6],
-                draped ? [.. _client.GetBareEarthOffsetGridAsync().GetAwaiter().GetResult()] : [],
-                draped ? [.. _client.GetBareEarthDtmGridAsync().GetAwaiter().GetResult()] : []);
+                digests.Count >= 2 ? digests[0] : string.Empty,
+                digests.Count >= 2 ? digests[1] : string.Empty);
         }
 
         return new LoadedWorld(origin.Latitude, origin.Longitude, origin.Altitude, openDrive, record);
     }
+
+    /// <summary>The server's digests of its record's two grids, or none where it publishes none.</summary>
+    private IReadOnlyList<string> ReadGridDigests()
+    {
+        try
+        {
+            return _client.GetBareEarthDigestAsync().GetAwaiter().GetResult() ?? [];
+        }
+        catch (CarlaRpcException)
+        {
+            return [];
+        }
+    }
+
+    /// <inheritdoc/>
+    public bool AdoptBareEarthGrids(string packagePath) => _client.AdoptBareEarthReference(packagePath);
 
     /// <inheritdoc/>
     public EpisodeSettings ReadSettings() =>

@@ -39,6 +39,10 @@ internal sealed class WorldConnectionGuard : ICarlaWorld
     public LoadedWorld DescribeLoadedWorld() => Guard(nameof(DescribeLoadedWorld), _world.DescribeLoadedWorld);
 
     /// <inheritdoc/>
+    public bool AdoptBareEarthGrids(string packagePath) =>
+        Guard(nameof(AdoptBareEarthGrids), () => _world.AdoptBareEarthGrids(packagePath));
+
+    /// <inheritdoc/>
     public EpisodeSettings ReadSettings() => Guard(nameof(ReadSettings), _world.ReadSettings);
 
     /// <inheritdoc/>

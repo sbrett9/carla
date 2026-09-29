@@ -1043,12 +1043,40 @@ public sealed class SumoDriveSessionTests
             () => SumoDriveSession.Start(options));
 
         Assert.Contains("does not describe the world the server has loaded", refused.Message);
-        Assert.Contains("cells of the loaded world's bare-earth ground grid differ", refused.Message);
+        Assert.Contains("the loaded world's bare-earth ground grid has SHA-1", refused.Message);
         Assert.Equal(1, carla.Descriptions);
         Assert.Empty(carla.SettingsWrites);
         Assert.Empty(carla.LayerWrites);
         Assert.Empty(carla.SolarWrites);
         Assert.Empty(carla.Spawned);
+
+        // And its grids are not handed to the world's truth telemetry: they are not the world's.
+        Assert.Empty(carla.Adoptions);
+    }
+
+    [RequiresSumoFact]
+    public void AnAdmittedPackageSGridsAreHandedToTheTruthTelemetryOnceTheCheckHasPassed()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+
+        using SumoDriveSession session = SumoDriveSession.Start(options);
+
+        // Once, the package the session was given, and only after the world had described itself:
+        // what is handed over is what the check has just shown the world to hold.
+        (string package, int afterDescriptions) = Assert.Single(carla.Adoptions);
+        Assert.Equal(world.PackagePath, package);
+        Assert.Equal(1, afterDescriptions);
+
+        for (int step = 0; step < 10 && session.Advance(); step++)
+        {
+        }
+
+        Assert.Single(carla.Adoptions);
     }
 
     [Fact]
@@ -1067,6 +1095,7 @@ public sealed class SumoDriveSessionTests
 
         Assert.Contains("carries no bare-earth reference record", refused.Message);
         Assert.Empty(carla.SettingsWrites);
+        Assert.Empty(carla.Adoptions);
     }
 
     private static SumoDriveSessionOptions Options(SyntheticWorld world,

@@ -24,9 +24,15 @@ namespace CarlaNet.CoSim;
 /// to be checked against, and is refused for that.</item>
 /// <item><b>The record describes the package's surface</b>: draped or shifted by a constant as the
 /// manifest says; under a drape, the same grid -- corner, cell size, columns and rows against the
-/// manifest's <c>Grid*</c> fields -- and the same two grids, cell for cell, against the package's
-/// <c>bareearth.bin</c>. The session seats each vehicle on the package's grids; the world's
-/// collision surface and its telemetry use the record's.</item>
+/// manifest's <c>Grid*</c> fields -- and the same two grids, by digest: the SHA-1 the server computed
+/// of each of its record's grids when the record was set (<c>get_bare_earth_digest</c>) against
+/// <see cref="WorldPackage.HashGrid"/> of the package's, hashed from its <c>bareearth.bin</c>. The
+/// session seats each vehicle on the package's grids; the world's collision surface and its telemetry
+/// use the record's.</item>
+/// <item><b>The package agrees with itself</b>: where its manifest records the digests of its grids
+/// (<c>BareEarthOffsetSha1</c>, <c>BareEarthDtmSha1</c>), they are what its <c>bareearth.bin</c>
+/// hashes to. A package written before they were recorded has none, and nothing else depends on
+/// them.</item>
 /// <item><b>The georeference origin</b> (<c>get_cesium_origin</c>) is the manifest's: the point
 /// every SUMO position is converted relative to.</item>
 /// <item><b>The road network the server serves</b> (<c>get_map_data</c>) is the one the package
@@ -38,15 +44,23 @@ namespace CarlaNet.CoSim;
 ///
 /// <para><b>How exact.</b> The grids are compared bit for bit: a second client's copy of the record
 /// is byte-identical to the building client's (<c>CarlaNet/python/test_bare_earth_reference.py</c>),
-/// and the package's grids are written from the same arrays in the same build. Counts are compared
-/// exactly. Positions, heights and angles are compared within <see cref="LengthMarginMetres"/> and
-/// <see cref="AngleMarginDegrees"/>. That margin is not a measurement: every such value is either the
-/// one the building client sent the server or one it read back from it, so an unchanged world gives
-/// the identical double; the margin is there so a double that has passed through a restored level's
-/// settings asset, a path this check has not been run on, is not refused over its last bit, and it
-/// moves no vehicle anywhere a pixel can show. The server's leg of the OpenDRIVE comparison -- the
-/// text it received, written to a file or held by a level, and served back -- has not been measured
-/// against a running server either.</para>
+/// and the package's grids are written from the same arrays in the same build. Both digests are over
+/// the same bytes -- each grid's float32 values, little-endian, row-major, exactly as
+/// <c>bareearth.bin</c> holds them -- so a digest that differs is a grid that differs, in one bit of
+/// one cell or in all of them. Digests rather than the grids themselves because the grids are the
+/// size of the drape: 7,611,381 floats each on the Bahonar world, whose two fetches took 146 s and
+/// 153 s. SHA-1 because the server computes it with the engine's own Core, which has no SHA-256 that
+/// runs on Windows or Linux; it tells one build's grids from another's, and an adversary is outside
+/// what this check can see anyway (below). A digest cannot say which cells differ, so a refusal
+/// names the two digests and not a cell. Counts are compared exactly. Positions, heights and angles
+/// are compared within <see cref="LengthMarginMetres"/> and <see cref="AngleMarginDegrees"/>. That
+/// margin is not a measurement: every such value is either the one the building client sent the
+/// server or one it read back from it, so an unchanged world gives the identical double; the margin
+/// is there so a double that has passed through a restored level's settings asset, a path this check
+/// has not been run on, is not refused over its last bit, and it moves no vehicle anywhere a pixel
+/// can show. The server's leg of the OpenDRIVE comparison -- the text it received, written to a file
+/// or held by a level, and served back -- has not been measured against a running server either, and
+/// nor has its leg of the grid comparison, the digests it computes as the record is set.</para>
 ///
 /// <para><b>What it cannot see.</b></para>
 /// <list type="bullet">
@@ -139,7 +153,7 @@ public static class LoadedWorldCheck
 
     /// <summary>
     /// The record against the manifest and the package's grids: how the surface was reconciled, and
-    /// under a drape the grid it was reconciled on and every cell of it.
+    /// under a drape the grid it was reconciled on and the digest of each of its grids.
     /// </summary>
     private static void CompareSurface(string packagePath,
                                        WorldPackageManifest manifest,
@@ -177,47 +191,48 @@ public static class LoadedWorldCheck
             return;
         }
 
-        if (!WorldPackage.TryReadGrids(packagePath, out float[] offset, out float[] ground))
+        if (!WorldPackage.TryReadGridDigests(packagePath, out string offset, out string ground))
         {
             found.Add("the package declares a draped surface and carries no grid of it");
             return;
         }
 
-        CompareCells("bare-earth ground", record.GroundGrid, ground, record.Columns, found);
-        CompareCells("surface offset", record.OffsetGrid, offset, record.Columns, found);
-    }
+        CompareRecorded("bare-earth ground", manifest.BareEarthDtmSha1, ground, found);
+        CompareRecorded("surface offset", manifest.BareEarthOffsetSha1, offset, found);
 
-    /// <summary>One grid against the other, bit for bit, naming how many cells differ and the first.</summary>
-    private static void CompareCells(string what, float[] loaded, float[] packaged, int columns,
-                                     List<string> found)
-    {
-        if (loaded.Length != packaged.Length)
+        if (string.IsNullOrEmpty(record.GroundGridSha1) || string.IsNullOrEmpty(record.OffsetGridSha1))
         {
-            found.Add($"the loaded world's {what} grid holds {loaded.Length} cells and the package's "
-                      + $"{packaged.Length}");
+            found.Add("the loaded world's server publishes no digest of its bare-earth grids "
+                      + "(get_bare_earth_digest), so they cannot be compared with the package's: a "
+                      + "server built before it published them answers with none");
             return;
         }
 
-        int differing = 0;
-        int first = -1;
-        for (int cell = 0; cell < loaded.Length; cell++)
-        {
-            if (BitConverter.SingleToInt32Bits(loaded[cell]) != BitConverter.SingleToInt32Bits(packaged[cell]))
-            {
-                differing++;
-                if (first < 0)
-                {
-                    first = cell;
-                }
-            }
-        }
+        CompareDigests("bare-earth ground", record.GroundGridSha1, ground, found);
+        CompareDigests("surface offset", record.OffsetGridSha1, offset, found);
+    }
 
-        if (differing > 0)
+    /// <summary>One grid of the loaded world against the package's, by digest, naming both.</summary>
+    private static void CompareDigests(string what, string loaded, string packaged, List<string> found)
+    {
+        if (!string.Equals(loaded, packaged, StringComparison.OrdinalIgnoreCase))
         {
-            found.Add($"{differing} of {loaded.Length} cells of the loaded world's {what} grid differ "
-                      + $"from the package's, the first at column {first % columns}, row "
-                      + $"{first / columns}: {loaded[first].ToString("0.###", CultureInfo.InvariantCulture)} m "
-                      + $"against {packaged[first].ToString("0.###", CultureInfo.InvariantCulture)} m");
+            found.Add($"the loaded world's {what} grid has SHA-1 {loaded} and the package's has "
+                      + $"SHA-1 {packaged}");
+        }
+    }
+
+    /// <summary>
+    /// The digest a package's manifest records for one of its grids, where it records one, against
+    /// what the grid it carries hashes to.
+    /// </summary>
+    private static void CompareRecorded(string what, string recorded, string carried, List<string> found)
+    {
+        if (!string.IsNullOrEmpty(recorded)
+            && !string.Equals(recorded, carried, StringComparison.OrdinalIgnoreCase))
+        {
+            found.Add($"the package's manifest records its {what} grid as SHA-1 {recorded} and its "
+                      + $"bareearth.bin holds one with SHA-1 {carried}");
         }
     }
 

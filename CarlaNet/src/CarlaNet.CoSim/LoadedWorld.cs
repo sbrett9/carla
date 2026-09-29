@@ -13,8 +13,8 @@ namespace CarlaNet.CoSim;
 /// asset.
 /// </param>
 /// <param name="BareEarth">
-/// The bare-earth reference record, or <see langword="null"/> where the world carries none -- any
-/// map loaded rather than generated.
+/// The bare-earth reference record, its grids described by the server's digests of them, or
+/// <see langword="null"/> where the world carries none -- any map loaded rather than generated.
 /// </param>
 public sealed record LoadedWorld(
     double OriginLatitude,

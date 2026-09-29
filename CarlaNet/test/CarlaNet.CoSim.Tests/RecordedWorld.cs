@@ -11,7 +11,7 @@ namespace CarlaNet.CoSim.Tests;
 /// A CARLA world that records what was asked of it and answers as a server would.
 /// </summary>
 /// <remarks>
-/// <para>Everything the bridge does to a world is thirteen operations wide, so a world that keeps a
+/// <para>Everything the bridge does to a world is fourteen operations wide, so a world that keeps a
 /// dictionary of actors, a list of batches and a simulated sun exercises the whole driving path --
 /// the check of which world is loaded, the pool, the batch, the read-back, the tick, the settings
 /// restoration and the sun's binding and audit -- with no server, no engine and no render. What it
@@ -171,6 +171,21 @@ internal class RecordedWorld : ICarlaWorld
         Connected(nameof(DescribeLoadedWorld));
         Descriptions++;
         return Loaded;
+    }
+
+    /// <summary>
+    /// The packages the world's truth telemetry was asked to take its bare-earth grids from, in order,
+    /// each with the number of descriptions the world had given when it was asked.
+    /// </summary>
+    public List<(string PackagePath, int AfterDescriptions)> Adoptions { get; } = [];
+
+    /// <inheritdoc/>
+    /// <remarks>Takes them whenever asked: what a world does with them is the client's to show.</remarks>
+    public bool AdoptBareEarthGrids(string packagePath)
+    {
+        Connected(nameof(AdoptBareEarthGrids));
+        Adoptions.Add((packagePath, Descriptions));
+        return true;
     }
 
     /// <inheritdoc/>
