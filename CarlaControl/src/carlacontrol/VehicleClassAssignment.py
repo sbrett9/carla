@@ -156,6 +156,18 @@ class VehicleClassAssignment:
             "gui_shape": "passenger", "gui_colour": "#CCCCD1",
         },
         {
+            # SUMO's passenger defaults, as for the civilian cars; a separate class so an author can
+            # ask for an off-road body by name rather than draw one by chance among the saloons.
+            "class_id": "offroad",
+            "description": "Short-wheelbase four-wheel-drive utility vehicles: an open-topped jeep.",
+            "sumo_vclass": "passenger",
+            "cot_base_type": "car",
+            "members": ["vehicle.jeep.wrangler_rubicon"],
+            "max_speed_mps": 35.0, "accel_mps2": 2.6, "decel_mps2": 4.5, "sigma": 0.5,
+            "speed_factor_mean": 1.0, "speed_factor_dev": 0.1, "min_gap_m": 2.5,
+            "gui_shape": "passenger/wagon", "gui_colour": "#6B7A55",
+        },
+        {
             "class_id": "civ_van",
             "description": "Panel vans and light commercial bodies on a van chassis.",
             "sumo_vclass": "delivery",

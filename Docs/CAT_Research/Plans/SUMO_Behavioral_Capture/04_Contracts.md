@@ -308,7 +308,8 @@ four wheels, not three.
 
 The registry now declares the corrected values — `car` on the six saloons, `van` on the Sprinter and the
 ambulance, `emergency` on the ambulance, the police Charger and the fire appliance, `taxi` on the taxi,
-four wheels on the Lincoln — and an eighteenth entry, `vehicle.carlamotors.european_hgv`. The catalogue
+four wheels on the Lincoln — and two new entries, `vehicle.carlamotors.european_hgv` and
+`vehicle.jeep.wrangler_rubicon`. The catalogue
 still derives each blueprint's kind from its measurement (§3.2) rather than reading these, because the
 file is hand-edited and nothing checks it against the bodies.
 
@@ -319,9 +320,10 @@ cannot spawn.** `Content/Carla/Blueprints/Vehicles/` holds thirty vehicle bluepr
 | Blueprints | Registered | Why |
 |---|---|---|
 | The seventeen of the table above, and `EuropeanHGV` | globally, 18 entries | `EuropeanHGV` derives from `BaseVehiclePawnNW` and wires six wheel blueprints on three axles; one skeletal mesh, no trailer |
+| `JeepWranglerRubicon` | globally, the nineteenth entry | its four wheel setups were wired in the editor (below); a generation-1 car with no door or lamp components |
 | `MiningTruck` | only on `Mine_01`, as `vehicle.miningtruck.miningtruck` in `Config/Mine_01/Vehicles.json` | an off-highway haul truck the content scopes to its map; registering it globally would declare the id twice there |
 | `2Wheeled/` — `CrossBike`, `Harley`, `KawasakiNinja`, `LeisureBike`, `RoadBike`, `Vespa`, `Yamaha` | no | two-wheelers, outside this contract (`D4.40`) |
-| `AudiA2`, `AudiETron`, `BmwIsetta`, `CitroenC3`, `Cybertruck`, `JeepWranglerRubicon`, `NissanMicra`, `SeatLeon`, `Tesla`, `ToyotaPrius`, `VolkswagenT2` | no | no wheel is wired in |
+| `AudiA2`, `AudiETron`, `BmwIsetta`, `CitroenC3`, `Cybertruck`, `NissanMicra`, `SeatLeon`, `Tesla`, `ToyotaPrius`, `VolkswagenT2` | no | no wheel is wired in |
 
 The last row's folders each hold four wheel blueprints, but no vehicle blueprint references one: none
 serialises `WheelSetups`, `BaseVehiclePawn` sets none, and `UChaosWheeledVehicleMovementComponent`
@@ -331,8 +333,15 @@ starts with none. `ACarlaWheeledVehicle::BeginPlay` passes the vehicle to
 `Vehicle/AckermannController.cpp:217-218`).
 Spawning one would assert, so registering one would put a server-stopping body into every client's
 random draw. The `Cybertruck` also references two glass meshes that are not in the content. Wiring the
-wheel setups in the editor is what makes these registrable; until then an author asking for a Jeep
-Wrangler or a Volkswagen T2 is refused (§3.10), not given the nearest body.
+wheel setups in the editor is what makes these registrable; until then an author asking for a
+Volkswagen T2 is refused (§3.10), not given the nearest body.
+
+The Jeep Wrangler was the first so wired. Its movement component now binds `Wheel_Front_Left`,
+`Wheel_Front_Right`, `Wheel_Rear_Left` and `Wheel_Rear_Right` to its own four wheel blueprints; the
+bone names are the Patrol's. Those wheel blueprints declared a 32 cm radius against a measured
+41.6 cm tyre (wheel bone at z 40.9 cm, mesh floor at −0.7 cm), so each now declares 41 cm. Its other
+physics are the Chaos defaults, left as they were: SUMO-driven vehicles are posed, not driven
+through physics.
 
 **Measurement 2 — half the preference table matches nothing.** Definition ids are lowercased
 (`Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Actor/ActorBlueprintFunctionLibrary.cpp:203-206`), so
@@ -792,6 +801,7 @@ names a blueprint the sweep did not measure:
 | `class_id` | `sumo_vclass` | `cot_base_type` / `cot_special_type` | Members |
 |---|---|---|---|
 | `civ_car` | `passenger` | `car` | the six `ue4.*` saloons, `dodge.charger`, `lincoln.mkz`, `mini.cooper`, `nissan.patrol` |
+| `offroad` | `passenger` | `car` | `jeep.wrangler_rubicon` — an open-topped short-wheelbase jeep |
 | `civ_van` | `delivery` | `van` | `sprinter.mercedes` |
 | `civ_truck` | `truck` | `truck` | `carlacola.actors` — a two-axle rigid box lorry |
 | `heavy_truck` | `truck` | `truck` | `carlamotors.european_hgv` — a three-axle rigid lorry |
@@ -802,9 +812,9 @@ names a blueprint the sweep did not measure:
 | `fire_appliance` | `emergency` | `truck` / `emergency` | `firetruck.actors` |
 
 No class is defined for a body the content cannot yet spawn (Measurement 1a), because a class with no
-measured member is refused (V1.7). When those blueprints are wired and registered they belong as
-follows: the Jeep Wrangler in an `offroad` class of its own, distinct from the Patrol's sport utility in
-`civ_car`; the Volkswagen T2 in `civ_van`; the A2, Isetta, C3, Micra, Leon and Prius in `civ_car`, with
+measured member is refused (V1.7). The Jeep Wrangler, the first of them wired, has its `offroad` class,
+distinct from the Patrol's sport utility in `civ_car`. When the rest are wired and registered they
+belong as follows: the Volkswagen T2 in `civ_van`; the A2, Isetta, C3, Micra, Leon and Prius in `civ_car`, with
 the Tesla Model 3 and the e-tron beside them unless the truth record is to carry upstream's
 `special_type=electric`, which would need a class of its own; the Cybertruck wherever its measured box
 and a curated reason place it.

@@ -48,8 +48,8 @@ MEASURED = {
 }
 
 # Registered in the content and named by a default class, but not yet swept, so there is no box to
-# put in MEASURED. Its entry moves there once the sweep has measured it.
-AWAITING_MEASUREMENT = frozenset({"vehicle.carlamotors.european_hgv"})
+# put in MEASURED. An entry moves there once the sweep has measured it.
+AWAITING_MEASUREMENT = frozenset({"vehicle.carlamotors.european_hgv", "vehicle.jeep.wrangler_rubicon"})
 
 
 def classes_over_measured_bodies() -> tuple[dict, ...]:
