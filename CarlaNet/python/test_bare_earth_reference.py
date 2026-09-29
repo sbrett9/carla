@@ -298,9 +298,11 @@ class BareEarthReferenceTest:
             self.check("one bit of one ground cell is refused, naming both digests",
                        len(named) == 1 and served[1] in named[0] and flipped_sha1 in named[0],
                        "; ".join(found))
+            # Held in a name: a Client disposes its connection when it is collected, and an inline
+            # temporary is collected while the call it made is still running.
+            doubter = carla.Client(args.host, args.port)
             self.check("and a client holding that copy does not take its grids",
-                       not bool(carla.Client(args.host, args.port)._inner
-                                .AdoptBareEarthReference(flipped)))
+                       not bool(doubter._inner.AdoptBareEarthReference(flipped)))
         finally:
             shutil.rmtree(scratch, ignore_errors=True)
 
