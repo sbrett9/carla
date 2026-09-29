@@ -36,6 +36,7 @@ class PygameInterface:
         recorder=None,
         scenario=None,
         orbit_sensor_controller=None,
+        read_only: bool = False,
     ):
         """Initialize pygame interface.
 
@@ -53,6 +54,9 @@ class PygameInterface:
             recorder: Optional NativeRecorder instance
             scenario: Optional ScenarioController instance
             orbit_sensor_controller: Optional OrbitSensorController instance
+            read_only: Read the world for the HUD and never write it: the keys that toggle a layer,
+                the ground's collision, the road mesh or the sun's advance are not bound. For a
+                viewer beside a process that owns the world, whose layers and clock are its own.
         """
         self.width = args.width
         self.height = args.height
@@ -69,6 +73,7 @@ class PygameInterface:
         self.recorder = recorder
         self.scenario = scenario
         self.orbit_sensor_controller = orbit_sensor_controller
+        self.read_only = read_only
         self.logger = logging.getLogger(__name__)
 
         # Pygame Setup, and pull in class attributes for quick access
@@ -288,6 +293,8 @@ class PygameInterface:
         """Register built-in hotkeys for standard flags and world controls."""
         self.register_hotkey(pygame.K_b, lambda: self.toggle_flag("show_perimeter"))
         self.register_hotkey(pygame.K_m, lambda: self.toggle_flag("show_margin"))
+        if self.read_only:
+            return
         self.register_hotkey(pygame.K_c, lambda: self._toggle_layer("photoreal"))
         self.register_hotkey(pygame.K_g, lambda: self._toggle_layer("ground"))
         self.register_hotkey(pygame.K_v, self._toggle_collision)
