@@ -115,6 +115,9 @@ from CarlaNet.CoSim import CoSimSessionRefusedException
 _THIS = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.normpath(os.path.join(_THIS, "..", ".."))
 
+# How long any one server call may take once the session is driving.
+RUN_TIMEOUT_S = 30.0
+
 logger = logging.getLogger("run_sumo_drive")
 
 
@@ -123,6 +126,12 @@ def parse_args() -> argparse.Namespace:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=2000)
+    parser.add_argument("--setup-timeout", type=float, default=600.0,
+                        help="seconds each server call may take while the session checks the "
+                             "loaded world and starts. The check reads the server's bare-earth "
+                             "grids, and on a large world they take minutes: Bahonar's two "
+                             "grids of 7.6 million cells took 146 s and 153 s. Once the session "
+                             "has started, every call gets 30 s again")
     parser.add_argument("--scenario", required=True, help="the scenario's .sumocfg")
     parser.add_argument("--world-package", required=True,
                         help="the .cwp the world was built as")
@@ -498,7 +507,7 @@ def main() -> int:
     sumo.announce()
 
     client = carla.Client(args.host, args.port)
-    client.set_timeout(30.0)
+    client.set_timeout(RUN_TIMEOUT_S)
     world = client.get_world()
     logger.info("server %s, map %s", client.get_server_version(), world.get_map().name)
 
@@ -519,6 +528,7 @@ def main() -> int:
             worst["tick"] = divergence.TickIndex
 
     try:
+        client.set_timeout(max(args.setup_timeout, RUN_TIMEOUT_S))
         session = world.start_sumo_drive(
             args.scenario, args.world_package, args.catalogue,
             region_centre=(args.region_x, args.region_y),
@@ -548,6 +558,7 @@ def main() -> int:
             # crossing into Python per vehicle per tick for nothing.
             on_pose=aim.collect if aims_at_traffic else None,
             on_divergence=on_divergence)
+        client.set_timeout(RUN_TIMEOUT_S)
         if session is None:
             return 1
 
