@@ -65,7 +65,7 @@ from carlacontrol.RotaExpander import RotaEntry, RotaExpander, RotaSkip
 from carlacontrol.RouteValidator import RouteRequest, RouteValidator
 from carlacontrol.ScenarioEpoch import ScenarioEpoch, ScenarioEpochRefusedError
 from carlacontrol.ScenarioSchema import SPEC_VERSION, ScenarioSchema
-from carlacontrol.ScenarioVehicleMix import ScenarioVehicleMix, VehicleClassSpec
+from carlacontrol.ScenarioVehicleMix import ScenarioVehicleMix, VehicleClassSpec, VehicleMixSpec
 from carlacontrol.SumoInstallation import SumoInstallation
 from carlacontrol.SumoVehicleTypeWriter import (
     CATALOGUE_DIGEST_PARAM,
@@ -331,41 +331,58 @@ class ScenarioCompiler:
         return entry
 
     def _resolve_vehicles(self) -> None:
-        catalogue_path = (self.base / self.spec["catalogue"]).resolve()
-        try:
-            self.catalogue = VehicleCatalogue.load(catalogue_path)
-        except (OSError, ValueError) as problem:
-            self.findings.refuse(14, "catalogue", f"{catalogue_path.name} cannot be read: {problem}")
-            return
+        """Bind the declared classes and mixes to measured bodies (checks 14, 17).
+
+        What a type may drive is the declaration's, not the catalogue's, so it is recorded before the
+        bodies are looked up: a class naming a body the catalogue lacks still has its type and its
+        routes checked (checks 16 and 10), and one compile reports every refusal the stage can see.
+        """
         classes = [VehicleClassSpec(
             class_id=c["class_id"], blueprints=tuple(c["blueprints"]), sumo_vclass=c["sumo_vclass"],
             behaviour=dict(c.get("behaviour", {})), share=float(c.get("share", 0.0)),
             weights=tuple(float(w) for w in c.get("weights", [])),
             gui_shape=c.get("gui_shape", ""), gui_colour=c.get("gui_colour", ""),
             note=c.get("note", "")) for c in self.spec["vehicle_classes"]]
+        mixes = [VehicleMixSpec(mix_id=m["id"],
+                                shares=tuple((k, float(v)) for k, v in m["shares"].items()),
+                                note=m.get("note", ""))
+                 for m in self.spec.get("vehicle_mixes", [])]
         self.mix_id = self.spec.get("vehicle_mix", "")
-        try:
-            self.mix = ScenarioVehicleMix(self.catalogue, classes, mix_id=self.mix_id)
-        except (LookupError, ValueError) as problem:
-            self.findings.refuse(14, "vehicle_classes", str(problem))
-            return
+        vclass_of = {entry.class_id: entry.sumo_vclass for entry in classes}
         self.type_vclasses: dict[str, set[str]] = {}
         for entry in classes:
             self.type_vclasses[entry.class_id] = {entry.sumo_vclass}
             for blueprint in entry.blueprints:
-                self.type_vclasses[self.mix.type_id(entry.class_id, blueprint)] = {entry.sumo_vclass}
+                self.type_vclasses[ScenarioVehicleMix.type_id(entry.class_id, blueprint)] = {
+                    entry.sumo_vclass}
             if len(entry.blueprints) == 1:
                 self.findings.warn(17, f"vehicle class {entry.class_id}",
                                    f"draws one body, {entry.blueprints[0]}, so every vehicle of the "
                                    "class looks the same and its appearance can become its label")
         if self.mix_id:
             self.type_vclasses[self.mix_id] = {e.sumo_vclass for e in classes if e.share > 0}
+        for mix in mixes:
+            self.type_vclasses[mix.mix_id] = {vclass_of[c] for c, _ in mix.shares if c in vclass_of}
+
+        catalogue_path = (self.base / self.spec["catalogue"]).resolve()
+        try:
+            self.catalogue = VehicleCatalogue.load(catalogue_path)
+        except (OSError, ValueError) as problem:
+            self.findings.refuse(14, "catalogue", f"{catalogue_path.name} cannot be read: {problem}")
+            return
+        try:
+            self.mix = ScenarioVehicleMix(self.catalogue, classes, mix_id=self.mix_id, mixes=mixes)
+        except (LookupError, ValueError) as problem:
+            self.findings.refuse(14, "vehicle_classes", str(problem))
+            return
         self.report.set("vehicle_types", {
             "catalogue": {"path": catalogue_path.name, "catalogue_id": self.catalogue.catalogue_id,
                           "catalogue_digest": self.catalogue.catalogue_digest,
                           "blueprint_set_digest": self.catalogue.blueprint_set_digest},
             "classes": self.mix.summary(),
             "mix": {"id": self.mix_id, "probabilities": self.mix.member_probabilities()},
+            "mixes": [{"id": mix.mix_id, "shares": dict(mix.shares),
+                       "probabilities": self.mix.mix_probabilities(mix)} for mix in mixes],
             "types": {self.mix.type_id(e.class_id, b): self._body(b) for e in classes
                       for b in e.blueprints}})
 

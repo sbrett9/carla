@@ -19,7 +19,11 @@ using it. It assumes no knowledge of the conversation that produced this plan.
 `path:line`. *Measured* — produced by running something read-only on this machine on 2026-09-17 or
 2026-09-18, with the method stated. *Carried forward* — a measurement recorded in a Findings document
 or in the authoring skill, cited, not re-run. *Inferred* — a conclusion drawn from the above, and
-labelled as such.
+labelled as such. A line citation of `make_bahonar_scenario.py` is to the SUMO-XML generator the
+specification generator replaced, as it stands at commit `308e4aaab` and in `BahonarPatternOfLife.zip`,
+whose route file and labels are the test fixtures
+`CarlaControl/test/fixtures/Shahid_Bahonar_Port_PatternOfLife.shipped.*`; §3.4.1 describes the one that
+replaced it.
 
 **The one-line division of labour on time.** **The author declares what the scenario's time *means*;
 the operator chooses the window and the illumination policy.** An epoch is a property of the
@@ -66,6 +70,7 @@ choice. §3.9 draws the boundary.
 | 2026-09-25 | Areas of interest, the place index and the solar frame built and published in the world package (§2.5, §2.10–§2.12). |
 | 2026-09-28 | Epoch is the C9 object; the session writes the zone; compiler, checks, report, association and sweeps built. |
 | 2026-09-28 | Check 6 refuses a SUMO release mismatch; the fence is the world's type map (D7.33); the bands are doc 11's; route phases and point, gateway and movement places built; the Gardnerville generator writes a specification; the skill's examples and references written. |
+| 2026-09-29 | The Bahonar generator writes a specification on the rebuilt world's own network under a 07:00 epoch, with named vehicle mixes, areas of interest and its six anomalies as supervision (§3.4.1, D7.34–D7.36); its compile waits on the catalogue measuring the European heavy goods vehicle. |
 
 ---
 
@@ -116,18 +121,20 @@ That asymmetry is the finding this whole section turns on.
 - `RoadNetwork.check_drivable` (`SumoScenarioBuilder.py:151-160`) — raises if an edge is absent from
   the network, or if consecutive edges in an explicit edge list have no connection between them.
   Used only by `write_routes` (`SumoScenarioBuilder.py:353`), and only on the orbit's first two laps.
-- `SumoPatternOfLifeBuilder._validate` (`SumoPatternOfLifeBuilder.py:150-167`) — raises if any flow
-  or scheduled vehicle references an edge absent from the network. Existence only; no reachability.
+- `SumoPatternOfLifeBuilder._validate` (`SumoPatternOfLifeBuilder.py:150-167`, which went with the
+  SUMO-XML Bahonar generator) — raised if any flow or scheduled vehicle referenced an edge absent from
+  the network. Existence only; no reachability.
 
 Nothing else in those scripts checks anything. In particular nothing in them checks that a route is
 **routable** (as opposed to its endpoints existing), that a `via` list is honoured, that the network
 shares the CARLA map's frame, or that the network was built from the same OSM the world was. The
-compiler of §5 checks all of that for a specification. Of the three scripts, `make_sumo_scenario.py`
-now writes a specification and compiles it (§3.4); the Arapahoe and Bahonar scripts still write SUMO
-XML directly.
+compiler of §5 checks all of that for a specification. `make_sumo_scenario.py` and
+`make_bahonar_scenario.py` write specifications and compile them (§3.4, §3.4.1); the Arapahoe script
+still writes SUMO XML directly.
 
-`make_bahonar_scenario.py:64` defines `WORLD_PACKAGE` and never reads it (*read*): the largest
-authored scenario has no binding to the world it is meant to run in.
+The SUMO-XML Bahonar generator defined `WORLD_PACKAGE` and never read it (`make_bahonar_scenario.py:64`,
+*read*): the largest authored scenario had no binding to the world it was meant to run in. Its
+specification names the package and the fingerprint of the network it carries (§3.4.1).
 `make_sumo_scenario.py:56` records the world's `SourceOsmSha256` in a **comment** (*read*).
 
 ### 1.3 The frame is shared. The graph is not.
@@ -582,6 +589,15 @@ The contract is [`04`](04_Contracts.md) C5; this is how the world build carries 
   package's own network (`AreaOfInterestResolver`) and published beside it (§2.12). An area the frame
   check refuses (V5.12) is left out and the refusal logged; the place index and solar frame are still
   published.
+- **Bahonar's areas**, `Import/Shahid_Bahonar_Port.aoi.geojson`, nineteen of them: `tower_00`..`tower_15`
+  (`bahonar:guard_post`), circles of 30 m centred where each tower's guard parks — the lane position the
+  generator's survey projected each tower onto, placed in WGS84 by SUMO's own projection, within 5.6 m
+  to 86 m of the nearest of the extract's 18 `military=guard_house` buildings; `port_gate`
+  (`bahonar:gate`), a 45 m circle on the OSM gate node the gate probe halts short of; and `drydock` and
+  `ferry_terminal`, the OSM `dock=drydock` and `amenity=ferry_terminal` outlines. *Measured,*
+  2026-09-29: published into the rebuilt package with `publish_reference_set.py`, every area resolved,
+  the worst geodesy residual 0.0003 m, and the package's `world.json`, `map.net.xml`, `map.xodr` and
+  `bareearth.bin` byte for byte unchanged. A world built again from the extract finds the file by name.
 
 ### 2.12 How the reference set travels
 
@@ -728,15 +744,103 @@ network: 775 vehicles inserted and none left waiting, as the SUMO-XML output of 
 the orbiter drives the same 20 983 m route and arrives at 1 899.7 s against 1 919.3 s — the difference
 is SUMO routing the flows itself at insertion rather than running the routes `duarouter` fixed (D7.8),
 which moves where its random draws fall. The co-simulation session's network check admits the compiled
-package ([`03`](03_CoSimulation_Runtime.md) D3.28). The other two scripts still write SUMO XML, and the
-Arapahoe dwell cannot be a specification without changing the scenario: its vehicle types carry no
+package ([`03`](03_CoSimulation_Runtime.md) D3.28). Its lorry class draws the CarlaCola alone: the
+content's other rigid lorry, the European heavy goods vehicle, joins it when the catalogue measures it,
+and the Fuso Rosa is a light bus. *Measured* 2026-09-29 on that class: 775 inserted, none waiting, no
+teleport, and the orbiter arrives at 1 920.8 s on the same 20 983 m route. The Arapahoe script still
+writes SUMO XML, and its dwell cannot be a specification without changing the scenario: its vehicle types carry no
 catalogue body (so under SUMO drive they are simulated and never rendered), its incident is a rerouter
 in an additional file, and its opposite-lane pairs are a network edit, which is a world-build decision
 (D7.9). Its route file and configuration are regenerated by its script against the world package's
 network, which the session admits; the network it writes differs from the world's only in the two
-`opposite` attributes, which the network fingerprint does not cover. The Bahonar script's fourteen
-vehicle types are hand-sized with no catalogue body either, and its world is to be rebuilt with its type
-map (§9.8) before its guards can drive.
+`opposite` attributes, which the network fingerprint does not cover. The Bahonar pattern of life is a
+specification (§3.4.1).
+
+### 3.4.1 The Bahonar pattern of life, as built
+
+`make_bahonar_scenario.py` writes the sizing scenario as a specification,
+`Import/Shahid_Bahonar_Port_PatternOfLife.scenario.json`, and compiles it against the world package.
+
+**The world's own network.** No netconvert run and no rewrite: the specification names
+`Build/world-packages/Shahid_Bahonar_Port.cwp` and the canonical fingerprint of its `map.net.xml`,
+`3966113a337bb878b0f34f55153214dded7b62faabaec3deefc1934fe7eb991f`, the world rebuilt with its type map
+(§9.8). Every anchor the SUMO-XML generator named resolves on it: the eight anchor edges its routes
+run between, the sixteen tower lanes at their surveyed offsets and the seven fence-line edges. The two
+anchors it had dropped are not declared.
+
+**Time.** The epoch is `2026-09-29T07:00:00+03:30` — `2026-09-29T03:30:00Z`, `Asia/Tehran`, no daylight
+saving (Iran has kept none since 2022), calendar advancing — so simulated second zero is the first
+morning shift change. The schedule's hours were civil: the guards change at 07:00, 15:00 and 23:00 local
+and the ferry sails from 06:00 to 18:00. So the schedule is written in civil clocks and the compiler
+resolves each under the epoch, and nothing moves in local time. The run is seven whole days, `d0 07:00`
+to `d7 07:00`. A daily rhythm is written for every civil day the run touches and cut to the run, so what
+the shipped scenario held before 07:00 on day 0 — the pre-dawn corridor windows and the 06:00 sailing —
+is not written, and day 7 before 07:00 is. The result is 335 guard postings (the first departs at
+t = 0), 21 hauls, the nine planted vehicles, 108 corridor windows, 49 sailings as 98 flows and 42 shift
+surges: 248 flows and 365 vehicles, where the shipped scenario had 245 and 365.
+
+**Bodies.** Each class names catalogue bodies and the compiler sizes it from their measurements (§2.6):
+
+| Class | vClass | Bodies | The shipped types it draws |
+|---|---|---|---|
+| `civ_car` | passenger | the catalogue's `civ_car` class, ten bodies | `civ_car`, `anomaly_probe` |
+| `civ_pickup` | passenger | the Jeep Wrangler Rubicon once the catalogue measures it, the Nissan Patrol until then | `civ_pickup` |
+| `civ_taxi` | taxi | `vehicle.taxi.ford` | `civ_taxi` |
+| `civ_truck` | truck | `vehicle.carlamotors.european_hgv` | `civ_truck` |
+| `civ_bus` | bus | `vehicle.fuso.mitsubishi`, the Rosa | `civ_bus` |
+| `port_vehicle` | authority | `vehicle.nissan.patrol` | `port_vehicle` |
+| `port_truck` | authority | `vehicle.carlamotors.european_hgv` | `port_truck` |
+| `mil_jeep` | army | as `civ_pickup` | `mil_jeep`, `anomaly_escort` |
+| `mil_truck` | army | `vehicle.carlamotors.european_hgv` | `mil_truck` |
+| `guard` | army | as `civ_pickup` | `guard` |
+| `army_car_crawl` | army | the civilian cars, `speedFactor` 0.45 exactly | `anomaly_shadow` |
+| `port_car` | authority | the civilian cars | `anomaly_staybehind` |
+
+The four shipped types that named the supervision are gone (D7.36): the probe drove as a civilian car
+and is one, and the escort drives as a military jeep — its shipped `maxSpeed` of 28 m/s against the
+jeeps' 33 is not kept, and *measured* its peak on the corridor is 30.6 m/s. The flows draw three named
+mixes with the shipped shares (D7.34).
+
+**Supervision**, in namespace `bahonar` at version 1 with the ten terms and three roles of
+[`06`](06_Truth_And_Annotation.md) §9.4 and the four area kinds its areas use: five annotated instances — the escort, lead and four
+followers, labelled `coordinated_group_transit` and `destination_off_pattern` at `drydock`; each gate
+probe, `standoff_dwell_at_access_point` at `port_gate`; the perimeter shadow,
+`perimeter_transit_off_cadence`; the stay-behind, `arrival_without_departure` at `ferry_terminal` — each
+interval opening at its vehicle's departure; the guard rota read as the nominal series `tower_relief`,
+labelled `tower_posting`, eight-hour slots each sited at its tower's area; the no-show as the absence
+`pi_tower_relief_d4_h7_t3_unmanned`, labelled `post_unmanned`, a vacancy from 2026-10-03T07:00:00+03:30
+to 15:00 at `tower_03` with its counter-evidence of 335 realised slots in 336; the 21 hauls nominal,
+`routine_freight_haul`; and the 98 ferry flows an annotated cohort, `cleared_gate_transit`. The CoT
+display affiliation per type the shipped labels carried is not in the specification: it is a run
+display convention ([`06`](06_Truth_And_Annotation.md) §9.1), and `sumo_cot_telemetry.py` reads only a
+`.labels.json`, which a compiled scenario does not write.
+
+**What it reproduces.** *Measured,* `test_bahonar_generator.py`: every entry of the shipped scenario
+inside the run comes back with the same id, roads, stops and local time — 335 postings, 21 hauls, the
+nine planted vehicles, every flow window cut to the run — and the absence sits at the tower, instant
+and length of the shipped labels' described gap. *Measured* in the resolution report: all 613 entries
+carry their second and their civil time, where the shipped 610 carried none.
+
+**Measured in SUMO,** 2026-09-29, the specification compiled with the one body the catalogue lacks
+replaced by a measured one, seven days at 1.0 s in 106 s: 69 245 inserted, none waiting, no teleport,
+no collision. The escort departs 10:00:00 to 10:00:16 on day 3 and reaches the drydock between 10:30:03
+and 10:31:00 over 14.3 km; each probe halts 300 s at the gate approach and leaves; the shadow crawls
+21.8 km from 02:30 to 05:28 on day 6 at a mean 2.0 m/s; the stay-behind parks at the berth at 08:01:27
+on day 1 and is there when the run ends; every tower is manned every shift but `tower_03` from 07:07 to
+15:07 on day 4; and no civilian route crosses a way the extract marks private. The shipped run's escort
+covered 10.3 km and its shadow 9.6 km: the world admits `authority` and not `army` on the `access=no`
+service connector (way 26413344) the access-keyed fence had opened to both, so the naval routes to the
+western towers go round (§12 question 14).
+
+**The compile.** Refused by check 14 alone, naming `vehicle.carlamotors.european_hgv` for `civ_truck`,
+`port_truck` and `mil_truck`: catalogue `carla-0.10.0-windows` (digest `771fa431…`) has not measured
+it. Every other check of the resolution stage passes, and with that body replaced by a measured one the
+whole compile passes and the session's network, lock, teleporting and route-error checks admit it
+against the package (`test_bahonar_generator.py`). It compiles, unchanged, once the catalogue measures
+the European heavy goods vehicle; a catalogue that also measures the Wrangler moves the jeep classes to
+it when the generator is next run. A compiled scenario's lock binds the catalogue digest, and the
+session refuses another, so every compiled scenario — Gardnerville's too — is recompiled after the
+catalogue is republished.
 
 ### 3.5 Shape of the specification
 
@@ -757,6 +861,7 @@ simulation         { end, step_length_s }; t = 0 is the epoch, so the run begins
 catalogue          the measured vehicle catalogue                             04 C1
 vehicle_classes[]  class_id, blueprints[], sumo_vclass, behaviour{}, share, weights[], gui_*
 vehicle_mix        the id of the whole-mix distribution, when one is wanted
+vehicle_mixes[]    further named mixes: id, shares{class: share}, note             D7.34
 places{}           named places: an edge, a lane with offset, an area, a street one way     §4.2
                    (at a cross street or near a point), a geographic point, a gateway,
                    or a junction movement
@@ -872,30 +977,31 @@ objection to loop constructs is what keeps both that shape.
 must match exactly one occasion and must say why (check 48): a skip that matches nothing is an anomaly
 that was never planted, and the whole of the sizing scenario's no-show rests on one `continue` firing
 (*read*, `make_bahonar_scenario.py:236`). *Measured:* the block above, over sixteen tower places,
-reproduces `make_bahonar_scenario.py`'s `tower_postings(7, 4, 7, 3)` exactly — the same 335 ids with the
-same departure seconds (`test_rota_expander.py`). *Measured,* compiled against the real Bahonar world
+reproduces the 335 guard trips of the route file that loop shipped exactly — the same ids with the same
+departure seconds (`test_rota_expander.py`) — and it is the block the generator writes. *Measured,* compiled against the real Bahonar world
 package, 2026-09-28: all 335 entries route through `duarouter`, pass the false-accept guard and compile
 in **0.64 s**, with the generator's ids and departure seconds — when the guard class is drawn as
 `delivery`, because the shipped world's network admits no other road class on the port's service roads.
-With the class `army` it compiles on the network the world build now writes with the world's type map,
-and is refused by check 10 on all 335 entries against the shipped package (§9.8, §12 question 14).
+With the class `army` it compiles on the package rebuilt with the world's type map, and the same
+netconvert invocation without the map refuses it by check 10 on all 335 entries
+(`test_netconvert_type_map.py`; §9.8, §12 question 14).
 
 **What it does to the sizing scenario's readability.** *Measured against the shipped script and its
-output:*
+output, and against the specification generator that replaced it (§3.4.1):*
 
-| | Today | Under the epoch |
+| | The SUMO-XML generator | The specification generator |
 |---|---|---|
 | Civil-hour-to-seconds arithmetic sites | **16** (`make_bahonar_scenario.py`, `grep '\* HOUR\|\* DAY'`) | **0** |
-| Emitted entries whose civil meaning is recoverable from the artifact | **0 of 610** (only from the `_h7_` substring in an id) | **610 of 610** |
+| Emitted entries whose civil meaning is recoverable from the artifact | **0 of 610** (only from the `_h7_` substring in an id) | **613 of 613**, each with its second and civil time in the report |
 | The guard rota — 335 entries | a triple loop with a `continue`, `:232-242` | one `rotas[]` block with one `skip` entry carrying its reason |
 | The no-show anomaly | a `continue` and a comment (`:236`) | a `skip` whose `because` is a field, reported in §5.3, and the slot an absence names (§3.6) |
 | `SHIFT_HOURS = [7, 15, 23]` (`:164`) | a constant multiplied out at `:233`, `:188`, `:204` | the literal text `"at": ["07:00", "15:00", "23:00"]` |
-| `FERRY_HOURS = [6, 8, …, 18]` (`:163`) | multiplied out at `:252` | a second rota |
-| The diurnal rates, `[(0,6,20), (6,10,180), …]` (`:169`) | multiplied out at `:175`, `:179` | flow windows `"d0 06:00"`..`"d0 10:00"` |
+| `FERRY_HOURS = [6, 8, …, 18]` (`:163`) | multiplied out at `:252` | flows per civil day, `"d3 08:00"`..`"d3 08:12"`: a rota's template is an actor, so a sailing's pulse is two flows the generator writes |
+| The diurnal rates, `[(0,6,20), (6,10,180), …]` (`:169`) | multiplied out at `:175`, `:179` | flow windows `"d1 06:00"`..`"d1 10:00"`, cut to the run at its edges |
 | The perimeter shadow, `6*DAY + 2*HOUR + 30*60` (`:285`) | three multiplications | `"d6 02:30"` |
 | The stay-behind, `1*DAY + 8*HOUR` (`:293`) | two multiplications | `"d1 08:00"` |
-| The probe's per-day offset, `day * 137` (`:275`) | arithmetic, and the resulting instant is stated nowhere | `{"at": "d2 11:00", "plus": 274}` — and the report states that it resolved to **2026-03-23T11:04:34+03:30**, and d5's to **11:11:25** (`test_civil_time_resolver.py`) |
-| The annotation's own interval, `"begin_s"/"end_s"` (`:371-377`) | seconds in a file with no epoch | civil times, resolved against the same epoch as the traffic |
+| The probe's per-day offset, `day * 137` (`:275`) | arithmetic, and the resulting instant is stated nowhere | `{"at": "d2 11:00", "plus": 274}` — and the report states that it resolved to **2026-10-01T11:04:34+03:30**, and d5's to **2026-10-04T11:11:25+03:30** (`test_bahonar_generator.py`; under a midnight epoch, `test_civil_time_resolver.py`) |
+| The annotation's own interval, `"begin_s"/"end_s"` (`:371-377`) | seconds in a file with no epoch | the absence's vacancy, **2026-10-03T07:00:00+03:30** to **15:00**, resolved against the same epoch as the traffic |
 
 The generator does not disappear and is not meant to. Bahonar's sixteen tower positions still come
 from a survey and still need a program to project them onto edges. What changes is that the program
@@ -1419,9 +1525,9 @@ the same ids and outcomes.
 | 12 | Each routed result starts on the requested origin, ends on the requested destination, and passes every via and stop edge in order | the routed output | **refuse** | *Measured:* the false accept of §5.5 |
 | 13 | An explicit edge list is connected end to end | `map.net.xml` connections | **refuse** | A break that appears only where the list is used |
 | **Vehicles** ||||
-| 14 | Every vehicle class names only blueprints the catalogue measured, and no two-wheeler | the catalogue, through `ScenarioVehicleMix` | **refuse** | A `vType` with no blueprint, discovered at spawn |
+| 14 | Every vehicle class names only blueprints the catalogue measured, and no two-wheeler; every named mix draws on declared classes at positive shares under an id of its own | the catalogue and the specification, through `ScenarioVehicleMix` | **refuse** | A `vType` with no blueprint, discovered at spawn |
 | 15 | Every emitted `vType`'s length, width and height are its blueprint's measured box | the route file read back as the bridge reads it (`ScenarioVehicleMix.check_route_file`) | **refuse** | *Read:* fourteen hand-written Bahonar lengths, none checked; SUMO's gaps and CARLA's rendering disagreeing by the difference everywhere. A class restating a dimension is refused when it is built |
-| 16 | Every type a flow or actor names is a declared class, one of its member types, or the mix | the specification | **refuse** | A vehicle drawn from a type nothing declares. Class shares are weights, normalised by design (`ScenarioVehicleMix`), so a class the content build has no body for redistributes in the proportions authored |
+| 16 | Every type a flow or actor names is a declared class, one of its member types, the mix or a named mix | the specification | **refuse** | A vehicle drawn from a type nothing declares. Class shares are weights, normalised by design (`ScenarioVehicleMix`), so a class the content build has no body for redistributes in the proportions authored |
 | 17 | A vehicle class draws from more than one body | the specification | **warn** | Appearance becoming the label: every member of the class is the same car |
 | **Annotation** ||||
 | 18 | Every label is a declared term and every role but `subject` a declared role; an annotation carries a label; the declarations resolve inside the published vocabulary | the vocabulary block | **refuse** | A corpus in which `loiter` is spelled three ways (doc 20 §6.2), or a label no consumer can read |
@@ -1523,7 +1629,9 @@ about to capture asserts 23:00.
 ### 5.4 The compile pipeline
 
 Each stage's checks all run, so one compile reports every failure a stage can see; a stage that refused
-stops the compile, because what follows depends on it.
+stops the compile, because what follows depends on it. Vehicle binding records what each declared class,
+member type and mix may drive before it looks a body up, so a body the catalogue lacks leaves checks 10
+and 16 reporting in the same compile (`test_scenario_compiler.py`).
 
 ```mermaid
 flowchart TD
@@ -1780,7 +1888,7 @@ validator check, a compiler default, or stays documentation, and where the enfor
 | 8 | XML comments cannot contain `--` (`:169-170`) | **Compiler default + self-check.** The emitter escapes; the self-check re-reads | **Built**: `ScenarioCompiler._comment`; check 30 |
 | 9 | `--device.fcd.explicit` is comma-separated (`:171`) | **Compiler default.** An author never writes the flag | Not needed: the compiler writes no device options |
 | 10 | Validate with `duarouter`, not `sumolib` (`:145-149`) | **Validator check**, unconditionally, plus the false-accept guard of §5.5 | **Built**: `RouteValidator`; checks 11, 12 |
-| 11 | Restricting private roads must also clear internal junction-connector lanes (`:135-139`) | **Does not arise under a world-build type map.** netconvert gives an internal lane the intersection of the permissions of the lanes it joins as it builds them (`NBEdge.cpp:1760`), so permissions set by type reach the junctions with no clearing; the trap belongs to a rewrite after netconvert, which `restrict_private_roads` still is | **Built** at world build (§9.8): *measured,* all 335 guard routes pass `duarouter` through the port's junctions; `restrict_private_roads` keeps its clearing for the legacy generator |
+| 11 | Restricting private roads must also clear internal junction-connector lanes (`:135-139`) | **Does not arise under a world-build type map.** netconvert gives an internal lane the intersection of the permissions of the lanes it joins as it builds them (`NBEdge.cpp:1760`), so permissions set by type reach the junctions with no clearing; the trap belongs to a rewrite after netconvert, which `restrict_private_roads` still is | **Built** at world build (§9.8): *measured,* all 335 guard routes pass `duarouter` through the port's junctions; `restrict_private_roads`, which nothing calls, keeps its clearing |
 | 12 | **SUMO's `H:M:S` time literal is an elapsed offset, not a clock.** *Measured:* `sumo -n … --begin 7:00:00 --end 7:00:10 --summary-output` ran steps `time="25200.00"` to `time="25209.00"`, exit 0 | **Compiler default + self-check.** The specification's civil times are resolved against `epoch` (§4.5) and the compiler emits **plain seconds** into every SUMO file, with the epoch restated as a comment above `<begin>`; a bare clock on a multi-day run is refused before anything is emitted | **Built**: `CivilTimeResolver`; checks 47 and 44 |
 
 Two of these — #5 and #6 — are the visible edge of §1.3. Moving them to the world build is not
@@ -2196,10 +2304,12 @@ not intention.
 - **The three shipped scenarios stay in the corpus as the regression set**, and re-expressing them under
   the epoch is the honest test of §3.5.1's readability claim: the sizing scenario must produce
   **byte-identical** departure seconds from civil-time literals. Built for the guard rota, the part the
-  claim rests on: re-expressed as one rota block it reproduces `tower_postings` exactly
-  (`test_rota_expander.py`), and on a world converted with its type map it compiles, all 335 entries
-  (`test_netconvert_type_map.py`). The Gardnerville orbit is re-expressed whole (§3.4). The Arapahoe and
-  Bahonar re-expressions are not written, for the reasons §3.4 gives.
+  claim rests on: re-expressed as one rota block it reproduces the shipped route file's 335 guard trips
+  exactly (`test_rota_expander.py`), and on the world built with its type map it compiles, all 335
+  entries (`test_netconvert_type_map.py`). The Gardnerville orbit is re-expressed whole (§3.4), and so
+  is the sizing scenario: every shipped entry inside its run comes back with its id and local time, and
+  what `Import/` carries is what the generator writes (`test_bahonar_generator.py`, §3.4.1). The
+  Arapahoe re-expression is not written, for the reasons §3.4 gives.
 - **The `+03:30` epoch is a test, not an illustration.** It compiles in `test_scenario_epoch.py` and
   `test_civil_time_resolver.py` beside +05:45, +12:45 and −03:30, so a regression to integer hours is a
   failing test rather than a corpus captured under the wrong sun.
@@ -2337,20 +2447,23 @@ recorded argument list names both. A world built with the road filter (`--keep-e
 passenger`) drops every road passenger vehicles may not drive before any of this matters, so a type map
 that admits other classes on such roads needs a world built with `--no-road-filter`, as Bahonar is.
 
-**The Bahonar world is to be rebuilt with its map** (`Import/Shahid_Bahonar_Port.typ.xml`). The shipped
-package predates it, so every scenario compiled against it refuses the guard rota. The command, from
-the package's recorded origin, extra arguments and height alignment, and the build log of 2026-09-21,
-run from `carla/` against a CARLA server:
+**The Bahonar world is built with its map** (`Import/Shahid_Bahonar_Port.typ.xml`). The command, from
+the earlier package's recorded origin, extra arguments and height alignment, run from `carla/` against a
+CARLA server:
 
 ```
 python CarlaControl/scripts/run_SCTMV.py --osm Import/Shahid_Bahonar_Port.osm     --lat 27.15012 --lon 56.18065 --no-road-filter --height-align drape     --netconvert-arg "--remove-edges.by-type highway.footway,highway.path,highway.steps,highway.cycleway,highway.pedestrian,highway.bridleway"     --type-map Import/Shahid_Bahonar_Port.typ.xml     --emit-world-package Build/world-packages
 ```
 
-`--type-map` restates what discovery beside the extract finds anyway. The build log shows the map as
-`road types : SUMO's own, then 1 from …`; the rebuilt package's `NetconvertArgv` ends in
-`--type-files …osmNetconvert.typ.xml,…Shahid_Bahonar_Port.typ.xml`. *Measured offline,* that argument
-list over the clipped extract gives network `3966113a…`, on which the guard rota compiles. A scenario
-compiled against the old package is refused by check 1 against the new one and is recompiled. The
+`--type-map` restates what discovery beside the extract finds anyway, as it does the areas beside it
+(§2.11). *Measured,* the package written 2026-09-29: its `NetconvertArgv` ends in
+`--type-files …osmNetconvert.typ.xml,…Shahid_Bahonar_Port.typ.xml`, and its `map.net.xml`
+fingerprints as `3966113a337bb878b0f34f55153214dded7b62faabaec3deefc1934fe7eb991f`, the network the same
+argument list gives offline over the clipped extract and the one the package records; 548 of its 630
+service-road lanes admit `army`. The guard rota compiles on it, the same invocation without the map
+refuses it on all 335 postings (`test_netconvert_type_map.py`), and the Bahonar pattern of life is
+authored against it (§3.4.1). A world built again from the extract is checked against that
+fingerprint: a different one is refused by check 1 and the scenario is regenerated and recompiled. The
 distribution copies `Import/*.osm` and not the files beside them, so a world built from the distribution
 has neither its areas nor its type map; that is stage D's to close.
 
@@ -2422,6 +2535,9 @@ has neither its areas nor its type map; that is stage D's to close.
 | **D7.31** | **A refused compile writes only its resolution report**, marked refused and naming every refusal; no scenario file is written (§5.1) |
 | **D7.32** | **The network SUMO runs is the world's, copied byte for byte beside the configuration**, and the lock digests it; the compiler never builds or edits a network (§5.1) |
 | **D7.33** | **What a road admits is the world's, set at world build by the world's type map** — `<extract>.typ.xml` or `--type-map`, layered over SUMO's own OSM type map in the one netconvert run that writes the world's network and OpenDRIVE — never by a rewrite of a network after netconvert. *Measured* on Bahonar: the guard towers stand on untagged `highway=service` roads SUMO's map closes to `army`; one type-map line opens them, changes no other edge attribute, and compiles the 335-entry guard rota the shipped world refuses. A type map is keyed on road type, never on `access`, so an access-keyed fence is not expressible this way (§9.8, §12 question 14) |
+| **D7.34** | **A specification may declare named vehicle mixes**, `vehicle_mixes[]`, each a flat distribution over declared classes at shares of its own, which a flow names by `type`. A scenario's populations are drawn from different compositions — Bahonar's corridor, port and base traffic from three — and splitting a mix into one flow per class would change what SUMO draws. A class's `share` belongs to the single `vehicle_mix`; a mix naming an undeclared class, a non-positive share or a taken id refuses (check 14); a flow drawing a mix is held to every member class's roads (check 10) (§3.4.1, §3.5) |
+| **D7.35** | **The sizing scenario's schedule is civil, and its `t = 0` is 07:00 at Bahonar on 2026-09-29 at +03:30.** The shipped schedule's hours were local clock times, so they are written as civil clocks and resolved under the epoch, and nothing moves in local time; the run is seven whole days from the first morning shift change, and a daily rhythm is written for every civil day the run touches and cut to the run. *Measured:* every shipped entry inside the run comes back with its id and local time (`test_bahonar_generator.py`) (§3.4.1) |
+| **D7.36** | **A planted vehicle is drawn from the class of the population it moves among unless its driving model is the behaviour itself.** A vehicle type carried by planted vehicles alone reaches the truth record as their label ([`06`](06_Truth_And_Annotation.md) §9.3). In Bahonar the probe is a civilian car and the escort military jeeps; the shadow's crawl and the stay-behind, a civilian car cleared into the port, keep classes of their own, named for the vehicle and not the anomaly (§3.4.1) |
 
 ---
 
@@ -2557,9 +2673,15 @@ has neither its areas nor its type map; that is stage D's to close.
     170 private `residential` and `tertiary` edges, `army` still may not drive the 89 `access=no` edges,
     and public service roads stay closed to civilians. Whether a world should carry an access-keyed fence, and by
     what netconvert input, is open; nothing compiled today needs it.
-    **`SumoScenarioBuilder.restrict_private_roads` now serves only the legacy Bahonar generator's
-    SUMO-only path** — `sumo-gui` and the SUMO-to-CoT telemetry tool. A network it rewrites is not the
-    world's: *measured,* it moves the Bahonar network's fingerprint from `672554bd…` to `09b2279b…`, so
-    the co-simulation session refuses a scenario on it ([`03`](03_CoSimulation_Runtime.md) D3.28) and the
-    compiler cannot express it (D7.32). When that generator emits a specification it has no caller and
-    goes.
+    **`SumoScenarioBuilder.restrict_private_roads` has no caller**: the Bahonar generator writes a
+    specification on the world's own network. A network it rewrites is not the world's: *measured,* it
+    moves the Bahonar network's fingerprint from `672554bd…` to `09b2279b…`, so the co-simulation
+    session refuses a scenario on it ([`03`](03_CoSimulation_Runtime.md) D3.28) and the compiler cannot
+    express it (D7.32). It stays while [`06`](06_Truth_And_Annotation.md) D6.36 plans to derive the
+    gate areas from the same pass over `access`. *Measured* on the rebuilt world, 2026-09-29, what the
+    access-keyed fence's absence does to the pattern of life: no civilian route crosses a private way
+    (0 of 53 730 civilian vehicles in the seven-day run), and the `access=no` service connector the
+    fence had opened to the naval traffic (way 26413344) admits `authority` and not `army`, so the
+    escort's route is 14.3 km against the shipped 10.3 and the perimeter shadow's 21.8 km against 9.6,
+    still before dawn (§3.4.1). A type map that admitted `army` there would admit it on every
+    `access=no` road of its type.

@@ -557,6 +557,68 @@ def test_an_undeclared_type_is_refused_under_check_16(world, installation, tmp_p
     assert 16 in checks(result)
 
 
+def test_a_missing_body_leaves_every_other_refusal_of_its_stage_reported(world, installation,
+                                                                         tmp_path):
+    """What a type may drive is the declaration's, so a body the catalogue lacks does not stop the
+    type and road checks: one compile names the missing body, the barred road and the unknown type."""
+    spec = world.specification()
+    spec["vehicle_classes"][0]["blueprints"].append("vehicle.harley.lowrider")
+    spec["vehicle_classes"].append({"class_id": "tramcar", "blueprints": ["vehicle.mini.cooper"],
+                                    "sumo_vclass": "tram", "share": 0.0})
+    spec["actors"][1]["type"] = "tramcar"
+    spec["actors"][0]["type"] = "pickup"
+    result = ScenarioCompiler(installation).compile(world.write(spec, "c14b.scenario.json"),
+                                                    tmp_path / "out")
+    assert {14, 10, 16} <= checks(result)
+    assert "vehicle.harley.lowrider" in messages(result, 14) and "tram" in messages(result, 10)
+
+
+def named_mix_specification(world, shares: dict) -> dict:
+    spec = world.specification()
+    spec["vehicle_classes"].append({"class_id": "tramcar", "blueprints": ["vehicle.mini.cooper"],
+                                    "sumo_vclass": "tram", "share": 0.0})
+    spec["vehicle_mixes"] = [{"id": "street_mix", "shares": shares,
+                              "note": "the kerb street's own population"}]
+    spec["flows"][0]["type"] = "street_mix"
+    return spec
+
+
+def test_a_named_mix_is_written_as_its_own_distribution_and_a_flow_draws_from_it(
+        world, installation, tmp_path):
+    spec = named_mix_specification(world, {"car": 3.0, "saloon": 1.0})
+    result = ScenarioCompiler(installation).compile(world.write(spec, "mix.scenario.json"),
+                                                    tmp_path / "out")
+    assert not result.refused, [str(f) for f in result.findings.refusals]
+    root = ET.parse(result.files["routes"]).getroot()
+    (mix,) = [d for d in root.iter("vTypeDistribution") if d.get("id") == "street_mix"]
+    drawn = dict(zip(mix.get("vTypes").split(), map(float, mix.get("probabilities").split()),
+                     strict=True))
+    assert drawn == pytest.approx({"car.vehicle.lincoln.mkz": 0.25,
+                                   "car.vehicle.dodge.charger": 0.25,
+                                   "car.vehicle.mini.cooper": 0.25,
+                                   "saloon.vehicle.lincoln.mkz": 0.25})
+    assert next(e for e in root if e.tag == "flow").get("type") == "street_mix"
+    (reported,) = result.report["vehicle_types"]["mixes"]
+    assert reported["id"] == "street_mix" and reported["shares"] == {"car": 3.0, "saloon": 1.0}
+
+
+def test_a_named_mix_drawing_an_undeclared_class_is_refused_under_check_14(world, installation,
+                                                                          tmp_path):
+    spec = named_mix_specification(world, {"car": 1.0, "lorry": 1.0})
+    result = ScenarioCompiler(installation).compile(world.write(spec, "mix14.scenario.json"),
+                                                    tmp_path / "out")
+    assert 14 in checks(result) and "'lorry', which is not declared" in messages(result, 14)
+
+
+def test_a_flow_drawing_a_named_mix_is_held_to_every_member_class_s_roads(world, installation,
+                                                                         tmp_path):
+    spec = named_mix_specification(world, {"car": 1.0, "tramcar": 1.0})
+    result = ScenarioCompiler(installation).compile(world.write(spec, "mix10.scenario.json"),
+                                                    tmp_path / "out")
+    assert 10 in checks(result) and "tram" in messages(result, 10)
+    assert "flow ambient" in {f.subject for f in result.findings.by_check(10)}
+
+
 # ---- routes ----------------------------------------------------------------------------------------
 
 def test_duarouter_false_accept_is_refused_under_check_12(installation, tmp_path):

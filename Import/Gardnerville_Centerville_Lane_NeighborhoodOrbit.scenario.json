@@ -83,8 +83,7 @@
     {
       "class_id": "truck",
       "blueprints": [
-        "vehicle.carlacola.actors",
-        "vehicle.fuso.mitsubishi"
+        "vehicle.carlacola.actors"
       ],
       "sumo_vclass": "truck",
       "behaviour": {
@@ -93,7 +92,7 @@
       },
       "share": 0.05,
       "gui_shape": "truck",
-      "note": "The two rigid lorries in the content build, measuring 8.00 m and 10.17 m. The 9.5 m this class was designed around falls between them, so a lorry here is either 1.50 m shorter or 0.67 m longer than intended and the two are drawn equally."
+      "note": "The rigid lorry in the content build, measuring 8.00 m against the 9.5 m this class was designed around, so every lorry here is 1.50 m shorter than intended. The Fuso Rosa is a light bus, not a lorry, and is not drawn as one."
     },
     {
       "class_id": "orbiter",

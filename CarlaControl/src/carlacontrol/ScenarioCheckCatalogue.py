@@ -74,14 +74,15 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
     ScenarioCheck(13, "routes", "An explicit edge list is connected end to end", "map.net.xml "
                   "connections", _R, COMPILER, "A break that appears only where the list is used"),
     # -- vehicles ----------------------------------------------------------------------------------
-    ScenarioCheck(14, "vehicles", "Every vehicle class names only blueprints the catalogue measured",
-                  "the vehicle catalogue", _R, COMPILER,
+    ScenarioCheck(14, "vehicles", "Every vehicle class names only blueprints the catalogue measured, "
+                  "and every named mix draws on declared classes at positive shares under an id of "
+                  "its own", "the vehicle catalogue and the specification", _R, COMPILER,
                   "A type with no body, discovered at spawn"),
     ScenarioCheck(15, "vehicles", "Every emitted vType's length, width and height are its "
                   "blueprint's measured box", "the vehicle catalogue", _R, COMPILER,
                   "SUMO's gaps and CARLA's rendering disagreeing by the difference"),
     ScenarioCheck(16, "vehicles", "Every type a flow or actor names is a declared class, one of its "
-                  "member types, or the mix", "the specification", _R, COMPILER,
+                  "member types, the mix or a named mix", "the specification", _R, COMPILER,
                   "A vehicle drawn from a type nothing declares"),
     ScenarioCheck(17, "vehicles", "A vehicle class draws from more than one body",
                   "the specification", _W, COMPILER,

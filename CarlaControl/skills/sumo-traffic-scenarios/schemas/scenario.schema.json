@@ -115,7 +115,15 @@
     },
     "vehicle_mix": {
       "type": "string",
-      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$",
+      "description": "The id of the whole-mix distribution, drawn by each class's share"
+    },
+    "vehicle_mixes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/named_vehicle_mix"
+      },
+      "description": "Further named mixes, each drawn by its own shares of declared classes"
     },
     "places": {
       "type": "object",
@@ -230,6 +238,31 @@
         },
         "gui_colour": {
           "type": "string"
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "named_vehicle_mix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "shares"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+        },
+        "shares": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "description": "Class id to that class's weight in this mix"
         },
         "note": {
           "type": "string"

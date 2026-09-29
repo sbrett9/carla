@@ -18,7 +18,11 @@ import pytest
 _REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 sys.path.insert(0, os.path.join(_REPO, "CarlaControl", "src"))
 
-from carlacontrol.ScenarioVehicleMix import ScenarioVehicleMix, VehicleClassSpec  # noqa: E402
+from carlacontrol.ScenarioVehicleMix import (  # noqa: E402
+    ScenarioVehicleMix,
+    VehicleClassSpec,
+    VehicleMixSpec,
+)
 from carlacontrol.SumoVehicleTypeWriter import SumoVehicleTypeWriter  # noqa: E402
 from carlacontrol.VehicleCatalogue import VehicleCatalogue  # noqa: E402
 
@@ -157,3 +161,49 @@ def test_every_emitted_type_carries_the_measurement_verbatim(catalogue, car_clas
 @pytest.mark.skipif(not os.path.exists(SCHEMA_PATH), reason="the staged SUMO schema is not present")
 def test_the_shipped_gardnerville_scenario_is_valid_against_sumos_own_schema():
     SumoVehicleTypeWriter.validate(GARDNERVILLE_ROUTES, SCHEMA_PATH)
+
+
+# ---- named mixes --------------------------------------------------------------------------------------
+
+def port_classes() -> list[VehicleClassSpec]:
+    return [
+        VehicleClassSpec(class_id="car", blueprints=(A_MEASURED_CAR, "vehicle.lincoln.mkz"),
+                         sumo_vclass="passenger"),
+        VehicleClassSpec(class_id="cleared", blueprints=("vehicle.nissan.patrol",),
+                         sumo_vclass="authority"),
+        VehicleClassSpec(class_id="freight", blueprints=("vehicle.carlacola.actors",),
+                         sumo_vclass="authority"),
+    ]
+
+
+def test_a_named_mix_draws_each_body_at_its_class_share_times_its_weight(catalogue):
+    """Two populations from one set of classes: each named mix is flat over its own shares, and a
+    class's own `share` plays no part in it."""
+    mixes = [VehicleMixSpec("corridor_mix", (("car", 1.0),)),
+             VehicleMixSpec("port_mix", (("cleared", 0.7), ("freight", 0.3), ("car", 0.2)))]
+    mix = ScenarioVehicleMix(catalogue, port_classes(), mixes=mixes)
+    port = mix.mix_probabilities(mixes[1])
+    assert sum(port.values()) == pytest.approx(1.0)
+    assert port["cleared.vehicle.nissan.patrol"] == pytest.approx(0.7 / 1.2)
+    assert port["freight.vehicle.carlacola.actors"] == pytest.approx(0.3 / 1.2)
+    assert port[f"car.{A_MEASURED_CAR}"] == pytest.approx(0.1 / 1.2)
+    root = ElementTree.fromstring(f"<routes>{mix.to_xml()}</routes>")
+    written = {d.get("id"): d for d in root.iter("vTypeDistribution")}
+    assert written["port_mix"].get("vTypes").split() == list(port)
+    assert [float(p) for p in written["port_mix"].get("probabilities").split()] == \
+        pytest.approx(list(port.values()), abs=1e-5)
+    assert written["corridor_mix"].get("vTypes").split() == [f"car.{A_MEASURED_CAR}",
+                                                             "car.vehicle.lincoln.mkz"]
+
+
+@pytest.mark.parametrize(("mix", "fragment"), [
+    (VehicleMixSpec("port_mix", (("lorry", 1.0),)), "draws on class 'lorry', which is not declared"),
+    (VehicleMixSpec("port_mix", (("cleared", 0.0),)), "not positive"),
+    (VehicleMixSpec("port_mix", ()), "names no class"),
+    (VehicleMixSpec("cleared", (("cleared", 1.0),)), "reuses an id"),
+    (VehicleMixSpec("car.vehicle.lincoln.mkz", (("car", 1.0),)), "reuses an id"),
+    (VehicleMixSpec("port_mix", (("car", 1.0), ("car", 2.0))), "names class 'car' twice"),
+])
+def test_a_named_mix_that_draws_nothing_it_can_name_is_refused(catalogue, mix, fragment):
+    with pytest.raises(ValueError, match=fragment):
+        ScenarioVehicleMix(catalogue, port_classes(), mixes=[mix])

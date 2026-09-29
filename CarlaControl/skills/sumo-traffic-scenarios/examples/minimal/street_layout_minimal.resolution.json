@@ -365,6 +365,7 @@
         "car.vehicle.mini.cooper": 0.3333333333333333
       }
     },
+    "mixes": [],
     "types": {
       "car.vehicle.lincoln.mkz": {
         "blueprint": "vehicle.lincoln.mkz",

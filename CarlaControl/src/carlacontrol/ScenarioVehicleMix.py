@@ -18,7 +18,10 @@ from nowhere else:
     draw, recorded in the behavioural simulation, rather than a choice made at playback;
   * one `<vTypeDistribution>` over every class that takes part in the scenario's traffic mix, each
     body's probability being its class's share times its weight inside that class. SUMO has no
-    nested distributions, so the mix is flat and the arithmetic happens here.
+    nested distributions, so the mix is flat and the arithmetic happens here;
+  * one further `<vTypeDistribution>` per named mix (`VehicleMixSpec`), for a scenario whose
+    populations are drawn from different compositions -- corridor traffic from one set of classes,
+    port traffic from another -- each flat by the same arithmetic over its own shares.
 
 Everything else about a type is the author's and is copied through untouched: the dimensions are the
 catalogue's, the driving model is the author's, and nothing is invented in between. A `length`,
@@ -115,6 +118,21 @@ class VehicleClassSpec:
         return self.weights if self.weights else tuple(1.0 for _ in self.blueprints)
 
 
+@dataclass(frozen=True)
+class VehicleMixSpec:
+    """A named composition of declared classes: a population a flow draws its vehicles from.
+
+    `shares` pairs a class id with that class's weight in this mix, in the order the author wrote
+    them, which is the order the mix's members are written in. A class's own `share` belongs to the
+    scenario's single whole mix and plays no part here, so one class can take part in several named
+    mixes at different weights. `note` is written as a comment above the mix.
+    """
+
+    mix_id: str
+    shares: tuple[tuple[str, float], ...]
+    note: str = ""
+
+
 class ScenarioVehicleMix:
     """The measured bodies a scenario's traffic is drawn from, as SUMO vehicle types.
 
@@ -124,14 +142,17 @@ class ScenarioVehicleMix:
     """
 
     def __init__(self, catalogue: VehicleCatalogue, classes: Sequence[VehicleClassSpec],
-                 mix_id: str = "", header: str = "") -> None:
+                 mix_id: str = "", header: str = "",
+                 mixes: Sequence[VehicleMixSpec] = ()) -> None:
         self.catalogue = catalogue
         self.classes = tuple(classes)
         self.mix_id = mix_id
         self.header = header
+        self.mixes = tuple(mixes)
         self._check()
 
-    def type_id(self, class_id: str, blueprint_id: str) -> str:
+    @staticmethod
+    def type_id(class_id: str, blueprint_id: str) -> str:
         """The `vType` id for one body inside one class.
 
         The class is part of the id because two classes may draw the same body with different driving
@@ -145,14 +166,27 @@ class ScenarioVehicleMix:
 
         Empty when no class takes part in the mix.
         """
+        return self._probabilities([(entry.class_id, entry.share) for entry in self.classes])
+
+    def mix_probabilities(self, mix: VehicleMixSpec) -> dict[str, float]:
+        """Each body's probability in one named mix, keyed by `vType` id, normalised to one."""
+        return self._probabilities(list(mix.shares))
+
+    def _probabilities(self, shares: list[tuple[str, float]]) -> dict[str, float]:
+        """Class share times member weight over the member's class total, normalised over the lot.
+
+        A class with no positive share takes no part.
+        """
+        by_id = {entry.class_id: entry for entry in self.classes}
         weighted: dict[str, float] = {}
-        for entry in self.classes:
-            if entry.share <= 0.0:
+        for class_id, share in shares:
+            entry = by_id.get(class_id)
+            if entry is None or share <= 0.0:
                 continue
             weights = entry.member_weights()
             total = sum(weights)
             for blueprint_id, weight in zip(entry.blueprints, weights, strict=True):
-                weighted[self.type_id(entry.class_id, blueprint_id)] = entry.share * weight / total
+                weighted[self.type_id(entry.class_id, blueprint_id)] = share * weight / total
         grand_total = sum(weighted.values())
         if not grand_total:
             return {}
@@ -190,6 +224,13 @@ class ScenarioVehicleMix:
         if self.mix_id and probabilities:
             lines.append("")
             lines.append(self._distribution(self.mix_id, list(probabilities),
+                                            tuple(probabilities.values())))
+        for mix in self.mixes:
+            lines.append("")
+            if mix.note:
+                lines.extend(self._comment(mix.note))
+            probabilities = self.mix_probabilities(mix)
+            lines.append(self._distribution(mix.mix_id, list(probabilities),
                                             tuple(probabilities.values())))
         return "\n".join(lines) + "\n"
 
@@ -282,10 +323,39 @@ class ScenarioVehicleMix:
         if self.mix_id and not self.member_probabilities():
             problems.append(
                 f"mix {self.mix_id!r} was asked for but no class declares a share above zero")
+        problems.extend(self._mix_problems(seen_classes, seen_type_ids))
         if problems:
             raise ValueError(
                 "this scenario's vehicle classes cannot be bound to measured bodies:\n  "
                 + "\n  ".join(problems))
+
+    def _mix_problems(self, class_ids: set[str], type_ids: set[str]) -> list[str]:
+        """A named mix must draw on declared classes, at positive shares, under an id of its own.
+
+        Its id shares one namespace with the classes, their member types and the whole mix, because
+        a flow names any of them by the same `type` attribute.
+        """
+        problems: list[str] = []
+        taken = set(class_ids) | set(type_ids) | ({self.mix_id} if self.mix_id else set())
+        for mix in self.mixes:
+            if mix.mix_id in taken:
+                problems.append(f"mix {mix.mix_id!r} reuses an id already given to a class, a "
+                                "vehicle type or another mix; a flow names each by its id alone")
+            taken.add(mix.mix_id)
+            if not mix.shares:
+                problems.append(f"mix {mix.mix_id!r} names no class, so it would draw nothing")
+            named: set[str] = set()
+            for class_id, share in mix.shares:
+                if class_id not in class_ids:
+                    problems.append(f"mix {mix.mix_id!r} draws on class {class_id!r}, which is not "
+                                    f"declared; declared: {', '.join(sorted(class_ids))}")
+                if class_id in named:
+                    problems.append(f"mix {mix.mix_id!r} names class {class_id!r} twice")
+                named.add(class_id)
+                if share <= 0:
+                    problems.append(f"mix {mix.mix_id!r} gives class {class_id!r} a share that is "
+                                    "not positive; leave a class out of a mix rather than zero it")
+        return problems
 
     def _class_vocabulary_problems(self, entry: VehicleClassSpec) -> list[str]:
         """Names SUMO would reject at load, and the two-wheeler classes the contract refuses."""

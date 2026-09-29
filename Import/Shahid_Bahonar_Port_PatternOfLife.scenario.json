@@ -1,0 +1,4949 @@
+{
+  "spec_version": 1,
+  "scenario_id": "Shahid_Bahonar_Port_PatternOfLife",
+  "scenario_name": "Shahid Bahonar Port pattern of life",
+  "description": "7 day(s) of pattern of life at Shahid Bahonar Port from 07:00 on 29 September 2026: diurnal corridor traffic, ferry pulses, airfield shift changes, a guard at each of sixteen towers relieved every eight hours and routine air-freight hauls, with a guard no-show, an escort to the drydock, two gate probes, a perimeter shadow and a ferry stay-behind planted against it. Written by CarlaControl/scripts/make_bahonar_scenario.py; edit that, not this.",
+  "world": {
+    "package": "../Build/world-packages/Shahid_Bahonar_Port.cwp",
+    "network_fingerprint": "3966113a337bb878b0f34f55153214dded7b62faabaec3deefc1934fe7eb991f"
+  },
+  "epoch": {
+    "epoch_version": 1,
+    "civil_datetime": "2026-09-29T07:00:00+03:30",
+    "utc_offset_hours": 3.5,
+    "utc_datetime": "2026-09-29T03:30:00Z",
+    "calendar_advances": true,
+    "dst_in_effect": false,
+    "time_zone_id": "Asia/Tehran",
+    "note": "Shahid Bahonar Port, Bandar Abbas: simulated second zero is 07:00 local time on 29 September 2026, the first morning shift change; the civil date advances"
+  },
+  "illumination": {
+    "illumination_version": 1,
+    "policy": "freeze_at_window_start"
+  },
+  "seeds": {
+    "sumo": 42
+  },
+  "simulation": {
+    "end": "d7 07:00",
+    "step_length_s": 1.0
+  },
+  "catalogue": "../CarlaControl/catalogue/vehicles.catalogue.json",
+  "vehicle_classes": [
+    {
+      "class_id": "civ_car",
+      "blueprints": [
+        "vehicle.dodge.charger",
+        "vehicle.lincoln.mkz",
+        "vehicle.mini.cooper",
+        "vehicle.nissan.patrol",
+        "vehicle.ue4.audi.tt",
+        "vehicle.ue4.bmw.grantourer",
+        "vehicle.ue4.chevrolet.impala",
+        "vehicle.ue4.ford.crown",
+        "vehicle.ue4.ford.mustang",
+        "vehicle.ue4.mercedes.ccc"
+      ],
+      "sumo_vclass": "passenger",
+      "behaviour": {
+        "maxSpeed": "35"
+      },
+      "share": 0.0,
+      "gui_shape": "passenger",
+      "gui_colour": "#CCCCD1",
+      "note": "Civilian cars on the public coastal corridor: the catalogue's civilian cars. The gate probe is one of them."
+    },
+    {
+      "class_id": "civ_pickup",
+      "blueprints": [
+        "vehicle.nissan.patrol"
+      ],
+      "sumo_vclass": "passenger",
+      "behaviour": {
+        "maxSpeed": "33"
+      },
+      "share": 0.0,
+      "gui_shape": "passenger",
+      "gui_colour": "#8C9499",
+      "note": "Civilian pickups and utility vehicles: the jeep body."
+    },
+    {
+      "class_id": "civ_taxi",
+      "blueprints": [
+        "vehicle.taxi.ford"
+      ],
+      "sumo_vclass": "taxi",
+      "behaviour": {
+        "maxSpeed": "35"
+      },
+      "share": 0.0,
+      "gui_shape": "taxi",
+      "gui_colour": "#E6CC33",
+      "note": "Taxis."
+    },
+    {
+      "class_id": "civ_truck",
+      "blueprints": [
+        "vehicle.carlamotors.european_hgv"
+      ],
+      "sumo_vclass": "truck",
+      "behaviour": {
+        "maxSpeed": "25"
+      },
+      "share": 0.0,
+      "gui_shape": "truck",
+      "gui_colour": "#998059",
+      "note": "Civilian lorries: the European heavy goods vehicle."
+    },
+    {
+      "class_id": "civ_bus",
+      "blueprints": [
+        "vehicle.fuso.mitsubishi"
+      ],
+      "sumo_vclass": "bus",
+      "behaviour": {
+        "maxSpeed": "24"
+      },
+      "share": 0.0,
+      "gui_shape": "bus",
+      "gui_colour": "#D9D9B3",
+      "note": "Buses: the Mitsubishi Fuso Rosa."
+    },
+    {
+      "class_id": "port_vehicle",
+      "blueprints": [
+        "vehicle.nissan.patrol"
+      ],
+      "sumo_vclass": "authority",
+      "behaviour": {
+        "maxSpeed": "30"
+      },
+      "share": 0.0,
+      "gui_shape": "passenger",
+      "gui_colour": "#8CB3D9",
+      "note": "Port-cleared cars that pass a checkpoint to reach the ferry and the quays: the Nissan Patrol."
+    },
+    {
+      "class_id": "port_truck",
+      "blueprints": [
+        "vehicle.carlamotors.european_hgv"
+      ],
+      "sumo_vclass": "authority",
+      "behaviour": {
+        "maxSpeed": "24"
+      },
+      "share": 0.0,
+      "gui_shape": "truck",
+      "gui_colour": "#7399BF",
+      "note": "Port-cleared freight: the European heavy goods vehicle."
+    },
+    {
+      "class_id": "mil_jeep",
+      "blueprints": [
+        "vehicle.nissan.patrol"
+      ],
+      "sumo_vclass": "army",
+      "behaviour": {
+        "maxSpeed": "33"
+      },
+      "share": 0.0,
+      "gui_shape": "passenger",
+      "gui_colour": "#4D6140",
+      "note": "Naval and base jeeps inside the wire: the jeep body. The escort convoy is five of them."
+    },
+    {
+      "class_id": "mil_truck",
+      "blueprints": [
+        "vehicle.carlamotors.european_hgv"
+      ],
+      "sumo_vclass": "army",
+      "behaviour": {
+        "maxSpeed": "24"
+      },
+      "share": 0.0,
+      "gui_shape": "truck",
+      "gui_colour": "#475738",
+      "note": "Naval and base lorries, and the routine air-freight hauls: the European heavy goods vehicle."
+    },
+    {
+      "class_id": "guard",
+      "blueprints": [
+        "vehicle.nissan.patrol"
+      ],
+      "sumo_vclass": "army",
+      "behaviour": {
+        "maxSpeed": "30"
+      },
+      "share": 0.0,
+      "gui_shape": "passenger",
+      "gui_colour": "#59734D",
+      "note": "The guard posted at a tower for a shift: the jeep body."
+    },
+    {
+      "class_id": "army_car_crawl",
+      "blueprints": [
+        "vehicle.dodge.charger",
+        "vehicle.lincoln.mkz",
+        "vehicle.mini.cooper",
+        "vehicle.nissan.patrol",
+        "vehicle.ue4.audi.tt",
+        "vehicle.ue4.bmw.grantourer",
+        "vehicle.ue4.chevrolet.impala",
+        "vehicle.ue4.ford.crown",
+        "vehicle.ue4.ford.mustang",
+        "vehicle.ue4.mercedes.ccc"
+      ],
+      "sumo_vclass": "army",
+      "behaviour": {
+        "maxSpeed": "33",
+        "speedFactor": "0.45",
+        "speedDev": "0"
+      },
+      "share": 0.0,
+      "gui_shape": "passenger",
+      "gui_colour": "#FF3399",
+      "note": "A civilian car admitted inside the wire and driven at 0.45 of each limit, exactly: the perimeter shadow's crawl, which is the behaviour itself."
+    },
+    {
+      "class_id": "port_car",
+      "blueprints": [
+        "vehicle.dodge.charger",
+        "vehicle.lincoln.mkz",
+        "vehicle.mini.cooper",
+        "vehicle.nissan.patrol",
+        "vehicle.ue4.audi.tt",
+        "vehicle.ue4.bmw.grantourer",
+        "vehicle.ue4.chevrolet.impala",
+        "vehicle.ue4.ford.crown",
+        "vehicle.ue4.ford.mustang",
+        "vehicle.ue4.mercedes.ccc"
+      ],
+      "sumo_vclass": "authority",
+      "behaviour": {
+        "maxSpeed": "30"
+      },
+      "share": 0.0,
+      "gui_shape": "passenger",
+      "gui_colour": "#FF4D00",
+      "note": "A civilian car cleared into the port: the ferry stay-behind."
+    }
+  ],
+  "vehicle_mixes": [
+    {
+      "id": "civ_mix",
+      "shares": {
+        "civ_car": 0.5,
+        "civ_pickup": 0.22,
+        "civ_taxi": 0.12,
+        "civ_truck": 0.1,
+        "civ_bus": 0.06
+      },
+      "note": "Civilian traffic on the public coastal corridor."
+    },
+    {
+      "id": "port_mix",
+      "shares": {
+        "port_vehicle": 0.7,
+        "port_truck": 0.3
+      },
+      "note": "Port-cleared traffic: ferry passengers and port freight."
+    },
+    {
+      "id": "mil_mix",
+      "shares": {
+        "mil_jeep": 0.6,
+        "mil_truck": 0.4
+      },
+      "note": "Naval and base traffic inside the wire."
+    }
+  ],
+  "places": {
+    "corridor_west_in": {
+      "edge": "26417705#0"
+    },
+    "corridor_east_in": {
+      "edge": "26401342#0"
+    },
+    "corridor_east_out": {
+      "edge": "26401454#6"
+    },
+    "corridor_north_out": {
+      "edge": "1396607732"
+    },
+    "apron": {
+      "edge": "26413425#5"
+    },
+    "drydock": {
+      "edge": "206870533#2"
+    },
+    "ferry": {
+      "edge": "900954912#2"
+    },
+    "port_gate_approach": {
+      "edge": "-431672573#2"
+    },
+    "port_gate_standoff": {
+      "lane": "-431672573#2_0",
+      "offset_m": 30.0
+    },
+    "ferry_berth": {
+      "lane": "900954912#2_0",
+      "offset_m": 20.0
+    },
+    "tower_00": {
+      "lane": "-26413411_0",
+      "offset_m": 5.0
+    },
+    "tower_01": {
+      "lane": "-26413426_0",
+      "offset_m": 5.0
+    },
+    "tower_02": {
+      "lane": "26413427_0",
+      "offset_m": 62.0
+    },
+    "tower_03": {
+      "lane": "26413459_0",
+      "offset_m": 58.9
+    },
+    "tower_04": {
+      "lane": "-26413460_0",
+      "offset_m": 5.0
+    },
+    "tower_05": {
+      "lane": "-26413425#5_0",
+      "offset_m": 278.7
+    },
+    "tower_06": {
+      "lane": "26413338#6_0",
+      "offset_m": 381.0
+    },
+    "tower_07": {
+      "lane": "-26413338#6_0",
+      "offset_m": 848.2
+    },
+    "tower_08": {
+      "lane": "26413338#5_0",
+      "offset_m": 442.2
+    },
+    "tower_09": {
+      "lane": "-26413274#2_0",
+      "offset_m": 5.0
+    },
+    "tower_10": {
+      "lane": "26413274#0_0",
+      "offset_m": 16.4
+    },
+    "tower_11": {
+      "lane": "-26413409#2_0",
+      "offset_m": 6.2
+    },
+    "tower_12": {
+      "lane": "26413409#1_0",
+      "offset_m": 2409.9
+    },
+    "tower_13": {
+      "lane": "26413409#1_0",
+      "offset_m": 920.5
+    },
+    "tower_14": {
+      "lane": "26413409#1_0",
+      "offset_m": 538.1
+    },
+    "tower_15": {
+      "lane": "26413409#1_0",
+      "offset_m": 306.1
+    },
+    "fence_26413338_6": {
+      "edge": "26413338#6"
+    },
+    "fence_r26413425_5": {
+      "edge": "-26413425#5"
+    },
+    "fence_r26413460": {
+      "edge": "-26413460"
+    },
+    "fence_26413459": {
+      "edge": "26413459"
+    },
+    "fence_26413427": {
+      "edge": "26413427"
+    },
+    "fence_r26413426": {
+      "edge": "-26413426"
+    },
+    "fence_r26413411": {
+      "edge": "-26413411"
+    }
+  },
+  "place_sets": {
+    "guard_towers": [
+      "tower_00",
+      "tower_01",
+      "tower_02",
+      "tower_03",
+      "tower_04",
+      "tower_05",
+      "tower_06",
+      "tower_07",
+      "tower_08",
+      "tower_09",
+      "tower_10",
+      "tower_11",
+      "tower_12",
+      "tower_13",
+      "tower_14",
+      "tower_15"
+    ]
+  },
+  "instants": {
+    "escort_departs": "d3 10:00",
+    "shadow_departs": "d6 02:30",
+    "staybehind_departs": "d1 08:00",
+    "run_end": "d7 07:00"
+  },
+  "flows": [
+    {
+      "id": "corridor_d0_p0_h6",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 180,
+      "begin": "d0 07:00",
+      "end": "d0 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d0_p0_h10",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 120,
+      "begin": "d0 10:00",
+      "end": "d0 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d0_p0_h16",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 200,
+      "begin": "d0 16:00",
+      "end": "d0 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d0_p0_h20",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 50,
+      "begin": "d0 20:00",
+      "end": "d0 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d0_p1_h6",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 180,
+      "begin": "d0 07:00",
+      "end": "d0 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d0_p1_h10",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 120,
+      "begin": "d0 10:00",
+      "end": "d0 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d0_p1_h16",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 200,
+      "begin": "d0 16:00",
+      "end": "d0 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d0_p1_h20",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 50,
+      "begin": "d0 20:00",
+      "end": "d0 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d0_p2_h6",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 180,
+      "begin": "d0 07:00",
+      "end": "d0 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d0_p2_h10",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 120,
+      "begin": "d0 10:00",
+      "end": "d0 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d0_p2_h16",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 200,
+      "begin": "d0 16:00",
+      "end": "d0 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d0_p2_h20",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 50,
+      "begin": "d0 20:00",
+      "end": "d0 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d1_p0_h0",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 20,
+      "begin": "d1 00:00",
+      "end": "d1 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d1_p0_h6",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 180,
+      "begin": "d1 06:00",
+      "end": "d1 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d1_p0_h10",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 120,
+      "begin": "d1 10:00",
+      "end": "d1 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d1_p0_h16",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 200,
+      "begin": "d1 16:00",
+      "end": "d1 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d1_p0_h20",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 50,
+      "begin": "d1 20:00",
+      "end": "d1 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d1_p1_h0",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 20,
+      "begin": "d1 00:00",
+      "end": "d1 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d1_p1_h6",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 180,
+      "begin": "d1 06:00",
+      "end": "d1 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d1_p1_h10",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 120,
+      "begin": "d1 10:00",
+      "end": "d1 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d1_p1_h16",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 200,
+      "begin": "d1 16:00",
+      "end": "d1 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d1_p1_h20",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 50,
+      "begin": "d1 20:00",
+      "end": "d1 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d1_p2_h0",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 20,
+      "begin": "d1 00:00",
+      "end": "d1 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d1_p2_h6",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 180,
+      "begin": "d1 06:00",
+      "end": "d1 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d1_p2_h10",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 120,
+      "begin": "d1 10:00",
+      "end": "d1 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d1_p2_h16",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 200,
+      "begin": "d1 16:00",
+      "end": "d1 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d1_p2_h20",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 50,
+      "begin": "d1 20:00",
+      "end": "d1 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d2_p0_h0",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 20,
+      "begin": "d2 00:00",
+      "end": "d2 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d2_p0_h6",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 180,
+      "begin": "d2 06:00",
+      "end": "d2 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d2_p0_h10",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 120,
+      "begin": "d2 10:00",
+      "end": "d2 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d2_p0_h16",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 200,
+      "begin": "d2 16:00",
+      "end": "d2 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d2_p0_h20",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 50,
+      "begin": "d2 20:00",
+      "end": "d2 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d2_p1_h0",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 20,
+      "begin": "d2 00:00",
+      "end": "d2 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d2_p1_h6",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 180,
+      "begin": "d2 06:00",
+      "end": "d2 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d2_p1_h10",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 120,
+      "begin": "d2 10:00",
+      "end": "d2 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d2_p1_h16",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 200,
+      "begin": "d2 16:00",
+      "end": "d2 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d2_p1_h20",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 50,
+      "begin": "d2 20:00",
+      "end": "d2 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d2_p2_h0",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 20,
+      "begin": "d2 00:00",
+      "end": "d2 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d2_p2_h6",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 180,
+      "begin": "d2 06:00",
+      "end": "d2 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d2_p2_h10",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 120,
+      "begin": "d2 10:00",
+      "end": "d2 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d2_p2_h16",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 200,
+      "begin": "d2 16:00",
+      "end": "d2 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d2_p2_h20",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 50,
+      "begin": "d2 20:00",
+      "end": "d2 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d3_p0_h0",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 20,
+      "begin": "d3 00:00",
+      "end": "d3 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d3_p0_h6",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 180,
+      "begin": "d3 06:00",
+      "end": "d3 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d3_p0_h10",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 120,
+      "begin": "d3 10:00",
+      "end": "d3 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d3_p0_h16",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 200,
+      "begin": "d3 16:00",
+      "end": "d3 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d3_p0_h20",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 50,
+      "begin": "d3 20:00",
+      "end": "d3 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d3_p1_h0",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 20,
+      "begin": "d3 00:00",
+      "end": "d3 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d3_p1_h6",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 180,
+      "begin": "d3 06:00",
+      "end": "d3 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d3_p1_h10",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 120,
+      "begin": "d3 10:00",
+      "end": "d3 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d3_p1_h16",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 200,
+      "begin": "d3 16:00",
+      "end": "d3 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d3_p1_h20",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 50,
+      "begin": "d3 20:00",
+      "end": "d3 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d3_p2_h0",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 20,
+      "begin": "d3 00:00",
+      "end": "d3 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d3_p2_h6",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 180,
+      "begin": "d3 06:00",
+      "end": "d3 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d3_p2_h10",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 120,
+      "begin": "d3 10:00",
+      "end": "d3 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d3_p2_h16",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 200,
+      "begin": "d3 16:00",
+      "end": "d3 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d3_p2_h20",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 50,
+      "begin": "d3 20:00",
+      "end": "d3 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d4_p0_h0",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 20,
+      "begin": "d4 00:00",
+      "end": "d4 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d4_p0_h6",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 180,
+      "begin": "d4 06:00",
+      "end": "d4 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d4_p0_h10",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 120,
+      "begin": "d4 10:00",
+      "end": "d4 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d4_p0_h16",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 200,
+      "begin": "d4 16:00",
+      "end": "d4 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d4_p0_h20",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 50,
+      "begin": "d4 20:00",
+      "end": "d4 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d4_p1_h0",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 20,
+      "begin": "d4 00:00",
+      "end": "d4 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d4_p1_h6",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 180,
+      "begin": "d4 06:00",
+      "end": "d4 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d4_p1_h10",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 120,
+      "begin": "d4 10:00",
+      "end": "d4 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d4_p1_h16",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 200,
+      "begin": "d4 16:00",
+      "end": "d4 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d4_p1_h20",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 50,
+      "begin": "d4 20:00",
+      "end": "d4 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d4_p2_h0",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 20,
+      "begin": "d4 00:00",
+      "end": "d4 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d4_p2_h6",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 180,
+      "begin": "d4 06:00",
+      "end": "d4 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d4_p2_h10",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 120,
+      "begin": "d4 10:00",
+      "end": "d4 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d4_p2_h16",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 200,
+      "begin": "d4 16:00",
+      "end": "d4 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d4_p2_h20",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 50,
+      "begin": "d4 20:00",
+      "end": "d4 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d5_p0_h0",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 20,
+      "begin": "d5 00:00",
+      "end": "d5 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d5_p0_h6",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 180,
+      "begin": "d5 06:00",
+      "end": "d5 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d5_p0_h10",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 120,
+      "begin": "d5 10:00",
+      "end": "d5 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d5_p0_h16",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 200,
+      "begin": "d5 16:00",
+      "end": "d5 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d5_p0_h20",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 50,
+      "begin": "d5 20:00",
+      "end": "d5 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d5_p1_h0",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 20,
+      "begin": "d5 00:00",
+      "end": "d5 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d5_p1_h6",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 180,
+      "begin": "d5 06:00",
+      "end": "d5 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d5_p1_h10",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 120,
+      "begin": "d5 10:00",
+      "end": "d5 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d5_p1_h16",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 200,
+      "begin": "d5 16:00",
+      "end": "d5 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d5_p1_h20",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 50,
+      "begin": "d5 20:00",
+      "end": "d5 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d5_p2_h0",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 20,
+      "begin": "d5 00:00",
+      "end": "d5 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d5_p2_h6",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 180,
+      "begin": "d5 06:00",
+      "end": "d5 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d5_p2_h10",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 120,
+      "begin": "d5 10:00",
+      "end": "d5 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d5_p2_h16",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 200,
+      "begin": "d5 16:00",
+      "end": "d5 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d5_p2_h20",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 50,
+      "begin": "d5 20:00",
+      "end": "d5 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d6_p0_h0",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 20,
+      "begin": "d6 00:00",
+      "end": "d6 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d6_p0_h6",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 180,
+      "begin": "d6 06:00",
+      "end": "d6 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d6_p0_h10",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 120,
+      "begin": "d6 10:00",
+      "end": "d6 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d6_p0_h16",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 200,
+      "begin": "d6 16:00",
+      "end": "d6 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d6_p0_h20",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 50,
+      "begin": "d6 20:00",
+      "end": "d6 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d6_p1_h0",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 20,
+      "begin": "d6 00:00",
+      "end": "d6 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d6_p1_h6",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 180,
+      "begin": "d6 06:00",
+      "end": "d6 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d6_p1_h10",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 120,
+      "begin": "d6 10:00",
+      "end": "d6 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d6_p1_h16",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 200,
+      "begin": "d6 16:00",
+      "end": "d6 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d6_p1_h20",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 50,
+      "begin": "d6 20:00",
+      "end": "d6 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d6_p2_h0",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 20,
+      "begin": "d6 00:00",
+      "end": "d6 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d6_p2_h6",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 180,
+      "begin": "d6 06:00",
+      "end": "d6 10:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d6_p2_h10",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 120,
+      "begin": "d6 10:00",
+      "end": "d6 16:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d6_p2_h16",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 200,
+      "begin": "d6 16:00",
+      "end": "d6 20:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d6_p2_h20",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 50,
+      "begin": "d6 20:00",
+      "end": "d6 24:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d7_p0_h0",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 20,
+      "begin": "d7 00:00",
+      "end": "d7 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d7_p0_h6",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 180,
+      "begin": "d7 06:00",
+      "end": "d7 07:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d7_p1_h0",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 20,
+      "begin": "d7 00:00",
+      "end": "d7 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d7_p1_h6",
+      "type": "civ_mix",
+      "from": "corridor_west_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 180,
+      "begin": "d7 06:00",
+      "end": "d7 07:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d7_p2_h0",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 20,
+      "begin": "d7 00:00",
+      "end": "d7 06:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_d7_p2_h6",
+      "type": "civ_mix",
+      "from": "corridor_east_in",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 180,
+      "begin": "d7 06:00",
+      "end": "d7 07:00",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d0_h8",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d0 08:00",
+      "end": "d0 08:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d0_h8",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d0 08:30",
+      "end": "d0 08:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d0_h10",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d0 10:00",
+      "end": "d0 10:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d0_h10",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d0 10:30",
+      "end": "d0 10:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d0_h12",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d0 12:00",
+      "end": "d0 12:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d0_h12",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d0 12:30",
+      "end": "d0 12:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d0_h14",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d0 14:00",
+      "end": "d0 14:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d0_h14",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d0 14:30",
+      "end": "d0 14:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d0_h16",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d0 16:00",
+      "end": "d0 16:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d0_h16",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d0 16:30",
+      "end": "d0 16:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d0_h18",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d0 18:00",
+      "end": "d0 18:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d0_h18",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d0 18:30",
+      "end": "d0 18:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d1_h6",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d1 06:00",
+      "end": "d1 06:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d1_h6",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d1 06:30",
+      "end": "d1 06:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d1_h8",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d1 08:00",
+      "end": "d1 08:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d1_h8",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d1 08:30",
+      "end": "d1 08:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d1_h10",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d1 10:00",
+      "end": "d1 10:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d1_h10",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d1 10:30",
+      "end": "d1 10:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d1_h12",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d1 12:00",
+      "end": "d1 12:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d1_h12",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d1 12:30",
+      "end": "d1 12:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d1_h14",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d1 14:00",
+      "end": "d1 14:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d1_h14",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d1 14:30",
+      "end": "d1 14:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d1_h16",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d1 16:00",
+      "end": "d1 16:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d1_h16",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d1 16:30",
+      "end": "d1 16:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d1_h18",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d1 18:00",
+      "end": "d1 18:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d1_h18",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d1 18:30",
+      "end": "d1 18:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d2_h6",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d2 06:00",
+      "end": "d2 06:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d2_h6",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d2 06:30",
+      "end": "d2 06:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d2_h8",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d2 08:00",
+      "end": "d2 08:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d2_h8",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d2 08:30",
+      "end": "d2 08:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d2_h10",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d2 10:00",
+      "end": "d2 10:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d2_h10",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d2 10:30",
+      "end": "d2 10:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d2_h12",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d2 12:00",
+      "end": "d2 12:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d2_h12",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d2 12:30",
+      "end": "d2 12:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d2_h14",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d2 14:00",
+      "end": "d2 14:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d2_h14",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d2 14:30",
+      "end": "d2 14:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d2_h16",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d2 16:00",
+      "end": "d2 16:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d2_h16",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d2 16:30",
+      "end": "d2 16:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d2_h18",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d2 18:00",
+      "end": "d2 18:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d2_h18",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d2 18:30",
+      "end": "d2 18:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d3_h6",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d3 06:00",
+      "end": "d3 06:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d3_h6",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d3 06:30",
+      "end": "d3 06:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d3_h8",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d3 08:00",
+      "end": "d3 08:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d3_h8",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d3 08:30",
+      "end": "d3 08:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d3_h10",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d3 10:00",
+      "end": "d3 10:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d3_h10",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d3 10:30",
+      "end": "d3 10:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d3_h12",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d3 12:00",
+      "end": "d3 12:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d3_h12",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d3 12:30",
+      "end": "d3 12:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d3_h14",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d3 14:00",
+      "end": "d3 14:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d3_h14",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d3 14:30",
+      "end": "d3 14:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d3_h16",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d3 16:00",
+      "end": "d3 16:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d3_h16",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d3 16:30",
+      "end": "d3 16:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d3_h18",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d3 18:00",
+      "end": "d3 18:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d3_h18",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d3 18:30",
+      "end": "d3 18:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d4_h6",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d4 06:00",
+      "end": "d4 06:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d4_h6",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d4 06:30",
+      "end": "d4 06:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d4_h8",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d4 08:00",
+      "end": "d4 08:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d4_h8",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d4 08:30",
+      "end": "d4 08:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d4_h10",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d4 10:00",
+      "end": "d4 10:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d4_h10",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d4 10:30",
+      "end": "d4 10:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d4_h12",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d4 12:00",
+      "end": "d4 12:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d4_h12",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d4 12:30",
+      "end": "d4 12:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d4_h14",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d4 14:00",
+      "end": "d4 14:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d4_h14",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d4 14:30",
+      "end": "d4 14:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d4_h16",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d4 16:00",
+      "end": "d4 16:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d4_h16",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d4 16:30",
+      "end": "d4 16:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d4_h18",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d4 18:00",
+      "end": "d4 18:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d4_h18",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d4 18:30",
+      "end": "d4 18:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d5_h6",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d5 06:00",
+      "end": "d5 06:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d5_h6",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d5 06:30",
+      "end": "d5 06:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d5_h8",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d5 08:00",
+      "end": "d5 08:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d5_h8",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d5 08:30",
+      "end": "d5 08:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d5_h10",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d5 10:00",
+      "end": "d5 10:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d5_h10",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d5 10:30",
+      "end": "d5 10:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d5_h12",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d5 12:00",
+      "end": "d5 12:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d5_h12",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d5 12:30",
+      "end": "d5 12:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d5_h14",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d5 14:00",
+      "end": "d5 14:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d5_h14",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d5 14:30",
+      "end": "d5 14:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d5_h16",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d5 16:00",
+      "end": "d5 16:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d5_h16",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d5 16:30",
+      "end": "d5 16:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d5_h18",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d5 18:00",
+      "end": "d5 18:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d5_h18",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d5 18:30",
+      "end": "d5 18:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d6_h6",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d6 06:00",
+      "end": "d6 06:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d6_h6",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d6 06:30",
+      "end": "d6 06:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d6_h8",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d6 08:00",
+      "end": "d6 08:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d6_h8",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d6 08:30",
+      "end": "d6 08:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d6_h10",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d6 10:00",
+      "end": "d6 10:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d6_h10",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d6 10:30",
+      "end": "d6 10:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d6_h12",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d6 12:00",
+      "end": "d6 12:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d6_h12",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d6 12:30",
+      "end": "d6 12:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d6_h14",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d6 14:00",
+      "end": "d6 14:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d6_h14",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d6 14:30",
+      "end": "d6 14:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d6_h16",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d6 16:00",
+      "end": "d6 16:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d6_h16",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d6 16:30",
+      "end": "d6 16:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d6_h18",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d6 18:00",
+      "end": "d6 18:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d6_h18",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d6 18:30",
+      "end": "d6 18:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_in_d7_h6",
+      "type": "port_mix",
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "vehs_per_hour": 600,
+      "begin": "d7 06:00",
+      "end": "d7 06:12",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "ferry_out_d7_h6",
+      "type": "port_mix",
+      "from": "ferry",
+      "to": "corridor_east_out",
+      "vehs_per_hour": 600,
+      "begin": "d7 06:30",
+      "end": "d7 06:42",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d0_h7",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d0 07:00",
+      "end": "d0 07:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d0_h7",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d0 07:15",
+      "end": "d0 07:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d0_h15",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d0 15:00",
+      "end": "d0 15:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d0_h15",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d0 15:15",
+      "end": "d0 15:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d0_h23",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d0 23:00",
+      "end": "d0 23:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d0_h23",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d0 23:15",
+      "end": "d0 23:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d1_h7",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d1 07:00",
+      "end": "d1 07:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d1_h7",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d1 07:15",
+      "end": "d1 07:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d1_h15",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d1 15:00",
+      "end": "d1 15:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d1_h15",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d1 15:15",
+      "end": "d1 15:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d1_h23",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d1 23:00",
+      "end": "d1 23:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d1_h23",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d1 23:15",
+      "end": "d1 23:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d2_h7",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d2 07:00",
+      "end": "d2 07:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d2_h7",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d2 07:15",
+      "end": "d2 07:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d2_h15",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d2 15:00",
+      "end": "d2 15:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d2_h15",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d2 15:15",
+      "end": "d2 15:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d2_h23",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d2 23:00",
+      "end": "d2 23:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d2_h23",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d2 23:15",
+      "end": "d2 23:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d3_h7",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d3 07:00",
+      "end": "d3 07:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d3_h7",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d3 07:15",
+      "end": "d3 07:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d3_h15",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d3 15:00",
+      "end": "d3 15:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d3_h15",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d3 15:15",
+      "end": "d3 15:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d3_h23",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d3 23:00",
+      "end": "d3 23:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d3_h23",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d3 23:15",
+      "end": "d3 23:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d4_h7",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d4 07:00",
+      "end": "d4 07:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d4_h7",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d4 07:15",
+      "end": "d4 07:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d4_h15",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d4 15:00",
+      "end": "d4 15:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d4_h15",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d4 15:15",
+      "end": "d4 15:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d4_h23",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d4 23:00",
+      "end": "d4 23:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d4_h23",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d4 23:15",
+      "end": "d4 23:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d5_h7",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d5 07:00",
+      "end": "d5 07:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d5_h7",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d5 07:15",
+      "end": "d5 07:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d5_h15",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d5 15:00",
+      "end": "d5 15:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d5_h15",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d5 15:15",
+      "end": "d5 15:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d5_h23",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d5 23:00",
+      "end": "d5 23:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d5_h23",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d5 23:15",
+      "end": "d5 23:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d6_h7",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d6 07:00",
+      "end": "d6 07:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d6_h7",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d6 07:15",
+      "end": "d6 07:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d6_h15",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d6 15:00",
+      "end": "d6 15:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d6_h15",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d6 15:15",
+      "end": "d6 15:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_in_d6_h23",
+      "type": "mil_mix",
+      "from": "corridor_west_in",
+      "to": "apron",
+      "vehs_per_hour": 240,
+      "begin": "d6 23:00",
+      "end": "d6 23:20",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "shift_out_d6_h23",
+      "type": "mil_mix",
+      "from": "apron",
+      "to": "corridor_north_out",
+      "vehs_per_hour": 240,
+      "begin": "d6 23:15",
+      "end": "d6 23:35",
+      "depart_lane": "free",
+      "depart_speed": "max"
+    }
+  ],
+  "actors": [
+    {
+      "id": "haul_d0_0",
+      "type": "mil_truck",
+      "depart": "d0 09:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "haul_d0_1",
+      "type": "mil_truck",
+      "depart": "d0 13:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "haul_d0_2",
+      "type": "mil_truck",
+      "depart": "d0 17:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "haul_d1_0",
+      "type": "mil_truck",
+      "depart": "d1 09:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "haul_d1_1",
+      "type": "mil_truck",
+      "depart": "d1 13:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "haul_d1_2",
+      "type": "mil_truck",
+      "depart": "d1 17:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "haul_d2_0",
+      "type": "mil_truck",
+      "depart": "d2 09:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "haul_d2_1",
+      "type": "mil_truck",
+      "depart": "d2 13:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "haul_d2_2",
+      "type": "mil_truck",
+      "depart": "d2 17:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "haul_d3_0",
+      "type": "mil_truck",
+      "depart": "d3 09:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "haul_d3_1",
+      "type": "mil_truck",
+      "depart": "d3 13:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "haul_d3_2",
+      "type": "mil_truck",
+      "depart": "d3 17:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "haul_d4_0",
+      "type": "mil_truck",
+      "depart": "d4 09:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "haul_d4_1",
+      "type": "mil_truck",
+      "depart": "d4 13:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "haul_d4_2",
+      "type": "mil_truck",
+      "depart": "d4 17:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "haul_d5_0",
+      "type": "mil_truck",
+      "depart": "d5 09:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "haul_d5_1",
+      "type": "mil_truck",
+      "depart": "d5 13:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "haul_d5_2",
+      "type": "mil_truck",
+      "depart": "d5 17:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "haul_d6_0",
+      "type": "mil_truck",
+      "depart": "d6 09:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "haul_d6_1",
+      "type": "mil_truck",
+      "depart": "d6 13:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "haul_d6_2",
+      "type": "mil_truck",
+      "depart": "d6 17:00",
+      "from": "apron",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "escort_0",
+      "type": "mil_jeep",
+      "depart": {
+        "instant": "escort_departs"
+      },
+      "from": "apron",
+      "to": "drydock",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "escort_1",
+      "type": "mil_jeep",
+      "depart": {
+        "instant": "escort_departs",
+        "plus": 4
+      },
+      "from": "apron",
+      "to": "drydock",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "escort_2",
+      "type": "mil_jeep",
+      "depart": {
+        "instant": "escort_departs",
+        "plus": 8
+      },
+      "from": "apron",
+      "to": "drydock",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "escort_3",
+      "type": "mil_jeep",
+      "depart": {
+        "instant": "escort_departs",
+        "plus": 12
+      },
+      "from": "apron",
+      "to": "drydock",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "escort_4",
+      "type": "mil_jeep",
+      "depart": {
+        "instant": "escort_departs",
+        "plus": 16
+      },
+      "from": "apron",
+      "to": "drydock",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    },
+    {
+      "id": "probe_d2",
+      "type": "civ_car",
+      "depart": {
+        "at": "d2 11:00",
+        "plus": 274
+      },
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current",
+      "via": [
+        "port_gate_approach"
+      ],
+      "stops": [
+        {
+          "place": "port_gate_standoff",
+          "duration": "5m"
+        }
+      ]
+    },
+    {
+      "id": "probe_d5",
+      "type": "civ_car",
+      "depart": {
+        "at": "d5 11:00",
+        "plus": 685
+      },
+      "from": "corridor_west_in",
+      "to": "corridor_east_out",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current",
+      "via": [
+        "port_gate_approach"
+      ],
+      "stops": [
+        {
+          "place": "port_gate_standoff",
+          "duration": "5m"
+        }
+      ]
+    },
+    {
+      "id": "shadow",
+      "type": "army_car_crawl",
+      "depart": {
+        "instant": "shadow_departs"
+      },
+      "from": "apron",
+      "to": "apron",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current",
+      "via": [
+        "fence_26413338_6",
+        "fence_r26413425_5",
+        "fence_r26413460",
+        "fence_26413459",
+        "fence_26413427",
+        "fence_r26413426",
+        "fence_r26413411"
+      ]
+    },
+    {
+      "id": "staybehind",
+      "type": "port_car",
+      "depart": {
+        "instant": "staybehind_departs"
+      },
+      "from": "corridor_east_in",
+      "to": "ferry",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current",
+      "stops": [
+        {
+          "place": "ferry_berth",
+          "until": {
+            "instant": "run_end"
+          },
+          "parking": true
+        }
+      ]
+    }
+  ],
+  "rotas": [
+    {
+      "id": "guard_posting",
+      "days": "0..6",
+      "at": [
+        "07:00",
+        "15:00",
+        "23:00"
+      ],
+      "subjects": {
+        "place_set": "guard_towers"
+      },
+      "id_pattern": "guard_d{day}_h{hour}_t{subject_index}",
+      "template": {
+        "type": "guard",
+        "from": "apron",
+        "to": "apron",
+        "via": [
+          "$subject"
+        ],
+        "stops": [
+          {
+            "place": "$subject",
+            "duration": "8h",
+            "parking": true
+          }
+        ],
+        "depart_lane": "best",
+        "depart_speed": "max",
+        "arrival_speed": "current"
+      },
+      "skip": [
+        {
+          "day": 4,
+          "at": "07:00",
+          "subject_index": 3,
+          "because": "the guard no-show: this post is not manned this shift"
+        }
+      ]
+    }
+  ],
+  "vocabulary": {
+    "namespaces": [
+      {
+        "namespace": "bahonar",
+        "version": 1,
+        "authority": "Shahid Bahonar Port pattern of life; CarlaControl/scripts/make_bahonar_scenario.py",
+        "terms": [
+          {
+            "term": "bahonar:expected_arrival_absent",
+            "since": 1,
+            "status": "active",
+            "applies_to": [
+              "slot"
+            ],
+            "realisation": [
+              "absent"
+            ],
+            "definition": "A recurring series enumerated an occasion and no vehicle realised it. The signal is the vacancy; the realised siblings of the same series are its evidence."
+          },
+          {
+            "term": "bahonar:post_unmanned",
+            "since": 1,
+            "status": "active",
+            "broader": "bahonar:expected_arrival_absent",
+            "applies_to": [
+              "slot"
+            ],
+            "realisation": [
+              "absent"
+            ],
+            "definition": "A guard tower that should have been manned at a shift change stands unmanned for the whole shift, while the other fifteen towers are relieved as usual.",
+            "counterfactual": {
+              "kind": "series",
+              "ref": "tower_relief"
+            }
+          },
+          {
+            "term": "bahonar:coordinated_group_transit",
+            "since": 1,
+            "status": "active",
+            "applies_to": [
+              "entity"
+            ],
+            "realisation": [
+              "present"
+            ],
+            "definition": "Several vehicles depart together and travel as one group in tight formation: a dense military escort around a shipment.",
+            "parameters": {
+              "group_size": {
+                "type": "integer",
+                "definition": "vehicles in the group"
+              },
+              "departure_spread_s": {
+                "type": "number",
+                "unit": "s",
+                "definition": "first to last departure"
+              }
+            },
+            "counterfactual": {
+              "kind": "term",
+              "ref": "bahonar:routine_freight_haul"
+            }
+          },
+          {
+            "term": "bahonar:destination_off_pattern",
+            "since": 1,
+            "status": "active",
+            "applies_to": [
+              "entity"
+            ],
+            "realisation": [
+              "present"
+            ],
+            "definition": "A vehicle travels to a place the routine traffic of its kind never goes: an air-freight shipment taken to the drydock rather than to the port."
+          },
+          {
+            "term": "bahonar:standoff_dwell_at_access_point",
+            "since": 1,
+            "status": "active",
+            "applies_to": [
+              "entity"
+            ],
+            "realisation": [
+              "present"
+            ],
+            "definition": "A vehicle approaches a controlled access point from the public side, halts short of it for several minutes, and departs without transiting.",
+            "parameters": {
+              "dwell_s": {
+                "type": "number",
+                "unit": "s",
+                "definition": "authored halt length at the access point"
+              }
+            },
+            "contrast_with": [
+              "bahonar:cleared_gate_transit"
+            ],
+            "counterfactual": {
+              "kind": "term",
+              "ref": "bahonar:cleared_gate_transit"
+            }
+          },
+          {
+            "term": "bahonar:perimeter_transit_off_cadence",
+            "since": 1,
+            "status": "active",
+            "applies_to": [
+              "entity"
+            ],
+            "realisation": [
+              "present"
+            ],
+            "definition": "During the pre-dawn dead hours one vehicle slowly follows the fence line past the guard posts without stopping at any of them.",
+            "parameters": {
+              "speed_factor": {
+                "type": "number",
+                "definition": "fraction of each limit driven"
+              },
+              "circuit_edges": {
+                "type": "integer",
+                "definition": "fence-line roads driven"
+              }
+            }
+          },
+          {
+            "term": "bahonar:arrival_without_departure",
+            "since": 1,
+            "status": "active",
+            "applies_to": [
+              "entity"
+            ],
+            "realisation": [
+              "present"
+            ],
+            "definition": "A vehicle arrives with a ferry sailing's traffic and never leaves; its dwell is still open when the scenario ends."
+          },
+          {
+            "term": "bahonar:tower_posting",
+            "since": 1,
+            "status": "active",
+            "applies_to": [
+              "entity"
+            ],
+            "realisation": [
+              "present"
+            ],
+            "definition": "An eight-hour authored guard posting at a perimeter tower: a long parked dwell, in a legitimate place, for a legitimate reason.",
+            "hard_negative_for": [
+              "bahonar:standoff_dwell_at_access_point",
+              "bahonar:arrival_without_departure"
+            ]
+          },
+          {
+            "term": "bahonar:routine_freight_haul",
+            "since": 1,
+            "status": "active",
+            "applies_to": [
+              "entity"
+            ],
+            "realisation": [
+              "present"
+            ],
+            "definition": "A scheduled air-freight run by one lorry from the apron to the port.",
+            "hard_negative_for": [
+              "bahonar:coordinated_group_transit",
+              "bahonar:destination_off_pattern"
+            ]
+          },
+          {
+            "term": "bahonar:cleared_gate_transit",
+            "since": 1,
+            "status": "active",
+            "applies_to": [
+              "cohort"
+            ],
+            "realisation": [
+              "present"
+            ],
+            "definition": "Port-cleared traffic that transits a checkpoint and enters: every member of a ferry sailing's pulse, for its whole life."
+          }
+        ],
+        "roles": [
+          {
+            "role": "bahonar:lead",
+            "definition": "the escort vehicle that departs first"
+          },
+          {
+            "role": "bahonar:follower",
+            "definition": "an escort vehicle behind the lead"
+          },
+          {
+            "role": "bahonar:guard",
+            "definition": "the vehicle that mans a tower for a shift"
+          }
+        ],
+        "area_kinds": [
+          {
+            "kind": "bahonar:guard_post"
+          },
+          {
+            "kind": "bahonar:gate"
+          },
+          {
+            "kind": "bahonar:drydock"
+          },
+          {
+            "kind": "bahonar:ferry_terminal"
+          }
+        ]
+      }
+    ]
+  },
+  "supervision": {
+    "instances": [
+      {
+        "name": "pi_escort_drydock_d3",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:coordinated_group_transit",
+          "bahonar:destination_off_pattern"
+        ],
+        "participants": [
+          {
+            "actor": "escort_0",
+            "role": "bahonar:lead"
+          },
+          {
+            "actor": "escort_1",
+            "role": "bahonar:follower"
+          },
+          {
+            "actor": "escort_2",
+            "role": "bahonar:follower"
+          },
+          {
+            "actor": "escort_3",
+            "role": "bahonar:follower"
+          },
+          {
+            "actor": "escort_4",
+            "role": "bahonar:follower"
+          }
+        ],
+        "intervals": [
+          {
+            "participant": "escort_0",
+            "phase": "transit",
+            "begin": {
+              "instant": "escort_departs"
+            }
+          },
+          {
+            "participant": "escort_1",
+            "phase": "transit",
+            "begin": {
+              "instant": "escort_departs",
+              "plus": 4
+            }
+          },
+          {
+            "participant": "escort_2",
+            "phase": "transit",
+            "begin": {
+              "instant": "escort_departs",
+              "plus": 8
+            }
+          },
+          {
+            "participant": "escort_3",
+            "phase": "transit",
+            "begin": {
+              "instant": "escort_departs",
+              "plus": 12
+            }
+          },
+          {
+            "participant": "escort_4",
+            "phase": "transit",
+            "begin": {
+              "instant": "escort_departs",
+              "plus": 16
+            }
+          }
+        ],
+        "aoi_refs": [
+          "drydock"
+        ],
+        "parameters": {
+          "group_size": 5,
+          "departure_spread_s": 16
+        },
+        "counterfactual": {
+          "kind": "term",
+          "ref": "bahonar:routine_freight_haul"
+        }
+      },
+      {
+        "name": "pi_gate_probe_d2",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:standoff_dwell_at_access_point"
+        ],
+        "participants": [
+          {
+            "actor": "probe_d2",
+            "role": "subject"
+          }
+        ],
+        "intervals": [
+          {
+            "participant": "probe_d2",
+            "phase": "standoff",
+            "begin": {
+              "at": "d2 11:00",
+              "plus": 274
+            }
+          }
+        ],
+        "aoi_refs": [
+          "port_gate"
+        ],
+        "parameters": {
+          "dwell_s": 300
+        }
+      },
+      {
+        "name": "pi_gate_probe_d5",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:standoff_dwell_at_access_point"
+        ],
+        "participants": [
+          {
+            "actor": "probe_d5",
+            "role": "subject"
+          }
+        ],
+        "intervals": [
+          {
+            "participant": "probe_d5",
+            "phase": "standoff",
+            "begin": {
+              "at": "d5 11:00",
+              "plus": 685
+            }
+          }
+        ],
+        "aoi_refs": [
+          "port_gate"
+        ],
+        "parameters": {
+          "dwell_s": 300
+        }
+      },
+      {
+        "name": "pi_perimeter_shadow_d6",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:perimeter_transit_off_cadence"
+        ],
+        "participants": [
+          {
+            "actor": "shadow",
+            "role": "subject"
+          }
+        ],
+        "intervals": [
+          {
+            "participant": "shadow",
+            "phase": "transit",
+            "begin": {
+              "instant": "shadow_departs"
+            }
+          }
+        ],
+        "parameters": {
+          "speed_factor": 0.45,
+          "circuit_edges": 7
+        }
+      },
+      {
+        "name": "pi_ferry_stay_behind_d1",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:arrival_without_departure"
+        ],
+        "participants": [
+          {
+            "actor": "staybehind",
+            "role": "subject"
+          }
+        ],
+        "intervals": [
+          {
+            "participant": "staybehind",
+            "phase": "dwell",
+            "begin": {
+              "instant": "staybehind_departs"
+            }
+          }
+        ],
+        "aoi_refs": [
+          "ferry_terminal"
+        ]
+      },
+      {
+        "name": "haul_d0_0",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d0_0",
+            "role": "subject"
+          }
+        ]
+      },
+      {
+        "name": "haul_d0_1",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d0_1",
+            "role": "subject"
+          }
+        ]
+      },
+      {
+        "name": "haul_d0_2",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d0_2",
+            "role": "subject"
+          }
+        ]
+      },
+      {
+        "name": "haul_d1_0",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d1_0",
+            "role": "subject"
+          }
+        ]
+      },
+      {
+        "name": "haul_d1_1",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d1_1",
+            "role": "subject"
+          }
+        ]
+      },
+      {
+        "name": "haul_d1_2",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d1_2",
+            "role": "subject"
+          }
+        ]
+      },
+      {
+        "name": "haul_d2_0",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d2_0",
+            "role": "subject"
+          }
+        ]
+      },
+      {
+        "name": "haul_d2_1",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d2_1",
+            "role": "subject"
+          }
+        ]
+      },
+      {
+        "name": "haul_d2_2",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d2_2",
+            "role": "subject"
+          }
+        ]
+      },
+      {
+        "name": "haul_d3_0",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d3_0",
+            "role": "subject"
+          }
+        ]
+      },
+      {
+        "name": "haul_d3_1",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d3_1",
+            "role": "subject"
+          }
+        ]
+      },
+      {
+        "name": "haul_d3_2",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d3_2",
+            "role": "subject"
+          }
+        ]
+      },
+      {
+        "name": "haul_d4_0",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d4_0",
+            "role": "subject"
+          }
+        ]
+      },
+      {
+        "name": "haul_d4_1",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d4_1",
+            "role": "subject"
+          }
+        ]
+      },
+      {
+        "name": "haul_d4_2",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d4_2",
+            "role": "subject"
+          }
+        ]
+      },
+      {
+        "name": "haul_d5_0",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d5_0",
+            "role": "subject"
+          }
+        ]
+      },
+      {
+        "name": "haul_d5_1",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d5_1",
+            "role": "subject"
+          }
+        ]
+      },
+      {
+        "name": "haul_d5_2",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d5_2",
+            "role": "subject"
+          }
+        ]
+      },
+      {
+        "name": "haul_d6_0",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d6_0",
+            "role": "subject"
+          }
+        ]
+      },
+      {
+        "name": "haul_d6_1",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d6_1",
+            "role": "subject"
+          }
+        ]
+      },
+      {
+        "name": "haul_d6_2",
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:routine_freight_haul"
+        ],
+        "participants": [
+          {
+            "actor": "haul_d6_2",
+            "role": "subject"
+          }
+        ]
+      }
+    ],
+    "cohorts": [
+      {
+        "flow": "ferry_in_d0_h8",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d0_h8",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d0_h10",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d0_h10",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d0_h12",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d0_h12",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d0_h14",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d0_h14",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d0_h16",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d0_h16",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d0_h18",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d0_h18",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d1_h6",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d1_h6",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d1_h8",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d1_h8",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d1_h10",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d1_h10",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d1_h12",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d1_h12",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d1_h14",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d1_h14",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d1_h16",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d1_h16",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d1_h18",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d1_h18",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d2_h6",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d2_h6",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d2_h8",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d2_h8",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d2_h10",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d2_h10",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d2_h12",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d2_h12",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d2_h14",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d2_h14",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d2_h16",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d2_h16",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d2_h18",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d2_h18",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d3_h6",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d3_h6",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d3_h8",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d3_h8",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d3_h10",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d3_h10",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d3_h12",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d3_h12",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d3_h14",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d3_h14",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d3_h16",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d3_h16",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d3_h18",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d3_h18",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d4_h6",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d4_h6",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d4_h8",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d4_h8",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d4_h10",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d4_h10",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d4_h12",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d4_h12",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d4_h14",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d4_h14",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d4_h16",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d4_h16",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d4_h18",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d4_h18",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d5_h6",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d5_h6",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d5_h8",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d5_h8",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d5_h10",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d5_h10",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d5_h12",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d5_h12",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d5_h14",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d5_h14",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d5_h16",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d5_h16",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d5_h18",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d5_h18",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d6_h6",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d6_h6",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d6_h8",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d6_h8",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d6_h10",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d6_h10",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d6_h12",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d6_h12",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d6_h14",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d6_h14",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d6_h16",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d6_h16",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d6_h18",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d6_h18",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_in_d7_h6",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      },
+      {
+        "flow": "ferry_out_d7_h6",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:cleared_gate_transit"
+        ]
+      }
+    ],
+    "series": [
+      {
+        "series_id": "tower_relief",
+        "rota": "guard_posting",
+        "member_role": "bahonar:guard",
+        "slot_length": "8h",
+        "slot_aoi_refs": {
+          "tower_00": "tower_00",
+          "tower_01": "tower_01",
+          "tower_02": "tower_02",
+          "tower_03": "tower_03",
+          "tower_04": "tower_04",
+          "tower_05": "tower_05",
+          "tower_06": "tower_06",
+          "tower_07": "tower_07",
+          "tower_08": "tower_08",
+          "tower_09": "tower_09",
+          "tower_10": "tower_10",
+          "tower_11": "tower_11",
+          "tower_12": "tower_12",
+          "tower_13": "tower_13",
+          "tower_14": "tower_14",
+          "tower_15": "tower_15"
+        },
+        "supervision": "nominal",
+        "labels": [
+          "bahonar:tower_posting"
+        ]
+      }
+    ],
+    "absences": [
+      {
+        "name": "pi_tower_relief_d4_h7_t3_unmanned",
+        "series": "tower_relief",
+        "entry": "guard_d4_h7_t3",
+        "labels": [
+          "bahonar:post_unmanned"
+        ],
+        "counterfactual": {
+          "kind": "series",
+          "ref": "tower_relief"
+        }
+      }
+    ]
+  }
+}

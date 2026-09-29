@@ -1,8 +1,10 @@
 """The corpus a Bahonar run writes must not say which of its vehicles were planted.
 
-A corpus is generated here rather than asserted about in the abstract: the real scenario definitions
-from `make_bahonar_scenario.py` drive the real `SumoCotBridge` writers through a stand-in for TraCI,
-so what is checked is the file the pipeline actually produces. Three things are asserted, and the
+A corpus is generated here rather than asserted about in the abstract: the sizing scenario's own
+definitions -- the vehicle types, trips, flows and labels it shipped with,
+`fixtures/Shahid_Bahonar_Port_PatternOfLife.shipped.rou.xml` and `.shipped.labels.json` -- drive the
+real `SumoCotBridge` writers through a stand-in for TraCI, so what is checked is the file the
+pipeline actually produces. Three things are asserted, and the
 middle one is the reason the other two mean anything:
 
   * the corpus written today carries no field by which its planted vehicles can be told apart,
@@ -14,7 +16,7 @@ middle one is the reason the other two mean anything:
 from __future__ import annotations
 
 import csv
-import importlib.util
+import json
 import sys
 import types
 import xml.etree.ElementTree as ET
@@ -36,8 +38,10 @@ from carlacontrol.SumoCotBridge import (  # noqa: E402
     SumoCotBridge,
 )
 
-SCENARIO_DAYS = 7
 UID_PREFIX = "SUMO-TRUTH"
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+SHIPPED_ROUTES = FIXTURES / "Shahid_Bahonar_Port_PatternOfLife.shipped.rou.xml"
+SHIPPED_LABELS = FIXTURES / "Shahid_Bahonar_Port_PatternOfLife.shipped.labels.json"
 
 # How the four planted vehicle types looked before the repair, and the ids the vehicles using them
 # carried: saturated colours against a muted population, a CoT affiliation of `u` that no nominal
@@ -65,13 +69,18 @@ PRE_REPAIR_CSV_COLUMNS = [
 ]
 
 
-def _load_scenario():
-    """Import `make_bahonar_scenario.py`, which is a script rather than a package module."""
-    path = _REPO / "CarlaControl" / "scripts" / "make_bahonar_scenario.py"
-    spec = importlib.util.spec_from_file_location("make_bahonar_scenario", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+class _ShippedScenario:
+    """The sizing scenario as it shipped: its vehicle types, scheduled trips, flows and labels."""
+
+    def __init__(self) -> None:
+        root = ET.parse(SHIPPED_ROUTES).getroot()
+        self.vehicle_types_xml = "".join(ET.tostring(element, encoding="unicode") for element in root
+                                         if element.tag in ("vType", "vTypeDistribution"))
+        self.trips = [(e.get("id"), e.get("type")) for e in root if e.tag == "trip"]
+        self.flows = [(e.get("id"), e.get("type")) for e in root if e.tag == "flow"]
+        labels = json.loads(SHIPPED_LABELS.read_text(encoding="utf-8"))
+        self.marked_ids = frozenset(labels["marked_ids"])
+        self.affiliation_by_type = labels["affiliation_by_type"]
 
 
 class _VehicleTypeTable:
@@ -205,24 +214,16 @@ def _roster(scenario, table: _VehicleTypeTable) -> list[tuple[str, str]]:
     sampled because a week of them is hundreds of thousands of vehicles and the check is over the
     set of values a field takes, which a handful of each type establishes.
     """
-    roster: list[tuple[str, str]] = []
-    for vehicle in (scenario.tower_postings(SCENARIO_DAYS, 4, 7, 3)
-                    + scenario.routine_hauls(SCENARIO_DAYS)
-                    + scenario.anomaly_vehicles(SCENARIO_DAYS)):
-        roster.append((vehicle.veh_id, vehicle.vehicle_type))
-
-    flows = (scenario.diurnal_corridor_flows(SCENARIO_DAYS)
-             + scenario.ferry_pulse_flows(SCENARIO_DAYS)
-             + scenario.shift_change_flows(SCENARIO_DAYS))
+    roster: list[tuple[str, str]] = list(scenario.trips)
     sampled: set[str] = set()
-    for flow in flows:
-        family = flow.flow_id.split("_d")[0]
+    for flow_id, flow_type in scenario.flows:
+        family = flow_id.split("_d")[0]
         if family in sampled:
             continue
         sampled.add(family)
-        members = table.members(flow.vehicle_type)
+        members = table.members(flow_type)
         for n, type_id in enumerate(members * 2):
-            roster.append((f"{flow.flow_id}.{n}", type_id))
+            roster.append((f"{flow_id}.{n}", type_id))
     return roster
 
 
@@ -235,7 +236,7 @@ def _write_corpus(tmp_path: Path, scenario, table, roster, marked_ids) -> tuple[
     bridge.run(CotOutputSettings(
         csv_path=csv_path, xml_path=xml_path, uid_prefix=UID_PREFIX,
         marked_vehicle="", marked_ids=frozenset(marked_ids),
-        affiliation_by_type=scenario.AFFILIATION_BY_TYPE))
+        affiliation_by_type=scenario.affiliation_by_type))
     return csv_path, xml_path
 
 
@@ -270,12 +271,12 @@ def _pre_repair_rows(rows: list[dict], roster, table, marked_ids) -> list[dict]:
 
 @pytest.fixture(scope="module")
 def scenario():
-    return _load_scenario()
+    return _ShippedScenario()
 
 
 @pytest.fixture(scope="module")
 def table(scenario):
-    return _VehicleTypeTable(scenario.VEHICLE_TYPES)
+    return _VehicleTypeTable(scenario.vehicle_types_xml)
 
 
 @pytest.fixture(scope="module")
@@ -285,7 +286,7 @@ def roster(scenario, table):
 
 @pytest.fixture(scope="module")
 def marked_ids(scenario):
-    return frozenset(v.veh_id for v in scenario.anomaly_vehicles(SCENARIO_DAYS) if v.marked)
+    return scenario.marked_ids
 
 
 @pytest.fixture(scope="module")
@@ -390,6 +391,6 @@ def test_the_run_report_counts_the_planted_vehicles_it_saw(tmp_path, scenario, t
     report = bridge.run(CotOutputSettings(
         csv_path=tmp_path / "corpus.csv", uid_prefix=UID_PREFIX,
         marked_vehicle="", marked_ids=marked_ids,
-        affiliation_by_type=scenario.AFFILIATION_BY_TYPE))
+        affiliation_by_type=scenario.affiliation_by_type))
     assert report.marked_vehicles == len(marked_ids)
     assert report.vehicles == len(roster)

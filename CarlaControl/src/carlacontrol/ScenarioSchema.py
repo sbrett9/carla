@@ -75,7 +75,12 @@ SCHEMA: dict = {
         "catalogue": {"type": "string", "minLength": 1,
                       "description": "The measured vehicle catalogue, relative to this file"},
         "vehicle_classes": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/vehicle_class"}},
-        "vehicle_mix": {"type": "string", "pattern": _IDENTIFIER},
+        "vehicle_mix": {"type": "string", "pattern": _IDENTIFIER,
+                        "description": "The id of the whole-mix distribution, drawn by each "
+                                       "class's share"},
+        "vehicle_mixes": {"type": "array", "items": {"$ref": "#/$defs/named_vehicle_mix"},
+                          "description": "Further named mixes, each drawn by its own shares of "
+                                         "declared classes"},
         "places": {"type": "object", "additionalProperties": {"$ref": "#/$defs/place"}},
         "place_sets": {"type": "object", "additionalProperties": _STRINGS},
         "instants": {"type": "object", "additionalProperties": _TIME},
@@ -100,6 +105,16 @@ SCHEMA: dict = {
                 "weights": {"type": "array", "items": {"type": "number", "exclusiveMinimum": 0}},
                 "gui_shape": {"type": "string"},
                 "gui_colour": {"type": "string"},
+                "note": {"type": "string"},
+            },
+        },
+        "named_vehicle_mix": {
+            "type": "object", "additionalProperties": False, "required": ["id", "shares"],
+            "properties": {
+                "id": {"type": "string", "pattern": _IDENTIFIER},
+                "shares": {"type": "object",
+                           "additionalProperties": {"type": "number", "exclusiveMinimum": 0},
+                           "description": "Class id to that class's weight in this mix"},
                 "note": {"type": "string"},
             },
         },

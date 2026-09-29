@@ -175,7 +175,7 @@ AMBIENT_FLOWS = [
 # is now the measured length of the body it renders as, so nothing is placed away from where SUMO
 # believes it is. What moves is the size of the vehicles this corridor is made of.
 #
-# There is no pickup. The content build registers seventeen vehicles and not one of them has a bed,
+# There is no pickup. The measured catalogue holds seventeen vehicles and not one of them has a bed,
 # so the class that carried a quarter of this corridor is absent rather than rendered as something
 # else: a substituted body makes the imagery and the behavioural record disagree while each stays
 # internally consistent, and nothing downstream can detect that. A rural Nevada corridor without
@@ -219,14 +219,16 @@ AMBIENT_CLASSES = (
              "of any class here, at 0.02 m."),
     VehicleClassSpec(
         class_id="truck",
-        blueprints=("vehicle.carlacola.actors", "vehicle.fuso.mitsubishi"),
+        # The European heavy goods vehicle, a rigid six-wheeler the content now registers, joins
+        # this class when the catalogue has measured it; a body the catalogue lacks is refused.
+        blueprints=("vehicle.carlacola.actors",),
         sumo_vclass="truck",
         behaviour={"maxSpeed": "35", "speedFactor": "normc(0.90,0.06,0.75,1.05)"},
         share=0.05,
         gui_shape="truck",
-        note="The two rigid lorries in the content build, measuring 8.00 m and 10.17 m. The 9.5 m "
-             "this class was designed around falls between them, so a lorry here is either 1.50 m "
-             "shorter or 0.67 m longer than intended and the two are drawn equally."),
+        note="The rigid lorry in the content build, measuring 8.00 m against the 9.5 m this class "
+             "was designed around, so every lorry here is 1.50 m shorter than intended. The Fuso "
+             "Rosa is a light bus, not a lorry, and is not drawn as one."),
 )
 
 # The marked vehicle's body. Everything about how it drives is set from the command line and written

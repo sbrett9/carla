@@ -66,16 +66,11 @@
         <param key="carla:class_id" value="van"/>
         <param key="carla:catalogue_digest" value="771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a"/>
     </vType>
-    <!-- The two rigid lorries in the content build, measuring 8.00 m and 10.17 m. The 9.5 m this class
-         was designed around falls between them, so a lorry here is either 1.50 m shorter or 0.67 m
-         longer than intended and the two are drawn equally. -->
+    <!-- The rigid lorry in the content build, measuring 8.00 m against the 9.5 m this class was designed
+         around, so every lorry here is 1.50 m shorter than intended. The Fuso Rosa is a light bus, not a
+         lorry, and is not drawn as one. -->
     <vType id="truck.vehicle.carlacola.actors" vClass="truck" length="8.0037" width="2.9118" height="4.0546" maxSpeed="35" speedFactor="normc(0.90,0.06,0.75,1.05)" guiShape="truck">
         <param key="carla:blueprint" value="vehicle.carlacola.actors"/>
-        <param key="carla:class_id" value="truck"/>
-        <param key="carla:catalogue_digest" value="771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a"/>
-    </vType>
-    <vType id="truck.vehicle.fuso.mitsubishi" vClass="truck" length="10.1743" width="3.9277" height="4.241" maxSpeed="35" speedFactor="normc(0.90,0.06,0.75,1.05)" guiShape="truck">
-        <param key="carla:blueprint" value="vehicle.fuso.mitsubishi"/>
         <param key="carla:class_id" value="truck"/>
         <param key="carla:catalogue_digest" value="771fa4312eb0ee293dc0d0d42443c0c0c5b8ac625bb361e136280b3ae2deb75a"/>
     </vType>
@@ -90,10 +85,10 @@
     <vTypeDistribution id="car" vTypes="car.vehicle.ue4.audi.tt car.vehicle.mini.cooper car.vehicle.ue4.bmw.grantourer car.vehicle.ue4.mercedes.ccc car.vehicle.ue4.ford.mustang car.vehicle.lincoln.mkz car.vehicle.dodge.charger car.vehicle.ue4.chevrolet.impala car.vehicle.ue4.ford.crown" probabilities="1 1 1 1 1 1 1 1 1"/>
     <vTypeDistribution id="suv" vTypes="suv.vehicle.nissan.patrol" probabilities="1"/>
     <vTypeDistribution id="van" vTypes="van.vehicle.sprinter.mercedes" probabilities="1"/>
-    <vTypeDistribution id="truck" vTypes="truck.vehicle.carlacola.actors truck.vehicle.fuso.mitsubishi" probabilities="1 1"/>
+    <vTypeDistribution id="truck" vTypes="truck.vehicle.carlacola.actors" probabilities="1"/>
     <vTypeDistribution id="orbiter" vTypes="orbiter.vehicle.lincoln.mkz" probabilities="1"/>
 
-    <vTypeDistribution id="ambient_mix" vTypes="car.vehicle.ue4.audi.tt car.vehicle.mini.cooper car.vehicle.ue4.bmw.grantourer car.vehicle.ue4.mercedes.ccc car.vehicle.ue4.ford.mustang car.vehicle.lincoln.mkz car.vehicle.dodge.charger car.vehicle.ue4.chevrolet.impala car.vehicle.ue4.ford.crown suv.vehicle.nissan.patrol van.vehicle.sprinter.mercedes truck.vehicle.carlacola.actors truck.vehicle.fuso.mitsubishi" probabilities="0.0666667 0.0666667 0.0666667 0.0666667 0.0666667 0.0666667 0.0666667 0.0666667 0.0666667 0.24 0.0933333 0.0333333 0.0333333"/>
+    <vTypeDistribution id="ambient_mix" vTypes="car.vehicle.ue4.audi.tt car.vehicle.mini.cooper car.vehicle.ue4.bmw.grantourer car.vehicle.ue4.mercedes.ccc car.vehicle.ue4.ford.mustang car.vehicle.lincoln.mkz car.vehicle.dodge.charger car.vehicle.ue4.chevrolet.impala car.vehicle.ue4.ford.crown suv.vehicle.nissan.patrol van.vehicle.sprinter.mercedes truck.vehicle.carlacola.actors" probabilities="0.0666667 0.0666667 0.0666667 0.0666667 0.0666667 0.0666667 0.0666667 0.0666667 0.0666667 0.24 0.0933333 0.0666667"/>
 
     <flow id="corridor_west_to_northeast" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="210" departLane="free" departSpeed="max">
         <route edges="108141475#0 108141475#2 108141475#3 108141475#4 108141475#5 108141475#6 1236933617#0 1236933617#1 1236933617#2"/>

@@ -174,8 +174,8 @@
     {
       "id": 14,
       "group": "vehicles",
-      "title": "Every vehicle class names only blueprints the catalogue measured",
-      "against": "the vehicle catalogue",
+      "title": "Every vehicle class names only blueprints the catalogue measured, and every named mix draws on declared classes at positive shares under an id of its own",
+      "against": "the vehicle catalogue and the specification",
       "outcomes": [
         "refuse"
       ],
@@ -196,7 +196,7 @@
     {
       "id": 16,
       "group": "vehicles",
-      "title": "Every type a flow or actor names is a declared class, one of its member types, or the mix",
+      "title": "Every type a flow or actor names is a declared class, one of its member types, the mix or a named mix",
       "against": "the specification",
       "outcomes": [
         "refuse"

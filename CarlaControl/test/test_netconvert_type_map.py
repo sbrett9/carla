@@ -9,8 +9,9 @@ after the fact.
 Held here, in order: the map is found and validated before anything is built; the world build passes
 SUMO's own map first and the world's second, after every other extra argument, and refuses a second
 `--type-files`; a real conversion admits what the map sets and changes nothing else; and the Shahid
-Bahonar world converted with its map -- `Import/Shahid_Bahonar_Port.typ.xml` -- compiles the sizing
-scenario's guard rota, all 335 postings, where the world as shipped refuses every one.
+Bahonar world, rebuilt with its map -- `Import/Shahid_Bahonar_Port.typ.xml` -- records the invocation
+that gives the network it carries, and compiles the sizing scenario's guard rota, all 335 postings,
+where the same invocation without the map refuses every one.
 
 What these cannot see: a type map is keyed on road type, so the tests also pin that a private service
 road and a public one take the same permissions -- netconvert 1.27 reads `access` only as `access=no`.
@@ -56,6 +57,8 @@ BAHONAR_MAP = _REPO / "Import" / "Shahid_Bahonar_Port.typ.xml"
 BAHONAR_PACKAGE = _REPO / "Build" / "world-packages" / "Shahid_Bahonar_Port.cwp"
 BAHONAR_OSM = _REPO / "Build" / "sumo-smoketest" / "Shahid_Bahonar_Port_clipped.osm"
 CATALOGUE = _REPO / "CarlaControl" / "catalogue" / "vehicles.catalogue.json"
+SHIPPED_ROUTES = (Path(__file__).resolve().parent / "fixtures"
+                  / "Shahid_Bahonar_Port_PatternOfLife.shipped.rou.xml")
 
 SERVICE_ARMY = """<?xml version="1.0" encoding="UTF-8"?>
 <types>
@@ -270,9 +273,16 @@ def bahonar_generator():
     return module
 
 
+def shipped_guard_postings() -> dict[str, float]:
+    """Every guard trip of the sizing scenario's shipped route file: id to departure second."""
+    return {trip.get("id"): float(trip.get("depart"))
+            for trip in ET.parse(SHIPPED_ROUTES).getroot().iter("trip")
+            if trip.get("id").startswith("guard_")}
+
+
 def bahonar_package(network: Path, argv: list[str], directory: Path,
                     installation: SumoInstallation) -> Path:
-    """The shipped Bahonar package carrying `network`, recording it and the argument list."""
+    """The Bahonar package carrying `network`, recording it and the argument list."""
     text = network.read_text(encoding="utf-8")
     opendrive = network.with_suffix("").with_suffix(".xodr").read_bytes()
     package = directory / "Shahid_Bahonar_Port.cwp"
@@ -298,8 +308,13 @@ def bahonar_package(network: Path, argv: list[str], directory: Path,
 
 
 def compile_guard_rota(package: Path, directory: Path, installation: SumoInstallation):
+    """The generator's guard rota alone, under the midnight epoch the sizing scenario shipped with,
+    so its departure seconds are the shipped file's."""
     generator = bahonar_generator()
-    places = {"guard_base": {"edge": generator.GUARD_BASE}}
+    rota = generator.BahonarPatternOfLifeSpecification(
+        None, days=7, no_show_day=4, no_show_hour=7, no_show_tower=3, step_length_s=1.0,
+        seed=42).guard_rota()
+    places = {"apron": {"edge": generator.PLACE_EDGES["apron"]}}
     for index, (edge, position) in enumerate(generator.TOWER_POSTS):
         places[f"tower_{index:02d}"] = {"lane": f"{edge}_0", "offset_m": position}
     with zipfile.ZipFile(package) as archive:
@@ -309,7 +324,7 @@ def compile_guard_rota(package: Path, directory: Path, installation: SumoInstall
         "scenario_name": "Bahonar guard rota",
         "description": "The sizing scenario's seven-day guard rota as one rota block, with the "
                        "no-show.",
-        "world": {"package": package.name, "network_fingerprint": fingerprint},
+        "world": {"package": str(package), "network_fingerprint": fingerprint},
         "epoch": {"epoch_version": 1, "civil_datetime": "2026-03-21T00:00:00+03:30",
                   "utc_offset_hours": 3.5, "utc_datetime": "2026-03-20T20:30:00Z",
                   "calendar_advances": True, "dst_in_effect": False,
@@ -321,56 +336,68 @@ def compile_guard_rota(package: Path, directory: Path, installation: SumoInstall
                              "sumo_vclass": "army", "share": 0.0}],
         "places": places,
         "place_sets": {"guard_towers": [f"tower_{i:02d}" for i in range(16)]},
-        "rotas": [{"id": "guard_posting", "days": "0..6", "at": ["07:00", "15:00", "23:00"],
-                   "subjects": {"place_set": "guard_towers"},
-                   "id_pattern": "guard_d{day}_h{hour}_t{subject_index}",
-                   "template": {"type": "guard", "from": "guard_base", "to": "guard_base",
-                                "via": ["$subject"],
-                                "stops": [{"place": "$subject", "duration": "8h",
-                                           "parking": True}]},
-                   "skip": [{"day": 4, "at": "07:00", "subject_index": 3,
-                             "because": "the no-show anomaly: this post is not manned this "
-                                        "shift"}]}],
+        "rotas": [rota],
     }
     spec = directory / "bahonar.scenario.json"
+    spec.parent.mkdir(parents=True, exist_ok=True)
     spec.write_text(json.dumps(specification, indent=2), encoding="utf-8")
-    return ScenarioCompiler(installation).compile(spec, directory / "out"), generator
+    return ScenarioCompiler(installation).compile(spec, directory / "out")
 
 
-def test_the_bahonar_guard_rota_compiles_on_the_world_built_with_its_type_map(tmp_path):
-    """The acceptance for moving the fence into the world build, on the real extract and package."""
+def without_type_files(argv: list[str]) -> list[str]:
+    """An argument list with its `--type-files` option and value taken out."""
+    index = argv.index("--type-files")
+    return argv[:index] + argv[index + 2:]
+
+
+def test_the_bahonar_world_carries_its_type_map_and_its_guard_rota_compiles_on_it(tmp_path):
+    """The acceptance for moving the fence into the world build, on the real extract and package.
+
+    The world was rebuilt with its map. Its recorded invocation over the clipped extract gives the
+    network it carries; the world build assembles exactly its recorded extra arguments from the map
+    beside the extract; the guard rota compiles on the package with the shipped ids and departure
+    seconds; and the same invocation without the map -- the world before it had one -- refuses the
+    rota on every one of its 335 postings.
+    """
     require_staged_netconvert()
     if not (BAHONAR_PACKAGE.exists() and BAHONAR_OSM.exists()):
         pytest.skip("the Shahid Bahonar world package and clipped extract are not built here")
     installation = SumoInstallation.locate(STAGED_SUMO)
     manifest = json.loads(zipfile.ZipFile(BAHONAR_PACKAGE).read("world.json"))
     recorded = list(manifest["NetconvertArgv"])
+    if "--type-files" not in recorded:
+        pytest.fail("the Shahid Bahonar package records no --type-files: it predates its type map; "
+                    "rebuild it (07 §9.8)")
+    assert recorded[recorded.index("--type-files") + 1].endswith(str(BAHONAR_MAP.resolve()))
 
-    # Control: the recorded invocation over this extract is the world as shipped.
-    shipped = convert(BAHONAR_OSM, recorded, tmp_path / "shipped", "shipped")
-    assert NetworkFingerprint.of_file(shipped) == manifest["NetworkFingerprint"]
-    refused, _ = compile_guard_rota(
-        bahonar_package(shipped, recorded, tmp_path / "shipped", installation),
-        tmp_path / "shipped", installation)
-    assert refused.refused
-    assert {f.subject for f in refused.findings.by_check(10)} == \
-        {f"rota guard_posting entry {e}" for e in
-         (v.veh_id for v in bahonar_generator().tower_postings(7, 4, 7, 3))}
+    # The recorded invocation is the network the package carries.
+    carried = convert(BAHONAR_OSM, recorded, tmp_path / "carried", "carried")
+    assert NetworkFingerprint.of_file(carried) == manifest["NetworkFingerprint"]
 
-    # The world build as it now runs: the same arguments, and the map beside the extract.
+    # The world build, given the package's other extra arguments, finds the map beside the extract
+    # and passes it last: exactly the extra arguments the package records.
+    extra = list(manifest["NetconvertExtraArgs"])
     world_builder = builder()
     args = world_args(_REPO / "Import" / "Shahid_Bahonar_Port.osm", lat=27.15012, lon=56.18065,
-                      netconvert_arg=[" ".join(manifest["NetconvertExtraArgs"])])
+                      netconvert_arg=[" ".join(without_type_files(extra))])
     assert world_builder.load_type_map(args)
     assert world_builder.type_map.path == BAHONAR_MAP.resolve()
-    extra = extra_arguments(world_builder, args)
-    argv = recorded + extra[len(manifest["NetconvertExtraArgs"]):]
-    fenced = convert(BAHONAR_OSM, argv, tmp_path / "fenced", "fenced")
-    result, generator = compile_guard_rota(
-        bahonar_package(fenced, argv, tmp_path / "fenced", installation),
-        tmp_path / "fenced", installation)
+    assert extra_arguments(world_builder, args) == extra
+
+    # The rota compiles on the package itself.
+    result = compile_guard_rota(BAHONAR_PACKAGE, tmp_path / "fenced", installation)
     assert not result.refused, [str(f) for f in result.findings.findings if f.outcome == "refuse"]
     routes = ET.parse(result.files["routes"]).getroot()
     compiled = {e.get("id"): float(e.get("depart")) for e in routes if e.tag == "vehicle"}
-    assert compiled == {v.veh_id: float(v.depart) for v in generator.tower_postings(7, 4, 7, 3)}
+    assert compiled == shipped_guard_postings()
     assert len(compiled) == 335
+
+    # Control: without the map, army may drive none of the posts.
+    unfenced_argv = without_type_files(recorded)
+    unfenced = convert(BAHONAR_OSM, unfenced_argv, tmp_path / "unfenced", "unfenced")
+    refused = compile_guard_rota(
+        bahonar_package(unfenced, unfenced_argv, tmp_path / "unfenced", installation),
+        tmp_path / "unfenced", installation)
+    assert refused.refused
+    assert {f.subject for f in refused.findings.by_check(10)} == \
+        {f"rota guard_posting entry {entry}" for entry in shipped_guard_postings()}

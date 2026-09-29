@@ -113,7 +113,9 @@ is a refusal whether or not it moves a road. A world a scenario needs built diff
 Bahonar port keeps its private roads and drops pedestrian ways by type — is built that way with
 `--netconvert-arg`, and what its roads admit with the world's type map (`<extract>.typ.xml` beside the
 extract, or `--type-map`), rather than by letting the two sides diverge a second time. The Bahonar world
-is rebuilt with `Import/Shahid_Bahonar_Port.typ.xml` ([`07`](07_Scenario_Authoring.md) §9.8).
+is built with `Import/Shahid_Bahonar_Port.typ.xml` and its areas of interest,
+`Import/Shahid_Bahonar_Port.aoi.geojson`; its network fingerprints as `3966113a…`
+([`07`](07_Scenario_Authoring.md) §9.8, §2.11).
 
 ---
 
@@ -225,8 +227,9 @@ Already scouted; the build itself already compiles clean from the unmodified con
 
 The Python builder stays, but **emits the specification rather than SUMO XML**, so a generated
 scenario faces every check a hand-written one does. The compiler is built (`ScenarioCompiler`,
-`compile_scenario.py`); `make_sumo_scenario.py` emits the Gardnerville orbit as a specification and
-compiles it, and the Arapahoe and Bahonar generators still write SUMO XML ([`07`](07_Scenario_Authoring.md) §3.4).
+`compile_scenario.py`); `make_sumo_scenario.py` and `make_bahonar_scenario.py` emit the Gardnerville
+orbit and the Bahonar pattern of life as specifications and compile them against their worlds'
+packages; the Arapahoe generator still writes SUMO XML ([`07`](07_Scenario_Authoring.md) §3.4, §3.4.1).
 
 | ⚑ | Item | Notes |
 |---|---|---|
@@ -238,6 +241,7 @@ compiles it, and the Arapahoe and Bahonar generators still write SUMO XML ([`07`
 | | **The resolution report**, the only place an annotation or an epoch can ever be checked. **Built**: `ResolutionReport`, JSON and Markdown; a refused compile writes only the report | |
 | | **The hour-to-label correlation check — warns, never refuses.** Measured at **0.600** on the shipped scenario; at 02:00 and 11:00 every entry is annotated. **Built**: `IlluminationLabelAssociation`, by doc 11's bands | Refusing would make doc 20's class 4 unauthorable, and a check firing on the only large scenario gets switched off. Buckets by illumination regime, not clock hour; the statistic lands in the lock file |
 | | Sweeps and counterfactual pairing, with illumination as a declared axis. **Built**: `ScenarioSweep`; an `epoch.date` sweep leaves the routes' traffic identical | **Sweeping `epoch.date` rather than the window hour** moves the sun 21° while holding population and behaviour provably fixed |
+| | **The Bahonar pattern of life compiled.** Written: a specification on the rebuilt world's network under a 07:00 +03:30 epoch, reproducing every shipped entry inside the run at its local time, its six anomalies as supervision. Refused by check 14 alone until the catalogue measures `vehicle.carlamotors.european_hgv`; with that body measured it compiles and the session's network, lock, teleporting and route-error checks admit it | After a catalogue republish every compiled scenario is recompiled, because the session refuses a catalogue digest other than the lock's |
 
 ---
 
@@ -303,8 +307,8 @@ New `CarlaNet.CoSim` in C#, orchestrated from Python; one TraCI connection owned
 
 | Item | Notes |
 |---|---|
-| Supervision records: three-valued state, pattern instances, participants, intervals with the three onsets | The declared onset may legitimately be absent — all 338 Bahonar stops use `duration`, none uses `until`. The harness refuses to substitute another onset silently |
-| **Recurring series and the unrealised slot** — how an anomaly with no vehicle is expressed | The guard no-show is reconstructible byte for byte from its siblings; the generator discards it at `make_bahonar_scenario.py:236` |
+| Supervision records: three-valued state, pattern instances, participants, intervals with the three onsets | The declared onset may legitimately be absent. Of Bahonar's 338 stops, 337 use `duration` and the stay-behind's uses `until` the run's end. The harness refuses to substitute another onset silently |
+| **Recurring series and the unrealised slot** — how an anomaly with no vehicle is expressed | The guard no-show is the guard rota's one skip, compiled to an absence over the series' unrealised slot ([`07`](07_Scenario_Authoring.md) §3.4.1) |
 | Field-by-field truth reconciliation, emitting pose, heading, speed and dimension separations per vehicle per tick | A free test oracle for the pose conventions |
 | **Take a state's instant from the bridge's clock, never from SUMO's output files.** SUMO writes a step's outputs and only then advances its clock, while TraCI reports the advanced clock (`MSNet.cpp:948`, `:956`, `:809`), so an output file labels a state one step earlier than the frame that renders it. Measured: the bridge's speed at `t` matches SUMO's output at `t − 0.05 s` to 5e-3 m/s, and at `t` only to 0.229 m/s | At a 1 s SUMO step that is a whole second of onset error in any truth taken from output files |
 | **The solar block extended** with declared civil time, the asserted policy, and the residual | A frozen run and an unconfigured run are byte-identical today; assertion is what makes them distinguishable |
@@ -507,7 +511,7 @@ opinion about the word ([`06`](06_Truth_And_Annotation.md) `D6.8`, `D6.35`). `su
 that a consumer reading a one-participant instance never has to guess which track the instance is
 about; `vacancy` is reserved because the absence writer emits it, so its spelling is ours. Closing
 either list would refuse the sizing scenario's own `guard` on the day it was written (*read*,
-`CarlaControl/scripts/make_bahonar_scenario.py:238`).
+`make_bahonar_scenario.py:238` at `308e4aaab`; the specification declares it as `bahonar:guard`).
 
 An author-defined term is carried **opaquely but self-describingly**: the pipeline moves it from the
 supervision plan to the truth sidecar without understanding it, and requires enough alongside it that a

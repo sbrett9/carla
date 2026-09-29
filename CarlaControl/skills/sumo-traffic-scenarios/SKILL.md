@@ -2,7 +2,7 @@
 name: sumo-traffic-scenarios
 description: Use when building a SUMO traffic scenario or a Cursor-on-Target (CoT) telemetry dataset for a CARLA world generated from OpenStreetMap — including orbit/dwell/pattern-of-life scenarios, planted anomalies, ambient traffic, guard postings, fenced (access-restricted) road networks, or standalone scenario zips. Also use when the question is about how the OSM → world package (.xodr + bareearth.bin drape) → SUMO network → routes → CoT pipeline fits together, how run_SCTMV.py and CarlaNet produce the world, or which of the make_*_scenario.py / sumo_cot_telemetry.py tools to reach for. Covers the netconvert flags, coordinate alignment, which vehicles a scenario may ask for, and the measured gotchas that make routes actually work. Also use when writing or compiling a scenario specification (compile_scenario.py): the epoch that says what civil time t = 0 is, civil-time literals, named places, rotas, supervision labels and vocabulary, capture windows, the illumination default, sweeps and counterfactual pairs.
 metadata:
-  version: 1.4.0
+  version: 1.5.0
 ---
 
 # SUMO traffic scenarios for generated CARLA worlds
@@ -41,7 +41,7 @@ a different graph.
         │    · resolve places and civil times, route with duarouter, check, emit
         │    · .rou.xml (routed) · .sumocfg · the world's .net.xml · .supervision.json · .lock.json
         │    · .resolution.json — what everything resolved to
-        │  (or the older make_<name>_scenario.py builders, which write SUMO XML directly)
+        │  (or make_arapahoe_scenario.py, the one builder that still writes SUMO XML directly)
         ▼
   scenario files in carla/Import/  →  sumo_cot_telemetry.py (drives SUMO over TraCI)
     · reads bareearth.bin for each vehicle's ellipsoidal height
@@ -126,10 +126,15 @@ Beside this file, and held to the compiler by the test suite:
 - `references/gotchas.md` — the measured gotchas, each with the code that enforces it.
 
 **The blocks.** `world` (the package path and the network fingerprint it was authored against), `epoch`,
-`illumination`, `seeds` (`sumo`), `simulation` (`end`, `step_length_s`), `catalogue`, `vehicle_classes`
-and `vehicle_mix` (the vehicle mapping contract below, as data), `places`, `place_sets`, `instants`,
-`flows`, `actors`, `rotas`, `vocabulary`, `supervision`, `capture_windows`. A field the schema does not
-name is refused.
+`illumination`, `seeds` (`sumo`), `simulation` (`end`, `step_length_s`), `catalogue`, `vehicle_classes`,
+`vehicle_mix` and `vehicle_mixes` (the vehicle mapping contract below, as data), `places`, `place_sets`,
+`instants`, `flows`, `actors`, `rotas`, `vocabulary`, `supervision`, `capture_windows`. A field the
+schema does not name is refused.
+
+`make_bahonar_scenario.py` is the worked pattern of life: a week scheduled in civil clocks under a
+07:00 epoch, a guard rota whose one skip plants the no-show, five annotated instances, a nominal series
+over the rota with the no-show as its absence, each sited at the world's areas of interest
+(`Import/<Name>.aoi.geojson`, published into the package), and three named mixes.
 
 ### The epoch — ask for it, never assume it
 
@@ -259,10 +264,9 @@ All pure standard library. One public class per file (repo convention, see `carl
 | module | responsibility |
 |---|---|
 | `SumoInstallation.py` | Finds SUMO: `--sumo-home` → `$SUMO_HOME` → repo `Build/sumo-src` → `PATH`. Gives `netconvert`, `sumo`, `duarouter`, the `tools/` dir (traci, sumolib), and `proj` data. Compares its release with a world's converter through `CarlaNet.Sumo.SumoRelease`, the session's own comparison. |
-| `SumoScenarioBuilder.py` | `NetconvertSettings` (the flag set), `build_network` (the world package's network, checked and copied byte for byte), `RoadNetwork` (reads a net for lane geometry + connections), `AmbientFlow` (a time-windowed traffic stream), and network post-processors for the legacy generators: `restrict_private_roads` (an access-keyed fence the session refuses), `allow_opposite_overtaking`, `write_config`, plus the orbit/dwell route writers. |
+| `SumoScenarioBuilder.py` | `NetconvertSettings` (the flag set), `build_network` (the world package's network, checked and copied byte for byte), `RoadNetwork` (reads a net for lane geometry + connections), `AmbientFlow` (a time-windowed traffic stream), and network post-processors: `restrict_private_roads` (an access-keyed fence the session refuses; nothing calls it), `allow_opposite_overtaking` (the Arapahoe builder's), `write_config`, plus the orbit/dwell route writers. |
 | `NetconvertTypeMap.py` | The world's own road types (`<extract>.typ.xml`, `--type-map`), validated before a build and passed to netconvert after SUMO's own map: the fence as a world-build decision. |
-| `SumoPatternOfLifeBuilder.py` | A multi-day timeline: `ScheduledVehicle` + `ScheduleStop`, and `write_routes` that merges time-windowed flows and scheduled vehicles onto one departure-sorted timeline. For week-long "pattern of life" scenarios. |
-| `ScenarioVehicleMix.py` | `VehicleClassSpec` (one kind of vehicle a scenario asks for: which measured blueprints it draws, its share of the traffic, and the author's own driving attributes) and `ScenarioVehicleMix`, which writes those as `<vType>`s sized from the catalogue plus the per-class and whole-mix `<vTypeDistribution>`s. `check_route_file` reads a written `.rou.xml` back and refuses one whose types name no measured body. This is how a scenario satisfies the mapping contract below. |
+| `ScenarioVehicleMix.py` | `VehicleClassSpec` (one kind of vehicle a scenario asks for: which measured blueprints it draws, its share of the traffic, and the author's own driving attributes), `VehicleMixSpec` (a named population drawn from declared classes at its own shares) and `ScenarioVehicleMix`, which writes those as `<vType>`s sized from the catalogue plus the per-class, whole-mix and named-mix `<vTypeDistribution>`s. `check_route_file` reads a written `.rou.xml` back and refuses one whose types name no measured body. This is how a scenario satisfies the mapping contract below. |
 | `VehicleCatalogue.py` | Read side of `vehicles.catalogue.json`: measured extent per blueprint, the bumper-to-origin shift the pose conversion needs, and the refusal reason for a type it cannot answer for. |
 | `SumoCotBridge.py` | Drives a scenario through **TraCI** and emits CoT. `BareEarthGrid` (reads `bareearth.bin`, loose or inside a `.cwp`), per-type affiliation + multi-marked support, real-time pacing. |
 | `CotUdpEmitter.py` | The CoT event formatter (shared with the CARLA truth producer, so datasets are comparable) and the UDP socket. Schema: `Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md`. |
@@ -270,12 +274,15 @@ All pure standard library. One public class per file (repo convention, see `carl
 CLIs in `carla/CarlaControl/scripts/`:
 
 - `make_sumo_scenario.py` — Gardnerville orbit (one marked vehicle laps a block N times). Writes a
-  specification and compiles it; the other two still write SUMO XML.
+  specification and compiles it.
 - `make_arapahoe_scenario.py` — Arapahoe I-25 dwell (freeway + underpass, an incident, a long dwell).
-- `make_bahonar_scenario.py` — Shahid Bahonar 7-day pattern of life (fenced port, guard postings,
-  six anomalies).
+  Still writes SUMO XML.
+- `make_bahonar_scenario.py` — Shahid Bahonar 7-day pattern of life (the port's guard postings, ferry
+  pulses and shift changes, six anomalies). Writes a specification and compiles it against the world
+  package; refused by name while the catalogue lacks a body it draws.
 - `sumo_cot_telemetry.py` — run any `.sumocfg`, emit CoT to `--udp` / `--xml` / `--csv`, with
-  `--labels <name>.labels.json` for ground truth and `--bare-earth <grid>` for height.
+  `--labels <name>.labels.json` for a legacy scenario's ground truth and `--bare-earth <grid>` for
+  height. A compiled scenario's ground truth is its `.supervision.json`, which this tool does not read.
 - `listen_cot.py` (in the bundles) — a minimal UDP receiver to confirm the live feed.
 
 Each scenario is also shipped as a **standalone zip at the workspace root** (`GardnervilleOrbit.zip`,
@@ -333,6 +340,19 @@ two-wheeler `vClass` stops the build. Then read the written file back with
 `Build/sumo-install/data/xsd/routes_file.xsd`. The scenario compiler does all of this from a
 specification's `vehicle_classes` (checks 14, 15, 51); `make_sumo_scenario.py` is the worked example.
 
+**Several populations.** Where flows draw from different compositions — corridor traffic from cars,
+taxis and lorries, port traffic from cleared cars and freight — declare `vehicle_mixes[]`, each
+`{"id": "port_mix", "shares": {"port_vehicle": 0.7, "port_truck": 0.3}}`: a flat distribution of its own
+by the same share × member weight arithmetic, named by a flow's `type`. A class's own `share` belongs
+to the single `vehicle_mix` and plays no part in a named one. A mix naming an undeclared class, a
+share that is not positive, or an id a class, type or other mix already has is refused (check 14), and
+a flow drawing a mix is held to every member class's road permissions (check 10).
+
+**A planted vehicle belongs to the class of the population it moves among** unless its driving model
+is the behaviour itself: a vehicle type carried by planted vehicles alone reaches the truth record as
+their label. In Bahonar the gate probe is a civilian car and the escort military jeeps; only the
+perimeter shadow's crawl and the stay-behind keep classes of their own.
+
 **What the catalogue cannot fill.** It measured 17 bodies and there is **no pickup** among them,
 and exactly one sport utility (`vehicle.nissan.patrol`). A scenario that wants a pickup does not get
 one: say so, drop the class, and let the shares redistribute — do not reach for the nearest-sized
@@ -384,10 +404,13 @@ editing a network afterwards:
   transport, emergency and authority only), never `access=private`, so a type map sets what every road
   of a type admits, private or not. A fence that keeps civilians off `access=private` residential
   roads is not expressible in a world today.
-- `SumoScenarioBuilder.restrict_private_roads` still does that access-keyed rewrite for the legacy
-  Bahonar generator's SUMO-only preview and CoT path. A network it rewrites is **not** the world's: the
-  session refuses a scenario on it and a specification cannot use it. Do not use it for anything CARLA
-  renders.
+- `SumoScenarioBuilder.restrict_private_roads` still does that access-keyed rewrite, and nothing calls
+  it: the Bahonar generator now runs the world's own network. A network it rewrites is **not** the
+  world's: the session refuses a scenario on it and a specification cannot use it. Do not use it for
+  anything CARLA renders.
+- *Measured* on Bahonar's rebuilt world: no civilian route crosses a formerly private way, but the
+  `access=no` service connector (way 26413344) admits `authority` and not `army`, so the naval
+  vehicles' routes to the western towers are longer than under the access-keyed fence.
 
 ## Measured gotchas (each cost real time; do not relearn them)
 
@@ -405,8 +428,8 @@ The compiler enforces four of these on a specification — departure order, `--`
 - **A scalar `speedFactor` is a distribution, not a value** — SUMO applies the default `speedDev`
   0.1, so `speedFactor="1.25"` measured 1.31. Set `speedDev="0"` when the multiple must be exact.
 - **The route file must be sorted by departure time** across flows and vehicles, or SUMO silently
-  drops the out-of-order entries with only a warning. `SumoPatternOfLifeBuilder` merges both onto one
-  timeline before writing for exactly this reason.
+  drops the out-of-order entries with only a warning. The compiler writes one departure-sorted
+  timeline and refuses a route file out of order (check 29).
 - **`--opposites.guess` yields zero opposite lanes on our netconvert output** (it compares
   junction-trimmed lane-shape endpoints). For centre-line overtaking, name the pairs explicitly with
   `allow_opposite_overtaking`. It does not rescue a two-way jam: SUMO refuses the manoeuvre while
@@ -427,7 +450,9 @@ The compiler enforces four of these on a specification — departure order, `--`
 Events are CoT `<event>`s (schema in `Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md`),
 emitted identically to UDP, an XML file, and a 31-column CSV (one row per vehicle per update). The
 `_carla` detail block name is kept even though the source is SUMO, so the two producers are directly
-comparable. Ground truth rides in the `.labels.json` the telemetry tool reads:
+comparable. A compiled scenario's ground truth is its `.supervision.json` (instances, series,
+absences, cohorts), which this tool does not read. A legacy scenario's rides in the `.labels.json` the
+telemetry tool reads:
 
 - `marked_ids` — vehicle IDs flagged as anomalies (`marked=1`, and a distinct affiliation).
 - `affiliation_by_type` — CoT affiliation per SUMO vehicle type: civilian `n` (neutral), military

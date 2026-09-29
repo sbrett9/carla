@@ -3,12 +3,15 @@
 `07_Scenario_Authoring.md` §8.5 sets the honest test of the rota construct: re-expressed as a rota, the
 sizing scenario's guard postings must produce **byte-identical** departure seconds and ids from
 civil-time literals, or the rota does not express what the triple loop expressed. This compares
-against the shipped generator's own `tower_postings`, not a transcription of it.
+against the 335 guard trips of the route file that loop shipped
+(`fixtures/Shahid_Bahonar_Port_PatternOfLife.shipped.rou.xml`, whose `t = 0` is midnight of day 0),
+not a transcription of them, and holds the rota under test to the one the generator now writes.
 """
 from __future__ import annotations
 
 import importlib.util
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -43,6 +46,10 @@ def expander(span_end_s=7 * 86_400):
     return RotaExpander(resolver, findings), findings
 
 
+SHIPPED_ROUTES = (Path(__file__).resolve().parent / "fixtures"
+                  / "Shahid_Bahonar_Port_PatternOfLife.shipped.rou.xml")
+
+
 def load_bahonar_generator():
     path = _REPO / "CarlaControl" / "scripts" / "make_bahonar_scenario.py"
     spec = importlib.util.spec_from_file_location("make_bahonar_scenario", path)
@@ -51,15 +58,33 @@ def load_bahonar_generator():
     return module
 
 
-def test_the_guard_rota_reproduces_the_generator_byte_for_byte():
-    generator = load_bahonar_generator()
-    shipped = generator.tower_postings(days=7, no_show_day=4, no_show_hour=7, no_show_tower=3)
+def shipped_guard_postings() -> list[tuple[str, float]]:
+    """Every guard trip of the shipped route file: its id and its departure second."""
+    return [(trip.get("id"), float(trip.get("depart")))
+            for trip in ET.parse(SHIPPED_ROUTES).getroot().iter("trip")
+            if trip.get("id").startswith("guard_")]
+
+
+def test_the_guard_rota_reproduces_the_shipped_postings_byte_for_byte():
+    shipped = shipped_guard_postings()
     rota, findings = expander()
     entries, _ = rota.expand(GUARD_ROTA, TOWERS)
     assert not findings.findings
     assert len(entries) == len(shipped) == 335
-    assert sorted((e.entry_id, e.depart.seconds) for e in entries) == \
-        sorted((v.veh_id, float(v.depart)) for v in shipped)
+    assert sorted((e.entry_id, e.depart.seconds) for e in entries) == sorted(shipped)
+
+
+def test_the_rota_under_test_is_the_one_the_generator_writes():
+    """Days, clocks, id pattern and the skipped occasion; the skip's wording is the generator's."""
+    written = load_bahonar_generator().BahonarPatternOfLifeSpecification(
+        None, days=7, no_show_day=4, no_show_hour=7, no_show_tower=3, step_length_s=1.0,
+        seed=42).guard_rota()
+    for key in ("days", "at", "id_pattern"):
+        assert written[key] == GUARD_ROTA[key], key
+    (skip,) = written["skip"]
+    assert {k: v for k, v in skip.items() if k != "because"} == \
+        {k: v for k, v in GUARD_ROTA["skip"][0].items() if k != "because"}
+    assert written["subjects"] == {"place_set": "guard_towers"}
 
 
 def test_the_skip_is_the_one_absence_with_its_reason_and_its_civil_time():
