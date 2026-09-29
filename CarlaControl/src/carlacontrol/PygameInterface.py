@@ -584,19 +584,55 @@ class PygameInterface:
             speed_val = 0.0
             frames_val = 0
 
+        # Only what this window can act on is shown: a window given no traffic, recorder or orbit
+        # lists none of their keys, and a read-only one none of the world's.
+        def on(flag: str) -> str:
+            return "ON" if self.get_flag(flag) else "OFF"
+
+        settings = [f"speed {speed_val:4.0f}"]
+        if not self.read_only:
+            settings += [f"photoreal(C) {on('photoreal_visible')}", f"ground(G) {on('ground_visible')}",
+                         f"gColl(V) {on('ground_collision')}", f"road(R) {on('road_rendered')}",
+                         f"signals(L) {on('signals_visible')}"]
+        if self.traffic:
+            settings.append(f"diag(]) {on('traffic_diagnostics')}")
+        settings += [f"perim(B) {on('show_perimeter')}", f"margin(M) {on('show_margin')}",
+                     f"time {time_str}" if self.read_only else f"time(K) {time_str}"]
+
+        systems = []
+        if self.traffic:
+            systems.append(f"traffic(T) {traf_str}")
+        if self.scenario:
+            systems.append(f"scenario(X) {scen_str}")
+        if self.telemetry:
+            systems.append(f"telemetry(Y) {tel_str}")
+        if self.recorder:
+            systems.append(f"record(F) {rec_str}")
+        if self.orbit_sensor_controller:
+            systems.append(f"orbit(O) {orbit_str}")
+        systems += [f"fps {self.get_fps():4.0f}", f"frames {frames_val}"]
+
+        movement = ["RMB look", "Ctrl+LMB measure", "WASD/EQ fly", "wheel speed", "Shift fast",
+                    "B/M overlays" if self.read_only else "C/G/V/R/L/B/M layers"]
+        controls = [] if self.read_only else ["K time"]
+        if self.traffic:
+            controls += ["T traffic", "] traffic diag"]
+        if self.scenario:
+            controls.append("X scenario")
+        if self.telemetry:
+            controls.append("Y telemetry")
+        if self.recorder:
+            controls.append("F record")
+        if self.orbit_sensor_controller:
+            controls += ["O orbit", "P pause orbit"]
+        controls += ["Space reset", "Esc quit"]
+
         hud = [
             pose_str,
-            f"speed {speed_val:4.0f}   photoreal(C) {'ON' if self.get_flag('photoreal_visible') else 'OFF'}   "
-            f"ground(G) {'ON' if self.get_flag('ground_visible') else 'OFF'}   gColl(V) {'ON' if self.get_flag('ground_collision') else 'OFF'}   "
-            f"road(R) {'ON' if self.get_flag('road_rendered') else 'OFF'}   signals(L) {'ON' if self.get_flag('signals_visible') else 'OFF'}   "
-            f"diag(]) {'ON' if self.get_flag('traffic_diagnostics') else 'OFF'}   "
-            f"perim(B) {'ON' if self.get_flag('show_perimeter') else 'OFF'}   "
-            f"margin(M) {'ON' if self.get_flag('show_margin') else 'OFF'}   time(K) {time_str}",
-            f"traffic(T) {traf_str}   scenario(X) {scen_str}   telemetry(Y) {tel_str}   record(F) {rec_str}   "
-            f"orbit(O) {orbit_str}   "
-            f"fps {self.get_fps():4.0f}   frames {frames_val}",
-            "RMB look | Ctrl+LMB measure | WASD/EQ fly | wheel speed | Shift fast | C/G/V/R/L/B/M layers | ",
-            "K time | T traffic | ] traffic diag | X scenario | Y telemetry | F record | O orbit | P pause orbit | Space reset | Esc quit",
+            "   ".join(settings),
+            "   ".join(systems),
+            " | ".join(movement) + " | ",
+            " | ".join(controls),
         ]
 
         if orbit_enabled and orbit_info is not None:
