@@ -215,7 +215,7 @@ public sealed class OsmConverter
             return new OsmConversionResult(
                 OpenDrive: await File.ReadAllTextAsync(xodrPath, ct).ConfigureAwait(false),
                 Network: await File.ReadAllTextAsync(netPath, ct).ConfigureAwait(false),
-                NetconvertArgv: argv,
+                NetconvertArgv: RecordedArguments(argv, xodrPath, netPath),
                 NetconvertPath: exe,
                 NetconvertVersion: ResolveNetconvertVersion(exe));
         }
@@ -505,6 +505,25 @@ public sealed class OsmConverter
 
     private static readonly Dictionary<string, string> VersionsByPath =
         new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>What an OpenDRIVE output path is recorded as in the build's arguments.</summary>
+    public const string RecordedOpenDriveOutput = "<opendrive-output>";
+
+    /// <summary>What the network output path is recorded as in the build's arguments.</summary>
+    public const string RecordedNetworkOutput = "<output-file>";
+
+    /// <summary>
+    /// The arguments as a build records them: the two output files are this run's scratch files,
+    /// named at random, and where netconvert writes changes nothing it produces, so they are
+    /// recorded by fixed names. Recorded as passed, every build of an identical world differed from
+    /// the last, and a scenario compiled against the first looked stale against the second.
+    /// </summary>
+    internal static IReadOnlyList<string> RecordedArguments(IReadOnlyList<string> argv,
+                                                            string openDrivePath,
+                                                            string networkPath) =>
+        [.. argv.Select(argument => argument == openDrivePath ? RecordedOpenDriveOutput
+                                    : argument == networkPath ? RecordedNetworkOutput
+                                    : argument)];
 
     private static void TryDelete(string path)
     {

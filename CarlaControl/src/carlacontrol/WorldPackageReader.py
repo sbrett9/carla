@@ -81,10 +81,24 @@ class WorldPackageReader:
         """The fingerprint the world build recorded. Empty on a package written before it existed."""
         return self.manifest.get("NetworkFingerprint", "")
 
+    # The output files netconvert wrote, recorded by these fixed names: they were the build's scratch
+    # files, named at random, and where netconvert writes changes nothing it produces.
+    RECORDED_OUTPUTS = {"--opendrive-output": "<opendrive-output>", "--output-file": "<output-file>",
+                        "-o": "<output-file>"}
+
     @property
     def netconvert_argv(self) -> list[str]:
-        """Every argument netconvert was given. Empty on a package written before it was recorded."""
-        return list(self.manifest.get("NetconvertArgv", []))
+        """Every argument netconvert was given, its output paths by fixed names.
+
+        Empty on a package written before it was recorded. A package written before the world build
+        recorded its outputs by name carries the random scratch paths, which made every rebuild of an
+        identical world differ from the last; they are named here as the build now names them.
+        """
+        argv = list(self.manifest.get("NetconvertArgv", []))
+        for index in range(1, len(argv)):
+            if argv[index - 1] in self.RECORDED_OUTPUTS:
+                argv[index] = self.RECORDED_OUTPUTS[argv[index - 1]]
+        return argv
 
     @property
     def netconvert_version(self) -> str:

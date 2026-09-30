@@ -884,7 +884,7 @@ Remedies:
   },
   "network": {
     "path": "Shahid_Bahonar_Port.net.xml",
-    "sha256": "294a30dbb9c0a95f95d4540433bf78295e7734f3e64946971c393b0217528b16"
+    "sha256": "83ac68c9f184c7de1f7df69e520435fc05db8741f3ec30e4b2e86e403f8593fb"
   },
   "supervision": {
     "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",

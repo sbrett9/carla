@@ -82,4 +82,22 @@ public class NetconvertArgumentsTests
         Assert.Contains("--output-file", argv);
         Assert.Contains("--tls.discard-loaded", argv);
     }
+
+    [Fact]
+    public void TheRecordedArgumentsNameTheOutputsByFixedNamesAndKeepEverythingElse()
+    {
+        // Two builds of one world write to two random scratch files; what they record must agree.
+        var converter = new OsmConverter(WorldBuildOptions);
+        string[] first = [.. OsmConverter.RecordedArguments(
+            converter.BuildArguments("map.osm", @"C:\t\carlanet_osm_a.xodr", @"C:\t\carlanet_osm_b.net.xml"),
+            @"C:\t\carlanet_osm_a.xodr", @"C:\t\carlanet_osm_b.net.xml")];
+        string[] second = [.. OsmConverter.RecordedArguments(
+            converter.BuildArguments("map.osm", @"C:\t\carlanet_osm_c.xodr", @"C:\t\carlanet_osm_d.net.xml"),
+            @"C:\t\carlanet_osm_c.xodr", @"C:\t\carlanet_osm_d.net.xml")];
+
+        Assert.Equal(first, second);
+        Assert.Equal(OsmConverter.RecordedOpenDriveOutput, first[Array.IndexOf(first, "--opendrive-output") + 1]);
+        Assert.Equal(OsmConverter.RecordedNetworkOutput, first[Array.IndexOf(first, "--output-file") + 1]);
+        Assert.Contains("map.osm", first);
+    }
 }

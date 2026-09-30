@@ -30238,7 +30238,7 @@
       },
       "network": {
         "path": "Shahid_Bahonar_Port.net.xml",
-        "sha256": "294a30dbb9c0a95f95d4540433bf78295e7734f3e64946971c393b0217528b16"
+        "sha256": "83ac68c9f184c7de1f7df69e520435fc05db8741f3ec30e4b2e86e403f8593fb"
       },
       "supervision": {
         "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
@@ -30253,7 +30253,7 @@
         "--osm-files",
         "G:\\Projects\\CarlaUE_5_7_4\\carla\\Build\\sumo-smoketest\\Shahid_Bahonar_Port_clipped.osm",
         "--opendrive-output",
-        "C:\\Users\\sbret\\AppData\\Local\\Temp\\carlanet_osm_b83d3bb5c1874cfe9cad32ee44eb2f2c.xodr",
+        "<opendrive-output>",
         "--proj",
         "+proj=tmerc +lat_0=27.15012 +lon_0=56.18065 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
         "--default.lanewidth",
@@ -30274,7 +30274,7 @@
         "--tls.default-type",
         "actuated",
         "--output-file",
-        "C:\\Users\\sbret\\AppData\\Local\\Temp\\carlanet_osm_ce9e0ad71b904f73be5f6d18dbb4b122.net.xml",
+        "<output-file>",
         "--junctions.join-dist",
         "25",
         "--remove-edges.by-type",
