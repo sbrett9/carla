@@ -820,7 +820,9 @@ class ScenarioCompiler:
             "spec_version": SPEC_VERSION,
             "scenario_id": self.scenario_id,
             "routes_digest": digests["routes"],
-            "network_digest": digests["network"],
+            # The network's identity, not its file's bytes: the copy carries netconvert's build
+            # stamp, which a rebuilt world changes while the network stays the same.
+            "network_digest": self.network_fingerprint,
             "config_digest": digests["config"],
             "vocabulary_version": self.vocabulary.to_document()["core"]["vocabulary_version"],
             "vocabulary_digest": self.vocabulary.digest,

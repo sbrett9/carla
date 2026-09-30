@@ -158,7 +158,7 @@ Remedies:
   },
   "supervision": {
     "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.supervision.json",
-    "sha256": "7307b94928522006f31c0f7f820353c72cf22320c9d030c393785f8852142ae7"
+    "sha256": "2ec3edbaf01efa029262f9fa25b91bfa2c729f7a32efddec3546753c5472ae7d"
   }
 }
 ```

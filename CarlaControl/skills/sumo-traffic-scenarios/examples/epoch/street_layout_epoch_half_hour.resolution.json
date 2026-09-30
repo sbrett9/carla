@@ -443,7 +443,7 @@
       },
       "supervision": {
         "path": "street_layout_epoch_half_hour.supervision.json",
-        "sha256": "442eb252b86747122fc144f4f7db7434f512ce8791f31155b089c9d6f08cfff0"
+        "sha256": "e2b45f5798bf8182c87b30783817207c36d59bcb35d3cebfc9bcab1bda6ee5f2"
       }
     },
     "world": {

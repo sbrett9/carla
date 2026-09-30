@@ -431,7 +431,7 @@
       },
       "supervision": {
         "path": "street_layout_epoch_whole_hour.supervision.json",
-        "sha256": "97cb208205e3a6b8d42884625d85b8751bd588e4011761cc37a296b19bdba027"
+        "sha256": "6a6fae2d263e8c90ca4b32a58f555a3d93e9fe92a598e6edf65e6614d33db80f"
       }
     },
     "world": {

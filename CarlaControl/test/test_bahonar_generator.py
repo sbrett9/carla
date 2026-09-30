@@ -70,8 +70,11 @@ CATALOGUE = _REPO / "CarlaControl" / "catalogue" / "vehicles.catalogue.json"
 IMPORT = _REPO / "Import"
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 SCENARIO = "Shahid_Bahonar_Port_PatternOfLife"
-BYTE_FOR_BYTE = (f"{SCENARIO}.rou.xml", f"{SCENARIO}.sumocfg", "Shahid_Bahonar_Port.net.xml",
-                 f"{SCENARIO}.supervision.json")
+BYTE_FOR_BYTE = (f"{SCENARIO}.rou.xml", f"{SCENARIO}.sumocfg", f"{SCENARIO}.supervision.json")
+# The network is the world package's, copied beside the scenario: its bytes carry netconvert's
+# "generated on" stamp from the world build, so rebuilding the world changes them while the
+# network stays the same. It is compared by its canonical fingerprint, as the session compares it.
+NETWORK = "Shahid_Bahonar_Port.net.xml"
 SHIPPED_ROUTES = FIXTURES / f"{SCENARIO}.shipped.rou.xml"
 SHIPPED_LABELS = FIXTURES / f"{SCENARIO}.shipped.labels.json"
 SHIPPED_END_S = 7 * 86_400
@@ -120,10 +123,13 @@ def test_the_shipped_scenario_is_what_its_generator_writes_today(tmp_path):
         assert done.returncode == 0, done.stdout[-3000:] + done.stderr[-3000:]
         for name in BYTE_FOR_BYTE:
             assert (tmp_path / name).read_bytes() == (IMPORT / name).read_bytes(), name
+        assert (NetworkFingerprint.of_file(tmp_path / NETWORK)
+                == NetworkFingerprint.of_file(IMPORT / NETWORK)), NETWORK
         shipped = json.loads((IMPORT / f"{SCENARIO}.lock.json").read_text(encoding="utf-8"))
         regenerated = json.loads((tmp_path / f"{SCENARIO}.lock.json").read_text(encoding="utf-8"))
         for lock in (shipped, regenerated):
             lock.pop("specification_sha256")
+            lock["files"]["network"].pop("sha256")
         assert regenerated == shipped
         return
 

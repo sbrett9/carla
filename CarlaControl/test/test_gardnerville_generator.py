@@ -21,13 +21,20 @@ from pathlib import Path
 import pytest
 
 _REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
+
+from carlacontrol.NetworkFingerprint import NetworkFingerprint  # noqa: E402
+
 GENERATOR = _REPO / "CarlaControl" / "scripts" / "make_sumo_scenario.py"
 PACKAGE = _REPO / "Build" / "world-packages" / "Gardnerville_Centerville_Lane.cwp"
 STAGED_SUMO = _REPO / "Build" / "sumo-install"
 IMPORT = _REPO / "Import"
 SCENARIO = "Gardnerville_Centerville_Lane_NeighborhoodOrbit"
-BYTE_FOR_BYTE = (f"{SCENARIO}.rou.xml", f"{SCENARIO}.sumocfg", "Gardnerville_Centerville_Lane.net.xml",
-                 f"{SCENARIO}.supervision.json")
+BYTE_FOR_BYTE = (f"{SCENARIO}.rou.xml", f"{SCENARIO}.sumocfg", f"{SCENARIO}.supervision.json")
+# The network is the world package's, copied beside the scenario: its bytes carry netconvert's
+# "generated on" stamp from the world build, so rebuilding the world changes them while the
+# network stays the same. It is compared by its canonical fingerprint, as the session compares it.
+NETWORK = "Gardnerville_Centerville_Lane.net.xml"
 
 
 def test_the_shipped_orbit_is_what_its_generator_compiles(tmp_path):
@@ -40,10 +47,13 @@ def test_the_shipped_orbit_is_what_its_generator_compiles(tmp_path):
     assert done.returncode == 0, done.stdout[-3000:] + done.stderr[-3000:]
     for name in BYTE_FOR_BYTE:
         assert (tmp_path / name).read_bytes() == (IMPORT / name).read_bytes(), name
+    assert (NetworkFingerprint.of_file(tmp_path / NETWORK)
+            == NetworkFingerprint.of_file(IMPORT / NETWORK)), NETWORK
     shipped = json.loads((IMPORT / f"{SCENARIO}.lock.json").read_text(encoding="utf-8"))
     regenerated = json.loads((tmp_path / f"{SCENARIO}.lock.json").read_text(encoding="utf-8"))
     for lock in (shipped, regenerated):
         lock.pop("specification_sha256")
+        lock["files"]["network"].pop("sha256")
     assert regenerated == shipped
     specification = json.loads((tmp_path / f"{SCENARIO}.scenario.json").read_text(encoding="utf-8"))
     shipped_specification = json.loads((IMPORT / f"{SCENARIO}.scenario.json").read_text(

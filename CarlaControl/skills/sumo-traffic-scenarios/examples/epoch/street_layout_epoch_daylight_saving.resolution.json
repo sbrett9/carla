@@ -431,7 +431,7 @@
       },
       "supervision": {
         "path": "street_layout_epoch_daylight_saving.supervision.json",
-        "sha256": "7f84f41183dda2e69c1d9aa168977174ead3a20f2acc9edf1dce968e8d457d03"
+        "sha256": "2f33db81e1e82f0816f94fa975e73dcfe6a6f8bf102745346fc3b46229d76885"
       }
     },
     "world": {

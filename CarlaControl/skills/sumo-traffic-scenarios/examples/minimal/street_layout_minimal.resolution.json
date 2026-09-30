@@ -430,7 +430,7 @@
       },
       "supervision": {
         "path": "street_layout_minimal.supervision.json",
-        "sha256": "5cf3c86f8393bf9a0726da96b4c01c3e1f4030e41e6e3f36c6a9091ac1c60189"
+        "sha256": "4c648b6f6ecffb1f9189e9a296042010ee4164fb1d193d4efac8e71619d0e604"
       }
     },
     "world": {

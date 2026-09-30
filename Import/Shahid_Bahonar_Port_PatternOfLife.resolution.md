@@ -884,11 +884,11 @@ Remedies:
   },
   "network": {
     "path": "Shahid_Bahonar_Port.net.xml",
-    "sha256": "abfa177478deec3e2e446b5b3313d1961c89e626233177949986816e2529236f"
+    "sha256": "294a30dbb9c0a95f95d4540433bf78295e7734f3e64946971c393b0217528b16"
   },
   "supervision": {
     "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
-    "sha256": "8ebda5ebdfb77e31a6413739d306fb464900208c2aa3dad905d61477a839cc31"
+    "sha256": "6b7388c46752c833f1acb7b1b13a02f46df81f0081b5327932e876744e440186"
   }
 }
 ```
