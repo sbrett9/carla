@@ -3,6 +3,7 @@ using System.Globalization;
 using CarlaNet.Map.WorldPackage;
 using CarlaNet.Recording;
 using CarlaNet.Sumo;
+using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Commands;
 using CarlaNet.Types.Rpc.Lighting;
 
@@ -43,6 +44,9 @@ public sealed class SumoDriveSession : IDisposable
     /// </summary>
     private static readonly TimeSpan SumoLastWordsBound = TimeSpan.FromSeconds(5);
 
+    /// <summary>The seed SUMO runs under when its configuration declares none (its <c>--seed</c> default).</summary>
+    private const long SumoDefaultSeed = 23423;
+
     private readonly SumoDriveSessionOptions _options;
     private readonly ICarlaWorld? _world;
     private readonly SumoConnection _sumo;
@@ -77,6 +81,12 @@ public sealed class SumoDriveSession : IDisposable
     private readonly HashSet<string> _stillAwaiting = [];
     private readonly HeadlightRule? _headlights;
     private readonly Dictionary<string, (ActorId Actor, VehicleLightStateFlags Lamps)> _lampsWritten = [];
+    private readonly GroundSurface _ground;
+    private readonly SortedDictionary<ActorId, CameraOptics> _cameras = [];
+    private readonly List<CameraView> _cameraViews = [];
+    private readonly long _seed;
+    private readonly double _longestBody;
+    private readonly double _bodyReach;
 
     private readonly (double Latitude, double Longitude) _origin;
     private SolarLease? _sun;
@@ -86,6 +96,7 @@ public sealed class SumoDriveSession : IDisposable
     private double? _lastCompleteSeconds;
     private double? _reportedSunElevation;
     private RenderSet? _renderSetNow;
+    private ulong? _lastFrame;
     private bool _disposed;
 
     private SumoDriveSession(SumoDriveSessionOptions options,
@@ -106,11 +117,16 @@ public sealed class SumoDriveSession : IDisposable
                              WorldSettingsLease? settings,
                              LayerVisibilityLease? layers,
                              VehicleBodyPool? pool,
-                             (double Latitude, double Longitude) origin)
+                             (double Latitude, double Longitude) origin,
+                             long seed)
     {
         _options = options;
         _world = world;
         _origin = origin;
+        _ground = ground;
+        _seed = seed;
+        _longestBody = catalogue.LongestBodyMetres;
+        _bodyReach = catalogue.BodyReachMetres;
         _sumo = sumo;
         _console = console;
         _collisionHandling = collisionHandling;
@@ -156,6 +172,8 @@ public sealed class SumoDriveSession : IDisposable
             LayerVisibility = layers?.Applied ?? new Dictionary<string, bool>(),
             Epoch = options.Epoch,
             Illumination = options.Illumination,
+            RenderSetPolicy = options.RenderSet.Description,
+            RenderSetSeed = seed,
         };
     }
 
@@ -216,6 +234,56 @@ public sealed class SumoDriveSession : IDisposable
     /// frames are held.
     /// </remarks>
     public IRenderSetSource RenderSet => _renderSets;
+
+    /// <summary>The cameras registered with the session, in actor order.</summary>
+    public IReadOnlyCollection<ActorId> Cameras => _cameras.Keys;
+
+    /// <summary>
+    /// Register a camera whose view the render set follows: from the next admission pass, a policy that
+    /// follows cameras renders the vehicles inside and approaching its ground footprint.
+    /// </summary>
+    /// <param name="camera">The camera's actor id, spawned by the caller.</param>
+    /// <remarks>
+    /// <para>The camera's image size and field of view are read from its attributes now, in one round
+    /// trip; its pose is read at every pass from the client's snapshot of the last frame rendered, so a
+    /// camera flown or orbited between passes is followed wherever it goes. Registering one already
+    /// registered reads its attributes again and changes nothing else.</para>
+    ///
+    /// <para>Cameras come and go during a run -- a free view opened late, a rig taken down -- and each
+    /// pass decides from the ones registered then. With none registered a policy that follows cameras
+    /// renders its configured circle, never nothing. Registered between advances, from the thread that
+    /// advances the session, as every other call on it is.</para>
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The session renders no world to read a camera from.</exception>
+    /// <exception cref="ArgumentException">The world has no such actor, or the actor is not a camera.</exception>
+    public void AddCamera(ActorId camera)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_world is not { } world)
+        {
+            throw new InvalidOperationException(
+                "The session renders no world, so it has no camera to follow: a camera is read from the "
+                + "world it was spawned in.");
+        }
+
+        _cameras[camera] = world.DescribeCamera(camera)
+                           ?? throw new ArgumentException(
+                               $"Actor {camera} is not a camera the world knows: it has no image_size_x, "
+                               + "image_size_y and fov to take a footprint from.", nameof(camera));
+    }
+
+    /// <summary>
+    /// Stop following a camera, from the next admission pass. Answers whether it was registered.
+    /// </summary>
+    /// <remarks>
+    /// Call it before destroying the camera: a registered camera the world no longer has is left out of
+    /// every pass, and counted on the report, but it is still registered.
+    /// </remarks>
+    public bool RemoveCamera(ActorId camera)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _cameras.Remove(camera);
+    }
 
     /// <summary>
     /// The SUMO this session drives, for a test that has to act on it as something outside the
@@ -385,6 +453,9 @@ public sealed class SumoDriveSession : IDisposable
         // there is anything to ask SUMO for on each step.
         SumoCollisionHandling collisionHandling = SumoCollisionHandling.Read(options.ScenarioPath);
 
+        // The seed SUMO will run under, which a ranking under the render set's capacity is drawn from.
+        long seed = ReadTheSeed(options.ScenarioPath);
+
         List<string> extraArguments = [];
         if (options.SumoStepOverrideSeconds is { } forced)
         {
@@ -453,7 +524,8 @@ public sealed class SumoDriveSession : IDisposable
                 session = new SumoDriveSession(options, world, sumo, console, release, compiled,
                                                teleporting, routeErrors, collisionHandling, headlights, clock,
                                                network, ground, catalogue, lease, settings, layers,
-                                               pool, (manifest.OriginLatitude, manifest.OriginLongitude));
+                                               pool, (manifest.OriginLatitude, manifest.OriginLongitude),
+                                               seed);
                 session.Prime();
                 session.BindTheSun();
                 return session;
@@ -621,6 +693,7 @@ public sealed class SumoDriveSession : IDisposable
                 };
             }
 
+            _lastFrame = frame;
             RecordTheRenderSet(frame);
             AuditTheSun(frame);
             MeasureDivergence();
@@ -930,6 +1003,7 @@ public sealed class SumoDriveSession : IDisposable
         IReadOnlyList<string> departed = _sumo.Simulation.DepartedVehicleIds;
         _population.Reconcile(departed, _sumo.Simulation.ArrivedVehicleIds);
         _population.ReadPositions(_positions);
+        BeginThePass();
         _renderSet.ReconcileSubscriptions(_population, _positions);
         _population.ReadFrames(_next);
         _renderSet.ReconcileRenderSet(_frameSeconds, _next, _population.LastVanished);
@@ -938,6 +1012,75 @@ public sealed class SumoDriveSession : IDisposable
         PublishTheAdmissionPass();
         RecordCollisions();
         return departed;
+    }
+
+    /// <summary>
+    /// Tell the render-set policy what the session holds for the pass about to be made: the frame the
+    /// pass decides, SUMO's step, the seed, the bodies' reach, and every registered camera's pose on
+    /// the last frame rendered.
+    /// </summary>
+    /// <remarks>
+    /// <para>A camera's pose comes from the client's snapshot of that frame, a read with no round trip.
+    /// Before the first tick there is no frame, and the newest snapshot is read. A registered camera the
+    /// snapshot does not hold -- destroyed without being removed -- is left out and counted: it has no
+    /// view to follow.</para>
+    ///
+    /// <para>What the policy made of the pass -- the rule in force and every camera's footprint and range
+    /// cap -- goes on the report as it is made.</para>
+    /// </remarks>
+    private void BeginThePass()
+    {
+        _cameraViews.Clear();
+        if (_world is { } world)
+        {
+            foreach ((ActorId camera, CameraOptics optics) in _cameras)
+            {
+                Transform? pose = _lastFrame is { } frame
+                    ? world.ObservedTransformAt(camera, frame)
+                    : world.ObservedTransform(camera);
+                if (pose is { } seen)
+                {
+                    _cameraViews.Add(new CameraView(camera, seen, optics));
+                }
+                else
+                {
+                    Report.CameraPosesUnread++;
+                }
+            }
+        }
+
+        _renderSet.BeginPass(new RenderSetPass(_frameSeconds, Clock.SumoStepSeconds, _seed, _longestBody,
+                                               _bodyReach, [.. _cameraViews], GroundHeightAt));
+        IRenderSetPolicy policy = _options.RenderSet;
+        Report.CountPass(policy.ActiveRule);
+        foreach (CameraFootprint footprint in policy.Footprints)
+        {
+            Report.RecordFootprint(footprint);
+        }
+    }
+
+    /// <summary>The ground surface's CARLA-local height under a CARLA-frame position, or null off the grid.</summary>
+    private double? GroundHeightAt(double carlaX, double carlaY) =>
+        _ground.Sample(carlaX, carlaY) is { } surface ? surface - _ground.OriginHeightMetres : null;
+
+    /// <summary>
+    /// The seed the scenario's configuration runs SUMO under, or SUMO's own default where it declares
+    /// none.
+    /// </summary>
+    /// <remarks>
+    /// Read from the configuration SUMO is about to be started on, the way SUMO reads it, so the seed a
+    /// ranking is drawn from is the one the traffic is: a run configuration's recorded seed is the same
+    /// number, compiled into the same file.
+    /// </remarks>
+    private static long ReadTheSeed(string scenarioPath)
+    {
+        IReadOnlyList<string> declared = SumoConfiguration
+            .Load(scenarioPath, "the seed the render set is ranked by cannot be read")
+            .ValuesOf("seed");
+        return declared.Count > 0
+               && long.TryParse(declared[^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out long seed)
+            ? seed
+            : SumoDefaultSeed;
     }
 
     /// <summary>
@@ -1093,7 +1236,12 @@ public sealed class SumoDriveSession : IDisposable
             _renderSet.LastNewlyAdmitted,
             _renderSet.LastReleased,
             _renderSet.Admissions,
-            _renderSet.CapacityDeclines);
+            _renderSet.CapacityDeclines)
+        {
+            Rule = _options.RenderSet.ActiveRule,
+            Cameras = _options.RenderSet.Footprints.Count,
+            Held = _renderSet.LastHeld,
+        };
         Report.LastAdmissionPass = pass;
         _options.OnAdmissionPass?.Invoke(pass);
     }

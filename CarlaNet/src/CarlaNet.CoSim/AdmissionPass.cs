@@ -3,7 +3,7 @@ using System.Globalization;
 namespace CarlaNet.CoSim;
 
 /// <summary>
-/// One admission pass of the render set: how many vehicles SUMO had, how many the region admitted a
+/// One admission pass of the render set: how many vehicles SUMO had, how many the policy admitted a
 /// place to, how many were rendered and how many the capacity shed -- the shedding ledger's row, taken
 /// once per SUMO step as the pass is made.
 /// </summary>
@@ -21,11 +21,14 @@ namespace CarlaNet.CoSim;
 /// <param name="WorldTick">World ticks the session had rendered when the pass was made.</param>
 /// <param name="SimulatedTimeSeconds">The SUMO frame the pass decided the render set for.</param>
 /// <param name="Population">
-/// Vehicles SUMO had in the simulation: every one carries the position subscription the region is
+/// Vehicles SUMO had in the simulation: every one carries the position subscription the render set is
 /// decided from.
 /// </param>
 /// <param name="Subscribed">Of those, the ones inside the subscription margin, delivering full state.</param>
-/// <param name="Eligible">Of those, the ones the render-set predicate -- the region -- admitted a place to.</param>
+/// <param name="Eligible">
+/// Of those, the ones the render-set predicate -- the circle, or a camera's footprint with its margin --
+/// admitted a place to, and the rendered ones the release lag held (<see cref="Held"/>).
+/// </param>
 /// <param name="Admitted">
 /// The vehicles holding a place in the render set after the pass: the eligible, up to the capacity.
 /// A place in the render set is a body only where the vehicle's type names a measured blueprint and
@@ -52,9 +55,31 @@ public sealed record AdmissionPass(
     long TotalAdmissions,
     long TotalCapacityDeclines)
 {
+    /// <summary>
+    /// The rule the pass decided by: the registered cameras' footprints, or the circle where no camera
+    /// was registered or the session runs the circle alone.
+    /// </summary>
+    /// <remarks>
+    /// Set rather than positional, as are <see cref="Cameras"/> and <see cref="Held"/>, so a pass built
+    /// from the twelve counts alone -- as a reader's test builds one -- still builds, and is a circle's.
+    /// </remarks>
+    public RenderSetRule Rule { get; init; } = RenderSetRule.Circle;
+
+    /// <summary>How many cameras' footprints the pass decided from; zero under the circle.</summary>
+    public int Cameras { get; init; }
+
+    /// <summary>
+    /// Of the eligible, the rendered vehicles the release lag held after they stopped passing the
+    /// predicate; always zero under the circle, which has no lag.
+    /// </summary>
+    public int Held { get; init; }
+
     /// <summary>The pass in the report's words.</summary>
     public override string ToString() =>
         $"at t={SimulatedTimeSeconds.ToString("0.###", CultureInfo.InvariantCulture)} s: population "
         + $"{Population}, subscribed {Subscribed}, eligible {Eligible}, admitted {Admitted}, shed {Shed}, "
-        + $"cap {Capacity}; this pass admitted {NewlyAdmitted} and released {Released}";
+        + $"cap {Capacity}; this pass admitted {NewlyAdmitted} and released {Released}; "
+        + (Rule == RenderSetRule.Cameras
+            ? $"by {Cameras} camera footprint(s), {Held} held by the release lag"
+            : "by the circle");
 }

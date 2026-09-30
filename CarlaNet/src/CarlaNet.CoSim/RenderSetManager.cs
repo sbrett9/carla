@@ -12,14 +12,30 @@ namespace CarlaNet.CoSim;
 ///
 /// <para>Nothing here spawns, destroys or moves an actor. The manager says which vehicles a pool
 /// would be checked out for; what is done about it is the driving stage's.</para>
+///
+/// <para><b>The release lag is kept here, for every policy.</b> A rendered vehicle that stops passing
+/// the policy's predicate is held, still rendered, until it has failed it for the policy's
+/// <see cref="IRenderSetPolicy.ReleaseLagSeconds"/> -- counted from the first pass it failed, and
+/// started again if it passes in between -- and released then. A held vehicle is still eligible and
+/// still counted as admitted, but ranks after every vehicle the predicate passes, the longest-held
+/// first to go. Under a lag of zero, the circle's, a vehicle is released at the first pass it fails,
+/// as it always was.</para>
 /// </remarks>
 public sealed class RenderSetManager
 {
+    /// <summary>
+    /// How much short of the lag a vehicle's time outside may fall and still count as the whole lag:
+    /// passes are a sum of SUMO steps, so they reach a whole number of seconds to within rounding.
+    /// </summary>
+    private const double LagTolerance = 1e-9;
+
     private readonly IRenderSetPolicy _policy;
     private readonly Action<RenderedVehicleInterval>? _onRelease;
     private readonly Dictionary<string, double> _admittedAt = [];
+    private readonly Dictionary<string, double> _failingSince = [];
     private readonly List<string> _leaving = [];
     private readonly List<(string Id, double Rank)> _candidates = [];
+    private readonly List<(string Id, double Since)> _held = [];
 
     /// <param name="policy">The predicate and the capacity.</param>
     /// <param name="onRelease">
@@ -46,8 +62,24 @@ public sealed class RenderSetManager
     /// <summary>How many admissions the capacity refused, counted per step per vehicle.</summary>
     public long CapacityDeclines { get; private set; }
 
-    /// <summary>At the last pass: the vehicles the predicate admitted a place to.</summary>
+    /// <summary>
+    /// At the last pass: the vehicles the predicate admitted a place to, and the rendered vehicles the
+    /// release lag held.
+    /// </summary>
     public int LastEligible { get; private set; }
+
+    /// <summary>At the last pass: the rendered vehicles held by the release lag after failing the predicate.</summary>
+    public int LastHeld { get; private set; }
+
+    /// <summary>
+    /// Tell the policy what the session holds for the pass about to be made: the instant, the step, the
+    /// seed, the bodies' reach and the cameras.
+    /// </summary>
+    public void BeginPass(RenderSetPass pass)
+    {
+        ArgumentNullException.ThrowIfNull(pass);
+        _policy.BeginPass(pass);
+    }
 
     /// <summary>At the last pass: the vehicles that took up a place.</summary>
     public int LastNewlyAdmitted { get; private set; }
@@ -63,9 +95,14 @@ public sealed class RenderSetManager
     /// the simulation delivers.
     /// </summary>
     /// <remarks>
-    /// Exhaustion of the render set is a policy event and is counted, never an error and never a
+    /// <para>Exhaustion of the render set is a policy event and is counted, never an error and never a
     /// reason to stop subscribing: a vehicle the capacity declined is still simulated, still has
-    /// truth to record, and may be admitted on the next step when a nearer one leaves.
+    /// truth to record, and may be admitted on the next step when a nearer one leaves.</para>
+    ///
+    /// <para><b>A rendered vehicle is never demoted.</b> It is released first, by the render set, and
+    /// demoted at a later pass. Demoted while rendered, it would drop out of the frames and be released
+    /// as though it had left the simulation, wherever it was -- which a vehicle held by a release lag,
+    /// or one that jumped across the subscription margin in a step, would otherwise be.</para>
     /// </remarks>
     public void ReconcileSubscriptions(SubscribedPopulation population,
                                        IReadOnlyDictionary<string, (double X, double Y)> positions)
@@ -77,7 +114,7 @@ public sealed class RenderSetManager
         foreach ((string vehicleId, (double x, double y)) in positions)
         {
             bool promoted = population.PromotedVehicleIds.Contains(vehicleId);
-            if (_policy.ShouldSubscribe(x, y, promoted))
+            if (_policy.ShouldSubscribe(x, y, promoted) || _admittedAt.ContainsKey(vehicleId))
             {
                 if (!promoted)
                 {
@@ -114,10 +151,11 @@ public sealed class RenderSetManager
         LastNewlyAdmitted = 0;
         LastReleased = 0;
         LastShed = 0;
+        LastHeld = 0;
 
-        // A vehicle that was rendered and is no longer in the frames is one SUMO removed, or one
-        // demoted out of the subscription margin. Either way it is out of the render set, and which
-        // it was is what the reason records: SUMO listed it as arrived, or it vanished without being
+        // A vehicle that was rendered and is no longer in the frames is one SUMO removed: a rendered
+        // vehicle is never demoted out of the subscription margin. It is out of the render set, and how
+        // it went is what the reason records: SUMO listed it as arrived, or it vanished without being
         // listed.
         _leaving.Clear();
         foreach (string vehicleId in _admittedAt.Keys)
@@ -137,17 +175,33 @@ public sealed class RenderSetManager
         }
 
         _candidates.Clear();
+        _held.Clear();
         _leaving.Clear();
+        double lag = _policy.ReleaseLagSeconds;
         foreach ((string vehicleId, CoSimVehicleFrame frame) in frames)
         {
             bool rendered = _admittedAt.ContainsKey(vehicleId);
             if (_policy.ShouldRender(frame, rendered))
             {
-                _candidates.Add((vehicleId, _policy.Rank(frame)));
+                _candidates.Add((vehicleId, _policy.Rank(frame, rendered)));
+                _failingSince.Remove(vehicleId);
             }
             else if (rendered)
             {
-                _leaving.Add(vehicleId);
+                if (!_failingSince.TryGetValue(vehicleId, out double since))
+                {
+                    since = simulatedTimeSeconds;
+                    _failingSince[vehicleId] = since;
+                }
+
+                if (simulatedTimeSeconds - since < lag - LagTolerance)
+                {
+                    _held.Add((vehicleId, since));
+                }
+                else
+                {
+                    _leaving.Add(vehicleId);
+                }
             }
         }
 
@@ -164,8 +218,21 @@ public sealed class RenderSetManager
             return byRank != 0 ? byRank : string.CompareOrdinal(left.Id, right.Id);
         });
 
+        // Held vehicles rank after every vehicle the predicate passes, the most recently in view first,
+        // so the capacity sheds the one out of view longest before any other.
+        _held.Sort(static (left, right) =>
+        {
+            int bySince = right.Since.CompareTo(left.Since);
+            return bySince != 0 ? bySince : string.CompareOrdinal(left.Id, right.Id);
+        });
+        foreach ((string vehicleId, _) in _held)
+        {
+            _candidates.Add((vehicleId, double.PositiveInfinity));
+        }
+
         int capacity = _policy.Capacity;
         LastEligible = _candidates.Count;
+        LastHeld = _held.Count;
         for (int index = 0; index < _candidates.Count; index++)
         {
             string vehicleId = _candidates[index].Id;
@@ -206,6 +273,7 @@ public sealed class RenderSetManager
 
     private void Release(string vehicleId, double simulatedTimeSeconds, RenderSetReleaseReason reason)
     {
+        _failingSince.Remove(vehicleId);
         if (!_admittedAt.Remove(vehicleId, out double admittedAt))
         {
             return;

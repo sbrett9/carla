@@ -25,6 +25,8 @@ public sealed class CoSimRunReport
     private readonly Dictionary<LaneInterpolationCase, long> _cases = [];
     private readonly Dictionary<UnrenderableReason, long> _refusedTypes = [];
     private readonly Dictionary<RenderSetReleaseReason, long> _releases = [];
+    private readonly Dictionary<RenderSetRule, long> _passesByRule = [];
+    private readonly SortedDictionary<uint, CameraFootprint> _footprints = [];
 
     /// <summary>The clock the session resolved.</summary>
     public required CoSimClock Clock { get; init; }
@@ -182,10 +184,34 @@ public sealed class CoSimRunReport
     public int VehiclesAwaitingInsertion { get; internal set; }
 
     /// <summary>
-    /// Render-set releases, by why each vehicle stopped holding a place -- the region, the capacity,
+    /// Render-set releases, by why each vehicle stopped holding a place -- the policy, the capacity,
     /// SUMO listing it as arrived, it vanishing without being listed, or the session ending.
     /// </summary>
     public IReadOnlyDictionary<RenderSetReleaseReason, long> Releases => _releases;
+
+    /// <summary>The render-set policy the session was given, in its own words.</summary>
+    public string RenderSetPolicy { get; init; } = string.Empty;
+
+    /// <summary>The seed a ranking under the render set's capacity is drawn from: the scenario's SUMO seed.</summary>
+    public long RenderSetSeed { get; init; }
+
+    /// <summary>
+    /// Admission passes by the rule each decided by: the cameras' footprints, or the circle where no
+    /// camera was registered.
+    /// </summary>
+    public IReadOnlyDictionary<RenderSetRule, long> PassesByRule => _passesByRule;
+
+    /// <summary>
+    /// Every camera the render set followed, by actor, with its footprint and range cap as of the last
+    /// pass that followed it -- a camera removed during the run keeps its last.
+    /// </summary>
+    public IReadOnlyDictionary<uint, CameraFootprint> CameraFootprints => _footprints;
+
+    /// <summary>
+    /// Passes at which a registered camera's pose was not in the snapshot -- a camera destroyed without
+    /// being removed -- and so was left out.
+    /// </summary>
+    public long CameraPosesUnread { get; internal set; }
 
     /// <summary>How many warnings SUMO wrote to its console, the fast-forward's included.</summary>
     /// <remarks>
@@ -451,6 +477,11 @@ public sealed class CoSimRunReport
     internal void CountRelease(RenderSetReleaseReason reason) =>
         _releases[reason] = _releases.GetValueOrDefault(reason) + 1;
 
+    internal void CountPass(RenderSetRule rule) =>
+        _passesByRule[rule] = _passesByRule.GetValueOrDefault(rule) + 1;
+
+    internal void RecordFootprint(CameraFootprint footprint) => _footprints[footprint.Actor] = footprint;
+
     internal void SampleCollision(in CollisionSpan span)
     {
         if (_collisions.Count < CollisionSampleLimit)
@@ -653,6 +684,25 @@ public sealed class CoSimRunReport
         text.AppendLine($"  approximated Z   {PosesOnAnApproximatedSeatHeight}");
         text.AppendLine($"  no ground        {PosesRefusedForMissingGround}");
         text.AppendLine($"  no measured body {VehicleTicksWithNoMeasuredBody} vehicle-ticks");
+        if (RenderSetPolicy.Length > 0)
+        {
+            text.AppendLine($"render set         {RenderSetPolicy}");
+            text.AppendLine($"  seed             {RenderSetSeed}; passes "
+                            + string.Join(", ", Enum.GetValues<RenderSetRule>()
+                                .Select(rule => $"{rule.ToString().ToLowerInvariant()} "
+                                                + _passesByRule.GetValueOrDefault(rule))));
+        }
+
+        foreach (CameraFootprint footprint in _footprints.Values)
+        {
+            text.AppendLine($"  {footprint}");
+        }
+
+        if (CameraPosesUnread > 0)
+        {
+            text.AppendLine($"  not in snapshot  {CameraPosesUnread} camera pose(s) left out of their pass");
+        }
+
         text.AppendLine($"admissions         {Admissions}, capacity declines {CapacityDeclines}");
         if (LastAdmissionPass is { } pass)
         {

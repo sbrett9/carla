@@ -8,7 +8,10 @@ namespace CarlaNet.CoSim;
 /// </remarks>
 public enum RenderSetReleaseReason
 {
-    /// <summary>The render-set predicate stopped holding for it.</summary>
+    /// <summary>
+    /// The render-set predicate stopped holding for it: it left the circle, or every camera's footprint
+    /// and its margin, and stayed out for the policy's release lag.
+    /// </summary>
     LeftTheRegion,
 
     /// <summary>More vehicles passed the predicate than the capacity allows, and this one ranked out.</summary>
