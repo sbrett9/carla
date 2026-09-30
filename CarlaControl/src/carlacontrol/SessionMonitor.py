@@ -12,7 +12,8 @@ display (§3.10.1 M1). A loud condition is written at once, at `WARNING`, whatev
 The panel is the capture operator's (§7.4.1): it shows the declared sun's elevation and the policy
 because that is how a wrong sun is made visible, and the session's latest admission pass --
 population, subscribed, eligible, admitted, shed and cap -- because that is how a binding render cap
-is made visible. An exercised operator's picture is a different display and never this one (D12.31).
+is made visible. Until the recorders start it also shows where each channel's view stands in its
+wait for its tiles and its picture (03 §9.5.1), because that wait is what the prewarm is spent on. An exercised operator's picture is a different display and never this one (D12.31).
 """
 from __future__ import annotations
 
@@ -21,6 +22,8 @@ import sys
 import time
 from collections.abc import Callable
 from typing import Any, TextIO
+
+from carlacontrol.ViewReadiness import describe_view
 
 PANEL_INTERVAL_S = 1.0
 LINE_INTERVAL_S = 10.0
@@ -107,6 +110,8 @@ class SessionMonitor:
             rows.append(f"rend  rendered now {render['rendered_now']}   ticks {render['ticks']:,}"
                         f"   steps {render['sumo_steps']:,}   batch failures "
                         f"{render['batch_failures']}")
+        for view in cls._views(snapshot):
+            rows.append(f"view  {view['sensor_id']}   {describe_view(view)}")
         for channel in snapshot["channels"]:
             rows.append(f"chan  {channel['sensor_id']}   written {cls._n(channel['written'], 'd')}"
                         f"   recorder-dropped {cls._n(channel['recorder_dropped'], 'd')}"
@@ -128,12 +133,22 @@ class SessionMonitor:
         population = "" if admission is None else (
             f"; eligible {admission['eligible']} admitted {admission['admitted']} shed "
             f"{admission['shed']} cap {admission['capacity']}")
+        views = "".join(f"; view {view['sensor_id']} {describe_view(view)}"
+                        for view in cls._views(snapshot))
         return (f"t={cls._n(snapshot['sim_time_s'], '.1f')} "
                 f"({'-' if progress is None else f'{100.0 * progress:.1f}%'}) civil "
                 f"{illumination.get('declared_civil') or '-'} sun "
                 f"{cls._n(illumination.get('sun_elevation_deg'), '+.2f')} deg; pace "
                 f"{cls._n(pacing.get('achieved_factor'), '.3f')}{population}; "
-                f"{channels or 'no channel'}")
+                f"{channels or 'no channel'}{views}")
+
+    @staticmethod
+    def _views(snapshot: dict) -> list[dict]:
+        """Each channel's wait for its view, while nothing records yet."""
+        readiness = snapshot.get("readiness")
+        if not readiness or snapshot["channels"]:
+            return []
+        return readiness["channels"]
 
     @staticmethod
     def _policy_flag(snapshot: dict) -> str:

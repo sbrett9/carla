@@ -26,29 +26,40 @@ world (D1.12):
   population lease names (`HeldBy`); `PreRoll` -- from the start, or from an `Advance` of the
   prewarm -- is `refused_preroll`, closed `aborted_at_preroll`; `Window` is `run_stopped`, closed
   `fault:<type>`. A SUMO failure is such a refusal. Anything else raised is `internal_error`.
-* **Place the cameras**: each channel's RGB camera at its stare pose -- or above its orbit's centre,
-  flown by `OrbitSensorController` -- with `sensor_tick` at the capture interval and the
-  post-process profile set by name; and, where occlusion is measured, a depth camera at the stare's
-  pose. The cameras exist through the prewarm, so the tiles their views select are streamed before
-  the first capture. A stare aimed at the rendered traffic starts over the render region's centre.
-* **Prewarm**: advance until the window's begin without recording. A stare aimed at the rendered
-  traffic follows it: after each prewarm step its cameras are moved to the pose around the centre of
-  the vehicles that step's last frame rendered, so the view whose tiles settle is the one the window
-  will hold, and the last step's centre is the point it resolves to -- recorded, and held for the
-  whole window; a last frame that rendered nothing refuses at pre-roll. Under `wall_clock` the pace
-  the prewarm held is checked against the floor (check 44); and, whatever the pacing, the vehicles
-  inside the render region at the window's begin are checked against the render cap (check 33), from
-  the session's admission pass for that instant.
-* **Record**: one recorder per channel, each started from its own `World` handle because the shim
-  holds one recorder per handle, all given this session's id as their run id, the session's
-  illumination source and its render set -- so each sidecar lists the bodies its own frame rendered,
-  named by SUMO vehicle, and none of the bodies parked out of sight between loans.
+* **Place the cameras**: each channel's RGB camera at its stare pose -- or at the pose its orbit
+  opens on, flown by `OrbitSensorController` from the window's opening -- with `sensor_tick` at the
+  capture interval and the post-process profile set by name; and, where occlusion is measured, a
+  depth camera at the stare's pose. The cameras exist through the prewarm, so the tiles their views
+  select are streamed before the first capture. A stare aimed at the rendered traffic starts over
+  the render region's centre. Every camera's frames are listened to from here until the recorders
+  start (`ViewReadinessGate`).
+* **Prewarm**: advance until the window's begin without recording, and wait there for every
+  channel's view to be ready (03 §9.5.1, check 50): after each step the server is asked whether the
+  camera's photoreal tiles are in, and once they are, the camera's own frames are compared until its
+  picture has settled. The wait lives inside the prewarm and ticks with it, and it begins once every
+  camera holds the pose the window opens on, because the tiles' figures cover every registered view
+  and a moving camera's picture never reads settled. A ceiling reached -- 90 s of wall clock for the
+  tiles, 120 of the camera's frames for the picture -- or a view not ready as the window opens
+  refuses at pre-roll, naming the channel, the witness and its state; the window's first frame is
+  never moved. A stare aimed at the rendered traffic follows it: after each prewarm step its cameras
+  are moved to the pose around the centre of the vehicles that step's last frame rendered, until one
+  picture ceiling of its frames before the window opens (`ViewReadiness.hold_lead_s`), when that
+  step's centre is the point it resolves to -- recorded, and held through the rest of the prewarm
+  and the whole window; a frame there that rendered nothing refuses at pre-roll. Under `wall_clock`
+  the pace the prewarm held is checked against the floor (check 44); and, whatever the pacing, the
+  vehicles inside the render region at the window's begin are checked against the render cap
+  (check 33), from the session's admission pass for that instant.
+* **Record**: stop listening to the cameras, then one recorder per channel, each started from its
+  own `World` handle because the shim holds one recorder per handle, all given this session's id as
+  their run id, the session's illumination source and its render set -- so each sidecar lists the
+  bodies its own frame rendered, named by SUMO vehicle, and none of the bodies parked out of sight
+  between loans. An orbit starts to sweep as the window opens.
 * **Advance** until the window's end, the scenario's end, a stop, a loud condition under an
   unattended caller, or write headroom running out (check 46).
 * **Terminate** through `RunTerminationSequence`: drain the recorders, take the closing snapshot and
   gate records, write the run result -- with the session's compile lock and teleporting checks, the
-  admission passes of the window, and where every camera looked -- and only then destroy the cameras
-  and dispose the session.
+  admission passes of the window, where every camera looked and how each view became ready -- and
+  only then destroy the cameras and dispose the session.
 
 The recorders are not given the scenario id or the seed: both would enter every PNG's `carla:capture`
 chunk, and whether the observation side may carry either is open (`04_Contracts.md` open question 15);
@@ -65,7 +76,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 import carlanet as carla
 from CarlaNet.CoSim import CoSimSessionRefusedException
@@ -99,6 +110,13 @@ from carlacontrol.ScenarioEpoch import ScenarioEpoch
 from carlacontrol.SessionMonitor import SessionMonitor
 from carlacontrol.SiteProfile import SiteProfile
 from carlacontrol.StareAim import StareAim
+from carlacontrol.ViewReadiness import (
+    PICTURE_CEILING_FRAMES,
+    TILES_CEILING_S,
+    ViewNotReadyError,
+    ViewReadinessGate,
+    wait_begins_s,
+)
 from carlacontrol.WindowAdmissions import WindowAdmissions
 
 SESSION_ID_PREFIX = "cap"
@@ -205,6 +223,8 @@ class CaptureSession:
         self.traffic: RenderedTrafficCentre | None = None
         self.end_reached_s: float | None = None
         self.preroll_pace: float | None = None
+        self.readiness: ViewReadinessGate | None = None
+        self.hold_from_s: float | None = None
 
     @staticmethod
     def new_session_id() -> str:
@@ -505,7 +525,26 @@ class CaptureSession:
             except Exception as failure:
                 raise _RefusedError("refused_preroll", f"channel {label}: its camera could not be "
                                f"placed: {failure!r}", closed_by="aborted_at_preroll") from None
+        self._watch_views()
         self._check_stop()
+
+    def _watch_views(self) -> None:
+        """Listen to every capture camera's frames and ask about its tiles from the prewarm on, so
+        that no capture is written before its view is ready (03 §9.5.1)."""
+        effective = self.effective
+        ticks_per_frame = round(1.0 / (float(effective.value("capture.capture_hz"))
+                                       * float(effective.value("capture.world_delta_s"))))
+        self.readiness = ViewReadinessGate(clock=self.clock, logger=self.logger)
+        self.termination.add_step(RELEASE_WORLD, "stop watching the cameras' views",
+                                  self.readiness.stop, CAMERA_TIMEOUT_S, ORDER_ORBIT)
+        self.closeout.attach_readiness(self.readiness)
+        for rig in self.channels:
+            try:
+                self.readiness.watch(rig.sensor_id, rig.camera, rig.world, ticks_per_frame)
+            except Exception as failure:
+                raise _RefusedError("refused_preroll", f"channel {rig.sensor_id}: its camera's "
+                               f"frames could not be watched, so its picture cannot be seen to "
+                               f"settle: {failure!r}", closed_by="aborted_at_preroll") from None
 
     def _place_channel(self, rig: ChannelRig) -> None:
         effective = self.effective
@@ -546,8 +585,9 @@ class CaptureSession:
                                        speed=description.orbit_period_s)
             self.termination.add_step(RELEASE_WORLD, f"stop orbit {rig.sensor_id}",
                                       rig.orbit.stop_updater, CAMERA_TIMEOUT_S, ORDER_ORBIT)
+            # Held at the pose it opens on until the window opens (`_set_orbits_moving`): the view
+            # the window's first frame is written from is the one whose readiness is witnessed.
             rig.orbit.start_updater()
-            rig.orbit.set_enabled(True)
 
     def _start_transform(self, rig: ChannelRig) -> carla.Transform:
         """Where a channel's camera is spawned, recording what it declared in `rig.aim_record`.
@@ -581,17 +621,26 @@ class CaptureSession:
             rig.aim = aim
             rig.aim_record = record
             return self._transform_of(aim)
+        # The pose the orbit opens on: angle zero, east of the centre, where
+        # `OrbitSensorController` starts. It is held there through the pre-roll.
+        opening = OrbitSensorController.orbit_transform(
+            description.orbit_centre_x_m, description.orbit_centre_y_m,
+            description.orbit_centre_z_m, description.orbit_radius_m,
+            description.orbit_altitude_m, 0.0)
+        location, rotation = opening.location, opening.rotation
         record.update({"centre": {"x_m": description.orbit_centre_x_m,
                                   "y_m": description.orbit_centre_y_m,
                                   "z_m": description.orbit_centre_z_m},
                        "radius_m": description.orbit_radius_m,
                        "altitude_m": description.orbit_altitude_m,
-                       "period_s": description.orbit_period_s})
+                       "period_s": description.orbit_period_s,
+                       "held_through_the_pre_roll": {
+                           "angle_deg": 0.0,
+                           "pose": {"x_m": location.x, "y_m": location.y, "z_m": location.z,
+                                    "pitch_deg": rotation.pitch, "yaw_deg": rotation.yaw},
+                           "sweeps_from": "the window's opening"}})
         rig.aim_record = record
-        return carla.Transform(
-            carla.Location(x=description.orbit_centre_x_m, y=description.orbit_centre_y_m,
-                           z=description.orbit_centre_z_m + description.orbit_altitude_m),
-            carla.Rotation(pitch=-90.0, yaw=0.0, roll=0.0))
+        return opening
 
     @staticmethod
     def _transform_of(aim: StareAim) -> carla.Transform:
@@ -618,21 +667,41 @@ class CaptureSession:
 
     # -- the prewarm --------------------------------------------------------------------------------------
     def _prewarm(self) -> None:
+        """Advance to the window's opening without recording, waiting there for every view.
+
+        The wait for each channel's view (03 §9.5.1) is told after every step the session renders
+        and asks nothing in between, so it ticks with the prewarm and cannot run without it. It
+        begins once every camera holds the pose the window opens on: at once, or -- where a stare
+        follows the rendered traffic -- when that stare stops to hold its pose, one picture ceiling
+        of its frames before the window opens.
+        """
         window = self.effective.window
         session = self.session
         started = float(session.RenderedTimeSeconds)
+        following = self.traffic is not None
+        self.hold_from_s = self._hold_from(started) if following else started
+        if not following:
+            self._begin_the_wait()
         while float(session.RenderedTimeSeconds) < window.begin_s - SIM_EPSILON_S:
             self._check_stop()
-            if self.traffic is not None:
+            waiting = self.readiness.begun
+            if following:
                 self.traffic.begin_step()
             more = session.Advance()
-            if self.traffic is not None:
+            if following:
                 self.traffic.end_step()
                 self._follow_traffic()
             if not more:
                 raise _RefusedError("refused_preroll", f"the scenario ended at "
                                f"t={float(session.RenderedTimeSeconds):g}, before the window "
                                f"opened at t={window.begin_s:g}", closed_by="aborted_at_preroll")
+            if waiting:
+                self._observe_views()
+            elif following and float(session.RenderedTimeSeconds) >= \
+                    self.hold_from_s - SIM_EPSILON_S:
+                following = False
+                self._resolve_traffic_aim()
+                self._begin_the_wait()
             self.monitor.update(self.closeout.snapshot())
         if float(session.RenderedTimeSeconds) > started:
             self.preroll_pace = self.closeout.snapshot()["pacing"]["achieved_factor"]
@@ -642,9 +711,58 @@ class CaptureSession:
             raise _RefusedError("refused_preroll", self._first_refusal(),
                            closed_by="aborted_at_preroll")
         self._check_window_open_population()
-        if self.traffic is not None:
-            self._resolve_traffic_aim()
+        self._check_views_ready()
         self._check_stop()
+
+    def _hold_from(self, started: float) -> float:
+        """Where a stare following the rendered traffic stops and holds: one picture ceiling of the
+        camera's frames before the window opens, in whole SUMO steps, and never before the prewarm's
+        first step has rendered traffic to measure (`wait_begins_s`)."""
+        return wait_begins_s(self.effective.window.begin_s, started,
+                             float(self.effective.value("scenario.sumo_step_s")),
+                             float(self.effective.value("capture.capture_hz")), True)
+
+    # -- the views ---------------------------------------------------------------------------------
+    def _begin_the_wait(self) -> None:
+        session = self.session
+        rendered = float(session.RenderedTimeSeconds)
+        self.readiness.begin(int(session.Report.Ticks), rendered)
+        self.logger.info("waiting for every channel's view from t=%g to the window's opening at "
+                         "t=%g: its photoreal tiles in (ceiling %.0f s of wall clock), then its "
+                         "picture settled (ceiling %d of the camera's frames); a view not ready by "
+                         "then refuses the run (03 §9.5.1)", rendered, self.effective.window.begin_s,
+                         TILES_CEILING_S, PICTURE_CEILING_FRAMES)
+
+    def _observe_views(self) -> None:
+        try:
+            said = self.readiness.after_step(int(self.session.Report.Ticks))
+        except ViewNotReadyError as not_ready:
+            self._refuse_not_ready([(not_ready.sensor_id, str(not_ready))])
+        for level, line in said:
+            self.logger.log(level, "%s", line)
+
+    def _check_views_ready(self) -> None:
+        """Check 50: every channel's view is ready as the window opens."""
+        begin = self.effective.window.begin_s
+        not_ready = self.readiness.at_window_open(begin)
+        if not_ready:
+            self._refuse_not_ready([(channel.sensor_id, channel.not_ready_message(begin))
+                                    for channel in not_ready])
+        for channel in self.readiness.channels:
+            self.logger.info("channel %s: ready as the window opens -- tiles in at frame %d, picture "
+                             "settled at frame %d (%.2f grey levels)", channel.sensor_id,
+                             channel.tiles["in_at_frame"], channel.picture["settled_at_frame"],
+                             channel.picture["residual_levels"])
+
+    def _refuse_not_ready(self, not_ready: list[tuple[str, str]]) -> NoReturn:
+        """Refuse at pre-roll, one finding per channel whose view is not ready."""
+        findings = RunConfigurationFindings()
+        for sensor_id, message in not_ready:
+            index = next((rig.index for rig in self.channels if rig.sensor_id == sensor_id), None)
+            findings.refuse(50, "capture.channels" if index is None
+                            else f"capture.channels[{index}]", message)
+        self.findings.extend(findings)
+        raise _RefusedError("refused_preroll", not_ready[0][1], closed_by="aborted_at_preroll")
 
     def _follow_traffic(self) -> None:
         """Move every stare aimed at the rendered traffic to the pose around the centre of the
@@ -659,21 +777,22 @@ class CaptureSession:
 
     def _resolve_traffic_aim(self) -> None:
         """Record the point each stare aimed at the rendered traffic resolved to, and the pose it
-        now holds for the whole window: the last prewarm step's centre, which `_follow_traffic`
-        has just moved it to.
+        now holds through the rest of the prewarm and the whole window: the centre of the step the
+        hold begins after, which `_follow_traffic` has just moved it to.
 
         Raises:
-            _RefusedError: `refused_preroll` where the last frame before the window rendered no
+            _RefusedError: `refused_preroll` where the last frame before the hold rendered no
                 vehicle, so there is nothing to aim at.
         """
         rigs = [rig for rig in self.channels if rig.aims_at_rendered_traffic]
         measured = self.traffic.to_dict()
+        rendered = float(self.session.RenderedTimeSeconds)
         if measured is None:
             labels = ", ".join(rig.sensor_id for rig in rigs)
             raise _RefusedError(
                 "refused_preroll", f"channel(s) {labels} aim at the rendered traffic, and the "
-                "prewarm's last step, which ended as the window opened at "
-                f"t={float(self.session.RenderedTimeSeconds):g}, rendered no vehicle with a body: "
+                f"prewarm's step before the hold, which ended at t={rendered:g} with the window "
+                f"opening at t={self.effective.window.begin_s:g}, rendered no vehicle with a body: "
                 "there is nothing to aim at. Aim the channel at a point or a pose, move or widen "
                 "capture.render_region, or open the window where the scenario has traffic",
                 closed_by="aborted_at_preroll")
@@ -686,13 +805,16 @@ class CaptureSession:
                 "pose": rig.aim.to_dict(),
                 "moves_before_the_window": rig.moves,
                 "last_move_m": rig.last_move_m,
+                "held_from_s": rendered,
+                "held_before_the_window_s": self.effective.window.begin_s - rendered,
                 "as_look_at_point": {"stare_look_at_x_m": point["x_m"],
                                      "stare_look_at_y_m": point["y_m"],
                                      "stare_look_at_z_m": point["z_m"]}})
             self.logger.info("channel %s: aimed at %d rendered vehicles centred on (%.1f, %.1f, "
-                             "%.1f) m at t=%g; camera at %s, held for the window", rig.sensor_id,
-                             measured["vehicles"], point["x_m"], point["y_m"], point["z_m"],
-                             measured["frame_s"], rig.aim.describe())
+                             "%.1f) m at t=%g; camera at %s, held from t=%g for its view to be "
+                             "ready and for the window", rig.sensor_id, measured["vehicles"],
+                             point["x_m"], point["y_m"], point["z_m"], measured["frame_s"],
+                             rig.aim.describe(), rendered)
 
     def _check_window_open_population(self) -> None:
         """Check 33, from the session's admission pass for the window's begin."""
@@ -723,6 +845,8 @@ class CaptureSession:
     def _record(self) -> None:
         effective = self.effective
         hz = float(effective.value("capture.capture_hz"))
+        # Every view was ready as the window opened; the recorders take the cameras from here.
+        self.readiness.stop()
         for rig in self.channels:
             description = effective.channel_description(rig.index)
             rig.directory.mkdir(parents=True, exist_ok=True)
@@ -741,6 +865,15 @@ class CaptureSession:
                                       rig.world.stop_recording, DRAIN_TIMEOUT_S)
             self.closeout.add_channel(ChannelCapture(rig.sensor_id, rig.directory, rig.recorder))
             self.logger.info("recording %s -> %s", rig.sensor_id, rig.directory)
+        self._set_orbits_moving()
+
+    def _set_orbits_moving(self) -> None:
+        """An orbit held the pose it opens on through the pre-roll, so the view its first capture is
+        written from is the one whose readiness was witnessed; it sweeps from the window's opening,
+        and the ground it sweeps afterwards has no such witness."""
+        for rig in self.channels:
+            if rig.orbit is not None:
+                rig.orbit.set_enabled(True)
 
     # -- the window ------------------------------------------------------------------------------------
     def _advance_window(self) -> None:
@@ -814,6 +947,7 @@ class CaptureSession:
                                  else epoch.civil_instant_at(reached)]},
             "channels": snapshot["channels"],
             "cameras": [dict(rig.aim_record) for rig in self.channels],
+            "readiness": snapshot.get("readiness"),
             "gates": gates,
             "admissions": snapshot["admissions"],
             "session": {**self.session_facts, **(snapshot["scenario_checks"] or {}),

@@ -46,6 +46,7 @@ advancement policy, the headlight predicate),
 | 2026-09-29 | §2.6, D3.36: a session can launch `sumo-gui` in place of `sumo`, from the same installation and held to the release pin by its own release; the report names the binary that ran. |
 | 2026-09-29 | §7.2, D3.26: the bare-earth grids are compared by digest (`get_bare_earth_digest`), not fetched — measured 146 s and 153 s for Bahonar's two; the manifest records them; the session's telemetry takes the package's grids. |
 | 2026-09-30 | §8.9, D3.37: each frame's render set published for the recorder; the truth sidecar lists only the bodies a frame drew, by SUMO vehicle, and no parked body. |
+| 2026-09-30 | §9.5.1: `run_capture` waits on both witnesses inside the prewarm, once every camera holds its opening pose; a view not ready by the window's opening refuses at `PreRoll` and the window is not moved. |
 
 ---
 
@@ -2564,8 +2565,52 @@ each tileset it gives `LoadProgress`, the load queues and kicked tiles behind it
 counts: among the tiles it draws, and across its loaded tree. A failed tile is drawn empty and counts
 as loaded, so `LoadProgress` 100 with a failure in view is a frame with a hole. An unknown or
 non-camera actor is an error. The figures come from one view group holding every registered view, so a
-camera follower flying during the wait holds `LoadProgress` below 100. The RPC is written and awaits a
-build; the client method and the check in the capture are not built.
+camera follower flying during the wait holds `LoadProgress` below 100. The RPC is built and verified
+live on Bahonar (`CarlaNet/python/test_view_readiness.py`), and the client method is
+`world.get_view_readiness`.
+
+**What the capture waits on, and where.** `run_capture` writes no capture before both witnesses say
+its camera's view is ready ([`12`](12_Operator_Control_Surface.md) §6.2 check 50 and §6.3;
+`CarlaControl/src/carlacontrol/ViewReadiness.py`). The wait lives in the prewarm and ticks with it:
+the session owns the clock (D3.12), so the capture asks the server once after each of the session's
+steps and never between them — a wait that did not tick would ask about the same tick again. The
+camera's own frames are listened to from its placement until the recorders start, reduced as they
+arrive and compared in frame order as the 27 placements were measured (BT.601 grey, the mean of each
+4 × 4 pixels, the mean absolute difference over each 20 × 20 of those), counting only frames rendered
+on or after the step the tiles were answered in for; a view whose tiles stop being in starts its
+picture again. The wait begins once every capture camera holds the pose the window opens on, because
+the tiles' figures cover every registered view and a camera that moves between its frames never reads
+settled: a stare at a point or a pose from the prewarm's first step; an orbit, which is held at the
+pose it opens on through the prewarm and sweeps from the window's opening; and a stare aimed at the
+rendered traffic, which follows it until one picture ceiling of its frames before the window opens —
+120, sixty SUMO steps at 2 Hz — and holds from there ([`12`](12_Operator_Control_Surface.md) §5.2,
+D12.37).
+
+**A view not ready by the window's opening refuses the run at `PreRoll`, and the window is not
+moved** ([`12`](12_Operator_Control_Surface.md) D12.38). The prewarm is the lead: `capture.prewarm_s`,
+300 s by default ([`10`](10_Scale_And_Performance.md) §8), fixed for the session and recorded in the
+effective configuration and the lock. It is not lengthened while a run is under way, for three
+reasons. SUMO has been fast-forwarded to the prewarm's first instant before the wait begins and cannot
+be taken back to start earlier ([`10`](10_Scale_And_Performance.md) D10.2). The render set at the
+window's opening depends on where rendering began, through its release hysteresis and its cap (§8.3),
+so a lead chosen from how long the tiles took would make the traffic the window renders a function of
+the network. And a window opened later than declared is not the window D3.21 binds the sun for. So a
+ceiling reached, or a view not ready when the window opens, ends the run `refused_preroll`, naming the
+channel, the witness and where it stood; a prewarm too short to hold the fewest frames the picture can
+be compared on is refused before anything starts (check 51). The measured need sits far inside the
+default: cold tiles in after 30–124 ticks and the picture within 39 frames of them, against 6,000
+ticks and 600 frames of prewarm at 2 Hz.
+
+**What is recorded, and what is not.** The run result carries, per channel, the ticks and the wall
+clock until the tiles were in — to within one SUMO step, the interval they are asked at — the frames
+until the picture settled and its residual, where each witness stood if it did not finish, and any
+return of the tiles to streaming; the launch echo says the wait will happen and where it begins. A
+capture's own readiness is not recorded: the server answers only for the last tick and an image
+reaches the recorder several ticks after its frame, so it needs the server to publish readiness per
+frame on the observer snapshot, which it does not; and an orbit's readiness as the window opens says
+nothing of the ground it sweeps afterwards. Both wait for that publication rather than being
+approximated from the last tick. Not yet measured live: whether traffic moving through a view keeps
+its worst block above 0.5 grey levels, since the 27 placements had no traffic in view.
 
 **The attended path never had this problem, because a person is its settle.** In `run_SCTMV.py`
 recording starts on a key press — `CarlaControl/src/carlacontrol/PygameInterface.py:308` binds

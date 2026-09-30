@@ -260,21 +260,28 @@ class OrbitSensorController(SensorController):
             self.last_time = current_time
 
         self.angle = (self.angle + self.angular_velocity * dt) % (2.0 * math.pi)
-        cam_x = self.center_x + self.radius * math.cos(self.angle)
-        cam_y = self.center_y + self.radius * math.sin(self.angle)
-        cam_z = self.center_z + self.cam_altitude
-        dx = self.center_x - cam_x
-        dy = self.center_y - cam_y
-        dz = self.center_z - cam_z
+        self.sensors.set_transform(self.orbit_transform(
+            self.center_x, self.center_y, self.center_z, self.radius, self.cam_altitude,
+            self.angle))
+
+    @staticmethod
+    def orbit_transform(center_x: float, center_y: float, center_z: float, radius: float,
+                        altitude: float, angle: float) -> carla.Transform:
+        """The camera's pose at `angle` (radians) round the orbit: on the circle, `altitude` above
+        the centre's height, with the boresight on the centre."""
+        cam_x = center_x + radius * math.cos(angle)
+        cam_y = center_y + radius * math.sin(angle)
+        cam_z = center_z + altitude
+        dx = center_x - cam_x
+        dy = center_y - cam_y
+        dz = center_z - cam_z
         horizontal_dist = math.sqrt(dx * dx + dy * dy)
         pitch = math.degrees(math.atan2(dz, horizontal_dist))
         yaw = math.degrees(math.atan2(dy, dx))
-
-        transform = carla.Transform(
+        return carla.Transform(
             carla.Location(x=cam_x, y=cam_y, z=cam_z),
             carla.Rotation(pitch=pitch, yaw=yaw, roll=0.0),
         )
-        self.sensors.set_transform(transform)
 
     def get_hud_info(self) -> dict[str, object]:
         info: dict[str, object] = {

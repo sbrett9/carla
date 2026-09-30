@@ -1,10 +1,12 @@
-"""A stare aimed at the rendered traffic looks at where the session put the vehicles as the window opens.
+"""A stare aimed at the rendered traffic looks at where the session put the vehicles before the window.
 
 Plan 12 §5.2 and D12.37: `stare_look_at_target: rendered_traffic` resolves to the mean position,
-height included, of the vehicles the session rendered on the last frame before the window opens,
-measured from the poses it wrote to bodies. The camera follows that centre through the prewarm, so the
-view whose tiles settle is the one the window holds, and then holds one pose for the whole window; the
-run result records the point so the view is reproducible as an ordinary look-at stare.
+height included, of the vehicles the session rendered on the last frame before its camera holds for
+the window, measured from the poses it wrote to bodies. The camera follows that centre through the
+prewarm until one picture ceiling of its frames before the window opens -- 120 frames at 2 Hz, sixty
+SUMO steps -- and then holds one pose, so the view whose tiles and picture are waited on (03 §9.5.1)
+is the view the window holds; the run result records the point so the view is reproducible as an
+ordinary look-at stare.
 
 The stand-in session hands `on_pose` one record per vehicle per tick. Its vehicles drive east at one
 metre per simulated second, so the centre of a step's last frame, the centre of the whole step and the
@@ -40,7 +42,10 @@ Usage = namedtuple("Usage", "total used free")
 SESSION_ID = "cap-traffic"
 FIRST_RENDERED_S = 24900.0
 BEGIN_S = 25200.0
-LAST_PREWARM_FRAME_S = 25199.95
+# 120 of the camera's frames at 2 Hz is 60 s, sixty one-second SUMO steps before the window.
+HOLD_S = 25140.0
+LAST_FOLLOWED_FRAME_S = 25139.95
+FOLLOWED_STEPS = int(HOLD_S - FIRST_RENDERED_S)
 A_TRAFFIC_STARE = {"sensor_id": "TRAFFIC-1", "stare_look_at_target": "rendered_traffic",
                    "stare_altitude_m": 250.0, "stare_standoff_m": 300.0, "stare_bearing_deg": 45.0}
 # Three bodies driving east at 1 m/s from these points at the first rendered frame, and a pose the
@@ -120,11 +125,11 @@ def moves_of(server: FakeServer, actor_id: int, before: str | None = None) -> li
 
 # -- the point it resolves to --------------------------------------------------------------------------
 
-def test_it_resolves_to_the_centre_of_the_last_prewarm_frame_s_bodies(layout):
+def test_it_resolves_to_the_centre_of_the_bodies_on_the_last_frame_before_the_hold(layout):
     server = traffic_server()
     result = capture(layout, server)
     assert result.outcome == "run_finished"
-    point = centre_at(LAST_PREWARM_FRAME_S)
+    point = centre_at(LAST_FOLLOWED_FRAME_S)
     rgb, _ = cameras(server)
     assert pose_of(rgb.transform) == pytest.approx(expected_pose(aim_around(point)), abs=1e-6)
     [record] = result.produced["cameras"]
@@ -132,7 +137,8 @@ def test_it_resolves_to_the_centre_of_the_last_prewarm_frame_s_bodies(layout):
     assert (record["look_at"]["x_m"], record["look_at"]["y_m"], record["look_at"]["z_m"]) == \
         pytest.approx(point, abs=1e-6)
     assert record["measured_on"]["vehicles"] == len(BODIES)
-    assert record["measured_on"]["frame_s"] == pytest.approx(LAST_PREWARM_FRAME_S)
+    assert record["measured_on"]["frame_s"] == pytest.approx(LAST_FOLLOWED_FRAME_S)
+    assert (record["held_from_s"], record["held_before_the_window_s"]) == (HOLD_S, 60.0)
     assert record["pose"] == pytest.approx(
         dict(zip(("x_m", "y_m", "z_m", "pitch_deg", "yaw_deg"),
                  expected_pose(aim_around(point)), strict=True)), abs=1e-6)
@@ -147,12 +153,14 @@ def test_the_height_of_the_point_is_the_bodies_own(layout):
 
 
 def test_a_last_frame_with_no_body_refuses_at_preroll_whatever_came_before(layout):
-    # Bodies throughout the prewarm but its last step, which renders only a pose with no body.
-    server = traffic_server(lambda at: eastbound(at) if at < BEGIN_S - 1.0
+    # Bodies throughout the prewarm but the step before the hold, which renders only a pose with
+    # no body.
+    server = traffic_server(lambda at: eastbound(at) if at < HOLD_S - 1.0
                             else [(BODILESS[0], BODILESS[1:])])
     result = capture(layout, server)
     assert (result.outcome, result.closed_by) == ("refused_preroll", "aborted_at_preroll")
     assert "TRAFFIC-1" in result.detail and "rendered no vehicle" in result.detail
+    assert "before the hold" in result.detail
     assert server.events.of("start_recording") == []
     assert server.session.disposed and all(actor.destroyed for actor in server.actors)
 
@@ -172,18 +180,35 @@ def test_the_camera_starts_over_the_render_region_s_centre(layout):
     assert tuple(placed["pose"].values()) == pytest.approx(start, abs=1e-6)
 
 
-def test_the_camera_follows_the_traffic_every_prewarm_step_and_holds_the_window(layout):
+def test_the_camera_follows_the_traffic_until_the_hold_and_holds_the_rest(layout):
     server = traffic_server()
     result = capture(layout, server)
     rgb, depth = cameras(server)
-    assert len(moves_of(server, rgb.id, before="start_recording")) == 300
-    assert len(moves_of(server, rgb.id)) == 300, "the camera moved while the window recorded"
-    assert len(moves_of(server, depth.id)) == 300
+    assert len(moves_of(server, rgb.id, before="start_recording")) == FOLLOWED_STEPS
+    assert len(moves_of(server, rgb.id)) == FOLLOWED_STEPS, "the camera moved after its hold"
+    assert len(moves_of(server, depth.id)) == FOLLOWED_STEPS
     assert pose_of(depth.transform) == pose_of(rgb.transform)
+    # The last move came with the step that ended at the hold, and none after it.
+    log = server.events.log
+    last_move = max(i for i, event in enumerate(log) if event[0] == "move")
+    assert [e[1] for e in log[:last_move] if e[0] == "advance"][-1] == HOLD_S
     [record] = result.produced["cameras"]
-    assert record["moves_before_the_window"] == 300
-    # The bodies drive a metre a step, so the view the window holds is a metre from the one before.
+    assert record["moves_before_the_window"] == FOLLOWED_STEPS
+    # The bodies drive a metre a step, so the view held is a metre from the one before it.
     assert record["last_move_m"] == pytest.approx(1.0)
+
+
+def test_nothing_asks_about_the_view_while_the_camera_follows_the_traffic(layout):
+    # The tiles' figures cover every registered view, and a moving camera's picture never reads
+    # settled, so the wait begins when the camera holds.
+    server = traffic_server()
+    result = capture(layout, server)
+    log = server.events.log
+    first_ask = next(i for i, event in enumerate(log) if event[0] == "view_readiness")
+    assert [e[1] for e in log[:first_ask] if e[0] == "advance"][-1] == HOLD_S + 1.0
+    view = result.produced["readiness"]["channels"][0]
+    assert view["wait_began"]["sim_time_s"] == HOLD_S
+    assert view["state"] == "ready" and view["ready_at_window_open"] is True
 
 
 def test_the_first_prewarm_step_already_moves_it_onto_the_traffic(layout):
@@ -195,12 +220,22 @@ def test_the_first_prewarm_step_already_moves_it_onto_the_traffic(layout):
         expected_pose(aim_around(centre_at(FIRST_RENDERED_S + 0.95))), abs=1e-6)
 
 
-def test_a_one_step_prewarm_is_enough(layout):
+def test_a_one_step_prewarm_measures_the_traffic_but_leaves_no_frame_to_witness(layout):
     server = traffic_server()
     result = capture(layout, server, overrides=["capture.prewarm_s=1"])
+    assert (result.outcome, result.refusals[0]["check"]) == ("refused_offline", 51)
+    assert server.clients == []
+
+
+def test_one_step_to_measure_and_eleven_frames_after_the_first_ask_are_enough(layout):
+    # One step followed, one held step before the tiles are first asked about, and six more held
+    # steps rendering the twelve frames the picture is compared on.
+    server = traffic_server()
+    result = capture(layout, server, overrides=["capture.prewarm_s=8"])
     assert result.outcome == "run_finished"
     rgb, _ = cameras(server)
     assert len(moves_of(server, rgb.id)) == 1
+    assert result.produced["readiness"]["channels"][0]["picture"]["frames"] == 11
 
 
 def test_a_stare_at_a_point_beside_it_is_never_moved_and_poses_are_asked_for(layout):
@@ -208,7 +243,8 @@ def test_a_stare_at_a_point_beside_it_is_never_moved_and_poses_are_asked_for(lay
     result = capture(layout, server, channels=[A_TRAFFIC_STARE, A_STARE])
     assert result.outcome == "run_finished"
     rgbs = [a for a in server.actors if a.type_id == "sensor.camera.rgb"]
-    assert len(moves_of(server, rgbs[0].id)) == 300 and moves_of(server, rgbs[1].id) == []
+    assert len(moves_of(server, rgbs[0].id)) == FOLLOWED_STEPS
+    assert moves_of(server, rgbs[1].id) == []
     [event] = server.events.of("start_sumo_drive")
     assert callable(event[4]["on_pose"])
     assert [c["form"] for c in result.produced["cameras"]] == ["rendered_traffic",

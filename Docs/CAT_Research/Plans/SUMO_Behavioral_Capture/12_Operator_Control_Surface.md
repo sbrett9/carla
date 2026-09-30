@@ -8,6 +8,7 @@ the live parser object and grepping the live source tree on 2026-09-18; the furt
 §3.5, §3.10.1, §3.10.2, §5.2 and §7.6 were taken the same way, and each says where.
 **Date:** 2026-09-18
 **Revisions:**
+`2026-09-30` — `run_capture` waits for every channel's view inside the prewarm — tiles in, picture settled (checks 50 and 51, D12.38); an orbit holds its opening pose until the window opens, and a stare aimed at the traffic holds for the last 120 of its frames.
 `2026-09-30` — §9.6 corrected: a camera image's header carried the next frame's pose; the server stamps it at capture, and a capture's pose is its frame's snapshot's, the header checked and counted (§7.2 gates).
 `2026-09-30` — `run_sumo_drive.py --view free`: a camera flown inside the drive, recording spans with the session's render set once its tiles are in (§9.6).
 `2026-09-28` — Staged refusals, the window's own instant, live admission passes and check 33 read; stare aimed at rendered traffic.
@@ -722,10 +723,10 @@ computations of one fact eventually disagree, and the caller believes the cheape
 |---:|---|---|---|
 | 0 | `run_finished` | The run reached the end it was given — the window's declared end, or the scenario's own end where the window declares none — and closed itself | The corpus, with the manifest's last record naming the end it reached |
 | 1 | `usage_error` | The invocation itself was malformed: unknown key, unreadable file, an override of a binding. Nothing was resolved | The result, and nothing else |
-| 2 | `refused_offline` | Phase 0 refused (checks 1–21, 34–42, 46). No server was contacted | The resolution report and the result |
+| 2 | `refused_offline` | Phase 0 refused (checks 1–21, 34–42, 46–48, 51). No server was contacted | The resolution report and the result |
 | 3 | `refused_server` | Phase 1 refused (checks 22–27, 43). Nothing was acquired, nothing spawned | The resolution report and the result |
 | 4 | `refused_authority` | Phase 2 refused (checks 28, 29): an authority is held by someone else, **named in the result** | The resolution report and the result |
-| 5 | `refused_preroll` | Phase 3 refused (checks 30–33, 44, 45). The lease was acquired and released; the manifest carries `closed_by: aborted_at_preroll` | A manifest with no window, the report and the result |
+| 5 | `refused_preroll` | Phase 3 refused (checks 30–33, 44, 45, 50). The lease was acquired and released; the manifest carries `closed_by: aborted_at_preroll` | A manifest with no window, the report and the result |
 | 6 | `run_stopped` | The run ended before that end: a signal, an operator stop, a loud condition (§7.1), or the tool stopping itself because write headroom ran out (check 46). `closed_by` names which | A shorter corpus, complete to its last append |
 | 7 | `internal_error` | An unhandled fault — **not** a signal | Whatever had been appended, plus the result if the fault left the tool able to write it |
 | — | *no result at all* | The tool was stopped before it could write one | Whatever had been appended. **Absence is absence**, and says nothing about the data |
@@ -749,7 +750,9 @@ Three things about that table are deliberate.
   its `Validation` or `Launch` stage, before it takes the lease (§6.3). `refused_preroll` covers the
   session's `PreRoll` stage, whether its start or a prewarm tick raised it, and, from `run_capture`
   itself, a camera that could not be placed, the prewarm's pace (check 44), a stare aimed at the
-  rendered traffic with no vehicle to aim at (§5.2), and check 33 refused by its adjudication.
+  rendered traffic with no vehicle to aim at (§5.2), check 33 refused by its adjudication, and a
+  channel's view not ready as the window opens, or a witness past its ceiling before then
+  (check 50).
 - A run that stops for any reason carries `closed_by`, one of: `window_end` and `scenario_end`
   (with `run_finished`); `signal:SIGINT`, `signal:SIGTERM`, `signal:SIGBREAK`, `operator_stop`,
   `loud:recorder_dropped`, `loud:pace_below_floor`, `write_headroom`, and `fault:<exception>` for a
@@ -769,13 +772,13 @@ stateDiagram-v2
     Invoked --> Resolve : argv + layers 1..6
     Resolve --> usage_error : malformed / override of a binding
     Resolve --> Phase0
-    Phase0 --> refused_offline : checks 1-21, 34-42, 46
+    Phase0 --> refused_offline : checks 1-21, 34-42, 46-48, 51
     Phase0 --> Phase1
     Phase1 --> refused_server : checks 22-27, 43
     Phase1 --> Phase2
     Phase2 --> refused_authority : world is busy, holder named
     Phase2 --> Phase3 : lease held - first irreversible step
-    Phase3 --> refused_preroll : checks 30-33, 44, 45
+    Phase3 --> refused_preroll : checks 30-33, 44, 45, 50
     Phase3 --> Window
     Window --> run_stopped : signal, operator stop,<br/>loud condition, headroom gone
     Window --> internal_error : unhandled fault
@@ -859,9 +862,13 @@ its `adjudication` and `adjudicated_by`), `expectations_declared` (§13 question
 and `produced`: the capture directory, `closed_by`, the window (`begin_s`, `end_declared_s`,
 `end_reached_s`, where the end came from, and the civil instants of the begin and the end reached),
 each channel's counters, where every camera looked (`cameras`: a stare's pose and how it was declared,
-an orbit's centre, and for a stare aimed at the rendered traffic the point it resolved to, the
-vehicles and frame it was measured on, how far its camera moved at the last step, and the same point
-as the three look-at fields), the gate records, the admission pass for the window's begin and a count
+an orbit's centre and the pose it opened on, and for a stare aimed at the rendered traffic the point
+it resolved to, the vehicles and frame it was measured on, how far its camera moved at the last step,
+where it began to hold, and the same point as the three look-at fields), how each channel's view became
+ready before the window opened (`readiness`: the ceilings, where the wait began, and per channel the
+frame, ticks and wall clock at which its tiles were in, the frame and the number of its frames at which
+its picture settled and the residual, where a witness stood if it did not finish, and any return of
+the tiles to streaming; §6.3), the gate records, the admission pass for the window's begin and a count
 of the window's passes and of those that shed (`admissions`), the session's clock, SUMO release, pace,
 sun and layers, its compile lock — whether the scenario was compiled, the SUMO release that routed it
 and the world it was compiled for — and whether SUMO could teleport a blocked vehicle, the prewarm's
@@ -1176,7 +1183,7 @@ that has since changed is refused naming both values.
 | `capture.capture_hz` | `2.0` | Session-fixed; **Degradation-only** downward when the shedding ladder exists | today's `--record-hz` (`:512-518`); [`10`](10_Scale_And_Performance.md) §7 row 4 |
 | `synchronous` | *not a field in a capture run*: the session takes the world's clock | **Bound** | [`10`](10_Scale_And_Performance.md) D10.10 |
 | `capture.window` | **—** (a scenario-declared name, an explicit `begin_s:end_s` pair, or `begin_s:` with no end) | Session-fixed | [`01`](01_Architecture.md) OQ3 / [`02`](02_Use_Cases.md) OQ2, resolved as D12.4. A window with no end resolves to the scenario's `end_s`, and the echo says so |
-| `capture.prewarm_s` | `300` | Session-fixed | [`10`](10_Scale_And_Performance.md) §8. The session fast-forwards SUMO to `begin_s − prewarm_s`, renders from there, and the recorders start at `begin_s` |
+| `capture.prewarm_s` | `300` | Session-fixed | [`10`](10_Scale_And_Performance.md) §8. The session fast-forwards SUMO to `begin_s − prewarm_s`, renders from there, and the recorders start at `begin_s`; every channel's view is waited on inside it, and one not ready by `begin_s` refuses the run (checks 50 and 51, D12.38) |
 
 #### Render set
 
@@ -1211,7 +1218,7 @@ that has since changed is refused naming both values.
 | `orbit_centre_z_m` | `0.0` | Session-fixed | today's fixed `center_z` (`OrbitSensorController.py:215`) |
 | `stare_look_at_x_m`, `stare_look_at_y_m` | **cond.** — a stare gives these, or `stare_look_at_target`, or the five `stare_*` pose fields below: exactly one of the three; refused with `orbit` | Session-fixed | [`08`](08_Collection_And_EPoL.md) §3.3 |
 | `stare_look_at_z_m` | `0.0` | Session-fixed; not used with `stare_look_at_target`, whose point carries the vehicles' own height | the implicit look-at height of `camera_transform` in `CarlaNet/python/run_sumo_drive.py` |
-| `stare_look_at_target` | **cond.** — `rendered_traffic`, in place of a look-at point or a pose; refused with `orbit`, and with a prewarm shorter than one SUMO step (check 47) | Session-fixed; the camera follows the traffic through the prewarm and holds one pose for the whole window | `run_sumo_drive.py`'s `--camera-aim traffic` (`RenderedVehicleCentre`); D12.37 |
+| `stare_look_at_target` | **cond.** — `rendered_traffic`, in place of a look-at point or a pose; refused with `orbit`, and with a prewarm shorter than one SUMO step (check 47) | Session-fixed; the camera follows the traffic through the prewarm until 120 of its frames before the window opens, then holds one pose while its view becomes ready and for the whole window | `run_sumo_drive.py`'s `--camera-aim traffic` (`RenderedVehicleCentre`); D12.37 |
 | `stare_altitude_m`, `stare_standoff_m`, `stare_bearing_deg` | `304.8`, `0.0`, `0.0` | Session-fixed | altitude and standoff are today's start pose — `--z` 1000 ft **converted to metres**, looking straight down (`CarlaControlArgumentParser.py:232-234`, `SensorRig.py:62`); the bearing puts north at the top of the picture, where the start pose's `yaw=0.0` puts east there |
 | `stare_x_m`, `stare_y_m`, `stare_z_m`, `stare_pitch_deg`, `stare_yaw_deg` | **cond.** — all five or none; the alternative to a look-at point or target | Session-fixed | §9.1: a stare is sited by flying there first, and what flying produces is a pose |
 
@@ -1222,8 +1229,11 @@ opposite `stare_bearing_deg`, and `stare_altitude_m` above it; the bearing is th
 camera looks along, clockwise from north, so the boresight passes through the point and dips by
 atan(altitude / standoff). A standoff of `0.0` looks straight down with the bearing at the top of the
 picture. An orbit circles its centre at `orbit_radius_m`, `orbit_altitude_m` above
-`orbit_centre_z_m`, with the boresight held on the centre. A field the chosen pattern would ignore is
-refused rather than dropped. The single definition of every row in this table that is built is
+`orbit_centre_z_m`, with the boresight held on the centre. It is held at the pose it opens on — angle
+zero, east of the centre, where `OrbitSensorController` starts — through the pre-roll, so the view its
+first capture is written from is the one whose readiness is waited on (§6.3), and it sweeps from the
+window's opening. A field the chosen pattern would ignore is refused rather than dropped. The single
+definition of every row in this table that is built is
 `ChannelDescription` (`CarlaControl/src/carlacontrol/ChannelDescription.py`), whose defaults a test
 holds equal to this table; the stare geometry is `StareAim`. `post_process_profile` is not yet in it:
 it is a field of a run configuration's channel object, defined once in `RunConfiguration`, until
@@ -1231,21 +1241,25 @@ it is a field of a run configuration's channel object, defined once in `RunConfi
 
 **A stare aimed at the rendered traffic** (`"stare_look_at_target": "rendered_traffic"`) stands off
 the same way from a point that is measured rather than given: the mean position, height included, of
-the vehicles the session rendered on the last frame before the window opens, taken from the poses the
-session wrote to bodies (`RenderedTrafficCentre`, fed by `on_pose`, which `run_capture` binds only
-when a channel needs it). Its camera is spawned over the render region's centre at CARLA's origin
-height and follows the traffic through the prewarm: after each step it is moved, with its depth
-camera, to the pose around the centre of that step's last frame, so the view whose tiles and picture
-settle during the prewarm is the view the window holds to within one step's traffic motion — a cold
-view takes on the order of a hundred ticks to settle ([`03`](03_CoSimulation_Runtime.md) §9.5.1), and
-a camera moved only as the window opened would spend the window's first captures settling. The last
-step's centre is the point, and the pose around it is held for the whole window. The run result
+the vehicles the session rendered on the last frame before its camera holds for the window, taken from
+the poses the session wrote to bodies (`RenderedTrafficCentre`, fed by `on_pose`, which `run_capture`
+binds only when a channel needs it). Its camera is spawned over the render region's centre at CARLA's
+origin height and follows the traffic through the prewarm: after each step it is moved, with its depth
+camera, to the pose around the centre of that step's last frame. It stops one picture ceiling of its
+frames before the window opens — 120, sixty one-second SUMO steps at 2 Hz
+(`ViewReadiness.hold_lead_s`), and never before the prewarm's first step — and that step's centre is
+the point, held through the rest of the prewarm and the whole window. The hold is where its view's readiness is waited on
+([`03`](03_CoSimulation_Runtime.md) §9.5.1, check 50): a camera that moves between its frames never
+reads settled, and the tiles' figures cover every registered view, so every channel's wait begins
+there. A camera moved only as the window opened would spend the window's first captures settling, and
+one followed to the last step would open the window on a view nobody had seen ready. The run result
 records it (`produced.cameras[]`): the point, the vehicles and the frame it was measured on, the pose,
-how far the camera moved at the last step, and the point again as `as_look_at_point`, the three
-look-at fields, so the view is reproducible from the record as an ordinary look-at stare. It needs a
-prewarm of at least one SUMO step (check 47); a last frame that rendered no vehicle refuses the run at
-pre-roll, naming the channel; and a camera follower refuses the form, because only the process
-driving the session sees the poses.
+how far the camera moved at the last step, where it began to hold, and the point again as
+`as_look_at_point`, the three look-at fields, so the view is reproducible from the record as an
+ordinary look-at stare. It needs a prewarm of at least one SUMO step (check 47), and one SUMO step
+more than check 51 asks of a still camera; a frame before the hold that rendered no vehicle refuses
+the run at pre-roll, naming the channel; and a camera follower refuses the form, because only the
+process driving the session sees the poses.
 
 **`post_process_profile` is the exposure control, and its default is a hidden host-dependent value of
 exactly the kind M2 forbids.** No camera blueprint publishes a *numeric* exposure attribute (§1.3), but
@@ -1381,7 +1395,7 @@ laptop.
 
 #### Phase 0 — offline
 
-Checks 1–21 below, plus 34–42 and 46 in the table that follows the later phases.
+Checks 1–21 below, plus 34–42, 46–49 and 51 in the table that follows the later phases.
 
 | # | Check | Outcome | Message shape |
 |---:|---|---|---|
@@ -1465,6 +1479,8 @@ the sequence rather than sitting inside a phase's table, and each states its own
 | 47 | 0 | Every channel is a valid `ChannelDescription`, occlusion is measured only on a stare, and a stare aimed at the rendered traffic has a prewarm of at least one SUMO step to measure it over | refuse | `capture.channels[0]: channel description refused: a stare needs somewhere to look: give stare_look_at_x_m and stare_look_at_y_m, or stare_look_at_target 'rendered_traffic', or all of stare_x_m, …`, `occlusion is measured against a depth camera held at the channel's pose, and an orbit moves its camera with one call at a time … Set occlusion.enabled false for a run with an orbit, or make this channel a stare` and `this stare aims at the rendered traffic, which is measured on the last frame the prewarm renders before the window opens; the prewarm is 0 s … and one SUMO step is 1 s, so no frame would be rendered to measure it on` |
 | 48 | 0 | The catalogue at `paths.catalogue` is the one the scenario was compiled against | refuse | `…/vehicles.catalogue.json has catalogue_digest 771f…; scenario gardnerville@d0bf… was compiled against 0771…. The session would seat bodies of other dimensions than the routes were built for` |
 | 49 | resolution | The scenario package and the world package resolve, and the scenario's files are the ones its lock digests — a scenario compiled earlier is re-bound by its lock, not recompiled (§6.1) | refuse | `routes file gardnerville.rou.xml digests 5a1c…, not the 9c07… its lock recorded: it changed after the compile. Recompile the specification` |
+| 50 | 3 | Every channel's view is ready as the window opens: its photoreal tiles in — the camera published on the last tick, every visible tileset at load progress 100, no failed tile in view — and its picture settled — a frame within 0.5 grey levels of the frame ten before it in its worst 80-pixel block, counting frames rendered once the tiles were in — each within its ceiling, 90 s of wall clock and 120 of the camera's frames ([`03`](03_CoSimulation_Runtime.md) §9.5.1) | refuse; the window's first frame is not moved (D12.38) | `channel OVERWATCH-1: its photoreal tiles were not in within 90 s of wall clock (03 §9.5.1): at frame 12345, 1800 ticks and 90.0 s into the wait, the tiles were 87%, 3 failed in view (ion 2275207: progress 87.0, queued 4/0, kicked 0, failed in view 3, failed loaded 3)` and `channel OVERWATCH-1: its view was not ready when the window opened at t=25200 (03 §9.5.1): the tiles were in at frame 6920, … and the picture had not settled: 9 of its frames arrived since, too few to compare a frame with the one 10 before it` |
+| 51 | 0 | The prewarm leaves every camera, at the pose it holds as the window opens, at least eleven of its frames after its tiles are first asked about, one SUMO step into the hold: the fewest its picture can be witnessed settled on | refuse | `every channel's view is waited on inside the prewarm, and its picture is witnessed settled by comparing one of the camera's frames with the one 10 before it, … the prewarm is 6 s (capture.prewarm_s, clipped to the window's begin), which leaves 10 of the camera's frames at 2 Hz against the 11 the witness needs, so the run would be refused at pre-roll. Give a prewarm of at least 6.5 s` — check 50's certain refusal moved to phase 0 |
 
 Checks 34, 35, 44 and 46 are the four that earn their place. **34 and 35 are §6.4's whole mechanism** —
 the machine's substitute for a human reading an echo — and **44 moves the live run's dominant failure
@@ -1534,6 +1550,8 @@ resolved, with outcome `usage_error` (§3.10.2). A check the co-simulation sessi
 | 47 | offline | `run_capture` | ChannelDescription, RunConfigurationValidator |
 | 48 | offline | `run_capture` | RunConfigurationValidator |
 | 49 | resolution | `run_capture` | ScenarioPackage, RunConfigurationResolver |
+| 50 | pre-roll | `run_capture` | CaptureSession, ViewReadinessGate: world.get_view_readiness after every prewarm step, and the camera's own frames |
+| 51 | offline | `run_capture` | RunConfigurationValidator, from ViewReadiness.wait_begins_s |
 
 ### 6.3 Launch, from command to first capture
 
@@ -1637,12 +1655,20 @@ prewarm tick — is `refused_preroll`, closed `aborted_at_preroll`; `Window` is 
 `detail` names the stage. Anything else raised — a dropped CARLA connection among them, which the
 session does not wrap — is `internal_error`. The session restores everything it took on every exit
 path, so a start that failed leaves the world as it was found. Then `CaptureSession` places the
-cameras, ticks the prewarm through the session with nothing recording — moving each stare aimed at
-the rendered traffic after every step (§5.2) — checks the prewarm's pace under `wall_clock` (check 44)
-and the vehicles inside the render region at the window's begin against the render cap (check 33),
-records the point each stare aimed at the traffic resolved to, and starts the recorders at the
-window's begin. The CLI never sets the sun or the world's settings itself: the session is their one
-owner.
+cameras — an orbit at the pose it opens on, held there — ticks the prewarm through the session with
+nothing recording — moving each stare aimed at the rendered traffic after every step until its hold,
+and recording the point it resolved to there (§5.2) — and waits inside the prewarm for every
+channel's view to be ready ([`03`](03_CoSimulation_Runtime.md) §9.5.1, check 50). After each step it
+asks the server whether each camera's photoreal tiles are in (`world.get_view_readiness`), and once
+they are it compares the camera's own frames, which it listens to from the camera's placement until
+the recorders start, until the picture has settled; it asks nothing between steps, so the wait ticks
+only with the prewarm, and it begins once every camera holds the pose the window opens on. A
+witness past its ceiling, or a view not ready when the prewarm's last step ends, refuses the run at
+pre-roll, naming the channel and the witness; the window's first frame is never moved (D12.38). It
+then checks the prewarm's pace under `wall_clock` (check 44), the vehicles inside the render region at
+the window's begin against the render cap (check 33) and every view as the window opens, stops
+listening, starts the recorders at the window's begin and sets any orbit sweeping. The CLI never sets
+the sun or the world's settings itself: the session is their one owner.
 
 ### 6.4 The echo before commit, and what replaces it for a machine
 
@@ -1683,8 +1709,11 @@ layer earlier, and the block is serialised as `launch_echo` in `<run>.resolution
 **As built** (`LaunchEcho`), the block carries the simulated span and where its end came from, the
 captures per channel and per hour, the civil span, the sun at the window's first and last captured
 instants with their illumination bands (`IlluminationBand`), the world, the render region and caps,
-the estimated disk cost and headroom (check 19's figures), where the run writes, the pacing, and the
-warning codes raised. The sun is evaluated with the window opening at **its own begin**, because that
+the estimated disk cost and headroom (check 19's figures), where the run writes, the pacing, the
+wait for every channel's view (`readiness`: the two witnesses, their ceilings, the instant the wait
+begins and the window's opening it must be met by, where a stare aimed at the traffic stops to hold,
+and that a view not ready refuses at pre-roll with the window unmoved), and the warning codes raised.
+The sun is evaluated with the window opening at **its own begin**, because that
 is the instant `run_capture` gives the session as `window_opens_at` and where the session pins a frozen
 sun and anchors an advancing one; `held_at` states it, and says the prewarm before it is lit by the
 same sun. Three figures are stated as not predicted: the wall-clock duration (no measured tick rate
@@ -1829,7 +1858,10 @@ requested and achieved real-time factor and the last pacing window's, the sessio
 pass — population, subscribed, eligible, admitted, shed and cap, read off `Report.LastAdmissionPass`
 between advances — the vehicles rendered now, the ticks, the SUMO steps and the batch failures, and
 per channel the captures written, the recorder's
-`Dropped`, the captures without their illumination declaration, and occlusion measured and unmatched.
+`Dropped`, the captures without their illumination declaration, and occlusion measured and unmatched;
+until the recorders start, each channel's view instead, where its tiles and its picture stand in their
+wait (`view  OVERWATCH-1   tiles in at frame 1100 after 100 ticks, 0.5 s; picture settling, last 1.30
+grey levels after 7 frames`), read from the same `readiness` block the run result carries.
 Every figure is in the snapshot the run result's `produced` block is taken from. Two of the three
 loud conditions are observable — a recorder's `Dropped` becoming non-zero, and in a live run the
 achieved factor falling below its floor; the participant admission guarantee and the rendered
@@ -2639,7 +2671,8 @@ them by number ([`08`](08_Collection_And_EPoL.md) §15 cites check 17).
 | **D12.34** | **A kill with no chance to flush is normal, and the record makes its cost visible.** What is on disk is what exists and the last complete record is the authority. At most `max(4, n × 2)` captures per channel are lost from the encode queue (`FrameRecorder.cs:115-121`) and `Dropped` counts none of them (`:184-185`), so the manifest carries **captured** and **written** per channel and their difference is the loss. A capture is two files written to their final paths in sequence (`:222-227`, `:228-230`), so atomic publication and a stated publication order are required from [`04`](04_Contracts.md), with the sidecar published first so that the only torn state is one a reader can detect and disregard (§3.10.2, §3.10.3 K2–K4) |
 | **D12.35** | **A run has no length of ours.** There is no `--duration` and no `--frames`; a window may declare no end; and nothing in this surface depends on a run reaching an end. The single bound the tool imposes on itself is **write headroom**, expressed in captured seconds rather than bytes and re-evaluated while the run proceeds (check 46), because a disk that fills produces truncated files — the one outcome D12.33 forbids outright. A clean self-stop carries `closed_by: write_headroom`, its floor is an operator-settable field, and a caller that stops us first never sees it (§3.8, §5.2, §6.2 check 46) |
 | **D12.36** | **What a caller can watch while a run proceeds is two surfaces that already exist, and one boundary that is not a gap.** Through CarlaNet and the Python shim, after an explicit `Client.start_observer()` (`carlanet/__init__.py:2233-2239`), three cache reads are free and cost the tick nothing — `get_sim_time` (`:2017`), `get_actor_ids` (`:2027`) and `get_solar_state` (`:1511`) — while `get_actors` (`:2038`) is a blocking RPC per call; [`10`](10_Scale_And_Performance.md) D10.10 is why the distinction matters, and an observer reads the push stream rather than polling. **The server holds no capture state**, so frames written, intervals closed, area covered and gate records are answerable only from the incrementally written artifacts — the same fields, from the same source, that D12.14 already binds the monitor to (§7.6) |
-| **D12.37** | **A stare can aim at the rendered traffic instead of at coordinates, and the point it resolves to is recorded.** `stare_look_at_target: rendered_traffic` is a third stare form beside a look-at point and a pose — exactly one of the three — with the look-at form's altitude, standoff and bearing. The point is the mean position, height included, of the vehicles the session rendered on the last frame before the window opens, measured from the poses it wrote to bodies, because the middle of a render region is not where a corridor scenario's traffic is. It is declared as a named target rather than a flag so that the look-at fields name what the boresight passes through in one place, and a second target is a new value rather than a new field. It is resolved as the window opens because the window is what it frames, and the camera follows the traffic through the prewarm so that the view which settles is the view the window holds. The run result records the point as look-at fields, so a run is reproducible from its record by an ordinary look-at stare, and a process with no session — a camera follower — refuses the form (§5.2) |
+| **D12.37** | **A stare can aim at the rendered traffic instead of at coordinates, and the point it resolves to is recorded.** `stare_look_at_target: rendered_traffic` is a third stare form beside a look-at point and a pose — exactly one of the three — with the look-at form's altitude, standoff and bearing. The point is the mean position, height included, of the vehicles the session rendered on the last frame before its camera holds for the window, measured from the poses it wrote to bodies, because the middle of a render region is not where a corridor scenario's traffic is. It is declared as a named target rather than a flag so that the look-at fields name what the boresight passes through in one place, and a second target is a new value rather than a new field. It is resolved one picture ceiling of the camera's frames before the window opens (120, sixty SUMO steps at 2 Hz) because the window is what it frames and the view the window holds has to be seen ready first: the camera follows the traffic through the prewarm until then and holds from there, so the view whose tiles and picture are waited on (D12.38) is the view the window holds; a camera followed to the last step would open the window on a view nobody had seen ready, because a camera that moves between its frames never reads settled. The run result records the point as look-at fields, so a run is reproducible from its record by an ordinary look-at stare, and a process with no session — a camera follower — refuses the form (§5.2) |
+| **D12.38** | **No capture is written before its camera's view is ready, and a view not ready by the window's opening refuses the run at pre-roll; the window's first frame is never moved and the prewarm is never lengthened while a run is under way.** Readiness is [`03`](03_CoSimulation_Runtime.md) §9.5.1's two witnesses — the server's word that the tiles are in, the camera's own frames that the picture has settled — waited on inside the prewarm, asked once after every step the session renders and never between, from the point every capture camera holds the pose the window opens on: an orbit is held at its opening pose until the window opens, and a stare aimed at the rendered traffic holds for the last 120 of its frames (D12.37). The prewarm is the lead — `capture.prewarm_s`, Session-fixed and recorded — and it is not lengthened at run time: SUMO has already been fast-forwarded to its first instant and cannot be taken back, the render set at the window's opening depends on where rendering began (its release hysteresis and its cap, [`03`](03_CoSimulation_Runtime.md) §8.3), so a lead that followed how long the tiles took would make the rendered traffic a function of the network, and a window opened late is not the window whose sun was bound ([`03`](03_CoSimulation_Runtime.md) D3.21). So a witness past its ceiling — 90 s of wall clock for the tiles, 120 of the camera's frames for the picture, neither a count a caller supplies — or a view not ready when the window opens is check 50, `refused_preroll`, naming the channel, the witness and where it stood, as check 44 refuses a live exercise that cannot hold its rate; a prewarm that could never hold the fewest frames the picture can be compared on is check 51, in phase 0. The run result records per channel how its view became ready. A capture's own readiness is not recorded, because the server answers only for the last tick and publishes nothing per frame, and an orbit's readiness as the window opens says nothing of the ground it sweeps afterwards (§6.3) |
 
 ---
 

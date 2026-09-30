@@ -13,6 +13,13 @@ per `Advance`, each for the frame one step ahead of the rendered clock, handed t
 pose record per vehicle per tick, from `FakeServer.traffic_at`. The records carry the member names
 of `CarlaNet.CoSim.AdmissionPass` and `CoSimPoseRecord`; the tests that read the real types hold
 the names equal.
+
+Every tick of a step advances the server's frame counter and its wall clock, and a camera being
+listened to is handed an image on each frame its `sensor_tick` renders, from its spawn frame on --
+a uniform grey from `FakeServer.picture_at` unless a test says otherwise. `get_view_readiness`
+answers as the shim does, as of the last tick, from `FakeServer.tiles_at`: by default the camera
+is published once a tick has passed since it was spawned, and its one visible tileset is in, beside
+a hidden tileset that never loads.
 """
 from __future__ import annotations
 
@@ -76,21 +83,51 @@ class FakeLibrary:
         return iter(self._blueprints)
 
 
+class FakeImage:
+    """An `Image` as the shim hands a listener one: its frame, size and BGRA bytes."""
+
+    def __init__(self, frame: int, width: int, height: int, raw_data: bytes) -> None:
+        self.frame = frame
+        self.width = width
+        self.height = height
+        self.raw_data = raw_data
+
+
 class FakeActor:
     def __init__(self, events: Events, actor_id: int, blueprint: FakeBlueprint,
-                 transform: Any) -> None:
+                 transform: Any, spawn_frame: int = 0) -> None:
         self.events = events
         self.id = actor_id
         self.type_id = blueprint.id
         self.attributes = dict(blueprint.values)
         self.transform = transform
         self.spawned_at = transform
+        self.spawn_frame = spawn_frame
         self.destroyed = False
+        self.listener = None
+        tick = float(self.attributes.get("sensor_tick", "0") or 0.0)
+        self.ticks_per_frame = max(1, round(tick / FakeSession.DELTA_S))
 
     def destroy(self) -> bool:
         self.destroyed = True
+        self.listener = None
         self.events.add("destroy", self.type_id, self.id)
         return True
+
+    def listen(self, callback) -> None:
+        self.listener = callback
+        self.events.add("listen", self.id)
+
+    def stop(self) -> None:
+        if self.listener is not None:
+            self.events.add("stop_listening", self.id)
+        self.listener = None
+
+    def is_listening(self) -> bool:
+        return self.listener is not None
+
+    def renders(self, frame: int) -> bool:
+        return frame > self.spawn_frame and (frame - self.spawn_frame) % self.ticks_per_frame == 0
 
     def set_transform(self, transform: Any) -> None:
         self.transform = transform
@@ -351,6 +388,8 @@ class FakeSession:
         if fault is not None and self.RenderedTimeSeconds >= fault[0]:
             raise fault[1]
         self._hand_over_poses()
+        for _ in range(self.TICKS_PER_STEP):
+            self.world.render_one_tick()
         self.advances += 1
         self.ticks += self.TICKS_PER_STEP
         self.RenderedTimeSeconds += self.step_s
@@ -396,9 +435,33 @@ class FakeWorld:
     def get_solar_state(self):
         return self.server.sun
 
+    def get_view_readiness(self, camera):
+        server = self.server
+        server.events.add("view_readiness", camera.id, server.frame)
+        if server.readiness_raises is not None:
+            raise server.readiness_raises
+        tiles = server.tiles_at(camera, server.frame)
+        visible = {"ion_asset_id": 2275207, "visible": True,
+                   "load_progress": float(tiles["load_progress"]),
+                   "loading": {"worker_queue": 0 if tiles["load_progress"] >= 100.0 else 4,
+                               "main_queue": 0, "kicked": 0},
+                   "failed_in_view": int(tiles["failed_in_view"]),
+                   "failed_loaded": int(tiles["failed_in_view"])}
+        hidden = {"ion_asset_id": 1, "visible": False, "load_progress": 0.0,
+                  "loading": {"worker_queue": 9, "main_queue": 9, "kicked": 0},
+                  "failed_in_view": 0, "failed_loaded": 0}
+        return {"frame": server.frame, "published": bool(tiles["published"]),
+                "tilesets": [visible, hidden]}
+
+    def tick(self, *_args):
+        # The session owns the clock: nothing in a capture run ticks the world itself.
+        self.server.events.add("world_tick", self.server.frame)
+        return self.server.frame
+
     def spawn_actor(self, blueprint: FakeBlueprint, transform: Any) -> FakeActor:
         self.server.next_actor += 1
-        actor = FakeActor(self.server.events, self.server.next_actor, blueprint, transform)
+        actor = FakeActor(self.server.events, self.server.next_actor, blueprint, transform,
+                          self.server.frame)
         self.server.actors.append(actor)
         self.server.events.add("spawn", blueprint.id, actor.id)
         return actor
@@ -421,7 +484,8 @@ class FakeWorld:
         self.server.recorders.append(recorder)
         session = self.server.session
         self.server.events.add("start_recording", camera.id, Path(record_dir), hz, kwargs,
-                               None if session is None else session.RenderedTimeSeconds)
+                               None if session is None else session.RenderedTimeSeconds,
+                               self.server.frame)
         return recorder
 
     def stop_recording(self) -> None:
@@ -460,6 +524,36 @@ class FakeServer:
         self.result_path: Path | None = None
         self.unreachable = False
         self.clients: list[FakeClient] = []
+        # The frame the last tick produced, and the wall clock the ticks have cost.
+        self.frame = 1000
+        self.wall_s = 0.0
+        self.wall_per_tick = 0.005
+        # What get_view_readiness says of a camera at a frame, and the grey level (or the BGRA
+        # bytes) of the image a camera renders at a frame.
+        self.tiles_at = lambda camera, frame: {"published": frame > camera.spawn_frame,
+                                               "load_progress": 100.0, "failed_in_view": 0}
+        self.picture_at = lambda _camera, _frame: 128
+        self.image_size = (320, 160)
+        self.readiness_raises: Exception | None = None
+
+    def clock(self) -> float:
+        """The wall clock the ticks have cost, for a run's `clock`."""
+        return self.wall_s
+
+    def render_one_tick(self) -> None:
+        """One world tick: the frame counter and wall clock move, and every camera being listened
+        to that renders this frame is handed its image."""
+        self.frame += 1
+        self.wall_s += self.wall_per_tick
+        width, height = self.image_size
+        for actor in list(self.actors):
+            if actor.listener is None or actor.destroyed or not actor.renders(self.frame):
+                continue
+            picture = self.picture_at(actor, self.frame)
+            if not isinstance(picture, bytes | bytearray):
+                level = int(picture)
+                picture = bytes((level, level, level, 255)) * (width * height)
+            actor.listener(FakeImage(self.frame, width, height, bytes(picture)))
 
     def client(self, host: str, port: int) -> FakeClient:
         if self.unreachable:

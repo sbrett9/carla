@@ -4,7 +4,8 @@
 anything is acquired, containing what a reader has to be told to notice that the run is not the run
 they meant: the simulated span and the captures it will make, the civil span, the sun at the window's
 first and last captured instants and the policy holding it, the world, the render region, the disk it
-will cost, where it writes, and the warnings raised.
+will cost, where it writes, the wait for every channel's view before the window opens, and the
+warnings raised.
 
 **One computation, two renderings.** `to_dict()` is the block, serialised into the resolution report
 and the run result whether or not anyone reads it; `render()` is the same block laid out for a
@@ -16,7 +17,9 @@ dotted paths under `launch_echo.`.
 `ScenarioEpoch.civil_instant_at` (the session's `SolarEpoch`); the sun is `WindowSun` (the session's
 `DeclaredSun` and `SolarPositionModel`), evaluated with the window opening at its own begin -- the
 instant `CaptureSession` hands the session as `window_opens_at`, where it pins a frozen sun and
-anchors an advancing one, the prewarm before it lit by that same sun; the disk figure is check 19's.
+anchors an advancing one, the prewarm before it lit by that same sun; the disk figure is check 19's;
+the instant every view's wait begins is `ViewReadiness.wait_begins_s`, which `CaptureSession` and
+check 51 read too.
 
 What it does not predict, and says so: the wall-clock duration (no measured tick rate exists for a
 configuration before it runs), the in-region population (no population profile is published,
@@ -34,6 +37,16 @@ from CarlaNet.CoSim import IlluminationPolicy
 from carlacontrol.EffectiveRunConfiguration import EffectiveRunConfiguration
 from carlacontrol.IlluminationBand import IlluminationBand
 from carlacontrol.ScenarioEpoch import ScenarioEpoch
+from carlacontrol.ViewReadiness import (
+    PER_CAPTURE,
+    PICTURE_BLOCK_PX,
+    PICTURE_CEILING_FRAMES,
+    PICTURE_SPAN_FRAMES,
+    PICTURE_TOLERANCE_LEVELS,
+    RULE,
+    TILES_CEILING_S,
+    wait_begins_s,
+)
 from carlacontrol.WindowSun import WindowSun
 
 LAUNCH_ECHO_VERSION = 1
@@ -42,8 +55,8 @@ NOT_PREDICTED = (
     "in-region population: no population profile of the scenario is published (check 21)",
 )
 NOT_PREDICTED_TRAFFIC_AIM = ("where a stare aimed at the rendered traffic will look: the point is "
-                             "measured on the last frame before the window opens, and the run "
-                             "result records it")
+                             "measured on the last frame before its camera holds for the window, "
+                             "and the run result records it")
 
 
 class LaunchEcho:
@@ -102,6 +115,7 @@ class LaunchEcho:
             "pacing": {"mode": effective.value("pacing.mode"),
                        "real_time_factor": effective.value("pacing.real_time_factor"),
                        "min_achieved_factor": effective.value("pacing.min_achieved_factor")},
+            "readiness": cls._readiness(effective),
             "warnings": list(warning_codes),
             "not_predicted": list(NOT_PREDICTED) + (
                 [NOT_PREDICTED_TRAFFIC_AIM] if any(
@@ -140,6 +154,30 @@ class LaunchEcho:
                                          + (f", and the prewarm from t={first:g} is lit by it"
                                             if first < opens_at else ""))
         return block
+
+    @staticmethod
+    def _readiness(effective: EffectiveRunConfiguration) -> dict:
+        """The wait for every channel's view inside the prewarm (03 §9.5.1), and where it begins."""
+        window = effective.window
+        follows = any(effective.channel_description(index).aims_at_rendered_traffic()
+                      for index in range(effective.channel_count))
+        begins = wait_begins_s(window.begin_s, effective.first_rendered_s,
+                               float(effective.value("scenario.sumo_step_s")),
+                               float(effective.value("capture.capture_hz")), follows)
+        return {"waits": True, "rule": RULE,
+                "tiles": "world.get_view_readiness after every prewarm step: the camera published "
+                         "on the last tick, every visible tileset at load progress 100, no failed "
+                         "tile in view",
+                "picture": f"the camera's frame within {PICTURE_TOLERANCE_LEVELS:g} grey levels of "
+                           f"its frame {PICTURE_SPAN_FRAMES} frames earlier in its worst "
+                           f"{PICTURE_BLOCK_PX}-pixel block",
+                "tiles_ceiling_s": TILES_CEILING_S,
+                "picture_ceiling_frames": PICTURE_CEILING_FRAMES,
+                "from_s": begins, "until_s": window.begin_s,
+                "traffic_stare_holds_from_s": begins if follows else None,
+                "not_ready": "refused at pre-roll (check 50); the window's first frame is not "
+                             "moved",
+                "per_capture": PER_CAPTURE}
 
     # -- reading ---------------------------------------------------------------------------------------
 
@@ -204,6 +242,14 @@ class LaunchEcho:
         lines.append(f"  pacing      {pacing['mode']}" + (
             f", {pacing['real_time_factor']:g}x real time, floor {pacing['min_achieved_factor']:g}"
             if pacing["mode"] == "wall_clock" else ""))
+        readiness = b["readiness"]
+        lines.append(f"  readiness   every view's tiles (ceiling {readiness['tiles_ceiling_s']:g} s) "
+                     f"and picture (ceiling {readiness['picture_ceiling_frames']} frames), from "
+                     f"t={readiness['from_s']:,.0f} to t={readiness['until_s']:,.0f}; not ready by "
+                     "then refuses at pre-roll")
+        if readiness["traffic_stare_holds_from_s"] is not None:
+            lines.append(f"              a stare aimed at the traffic follows it until "
+                         f"t={readiness['traffic_stare_holds_from_s']:,.0f}, then holds")
         lines.append(f"  writes      {b['writes']['capture_directory']}")
         lines.append(f"              result {b['writes']['result_path']}")
         warnings = b["warnings"]

@@ -3,8 +3,9 @@
 `12_Operator_Control_Surface.md` §7.2, D12.16. Computed at any instant from the objects that hold the
 facts -- the co-simulation session (`SumoDriveSession`: its clock, its pacing, the sun's audit, the
 newest frame's illumination declaration, its latest admission pass, and the compile lock and
-teleporting checks it made before SUMO started), the window's admission passes (`WindowAdmissions`)
-and each channel's recorder (`FrameRecorder`: captures written, captures dropped, illumination
+teleporting checks it made before SUMO started), the window's admission passes (`WindowAdmissions`),
+the wait for each channel's view before the window opened (`ViewReadinessGate`) and each channel's
+recorder (`FrameRecorder`: captures written, captures dropped, illumination
 pairing, render-set pairing, occlusion pairing, and where each capture's pose came from) -- never at
 the end only, so a run stopped at minute nine has everything it knew at minute nine. `snapshot()` is
 the one computation: the live monitor renders it (D12.14), the loud conditions are read from it, and
@@ -45,6 +46,7 @@ from pathlib import Path
 from typing import Any
 
 from carlacontrol.EffectiveRunConfiguration import EffectiveRunConfiguration
+from carlacontrol.ViewReadiness import describe_view
 from carlacontrol.WindowAdmissions import WindowAdmissions
 
 SKIPPED = {
@@ -83,6 +85,7 @@ class RunCloseoutReport:
         self.scenario_checks: dict | None = None
         self.channels: list[ChannelCapture] = []
         self.started_at: float | None = None
+        self.readiness: Any = None
 
     def attach(self, session: Any, admissions: WindowAdmissions | None = None) -> None:
         """Read from `session` from now on, and from the window's admission passes where given.
@@ -117,6 +120,10 @@ class RunCloseoutReport:
     def add_channel(self, channel: ChannelCapture) -> None:
         self.channels.append(channel)
 
+    def attach_readiness(self, readiness: Any) -> None:
+        """Read each channel's wait for its view from `readiness` (a `ViewReadinessGate`)."""
+        self.readiness = readiness
+
     # -- the one computation ----------------------------------------------------------------------------
 
     def snapshot(self) -> dict:
@@ -134,6 +141,7 @@ class RunCloseoutReport:
             "admissions": None if self.admissions is None else self.admissions.to_dict(),
             "scenario_checks": self.scenario_checks,
             "channels": [self._channel(channel) for channel in self.channels],
+            "readiness": None if self.readiness is None else self.readiness.to_dict(),
             "wall_elapsed_s": None if self.started_at is None else self.clock() - self.started_at,
         }
         session = self.session
@@ -346,6 +354,9 @@ class RunCloseoutReport:
             lines.append(f"  admission passes in the window: {window['passes']}, "
                          f"{window['passes_shedding']} shedding; most eligible "
                          f"{window['most_eligible']}, most shed {window['most_shed']}")
+        readiness = snapshot.get("readiness")
+        for view in (readiness or {}).get("channels", []):
+            lines.append(f"  view {view['sensor_id']}: {describe_view(view)}")
         for channel in snapshot["channels"]:
             lines.append(f"  channel {channel['sensor_id']}: written {channel['written']}, "
                          f"recorder-dropped {channel['recorder_dropped']}, illumination unpaired "

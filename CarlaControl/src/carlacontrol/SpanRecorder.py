@@ -12,6 +12,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from carlacontrol import ViewReadiness
+
 
 class SpanRecorder:
     """Records a flown camera in spans, one folder per span, each started once its tiles are in.
@@ -344,32 +346,14 @@ class SpanRecorder:
     @staticmethod
     def tiles_in(readiness: dict) -> bool:
         """The camera's view drove the tiles' selection on the tick answered for, and every visible
-        tileset has loaded all of it with no failed tile in view.
+        tileset has loaded all of it with no failed tile in view: `ViewReadiness.tiles_in`, the
+        one definition a capture's pre-roll waits on too."""
+        return ViewReadiness.tiles_in(readiness)
 
-        A failed tile is drawn empty and counts as loaded, so progress at 100 with a failure in view
-        is a frame with a hole in it, and is not in.
-        """
-        visible = [tileset for tileset in readiness.get("tilesets", []) if tileset.get("visible")]
-        return (bool(readiness.get("published")) and bool(visible)
-                and all(tileset["load_progress"] >= 100.0 and tileset["failed_in_view"] == 0
-                        for tileset in visible))
-
-    @classmethod
-    def describe_tiles(cls, readiness: dict) -> str:
+    @staticmethod
+    def describe_tiles(readiness: dict) -> str:
         """Where the tiles stand, in a few words to follow "tiles": in, a percentage, a failure."""
-        if not readiness.get("published"):
-            return "not published for this view yet"
-        visible = [tileset for tileset in readiness.get("tilesets", []) if tileset.get("visible")]
-        if not visible:
-            return "absent: no visible tileset"
-        if cls.tiles_in(readiness):
-            return "in"
-        progress = min(float(tileset["load_progress"]) for tileset in visible)
-        failed = sum(int(tileset["failed_in_view"]) for tileset in visible)
-        text = f"{progress:.0f}%"
-        if failed:
-            text += f", {failed} failed in view"
-        return text
+        return ViewReadiness.describe_tiles(readiness)
 
     def _ask(self) -> dict:
         started = time.perf_counter()

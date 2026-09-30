@@ -12,7 +12,8 @@ by construction, and which have nothing in the tree to compare.
   night's runs can be validated on a laptop (02 D2.2). Where the session has a validator of its own
   for a rule, they call it rather than restate it: the clock ratio is
   `CarlaNet.CoSim.CoSimClock.ForSession`, the illumination object is `IlluminationPolicy.FromJson`,
-  and the epoch is `SolarEpoch` through `ScenarioEpoch`.
+  and the epoch is `SolarEpoch` through `ScenarioEpoch`. Where the pre-roll's wait for each view
+  could not possibly be met, the prewarm is refused here (check 51) rather than there (check 50).
 * **The server checks** (`validate_against_server`) read what the rig and the scenario need from
   the server --
   the sun, the camera blueprints' attributes, the vehicle blueprints -- before anything is spawned.
@@ -47,6 +48,12 @@ from carlacontrol.ScenarioEpoch import ScenarioEpoch, ScenarioEpochRefusedError
 from carlacontrol.ScenarioPackage import READABLE_LOCK_VERSIONS
 from carlacontrol.SiteProfile import SUMO_SEARCHED_VARIABLES
 from carlacontrol.VehicleCatalogue import VehicleCatalogue
+from carlacontrol.ViewReadiness import (
+    FEWEST_FRAMES,
+    PICTURE_SPAN_FRAMES,
+    frames_to_witness,
+    wait_begins_s,
+)
 
 MEASURED_PNG_BYTES = 2.25 * 2**20
 MEASURED_PNG_PIXELS = 1280 * 720
@@ -85,6 +92,8 @@ class RunConfigurationValidator:
         window_ok = self._window(effective, findings)
         self._clock(effective, findings)
         self._channels(effective, findings)
+        if window_ok:
+            self._readiness_prewarm(effective, findings)
         self._epoch(effective, findings)
         self._illumination(effective, findings)
         self._render(effective, findings)
@@ -297,8 +306,8 @@ class RunConfigurationValidator:
     @staticmethod
     def _traffic_prewarm(effective: EffectiveRunConfiguration, subject: str,
                          findings: RunConfigurationFindings) -> None:
-        """A stare aimed at the rendered traffic measures it on the prewarm's last frame, so the
-        prewarm has to render at least one SUMO step before the window opens."""
+        """A stare aimed at the rendered traffic measures it on a prewarm frame, so the prewarm has
+        to render at least one SUMO step before the window opens."""
         step = effective.value("scenario.sumo_step_s")
         if step is None or effective.value("capture.window") is None:
             return
@@ -308,11 +317,50 @@ class RunConfigurationValidator:
             return
         if prewarm + 1e-9 < float(step):
             findings.refuse(47, subject, f"this stare aims at the rendered traffic, which is "
-                            f"measured on the last frame the prewarm renders before the window "
-                            f"opens; the prewarm is {prewarm:g} s (capture.prewarm_s, clipped to "
+                            f"measured on a frame the prewarm renders before the window opens; "
+                            f"the prewarm is {prewarm:g} s (capture.prewarm_s, clipped to "
                             f"the window's begin) and one SUMO step is {float(step):g} s, so no "
                             "frame would be rendered to measure it on. Give a prewarm of at least "
                             "one SUMO step, or aim the channel at a point or a pose")
+
+    # -- check 51 ---------------------------------------------------------------------------------
+    @staticmethod
+    def _readiness_prewarm(effective: EffectiveRunConfiguration,
+                           findings: RunConfigurationFindings) -> None:
+        """Every channel's view is waited on inside the prewarm (03 §9.5.1), from where every camera
+        holds the pose the window opens on; a prewarm that leaves too few of the camera's frames
+        there for its picture to be witnessed settled is refused before anything is started."""
+        step = effective.value("scenario.sumo_step_s")
+        if step is None:
+            return
+        try:
+            descriptions = [effective.channel_description(index)
+                            for index in range(effective.channel_count)]
+            prewarm = effective.prewarm_s
+        except (ValueError, WindowResolutionError):
+            return
+        step = float(step)
+        hz = float(effective.value("capture.capture_hz"))
+        follows = any(description.aims_at_rendered_traffic() for description in descriptions)
+        if follows and prewarm + 1e-9 < step:
+            return  # check 47 refuses it: there is no step to measure the traffic on
+        begin = effective.window.begin_s
+        held = begin - wait_begins_s(begin, effective.first_rendered_s, step, hz, follows)
+        frames = frames_to_witness(held, hz, step)
+        if frames + 1e-9 >= FEWEST_FRAMES:
+            return
+        needed = step + FEWEST_FRAMES / hz + (step if follows else 0.0)
+        findings.refuse(51, "capture.prewarm_s", (
+            f"every channel's view is waited on inside the prewarm, and its picture is witnessed "
+            f"settled by comparing one of the camera's frames with the one {PICTURE_SPAN_FRAMES} "
+            f"before it, both rendered after its tiles are first asked about, one SUMO step into "
+            f"the wait (03 §9.5.1): the prewarm is {prewarm:g} s (capture.prewarm_s, clipped to the "
+            f"window's begin)"
+            + (", and the wait begins only where the stare following the rendered traffic stops "
+               "to hold its pose, after the step it measures the traffic on" if follows else "")
+            + f", which leaves {max(frames, 0.0):g} of the camera's frames at {hz:g} Hz against "
+            f"the {FEWEST_FRAMES} the witness needs, so the run would be refused at pre-roll. Give "
+            f"a prewarm of at least {needed:g} s"))
 
     # -- checks 12 and 13 -------------------------------------------------------------------------
     @staticmethod

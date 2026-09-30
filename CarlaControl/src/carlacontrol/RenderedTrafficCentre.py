@@ -1,8 +1,8 @@
 """Where the rendered vehicles are, measured from the poses the co-simulation session wrote to bodies.
 
 A stare aimed at the traffic (`ChannelDescription.stare_look_at_target` set to `rendered_traffic`)
-looks at the centre of the vehicles the session rendered on the last frame before the capture window
-opens. The middle of the render region is a poor stand-in: on a corridor scenario the region is drawn
+looks at the centre of the vehicles the session rendered on the last frame before its camera holds
+for the capture window. The middle of the render region is a poor stand-in: on a corridor scenario the region is drawn
 around a road that runs through it, and a run aimed at its middle framed a builder's yard while the
 traffic was on a highway a hundred metres away (`CarlaNet/python/run_sumo_drive.py`,
 `RenderedVehicleCentre`). The mean of the poses is not a guess about where the traffic ought to be;

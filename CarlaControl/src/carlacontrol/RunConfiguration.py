@@ -209,7 +209,9 @@ _FIELDS: tuple[RunField, ...] = (
             "unless the caller stops it first."),
     _F("capture.prewarm_s", _NON_NEGATIVE, 300.0, SESSION_FIXED,
        help="Simulated seconds rendered before the window opens and not recorded, so the render "
-            "set and the camera's tiles fill before the first capture (10 §8)."),
+            "set fills (10 §8) and every camera's view is ready -- its tiles in, its picture "
+            "settled -- before the first capture (03 §9.5.1). A view not ready by the window's "
+            "opening refuses the run; the window is not moved."),
     _F("capture.world_delta_s", _POSITIVE, 0.05, SESSION_FIXED,
        help="Simulated seconds per world tick. The SUMO step must be a whole number of them."),
     _F("capture.capture_hz", _POSITIVE, 2.0, SESSION_FIXED,
@@ -360,9 +362,11 @@ _CHANNEL_HELP = {
                          "stare_look_at_target, whose point carries the vehicles' own height.",
     "stare_look_at_target": "Stare: a point named instead of given. rendered_traffic is the centre "
                             "of the vehicles the session rendered on the last frame before the "
-                            "window opens; the camera follows it through the prewarm, holds the "
-                            "pose it resolves to for the whole window, and the run result records "
-                            "that point. Needs a prewarm of at least one SUMO step.",
+                            "camera holds for the window; the camera follows it through the "
+                            "prewarm until 120 of its frames before the window opens, then holds "
+                            "the pose it resolves to while its view becomes ready and for the "
+                            "whole window, and the run result records that point. Needs a prewarm "
+                            "of at least one SUMO step.",
     "stare_altitude_m": "Stare: height above the point, metres.",
     "stare_standoff_m": "Stare: horizontal distance back from the point, metres; 0 looks "
                         "straight down.",
