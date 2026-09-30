@@ -48,4 +48,13 @@ public enum LaneInterpolationCase
     /// sliding it across the gap.
     /// </summary>
     Discontinuous,
+
+    /// <summary>
+    /// An end off every lane: a vehicle parked at a stop, whose lane SUMO reports as empty for as
+    /// long as it is parked, or one pulling into or out of the stop. The reported points are blended
+    /// directly, which holds a parked vehicle where it stands. Measured on the Bahonar scenario:
+    /// every guard parked at its tower was filed as <see cref="Discontinuous"/> on every step before
+    /// this case existed, and those filled the run report's samples.
+    /// </summary>
+    OffLane,
 }

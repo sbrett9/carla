@@ -1394,6 +1394,15 @@ id, lane position. Cases, in order:
    removal-and-reinsertion. Do **not** interpolate. Release the actor and re-admit it at the new pose
    (§8.4, §11.6). With (4) in place this case does not arise at all on a matched network: measured,
    0 in 197,300 poses at a 1.0 s step and 0 in 193,808 at 0.05 s.
+6. **Off every lane.** SUMO reports an **empty** lane for a vehicle parked at a stop, for as long as
+   it is parked. That is neither a lane the network lacks nor a jump, so the reported points are
+   blended directly: a vehicle parked at both ends is held where it stands, and one pulling into or
+   out of its stop crosses the short step between lane and kerb. A move longer than
+   `v_max · Δs · 1.5` plus 5 m is still case (5); a lane *name* the network does not know is still
+   case (5). **Measured 2026-09-30** on Bahonar through TraCI: a guard pulling into its tower stop
+   moved 3.48 m in the step its lane became empty, at 0.05 m/s. Before this case existed every
+   parked guard was filed as (5) on every step, and three of them filled the run report's samples;
+   the report now keeps one sample per vehicle and counts the ticks it recurred on.
 
 **Distance is advanced by integrating the speed ramp, not linearly in time.** A step during which the
 vehicle's speed changed does not cover its distance at a constant rate, and the error from pretending

@@ -391,7 +391,7 @@ public sealed class CoSimRunReport
     /// producing tracks that start and stop for reasons nothing downstream can see -- and the first
     /// question about them is always which lanes they were between, which a count cannot answer.
     /// </remarks>
-    public IReadOnlyList<string> DiscontinuitySamples => _discontinuities;
+    public IReadOnlyList<string> DiscontinuitySamples => _discontinuities.Samples;
 
     private const int DiscontinuitySampleLimit = 20;
     private const int BatchFailureSampleLimit = 10;
@@ -399,7 +399,7 @@ public sealed class CoSimRunReport
     private const int NotInsertedSampleLimit = 10;
 
     private readonly List<string> _batchFailures = [];
-    private readonly List<string> _discontinuities = [];
+    private readonly DiscontinuitySampler _discontinuities = new(DiscontinuitySampleLimit);
     private readonly List<CollisionSpan> _collisions = [];
     private readonly List<VehicleNotInserted> _notInserted = [];
     private double _positionDivergenceTotal;
@@ -409,21 +409,8 @@ public sealed class CoSimRunReport
 
     internal void SampleDiscontinuity(in CoSimVehicleFrame from,
                                       in CoSimVehicleFrame to,
-                                      double? routeDistanceMetres)
-    {
-        if (_discontinuities.Count >= DiscontinuitySampleLimit)
-        {
-            return;
-        }
-
-        string distance = routeDistanceMetres is { } metres
-            ? $"{metres:0.00} m along the route"
-            : "no route between them";
-        _discontinuities.Add(
-            $"{from.Id}: {from.LaneId}@{from.LanePositionMetres:0.00} -> "
-            + $"{to.LaneId}@{to.LanePositionMetres:0.00}, {distance}, "
-            + $"speed {from.SpeedMetresPerSecond:0.0} to {to.SpeedMetresPerSecond:0.0} m/s");
-    }
+                                      double? routeDistanceMetres) =>
+        _discontinuities.Sample(from, to, routeDistanceMetres);
 
     internal void AddDivergence(in PoseDivergence divergence)
     {
@@ -760,7 +747,7 @@ public sealed class CoSimRunReport
                         + $"{LaneGeometrySamples} frames");
         text.AppendLine($"bridge cost        {BridgeMillisecondsPerTick:0.0000} ms/tick");
         text.Append($"sumo cost          {SumoMillisecondsPerStep:0.0000} ms/step");
-        foreach (string sample in _discontinuities)
+        foreach (string sample in _discontinuities.Lines())
         {
             text.AppendLine();
             text.Append($"  discontinuity    {sample}");

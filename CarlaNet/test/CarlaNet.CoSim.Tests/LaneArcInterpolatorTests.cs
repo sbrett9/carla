@@ -281,6 +281,75 @@ public sealed class LaneArcInterpolatorTests
         return track;
     }
 
+    // A vehicle parked at a stop: SUMO reports no lane for it for as long as it is parked.
+    private static CoSimVehicleFrame Parked(double x, double y, double heading = 348.9,
+                                            double speed = 0.0) =>
+        new("guard", x, y, heading, speed, "", "", 306.10, "measured_truck", SumoVehicleSignals.None);
+
+    [Fact]
+    public void AVehicleParkedAtBothEndsIsHeldWhereItStandsAndIsNotADiscontinuity()
+    {
+        InterpolatedState state = Interpolator().Interpolate(
+            Parked(728.47, 1394.75), Parked(728.47, 1394.75), 0.5, 1.0);
+
+        Assert.Equal(LaneInterpolationCase.OffLane, state.Case);
+        Assert.Equal(728.47, state.X, 9);
+        Assert.Equal(1394.75, state.Y, 9);
+        Assert.Equal(348.9, state.HeadingDegrees, 9);
+    }
+
+    [Fact]
+    public void PullingIntoAStopIsBlendedAcrossTheMeasuredStepToTheKerb()
+    {
+        // Measured on Bahonar through TraCI: 3.48 m in the step the lane became empty, at 0.05 m/s,
+        // which a limit derived from speed alone would call a jump.
+        CoSimVehicleFrame onLane = On("approach_0", 50.0, speed: 0.05) with { X = 725.0, Y = 1394.75 };
+        CoSimVehicleFrame parked = Parked(728.48, 1394.75, speed: 0.05);
+
+        InterpolatedState state = Interpolator().Interpolate(onLane, parked, 0.5, 1.0);
+
+        Assert.Equal(LaneInterpolationCase.OffLane, state.Case);
+        Assert.Equal(726.74, state.X, 6);
+    }
+
+    [Fact]
+    public void AnOffLaneMoveTheVehicleCouldNotHaveMadeIsStillADiscontinuity()
+    {
+        InterpolatedState state = Interpolator().Interpolate(
+            Parked(728.47, 1394.75), Parked(778.47, 1394.75), 0.5, 1.0);
+
+        Assert.Equal(LaneInterpolationCase.Discontinuous, state.Case);
+        Assert.Equal(778.47, state.X, 9);
+    }
+
+    [Fact]
+    public void ALaneTheNetworkDoesNotKnowIsStillADiscontinuity()
+    {
+        InterpolatedState state = Interpolator().Interpolate(
+            On("nowhere_0", 10.0), On("nowhere_0", 12.0), 0.5, 1.0);
+
+        Assert.Equal(LaneInterpolationCase.Discontinuous, state.Case);
+    }
+
+    [Fact]
+    public void TheRunReportSamplesAVehicleOnceAndCountsTheTicksItRecurredOn()
+    {
+        var sampler = new DiscontinuitySampler(limit: 20);
+        CoSimVehicleFrame a = On("turn_east_0", 10.0) with { Id = "a" };
+        CoSimVehicleFrame b = On("turn_east_0", 10.0) with { Id = "b" };
+        for (int tick = 0; tick < 30; tick++)
+        {
+            sampler.Sample(a, a, null);
+        }
+        sampler.Sample(b, b, null);
+
+        Assert.Equal(2, sampler.Samples.Count);
+        string[] lines = [.. sampler.Lines()];
+        Assert.StartsWith("a: turn_east_0@10.00", lines[0]);
+        Assert.EndsWith("on 30 ticks", lines[0]);
+        Assert.DoesNotContain("ticks", lines[1]);
+    }
+
     private static LaneArcInterpolator Interpolator() =>
         new(SumoRoadNetwork.Load(CoSimFixtures.RightAngleTurnNetwork));
 

@@ -31,6 +31,14 @@ public sealed class LaneArcInterpolator
     /// </summary>
     private const double StationaryAllowanceMetres = 1.0;
 
+    /// <summary>
+    /// How far a vehicle may move in one step into or out of a parking stop at walking pace, in
+    /// metres: the sideways step between the lane and where SUMO parks it. Measured on the Bahonar
+    /// scenario through TraCI: a guard pulling into its tower stop moved 3.48 m in the step its lane
+    /// became empty, at 0.05 m/s, which a speed-derived limit alone would call a jump.
+    /// </summary>
+    private const double ParkingStepAllowanceMetres = 5.0;
+
     private readonly SumoRoadNetwork _network;
 
     public LaneArcInterpolator(SumoRoadNetwork network)
@@ -53,6 +61,14 @@ public sealed class LaneArcInterpolator
     {
         double speed = from.SpeedMetresPerSecond
                        + ((to.SpeedMetresPerSecond - from.SpeedMetresPerSecond) * fraction);
+
+        // SUMO reports no lane for a vehicle parked at a stop, for as long as it is parked. That is
+        // not a lane the network lacks, and not a jump: the reported points are what there is to
+        // go on, and a lane name the network does not know is still a discontinuity below.
+        if (from.LaneId.Length == 0 || to.LaneId.Length == 0)
+        {
+            return OffLane(from, to, fraction, speed, stepSeconds);
+        }
 
         if (!_network.TryGetLane(from.LaneId, out SumoLane fromLane)
             || !_network.TryGetLane(to.LaneId, out SumoLane toLane))
@@ -306,6 +322,34 @@ public sealed class LaneArcInterpolator
     {
         (double x, double y, double directionX, double directionY) = lane.PointAt(lanePosition);
         return new InterpolatedState(x, y, Heading(directionX, directionY), speed, which);
+    }
+
+    /// <summary>
+    /// A step with an end off every lane: parked there, or pulling into or out of the stop. The
+    /// reported points are blended directly, which holds a vehicle parked at both ends where it
+    /// stands; a move further than the vehicle could have made plus the step to the kerb is still a
+    /// discontinuity.
+    /// </summary>
+    private static InterpolatedState OffLane(in CoSimVehicleFrame from,
+                                             in CoSimVehicleFrame to,
+                                             double fraction,
+                                             double speed,
+                                             double stepSeconds)
+    {
+        double deltaX = to.X - from.X;
+        double deltaY = to.Y - from.Y;
+        double reach = Math.Max(from.SpeedMetresPerSecond, to.SpeedMetresPerSecond)
+                       * stepSeconds * DistanceAllowance;
+        if (Math.Sqrt((deltaX * deltaX) + (deltaY * deltaY)) > reach + ParkingStepAllowanceMetres)
+        {
+            return Reported(to, speed, LaneInterpolationCase.Discontinuous);
+        }
+
+        // The shorter way round, so a heading near north does not swing through south.
+        double turn = ((to.HeadingDegrees - from.HeadingDegrees + 540.0) % 360.0) - 180.0;
+        double heading = (from.HeadingDegrees + (turn * fraction) + 360.0) % 360.0;
+        return new InterpolatedState(from.X + (deltaX * fraction), from.Y + (deltaY * fraction),
+                                     heading, speed, LaneInterpolationCase.OffLane);
     }
 
     private static InterpolatedState Reported(in CoSimVehicleFrame frame,
