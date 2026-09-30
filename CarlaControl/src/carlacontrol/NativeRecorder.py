@@ -158,7 +158,7 @@ class NativeRecorder:
             # encoder queue, and reading first would under-report a whole queue's worth of them.
             self.world.stop_recording()
             report = self.report()
-            note = self._occlusion_note() + self._pairing_note()
+            note = self._occlusion_note() + self._pairing_note() + self._pose_note()
             self.recording = False
             self._handle = None
             self._log_report(report, note)
@@ -183,6 +183,30 @@ class NativeRecorder:
         # arriving further behind the observer than the client keeps history for.
         return (f"; truth paired to its own frame on {exact}, to a neighbouring frame on {offset} "
                 f"(worst {worst} frame(s) apart, see telemetry_tick in those sidecars)")
+
+    def _pose_note(self) -> str:
+        """Where the captures' platform poses came from, for the stop message."""
+        if self._handle is None:
+            return ""
+        try:
+            if not self._handle.ChecksSensorPose:
+                return ""
+            from_snapshot = int(self._handle.SensorPoseFromSnapshot)
+            disagreed = int(self._handle.SensorPoseHeaderDisagreed)
+            from_header = int(self._handle.SensorPoseFromHeader)
+        except Exception as e:
+            self.logger.debug(f"failed to read pose counters: {e}")
+            return ""
+        if not from_snapshot and not from_header:
+            return ""
+        note = f"; pose from its own frame's snapshot on {from_snapshot}"
+        # A header that disagreed is a server stamping the image's pose after its frame: the
+        # snapshot's pose was written, but the server needs its fix.
+        if disagreed:
+            note += f", {disagreed} of them with an image header that disagreed"
+        if from_header:
+            note += f", from the image header on {from_header} (frame no longer held)"
+        return note
 
     def _occlusion_note(self) -> str:
         """How many captures got a per-vehicle occlusion measurement, for the stop message."""
@@ -224,7 +248,7 @@ class NativeRecorder:
             self.want_enabled = not self.want_enabled
         else:
             self.want_enabled = enabled
-        
+
     def update(self, now) -> None:
         """Update the recorder (no-op for native recorder)."""
         pass

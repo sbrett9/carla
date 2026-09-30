@@ -26,6 +26,33 @@
 
 struct FActorDescription;
 
+/// The frame, clock and pose a sensor's data header states, taken on the game thread in the call
+/// that captures the data.
+///
+/// Data read back asynchronously is sent long after that call: a camera's image comes back from
+/// the GPU on the render thread, which runs up to a frame behind the game thread, so by the time
+/// it is sent the frame counter and the episode's clock may have advanced to the next tick and a
+/// client may already have moved the sensor for it. Measured with a camera moved between
+/// synchronous ticks, a header written from the sensor as it stood at send time carried the pose
+/// of the frame after the image's in 89 of 90 images, while the pixels were the image's own frame
+/// in all 90. So the header is written from this, never from the sensor at send time.
+struct FSensorCaptureHeader
+{
+  uint64_t Frame = 0u;
+
+  /// The episode's elapsed game time, in seconds.
+  double Timestamp = 0.0;
+
+  /// The sensor's world transform, as the header carries it.
+  FTransform Transform;
+
+  /// The sensor's transform relative to the actor it is attached to, which ROS2 publishes in
+  /// place of the world transform for an attached sensor. Meaningful only when bAttached.
+  FTransform AttachedTransform;
+
+  bool bAttached = false;
+};
+
 
 
 /*  @CARLA_UE5
@@ -38,10 +65,12 @@ struct FActorDescription;
     if (!AreClientsListening()) // Ideally, check whether there are any clients.
         return;
 
-    auto FrameIndex = FCarlaEngine::GetFrameCounter();
+    // Taken now, in the call that captures the frame: the callback runs
+    // later, on another thread, after the sensor may have moved.
+    auto CaptureHeader = MakeCaptureHeader();
     ImageUtil::ReadImageDataAsync(
         *GetCaptureRenderTarget(),
-        [this](
+        [this, CaptureHeader](
             const void* MappedPtr,
             size_t RowPitch,
             size_t BufferHeight,
@@ -53,7 +82,7 @@ struct FActorDescription;
             SendDataToClient(
                 *this,
                 ImageData,
-                FrameIndex);
+                CaptureHeader);
             return true;
         });
 
@@ -168,15 +197,24 @@ protected:
       GetEpisode().GetElapsedGameTime());
   }
 
+  /// The frame, clock and pose to stamp on data captured now.
+  ///
+  /// @pre To be called from the game thread, in the call that captures the data, so that it
+  /// describes the same instant the data does. Hand the result to SendDataToClient.
+  FSensorCaptureHeader MakeCaptureHeader() const;
 
-  // Send sensor data to the client.
+
+  // Send sensor data to the client, stamped with the frame, clock and pose of the moment it was
+  // captured rather than of the moment it is sent. The stream's header is built from the sensor
+  // as it stands now, which for data read back asynchronously is a later instant, so all three
+  // fields are overwritten from CaptureHeader (see FSensorCaptureHeader).
   template <
     typename SensorType,
     typename ElementType>
   static void SendDataToClient(
-    SensorType&& Sensor,                  // The data's owning sensor.
-    TArrayView<ElementType> SensorData,   // Data to send to the client.
-    uint64_t FrameIndex                   // Current frame index.
+    SensorType&& Sensor,                        // The data's owning sensor.
+    TArrayView<ElementType> SensorData,         // Data to send to the client.
+    const FSensorCaptureHeader& CaptureHeader   // Taken by MakeCaptureHeader at capture.
     )
   {
     using carla::sensor::SensorRegistry;
@@ -187,8 +225,10 @@ protected:
         return;
 
     auto Stream = Sensor.GetDataStream(Sensor);
-    Stream.SetFrameNumber(FrameIndex);
-    
+    Stream.SetFrameNumber(CaptureHeader.Frame);
+    Stream.SetTimestamp(CaptureHeader.Timestamp);
+    Stream.SetTransform(CaptureHeader.Transform);
+
     auto Buffer = Stream.PopBufferFromPool();
     Buffer.copy_from(
       HeaderOffset,
@@ -209,7 +249,7 @@ protected:
     {
       TRACE_CPUPROFILER_EVENT_SCOPE_STR("ROS2 SendDataToClient");
       auto StreamId = carla::streaming::detail::token_type(Sensor.GetToken()).get_stream_id();
-      auto Res = std::async(std::launch::async, [&Sensor, ROS2, &Stream, StreamId, BufferView]()
+      auto Res = std::async(std::launch::async, [&Sensor, ROS2, &Stream, StreamId, BufferView, CaptureHeader]()
       {
         // get resolution of camera
         int W = -1, H = -1;
@@ -223,11 +263,10 @@ protected:
         auto FovOpt = Sensor.GetAttribute("fov");
         if (FovOpt.has_value())
           Fov = FCString::Atof(*FovOpt->Value);
-        // send data to ROS2
-        auto ParentActor = Sensor.GetAttachParentActor();
+        // send data to ROS2, from the pose it was captured at
         auto Transform =
-          ParentActor ?
-          Sensor.GetActorTransform().GetRelativeTransform(ParentActor->GetActorTransform()) :
+          CaptureHeader.bAttached ?
+          CaptureHeader.AttachedTransform :
           Stream.GetSensorTransform();
         ROS2->ProcessDataFromCamera(
           Stream.GetSensorType(),

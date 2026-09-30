@@ -55,6 +55,7 @@ public sealed class OcclusionEstimator : IDisposable
 
     private readonly OcclusionOptions _options;
     private readonly IDisposable _subscription;
+    private readonly SensorPoseCheck? _depthPose;
     private readonly DepthFrame?[] _ring = new DepthFrame?[RingSize];
     private int _next;
     private long _matched, _missedNoCaptures, _missedOutOfStep, _missedPose;
@@ -77,15 +78,35 @@ public sealed class OcclusionEstimator : IDisposable
     /// <summary>Recorded frames left without occlusion, for any reason.</summary>
     public long Missed => MissedNoCaptures + MissedOutOfStep + MissedPose;
 
+    /// <summary>Whether a matched depth capture's pose is read from the snapshot of its own frame and
+    /// its header checked against it.</summary>
+    public bool ChecksDepthPose => _depthPose is not null;
+
+    /// <summary>Matched depth captures whose pose was read from the snapshot of their own frame.</summary>
+    public long DepthPoseFromSnapshot => _depthPose?.FromSnapshot ?? 0;
+
+    /// <summary>Of those, the ones whose header carried a different pose. A server that stamps the
+    /// header at capture keeps this at zero; see <see cref="SensorPoseCheck"/>.</summary>
+    public long DepthPoseHeaderDisagreed => _depthPose?.HeaderDisagreed ?? 0;
+
+    /// <summary>Matched depth captures whose own frame the client no longer held, projected from their
+    /// header's pose.</summary>
+    public long DepthPoseFromHeader => _depthPose?.FromHeader ?? 0;
+
     /// <param name="depthStreamToken">The depth camera actor's 24-byte sensor stream token. The
     /// subscription is this estimator's own, so it neither disturbs nor depends on any other listener
     /// on that camera.</param>
-    public OcclusionEstimator(CarlaClient client, byte[] depthStreamToken, OcclusionOptions? options = null)
+    /// <param name="depthActorId">The depth camera actor. Given, each matched capture is projected
+    /// from the depth camera's pose in the snapshot of that capture's own frame, with its header
+    /// checked against it (<see cref="SensorPoseCheck"/>); null projects from the header alone.</param>
+    public OcclusionEstimator(CarlaClient client, byte[] depthStreamToken, OcclusionOptions? options = null,
+                              ActorId? depthActorId = null)
     {
         if (depthStreamToken is not { Length: 24 })
             throw new ArgumentException("depthStreamToken must be a 24-byte sensor stream token",
                                         nameof(depthStreamToken));
         _options = options ?? OcclusionOptions.Default;
+        _depthPose = depthActorId is { } depth ? new SensorPoseCheck(client.GetSnapshotFrame, depth) : null;
         _subscription = client.SubscribeToStream(depthStreamToken, OnDepthFrame);
     }
 
@@ -107,6 +128,11 @@ public sealed class OcclusionEstimator : IDisposable
     /// measurement is only meaningful while the depth camera is looking from where the recorded
     /// camera is looking, and silently mismeasuring is worse than reporting nothing.
     /// </summary>
+    /// <remarks>The capture returned carries the pose it is projected from, which is the depth camera's
+    /// pose in the snapshot of the capture's own frame wherever the estimator knows the camera and the
+    /// client holds the frame, and its header's otherwise: a header stamped after the capture was read
+    /// back can carry the pose of a later frame (<see cref="SensorPoseCheck"/>), and projecting the
+    /// vehicles of this frame from it would measure them against where the camera went next.</remarks>
     public DepthFrame? MatchTo(ulong frame, double timestamp, Transform cameraTransform)
     {
         // The two cameras arrive over separate connections, so the depth capture for this instant may
@@ -119,13 +145,16 @@ public sealed class OcclusionEstimator : IDisposable
             var (best, gap, anyAvailable) = FindNearest(frame, timestamp);
             if (best is not null && gap <= _options.FrameToleranceSeconds)
             {
-                if (!IsCoLocated(best, cameraTransform))
+                DepthFrame depth = _depthPose is null
+                    ? best
+                    : best.WithTransform(_depthPose.Resolve(best.Frame, best.Transform));
+                if (!IsCoLocated(depth, cameraTransform))
                 {
                     Interlocked.Increment(ref _missedPose);
                     return null;
                 }
                 Interlocked.Increment(ref _matched);
-                return best;
+                return depth;
             }
             if (Environment.TickCount64 >= deadline)
             {

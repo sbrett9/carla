@@ -8,6 +8,7 @@ the live parser object and grepping the live source tree on 2026-09-18; the furt
 §3.5, §3.10.1, §3.10.2, §5.2 and §7.6 were taken the same way, and each says where.
 **Date:** 2026-09-18
 **Revisions:**
+`2026-09-30` — §9.6 corrected: a camera image's header carried the next frame's pose; the server stamps it at capture, and a capture's pose is its frame's snapshot's, the header checked and counted (§7.2 gates).
 `2026-09-30` — `run_sumo_drive.py --view free`: a camera flown inside the drive, recording spans with the session's render set once its tiles are in (§9.6).
 `2026-09-28` — Staged refusals, the window's own instant, live admission passes and check 33 read; stare aimed at rendered traffic.
 `2026-09-28` — `run_capture` built: layered resolution, validation, echo, capture, result, termination, monitor, both launchers.
@@ -1892,7 +1893,11 @@ finished or was stopped; the difference between those two is `closed_by`, not a 
 (threshold 0), `capture.illumination_unpaired[<sensor>]` (captures written without their frame's
 illumination declaration, threshold 0), `capture.render_set_unpaired[<sensor>]` (captures written
 with no vehicle list because their frame's render set was no longer held, threshold 0;
-[`06`](06_Truth_And_Annotation.md) §8.2), `clock.ratio_recorded`, `pacing.achieved_factor` under
+[`06`](06_Truth_And_Annotation.md) §8.2), `capture.sensor_pose_header_disagreed[<sensor>]` (captures
+whose image header placed the camera elsewhere than the snapshot of their own frame, threshold 0;
+§9.6), `capture.depth_pose_header_disagreed[<sensor>]` (the same for the depth captures occlusion is
+measured against, threshold 0; skipped for a channel with no depth camera), `clock.ratio_recorded`,
+`pacing.achieved_factor` under
 `wall_clock`, `solar.applied_equals_confirmed` (the solar audit's worst angle against its tolerance;
 skipped where the policy binds no sun) and `launch.warnings_adjudicated`. Four are recorded as
 `skipped`, each with its reason, so that *not measured* never reads as *met*:
@@ -2358,18 +2363,80 @@ captures written at the rate, the recorder's `Dropped` when non-zero, the captur
 frame's rendered vehicles and those that could not, and the tiles. `NativeRecorder`'s field in
 `run_SCTMV.py` reads exactly as it did.
 
-**The pose a capture records is the image's.** The sidecar's platform point and boresight come from
-the transform in the image's sensor header, which the server takes in the same game-thread call that
-captures the frame (`PixelReader.h`, `SendPixelsInRenderThread`); `FrameRecorder` derives the
-`SensorPose` from `SensorFrame.SensorTransform` and never reads the camera actor. So a camera moved
-by the flight controller between the frame and the image's arrival is recorded where it was when
-the image was rendered. `FrameRecorderSensorPoseTests` streams a real recorder an image of frame 100
-whose header holds one pose while the world observer's latest snapshot, and `GetActorTransform`,
-hold the pose the camera was moved to by frame 103, and checks the sidecar's point, hae, azimuth and
-elevation and the PNG's `carla:sensor` chunk carry the header's; it was seen failing against a
-recorder reading the actor's transform. `CarlaNet/python/test_moving_camera_pose.py` checks it live:
-a camera moved about 100 m and tens of degrees before every tick, recorded, and every sidecar's pose
-compared with the pose commanded for its own frame and with the three commanded after it.
+**The pose a capture records is the image's.** The sidecar's platform point and boresight, and the
+pose the capture's occlusion is measured from, are the camera's pose in the client's world snapshot of
+the image's own frame (`CarlaClient.GetSnapshotFrame`, the snapshot the capture's truth records are
+read from), never the camera actor's current transform, which for a camera flown between the frame and
+the image's arrival is somewhere else. The transform in the image's sensor header is checked against it
+and not trusted, because on this path it was wrong (measured 2026-09-30):
+
+- **What the header carried.** This section said, until this correction, that the server takes the
+  header's transform in the same game-thread call that captures the frame, citing
+  `SendPixelsInRenderThread` in `PixelReader.h`. That function does, but nothing calls it. Every camera
+  -- RGB, depth, semantic and instance segmentation, normals, optical flow -- reads its image back from
+  the GPU asynchronously (`ImageUtil::ReadSensorImageDataAsyncFColor`, `ReadImageDataAsync`) and sends
+  it from the read-back callback through `ASensor::SendDataToClient`, which built the header there,
+  from the camera's transform and the episode's clock as they stood at that moment, and put back only
+  the frame number. The callback runs on the render thread up to a frame behind the game thread, and by
+  then the client's next `set_transform` had been served. Measured on Bahonar with a camera moved
+  before every synchronous tick (0.05 s) through a three-pose cycle told apart by sky colour: the pixels
+  of the image labelled F were F's pose in 90 of 90 images; its header's transform was the pose
+  commanded for F+1 in 89 of 90; the client's snapshot of F held the camera at F's pose in 59 of 60,
+  the other frame not held exactly. `test_moving_camera_pose.py` failed live, 5 of 34 captures carrying
+  their own frame's pose and 29 a later frame's. `FrameRecorderSensorPoseTests` had passed because it
+  fed the recorder an image whose header held the right pose, which was the premise in question.
+- **The header's clock.** Read in the same callback, so late whenever the callback ran after the next
+  tick had begun: the frame counter and the episode's clock advance together as the tick cue is
+  received (`FCarlaEngine::OnPreTick`), and the frame number was put back while the clock was not.
+  Reasoned, not measured: in the measurement above the header's transform was already the next frame's,
+  so the callback ran after the client's `set_transform` for F+1 had been served, and the client sends
+  its cue for F+1 one round trip later; for the clock to have been on time the callback would have had
+  to fall in that sub-millisecond gap in 89 of 90 frames, so wherever the pose was late the clock almost
+  certainly was too, and that holds for a still camera as well, whose pose cannot show it. Where the
+  client waits between ticks, as a paced drive does, the callback can fall before the cue and the clock
+  be on time. The captures on disk do not settle which: in each of five recorded runs (336 captures)
+  `sim_time_s` stays locked to `tick` at exactly 0.05 s, so the clock fell on the same side every time
+  within a run, and nothing recorded says which side. The live check now measures it.
+- **The server fix.** `ASensor::MakeCaptureHeader` takes the frame, the episode's clock and the
+  sensor's world transform -- and, for ROS2, its transform relative to the actor it is attached to --
+  in the game-thread call that captures the frame, and `SendDataToClient` writes all three into the
+  header from it (`SetFrameNumber`, `SetTimestamp`, `SetTransform`, as `SendPixelsInRenderThread`
+  does). All six cameras use it. None of the other sensors was late: the DVS camera reads its image
+  synchronously and builds its header in the call that captured it, and the ray-cast lidars, radar,
+  GNSS, IMU, collision and obstacle sensors build and send theirs on the game thread in the tick they
+  measured. The G-buffer path (`SendGBuffer` in `SceneCaptureSensor.h`) builds its header the late way
+  too, but compiles only against an engine with `GBufferView.h`, which 5.7.4 does not have. A ROS2
+  camera message now carries the capture's transform; its stamp is still ROS2's own clock at publish
+  time, as before.
+- **The recorder's check.** `SensorPoseCheck` takes the pose from the snapshot of the image's own
+  frame whenever the client holds that frame exactly and the camera is in it, and compares the
+  header's with it: 1 cm, and 0.01° on each of the forward and up axes, compared as axes so that a yaw
+  of 180 and one of −180, or yaw traded for roll looking straight down, are not a disagreement. It
+  counts `SensorPoseFromSnapshot`, `SensorPoseHeaderDisagreed` among those, and `SensorPoseFromHeader`
+  for a frame the client no longer holds, which is written with the header's pose because the nearest
+  frame held is the camera at another instant. The depth capture occlusion is projected from goes
+  through the same check for the depth camera (`OcclusionDepthPose*`): projected from a late header,
+  this frame's vehicles would be measured against where the depth camera went next. `start_recording`
+  hands the recorder both camera ids. `run_sumo_drive.py`'s summary and each span's closing report say
+  the counts, louder when a header disagreed; `run_capture` gates `capture.sensor_pose_header_disagreed`
+  and `capture.depth_pose_header_disagreed` at 0 (§7.2); `run_SCTMV.py`'s recorder says them when it
+  stops. The sidecar's `sim_time_s` still comes from the header's clock and is not checked; the server
+  fix is what makes it the frame's.
+- **Exercised by** `FrameRecorderSensorPoseTests`, which streams a real recorder the defect as it was
+  measured -- an image of frame 100 whose header holds the pose the camera was moved to by frame 103,
+  while the snapshot of frame 100 holds where it was -- and checks that the sidecar's point, hae,
+  azimuth and elevation and the PNG's `carla:sensor` chunk carry the snapshot's, with one disagreement
+  counted; that a header that agrees counts none; that a frame the client no longer holds is written
+  from its header, not from the nearest frame, and counted apart; and that a depth capture is projected
+  from its frame's snapshot in both cases. `SensorPoseCheckTests` covers the lookup, the tolerances and
+  the equivalent angles. Each was seen failing against the recorder reading the header, against the
+  nearest frame taken for the image's, against a disagreement left uncounted, against the depth capture
+  projected from its header, and against angles compared as numbers. `CarlaNet/python/test_moving_camera_pose.py`
+  is the live check. It reports separately the snapshots against the commanded poses (the control), the
+  headers' poses and timestamps against their own frame's (the server fix), each sidecar against the
+  pose commanded for its own frame and the three after it, and the recorder's counts (the check). With
+  the wheel rebuilt and the plugin not, the sidecar lines pass and the header lines fail, the recorder
+  counting the disagreements; with both rebuilt, every line passes and the count is 0.
 
 **Threads, and what the window costs the drive.** The drive keeps its thread: the session's steps,
 the world's ticks and the pacer's waits. The window is created, pumped and drawn on a thread of its

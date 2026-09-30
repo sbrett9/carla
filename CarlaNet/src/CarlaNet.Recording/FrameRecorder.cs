@@ -40,7 +40,7 @@ public sealed class FrameRecorder : IDisposable
 {
     /// <summary>A decimated frame as the stream thread hands it on: nothing asked of the server yet.</summary>
     private sealed record Arrival(DateTime CapturedUtc, ulong Frame, double SimTimeSeconds,
-                                  Transform SensorTransform, int Width, int Height,
+                                  Transform HeaderTransform, int Width, int Height,
                                   ReadOnlyMemory<byte> Bgra, IReadOnlyList<double> Solar);
 
     private sealed record Job(DateTime CapturedUtc, int Width, int Height,
@@ -63,6 +63,7 @@ public sealed class FrameRecorder : IDisposable
     private readonly OcclusionEstimator? _occlusion;
     private readonly IIlluminationSource? _illumination;
     private readonly RenderSetPairing? _renderSet;
+    private readonly SensorPoseCheck? _sensorPose;
 
     private readonly Channel<Arrival> _arrivals;
     private readonly Task _preparation;
@@ -145,6 +146,39 @@ public sealed class FrameRecorder : IDisposable
     /// <summary>Of those, the ones whose depth capture was of the wrong pose.</summary>
     public long OcclusionDepthWrongPose => _occlusion?.MissedPose ?? 0;
 
+    /// <summary>Whether each capture's pose is read from the snapshot of its own frame, with its image
+    /// header checked against it (<see cref="SensorPoseCheck"/>), rather than taken from the header.</summary>
+    public bool ChecksSensorPose => _sensorPose is not null;
+
+    /// <summary>Captures whose platform pose is the camera's in the snapshot of their own frame.</summary>
+    public long SensorPoseFromSnapshot => _sensorPose?.FromSnapshot ?? 0;
+
+    /// <summary>
+    /// Of those, the captures whose image header carried a different pose: each would have been
+    /// written somewhere its image was not taken from had the header been trusted. A server that
+    /// stamps the header when it captures the frame keeps this at zero.
+    /// </summary>
+    public long SensorPoseHeaderDisagreed => _sensorPose?.HeaderDisagreed ?? 0;
+
+    /// <summary>Captures whose own frame the client no longer held, written with their header's pose
+    /// unchecked.</summary>
+    public long SensorPoseFromHeader => _sensorPose?.FromHeader ?? 0;
+
+    /// <summary>Whether the depth capture occlusion is measured against is projected from the depth
+    /// camera's pose in the snapshot of its own frame, with its header checked the same way.</summary>
+    public bool ChecksDepthPose => _occlusion?.ChecksDepthPose ?? false;
+
+    /// <summary>Matched depth captures projected from the depth camera's pose in the snapshot of their
+    /// own frame.</summary>
+    public long OcclusionDepthPoseFromSnapshot => _occlusion?.DepthPoseFromSnapshot ?? 0;
+
+    /// <summary>Of those, the ones whose header carried a different pose; zero from a correct server.</summary>
+    public long OcclusionDepthPoseHeaderDisagreed => _occlusion?.DepthPoseHeaderDisagreed ?? 0;
+
+    /// <summary>Matched depth captures whose own frame the client no longer held, projected from their
+    /// header's pose.</summary>
+    public long OcclusionDepthPoseFromHeader => _occlusion?.DepthPoseFromHeader ?? 0;
+
     /// <param name="streamToken">The camera actor's StreamToken (24-byte sensor stream token).</param>
     /// <param name="hz">Captures per second (may be fractional). Decimated against sim time.</param>
     /// <param name="platform">Collection-platform options; when supplied (and a georeference origin is
@@ -166,12 +200,19 @@ public sealed class FrameRecorder : IDisposable
     /// the vehicle it rendered (<c>sumo_id</c>), and leaves out every body parked between loans; a
     /// frame whose set is no longer held lists no vehicle and says so. Null lists every vehicle actor,
     /// which is right wherever each actor is its own vehicle.</param>
+    /// <param name="cameraActorId">The recorded camera actor. Given, each capture's pose -- its
+    /// platform point and boresight, and the pose its occlusion is measured from -- is the camera's
+    /// in the snapshot of the image's own frame, with the image header's checked against it and
+    /// counted (<see cref="SensorPoseCheck"/>). Null takes the pose from the header unchecked.</param>
+    /// <param name="depthActorId">The depth camera actor, for the same check on the depth capture
+    /// occlusion is measured against. Used only with <paramref name="depthStreamToken"/>.</param>
     public FrameRecorder(CarlaClient client, byte[] streamToken, string dir, double hz,
                          string affiliation = "n", double staleSeconds = 3.0,
                          SensorPlatformOptions? platform = null, int workers = 0,
                          string? runId = null, string? scenarioId = null, long? seed = null,
                          byte[]? depthStreamToken = null, OcclusionOptions? occlusion = null,
-                         IIlluminationSource? illumination = null, IRenderSetSource? renderSet = null)
+                         IIlluminationSource? illumination = null, IRenderSetSource? renderSet = null,
+                         ActorId? cameraActorId = null, ActorId? depthActorId = null)
     {
         if (streamToken is not { Length: 24 })
             throw new ArgumentException("streamToken must be a 24-byte sensor stream token", nameof(streamToken));
@@ -197,9 +238,10 @@ public sealed class FrameRecorder : IDisposable
         catch { _haveOrigin = false; }
 
         if (depthStreamToken is not null)
-            _occlusion = new OcclusionEstimator(client, depthStreamToken, occlusion);
+            _occlusion = new OcclusionEstimator(client, depthStreamToken, occlusion, depthActorId);
         _illumination = illumination;
         _renderSet = renderSet is null ? null : new RenderSetPairing(renderSet);
+        _sensorPose = cameraActorId is { } camera ? new SensorPoseCheck(client.GetSnapshotFrame, camera) : null;
 
         int n = workers > 0 ? workers : Math.Max(2, Environment.ProcessorCount / 2);
         _channel = Channel.CreateBounded<Job>(new BoundedChannelOptions(Math.Max(4, n * 2))
@@ -319,16 +361,23 @@ public sealed class FrameRecorder : IDisposable
             vehicles = paired.Vehicles;
         }
 
+        // The pose these pixels were taken from: the camera in the snapshot of the image's own frame,
+        // with the header checked against it rather than trusted, because a header stamped after the
+        // read-back carried the pose of the frame after the image's (SensorPoseCheck). Everything
+        // below that places the camera works from this one pose.
+        Transform cameraPose = _sensorPose?.Resolve(arrival.Frame, arrival.HeaderTransform)
+                               ?? arrival.HeaderTransform;
+
         // How much of each vehicle this camera can actually see. Occlusion belongs to the
         // (vehicle, camera) pair, so it is measured against the depth capture of THIS frame from THIS
         // pose; when none matches, the capture simply carries no occlusion rather than a stale one.
         if (_occlusion is not null && recs.Count > 0)
         {
-            try { recs = MeasureOcclusion(recs, arrival.Frame, arrival.SimTimeSeconds, arrival.SensorTransform); }
+            try { recs = MeasureOcclusion(recs, arrival.Frame, arrival.SimTimeSeconds, cameraPose); }
             catch { }
         }
 
-        // The collection platform, derived from THIS frame's header transform — same pixels, same tick.
+        // The collection platform, at the pose the pixels were taken from — same pixels, same tick.
         // Course/speed come from the delta to the previous captured frame's pose.
         SensorPose? sensor = null;
         if (_haveOrigin && _platform is not null)
@@ -336,11 +385,11 @@ public sealed class FrameRecorder : IDisposable
             double dt = _prevSensorTf is null ? 0.0 : (arrival.SimTimeSeconds - _prevSensorSimTime);
             try
             {
-                sensor = _telemetry.ComputeSensorPose(_origin, arrival.SensorTransform, _prevSensorTf, dt,
+                sensor = _telemetry.ComputeSensorPose(_origin, cameraPose, _prevSensorTf, dt,
                                                       _platform, arrival.Width, arrival.Height);
             }
             catch { }
-            _prevSensorTf = arrival.SensorTransform;
+            _prevSensorTf = cameraPose;
             _prevSensorSimTime = arrival.SimTimeSeconds;
         }
 

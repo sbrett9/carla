@@ -5,10 +5,10 @@ facts -- the co-simulation session (`SumoDriveSession`: its clock, its pacing, t
 newest frame's illumination declaration, its latest admission pass, and the compile lock and
 teleporting checks it made before SUMO started), the window's admission passes (`WindowAdmissions`)
 and each channel's recorder (`FrameRecorder`: captures written, captures dropped, illumination
-pairing, render-set pairing, occlusion pairing) -- never at the end only, so a run stopped at minute
-nine has everything it knew at minute nine. `snapshot()` is the one computation: the live monitor
-renders it (D12.14), the loud conditions are read from it, and the run result carries the last one
-taken. Nothing here measures anything of its own.
+pairing, render-set pairing, occlusion pairing, and where each capture's pose came from) -- never at
+the end only, so a run stopped at minute nine has everything it knew at minute nine. `snapshot()` is
+the one computation: the live monitor renders it (D12.14), the loud conditions are read from it, and
+the run result carries the last one taken. Nothing here measures anything of its own.
 
 **Gate records are observations, never a verdict.** Each names what it observed, the threshold it
 compared against, the comparison, and whether it was met; nothing sums them. A gate whose input the
@@ -20,6 +20,8 @@ tree does not publish is recorded as `skipped` with the reason, so *not measured
 | `capture.recorder_dropped` | `FrameRecorder.Dropped` per channel, threshold 0 (10 D10.7) | measured |
 | `capture.illumination_unpaired` | captures written without their frame's illumination declaration, threshold 0 | measured |
 | `capture.render_set_unpaired` | captures written with no vehicle list because their frame's render set was no longer held, threshold 0 | measured |
+| `capture.sensor_pose_header_disagreed` | captures whose image header placed the camera elsewhere than their own frame's snapshot, threshold 0 | measured |
+| `capture.depth_pose_header_disagreed` | the same for the depth captures occlusion is measured against, threshold 0 | measured where the channel has a depth camera |
 | `clock.ratio_recorded` | whether the session's achieved real-time factor exists | measured |
 | `pacing.achieved_factor` | under `wall_clock`, the achieved factor against `min_achieved_factor` | measured |
 | `solar.applied_equals_confirmed` | the audit's worst angle between the world's sun and the declared one, against its tolerance | measured where the policy binds the sun |
@@ -194,7 +196,10 @@ class RunCloseoutReport:
                  "captured": None, "written": None, "recorder_dropped": None,
                  "illumination_paired": None, "illumination_unpaired": None,
                  "render_set_paired": None, "render_set_unpaired": None,
-                 "occlusion_measured": None, "occlusion_unmatched": None}
+                 "occlusion_measured": None, "occlusion_unmatched": None,
+                 "sensor_pose_from_snapshot": None, "sensor_pose_header_disagreed": None,
+                 "sensor_pose_from_header": None,
+                 "depth_pose_header_disagreed": None, "depth_pose_from_header": None}
         if recorder is None:
             return entry
         entry.update({"written": int(recorder.Saved), "recorder_dropped": int(recorder.Dropped),
@@ -204,6 +209,14 @@ class RunCloseoutReport:
                       "render_set_unpaired": int(recorder.RenderSetUnpaired),
                       "occlusion_measured": int(recorder.OcclusionMeasured),
                       "occlusion_unmatched": int(recorder.OcclusionUnmatched)})
+        if recorder.ChecksSensorPose:
+            entry.update({"sensor_pose_from_snapshot": int(recorder.SensorPoseFromSnapshot),
+                          "sensor_pose_header_disagreed": int(recorder.SensorPoseHeaderDisagreed),
+                          "sensor_pose_from_header": int(recorder.SensorPoseFromHeader)})
+        if recorder.ChecksDepthPose:
+            entry.update({
+                "depth_pose_header_disagreed": int(recorder.OcclusionDepthPoseHeaderDisagreed),
+                "depth_pose_from_header": int(recorder.OcclusionDepthPoseFromHeader)})
         return entry
 
     # -- read from the snapshot ---------------------------------------------------------------------
@@ -244,6 +257,22 @@ class RunCloseoutReport:
                                     "captures written with no vehicle list because their frame's "
                                     "render set was no longer held", "06 §8.2",
                                     channel["render_set_unpaired"], 0, "equals"))
+            # A capture whose image header placed the camera somewhere the snapshot of its own frame
+            # did not. The snapshot's pose is the one written, so the still is placed right, but the
+            # server stamped the header after the frame, and a corpus has to know it was.
+            gates.append(self._gate(f"capture.sensor_pose_header_disagreed[{channel['sensor_id']}]",
+                                    "captures whose image header disagreed with the camera's pose "
+                                    "in their own frame's snapshot", "12 §9.6",
+                                    channel["sensor_pose_header_disagreed"], 0, "equals"))
+            depth_gate = f"capture.depth_pose_header_disagreed[{channel['sensor_id']}]"
+            depth_name = ("depth captures whose header disagreed with the depth camera's pose in "
+                          "their own frame's snapshot")
+            if channel["depth_pose_header_disagreed"] is None:
+                gates.append(self._skipped(depth_gate, depth_name,
+                                           "the channel measures occlusion against no depth camera"))
+            else:
+                gates.append(self._gate(depth_gate, depth_name, "12 §9.6",
+                                        channel["depth_pose_header_disagreed"], 0, "equals"))
         pacing = snapshot["pacing"]
         achieved = None if pacing is None else pacing["achieved_factor"]
         gates.append(self._gate("clock.ratio_recorded", "the achieved real-time factor is recorded",
@@ -322,6 +351,11 @@ class RunCloseoutReport:
                          f"recorder-dropped {channel['recorder_dropped']}, illumination unpaired "
                          f"{channel['illumination_unpaired']}, render set unpaired "
                          f"{channel['render_set_unpaired']}  -> {channel['directory']}")
+            if channel.get("sensor_pose_from_snapshot") is not None:
+                lines.append(f"    pose from its own frame's snapshot "
+                             f"{channel['sensor_pose_from_snapshot']}, header disagreed "
+                             f"{channel['sensor_pose_header_disagreed']}, from the header "
+                             f"{channel['sensor_pose_from_header']}")
         for gate in gates:
             if gate["status"] == "skipped":
                 lines.append(f"  gate {gate['id']}: skipped ({gate['skip_reason']})")

@@ -113,6 +113,38 @@ def test_a_capture_listed_without_its_frame_s_render_set_is_a_gate_not_met(layou
     assert "render set unpaired 3" in RunCloseoutReport.render(snapshot, report.gates(snapshot, 0))
 
 
+def test_a_capture_whose_image_header_disagreed_with_its_frame_s_snapshot_is_a_gate_not_met(layout):
+    # The recorder wrote the snapshot's pose, so the still is placed right; the gate records that the
+    # server stamped the header after the frame.
+    report, session, recorder = closeout(layout)
+    session.Advance()
+    recorder.SensorPoseHeaderDisagreed = 2
+    recorder.SensorPoseFromHeader = 1
+    snapshot = report.snapshot()
+    channel = snapshot["channels"][0]
+    assert channel["sensor_pose_from_snapshot"] == recorder.SensorPoseFromSnapshot > 0
+    assert (channel["sensor_pose_header_disagreed"], channel["sensor_pose_from_header"]) == (2, 1)
+    disagreed = gate(report.gates(snapshot, 0), "capture.sensor_pose_header_disagreed[OVERWATCH-1]")
+    assert (disagreed["observed"], disagreed["threshold"], disagreed["met"]) == (2, 0, False)
+    text = RunCloseoutReport.render(snapshot, report.gates(snapshot, 0))
+    assert "header disagreed 2, from the header 1" in text
+
+
+def test_the_depth_pose_gate_is_skipped_without_a_depth_camera_and_evaluated_with_one(layout):
+    report, session, recorder = closeout(layout)
+    session.Advance()
+    skipped = gate(report.gates(report.snapshot(), 0),
+                   "capture.depth_pose_header_disagreed[OVERWATCH-1]")
+    assert skipped["status"] == "skipped" and skipped["met"] is None
+    assert "no depth camera" in skipped["skip_reason"]
+
+    recorder.ChecksDepthPose = True
+    recorder.OcclusionDepthPoseHeaderDisagreed = 1
+    evaluated = gate(report.gates(report.snapshot(), 0),
+                     "capture.depth_pose_header_disagreed[OVERWATCH-1]")
+    assert (evaluated["observed"], evaluated["threshold"], evaluated["met"]) == (1, 0, False)
+
+
 def test_an_unmeasured_gate_is_skipped_with_its_reason_never_passed(layout):
     report, session, _ = closeout(layout)
     session.Advance()

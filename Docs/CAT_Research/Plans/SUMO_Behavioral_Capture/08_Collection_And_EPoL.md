@@ -25,6 +25,7 @@ Findings set. Every external claim is cited.
 | 2026-09-21 | The vocabulary is published into the training export as well as the truth root. |
 | 2026-09-30 | §3.4, §8.1, §9.3: the recorder in the driving process lists each frame's render set by SUMO vehicle, with no parked body; a SUMO drive's truth uid follows the SUMO vehicle. |
 | 2026-09-30 | §3.4: a camera flown inside the driving process records its spans there, with the session's render set, which satisfies the co-location the render set depends on. |
+| 2026-09-30 | §3.4: a capture's pose is the camera's in the snapshot of its own frame, with the image header checked against it; the header carried the next frame's pose until the server stamped it at capture. |
 
 > **The boundary this section is written against.** This pipeline **labels; it never scores.** It does
 > not run a detector, a tracker or an EPoL model; it does not associate external model output to truth;
@@ -786,6 +787,22 @@ frame's rendered vehicles by SUMO id and no parked body. The viewers in other pr
 correctness still does not depend on which of them is open. Performance does, as the second decision
 allows: the flown camera and its depth camera render every tick, and its window runs on a thread of
 its own so that nothing it draws holds the drive's tick loop.
+
+**A capture is placed from the snapshot of its own frame, not from its image header (2026-09-30).**
+The pairing above joins a capture's truth to its frame by the frame number in the image's header, and
+that number was always right. The rest of the header was not: every camera sent its image from the
+GPU read-back callback, and the server wrote the header's transform and clock there, as they stood
+when the image came back, up to a tick later, so under a camera moved between ticks the header carried
+the next frame's pose (89 of 90 images measured on Bahonar) while the pixels and the snapshot of the
+frame were the frame's own ([`12`](12_Operator_Control_Surface.md) §9.6). The server now stamps the
+header when it captures the frame, and the recorder no longer relies on it: the platform pose, and the
+pose occlusion is measured from, are the camera's and the depth camera's in the snapshot of the
+image's own frame, the same snapshot the truth records are read from, with the header checked against
+it and a disagreement counted (`SensorPoseHeaderDisagreed`, `OcclusionDepthPoseHeaderDisagreed`). A
+frame the client no longer holds is placed from its header and counted apart, as its truth is served
+from the nearest frame and stamped `telemetry_tick`. So pose, truth and render set are all read as of
+the image's frame, which is what makes the co-location in this section enough for a flown camera as
+it is for a fixed one.
 
 ### 3.5 Session and sensor identity, and the artifact roots
 
@@ -3090,7 +3107,7 @@ sequenceDiagram
     B->>W: apply poses for tick N
     B->>W: apply composed light state for tick N<br/>[same batch, no extra round trip — §4.5]
     W->>W: render RGB + depth (~1 frame)
-    W-->>R: sensor frame, header carries pose + tick<br/>[t0]
+    W-->>R: sensor frame, header carries pose + tick,<br/>both taken when the frame is captured [t0]
     W-->>X: world-observer snapshot (poses, annotation state, solar block)
 
     R->>R: decimate against SIMULATED time (FrameRecorder.cs:129-133)<br/>decode BGRA [~1-3 ms, estimated]

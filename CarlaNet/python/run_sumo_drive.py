@@ -581,6 +581,16 @@ def report_captures(recorder) -> None:
         "because the frame's set was no longer held; %s rendered bodies had no truth "
         "record", recorder.RenderSetPaired, recorder.RenderSetUnpaired,
         recorder.RenderSetBodiesMissing)
+    if recorder.ChecksSensorPose:
+        # A capture is placed where its frame's snapshot holds the camera, and its image header is
+        # checked against that. A header that disagreed is a server stamping the image's pose after
+        # the frame, which the snapshot's pose has covered for but the server should not do, so it
+        # is said louder.
+        (logger.warning if recorder.SensorPoseHeaderDisagreed else logger.info)(
+            "sensor pose        %s captures placed from their own frame's snapshot, %s of them with "
+            "an image header that disagreed; %s placed from the header because their frame was no "
+            "longer held", recorder.SensorPoseFromSnapshot, recorder.SensorPoseHeaderDisagreed,
+            recorder.SensorPoseFromHeader)
     if recorder.MeasuresOcclusion:
         # A capture the depth camera could not be paired with carries no occlusion, which a
         # consumer counting unoccluded vehicles has to leave out, so any such capture is said louder.
@@ -590,6 +600,12 @@ def report_captures(recorder) -> None:
             recorder.OcclusionMeasured, recorder.OcclusionUnmatched,
             recorder.OcclusionNoDepthCaptures, recorder.OcclusionDepthOutOfStep,
             recorder.OcclusionDepthWrongPose)
+        if recorder.ChecksDepthPose:
+            (logger.warning if recorder.OcclusionDepthPoseHeaderDisagreed else logger.info)(
+                "depth pose         %s depth captures projected from their own frame's snapshot, "
+                "%s of them with a header that disagreed; %s from the header",
+                recorder.OcclusionDepthPoseFromSnapshot, recorder.OcclusionDepthPoseHeaderDisagreed,
+                recorder.OcclusionDepthPoseFromHeader)
 
 
 def use_carlacontrol() -> None:

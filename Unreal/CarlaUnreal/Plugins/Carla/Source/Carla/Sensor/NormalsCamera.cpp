@@ -31,12 +31,12 @@ void ANormalsCamera::PostPhysTick(UWorld *World, ELevelTick TickType, float Delt
   if (!AreClientsListening())
       return;
 
-  auto FrameIndex = FCarlaEngine::GetFrameCounter();
-  ImageUtil::ReadSensorImageDataAsyncFColor(*this, [this, FrameIndex](
+  auto CaptureHeader = MakeCaptureHeader();
+  ImageUtil::ReadSensorImageDataAsyncFColor(*this, [this, CaptureHeader](
     TArrayView<const FColor> Pixels,
     FIntPoint Size) -> bool
   {
-    SendDataToClient(*this, Pixels, FrameIndex);
+    SendDataToClient(*this, Pixels, CaptureHeader);
     return true;
   });
 }

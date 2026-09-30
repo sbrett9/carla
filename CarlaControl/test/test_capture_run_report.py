@@ -160,6 +160,23 @@ def test_toggling_the_recorder_off_reports_the_same_way(caplog):
     assert not recorder.recording
 
 
+def test_toggling_off_says_where_the_poses_came_from_and_names_a_disagreeing_header(caplog):
+    """A header that disagreed with its frame's snapshot is a server stamping the pose late."""
+    recorder = _recording(_World(sim_time=30.0), saved=60, dropped=0)
+    handle = recorder._handle
+    handle.ChecksSensorPose = True
+    handle.SensorPoseFromSnapshot, handle.SensorPoseHeaderDisagreed = 58, 57
+    handle.SensorPoseFromHeader = 2
+    recorder.want_enabled = False
+
+    with caplog.at_level(logging.INFO, logger="carlacontrol.NativeRecorder"):
+        recorder.apply_want()
+
+    logged = "\n".join(record.getMessage() for record in caplog.records)
+    assert ("pose from its own frame's snapshot on 58, 57 of them with an image header that "
+            "disagreed, from the image header on 2") in logged
+
+
 def test_counters_read_from_a_released_handle_are_zero_rather_than_an_error():
     recorder = NativeRecorder(_World(), camera=None, args=_Arguments())
     assert recorder.saved == 0

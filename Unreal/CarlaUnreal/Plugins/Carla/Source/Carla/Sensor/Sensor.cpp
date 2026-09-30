@@ -137,3 +137,18 @@ void ASensor::PostPhysTickInternal(UWorld *World, ELevelTick TickType, float Del
     ReadyToTick = false;
   }
 }
+
+FSensorCaptureHeader ASensor::MakeCaptureHeader() const
+{
+  FSensorCaptureHeader CaptureHeader;
+  CaptureHeader.Frame = FCarlaEngine::GetFrameCounter();
+  CaptureHeader.Timestamp = GetEpisode().GetElapsedGameTime();
+  CaptureHeader.Transform = GetActorTransform();
+  if (const AActor *ParentActor = GetAttachParentActor())
+  {
+    CaptureHeader.AttachedTransform =
+        CaptureHeader.Transform.GetRelativeTransform(ParentActor->GetActorTransform());
+    CaptureHeader.bAttached = true;
+  }
+  return CaptureHeader;
+}

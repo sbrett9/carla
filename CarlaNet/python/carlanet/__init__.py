@@ -1997,7 +1997,16 @@ class World:
         and says `vehicles="unknown"` on the sidecar rather than guessing. `RenderSetPaired` and
         `RenderSetUnpaired` count the two, and `RenderSetBodiesMissing` the rendered bodies no truth
         record described. Without it every vehicle actor is listed, which is right wherever each
-        actor is its own vehicle."""
+        actor is its own vehicle.
+
+        Each capture's platform pose, and the pose its occlusion is measured from, is the camera's in
+        the client's snapshot of the image's own frame, with the transform in the image's header
+        checked against it rather than trusted; the depth camera's capture is checked the same way.
+        `SensorPoseFromSnapshot` counts the captures placed from their frame's snapshot,
+        `SensorPoseHeaderDisagreed` those among them whose header said otherwise (zero from a server
+        that stamps the header when it captures the frame), and `SensorPoseFromHeader` those whose
+        frame the client no longer held, written from the header; `OcclusionDepthPose*` count the
+        same for the depth captures."""
         if not _CARLANET_RECORDING_AVAILABLE:
             print("native recording unavailable: CarlaNet.Recording assembly not loaded "
                   "(rebuild the wheel/DLLs).", file=sys.stderr)
@@ -2024,7 +2033,9 @@ class World:
                                        None if run_id is None else str(run_id),
                                        None if scenario_id is None else str(scenario_id),
                                        None if seed is None else int(seed),
-                                       depth_token, occlusion, illumination, render_set)
+                                       depth_token, occlusion, illumination, render_set,
+                                       int(camera.id),
+                                       None if depth_camera is None else int(depth_camera.id))
         return self._recorder
 
     def start_scenario(self, path, traffic_manager, report=None):
