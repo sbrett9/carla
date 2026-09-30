@@ -205,6 +205,9 @@ def test_each_channel_records_through_its_own_handle_with_the_session_s_identity
     for start in starts:
         assert start[4]["run_id"] == SESSION_ID
         assert start[4]["illumination"] is server.session.Illumination
+        # And the session's render set, so each sidecar lists its own frame's rendered vehicles by
+        # SUMO id and none of the bodies parked between loans.
+        assert start[4]["render_set"] is server.session.RenderSet
         assert "scenario_id" not in start[4] and "seed" not in start[4]
     assert {start[4]["platform_callsign"] for start in starts} == {"OVERWATCH-1", "OVERWATCH-2"}
     # 1,800 s at 2 Hz on each: neither recorder was stopped by the other starting.

@@ -9,12 +9,21 @@ namespace CarlaNet.Recording;
 /// vehicle (the same UID/type/format as the live cot_telemetry feed), pinned to the capture instant.
 /// Indentation is produced by <see cref="XmlWriter"/> (Indent = true) — human-readable by construction.
 /// </summary>
+/// <remarks>
+/// A record that names the vehicle its body rendered (<see cref="VehicleTelemetry.Rendered"/>) is a
+/// track of that vehicle, not of the body: a pooled body renders a succession of vehicles over a run,
+/// so a uid built on its actor id would jump from one real vehicle to the next. Its uid is
+/// <c>CARLA-TRUTH-SUMO-&lt;sumo_id&gt;</c> and its callsign <c>&lt;base_type&gt;-&lt;sumo_id&gt;</c>, and
+/// the actor id stays in the extras, where it says which body drew the vehicle on this frame. A record
+/// with no vehicle named is written exactly as before.
+/// </remarks>
 public static class CotWriter
 {
     public static void WriteToFile(string path, DateTime capturedUtc,
         IReadOnlyList<VehicleTelemetry> recs, string affiliation = "n", double staleSeconds = 3.0,
         IReadOnlyList<double>? solar = null, SensorPose? sensor = null,
-        CaptureIdentity? capture = null, IlluminationDeclaration? illumination = null)
+        CaptureIdentity? capture = null, IlluminationDeclaration? illumination = null,
+        SidecarVehicles vehicles = SidecarVehicles.World)
     {
         var settings = new XmlWriterSettings
         {
@@ -50,6 +59,13 @@ public static class CotWriter
             if (capture.Seed.HasValue)
                 w.WriteAttributeString("seed", capture.Seed.Value.ToString(CultureInfo.InvariantCulture));
         }
+
+        // Which vehicles the events below are. Absent, they are every vehicle actor the world held,
+        // as they always were. "rendered" is exactly the bodies this frame drew, each named by the
+        // vehicle it drew; "unknown" is a frame whose render set was no longer held, listed empty
+        // rather than guessed, and not to be read as an empty scene.
+        if (vehicles == SidecarVehicles.Rendered) w.WriteAttributeString("vehicles", "rendered");
+        else if (vehicles == SidecarVehicles.Unknown) w.WriteAttributeString("vehicles", "unknown");
 
         // Scene-level solar state (unbreakably tied to the imagery too, via the PNG tEXt chunk). Written
         // once here, before the per-vehicle events, so it is present even for a vehicle-free frame.
@@ -143,9 +159,16 @@ public static class CotWriter
 
         foreach (var r in recs)
         {
+            // The track is the vehicle's where the record names one, and the actor's otherwise. The
+            // uid says which, so a SUMO id that happens to be a number is never read as an actor id.
+            string track = r.Rendered is { } vehicle
+                ? vehicle.SumoId
+                : r.Id.ToString(CultureInfo.InvariantCulture);
+            string uid = r.Rendered is null ? $"CARLA-TRUTH-{track}" : $"CARLA-TRUTH-SUMO-{track}";
+
             w.WriteStartElement("event");
             w.WriteAttributeString("version", "2.0");
-            w.WriteAttributeString("uid", $"CARLA-TRUTH-{r.Id}");
+            w.WriteAttributeString("uid", uid);
             w.WriteAttributeString("type", $"a-{affiliation}-G-E-V");
             w.WriteAttributeString("how", "m-g");
             w.WriteAttributeString("time", time);
@@ -168,7 +191,7 @@ public static class CotWriter
             w.WriteEndElement(); // track
 
             w.WriteStartElement("contact");
-            w.WriteAttributeString("callsign", $"{r.BaseType}-{r.Id}");
+            w.WriteAttributeString("callsign", $"{r.BaseType}-{track}");
             w.WriteEndElement(); // contact
 
             w.WriteStartElement("_carla");
@@ -204,6 +227,16 @@ public static class CotWriter
                                        r.ApparentWidthPx.ToString(CultureInfo.InvariantCulture));
                 w.WriteAttributeString("apparent_height_px",
                                        r.ApparentHeightPx.ToString(CultureInfo.InvariantCulture));
+            }
+            // Who this body was drawing on this frame, where it was lent one: the SUMO vehicle that
+            // joins the record to the scenario's supervision, its declared type, and the frame its
+            // rendered span began on, so a track that starts mid-scene says so.
+            if (r.Rendered is { } rendered)
+            {
+                w.WriteAttributeString("sumo_id", rendered.SumoId);
+                w.WriteAttributeString("vtype_id", rendered.VehicleTypeId);
+                w.WriteAttributeString("admitted_tick",
+                                       rendered.AdmittedTick.ToString(CultureInfo.InvariantCulture));
             }
             w.WriteEndElement(); // _carla
 

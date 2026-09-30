@@ -67,6 +67,12 @@ public sealed class VehicleBodyPool
     /// <summary>How many bodies are lent out right now.</summary>
     public int HeldBodies => _held.Count;
 
+    /// <summary>
+    /// The bodies lent out right now, by the vehicle holding each: the render set as the world will
+    /// draw it once the next batch is applied. A body not in here is parked.
+    /// </summary>
+    public IReadOnlyDictionary<string, PooledBody> Held => _held;
+
     /// <summary>How many times a vehicle was refused a body because the budget was spent.</summary>
     public long Exhaustions { get; private set; }
 

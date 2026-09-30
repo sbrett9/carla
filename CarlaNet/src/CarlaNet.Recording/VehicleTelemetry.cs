@@ -72,4 +72,11 @@ public sealed record VehicleTelemetry(
     /// <summary>The vehicle's bounding box in its own frame (centre offset, half-extents, rotation),
     /// as reported by the actor description. See <see cref="ActorTransform"/>.</summary>
     public BoundingBox BoundingBox { get; init; }
+
+    /// <summary>
+    /// The vehicle this body rendered at the record's frame, where a render-set source lent it: a
+    /// pooled body carries a succession of vehicles over a run, so the actor id alone names none of
+    /// them. Null where no source was given, which is every run whose actors are their vehicles.
+    /// </summary>
+    public RenderedVehicle? Rendered { get; init; }
 }

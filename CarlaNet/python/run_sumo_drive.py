@@ -647,9 +647,12 @@ def main() -> int:
             os.makedirs(args.record_dir, exist_ok=True)
             # Every capture carries the declaration of its own frame's sun and the audit's residual
             # on the tick that rendered it, so a still's illumination is traceable to what this run
-            # said it should be.
+            # said it should be. And it lists the bodies its own frame rendered, each by the SUMO
+            # vehicle it rendered, rather than every vehicle actor: the bodies parked between loans
+            # stand below the ground and are no vehicle anyone could see.
             recorder = world.start_recording(camera, args.record_dir, args.record_hz, fov=args.fov,
-                                             illumination=session.Illumination)
+                                             illumination=session.Illumination,
+                                             render_set=session.RenderSet)
             if recorder is None:
                 return 1
             logger.info("recording -> %s", args.record_dir)
@@ -699,6 +702,14 @@ def main() -> int:
             logger.info("captures           %s written, %s dropped; %s carry their frame's "
                         "illumination declaration, %s do not", recorder.Saved, recorder.Dropped,
                         recorder.IlluminationPaired, recorder.IlluminationUnpaired)
+            # A capture whose frame's render set the session no longer held lists no vehicle rather
+            # than a guessed set, so any such capture is truth missing, and is said louder.
+            (logger.warning if recorder.RenderSetUnpaired or recorder.RenderSetBodiesMissing
+             else logger.info)(
+                "render set         %s captures list their frame's rendered vehicles, %s list none "
+                "because the frame's set was no longer held; %s rendered bodies had no truth "
+                "record", recorder.RenderSetPaired, recorder.RenderSetUnpaired,
+                recorder.RenderSetBodiesMissing)
         if camera is not None:
             try:
                 camera.destroy()

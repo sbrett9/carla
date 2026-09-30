@@ -47,7 +47,7 @@ Same shape ⇒ truth-vs-detection scoring is a direct diff (position error, clas
 | Field | Convention |
 |---|---|
 | `version` | CoT `2.0` |
-| `uid` | stable per (source, track). TRUTH: `CARLA-TRUTH-<actor_id>`. DETECTION: `CARLA-DET-<track_id>`. (Scoring associates truth↔detection by position/time, **not** uid.) |
+| `uid` | stable per (source, track). TRUTH: `CARLA-TRUTH-<actor_id>`. DETECTION: `CARLA-DET-<track_id>`. (Scoring associates truth↔detection by position/time, **not** uid.) In a SUMO drive, where a pooled actor renders a succession of SUMO vehicles, the track is the SUMO vehicle: TRUTH `CARLA-TRUTH-SUMO-<sumo_id>` (§5.2). |
 | `type` | 2525 CoT atom type — §4 |
 | `how` | TRUTH `m-g` (machine/GPS). DETECTION `m-f` (machine/fused) so the provenance differs. |
 | `time`/`start` | generation instant, ISO-8601 UTC ("Zulu"), millisecond precision |
@@ -57,7 +57,7 @@ Same shape ⇒ truth-vs-detection scoring is a direct diff (position error, clas
 | `point.ce`/`le` | error metres. **TRUTH = 0.0** (exact). DETECTION = estimated. (CoT "unknown" sentinel 9999999 is NOT used.) |
 | `track.course` | heading **degrees true north, 0–360**. Course-over-ground from velocity: `bearing = atan2(East, North) = atan2(vx, -vy)` (CARLA +X=East, −Y=North); fall back to vehicle yaw below a speed threshold. *Verify empirically (drive north ⇒ ~0°), as with the pick math.* |
 | `track.speed` | horizontal ground speed `sqrt(vx²+vy²)`, **m/s** |
-| `contact.callsign` | human-readable; default `<base_type>-<actor_id>` (e.g. `car-123`) |
+| `contact.callsign` | human-readable; default `<base_type>-<actor_id>` (e.g. `car-123`); `<base_type>-<sumo_id>` in a SUMO drive (e.g. `car-escort_0`) |
 
 ## 4. 2525 / CoT `type` mapping
 
@@ -91,6 +91,9 @@ Carries the richer-than-ADS-B fields for the scoring harness / any TAK plugin; W
 detail children. Attributes: `source` (`truth`|`detection`), `actor_id`, `type_id`, `base_type`,
 `special_type`, `length_m`/`width_m`/`height_m` (from `bounding_box.extent × 2`), `color`, `role_name`,
 raw `vx`/`vy`/`vz`. (Detection fills what it can: `source="detection"`, confidence, predicted class.)
+In a SUMO drive a recorded sidecar adds, per vehicle, `sumo_id` (the SUMO vehicle the body rendered
+on that frame), `vtype_id` (its declared vType) and `admitted_tick` (the first frame of its current
+rendered span); `actor_id` is then the body that drew it on that frame (§5.2).
 
 ### 5.1 Occlusion (recorded captures only)
 
@@ -124,6 +127,15 @@ half-dissolved car is not something a sensor should be told is there. A vehicle 
 reported while it dissolves back out on its way off the map. Vehicles nothing fades — a hero vehicle,
 scenario traffic, anything spawned by hand — are reported from the moment they spawn, so this makes no
 difference to a run without staging traffic.
+
+**A SUMO drive reports its render set.** Its vehicles are drawn by a pool of bodies, each lent to a
+SUMO vehicle while it is rendered and parked out of sight, about 300 m below the ground, in between
+([03 §8.2](../Plans/SUMO_Behavioral_Capture/03_CoSimulation_Runtime.md)). A recorded sidecar lists
+exactly the bodies its frame drew, as the session publishes them per frame, each named by its SUMO
+vehicle, and marks its container `vehicles="rendered"`; a parked body is not reported. A frame whose
+set is no longer held lists none and says `vehicles="unknown"`, which is not a claim that the scene
+was empty (03 §8.9). A run with no render set is reported as above, unchanged. The live pull
+(`get_vehicle_telemetry`) has no render set, and during a SUMO drive still returns the parked bodies.
 
 ## 6. Producers
 

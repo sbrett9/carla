@@ -40,8 +40,9 @@ world (D1.12):
   inside the render region at the window's begin are checked against the render cap (check 33), from
   the session's admission pass for that instant.
 * **Record**: one recorder per channel, each started from its own `World` handle because the shim
-  holds one recorder per handle, all given this session's id as their run id and the session's
-  illumination source.
+  holds one recorder per handle, all given this session's id as their run id, the session's
+  illumination source and its render set -- so each sidecar lists the bodies its own frame rendered,
+  named by SUMO vehicle, and none of the bodies parked out of sight between loans.
 * **Advance** until the window's end, the scenario's end, a stop, a loud condition under an
   unattended caller, or write headroom running out (check 46).
 * **Terminate** through `RunTerminationSequence`: drain the recorders, take the closing snapshot and
@@ -731,7 +732,8 @@ class CaptureSession:
                 depth_camera=rig.depth,
                 occlusion_margin_m=float(effective.value("occlusion.margin_m")),
                 occlusion_samples=int(effective.value("occlusion.samples")),
-                illumination=self.session.Illumination)
+                illumination=self.session.Illumination,
+                render_set=self.session.RenderSet)
             if rig.recorder is None:
                 raise _RefusedError("refused_preroll", "native recording is unavailable "
                                "(CarlaNet.Recording)", closed_by="aborted_at_preroll")

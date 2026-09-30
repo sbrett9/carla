@@ -102,6 +102,17 @@ def test_a_dropped_capture_is_a_gate_not_met_and_a_loud_condition(layout):
     assert [c for c, _ in report.loud_conditions(snapshot)] == ["recorder_dropped"]
 
 
+def test_a_capture_listed_without_its_frame_s_render_set_is_a_gate_not_met(layout):
+    report, session, recorder = closeout(layout)
+    session.Advance()
+    recorder.RenderSetUnpaired = 3
+    snapshot = report.snapshot()
+    assert snapshot["channels"][0]["render_set_paired"] == recorder.RenderSetPaired > 0
+    unpaired = gate(report.gates(snapshot, 0), "capture.render_set_unpaired[OVERWATCH-1]")
+    assert (unpaired["observed"], unpaired["threshold"], unpaired["met"]) == (3, 0, False)
+    assert "render set unpaired 3" in RunCloseoutReport.render(snapshot, report.gates(snapshot, 0))
+
+
 def test_an_unmeasured_gate_is_skipped_with_its_reason_never_passed(layout):
     report, session, _ = closeout(layout)
     session.Advance()

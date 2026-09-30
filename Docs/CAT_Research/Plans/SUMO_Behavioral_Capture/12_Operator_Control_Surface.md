@@ -1889,7 +1889,9 @@ finished or was stopped; the difference between those two is `closed_by`, not a 
 
 **As built**, the gate records `RunCloseoutReport` evaluates are `capture.recorder_dropped[<sensor>]`
 (threshold 0), `capture.illumination_unpaired[<sensor>]` (captures written without their frame's
-illumination declaration, threshold 0), `clock.ratio_recorded`, `pacing.achieved_factor` under
+illumination declaration, threshold 0), `capture.render_set_unpaired[<sensor>]` (captures written
+with no vehicle list because their frame's render set was no longer held, threshold 0;
+[`06`](06_Truth_And_Annotation.md) §8.2), `clock.ratio_recorded`, `pacing.achieved_factor` under
 `wall_clock`, `solar.applied_equals_confirmed` (the solar audit's worst angle against its tolerance;
 skipped where the policy binds no sun) and `launch.warnings_adjudicated`. Four are recorded as
 `skipped`, each with its reason, so that *not measured* never reads as *met*:

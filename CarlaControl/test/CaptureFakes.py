@@ -106,6 +106,9 @@ class FakeRecorder:
         self.Dropped = 0
         self.IlluminationPaired = 0
         self.IlluminationUnpaired = 0
+        self.RenderSetPaired = 0
+        self.RenderSetUnpaired = 0
+        self.RenderSetBodiesMissing = 0
         self.OcclusionMeasured = 0
         self.OcclusionUnmatched = 0
         self.stopped = False
@@ -117,6 +120,7 @@ class FakeRecorder:
         captures = int(round(seconds * self.capture_hz))
         self.Saved += captures
         self.IlluminationPaired += captures
+        self.RenderSetPaired += captures
         self.OcclusionMeasured += captures
         self.Dropped += self.drop_every_step
 
@@ -174,6 +178,12 @@ class _Illumination:
     def TryGetDeclaration(self, frame: int, _out: Any):  # noqa: N802 -- the .NET member name
         declaration = self._declarations.get(frame)
         return declaration is not None, declaration
+
+
+class _RenderSet:
+    """A session's render-set source: handed to each recorder, never read here."""
+
+    NewestFrame = None
 
 
 class FakeCompileLock:
@@ -295,6 +305,7 @@ class FakeSession:
         self.Sun = "bound to 2026-03-21 07:00:00-07:00" if binds else None
         self.SunAudit = _Audit() if binds else None
         self.Illumination = _Illumination()
+        self.RenderSet = _RenderSet()
         self.RenderedVehicleIds = _RenderedIds()
         self.disposed = False
         self.advances = 0

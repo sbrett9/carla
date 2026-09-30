@@ -1953,7 +1953,8 @@ class World:
                         fov=90.0, platform_type="uas-fixed", platform_affiliation="f",
                         platform_callsign="OVERWATCH", platform_uid=None, distortion="none",
                         run_id=None, scenario_id=None, seed=None, depth_camera=None,
-                        occlusion_margin_m=1.0, occlusion_samples=24, illumination=None):
+                        occlusion_margin_m=1.0, occlusion_samples=24, illumination=None,
+                        render_set=None):
         """Start native (C#) recording of `camera`'s imagery to `record_dir`: every 1/hz seconds a
         lossless PNG of the clean frame + a paired CoT-XML telemetry sidecar, encoded on the .NET thread
         pool (no Python/GIL in the hot path). Returns the FrameRecorder, or None if unavailable.
@@ -1985,7 +1986,18 @@ class World:
         policy, the frame's civil instant, the sun declared for it with both its geometric and its
         refraction-corrected elevation, and the audit's residual on the tick that rendered it, as an
         `<_illumination>` element beside `<_solar>` and a `carla:illumination` PNG chunk. The recorder's
-        `IlluminationUnpaired` counts captures that went without one."""
+        `IlluminationUnpaired` counts captures that went without one.
+
+        Pass `render_set` -- a SUMO drive session's `session.RenderSet` -- to have each capture list
+        only the vehicle bodies its own frame rendered, each named by the SUMO vehicle it rendered
+        (`sumo_id`, `vtype_id` and `admitted_tick` in the truth extras, uid
+        `CARLA-TRUTH-SUMO-<sumo_id>`, callsign `<base_type>-<sumo_id>`), and leave out the bodies
+        parked out of sight between loans. The set is looked up for the frame the capture's truth
+        describes, not the newest; a frame whose set the session no longer holds lists no vehicle
+        and says `vehicles="unknown"` on the sidecar rather than guessing. `RenderSetPaired` and
+        `RenderSetUnpaired` count the two, and `RenderSetBodiesMissing` the rendered bodies no truth
+        record described. Without it every vehicle actor is listed, which is right wherever each
+        actor is its own vehicle."""
         if not _CARLANET_RECORDING_AVAILABLE:
             print("native recording unavailable: CarlaNet.Recording assembly not loaded "
                   "(rebuild the wheel/DLLs).", file=sys.stderr)
@@ -2012,7 +2024,7 @@ class World:
                                        None if run_id is None else str(run_id),
                                        None if scenario_id is None else str(scenario_id),
                                        None if seed is None else int(seed),
-                                       depth_token, occlusion, illumination)
+                                       depth_token, occlusion, illumination, render_set)
         return self._recorder
 
     def start_scenario(self, path, traffic_manager, report=None):
@@ -2250,6 +2262,15 @@ class World:
         `TotalCapacityDeclines`. Read it between advances for a live monitor; `on_admission_pass` is
         handed every pass, including the two made while the session starts, for a writer that keeps
         the whole ledger. It is called from the tick thread once per SUMO step and must not block.
+
+        Vehicles are rendered by a pool of bodies, lent to a SUMO vehicle on admission and parked
+        out of sight, about 300 m below the ground, between loans -- so the world's vehicle actors
+        are not the scene's vehicles, and an actor id names each vehicle its body carries in turn.
+        `session.RenderSet` answers, for each frame the session rendered, which bodies the frame
+        drew, the SUMO vehicle each one drew, its vType and the frame its rendered span began on,
+        keyed by the frame the tick produced; the last 256 frames are held. Hand it to
+        `start_recording(render_set=...)` so the truth sidecars list the rendered vehicles by SUMO
+        id and leave the parked bodies out.
 
         Every pose the session writes carries its velocity: SUMO's speed along the lane, pointed along
         the body's yaw, climbing with the ground it is seated on. A vehicle whose physics is disabled

@@ -60,6 +60,8 @@ public sealed class SumoDriveSession : IDisposable
     private readonly VehicleBodyPool? _pool;
     private readonly Func<ulong?> _tickWorld;
     private readonly IlluminationFrames _illumination = new();
+    private readonly RenderSetFrames _renderSets = new();
+    private readonly Dictionary<string, (string TypeId, ulong? AdmittedTick)> _renderedSpans = [];
     private readonly TickBatch _batch = new();
     private readonly List<(string VehicleId, ActorId Actor, VehiclePose Pose)> _commanded = [];
     private readonly Dictionary<string, (double X, double Y)> _positions = [];
@@ -83,6 +85,7 @@ public sealed class SumoDriveSession : IDisposable
     private double _frameSeconds;
     private double? _lastCompleteSeconds;
     private double? _reportedSunElevation;
+    private RenderSet? _renderSetNow;
     private bool _disposed;
 
     private SumoDriveSession(SumoDriveSessionOptions options,
@@ -199,6 +202,20 @@ public sealed class SumoDriveSession : IDisposable
     /// audit's residual on its tick. Empty where the session renders no world.
     /// </summary>
     public IIlluminationSource Illumination => _illumination;
+
+    /// <summary>
+    /// Each rendered frame's render set, for a recorder to list beside the capture of that frame:
+    /// which bodies the frame drew, the SUMO vehicle each one drew, that vehicle's type and the frame
+    /// its rendered span began on. Every body not in a frame's set stood parked out of sight on that
+    /// frame. Empty where the session renders no world.
+    /// </summary>
+    /// <remarks>
+    /// Keyed by the frame each tick produced, because bodies are lent and given back between ticks
+    /// and an image arrives several ticks after its frame: the set in force when the image arrives is
+    /// routinely not the one it was taken under. The last <see cref="RenderSetFrames.Capacity"/>
+    /// frames are held.
+    /// </remarks>
+    public IRenderSetSource RenderSet => _renderSets;
 
     /// <summary>
     /// The SUMO this session drives, for a test that has to act on it as something outside the
@@ -604,6 +621,7 @@ public sealed class SumoDriveSession : IDisposable
                 };
             }
 
+            RecordTheRenderSet(frame);
             AuditTheSun(frame);
             MeasureDivergence();
             _lastCompleteSeconds = RenderedTimeSeconds;
@@ -749,6 +767,53 @@ public sealed class SumoDriveSession : IDisposable
             Report.SunAudit = _sunAudit;
             _sunAudit.AuditWindowOpen(opened);
         }
+    }
+
+    /// <summary>
+    /// Keep the render set of the frame this tick produced, for a recorder to list beside the capture
+    /// of that frame.
+    /// </summary>
+    /// <remarks>
+    /// <para>Read from the pool as the tick left it. Every body given back since the last tick was
+    /// parked at the head of this tick's batch and every body lent was posed in it, so the bodies held
+    /// now are exactly the bodies the frame drew -- including one whose pose was not written this tick,
+    /// which stands where it was last put and is drawn there.</para>
+    ///
+    /// <para>Built again only when a body has been lent or given back since the last frame, so a
+    /// frame whose lending did not change shares its set with the frame before. Recorded before the
+    /// sun's audit, which can stop the run, because the frame may already be on its way to a
+    /// recorder.</para>
+    /// </remarks>
+    private void RecordTheRenderSet(ulong frame)
+    {
+        if (_pool is not { } pool)
+        {
+            return;
+        }
+
+        if (_renderSetNow is null)
+        {
+            var vehicles = new List<RenderedVehicle>(pool.HeldBodies);
+            foreach ((string vehicleId, PooledBody body) in pool.Held)
+            {
+                (string typeId, ulong? admitted) = _renderedSpans.TryGetValue(vehicleId, out var span)
+                    ? span
+                    : (string.Empty, null);
+
+                // The first frame a vehicle's body is drawn for it opens its rendered span.
+                ulong since = admitted ?? frame;
+                if (admitted is null)
+                {
+                    _renderedSpans[vehicleId] = (typeId, since);
+                }
+
+                vehicles.Add(new RenderedVehicle(body.Actor, vehicleId, typeId, since));
+            }
+
+            _renderSetNow = new RenderSet(vehicles);
+        }
+
+        _renderSets.Record(frame, _renderSetNow);
     }
 
     /// <summary>
@@ -1101,6 +1166,12 @@ public sealed class SumoDriveSession : IDisposable
                 if (pool.TryCheckOut(vehicleId, extent.BlueprintId, out PooledBody body))
                 {
                     actor = body.Actor;
+                    if (_renderedSpans.TryAdd(vehicleId, (to.TypeId, null)))
+                    {
+                        // A body newly lent changes the render set from this tick's frame on.
+                        _renderSetNow = null;
+                    }
+
                     _batch.Pose(actor, applied);
                     _commanded.Add((vehicleId, actor, applied));
                     lamps = WriteTheLamps(vehicleId, actor, from.Signals, headlights);
@@ -1192,6 +1263,11 @@ public sealed class SumoDriveSession : IDisposable
         }
 
         _lampsWritten.Remove(interval.VehicleId);
+        if (_renderedSpans.Remove(interval.VehicleId))
+        {
+            // Parked at the head of the next tick's batch, so absent from that tick's frame on.
+            _renderSetNow = null;
+        }
 
         Report.CountRelease(interval.ReleaseReason);
         _options.OnRelease?.Invoke(interval with { Actor = actor });

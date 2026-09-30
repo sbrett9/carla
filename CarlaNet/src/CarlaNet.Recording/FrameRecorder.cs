@@ -46,7 +46,7 @@ public sealed class FrameRecorder : IDisposable
     private sealed record Job(DateTime CapturedUtc, int Width, int Height,
                               ReadOnlyMemory<byte> Bgra, IReadOnlyList<VehicleTelemetry> Telemetry,
                               IReadOnlyList<double> Solar, SensorPose? Sensor,
-                              CaptureIdentity Capture);
+                              CaptureIdentity Capture, SidecarVehicles Vehicles);
 
     private readonly CarlaClient _client;
     private readonly string _dir;
@@ -62,6 +62,7 @@ public sealed class FrameRecorder : IDisposable
 
     private readonly OcclusionEstimator? _occlusion;
     private readonly IIlluminationSource? _illumination;
+    private readonly RenderSetPairing? _renderSet;
 
     private readonly Channel<Arrival> _arrivals;
     private readonly Task _preparation;
@@ -109,6 +110,23 @@ public sealed class FrameRecorder : IDisposable
     /// </summary>
     public long IlluminationUnpaired => Interlocked.Read(ref _illuminationUnpaired);
 
+    /// <summary>Whether captures list their frame's render set rather than every vehicle actor.</summary>
+    public bool PairsRenderSet => _renderSet is not null;
+
+    /// <summary>Captures whose vehicle list is the render set of the frame their truth describes.</summary>
+    public long RenderSetPaired => _renderSet?.Paired ?? 0;
+
+    /// <summary>
+    /// Captures written with no vehicle list, although a render-set source was given: frames whose
+    /// set the source no longer held, or never had. Each such sidecar says <c>vehicles="unknown"</c>,
+    /// so its empty list is not read as an empty scene.
+    /// </summary>
+    public long RenderSetUnpaired => _renderSet?.Unpaired ?? 0;
+
+    /// <summary>Bodies a paired capture's render set held that no truth record described, summed
+    /// over the captures.</summary>
+    public long RenderSetBodiesMissing => _renderSet?.BodiesMissing ?? 0;
+
     /// <summary>Whether captures carry a per-vehicle occlusion measurement.</summary>
     public bool MeasuresOcclusion => _occlusion is not null;
 
@@ -143,12 +161,17 @@ public sealed class FrameRecorder : IDisposable
     /// each capture's sun, the declaration for that capture's frame and the audit's residual on it,
     /// so the still's illumination is traceable to what the run said it should be. Null writes the
     /// sun alone.</param>
+    /// <param name="renderSet">What lent the vehicle bodies this run renders, where they are lent from
+    /// a pool. Supplying it lists, in each capture, only the bodies its frame rendered, each named by
+    /// the vehicle it rendered (<c>sumo_id</c>), and leaves out every body parked between loans; a
+    /// frame whose set is no longer held lists no vehicle and says so. Null lists every vehicle actor,
+    /// which is right wherever each actor is its own vehicle.</param>
     public FrameRecorder(CarlaClient client, byte[] streamToken, string dir, double hz,
                          string affiliation = "n", double staleSeconds = 3.0,
                          SensorPlatformOptions? platform = null, int workers = 0,
                          string? runId = null, string? scenarioId = null, long? seed = null,
                          byte[]? depthStreamToken = null, OcclusionOptions? occlusion = null,
-                         IIlluminationSource? illumination = null)
+                         IIlluminationSource? illumination = null, IRenderSetSource? renderSet = null)
     {
         if (streamToken is not { Length: 24 })
             throw new ArgumentException("streamToken must be a 24-byte sensor stream token", nameof(streamToken));
@@ -176,6 +199,7 @@ public sealed class FrameRecorder : IDisposable
         if (depthStreamToken is not null)
             _occlusion = new OcclusionEstimator(client, depthStreamToken, occlusion);
         _illumination = illumination;
+        _renderSet = renderSet is null ? null : new RenderSetPairing(renderSet);
 
         int n = workers > 0 ? workers : Math.Max(2, Environment.ProcessorCount / 2);
         _channel = Channel.CreateBounded<Job>(new BoundedChannelOptions(Math.Max(4, n * 2))
@@ -282,6 +306,19 @@ public sealed class FrameRecorder : IDisposable
             catch { }
         }
 
+        // Where the bodies are lent from a pool, the world's vehicle actors are not the scene's
+        // vehicles: a body between loans stands parked out of sight below the ground, and a lent one
+        // renders whichever vehicle borrowed it. So the records are cut to the bodies the records'
+        // own frame rendered, each named by its vehicle, before anything is measured against the
+        // imagery -- a parked body is neither reported nor measured.
+        SidecarVehicles vehicles = SidecarVehicles.World;
+        if (_renderSet is not null && telemetryTick is { } described)
+        {
+            PairedTruth paired = _renderSet.Pair(recs, described);
+            recs = paired.Records;
+            vehicles = paired.Vehicles;
+        }
+
         // How much of each vehicle this camera can actually see. Occlusion belongs to the
         // (vehicle, camera) pair, so it is measured against the depth capture of THIS frame from THIS
         // pose; when none matches, the capture simply carries no occlusion rather than a stale one.
@@ -313,7 +350,7 @@ public sealed class FrameRecorder : IDisposable
         var capture = new CaptureIdentity(arrival.Frame, arrival.SimTimeSeconds, _runId, _scenarioId, _seed,
                                           telemetryTick);
         return new Job(arrival.CapturedUtc, arrival.Width, arrival.Height, arrival.Bgra, recs, arrival.Solar,
-                       sensor, capture);
+                       sensor, capture, vehicles);
     }
 
     private IReadOnlyList<VehicleTelemetry> MeasureOcclusion(
@@ -363,7 +400,7 @@ public sealed class FrameRecorder : IDisposable
                                                    .Concat(job.Capture.PngTextChunks()));
                     CotWriter.WriteToFile(Path.Combine(_dir, stem + ".xml"),
                                           job.CapturedUtc, job.Telemetry, _affiliation, _stale,
-                                          job.Solar, job.Sensor, job.Capture, illumination);
+                                          job.Solar, job.Sensor, job.Capture, illumination, job.Vehicles);
                     Interlocked.Increment(ref _saved);
                 }
                 catch (Exception ex)

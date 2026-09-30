@@ -12,6 +12,7 @@ the real scenario artifacts. No code changed, no build run.
 | 4 · 2026-09-21 | Annotation vocabulary layered: a closed core, and author terms carried opaquely to the consumer. |
 | 5 · 2026-09-21 | Training export carries supervision per image, and the vocabulary without its subject pointers. |
 | 6 · 2026-09-28 | Illumination bands are doc 11 §4.4's six, defined there, in the core vocabulary and on every record that carries a band. |
+| 7 · 2026-09-30 | The capture sidecar lists each frame's rendered set, named by SUMO vehicle, and no parked body; a truth uid follows the SUMO vehicle, not the pooled body (§8.2, §7.1). |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -1124,6 +1125,13 @@ And **only SUMO has a vehicle it is simulating that CARLA never rendered** — m
 69 245 vehicles over the week against a render set [01 §9.2](01_Architecture.md) caps at a few hundred
 concurrently.
 
+**One correction to the table's "Covers" row, measured 2026-09-28.** "Existing and being reported are
+the same thing" reported the pool's parked bodies too: a body between loans exists, stands 300 m below
+the ground, and was written into the sidecar as a vehicle — 1,385 of 2,608 records on a Gardnerville
+capture ([03](03_CoSimulation_Runtime.md) §8.9). The CARLA producer now covers **the bodies the
+frame rendered**, as the session publishes them per frame, each named by the SUMO vehicle it rendered
+(§8.2).
+
 ### 4.2 Authority, field by field
 
 The question is not which producer is authoritative. It is which producer is authoritative for which
@@ -1684,6 +1692,18 @@ parameter sweep needs runs to be joinable. Under SUMO the vehicle id is already 
 the callsign (measured in the shipped CSV sample: `uid` = `SUMO-TRUTH-corridor_d0_p0_h0.0`). So
 `entity_id` is `sumo_id` unless an author overrides it, and nothing has to be invented.
 
+**Under the pool, `actor_id` is stable as an object and names a succession of vehicles.** A body is
+lent to one SUMO vehicle, given back, and lent to the next ([03](03_CoSimulation_Runtime.md) D3.9), so
+"which CARLA object is this, right now" is answerable only per frame, and a truth uid built on it
+names different vehicles at different times — measured on a 30 s Gardnerville capture, two uids were
+each seen on the road, parked and on the road again: a body given back and lent again under one uid.
+The capture sidecar therefore carries `sumo_id` on every vehicle record, taken
+from the session's render set for that record's own frame, and its uid and callsign follow the SUMO
+vehicle (`CARLA-TRUTH-SUMO-<sumo_id>`, `<base_type>-<sumo_id>`); `actor_id` stays beside them,
+where it says which body drew the vehicle on that frame (§8.2). This is the sidecar reaching what the
+standalone SUMO producer already does with its `SUMO-TRUTH-<sumo_id>` uid, keeping the `CARLA-TRUTH`
+prefix that says which producer wrote the record.
+
 `role_name` stays a provenance field, per doc 20 decision 8, and the SUMO producer already uses it that
 way: it is set to `vehicle_id.rsplit(".", 1)[0]` (`SumoCotBridge.py:329`), which is the flow id for a
 flow member and the trip id for a scheduled vehicle. That is the cohort identity, and it is exactly
@@ -1954,7 +1974,7 @@ set is extended. Taking the real emitted shape as the baseline (`CotWriter.cs:13
 
 ```xml
 <events captured="2026-01-05T07:00:00.000Z" count="37" source="truth"
-        tick="1044000" sim_time_s="370800.000000"
+        tick="1044000" sim_time_s="370800.000000" vehicles="rendered"
         run_id="cap-20260105-0700-bahonar-tower3"
         scenario_id="bahonar_pattern_of_life@a91c3f"
         seed="42"
@@ -1989,13 +2009,13 @@ set is extended. Taking the real emitted shape as the baseline (`CotWriter.cs:13
 
   <event uid="CARLA-SENSOR-OVERWATCH-1" .../>   <!-- the collection platform, unchanged -->
 
-  <event version="2.0" uid="CARLA-TRUTH-412" type="a-n-G-E-V" how="m-g"
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-guard_d4_h15_t3" type="a-n-G-E-V" how="m-g"
          time="..." start="..." stale="...">
     <point lat="27.1701234" lon="56.2013456" hae="-24.60" ce="0.0" le="0.0"/>
     <detail>
       <!-- kinematics: SUMO's, and the record says so -->
       <track course="184.2" speed="0.00"/>
-      <contact callsign="car-412"/>
+      <contact callsign="car-guard_d4_h15_t3"/>
 
       <!-- _carla keeps its name although the source is SUMO, deliberately, so the two producers
            stay directly comparable. Existing attributes unchanged; new ones below the fold. -->
@@ -2033,11 +2053,11 @@ set is extended. Taking the real emitted shape as the baseline (`CotWriter.cs:13
     </detail>
   </event>
 
-  <event version="2.0" uid="CARLA-TRUTH-518" type="a-n-G-E-V" how="m-g" ...>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-shadow" type="a-n-G-E-V" how="m-g" ...>
     <point .../>
     <detail>
       <track course="271.8" speed="1.90"/>
-      <contact callsign="car-518"/>
+      <contact callsign="car-shadow"/>
       <_carla ... entity_id="shadow" sumo_id="shadow" provenance="sumo_scheduled"
               producer="reconciled" kinematics_source="sumo" .../>
       <_supervision state="annotated" vocabulary="1" vocabulary_digest="vocab@3c81f7">
@@ -2058,6 +2078,27 @@ set is extended. Taking the real emitted shape as the baseline (`CotWriter.cs:13
 
 Notes, each carrying a decision:
 
+- **The events are exactly the frame's rendered set, and the container says so.** Vehicles are
+  rendered by a pool of bodies ([03](03_CoSimulation_Runtime.md) D3.9), and a body between loans stands
+  parked 300 m below the ground. It is a vehicle actor like any other and is **not** a vehicle in the
+  scene, so the sidecar lists the bodies the session says **this frame** drew
+  ([03](03_CoSimulation_Runtime.md) §8.9) — never the world's actor list, and never the newest set,
+  because bodies change hands between ticks and the image arrives ticks after its frame.
+  `vehicles="rendered"` on `<events>` says the list is that set. A frame whose set is no longer held
+  lists no vehicle and says `vehicles="unknown"`: the pixels still show vehicles, the truth about them
+  is missing, and an empty list must not read as an empty scene. It is counted, and gated at zero
+  ([12](12_Operator_Control_Surface.md) §7.2); the nearest set still held would be a guess of exactly
+  the kind §4.3 refuses. With no render set — traffic-manager traffic, whose actors are its vehicles —
+  the attribute is absent and the sidecar is what it always was.
+- **The uid and callsign follow the SUMO vehicle, not the body.** [09 §3](../../Findings/09_Telemetry_CoT_Contract.md)
+  makes a truth uid "stable per (source, track)", and in a SUMO drive the track is the SUMO vehicle:
+  identity is SUMO's (§4.2), and a pooled actor id names each vehicle its body carries in turn (§7.1).
+  So the uid is `CARLA-TRUTH-SUMO-<sumo_id>` — the `CARLA-TRUTH` prefix keeping the producer, `SUMO-`
+  saying the key is a SUMO id so a numeric one is never read as an actor id — and the callsign
+  `<base_type>-<sumo_id>`. `actor_id` stays in `_carla`, where it says which body drew the vehicle on
+  this frame. This leaves §10.1's rule 1 untouched: a detector's track carries no SUMO id, so the uid
+  is still useless for joining detector output, and `sumo_id` is withheld from the training export
+  like every other identifier (§10.2).
 - **`state` is always written, and the assertion lives in `state` alone.** `annotated` and `nominal`
   may each carry one or more `<annotation>` children — labels are a set — and `unlabelled` carries
   none, because there is nothing to name. Absence of the element is a bug, not a negative. What a
@@ -2125,6 +2166,15 @@ merely self-identifying: a label without the version and digest that pin its mea
 definition a reader cannot locate. The solar chunk gains the four added
 attributes alongside the nine it already carries, which is what makes the frame-by-frame replay check
 of §7.3 work on stills alone.
+
+**As built (2026-09-30), of the shape above:** `vehicles` on `<events>`; on every vehicle record of a
+SUMO drive the SUMO-keyed uid and callsign, and `sumo_id`, `vtype_id` and `admitted_tick` in `_carla`
+— `admitted_tick` being the first frame of the vehicle's current rendered span, the frame its body was
+first drawn for it. They come from the session's render set (`SumoDriveSession.RenderSet`) handed to
+the recorder (`start_recording(render_set=...)`; `run_sumo_drive.py` and `run_capture` both pass it).
+`producer`, `entity_id`, `provenance`, the two source attributes, `render_state`, network state,
+`vtype` dimensions and the separations wait for the reconciler, and `role_name` is still the pooled
+body's spawn attribute, not the flow id.
 
 ### 8.3 The world truth track
 

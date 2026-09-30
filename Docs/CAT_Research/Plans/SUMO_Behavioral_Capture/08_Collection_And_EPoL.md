@@ -23,6 +23,7 @@ Findings set. Every external claim is cited.
 | 2026-09-18 | Scope narrowed to labelling: no scoring, no association harness, no model metrics. |
 | 2026-09-18 | Live exercise designed as a primary use case; no external format specified. |
 | 2026-09-21 | The vocabulary is published into the training export as well as the truth root. |
+| 2026-09-30 | §3.4, §8.1, §9.3: the recorder in the driving process lists each frame's render set by SUMO vehicle, with no parked body; a SUMO drive's truth uid follows the SUMO vehicle. |
 
 > **The boundary this section is written against.** This pipeline **labels; it never scores.** It does
 > not run a detector, a tracker or an EPoL model; it does not associate external model output to truth;
@@ -759,6 +760,18 @@ snapshot must carry, per actor, the supervision state and the instance and phase
 with the tick it describes — so that two recorders reading it at different wall-clock moments produce
 identical `<_supervision>` for the same tick, which doc 20 decision 15 requires and calls a defect if
 violated.
+
+**As built for the render set (2026-09-30), and what it depends on.** The truth sidecar must list the
+bodies a frame drew and name each by its SUMO vehicle, and nothing but the co-simulation session knows
+either: a pooled body between loans is an ordinary vehicle actor standing 300 m below the ground, and a
+lent one renders whichever vehicle borrowed it ([03](03_CoSimulation_Runtime.md) §8.9). The session
+publishes the set per frame **in process** (`SumoDriveSession.RenderSet`), and the recorder beside it
+in the driving process reads it — which is why `run_sumo_drive.py` and `run_capture` start their
+recorders from the session's own process, the second decision above. This is the one world-scoped
+fact whose correctness still depends on co-location, contrary to the first decision: a recorder in
+another process has no render set and lists every vehicle actor, parked bodies included, by actor id.
+Publishing the render set on the world-observer snapshot, as the first decision asks of every
+world-scoped fact, is not built; until it is, a capture keeps its recorders in the driving process.
 
 ### 3.5 Session and sensor identity, and the artifact roots
 
@@ -2047,6 +2060,12 @@ harness nobody here writes.
 The consequence for the corpus: **truth must be associable by geometry and time alone, and the corpus's
 job is to make that possible and to say how well it is possible.** "How well" is §8.3.
 
+**In a SUMO drive the truth uid is keyed on the SUMO vehicle** — `CARLA-TRUTH-SUMO-<sumo_id>`, with
+`sumo_id` in the extras ([06](06_Truth_And_Annotation.md) §8.2) — because a pooled body's actor id names
+a succession of vehicles and a uid built on it jumps between them. The constraint above is unchanged:
+a consumer's track carries no SUMO id either, so the uid is no more a join key for it than before, and
+`sumo_id` is on the truth list (§9.3).
+
 ### 8.2 The published rule: how supervision would be carried onto a consumer's tracks
 
 **We publish this; we do not run it.** It exists so that a transfer done downstream is done the same way
@@ -2327,6 +2346,7 @@ to catch a leak after the fact. Four rows come from §4 and §5; three more from
 | Any `<event uid="CARLA-TRUTH-…">`, any element with `source="truth"` | it is the simulator's own answer |
 | `<_supervision>`, `<_aoi>` | authored intent and derived context over truth objects (doc 20 §7.4) |
 | `actor_id`, `entity_id`, `instance_id` | identities only the simulator assigns |
+| `sumo_id`, `vtype_id`, `admitted_tick`, and a uid built on `sumo_id` | the SUMO vehicle's identity and type, and when the render set took it up: the authoring surface's names and a render-set fact ([06](06_Truth_And_Annotation.md) §8.2) |
 | `occlusion`, `occlusion_level`, `occlusion_samples` | computed from the simulator's depth buffer against the true 3D box (doc 17 §12.1) |
 | `apparent_width_px` / `apparent_height_px` | computed from the true 3D box |
 | `opacity`, arrival state | render state the simulator owns. Constant under the default (§2.6), so it carries nothing today — but it stays on the truth list, because a field that becomes informative later must not have to be re-classified then |

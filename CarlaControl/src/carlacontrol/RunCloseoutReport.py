@@ -5,10 +5,10 @@ facts -- the co-simulation session (`SumoDriveSession`: its clock, its pacing, t
 newest frame's illumination declaration, its latest admission pass, and the compile lock and
 teleporting checks it made before SUMO started), the window's admission passes (`WindowAdmissions`)
 and each channel's recorder (`FrameRecorder`: captures written, captures dropped, illumination
-pairing, occlusion pairing) -- never at the end only, so a run stopped at minute nine has everything
-it knew at minute nine. `snapshot()` is the one computation: the live monitor renders it (D12.14), the
-loud conditions are read from it, and the run result carries the last one taken. Nothing here
-measures anything of its own.
+pairing, render-set pairing, occlusion pairing) -- never at the end only, so a run stopped at minute
+nine has everything it knew at minute nine. `snapshot()` is the one computation: the live monitor
+renders it (D12.14), the loud conditions are read from it, and the run result carries the last one
+taken. Nothing here measures anything of its own.
 
 **Gate records are observations, never a verdict.** Each names what it observed, the threshold it
 compared against, the comparison, and whether it was met; nothing sums them. A gate whose input the
@@ -19,6 +19,7 @@ tree does not publish is recorded as `skipped` with the reason, so *not measured
 |---|---|---|
 | `capture.recorder_dropped` | `FrameRecorder.Dropped` per channel, threshold 0 (10 D10.7) | measured |
 | `capture.illumination_unpaired` | captures written without their frame's illumination declaration, threshold 0 | measured |
+| `capture.render_set_unpaired` | captures written with no vehicle list because their frame's render set was no longer held, threshold 0 | measured |
 | `clock.ratio_recorded` | whether the session's achieved real-time factor exists | measured |
 | `pacing.achieved_factor` | under `wall_clock`, the achieved factor against `min_achieved_factor` | measured |
 | `solar.applied_equals_confirmed` | the audit's worst angle between the world's sun and the declared one, against its tolerance | measured where the policy binds the sun |
@@ -192,12 +193,15 @@ class RunCloseoutReport:
         entry = {"sensor_id": channel.sensor_id, "directory": str(channel.directory),
                  "captured": None, "written": None, "recorder_dropped": None,
                  "illumination_paired": None, "illumination_unpaired": None,
+                 "render_set_paired": None, "render_set_unpaired": None,
                  "occlusion_measured": None, "occlusion_unmatched": None}
         if recorder is None:
             return entry
         entry.update({"written": int(recorder.Saved), "recorder_dropped": int(recorder.Dropped),
                       "illumination_paired": int(recorder.IlluminationPaired),
                       "illumination_unpaired": int(recorder.IlluminationUnpaired),
+                      "render_set_paired": int(recorder.RenderSetPaired),
+                      "render_set_unpaired": int(recorder.RenderSetUnpaired),
                       "occlusion_measured": int(recorder.OcclusionMeasured),
                       "occlusion_unmatched": int(recorder.OcclusionUnmatched)})
         return entry
@@ -234,6 +238,12 @@ class RunCloseoutReport:
                                     "captures written without their frame's illumination "
                                     "declaration", "12 §7.2", channel["illumination_unpaired"], 0,
                                     "equals"))
+            # A capture listed with no vehicles because its frame's render set had aged out: truth
+            # missing from a still that shows vehicles, which a corpus has to know about.
+            gates.append(self._gate(f"capture.render_set_unpaired[{channel['sensor_id']}]",
+                                    "captures written with no vehicle list because their frame's "
+                                    "render set was no longer held", "06 §8.2",
+                                    channel["render_set_unpaired"], 0, "equals"))
         pacing = snapshot["pacing"]
         achieved = None if pacing is None else pacing["achieved_factor"]
         gates.append(self._gate("clock.ratio_recorded", "the achieved real-time factor is recorded",
@@ -310,7 +320,8 @@ class RunCloseoutReport:
         for channel in snapshot["channels"]:
             lines.append(f"  channel {channel['sensor_id']}: written {channel['written']}, "
                          f"recorder-dropped {channel['recorder_dropped']}, illumination unpaired "
-                         f"{channel['illumination_unpaired']}  -> {channel['directory']}")
+                         f"{channel['illumination_unpaired']}, render set unpaired "
+                         f"{channel['render_set_unpaired']}  -> {channel['directory']}")
         for gate in gates:
             if gate["status"] == "skipped":
                 lines.append(f"  gate {gate['id']}: skipped ({gate['skip_reason']})")
