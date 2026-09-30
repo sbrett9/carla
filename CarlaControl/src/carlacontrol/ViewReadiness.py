@@ -375,7 +375,9 @@ class SessionFrameVehicles:
         if not found or render_set is None:
             return None
         bodies = [int(actor) for actor in render_set.ByActor.Keys]
-        snapshot, served = self._world._client.GetSnapshotFrame(frame, None)
+        # The out parameter is a ulong, which pythonnet matches to a number and not to None, and the
+        # snapshot is keyed by the actor's uint id, which a plain int does not match.
+        snapshot, served = self._world._client.GetSnapshotFrame(frame, 0)
         if snapshot is None or int(served) != int(frame):
             return None
         unknown = [actor for actor in bodies if actor not in self._boxes]
@@ -384,11 +386,11 @@ class SessionFrameVehicles:
                 self._boxes[int(actor.id)] = VehicleBox.of(actor.bounding_box)
         vehicles = []
         for actor in bodies:
-            held, state = snapshot.TryGetValue(actor, None)
+            held, state = snapshot.TryGetValue(_actor_key(actor), None)
             if not held or actor not in self._boxes:
                 return None
             vehicles.append((Pose.of(state.Transform), self._boxes[actor]))
-        held, camera = snapshot.TryGetValue(self._camera_id, None)
+        held, camera = snapshot.TryGetValue(_actor_key(self._camera_id), None)
         pose = Pose.of(camera.Transform) if held else Pose.of(self._held_pose())
         return FrameVehicles(pose, tuple(vehicles), self._sun(), bool(held))
 
@@ -400,6 +402,16 @@ class SessionFrameVehicles:
         if elevation is None:
             elevation = state.get("sun_elevation_deg")
         return None if elevation is None else (float(elevation), float(state["sun_azimuth_deg"]))
+
+
+def _actor_key(actor_id: int):
+    """An actor id as the client's snapshot is keyed: a .NET uint, where the CarlaNet assemblies are
+    loaded; the plain number otherwise, which is what a test's stand-in snapshot takes."""
+    try:
+        from System import UInt32  # noqa: PLC0415 -- present only once carlanet has loaded .NET
+    except ImportError:
+        return int(actor_id)
+    return UInt32(int(actor_id))
 
 
 # -- how long a wait needs -------------------------------------------------------------------------
