@@ -135,7 +135,7 @@ class PygameInterface:
 
         if hasattr(args, "fov"):
             self.setup_boundary_overlays(fov=args.fov)
-        
+
         self.logger.info(
             f"pygame interface initialized: {self.width}x{self.height}, "
             f"target_fps={self.target_fps:.1f}, sync={self.sync}"
@@ -551,18 +551,7 @@ class PygameInterface:
         else:
             tel_str = "n/a"
 
-        if self.recorder:
-            # Drops are shown as they happen, not only in the summary at the end: a capture the
-            # encoder queue had no room for takes its truth sidecar with it, and an operator who can
-            # see the count climbing can lower the rate while the run is still worth keeping.
-            rec_str = "off"
-            if self.recorder.recording:
-                dropped = self.recorder.dropped
-                rec_str = f"REC {self.recorder.saved}@{self.recorder.record_hz:g}Hz"
-                if dropped:
-                    rec_str += f" -{dropped} dropped"
-        else:
-            rec_str = "n/a"
+        rec_str = self.recording_status()
 
         if self.scenario:
             if self.scenario.running:
@@ -686,6 +675,38 @@ class PygameInterface:
                 self.draw_text(self.note[0], 8, bar_h + 6, (255, 120, 120))
 
         pygame.display.flip()
+
+    def recording_status(self) -> str:
+        """The heads-up display's record(F) field: what the recorder is doing, and what it has kept.
+
+        A recorder that waits for the camera's tiles before it records (`SpanRecorder`) says so and
+        how far they have come; one that pairs each capture with its frame's rendered vehicles adds
+        how many captures did and how many could not. A recorder with neither shows what it always
+        did.
+        """
+        recorder = self.recorder
+        if not recorder:
+            return "n/a"
+        if getattr(recorder, "waiting", False):
+            return f"waiting for tiles, {recorder.tiles or 'asking'} ({recorder.waiting_s:.0f} s)"
+        if not recorder.recording:
+            return "off"
+        # Drops are shown as they happen, not only in the summary at the end: a capture the
+        # encoder queue had no room for takes its truth sidecar with it, and an operator who can
+        # see the count climbing can lower the rate while the run is still worth keeping.
+        dropped = recorder.dropped
+        status = f"REC {recorder.saved}@{recorder.record_hz:g}Hz"
+        if dropped:
+            status += f" -{dropped} dropped"
+        paired = getattr(recorder, "render_set_paired", None)
+        if paired is not None:
+            status += f"  set {paired} paired"
+            if recorder.render_set_unpaired:
+                status += f" -{recorder.render_set_unpaired} unpaired"
+        tiles = getattr(recorder, "tiles", None)
+        if tiles:
+            status += f"  tiles {tiles}"
+        return status
 
     def tick(self) -> float:
         """Advance the clock and return delta time in seconds since last tick"""

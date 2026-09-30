@@ -8,6 +8,7 @@ the live parser object and grepping the live source tree on 2026-09-18; the furt
 §3.5, §3.10.1, §3.10.2, §5.2 and §7.6 were taken the same way, and each says where.
 **Date:** 2026-09-18
 **Revisions:**
+`2026-09-30` — `run_sumo_drive.py --view free`: a camera flown inside the drive, recording spans with the session's render set once its tiles are in (§9.6).
 `2026-09-28` — Staged refusals, the window's own instant, live admission passes and check 33 read; stare aimed at rendered traffic.
 `2026-09-28` — `run_capture` built: layered resolution, validation, echo, capture, result, termination, monitor, both launchers.
 `2026-09-25` — Stare pose and orbit centre fields; `ChannelDescription` and the camera follower built.
@@ -2217,7 +2218,7 @@ live **only** there and must not be assumed to migrate:
 
 | Capability | Why it stays interactive |
 |---|---|
-| **Free-flight camera control** (`PyGameSensorController`) | A capture run's camera track is declared, not flown. Siting a stare or an orbit is done by flying there first |
+| **Free-flight camera control** (`PyGameSensorController`) | A capture run's camera track is declared, not flown. Siting a stare or an orbit is done by flying there first. Under SUMO drive the same controls fly a camera inside `run_sumo_drive.py` and record from it (§9.6); `run_capture` offers none |
 | **`solar.policy: accelerated`** (`--time-rate`) | Refused for a capture run (§4.3), and genuinely useful for look development |
 | **`--async` free-running mode** | A capture run is synchronous by [`10`](10_Scale_And_Performance.md) D10.10 |
 
@@ -2279,6 +2280,138 @@ express for the overlapping concerns, so `run_capture --emit-run-configuration` 
 `run_SCTMV.py` command line into a run configuration, and the resolution report shows what each flag
 resolved to. That is the migration path for an operator with a command line they trust: run it once
 through the converter, read the report, keep the file.
+
+### 9.6 Flying a camera inside the drive
+
+`CarlaNet/python/run_sumo_drive.py --view free` puts the free-move camera inside the process that
+drives the world. `--view fixed`, the default, is the drive as it was: one camera, aimed once,
+recorded from the window's opening to the end. `--view free` spawns no fixed camera; it opens the
+window, flight controls and heads-up display of `CarlaControl/scripts/run_free_move_camera.py` --
+`PygameInterface` opened read-only, `SensorRig` (the RGB camera and its depth camera) and
+`PyGameSensorController`, the same classes, not copies — and gives the window's F key a recorder
+that writes the flown camera's captures with the session's render set and illumination, as the
+fixed camera's are written. It is `carlacontrol.FreeView` for the window and
+`carlacontrol.SpanRecorder` for the key. `run_free_move_camera.py` stays the separate viewer that
+records nothing, and `run_capture` offers no flown camera: a capture run's camera track is declared.
+
+| Option | Default | What it does |
+|---|---|---|
+| `--view` | `fixed` | `free` opens the flight window in place of the fixed camera |
+| `--camera-z` | `300.0` | the free camera starts over the region centre at this height, looking straight down |
+| `--flight-speed` | `60.0` | the free camera's starting speed, m/s; the mouse wheel changes it |
+| `--width`, `--height`, `--fov` | fixed `1920`, `1080`, `60`; free `1280`, `720`, `90` | the camera's image, which is also the window's size; a value given applies to either view |
+| `--record-dir` | `Build/captures` | a free view writes each span to a folder of its own under it |
+| `--no-record` | off | a free view opens and flies, and F records nothing |
+
+`--camera-standoff`, `--camera-yaw` and `--camera-aim` are the fixed camera's and do nothing in a
+free view.
+
+| Key | In the free view |
+|---|---|
+| RMB + mouse | look around |
+| W/S, A/D, E/Q | fly forward and back, strafe, up and down |
+| Mouse wheel, Shift | flight speed; Shift triples it |
+| Ctrl + LMB | measure the latitude, longitude and elevation of a point |
+| B / M | the perimeter and margin overlays, drawn in the window only |
+| **F** | ask for a recording span; F again ends it, or cancels the wait for tiles |
+| Space | back to the start pose |
+| Esc, or closing the window | ends the drive: the loop stops at the next step, the report is printed and everything is given back, as at the end of a scenario |
+
+The keys that toggle a layer, the ground's collision, the road mesh or the sun's advance (C, G, V,
+R, L, K) are not bound: the window is read-only, and the drive owns all of those.
+
+**A recording span.** F asks for a span; nothing is recorded until the capture window has opened --
+before then F is refused with the instant it opens — and a span starts only once the camera's
+photoreal tiles are in. Each span is written to `<record-dir>/CARLA-SENSOR-<camera id>-<UTC>`, the
+UTC instant as `yyyymmddThhmmssZ` with a numbered suffix for a second span begun in the same second,
+so a folder names the platform uid its sidecars carry and the instant it began; the file names
+inside are the recorder's own. `SpanRecorder.span_directory` is the one place that name is made.
+Every span of one drive carries the drive's run id (`run-<UTC>`, logged at start), so the spans can
+be gathered back into the run. The recorder is the fixed camera's --
+`world.start_recording(camera, span folder, --record-hz, fov, run_id, depth_camera=the rig's depth
+camera, illumination=session.Illumination, render_set=session.RenderSet)` — through a world object
+of its own, so the drive's other recording calls never touch it. When a span ends it is flushed and
+its counts are logged, as the fixed camera's are at the end of a drive: captures written and
+dropped, illumination paired and not, render-set paired and unpaired and bodies missing, and
+occlusion measured and not with the reason.
+
+**The tiles.** A flown camera renders new ground while Cesium is still streaming it
+([`03`](03_CoSimulation_Runtime.md) §9.5.1), so a span waits for `world.get_view_readiness(camera)`
+to say the tiles are in — the camera published on the tick answered for, and every visible tileset
+at load progress 100 with no failed tile in view — on a frame later than the first answer of the
+wait, which is a frame rendered after the key was pressed. The ceiling is §9.5.1's 90 s of wall
+clock, and it only fails: past it the span is not started, the window's note says so with how far
+the tiles got, and F tries again. Readiness covers every registered view, so a camera still being
+flown holds the progress below 100 until it stops. A server that cannot answer is said so, and the
+span starts without the wait. The picture's own settling, §9.5.1's second witness, is not waited on:
+the operator is watching the view the span writes. While a span records, readiness is asked once per
+capture period, the heads-up display shows it, and the log says when the view's tiles stop being in
+and when they are in again, with the frame. It is not written into a capture: it describes the view
+as of the last tick, and an image reaches the recorder several ticks after its frame with the camera
+possibly moved in between. Recording each capture's own readiness needs the server to publish it per
+frame, on the observer snapshot, which is not built. Every readiness call is timed, and the log
+gives the count, median and worst when a wait ends and when a span closes.
+
+**The heads-up display's record field** reads `off`; `waiting for tiles, 87% (12 s)` during the
+wait; and while recording `REC 24@2Hz -1 dropped  set 23 paired -1 unpaired  tiles in` — the
+captures written at the rate, the recorder's `Dropped` when non-zero, the captures listing their own
+frame's rendered vehicles and those that could not, and the tiles. `NativeRecorder`'s field in
+`run_SCTMV.py` reads exactly as it did.
+
+**The pose a capture records is the image's.** The sidecar's platform point and boresight come from
+the transform in the image's sensor header, which the server takes in the same game-thread call that
+captures the frame (`PixelReader.h`, `SendPixelsInRenderThread`); `FrameRecorder` derives the
+`SensorPose` from `SensorFrame.SensorTransform` and never reads the camera actor. So a camera moved
+by the flight controller between the frame and the image's arrival is recorded where it was when
+the image was rendered. `FrameRecorderSensorPoseTests` streams a real recorder an image of frame 100
+whose header holds one pose while the world observer's latest snapshot, and `GetActorTransform`,
+hold the pose the camera was moved to by frame 103, and checks the sidecar's point, hae, azimuth and
+elevation and the PNG's `carla:sensor` chunk carry the header's; it was seen failing against a
+recorder reading the actor's transform. `CarlaNet/python/test_moving_camera_pose.py` checks it live:
+a camera moved about 100 m and tens of degrees before every tick, recorded, and every sidecar's pose
+compared with the pose commanded for its own frame and with the three commanded after it.
+
+**Threads, and what the window costs the drive.** The drive keeps its thread: the session's steps,
+the world's ticks and the pacer's waits. The window is created, pumped and drawn on a thread of its
+own, which SDL requires on Windows and which keeps every frame it draws off the drive's thread; the
+flight controller moves the two cameras from its mover thread in one batch; the span recorder starts,
+stops and asks about the tiles on a fourth. The drive hands the session no per-vehicle callback: the
+worst divergence it logs is read off the session's report, which already names the vehicle and tick,
+so no Python runs inside the tick loop for another thread to hold up. **Measured offline**
+(pythonnet 3.2, Python 3.14, Windows; a 1280×720 frame converted and drawn at 20 fps on a pygame
+thread beside two threads copying 3.7 MB frames at 20 Hz, as the rig's listeners do): the interpreter
+is released for the whole of a .NET call; a thread coming back from one waits for it at most 4.5 ms
+(p99 0.08 ms), a switch interval; 128 Python callbacks inside one .NET call took a worst 2.8–5.7 ms
+against under 1 ms with no window thread, which is the wait the divergence callback would have put in
+the tick loop. pygame also sets the system timer's resolution for the process: a 20 ms .NET wait ends
+a median 0.5 ms late with the window open against 11 ms without, so the pacer's cues
+([`03`](03_CoSimulation_Runtime.md) §9.9) go out closer to their due instants while the view is up.
+What the server pays is the rig's two 1280×720 cameras rendering every tick, the same as
+`run_free_move_camera.py` beside a drive; the drive's achieved pace with and without the window at
+`--real-time-factor 1.0` is not yet measured.
+
+**The region.** Vehicles are rendered only inside the render region, a fixed circle
+([`10`](10_Scale_And_Performance.md) D10.5), so a free camera flown beyond it sees roads with nothing
+on them while SUMO simulates the vehicles there. With `--view free` the log says, before the drive
+starts, when the circle does not take in the world package's sandbox, and gives the region that does:
+the circle through the sandbox's corners, in SUMO's frame (`RenderRegionCoverage`); on Gardnerville,
+`--region-x 0 --region-y -1 --region-radius 956`. `--capacity` still bounds how many vehicles are
+rendered at once. A render set that follows the camera ([`03`](03_CoSimulation_Runtime.md) §8.3) is
+a separate item.
+
+**Exercised by** `test_span_recorder.py` (the wait, the first answer not trusted, the ceiling, a
+failed tile, cancelling, the capture window, a server with no answer, the folders and their suffix,
+the flush before the report, the counts, the readiness asked per capture period, and the recorder's
+own thread doing the starting and stopping), `test_free_view.py` (one thread that is not the
+caller's makes, pumps and draws the window; no write to the world whatever is pressed; Esc; the
+note; a window that cannot open; the record field), `test_render_region_coverage.py` (the northing
+negated, the whole-map circle, and on every world package on disk the circle taking in the package's
+own SUMO network) and `test_run_sumo_drive_free_view.py` (the span recorded as the fixed camera
+records, the rig's start and depth range, no divergence callback in either view, and the region
+warning). Each was seen failing against a wrong implementation: the first answer trusted, no
+ceiling, the capture window unchecked, a failed tile ignored, a stop left recording, the window not
+read-only, the divergence callback bound, no depth camera, the northing not negated, and the pairing
+not shown.
 
 ---
 

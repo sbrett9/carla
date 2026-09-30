@@ -24,6 +24,7 @@ Findings set. Every external claim is cited.
 | 2026-09-18 | Live exercise designed as a primary use case; no external format specified. |
 | 2026-09-21 | The vocabulary is published into the training export as well as the truth root. |
 | 2026-09-30 | §3.4, §8.1, §9.3: the recorder in the driving process lists each frame's render set by SUMO vehicle, with no parked body; a SUMO drive's truth uid follows the SUMO vehicle. |
+| 2026-09-30 | §3.4: a camera flown inside the driving process records its spans there, with the session's render set, which satisfies the co-location the render set depends on. |
 
 > **The boundary this section is written against.** This pipeline **labels; it never scores.** It does
 > not run a detector, a tracker or an EPoL model; it does not associate external model output to truth;
@@ -772,6 +773,19 @@ fact whose correctness still depends on co-location, contrary to the first decis
 another process has no render set and lists every vehicle actor, parked bodies included, by actor id.
 Publishing the render set on the world-observer snapshot, as the first decision asks of every
 world-scoped fact, is not built; until it is, a capture keeps its recorders in the driving process.
+
+**A camera flown by hand is recorded from the driving process too (2026-09-30).** An operator who
+wants imagery from wherever they fly does not need a recorder in a viewer process:
+`run_sumo_drive.py --view free` flies the free-move camera inside the process that drives the
+session, and its F key records spans from that camera through the same recorder the fixed camera
+uses, handed the session's render set and illumination and the rig's depth camera
+([`12`](12_Operator_Control_Surface.md) §9.6). That is the co-location the paragraph above depends on,
+so recording from a flown camera satisfies this section as it stands: the captures list their own
+frame's rendered vehicles by SUMO id and no parked body. The viewers in other processes --
+`run_free_move_camera.py` and the camera follower — still record nothing, for the reason above, and
+correctness still does not depend on which of them is open. Performance does, as the second decision
+allows: the flown camera and its depth camera render every tick, and its window runs on a thread of
+its own so that nothing it draws holds the drive's tick loop.
 
 ### 3.5 Session and sensor identity, and the artifact roots
 

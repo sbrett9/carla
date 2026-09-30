@@ -109,6 +109,28 @@ that is still arriving -- an unattended capture has nobody watching the view fil
 operator flying the camera does. What that costs, and why the number of ticks it takes is not a
 caller's to supply, is in
 `Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/03_CoSimulation_Runtime.md` section 9.5.1.
+
+`--view free` replaces that one fixed camera with a camera you fly, in this process: the window,
+flight controls and heads-up display of CarlaControl/scripts/run_free_move_camera.py, opened over
+the region centre at `--camera-z`, looking straight down. F starts a recording span from that camera
+and F again ends it; each span is written to a folder of its own under `--record-dir`, named by the
+camera and the span's start (`CARLA-SENSOR-<camera id>-<UTC>`), with the render set, illumination
+and occlusion the fixed camera's captures carry. A span starts once the camera's photoreal tiles
+are in, waiting up to 90 s for them, and only from the capture window's opening. Esc or closing
+the window ends the drive. The window runs on a thread of its own and never ticks the world, so the
+drive keeps its clock and its pace; the pacing lines say what it held. Vehicles are still rendered
+only inside the fixed circle of `--region-x`, `--region-y` and `--region-radius`, so give a region
+that takes in the ground you mean to fly over -- the log says when the region is smaller than the
+world, and the arguments that would take in all of it, which on Gardnerville are these:
+
+    python run_sumo_drive.py --scenario ... --world-package ... --epoch ... \\
+        --illumination freeze_at_window_start --real-time-factor 1.0 --steps 0 --view free \\
+        --region-x 0 --region-y -1 --region-radius 956
+
+Flying: hold the right mouse button and move the mouse to look; W/S A/D E/Q to fly; the wheel sets
+the speed, Shift triples it; Ctrl+click measures a point; B/M draw the perimeter and margin; Space
+returns to the start pose. run_free_move_camera.py stays the separate viewer that records nothing.
+On Linux the window needs a display.
 """
 import argparse
 import json
@@ -117,6 +139,7 @@ import math
 import os
 import sys
 import time
+from datetime import UTC, datetime
 
 import carlanet as carla
 
@@ -130,6 +153,10 @@ _REPO = os.path.normpath(os.path.join(_THIS, "..", ".."))
 
 # How long any one server call may take once the session is driving.
 RUN_TIMEOUT_S = 30.0
+
+# Image width, height and horizontal field of view per view, where the command line gives none: the
+# fixed camera's as it always was, and the free view's as run_free_move_camera.py opens its window.
+VIEW_OPTICS = {"fixed": (1920, 1080, 60.0), "free": (1280, 720, 90.0)}
 
 logger = logging.getLogger("run_sumo_drive")
 
@@ -254,25 +281,49 @@ def parse_args() -> argparse.Namespace:
                         help="run on a world with no sun rather than refusing it. The run is then "
                              "lit by nothing anyone declared, and says so")
 
+    parser.add_argument("--view", choices=("fixed", "free"), default="fixed",
+                        help="the camera: 'fixed' spawns one camera, aims it once and records from "
+                             "the window's opening to the end; 'free' opens a window with a camera "
+                             "you fly, and F records spans from it, each to its own folder under "
+                             "--record-dir once the camera's tiles are in. Esc or closing the window "
+                             "ends the drive. Vehicles are rendered only inside the region circle "
+                             "(--region-x, --region-y, --region-radius), so a free camera flown "
+                             "beyond it sees empty roads; the log names the region that takes in "
+                             "the whole map when the one given does not")
     parser.add_argument("--no-record", action="store_true",
-                        help="drive the world without spawning a camera or writing frames")
-    parser.add_argument("--record-dir", default=os.path.join(_REPO, "Build", "captures"))
+                        help="write no frames: no fixed camera is spawned, and a free view's F key "
+                             "records nothing")
+    parser.add_argument("--record-dir", default=os.path.join(_REPO, "Build", "captures"),
+                        help="where captures are written; a free view writes each span to a folder "
+                             "of its own under it")
     parser.add_argument("--record-hz", type=float, default=2.0)
     parser.add_argument("--camera-z", type=float, default=300.0,
-                        help="camera height above the region centre, metres")
+                        help="camera height above the region centre, metres; a free view starts "
+                             "there, looking straight down")
     parser.add_argument("--camera-standoff", type=float, default=300.0,
-                        help="camera distance back from the region centre, metres")
+                        help="fixed view: camera distance back from the region centre, metres")
     parser.add_argument("--camera-yaw", type=float, default=0.0,
-                        help="bearing the camera stands off along, degrees clockwise from north")
+                        help="fixed view: bearing the camera stands off along, degrees clockwise "
+                             "from north")
     parser.add_argument("--camera-aim", choices=("traffic", "region-centre"), default="traffic",
-                        help="what the camera looks at: 'traffic' the mean position of the vehicles "
-                             "rendered on the first step, 'region-centre' the middle of the "
-                             "rendered region. The middle of a corridor scenario's region is "
+                        help="fixed view: what the camera looks at: 'traffic' the mean position of "
+                             "the vehicles rendered on the first step, 'region-centre' the middle "
+                             "of the rendered region. The middle of a corridor scenario's region is "
                              "usually not where its traffic is")
-    parser.add_argument("--width", type=int, default=1920)
-    parser.add_argument("--height", type=int, default=1080)
-    parser.add_argument("--fov", type=float, default=60.0)
-    return parser.parse_args()
+    parser.add_argument("--flight-speed", type=float, default=60.0,
+                        help="free view: the camera's starting flight speed, m/s; the mouse wheel "
+                             "changes it")
+    parser.add_argument("--width", type=int, default=None,
+                        help="camera image width; default 1920 fixed, 1280 free (the window's size)")
+    parser.add_argument("--height", type=int, default=None,
+                        help="camera image height; default 1080 fixed, 720 free")
+    parser.add_argument("--fov", type=float, default=None,
+                        help="camera horizontal field of view, degrees; default 60 fixed, 90 free")
+    args = parser.parse_args()
+    for name, default in zip(("width", "height", "fov"), VIEW_OPTICS[args.view], strict=True):
+        if getattr(args, name) is None:
+            setattr(args, name, default)
+    return args
 
 
 def region_centre(args: argparse.Namespace) -> tuple[float, float]:
@@ -457,17 +508,19 @@ class PacingProgress:
             text += f", {pacing.BehindScheduleSeconds:.2f} s behind schedule"
         return text
 
-    def after_step(self, session, steps: int, worst_metres: float) -> None:
+    def after_step(self, session, steps: int) -> None:
         """Log a line if a pacing window closed during the step just taken."""
         pacing = session.Report.Pacing
         if pacing.CompletedWindows == self.windows_seen:
             return
         self.windows_seen = pacing.CompletedWindows
-        # The velocity figure is the report's own, live: how far the velocity the world reports for
-        # a body -- the one the truth telemetry reads -- has been from the velocity it was given.
+        # The divergence figures are the report's own, live: how far a body's applied pose has been
+        # from the pose it was given, and how far the velocity the world reports for it -- the one
+        # the truth telemetry reads -- from the velocity it was given.
         logger.info("  %d steps, t=%.1f s, %d rendered, pace %s, worst divergence %.4f m, "
                     "%.4f m/s", steps, session.RenderedTimeSeconds,
-                    session.RenderedVehicleIds.Count, self.achieved(pacing), worst_metres,
+                    session.RenderedVehicleIds.Count, self.achieved(pacing),
+                    session.Report.WorstPositionDivergenceMetres,
                     session.Report.WorstVelocityDivergenceMetresPerSecond)
         admission = session.Report.LastAdmissionPass
         if admission is not None:
@@ -514,6 +567,174 @@ def spawn_camera(world, args: argparse.Namespace, centre: tuple[float, float]):
     return camera
 
 
+def report_captures(recorder) -> None:
+    """Say what a recorder wrote. Read once it has flushed, so the counts are its run's and not a
+    moment's."""
+    logger.info("captures           %s written, %s dropped; %s carry their frame's "
+                "illumination declaration, %s do not", recorder.Saved, recorder.Dropped,
+                recorder.IlluminationPaired, recorder.IlluminationUnpaired)
+    # A capture whose frame's render set the session no longer held lists no vehicle rather
+    # than a guessed set, so any such capture is truth missing, and is said louder.
+    (logger.warning if recorder.RenderSetUnpaired or recorder.RenderSetBodiesMissing
+     else logger.info)(
+        "render set         %s captures list their frame's rendered vehicles, %s list none "
+        "because the frame's set was no longer held; %s rendered bodies had no truth "
+        "record", recorder.RenderSetPaired, recorder.RenderSetUnpaired,
+        recorder.RenderSetBodiesMissing)
+    if recorder.MeasuresOcclusion:
+        # A capture the depth camera could not be paired with carries no occlusion, which a
+        # consumer counting unoccluded vehicles has to leave out, so any such capture is said louder.
+        (logger.warning if recorder.OcclusionUnmatched else logger.info)(
+            "occlusion          measured on %s captures, not on %s (%s with no depth frame, %s with "
+            "the depth stream out of step, %s with the cameras at different poses)",
+            recorder.OcclusionMeasured, recorder.OcclusionUnmatched,
+            recorder.OcclusionNoDepthCaptures, recorder.OcclusionDepthOutOfStep,
+            recorder.OcclusionDepthWrongPose)
+
+
+def use_carlacontrol() -> None:
+    """Put this repository's CarlaControl sources ahead of any installed copy.
+
+    Only the free view needs them, and pygame with them: a drive with a fixed camera imports
+    neither.
+    """
+    source = os.path.join(_REPO, "CarlaControl", "src")
+    if source not in sys.path:
+        sys.path.insert(0, source)
+    # pygame prints a banner on import unless told not to; the log is this script's only output.
+    os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+
+
+def warn_of_an_uncovered_world(args: argparse.Namespace) -> None:
+    """Say when a free view's render region is smaller than the world it can be flown over.
+
+    The region is a fixed circle and a free camera can go anywhere, so the operator is told before
+    the drive starts, with the region that would take in the whole world package.
+    """
+    use_carlacontrol()
+    from carlacontrol.RenderRegionCoverage import RenderRegionCoverage
+    from carlacontrol.WorldPackageReader import WorldPackageReader
+
+    coverage = RenderRegionCoverage.from_manifest(WorldPackageReader(args.world_package).manifest)
+    if coverage is None:
+        logger.info("free view: the world package records no extent to check the region against")
+        return
+    advice = coverage.advice(args.region_x, args.region_y, args.region_radius, args.capacity)
+    if advice is None:
+        logger.info("free view: the render region takes in the whole world")
+    else:
+        logger.warning("free view: %s", advice)
+
+
+def free_view_settings(args: argparse.Namespace, feet_per_metre: float,
+                       depth_range_m: float) -> argparse.Namespace:
+    """The flight window's settings, in the shape `SensorRig` and `PygameInterface` read them."""
+    x, y = region_centre(args)
+    return argparse.Namespace(
+        x=x, y=y,
+        # The rig takes its start altitude in feet, as run_SCTMV.py does.
+        z=args.camera_z * feet_per_metre,
+        width=args.width, height=args.height, fov=args.fov,
+        # No camera blueprint here publishes an exposure compensation to set.
+        ev=None,
+        # The run configuration's one depth range, so occlusion is measured as far as a capture
+        # run's is rather than to the depth camera's stock 1000 m.
+        depth_max_range=depth_range_m,
+        # Frames are kept as they arrive: this window never ticks the world.
+        asynchronous=True,
+        fixed_delta=args.fixed_delta,
+        time_rate=1.0)
+
+
+class FreeViewParts:
+    """What a free view is made of, filled in as each part is made.
+
+    The way out takes down exactly what was made, in order: the recorder first, flushing its span
+    while the cameras still exist; then the window and the flight controller's mover, so nothing
+    moves a camera being destroyed; then the cameras.
+    """
+
+    def __init__(self) -> None:
+        self.rig = None
+        self.recorder = None
+        self.view = None
+
+    @property
+    def closed(self) -> bool:
+        """Whether the operator has closed the window."""
+        return self.view is not None and self.view.closed.is_set()
+
+    def open(self, client, world, session, args: argparse.Namespace, run_id: str) -> None:
+        use_carlacontrol()
+        from carlacontrol.FreeView import FreeView
+        from carlacontrol.PyGameSensorController import PyGameSensorController
+        from carlacontrol.RunConfiguration import RunConfiguration
+        from carlacontrol.SensorRig import SensorRig
+
+        settings = free_view_settings(
+            args, SensorRig.FT_PER_M, RunConfiguration.field("occlusion.depth_max_range_m").default)
+        # Spawned with the world already the session's, so every frame either camera delivers is of
+        # a tick the session issued.
+        self.rig = SensorRig(world=world, args=settings, client=client)
+        controller = PyGameSensorController(self.rig, world, self.rig.get_initial_pose(),
+                                            speed=args.flight_speed)
+        if not args.no_record:
+            self.recorder = self.span_recorder(client, session, args, run_id)
+            self.recorder.run_in_background()
+        self.view = FreeView(settings, world, self.rig, controller, recorder=self.recorder)
+        self.view.open()
+        logger.info("free view: camera %s over (%.1f, %.1f) at %.0f m, %dx%d, fov %g; %s",
+                    self.rig.camera.id, settings.x, settings.y, args.camera_z, args.width,
+                    args.height, args.fov,
+                    "F records a span once the camera's tiles are in, from the capture window's "
+                    f"opening at t={session.WindowOpensAtSeconds:g} s; Esc ends the drive"
+                    if self.recorder is not None else "nothing is recorded; Esc ends the drive")
+
+    def span_recorder(self, client, session, args: argparse.Namespace, run_id: str):
+        """The recorder F toggles: the fixed camera's recording, from the flown camera.
+
+        It records through a world object of its own, so its recorder is the only one that
+        object's stop_recording ever stops. Every span shares this drive's run id, so the spans of
+        one drive can be gathered back into it.
+        """
+        from carlacontrol.SpanRecorder import SpanRecorder
+
+        recording = client.get_world()
+        camera, depth = self.rig.camera, self.rig.depth_cam
+
+        def start(directory: str):
+            # As the fixed camera records, and with the rig's depth camera for occlusion.
+            return recording.start_recording(camera, directory, args.record_hz, fov=args.fov,
+                                             run_id=run_id, depth_camera=depth,
+                                             illumination=session.Illumination,
+                                             render_set=session.RenderSet)
+
+        def window_open() -> str | None:
+            opens = session.WindowOpensAtSeconds
+            if session.RenderedTimeSeconds < opens - 1e-6:
+                return f"the capture window opens at t={opens:g} s"
+            return None
+
+        return SpanRecorder(
+            args.record_dir, f"CARLA-SENSOR-{camera.id}", args.record_hz,
+            start_recording=start, stop_recording=recording.stop_recording,
+            view_readiness=lambda: recording.get_view_readiness(camera),
+            may_record=window_open,
+            on_closed=lambda handle, _directory: report_captures(handle))
+
+    def close(self) -> None:
+        """Take down what was made. Each part is tried whatever the ones before it did."""
+        for part, take_down in ((self.recorder, "close"), (self.view, "close"),
+                                (self.rig, "cleanup")):
+            if part is None:
+                continue
+            try:
+                getattr(part, take_down)()
+            except Exception as failure:
+                logger.error("could not take down the free view's %s: %r",
+                             type(part).__name__, failure)
+
+
 def main() -> int:
     args = parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
@@ -526,6 +747,8 @@ def main() -> int:
     sun = SunDeclaration(args)
     sumo = SessionSumo(args.sumo_home)
     sumo.announce(args.sumo_gui)
+    if args.view == "free":
+        warn_of_an_uncovered_world(args)
 
     client = carla.Client(args.host, args.port)
     client.set_timeout(RUN_TIMEOUT_S)
@@ -535,18 +758,11 @@ def main() -> int:
     camera = None
     session = None
     recorder = None
+    free = FreeViewParts()
+    run_id = f"run-{datetime.now(UTC):%Y%m%d-%H%M%S}"
     aim = RenderedVehicleCentre()
     progress = PacingProgress()
-    aims_at_traffic = args.camera_aim == "traffic" and not args.no_record
-    worst = {"metres": 0.0, "vehicle": "", "tick": 0}
-
-    def on_divergence(divergence):
-        # Kept as one number rather than a list: a capture run produces one of these per vehicle per
-        # tick, and the summary a run needs is on the report anyway.
-        if divergence.PositionMetres > worst["metres"]:
-            worst["metres"] = divergence.PositionMetres
-            worst["vehicle"] = divergence.VehicleId
-            worst["tick"] = divergence.TickIndex
+    aims_at_traffic = args.view == "fixed" and args.camera_aim == "traffic" and not args.no_record
 
     try:
         client.set_timeout(max(args.setup_timeout, RUN_TIMEOUT_S))
@@ -577,9 +793,11 @@ def main() -> int:
             headlight_off_above_deg=args.headlight_off_above,
             # Bound only where the aim needs it: the session hands out a pose per rendered
             # vehicle per tick, and a callback that spends the whole run declining them is a
-            # crossing into Python per vehicle per tick for nothing.
-            on_pose=aim.collect if aims_at_traffic else None,
-            on_divergence=on_divergence)
+            # crossing into Python per vehicle per tick for nothing. No divergence callback for
+            # the same reason: the report keeps the worst divergence and names its vehicle and
+            # tick, and a crossing per vehicle per tick is a wait on the interpreter inside the
+            # tick loop whenever another thread of this process -- a free view's window -- holds it.
+            on_pose=aim.collect if aims_at_traffic else None)
         client.set_timeout(RUN_TIMEOUT_S)
         if session is None:
             return 1
@@ -612,7 +830,18 @@ def main() -> int:
         # Everything up to the recorder starting happens with the world already in synchronous mode:
         # the session takes the clock before the camera exists, so every image the camera delivers is
         # of a tick the session issued.
-        if not args.no_record:
+        if args.view == "free":
+            # The window is up for the whole drive, the prewarm included: nothing is recorded until
+            # F is pressed, and F records nothing before the capture window opens.
+            logger.info("run id: %s", run_id)
+            try:
+                free.open(client, world, session, args, run_id)
+            except RuntimeError as failure:
+                # A window that cannot open -- no display on Linux, most often -- ends the run
+                # before its first step, with everything given back on the way out.
+                logger.error("%s", failure)
+                return 1
+        elif not args.no_record:
             centre = region_centre(args)
             if aims_at_traffic:
                 # One step, to see where the bodies actually went. Bought rather than assumed, and
@@ -663,7 +892,11 @@ def main() -> int:
                 steps += 1
                 if args.steps and steps >= args.steps:
                     break
-                progress.after_step(session, steps, worst["metres"])
+                progress.after_step(session, steps)
+                if free.closed:
+                    logger.info("the free view was closed at t=%.1f s; the drive ends there",
+                                session.RenderedTimeSeconds)
+                    break
         except CoSimSessionRefusedException as refused:
             # SUMO, the server or the sun failed part-way, and both sides stopped together. The report
             # says where, and which frame was the last whose truth holds.
@@ -677,9 +910,10 @@ def main() -> int:
         logger.info("\n%d SUMO steps in %.1f s wall clock; pace %s: %s\n", steps, elapsed,
                     PacingProgress.declared(pacing), PacingProgress.achieved(pacing))
         logger.info("%s", session.Report)
-        if worst["vehicle"]:
+        worst = session.Report.WorstDivergence
+        if worst is not None and worst.PositionMetres > 0.0:
             logger.info("\nworst divergence %.6f m on %s at tick %d",
-                        worst["metres"], worst["vehicle"], worst["tick"])
+                        worst.PositionMetres, worst.VehicleId, worst.TickIndex)
         if session.Report.PosesComputed == 0:
             # The likeliest reason by far, and the one that produces a run that looks healthy and
             # renders an empty road: the scenario's vTypes name no blueprint the catalogue has
@@ -689,27 +923,17 @@ def main() -> int:
                          "never given a body.")
         return 0
     finally:
-        # Order matters on the way out: stop tapping the camera, take the camera out of the world,
-        # then let the session give back the bodies, the population lease and the world's clock. The
+        # Order matters on the way out: stop tapping the cameras, take them out of the world, then
+        # let the session give back the bodies, the population lease and the world's clock. The
         # session restores the settings it found whatever happened above, which is what keeps an
         # editor from being left waiting for a tick from a process that has stopped.
+        free.close()
         try:
             world.stop_recording()
         except Exception as failure:
             logger.error("could not stop the recorder: %r", failure)
         if recorder is not None:
-            # Read once the recorder has flushed, so the counts are the run's and not a moment's.
-            logger.info("captures           %s written, %s dropped; %s carry their frame's "
-                        "illumination declaration, %s do not", recorder.Saved, recorder.Dropped,
-                        recorder.IlluminationPaired, recorder.IlluminationUnpaired)
-            # A capture whose frame's render set the session no longer held lists no vehicle rather
-            # than a guessed set, so any such capture is truth missing, and is said louder.
-            (logger.warning if recorder.RenderSetUnpaired or recorder.RenderSetBodiesMissing
-             else logger.info)(
-                "render set         %s captures list their frame's rendered vehicles, %s list none "
-                "because the frame's set was no longer held; %s rendered bodies had no truth "
-                "record", recorder.RenderSetPaired, recorder.RenderSetUnpaired,
-                recorder.RenderSetBodiesMissing)
+            report_captures(recorder)
         if camera is not None:
             try:
                 camera.destroy()
