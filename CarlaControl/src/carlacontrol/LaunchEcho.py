@@ -40,11 +40,12 @@ from carlacontrol.ScenarioEpoch import ScenarioEpoch
 from carlacontrol.ViewReadiness import (
     PER_CAPTURE,
     PICTURE_BLOCK_PX,
-    PICTURE_CEILING_FRAMES,
-    PICTURE_SPAN_FRAMES,
+    PICTURE_CEILING_TICKS,
+    PICTURE_SPAN_TICKS,
     PICTURE_TOLERANCE_LEVELS,
     RULE,
     TILES_CEILING_S,
+    VEHICLES,
     wait_begins_s,
 )
 from carlacontrol.WindowSun import WindowSun
@@ -163,16 +164,17 @@ class LaunchEcho:
                       for index in range(effective.channel_count))
         begins = wait_begins_s(window.begin_s, effective.first_rendered_s,
                                float(effective.value("scenario.sumo_step_s")),
-                               float(effective.value("capture.capture_hz")), follows)
+                               float(effective.value("capture.world_delta_s")), follows)
         return {"waits": True, "rule": RULE,
                 "tiles": "world.get_view_readiness after every prewarm step: the camera published "
                          "on the last tick, every visible tileset at load progress 100, no failed "
                          "tile in view",
                 "picture": f"the camera's frame within {PICTURE_TOLERANCE_LEVELS:g} grey levels of "
-                           f"its frame {PICTURE_SPAN_FRAMES} frames earlier in its worst "
-                           f"{PICTURE_BLOCK_PX}-pixel block",
+                           f"its frame at least {PICTURE_SPAN_TICKS} ticks earlier in its worst "
+                           f"judged {PICTURE_BLOCK_PX}-pixel block",
+                "vehicles": VEHICLES,
                 "tiles_ceiling_s": TILES_CEILING_S,
-                "picture_ceiling_frames": PICTURE_CEILING_FRAMES,
+                "picture_ceiling_ticks": PICTURE_CEILING_TICKS,
                 "from_s": begins, "until_s": window.begin_s,
                 "traffic_stare_holds_from_s": begins if follows else None,
                 "not_ready": "refused at pre-roll (check 50); the window's first frame is not "
@@ -244,7 +246,7 @@ class LaunchEcho:
             if pacing["mode"] == "wall_clock" else ""))
         readiness = b["readiness"]
         lines.append(f"  readiness   every view's tiles (ceiling {readiness['tiles_ceiling_s']:g} s) "
-                     f"and picture (ceiling {readiness['picture_ceiling_frames']} frames), from "
+                     f"and picture (ceiling {readiness['picture_ceiling_ticks']} ticks), from "
                      f"t={readiness['from_s']:,.0f} to t={readiness['until_s']:,.0f}; not ready by "
                      "then refuses at pre-roll")
         if readiness["traffic_stare_holds_from_s"] is not None:

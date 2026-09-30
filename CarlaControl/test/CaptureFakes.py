@@ -20,6 +20,12 @@ a uniform grey from `FakeServer.picture_at` unless a test says otherwise. `get_v
 answers as the shim does, as of the last tick, from `FakeServer.tiles_at`: by default the camera
 is published once a tick has passed since it was spawned, and its one visible tileset is in, beside
 a hidden tileset that never loads.
+
+Each tick also records the frame's render set and the client's snapshot of it, as the session and
+`CarlaClient.GetSnapshotFrame` hold them: the vehicles `FakeServer.vehicles_at` places on the frame,
+and every camera where it stands. The session answers `RenderSet.TryGetRenderSet` for the last 256
+frames and the client `GetSnapshotFrame` for the last 64, with the nearest frame and its number past
+that; `get_actors` gives each vehicle the box `FakeServer.vehicle_extent` describes.
 """
 from __future__ import annotations
 
@@ -225,10 +231,91 @@ class _Illumination:
         return declaration is not None, declaration
 
 
-class _RenderSet:
-    """A session's render-set source: handed to each recorder, never read here."""
+class _Keys:
+    def __init__(self, keys) -> None:
+        self.Keys = list(keys)
 
-    NewestFrame = None
+
+class _FrameRenderSet:
+    """A `RenderSet`: the bodies one frame drew, by actor id."""
+
+    def __init__(self, actors) -> None:
+        self.ByActor = _Keys(actors)
+        self.Count = len(self.ByActor.Keys)
+
+
+class _RenderSet:
+    """A session's render-set source, answering for the frames the server has recorded."""
+
+    def __init__(self, server: FakeServer) -> None:
+        self.server = server
+
+    @property
+    def NewestFrame(self):  # noqa: N802 -- the .NET member name
+        return max(self.server.render_sets) if self.server.render_sets else None
+
+    def TryGetRenderSet(self, frame, _out):  # noqa: N802 -- the .NET member name
+        actors = self.server.render_sets.get(int(frame))
+        return (False, None) if actors is None else (True, _FrameRenderSet(actors))
+
+
+class _Xyz:
+    def __init__(self, x: float, y: float, z: float) -> None:
+        self.x, self.y, self.z = x, y, z
+
+
+class _Rotation:
+    def __init__(self, pitch: float, yaw: float, roll: float) -> None:
+        self.pitch, self.yaw, self.roll = pitch, yaw, roll
+
+
+class FakeTransform:
+    """A transform as CarlaNet's and the shim's both read: `location.x`, `rotation.yaw`."""
+
+    def __init__(self, x: float, y: float, z: float, pitch: float = 0.0, yaw: float = 0.0,
+                 roll: float = 0.0) -> None:
+        self.location = _Xyz(x, y, z)
+        self.rotation = _Rotation(pitch, yaw, roll)
+
+
+class _ActorState:
+    def __init__(self, transform) -> None:
+        self.Transform = transform
+
+
+class _Snapshot:
+    """One frame's snapshot: every actor's transform, by id."""
+
+    def __init__(self, transforms: dict) -> None:
+        self.transforms = transforms
+
+    def TryGetValue(self, actor, _out):  # noqa: N802 -- the .NET member name
+        transform = self.transforms.get(int(actor))
+        return (False, None) if transform is None else (True, _ActorState(transform))
+
+
+class FakeCarlaClient:
+    """The CarlaNet client behind a world: the snapshots of the frames it still holds."""
+
+    def __init__(self, server: FakeServer) -> None:
+        self.server = server
+
+    def GetSnapshotFrame(self, frame, _out):  # noqa: N802 -- the .NET member name
+        held = self.server.snapshots
+        if not held:
+            return None, 0
+        served = int(frame) if int(frame) in held else min(held, key=lambda f: abs(f - int(frame)))
+        return _Snapshot(held[served]), served
+
+
+class _FakeBoxed:
+    """An actor as `world.get_actors` gives it: its id and bounding box."""
+
+    def __init__(self, actor_id: int, extent: tuple[float, float, float]) -> None:
+        self.id = actor_id
+        self.bounding_box = type("BoundingBox", (), {
+            "location": _Xyz(0.0, 0.0, extent[2]), "extent": _Xyz(*extent),
+            "rotation": _Rotation(0.0, 0.0, 0.0)})()
 
 
 class FakeCompileLock:
@@ -350,7 +437,7 @@ class FakeSession:
         self.Sun = "bound to 2026-03-21 07:00:00-07:00" if binds else None
         self.SunAudit = _Audit() if binds else None
         self.Illumination = _Illumination()
-        self.RenderSet = _RenderSet()
+        self.RenderSet = _RenderSet(world)
         self.RenderedVehicleIds = _RenderedIds()
         self.disposed = False
         self.advances = 0
@@ -434,6 +521,10 @@ class FakeWorld:
 
     def get_solar_state(self):
         return self.server.sun
+
+    def get_actors(self, actor_ids):
+        self.server.events.add("get_actors", sorted(int(a) for a in actor_ids))
+        return [_FakeBoxed(int(a), self.server.vehicle_extent) for a in actor_ids]
 
     def get_view_readiness(self, camera):
         server = self.server
@@ -535,6 +626,13 @@ class FakeServer:
         self.picture_at = lambda _camera, _frame: 128
         self.image_size = (320, 160)
         self.readiness_raises: Exception | None = None
+        # (actor, (x, y, z, yaw)) per vehicle a frame renders; the frame's render set and snapshot
+        # are drawn from it, as are the boxes get_actors gives those actors.
+        self.vehicles_at = lambda _frame: []
+        self.vehicle_extent = (2.4, 1.0, 0.8)
+        self.render_sets: dict[int, list[int]] = {}
+        self.snapshots: dict[int, dict] = {}
+        self._client = FakeCarlaClient(self)
 
     def clock(self) -> float:
         """The wall clock the ticks have cost, for a run's `clock`."""
@@ -545,6 +643,14 @@ class FakeServer:
         to that renders this frame is handed its image."""
         self.frame += 1
         self.wall_s += self.wall_per_tick
+        vehicles = list(self.vehicles_at(self.frame))
+        self.render_sets[self.frame] = [actor for actor, _pose in vehicles]
+        snapshot = {actor: FakeTransform(x, y, z, 0.0, yaw) for actor, (x, y, z, yaw) in vehicles}
+        snapshot.update({actor.id: actor.transform for actor in self.actors if not actor.destroyed})
+        self.snapshots[self.frame] = snapshot
+        for held, keep in ((self.render_sets, 256), (self.snapshots, 64)):
+            while len(held) > keep:
+                del held[min(held)]
         width, height = self.image_size
         for actor in list(self.actors):
             if actor.listener is None or actor.destroyed or not actor.renders(self.frame):

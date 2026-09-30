@@ -36,16 +36,18 @@ world (D1.12):
 * **Prewarm**: advance until the window's begin without recording, and wait there for every
   channel's view to be ready (03 §9.5.1, check 50): after each step the server is asked whether the
   camera's photoreal tiles are in, and once they are, the camera's own frames are compared until its
-  picture has settled. The wait lives inside the prewarm and ticks with it, and it begins once every
-  camera holds the pose the window opens on, because the tiles' figures cover every registered view
-  and a moving camera's picture never reads settled. A ceiling reached -- 90 s of wall clock for the
-  tiles, 120 of the camera's frames for the picture -- or a view not ready as the window opens
-  refuses at pre-roll, naming the channel, the witness and its state; the window's first frame is
-  never moved. A stare aimed at the rendered traffic follows it: after each prewarm step its cameras
-  are moved to the pose around the centre of the vehicles that step's last frame rendered, until one
-  picture ceiling of its frames before the window opens (`ViewReadiness.hold_lead_s`), when that
-  step's centre is the point it resolves to -- recorded, and held through the rest of the prewarm
-  and the whole window; a frame there that rendered nothing refuses at pre-roll. Under `wall_clock`
+  picture has settled, leaving out every block a rendered vehicle covers -- placed from the session's
+  render set of the frame and the client's snapshot of it (`SessionFrameVehicles`). The wait lives
+  inside the prewarm and ticks with it, and it begins once every camera holds the pose the window
+  opens on, because the tiles' figures cover every registered view and a moving camera's picture
+  never reads settled. A ceiling reached -- 90 s of wall clock for the tiles, 120 ticks for the
+  picture -- or a view not ready as the window opens refuses at pre-roll, naming the channel, the
+  witness and its state; the window's first frame is never moved. A stare aimed at the rendered
+  traffic follows it: after each prewarm step its cameras are moved to the pose around the centre of
+  the vehicles that step's last frame rendered, until one SUMO step and the picture's ceiling before
+  the window opens (`ViewReadiness.hold_lead_s`), when that step's centre is the point it resolves
+  to -- recorded, and held through the rest of the prewarm and the whole window; a frame there that
+  rendered nothing refuses at pre-roll. Under `wall_clock`
   the pace the prewarm held is checked against the floor (check 44); and, whatever the pacing, the
   vehicles inside the render region at the window's begin are checked against the render cap
   (check 33), from the session's admission pass for that instant.
@@ -111,8 +113,9 @@ from carlacontrol.SessionMonitor import SessionMonitor
 from carlacontrol.SiteProfile import SiteProfile
 from carlacontrol.StareAim import StareAim
 from carlacontrol.ViewReadiness import (
-    PICTURE_CEILING_FRAMES,
+    PICTURE_CEILING_TICKS,
     TILES_CEILING_S,
+    SessionFrameVehicles,
     ViewNotReadyError,
     ViewReadinessGate,
     wait_begins_s,
@@ -172,6 +175,8 @@ class ChannelRig:
     moves: int = 0
     last_move_m: float | None = None
     notes: list[str] = field(default_factory=list)
+    # Where the camera is held now: spawned there, or moved there last.
+    pose: Any = None
 
     @property
     def aims_at_rendered_traffic(self) -> bool:
@@ -530,7 +535,9 @@ class CaptureSession:
 
     def _watch_views(self) -> None:
         """Listen to every capture camera's frames and ask about its tiles from the prewarm on, so
-        that no capture is written before its view is ready (03 §9.5.1)."""
+        that no capture is written before its view is ready (03 §9.5.1). Each frame's rendered
+        vehicles are placed from the session's render set of the frame and the client's snapshot of
+        it, so the blocks they cover are left out of the picture's comparisons."""
         effective = self.effective
         ticks_per_frame = round(1.0 / (float(effective.value("capture.capture_hz"))
                                        * float(effective.value("capture.world_delta_s"))))
@@ -540,7 +547,10 @@ class CaptureSession:
         self.closeout.attach_readiness(self.readiness)
         for rig in self.channels:
             try:
-                self.readiness.watch(rig.sensor_id, rig.camera, rig.world, ticks_per_frame)
+                locate = SessionFrameVehicles(rig.world, self.session.RenderSet, rig.camera.id,
+                                              lambda rig=rig: rig.pose)
+                self.readiness.watch(rig.sensor_id, rig.camera, rig.world, ticks_per_frame,
+                                     locate, float(rig.description.fov))
             except Exception as failure:
                 raise _RefusedError("refused_preroll", f"channel {rig.sensor_id}: its camera's "
                                f"frames could not be watched, so its picture cannot be seen to "
@@ -561,6 +571,7 @@ class CaptureSession:
         rgb.set_attribute("post_process_profile", str(values["post_process_profile"]))
         transform = self._start_transform(rig)
         rig.camera = rig.world.spawn_actor(rgb, transform)
+        rig.pose = transform
         self.termination.add_step(RELEASE_WORLD, f"destroy camera {rig.sensor_id}",
                                   rig.camera.destroy, CAMERA_TIMEOUT_S, ORDER_CAMERA)
         self.logger.info("channel %s: camera %s at %s", rig.sensor_id, rig.camera.id,
@@ -651,6 +662,7 @@ class CaptureSession:
         """Put a stare's cameras -- the RGB camera and its depth camera -- at a new pose."""
         transform = self._transform_of(aim)
         rig.camera.set_transform(transform)
+        rig.pose = transform
         if rig.depth is not None:
             rig.depth.set_transform(transform)
         previous = rig.aim
@@ -672,8 +684,8 @@ class CaptureSession:
         The wait for each channel's view (03 §9.5.1) is told after every step the session renders
         and asks nothing in between, so it ticks with the prewarm and cannot run without it. It
         begins once every camera holds the pose the window opens on: at once, or -- where a stare
-        follows the rendered traffic -- when that stare stops to hold its pose, one picture ceiling
-        of its frames before the window opens.
+        follows the rendered traffic -- when that stare stops to hold its pose, one SUMO step and
+        the picture's ceiling before the window opens.
         """
         window = self.effective.window
         session = self.session
@@ -715,12 +727,12 @@ class CaptureSession:
         self._check_stop()
 
     def _hold_from(self, started: float) -> float:
-        """Where a stare following the rendered traffic stops and holds: one picture ceiling of the
-        camera's frames before the window opens, in whole SUMO steps, and never before the prewarm's
-        first step has rendered traffic to measure (`wait_begins_s`)."""
+        """Where a stare following the rendered traffic stops and holds: one SUMO step and the
+        picture's ceiling before the window opens, in whole SUMO steps, and never before the
+        prewarm's first step has rendered traffic to measure (`wait_begins_s`)."""
         return wait_begins_s(self.effective.window.begin_s, started,
                              float(self.effective.value("scenario.sumo_step_s")),
-                             float(self.effective.value("capture.capture_hz")), True)
+                             float(self.effective.value("capture.world_delta_s")), True)
 
     # -- the views ---------------------------------------------------------------------------------
     def _begin_the_wait(self) -> None:
@@ -729,9 +741,9 @@ class CaptureSession:
         self.readiness.begin(int(session.Report.Ticks), rendered)
         self.logger.info("waiting for every channel's view from t=%g to the window's opening at "
                          "t=%g: its photoreal tiles in (ceiling %.0f s of wall clock), then its "
-                         "picture settled (ceiling %d of the camera's frames); a view not ready by "
-                         "then refuses the run (03 §9.5.1)", rendered, self.effective.window.begin_s,
-                         TILES_CEILING_S, PICTURE_CEILING_FRAMES)
+                         "picture settled with its rendered vehicles left out (ceiling %d ticks); a "
+                         "view not ready by then refuses the run (03 §9.5.1)", rendered,
+                         self.effective.window.begin_s, TILES_CEILING_S, PICTURE_CEILING_TICKS)
 
     def _observe_views(self) -> None:
         try:
@@ -750,9 +762,11 @@ class CaptureSession:
                                     for channel in not_ready])
         for channel in self.readiness.channels:
             self.logger.info("channel %s: ready as the window opens -- tiles in at frame %d, picture "
-                             "settled at frame %d (%.2f grey levels)", channel.sensor_id,
-                             channel.tiles["in_at_frame"], channel.picture["settled_at_frame"],
-                             channel.picture["residual_levels"])
+                             "settled at frame %d (%.2f grey levels, %.0f%% of its blocks judged)",
+                             channel.sensor_id, channel.tiles["in_at_frame"],
+                             channel.picture["settled_at_frame"],
+                             channel.picture["residual_levels"],
+                             100.0 * channel.picture["judged_share"])
 
     def _refuse_not_ready(self, not_ready: list[tuple[str, str]]) -> NoReturn:
         """Refuse at pre-roll, one finding per channel whose view is not ready."""

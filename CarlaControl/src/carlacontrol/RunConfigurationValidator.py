@@ -49,9 +49,9 @@ from carlacontrol.ScenarioPackage import READABLE_LOCK_VERSIONS
 from carlacontrol.SiteProfile import SUMO_SEARCHED_VARIABLES
 from carlacontrol.VehicleCatalogue import VehicleCatalogue
 from carlacontrol.ViewReadiness import (
-    FEWEST_FRAMES,
-    PICTURE_SPAN_FRAMES,
-    frames_to_witness,
+    PICTURE_SPAN_TICKS,
+    ticks_after_first_ask,
+    ticks_to_first_comparison,
     wait_begins_s,
 )
 
@@ -328,8 +328,8 @@ class RunConfigurationValidator:
     def _readiness_prewarm(effective: EffectiveRunConfiguration,
                            findings: RunConfigurationFindings) -> None:
         """Every channel's view is waited on inside the prewarm (03 §9.5.1), from where every camera
-        holds the pose the window opens on; a prewarm that leaves too few of the camera's frames
-        there for its picture to be witnessed settled is refused before anything is started."""
+        holds the pose the window opens on; a prewarm that leaves too few ticks there for the camera
+        to render two frames the picture can be compared on is refused before anything is started."""
         step = effective.value("scenario.sumo_step_s")
         if step is None:
             return
@@ -340,27 +340,29 @@ class RunConfigurationValidator:
         except (ValueError, WindowResolutionError):
             return
         step = float(step)
-        hz = float(effective.value("capture.capture_hz"))
+        delta = float(effective.value("capture.world_delta_s"))
+        period = round(1.0 / (float(effective.value("capture.capture_hz")) * delta))
         follows = any(description.aims_at_rendered_traffic() for description in descriptions)
         if follows and prewarm + 1e-9 < step:
             return  # check 47 refuses it: there is no step to measure the traffic on
         begin = effective.window.begin_s
-        held = begin - wait_begins_s(begin, effective.first_rendered_s, step, hz, follows)
-        frames = frames_to_witness(held, hz, step)
-        if frames + 1e-9 >= FEWEST_FRAMES:
+        held = begin - wait_begins_s(begin, effective.first_rendered_s, step, delta, follows)
+        ticks = ticks_after_first_ask(held, step, delta)
+        needed_ticks = ticks_to_first_comparison(period)
+        if ticks + 1e-6 >= needed_ticks:
             return
-        needed = step + FEWEST_FRAMES / hz + (step if follows else 0.0)
+        needed = step + needed_ticks * delta + (step if follows else 0.0)
         findings.refuse(51, "capture.prewarm_s", (
             f"every channel's view is waited on inside the prewarm, and its picture is witnessed "
-            f"settled by comparing one of the camera's frames with the one {PICTURE_SPAN_FRAMES} "
-            f"before it, both rendered after its tiles are first asked about, one SUMO step into "
-            f"the wait (03 §9.5.1): the prewarm is {prewarm:g} s (capture.prewarm_s, clipped to the "
-            f"window's begin)"
+            f"settled by comparing one of the camera's frames with its frame at least "
+            f"{PICTURE_SPAN_TICKS} ticks before it, both rendered after its tiles are first asked "
+            f"about, one SUMO step into the wait (03 §9.5.1): the prewarm is {prewarm:g} s "
+            f"(capture.prewarm_s, clipped to the window's begin)"
             + (", and the wait begins only where the stare following the rendered traffic stops "
                "to hold its pose, after the step it measures the traffic on" if follows else "")
-            + f", which leaves {max(frames, 0.0):g} of the camera's frames at {hz:g} Hz against "
-            f"the {FEWEST_FRAMES} the witness needs, so the run would be refused at pre-roll. Give "
-            f"a prewarm of at least {needed:g} s"))
+            + f", which leaves {max(ticks, 0.0):g} ticks against the {needed_ticks} a camera "
+            f"rendering every {period} ticks may need for two such frames, so the run would be "
+            f"refused at pre-roll. Give a prewarm of at least {needed:g} s"))
 
     # -- checks 12 and 13 -------------------------------------------------------------------------
     @staticmethod

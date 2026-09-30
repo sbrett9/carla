@@ -160,9 +160,9 @@ _CHECKS: tuple[RunCheck, ...] = (
     RunCheck(48, OFFLINE, "The catalogue at paths.catalogue is the one the scenario was compiled "
              "against", _R, RUN_CAPTURE, "RunConfigurationValidator"),
     RunCheck(51, OFFLINE, "The prewarm leaves every camera, at the pose it holds as the window "
-             "opens, at least eleven of its frames after its tiles are first asked about: the "
-             "fewest its picture can be witnessed settled on", _R, RUN_CAPTURE,
-             "RunConfigurationValidator"),
+             "opens, enough ticks after its tiles are first asked about to render two frames at "
+             "least ten ticks apart: the fewest its picture can be witnessed settled on", _R,
+             RUN_CAPTURE, "RunConfigurationValidator"),
     # -- the server --------------------------------------------------------------------------
     RunCheck(22, SERVER, "The loaded world is the world package's", (), SESSION,
              "SumoDriveSession.Start, LoadedWorldCheck, before SUMO is started"),
@@ -200,7 +200,8 @@ _CHECKS: tuple[RunCheck, ...] = (
     RunCheck(45, PRE_ROLL, "The handover transport opens", (), NOT_BUILT,
              "no handover transport exists"),
     RunCheck(50, PRE_ROLL, "Every channel's view is ready as the window opens: its photoreal tiles "
-             "in and its picture settled, each within its ceiling", _R, RUN_CAPTURE,
+             "in and its picture settled with the blocks rendered vehicles cover left out, each "
+             "within its ceiling", _R, RUN_CAPTURE,
              "CaptureSession, ViewReadinessGate: world.get_view_readiness after every prewarm "
              "step, and the camera's own frames"),
     # -- while the run proceeds -------------------------------------------------------------------

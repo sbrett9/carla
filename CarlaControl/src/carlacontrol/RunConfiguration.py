@@ -363,10 +363,10 @@ _CHANNEL_HELP = {
     "stare_look_at_target": "Stare: a point named instead of given. rendered_traffic is the centre "
                             "of the vehicles the session rendered on the last frame before the "
                             "camera holds for the window; the camera follows it through the "
-                            "prewarm until 120 of its frames before the window opens, then holds "
-                            "the pose it resolves to while its view becomes ready and for the "
-                            "whole window, and the run result records that point. Needs a prewarm "
-                            "of at least one SUMO step.",
+                            "prewarm until one SUMO step and 120 ticks before the window opens "
+                            "(7 s at the defaults), then holds the pose it resolves to while its "
+                            "view becomes ready and for the whole window, and the run result "
+                            "records that point. Needs a prewarm of at least one SUMO step.",
     "stare_altitude_m": "Stare: height above the point, metres.",
     "stare_standoff_m": "Stare: horizontal distance back from the point, metres; 0 looks "
                         "straight down.",

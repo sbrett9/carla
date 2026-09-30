@@ -47,6 +47,7 @@ advancement policy, the headlight predicate),
 | 2026-09-29 | §7.2, D3.26: the bare-earth grids are compared by digest (`get_bare_earth_digest`), not fetched — measured 146 s and 153 s for Bahonar's two; the manifest records them; the session's telemetry takes the package's grids. |
 | 2026-09-30 | §8.9, D3.37: each frame's render set published for the recorder; the truth sidecar lists only the bodies a frame drew, by SUMO vehicle, and no parked body. |
 | 2026-09-30 | §9.5.1: `run_capture` waits on both witnesses inside the prewarm, once every camera holds its opening pose; a view not ready by the window's opening refuses at `PreRoll` and the window is not moved. |
+| 2026-09-30 | §9.5.1: measured on Bahonar, traffic in view defeats a whole-view picture comparison, and the renderer settles on ticks; the picture is compared ten ticks apart with a 120-tick ceiling, and the blocks rendered vehicles cover are left out, half the view to be judged. |
 
 ---
 
@@ -2547,16 +2548,58 @@ image-only rules let through frames up to 177 levels from settled. **`LoadProgre
 either**: it reads 100 for up to 8 ticks before a new camera is published, and after a failure, since a
 failed tile is never retried and counts as done — the DNS stall ended with three-quarters of the frame
 empty at 100. **And tiles being in is not the picture being settled**: the renderer moves the worst
-block by up to 7.7 levels for up to 39 frames, counted in frames the camera renders.
+block by up to 7.7 levels for up to 39 frames. The placements' camera rendered every tick, so those 39
+frames were also 39 ticks; which of the two the renderer counts is settled below, by a camera that
+rendered one tick in ten.
 
 Readiness is therefore two conditions from two witnesses. The **tiles** are in when the camera is among
 the views `ACesiumSensorViewPublisher` published on the last tick and every visible tileset reports
 `LoadProgress` 100 with no failed tile in view; only the server can say this. The **picture** has
-settled when the camera's frame differs from its frame ten frames earlier by at most 0.5 grey levels in
-its worst 80-pixel block; only the camera can say this. Each stage has a ceiling in the unit it
-progresses in, and a ceiling only fails the run: 90 s of wall clock for the tiles, above the 60 s
-request timeout so a stalled request shows first as a failed tile, and 120 of the camera's frames for
-the picture. Neither is a count a caller supplies.
+settled when the camera's frame differs from its newest frame at least ten ticks earlier by at most
+0.5 grey levels in its worst 80-pixel block that no rendered vehicle covers in either frame; only the
+camera can say this. Each stage has a ceiling in the unit it progresses in, and a ceiling only fails
+the run: 90 s of wall clock for the tiles, above the 60 s request timeout so a stalled request shows
+first as a failed tile, and 120 ticks for the picture. Neither is a count a caller supplies. The span
+and the picture's ceiling were first written as ten and 120 of the camera's frames, and the vehicles
+were not left out; the next paragraphs give the measurement that changed both.
+
+**Traffic in view, and the unit the picture settles in.** Measured on Bahonar (2026-09-30), two runs of
+one stare — (−1400, −600) from 450 m, straight down, 1280×720 at 2 Hz, synchronous at 0.05 s, the
+picture then compared frame against the camera's frame ten frames earlier:
+
+| Run | Rendered vehicles | Tiles in | Picture |
+|---|---|---|---|
+| Render region (−1200, −600), 800 m | 56 admitted | 80 ticks, 2.1 s | never settled: the worst block held at 1.77–2.04 grey levels, at pixel (480, 480), over 120 frames; refused at pre-roll |
+| Render region (3000, 1500), 300 m | none | 20 ticks, 0.3 s | settled after 16 frames, worst block 0.46 |
+
+Two facts come out of the pair. **Moving vehicles defeat a whole-view comparison.** At the capture
+rate, ten of the camera's frames are 100 ticks — 5 s, in which traffic moves about 100 m — so the
+comparison saw the scene change, not the rendering; the question the witness asks is whether the
+world's rendering (tiles, levels of detail, textures) has settled, and a vehicle driving through the
+view answers a different question. **The renderer settles on the world's ticks, not on the frames a
+camera renders.** The run with no traffic matched its frames 50 and 150 ticks after the tiles — the
+sixth and sixteenth — so its view had settled by 50 ticks, five of its own frames; the placements'
+renderer, at a frame a tick, took 19 to 39. Had the renderer counted the camera's frames, the sixth
+frame would still have been moving. *Inference, from one run of each:* the span and the ceiling belong
+in ticks, where the placements measured them, since frames and ticks were the same there. So a frame
+is compared with the camera's newest frame at least ten ticks before it — at 2 Hz the frame before it,
+at 20 Hz the frame ten before it, the rule as measured — and the ceiling is 120 ticks from the tiles
+being in: at 2 Hz, the frames of 6 s, twelve comparisons. The run with no traffic would have met it at
+its seventh frame, 60 ticks after the tiles, by the same inference.
+
+**What a rendered vehicle covers is left out, in either frame of a comparison.** Each body the
+session's render set says a frame drew (§8.9) is posed where the client's snapshot of exactly that
+frame holds it, with the box its actor description reports, and projected from the camera's pose in
+the same snapshot with the pinhole the occlusion estimate uses (`OcclusionEstimator`, whose apparent
+sizes the projection is held equal to), together with the shadow the box casts on the ground from the
+world's sun and a margin of four pixels. Every 80-pixel block such a footprint touches, in the newer
+frame or the older, is left out of that comparison: a vehicle's old place changes as much as its new
+one. **A comparison left less than half the view's blocks to judge cannot settle the picture**,
+because a judgement of whatever part of the view the traffic happens to leave is not a judgement of
+the view; nor can one whose vehicles could not be placed, because the session no longer held the
+frame's render set or the client its snapshot. A view that stays so until the ceiling is refused at
+pre-roll with that as the reason. Half is chosen, not measured; the run result records, per
+comparison, the blocks left out and the share judged, so it can be set from what live runs show.
 
 **What the server reports.** `get_view_readiness(actor_id)` reads the tilesets' state as of the end of
 the last tick. The camera counts only once `ACesiumSensorViewPublisher` has written its view on that
@@ -2577,14 +2620,14 @@ steps and never between them — a wait that did not tick would ask about the sa
 camera's own frames are listened to from its placement until the recorders start, reduced as they
 arrive and compared in frame order as the 27 placements were measured (BT.601 grey, the mean of each
 4 × 4 pixels, the mean absolute difference over each 20 × 20 of those), counting only frames rendered
-on or after the step the tiles were answered in for; a view whose tiles stop being in starts its
-picture again. The wait begins once every capture camera holds the pose the window opens on, because
+on or after the step the tiles were answered in for, and leaving out the blocks the rendered vehicles
+cover (`SessionFrameVehicles`); a view whose tiles stop being in starts its picture again. The wait begins once every capture camera holds the pose the window opens on, because
 the tiles' figures cover every registered view and a camera that moves between its frames never reads
 settled: a stare at a point or a pose from the prewarm's first step; an orbit, which is held at the
 pose it opens on through the prewarm and sweeps from the window's opening; and a stare aimed at the
-rendered traffic, which follows it until one picture ceiling of its frames before the window opens —
-120, sixty SUMO steps at 2 Hz — and holds from there ([`12`](12_Operator_Control_Surface.md) §5.2,
-D12.37).
+rendered traffic, which follows it until one SUMO step and the picture's 120-tick ceiling before the
+window opens — seven one-second steps at the defaults — and holds from there
+([`12`](12_Operator_Control_Surface.md) §5.2, D12.37).
 
 **A view not ready by the window's opening refuses the run at `PreRoll`, and the window is not
 moved** ([`12`](12_Operator_Control_Surface.md) D12.38). The prewarm is the lead: `capture.prewarm_s`,
@@ -2596,21 +2639,25 @@ window's opening depends on where rendering began, through its release hysteresi
 so a lead chosen from how long the tiles took would make the traffic the window renders a function of
 the network. And a window opened later than declared is not the window D3.21 binds the sun for. So a
 ceiling reached, or a view not ready when the window opens, ends the run `refused_preroll`, naming the
-channel, the witness and where it stood; a prewarm too short to hold the fewest frames the picture can
-be compared on is refused before anything starts (check 51). The measured need sits far inside the
-default: cold tiles in after 30–124 ticks and the picture within 39 frames of them, against 6,000
-ticks and 600 frames of prewarm at 2 Hz.
+channel, the witness and where it stood; a prewarm too short for the camera to render two frames ten
+ticks apart after its tiles are first asked about is refused before anything starts (check 51). The
+measured need sits far inside the default: cold tiles in after 30–124 ticks and the picture within 39
+ticks of them, against 6,000 ticks of prewarm.
 
 **What is recorded, and what is not.** The run result carries, per channel, the ticks and the wall
-clock until the tiles were in — to within one SUMO step, the interval they are asked at — the frames
-until the picture settled and its residual, where each witness stood if it did not finish, and any
-return of the tiles to streaming; the launch echo says the wait will happen and where it begins. A
+clock until the tiles were in — to within one SUMO step, the interval they are asked at — the ticks
+and frames until the picture settled and its residual, the blocks rendered vehicles took out of that
+comparison and the share of the view judged, how many comparisons were judged and how many could not
+be (too few blocks left, or vehicles that could not be placed), where each witness stood if it did not
+finish, and any return of the tiles to streaming; the launch echo says the wait will happen and where
+it begins. A
 capture's own readiness is not recorded: the server answers only for the last tick and an image
 reaches the recorder several ticks after its frame, so it needs the server to publish readiness per
 frame on the observer snapshot, which it does not; and an orbit's readiness as the window opens says
 nothing of the ground it sweeps afterwards. Both wait for that publication rather than being
-approximated from the last tick. Not yet measured live: whether traffic moving through a view keeps
-its worst block above 0.5 grey levels, since the 27 placements had no traffic in view.
+approximated from the last tick. Not yet measured live: the with-traffic stare above run again with
+its vehicles left out, the share of its blocks that leaves, and whether cast shadows or moving
+vehicles' lamps reach blocks the footprints do not.
 
 **The attended path never had this problem, because a person is its settle.** In `run_SCTMV.py`
 recording starts on a key press — `CarlaControl/src/carlacontrol/PygameInterface.py:308` binds

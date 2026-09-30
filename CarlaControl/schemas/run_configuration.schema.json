@@ -374,7 +374,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "Stare: a point named instead of given. rendered_traffic is the centre of the vehicles the session rendered on the last frame before the camera holds for the window; the camera follows it through the prewarm until 120 of its frames before the window opens, then holds the pose it resolves to while its view becomes ready and for the whole window, and the run result records that point. Needs a prewarm of at least one SUMO step.",
+                "description": "Stare: a point named instead of given. rendered_traffic is the centre of the vehicles the session rendered on the last frame before the camera holds for the window; the camera follows it through the prewarm until one SUMO step and 120 ticks before the window opens (7 s at the defaults), then holds the pose it resolves to while its view becomes ready and for the whole window, and the run result records that point. Needs a prewarm of at least one SUMO step.",
                 "default": null,
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"
