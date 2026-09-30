@@ -1398,9 +1398,10 @@ id, lane position. Cases, in order:
    it is parked. That is neither a lane the network lacks nor a jump, so the reported points are
    blended directly: a vehicle parked at both ends is held where it stands, and one pulling into or
    out of its stop crosses the short step between lane and kerb. A move longer than
-   `v_max · Δs · 1.5` plus 5 m is still case (5); a lane *name* the network does not know is still
-   case (5). **Measured 2026-09-30** on Bahonar through TraCI: a guard pulling into its tower stop
-   moved 3.48 m in the step its lane became empty, at 0.05 m/s. Before this case existed every
+   `v_max · Δs · 1.5` plus 10 m is still case (5); a lane *name* the network does not know is still
+   case (5). **Measured 2026-09-30** on Bahonar through TraCI over all sixteen guards pulling into
+   their tower stops: 3.20 m to 7.05 m in the step their lane became empty, at 0.09 m/s to
+   1.18 m/s, where a teleport is tens of metres at the least. Before this case existed every
    parked guard was filed as (5) on every step, and three of them filled the run report's samples;
    the report now keeps one sample per vehicle and counts the ticks it recurred on.
 

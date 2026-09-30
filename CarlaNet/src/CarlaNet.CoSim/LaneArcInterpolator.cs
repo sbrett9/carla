@@ -33,11 +33,12 @@ public sealed class LaneArcInterpolator
 
     /// <summary>
     /// How far a vehicle may move in one step into or out of a parking stop at walking pace, in
-    /// metres: the sideways step between the lane and where SUMO parks it. Measured on the Bahonar
-    /// scenario through TraCI: a guard pulling into its tower stop moved 3.48 m in the step its lane
-    /// became empty, at 0.05 m/s, which a speed-derived limit alone would call a jump.
+    /// metres: the step between the lane and where SUMO parks it. Measured on the Bahonar scenario
+    /// through TraCI over all sixteen guards pulling into their tower stops: 3.20 m to 7.05 m in the
+    /// step their lane became empty, at 0.09 m/s to 1.18 m/s, which a speed-derived limit alone
+    /// would call a jump. A teleport is tens of metres at the least.
     /// </summary>
-    private const double ParkingStepAllowanceMetres = 5.0;
+    private const double ParkingStepAllowanceMetres = 10.0;
 
     private readonly SumoRoadNetwork _network;
 

@@ -301,15 +301,15 @@ public sealed class LaneArcInterpolatorTests
     [Fact]
     public void PullingIntoAStopIsBlendedAcrossTheMeasuredStepToTheKerb()
     {
-        // Measured on Bahonar through TraCI: 3.48 m in the step the lane became empty, at 0.05 m/s,
-        // which a limit derived from speed alone would call a jump.
-        CoSimVehicleFrame onLane = On("approach_0", 50.0, speed: 0.05) with { X = 725.0, Y = 1394.75 };
-        CoSimVehicleFrame parked = Parked(728.48, 1394.75, speed: 0.05);
+        // Measured on Bahonar through TraCI over sixteen guards: 3.20 m to 7.05 m in the step the
+        // lane became empty, at as little as 0.09 m/s, which a limit from speed alone calls a jump.
+        CoSimVehicleFrame onLane = On("approach_0", 50.0, speed: 0.12) with { X = 721.42, Y = 1394.75 };
+        CoSimVehicleFrame parked = Parked(728.47, 1394.75, speed: 0.12);
 
         InterpolatedState state = Interpolator().Interpolate(onLane, parked, 0.5, 1.0);
 
         Assert.Equal(LaneInterpolationCase.OffLane, state.Case);
-        Assert.Equal(726.74, state.X, 6);
+        Assert.Equal(724.945, state.X, 6);
     }
 
     [Fact]
