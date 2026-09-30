@@ -10,6 +10,7 @@ the live parser object and grepping the live source tree on 2026-09-18; the furt
 **Revisions:**
 `2026-09-30` — Measured on Bahonar, the picture witness failed with traffic in view: it now leaves out the blocks rendered vehicles cover, needs half the view judged, and is counted in ticks, ten apart with a 120-tick ceiling (check 50); a stare aimed at the traffic holds for one SUMO step and 120 ticks.
 `2026-09-30` — `run_capture` waits for every channel's view inside the prewarm — tiles in, picture settled (checks 50 and 51, D12.38); an orbit holds its opening pose until the window opens, and a stare aimed at the traffic holds for the last 120 of its frames.
+`2026-09-30` — The render set follows the cameras: `capture.render_set` (`cameras` by default, or `circle`) and its three settings (§5.2); `run_sumo_drive.py --render-set` and the free view followed wherever it flies (§9.6); check 33 names what was eligible.
 `2026-09-30` — §9.6 corrected: a camera image's header carried the next frame's pose; the server stamps it at capture, and a capture's pose is its frame's snapshot's, the header checked and counted (§7.2 gates).
 `2026-09-30` — `run_sumo_drive.py --view free`: a camera flown inside the drive, recording spans with the session's render set once its tiles are in (§9.6).
 `2026-09-28` — Staged refusals, the window's own instant, live admission passes and check 33 read; stare aimed at rendered traffic.
@@ -1192,12 +1193,15 @@ that has since changed is refused naming both values.
 
 | Toggle | Default | Class | Source |
 |---|---|---|---|
-| `capture.render_region` | **—** (never defaulted): `x_m`, `y_m` in CARLA's frame, `radius_m` | Session-fixed | [`10`](10_Scale_And_Performance.md) D10.5; the session's region, whose y is negated once at the call |
-| `capture.render_hysteresis_m` | `60.0` | Session-fixed | the session's `hysteresis_m`: how much further out a rendered vehicle is released |
-| `capture.render_cap` | `128` | Session-fixed | D10.4; the session's `capacity` |
+| `capture.render_set` | `cameras` | Session-fixed | [`03`](03_CoSimulation_Runtime.md) §8.3.1, D3.38; the session's `render_set`. `cameras`: a vehicle is rendered while it is inside, or about to enter, the ground footprint of any channel's camera -- each RGB camera, orbits included, is registered with the session as it is placed -- and `render_region` decides only until the cameras are placed. `circle`: `render_region`, for the whole run |
+| `capture.render_region` | **—** (never defaulted): `x_m`, `y_m` in CARLA's frame, `radius_m` | Session-fixed | [`10`](10_Scale_And_Performance.md) D10.5; the session's region, whose y is negated once at the call. Under `cameras`, the circle the session falls back to while no camera is registered |
+| `capture.render_hysteresis_m` | `60.0` | Session-fixed | the session's `hysteresis_m`: how much further out a rendered vehicle is released; under `cameras`, the band above a footprint's widest admission threshold a rendered vehicle is kept inside |
+| `capture.render_min_pixels` | `2.0` | Session-fixed | [`03`](03_CoSimulation_Runtime.md) §8.3.1: each camera's footprint is capped at the slant range past which the catalogue's longest body covers fewer than this many pixels along its length, at the picture's corners. Two, because a body under two pixels along its longest dimension is below anything a detector samples; the run report states each camera's cap |
+| `capture.render_admit_lead_s`, `capture.render_release_lag_s` | `3.0`, `5.0` | Session-fixed | [`10`](10_Scale_And_Performance.md) §8's `frustum_lead_s` and `exit_lag_s`, under `cameras`: simulated seconds of its own travel ahead of a footprint a vehicle is admitted, beyond a margin of the bodies' reach and one SUMO step at 40 m/s, and seconds a vehicle is held after it last was within reach |
+| `capture.render_cap` | `128` | Session-fixed | D10.4; the session's `capacity`. Past it, under `cameras`, a vehicle in view ranks ahead of one approaching, one rendered ahead of a newcomer, and then the scenario's SUMO seed decides |
 | `capture.render_cap_hard` | `192` | Session-fixed | D10.4; the session's `maximum_bodies` |
 | `capture.road_layer_visible`, `capture.signal_layer_visible` | `false`, `false` | Session-fixed; written once by the session before the first tick and given back on every exit path | [`13`](13_Work_Breakdown.md) §10, `LayerVisibilityLease` |
-| `entry_lead_m`, `exit_lag_m`, `exit_lag_s`, `frustum_lead_s`, `aoi_halo_m`, `aoi_max_relations_per_vehicle` | *not offered*: the session's render set is a circle with a release hysteresis, and none of these exists in it | — | [`10`](10_Scale_And_Performance.md) §8, D10.8 |
+| `entry_lead_m`, `exit_lag_m`, `aoi_halo_m`, `aoi_max_relations_per_vehicle` | *not offered*: `frustum_lead_s` and `exit_lag_s` are offered as `capture.render_admit_lead_s` and `capture.render_release_lag_s`; the distances are derived under `cameras` -- the bodies' reach and one SUMO step at the fastest plausible speed, and `capture.render_hysteresis_m` -- and the circle has none; areas of interest are not built | — | [`10`](10_Scale_And_Performance.md) §8, D10.8; [`03`](03_CoSimulation_Runtime.md) §8.3.1 |
 | `rendered_fraction_floor` | *not offered*: the session publishes no rendered fraction | — | [`10`](10_Scale_And_Performance.md) §7 |
 | admission priority order | not a field — the selector's rule | Bound | [`01`](01_Architecture.md) D1.14 |
 
@@ -1456,7 +1460,7 @@ captured is run), so the population inside a candidate region at every step is a
 | 30 | SUMO reaches `window.begin_s − prewarm_s` | refuse on a SUMO error, naming its own message | [`10`](10_Scale_And_Performance.md) D10.2 |
 | 31 | Applied solar state matches the requested one, read back from `get_solar_state()` | refuse | `requested solar_time 23.00, world reports 12.00.` — §4.5's `confirmed` |
 | 32 | The first cued tick delivers a frame on every channel | refuse | `channel OVERWATCH-2 delivered no frame within 5 cues.` — [`02`](02_Use_Cases.md) UC-7's session fault, applied before the window rather than during it |
-| 33 | Actual in-region population at `window.begin_s` against `render_cap` | warn, with the number; refuse where `on_warning.render_cap_bound_at_window_open` refuses it, or the caller is unattended and has not adjudicated it (§6.4.2) | `at the window's begin, t=25200, 140 vehicles were inside the render region against render_cap 128, so 12 were not rendered: the cap binds, and a binding cap makes scene density a function of the label (00 §6).` — closes the loop on check 21 with the real figure |
+| 33 | Actual population eligible for the render set at `window.begin_s` -- inside the render region, or under `render_set` `cameras` within reach of a channel camera's view -- against `render_cap` | warn, with the number; refuse where `on_warning.render_cap_bound_at_window_open` refuses it, or the caller is unattended and has not adjudicated it (§6.4.2) | `at the window's begin, t=25200, 140 vehicles were inside the render region against render_cap 128, so 12 were not rendered: the cap binds, and a binding cap makes scene density a function of the label (00 §6).` — closes the loop on check 21 with the real figure |
 
 #### Further checks, each naming its own phase
 
@@ -2342,6 +2346,9 @@ records nothing, and `run_capture` offers no flown camera: a capture run's camer
 | Option | Default | What it does |
 |---|---|---|
 | `--view` | `fixed` | `free` opens the flight window in place of the fixed camera |
+| `--render-set` | `cameras` | `cameras`: the camera the drive spawns or flies is registered with the session and the render set follows its view; the region circle decides only while no camera is registered. `circle`: the region circle for the whole drive |
+| `--render-min-pixels` | `2.0` | under `cameras`: the pixels along its length the catalogue's longest body covers at a view's range cap |
+| `--render-admit-lead`, `--render-release-lag` | `3.0`, `5.0` | under `cameras`: simulated seconds of travel ahead of the view a vehicle is placed, and seconds it is held after it last was within reach |
 | `--camera-z` | `300.0` | the free camera starts over the region centre at this height, looking straight down |
 | `--flight-speed` | `60.0` | the free camera's starting speed, m/s; the mouse wheel changes it |
 | `--width`, `--height`, `--fov` | fixed `1920`, `1080`, `60`; free `1280`, `720`, `90` | the camera's image, which is also the window's size; a value given applies to either view |
@@ -2497,14 +2504,23 @@ What the server pays is the rig's two 1280×720 cameras rendering every tick, th
 `run_free_move_camera.py` beside a drive; the drive's achieved pace with and without the window at
 `--real-time-factor 1.0` is not yet measured.
 
-**The region.** Vehicles are rendered only inside the render region, a fixed circle
-([`10`](10_Scale_And_Performance.md) D10.5), so a free camera flown beyond it sees roads with nothing
-on them while SUMO simulates the vehicles there. With `--view free` the log says, before the drive
-starts, when the circle does not take in the world package's sandbox, and gives the region that does:
-the circle through the sandbox's corners, in SUMO's frame (`RenderRegionCoverage`); on Gardnerville,
-`--region-x 0 --region-y -1 --region-radius 956`. `--capacity` still bounds how many vehicles are
-rendered at once. A render set that follows the camera ([`03`](03_CoSimulation_Runtime.md) §8.3) is
-a separate item.
+**The render set follows the flown camera.** Under `--render-set cameras`, the default, the free
+view registers its RGB camera with the session as it opens (`session.AddCamera`) and lets it go
+before destroying it (`RemoveCamera`), so from the next step a vehicle is rendered while it is inside,
+or about to enter, the camera's ground footprint wherever the camera is flown: placed
+`--render-admit-lead` seconds of its own travel ahead of the view, the footprint swept along the
+camera's own motion, and taken away `--render-release-lag` seconds after it last was within reach
+([`03`](03_CoSimulation_Runtime.md) §8.3.1). The fixed camera is registered the same way once it is
+spawned. Measured before it, a free camera flown past the circle saw vehicles vanish at its release
+radius, and the workaround was a circle taking in the whole map, a body for every vehicle nothing
+looked at. The region circle decides only while no camera is registered, and the log says so. Under
+`--render-set circle` vehicles are rendered only inside the circle ([`10`](10_Scale_And_Performance.md)
+D10.5), as before: with `--view free` the log says, before the drive starts, when the circle does not
+take in the world package's sandbox, and gives the region that does -- the circle through the sandbox's
+corners, in SUMO's frame (`RenderRegionCoverage`); on Gardnerville,
+`--region-x 0 --region-y -1 --region-radius 956`. `--capacity` bounds how many vehicles are rendered at
+once under either; each admission line in the log says which rule decided it, and the first time a
+camera is followed its range cap and footprint are logged.
 
 **Exercised by** `test_span_recorder.py` (the wait, the first answer not trusted, the ceiling, a
 failed tile, cancelling, the capture window, a server with no answer, the folders and their suffix,
@@ -2514,8 +2530,9 @@ caller's makes, pumps and draws the window; no write to the world whatever is pr
 note; a window that cannot open; the record field), `test_render_region_coverage.py` (the northing
 negated, the whole-map circle, and on every world package on disk the circle taking in the package's
 own SUMO network) and `test_run_sumo_drive_free_view.py` (the span recorded as the fixed camera
-records, the rig's start and depth range, no divergence callback in either view, and the region
-warning). Each was seen failing against a wrong implementation: the first answer trusted, no
+records, the rig's start and depth range, no divergence callback in either view, the region warning
+under the circle and the camera-following note under the cameras, the render settings handed to the
+session, and the flown camera registered and let go of before it is destroyed). Each was seen failing against a wrong implementation: the first answer trusted, no
 ceiling, the capture window unchecked, a failed tile ignored, a stop left recording, the window not
 read-only, the divergence callback bound, no depth camera, the northing not negated, and the pairing
 not shown.

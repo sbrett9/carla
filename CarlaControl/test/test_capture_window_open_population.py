@@ -91,9 +91,20 @@ def test_a_cap_binding_at_the_window_s_begin_is_a_warning_with_the_numbers(layou
     for figure in ("t=25200", "140 vehicles", "render_cap 128", "12 were not rendered"):
         assert figure in warning["message"]
     assert warning["adjudication"] is None
+    # Under the cameras, the default, the eligible are the vehicles within reach of a view.
+    assert "within reach of a channel camera's view" in warning["message"]
     assert any(f"LOUD {CODE}" in record.message for record in caplog.records)
     gate = next(g for g in result.produced["gates"] if g["id"] == "launch.warnings_adjudicated")
     assert (gate["observed"], gate["met"]) == (1, False)
+
+
+def test_under_the_circle_the_warning_names_the_render_region(layout):
+    server = FakeServer()
+    server.eligible_at = busy_at(BEGIN_S)
+    result = capture(layout, server, ["capture.render_set=circle"])
+    [warning] = population_warnings(result)
+    assert "140 vehicles were inside the render region" in warning["message"]
+    assert "narrow capture.render_region" in warning["message"]
 
 
 @pytest.mark.parametrize("frame_s", [BEGIN_S - 1.0, BEGIN_S + 1.0],

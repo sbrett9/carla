@@ -191,7 +191,8 @@ _CHECKS: tuple[RunCheck, ...] = (
              "SolarAuditFailedException"),
     RunCheck(32, PRE_ROLL, "The first cued tick delivers a frame on every channel", (), NOT_BUILT,
              "the recorder publishes no count of frames received"),
-    RunCheck(33, PRE_ROLL, "The in-region population at the window's begin against render_cap", _RW,
+    RunCheck(33, PRE_ROLL, "The population eligible for the render set at the window's begin against "
+             "render_cap", _RW,
              RUN_CAPTURE, "CaptureSession, from the session's admission pass for the window's "
              "begin; refused only as on_warning or an unattended caller requires",
              warning_code="render_cap_bound_at_window_open"),

@@ -32,7 +32,9 @@ world (D1.12):
   depth camera at the stare's pose. The cameras exist through the prewarm, so the tiles their views
   select are streamed before the first capture. A stare aimed at the rendered traffic starts over
   the render region's centre. Every camera's frames are listened to from here until the recorders
-  start (`ViewReadinessGate`).
+  start (`ViewReadinessGate`). Each RGB camera is registered with the session (`AddCamera`), so
+  under `capture.render_set` `cameras` the render set follows every channel's view, an orbit's as
+  it flies.
 * **Prewarm**: advance until the window's begin without recording, and wait there for every
   channel's view to be ready (03 §9.5.1, check 50): after each step the server is asked whether the
   camera's photoreal tiles are in, and once they are, the camera's own frames are compared until its
@@ -457,6 +459,10 @@ class CaptureSession:
             hysteresis_m=float(effective.value("capture.render_hysteresis_m")),
             capacity=int(effective.value("capture.render_cap")),
             maximum_bodies=int(effective.value("capture.render_cap_hard")),
+            render_set=str(effective.value("capture.render_set")),
+            render_min_pixels=float(effective.value("capture.render_min_pixels")),
+            render_admit_lead_s=float(effective.value("capture.render_admit_lead_s")),
+            render_release_lag_s=float(effective.value("capture.render_release_lag_s")),
             fixed_delta=float(effective.value("capture.world_delta_s")),
             record_hz=float(effective.value("capture.capture_hz")),
             warm_up_to=float(effective.first_rendered_s),
@@ -573,7 +579,10 @@ class CaptureSession:
         rig.camera = rig.world.spawn_actor(rgb, transform)
         rig.pose = transform
         self.termination.add_step(RELEASE_WORLD, f"destroy camera {rig.sensor_id}",
-                                  rig.camera.destroy, CAMERA_TIMEOUT_S, ORDER_CAMERA)
+                                  lambda: self._release_camera(rig), CAMERA_TIMEOUT_S, ORDER_CAMERA)
+        # The render set follows every channel's camera, an orbit's included, from the next step;
+        # its depth camera shares its pose and view, so it is not registered as well.
+        self.session.AddCamera(rig.camera.id)
         self.logger.info("channel %s: camera %s at %s", rig.sensor_id, rig.camera.id,
                          self._describe(transform))
         if description.pattern == "stare" and effective.value("occlusion.enabled"):
@@ -599,6 +608,12 @@ class CaptureSession:
             # Held at the pose it opens on until the window opens (`_set_orbits_moving`): the view
             # the window's first frame is written from is the one whose readiness is witnessed.
             rig.orbit.start_updater()
+
+    def _release_camera(self, rig: ChannelRig) -> None:
+        """Stop the render set following a channel's camera, then destroy it: the session counts a
+        registered camera the world no longer has as missing."""
+        self.session.RemoveCamera(rig.camera.id)
+        rig.camera.destroy()
 
     def _start_transform(self, rig: ChannelRig) -> carla.Transform:
         """Where a channel's camera is spawned, recording what it declared in `rig.aim_record`.

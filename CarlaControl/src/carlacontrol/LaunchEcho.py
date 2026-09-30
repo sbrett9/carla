@@ -101,8 +101,12 @@ class LaunchEcho:
                       "network_fingerprint": effective.value("world.network_fingerprint"),
                       "origin": [effective.value("world.origin_latitude"),
                                  effective.value("world.origin_longitude")]},
-            "render": {"region": effective.value("capture.render_region"),
+            "render": {"set": effective.value("capture.render_set"),
+                       "region": effective.value("capture.render_region"),
                        "hysteresis_m": effective.value("capture.render_hysteresis_m"),
+                       "min_pixels": effective.value("capture.render_min_pixels"),
+                       "admit_lead_s": effective.value("capture.render_admit_lead_s"),
+                       "release_lag_s": effective.value("capture.render_release_lag_s"),
                        "cap": effective.value("capture.render_cap"),
                        "cap_hard": effective.value("capture.render_cap_hard"),
                        "road_layer_visible": effective.value("capture.road_layer_visible"),
@@ -229,8 +233,12 @@ class LaunchEcho:
                      f"{world['origin'][0]}, {world['origin'][1]}")
         render = b["render"]
         region = render["region"] or {}
-        lines.append(f"  render      region {region.get('radius_m', '?')} m at "
-                     f"({region.get('x_m', '?')}, {region.get('y_m', '?')})   cap {render['cap']}"
+        circle = (f"region {region.get('radius_m', '?')} m at "
+                  f"({region.get('x_m', '?')}, {region.get('y_m', '?')})")
+        chosen = (f"the cameras (lead {render['admit_lead_s']:g} s, lag {render['release_lag_s']:g} "
+                  f"s, {render['min_pixels']:g} px), {circle} until they are placed"
+                  if render["set"] == "cameras" else circle)
+        lines.append(f"  render      {chosen}   cap {render['cap']}"
                      f" (hard {render['cap_hard']})   road "
                      f"{'drawn' if render['road_layer_visible'] else 'hidden'}, signals "
                      f"{'drawn' if render['signal_layer_visible'] else 'hidden'}")

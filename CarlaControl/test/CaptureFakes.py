@@ -445,6 +445,8 @@ class FakeSession:
         self.capacity = int(kwargs.get("capacity", 128))
         self.on_pose = kwargs.get("on_pose")
         self.on_admission_pass = kwargs.get("on_admission_pass")
+        # The cameras registered for the render set to follow, in the order they were registered.
+        self.cameras: list[int] = []
         # The two passes the session makes while starting: the fast-forward's frame, and the step of
         # lookahead after it.
         self._publish_pass(self.RenderedTimeSeconds)
@@ -494,6 +496,17 @@ class FakeSession:
         if self.world.on_advance is not None:
             self.world.on_advance(self)
         return self.RenderedTimeSeconds < self.world.scenario_end_s
+
+    def AddCamera(self, camera: int) -> None:  # noqa: N802 -- the .NET member name
+        self.cameras.append(int(camera))
+        self.world.events.add("add_camera", int(camera))
+
+    def RemoveCamera(self, camera: int) -> bool:  # noqa: N802 -- the .NET member name
+        self.world.events.add("remove_camera", int(camera))
+        if int(camera) in self.cameras:
+            self.cameras.remove(int(camera))
+            return True
+        return False
 
     def Dispose(self) -> None:  # noqa: N802 -- the .NET member name
         self.disposed = True

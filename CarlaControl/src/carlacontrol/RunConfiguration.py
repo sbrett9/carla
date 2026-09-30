@@ -222,14 +222,36 @@ _FIELDS: tuple[RunField, ...] = (
         "required": ["x_m", "y_m", "radius_m"],
         "properties": {"x_m": _NUMBER, "y_m": _NUMBER, "radius_m": _POSITIVE}},
        NO_DEFAULT, SESSION_FIXED,
-       help="The circle vehicles are rendered inside, in CARLA's frame (x east, y south, metres). "
-            "Never defaulted (10 D10.5): sized per scenario so the render cap does not bind."),
+       help="The circle vehicles are rendered inside, in CARLA's frame (x east, y south, metres): "
+            "for the whole run under render_set circle, and under cameras only until the channels' "
+            "cameras are placed. Never defaulted (10 D10.5): sized per scenario so the render cap "
+            "does not bind."),
     _F("capture.render_hysteresis_m", _NON_NEGATIVE, 60.0, SESSION_FIXED,
-       help="How much further out than the region's radius a rendered vehicle is released."),
+       help="How much further out than the region's radius a rendered vehicle is released; under "
+            "render_set cameras, the band beyond a footprint's widest admission threshold a rendered "
+            "vehicle is kept inside."),
     _F("capture.render_cap", _POSITIVE_INTEGER, 128, SESSION_FIXED,
-       help="How many vehicles may be rendered at once."),
+       help="How many vehicles may be rendered at once. Past it, a vehicle in view ranks ahead of "
+            "one approaching, one rendered ahead of a newcomer, and then the scenario's seed decides."),
     _F("capture.render_cap_hard", _POSITIVE_INTEGER, 192, SESSION_FIXED,
        help="How many CARLA actors the session may own."),
+    _F("capture.render_set", {"type": "string", "enum": ["cameras", "circle"]}, "cameras",
+       SESSION_FIXED,
+       help="Which vehicles are rendered. cameras: those inside, or about to enter, the ground "
+            "footprint of any channel's camera, orbits included (03 §8.3), with render_region "
+            "deciding only until the cameras are placed. circle: those inside render_region, for "
+            "the whole run."),
+    _F("capture.render_min_pixels", _POSITIVE, 2.0, SESSION_FIXED,
+       help="Under render_set cameras: a camera's footprint is capped at the range beyond which the "
+            "catalogue's longest body covers fewer than this many pixels along its length, anywhere "
+            "in the picture. Two is the least a shape can span and still be sampled."),
+    _F("capture.render_admit_lead_s", _NON_NEGATIVE, 3.0, SESSION_FIXED,
+       help="Under render_set cameras: simulated seconds of its own travel ahead of a camera's "
+            "footprint a vehicle is admitted, beyond a margin of its body and one SUMO step, so it "
+            "appears out of view (10 §8 frustum_lead_s)."),
+    _F("capture.render_release_lag_s", _NON_NEGATIVE, 5.0, SESSION_FIXED,
+       help="Under render_set cameras: simulated seconds a rendered vehicle is held after it last "
+            "was within reach of a camera's footprint, before it is released (10 §8 exit_lag_s)."),
     _F("capture.road_layer_visible", _BOOLEAN, False, SESSION_FIXED,
        help="Draw the generated road surface. Hidden by default: it is a flat ribbon over the "
             "photogrammetry of the real road, so drawn it is an artefact in every frame."),

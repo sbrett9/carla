@@ -626,7 +626,9 @@ class RunConfigurationValidator:
     @staticmethod
     def window_open_population(effective: EffectiveRunConfiguration,
                                at_window_open: dict | None) -> RunConfigurationFindings:
-        """Check 33: the vehicles inside the render region at the window's begin against the cap.
+        """Check 33: the vehicles eligible for the render set at the window's begin against the cap --
+        inside the render region, or under `capture.render_set` `cameras` within reach of a channel
+        camera's view.
 
         `at_window_open` is the session's admission pass for the window's begin, as
         `WindowAdmissions.describe` states it. Where more vehicles were eligible than the capacity,
@@ -641,12 +643,18 @@ class RunConfigurationValidator:
         eligible, capacity = at_window_open["eligible"], at_window_open["capacity"]
         if eligible <= capacity:
             return findings
+        # Under the cameras the eligible are the vehicles within reach of a channel's view, and the
+        # region only decides until the cameras are placed.
+        cameras = effective.value("capture.render_set") == "cameras"
+        where = ("within reach of a channel camera's view" if cameras
+                 else "inside the render region")
+        narrow = ("narrow a channel's view" if cameras else "narrow capture.render_region")
         message = (f"at the window's begin, t={at_window_open['sim_time_s']:g}, {eligible} vehicles "
-                   f"were inside the render region against render_cap {capacity}, so "
+                   f"were {where} against render_cap {capacity}, so "
                    f"{at_window_open['shed']} were not rendered: the cap binds, and a binding cap "
-                   "makes scene density a function of the label (00 §6). Narrow "
-                   "capture.render_region, or raise capture.render_cap (render_cap_hard is "
-                   f"{effective.value('capture.render_cap_hard')})")
+                   f"makes scene density a function of the label (00 §6). Raise "
+                   f"capture.render_cap (render_cap_hard is "
+                   f"{effective.value('capture.render_cap_hard')}), or {narrow}")
         findings.warn(33, "capture.render_cap", message)
         code = RunConfigurationFindings.warning_code(findings.warnings[0])
         decision = (effective.value("on_warning") or {}).get(code)

@@ -142,6 +142,58 @@ def test_every_admission_pass_is_asked_for_and_poses_only_where_a_stare_aims_at_
     assert started["on_pose"] is None
 
 
+def test_the_render_set_follows_the_cameras_unless_the_circle_is_chosen(layout, server):
+    capture(layout, server)
+    started = started_with(server)
+    # The defaults: the cameras, capped where the longest body covers 2 px, admitted 3 s ahead and
+    # held 5 s after (10 §8's frustum_lead_s and exit_lag_s).
+    assert (started["render_set"], started["render_min_pixels"], started["render_admit_lead_s"],
+            started["render_release_lag_s"]) == ("cameras", 2.0, 3.0, 5.0)
+
+    circle = FakeServer()
+    capture(layout, circle, overrides=["capture.render_set=circle", "capture.render_min_pixels=3",
+                                       "capture.render_admit_lead_s=1.5",
+                                       "capture.render_release_lag_s=0"])
+    started = started_with(circle)
+    assert (started["render_set"], started["render_min_pixels"], started["render_admit_lead_s"],
+            started["render_release_lag_s"]) == ("circle", 3.0, 1.5, 0.0)
+
+
+def test_every_channel_s_camera_is_registered_before_the_prewarm_and_let_go_before_it_goes(layout, server):
+    # A stare measuring occlusion: its RGB camera is registered, and its depth camera, which shares
+    # the RGB camera's view, is not.
+    capture(layout, server)
+    rgb, depth = server.actors
+    assert (rgb.type_id, depth.type_id) == ("sensor.camera.rgb", "sensor.camera.depth")
+    assert [event[1] for event in server.events.of("add_camera")] == [rgb.id]
+    # Registered before the first step, so the prewarm is rendered for the views the window holds.
+    assert server.events.index("add_camera") < server.events.index("advance")
+    # Let go before the camera is destroyed, so the session never follows a camera the world lacks.
+    assert server.session.cameras == []
+    log = server.events.log
+    assert log.index(("remove_camera", rgb.id)) < log.index(("destroy", "sensor.camera.rgb", rgb.id))
+
+    # A stare and an orbit: both, the orbit's followed as it flies.
+    both = FakeServer()
+    document = run_document()
+    document["capture"]["channels"] = [A_STARE, dict(AN_ORBIT, sensor_id="ORBIT-2")]
+    _, result = capture(layout, both, document, ["occlusion.enabled=false"])
+    assert result.outcome == "run_finished"
+    cameras = [actor.id for actor in both.actors if actor.type_id == "sensor.camera.rgb"]
+    assert len(cameras) == 2
+    assert [event[1] for event in both.events.of("add_camera")] == cameras
+    assert sorted(event[1] for event in both.events.of("remove_camera")) == sorted(cameras)
+    assert both.session.cameras == []
+
+
+def test_an_unusable_render_setting_is_refused_as_a_usage_error(layout, server):
+    for override in ("capture.render_set=everything", "capture.render_min_pixels=0",
+                     "capture.render_admit_lead_s=-1"):
+        _, result = capture(layout, server, overrides=[override])
+        assert result.outcome == "usage_error", override
+    assert server.events.of("start_sumo_drive") == []
+
+
 def test_the_render_region_is_handed_over_in_sumo_s_frame(layout, server):
     capture(layout, server, overrides=['capture.render_region={"x_m": 120.0, "y_m": -340.0, '
                                        '"radius_m": 250.0}'])
