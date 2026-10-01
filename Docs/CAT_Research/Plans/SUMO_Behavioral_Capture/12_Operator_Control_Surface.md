@@ -8,6 +8,7 @@ the live parser object and grepping the live source tree on 2026-09-18; the furt
 §3.5, §3.10.1, §3.10.2, §5.2 and §7.6 were taken the same way, and each says where.
 **Date:** 2026-09-18
 **Revisions:**
+`2026-09-30` — The render cap (128, hard 192) was never measured — M2 never ran — and the scenario is the arbiter of population: every vehicle SUMO has is drawn, and a heavier scenario runs slower, never thinner. Removed with it: the settings `capture.render_region`, `capture.render_hysteresis_m`, `capture.render_cap`, `capture.render_cap_hard`, `capture.render_set`, `capture.render_min_pixels`, `capture.render_admit_lead_s` and `capture.render_release_lag_s` (§5.2); `run_sumo_drive.py`'s render-set, region and capacity options and the free view's region coverage (§9.6); checks 20, 21 and 33, withdrawn with their numbers retired, and the warning `render_cap_bound_at_window_open`; the rendered-fraction floor and its loud condition (§7.1, §7.2); D12.20, withdrawn. A stare aimed at the traffic starts over the centre of the world's staging bounds.
 `2026-09-30` — Measured on Bahonar, the picture witness failed with traffic in view: it now leaves out the blocks rendered vehicles cover, needs half the view judged, and is counted in ticks, ten apart with a 120-tick ceiling (check 50); a stare aimed at the traffic holds for one SUMO step and 120 ticks.
 `2026-09-30` — `run_capture` waits for every channel's view inside the prewarm — tiles in, picture settled (checks 50 and 51, D12.38); an orbit holds its opening pose until the window opens, and a stare aimed at the traffic holds for the last 120 of its frames.
 `2026-09-30` — The render set follows the cameras: `capture.render_set` (`cameras` by default, or `circle`) and its three settings (§5.2); `run_sumo_drive.py --render-set` and the free view followed wherever it flies (§9.6); check 33 names what was eligible.
@@ -281,7 +282,6 @@ argument list would have to express.
 | **World package** | Which world, and the binding that proves the scenario was authored against it | [`07`](07_Scenario_Authoring.md) §2, D7.15 |
 | **Scenario package** | Which scenario, at which lock, with which supervision plan | [`07`](07_Scenario_Authoring.md) §5.1 |
 | **Capture window** | `[begin_s, end_s]` in simulated time, plus prewarm — **or a begin with no end**, which runs until the scenario ends or the caller stops us (D12.4) | [`10`](10_Scale_And_Performance.md) §4.2, D10.3 |
-| **Render region and caps** | `render_region`, `render_cap`, `render_cap_hard`, the lead/lag hysteresis, the rendered-fraction floor | [`10`](10_Scale_And_Performance.md) §8, D10.4, D10.5 |
 | **Camera rig** | N channels, each `(sensor_id, pattern, track, optics, depth?, seg?)` | [`08`](08_Collection_And_EPoL.md) §3.2, §3.3, D8.4 |
 | **Clock** | SUMO step, world delta, capture rate — an integer-ratio contract | [`01`](01_Architecture.md) D1.13 |
 | **Solar epoch and policy** | The civil instant `t = 0` means, and whether the sun freezes or advances | [`11`](11_Time_And_Illumination.md); this section for expression |
@@ -294,9 +294,9 @@ argument list would have to express.
 | **Handover and transcript** | Whether frames leave the process live, on which channels, and whether what comes back is recorded | [`08`](08_Collection_And_EPoL.md) §11.2, §11.3; [`02`](02_Use_Cases.md) UC-8 |
 | **Caller** | Attended or unattended, and — if unattended — how each warning is adjudicated in advance. An unattended caller also decides when the run ends, which is not a field (§3.10.2) | §3.10, §6.4 |
 
-Sixteen axes, of which four are *bindings to artifacts* (world, scenario, epoch, supervision plan),
-three are *contracts between numbers* (clock ratio, render sizing, seeds), eight are *choices*, and one
-— the caller — decides **who is allowed to adjudicate the other fifteen**. A flat argument list can
+Fifteen axes, of which four are *bindings to artifacts* (world, scenario, epoch, supervision plan),
+two are *contracts between numbers* (clock ratio, seeds), eight are *choices*, and one — the caller —
+decides **who is allowed to adjudicate the other fourteen**. A flat argument list can
 express the choices. It cannot express a binding — there is nothing for a flag to bind *to* — it cannot
 validate a contract between three numbers that live in three different groups, and it has no place to
 put an adjudication that has to survive the run that used it.
@@ -355,7 +355,7 @@ field nobody meant to vary.
 
 ### 3.4 Candidate — layered resolution: artifact bindings, then declared defaults, then the run, then the operator
 
-A scenario declares what it knows (its epoch, its named windows, its step, its region hint); a run
+A scenario declares what it knows (its epoch, its named windows, its step); a run
 configuration states the run's own choices; the operator overrides individual fields on the command
 line. All of it resolves into one **effective run configuration** before anything starts, and that
 object — not the file, not the argv — is the recorded artifact.
@@ -387,8 +387,8 @@ Strictly increasing precedence. Every layer is optional except the first and the
 | 1 | **Tool defaults** | Values compiled into the schema and versioned with the tool. Every one is materialised into the effective configuration with `provenance: "tool_default"` and the tool version | Permitted |
 | 2 | **Site profile** | Facts about *this machine*, not about the science: server host and port, SUMO install, Cesium ion token, the two export roots' base paths. Separated so a run configuration is portable between machines unedited | Permitted |
 | 3 | **World package binding** | Origin latitude/longitude, staging rectangle, netconvert argument vector and version, world digest, network fingerprint | **Refused.** These are bindings, not defaults; an operator override here is a check failure naming both values |
-| 4 | **Scenario package declaration** | Solar epoch, named capture windows, SUMO step, the supervision plan, the scenario's own seeds, its `render_region` and its rendered-fraction floor | Permitted, and every override is recorded against the value it replaced |
-| 5 | **Run configuration** | The run's choices: mode, window selection, rig, caps, solar policy, sinks, roots, seeds | Permitted |
+| 4 | **Scenario package declaration** | Solar epoch, named capture windows, SUMO step, the supervision plan and the scenario's own seeds | Permitted, and every override is recorded against the value it replaced |
+| 5 | **Run configuration** | The run's choices: mode, window selection, rig, solar policy, sinks, roots, seeds | Permitted |
 | 6 | **Operator override** | One command-line flag per field, in `--set <path>=<value>` form plus short aliases for the handful in §3.8 | — |
 
 Three properties make the layering safe rather than merely convenient:
@@ -453,12 +453,12 @@ is itself a valid run configuration.** Reproducing a run is reading it back, not
 ### 3.7 What the effective configuration looks like
 
 Four fields, in full, to fix the shape. The document keys each field by its dotted path; this is
-`EffectiveRunConfiguration.to_document()` for a run given `--solar advance --set capture.render_cap=96`:
+`EffectiveRunConfiguration.to_document()` for a run given `--solar advance --set capture.prewarm_s=600`:
 
 ```jsonc
-"capture.render_cap": {
-  "value": 96, "layer": "operator_override", "provenance": "--set capture.render_cap=96",
-  "tool_default": 128, "overridden": null
+"capture.prewarm_s": {
+  "value": 600, "layer": "operator_override", "provenance": "--set capture.prewarm_s=600",
+  "tool_default": 300, "overridden": null
 },
 "solar.policy": {
   "value": "advance", "layer": "operator_override", "provenance": "--solar advance",
@@ -504,7 +504,7 @@ common cases, in full:
 run_capture --scenario bahonar_pattern_of_life --window night_shift
 run_capture --scenario bahonar_pattern_of_life --window night_shift --solar freeze_at_window_start
 run_capture --run configs/bahonar_night_sweep.run.json
-run_capture --run configs/bahonar_night_sweep.run.json --set capture.render_cap=192
+run_capture --run configs/bahonar_night_sweep.run.json --set capture.prewarm_s=600
 run_capture --run runs/cap-20260105-230000-1f2e3d/run.effective.json
 ```
 
@@ -575,7 +575,6 @@ PascalCase, modern union hints, absolute imports outside the package, all import
 | `ChannelDescription.py` | `ChannelDescription` | **Built.** One camera channel: §5.2's per-channel fields and their defaults, defined once and validated on construction. §9.2's typed channel description |
 | `StareAim.py` | `StareAim` | **Built.** The pose a stare channel holds, from a look-at point or an explicit pose, or around the point a stare aimed at the rendered traffic resolves to |
 | `RenderedTrafficCentre.py` | `RenderedTrafficCentre` | **Built.** The centre of the vehicles a prewarm step's last frame rendered, from the session's `on_pose` records of poses written to bodies: what a stare aimed at the rendered traffic follows through the prewarm, and the point it resolves to (§5.2) |
-| `WindowAdmissions.py` | `WindowAdmissions` | **Built.** The session's admission passes as the window saw them, from `on_admission_pass`: the pass for the window's begin, which check 33 reads, and a count of the passes rendered inside the window and of those that shed |
 | `CameraFollower.py` | `CameraFollower` | **Built.** A viewer that places one camera from a `ChannelDescription` and shows its picture live; a camera-follower process in [`01`](01_Architecture.md) D1.1's sense — it never cues, never writes episode settings, and never records ([`08`](08_Collection_And_EPoL.md) §3.4). Its camera, window and frame-stall notice are `FollowerCamera`, `FollowerWindow` and `FrameStallWatch` |
 | `CaptureSession.py` | `CaptureSession` | **Built.** One capture run, [`01`](01_Architecture.md) §2.3's component in the process that drives the world: it resolves and validates the invocation, prints the echo, writes the resolution report and the lock, starts `SumoDriveSession`, places each channel's cameras, prewarms, starts one recorder per channel under one session id, advances the window, and ends through `RunTerminationSequence` |
 | `scripts/run_capture.py` | — | **Built.** Thin `main`: parses the command line, discovers the site profile, constructs `CaptureSession`, runs it, and returns the exit status its `RunResult` carries |
@@ -725,10 +724,10 @@ computations of one fact eventually disagree, and the caller believes the cheape
 |---:|---|---|---|
 | 0 | `run_finished` | The run reached the end it was given — the window's declared end, or the scenario's own end where the window declares none — and closed itself | The corpus, with the manifest's last record naming the end it reached |
 | 1 | `usage_error` | The invocation itself was malformed: unknown key, unreadable file, an override of a binding. Nothing was resolved | The result, and nothing else |
-| 2 | `refused_offline` | Phase 0 refused (checks 1–21, 34–42, 46–48, 51). No server was contacted | The resolution report and the result |
+| 2 | `refused_offline` | Phase 0 refused (checks 1–19, 34–42, 46–48, 51). No server was contacted | The resolution report and the result |
 | 3 | `refused_server` | Phase 1 refused (checks 22–27, 43). Nothing was acquired, nothing spawned | The resolution report and the result |
 | 4 | `refused_authority` | Phase 2 refused (checks 28, 29): an authority is held by someone else, **named in the result** | The resolution report and the result |
-| 5 | `refused_preroll` | Phase 3 refused (checks 30–33, 44, 45, 50). The lease was acquired and released; the manifest carries `closed_by: aborted_at_preroll` | A manifest with no window, the report and the result |
+| 5 | `refused_preroll` | Phase 3 refused (checks 30–32, 44, 45, 50). The lease was acquired and released; the manifest carries `closed_by: aborted_at_preroll` | A manifest with no window, the report and the result |
 | 6 | `run_stopped` | The run ended before that end: a signal, an operator stop, a loud condition (§7.1), or the tool stopping itself because write headroom ran out (check 46). `closed_by` names which | A shorter corpus, complete to its last append |
 | 7 | `internal_error` | An unhandled fault — **not** a signal | Whatever had been appended, plus the result if the fault left the tool able to write it |
 | — | *no result at all* | The tool was stopped before it could write one | Whatever had been appended. **Absence is absence**, and says nothing about the data |
@@ -752,9 +751,8 @@ Three things about that table are deliberate.
   its `Validation` or `Launch` stage, before it takes the lease (§6.3). `refused_preroll` covers the
   session's `PreRoll` stage, whether its start or a prewarm tick raised it, and, from `run_capture`
   itself, a camera that could not be placed, the prewarm's pace (check 44), a stare aimed at the
-  rendered traffic with no vehicle to aim at (§5.2), check 33 refused by its adjudication, and a
-  channel's view not ready as the window opens, or a witness past its ceiling before then
-  (check 50).
+  rendered traffic with no vehicle to aim at (§5.2), and a channel's view not ready as the window
+  opens, or a witness past its ceiling before then (check 50).
 - A run that stops for any reason carries `closed_by`, one of: `window_end` and `scenario_end`
   (with `run_finished`); `signal:SIGINT`, `signal:SIGTERM`, `signal:SIGBREAK`, `operator_stop`,
   `loud:recorder_dropped`, `loud:pace_below_floor`, `write_headroom`, and `fault:<exception>` for a
@@ -774,13 +772,13 @@ stateDiagram-v2
     Invoked --> Resolve : argv + layers 1..6
     Resolve --> usage_error : malformed / override of a binding
     Resolve --> Phase0
-    Phase0 --> refused_offline : checks 1-21, 34-42, 46-48, 51
+    Phase0 --> refused_offline : checks 1-19, 34-42, 46-48, 51
     Phase0 --> Phase1
     Phase1 --> refused_server : checks 22-27, 43
     Phase1 --> Phase2
     Phase2 --> refused_authority : world is busy, holder named
     Phase2 --> Phase3 : lease held - first irreversible step
-    Phase3 --> refused_preroll : checks 30-33, 44, 45, 50
+    Phase3 --> refused_preroll : checks 30-32, 44, 45, 50
     Phase3 --> Window
     Window --> run_stopped : signal, operator stop,<br/>loud condition, headroom gone
     Window --> internal_error : unhandled fault
@@ -838,7 +836,7 @@ around it**, which is four rules:
   "lock": "out/bahonar_night.lock.json",
   "launch_echo": { … },                  // §6.4 — the same block a human would have read
   "refusals":  [ { "check": 14, "field": "solar.vehicle_lights", "message": "…" } ],
-  "warnings":  [ { "code": "render_cap_binds", "message": "…",
+  "warnings":  [ { "code": "lighting_honours_no_epoch", "message": "…",
                    "adjudication": "proceed", "adjudicated_by": "configs/bahonar_night.run.json" } ],
   "produced": {
     "manifest": "/data/truth/cap-20260308-2300/manifest.json",   // null on a refusal
@@ -848,8 +846,8 @@ around it**, which is four rules:
                 "civil": ["2026-03-08T23:00:00+03:30", "2026-03-08T23:08:00+03:30"] },
     "channels": [ { "sensor_id": "OVERWATCH-1",
                     "captured": 1762, "written": 1749, "recorder_dropped": 0 } ],
-    "gates": [ { "id": "render_accounting.rendered_fraction",
-                 "observed": 0.91, "threshold": 0.95, "comparison": "at_least", "met": false },
+    "gates": [ { "id": "capture.render_set_unpaired",
+                 "observed": 3, "threshold": 0, "comparison": "equals", "met": false },
                { "id": "capture.recorder_dropped",
                  "observed": 0, "threshold": 0, "comparison": "equals", "met": true } ]
   }
@@ -872,8 +870,7 @@ frame, ticks and wall clock at which its tiles were in, the frame, ticks and fra
 picture settled and the residual, the blocks rendered vehicles took out of that comparison and the
 share of the view judged, how many comparisons were judged and how many could not be and why, where a
 witness stood if it did not finish, and any return of the tiles to streaming; §6.3), the gate
-records, the admission pass for the window's begin and a count
-of the window's passes and of those that shed (`admissions`), the session's clock, SUMO release, pace,
+records, the session's clock, SUMO release, pace,
 sun and layers, its compile lock — whether the scenario was compiled, the SUMO release that routed it
 and the world it was compiled for — and whether SUMO could teleport a blocked vehicle, the prewarm's
 achieved factor, the run id every recorder was given, and each termination step as it ran. Three differences from the sketch above, each a fact about the tree:
@@ -1102,7 +1099,7 @@ Named descriptively, because "static" and "dynamic" do not say what is at stake.
 |---|---|---|
 | **Bound** | Fixed by an artifact, **or by a ruling in a sibling section that this surface expresses rather than re-offers.** Not the caller's to set; an attempt is a refusal naming both values | A binding in the effective configuration and the lock file |
 | **Session-fixed** | The operator sets it; it is then fixed for the session's life. Changing it mid-run would make the corpus's own description of itself false | A field in the effective configuration, written once |
-| **Degradation-only** | Never set by the operator. Changed only by [`10`](10_Scale_And_Performance.md) §7's shedding ladder, and always recorded at the instant it changes | A timestamped entry in the manifest, per window |
+| **Degradation-only** | Never set by the operator. Changed only by [`10`](10_Scale_And_Performance.md) §7's degradation ladder, and always recorded at the instant it changes | A timestamped entry in the manifest, per window |
 | **Run-mutable** | May change mid-run because it does not change what the corpus *is* | A `control_events[]` entry in the manifest: tick, field, old value, new value |
 
 The dividing line between Session-fixed and Run-mutable is one question: **would a consumer reading
@@ -1184,26 +1181,24 @@ that has since changed is refused naming both values.
 | Toggle | Default | Class | Source |
 |---|---|---|---|
 | `capture.world_delta_s` | `0.05` | Session-fixed | today's `--fixed-delta` (`:68-74`) |
-| `capture.capture_hz` | `2.0` | Session-fixed; **Degradation-only** downward when the shedding ladder exists | today's `--record-hz` (`:512-518`); [`10`](10_Scale_And_Performance.md) §7 row 4 |
+| `capture.capture_hz` | `2.0` | Session-fixed; **Degradation-only** downward when the degradation ladder exists | today's `--record-hz` (`:512-518`); [`10`](10_Scale_And_Performance.md) §7 row 6 |
 | `synchronous` | *not a field in a capture run*: the session takes the world's clock | **Bound** | [`10`](10_Scale_And_Performance.md) D10.10 |
 | `capture.window` | **—** (a scenario-declared name, an explicit `begin_s:end_s` pair, or `begin_s:` with no end) | Session-fixed | [`01`](01_Architecture.md) OQ3 / [`02`](02_Use_Cases.md) OQ2, resolved as D12.4. A window with no end resolves to the scenario's `end_s`, and the echo says so |
 | `capture.prewarm_s` | `300` | Session-fixed | [`10`](10_Scale_And_Performance.md) §8. The session fast-forwards SUMO to `begin_s − prewarm_s`, renders from there, and the recorders start at `begin_s`; every channel's view is waited on inside it, and one not ready by `begin_s` refuses the run (checks 50 and 51, D12.38) |
 
 #### Render set
 
+Every vehicle SUMO has in a capture window, or in its prewarm, is drawn, from the frame after SUMO
+first reports it until SUMO removes it or the window closes; nothing here selects which. The one
+exception is a vehicle of a type with no measured body, which is simulated and never drawn; the
+compiler refuses a scenario whose vehicle class names a blueprint the catalogue did not measure
+([`07`](07_Scenario_Authoring.md) check 14), and check 25 re-runs that against the server.
+
 | Toggle | Default | Class | Source |
 |---|---|---|---|
-| `capture.render_set` | `cameras` | Session-fixed | [`03`](03_CoSimulation_Runtime.md) §8.3.1, D3.38; the session's `render_set`. `cameras`: a vehicle is rendered while it is inside, or about to enter, the ground footprint of any channel's camera -- each RGB camera, orbits included, is registered with the session as it is placed -- and `render_region` decides only until the cameras are placed. `circle`: `render_region`, for the whole run |
-| `capture.render_region` | **—** (never defaulted): `x_m`, `y_m` in CARLA's frame, `radius_m` | Session-fixed | [`10`](10_Scale_And_Performance.md) D10.5; the session's region, whose y is negated once at the call. Under `cameras`, the circle the session falls back to while no camera is registered |
-| `capture.render_hysteresis_m` | `60.0` | Session-fixed | the session's `hysteresis_m`: how much further out a rendered vehicle is released; under `cameras`, the band above a footprint's widest admission threshold a rendered vehicle is kept inside |
-| `capture.render_min_pixels` | `2.0` | Session-fixed | [`03`](03_CoSimulation_Runtime.md) §8.3.1: each camera's footprint is capped at the slant range past which the catalogue's longest body covers fewer than this many pixels along its length, at the picture's corners. Two, because a body under two pixels along its longest dimension is below anything a detector samples; the run report states each camera's cap |
-| `capture.render_admit_lead_s`, `capture.render_release_lag_s` | `3.0`, `5.0` | Session-fixed | [`10`](10_Scale_And_Performance.md) §8's `frustum_lead_s` and `exit_lag_s`, under `cameras`: simulated seconds of its own travel ahead of a footprint a vehicle is admitted, beyond a margin of the bodies' reach and one SUMO step at 40 m/s, and seconds a vehicle is held after it last was within reach |
-| `capture.render_cap` | `128` | Session-fixed | D10.4; the session's `capacity`. Past it, under `cameras`, a vehicle in view ranks ahead of one approaching, one rendered ahead of a newcomer, and then the scenario's SUMO seed decides |
-| `capture.render_cap_hard` | `192` | Session-fixed | D10.4; the session's `maximum_bodies` |
+| which vehicles are drawn | not a field: every vehicle SUMO has in a window is drawn | Bound | [`01`](01_Architecture.md) D1.14 |
 | `capture.road_layer_visible`, `capture.signal_layer_visible` | `false`, `false` | Session-fixed; written once by the session before the first tick and given back on every exit path | [`13`](13_Work_Breakdown.md) §10, `LayerVisibilityLease` |
-| `entry_lead_m`, `exit_lag_m`, `aoi_halo_m`, `aoi_max_relations_per_vehicle` | *not offered*: `frustum_lead_s` and `exit_lag_s` are offered as `capture.render_admit_lead_s` and `capture.render_release_lag_s`; the distances are derived under `cameras` -- the bodies' reach and one SUMO step at the fastest plausible speed, and `capture.render_hysteresis_m` -- and the circle has none; areas of interest are not built | — | [`10`](10_Scale_And_Performance.md) §8, D10.8; [`03`](03_CoSimulation_Runtime.md) §8.3.1 |
-| `rendered_fraction_floor` | *not offered*: the session publishes no rendered fraction | — | [`10`](10_Scale_And_Performance.md) §7 |
-| admission priority order | not a field — the selector's rule | Bound | [`01`](01_Architecture.md) D1.14 |
+| `aoi_max_relations_per_vehicle` | *not offered*: areas of interest are not built | — | [`10`](10_Scale_And_Performance.md) §8, D10.8 |
 
 #### Camera rig — per channel
 
@@ -1211,7 +1206,7 @@ that has since changed is refused naming both values.
 |---|---|---|---|
 | `capture.channels` | **—**: one object per channel, at least one | Session-fixed; every channel is recorded | the rows below are each object's fields |
 | `sensor_id` | **—** when more than one channel | Session-fixed | [`08`](08_Collection_And_EPoL.md) D8.4 |
-| `pattern` | `stare` | Session-fixed; a camera is not re-aimed during an interval it covers | [`08`](08_Collection_And_EPoL.md) §3.3, D8.16a |
+| `pattern` | `stare` | Session-fixed | [`08`](08_Collection_And_EPoL.md) §3.3 |
 | `fov` / `width` / `height` | `90.0` / `1280` / `720` | Session-fixed | today's `:236, :272-273` |
 | `capture_rgb` | `true` | Bound — a channel without it is not a channel | [`08`](08_Collection_And_EPoL.md) D8.2 |
 | `capture_depth` | *not offered*: the recorder writes no depth imagery; a depth camera is spawned at a stare channel's pose only to measure occlusion (`occlusion.enabled`) | — | D8.2 |
@@ -1250,8 +1245,8 @@ it is a field of a run configuration's channel object, defined once in `RunConfi
 the same way from a point that is measured rather than given: the mean position, height included, of
 the vehicles the session rendered on the last frame before its camera holds for the window, taken from
 the poses the session wrote to bodies (`RenderedTrafficCentre`, fed by `on_pose`, which `run_capture`
-binds only when a channel needs it). Its camera is spawned over the render region's centre at CARLA's
-origin height and follows the traffic through the prewarm: after each step it is moved, with its depth
+binds only when a channel needs it). Its camera is spawned over the centre of the world's staging
+bounds (`get_staging_bounds`) at CARLA's origin height and follows the traffic through the prewarm: after each step it is moved, with its depth
 camera, to the pose around the centre of that step's last frame. It stops one SUMO step and the
 picture's 120-tick ceiling before the window opens — seven one-second steps at the defaults
 (`ViewReadiness.hold_lead_s`), and never before the prewarm's first step — and that step's centre is
@@ -1331,7 +1326,7 @@ The `solar` block is the scenario's `illumination` object, field for field (§4.
 | `sumo.home` | `null` | Session-fixed; the site profile names it, or the session searches `SUMO_HOME` and then `PATH` (check 36 refuses that under `caller: unattended`) | [`09`](09_Toolchain_And_Packaging.md) D9.6 |
 | `sumo.allow_version_mismatch` | `false` | Session-fixed; the session records an accepted mismatch | check 26 |
 | `seeds.sumo` | *not a run field*: `scenario.sumo_seed`, bound by the scenario package, whose SUMO configuration carries it | **Bound** | [`07`](07_Scenario_Authoring.md) D7.11 |
-| `seeds.appearance`, `seeds.admission` | *not offered*: nothing consumes them — appearance is drawn by SUMO's own seed and admission is the region's deterministic rule | — | [`07`](07_Scenario_Authoring.md) D7.11 |
+| `seeds.appearance`, `seeds.admission` | *not offered*: nothing consumes them — appearance is drawn by SUMO's own seed, and admission chooses nothing: every vehicle SUMO has is drawn | — | [`07`](07_Scenario_Authoring.md) D7.11 |
 | `log_path` | *not offered*: `run_capture` logs to standard output | — | today's `--log` (`:493-499`) |
 | `result_path` | `null` | Session-fixed; `null` is `<paths.runs_root>/<session id>/run.result.json`; **—** under `caller: unattended`, and refused inside the capture root (check 40) | §3.10.3 |
 | `on_warning` | `{}` | Session-fixed — which warnings a corpus proceeded past is a fact a consumer needs (§5.1); **—** under `caller: unattended` for every code actually raised | §6.4 |
@@ -1402,11 +1397,12 @@ laptop.
 
 #### Phase 0 — offline
 
-Checks 1–21 below, plus 34–42, 46–49 and 51 in the table that follows the later phases.
+Checks 1–19 below (20 and 21 are withdrawn), plus 34–42, 46–49 and 51 in the table that follows the
+later phases.
 
 | # | Check | Outcome | Message shape |
 |---:|---|---|---|
-| 1 | Document parses against the schema at its declared `spec_version` | refuse | `run configuration: unknown key 'capture.render_capp' at line 14; did you mean 'capture.render_cap'?` |
+| 1 | Document parses against the schema at its declared `spec_version` | refuse | `run configuration: unknown key 'capture.prewarm_sec' at line 14; did you mean 'capture.prewarm_s'?` |
 | 2 | Every required field is supplied by some layer | refuse | `'capture.window' has no value and no default. Supply it, or name one of the scenario's declared windows: morning_shift, night_shift.` |
 | 3 | No operator override targets a layer-3 binding | refuse | `'world.origin_lat' is bound by world package Bahonar@3f91ac (56.3421); it cannot be overridden. Rebuild the world to change it.` |
 | 4 | `mode` is one value, and no block of a non-selected mode is present | refuse | `mode is 'sumo_driven_playback'; block 'traffic_manager' is not valid in this mode. Ambient traffic and SUMO drive are mutually exclusive (01 D1.7).` |
@@ -1425,15 +1421,8 @@ Checks 1–21 below, plus 34–42, 46–49 and 51 in the table that follows the 
 | 17 | The two export roots are distinct and neither contains the other | refuse | `roots.truth '/data/run7' contains roots.observation '/data/run7/obs'. The anti-leak split requires two disjoint roots (08 D8.17, 04 D4.26).` — there is no third root: model output is neither produced nor consumed here, and a named shelf for it would only invite it into the tree |
 | 18 | Every seed has an explicit value or `random` | refuse | `seeds.sumo is unset. Give a value, or 'random' to draw and record one.` |
 | 19 | Free space under `roots.observation`, expressed in **captured seconds** at the configured rate and channel count | refuse when the window declares an end that does not fit; **warn with the figure** when it declares none | `window needs ~52 GB at 2 Hz × 2 channels × 6.2 Mpx; 31 GB free at /data.` and, with no declared end, `at 24 GB/h, 31 GB free at /data is 1 h 17 m of capture. This window declares no end.` — derived from [`10`](10_Scale_And_Performance.md) §4.2.3's measured per-frame sizes. Check 46 is the same quantity re-evaluated while the run proceeds |
-| 20 | `render_region` is present and sized | refuse | `capture.render_region has no value; it is never defaulted (10 D10.5). The scenario's radial population profile suggests 300 m.` |
-| 21 | Predicted in-region population stays under `render_cap` for at least `rendered_fraction_floor` of the window — or, where the window declares no end, of the scenario's remaining span | warn, with the numbers | `at render_region 600 m the median in-region population is 276 against render_cap 128; the cap will bind for 94% of the window and the label-dependent shedding path becomes active (00 §6).` |
-
-Check 21 is the one that earns the phase. [`00_Overview.md`](00_Overview.md) §6 records that the cap
-binding makes scene density a function of the label, which would exclude an Arapahoe-class corpus from
-training; the resolution is to size the region so the cap does not bind. **That is a configuration
-property, checkable before a run rather than discovered in the manifest afterwards** — the scenario
-has already been run headless ([`10`](10_Scale_And_Performance.md) D10.13: a scenario that will be
-captured is run), so the population inside a candidate region at every step is a lookup.
+| 20 | **Withdrawn 2026-09-30** with the render region: there is no region to size. | — | — |
+| 21 | **Withdrawn 2026-09-30** with the render cap: there is no cap for a population to stay under. | — | — |
 
 #### Phase 1 — server-bound
 
@@ -1460,7 +1449,7 @@ captured is run), so the population inside a candidate region at every step is a
 | 30 | SUMO reaches `window.begin_s − prewarm_s` | refuse on a SUMO error, naming its own message | [`10`](10_Scale_And_Performance.md) D10.2 |
 | 31 | Applied solar state matches the requested one, read back from `get_solar_state()` | refuse | `requested solar_time 23.00, world reports 12.00.` — §4.5's `confirmed` |
 | 32 | The first cued tick delivers a frame on every channel | refuse | `channel OVERWATCH-2 delivered no frame within 5 cues.` — [`02`](02_Use_Cases.md) UC-7's session fault, applied before the window rather than during it |
-| 33 | Actual population eligible for the render set at `window.begin_s` -- inside the render region, or under `render_set` `cameras` within reach of a channel camera's view -- against `render_cap` | warn, with the number; refuse where `on_warning.render_cap_bound_at_window_open` refuses it, or the caller is unattended and has not adjudicated it (§6.4.2) | `at the window's begin, t=25200, 140 vehicles were inside the render region against render_cap 128, so 12 were not rendered: the cap binds, and a binding cap makes scene density a function of the label (00 §6).` — closes the loop on check 21 with the real figure |
+| 33 | **Withdrawn 2026-09-30** with the render cap: every vehicle SUMO has at the window's begin is drawn, so there is no eligible population to compare. | — | — |
 
 #### Further checks, each naming its own phase
 
@@ -1470,7 +1459,7 @@ the sequence rather than sitting inside a phase's table, and each states its own
 
 | # | Phase | Check | Outcome | Message shape |
 |---:|---|---|---|---|
-| 34 | 0 | Under `caller: unattended`, every warning code actually raised has an `on_warning` adjudication | refuse | `warning 'render_cap_binds' was raised and the caller is unattended. Set capture.on_warning.render_cap_binds to 'proceed' — which is recorded against this configuration — or change render_region. An unattended run does not proceed past an unadjudicated warning (§6.4).` |
+| 34 | 0 | Under `caller: unattended`, every warning code actually raised has an `on_warning` adjudication | refuse | `warning 'lighting_honours_no_epoch' was raised and the caller is unattended. Set on_warning.lighting_honours_no_epoch to 'proceed' — which is recorded against this configuration — or choose a solar.policy that honours the scenario's epoch. An unattended run does not proceed past an unadjudicated warning (§6.4).` |
 | 35 | 0 | Every declared `expect.<path>` holds against the resolved value | refuse, naming both | `expect.solar.window_civil_begin was '23:00:00+03:30'; the configuration resolved '12:00:00+03:30'. The scenario's epoch is bahonar…@a91c3f and the window is night_shift.` — §6.4's substitute for a human reading the echo |
 | 36 | 0 | Under `caller: unattended`, no field resolved from an environment variable the site profile does not name | refuse | `'sumo.install' resolved from SUMO_HOME='G:\Sumo', which this site profile does not declare. An unattended run does not inherit host state it was not given (§3.10 M2; 09 D9.6).` |
 | 37 | 0 | No site-profile secret or path resolves to the empty string | refuse | `'cesium.ion_token' is empty: CESIUM_ION_TOKEN is unset and the parser's default is the empty string (CarlaControlArgumentParser.py:105). An absent token is a refusal, not a blank.` |
@@ -1480,7 +1469,7 @@ the sequence rather than sitting inside a phase's table, and each states its own
 | 41 | 0 | Pacing fields are consistent with `pacing.mode` | refuse | `pacing.mode is 'as_available'; 'pacing.real_time_factor' is not valid in that mode.` and `pacing.min_achieved_factor 1.2 exceeds pacing.real_time_factor 1.0.` |
 | 42 | 0 | `handover.channels[]` names only declared channels, and `transcript.root` lies outside both corpus roots | refuse | `transcript.root '/data/obs/cap-…/transcript' is inside roots.observation. Received data is not a corpus artifact (08 D8.38's precedent, team brief §3c).` |
 | 43 | 1 | Each channel's `post_process_profile` loaded on the server, confirmed by digest | refuse | `channel OVERWATCH-1 asked for profile 'default'; the server loaded nothing and kept the component's construction-time settings. The load's return value is discarded (ActorBlueprintFunctionLibrary.cpp:1377-1380), so a name that does not resolve is silent. Profiles present: Default, GoPro, Town10HD_Opt, Town_C.` — §5.2's correction, and the platform case mismatch it measured |
-| 44 | 3 | Under `pacing.mode: wall_clock`, the pre-roll's achieved real-time factor is measured and compared against `min_achieved_factor` | refuse | `pre-roll held 0.31 of real time against a requested 1.0 and a floor of 0.8. A live exercise that cannot hold its rate should not open its window.` — the live analogue of check 21: predict before spending, not after |
+| 44 | 3 | Under `pacing.mode: wall_clock`, the pre-roll's achieved real-time factor is measured and compared against `min_achieved_factor` | refuse | `pre-roll held 0.31 of real time against a requested 1.0 and a floor of 0.8. A live exercise that cannot hold its rate should not open its window.` — the rate is measured before the window is spent, not after |
 | 45 | 3 | Under `handover.enabled`, the handover transport opens, and every `transcript.sources[]` listener binds | refuse | `handover transport could not open tcp://…: connection refused. Nothing has been captured.` |
 | 46 | 0, then continuous | Write headroom under `roots.observation`, in **captured seconds** at the configured rate and channel count, stays above `write_headroom_floor` | refuse at launch when a declared window does not fit (check 19); **stop the run cleanly** when it falls below the floor while running | at launch `at 24 GB/h, 31 GB free at /data is 1 h 17 m of capture against a declared window of 8 h.`; while running `write headroom is 9 min of capture and the floor is 10 min; stopping cleanly at t=372 480 (closed_by: write_headroom).` |
 | 47 | 0 | Every channel is a valid `ChannelDescription`, occlusion is measured only on a stare, and a stare aimed at the rendered traffic has a prewarm of at least one SUMO step to measure it over | refuse | `capture.channels[0]: channel description refused: a stare needs somewhere to look: give stare_look_at_x_m and stare_look_at_y_m, or stare_look_at_target 'rendered_traffic', or all of stare_x_m, …`, `occlusion is measured against a depth camera held at the channel's pose, and an orbit moves its camera with one call at a time … Set occlusion.enabled false for a run with an orbit, or make this channel a stare` and `this stare aims at the rendered traffic, which is measured on the last frame the prewarm renders before the window opens; the prewarm is 0 s … and one SUMO step is 1 s, so no frame would be rendered to measure it on` |
@@ -1504,7 +1493,7 @@ an operator can set (§5.2).
 #### 6.2.1 Where each check is carried out
 
 `RunConfigurationCheckCatalogue` holds every check above by its number, and a test holds this table equal to it. **resolution** is the first of the offline checks: a check there ends the launch before anything is
-resolved, with outcome `usage_error` (§3.10.2). A check the co-simulation session runs as part of starting — `SumoDriveSession.Start` — is run there and nowhere else, because the session is its one validator; `run_capture` maps the session's refusal onto the run's outcome. A check marked *by construction* guards something the configuration cannot express; one marked **not built** compares a thing nothing in the tree publishes, and the last column says what.
+resolved, with outcome `usage_error` (§3.10.2). A check the co-simulation session runs as part of starting — `SumoDriveSession.Start` — is run there and nowhere else, because the session is its one validator; `run_capture` maps the session's refusal onto the run's outcome. A check marked *by construction* guards something the configuration cannot express; one marked **not built** compares a thing nothing in the tree publishes, and the last column says what; one marked **withdrawn** is retired with its number, which is never reused.
 
 | # | Phase | Carried out by | Where, or what is missing |
 |---:|---|---|---|
@@ -1527,8 +1516,8 @@ resolved, with outcome `usage_error` (§3.10.2). A check the co-simulation sessi
 | 17 | offline | **not built** | the recorder writes each capture's image and sidecar into one directory; the two-root split is stage K's and no writer makes it |
 | 18 | offline | by construction | the only seed the run consumes is SUMO's, bound by the scenario package |
 | 19 | offline | `run_capture` | RunConfigurationValidator, from doc 10's measured capture sizes |
-| 20 | offline | `run_capture` | RunConfigurationValidator |
-| 21 | offline | **not built** | no headless population profile of a scenario is published |
+| 20 | — | **withdrawn 2026-09-30** | with the render region: there is no region to size |
+| 21 | — | **withdrawn 2026-09-30** | with the render cap: there is no cap for a population to stay under |
 | 22 | server | the session | SumoDriveSession.Start, LoadedWorldCheck, before SUMO is started |
 | 23 | server | `run_capture` | RunConfigurationValidator.validate_against_server |
 | 24 | server | `run_capture` | RunConfigurationValidator.validate_against_server |
@@ -1540,7 +1529,7 @@ resolved, with outcome `usage_error` (§3.10.2). A check the co-simulation sessi
 | 30 | pre-roll | the session | SumoDriveSession.Start, its fast-forward |
 | 31 | pre-roll | the session | SumoDriveSession.Start, SolarLease and the window-open audit; SolarAuditFailedException |
 | 32 | pre-roll | **not built** | the recorder publishes no count of frames received |
-| 33 | pre-roll | `run_capture` | CaptureSession, from the session's admission pass for the window's begin (on_admission_pass, WindowAdmissions) |
+| 33 | — | **withdrawn 2026-09-30** | with the render cap: every vehicle SUMO has at the window's begin is drawn |
 | 34 | offline | `run_capture` | RunConfigurationValidator |
 | 35 | offline | `run_capture` | RunConfigurationValidator, against the configuration and the launch echo |
 | 36 | offline | `run_capture` | RunConfigurationValidator |
@@ -1585,7 +1574,7 @@ sequenceDiagram
     rect rgb(30,45,70)
     note over CLI,VAL: PHASE 0 - offline. No server, no GPU, no SUMO.
     CLI->>VAL: validate(effective)
-    VAL-->>CLI: checks 1-21
+    VAL-->>CLI: checks 1-19
     alt any refusal
         VAL-->>OP: REFUSE, field named, both values named,<br/>candidates listed. Nothing started.
     end
@@ -1624,7 +1613,7 @@ sequenceDiagram
     CLI->>SUMO: launch, step from t=0 to begin_s - prewarm_s
     SUMO-->>CLI: warm state
     CLI->>VAL: validate_preroll(...)
-    VAL-->>CLI: checks 30-33
+    VAL-->>CLI: checks 30-32
     alt refusal
         CLI->>AUT: release
         VAL-->>OP: REFUSE. Manifest closed as aborted_at_preroll.
@@ -1675,8 +1664,7 @@ nothing between steps, so the wait ticks
 only with the prewarm, and it begins once every camera holds the pose the window opens on. A
 witness past its ceiling, or a view not ready when the prewarm's last step ends, refuses the run at
 pre-roll, naming the channel and the witness; the window's first frame is never moved (D12.38). It
-then checks the prewarm's pace under `wall_clock` (check 44), the vehicles inside the render region at
-the window's begin against the render cap (check 33) and every view as the window opens, stops
+then checks the prewarm's pace under `wall_clock` (check 44) and every view as the window opens, stops
 listening, starts the recorders at the window's begin and sets any orbit sweeping. The CLI never sets
 the sun or the world's settings itself: the session is their one owner.
 
@@ -1703,23 +1691,21 @@ bahonar_pattern_of_life @ a91c3f  ::  window night_shift        caller: attended
   sun         elevation -37.2 deg -> -41.8 deg   azimuth 12.4 -> 31.0    policy: advance, rate 1.0
               DARK for 1 800 s of 1 800.  solar.vehicle_lights = from_sumo  (stated, check 14)
   world       Bahonar@3f91ac   net@88b1de   origin 30.2891, 56.3421
-  render      region 300 m   cap 128   predicted median in-region population 96
   cost        ~52 GB under /data/obs      predicted 2 h 10 m wall at the measured tick rate
   roots       observation /data/obs/cap-20260308-2300     truth /data/truth/cap-20260308-2300
-  warnings    1   (render_cap_binds: cap binds for 6% of the window)
+  warnings    0
 ```
 
 Every figure in it already exists: the civil span and sun angles come from
 [`11`](11_Time_And_Illumination.md)'s N2 and N4 functions that check 12 and check 14 already evaluate;
-the population from check 21's lookup; the size from check 19; the roots from the resolved layer 2. **The
+the size from check 19; the roots from the resolved layer 2. **The
 echo is a rendering of a block, not a computation** — the same rule D12.14 applies to the monitor, one
 layer earlier, and the block is serialised as `launch_echo` in `<run>.resolution.json` and in
 `RunResult` (§3.10.3) whether anybody reads it or not.
 
 **As built** (`LaunchEcho`), the block carries the simulated span and where its end came from, the
 captures per channel and per hour, the civil span, the sun at the window's first and last captured
-instants with their illumination bands (`IlluminationBand`), the world, the render region and caps,
-the estimated disk cost and headroom (check 19's figures), where the run writes, the pacing, the
+instants with their illumination bands (`IlluminationBand`), the world, the estimated disk cost and headroom (check 19's figures), where the run writes, the pacing, the
 wait for every channel's view (`readiness`: the two witnesses, their ceilings, the blocks rendered
 vehicles take out of a comparison, the instant the wait begins and the window's opening it must be met
 by, where a stare aimed at the traffic stops to hold, and that a view not ready refuses at pre-roll
@@ -1727,20 +1713,20 @@ with the window unmoved), and the warning codes raised.
 The sun is evaluated with the window opening at **its own begin**, because that
 is the instant `run_capture` gives the session as `window_opens_at` and where the session pins a frozen
 sun and anchors an advancing one; `held_at` states it, and says the prewarm before it is lit by the
-same sun. Three figures are stated as not predicted: the wall-clock duration (no measured tick rate
-exists for a configuration before it runs), the in-region population (check 21 is not built; check 33
-measures it at pre-roll), and, where a stare is aimed at the rendered traffic, where it will look.
+same sun. Two figures are stated as not predicted: the wall-clock duration (no measured tick rate
+exists for a configuration before it runs) and, where a stare is aimed at the rendered traffic, where
+it will look.
 
 #### 6.4.2 When it blocks, for a human
 
 **It prints on every attended launch, and it blocks on exactly one condition: a phase-0 warning was
 raised.** With no warnings it prints and the run proceeds.
 
-**A warning raised at pre-roll is adjudicated by the same codes, and nobody is asked.** Check 33 is
-evaluated after the prewarm, with the lease held and the world's clock the session's, so a prompt then
-would hold both, and an operator who has stepped away would hold them indefinitely.
-`on_warning.<code>` `refuse` refuses and `proceed` proceeds, as in phase 0; with no adjudication an
-unattended caller is refused at pre-roll, and an attended run proceeds with the warning said at once as
+**A warning raised at pre-roll is adjudicated by the same codes, and nobody is asked.** No pre-roll
+check warns today, but one would be evaluated after the prewarm, with the lease held and the world's
+clock the session's, so a prompt then would hold both, and an operator who has stepped away would hold
+them indefinitely. `on_warning.<code>` `refuse` refuses and `proceed` proceeds, as in phase 0; with no
+adjudication an unattended caller is refused at pre-roll, and an attended run proceeds with the warning said at once as
 a loud condition and carried unadjudicated into the result, where the `launch.warnings_adjudicated`
 gate records it.
 
@@ -1834,8 +1820,7 @@ outcome available — the operator believes the screen.
 bahonar_pattern_of_life :: night_shift          cap-20260308-2300     [ADVANCING]
 sim   t=371 240 / 371 700   window  61.7%   |  civil 23:12:20 +03:30  sun -39.1 deg
 clock 0.41 ticks/wall-s  (ratio 0.29)       |  ETA 00:52 wall
-sumo  population 139   eligible 96   admitted 96   shed 0        cap 128
-render                                       rendered fraction 1.00  floor 0.95  OK
+sumo  population 139   rendered 139
 chan  OVERWATCH-1   frames 1 482   dropped 0   occl paired 1 482/1 482
 chan  OVERWATCH-2   frames 1 482   dropped 0   occl paired 1 481/1 482    1 unpaired
 truth manifest flushed t=371 238 (2 s ago)   instances 7   intervals open 2
@@ -1846,41 +1831,33 @@ truth manifest flushed t=371 238 (2 s ago)   instances 7   intervals open 2
 | Window progress and civil time | The operator must be able to see that the sun matches the scenario, which is §1.6's defect made visible | `solar.window_civil`, `<_solar>` per capture |
 | Sun elevation and the advancing flag | The one number that says the time-of-day coupling is working | `solar.applied`, `solar.confirmed` |
 | **Achieved ticks per wall-second and the clock ratio** | Recorded nowhere today; recoverable only by differencing PNG metadata against file timestamps | [`10`](10_Scale_And_Performance.md) D10.12 |
-| `population / eligible / admitted / shed` | The shedding ledger, live | `shedding[]` ([`10`](10_Scale_And_Performance.md) §7) |
-| Rendered fraction against the floor | The gate record as it stands, rather than only at the close | `render_accounting` |
+| `population / rendered` | How many vehicles SUMO has and how many bodies the frame drew. Every vehicle SUMO has is drawn, so they differ only by a vehicle SUMO has just reported, drawn from the next frame, and by a vehicle of a type with no measured body | `render_states[]` ([`04`](04_Contracts.md) §4.5) |
 | **Frames written and `Dropped`, per channel** | `FrameRecorder.Dropped` is incremented at `FrameRecorder.cs:184` and has **no reader anywhere in the tree** | [`10`](10_Scale_And_Performance.md) D10.7 |
 | Occlusion pairing successes and failures | An unpaired capture is excluded from the unoccluded denominator entirely | [`08`](08_Collection_And_EPoL.md) D8.19 |
 | Manifest last-flush tick | The manifest is written incrementally; a stalled writer is a silent loss of supervision | [`06`](06_Truth_And_Annotation.md) §8.4 |
 
-**Three conditions are loud** — they interrupt rather than appearing in a column, because each means
-the corpus is no longer what was asked for:
-
-1. A participant in an open annotated interval could not be admitted →
-   [`04`](04_Contracts.md) D4.6 fails the run at that tick.
-2. The **recorder's** `Dropped` becomes non-zero on any channel →
-   [`10`](10_Scale_And_Performance.md) D10.7. §7.4 names the second, unrelated drop counter that a live
-   run introduces and explains why it is not loud.
-3. The rendered fraction falls below the declared floor → [`10`](10_Scale_And_Performance.md) §7.
+**One condition is loud** — it interrupts rather than appearing in a column, because it means the
+corpus is no longer what was asked for: the **recorder's** `Dropped` becomes non-zero on any channel →
+[`10`](10_Scale_And_Performance.md) D10.7. §7.4 names the second, unrelated drop counter that a live
+run introduces and explains why it is not loud, and adds a second loud condition for a live run only.
+A participant in an open annotated interval is not a loud condition: every vehicle SUMO has is drawn,
+so a participant always is ([`04`](04_Contracts.md) D4.6), and §7.2's
+`render_accounting.intervals_rendered` records it.
 
 **As built** (`SessionMonitor`, `RunCloseoutReport`), the panel shows the simulated time, the window's
 progress, the newest frame's declared civil instant, declared sun elevation and policy — read from the
 session's illumination source, the same declaration every capture's `<_illumination>` carries — the
-requested and achieved real-time factor and the last pacing window's, the session's latest admission
-pass — population, subscribed, eligible, admitted, shed and cap, read off `Report.LastAdmissionPass`
-between advances — the vehicles rendered now, the ticks, the SUMO steps and the batch failures, and
-per channel the captures written, the recorder's
+requested and achieved real-time factor and the last pacing window's, the vehicles SUMO has and the
+vehicles rendered now, read off the session's report between advances, the ticks, the SUMO steps and
+the batch failures, and per channel the captures written, the recorder's
 `Dropped`, the captures without their illumination declaration, and occlusion measured and unmatched;
 until the recorders start, each channel's view instead, where its tiles and its picture stand in their
 wait (`view  OVERWATCH-1   tiles in at frame 1100 after 100 ticks, 0.5 s; picture settling, last 1.30
 grey levels with 81% of its blocks judged`), read from the same `readiness` block the run result
 carries.
-Every figure is in the snapshot the run result's `produced` block is taken from. Two of the three
-loud conditions are observable — a recorder's `Dropped` becoming non-zero, and in a live run the
-achieved factor falling below its floor; the participant admission guarantee and the rendered
-fraction read quantities nothing in the tree publishes. The rendered fraction against its floor and
-the manifest's last flush have no source and are not shown; the shedding ledger is shown as its
-latest row, and the run result keeps the pass at the window's begin and a count of the window's
-passes rather than every row.
+Every figure is in the snapshot the run result's `produced` block is taken from. Both loud
+conditions are observable — a recorder's `Dropped` becoming non-zero, and in a live run the achieved
+factor falling below its floor. The manifest's last flush has no source and is not shown.
 
 Nothing else interrupts. Diagnostics verbosity stays Run-mutable (§5.2) precisely so that the loud
 conditions are not buried, which is the reason `--traffic-diagnostics` is off by default today
@@ -1918,7 +1895,7 @@ rendering of the manifest, never a second computation, for the same reason the m
 | **What was asked for** | the effective configuration, with every field that came from an override or a non-default layer flagged | — |
 | **What ran** | window in simulated and civil time; the end declared, the end reached and `closed_by`; achieved ticks per wall-second per window; wall-clock elapsed | `clock.ratio_recorded` — observed: windows with a recorded ratio; threshold: all of them |
 | **Capture** | per channel: captured, written, `Dropped`, capture rate including any degradation step, occlusion pairing | `capture.recorder_dropped` — observed `Dropped`, threshold 0 (D10.7). `capture.captured_minus_written` — observed the difference, threshold 0, which is non-zero exactly when a kill left frames in the encode queue (§3.10.2). `capture.rate_changes_recorded` — observed rate changes carrying a record, threshold: all |
-| **Render accounting** | simulated / rendered / never rendered; admissions; refusals by reason; `cap_bound_ticks`; median rendered fraction | `render_accounting.rendered_fraction` — observed the median, threshold the declared floor. `render_accounting.intervals_rendered` — observed annotated intervals never rendered, threshold 0 |
+| **Render accounting** | simulated / rendered / never rendered; admissions and releases; vehicle types refused a body, by reason (`no_blueprint`, `unknown_extent`) | `render_accounting.intervals_rendered` — observed annotated intervals never rendered, threshold 0 |
 | **Solar** | requested policy, epoch, applied state, confirmed state, closing state | `solar.applied_equals_confirmed` — observed the difference, threshold 0 |
 | **Radiometry** | per channel: the profile asked for and the digest of the profile the server loaded | `radiometry.profile_digest_present` — observed channels carrying a digest, threshold: all ([`08`](08_Collection_And_EPoL.md) D8.28) |
 | **Pacing** | requested mode and real-time factor; achieved factor per window | `pacing.factor_recorded` — under `wall_clock`, observed: recorded or not. `pacing.achieved_factor` — observed the achieved factor, threshold `min_achieved_factor` |
@@ -1943,17 +1920,17 @@ whose image header placed the camera elsewhere than the snapshot of their own fr
 measured against, threshold 0; skipped for a channel with no depth camera), `clock.ratio_recorded`,
 `pacing.achieved_factor` under
 `wall_clock`, `solar.applied_equals_confirmed` (the solar audit's worst angle against its tolerance;
-skipped where the policy binds no sun) and `launch.warnings_adjudicated`. Four are recorded as
+skipped where the policy binds no sun) and `launch.warnings_adjudicated`. Three are recorded as
 `skipped`, each with its reason, so that *not measured* never reads as *met*:
-`capture.captured_minus_written`, `render_accounting.rendered_fraction`,
-`radiometry.profile_digest_present` and `supervision.manifest_closing_record`. A record carries `id`,
+`capture.captured_minus_written`, `radiometry.profile_digest_present` and
+`supervision.manifest_closing_record`. A record carries `id`,
 `name`, `owner`, `status` (`evaluated` or `skipped`), `observed`, `threshold`, `comparison` and `met`.
 **With no run manifest in the tree, the records are not appended as they change**: they are computed
 from the live session and recorders at any instant, rendered by the closeout, and written into the run
 result at the terminal outcome. Appending them as they change waits for `RunManifestWriter`. Beside
 them, recorded and not compared, the run result carries whether SUMO could teleport a blocked vehicle
-and whether that was accepted (`produced.session.teleporting`), the scenario's compile lock
-(`produced.session.compile_lock`), and the window's admission passes (`produced.admissions`).
+and whether that was accepted (`produced.session.teleporting`) and the scenario's compile lock
+(`produced.session.compile_lock`).
 
 ### 7.3 The two silent failures this closes
 
@@ -1992,7 +1969,7 @@ holds: every field shown is a field the manifest carries, read from the same sou
 bahonar_pattern_of_life :: night_shift          exr-20260308-2300     [ADVANCING]
 sim   t=371 240 / 371 700   window  61.7%   |  civil 23:12:20 +03:30  sun -39.1 deg
 pace  requested 1.00  achieved 0.97  floor 0.80   |  sim clock 4.1 s behind wall clock
-sumo  population 139   eligible 96   admitted 96   shed 0        cap 128
+sumo  population 139   rendered 139
 chan  OVERWATCH-1  captured 1 482  recorder-dropped 0  |  offered 1 482  handover-dropped 37
 chan  OVERWATCH-2  captured 1 482  recorder-dropped 0  |  offered 1 482  handover-dropped 41
 recv  DETECT-A  last 0.4 s ago  312 blobs  application/octet-stream   (not parsed)
@@ -2014,7 +1991,7 @@ specifically forbids `advancing` and `rate` from riding a feed an exercised oper
 reason truth does not: they describe the simulation's configuration, and an exercise is not supposed to
 show its own scaffolding. A single merged display would have to satisfy both rules and could not.
 
-**A fourth loud condition, in a live run only:** the achieved real-time factor falls below
+**A second loud condition, in a live run only:** the achieved real-time factor falls below
 `pacing.min_achieved_factor`. It is loud rather than a column because a live exercise that has stopped
 keeping time is no longer the thing anybody is watching, and check 44 has already proved at pre-roll
 that the machine *could* hold the rate — so a shortfall inside the window is a change, not a
@@ -2029,7 +2006,7 @@ They count different losses and they have different verdicts.
 | What was lost | a frame that never reached disk | a frame that reached disk but not the consumer |
 | Where | the encode queue's `DropWrite` channel, counter incremented at `FrameRecorder.cs:184-185` (declared at `:46`), which §7.3 measures as having **no reader anywhere in the tree** | the handover socket's drop-oldest queue, per sensor ([`08`](08_Collection_And_EPoL.md) §11.3) |
 | What it does to the corpus | **a hole.** The imagery is short and the coverage record says the camera saw something that no file holds | **nothing.** The corpus is complete; the coverage record marks that `(sensor, tick)` *covered but not delivered* |
-| Verdict | **loud** — §7.1 condition 2, and D10.7 makes a non-zero value a gate record that misses its threshold | **a counted column.** [`08`](08_Collection_And_EPoL.md) §11.3 rules it the correct behaviour, so interrupting on it would be interrupting on the design working |
+| Verdict | **loud** — §7.1's loud condition, and D10.7 makes a non-zero value a gate record that misses its threshold | **a counted column.** [`08`](08_Collection_And_EPoL.md) §11.3 rules it the correct behaviour, so interrupting on it would be interrupting on the design working |
 
 A single "dropped" figure would be a number that is neither: non-zero on a healthy live run, and unable
 to distinguish a corpus with holes from a consumer that reads slowly. They are separate fields in the
@@ -2172,10 +2149,10 @@ flowchart TB
     subgraph CS["Control surface"]
         direction TB
         C1["Resolve layers 1-6;<br/>record provenance per field"]
-        C2["PHASE 0 offline checks 1-21<br/>no server, no GPU"]
+        C2["PHASE 0 offline checks 1-19<br/>no server, no GPU"]
         C3["PHASE 1 server checks 22-27"]
         C4["PHASE 2 acquire population authority"]
-        C5["PHASE 3 pre-roll checks 30-33"]
+        C5["PHASE 3 pre-roll checks 30-32"]
         C6["Emit resolution report + lock"]
         C7["Render the live monitor<br/>from manifest fields only"]
         C8["Render the gate records<br/>as last appended"]
@@ -2346,10 +2323,7 @@ records nothing, and `run_capture` offers no flown camera: a capture run's camer
 | Option | Default | What it does |
 |---|---|---|
 | `--view` | `fixed` | `free` opens the flight window in place of the fixed camera |
-| `--render-set` | `cameras` | `cameras`: the camera the drive spawns or flies is registered with the session and the render set follows its view; the region circle decides only while no camera is registered. `circle`: the region circle for the whole drive |
-| `--render-min-pixels` | `2.0` | under `cameras`: the pixels along its length the catalogue's longest body covers at a view's range cap |
-| `--render-admit-lead`, `--render-release-lag` | `3.0`, `5.0` | under `cameras`: simulated seconds of travel ahead of the view a vehicle is placed, and seconds it is held after it last was within reach |
-| `--camera-z` | `300.0` | the free camera starts over the region centre at this height, looking straight down |
+| `--camera-z` | `300.0` | the free camera starts over the centre of the world's staging bounds at this height, looking straight down |
 | `--flight-speed` | `60.0` | the free camera's starting speed, m/s; the mouse wheel changes it |
 | `--width`, `--height`, `--fov` | fixed `1920`, `1080`, `60`; free `1280`, `720`, `90` | the camera's image, which is also the window's size; a value given applies to either view |
 | `--record-dir` | `Build/captures` | a free view writes each span to a folder of its own under it |
@@ -2504,38 +2478,21 @@ What the server pays is the rig's two 1280×720 cameras rendering every tick, th
 `run_free_move_camera.py` beside a drive; the drive's achieved pace with and without the window at
 `--real-time-factor 1.0` is not yet measured.
 
-**The render set follows the flown camera.** Under `--render-set cameras`, the default, the free
-view registers its RGB camera with the session as it opens (`session.AddCamera`) and lets it go
-before destroying it (`RemoveCamera`), so from the next step a vehicle is rendered while it is inside,
-or about to enter, the camera's ground footprint wherever the camera is flown: placed
-`--render-admit-lead` seconds of its own travel ahead of the view, the footprint swept along the
-camera's own motion, and taken away `--render-release-lag` seconds after it last was within reach
-([`03`](03_CoSimulation_Runtime.md) §8.3.1). The fixed camera is registered the same way once it is
-spawned. Measured before it, a free camera flown past the circle saw vehicles vanish at its release
-radius, and the workaround was a circle taking in the whole map, a body for every vehicle nothing
-looked at. The region circle decides only while no camera is registered, and the log says so. Under
-`--render-set circle` vehicles are rendered only inside the circle ([`10`](10_Scale_And_Performance.md)
-D10.5), as before: with `--view free` the log says, before the drive starts, when the circle does not
-take in the world package's sandbox, and gives the region that does -- the circle through the sandbox's
-corners, in SUMO's frame (`RenderRegionCoverage`); on Gardnerville,
-`--region-x 0 --region-y -1 --region-radius 956`. `--capacity` bounds how many vehicles are rendered at
-once under either; each admission line in the log says which rule decided it, and the first time a
-camera is followed its range cap and footprint are logged.
+**Every vehicle is drawn wherever the camera is flown.** The session draws every vehicle SUMO has, so
+a flown camera finds the traffic wherever it goes, and nothing the camera does changes which vehicles
+have bodies; the same holds for the fixed camera. The free camera starts over the centre of the
+world's staging bounds (`get_staging_bounds`).
 
 **Exercised by** `test_span_recorder.py` (the wait, the first answer not trusted, the ceiling, a
 failed tile, cancelling, the capture window, a server with no answer, the folders and their suffix,
 the flush before the report, the counts, the readiness asked per capture period, and the recorder's
 own thread doing the starting and stopping), `test_free_view.py` (one thread that is not the
 caller's makes, pumps and draws the window; no write to the world whatever is pressed; Esc; the
-note; a window that cannot open; the record field), `test_render_region_coverage.py` (the northing
-negated, the whole-map circle, and on every world package on disk the circle taking in the package's
-own SUMO network) and `test_run_sumo_drive_free_view.py` (the span recorded as the fixed camera
-records, the rig's start and depth range, no divergence callback in either view, the region warning
-under the circle and the camera-following note under the cameras, the render settings handed to the
-session, and the flown camera registered and let go of before it is destroyed). Each was seen failing against a wrong implementation: the first answer trusted, no
+note; a window that cannot open; the record field) and `test_run_sumo_drive_free_view.py` (the span
+recorded as the fixed camera records, the rig's start and depth range, and no divergence callback in
+either view). Each was seen failing against a wrong implementation: the first answer trusted, no
 ceiling, the capture window unchecked, a failed tile ignored, a stop left recording, the window not
-read-only, the divergence callback bound, no depth camera, the northing not negated, and the pairing
-not shown.
+read-only, the divergence callback bound, no depth camera, and the pairing not shown.
 
 ---
 
@@ -2615,11 +2572,11 @@ on Windows runs unedited on Linux.
 - **The epoch's and the policy's semantics.** [`11`](11_Time_And_Illumination.md) owns them; §4.6
   states the six properties this section needs.
 - **The scenario specification's schema.** [`07`](07_Scenario_Authoring.md) §3.5 owns it. This section
-  requires only that it can declare an epoch, named windows and a rendered-fraction floor.
+  requires only that it can declare an epoch and named windows.
 - **The manifest's supervision content.** [`06`](06_Truth_And_Annotation.md) §8.4 owns it; §4.5 adds
   one sibling block and §7.2 reads it.
-- **The values of the render parameters.** [`10`](10_Scale_And_Performance.md) §8 owns them; §5.2
-  records where each is set and which class it is in.
+- **The values of the capture parameters**, `prewarm_s` among them. [`10`](10_Scale_And_Performance.md)
+  §8 owns them; §5.2 records where each is set and which class it is in.
 - **The optics and coverage of the rig.** [`08`](08_Collection_And_EPoL.md) §3 owns them.
 - **A graphical interface.** Nothing above needs one. If one is built it is a producer of run
   configurations and a reader of manifests, and it changes nothing in §3 or §6.
@@ -2664,7 +2621,7 @@ them by number ([`08`](08_Collection_And_EPoL.md) §15 cites check 17).
 | **D12.2** | **The control surface is layered resolution, not an extended flat command line and not a bare configuration file.** Six layers in strict precedence: tool defaults, site profile, world-package bindings, scenario declarations, run configuration, operator overrides. Rejected: the flat command line, because a recorded argv is not a reproducible run description once a default changes — *measured:* `--fade` already flipped; and the bare file, because one scenario's 4–8 windows times a counterfactual sweep produces 8–16 near-identical documents (§3.2–3.4) |
 | **D12.3** | **The recorded artifact is the `EffectiveRunConfiguration`, and every field in it carries its value, its layer, the tool default it would have had, and what any override replaced.** The manifest's copy is itself a valid run configuration, so reproducing a run is reading it back rather than reconstructing it. This is what makes layering safe: "where did this come from" is answered by the artifact, not by re-derivation (§3.6, §3.7) |
 | **D12.4** | **A capture window is chosen by name from the scenario's declarations, or given explicitly by the operator, and the manifest records which.** A window may also declare a begin and **no end**, in which case the run continues until the scenario ends or the caller stops it. This closes [`01`](01_Architecture.md) open question 3 and [`02`](02_Use_Cases.md) open question 2 together, in the way both recommended (§3.8, §5.2) |
-| **D12.5** | **Run-configuration validation is a further phase of [`07`](07_Scenario_Authoring.md) §5's compiler, not a second validator.** Same refuse/warn vocabulary, same resolution report, same lock-file shape. Phase 0 — 34 of the 49 checks — needs no server, no GPU and no SUMO, preserving [`02`](02_Use_Cases.md) D2.2's property one layer up (§6.1, §6.2) |
+| **D12.5** | **Run-configuration validation is a further phase of [`07`](07_Scenario_Authoring.md) §5's compiler, not a second validator.** Same refuse/warn vocabulary, same resolution report, same lock-file shape. Phase 0 — 33 of the 48 checks in force — needs no server, no GPU and no SUMO, preserving [`02`](02_Use_Cases.md) D2.2's property one layer up (§6.1, §6.2) |
 | **D12.6** | **Two mutual-exclusion mechanisms, both required.** A configuration naming a block of a non-selected mode is refused at compile time with no server involved; a world whose population authority is held refuses the session start naming the holder. The first catches a wrong request, the second catches a busy world; neither substitutes for the other (§5.3) |
 | **D12.7** | **The solar policy has no tool default: the scenario states it, and a run takes it or overrides it with the override recorded.** A frozen run and an unconfigured run are byte-identical, so absence is made impossible rather than defaulted ([`00`](00_Overview.md) §6). The failure modes of an unstated policy are asymmetric: a run that wanted constant illumination and got an advancing sun records a small, correct, self-describing variation, while a run that wanted changing light and got a frozen one records a physically impossible constant that nothing flags. `freeze_at_window_start` is the recommended value, not a silent one (§4.3, §4.4) |
 | **D12.8** | **Under `advance`, `rate` is pinned to 1.0 and is not operator-settable**, because the session writes each tick's own instant ([`11`](11_Time_And_Illumination.md) D11.19) and [`01`](01_Architecture.md) D1.1/D1.13 make one tick exactly `world_delta_s` of simulated time — so 1.0 is the only value under which one sun-second is one scenario-second. `accelerated` (any other rate) is **refused for a capture run and retained in the interactive path**, where it is useful and harmless (§4.3) |
@@ -2674,12 +2631,12 @@ them by number ([`08`](08_Collection_And_EPoL.md) §15 cites check 17).
 | **D12.12** | **The solar state is read back from the world and recorded before the first capture, and a disagreement with what was requested refuses the run.** Today `WorldBuilder.py:238-247` logs what it asked for and never reads back, and a world with no CesiumSunSky produces a warning and a run that continues (`:244-245`) (§4.5, §6.2 checks 23 and 31) |
 | **D12.13** | **Four mutability classes — Bound, Session-fixed, Degradation-only, Run-mutable — decided by one question: would a consumer reading the corpus be wrong if this changed and they did not know?** The occlusion estimator is Session-fixed rather than Run-mutable for exactly this reason, although it is a runtime toggle today. **Bound** reads *fixed by an artifact, or by a ruling in a sibling section that this surface expresses rather than re-offers*, which is what `synchronous` (D10.10), `telemetry.on_tick_thread` (D10.11) and the external-chain drop policy ([`08`](08_Collection_And_EPoL.md) §11.3) all need. **There is no fifth class**: `caller` and `on_warning.*` are Session-fixed by the governing question, and `caller_label` and `expect.*` are recorded in the lock as launch provenance rather than given a class of their own (§5.1, §5.2) |
 | **D12.14** | **The live monitor displays only fields the manifest also carries, read from the same source.** A monitor that computes its own numbers can disagree with the record, and the operator believes the screen (§7.1) |
-| **D12.15** | **Three conditions interrupt the operator and nothing else does:** a participant in an open annotated interval refused admission, a non-zero `Dropped` on any channel, and the rendered fraction falling below the declared floor. Everything else is a column (§7.1) |
+| **D12.15** | **One condition interrupts the operator in every run, and nothing else does:** a non-zero `Dropped` on any channel; a live run adds the achieved real-time factor falling below its floor (§7.4.1). A participant in an open annotated interval is always drawn, because every vehicle SUMO has is drawn, so it is a gate record rather than an interruption (§7.2). Everything else is a column (§7.1) |
 | **D12.16** | **This surface publishes gate records and never an aggregate verdict.** Each record names what the check observed, the threshold it compared against and whether it met it; nothing rolls them into a single field saying the corpus is fit, because fitness is relative to a purpose the caller never told us ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3d). The records are **appended to the manifest as they change**, so a run stopped at minute nine has already published everything it knew at minute nine, and the closeout is a rendering rather than the moment they come into existence. A record that did not meet its threshold deletes nothing and hides nothing (§7.2, §3.10.3) |
 | **D12.17** | **`run_SCTMV.py` and its parser keep every one of their 87 arguments (§1's 86 and `--aoi`) and all thirteen hotkeys.** The new surface is a second front end over shared definitions — `WorldBuildConfiguration`, the channel description, the capture description, and one solar application path — with **defaults defined exactly once in the schema**. *Measured justification:* three `getattr` fallbacks already disagree with the parser and exist precisely to survive a caller that is not this parser (§9.2, §9.3, §1.5) |
 | **D12.18** | **Seven repairs to the interactive surface are owed regardless of whether the new one is built:** refuse or remove `--ev`; reconcile the three divergent defaults; warn on `--time-rate` without `--time-advance`; stop overwriting the sun in attach mode; document the four undocumented hotkeys; make `parse` and `parse_args` behave identically; and fix the post-process profile default, whose name is the lowercase literal `"default"` (`ActorBlueprintFunctionLibrary.cpp:1376`) against a file named `Default.json` — so it resolves on a case-insensitive file system and silently does not on a case-sensitive one, with the failure discarded at `:1377-1380` (§9.4) |
 | **D12.19** | **The launcher ships on both platforms in the same change, its `--help` generated from the schema, with a CI parity check comparing the two option sets.** *Measured:* the existing parity break survived because nothing compared them — `MakeDistribution.ps1:237` copies a file deleted in `d2c666c23` and only warns, `:301` then writes a launcher that runs it, and the Windows script additionally omits the `carlacontrol` wheel that `MakeDistribution.sh:112-113` bundles (§10) |
-| **D12.20** | **The predicted in-region population is checked against `render_cap` at launch**, using the scenario's already-run population profile, and a region that makes the cap bind produces a warning with the numbers. This moves [`00_Overview.md`](00_Overview.md) §6's cross-section conflict — label-dependent shedding excluding a corpus from training — from something discovered in a manifest to something named before the run starts (§6.2 check 21) |
+| **D12.20** | **Withdrawn 2026-09-30.** There is no render cap or render region to check a population against: every vehicle SUMO has is drawn, and a heavier scenario runs slower, never thinner (§6.2 checks 20 and 21, withdrawn) |
 | **D12.21** | **The external caller is a first-class consumer of this surface, not a scripted human.** It is declared (`caller: unattended`), it is recorded in the corpus, and it changes what the tool may do without being told. **Three of its six requirements already hold and are not rebuilt:** no interactive prompt (*measured:* no `input()` anywhere in `CarlaControl/src/carlacontrol` or `CarlaControl/scripts`), a provenance-carrying effective configuration (D12.3), and a reproducible artifact (R1, D12.11). Three are specified here: a record that distinguishes stopped from finished (D12.22), a result artifact written in every outcome the tool survives (D12.23), and clean termination under a kill (D12.33). What this surface does **not** contain is a scheduler, a loop, a cadence, a run length or a comparison between runs — all of those belong to the caller (§3.10) |
 | **D12.22** | **Eight named terminal outcomes whose live distinction is *stopped* against *finished*, and the process exit status is read from the result artifact rather than computed beside it.** *Measured justification:* `run_SCTMV.py` has two statuses — `1` on a failed world build (`:130`), `0` otherwise (`:339`) — and swallows `KeyboardInterrupt` at `:291-292`, so a run killed halfway is indistinguishable from one that finished; and [`07`](07_Scenario_Authoring.md) §5.5 measured `duarouter` exiting 0 regardless under `--ignore-errors`, concluding that an exit code alone is a gate that stops at the first error. The set is small on purpose, and **none of it is a verdict**: `run_finished` and `run_stopped` differ in how the run ended, not in whether the data is useful, and the refusals differ in how far the launch got. `refused_authority` is the one outcome whose cause is outside the configuration, and the result names the holder (§3.10.2) |
 | **D12.23** | **`RunResult` is written in every terminal outcome the tool survives, at a path the caller gives, outside both corpus roots — and its absence means only that the tool was stopped before it could write one.** It carries the outcome and its status, `closed_by`, the end declared and the end reached, the launch echo, every refusal, every warning with its adjudication, per-channel *captured* and *written*, the gate records, and a pointer to the manifest or `null`. It carries **no aggregate verdict**. The path is separate because a phase-0 refusal never reaches [`08`](08_Collection_And_EPoL.md) D8.4's session assignment and so has no session root to write under. Its fields are [`04`](04_Contracts.md)'s `C10`; this section owns when and where the tool writes it, and §3.10.3 K1–K4 state the properties it needs back (§3.10.3) |
@@ -2696,8 +2653,8 @@ them by number ([`08`](08_Collection_And_EPoL.md) §15 cites check 17).
 | **D12.34** | **A kill with no chance to flush is normal, and the record makes its cost visible.** What is on disk is what exists and the last complete record is the authority. At most `max(4, n × 2)` captures per channel are lost from the encode queue (`FrameRecorder.cs:115-121`) and `Dropped` counts none of them (`:184-185`), so the manifest carries **captured** and **written** per channel and their difference is the loss. A capture is two files written to their final paths in sequence (`:222-227`, `:228-230`), so atomic publication and a stated publication order are required from [`04`](04_Contracts.md), with the sidecar published first so that the only torn state is one a reader can detect and disregard (§3.10.2, §3.10.3 K2–K4) |
 | **D12.35** | **A run has no length of ours.** There is no `--duration` and no `--frames`; a window may declare no end; and nothing in this surface depends on a run reaching an end. The single bound the tool imposes on itself is **write headroom**, expressed in captured seconds rather than bytes and re-evaluated while the run proceeds (check 46), because a disk that fills produces truncated files — the one outcome D12.33 forbids outright. A clean self-stop carries `closed_by: write_headroom`, its floor is an operator-settable field, and a caller that stops us first never sees it (§3.8, §5.2, §6.2 check 46) |
 | **D12.36** | **What a caller can watch while a run proceeds is two surfaces that already exist, and one boundary that is not a gap.** Through CarlaNet and the Python shim, after an explicit `Client.start_observer()` (`carlanet/__init__.py:2233-2239`), three cache reads are free and cost the tick nothing — `get_sim_time` (`:2017`), `get_actor_ids` (`:2027`) and `get_solar_state` (`:1511`) — while `get_actors` (`:2038`) is a blocking RPC per call; [`10`](10_Scale_And_Performance.md) D10.10 is why the distinction matters, and an observer reads the push stream rather than polling. **The server holds no capture state**, so frames written, intervals closed, area covered and gate records are answerable only from the incrementally written artifacts — the same fields, from the same source, that D12.14 already binds the monitor to (§7.6) |
-| **D12.37** | **A stare can aim at the rendered traffic instead of at coordinates, and the point it resolves to is recorded.** `stare_look_at_target: rendered_traffic` is a third stare form beside a look-at point and a pose — exactly one of the three — with the look-at form's altitude, standoff and bearing. The point is the mean position, height included, of the vehicles the session rendered on the last frame before its camera holds for the window, measured from the poses it wrote to bodies, because the middle of a render region is not where a corridor scenario's traffic is. It is declared as a named target rather than a flag so that the look-at fields name what the boresight passes through in one place, and a second target is a new value rather than a new field. It is resolved one SUMO step and the picture's 120-tick ceiling before the window opens (seven one-second steps at the defaults) because the window is what it frames and the view the window holds has to be seen ready first: the camera follows the traffic through the prewarm until then and holds from there, so the view whose tiles and picture are waited on (D12.38) is the view the window holds; a camera followed to the last step would open the window on a view nobody had seen ready, because a camera that moves between its frames never reads settled. The run result records the point as look-at fields, so a run is reproducible from its record by an ordinary look-at stare, and a process with no session — a camera follower — refuses the form (§5.2) |
-| **D12.38** | **No capture is written before its camera's view is ready, and a view not ready by the window's opening refuses the run at pre-roll; the window's first frame is never moved and the prewarm is never lengthened while a run is under way.** Readiness is [`03`](03_CoSimulation_Runtime.md) §9.5.1's two witnesses — the server's word that the tiles are in, the camera's own frames that the picture has settled — waited on inside the prewarm, asked once after every step the session renders and never between, from the point every capture camera holds the pose the window opens on: an orbit is held at its opening pose until the window opens, and a stare aimed at the rendered traffic holds for the last SUMO step and 120 ticks (D12.37). The picture is judged with every block a rendered vehicle covers, in either frame of a comparison, left out, because the witness asks whether the world's rendering has settled and a vehicle driving through the view answers a different question (measured on Bahonar: 56 rendered vehicles held the worst block at 1.8–2.0 grey levels where the same view with none settled); a comparison that leaves less than half the view to judge, or whose vehicles could not be placed, does not count. The prewarm is the lead — `capture.prewarm_s`, Session-fixed and recorded — and it is not lengthened at run time: SUMO has already been fast-forwarded to its first instant and cannot be taken back, the render set at the window's opening depends on where rendering began (its release hysteresis and its cap, [`03`](03_CoSimulation_Runtime.md) §8.3), so a lead that followed how long the tiles took would make the rendered traffic a function of the network, and a window opened late is not the window whose sun was bound ([`03`](03_CoSimulation_Runtime.md) D3.21). So a witness past its ceiling — 90 s of wall clock for the tiles, 120 ticks for the picture — the renderer settles on the world's ticks, not on the frames a camera renders — neither a count a caller supplies — or a view not ready when the window opens is check 50, `refused_preroll`, naming the channel, the witness and where it stood, as check 44 refuses a live exercise that cannot hold its rate; a prewarm that could never hold the fewest frames the picture can be compared on is check 51, in phase 0. The run result records per channel how its view became ready. A capture's own readiness is not recorded, because the server answers only for the last tick and publishes nothing per frame, and an orbit's readiness as the window opens says nothing of the ground it sweeps afterwards (§6.3) |
+| **D12.37** | **A stare can aim at the rendered traffic instead of at coordinates, and the point it resolves to is recorded.** `stare_look_at_target: rendered_traffic` is a third stare form beside a look-at point and a pose — exactly one of the three — with the look-at form's altitude, standoff and bearing. The point is the mean position, height included, of the vehicles the session rendered on the last frame before its camera holds for the window, measured from the poses it wrote to bodies, because the middle of the world's staging bounds, where its camera starts, is not where a corridor scenario's traffic is. It is declared as a named target rather than a flag so that the look-at fields name what the boresight passes through in one place, and a second target is a new value rather than a new field. It is resolved one SUMO step and the picture's 120-tick ceiling before the window opens (seven one-second steps at the defaults) because the window is what it frames and the view the window holds has to be seen ready first: the camera follows the traffic through the prewarm until then and holds from there, so the view whose tiles and picture are waited on (D12.38) is the view the window holds; a camera followed to the last step would open the window on a view nobody had seen ready, because a camera that moves between its frames never reads settled. The run result records the point as look-at fields, so a run is reproducible from its record by an ordinary look-at stare, and a process with no session — a camera follower — refuses the form (§5.2) |
+| **D12.38** | **No capture is written before its camera's view is ready, and a view not ready by the window's opening refuses the run at pre-roll; the window's first frame is never moved and the prewarm is never lengthened while a run is under way.** Readiness is [`03`](03_CoSimulation_Runtime.md) §9.5.1's two witnesses — the server's word that the tiles are in, the camera's own frames that the picture has settled — waited on inside the prewarm, asked once after every step the session renders and never between, from the point every capture camera holds the pose the window opens on: an orbit is held at its opening pose until the window opens, and a stare aimed at the rendered traffic holds for the last SUMO step and 120 ticks (D12.37). The picture is judged with every block a rendered vehicle covers, in either frame of a comparison, left out, because the witness asks whether the world's rendering has settled and a vehicle driving through the view answers a different question (measured on Bahonar: 56 rendered vehicles held the worst block at 1.8–2.0 grey levels where the same view with none settled); a comparison that leaves less than half the view to judge, or whose vehicles could not be placed, does not count. The prewarm is the lead — `capture.prewarm_s`, Session-fixed and recorded — and it is not lengthened at run time: SUMO has already been fast-forwarded to its first instant and cannot be taken back, and a window opened late is not the window whose sun was bound ([`03`](03_CoSimulation_Runtime.md) D3.21). So a witness past its ceiling — 90 s of wall clock for the tiles, 120 ticks for the picture — the renderer settles on the world's ticks, not on the frames a camera renders — neither a count a caller supplies — or a view not ready when the window opens is check 50, `refused_preroll`, naming the channel, the witness and where it stood, as check 44 refuses a live exercise that cannot hold its rate; a prewarm that could never hold the fewest frames the picture can be compared on is check 51, in phase 0. The run result records per channel how its view became ready. A capture's own readiness is not recorded, because the server answers only for the last tick and publishes nothing per frame, and an orbit's readiness as the window opens says nothing of the ground it sweeps afterwards (§6.3) |
 
 ---
 
@@ -2752,18 +2709,18 @@ them by number ([`08`](08_Collection_And_EPoL.md) §15 cites check 17).
    asking.
 
 5. **Is there an operator-facing preview of what a window will look like before it costs a run?**
-   §6's check 21 predicts population and check 19 predicts corpus size, both cheaply. A third
-   prediction — the sun's elevation and azimuth across the window, and the fraction of it that is
-   dark — is equally cheap once [`11`](11_Time_And_Illumination.md)'s N4 exists, and would let an
-   operator choose a window by its light rather than by its traffic. **Recommend adding it to the
+   §6's check 19 predicts corpus size, cheaply. A second prediction — the sun's elevation and
+   azimuth across the window, and the fraction of it that is dark — is equally cheap once
+   [`11`](11_Time_And_Illumination.md)'s N4 exists, and would let an operator choose a window by its
+   light. **Recommend adding it to the
    resolution report** rather than building a separate tool; noting that it is exactly the information
    that would have prevented the defect in §1.6 from ever mattering.
 
 6. **Should the effective configuration be signed, or merely digested?**
    [`07`](07_Scenario_Authoring.md) open question 3 raises the same question for the scenario's
    resolution report — that an author should record having read it. The run-level analogue is stronger,
-   because a capture is expensive and the operator's acceptance of check 21's warning is a judgement
-   nobody else can reconstruct. **Recommend a field in the run lock recording which warnings were
+   because a capture is expensive and the operator's acceptance of a warning is a judgement nobody
+   else can reconstruct. **Recommend a field in the run lock recording which warnings were
    acknowledged and by whom**, populated from an explicit flag — but process that is not enforced is
    theatre, and whether this one would be enforced is a question about how the team works rather than
    about the tool.
