@@ -51,6 +51,7 @@ advancement policy, the headlight predicate),
 | 2026-09-30 | §8.3, §8.3.1, D3.38: the policy interface as built, and the render set that follows the registered cameras' ground footprints -- range-capped, admitted ahead, held after, ranked by the seed -- with the circle deciding while no camera is registered. §8.8: the eligible include the vehicles the release lag holds. |
 | 2026-09-30 | Render cap removed: the cap (128, hard 192) was never measured -- M2 never ran -- and the scenario is the arbiter of population, so every vehicle SUMO has is drawn and a heavier scenario runs slower, never thinner. §8.3 now states that rule; §8.3.1 and D3.38 are withdrawn, and with them the circle, the camera-footprint render set, capacity, shedding and the subscription tiers. The pool still parks and reuses bodies, with no ceiling (§8.2, D3.9). §8.5 and D3.10 describe the entry and exit this gives, §8.8 and D3.31 the pass's counts, and §9.5.1 a stare at the traffic starting over the staging bounds. |
 | 2026-10-01 | D3.6, §6.3, §8.3, §8.4, §8.5, §8.8, §9.7, §9.8: a vehicle SUMO inserts is drawn from the frame SUMO first reports it in, at that position and moving, and never before SUMO inserted it. Measured live on Bahonar, the bridge had drawn every inserted vehicle a step early, standing at its insertion point while the truth reported SUMO's speed. A vehicle SUMO has when rendering begins is still drawn on the first rendered frame. |
+| 2026-10-01 | §7.5: the pitch and roll signs confirmed live against the visible surface; bodies at two-level crossings measured seated on the wrong level. |
 | 2026-10-01 | §8.9, D3.39: the render set is named to the server on each change and carried on every world-observer snapshot, so the live pull, the CoT feed and a recorder in any process list only the bodies a frame drew, each by its SUMO vehicle. §8.2: every body is spawned with `role_name` `sumo`. Written; the plugin awaits a build. |
 
 ---
@@ -1771,7 +1772,16 @@ headings, and requires each horizontal axis to satisfy `z = a·x + b·y`
 (`CarlaNet/test/CarlaNet.CoSim.Tests/PoseConverterTests.cs`).
 
 What the geometry cannot settle is whether the body on screen agrees, which is the one thing a live
-run adds. Marked **derived, pending a look**.
+run adds. **Confirmed live on Arapahoe, 2026-10-01**: for the 309 drawn bodies seated within 0.5 m of
+the photoreal surface, the surface was sampled 4 m ahead and behind and 2 m to each side, and the
+pitch and roll a body seated on it would have were set against the body's own rotation. Of the 181 on
+a visible grade over 1 degree, 167 pitch the same way as the surface; of the 190 on a cross-slope over
+1 degree, 169 roll the same way. The disagreements are mostly samples that met a building, a tree or
+a structure's edge in the photoreal, reading as grades of 40 to 55 degrees. Measured beside it, and a
+defect of the surface rather than the signs: where roads cross at two levels, the body is seated on
+the one surface the grid holds at that point -- on I-25's overpass at Arapahoe Road the freeway's
+bodies sat 1.2 to 6.1 m below the visible deck, on the ground beneath it, and under the Yosemite
+Street bridge bodies were lifted toward the deck in humps of up to 7 m.
 
 **Cost per vehicle per world tick:** 5 `SampleDrapeGroundElevation` calls (one for Z, four for the
 gradients) = 20 array reads, no allocation, no RPC. At 131 vehicles × 20 ticks/s that is 13,100
