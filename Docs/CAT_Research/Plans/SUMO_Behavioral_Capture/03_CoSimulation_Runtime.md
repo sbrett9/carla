@@ -51,6 +51,7 @@ advancement policy, the headlight predicate),
 | 2026-09-30 | §8.3, §8.3.1, D3.38: the policy interface as built, and the render set that follows the registered cameras' ground footprints -- range-capped, admitted ahead, held after, ranked by the seed -- with the circle deciding while no camera is registered. §8.8: the eligible include the vehicles the release lag holds. |
 | 2026-09-30 | Render cap removed: the cap (128, hard 192) was never measured -- M2 never ran -- and the scenario is the arbiter of population, so every vehicle SUMO has is drawn and a heavier scenario runs slower, never thinner. §8.3 now states that rule; §8.3.1 and D3.38 are withdrawn, and with them the circle, the camera-footprint render set, capacity, shedding and the subscription tiers. The pool still parks and reuses bodies, with no ceiling (§8.2, D3.9). §8.5 and D3.10 describe the entry and exit this gives, §8.8 and D3.31 the pass's counts, and §9.5.1 a stare at the traffic starting over the staging bounds. |
 | 2026-10-01 | D3.6, §6.3, §8.3, §8.4, §8.5, §8.8, §9.7, §9.8: a vehicle SUMO inserts is drawn from the frame SUMO first reports it in, at that position and moving, and never before SUMO inserted it. Measured live on Bahonar, the bridge had drawn every inserted vehicle a step early, standing at its insertion point while the truth reported SUMO's speed. A vehicle SUMO has when rendering begins is still drawn on the first rendered frame. |
+| 2026-10-01 | §8.9, D3.39: the render set is named to the server on each change and carried on every world-observer snapshot, so the live pull, the CoT feed and a recorder in any process list only the bodies a frame drew, each by its SUMO vehicle. §8.2: every body is spawned with `role_name` `sumo`. Written; the plugin awaits a build. |
 
 ---
 
@@ -1872,6 +1873,14 @@ clear parking pose, and never spawn again during the run.
   reuse did interact with truth reporting in two other ways, both measured and both closed in §8.9:
   a parked body was reported as a vehicle, and the truth uid was built on an actor id that names each
   vehicle its body carries in turn.
+- **Every body is spawned with `role_name` `sumo`** (built 2026-10-01). `role_name` is provenance —
+  `autopilot` for traffic-manager traffic, `scenario` for storyboard entities, `sumo` for SUMO-driven
+  ones ([`04`](04_Contracts.md) D4.9) — and an attribute is fixed for the actor's life. Left to the
+  blueprint's default, every body read `autopilot`, and the truth record named the traffic manager as
+  the driver of every SUMO vehicle: 152 of 152 in a Bahonar sidecar. The pool spawns under
+  `VehicleBodyPool.RoleName`, `ICarlaWorld.Spawn` takes the role, and `CarlaClientWorld` sends it in
+  place of the definition's default; the recorded sidecar and the live pull read it from the actor's
+  description. SUMO drives a body for its whole life, so the role holds whichever vehicle it carries.
 
 ### 8.3 Admission — every vehicle SUMO has
 
@@ -2144,11 +2153,12 @@ uid. A record could not be joined to the scenario's supervision, whose participa
   was never an occluder of anything else: the estimate takes an occluder only from what the depth
   capture drew, and a body 300 m below the world's origin and 200 m outside the sandbox cannot stand
   between a camera above the scene and a vehicle on its roads.
-- **Where it runs, and what that leaves open.** The source is in-process: the recorder sits beside the
-  session in the driving process, which is the default topology ([`01`](01_Architecture.md) §3.4,
-  [`08`](08_Collection_And_EPoL.md) §3.4). A recorder in another process has no source and lists every
-  vehicle actor, parked bodies included, as before. The render set is one of the world-scoped facts
-  01 §3.4 says are to be published server-side for such a recorder; that is not built.
+- **Where it runs.** The source is in-process: the recorder sits beside the session in the driving
+  process, which is the default topology ([`01`](01_Architecture.md) §3.4,
+  [`08`](08_Collection_And_EPoL.md) §3.4). Every other reader of the world takes the same set from the
+  server, which carries it on every world-observer snapshot (D3.39, below). Until that was built a
+  recorder in another process, the live pull and the CoT feed listed every vehicle actor, parked bodies
+  included, and none named a SUMO vehicle.
 
 With no source — a run of traffic-manager traffic, where every vehicle actor is its own vehicle — the
 recorder writes exactly what it wrote before, byte for byte.
@@ -2167,6 +2177,78 @@ body the pool owns published; the set not rebuilt when a body is given back; and
 frame off. `CarlaControl/scripts/audit_truth_sidecars.py` reads a capture back and counts all three
 defects; on the capture above it reports the 1,385 records below the ground band, all 2,608 without a
 SUMO id, and the two uids lent again after parking.
+
+**The same set, on the server, for every other reader (2026-10-01).** The render set above lives in
+the driving process, and the world's other readers see only its vehicle actors: the live pull
+(`get_vehicle_telemetry`), the live CoT feed and a recorder in any other process listed every body,
+the parked ones 300 m below the ground among them, by actor id. The render set is one of the
+world-scoped facts [`01`](01_Architecture.md) §3.4 publishes to the server, on the world-observer
+snapshot as [`08`](08_Collection_And_EPoL.md) D8.3 asks of every one, and it is now built that way.
+
+> **D3.39 — The session names each change to its render set to the server — every body lent since the
+> last change, with the SUMO vehicle and vType it draws, and every body given back — in one
+> `update_render_set` call before the tick cue of the frame the change is drawn in, and the world
+> observer carries every named body on each snapshot. Every client's truth leaves out a body parked
+> on the frame it describes and names a lent one by its SUMO vehicle. The server holds the naming on
+> each actor's own record, so it ends with the actor, and only a body a session named is ever left
+> out.**
+
+- **What the server holds.** `update_render_set(lent_ids, vehicle_ids, vehicle_type_ids, parked_ids)`
+  (`CarlaServer.cpp`) sets each named actor's `FRenderSetMembership` on its `FCarlaActor`: lent, with
+  the vehicle, its vType and the frame its span began on, or parked. A body given back and lent again
+  in one call ends lent. The span's first frame is the frame counter plus one at the call — the frame
+  `tick_cue` answers with, the frame the change is first drawn in — and is kept while the body stays
+  lent to the same vehicle, so it is the recorder's `admitted_tick`. The call answers how many named
+  actors it found; the report sums the ones it did not (`RenderSetBodiesNotFound`).
+- **What the snapshot carries.** Where any body is named, a render set block between the header and
+  the actors, flagged `RenderSetCarried` (`EpisodeStateSerializer.h` gives the layout): per named body
+  its actor id, state, span's first frame, and the vehicle and vType names. A world no session has
+  named a body in carries no block, and its snapshot is laid out byte for byte as before. The client
+  reads it (`EpisodeStateLayout.ReadRenderSet`, `CarlaClient.GetCachedRenderSet`) and keeps it with
+  the frame's actors in `SnapshotHistory`, so a frame's actors and its naming are read together
+  (`CarlaClient.GetSnapshotFrame(frame, out served, out renderSet)`).
+- **The recorder's set, frame for frame.** Named from the pool after the tick's batch, as §8.9's set
+  is read from it once the tick returns, with nothing lending or giving back a body in between, and
+  applied in the drain the frame is cued from: so each frame's snapshot carries exactly the set the
+  session recorded for it (`SumoDriveSession.NameTheRenderSet`).
+- **The cost.** One round trip on a tick whose lending changed, none on any other: a body is lent or
+  given back only where a SUMO step is read, so at most one per SUMO step and far fewer in a steady
+  scene (`CoSimRunReport.RenderSetUpdates`). The snapshot carries 17 bytes per named body plus its two
+  names every tick, and the client keeps one parsed set for every frame whose block is the same bytes.
+- **What reads it.** `VehicleTelemetryService`, which every truth path goes through: a parked body is
+  not listed and its description is not even fetched; a lent one carries `Rendered`, its SUMO
+  vehicle, vType and span's first frame. With no frame asked for — the live pull — and a set in the
+  newest snapshot, the records come from the newest retained frame rather than the actor cache, so
+  pose and naming are of one frame. The shim's dicts gain `sumo_id`, `vtype_id` and `admitted_tick`,
+  and the live CoT emitters key such a track on its SUMO id as the sidecar does
+  ([`09`](../../Findings/09_Telemetry_CoT_Contract.md) §5.2). A recorder with no source of its own
+  writes the server's set and says `vehicles="rendered"`; one with a source pairs as above.
+- **Nothing outlives its bodies.** Only actors a session named are affected, and the naming lives on
+  each actor's record: the session's disposal destroys its bodies and their naming with them, and a
+  map load starts a new episode. A session that stops without destroying them — a crash, a dropped
+  connection — leaves its parked bodies named parked, which is still what they are, out of sight below
+  the ground, and its lent bodies named for the vehicle each last drew, standing where it left them. An
+  actor no session named, such as traffic-manager traffic started afterwards, is never left out. There
+  is no server-side session to tie it to instead: the population lease is process-scoped
+  (`WorldDriveAuthority`), and §10.2's episode-held mechanisms are not built. The per-actor record is
+  where §10.2 mechanism (1) would keep its bridge-owned mark; the lockout itself is still not built.
+- **A server that refuses.** One built before this has no such call and answers it with an error. The
+  session records the refusal (`CoSimRunReport.RenderSetRefused`, printed in its report) and names
+  nothing more; its own recorded truth is cut to its render set in process either way, and only other
+  processes go back to listing every vehicle actor.
+
+**Exercised by** `SumoDriveSessionRenderSetTests` (each held frame's set as the world was told it,
+lent bodies with the recorder's vehicles, vTypes and span starts and every other body named parked; a
+change named exactly on the ticks whose set changed; no body named once the session is disposed; a
+refusing server asked once and the run going on), `CarlaClientWorldTests` (the call as the server
+receives it; a missing call answered as a refusal), `EpisodeStateRenderSetTests` (the actors found
+after the block, a layout unchanged without one, a truncated block refused with the actors still
+found), `SnapshotHistoryTests` and `LiveTruthRenderSetTests` (through a stand-in server: the live pull
+with no parked body and the lent one named, each frame read with its own set, a world with none
+unchanged, a recorder with no source writing the server's set). Each was seen failing against a
+wrong implementation: the set named after the tick; no body ever named parked; the live pull without
+the parked filter; the live pull pairing the newest actors with another frame's set; a reader ignoring
+the block; and a recorder with no source not marking its sidecar.
 
 ---
 
@@ -3665,6 +3747,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.36** | **A session can launch `sumo-gui` in place of `sumo`** (`SumoGui`; `run_sumo_drive.py --sumo-gui`), from the installation it resolved and no other, with `sumo`'s arguments followed by `--start --quit-on-end --delay 0 --message-log stdout --error-log stderr`, so the one SUMO process the session steps is on screen, follows the session with nobody at the window, exits when the session closes it, never sets the pace and keeps the console the session reads. The release pin holds for the binary that runs: the release compared with the world's converter is `sumo-gui`'s own. An installation without `sumo-gui` is refused before anything starts, naming the file and the setup script that stages it. The report records the binary that ran on every run (§2.6). |
 | **D3.38** | **Withdrawn 2026-09-30.** No policy chooses which vehicles are drawn: every vehicle SUMO has is drawn, so the render set no longer follows the cameras (§8.3). |
 | **D3.37** | **Each frame's render set is published for the truth, keyed by the frame the tick produced** — every body lent, the SUMO vehicle it rendered, its vType and the first frame of its rendered span, read from the pool as the tick left it and recorded as the tick returns, the last 256 frames held (`SumoDriveSession.RenderSet`, `IRenderSetSource`). The recorder lists exactly the set of the frame its truth describes, named by SUMO vehicle, and no parked body; a frame whose set is no longer held is written with no vehicles, marked `vehicles="unknown"`, and counted, never guessed. With no source the recorder is unchanged (§8.9). |
+| **D3.39** | **The render set is also published on the server, for every reader** — the session names each change (bodies lent, with their SUMO vehicles and vTypes, and bodies given back) in one `update_render_set` before the tick cue of the frame it is drawn in, the server holds it on each actor's record so it ends with the actor, and the world observer carries every named body on each snapshot. Every client's truth leaves out a body parked on its frame and names a lent one by its SUMO vehicle; a world no session named a body in is unchanged; a server that refuses is recorded and told nothing more (§8.9). |
 
 ---
 

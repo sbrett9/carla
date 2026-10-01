@@ -15,6 +15,7 @@ the real scenario artifacts. No code changed, no build run.
 | 7 · 2026-09-30 | The capture sidecar lists each frame's rendered set, named by SUMO vehicle, and no parked body; a truth uid follows the SUMO vehicle, not the pooled body (§8.2, §7.1). |
 | 8 · 2026-09-30 | The render cap (128, hard 192) is removed: it was never measured, since M2 never ran, and the scenario is the arbiter of population. Every vehicle SUMO has is drawn, and a heavier scenario runs slower, never thinner. So no span is withheld from the training export for a binding cap (D6.16 withdrawn, §10.4), nothing prioritises participants, and a vehicle goes undrawn only outside every capture window or when its type has no measured body (§4.4, §5.1, §8.4). |
 | 9 · 2026-10-01 | A vehicle SUMO inserts is drawn from the frame SUMO first reports it in, where SUMO inserted it and moving, so no frame shows it, or lists it in its truth, before SUMO inserted it (§4.4). Measured live on Bahonar, the bridge had drawn every inserted vehicle a step early, standing still while its truth reported SUMO's speed. |
+| 10 · 2026-10-01 | Every reader of the truth, not only the recorder beside the session, lists the bodies a frame drew, named by SUMO vehicle, and no parked body: the server carries the render set on every world-observer snapshot. A pooled body's `role_name` is `sumo` (§4.1, §8.2). |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -1137,7 +1138,10 @@ the same thing" reported the pool's parked bodies too: a body between loans exis
 the ground, and was written into the sidecar as a vehicle — 1,385 of 2,608 records on a Gardnerville
 capture ([03](03_CoSimulation_Runtime.md) §8.9). The CARLA producer now covers **the bodies the
 frame rendered**, as the session publishes them per frame, each named by the SUMO vehicle it rendered
-(§8.2).
+(§8.2). Since 2026-10-01 that holds for every reader in any process, not only the recorder beside the
+session: the server carries the render set on every world-observer snapshot
+([03](03_CoSimulation_Runtime.md) D3.39), so the live pull and the CoT feed leave the parked bodies
+out too.
 
 ### 4.2 Authority, field by field
 
@@ -2203,6 +2207,16 @@ the recorder (`start_recording(render_set=...)`; `run_sumo_drive.py` and `run_ca
 `producer`, `entity_id`, `provenance`, the two source attributes, `render_state`, network state,
 `vtype` dimensions and the separations wait for the reconciler, and `role_name` is still the pooled
 body's spawn attribute, not the flow id.
+
+**As built (2026-10-01):** the spawn attribute is `sumo` on every pooled body, the authority class
+[`04`](04_Contracts.md) D4.9 gives a SUMO-driven vehicle — before, it was the blueprint's default,
+`autopilot`, on every record (152 of 152 in a Bahonar sidecar). And the record shape above reaches
+every reader, not only a recorder handed the session's source: the session names each body to the
+server as it lends it and gives it back, the server carries that set on every world-observer snapshot
+([`03`](03_CoSimulation_Runtime.md) §8.9, D3.39), and the truth producer cuts its records to it and
+names each lent body by its SUMO vehicle. So the live pull, the live CoT feed and a recorder with no
+source of its own carry `sumo_id`, `vtype_id` and `admitted_tick`, key the uid and callsign on the
+SUMO vehicle, and list no parked body; such a recorder marks its sidecar `vehicles="rendered"`.
 
 ### 8.3 The world truth track
 

@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 18 | 2026-10-01. `C4`: every pooled body is spawned with `role_name` `sumo` (D4.9, as built). `capture:sumo_id` is not stamped, because a pooled body draws a succession of vehicles; the vehicle a body draws is named per frame instead, on the world-observer snapshot for every reader (§6.4; [`03`](03_CoSimulation_Runtime.md) D3.39) |
 | 17 | 2026-10-01. `C3`: a scenario that declares lane closures carries a fifth file, the rerouter `.add.xml`, named by its configuration and digested in its lock |
 | 16 | 2026-10-01. `C2`: a vehicle SUMO inserts is drawn from the frame SUMO first reports it in, at that position and moving, and never before SUMO inserted it, and its admission instant is that frame (§4.2, §4.3). A vehicle SUMO has when rendering begins is drawn on the first rendered frame |
 | 15 | 2026-09-30. `C2` draws every vehicle SUMO has in a capture window. The render cap (128, hard 192) was never measured — M2 never ran — and the scenario is the arbiter of population, so a heavier scenario runs slower, never thinner. The input is `capture_windows[]` and `prewarm_s`; the region, priority and capacity gates, E2, E4, V2.3, V2.4, the reasons `outside_region` and `capped`, the rendered-fraction gate and open question 3 are withdrawn; `D4.6` holds by construction |
@@ -1812,6 +1813,18 @@ are bare lowercase words):**
 `bRestrictToRecommended = false` (`ActorBlueprintFunctionLibrary.cpp:203-214`, recommended values
 replaced with `{autopilot, scenario, ego_vehicle}` at `:846-847` via `:225-237`), so `sumo` is accepted
 by both the C# and the Python paths.
+
+**As built (2026-10-01).** Every body the pool spawns carries `role_name` `sumo`
+(`VehicleBodyPool.RoleName`; `CarlaClientWorld.Spawn` sends it in place of the definition's default,
+and adds it to a definition that declares none). Before, every body took the default, `autopilot`,
+and the truth record named the traffic manager as the driver of every SUMO vehicle — 152 of 152 in a
+Bahonar sidecar. The recorded sidecar and the live pull read the attribute from the actor's
+description, so both now say `sumo`. The `capture:*` attributes are not stamped, and `capture:sumo_id`
+cannot be as the table has it: under the pool ([`03`](03_CoSimulation_Runtime.md) D3.9) one body draws
+a succession of SUMO vehicles, and an attribute is fixed at spawn. The vehicle a body draws is named
+per frame instead — in the session's render set for the recorder beside it (03 §8.9, D3.37), and on
+the world-observer snapshot for every other reader (03 D3.39) — so V4.5 holds for `role_name` and its
+`capture:sumo_id` half, with V4.6, is met by the per-frame naming rather than by an attribute.
 
 ### 6.5 The identity lifecycle
 
