@@ -289,7 +289,8 @@ public sealed class LoadedWorldCheckTests
         Assert.Equal(3, disagreements.Count);
         Assert.StartsWith("the loaded world's surface grid is 478x971 cells of 2 m", disagreements[0]);
         Assert.StartsWith("the loaded world's origin is 39.59431, -104.88449", disagreements[1]);
-        Assert.StartsWith("the loaded world serves an OpenDRIVE with digest b6bb52668042", disagreements[2]);
+        string served = WorldPackage.HashOpenDrive(WorldPackage.ReadOpenDrive(arapahoe));
+        Assert.StartsWith($"the loaded world serves an OpenDRIVE with digest {served[..12]}", disagreements[2]);
     }
 
     [ShippedWorldPackagesFact]
