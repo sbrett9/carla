@@ -3,7 +3,7 @@
 
     run_capture --scenario gardnerville_morning --window morning
     run_capture --scenario gardnerville_morning --window morning --solar advance
-    run_capture --run configs/gardnerville_morning.run.json --set capture.render_cap=96
+    run_capture --run configs/gardnerville_morning.run.json --set capture.prewarm_s=600
     run_capture --run <runs>/<session>/run.effective.json          (reproduce a run)
     run_capture --run configs/g.run.json --caller unattended --result out/g.result.json
 
@@ -76,7 +76,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                             metavar=None if choices else "VALUE",
                             help=f"sets {path} ({default}). {spec.help}")
     parser.add_argument("--set", dest="set_fields", action="append", default=[],
-                        metavar="PATH=VALUE", help="set any field, e.g. capture.render_cap=96")
+                        metavar="PATH=VALUE", help="set any field, e.g. capture.prewarm_s=600")
     parser.add_argument("--site-profile", metavar="FILE",
                         help="this machine's site profile; unset, it is derived from the layout "
                              "run_capture runs from")

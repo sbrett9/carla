@@ -3,9 +3,9 @@ using CarlaNet.Sumo;
 namespace CarlaNet.CoSim.Tests;
 
 /// <summary>
-/// Admission, release and the capacity, against frames made up here rather than against a
-/// simulation: what is asserted is the manager's arithmetic, and a simulation would only make it
-/// harder to put a vehicle exactly on a boundary.
+/// Admission and release, against frames made up here rather than against a simulation: what is
+/// asserted is the manager's bookkeeping, and a simulation would only make it harder to put a vehicle
+/// exactly where a test wants it.
 /// </summary>
 public sealed class RenderSetManagerTests
 {
@@ -13,84 +13,70 @@ public sealed class RenderSetManagerTests
         new(id, x, y, 90.0, 10.0, "edge", "edge_0", 5.0, "measured_truck", SumoVehicleSignals.None);
 
     [Fact]
-    public void AVehicleOnTheBoundaryDoesNotFlickerBetweenAdmittedAndReleased()
+    public void EveryVehicleWithAStateIsAdmittedWhereverItIs()
     {
-        var policy = new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 100.0,
-                                               hysteresisMetres: 20.0, capacity: 8);
-        var manager = new RenderSetManager(policy);
+        var manager = new RenderSetManager();
 
-        // Just outside the admit radius: not admitted.
-        manager.ReconcileRenderSet(0.0, Frames(At("a", 101.0, 0.0)));
-        Assert.Empty(manager.RenderedVehicleIds);
+        manager.ReconcileRenderSet(0.0, Frames(At("near", 10.0, 0.0), At("far", 50_000.0, -50_000.0)));
 
-        // Just inside it: admitted.
-        manager.ReconcileRenderSet(1.0, Frames(At("a", 99.0, 0.0)));
-        Assert.Contains("a", manager.RenderedVehicleIds);
-
-        // Back outside the admit radius but inside the release radius: still admitted. Without the
-        // hysteresis this is the tick the vehicle vanishes on, and the next one it reappears on.
-        manager.ReconcileRenderSet(2.0, Frames(At("a", 110.0, 0.0)));
-        Assert.Contains("a", manager.RenderedVehicleIds);
-
-        // Past the release radius: released.
-        manager.ReconcileRenderSet(3.0, Frames(At("a", 121.0, 0.0)));
-        Assert.Empty(manager.RenderedVehicleIds);
+        Assert.Equal(["far", "near"], manager.RenderedVehicleIds.Order().ToArray());
+        Assert.Equal(2, manager.Admissions);
     }
 
     [Fact]
-    public void TheCapacityAdmitsTheNearestAndDeclinesTheRestWithoutFailing()
+    public void APopulationOfThreeHundredIsAdmittedInFull()
     {
-        var policy = new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 100.0,
-                                               hysteresisMetres: 10.0, capacity: 2);
-        var manager = new RenderSetManager(policy);
+        var manager = new RenderSetManager();
 
-        manager.ReconcileRenderSet(0.0, Frames(
-            At("far", 90.0, 0.0), At("near", 10.0, 0.0), At("middle", 50.0, 0.0)));
+        manager.ReconcileRenderSet(0.0, Frames([.. Enumerable.Range(0, 300)
+            .Select(index => At($"v{index:000}", index * 3.0, 0.0))]));
 
-        Assert.Equal(["middle", "near"], manager.RenderedVehicleIds.Order().ToArray());
-        Assert.Equal(1, manager.CapacityDeclines);
-        Assert.Equal(2, manager.Admissions);
+        Assert.Equal(300, manager.RenderedVehicleIds.Count);
+        Assert.Equal(300, manager.Admissions);
+        Assert.Equal(300, manager.LastNewlyAdmitted);
+    }
+
+    [Fact]
+    public void AVehicleIsAdmittedOnceAndHoldsItsPlaceForAsLongAsSumoHasIt()
+    {
+        List<RenderedVehicleInterval> released = [];
+        var manager = new RenderSetManager(released.Add);
+
+        for (int step = 0; step < 50; step++)
+        {
+            // Driving away, a kilometre a step: nothing about where it is releases it.
+            manager.ReconcileRenderSet(step, Frames(At("a", step * 1000.0, 0.0)));
+            Assert.Equal(step == 0 ? 1 : 0, manager.LastNewlyAdmitted);
+        }
+
+        Assert.Equal(1, manager.Admissions);
+        Assert.Empty(released);
+        Assert.True(manager.TryGetAdmissionInstant("a", out double admittedAt));
+        Assert.Equal(0.0, admittedAt);
     }
 
     [Fact]
     public void AnAdmissionAndItsReleaseAreRecordedWithTheirInstantsAndTheReason()
     {
         List<RenderedVehicleInterval> released = [];
-        var policy = new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 100.0,
-                                               hysteresisMetres: 10.0, capacity: 8);
-        var manager = new RenderSetManager(policy, released.Add);
+        var manager = new RenderSetManager(released.Add);
 
         manager.ReconcileRenderSet(12.5, Frames(At("a", 10.0, 0.0)));
-        manager.ReconcileRenderSet(30.0, Frames(At("a", 500.0, 0.0)));
+        manager.ReconcileRenderSet(30.0, new Dictionary<string, CoSimVehicleFrame>());
 
         RenderedVehicleInterval interval = Assert.Single(released);
         Assert.Equal("a", interval.VehicleId);
         Assert.Equal(12.5, interval.AdmittedAtSeconds);
         Assert.Equal(30.0, interval.ReleasedAtSeconds);
-        Assert.Equal(RenderSetReleaseReason.LeftTheRegion, interval.ReleaseReason);
-    }
-
-    [Fact]
-    public void AVehicleSumoRemovesIsReleasedAndSaidToHaveLeftTheSimulation()
-    {
-        List<RenderedVehicleInterval> released = [];
-        var policy = new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 100.0,
-                                               hysteresisMetres: 10.0, capacity: 8);
-        var manager = new RenderSetManager(policy, released.Add);
-
-        manager.ReconcileRenderSet(1.0, Frames(At("a", 10.0, 0.0)));
-        manager.ReconcileRenderSet(2.0, new Dictionary<string, CoSimVehicleFrame>());
-
-        Assert.Equal(RenderSetReleaseReason.LeftTheSimulation, Assert.Single(released).ReleaseReason);
+        Assert.Equal(RenderSetReleaseReason.LeftTheSimulation, interval.ReleaseReason);
+        Assert.Equal(1, manager.LastReleased);
     }
 
     [Fact]
     public void AVehicleThatVanishedWithoutArrivingIsReleasedAndSaidToHaveVanished()
     {
         List<RenderedVehicleInterval> released = [];
-        var policy = new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 100.0,
-                                               hysteresisMetres: 10.0, capacity: 8);
-        var manager = new RenderSetManager(policy, released.Add);
+        var manager = new RenderSetManager(released.Add);
 
         // Both gone from the frames; only one of them is named as having gone without arriving.
         manager.ReconcileRenderSet(1.0, Frames(At("arrived", 10.0, 0.0), At("vanished", -10.0, 0.0)));
@@ -104,71 +90,63 @@ public sealed class RenderSetManagerTests
     }
 
     [Fact]
-    public void TwoIdenticallyRankedVehiclesAreAdmittedInAnOrderThatDoesNotDependOnADictionary()
+    public void TheEndOfASessionClosesEveryOpenInterval()
     {
-        var policy = new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 100.0,
-                                               hysteresisMetres: 10.0, capacity: 1);
+        List<RenderedVehicleInterval> released = [];
+        var manager = new RenderSetManager(released.Add);
 
-        // Two vehicles the same distance from the centre, presented in opposite orders.
-        var forwards = new RenderSetManager(policy);
-        forwards.ReconcileRenderSet(0.0, Frames(At("alpha", 10.0, 0.0), At("beta", -10.0, 0.0)));
+        manager.ReconcileRenderSet(1.0, Frames(At("a", 10.0, 0.0), At("b", -10.0, 0.0)));
+        manager.CloseAll(4.0);
 
-        var backwards = new RenderSetManager(policy);
-        backwards.ReconcileRenderSet(0.0, Frames(At("beta", -10.0, 0.0), At("alpha", 10.0, 0.0)));
-
-        Assert.Equal(forwards.RenderedVehicleIds, backwards.RenderedVehicleIds);
-        Assert.Equal("alpha", Assert.Single(forwards.RenderedVehicleIds));
+        Assert.Empty(manager.RenderedVehicleIds);
+        Assert.Equal(2, released.Count);
+        Assert.All(released, interval =>
+        {
+            Assert.Equal(RenderSetReleaseReason.SessionEnded, interval.ReleaseReason);
+            Assert.Equal(4.0, interval.ReleasedAtSeconds);
+        });
     }
 
     [Fact]
-    public void APolicyWithNoHysteresisIsRefusedWhereItIsBuilt()
+    public void VehiclesAreAdmittedInAnOrderThatDoesNotDependOnADictionary()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(
-            () => new RegionRenderSetPolicy(0.0, 0.0, 100.0, hysteresisMetres: 0.0, capacity: 8));
+        // The same vehicles, presented in opposite orders.
+        var forwards = new RenderSetManager();
+        forwards.ReconcileRenderSet(0.0, Frames(At("alpha", 10.0, 0.0), At("beta", -10.0, 0.0),
+                                                At("gamma", 0.0, 10.0)));
+
+        var backwards = new RenderSetManager();
+        backwards.ReconcileRenderSet(0.0, Frames(At("gamma", 0.0, 10.0), At("beta", -10.0, 0.0),
+                                                 At("alpha", 10.0, 0.0)));
+
+        Assert.Equal(["alpha", "beta", "gamma"], forwards.RenderedVehicleIds.ToArray());
+        Assert.Equal(forwards.RenderedVehicleIds.ToArray(), backwards.RenderedVehicleIds.ToArray());
     }
 
     [RequiresSumoFact]
-    public void TheSubscriptionTierFollowsTheRenderSetAcrossARunningSimulation()
+    public void TheRenderSetIsEveryVehicleSumoHasAcrossARunningSimulation()
     {
         using SumoConnection sumo = CoSimFixtures.Open(CoSimFixtures.RightAngleTurnScenario);
         var population = new SubscribedPopulation(sumo.TraCI);
+        var manager = new RenderSetManager();
 
-        // A disc around the junction: a vehicle 100 m down the approach is outside it and is
-        // screened, and one on the junction is inside it and carries the full state set.
-        var policy = new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 30.0,
-                                               hysteresisMetres: 10.0, capacity: 8);
-        var manager = new RenderSetManager(policy);
-
-        Dictionary<string, (double X, double Y)> positions = [];
         Dictionary<string, CoSimVehicleFrame> frames = [];
-        bool sawTheTurnerRendered = false;
-        bool sawAVehicleScreenedButNotPromoted = false;
-        bool sawADemotion = false;
-
+        int most = 0;
         for (int step = 0; step < 400; step++)
         {
             sumo.Step();
             population.Reconcile(sumo.Simulation.DepartedVehicleIds,
                                  sumo.Simulation.ArrivedVehicleIds);
-            population.ReadPositions(positions);
-            long tierChangesBefore = population.TierChanges;
-            int promotedBefore = population.PromotedVehicleIds.Count;
-            manager.ReconcileSubscriptions(population, positions);
             population.ReadFrames(frames);
-            manager.ReconcileRenderSet(sumo.Time, frames);
+            manager.ReconcileRenderSet(sumo.Time, frames, population.LastVanished);
 
-            sawTheTurnerRendered |= manager.RenderedVehicleIds.Contains("turner");
-            sawAVehicleScreenedButNotPromoted |=
-                population.ScreenedVehicleIds.Count > population.PromotedVehicleIds.Count;
-            sawADemotion |= population.TierChanges > tierChangesBefore
-                            && population.PromotedVehicleIds.Count < promotedBefore;
+            Assert.Equal(sumo.Vehicles.Ids.Order(StringComparer.Ordinal),
+                         manager.RenderedVehicleIds.Order(StringComparer.Ordinal));
+            most = Math.Max(most, manager.RenderedVehicleIds.Count);
         }
 
-        Assert.True(sawTheTurnerRendered, "the turning vehicle never entered the render set");
-        Assert.True(sawAVehicleScreenedButNotPromoted,
-                    "every screened vehicle was promoted at every step, so the subscription tier is "
-                    + "not governed by the render set at all");
-        Assert.True(sawADemotion, "no vehicle ever left the subscription margin");
+        Assert.True(most >= 3, $"the fixture never held more than {most} vehicles at once");
+        Assert.Equal(4, manager.Admissions);
     }
 
     private static Dictionary<string, CoSimVehicleFrame> Frames(params CoSimVehicleFrame[] frames) =>

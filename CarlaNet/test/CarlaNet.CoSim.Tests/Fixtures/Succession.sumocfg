@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The cross, with the vehicles of Succession.rou.xml on it: one body handed from one vehicle to the
+     next. The step length matches the CARLA fixed delta the bridge ticks at, as RightAngleTurn's does. -->
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
+    <input>
+        <net-file value="RightAngleTurn.net.xml"/>
+        <route-files value="Succession.rou.xml"/>
+    </input>
+    <time>
+        <begin value="0"/>
+        <end value="3600"/>
+        <step-length value="0.05"/>
+    </time>
+    <processing>
+        <!-- Fixed so the tests see the same vehicle states on every run. -->
+        <seed value="42"/>
+        <!-- Forbidden here exactly as a capture scenario forbids it. -->
+        <time-to-teleport value="-1"/>
+    </processing>
+    <report>
+        <no-step-log value="true"/>
+    </report>
+</configuration>

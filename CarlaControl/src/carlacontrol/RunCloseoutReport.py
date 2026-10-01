@@ -347,13 +347,10 @@ class RunCloseoutReport:
             opening = admissions["at_window_open"]
             if opening is not None:
                 lines.append(f"  admission at the window's begin, t={opening['sim_time_s']:g}: "
-                             f"population {opening['population']}, eligible "
-                             f"{opening['eligible']}, admitted {opening['admitted']}, shed "
-                             f"{opening['shed']}, cap {opening['capacity']}")
+                             f"population {opening['population']}, all rendered")
             window = admissions["window"]
-            lines.append(f"  admission passes in the window: {window['passes']}, "
-                         f"{window['passes_shedding']} shedding; most eligible "
-                         f"{window['most_eligible']}, most shed {window['most_shed']}")
+            lines.append(f"  admission passes in the window: {window['passes']}; most population "
+                         f"{window['most_population']}")
         readiness = snapshot.get("readiness")
         for view in (readiness or {}).get("channels", []):
             lines.append(f"  view {view['sensor_id']}: {describe_view(view)}")

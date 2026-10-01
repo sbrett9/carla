@@ -134,9 +134,7 @@ public sealed class SumoDriveSessionLockTests
         new(scenario,
             world.PackagePath,
             CoSimFixtures.VehicleCatalogue,
-            "test://" + Guid.NewGuid().ToString("n"),
-            new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 60.0,
-                                      hysteresisMetres: 15.0, capacity: 8))
+            "test://" + Guid.NewGuid().ToString("n"))
         {
             TickWorld = () => true,
             Epoch = SolarLeaseTests.PortEpoch(),

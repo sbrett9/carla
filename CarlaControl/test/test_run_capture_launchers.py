@@ -96,6 +96,6 @@ def test_a_malformed_override_returns_1_from_both(tmp_path, launcher):
     result = tmp_path / "out" / "usage.result.json"
     completed = launch(launcher, "--run", str(run_path), "--site-profile",
                        str(layout.write_profile()), "--result", str(result),
-                       "--set", "capture.render_capp=3")
+                       "--set", "capture.prewarm_ss=3")
     assert completed.returncode == 1, completed.stdout + completed.stderr
     assert json.loads(result.read_text(encoding="utf-8"))["outcome"] == "usage_error"

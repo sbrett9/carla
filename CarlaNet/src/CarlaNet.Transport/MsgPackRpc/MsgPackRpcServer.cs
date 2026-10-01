@@ -322,7 +322,7 @@ public sealed class MsgPackRpcServer : IAsyncDisposable
         if (!hasReturn || result is null)
             w.WriteNil();
         else
-            MessagePackSerializer.Serialize(result.GetType(), ref w, result);
+            MessagePackSerializer.Serialize(MsgPackWireType.Of(result), ref w, result);
         w.Flush();
         await WriteLockedAsync(stream, writeLock, buffer.WrittenMemory).ConfigureAwait(false);
     }

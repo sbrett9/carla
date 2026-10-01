@@ -47,10 +47,8 @@ def pose_record(tick: int, actor: int, x: float, y: float, z: float) -> CoSimPos
                            LaneInterpolationCase.SameLane, 0.0, 0.0, 0.0)
 
 
-def admission(frame_s: float, eligible: int, capacity: int = 4, tick: int = 0) -> AdmissionPass:
-    admitted = min(eligible, capacity)
-    return AdmissionPass(tick, frame_s, eligible + 5, eligible + 2, eligible, admitted,
-                         eligible - admitted, capacity, 0, 0, 0, 0)
+def admission(frame_s: float, population: int, tick: int = 0) -> AdmissionPass:
+    return AdmissionPass(tick, frame_s, population, 2, 1, population + 40)
 
 
 # -- the rendered traffic's centre ------------------------------------------------------------------
@@ -100,22 +98,21 @@ def test_an_earlier_frame_arriving_late_does_not_replace_the_latest():
 def test_the_opening_pass_is_the_first_at_or_after_the_begin():
     admissions = WindowAdmissions(begin_s=100.0, end_s=110.0, step_s=1.0)
     for frame in (98.0, 99.0, 100.0, 101.0):
-        admissions.observe(admission(frame, eligible=int(frame) - 90))
+        admissions.observe(admission(frame, population=int(frame) - 90))
     opening = admissions.at_window_open
-    assert (opening["sim_time_s"], opening["eligible"], opening["shed"]) == (100.0, 10, 6)
-    assert opening["population"] == 15 and opening["subscribed"] == 12
+    assert (opening["sim_time_s"], opening["population"]) == (100.0, 10)
+    assert (opening["newly_admitted"], opening["released"], opening["total_admissions"]) == (2, 1, 50)
 
 
 def test_only_passes_whose_step_was_rendered_inside_the_window_are_counted():
     admissions = WindowAdmissions(begin_s=100.0, end_s=103.0, step_s=1.0)
     # Frames 100 to 105 arrive; 101, 102 and 103 govern steps inside 100-103. The pass for 100
     # governs the step before the window, 104 the step after it, and 105 is never followed.
-    for frame, eligible in ((100.0, 9), (101.0, 2), (102.0, 6), (103.0, 3), (104.0, 9),
-                            (105.0, 9)):
-        admissions.observe(admission(frame, eligible))
+    for frame, population in ((100.0, 9), (101.0, 2), (102.0, 6), (103.0, 3), (104.0, 9),
+                              (105.0, 9)):
+        admissions.observe(admission(frame, population))
     window = admissions.to_dict()["window"]
-    assert (window["passes"], window["passes_shedding"]) == (3, 1)
-    assert (window["most_eligible"], window["most_shed"], window["capacity"]) == (6, 2, 4)
+    assert (window["passes"], window["most_population"]) == (3, 6)
     assert (window["first_frame_s"], window["last_frame_s"]) == (101.0, 103.0)
 
 
@@ -124,7 +121,7 @@ def test_the_newest_pass_is_held_back_until_the_next_one_shows_its_step_rendered
     admissions.observe(admission(101.0, 9))
     assert admissions.passes == 0
     admissions.observe(admission(102.0, 1))
-    assert (admissions.passes, admissions.passes_shedding) == (1, 1)
+    assert (admissions.passes, admissions.most_population) == (1, 9)
 
 
 def test_no_pass_is_described_as_nothing():

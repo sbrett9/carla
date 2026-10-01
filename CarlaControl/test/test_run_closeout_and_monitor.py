@@ -68,7 +68,7 @@ def test_the_snapshot_reads_the_session_and_the_recorders(layout):
     assert snapshot["pacing"]["achieved_factor"] == 3.2
     # The newest pass is one step ahead of the rendered clock.
     assert snapshot["admission"]["sim_time_s"] == 26101.0
-    assert (snapshot["admission"]["eligible"], snapshot["admission"]["capacity"]) == (7, 128)
+    assert (snapshot["admission"]["population"], snapshot["admission"]["total_admissions"]) == (7, 7)
 
 
 def test_the_snapshot_carries_the_session_s_checks_and_the_closeout_shows_them(layout):
@@ -81,7 +81,7 @@ def test_the_snapshot_carries_the_session_s_checks_and_the_closeout_shows_them(l
     assert f"compile lock: {session.Report.CompileLock}" in text
     assert f"routed by {session.Report.CompileLock.RoutedByText}" in text
     assert "teleporting: disabled (time-to-teleport '-1')" in text
-    assert "admission passes in the window: 0, 0 shedding" in text
+    assert "admission passes in the window: 0; most population" in text
 
 
 def test_a_clean_run_meets_every_measured_gate(layout):
@@ -207,9 +207,8 @@ SNAPSHOT = {
                "completed_windows": 3},
     "render": {"rendered_now": 41, "ticks": 9000, "sumo_steps": 450, "poses_computed": 1,
                "batch_failures": 0},
-    "admission": {"sim_time_s": 25651.0, "world_tick": 9000, "population": 139, "subscribed": 101,
-                  "eligible": 96, "admitted": 90, "shed": 6, "capacity": 90, "newly_admitted": 2,
-                  "released": 1, "total_admissions": 400, "total_capacity_declines": 30},
+    "admission": {"sim_time_s": 25651.0, "world_tick": 9000, "population": 139, "newly_admitted": 2,
+                  "released": 1, "total_admissions": 4000},
     "channels": [{"sensor_id": "OVERWATCH-1", "directory": "d", "captured": None, "written": 900,
                   "recorder_dropped": 2, "illumination_paired": 900, "illumination_unpaired": 0,
                   "occlusion_measured": 880, "occlusion_unmatched": 20}],
@@ -223,7 +222,7 @@ def test_the_panel_shows_the_snapshot_s_figures_as_given():
     text = stream.getvalue()
     for figure in ("0.777", "2026-03-21T07:07:30-07:00", "+1.23", "25.0%", "written 900",
                    "recorder-dropped 2", "[advance]",
-                   "population 139   subscribed 101   eligible 96   admitted 90   shed 6   cap 90"):
+                   "population 139, all rendered   admitted 2   released 1   admitted in all 4,000"):
         assert figure in text, figure
     assert "4.5" not in text
 
@@ -234,7 +233,7 @@ def test_off_a_terminal_it_logs_lines_and_writes_no_escape_codes(caplog):
         SessionMonitor(stream=stream, is_terminal=False).update(SNAPSHOT)
     assert stream.getvalue() == ""
     assert any("t=25650.0" in record.message and "\x1b" not in record.message
-               and "eligible 96 admitted 90 shed 6 cap 90" in record.message
+               and "population 139, all rendered" in record.message
                for record in caplog.records)
 
 

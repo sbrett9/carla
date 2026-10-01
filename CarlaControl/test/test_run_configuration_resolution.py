@@ -58,37 +58,37 @@ def refused(layout: Layout, document=None, overrides=()) -> RunConfigurationRefu
 # -- every layer, by a field it alone supplies -------------------------------------------------------
 
 def test_each_layer_is_named_on_the_field_it_supplied(layout):
-    effective = resolve(layout, overrides=["capture.render_cap=96"])
+    effective = resolve(layout, overrides=["occlusion.samples=48"])
     layers = {path: effective.resolution(path).layer for path in (
         "capture.prewarm_s", "paths.capture_root", "world.origin_latitude", "scenario.sumo_step_s",
-        "capture.window", "capture.render_cap")}
+        "capture.window", "occlusion.samples")}
     assert layers == {"capture.prewarm_s": "tool_default", "paths.capture_root": "site_profile",
                       "world.origin_latitude": "world_package",
                       "scenario.sumo_step_s": "scenario_package",
                       "capture.window": "run_configuration",
-                      "capture.render_cap": "operator_override"}
+                      "occlusion.samples": "operator_override"}
 
 
 def test_the_tool_default_is_carried_beside_a_value_that_came_from_elsewhere(layout):
-    resolved = resolve(layout, overrides=["capture.render_cap=96"]).resolution("capture.render_cap")
-    assert resolved.value == 96
-    assert resolved.tool_default == 128
-    assert resolved.to_dict()["tool_default"] == 128
+    resolved = resolve(layout, overrides=["occlusion.samples=48"]).resolution("occlusion.samples")
+    assert resolved.value == 48
+    assert resolved.tool_default == 24
+    assert resolved.to_dict()["tool_default"] == 24
 
 
 def test_an_override_records_the_value_it_replaced(layout):
     document = run_document()
-    document["capture"]["render_cap"] = 110
-    resolved = resolve(layout, document, ["capture.render_cap=96"]).resolution("capture.render_cap")
+    document["occlusion"] = {"samples": 40}
+    resolved = resolve(layout, document, ["occlusion.samples=48"]).resolution("occlusion.samples")
     assert resolved.layer == "operator_override"
-    assert [(r["layer"], r["value"]) for r in resolved.overridden] == [("run_configuration", 110)]
+    assert [(r["layer"], r["value"]) for r in resolved.overridden] == [("run_configuration", 40)]
 
 
 def test_a_later_override_of_the_same_field_records_the_earlier(layout):
-    resolved = resolve(layout, overrides=["capture.render_cap=96", "capture.render_cap=64"]) \
-        .resolution("capture.render_cap")
-    assert resolved.value == 64
-    assert [r["value"] for r in resolved.overridden] == [96]
+    resolved = resolve(layout, overrides=["occlusion.samples=48", "occlusion.samples=32"]) \
+        .resolution("occlusion.samples")
+    assert resolved.value == 32
+    assert [r["value"] for r in resolved.overridden] == [48]
 
 
 def test_the_scenario_s_illumination_default_is_layer_four(layout):
@@ -105,10 +105,10 @@ def test_a_scenario_package_implies_its_mode(layout):
 
 def test_a_field_no_layer_supplies_resolves_as_unsupplied(layout):
     document = run_document()
-    del document["capture"]["render_region"]
+    del document["capture"]["channels"]
     effective = resolve(layout, document)
-    assert effective.resolution("capture.render_region").layer == "unsupplied"
-    assert "capture.render_region" in effective.unsupplied()
+    assert effective.resolution("capture.channels").layer == "unsupplied"
+    assert "capture.channels" in effective.unsupplied()
 
 
 # -- bindings ------------------------------------------------------------------------------------------
@@ -231,7 +231,7 @@ def test_a_scenario_can_be_named_by_its_lock_path(layout):
 # -- replay ----------------------------------------------------------------------------------------------
 
 def test_the_effective_configuration_replays_to_itself(layout):
-    first = resolve(layout, overrides=["solar.policy=advance", "capture.render_cap=96"])
+    first = resolve(layout, overrides=["solar.policy=advance", "occlusion.samples=48"])
     replayed = resolve(layout, first.to_run_configuration())
     assert replayed.digest == first.digest
     for path in RunConfiguration.FIELDS:
@@ -254,7 +254,7 @@ def test_a_replay_against_a_rebuilt_world_is_refused(layout):
 
 
 def test_the_digest_moves_when_a_science_field_moves(layout):
-    assert resolve(layout).digest != resolve(layout, overrides=["capture.render_cap=96"]).digest
+    assert resolve(layout).digest != resolve(layout, overrides=["occlusion.samples=48"]).digest
 
 
 def test_the_digest_does_not_depend_on_the_machine(layout, tmp_path):

@@ -34,9 +34,13 @@ from RunCaptureFixture import (  # noqa: E402
 
 from carlacontrol.LaunchEcho import LaunchEcho  # noqa: E402
 from carlacontrol.RunConfiguration import RunConfiguration  # noqa: E402
+from carlacontrol.RunConfigurationCheckCatalogue import RunConfigurationCheckCatalogue  # noqa: E402
 from carlacontrol.RunConfigurationFindings import RunConfigurationFindings  # noqa: E402
 from carlacontrol.RunConfigurationResolver import RunConfigurationResolver  # noqa: E402
-from carlacontrol.RunConfigurationValidator import RunConfigurationValidator  # noqa: E402
+from carlacontrol.RunConfigurationValidator import (  # noqa: E402
+    PNG_BYTES_PER_PIXEL,
+    RunConfigurationValidator,
+)
 from carlacontrol.SiteProfile import SiteProfile  # noqa: E402
 
 Usage = namedtuple("Usage", "total used free")
@@ -205,16 +209,24 @@ def test_two_channels_must_name_distinct_sensors(layout):
 
 # -- render, pacing, mode ------------------------------------------------------------------------
 
-def test_no_render_region_is_check_20(layout):
-    document = run_document()
-    del document["capture"]["render_region"]
-    *_, findings, _, _ = offline(layout, document)
-    assert "never defaulted" in only(findings, 20).message
+def test_no_field_bounds_the_rendered_population_and_its_checks_are_retired(layout):
+    # The session renders every vehicle SUMO has: the fixture names no render region or cap, and the
+    # checks that compared them (20, 21 and 33) cite nothing and are never given to another check.
+    assert not [path for path in RunConfiguration.FIELDS if path.startswith("capture.render_")]
+    assert launch(layout).findings == []
+    for retired in (20, 21, 33):
+        with pytest.raises(KeyError, match="retired"):
+            RunConfigurationCheckCatalogue.get(retired)
 
 
-def test_a_cap_above_the_hard_cap_is_refused(layout):
-    *_, findings, _, _ = offline(layout, overrides=["capture.render_cap=200"])
-    assert "exceeds render_cap_hard" in only(findings, 20).message
+def test_the_disk_estimate_counts_the_pictures_and_says_it_leaves_the_sidecars_out(layout):
+    effective, validator, findings, _, _ = offline(layout, free=10**9)
+    # The fixture's one channel at 2 Hz: its PNGs alone, at doc 10's measured size per pixel.
+    values = effective.channel_values(0)
+    assert validator.bytes_per_captured_second(effective) == pytest.approx(
+        2.0 * PNG_BYTES_PER_PIXEL * values["width"] * values["height"])
+    assert "truth sidecars, which grow with the traffic in frame, are not counted" in \
+        only(findings, 19).message
 
 
 def test_a_real_time_factor_as_available_is_refused(layout):

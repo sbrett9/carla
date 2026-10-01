@@ -201,9 +201,7 @@ AN_ORBIT = {"sensor_id": "ORBIT-1", "pattern": "orbit", "orbit_centre_x_m": 50.0
 RUN_DOCUMENT = {
     "run_configuration_version": 1,
     "scenario_package": SCENARIO_ID,
-    "capture": {"window": "morning",
-                "render_region": {"x_m": 0.0, "y_m": 0.0, "radius_m": 300.0},
-                "channels": [A_STARE]},
+    "capture": {"window": "morning", "channels": [A_STARE]},
 }
 
 

@@ -136,9 +136,7 @@ public sealed class SumoDriveSessionTests
             NamedCoSimRunFactAttribute.Scenario!,
             NamedCoSimRunFactAttribute.WorldPackage!,
             CoSimFixtures.VehicleCatalogue,
-            "named://" + Guid.NewGuid().ToString("n"),
-            new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 270.0,
-                                      hysteresisMetres: 30.0, capacity: 128))
+            "named://" + Guid.NewGuid().ToString("n"))
         {
             WarmUpToSimulatedSecond = NamedCoSimRunFactAttribute.WarmUp,
             SumoStepOverrideSeconds = NamedCoSimRunFactAttribute.StepLength,
@@ -177,7 +175,6 @@ public sealed class SumoDriveSessionTests
 
             _output.WriteLine(session.Report.ToString());
             Assert.True(session.Report.BodiesSpawned > 0, "no body was ever lent");
-            Assert.Equal(0, session.Report.PoseDeclinesForNoBody);
         }
 
         // One blueprint in the scenario, so every body is one; and each is spawned once, never
@@ -295,8 +292,8 @@ public sealed class SumoDriveSessionTests
     {
         // A 26 m grid from -76 m to 80 m under a network whose arms reach 100 m. That is inside the
         // one cell a session lets a network overhang its surface, so the session starts, and the
-        // outer end of every arm has no ground under it. The region reaches past the arms' ends, so
-        // a vehicle is still rendered, and still holds its body, as it drives off the surface.
+        // outer end of every arm has no ground under it. Every vehicle SUMO has is rendered, so a
+        // vehicle still holds its body as it drives off the surface.
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!", cellSize: 26.0, min: -76.0, cells: 7);
 
@@ -305,9 +302,7 @@ public sealed class SumoDriveSessionTests
             CoSimFixtures.RightAngleTurnScenario,
             world.PackagePath,
             CoSimFixtures.VehicleCatalogue,
-            "test://" + Guid.NewGuid().ToString("n"),
-            new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 120.0,
-                                      hysteresisMetres: 15.0, capacity: 8))
+            "test://" + Guid.NewGuid().ToString("n"))
         {
             World = carla,
             Epoch = SolarLeaseTests.PortEpoch(),
@@ -1105,9 +1100,7 @@ public sealed class SumoDriveSessionTests
         new(CoSimFixtures.RightAngleTurnScenario,
             world.PackagePath,
             CoSimFixtures.VehicleCatalogue,
-            "test://" + Guid.NewGuid().ToString("n"),
-            new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 60.0,
-                                      hysteresisMetres: 15.0, capacity: 8))
+            "test://" + Guid.NewGuid().ToString("n"))
         {
             TickWorld = tick,
             OnPose = computed.Add,

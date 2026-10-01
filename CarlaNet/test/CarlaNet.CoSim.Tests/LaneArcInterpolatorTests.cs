@@ -267,11 +267,6 @@ public sealed class LaneArcInterpolatorTests
             sumo.Step();
             population.Reconcile(sumo.Simulation.DepartedVehicleIds,
                                  sumo.Simulation.ArrivedVehicleIds);
-            if (population.ScreenedVehicleIds.Contains(vehicleId))
-            {
-                population.Promote(vehicleId);
-            }
-
             if (population.TryReadFrame(vehicleId, out CoSimVehicleFrame frame))
             {
                 track.Add(frame);

@@ -16,49 +16,35 @@ namespace CarlaNet.CoSim;
 /// occupied -- there is no queue and no retry, the call simply answers a collision. A vehicle that
 /// borrows a body that already exists never meets that failure.</para>
 ///
-/// <para><b>The pool grows to demand rather than being sized in advance.</b> The alternative is to
-/// spawn the full depth of every blueprint before the first tick, which for a seventeen-blueprint
-/// catalogue and a render-set capacity of 128 is two thousand actors, nearly all of them parked for
-/// the whole run. Growing on demand spawns the body the first time a blueprint is actually needed
-/// and never again, so the spawn-once property that makes the pool safe is kept while the actor
-/// count stays near what the scene holds. Each body gets its own parking slot, so a spawn is always
-/// onto empty ground.</para>
+/// <para><b>The pool grows to demand, and has no ceiling.</b> Every vehicle SUMO has is rendered, so
+/// the pool comes to hold as many bodies of each blueprint as the scenario ever has vehicles of it at
+/// once: a scenario heavier than the machine is comfortable with makes the run slower, never thinner.
+/// A body is spawned only when every body of its blueprint is lent out, so each one is spawned once
+/// and reused for the rest of the run -- the spawn-once property that makes the pool safe -- and the
+/// actor count stays at the most the scene ever held. Each body gets its own parking slot, so a spawn
+/// is always onto empty ground.</para>
 ///
 /// <para><b>Physics and gravity are off from the moment a body exists.</b> They are written in one
 /// batch immediately after the spawn and before any tick, so no body ever falls, is pushed, or
 /// settles: between a spawn and the next tick the world does not advance, and the world is the only
 /// thing that could move it. A pose-driven body under physics would coast, collide and roll between
 /// corrections, which is the vehicle dynamics this mode exists to replace with SUMO's.</para>
-///
-/// <para><b>Exhaustion is a policy event.</b> Asking for a body when every one is out and the budget
-/// is spent answers false and is counted. It is never an error and never a spawn attempt, because
-/// the honest response to "more vehicles want rendering than this run can afford" is to render fewer
-/// and record how many were declined.</para>
 /// </remarks>
 public sealed class VehicleBodyPool
 {
     private readonly ICarlaWorld _world;
     private readonly VehicleParking _parking;
-    private readonly int _maximumBodies;
     private readonly Dictionary<string, Stack<PooledBody>> _free = [];
     private readonly Dictionary<string, PooledBody> _held = [];
     private readonly List<PooledBody> _bodies = [];
 
     /// <param name="world">The world the bodies live in.</param>
     /// <param name="parking">Where a free body stands.</param>
-    /// <param name="maximumBodies">
-    /// How many actors this session may own at once, across every blueprint. A ceiling on the whole
-    /// pool rather than a depth per blueprint: which bodies a scenario asks for is a property of its
-    /// traffic mix, which nothing knows before the run, while the total is the budget that actually
-    /// binds.
-    /// </param>
-    public VehicleBodyPool(ICarlaWorld world, VehicleParking parking, int maximumBodies)
+    public VehicleBodyPool(ICarlaWorld world, VehicleParking parking)
     {
         ArgumentNullException.ThrowIfNull(world);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumBodies);
         _world = world;
         _parking = parking;
-        _maximumBodies = maximumBodies;
     }
 
     /// <summary>Every body the pool has spawned, free or held.</summary>
@@ -73,44 +59,25 @@ public sealed class VehicleBodyPool
     /// </summary>
     public IReadOnlyDictionary<string, PooledBody> Held => _held;
 
-    /// <summary>How many times a vehicle was refused a body because the budget was spent.</summary>
-    public long Exhaustions { get; private set; }
-
     /// <summary>
-    /// Lend a body of the named blueprint to a vehicle, spawning one where the pool has none free
-    /// and the budget allows.
+    /// Lend a body of the named blueprint to a vehicle: the one it already holds, a free one of that
+    /// blueprint, or one spawned for it where every body of that blueprint is out.
     /// </summary>
-    /// <returns>
-    /// False where every body of that blueprint is out and the pool is at its ceiling. The vehicle
-    /// is then simulated and not rendered, which is a decision, not a failure.
-    /// </returns>
-    public bool TryCheckOut(string vehicleId, string blueprintId, out PooledBody body)
+    public PooledBody CheckOut(string vehicleId, string blueprintId)
     {
         ArgumentException.ThrowIfNullOrEmpty(vehicleId);
         ArgumentException.ThrowIfNullOrEmpty(blueprintId);
 
-        if (_held.TryGetValue(vehicleId, out body))
+        if (_held.TryGetValue(vehicleId, out PooledBody body))
         {
-            return true;
+            return body;
         }
 
-        if (_free.TryGetValue(blueprintId, out Stack<PooledBody>? free) && free.Count > 0)
-        {
-            body = free.Pop();
-            _held[vehicleId] = body;
-            return true;
-        }
-
-        if (_bodies.Count >= _maximumBodies)
-        {
-            Exhaustions++;
-            body = default;
-            return false;
-        }
-
-        body = Spawn(blueprintId);
+        body = _free.TryGetValue(blueprintId, out Stack<PooledBody>? free) && free.Count > 0
+            ? free.Pop()
+            : Spawn(blueprintId);
         _held[vehicleId] = body;
-        return true;
+        return body;
     }
 
     /// <summary>The body a vehicle holds, if it holds one.</summary>

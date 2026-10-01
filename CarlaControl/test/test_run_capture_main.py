@@ -80,7 +80,7 @@ def test_an_offline_refusal_exits_with_the_result_s_status(layout):
 
 
 def test_a_malformed_override_exits_1_with_a_result(layout):
-    status, result = invoke(layout, "--set", "capture.render_capp=3")
+    status, result = invoke(layout, "--set", "capture.prewarm_ss=3")
     assert status == 1 and RunResult.read(result)["outcome"] == "usage_error"
 
 

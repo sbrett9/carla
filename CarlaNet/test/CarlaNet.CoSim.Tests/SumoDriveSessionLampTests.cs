@@ -35,16 +35,18 @@ public sealed class SumoDriveSessionLampTests
         List<CoSimPoseRecord> poses = [];
         SumoDriveSessionOptions options = Driving(world, carla, Noon());
         options.OnPose = poses.Add;
+        double step;
 
         using (SumoDriveSession session = SumoDriveSession.Start(options))
         {
-            for (int step = 0; step < 400 && session.Advance(); step++)
+            for (int advanced = 0; advanced < 400 && session.Advance(); advanced++)
             {
             }
 
             _output.WriteLine(session.Report.ToString());
             Assert.False(session.Report.Headlights!.OnAtStart);
             Assert.Equal(0, session.Report.Headlights.Switches);
+            step = session.Clock.SumoStepSeconds;
         }
 
         // What SUMO signalled, frame by frame, running the same scenario and seed alone.
@@ -54,7 +56,15 @@ public sealed class SumoDriveSessionLampTests
         Assert.NotEmpty(bodies);
         foreach (CoSimPoseRecord record in bodies)
         {
-            Assert.Equal(signalled[(Millisecond(record.SimulatedTimeSeconds), record.Pose.VehicleId)], record.Signals);
+            // The frame a pose is rendered from is SUMO's at the tick's instant -- or, on the step
+            // before the frame SUMO first reports a vehicle in, that first frame, where the vehicle is
+            // first drawn.
+            string vehicle = record.Pose.VehicleId;
+            SumoVehicleSignals given = signalled.TryGetValue((Millisecond(record.SimulatedTimeSeconds), vehicle),
+                                                             out SumoVehicleSignals atTheTick)
+                ? atTheTick
+                : signalled[(Millisecond(record.SimulatedTimeSeconds + step), vehicle)];
+            Assert.Equal(given, record.Signals);
             Assert.Equal(VehicleLampMapping.FromSumo(record.Signals), record.Lamps);
         }
 
@@ -118,17 +128,15 @@ public sealed class SumoDriveSessionLampTests
     public void ABodyGivenBackIsDarkenedAndABodyLentAgainIsGivenItsNewVehicleSLamps()
     {
         // At night every body is lit, so a body carried from one vehicle to the next would carry lamps.
+        // The succession fixture's second vehicle borrows the body its predecessor gave back.
         using SyntheticWorld world = Fixture();
         var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         List<CoSimPoseRecord> poses = [];
-        List<RenderedVehicleInterval> released = [];
-        SumoDriveSessionOptions options = Driving(world, carla, SolarLeaseTests.PortEpoch());
+        List<(RenderedVehicleInterval Interval, long AtTick)> released = [];
+        SumoDriveSessionOptions options = Driving(world, carla, SolarLeaseTests.PortEpoch(),
+                                                  CoSimFixtures.SuccessionScenario);
         options.OnPose = poses.Add;
-        options.OnRelease = released.Add;
-
-        // One body for the whole run, so every vehicle after the first borrows the one its predecessor
-        // gave back.
-        options.MaximumBodies = 1;
+        options.OnRelease = interval => released.Add((interval, carla.Ticks));
 
         using SumoDriveSession session = SumoDriveSession.Start(options);
         for (int step = 0; step < 400 && session.Advance(); step++)
@@ -154,7 +162,10 @@ public sealed class SumoDriveSessionLampTests
             }
         }
 
-        Assert.Equal(released.Count(interval => interval.Actor != 0), parkings);
+        // A body given back is parked by the next tick; the one the run's last step gave back has no
+        // next tick, and is destroyed with the rest when the session ends.
+        Assert.Equal(released.Count(entry => entry.Interval.Actor != 0 && entry.AtTick < carla.Ticks), parkings);
+        Assert.True(parkings > 0, "no body was given back while the run went on");
 
         // A body lent to a second vehicle wears that vehicle's lamps from its first tick.
         Assert.Contains(poses.Where(record => record.Actor != 0).GroupBy(record => record.Actor),
@@ -178,16 +189,12 @@ public sealed class SumoDriveSessionLampTests
     [RequiresSumoFact]
     public void ABodyLentToAVehicleShowingNoLampsIsStillWrittenDark()
     {
-        // A region over the northern exit, where a vehicle arrives cruising straight at midday with no
-        // lamp lit: its body's lamps are written anyway, because the actor keeps whatever it last held.
+        // A vehicle departing straight ahead at midday shows no lamp on its first tick: its body's lamps
+        // are written anyway, because the actor keeps whatever it last held.
         using SyntheticWorld world = Fixture();
         var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         List<CoSimPoseRecord> poses = [];
-        SumoDriveSessionOptions options = Driving(world, carla, Noon()) with
-        {
-            RenderSet = new RegionRenderSetPolicy(0.0, 70.0, admitRadiusMetres: 25.0, hysteresisMetres: 5.0,
-                                                  capacity: 8),
-        };
+        SumoDriveSessionOptions options = Driving(world, carla, Noon());
         options.OnPose = poses.Add;
 
         using SumoDriveSession session = SumoDriveSession.Start(options);
@@ -206,42 +213,26 @@ public sealed class SumoDriveSessionLampTests
     }
 
     [RequiresSumoFact]
-    public void AVehicleAdmittedAgainToTheBodyItGaveBackWearsItsLampsAgain()
+    public void EveryLampCommandLeavesEachPosedBodyHoldingTheLampsItsPoseRecordSays()
     {
-        // One place and one body, at night. The vehicle holding the place loses it to a nearer one, which
-        // is then taken out, and the first is admitted again to the body it gave back -- which was
-        // darkened in between.
+        // At night, with one body handed from one vehicle to the next and darkened in between.
         using SyntheticWorld world = Fixture();
         var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         List<CoSimPoseRecord> poses = [];
-        List<RenderedVehicleInterval> released = [];
-        SumoDriveSessionOptions options = Driving(world, carla, SolarLeaseTests.PortEpoch()) with
-        {
-            RenderSet = new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 60.0, hysteresisMetres: 15.0,
-                                                  capacity: 1),
-        };
-        options.MaximumBodies = 1;
+        SumoDriveSessionOptions options = Driving(world, carla, SolarLeaseTests.PortEpoch(),
+                                                  CoSimFixtures.SuccessionScenario);
         options.OnPose = poses.Add;
-        options.OnRelease = released.Add;
 
         using SumoDriveSession session = SumoDriveSession.Start(options);
-        for (int step = 0; step < 400 && !released.Any(interval => interval.ReleaseReason == RenderSetReleaseReason.Capacity)
-                           && session.Advance(); step++)
-        {
-        }
-
-        string displaced = Assert.Single(released, interval => interval.ReleaseReason == RenderSetReleaseReason.Capacity).VehicleId;
-        long displacedAt = poses.Where(record => record.Pose.VehicleId == displaced).Max(record => record.TickIndex);
-        session.Sumo.Vehicles.Remove(Assert.Single(session.RenderedVehicleIds));
         for (int step = 0; step < 400 && session.Advance(); step++)
         {
         }
 
-        Assert.Contains(poses, record => record.Pose.VehicleId == displaced && record.TickIndex > displacedAt + 1
-                                         && record.Actor != 0);
+        Assert.Contains(poses.Where(record => record.Actor != 0).GroupBy(record => record.Actor),
+                        body => body.Select(record => record.Pose.VehicleId).Distinct().Count() > 1);
 
         // Replayed in order, every lamp command leaves each posed body holding exactly the lamps its pose
-        // record says -- on the tick a vehicle is admitted again included.
+        // record says -- on the tick a body is lent to its second vehicle included.
         Dictionary<uint, VehicleLightStateFlags> held = [];
         ILookup<long, CoSimPoseRecord> posedAt = poses.Where(record => record.Actor != 0).ToLookup(record => record.TickIndex);
         foreach ((IReadOnlyList<Command> batch, long tick) in carla.DrivenBatches)
@@ -404,13 +395,12 @@ public sealed class SumoDriveSessionLampTests
     private static SyntheticWorld Fixture() =>
         SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
 
-    private static SumoDriveSessionOptions Driving(SyntheticWorld world, RecordedWorld carla, SolarEpoch? epoch) =>
-        new(CoSimFixtures.RightAngleTurnScenario,
+    private static SumoDriveSessionOptions Driving(SyntheticWorld world, RecordedWorld carla, SolarEpoch? epoch,
+                                                   string? scenario = null) =>
+        new(scenario ?? CoSimFixtures.RightAngleTurnScenario,
             world.PackagePath,
             CoSimFixtures.VehicleCatalogue,
-            "test://" + Guid.NewGuid().ToString("n"),
-            new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 60.0,
-                                      hysteresisMetres: 15.0, capacity: 8))
+            "test://" + Guid.NewGuid().ToString("n"))
         {
             World = carla,
             Epoch = epoch,

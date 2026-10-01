@@ -66,14 +66,6 @@ internal sealed class WorldConnectionGuard : ICarlaWorld
         Guard(nameof(ObservedVelocity), () => _world.ObservedVelocity(actor));
 
     /// <inheritdoc/>
-    public Transform? ObservedTransformAt(ActorId actor, ulong frame) =>
-        Guard(nameof(ObservedTransformAt), () => _world.ObservedTransformAt(actor, frame));
-
-    /// <inheritdoc/>
-    public CameraOptics? DescribeCamera(ActorId camera) =>
-        Guard(nameof(DescribeCamera), () => _world.DescribeCamera(camera));
-
-    /// <inheritdoc/>
     public ulong? Tick() => Guard(nameof(Tick), _world.Tick);
 
     /// <inheritdoc/>

@@ -49,8 +49,8 @@ LAST_FOLLOWED_FRAME_S = 25192.95
 FOLLOWED_STEPS = int(HOLD_S - FIRST_RENDERED_S)
 A_TRAFFIC_STARE = {"sensor_id": "TRAFFIC-1", "stare_look_at_target": "rendered_traffic",
                    "stare_altitude_m": 250.0, "stare_standoff_m": 300.0, "stare_bearing_deg": 45.0}
-# Three bodies driving east at 1 m/s from these points at the first rendered frame, and a pose the
-# pool had no body for, far away.
+# Three bodies driving east at 1 m/s from these points at the first rendered frame, and a pose
+# written to no body, far away.
 BODIES = ((11, 100.0, -200.0, 12.0), (12, 120.0, -220.0, 14.0), (13, 140.0, -240.0, 16.0))
 BODILESS = (0, 5000.0, 5000.0, 900.0)
 
@@ -168,17 +168,29 @@ def test_a_last_frame_with_no_body_refuses_at_preroll_whatever_came_before(layou
 
 # -- following through the prewarm, holding through the window ------------------------------------
 
-def test_the_camera_starts_over_the_render_region_s_centre(layout):
+def test_the_camera_starts_over_the_centre_of_the_world_s_staging_bounds(layout):
     server = traffic_server()
-    result = capture(layout, server, overrides=[
-        'capture.render_region={"x_m": 50.0, "y_m": -80.0, "radius_m": 400.0}'])
+    server.staging_bounds = {"min_x": -150.0, "min_y": -460.0, "max_x": 250.0, "max_y": 300.0,
+                             "margin": 40.0}
+    result = capture(layout, server)
     rgb, depth = cameras(server)
     start = expected_pose(aim_around((50.0, -80.0, 0.0)))
     assert pose_of(rgb.spawned_at) == pytest.approx(start, abs=1e-6)
     assert pose_of(depth.spawned_at) == pytest.approx(start, abs=1e-6)
     placed = result.produced["cameras"][0]["placed_before_the_prewarm"]
-    assert placed["look_at"]["source"] == "the render region's centre"
+    assert placed["look_at"]["source"] == "the centre of the world's staging bounds"
     assert tuple(placed["pose"].values()) == pytest.approx(start, abs=1e-6)
+
+
+def test_a_world_with_no_staging_bounds_starts_the_camera_over_carla_s_origin(layout):
+    server = traffic_server()
+    server.staging_bounds = None
+    result = capture(layout, server)
+    rgb, _ = cameras(server)
+    assert pose_of(rgb.spawned_at) == pytest.approx(expected_pose(aim_around((0.0, 0.0, 0.0))),
+                                                    abs=1e-6)
+    placed = result.produced["cameras"][0]["placed_before_the_prewarm"]
+    assert placed["look_at"]["source"] == "CARLA's origin: the world publishes no staging bounds"
 
 
 def test_the_camera_follows_the_traffic_until_the_hold_and_holds_the_rest(layout):

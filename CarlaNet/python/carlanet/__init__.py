@@ -2085,10 +2085,6 @@ class World:
             self._scenario = None
 
     def start_sumo_drive(self, scenario, world_package, catalogue,
-                         region_centre=(0.0, 0.0), admit_radius_m=400.0, hysteresis_m=60.0,
-                         capacity=128, maximum_bodies=192,
-                         render_set="cameras", render_min_pixels=2.0, render_admit_lead_s=3.0,
-                         render_release_lag_s=5.0, render_max_speed_mps=40.0,
                          fixed_delta=0.05, record_hz=2.0,
                          warm_up_to=0.0, window_opens_at=None, step_length=None,
                          road_layer_visible=False, signal_layer_visible=False,
@@ -2117,31 +2113,13 @@ class World:
         holds a measurement for is simulated and never rendered — no body of another shape stands in
         for it.
 
-        `region_centre`, `admit_radius_m` and `hysteresis_m` draw the region vehicles are rendered
-        in, in the SUMO network's own projected metres; `capacity` is how many may be rendered at
-        once and `maximum_bodies` how many CARLA actors the session may own. `warm_up_to`
-        fast-forwards SUMO to a simulated second before the first world tick, and `step_length`
-        overrides the scenario's own SUMO step (behaviour-changing, and recorded as such).
-
-        `render_set` is 'cameras', the default, or 'circle'. Under 'circle' the region above is the
-        render set for the whole run. Under 'cameras' the render set follows every camera registered
-        with `session.AddCamera(camera.id)` -- a vehicle is rendered while it is inside, or about to
-        enter, a registered camera's ground footprint -- and the circle decides only while none is
-        registered, so a session given no camera behaves exactly as under 'circle'.
-        `session.RemoveCamera(camera.id)` stops following one; remove a camera before destroying it.
-        Each camera's pose is read at every SUMO step from the client's snapshot of the last rendered
-        frame, and its image size and field of view once, from its attributes. A footprint is the
-        camera's frustum on the ground, capped at the slant range past which the catalogue's longest
-        body covers fewer than `render_min_pixels` pixels along its length at the corners of the
-        picture, and swept along the camera's own motion over the step. A vehicle is admitted
-        `render_admit_lead_s` of its own travel ahead of a footprint, plus a margin of the bodies'
-        reach and one SUMO step at `render_max_speed_mps`, so it appears out of view; it is kept
-        within `hysteresis_m` beyond the widest admission threshold, and released
-        `render_release_lag_s` after it last was. When more pass than `capacity` allows, a vehicle in
-        view ranks ahead of one approaching, one already rendered ahead of a newcomer, and then the
-        scenario's SUMO seed decides, so one seed always admits the same set. Every admission pass
-        says which rule decided it (`Rule`, `Cameras`, `Held` on `session.Report.LastAdmissionPass`),
-        and `session.Report.CameraFootprints` gives each camera's range cap and footprint.
+        Every vehicle SUMO has is rendered: the scenario is the only arbiter of population. A vehicle
+        holds a body from the frame after SUMO first reports it until SUMO removes it or the session
+        ends, wherever it is and however many others there are, parked vehicles included. Nothing
+        caps the count; a scenario heavier than the machine is comfortable with makes a synchronous
+        run slower on the wall clock, never different in content. `warm_up_to` fast-forwards SUMO to
+        a simulated second before the first world tick, and `step_length` overrides the scenario's
+        own SUMO step (behaviour-changing, and recorded as such).
 
         `road_layer_visible` and `signal_layer_visible` decide what is in frame. Both are off,
         because the imagery this mode produces is of the photogrammetry: the generated road mesh is
@@ -2290,17 +2268,17 @@ class World:
 
         The render set's admission pass is published as it is made, once per SUMO step:
         `session.Report.LastAdmissionPass` holds the latest, replaced whole -- `Population` (every
-        vehicle SUMO has), `Subscribed`, `Eligible` (inside the region or a camera footprint's margin,
-        or held by the release lag), `Admitted` (holding a place,
-        the eligible up to the capacity), `Shed` (the eligible the capacity declined), `Capacity`,
-        `NewlyAdmitted` and `Released` at that pass, and the running `TotalAdmissions` and
-        `TotalCapacityDeclines`. Read it between advances for a live monitor; `on_admission_pass` is
-        handed every pass, including the two made while the session starts, for a writer that keeps
-        the whole ledger. It is called from the tick thread once per SUMO step and must not block.
+        vehicle SUMO has, every one holding a place), `NewlyAdmitted` and `Released` at that pass,
+        and the running `TotalAdmissions`. Read it between advances for a live monitor;
+        `on_admission_pass` is handed every pass, including the two made while the session starts,
+        for a writer that keeps the whole ledger. It is called from the tick thread once per SUMO
+        step and must not block.
 
         Vehicles are rendered by a pool of bodies, lent to a SUMO vehicle on admission and parked
         out of sight, about 300 m below the ground, between loans -- so the world's vehicle actors
         are not the scene's vehicles, and an actor id names each vehicle its body carries in turn.
+        The pool has no ceiling: it grows to as many bodies of each blueprint as the scenario ever
+        has vehicles of it at once (`session.Report.BodiesSpawned`).
         `session.RenderSet` answers, for each frame the session rendered, which bodies the frame
         drew, the SUMO vehicle each one drew, its vType and the frame its rendered span began on,
         keyed by the frame the tick produced; the last 256 frames are held. Hand it to
@@ -2317,27 +2295,18 @@ class World:
             print("SUMO co-simulation unavailable: CarlaNet.CoSim assembly not loaded "
                   "(rebuild the wheel/DLLs).", file=sys.stderr)
             return None
-        from CarlaNet.CoSim import (AdmissionPass, CameraFootprintRenderSetPolicy, CarlaClientWorld,
-                                    CollisionSpan, CoSimPoseRecord, IlluminationPolicy,
-                                    PoseDivergence, RegionRenderSetPolicy, RenderedVehicleInterval,
+        from CarlaNet.CoSim import (AdmissionPass, CarlaClientWorld, CollisionSpan, CoSimPoseRecord,
+                                    IlluminationPolicy, PoseDivergence, RenderedVehicleInterval,
                                     SolarEpoch, SumoDriveSession, SumoDriveSessionOptions,
                                     VehicleNotInserted)
         from System import Action
 
-        if render_set not in ("cameras", "circle"):
-            raise ValueError(f"render_set is 'cameras' or 'circle', not {render_set!r}")
-        circle = RegionRenderSetPolicy(float(region_centre[0]), float(region_centre[1]),
-                                       float(admit_radius_m), float(hysteresis_m), int(capacity))
-        policy = circle if render_set == "circle" else CameraFootprintRenderSetPolicy(
-            circle, float(render_admit_lead_s), float(render_release_lag_s),
-            float(render_min_pixels), float(render_max_speed_mps))
         options = SumoDriveSessionOptions(
             str(scenario), str(world_package), str(catalogue),
-            f"{self._client.Endpoint}/{self.get_map().name}", policy)
+            f"{self._client.Endpoint}/{self.get_map().name}")
         # Attaching starts the world-observer stream the pose read-back is taken from, if this
         # client has not already got one.
         options.World = CarlaClientWorld.Attach(self._client, True)
-        options.MaximumBodies = int(maximum_bodies)
         options.WorldDeltaSeconds = float(fixed_delta)
         options.CaptureRateHz = float(record_hz)
         options.WarmUpToSimulatedSecond = float(warm_up_to)

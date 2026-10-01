@@ -10,9 +10,9 @@ caller's log -- it writes one line every `line_interval_s` through `logging`, so
 display (§3.10.1 M1). A loud condition is written at once, at `WARNING`, whatever the interval.
 
 The panel is the capture operator's (§7.4.1): it shows the declared sun's elevation and the policy
-because that is how a wrong sun is made visible, and the session's latest admission pass --
-population, subscribed, eligible, admitted, shed and cap -- because that is how a binding render cap
-is made visible. Until the recorders start it also shows where each channel's view stands in its
+because that is how a wrong sun is made visible, and the session's latest admission pass -- the
+population, every vehicle of which is rendered, and the vehicles admitted and released at it --
+because the population is what sets the pace. Until the recorders start it also shows where each channel's view stands in its
 wait for its tiles and its picture (03 §9.5.1), because that wait is what the prewarm is spent on. An exercised operator's picture is a different display and never this one (D12.31).
 """
 from __future__ import annotations
@@ -101,10 +101,9 @@ class SessionMonitor:
                            if pacing["paced"] else ""))
         admission = snapshot.get("admission")
         if admission is not None:
-            rows.append(f"sumo  population {admission['population']}   subscribed "
-                        f"{admission['subscribed']}   eligible {admission['eligible']}   admitted "
-                        f"{admission['admitted']}   shed {admission['shed']}   cap "
-                        f"{admission['capacity']}")
+            rows.append(f"sumo  population {admission['population']}, all rendered   admitted "
+                        f"{admission['newly_admitted']}   released {admission['released']}   "
+                        f"admitted in all {admission['total_admissions']:,}")
         render = snapshot["render"]
         if render is not None:
             rows.append(f"rend  rendered now {render['rendered_now']}   ticks {render['ticks']:,}"
@@ -131,8 +130,7 @@ class SessionMonitor:
         progress = snapshot["window"].get("progress")
         admission = snapshot.get("admission")
         population = "" if admission is None else (
-            f"; eligible {admission['eligible']} admitted {admission['admitted']} shed "
-            f"{admission['shed']} cap {admission['capacity']}")
+            f"; population {admission['population']}, all rendered")
         views = "".join(f"; view {view['sensor_id']} {describe_view(view)}"
                         for view in cls._views(snapshot))
         return (f"t={cls._n(snapshot['sim_time_s'], '.1f')} "
