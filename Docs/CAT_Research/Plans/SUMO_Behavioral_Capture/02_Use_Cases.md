@@ -169,7 +169,7 @@ never starts a session, configures a run, loads a world, or calls anything.
 | Requirement | Where it lives |
 |---|---|
 | Know the corpus's illumination strata, to know what a training set is balanced over | Published corpus metadata: prevalence in three units **per illumination band**, with the band cut points recorded beside the numbers ([06 §5.3](06_Truth_And_Annotation.md)); handed over at UC-10 step 4; D2.19 |
-| Compute a denominator the capture cannot silently distort | Observability accounting: observed intervals gated first on rendered spans, published per sensor and unioned, with admissions, releases and refused vehicle types alongside ([06 §5.1](06_Truth_And_Annotation.md), [§10.4](06_Truth_And_Annotation.md)); handed over at UC-10 steps 4 and 5; D2.8 |
+| Compute a denominator the capture cannot silently distort | Observability accounting: observed intervals gated first on rendered spans, published per sensor and unioned, with admissions, releases and refused vehicle types alongside ([06 §5.1](06_Truth_And_Annotation.md), [§8.4](06_Truth_And_Annotation.md)); handed over at UC-10 steps 4 and 5; D2.8 |
 | Read it per illumination stratum as well as per sensor | Both breakdowns are published, and both are refused as a pooled aggregate (UC-10 failure flows) |
 
 The pattern is the same in all three rows: **we compute and publish the quantity a score would need; we
@@ -1107,7 +1107,7 @@ clause-by-clause argument that slowing costs no truth.
 | **The sun falling behind the exercise's own wall clock**, under an advancing policy | free: `get_solar_state` reads the tick-paired world-observer cache with no RPC (`carlanet/__init__.py:1511-1533`) | It is the one indicator an observer reads **without instrumentation**, in the imagery itself, which is why an advancing sun makes a slowed exercise visible for nothing |
 
 A coordination note rather than a decision: [12](12_Operator_Control_Surface.md) D12.15 makes a non-zero
-`Dropped` on any channel one of exactly three conditions that **interrupt** the operator. In a captured
+`Dropped` on any channel the one condition that **interrupts** the operator in every run. In a captured
 collection that is right. In a live exercise at the floor factor, drops are the *expected* degradation and
 an interrupt per drop is noise. That tension is open question 13, and it is
 [12](12_Operator_Control_Surface.md)'s to settle.
@@ -1344,7 +1344,7 @@ version recorded; a named recipient.
    - the run's solar record: the epoch, the derived civil date and time, the policy and rate, the
      solar-frame offset, any override, and the achieved sun (UC-7 step 10);
    - the render-set accounting: admissions, releases and refused vehicle types
-     ([06 §10.4](06_Truth_And_Annotation.md)).
+     ([06 §8.4](06_Truth_And_Annotation.md)).
 5. **State what it does not contain**, as explicit rows rather than as an absence. This is the half a
    recipient cannot reconstruct and the half that decides whether their denominator is honest:
    - **intervals whose participants were never instantiated.** They are `not_rendered`, they are in the
@@ -2537,11 +2537,12 @@ renumbered.
 
 13. **In a live exercise, is a dropped frame an interruption or a column?**
     [12](12_Operator_Control_Surface.md) D12.15 makes a non-zero `FrameRecorder.Dropped` on any channel
-    one of exactly three conditions that interrupt the operator, and everything else a column. For a
+    the one condition that interrupts the operator in every run, and everything else a column. For a
     captured collection that is right: a thin corpus that looks normal is the failure it exists to catch.
     For a live exercise it is inverted — drops are the **expected** degradation when a consumer is slower
     than the world (UC-8 §8a), and an interrupt per drop is noise an operator learns to dismiss, which
-    destroys the interrupt's value for the other two conditions as well. Options: **(a)** keep D12.15 as
+    destroys the interrupt's value for the live run's other condition, the achieved factor falling below
+    its floor, as well. Options: **(a)** keep D12.15 as
     written and accept the noise; **(b)** make drops a column in the live mode and an interrupt in the
     capture mode, which is a mode-dependent rule and therefore something to be suspicious of; **(c)**
     interrupt **once**, on the first drop of a session, and carry a persistent counter thereafter.
