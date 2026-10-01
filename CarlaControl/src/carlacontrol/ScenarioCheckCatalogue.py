@@ -50,13 +50,15 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
                   "Traffic routed by one duarouter release on a network another built: a different "
                   "release can route the same demand differently"),
     # -- references --------------------------------------------------------------------------------
-    ScenarioCheck(7, "references", "Every declared place resolves, and to exactly one thing",
+    ScenarioCheck(7, "references", "Every declared place resolves, and to exactly one thing; every "
+                  "lane a closure names is on its edge",
                   "the network, the place index and the area table", _R, COMPILER,
                   "An authored place that silently becomes a different place"),
     ScenarioCheck(8, "references", "Every reference names what the specification declares: places, "
                   "instants, rotas, series, flows and counterfactuals", "the specification", _R,
                   COMPILER, "A typo becoming a valid-looking identifier"),
-    ScenarioCheck(54, "references", "Every actor, rota entry, flow and capture window id is unique",
+    ScenarioCheck(54, "references", "Every actor, rota entry, flow, lane closure and capture window "
+                  "id is unique",
                   "the specification", _R, COMPILER,
                   "Two vehicles SUMO would read as one, or a window cited ambiguously"),
     ScenarioCheck(9, "references", "Every stop position lies within its lane's length",
@@ -73,6 +75,11 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
                   "duarouter's false accept: a trip to a nonexistent edge routes as one edge"),
     ScenarioCheck(13, "routes", "An explicit edge list is connected end to end", "map.net.xml "
                   "connections", _R, COMPILER, "A break that appears only where the list is used"),
+    ScenarioCheck(55, "routes", "Every route through a lane closure enters and leaves the closed "
+                  "edge on a lane the closure leaves open", "map.net.xml lane connections and the "
+                  "routed routes", _R, COMPILER,
+                  "SUMO refusing to insert a vehicle whose route the closure breaks, and stopping "
+                  "the run"),
     # -- vehicles ----------------------------------------------------------------------------------
     ScenarioCheck(14, "vehicles", "Every vehicle class names only blueprints the catalogue measured, "
                   "and every named mix draws on declared classes at positive shares under an id of "
@@ -181,8 +188,9 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
                   "SUMO rejecting the file"),
     ScenarioCheck(44, "emission", "No emitted SUMO file carries an H:M:S time", "the emitted files",
                   _R, COMPILER, "An offset wearing a clock's clothes"),
-    ScenarioCheck(51, "emission", "The route file is valid against SUMO's routes_file.xsd",
-                  "the emitted file", _R, COMPILER, "A route file SUMO will not load"),
+    ScenarioCheck(51, "emission", "The route file is valid against SUMO's routes_file.xsd, and the "
+                  "additional file, where there is one, against its additional_file.xsd",
+                  "the emitted files", _R, COMPILER, "A file SUMO will not load"),
     ScenarioCheck(52, "emission", "The route file carries no parameter but the vehicle-type "
                   "binding's", "the emitted file", _R, COMPILER,
                   "Supervision leaking into the route file, the channel it must never use"),

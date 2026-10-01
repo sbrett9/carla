@@ -337,6 +337,92 @@ def test_phases_given_with_another_route_or_a_stop_or_not_closing_are_refused(
     assert check in checks(result)
 
 
+# ---- lane closures, the one element an additional file carries ---------------------------------------
+
+# West Street's westbound carriageway, which no route of the fixture drives, closed for ten minutes
+# from 07:10; a vehicle would learn of it as it entered the world eastbound. The fixture's edges are
+# one lane each, so a closure there closes the whole edge, and only an edge no route crosses may be
+# closed (check 55); what a closure does to traffic is measured on the Arapahoe dwell's six lanes
+# (`test_arapahoe_generator.py`).
+CLOSURE = {"id": "incident", "place": "west_out", "lanes": [0], "notify": ["west_gate"],
+           "begin": "d0 07:10", "end": "d0 07:20"}
+CLOSURE_BEGIN_S, CLOSURE_END_S = 4200.0, 4800.0
+
+
+def closure_spec(world, **closure) -> dict:
+    places = {**world.specification()["places"], "west_out": {"edge": "-900"}}
+    return {"places": places, "lane_closures": [{**CLOSURE, **closure}]}
+
+
+def test_a_lane_closure_compiles_into_an_additional_file_the_configuration_names_and_the_lock_binds(
+        world, installation, tmp_path):
+    result = compile_spec(world, installation, tmp_path, **closure_spec(world))
+    assert not result.refused, [str(f) for f in result.findings.refusals]
+    additional = result.files["additional"]
+    assert additional.name == "street_layout_probe.add.xml"
+    rerouter = ET.parse(additional).getroot().find("rerouter")
+    assert (rerouter.get("id"), rerouter.get("edges")) == ("incident", "900")
+    interval = rerouter.find("interval")
+    assert (float(interval.get("begin")), float(interval.get("end"))) == (CLOSURE_BEGIN_S,
+                                                                          CLOSURE_END_S)
+    assert [(c.get("id"), c.get("allow")) for c in interval] == [("-900_0", "authority")]
+    config = ET.parse(result.files["config"]).getroot()
+    assert config.find("input/additional-files").get("value") == additional.name
+    locked = result.lock["files"]["additional"]
+    assert locked == {"path": additional.name,
+                      "sha256": hashlib.sha256(additional.read_bytes()).hexdigest()}
+    reported = result.report["lane_closures"][0]
+    assert (reported["lanes"], reported["open_lanes"]) == (["-900_0"], 0)
+    assert reported["begin"]["civil"] == "2026-03-21T07:10:00-06:00"
+
+
+def test_a_scenario_without_closures_writes_no_additional_file(world, installation, tmp_path):
+    result = compile_spec(world, installation, tmp_path)
+    assert "additional" not in result.files and "additional" not in result.lock["files"]
+    assert "additional-files" not in result.files["config"].read_text(encoding="utf-8")
+    assert not list((tmp_path / "out").glob("*.add.xml"))
+
+
+def test_sumo_loads_the_compiled_closure_and_runs_to_the_end(world, installation, tmp_path):
+    result = compile_spec(world, installation, tmp_path, **closure_spec(world))
+    completed = subprocess.run(
+        [str(installation.sumo), "-c", str(result.files["config"]), "--no-step-log", "true"],
+        capture_output=True, text=True, timeout=300, check=False)
+    assert completed.returncode == 0, completed.stderr
+    assert "Simulation ended at time: 10800" in completed.stdout
+
+
+def test_a_closure_breaking_a_route_is_refused_under_check_55(world, installation, tmp_path):
+    """Closing the one lane of the ambient flow's destination leaves the flow no connection into it,
+    and SUMO, measured, stops the run at the first vehicle inserted during the closure."""
+    result = compile_spec(world, installation, tmp_path,
+                          **closure_spec(world, place="east_end", notify=["west_gate"]))
+    assert 55 in checks(result)
+    assert "every lane of 901#1 is closed" in messages(result, 55)
+    assert {f.subject for f in result.findings.by_check(55)} >= {"flow ambient", "actor probe"}
+    assert not (tmp_path / "out" / "street_layout_probe.add.xml").exists()
+
+
+@pytest.mark.parametrize(("changes", "check"), [
+    ({"lanes": [1]}, 7),
+    ({"place": "nowhere"}, 8),
+    ({"lanes": [0, 0]}, 53),
+    ({"begin": "d0 07:20", "end": "d0 07:10"}, 47),
+    ({"end": "d0 09:30"}, 37),
+    ({"id": "ambient"}, 54),
+])
+def test_a_closure_that_cannot_be_applied_as_written_is_refused(world, installation, tmp_path,
+                                                                 changes, check):
+    result = compile_spec(world, installation, tmp_path, **closure_spec(world, **changes))
+    assert check in checks(result)
+    assert not (tmp_path / "out" / "street_layout_probe.add.xml").exists()
+
+
+def test_a_closure_naming_a_lane_its_edge_lacks_says_how_many_it_has(world, installation, tmp_path):
+    result = compile_spec(world, installation, tmp_path, **closure_spec(world, lanes=[0, 2]))
+    assert "closes lane 2 of -900, which has 1 lane, numbered 0 to 0" in messages(result, 7)
+
+
 # ---- the SUMO release that routes (check 6) ---------------------------------------------------------
 
 def package_recording_converter(world, tmp_path, converter: str | None) -> dict:

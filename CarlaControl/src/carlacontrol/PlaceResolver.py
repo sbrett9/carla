@@ -142,6 +142,9 @@ class PlaceResolver:
         self.edge_names: dict[str, str] = {}
         self.edge_ends: dict[str, tuple[str, str]] = {}
         self.successors: dict[str, set[str]] = {}
+        # Which lane of an edge leads into which lane of the next, per pair of normal edges: what a
+        # lane closure is checked against.
+        self.lane_links: dict[tuple[str, str], set[tuple[int, int]]] = {}
         root = ET.fromstring(network_text)
         for edge in root.findall("edge"):
             if edge.get("function") == "internal":
@@ -170,6 +173,8 @@ class PlaceResolver:
             source, target = connection.get("from"), connection.get("to")
             if source in self.edge_lanes and target in self.edge_lanes:
                 self.successors.setdefault(source, set()).add(target)
+                self.lane_links.setdefault((source, target), set()).add(
+                    (int(connection.get("fromLane", 0)), int(connection.get("toLane", 0))))
         self._streets = {street["name"]: street for street in self.place_index.get("streets", [])}
         self._edge_records = {edge["edge_id"]: edge
                               for street in self.place_index.get("streets", [])

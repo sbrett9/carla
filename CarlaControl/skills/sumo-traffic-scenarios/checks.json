@@ -86,7 +86,7 @@
     {
       "id": 7,
       "group": "references",
-      "title": "Every declared place resolves, and to exactly one thing",
+      "title": "Every declared place resolves, and to exactly one thing; every lane a closure names is on its edge",
       "against": "the network, the place index and the area table",
       "outcomes": [
         "refuse"
@@ -108,7 +108,7 @@
     {
       "id": 54,
       "group": "references",
-      "title": "Every actor, rota entry, flow and capture window id is unique",
+      "title": "Every actor, rota entry, flow, lane closure and capture window id is unique",
       "against": "the specification",
       "outcomes": [
         "refuse"
@@ -170,6 +170,17 @@
       ],
       "status": "compiler",
       "prevents": "A break that appears only where the list is used"
+    },
+    {
+      "id": 55,
+      "group": "routes",
+      "title": "Every route through a lane closure enters and leaves the closed edge on a lane the closure leaves open",
+      "against": "map.net.xml lane connections and the routed routes",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "SUMO refusing to insert a vehicle whose route the closure breaks, and stopping the run"
     },
     {
       "id": 14,
@@ -559,13 +570,13 @@
     {
       "id": 51,
       "group": "emission",
-      "title": "The route file is valid against SUMO's routes_file.xsd",
-      "against": "the emitted file",
+      "title": "The route file is valid against SUMO's routes_file.xsd, and the additional file, where there is one, against its additional_file.xsd",
+      "against": "the emitted files",
       "outcomes": [
         "refuse"
       ],
       "status": "compiler",
-      "prevents": "A route file SUMO will not load"
+      "prevents": "A file SUMO will not load"
     },
     {
       "id": 52,
