@@ -14,6 +14,7 @@ the real scenario artifacts. No code changed, no build run.
 | 6 · 2026-09-28 | Illumination bands are doc 11 §4.4's six, defined there, in the core vocabulary and on every record that carries a band. |
 | 7 · 2026-09-30 | The capture sidecar lists each frame's rendered set, named by SUMO vehicle, and no parked body; a truth uid follows the SUMO vehicle, not the pooled body (§8.2, §7.1). |
 | 8 · 2026-09-30 | The render cap (128, hard 192) is removed: it was never measured, since M2 never ran, and the scenario is the arbiter of population. Every vehicle SUMO has is drawn, and a heavier scenario runs slower, never thinner. So no span is withheld from the training export for a binding cap (D6.16 withdrawn, §10.4), nothing prioritises participants, and a vehicle goes undrawn only outside every capture window or when its type has no measured body (§4.4, §5.1, §8.4). |
+| 9 · 2026-10-01 | A vehicle SUMO inserts is drawn from the frame SUMO first reports it in, where SUMO inserted it and moving, so no frame shows it, or lists it in its truth, before SUMO inserted it (§4.4). Measured live on Bahonar, the bridge had drawn every inserted vehicle a step early, standing still while its truth reported SUMO's speed. |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -1309,8 +1310,10 @@ it was, and would make the base rate of §2.6 wrong in the direction that makes 
 denser in annotated content than it is.
 
 **Two things put a vehicle in that row, and nothing else does.** Every vehicle SUMO has inside a
-capture window, its prewarm included, is drawn, from the frame after it is first seen until SUMO
-removes it or the window closes, parked vehicles included; the body pool has no ceiling and declines
+capture window, its prewarm included, is drawn, from the frame SUMO first reports it in until SUMO
+removes it or the window closes, parked vehicles included; one SUMO inserts is drawn first where SUMO
+inserted it and moving, so no frame shows it, or lists it in its truth, before SUMO inserted it
+([03](03_CoSimulation_Runtime.md) D3.6). The body pool has no ceiling and declines
 nothing ([03](03_CoSimulation_Runtime.md) D3.9). So the row holds a vehicle only (a) for the part of its life
 that falls outside every capture window, truth-only windows included, where SUMO runs alone, and
 (b) when its `vType` has no measured body — it names no CARLA blueprint, or one the catalogue holds no

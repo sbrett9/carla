@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 16 | 2026-10-01. `C2`: a vehicle SUMO inserts is drawn from the frame SUMO first reports it in, at that position and moving, and never before SUMO inserted it, and its admission instant is that frame (§4.2, §4.3). A vehicle SUMO has when rendering begins is drawn on the first rendered frame |
 | 15 | 2026-09-30. `C2` draws every vehicle SUMO has in a capture window. The render cap (128, hard 192) was never measured — M2 never ran — and the scenario is the arbiter of population, so a heavier scenario runs slower, never thinner. The input is `capture_windows[]` and `prewarm_s`; the region, priority and capacity gates, E2, E4, V2.3, V2.4, the reasons `outside_region` and `capped`, the rendered-fraction gate and open question 3 are withdrawn; `D4.6` holds by construction |
 | 14 | `C1`: the registry carries corrected class metadata and the European HGV; the content's unregistered blueprints inventoried; the Fuso Rosa is a bus; the default class set stated |
 | 13 | `C3` is the directory of loose files the scenario compiler writes, bound by its lock; the clipped OSM is not carried, and each validation rule states where it is enforced |
@@ -1348,8 +1349,10 @@ with the terms defined as:
 | **`measured_body`** | `v`'s vType names a catalogue blueprint whose extent the catalogue measured (`C1` §3.2, `D4.17`) | — |
 
 Every vehicle SUMO has in a window is drawn, wherever it is and whether or not any sensor can see it;
-there is no region, no priority order and no capacity. An admitted vehicle is first drawn where the
-previous frame had it ([`03`](03_CoSimulation_Runtime.md) D3.6). No vehicle waits for a body: bodies
+there is no region, no priority order and no capacity. A vehicle SUMO inserts is drawn from the frame
+SUMO first reports it in: where SUMO inserted it, moving from then, and never on a frame before SUMO
+inserted it ([`03`](03_CoSimulation_Runtime.md) D3.6). A vehicle SUMO already has when the session
+starts rendering is drawn on the first rendered frame. No vehicle waits for a body: bodies
 are spawned or reused as the population needs, with no ceiling ([`03`](03_CoSimulation_Runtime.md)
 §8.2), and what a larger population costs is wall-clock time ([`10`](10_Scale_And_Performance.md)
 §4.3).
@@ -1379,7 +1382,9 @@ A vehicle still drawn when the run stops is not released; §4.1 says what its ro
 designed around ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md), *Vehicle fade is demoted*): an admitted vehicle
 appears at full opacity and a released one disappears. What replaces the fade-derived notion of a
 vehicle having "arrived" is the **recorded admission and release instant** — `rendered_spans[]` in §4.5
-— which is a fact about the capture rather than a visual transition.
+— which is a fact about the capture rather than a visual transition. The admission instant is the
+frame SUMO first reports the vehicle in, or the first rendered frame for one SUMO already had, and it
+is the first frame the vehicle is drawn on (§4.2): no frame before it shows the vehicle.
 
 Two consequences, both already true in the tree. The arrival gate degrades to inert rather than
 breaking: `CarlaClient.IsActorEstablished` returns true for any actor nobody has faded
