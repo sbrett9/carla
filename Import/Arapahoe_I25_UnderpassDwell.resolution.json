@@ -1,0 +1,4530 @@
+{
+  "resolution_version": 1,
+  "outcome": "compiled",
+  "scenario": {
+    "scenario_id": "Arapahoe_I25_UnderpassDwell",
+    "scenario_name": "Arapahoe I-25 underpass dwell",
+    "description": "One marked vehicle enters northbound on I-25, leaves at the Arapahoe interchange, runs west on Arapahoe Road and north up South Yosemite Street, waits 30 minutes under the Yosemite Street bridge and leaves north on I-25, among heavy freeway traffic with a wide spread of speeds, dense arterial traffic heavy in vans and trucks, residential commuters on the west and south edges, and an incident closing 5 of the 6 northbound lanes for 3 minutes. Written by CarlaControl/scripts/make_arapahoe_scenario.py; edit that, not this.",
+    "specification": "Arapahoe_I25_UnderpassDwell.scenario.json",
+    "specification_sha256": "436bc7f2c8cdf693416ecc5231ed89e14cbf5e454897f0147702ab7d43f1d469",
+    "spec_version": 1
+  },
+  "findings": [
+    {
+      "check": 17,
+      "outcome": "warn",
+      "subject": "vehicle class suv",
+      "message": "draws one body, vehicle.nissan.patrol, so every vehicle of the class looks the same and its appearance can become its label"
+    },
+    {
+      "check": 17,
+      "outcome": "warn",
+      "subject": "vehicle class van",
+      "message": "draws one body, vehicle.sprinter.mercedes, so every vehicle of the class looks the same and its appearance can become its label"
+    },
+    {
+      "check": 17,
+      "outcome": "warn",
+      "subject": "vehicle class truck",
+      "message": "draws one body, vehicle.carlacola.actors, so every vehicle of the class looks the same and its appearance can become its label"
+    },
+    {
+      "check": 17,
+      "outcome": "warn",
+      "subject": "vehicle class semi",
+      "message": "draws one body, vehicle.carlamotors.european_hgv, so every vehicle of the class looks the same and its appearance can become its label"
+    },
+    {
+      "check": 17,
+      "outcome": "warn",
+      "subject": "vehicle class marked",
+      "message": "draws one body, vehicle.jeep.wrangler_rubicon, so every vehicle of the class looks the same and its appearance can become its label"
+    },
+    {
+      "check": 41,
+      "outcome": "warn",
+      "subject": "supervision",
+      "message": "I(band; supervision) / H(supervision) = undefined (one supervision state only) over 52 entries (at their departures; no capture window is declared). Expected in a pattern of life and never a refusal; the table, the usable bands and the remedies are in the resolution report, and the statistic is in the lock"
+    }
+  ],
+  "epoch": {
+    "declared": {
+      "calendar_advances": true,
+      "civil_datetime": "2026-09-29T07:00:00-06:00",
+      "dst_in_effect": true,
+      "epoch_version": 1,
+      "note": "Arapahoe County, Colorado: simulated second zero is 07:00 Mountain Daylight Time on 29 September 2026, in the morning peak",
+      "time_zone_id": "America/Denver",
+      "utc_datetime": "2026-09-29T13:00:00Z",
+      "utc_offset_hours": -6
+    },
+    "epoch_block_sha256": "ef1458adcb1395f9fd2141d237057e311571a7bf1e24a178d8349ba24e691f8f",
+    "statement": "t = 0 is 2026-09-29T07:00:00-06:00 (2026-09-29T13:00:00Z), UTC-06:00 including daylight saving, calendar advances, America/Denver; the run ends at 2026-09-29T07:45:00-06:00",
+    "t0_civil": "2026-09-29T07:00:00-06:00",
+    "end_s": 2700.0,
+    "end_civil": "2026-09-29T07:45:00-06:00",
+    "time_zone_id": "America/Denver",
+    "time_zone_id_resolved": false
+  },
+  "zone": {
+    "declared_offset_hours": -6.0,
+    "engine_time_zone_hours": -6.992299333333333,
+    "difference_hours": 0.9922993333333334,
+    "written_by_the_session": "set_solar_epoch writes the declared offset as the sun's zone (04 D4.19)"
+  },
+  "illumination_default": {
+    "declared": {
+      "illumination_version": 1,
+      "policy": "freeze_at_window_start"
+    },
+    "policy": "freeze_at_window_start",
+    "status": "an authored default the operator may override (07 §3.9)",
+    "declared_elevation_kind": "refraction_corrected"
+  },
+  "capture_windows": [],
+  "illumination_label_association": {
+    "statistic": "I(band; supervision) / H(supervision), base 2",
+    "band_source": "11_Time_And_Illumination.md §4.4",
+    "band_edges": [
+      {
+        "band": "day",
+        "above_deg": 6.0
+      },
+      {
+        "band": "golden",
+        "above_deg": 0.0
+      },
+      {
+        "band": "civil_twilight",
+        "above_deg": -6.0
+      },
+      {
+        "band": "nautical_twilight",
+        "above_deg": -12.0
+      },
+      {
+        "band": "astronomical_twilight",
+        "above_deg": -18.0
+      },
+      {
+        "band": "night",
+        "above_deg": null
+      }
+    ],
+    "elevation_kind": "refraction_corrected",
+    "presence_estimate": "a vehicle is present from its departure for its free-flow route time plus its stops; a flow from its begin to its end",
+    "over_windows": {
+      "not_computed": "no capture window is declared"
+    },
+    "over_span": {
+      "entries": 52,
+      "table": {
+        "golden": {
+          "annotated": 0,
+          "nominal": 0,
+          "unlabelled": 52,
+          "total": 52
+        }
+      },
+      "state_totals": {
+        "annotated": 0,
+        "nominal": 0,
+        "unlabelled": 52
+      },
+      "annotated_rate": {
+        "golden": 0.0
+      },
+      "base_annotated_rate": 0.0,
+      "normalized_mutual_information": null,
+      "degenerate_bands": [],
+      "usable_bands": []
+    },
+    "normalized_mutual_information": null,
+    "bands": {
+      "golden": {
+        "annotated": 0,
+        "nominal": 0,
+        "unlabelled": 52,
+        "total": 52
+      }
+    },
+    "entries": 52,
+    "measured_over": "span",
+    "remedies": [
+      "pair an annotated behaviour with a displaced-in-time counterfactual, so the same annotation appears in a second band (07 §7.3)",
+      "add a nominal twin inside the annotated band: a hard negative lit identically (07 §7.3, doc 20 §2.7)",
+      "add a capture window in a band where the annotated class is absent, which turns a degenerate band into a populated one"
+    ]
+  },
+  "world": {
+    "package": "Arapahoe_I25.cwp",
+    "map_name": "Arapahoe_I25",
+    "network_fingerprint": "ac83aa8b541158e60f012d185405ec20e5a924ff95f1a4609660ccd3a714191b",
+    "netconvert_version": "Eclipse SUMO netconvert 1.27.0",
+    "origin": [
+      39.59431,
+      -104.88449
+    ],
+    "georeference": "+proj=tmerc +lat_0=39.59431 +lon_0=-104.88449 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
+    "routing_sumo": {
+      "home": "G:\\Projects\\CarlaUE_5_7_4\\carla\\Build\\sumo-install",
+      "version": "1.27.0",
+      "matched_by": "explicit",
+      "release_agreement": "SameRelease",
+      "verdict": "the world was converted by 'Eclipse SUMO netconvert 1.27.0', the same release"
+    }
+  },
+  "instants": {},
+  "places": {
+    "i25_north_in": {
+      "name": "i25_north_in",
+      "authored": {
+        "gateway": "south",
+        "travel": "in",
+        "street": "South Valley Highway"
+      },
+      "form": "gateway",
+      "edges": [
+        "37722905"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Valley Highway",
+      "detail": "1 edge(s) entering on the south side",
+      "edge_details": [
+        {
+          "edge": "37722905",
+          "street": "South Valley Highway",
+          "length_m": 554.38,
+          "speed_mps": 29.06
+        }
+      ]
+    },
+    "i25_north_out": {
+      "name": "i25_north_out",
+      "authored": {
+        "gateway": "north",
+        "travel": "out",
+        "street": "South Valley Highway"
+      },
+      "form": "gateway",
+      "edges": [
+        "106308386"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Valley Highway",
+      "detail": "1 edge(s) leaving on the north side",
+      "edge_details": [
+        {
+          "edge": "106308386",
+          "street": "South Valley Highway",
+          "length_m": 355.24,
+          "speed_mps": 29.06
+        }
+      ]
+    },
+    "i25_south_in": {
+      "name": "i25_south_in",
+      "authored": {
+        "gateway": "north",
+        "travel": "in",
+        "street": "South Valley Highway"
+      },
+      "form": "gateway",
+      "edges": [
+        "472478085"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Valley Highway",
+      "detail": "1 edge(s) entering on the north side",
+      "edge_details": [
+        {
+          "edge": "472478085",
+          "street": "South Valley Highway",
+          "length_m": 543.32,
+          "speed_mps": 29.06
+        }
+      ]
+    },
+    "i25_south_out": {
+      "name": "i25_south_out",
+      "authored": {
+        "gateway": "south",
+        "travel": "out",
+        "street": "South Valley Highway"
+      },
+      "form": "gateway",
+      "edges": [
+        "908324823"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Valley Highway",
+      "detail": "1 edge(s) leaving on the south side",
+      "edge_details": [
+        {
+          "edge": "908324823",
+          "street": "South Valley Highway",
+          "length_m": 796.82,
+          "speed_mps": 29.06
+        }
+      ]
+    },
+    "i25_north_short_of_arapahoe": {
+      "name": "i25_north_short_of_arapahoe",
+      "authored": {
+        "edge": "907700111"
+      },
+      "form": "edge",
+      "edges": [
+        "907700111"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Valley Highway",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "907700111",
+          "street": "South Valley Highway",
+          "length_m": 441.36,
+          "speed_mps": 29.06
+        }
+      ]
+    },
+    "i25_north_past_arapahoe": {
+      "name": "i25_north_past_arapahoe",
+      "authored": {
+        "edge": "1001791386"
+      },
+      "form": "edge",
+      "edges": [
+        "1001791386"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Valley Highway",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "1001791386",
+          "street": "South Valley Highway",
+          "length_m": 242.07,
+          "speed_mps": 29.06
+        }
+      ]
+    },
+    "arapahoe_east_in": {
+      "name": "arapahoe_east_in",
+      "authored": {
+        "edge": "131933384"
+      },
+      "form": "edge",
+      "edges": [
+        "131933384"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Arapahoe Road",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "131933384",
+          "street": "East Arapahoe Road",
+          "length_m": 17.8,
+          "speed_mps": 17.88
+        }
+      ]
+    },
+    "arapahoe_east_out": {
+      "name": "arapahoe_east_out",
+      "authored": {
+        "edge": "427819527"
+      },
+      "form": "edge",
+      "edges": [
+        "427819527"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Arapahoe Road",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "427819527",
+          "street": "East Arapahoe Road",
+          "length_m": 148.02,
+          "speed_mps": 17.88
+        }
+      ]
+    },
+    "arapahoe_west_in": {
+      "name": "arapahoe_west_in",
+      "authored": {
+        "edge": "427819540#0"
+      },
+      "form": "edge",
+      "edges": [
+        "427819540#0"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Arapahoe Road",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "427819540#0",
+          "street": "East Arapahoe Road",
+          "length_m": 39.78,
+          "speed_mps": 17.88
+        }
+      ]
+    },
+    "arapahoe_west_out": {
+      "name": "arapahoe_west_out",
+      "authored": {
+        "edge": "427819541#0"
+      },
+      "form": "edge",
+      "edges": [
+        "427819541#0"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Arapahoe Road",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "427819541#0",
+          "street": "East Arapahoe Road",
+          "length_m": 81.52,
+          "speed_mps": 20.12
+        }
+      ]
+    },
+    "arapahoe_westbound_west_of_i25": {
+      "name": "arapahoe_westbound_west_of_i25",
+      "authored": {
+        "edge": "629675735"
+      },
+      "form": "edge",
+      "edges": [
+        "629675735"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Arapahoe Road",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "629675735",
+          "street": "East Arapahoe Road",
+          "length_m": 108.45,
+          "speed_mps": 17.88
+        }
+      ]
+    },
+    "i25_north_exit_to_arapahoe_east": {
+      "name": "i25_north_exit_to_arapahoe_east",
+      "authored": {
+        "edge": "131933449#0"
+      },
+      "form": "edge",
+      "edges": [
+        "131933449#0"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "131933449#0",
+          "street": "",
+          "length_m": 16.24,
+          "speed_mps": 22.22
+        }
+      ]
+    },
+    "xanthia_street_northbound": {
+      "name": "xanthia_street_northbound",
+      "authored": {
+        "edge": "-17003602#7"
+      },
+      "form": "edge",
+      "edges": [
+        "-17003602#7"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Xanthia Street",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "-17003602#7",
+          "street": "South Xanthia Street",
+          "length_m": 75.6,
+          "speed_mps": 11.18
+        }
+      ]
+    },
+    "arapahoe_westbound_at_yosemite": {
+      "name": "arapahoe_westbound_at_yosemite",
+      "authored": {
+        "edge": "427819537#1"
+      },
+      "form": "edge",
+      "edges": [
+        "427819537#1"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Arapahoe Road",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "427819537#1",
+          "street": "East Arapahoe Road",
+          "length_m": 60.47,
+          "speed_mps": 17.88
+        }
+      ]
+    },
+    "yosemite_northbound_from_arapahoe": {
+      "name": "yosemite_northbound_from_arapahoe",
+      "authored": {
+        "edge": "1026993839#0"
+      },
+      "form": "edge",
+      "edges": [
+        "1026993839#0"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Yosemite Street",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "1026993839#0",
+          "street": "South Yosemite Street",
+          "length_m": 151.46,
+          "speed_mps": 27.78
+        }
+      ]
+    },
+    "underpass_westbound": {
+      "name": "underpass_westbound",
+      "authored": {
+        "edge": "218965860#0"
+      },
+      "form": "edge",
+      "edges": [
+        "218965860#0"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Yosemite Street",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "218965860#0",
+          "street": "South Yosemite Street",
+          "length_m": 155.65,
+          "speed_mps": 13.89
+        }
+      ]
+    },
+    "underpass_eastbound": {
+      "name": "underpass_eastbound",
+      "authored": {
+        "edge": "-223315781"
+      },
+      "form": "edge",
+      "edges": [
+        "-223315781"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Yosemite Street",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "-223315781",
+          "street": "South Yosemite Street",
+          "length_m": 161.04,
+          "speed_mps": 13.89
+        }
+      ]
+    },
+    "underpass_dwell": {
+      "name": "underpass_dwell",
+      "authored": {
+        "lat": 39.600357,
+        "lon": -104.88649,
+        "max_snap_m": 2.0,
+        "vclass": "passenger"
+      },
+      "form": "point",
+      "edges": [
+        "218965860#0"
+      ],
+      "lane": "218965860#0_0",
+      "start_pos": null,
+      "end_pos": 88.63,
+      "street": "South Yosemite Street",
+      "detail": "snapped 0.09 m to 218965860#0_0 admitting 'passenger'",
+      "edge_details": [
+        {
+          "edge": "218965860#0",
+          "street": "South Yosemite Street",
+          "length_m": 155.65,
+          "speed_mps": 13.89
+        }
+      ]
+    },
+    "yosemite_north_in": {
+      "name": "yosemite_north_in",
+      "authored": {
+        "edge": "427819547"
+      },
+      "form": "edge",
+      "edges": [
+        "427819547"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Yosemite Street",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "427819547",
+          "street": "South Yosemite Street",
+          "length_m": 32.2,
+          "speed_mps": 17.88
+        }
+      ]
+    },
+    "yosemite_north_out": {
+      "name": "yosemite_north_out",
+      "authored": {
+        "edge": "-427819547"
+      },
+      "form": "edge",
+      "edges": [
+        "-427819547"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Yosemite Street",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "-427819547",
+          "street": "South Yosemite Street",
+          "length_m": 32.2,
+          "speed_mps": 17.88
+        }
+      ]
+    },
+    "yosemite_south_in": {
+      "name": "yosemite_south_in",
+      "authored": {
+        "edge": "-629629570"
+      },
+      "form": "edge",
+      "edges": [
+        "-629629570"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Yosemite Street",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "-629629570",
+          "street": "South Yosemite Street",
+          "length_m": 24.44,
+          "speed_mps": 17.88
+        }
+      ]
+    },
+    "yosemite_south_out": {
+      "name": "yosemite_south_out",
+      "authored": {
+        "edge": "629629570"
+      },
+      "form": "edge",
+      "edges": [
+        "629629570"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Yosemite Street",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "629629570",
+          "street": "South Yosemite Street",
+          "length_m": 24.44,
+          "speed_mps": 15.65
+        }
+      ]
+    },
+    "clinton_in": {
+      "name": "clinton_in",
+      "authored": {
+        "edge": "-629634784"
+      },
+      "form": "edge",
+      "edges": [
+        "-629634784"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Clinton Street",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "-629634784",
+          "street": "South Clinton Street",
+          "length_m": 33.75,
+          "speed_mps": 27.78
+        }
+      ]
+    },
+    "clinton_out": {
+      "name": "clinton_out",
+      "authored": {
+        "edge": "629634784"
+      },
+      "form": "edge",
+      "edges": [
+        "629634784"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Clinton Street",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "629634784",
+          "street": "South Clinton Street",
+          "length_m": 32.33,
+          "speed_mps": 27.78
+        }
+      ]
+    },
+    "caley_in": {
+      "name": "caley_in",
+      "authored": {
+        "edge": "132833790"
+      },
+      "form": "edge",
+      "edges": [
+        "132833790"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Caley Avenue",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "132833790",
+          "street": "East Caley Avenue",
+          "length_m": 0.2,
+          "speed_mps": 22.22
+        }
+      ]
+    },
+    "caley_out": {
+      "name": "caley_out",
+      "authored": {
+        "edge": "629653938"
+      },
+      "form": "edge",
+      "edges": [
+        "629653938"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Caley Avenue",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "629653938",
+          "street": "East Caley Avenue",
+          "length_m": 0.2,
+          "speed_mps": 22.22
+        }
+      ]
+    },
+    "peakview_west_in": {
+      "name": "peakview_west_in",
+      "authored": {
+        "edge": "16999218"
+      },
+      "form": "edge",
+      "edges": [
+        "16999218"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Peakview Avenue",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "16999218",
+          "street": "East Peakview Avenue",
+          "length_m": 5.31,
+          "speed_mps": 22.22
+        }
+      ]
+    },
+    "peakview_east_out": {
+      "name": "peakview_east_out",
+      "authored": {
+        "edge": "292396861#1"
+      },
+      "form": "edge",
+      "edges": [
+        "292396861#1"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Peakview Avenue",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "292396861#1",
+          "street": "East Peakview Avenue",
+          "length_m": 147.34,
+          "speed_mps": 22.22
+        }
+      ]
+    },
+    "peakview_east_in": {
+      "name": "peakview_east_in",
+      "authored": {
+        "edge": "633447921"
+      },
+      "form": "edge",
+      "edges": [
+        "633447921"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Peakview Avenue",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "633447921",
+          "street": "East Peakview Avenue",
+          "length_m": 56.3,
+          "speed_mps": 22.22
+        }
+      ]
+    },
+    "peakview_west_out": {
+      "name": "peakview_west_out",
+      "authored": {
+        "edge": "46107902#0"
+      },
+      "form": "edge",
+      "edges": [
+        "46107902#0"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Peakview Avenue",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "46107902#0",
+          "street": "East Peakview Avenue",
+          "length_m": 83.73,
+          "speed_mps": 22.22
+        }
+      ]
+    },
+    "boston_court_in": {
+      "name": "boston_court_in",
+      "authored": {
+        "edge": "17000739"
+      },
+      "form": "edge",
+      "edges": [
+        "17000739"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Boston Court",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "17000739",
+          "street": "South Boston Court",
+          "length_m": 72.39,
+          "speed_mps": 13.89
+        }
+      ]
+    },
+    "arbor_in": {
+      "name": "arbor_in",
+      "authored": {
+        "edge": "16998684#0"
+      },
+      "form": "edge",
+      "edges": [
+        "16998684#0"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Arbor Drive",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "16998684#0",
+          "street": "East Arbor Drive",
+          "length_m": 74.12,
+          "speed_mps": 13.89
+        }
+      ]
+    },
+    "willow_in": {
+      "name": "willow_in",
+      "authored": {
+        "edge": "550665536#0"
+      },
+      "form": "edge",
+      "edges": [
+        "550665536#0"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Willow Drive",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "550665536#0",
+          "street": "South Willow Drive",
+          "length_m": 65.74,
+          "speed_mps": 11.18
+        }
+      ]
+    },
+    "wabash_in": {
+      "name": "wabash_in",
+      "authored": {
+        "edge": "427479206"
+      },
+      "form": "edge",
+      "edges": [
+        "427479206"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Wabash Way",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "427479206",
+          "street": "South Wabash Way",
+          "length_m": 69.75,
+          "speed_mps": 11.18
+        }
+      ]
+    },
+    "davies_avenue_in": {
+      "name": "davies_avenue_in",
+      "authored": {
+        "edge": "16993828#0"
+      },
+      "form": "edge",
+      "edges": [
+        "16993828#0"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Davies Avenue",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "16993828#0",
+          "street": "East Davies Avenue",
+          "length_m": 6.89,
+          "speed_mps": 11.18
+        }
+      ]
+    },
+    "davies_avenue_out": {
+      "name": "davies_avenue_out",
+      "authored": {
+        "edge": "-16993828#0"
+      },
+      "form": "edge",
+      "edges": [
+        "-16993828#0"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Davies Avenue",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "-16993828#0",
+          "street": "East Davies Avenue",
+          "length_m": 6.89,
+          "speed_mps": 11.18
+        }
+      ]
+    },
+    "costilla_place_in": {
+      "name": "costilla_place_in",
+      "authored": {
+        "edge": "16996647"
+      },
+      "form": "edge",
+      "edges": [
+        "16996647"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Costilla Place",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "16996647",
+          "street": "East Costilla Place",
+          "length_m": 53.6,
+          "speed_mps": 13.89
+        }
+      ]
+    },
+    "costilla_place_out": {
+      "name": "costilla_place_out",
+      "authored": {
+        "edge": "-16996647"
+      },
+      "form": "edge",
+      "edges": [
+        "-16996647"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Costilla Place",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "-16996647",
+          "street": "East Costilla Place",
+          "length_m": 53.6,
+          "speed_mps": 13.89
+        }
+      ]
+    },
+    "costilla_avenue_in": {
+      "name": "costilla_avenue_in",
+      "authored": {
+        "edge": "16996898"
+      },
+      "form": "edge",
+      "edges": [
+        "16996898"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Costilla Avenue",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "16996898",
+          "street": "East Costilla Avenue",
+          "length_m": 54.26,
+          "speed_mps": 13.89
+        }
+      ]
+    },
+    "costilla_avenue_out": {
+      "name": "costilla_avenue_out",
+      "authored": {
+        "edge": "-16996898"
+      },
+      "form": "edge",
+      "edges": [
+        "-16996898"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Costilla Avenue",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "-16996898",
+          "street": "East Costilla Avenue",
+          "length_m": 54.41,
+          "speed_mps": 13.89
+        }
+      ]
+    },
+    "davies_place_in": {
+      "name": "davies_place_in",
+      "authored": {
+        "edge": "17001552#0"
+      },
+      "form": "edge",
+      "edges": [
+        "17001552#0"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Davies Place",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "17001552#0",
+          "street": "East Davies Place",
+          "length_m": 54.8,
+          "speed_mps": 11.18
+        }
+      ]
+    },
+    "davies_place_out": {
+      "name": "davies_place_out",
+      "authored": {
+        "edge": "-17001552#1"
+      },
+      "form": "edge",
+      "edges": [
+        "-17001552#1"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Davies Place",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "-17001552#1",
+          "street": "East Davies Place",
+          "length_m": 54.8,
+          "speed_mps": 11.18
+        }
+      ]
+    },
+    "briarwood_place_in": {
+      "name": "briarwood_place_in",
+      "authored": {
+        "edge": "17003522"
+      },
+      "form": "edge",
+      "edges": [
+        "17003522"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Briarwood Place",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "17003522",
+          "street": "East Briarwood Place",
+          "length_m": 44.83,
+          "speed_mps": 13.89
+        }
+      ]
+    },
+    "briarwood_place_out": {
+      "name": "briarwood_place_out",
+      "authored": {
+        "edge": "-17003522"
+      },
+      "form": "edge",
+      "edges": [
+        "-17003522"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Briarwood Place",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "-17003522",
+          "street": "East Briarwood Place",
+          "length_m": 44.35,
+          "speed_mps": 13.89
+        }
+      ]
+    },
+    "briarwood_boulevard_in": {
+      "name": "briarwood_boulevard_in",
+      "authored": {
+        "edge": "17007347#0"
+      },
+      "form": "edge",
+      "edges": [
+        "17007347#0"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Briarwood Boulevard",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "17007347#0",
+          "street": "East Briarwood Boulevard",
+          "length_m": 55.69,
+          "speed_mps": 11.18
+        }
+      ]
+    },
+    "briarwood_boulevard_out": {
+      "name": "briarwood_boulevard_out",
+      "authored": {
+        "edge": "-17007347#0"
+      },
+      "form": "edge",
+      "edges": [
+        "-17007347#0"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Briarwood Boulevard",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "-17007347#0",
+          "street": "East Briarwood Boulevard",
+          "length_m": 55.69,
+          "speed_mps": 11.18
+        }
+      ]
+    },
+    "briarwood_avenue_in": {
+      "name": "briarwood_avenue_in",
+      "authored": {
+        "edge": "224876698"
+      },
+      "form": "edge",
+      "edges": [
+        "224876698"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Briarwood Avenue",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "224876698",
+          "street": "East Briarwood Avenue",
+          "length_m": 25.59,
+          "speed_mps": 13.89
+        }
+      ]
+    },
+    "briarwood_avenue_out": {
+      "name": "briarwood_avenue_out",
+      "authored": {
+        "edge": "-224876698"
+      },
+      "form": "edge",
+      "edges": [
+        "-224876698"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Briarwood Avenue",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "-224876698",
+          "street": "East Briarwood Avenue",
+          "length_m": 26.79,
+          "speed_mps": 13.89
+        }
+      ]
+    },
+    "easter_place_in": {
+      "name": "easter_place_in",
+      "authored": {
+        "edge": "17006662#0"
+      },
+      "form": "edge",
+      "edges": [
+        "17006662#0"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Easter Place",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "17006662#0",
+          "street": "East Easter Place",
+          "length_m": 38.34,
+          "speed_mps": 11.18
+        }
+      ]
+    },
+    "easter_place_out": {
+      "name": "easter_place_out",
+      "authored": {
+        "edge": "-17006662#0"
+      },
+      "form": "edge",
+      "edges": [
+        "-17006662#0"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Easter Place",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "-17006662#0",
+          "street": "East Easter Place",
+          "length_m": 38.34,
+          "speed_mps": 11.18
+        }
+      ]
+    },
+    "fremont_circle_in": {
+      "name": "fremont_circle_in",
+      "authored": {
+        "edge": "-16991914"
+      },
+      "form": "edge",
+      "edges": [
+        "-16991914"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Fremont Circle",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "-16991914",
+          "street": "East Fremont Circle",
+          "length_m": 103.81,
+          "speed_mps": 13.89
+        }
+      ]
+    },
+    "fremont_circle_out": {
+      "name": "fremont_circle_out",
+      "authored": {
+        "edge": "16991914"
+      },
+      "form": "edge",
+      "edges": [
+        "16991914"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "East Fremont Circle",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "16991914",
+          "street": "East Fremont Circle",
+          "length_m": 106.19,
+          "speed_mps": 13.89
+        }
+      ]
+    },
+    "xanthia_street_in": {
+      "name": "xanthia_street_in",
+      "authored": {
+        "edge": "-17003598#2"
+      },
+      "form": "edge",
+      "edges": [
+        "-17003598#2"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Xanthia Street",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "-17003598#2",
+          "street": "South Xanthia Street",
+          "length_m": 0.2,
+          "speed_mps": 13.89
+        }
+      ]
+    },
+    "xanthia_way_in": {
+      "name": "xanthia_way_in",
+      "authored": {
+        "edge": "-17006541"
+      },
+      "form": "edge",
+      "edges": [
+        "-17006541"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Xanthia Way",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "-17006541",
+          "street": "South Xanthia Way",
+          "length_m": 1.29,
+          "speed_mps": 13.89
+        }
+      ]
+    },
+    "alton_way_in": {
+      "name": "alton_way_in",
+      "authored": {
+        "edge": "-17003147#17"
+      },
+      "form": "edge",
+      "edges": [
+        "-17003147#17"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Alton Way",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "-17003147#17",
+          "street": "South Alton Way",
+          "length_m": 151.85,
+          "speed_mps": 11.18
+        }
+      ]
+    },
+    "alton_way_out": {
+      "name": "alton_way_out",
+      "authored": {
+        "edge": "17003147#12"
+      },
+      "form": "edge",
+      "edges": [
+        "17003147#12"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Alton Way",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "17003147#12",
+          "street": "South Alton Way",
+          "length_m": 152.12,
+          "speed_mps": 11.18
+        }
+      ]
+    }
+  },
+  "rotas": [],
+  "routes": [
+    {
+      "id": "marked",
+      "type": "marked",
+      "from": "37722905",
+      "to": "106308386",
+      "via": [
+        "629675735",
+        "427819537#1",
+        "1026993839#0",
+        "218965860#0"
+      ],
+      "route": [
+        "37722905",
+        "37748865",
+        "629675805",
+        "629675780",
+        "427819562#0",
+        "1037832984",
+        "75609577",
+        "629675735",
+        "775963749",
+        "132789650",
+        "427819537#0",
+        "427819537#1",
+        "1026993839#0",
+        "427819553#0",
+        "427819555#0",
+        "427819546",
+        "427819548",
+        "427819545#0",
+        "427819558#0",
+        "16999198#0",
+        "-427819557",
+        "-427819554#2",
+        "45798671#1",
+        "629653894",
+        "572762876#1",
+        "1107125073",
+        "218965860#0",
+        "-787011390",
+        "1035917283#0",
+        "223289022#0",
+        "45798671#1",
+        "629653894",
+        "629653907",
+        "218965865#0",
+        "223928717",
+        "629634742#0",
+        "629634747",
+        "629634762",
+        "629634763",
+        "629634764#0",
+        "45760891#1",
+        "629634767",
+        "629634776",
+        "629634775",
+        "629634777",
+        "629634778#0",
+        "132789653",
+        "694506252#0",
+        "1037832984",
+        "16990310#0",
+        "218679786",
+        "1037827831",
+        "106308386"
+      ],
+      "route_length_m": 5251.8,
+      "free_flow_s": 257.9,
+      "stops": [
+        {
+          "place": "underpass_dwell",
+          "lane": "218965860#0_0",
+          "start_pos": null,
+          "end_pos": 88.63,
+          "parking": true,
+          "duration": 1800.0
+        }
+      ],
+      "depart": {
+        "authored": 120,
+        "form": "seconds",
+        "seconds": 120.0,
+        "civil": "2026-09-29T07:02:00-06:00"
+      },
+      "origin": "actor"
+    },
+    {
+      "id": "i25_north_through",
+      "type": "freeway_mix",
+      "from": "37722905",
+      "to": "106308386",
+      "via": [
+        "1001791386"
+      ],
+      "route": [
+        "37722905",
+        "907700111",
+        "1342047649",
+        "1001791386",
+        "37722913",
+        "106308386"
+      ],
+      "route_length_m": 2066.08,
+      "free_flow_s": 71.1,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 3300.0
+    },
+    {
+      "id": "i25_south_through",
+      "type": "freeway_mix",
+      "from": "472478085",
+      "to": "908324823",
+      "via": [],
+      "route": [
+        "472478085",
+        "106308389",
+        "39451713",
+        "908324823"
+      ],
+      "route_length_m": 2096.91,
+      "free_flow_s": 72.2,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 3000.0
+    },
+    {
+      "id": "i25_north_to_arapahoe_east",
+      "type": "freeway_mix",
+      "from": "37722905",
+      "to": "427819527",
+      "via": [
+        "131933449#0"
+      ],
+      "route": [
+        "37722905",
+        "37748865",
+        "629675805",
+        "629675780",
+        "131933449#0",
+        "427819525",
+        "131933321#0",
+        "427819527"
+      ],
+      "route_length_m": 1316.05,
+      "free_flow_s": 56.3,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 150.0
+    },
+    {
+      "id": "i25_north_to_arapahoe_west",
+      "type": "freeway_mix",
+      "from": "37722905",
+      "to": "427819541#0",
+      "via": [],
+      "route": [
+        "37722905",
+        "37748865",
+        "629675805",
+        "629675780",
+        "427819562#0",
+        "1037832984",
+        "75609577",
+        "629675735",
+        "775963749",
+        "132789650",
+        "427819537#0",
+        "427819537#1",
+        "427819541#0"
+      ],
+      "route_length_m": 1456.17,
+      "free_flow_s": 63.7,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 130.0
+    },
+    {
+      "id": "i25_south_to_arapahoe_east",
+      "type": "freeway_mix",
+      "from": "472478085",
+      "to": "427819527",
+      "via": [],
+      "route": [
+        "472478085",
+        "16990020",
+        "633436191",
+        "427884544",
+        "218679720#0",
+        "626534263",
+        "223306870",
+        "1037832983#0",
+        "775965544",
+        "427884543",
+        "427819525",
+        "131933321#0",
+        "427819527"
+      ],
+      "route_length_m": 1416.83,
+      "free_flow_s": 62.7,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 130.0
+    },
+    {
+      "id": "i25_south_to_arapahoe_west",
+      "type": "freeway_mix",
+      "from": "472478085",
+      "to": "427819541#0",
+      "via": [],
+      "route": [
+        "472478085",
+        "16990020",
+        "633436191",
+        "427884544",
+        "218679741#0",
+        "132789650",
+        "427819537#0",
+        "427819537#1",
+        "427819541#0"
+      ],
+      "route_length_m": 1177.61,
+      "free_flow_s": 49.0,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 120.0
+    },
+    {
+      "id": "arapahoe_east_to_i25_north",
+      "type": "freeway_mix",
+      "from": "131933384",
+      "to": "106308386",
+      "via": [],
+      "route": [
+        "131933384",
+        "427819534",
+        "427819530#0",
+        "132789653",
+        "694506252#0",
+        "1037832984",
+        "16990310#0",
+        "218679786",
+        "1037827831",
+        "106308386"
+      ],
+      "route_length_m": 1331.3,
+      "free_flow_s": 59.6,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 140.0
+    },
+    {
+      "id": "arapahoe_west_to_i25_north",
+      "type": "freeway_mix",
+      "from": "427819540#0",
+      "to": "106308386",
+      "via": [],
+      "route": [
+        "427819540#0",
+        "427819539#0",
+        "1026993836#0",
+        "1059880022",
+        "10378085",
+        "626534263",
+        "223306870",
+        "223207864#0",
+        "1342047649",
+        "1001791386",
+        "37722913",
+        "106308386"
+      ],
+      "route_length_m": 1657.36,
+      "free_flow_s": 67.9,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 130.0
+    },
+    {
+      "id": "arapahoe_east_to_i25_south",
+      "type": "freeway_mix",
+      "from": "131933384",
+      "to": "908324823",
+      "via": [
+        "629675735"
+      ],
+      "route": [
+        "131933384",
+        "427819534",
+        "427819530#0",
+        "132789653",
+        "694506252#0",
+        "1037832984",
+        "75609577",
+        "629675735",
+        "626534263",
+        "223207859#0",
+        "223207859#2",
+        "946861047",
+        "908324823"
+      ],
+      "route_length_m": 1606.2,
+      "free_flow_s": 69.5,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 120.0
+    },
+    {
+      "id": "arapahoe_west_to_i25_south",
+      "type": "freeway_mix",
+      "from": "427819540#0",
+      "to": "908324823",
+      "via": [],
+      "route": [
+        "427819540#0",
+        "427819539#0",
+        "1026993836#0",
+        "1059880022",
+        "10378085",
+        "626534263",
+        "223207859#0",
+        "223207859#2",
+        "946861047",
+        "908324823"
+      ],
+      "route_length_m": 1388.22,
+      "free_flow_s": 57.4,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 110.0
+    },
+    {
+      "id": "arapahoe_east_to_west",
+      "type": "arterial_mix",
+      "from": "131933384",
+      "to": "427819541#0",
+      "via": [],
+      "route": [
+        "131933384",
+        "427819534",
+        "427819530#0",
+        "132789653",
+        "694506252#0",
+        "1037832984",
+        "75609577",
+        "629675735",
+        "775963749",
+        "132789650",
+        "427819537#0",
+        "427819537#1",
+        "427819541#0"
+      ],
+      "route_length_m": 703.77,
+      "free_flow_s": 38.9,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 350.0
+    },
+    {
+      "id": "arapahoe_west_to_east",
+      "type": "arterial_mix",
+      "from": "427819540#0",
+      "to": "427819527",
+      "via": [],
+      "route": [
+        "427819540#0",
+        "427819539#0",
+        "1026993836#0",
+        "1059880022",
+        "10378085",
+        "626534263",
+        "223306870",
+        "1037832983#0",
+        "775965544",
+        "427884543",
+        "427819525",
+        "131933321#0",
+        "427819527"
+      ],
+      "route_length_m": 714.56,
+      "free_flow_s": 40.0,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 330.0
+    },
+    {
+      "id": "yosemite_north_to_south",
+      "type": "arterial_mix",
+      "from": "427819547",
+      "to": "629629570",
+      "via": [],
+      "route": [
+        "427819547",
+        "714754657#0",
+        "427819554#2",
+        "-45806432",
+        "427819544",
+        "427819552#0",
+        "-427819558#1",
+        "-427819545#1",
+        "-427819548",
+        "-427819546",
+        "-427819555#1",
+        "-427819553#3",
+        "629653852",
+        "1278080473#0",
+        "1025703940",
+        "427819559#0",
+        "427819543#0",
+        "629653843",
+        "-427819551#8",
+        "-427819551#0",
+        "629653811#0",
+        "16999684",
+        "629653795",
+        "629653803",
+        "629629558",
+        "629629560",
+        "629629562",
+        "629629564",
+        "629629566",
+        "629629568",
+        "629629570"
+      ],
+      "route_length_m": 1824.71,
+      "free_flow_s": 115.5,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 130.0
+    },
+    {
+      "id": "yosemite_south_to_north",
+      "type": "arterial_mix",
+      "from": "-629629570",
+      "to": "-427819547",
+      "via": [],
+      "route": [
+        "-629629570",
+        "-629629568",
+        "-629629566",
+        "-629629564",
+        "-629629562",
+        "-629629560",
+        "-629629558",
+        "-629653803",
+        "-629653795",
+        "-16999684",
+        "-629653811#1",
+        "629653818",
+        "427819551#1",
+        "1025703939#0",
+        "1026993839#0",
+        "427819553#0",
+        "427819555#0",
+        "427819546",
+        "427819548",
+        "427819545#0",
+        "427819558#0",
+        "16999198#0",
+        "-427819557",
+        "-427819554#2",
+        "-714754657#0",
+        "-427819547"
+      ],
+      "route_length_m": 1856.91,
+      "free_flow_s": 105.5,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 120.0
+    },
+    {
+      "id": "yosemite_north_to_arapahoe_east",
+      "type": "arterial_mix",
+      "from": "427819547",
+      "to": "427819527",
+      "via": [],
+      "route": [
+        "427819547",
+        "714754657#0",
+        "45798671#1",
+        "629653894",
+        "629653907",
+        "218965865#0",
+        "223928717",
+        "629634742#0",
+        "629634747",
+        "629634762",
+        "629634763",
+        "629634764#0",
+        "45760891#1",
+        "629634767",
+        "629634776",
+        "629634775",
+        "629634777",
+        "629634778#0",
+        "427819527"
+      ],
+      "route_length_m": 1142.93,
+      "free_flow_s": 45.7,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 90.0
+    },
+    {
+      "id": "arapahoe_east_to_yosemite_north",
+      "type": "arterial_mix",
+      "from": "131933384",
+      "to": "-427819547",
+      "via": [],
+      "route": [
+        "131933384",
+        "427819534",
+        "427819530#0",
+        "629634769#0",
+        "629634768#0",
+        "629634766",
+        "629634765#0",
+        "629634760#1",
+        "1074718490",
+        "629634759",
+        "16996152#0",
+        "629634736",
+        "629653921",
+        "629653901",
+        "629653887#0",
+        "1389992986",
+        "1389992987",
+        "45798675#0",
+        "-714754657#0",
+        "-427819547"
+      ],
+      "route_length_m": 1133.32,
+      "free_flow_s": 44.1,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 85.0
+    },
+    {
+      "id": "clinton_to_arapahoe_west",
+      "type": "arterial_mix",
+      "from": "-629634784",
+      "to": "427819541#0",
+      "via": [],
+      "route": [
+        "-629634784",
+        "-629634783#2",
+        "45760824#0",
+        "629634780",
+        "629634781#0",
+        "132789653",
+        "694506252#0",
+        "1037832984",
+        "75609577",
+        "629675735",
+        "775963749",
+        "132789650",
+        "427819537#0",
+        "427819537#1",
+        "427819541#0"
+      ],
+      "route_length_m": 860.32,
+      "free_flow_s": 41.9,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 75.0
+    },
+    {
+      "id": "arapahoe_west_to_clinton",
+      "type": "arterial_mix",
+      "from": "427819540#0",
+      "to": "629634784",
+      "via": [],
+      "route": [
+        "427819540#0",
+        "427819539#0",
+        "1026993836#0",
+        "1059880022",
+        "10378085",
+        "626534263",
+        "223306870",
+        "1037832983#0",
+        "775965544",
+        "427884543",
+        "427819525",
+        "131933321#0",
+        "903817668#0",
+        "1384299163",
+        "629634782",
+        "629634784"
+      ],
+      "route_length_m": 871.05,
+      "free_flow_s": 42.6,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 70.0
+    },
+    {
+      "id": "caley_to_arapahoe_east",
+      "type": "arterial_mix",
+      "from": "132833790",
+      "to": "427819527",
+      "via": [],
+      "route": [
+        "132833790",
+        "629653945",
+        "629653927",
+        "45760825",
+        "223928717",
+        "629634742#0",
+        "629634747",
+        "629634762",
+        "629634763",
+        "629634764#0",
+        "45760891#1",
+        "629634767",
+        "629634776",
+        "629634775",
+        "629634777",
+        "629634778#0",
+        "427819527"
+      ],
+      "route_length_m": 905.55,
+      "free_flow_s": 36.9,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 65.0
+    },
+    {
+      "id": "arapahoe_east_to_caley",
+      "type": "arterial_mix",
+      "from": "131933384",
+      "to": "629653938",
+      "via": [],
+      "route": [
+        "131933384",
+        "427819534",
+        "427819530#0",
+        "629634769#0",
+        "629634768#0",
+        "629634766",
+        "629634765#0",
+        "629634760#1",
+        "1074718490",
+        "629634759",
+        "16996152#0",
+        "629634736",
+        "629653933",
+        "596754659#0",
+        "629653938"
+      ],
+      "route_length_m": 902.36,
+      "free_flow_s": 36.2,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 60.0
+    },
+    {
+      "id": "peakview_west_to_east",
+      "type": "arterial_mix",
+      "from": "16999218",
+      "to": "292396861#1",
+      "via": [],
+      "route": [
+        "16999218",
+        "223052085#0",
+        "16999198#0",
+        "-427819557",
+        "-427819554#2",
+        "45798671#1",
+        "629653894",
+        "629653907",
+        "218965865#0",
+        "223928717",
+        "629634742#0",
+        "629634747",
+        "629634762",
+        "629634763",
+        "629634764#0",
+        "292396861#1"
+      ],
+      "route_length_m": 1388.62,
+      "free_flow_s": 67.1,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 75.0
+    },
+    {
+      "id": "peakview_east_to_west",
+      "type": "arterial_mix",
+      "from": "633447921",
+      "to": "46107902#0",
+      "via": [],
+      "route": [
+        "633447921",
+        "629634758#0",
+        "1074718490",
+        "629634759",
+        "16996152#0",
+        "629634736",
+        "629653921",
+        "629653901",
+        "629653887#0",
+        "1389992986",
+        "1389992987",
+        "45798675#0",
+        "427819554#2",
+        "-45806432",
+        "427819544",
+        "427819552#0",
+        "46107902#0"
+      ],
+      "route_length_m": 1372.67,
+      "free_flow_s": 65.8,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 70.0
+    },
+    {
+      "id": "boston_court_to_arapahoe_east",
+      "type": "arterial_mix",
+      "from": "17000739",
+      "to": "427819527",
+      "via": [],
+      "route": [
+        "17000739",
+        "45760825",
+        "223928717",
+        "629634742#0",
+        "629634747",
+        "629634762",
+        "629634763",
+        "629634764#0",
+        "45760891#1",
+        "629634767",
+        "629634776",
+        "629634775",
+        "629634777",
+        "629634778#0",
+        "427819527"
+      ],
+      "route_length_m": 852.17,
+      "free_flow_s": 36.4,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 45.0
+    },
+    {
+      "id": "arbor_to_arapahoe_east",
+      "type": "arterial_mix",
+      "from": "16998684#0",
+      "to": "427819527",
+      "via": [],
+      "route": [
+        "16998684#0",
+        "629653945",
+        "629653927",
+        "45760825",
+        "223928717",
+        "629634742#0",
+        "629634747",
+        "629634762",
+        "629634763",
+        "629634764#0",
+        "45760891#1",
+        "629634767",
+        "629634776",
+        "629634775",
+        "629634777",
+        "629634778#0",
+        "427819527"
+      ],
+      "route_length_m": 979.47,
+      "free_flow_s": 42.2,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 40.0
+    },
+    {
+      "id": "willow_to_yosemite_south",
+      "type": "arterial_mix",
+      "from": "550665536#0",
+      "to": "629629570",
+      "via": [],
+      "route": [
+        "550665536#0",
+        "1035917283#0",
+        "223289022#0",
+        "427819554#2",
+        "-45806432",
+        "427819544",
+        "427819552#0",
+        "-427819558#1",
+        "-427819545#1",
+        "-427819548",
+        "-427819546",
+        "-427819555#1",
+        "-427819553#3",
+        "629653852",
+        "1278080473#0",
+        "1025703940",
+        "427819559#0",
+        "427819543#0",
+        "629653843",
+        "-427819551#8",
+        "-427819551#0",
+        "629653811#0",
+        "16999684",
+        "629653795",
+        "629653803",
+        "629629558",
+        "629629560",
+        "629629562",
+        "629629564",
+        "629629566",
+        "629629568",
+        "629629570"
+      ],
+      "route_length_m": 1935.93,
+      "free_flow_s": 126.5,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 45.0
+    },
+    {
+      "id": "wabash_to_arapahoe_west",
+      "type": "arterial_mix",
+      "from": "427479206",
+      "to": "427819541#0",
+      "via": [],
+      "route": [
+        "427479206",
+        "550665532",
+        "737508780#0",
+        "1035917283#0",
+        "223289022#0",
+        "427819554#2",
+        "-45806432",
+        "427819544",
+        "427819552#0",
+        "-427819558#1",
+        "-427819545#1",
+        "-427819548",
+        "-427819546",
+        "-427819555#1",
+        "-427819553#3",
+        "629653852",
+        "1278080473#0",
+        "1025703940",
+        "427819559#0",
+        "427819541#0"
+      ],
+      "route_length_m": 1186.69,
+      "free_flow_s": 81.7,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 40.0
+    },
+    {
+      "id": "underpass_north_to_south",
+      "type": "arterial_mix",
+      "from": "427819547",
+      "to": "629629570",
+      "via": [
+        "218965860#0"
+      ],
+      "route": [
+        "427819547",
+        "714754657#0",
+        "45798671#1",
+        "629653894",
+        "572762876#1",
+        "1107125073",
+        "218965860#0",
+        "-787011390",
+        "1035917283#0",
+        "223289022#0",
+        "427819554#2",
+        "-45806432",
+        "427819544",
+        "427819552#0",
+        "-427819558#1",
+        "-427819545#1",
+        "-427819548",
+        "-427819546",
+        "-427819555#1",
+        "-427819553#3",
+        "629653852",
+        "1278080473#0",
+        "1025703940",
+        "427819559#0",
+        "427819543#0",
+        "629653843",
+        "-427819551#8",
+        "-427819551#0",
+        "629653811#0",
+        "16999684",
+        "629653795",
+        "629653803",
+        "629629558",
+        "629629560",
+        "629629562",
+        "629629564",
+        "629629566",
+        "629629568",
+        "629629570"
+      ],
+      "route_length_m": 2707.49,
+      "free_flow_s": 177.0,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 120.0
+    },
+    {
+      "id": "underpass_south_to_north",
+      "type": "arterial_mix",
+      "from": "-629629570",
+      "to": "-427819547",
+      "via": [
+        "-223315781"
+      ],
+      "route": [
+        "-629629570",
+        "-629629568",
+        "-629629566",
+        "-629629564",
+        "-629629562",
+        "-629629560",
+        "-629629558",
+        "-629653803",
+        "-629653795",
+        "-16999684",
+        "-629653811#1",
+        "629653818",
+        "427819551#1",
+        "1025703939#0",
+        "1026993839#0",
+        "427819553#0",
+        "427819555#0",
+        "427819546",
+        "427819548",
+        "427819545#0",
+        "427819558#0",
+        "16999198#0",
+        "-427819557",
+        "-427819554#2",
+        "892466867#1",
+        "696713869#0",
+        "223290451#1",
+        "-223315781",
+        "-1107125073",
+        "-572762876#8",
+        "629653887#0",
+        "1389992986",
+        "1389992987",
+        "45798675#0",
+        "-714754657#0",
+        "-427819547"
+      ],
+      "route_length_m": 2727.52,
+      "free_flow_s": 166.7,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 110.0
+    },
+    {
+      "id": "underpass_caley_to_yosemite",
+      "type": "arterial_mix",
+      "from": "132833790",
+      "to": "629629570",
+      "via": [
+        "218965860#0"
+      ],
+      "route": [
+        "132833790",
+        "629653945",
+        "629653927",
+        "629653921",
+        "629653901",
+        "572762876#1",
+        "1107125073",
+        "218965860#0",
+        "-787011390",
+        "1035917283#0",
+        "223289022#0",
+        "427819554#2",
+        "-45806432",
+        "427819544",
+        "427819552#0",
+        "-427819558#1",
+        "-427819545#1",
+        "-427819548",
+        "-427819546",
+        "-427819555#1",
+        "-427819553#3",
+        "629653852",
+        "1278080473#0",
+        "1025703940",
+        "427819559#0",
+        "427819543#0",
+        "629653843",
+        "-427819551#8",
+        "-427819551#0",
+        "629653811#0",
+        "16999684",
+        "629653795",
+        "629653803",
+        "629629558",
+        "629629560",
+        "629629562",
+        "629629564",
+        "629629566",
+        "629629568",
+        "629629570"
+      ],
+      "route_length_m": 2818.72,
+      "free_flow_s": 181.5,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 80.0
+    },
+    {
+      "id": "davies_avenue_to_i25_north",
+      "type": "residential_mix",
+      "from": "16993828#0",
+      "to": "106308386",
+      "via": [
+        "-17003602#7"
+      ],
+      "route": [
+        "16993828#0",
+        "16993828#1",
+        "16993828#2",
+        "16993828#3",
+        "16993828#4",
+        "-16999684",
+        "-629653811#1",
+        "629653818",
+        "427819551#1",
+        "-17003602#7",
+        "-17003602#4",
+        "1059880022",
+        "10378085",
+        "626534263",
+        "223306870",
+        "223207864#0",
+        "1342047649",
+        "1001791386",
+        "37722913",
+        "106308386"
+      ],
+      "route_length_m": 2488.68,
+      "free_flow_s": 135.8,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 32.0
+    },
+    {
+      "id": "i25_south_to_davies_avenue",
+      "type": "residential_mix",
+      "from": "472478085",
+      "to": "-16993828#0",
+      "via": [],
+      "route": [
+        "472478085",
+        "16990020",
+        "633436191",
+        "427884544",
+        "218679741#0",
+        "132789650",
+        "427819537#0",
+        "427819537#1",
+        "427819543#0",
+        "629653843",
+        "-427819551#8",
+        "-427819551#0",
+        "629653811#0",
+        "16999684",
+        "-16993828#5",
+        "-16993828#3",
+        "-16993828#2",
+        "-16993828#1",
+        "-16993828#0"
+      ],
+      "route_length_m": 2106.86,
+      "free_flow_s": 118.6,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 30.0
+    },
+    {
+      "id": "costilla_place_to_i25_north",
+      "type": "residential_mix",
+      "from": "16996647",
+      "to": "106308386",
+      "via": [],
+      "route": [
+        "16996647",
+        "17010076#2",
+        "17010076#3",
+        "17010076#4",
+        "17007347#1",
+        "17007347#2",
+        "1047338037#0",
+        "629653818",
+        "427819551#1",
+        "1025703939#0",
+        "1026993836#0",
+        "1059880022",
+        "10378085",
+        "626534263",
+        "223306870",
+        "223207864#0",
+        "1342047649",
+        "1001791386",
+        "37722913",
+        "106308386"
+      ],
+      "route_length_m": 2723.46,
+      "free_flow_s": 145.3,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 27.0
+    },
+    {
+      "id": "i25_south_to_costilla_place",
+      "type": "residential_mix",
+      "from": "472478085",
+      "to": "-16996647",
+      "via": [],
+      "route": [
+        "472478085",
+        "16990020",
+        "633436191",
+        "427884544",
+        "218679741#0",
+        "132789650",
+        "427819537#0",
+        "427819537#1",
+        "427819543#0",
+        "629653843",
+        "-427819551#8",
+        "-427819551#0",
+        "629653811#0",
+        "16999684",
+        "-16993828#5",
+        "-16993828#3",
+        "-17003603#2",
+        "-17007347#1",
+        "-17010076#5",
+        "-17010076#3",
+        "-17010076#2",
+        "-16996647"
+      ],
+      "route_length_m": 2432.53,
+      "free_flow_s": 146.8,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 25.0
+    },
+    {
+      "id": "costilla_avenue_to_i25_south",
+      "type": "residential_mix",
+      "from": "16996898",
+      "to": "908324823",
+      "via": [],
+      "route": [
+        "16996898",
+        "17010076#3",
+        "17010076#4",
+        "17007347#1",
+        "17007347#2",
+        "1047338037#0",
+        "629653818",
+        "427819551#1",
+        "1025703939#0",
+        "1026993836#0",
+        "1059880022",
+        "10378085",
+        "626534263",
+        "223207859#0",
+        "223207859#2",
+        "946861047",
+        "908324823"
+      ],
+      "route_length_m": 2378.31,
+      "free_flow_s": 127.9,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 27.0
+    },
+    {
+      "id": "i25_north_to_costilla_avenue",
+      "type": "residential_mix",
+      "from": "37722905",
+      "to": "-16996898",
+      "via": [],
+      "route": [
+        "37722905",
+        "37748865",
+        "629675805",
+        "629675780",
+        "427819562#0",
+        "1037832984",
+        "75609577",
+        "629675735",
+        "775963749",
+        "132789650",
+        "427819537#0",
+        "427819537#1",
+        "427819543#0",
+        "629653843",
+        "-427819551#8",
+        "-427819551#0",
+        "629653811#0",
+        "16999684",
+        "-16993828#5",
+        "-16993828#3",
+        "-17003603#2",
+        "-17007347#1",
+        "-17010076#5",
+        "-17010076#3",
+        "-16996898"
+      ],
+      "route_length_m": 2635.23,
+      "free_flow_s": 154.7,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 25.0
+    },
+    {
+      "id": "davies_place_to_i25_north",
+      "type": "residential_mix",
+      "from": "17001552#0",
+      "to": "106308386",
+      "via": [
+        "-17003602#7"
+      ],
+      "route": [
+        "17001552#0",
+        "17010076#4",
+        "17007347#1",
+        "17007347#2",
+        "1047338037#0",
+        "629653818",
+        "427819551#1",
+        "-17003602#7",
+        "-17003602#4",
+        "1059880022",
+        "10378085",
+        "626534263",
+        "223306870",
+        "223207864#0",
+        "1342047649",
+        "1001791386",
+        "37722913",
+        "106308386"
+      ],
+      "route_length_m": 2467.84,
+      "free_flow_s": 137.1,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 25.0
+    },
+    {
+      "id": "i25_south_to_davies_place",
+      "type": "residential_mix",
+      "from": "472478085",
+      "to": "-17001552#1",
+      "via": [],
+      "route": [
+        "472478085",
+        "16990020",
+        "633436191",
+        "427884544",
+        "218679741#0",
+        "132789650",
+        "427819537#0",
+        "427819537#1",
+        "427819543#0",
+        "629653843",
+        "-427819551#8",
+        "-427819551#0",
+        "629653811#0",
+        "16999684",
+        "-16993828#5",
+        "-16993828#3",
+        "-17003603#2",
+        "-17007347#1",
+        "-17010076#5",
+        "-17001552#1"
+      ],
+      "route_length_m": 2280.81,
+      "free_flow_s": 134.1,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 22.0
+    },
+    {
+      "id": "briarwood_place_to_i25_north",
+      "type": "residential_mix",
+      "from": "17003522",
+      "to": "106308386",
+      "via": [],
+      "route": [
+        "17003522",
+        "17010076#1",
+        "17010076#2",
+        "17010076#3",
+        "17010076#4",
+        "17007347#1",
+        "17007347#2",
+        "1047338037#0",
+        "629653818",
+        "427819551#1",
+        "1025703939#0",
+        "1026993836#0",
+        "1059880022",
+        "10378085",
+        "626534263",
+        "223306870",
+        "223207864#0",
+        "1342047649",
+        "1001791386",
+        "37722913",
+        "106308386"
+      ],
+      "route_length_m": 2796.54,
+      "free_flow_s": 152.0,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 27.0
+    },
+    {
+      "id": "i25_south_to_briarwood_place",
+      "type": "residential_mix",
+      "from": "472478085",
+      "to": "-17003522",
+      "via": [],
+      "route": [
+        "472478085",
+        "16990020",
+        "633436191",
+        "427884544",
+        "218679741#0",
+        "132789650",
+        "427819537#0",
+        "427819537#1",
+        "427819543#0",
+        "629653843",
+        "-427819551#8",
+        "-427819551#0",
+        "629653811#0",
+        "16999684",
+        "-16993828#5",
+        "-16993828#3",
+        "-17003603#2",
+        "-17007347#1",
+        "-17010076#5",
+        "-17010076#3",
+        "-17010076#2",
+        "-17010076#1",
+        "-17003522"
+      ],
+      "route_length_m": 2505.88,
+      "free_flow_s": 153.5,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 25.0
+    },
+    {
+      "id": "briarwood_boulevard_to_i25_south",
+      "type": "residential_mix",
+      "from": "17007347#0",
+      "to": "908324823",
+      "via": [],
+      "route": [
+        "17007347#0",
+        "17007347#1",
+        "17007347#2",
+        "1047338037#0",
+        "629653818",
+        "427819551#1",
+        "1025703939#0",
+        "1026993836#0",
+        "1059880022",
+        "10378085",
+        "626534263",
+        "223207859#0",
+        "223207859#2",
+        "946861047",
+        "908324823"
+      ],
+      "route_length_m": 2224.93,
+      "free_flow_s": 115.1,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 27.0
+    },
+    {
+      "id": "i25_north_to_briarwood_boulevard",
+      "type": "residential_mix",
+      "from": "37722905",
+      "to": "-17007347#0",
+      "via": [],
+      "route": [
+        "37722905",
+        "37748865",
+        "629675805",
+        "629675780",
+        "427819562#0",
+        "1037832984",
+        "75609577",
+        "629675735",
+        "775963749",
+        "132789650",
+        "427819537#0",
+        "427819537#1",
+        "427819543#0",
+        "629653843",
+        "-427819551#8",
+        "-427819551#0",
+        "629653811#0",
+        "16999684",
+        "-16993828#5",
+        "-16993828#3",
+        "-17003603#2",
+        "-17007347#1",
+        "-17007347#0"
+      ],
+      "route_length_m": 2481.75,
+      "free_flow_s": 141.9,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 25.0
+    },
+    {
+      "id": "briarwood_avenue_to_arapahoe_east",
+      "type": "residential_mix",
+      "from": "224876698",
+      "to": "427819527",
+      "via": [
+        "-17003602#7"
+      ],
+      "route": [
+        "224876698",
+        "17010076#0",
+        "17010076#1",
+        "17010076#2",
+        "17010076#3",
+        "17010076#4",
+        "17007347#1",
+        "17007347#2",
+        "1047338037#0",
+        "629653818",
+        "427819551#1",
+        "-17003602#7",
+        "-17003602#4",
+        "1059880022",
+        "10378085",
+        "626534263",
+        "223306870",
+        "1037832983#0",
+        "775965544",
+        "427884543",
+        "427819525",
+        "131933321#0",
+        "427819527"
+      ],
+      "route_length_m": 1813.01,
+      "free_flow_s": 134.4,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 32.0
+    },
+    {
+      "id": "arapahoe_east_to_briarwood_avenue",
+      "type": "residential_mix",
+      "from": "131933384",
+      "to": "-224876698",
+      "via": [],
+      "route": [
+        "131933384",
+        "427819534",
+        "427819530#0",
+        "132789653",
+        "694506252#0",
+        "1037832984",
+        "75609577",
+        "629675735",
+        "775963749",
+        "132789650",
+        "427819537#0",
+        "427819537#1",
+        "427819543#0",
+        "629653843",
+        "-427819551#8",
+        "-427819551#0",
+        "629653811#0",
+        "16999684",
+        "-16993828#5",
+        "-16993828#3",
+        "-17003603#2",
+        "-17007347#1",
+        "-17010076#5",
+        "-17010076#3",
+        "-17010076#2",
+        "-17010076#1",
+        "-17010076#0",
+        "-224876698"
+      ],
+      "route_length_m": 2099.09,
+      "free_flow_s": 149.7,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 30.0
+    },
+    {
+      "id": "easter_place_to_i25_north",
+      "type": "residential_mix",
+      "from": "17006662#0",
+      "to": "106308386",
+      "via": [
+        "-17003602#7"
+      ],
+      "route": [
+        "17006662#0",
+        "-17010082#0",
+        "16993828#1",
+        "16993828#2",
+        "16993828#3",
+        "16993828#4",
+        "-16999684",
+        "-629653811#1",
+        "629653818",
+        "427819551#1",
+        "-17003602#7",
+        "-17003602#4",
+        "1059880022",
+        "10378085",
+        "626534263",
+        "223306870",
+        "223207864#0",
+        "1342047649",
+        "1001791386",
+        "37722913",
+        "106308386"
+      ],
+      "route_length_m": 2638.98,
+      "free_flow_s": 147.2,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 22.0
+    },
+    {
+      "id": "i25_south_to_easter_place",
+      "type": "residential_mix",
+      "from": "472478085",
+      "to": "-17006662#0",
+      "via": [],
+      "route": [
+        "472478085",
+        "16990020",
+        "633436191",
+        "427884544",
+        "218679741#0",
+        "132789650",
+        "427819537#0",
+        "427819537#1",
+        "427819543#0",
+        "629653843",
+        "-427819551#8",
+        "-427819551#0",
+        "629653811#0",
+        "16999684",
+        "-16993828#5",
+        "-16993828#3",
+        "-16993828#2",
+        "-16993828#1",
+        "17010082#0",
+        "-17006662#0"
+      ],
+      "route_length_m": 2257.03,
+      "free_flow_s": 129.9,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 20.0
+    },
+    {
+      "id": "fremont_circle_to_i25_north",
+      "type": "residential_mix",
+      "from": "-16991914",
+      "to": "106308386",
+      "via": [
+        "-17003602#7"
+      ],
+      "route": [
+        "-16991914",
+        "-17003598#0",
+        "1037840512",
+        "1037840511",
+        "-629629564",
+        "-629629562",
+        "-629629560",
+        "-629629558",
+        "-629653803",
+        "-629653795",
+        "-16999684",
+        "-629653811#1",
+        "629653818",
+        "427819551#1",
+        "-17003602#7",
+        "-17003602#4",
+        "1059880022",
+        "10378085",
+        "626534263",
+        "223306870",
+        "223207864#0",
+        "1342047649",
+        "1001791386",
+        "37722913",
+        "106308386"
+      ],
+      "route_length_m": 2667.82,
+      "free_flow_s": 140.2,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 25.0
+    },
+    {
+      "id": "i25_south_to_fremont_circle",
+      "type": "residential_mix",
+      "from": "472478085",
+      "to": "16991914",
+      "via": [],
+      "route": [
+        "472478085",
+        "16990020",
+        "633436191",
+        "427884544",
+        "218679741#0",
+        "132789650",
+        "427819537#0",
+        "427819537#1",
+        "427819543#0",
+        "629653843",
+        "-427819551#8",
+        "-427819551#0",
+        "629653811#0",
+        "16999684",
+        "629653795",
+        "629653803",
+        "629629558",
+        "629629560",
+        "629629562",
+        "629629564",
+        "1037840513#0",
+        "-1037840512",
+        "17003598#0",
+        "16991914"
+      ],
+      "route_length_m": 2282.67,
+      "free_flow_s": 124.5,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 22.0
+    },
+    {
+      "id": "xanthia_street_to_arapahoe_east",
+      "type": "residential_mix",
+      "from": "-17003598#2",
+      "to": "427819527",
+      "via": [
+        "-17003602#7"
+      ],
+      "route": [
+        "-17003598#2",
+        "-17003598#1",
+        "-17003598#0",
+        "1037840512",
+        "1037840511",
+        "-629629564",
+        "-629629562",
+        "-629629560",
+        "-629629558",
+        "-629653803",
+        "-629653795",
+        "-16999684",
+        "-629653811#1",
+        "629653818",
+        "427819551#1",
+        "-17003602#7",
+        "-17003602#4",
+        "1059880022",
+        "10378085",
+        "626534263",
+        "223306870",
+        "1037832983#0",
+        "775965544",
+        "427884543",
+        "427819525",
+        "131933321#0",
+        "427819527"
+      ],
+      "route_length_m": 1734.41,
+      "free_flow_s": 112.9,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 22.0
+    },
+    {
+      "id": "xanthia_way_to_i25_north",
+      "type": "residential_mix",
+      "from": "-17006541",
+      "to": "106308386",
+      "via": [
+        "-17003602#7"
+      ],
+      "route": [
+        "-17006541",
+        "-17003598#1",
+        "-17003598#0",
+        "1037840512",
+        "1037840511",
+        "-629629564",
+        "-629629562",
+        "-629629560",
+        "-629629558",
+        "-629653803",
+        "-629653795",
+        "-16999684",
+        "-629653811#1",
+        "629653818",
+        "427819551#1",
+        "-17003602#7",
+        "-17003602#4",
+        "1059880022",
+        "10378085",
+        "626534263",
+        "223306870",
+        "223207864#0",
+        "1342047649",
+        "1001791386",
+        "37722913",
+        "106308386"
+      ],
+      "route_length_m": 2678.3,
+      "free_flow_s": 140.9,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 20.0
+    },
+    {
+      "id": "alton_way_to_arapahoe_east",
+      "type": "residential_mix",
+      "from": "-17003147#17",
+      "to": "427819527",
+      "via": [
+        "-17003602#7"
+      ],
+      "route": [
+        "-17003147#17",
+        "-17003147#11",
+        "-1037841385#3",
+        "629653818",
+        "427819551#1",
+        "-17003602#7",
+        "-17003602#4",
+        "1059880022",
+        "10378085",
+        "626534263",
+        "223306870",
+        "1037832983#0",
+        "775965544",
+        "427884543",
+        "427819525",
+        "131933321#0",
+        "427819527"
+      ],
+      "route_length_m": 1699.45,
+      "free_flow_s": 124.7,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 25.0
+    },
+    {
+      "id": "arapahoe_east_to_alton_way",
+      "type": "residential_mix",
+      "from": "131933384",
+      "to": "17003147#12",
+      "via": [],
+      "route": [
+        "131933384",
+        "427819534",
+        "427819530#0",
+        "132789653",
+        "694506252#0",
+        "1037832984",
+        "75609577",
+        "629675735",
+        "775963749",
+        "132789650",
+        "427819537#0",
+        "427819537#1",
+        "427819543#0",
+        "629653843",
+        "-427819551#8",
+        "-427819551#0",
+        "1037841385#0",
+        "17003147#0",
+        "17003147#12"
+      ],
+      "route_length_m": 1781.1,
+      "free_flow_s": 124.1,
+      "stops": [],
+      "begin": {
+        "authored": 0,
+        "form": "seconds",
+        "seconds": 0.0,
+        "civil": "2026-09-29T07:00:00-06:00"
+      },
+      "end": {
+        "authored": 2700,
+        "form": "seconds",
+        "seconds": 2700.0,
+        "civil": "2026-09-29T07:45:00-06:00"
+      },
+      "vehs_per_hour": 22.0
+    }
+  ],
+  "lane_closures": [
+    {
+      "id": "incident",
+      "edge": "1001791386",
+      "street": "South Valley Highway",
+      "lanes": [
+        "1001791386_0",
+        "1001791386_1",
+        "1001791386_2",
+        "1001791386_3",
+        "1001791386_4"
+      ],
+      "open_lanes": 1,
+      "notify": [
+        "907700111"
+      ],
+      "allow": "authority",
+      "begin": {
+        "authored": 900.0,
+        "form": "seconds",
+        "seconds": 900.0,
+        "civil": "2026-09-29T07:15:00-06:00"
+      },
+      "end": {
+        "authored": 1080.0,
+        "form": "seconds",
+        "seconds": 1080.0,
+        "civil": "2026-09-29T07:18:00-06:00"
+      }
+    }
+  ],
+  "vehicle_types": {
+    "catalogue": {
+      "path": "vehicles.catalogue.json",
+      "catalogue_id": "carla-0.10.0-windows",
+      "catalogue_digest": "c31294d8410a313d21b9e1f4343f293b9d590f51f3eba4843de4950ecf4a9850",
+      "blueprint_set_digest": "a51cfaacc5ceb15351f445575e8d3208e47dfe5c4c239c9805717be6cc9770b4"
+    },
+    "classes": [
+      "car_quick: 9 measured bodies, length 4.18-5.37 m, mean 4.82 m, share 0",
+      "car: 9 measured bodies, length 4.18-5.37 m, mean 4.82 m, share 0",
+      "suv: 1 measured body, length 5.59-5.59 m, mean 5.59 m, share 0",
+      "van: 1 measured body, length 5.92-5.92 m, mean 5.92 m, share 0",
+      "truck: 1 measured body, length 8.00-8.00 m, mean 8.00 m, share 0",
+      "semi: 1 measured body, length 7.92-7.92 m, mean 7.92 m, share 0",
+      "marked: 1 measured body, length 3.87-3.87 m, mean 3.87 m, share 0"
+    ],
+    "mix": {
+      "id": "",
+      "probabilities": {}
+    },
+    "mixes": [
+      {
+        "id": "freeway_mix",
+        "shares": {
+          "car_quick": 0.26,
+          "car": 0.35,
+          "suv": 0.2,
+          "van": 0.08,
+          "truck": 0.07,
+          "semi": 0.04
+        },
+        "probabilities": {
+          "car_quick.vehicle.ue4.audi.tt": 0.02888888888888889,
+          "car_quick.vehicle.mini.cooper": 0.02888888888888889,
+          "car_quick.vehicle.ue4.bmw.grantourer": 0.02888888888888889,
+          "car_quick.vehicle.ue4.mercedes.ccc": 0.02888888888888889,
+          "car_quick.vehicle.ue4.ford.mustang": 0.02888888888888889,
+          "car_quick.vehicle.lincoln.mkz": 0.02888888888888889,
+          "car_quick.vehicle.dodge.charger": 0.02888888888888889,
+          "car_quick.vehicle.ue4.chevrolet.impala": 0.02888888888888889,
+          "car_quick.vehicle.ue4.ford.crown": 0.02888888888888889,
+          "car.vehicle.ue4.audi.tt": 0.03888888888888889,
+          "car.vehicle.mini.cooper": 0.03888888888888889,
+          "car.vehicle.ue4.bmw.grantourer": 0.03888888888888889,
+          "car.vehicle.ue4.mercedes.ccc": 0.03888888888888889,
+          "car.vehicle.ue4.ford.mustang": 0.03888888888888889,
+          "car.vehicle.lincoln.mkz": 0.03888888888888889,
+          "car.vehicle.dodge.charger": 0.03888888888888889,
+          "car.vehicle.ue4.chevrolet.impala": 0.03888888888888889,
+          "car.vehicle.ue4.ford.crown": 0.03888888888888889,
+          "suv.vehicle.nissan.patrol": 0.2,
+          "van.vehicle.sprinter.mercedes": 0.08,
+          "truck.vehicle.carlacola.actors": 0.07,
+          "semi.vehicle.carlamotors.european_hgv": 0.04
+        }
+      },
+      {
+        "id": "arterial_mix",
+        "shares": {
+          "car": 0.45,
+          "suv": 0.24,
+          "van": 0.2,
+          "truck": 0.11
+        },
+        "probabilities": {
+          "car.vehicle.ue4.audi.tt": 0.05,
+          "car.vehicle.mini.cooper": 0.05,
+          "car.vehicle.ue4.bmw.grantourer": 0.05,
+          "car.vehicle.ue4.mercedes.ccc": 0.05,
+          "car.vehicle.ue4.ford.mustang": 0.05,
+          "car.vehicle.lincoln.mkz": 0.05,
+          "car.vehicle.dodge.charger": 0.05,
+          "car.vehicle.ue4.chevrolet.impala": 0.05,
+          "car.vehicle.ue4.ford.crown": 0.05,
+          "suv.vehicle.nissan.patrol": 0.24,
+          "van.vehicle.sprinter.mercedes": 0.2,
+          "truck.vehicle.carlacola.actors": 0.11
+        }
+      },
+      {
+        "id": "residential_mix",
+        "shares": {
+          "car": 0.58,
+          "suv": 0.33,
+          "van": 0.09
+        },
+        "probabilities": {
+          "car.vehicle.ue4.audi.tt": 0.06444444444444444,
+          "car.vehicle.mini.cooper": 0.06444444444444444,
+          "car.vehicle.ue4.bmw.grantourer": 0.06444444444444444,
+          "car.vehicle.ue4.mercedes.ccc": 0.06444444444444444,
+          "car.vehicle.ue4.ford.mustang": 0.06444444444444444,
+          "car.vehicle.lincoln.mkz": 0.06444444444444444,
+          "car.vehicle.dodge.charger": 0.06444444444444444,
+          "car.vehicle.ue4.chevrolet.impala": 0.06444444444444444,
+          "car.vehicle.ue4.ford.crown": 0.06444444444444444,
+          "suv.vehicle.nissan.patrol": 0.33,
+          "van.vehicle.sprinter.mercedes": 0.09
+        }
+      }
+    ],
+    "types": {
+      "car_quick.vehicle.ue4.audi.tt": {
+        "blueprint": "vehicle.ue4.audi.tt",
+        "length_m": 4.1812,
+        "width_m": 1.9941,
+        "height_m": 1.3853
+      },
+      "car_quick.vehicle.mini.cooper": {
+        "blueprint": "vehicle.mini.cooper",
+        "length_m": 4.5526,
+        "width_m": 2.0956,
+        "height_m": 1.7725
+      },
+      "car_quick.vehicle.ue4.bmw.grantourer": {
+        "blueprint": "vehicle.ue4.bmw.grantourer",
+        "length_m": 4.611,
+        "width_m": 2.2417,
+        "height_m": 1.6673
+      },
+      "car_quick.vehicle.ue4.mercedes.ccc": {
+        "blueprint": "vehicle.ue4.mercedes.ccc",
+        "length_m": 4.6736,
+        "width_m": 1.8118,
+        "height_m": 1.4419
+      },
+      "car_quick.vehicle.ue4.ford.mustang": {
+        "blueprint": "vehicle.ue4.ford.mustang",
+        "length_m": 4.7175,
+        "width_m": 1.8948,
+        "height_m": 1.3009
+      },
+      "car_quick.vehicle.lincoln.mkz": {
+        "blueprint": "vehicle.lincoln.mkz",
+        "length_m": 4.892,
+        "width_m": 1.8356,
+        "height_m": 1.5241
+      },
+      "car_quick.vehicle.dodge.charger": {
+        "blueprint": "vehicle.dodge.charger",
+        "length_m": 5.006,
+        "width_m": 1.881,
+        "height_m": 1.5403
+      },
+      "car_quick.vehicle.ue4.chevrolet.impala": {
+        "blueprint": "vehicle.ue4.chevrolet.impala",
+        "length_m": 5.3575,
+        "width_m": 2.0332,
+        "height_m": 1.4107
+      },
+      "car_quick.vehicle.ue4.ford.crown": {
+        "blueprint": "vehicle.ue4.ford.crown",
+        "length_m": 5.3657,
+        "width_m": 1.8007,
+        "height_m": 1.575
+      },
+      "car.vehicle.ue4.audi.tt": {
+        "blueprint": "vehicle.ue4.audi.tt",
+        "length_m": 4.1812,
+        "width_m": 1.9941,
+        "height_m": 1.3853
+      },
+      "car.vehicle.mini.cooper": {
+        "blueprint": "vehicle.mini.cooper",
+        "length_m": 4.5526,
+        "width_m": 2.0956,
+        "height_m": 1.7725
+      },
+      "car.vehicle.ue4.bmw.grantourer": {
+        "blueprint": "vehicle.ue4.bmw.grantourer",
+        "length_m": 4.611,
+        "width_m": 2.2417,
+        "height_m": 1.6673
+      },
+      "car.vehicle.ue4.mercedes.ccc": {
+        "blueprint": "vehicle.ue4.mercedes.ccc",
+        "length_m": 4.6736,
+        "width_m": 1.8118,
+        "height_m": 1.4419
+      },
+      "car.vehicle.ue4.ford.mustang": {
+        "blueprint": "vehicle.ue4.ford.mustang",
+        "length_m": 4.7175,
+        "width_m": 1.8948,
+        "height_m": 1.3009
+      },
+      "car.vehicle.lincoln.mkz": {
+        "blueprint": "vehicle.lincoln.mkz",
+        "length_m": 4.892,
+        "width_m": 1.8356,
+        "height_m": 1.5241
+      },
+      "car.vehicle.dodge.charger": {
+        "blueprint": "vehicle.dodge.charger",
+        "length_m": 5.006,
+        "width_m": 1.881,
+        "height_m": 1.5403
+      },
+      "car.vehicle.ue4.chevrolet.impala": {
+        "blueprint": "vehicle.ue4.chevrolet.impala",
+        "length_m": 5.3575,
+        "width_m": 2.0332,
+        "height_m": 1.4107
+      },
+      "car.vehicle.ue4.ford.crown": {
+        "blueprint": "vehicle.ue4.ford.crown",
+        "length_m": 5.3657,
+        "width_m": 1.8007,
+        "height_m": 1.575
+      },
+      "suv.vehicle.nissan.patrol": {
+        "blueprint": "vehicle.nissan.patrol",
+        "length_m": 5.5912,
+        "width_m": 2.1466,
+        "height_m": 2.059
+      },
+      "van.vehicle.sprinter.mercedes": {
+        "blueprint": "vehicle.sprinter.mercedes",
+        "length_m": 5.9151,
+        "width_m": 1.9884,
+        "height_m": 2.726
+      },
+      "truck.vehicle.carlacola.actors": {
+        "blueprint": "vehicle.carlacola.actors",
+        "length_m": 8.0037,
+        "width_m": 2.9118,
+        "height_m": 4.0546
+      },
+      "semi.vehicle.carlamotors.european_hgv": {
+        "blueprint": "vehicle.carlamotors.european_hgv",
+        "length_m": 7.9241,
+        "width_m": 2.8647,
+        "height_m": 3.7833
+      },
+      "marked.vehicle.jeep.wrangler_rubicon": {
+        "blueprint": "vehicle.jeep.wrangler_rubicon",
+        "length_m": 3.8662,
+        "width_m": 1.9052,
+        "height_m": 1.8779
+      }
+    }
+  },
+  "supervision": {
+    "instances": [],
+    "cohorts": [
+      {
+        "flow_id": "i25_north_through",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "i25_south_through",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "i25_north_to_arapahoe_east",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "i25_north_to_arapahoe_west",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "i25_south_to_arapahoe_east",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "i25_south_to_arapahoe_west",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "arapahoe_east_to_i25_north",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "arapahoe_west_to_i25_north",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "arapahoe_east_to_i25_south",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "arapahoe_west_to_i25_south",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "arapahoe_east_to_west",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "arapahoe_west_to_east",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "yosemite_north_to_south",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "yosemite_south_to_north",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "yosemite_north_to_arapahoe_east",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "arapahoe_east_to_yosemite_north",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "clinton_to_arapahoe_west",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "arapahoe_west_to_clinton",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "caley_to_arapahoe_east",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "arapahoe_east_to_caley",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "peakview_west_to_east",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "peakview_east_to_west",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "boston_court_to_arapahoe_east",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "arbor_to_arapahoe_east",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "willow_to_yosemite_south",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "wabash_to_arapahoe_west",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "underpass_north_to_south",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "underpass_south_to_north",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "underpass_caley_to_yosemite",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "davies_avenue_to_i25_north",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "i25_south_to_davies_avenue",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "costilla_place_to_i25_north",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "i25_south_to_costilla_place",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "costilla_avenue_to_i25_south",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "i25_north_to_costilla_avenue",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "davies_place_to_i25_north",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "i25_south_to_davies_place",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "briarwood_place_to_i25_north",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "i25_south_to_briarwood_place",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "briarwood_boulevard_to_i25_south",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "i25_north_to_briarwood_boulevard",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "briarwood_avenue_to_arapahoe_east",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "arapahoe_east_to_briarwood_avenue",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "easter_place_to_i25_north",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "i25_south_to_easter_place",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "fremont_circle_to_i25_north",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "i25_south_to_fremont_circle",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "xanthia_street_to_arapahoe_east",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "xanthia_way_to_i25_north",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "alton_way_to_arapahoe_east",
+        "supervision": "unlabelled",
+        "labels": []
+      },
+      {
+        "flow_id": "arapahoe_east_to_alton_way",
+        "supervision": "unlabelled",
+        "labels": []
+      }
+    ],
+    "series": []
+  },
+  "lock": {
+    "lock_version": 1,
+    "scenario_id": "Arapahoe_I25_UnderpassDwell",
+    "scenario_name": "Arapahoe I-25 underpass dwell",
+    "spec_version": 1,
+    "specification": "Arapahoe_I25_UnderpassDwell.scenario.json",
+    "specification_sha256": "436bc7f2c8cdf693416ecc5231ed89e14cbf5e454897f0147702ab7d43f1d469",
+    "compiler": {
+      "name": "carlacontrol.ScenarioCompiler",
+      "version": "1.0.0"
+    },
+    "files": {
+      "routes": {
+        "path": "Arapahoe_I25_UnderpassDwell.rou.xml",
+        "sha256": "1715bb1d4cc2504f6c3794081e4dcc7da9e3b35d4be9aeb7ce3275d1caccfea9"
+      },
+      "config": {
+        "path": "Arapahoe_I25_UnderpassDwell.sumocfg",
+        "sha256": "e299b2929262e50bfd5301dea2984e42377549933d53fff877e6b23bf623c01b"
+      },
+      "network": {
+        "path": "Arapahoe_I25.net.xml",
+        "sha256": "11e2bba84b33514e37249ce67d05275df7d9166ea4685c4ddeaa5ce5b29e16ba"
+      },
+      "additional": {
+        "path": "Arapahoe_I25_UnderpassDwell.add.xml",
+        "sha256": "6f05aef7af30d1aa3077236f3d710d2ca83431499c3b88229a02dd29d87d0654"
+      },
+      "supervision": {
+        "path": "Arapahoe_I25_UnderpassDwell.supervision.json",
+        "sha256": "679acda6c161b94c37ceac8d4a40ec654ad347a6d5b92264343b36736bc26f75"
+      }
+    },
+    "world": {
+      "package": "Arapahoe_I25.cwp",
+      "map_name": "Arapahoe_I25",
+      "network_fingerprint": "ac83aa8b541158e60f012d185405ec20e5a924ff95f1a4609660ccd3a714191b",
+      "netconvert_argv": [
+        "--osm-files",
+        "G:\\Projects\\CarlaUE_5_7_4\\carla\\Build\\sumo-smoketest\\Arapahoe_I25_clipped.osm",
+        "--opendrive-output",
+        "<opendrive-output>",
+        "--proj",
+        "+proj=tmerc +lat_0=39.59431 +lon_0=-104.88449 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
+        "--default.lanewidth",
+        "3.35",
+        "--default.sidewalk-width",
+        "2.8",
+        "--tls.guess",
+        "true",
+        "--geometry.remove",
+        "--roundabouts.guess",
+        "--osm.turn-lanes",
+        "--output.street-names",
+        "true",
+        "--output.original-names",
+        "true",
+        "--offset.disable-normalization",
+        "--junctions.join",
+        "--tls.default-type",
+        "actuated",
+        "--output-file",
+        "<output-file>",
+        "--junctions.join-dist",
+        "25",
+        "--keep-edges.by-vclass",
+        "passenger",
+        "--keep-edges.components",
+        "1",
+        "--remove-edges.isolated",
+        "true"
+      ],
+      "netconvert_version": "Eclipse SUMO netconvert 1.27.0",
+      "opendrive_sha256": "b6bb52668042454cc936e23ada2e8692a3759bd7ac17b1281937b895736614bb",
+      "source_osm_sha256": "f366f0d0e615ad4a663d93d672b8a95589ed3d8e58bdb60b146a423aabf2cecc",
+      "origin_latitude": 39.59431,
+      "origin_longitude": -104.88449,
+      "georeference": "+proj=tmerc +lat_0=39.59431 +lon_0=-104.88449 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
+    },
+    "catalogue": {
+      "catalogue_id": "carla-0.10.0-windows",
+      "catalogue_digest": "c31294d8410a313d21b9e1f4343f293b9d590f51f3eba4843de4950ecf4a9850",
+      "blueprint_set_digest": "a51cfaacc5ceb15351f445575e8d3208e47dfe5c4c239c9805717be6cc9770b4",
+      "content_build_id": "carla-0.10.0-windows"
+    },
+    "vocabulary": {
+      "core_version": 1,
+      "namespaces": [],
+      "vocabulary_digest": "f55740d1198fafffbee1a2d030dfaf57444434b083a44cc1fe87106503435edf"
+    },
+    "traffic": {
+      "sumo_seed": 42,
+      "step_length_s": 0.05,
+      "end_s": 2700.0,
+      "processing": {
+        "time-to-teleport": "-1",
+        "max-depart-delay": "900",
+        "collision.action": "warn"
+      },
+      "routed_by": {
+        "tool": "duarouter",
+        "version": "1.27.0",
+        "world_converter": "Eclipse SUMO netconvert 1.27.0",
+        "release_agreement": "SameRelease",
+        "mismatch_accepted": false
+      }
+    },
+    "epoch": {
+      "calendar_advances": true,
+      "civil_datetime": "2026-09-29T07:00:00-06:00",
+      "dst_in_effect": true,
+      "epoch_version": 1,
+      "note": "Arapahoe County, Colorado: simulated second zero is 07:00 Mountain Daylight Time on 29 September 2026, in the morning peak",
+      "time_zone_id": "America/Denver",
+      "utc_datetime": "2026-09-29T13:00:00Z",
+      "utc_offset_hours": -6
+    },
+    "epoch_block_sha256": "ef1458adcb1395f9fd2141d237057e311571a7bf1e24a178d8349ba24e691f8f",
+    "illumination": {
+      "illumination_version": 1,
+      "policy": "freeze_at_window_start"
+    },
+    "capture_windows": [],
+    "ephemeris": "CarlaNet.CoSim.DeclaredSun and SolarPositionModel.AtInstant",
+    "illumination_label_association": {
+      "normalized_mutual_information": null,
+      "bands": {
+        "golden": {
+          "annotated": 0,
+          "nominal": 0,
+          "unlabelled": 52,
+          "total": 52
+        }
+      },
+      "entries": 52
+    }
+  }
+}

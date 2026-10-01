@@ -5,9 +5,10 @@ catalogue entries, dates or the sun: its clock reads elapsed seconds (`07_Scenar
 §5.3). So this report is **the only place an annotation or an epoch can be checked** before a capture
 is spent. It states every place and what it became, the epoch in one sentence, every declared instant
 with its second and its civil time, every rota and every skip with its reason, every route as
-`duarouter` produced it, every vehicle type and the body it binds, every supervision instance with its
-intervals in seconds and civil time, every capture window with its civil date and the sun the session
-will declare, the illumination-label association in full, every warning in full, and the lock.
+`duarouter` produced it, every lane closure and its window, every vehicle type and the body it binds,
+every supervision instance with its intervals in seconds and civil time, every capture window with its
+civil date and the sun the session will declare, the illumination-label association in full, every
+warning in full, and the lock.
 
 `<scenario>.resolution.json` is the record; `<scenario>.resolution.md` renders it for reading. A
 refused compile writes the report too, marked refused, with every refusal.
@@ -21,7 +22,8 @@ RESOLUTION_VERSION = 1
 # Section order: what a reader checks first comes first.
 SECTIONS = ("resolution_version", "outcome", "scenario", "findings", "epoch", "zone",
             "illumination_default", "capture_windows", "illumination_label_association", "world",
-            "instants", "places", "rotas", "routes", "vehicle_types", "supervision", "lock")
+            "instants", "places", "rotas", "routes", "lane_closures", "vehicle_types",
+            "supervision", "lock")
 
 
 class ResolutionReport:
@@ -70,6 +72,7 @@ class ResolutionReport:
         lines += self._places(d.get("places"))
         lines += self._rotas(d.get("rotas"))
         lines += self._routes(d.get("routes"))
+        lines += self._lane_closures(d.get("lane_closures"))
         lines += self._supervision(d.get("supervision"))
         if "lock" in d:
             lines += ["## Lock", "", "```json", json.dumps(d["lock"].get("files", {}), indent=2),
@@ -178,6 +181,18 @@ class ResolutionReport:
                 f"{r['begin']['civil']} to {r['end']['civil']}"
             lines.append(f"| {r['id']} | {r['type']} | {when} | {' '.join(r['route'])} | "
                          f"{r['route_length_m']:g} m | {r['free_flow_s']:g} s |")
+        return [*lines, ""]
+
+    @staticmethod
+    def _lane_closures(closures) -> list[str]:
+        if not closures:
+            return []
+        lines = ["## Lane closures", "", "| Id | Edge | Closed lanes | Open lanes | From | To | "
+                 "Notified on |", "|---|---|---|---|---|---|---|"]
+        for c in closures:
+            lines.append(f"| {c['id']} | {c['edge']} {c['street']} | {' '.join(c['lanes'])} | "
+                         f"{c['open_lanes']} | {c['begin']['civil']} | {c['end']['civil']} | "
+                         f"{' '.join(c['notify'])} |")
         return [*lines, ""]
 
     @staticmethod

@@ -87,6 +87,9 @@ SCHEMA: dict = {
         "flows": {"type": "array", "items": {"$ref": "#/$defs/flow"}},
         "actors": {"type": "array", "items": {"$ref": "#/$defs/actor"}},
         "rotas": {"type": "array", "items": {"$ref": "#/$defs/rota"}},
+        "lane_closures": {"type": "array", "items": {"$ref": "#/$defs/lane_closure"},
+                          "description": "Lanes taken out of service for a window, as an incident "
+                                         "takes them"},
         "capture_windows": {"type": "array", "items": {"$ref": "#/$defs/capture_window"}},
         "vocabulary": {"$ref": "#/$defs/vocabulary"},
         "supervision": {"$ref": "#/$defs/supervision"},
@@ -244,6 +247,23 @@ SCHEMA: dict = {
                                    "subject_index": {"type": "integer", "minimum": 0},
                                    "subject": {"type": "string"},
                                    "because": {"type": "string", "minLength": 1}}}},
+            },
+        },
+        "lane_closure": {
+            "type": "object", "additionalProperties": False,
+            "required": ["id", "place", "lanes", "begin", "end"],
+            "properties": {
+                "id": {"type": "string", "pattern": _IDENTIFIER},
+                "place": {"type": "string", "minLength": 1,
+                          "description": "A place naming the one edge whose lanes close"},
+                "lanes": {"type": "array", "minItems": 1,
+                          "items": {"type": "integer", "minimum": 0},
+                          "description": "The indices of the lanes that close, 0 the rightmost"},
+                "notify": {"type": "array", "items": {"type": "string", "minLength": 1},
+                           "description": "Places naming the edges on which a vehicle learns of "
+                                          "the closure and may be rerouted; the closed edge when "
+                                          "absent"},
+                "begin": _TIME, "end": _TIME,
             },
         },
         "capture_window": {

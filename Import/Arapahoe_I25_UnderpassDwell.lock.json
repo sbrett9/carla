@@ -1,0 +1,137 @@
+{
+  "lock_version": 1,
+  "scenario_id": "Arapahoe_I25_UnderpassDwell",
+  "scenario_name": "Arapahoe I-25 underpass dwell",
+  "spec_version": 1,
+  "specification": "Arapahoe_I25_UnderpassDwell.scenario.json",
+  "specification_sha256": "436bc7f2c8cdf693416ecc5231ed89e14cbf5e454897f0147702ab7d43f1d469",
+  "compiler": {
+    "name": "carlacontrol.ScenarioCompiler",
+    "version": "1.0.0"
+  },
+  "files": {
+    "routes": {
+      "path": "Arapahoe_I25_UnderpassDwell.rou.xml",
+      "sha256": "1715bb1d4cc2504f6c3794081e4dcc7da9e3b35d4be9aeb7ce3275d1caccfea9"
+    },
+    "config": {
+      "path": "Arapahoe_I25_UnderpassDwell.sumocfg",
+      "sha256": "e299b2929262e50bfd5301dea2984e42377549933d53fff877e6b23bf623c01b"
+    },
+    "network": {
+      "path": "Arapahoe_I25.net.xml",
+      "sha256": "11e2bba84b33514e37249ce67d05275df7d9166ea4685c4ddeaa5ce5b29e16ba"
+    },
+    "additional": {
+      "path": "Arapahoe_I25_UnderpassDwell.add.xml",
+      "sha256": "6f05aef7af30d1aa3077236f3d710d2ca83431499c3b88229a02dd29d87d0654"
+    },
+    "supervision": {
+      "path": "Arapahoe_I25_UnderpassDwell.supervision.json",
+      "sha256": "679acda6c161b94c37ceac8d4a40ec654ad347a6d5b92264343b36736bc26f75"
+    }
+  },
+  "world": {
+    "package": "Arapahoe_I25.cwp",
+    "map_name": "Arapahoe_I25",
+    "network_fingerprint": "ac83aa8b541158e60f012d185405ec20e5a924ff95f1a4609660ccd3a714191b",
+    "netconvert_argv": [
+      "--osm-files",
+      "G:\\Projects\\CarlaUE_5_7_4\\carla\\Build\\sumo-smoketest\\Arapahoe_I25_clipped.osm",
+      "--opendrive-output",
+      "<opendrive-output>",
+      "--proj",
+      "+proj=tmerc +lat_0=39.59431 +lon_0=-104.88449 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
+      "--default.lanewidth",
+      "3.35",
+      "--default.sidewalk-width",
+      "2.8",
+      "--tls.guess",
+      "true",
+      "--geometry.remove",
+      "--roundabouts.guess",
+      "--osm.turn-lanes",
+      "--output.street-names",
+      "true",
+      "--output.original-names",
+      "true",
+      "--offset.disable-normalization",
+      "--junctions.join",
+      "--tls.default-type",
+      "actuated",
+      "--output-file",
+      "<output-file>",
+      "--junctions.join-dist",
+      "25",
+      "--keep-edges.by-vclass",
+      "passenger",
+      "--keep-edges.components",
+      "1",
+      "--remove-edges.isolated",
+      "true"
+    ],
+    "netconvert_version": "Eclipse SUMO netconvert 1.27.0",
+    "opendrive_sha256": "b6bb52668042454cc936e23ada2e8692a3759bd7ac17b1281937b895736614bb",
+    "source_osm_sha256": "f366f0d0e615ad4a663d93d672b8a95589ed3d8e58bdb60b146a423aabf2cecc",
+    "origin_latitude": 39.59431,
+    "origin_longitude": -104.88449,
+    "georeference": "+proj=tmerc +lat_0=39.59431 +lon_0=-104.88449 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
+  },
+  "catalogue": {
+    "catalogue_id": "carla-0.10.0-windows",
+    "catalogue_digest": "c31294d8410a313d21b9e1f4343f293b9d590f51f3eba4843de4950ecf4a9850",
+    "blueprint_set_digest": "a51cfaacc5ceb15351f445575e8d3208e47dfe5c4c239c9805717be6cc9770b4",
+    "content_build_id": "carla-0.10.0-windows"
+  },
+  "vocabulary": {
+    "core_version": 1,
+    "namespaces": [],
+    "vocabulary_digest": "f55740d1198fafffbee1a2d030dfaf57444434b083a44cc1fe87106503435edf"
+  },
+  "traffic": {
+    "sumo_seed": 42,
+    "step_length_s": 0.05,
+    "end_s": 2700.0,
+    "processing": {
+      "time-to-teleport": "-1",
+      "max-depart-delay": "900",
+      "collision.action": "warn"
+    },
+    "routed_by": {
+      "tool": "duarouter",
+      "version": "1.27.0",
+      "world_converter": "Eclipse SUMO netconvert 1.27.0",
+      "release_agreement": "SameRelease",
+      "mismatch_accepted": false
+    }
+  },
+  "epoch": {
+    "calendar_advances": true,
+    "civil_datetime": "2026-09-29T07:00:00-06:00",
+    "dst_in_effect": true,
+    "epoch_version": 1,
+    "note": "Arapahoe County, Colorado: simulated second zero is 07:00 Mountain Daylight Time on 29 September 2026, in the morning peak",
+    "time_zone_id": "America/Denver",
+    "utc_datetime": "2026-09-29T13:00:00Z",
+    "utc_offset_hours": -6
+  },
+  "epoch_block_sha256": "ef1458adcb1395f9fd2141d237057e311571a7bf1e24a178d8349ba24e691f8f",
+  "illumination": {
+    "illumination_version": 1,
+    "policy": "freeze_at_window_start"
+  },
+  "capture_windows": [],
+  "ephemeris": "CarlaNet.CoSim.DeclaredSun and SolarPositionModel.AtInstant",
+  "illumination_label_association": {
+    "normalized_mutual_information": null,
+    "bands": {
+      "golden": {
+        "annotated": 0,
+        "nominal": 0,
+        "unlabelled": 52,
+        "total": 52
+      }
+    },
+    "entries": 52
+  }
+}

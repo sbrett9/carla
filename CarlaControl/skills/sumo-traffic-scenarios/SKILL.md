@@ -40,8 +40,8 @@ a different graph.
         │  <Scenario>.scenario.json  →  compile_scenario.py  (ScenarioCompiler)
         │    · resolve places and civil times, route with duarouter, check, emit
         │    · .rou.xml (routed) · .sumocfg · the world's .net.xml · .supervision.json · .lock.json
+        │    · .add.xml — the lane closures, where the specification declares any
         │    · .resolution.json — what everything resolved to
-        │  (or make_arapahoe_scenario.py, the one builder that still writes SUMO XML directly)
         ▼
   scenario files in carla/Import/  →  sumo_cot_telemetry.py (drives SUMO over TraCI)
     · reads bareearth.bin for each vehicle's ellipsoidal height
@@ -128,8 +128,15 @@ Beside this file, and held to the compiler by the test suite:
 **The blocks.** `world` (the package path and the network fingerprint it was authored against), `epoch`,
 `illumination`, `seeds` (`sumo`), `simulation` (`end`, `step_length_s`), `catalogue`, `vehicle_classes`,
 `vehicle_mix` and `vehicle_mixes` (the vehicle mapping contract below, as data), `places`, `place_sets`,
-`instants`, `flows`, `actors`, `rotas`, `vocabulary`, `supervision`, `capture_windows`. A field the
-schema does not name is refused.
+`instants`, `flows`, `actors`, `rotas`, `lane_closures`, `vocabulary`, `supervision`,
+`capture_windows`. A field the schema does not name is refused.
+
+A lane closure is an incident's: `{"id", "place", "lanes", "notify", "begin", "end"}` closes the lanes
+of the one edge `place` names, by index from the right, to everything but class `authority` for the
+window, and `notify` names the edges where a vehicle learns of it (the closed edge when absent). It
+compiles into `<scenario_id>.add.xml`, which the configuration names and the lock digests; the route
+file cannot carry it. `make_arapahoe_scenario.py` closes five of I-25's six northbound lanes for three
+minutes this way.
 
 `make_bahonar_scenario.py` is the worked pattern of life: a week scheduled in civil clocks under a
 07:00 epoch, a guard rota whose one skip plants the no-show, five annotated instances, a nominal series
@@ -277,7 +284,7 @@ CLIs in `carla/CarlaControl/scripts/`:
 - `make_sumo_scenario.py` — Gardnerville orbit (one marked vehicle laps a block N times). Writes a
   specification and compiles it.
 - `make_arapahoe_scenario.py` — Arapahoe I-25 dwell (freeway + underpass, an incident, a long dwell).
-  Still writes SUMO XML.
+  Writes a specification and compiles it; the incident is a lane closure.
 - `make_bahonar_scenario.py` — Shahid Bahonar 7-day pattern of life (the port's guard postings, ferry
   pulses and shift changes, six anomalies). Writes a specification and compiles it against the world
   package; refused by name while the catalogue lacks a body it draws.

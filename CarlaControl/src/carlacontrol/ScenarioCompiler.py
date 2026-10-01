@@ -10,6 +10,7 @@ measured vehicle catalogue; it emits, beside one another:
 |---|---|
 | `<scenario_id>.rou.xml` | vehicle types from the catalogue; every actor and flow, **already routed**, departure-sorted, times in plain seconds, no supervision |
 | `<scenario_id>.sumocfg` | the run configuration: seed, step, end, and the options that decide the traffic; the epoch restated as a comment |
+| `<scenario_id>.add.xml` | the specification's lane closures, as SUMO rerouters the configuration names; written only when it declares any |
 | `<MapName>.net.xml` | the world package's own network, byte for byte -- the network SUMO runs is the world's |
 | `<scenario_id>.supervision.json` | the supervision plan, the sole annotation channel |
 | `<scenario_id>.resolution.json` and `.md` | what everything resolved to, and every warning in full |
@@ -33,6 +34,13 @@ the comparison the co-simulation session refuses a mismatched SUMO with (`CarlaN
 reached through `SumoInstallation.release_check`): a different `duarouter` release can route the same
 demand differently. `allow_sumo_version_mismatch` compiles anyway, warns, and records the acceptance in
 the lock; a world that records no converter warns and compiles.
+
+**A lane closure is the one thing the route file cannot carry.** SUMO closes a lane with a rerouter's
+`closingLaneReroute`, an element of an additional file, so a specification declaring `lane_closures`
+compiles into one more file, named by the configuration and digested in the lock with the others. A
+closed lane admits only class `authority` for the closure's interval; the edge stays open on its other
+lanes, so the routes fixed at compile time still hold, and traffic arriving faster than the open lanes
+carry queues behind the closure and drains once it lifts.
 """
 from __future__ import annotations
 
@@ -101,6 +109,14 @@ ALLOWED_PARAMS = frozenset({BLUEPRINT_PARAM, CLASS_PARAM, CATALOGUE_DIGEST_PARAM
 
 DEFAULT_DEPART_LANE = "best"
 DEFAULT_DEPART_SPEED = "max"
+
+# SUMO's schema for an additional file, beside its route schema in the installation's data directory.
+ADDITIONAL_SCHEMA_RELATIVE_PATH = Path("xsd") / "additional_file.xsd"
+
+# The only vehicle class a closed lane admits while its closure lasts: the emergency services, which
+# an incident does not close a road to. A scenario whose own traffic is of this class drives through
+# its closures.
+CLOSED_LANE_ALLOWS = "authority"
 
 # A whole attribute value that is a clock, which SUMO would read as an offset from t = 0 (check 44).
 _CLOCK_VALUE = re.compile(r"^\s*\d+:\d{2}(:\d{2}(\.\d+)?)?\s*$")
@@ -275,6 +291,7 @@ class ScenarioCompiler:
         self._resolve_rotas()
         self._resolve_actors()
         self._resolve_flows()
+        self._resolve_lane_closures()
         self._check_unique_ids()
         self.report.set("epoch", {
             "declared": self.epoch.declaration, "epoch_block_sha256": self.epoch.digest,
@@ -282,6 +299,8 @@ class ScenarioCompiler:
             "t0_civil": self.epoch.civil_instant_at(0), "end_s": end.seconds, "end_civil": end.civil,
             "time_zone_id": self.epoch.time_zone_id, "time_zone_id_resolved": False})
         self.report.set("instants", {name: r.to_dict() for name, r in self.instants.items()})
+        if self.spec.get("lane_closures"):
+            self.report.set("lane_closures", [self._closure_report(c) for c in self.lane_closures])
 
     def _resolve_epoch(self) -> None:
         try:
@@ -580,6 +599,54 @@ class ScenarioCompiler:
             self._check_permissions(flow)
             self.flows.append(flow)
 
+    def _resolve_lane_closures(self) -> None:
+        """Each declared closure: the edge its place names, the lanes that close, where vehicles
+        learn of it, and its window, which must lie inside the run (checks 7, 8, 53, 47, 37).
+
+        A lane is named by its index on the edge, 0 the rightmost, as SUMO numbers it, so a closure
+        reads as "five of six lanes" rather than as five lane ids; an index the edge does not have
+        is a place that does not resolve (check 7). `notify` defaults to the closed edge itself.
+        """
+        self.lane_closures: list[dict] = []
+        for declared in self.spec.get("lane_closures", []):
+            where = f"lane closure {declared['id']}"
+            edge = self.places.single_edge(declared["place"], f"{where} place")
+            notify = self._via(declared.get("notify", []), where)
+            begin = self.resolver.instant(declared["begin"], f"{where} begin")
+            end = self.resolver.instant(declared["end"], f"{where} end")
+            if edge is None or None in notify or begin is None or end is None:
+                continue
+            lanes = self.places.edge_lanes[edge]
+            indices = list(declared["lanes"])
+            beyond = sorted({index for index in indices if index >= len(lanes)})
+            if beyond:
+                self.findings.refuse(7, where, f"closes lane {', '.join(map(str, beyond))} of {edge}, "
+                                     f"which has {len(lanes)} lane{'s' if len(lanes) != 1 else ''}, "
+                                     f"numbered 0 to {len(lanes) - 1} from the right")
+            repeated = sorted({index for index in indices if indices.count(index) > 1})
+            if repeated:
+                self.findings.refuse(53, where, f"names lane {', '.join(map(str, repeated))} more "
+                                     "than once")
+            ordered = end.seconds > begin.seconds
+            if not ordered:
+                self.findings.refuse(47, where, f"ends at {end.civil}, not after it begins at "
+                                     f"{begin.civil}")
+            inside = [self.resolver.require_in_span(begin, f"{where} begin"),
+                      self.resolver.require_in_span(end, f"{where} end")]
+            if beyond or repeated or not ordered or not all(inside):
+                continue
+            self.lane_closures.append({
+                "id": declared["id"], "where": where, "edge": edge, "street":
+                self.places.edge_names.get(edge, ""), "lane_count": len(lanes),
+                "indices": sorted(indices), "lanes": [lanes[index] for index in sorted(indices)],
+                "notify": list(dict.fromkeys(notify)) or [edge], "begin": begin, "end": end})
+
+    def _closure_report(self, closure: dict) -> dict:
+        return {"id": closure["id"], "edge": closure["edge"], "street": closure["street"],
+                "lanes": closure["lanes"], "open_lanes": closure["lane_count"] - len(closure["lanes"]),
+                "notify": closure["notify"], "allow": CLOSED_LANE_ALLOWS,
+                "begin": closure["begin"].to_dict(), "end": closure["end"].to_dict()}
+
     def _via(self, names: list[str], where: str) -> list[str | None]:
         """The edges a via list names, in order: a junction movement gives its two, any other place
         its one, and a place that did not resolve a None, so the caller can see it failed."""
@@ -610,7 +677,8 @@ class ScenarioCompiler:
 
     def _check_unique_ids(self) -> None:
         seen: dict[str, str] = {}
-        for kind, items in (("actor", self.actors), ("flow", self.flows)):
+        for kind, items in (("actor", self.actors), ("flow", self.flows),
+                            ("lane closure", self.lane_closures)):
             for item in items:
                 if item["id"] in seen:
                     self.findings.refuse(54, item["where"], f"id '{item['id']}' is also "
@@ -648,6 +716,44 @@ class ScenarioCompiler:
                 vehicle["route"] = list(self.routing.routes.get(vehicle["id"], ()))
             if vehicle["route"]:
                 self._check_permissions(vehicle, tuple(vehicle["route"]))
+        self._check_closed_routes()
+
+    def _check_closed_routes(self) -> None:
+        """Check 55: every route through a lane closure enters and leaves its edge on an open lane.
+
+        A closed lane admits only `CLOSED_LANE_ALLOWS`, so for any other vehicle a connection into or
+        out of it is gone while the closure lasts. SUMO refuses to insert a vehicle whose fixed route
+        then has no connection it may use, and quits: *measured* with the staged SUMO 1.27.0 on the
+        fixture world, closing the one lane of a flow's destination edge stopped the run at the first
+        vehicle inserted during the closure ("has no valid route. No connection between edge '901#0'
+        and edge '901#1'. Quitting (on error)"). Every route is held to it, whenever it departs.
+        """
+        for closure in self.lane_closures:
+            edge, closed = closure["edge"], set(closure["indices"])
+            for vehicle in [*self.actors, *self.flows]:
+                route = vehicle["route"] or []
+                problems = []
+                for index, current in enumerate(route):
+                    if current != edge:
+                        continue
+                    if len(closed) == closure["lane_count"]:
+                        problems.append(f"every lane of {edge} is closed")
+                        break
+                    before = route[index - 1] if index else None
+                    after = route[index + 1] if index + 1 < len(route) else None
+                    if before is not None and not any(
+                            to_lane not in closed
+                            for _, to_lane in self.places.lane_links.get((before, edge), ())):
+                        problems.append(f"{before} leads only into closed lanes of {edge}")
+                    if after is not None and not any(
+                            from_lane not in closed
+                            for from_lane, _ in self.places.lane_links.get((edge, after), ())):
+                        problems.append(f"only closed lanes of {edge} lead on to {after}")
+                if problems:
+                    self.findings.refuse(55, vehicle["where"], f"its route crosses lane closure "
+                                         f"{closure['id']}, and {'; '.join(dict.fromkeys(problems))}"
+                                         ". SUMO refuses to insert a vehicle on that route while "
+                                         "the closure lasts, and stops the run")
 
     # -- stage: supervision -----------------------------------------------------------------------------
     def _stage_supervision(self) -> None:
@@ -804,16 +910,25 @@ class ScenarioCompiler:
             "supervision": self.out_dir / f"{self.scenario_id}.supervision.json",
             "lock": self.out_dir / f"{self.scenario_id}.lock.json",
         }
+        additional_xml = None
+        if self.lane_closures:
+            paths["additional"] = self.out_dir / f"{self.scenario_id}.add.xml"
+            additional_xml = self._additional_xml()
         routes_xml = self._routes_xml()
-        config_xml = self._config_xml(paths["network"].name, paths["routes"].name)
-        self._self_check(routes_xml, config_xml)
+        config_xml = self._config_xml(paths["network"].name, paths["routes"].name,
+                                      paths["additional"].name if additional_xml else None)
+        self._self_check(routes_xml, config_xml, additional_xml)
         self._check_bodies(routes_xml)
         if self.findings.refused:
             return
         paths["network"].write_text(self.network_text, encoding="utf-8", newline="")
         paths["routes"].write_text(routes_xml, encoding="utf-8", newline="\n")
         paths["config"].write_text(config_xml, encoding="utf-8", newline="\n")
-        digests = {role: self._sha256(paths[role]) for role in ("routes", "config", "network")}
+        roles = ("routes", "config", "network")
+        if additional_xml is not None:
+            paths["additional"].write_text(additional_xml, encoding="utf-8", newline="\n")
+            roles += ("additional",)
+        digests = {role: self._sha256(paths[role]) for role in roles}
         plan = {
             "supervision_plan_version": SUPERVISION_PLAN_VERSION,
             "plan_id": self.scenario_id,
@@ -907,18 +1022,53 @@ class ScenarioCompiler:
                 f"        <route edges={quoteattr(' '.join(flow['route']))}/>\n"
                 "    </flow>")
 
-    def _config_xml(self, network_name: str, routes_name: str) -> str:
+    def _additional_xml(self) -> str:
+        """The additional file: one rerouter per lane closure, closing its lanes for its window.
+
+        A `closingLaneReroute` restricts its lane to `CLOSED_LANE_ALLOWS` from the interval's begin
+        to its end, whatever the rerouter's edges; those edges are where a vehicle learns of the
+        closure and may be rerouted round it.
+        """
+        blocks = []
+        for closure in sorted(self.lane_closures, key=lambda c: (c["begin"].seconds, c["id"])):
+            begin, end = closure["begin"], closure["end"]
+            closed = len(closure["lanes"])
+            blocks.append("\n".join([
+                self._comment(f"{closure['id']}: {closed} of the {closure['lane_count']} lanes of "
+                              f"{closure['edge']} ({closure['street'] or 'unnamed'}) closed from "
+                              f"{begin.civil} to {end.civil}.", indent="    "),
+                f"    <rerouter id={quoteattr(closure['id'])} "
+                f"edges={quoteattr(' '.join(closure['notify']))}>",
+                f"        <interval begin=\"{begin.seconds:.2f}\" end=\"{end.seconds:.2f}\">",
+                *[f"            <closingLaneReroute id={quoteattr(lane)} "
+                  f"allow={quoteattr(CLOSED_LANE_ALLOWS)}/>" for lane in closure["lanes"]],
+                "        </interval>",
+                "    </rerouter>"]))
+        header = self._comment(
+            f"{self.spec['scenario_name']}: the lane closures, compiled by {COMPILER} {__version__} "
+            f"from the specification of {self.scenario_id}; edit that, not this. Every time in this "
+            "file is simulated seconds from t = 0; the epoch that gives them their civil meaning is "
+            f"stated in {self.scenario_id}.sumocfg.")
+        return ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" + header + "\n"
+                "<additional xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" "
+                "xsi:noNamespaceSchemaLocation=\"http://sumo.dlr.de/xsd/additional_file.xsd\">\n"
+                + "\n".join(blocks) + "\n</additional>\n")
+
+    def _config_xml(self, network_name: str, routes_name: str,
+                    additional_name: str | None = None) -> str:
         options = "\n".join(f"        <{name} value={quoteattr(value)}/>"
                             for name, value in PROCESSING_OPTIONS.items())
         epoch = self._comment(f"{self.epoch.describe()}. The run ends at {self.end.civil}. begin and "
                               "end below are simulated seconds from t = 0.", indent="    ")
+        additional = ("" if additional_name is None else
+                      f"\n        <additional-files value={quoteattr(additional_name)}/>")
         return (f"""<?xml version="1.0" encoding="UTF-8"?>
 {self._comment(f"Compiled by {COMPILER} from the specification of {self.scenario_id}; edit that, not this.")}
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
     <input>
         <net-file value={quoteattr(network_name)}/>
-        <route-files value={quoteattr(routes_name)}/>
+        <route-files value={quoteattr(routes_name)}/>{additional}
     </input>
 {epoch}
     <time>
@@ -946,10 +1096,13 @@ class ScenarioCompiler:
             text = text.replace("--", "- -")
         return f"{indent}<!-- {text} -->"
 
-    def _self_check(self, routes_xml: str, config_xml: str) -> None:
+    def _self_check(self, routes_xml: str, config_xml: str, additional_xml: str | None = None) -> None:
         """Checks 29, 30, 44, 51 and 52: re-read what is about to be written."""
         parsed = {}
-        for name, text in (("route file", routes_xml), ("configuration", config_xml)):
+        texts = [("route file", routes_xml), ("configuration", config_xml)]
+        if additional_xml is not None:
+            texts.append(("additional file", additional_xml))
+        for name, text in texts:
             for comment in re.findall(r"<!--(.*?)-->", text, flags=re.S):
                 if "--" in comment:
                     self.findings.refuse(30, name, "an XML comment contains --, which SUMO rejects")
@@ -964,6 +1117,8 @@ class ScenarioCompiler:
                     if _CLOCK_VALUE.match(value):
                         self.findings.refuse(44, name, f"<{element.tag} {attribute}=\"{value}\"> is a "
                                              "clock, which SUMO reads as an offset from t = 0")
+        if "additional file" in parsed:
+            self._validate("additional file", additional_xml, ADDITIONAL_SCHEMA_RELATIVE_PATH)
         root = parsed.get("route file")
         if root is None:
             return
@@ -982,16 +1137,20 @@ class ScenarioCompiler:
                 self.findings.refuse(52, "route file", f"carries <param key=\"{param.get('key')}\">; "
                                      "the route file carries only the vehicle-type binding, and "
                                      "supervision travels in the supervision plan alone")
-        schema = self.installation.home / "data" / ROUTES_SCHEMA_RELATIVE_PATH
+        self._validate("route file", routes_xml, ROUTES_SCHEMA_RELATIVE_PATH)
+
+    def _validate(self, name: str, text: str, relative_schema: Path) -> None:
+        """Check 51: an emitted file against the SUMO installation's own schema for it."""
+        schema = self.installation.home / "data" / relative_schema
         if schema.exists():
             validator = etree.XMLSchema(etree.parse(str(schema)))
-            document = etree.fromstring(routes_xml.encode("utf-8"))
+            document = etree.fromstring(text.encode("utf-8"))
             if not validator.validate(document):
                 for error in validator.error_log:
-                    self.findings.refuse(51, "route file", f"line {error.line}: {error.message}")
+                    self.findings.refuse(51, name, f"line {error.line}: {error.message}")
         else:
-            self.findings.refuse(51, "route file", f"SUMO's route schema is not at {schema}, so the "
-                                 "route file cannot be validated")
+            self.findings.refuse(51, name, f"SUMO's schema {relative_schema.name} is not at "
+                                 f"{schema}, so the {name} cannot be validated")
 
     def _check_bodies(self, routes_xml: str) -> None:
         """Check 15: read the route file back as the bridge will, and hold every type to its body."""
