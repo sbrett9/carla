@@ -147,9 +147,7 @@ public sealed class SumoDriveSessionReleaseTests
         new(CoSimFixtures.RightAngleTurnScenario,
             world.PackagePath,
             CoSimFixtures.VehicleCatalogue,
-            "test://" + Guid.NewGuid().ToString("n"),
-            new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 60.0,
-                                      hysteresisMetres: 15.0, capacity: 8))
+            "test://" + Guid.NewGuid().ToString("n"))
         {
             TickWorld = () => true,
             SumoHome = installation.Home,

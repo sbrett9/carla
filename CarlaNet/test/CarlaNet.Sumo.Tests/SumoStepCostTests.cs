@@ -11,9 +11,9 @@ namespace CarlaNet.Sumo.Tests;
 /// </summary>
 /// <remarks>
 /// <para>The three numbers matter because of how SUMO charges a subscription: it fills the results
-/// while it advances, so the cost lands inside the step whether or not anything reads them. That
-/// makes the <i>subscribed</i> set a budget the bridge controls in its own right, separately from
-/// the render set, and it is the reason the subscription here takes vehicles one at a time.</para>
+/// while it advances, so the cost is paid inside the step whether or not anything reads them. The
+/// bridge subscribes every vehicle SUMO has, because it renders every one, so these are what a
+/// scenario's population costs SUMO per step -- paid in wall clock, never in what is drawn.</para>
 ///
 /// <para>All three keep the departure and arrival lists, so the only difference between the first
 /// and the second is the subscription itself, and between the second and the third the decode.

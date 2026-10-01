@@ -2,10 +2,10 @@
 
 A stare aimed at the traffic (`ChannelDescription.stare_look_at_target` set to `rendered_traffic`)
 looks at the centre of the vehicles the session rendered on the last frame before its camera holds
-for the capture window. The middle of the render region is a poor stand-in: on a corridor scenario the region is drawn
-around a road that runs through it, and a run aimed at its middle framed a builder's yard while the
-traffic was on a highway a hundred metres away (`CarlaNet/python/run_sumo_drive.py`,
-`RenderedVehicleCentre`). The mean of the poses is not a guess about where the traffic ought to be;
+for the capture window. The middle of the world is a poor stand-in: on a corridor scenario the world
+is built around a road that runs through it, and a run aimed at the middle of its area framed a
+builder's yard while the traffic was on a highway a hundred metres away
+(`CarlaNet/python/run_sumo_drive.py`, `RenderedVehicleCentre`). The mean of the poses is not a guess about where the traffic ought to be;
 it is where the bodies were put.
 
 The session hands `on_pose` one record per rendered vehicle per tick, on the thread that called
@@ -16,8 +16,8 @@ included, so a camera's altitude is measured above the traffic rather than above
 render set changes only between steps, at the admission pass, so every tick of a step renders the
 same vehicles and the latest tick is the step's last frame.
 
-A pose written to no body (`Actor` zero: the pool had no body for its blueprint, or no world is
-attached) is left out, because a vehicle with no body is in no frame.
+A pose written to no body (`Actor` zero: no world is attached) is left out, because a vehicle with
+no body is in no frame.
 
 The session reads its callbacks once, when it starts, so this is bound for the whole run. Between the
 steps it measures it declines each record after one comparison, and it keeps running sums rather than

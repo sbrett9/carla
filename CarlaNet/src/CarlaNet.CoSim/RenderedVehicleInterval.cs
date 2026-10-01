@@ -7,14 +7,13 @@ namespace CarlaNet.CoSim;
 /// </summary>
 /// <param name="VehicleId">SUMO's vehicle id.</param>
 /// <param name="Actor">
-/// The pooled body that rendered it, or zero where it held none -- a vehicle the render set admitted
-/// and the pool had no body left for, or a run with no CARLA attached.
+/// The pooled body that rendered it, or zero where it held none -- a vehicle whose type names no
+/// measured blueprint, or a run with no CARLA attached.
 /// </param>
 /// <param name="AdmittedAtSeconds">Simulated second the vehicle entered the render set.</param>
 /// <param name="ReleasedAtSeconds">Simulated second it left, or the session's end.</param>
 /// <param name="ReleaseReason">
-/// Why it left: the policy, the capacity, SUMO listing it as arrived, it vanishing without being listed,
-/// or the session ending.
+/// Why it left: SUMO listing it as arrived, it vanishing without being listed, or the session ending.
 /// </param>
 /// <remarks>
 /// <para>These two instants are what lets anyone later reconcile "SUMO simulated sixty-eight

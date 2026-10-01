@@ -355,21 +355,14 @@ class FakeTeleporting:
 class FakeAdmissionPass:
     """An AdmissionPass: the render set's row for one SUMO frame."""
 
-    def __init__(self, world_tick: int, frame_s: float, eligible: int, capacity: int,
-                 total_admissions: int, total_declines: int) -> None:
-        admitted = min(eligible, capacity)
+    def __init__(self, world_tick: int, frame_s: float, population: int, newly_admitted: int,
+                 released: int, total_admissions: int) -> None:
         self.WorldTick = world_tick
         self.SimulatedTimeSeconds = frame_s
-        self.Population = eligible + 10
-        self.Subscribed = eligible + 3
-        self.Eligible = eligible
-        self.Admitted = admitted
-        self.Shed = eligible - admitted
-        self.Capacity = capacity
-        self.NewlyAdmitted = 0
-        self.Released = 0
+        self.Population = population
+        self.NewlyAdmitted = newly_admitted
+        self.Released = released
         self.TotalAdmissions = total_admissions
-        self.TotalCapacityDeclines = total_declines
 
 
 class _Position:
@@ -401,7 +394,6 @@ class _Report:
         self.PosesComputed = 0
         self.BatchFailures = 0
         self.Admissions = 0
-        self.CapacityDeclines = 0
         self.LastAdmissionPass = None
         self.WorstSolarResidualDegrees = 0.002
         self.WorstSolarClockResidualSeconds = 0.1
@@ -442,23 +434,25 @@ class FakeSession:
         self.disposed = False
         self.advances = 0
         self.ticks = 0
-        self.capacity = int(kwargs.get("capacity", 128))
         self.on_pose = kwargs.get("on_pose")
         self.on_admission_pass = kwargs.get("on_admission_pass")
-        # The cameras registered for the render set to follow, in the order they were registered.
-        self.cameras: list[int] = []
+        self._population = 0
         # The two passes the session makes while starting: the fast-forward's frame, and the step of
         # lookahead after it.
         self._publish_pass(self.RenderedTimeSeconds)
         self._publish_pass(self.RenderedTimeSeconds + self.step_s)
 
     def _publish_pass(self, frame_s: float) -> None:
-        eligible = self.world.eligible_at(frame_s)
+        # Every vehicle SUMO has holds a place: the population's growth is its admissions, and its
+        # shrinking its releases.
+        population = self.world.population_at(frame_s)
+        admitted = max(0, population - self._population)
+        released = max(0, self._population - population)
+        self._population = population
         report = self.Report
-        report.Admissions += min(eligible, self.capacity)
-        report.CapacityDeclines += max(0, eligible - self.capacity)
-        admission = FakeAdmissionPass(self.ticks, frame_s, eligible, self.capacity,
-                                      report.Admissions, report.CapacityDeclines)
+        report.Admissions += admitted
+        admission = FakeAdmissionPass(self.ticks, frame_s, population, admitted, released,
+                                      report.Admissions)
         report.LastAdmissionPass = admission
         if self.on_admission_pass is not None:
             self.on_admission_pass(admission)
@@ -497,17 +491,6 @@ class FakeSession:
             self.world.on_advance(self)
         return self.RenderedTimeSeconds < self.world.scenario_end_s
 
-    def AddCamera(self, camera: int) -> None:  # noqa: N802 -- the .NET member name
-        self.cameras.append(int(camera))
-        self.world.events.add("add_camera", int(camera))
-
-    def RemoveCamera(self, camera: int) -> bool:  # noqa: N802 -- the .NET member name
-        self.world.events.add("remove_camera", int(camera))
-        if int(camera) in self.cameras:
-            self.cameras.remove(int(camera))
-            return True
-        return False
-
     def Dispose(self) -> None:  # noqa: N802 -- the .NET member name
         self.disposed = True
         result_written = self.world.result_path is not None and self.world.result_path.is_file()
@@ -534,6 +517,9 @@ class FakeWorld:
 
     def get_solar_state(self):
         return self.server.sun
+
+    def get_staging_bounds(self):
+        return self.server.staging_bounds
 
     def get_actors(self, actor_ids):
         self.server.events.add("get_actors", sorted(int(a) for a in actor_ids))
@@ -620,8 +606,12 @@ class FakeServer:
         # What the session found of the scenario's compile lock and its time-to-teleport.
         self.compile_lock = FakeCompileLock()
         self.teleporting = FakeTeleporting()
-        # Vehicles inside the render region at a SUMO frame, for the admission passes.
-        self.eligible_at = lambda _frame_s: 7
+        # The vehicles SUMO has at a SUMO frame, for the admission passes.
+        self.population_at = lambda _frame_s: 7
+        # What get_staging_bounds answers: the world's extent in CARLA's frame, as a world built from
+        # an OSM area publishes it, or None for one that publishes none.
+        self.staging_bounds: dict | None = {"min_x": -400.0, "min_y": -300.0, "max_x": 600.0,
+                                            "max_y": 100.0, "margin": 50.0}
         # (actor, (x, y, z)) per rendered vehicle at a rendered instant, for on_pose; None hands
         # over no poses.
         self.traffic_at = None

@@ -7,22 +7,19 @@ session stood in for:
 * each span is recorded as the fixed camera's recording is -- the session's render set and
   illumination -- with the rig's depth camera for occlusion, this drive's run id, into the span's
   own folder, and no span starts before the capture window opens;
-* the flown rig is spawned over the region centre at `--camera-z`, with the run configuration's
-  depth range rather than the depth camera's stock 1000 m;
+* the flown rig is spawned over the centre of the world's staging bounds at `--camera-z` -- CARLA's
+  origin where the world publishes none -- with the run configuration's depth range rather than the
+  depth camera's stock 1000 m;
 * the session is handed no per-vehicle callback it does not need, in either view: the worst
   divergence comes off the session's report, so nothing crosses into Python per vehicle per tick
   while a window thread in the same process holds the interpreter;
-* the render set follows the cameras unless the circle is chosen, with the settings given, and the
-  flown camera is registered with the session and let go of before it is destroyed; each camera's
-  footprint is logged once, and each admission line says the rule that decided it;
-* under the circle, a region smaller than the world is said before the drive starts, with the one
-  that is not; under the cameras, what the flown camera will find rendered is said instead.
+* nothing the session is handed limits which vehicles are rendered, and the options that once did
+  are gone from the command line: every vehicle SUMO has is drawn.
 """
 from __future__ import annotations
 
 import importlib.util
 import json
-import logging
 import sys
 import zipfile
 from pathlib import Path
@@ -71,19 +68,31 @@ def test_each_view_gets_its_own_image_size_unless_one_is_given(drive, monkeypatc
     assert (given.width, given.height, given.fov) == (1920, 720, 60.0)
 
 
-def test_the_flown_rig_starts_over_the_region_centre_and_measures_depth_as_far_as_a_capture_run(
+class _StagedWorld:
+    """A world that publishes its staging bounds, or none."""
+
+    def __init__(self, bounds: dict | None) -> None:
+        self.bounds = bounds
+
+    def get_staging_bounds(self) -> dict | None:
+        return self.bounds
+
+
+def test_the_flown_rig_starts_over_the_world_s_centre_and_measures_depth_as_far_as_a_capture_run(
         drive, monkeypatch):
     from carlacontrol.RunConfiguration import RunConfiguration
     from carlacontrol.SensorRig import SensorRig
 
-    args = _arguments(drive, monkeypatch, "--view", "free", "--region-x", "120",
-                      "--region-y", "340", "--camera-z", "450")
+    args = _arguments(drive, monkeypatch, "--view", "free", "--camera-z", "450")
+    centre = drive.world_centre(_StagedWorld({"min_x": -838.9, "min_y": -455.1, "max_x": 839.1,
+                                              "max_y": 456.9, "margin": 50.0}))
 
     settings = drive.free_view_settings(
-        args, SensorRig.FT_PER_M, RunConfiguration.field("occlusion.depth_max_range_m").default)
+        args, centre, SensorRig.FT_PER_M,
+        RunConfiguration.field("occlusion.depth_max_range_m").default)
 
-    # The region is in SUMO's frame, the camera in CARLA's: the same frame with the northing negated.
-    assert (settings.x, settings.y) == (120.0, -340.0)
+    # The staging bounds are in CARLA's frame, as the camera is.
+    assert (settings.x, settings.y) == pytest.approx((0.1, 0.9))
     assert settings.z / SensorRig.FT_PER_M == pytest.approx(450.0)
     assert settings.depth_max_range == 20000.0
     assert (settings.width, settings.height, settings.fov) == (1280, 720, 90.0)
@@ -204,91 +213,21 @@ def test_the_session_is_handed_no_per_vehicle_divergence_callback(drive, monkeyp
     assert (world.drive_arguments["on_pose"] is None) == (view == "free")
 
 
-def test_under_the_circle_a_region_smaller_than_the_world_is_said_before_the_drive_starts(
-        drive, monkeypatch, tmp_path, caplog):
-    with caplog.at_level(logging.INFO, logger="run_sumo_drive"):
-        _run_main(drive, monkeypatch, tmp_path, "--view", "free", "--render-set", "circle")
-
-    assert "--region-x 0 --region-y -1 --region-radius 956" in caplog.text
-
-    caplog.clear()
-    with caplog.at_level(logging.INFO, logger="run_sumo_drive"):
-        _run_main(drive, monkeypatch, tmp_path, "--view", "free", "--render-set", "circle",
-                  "--region-x", "0", "--region-y", "-1", "--region-radius", "956")
-    assert "the render region takes in the whole world" in caplog.text
+def test_a_world_with_no_staging_bounds_starts_the_flown_rig_over_carla_s_origin(drive):
+    assert drive.world_centre(_StagedWorld(None)) == (0.0, 0.0)
 
 
-def test_under_the_cameras_the_free_view_is_told_the_vehicles_follow_it(drive, monkeypatch,
-                                                                         tmp_path, caplog):
-    with caplog.at_level(logging.INFO, logger="run_sumo_drive"):
-        _run_main(drive, monkeypatch, tmp_path, "--view", "free")
-
-    assert "vehicles are rendered where the flown camera looks" in caplog.text
-    assert "--region-radius 956" not in caplog.text
-
-
-def test_the_render_set_follows_the_cameras_unless_the_circle_is_chosen(drive, monkeypatch,
-                                                                         tmp_path):
-    world = _run_main(drive, monkeypatch, tmp_path)
-    assert {key: world.drive_arguments[key] for key in (
-        "render_set", "render_min_pixels", "render_admit_lead_s", "render_release_lag_s")} == {
-        "render_set": "cameras", "render_min_pixels": 2.0, "render_admit_lead_s": 3.0,
-        "render_release_lag_s": 5.0}
-
-    world = _run_main(drive, monkeypatch, tmp_path, "--render-set", "circle",
-                      "--render-min-pixels", "3", "--render-admit-lead", "1.5",
-                      "--render-release-lag", "0")
-    assert {key: world.drive_arguments[key] for key in (
-        "render_set", "render_min_pixels", "render_admit_lead_s", "render_release_lag_s")} == {
-        "render_set": "circle", "render_min_pixels": 3.0, "render_admit_lead_s": 1.5,
-        "render_release_lag_s": 0.0}
+def test_nothing_the_session_is_handed_limits_which_vehicles_are_rendered(drive, monkeypatch,
+                                                                           tmp_path):
+    for view in ("fixed", "free"):
+        world = _run_main(drive, monkeypatch, tmp_path, "--view", view)
+        assert not {"region_centre", "admit_radius_m", "hysteresis_m", "capacity", "maximum_bodies",
+                    "render_set", "render_min_pixels", "render_admit_lead_s",
+                    "render_release_lag_s"} & set(world.drive_arguments), view
 
 
-class _FollowingSession:
-    """The session's camera registry, recording what it was told in one ordered log."""
-
-    def __init__(self, log: list) -> None:
-        self.log = log
-
-    def AddCamera(self, camera) -> None:  # noqa: N802 -- the .NET member name
-        self.log.append(("add", camera))
-
-    def RemoveCamera(self, camera) -> bool:  # noqa: N802 -- the .NET member name
-        self.log.append(("remove", camera))
-        return True
-
-
-def test_each_camera_s_footprint_is_said_once_and_each_admission_line_says_its_rule(drive, caplog):
-    # A camera followed from one step on is said at that step and not again; a second is said when
-    # it is first followed.
-    first = SimpleNamespace(Actor=4121)
-    second = SimpleNamespace(Actor=4122)
-    report = SimpleNamespace(CameraFootprints=SimpleNamespace(Count=1, Values=[first]))
-    session = SimpleNamespace(Report=report)
-    said = drive.CameraFootprints()
-    with caplog.at_level(logging.INFO, logger="run_sumo_drive"):
-        said.after_step(session)
-        said.after_step(session)
-        report.CameraFootprints = SimpleNamespace(Count=2, Values=[first, second])
-        said.after_step(session)
-    followed = [record.getMessage() for record in caplog.records
-                if record.getMessage().startswith("render set follows")]
-    assert followed == [f"render set follows {first}", f"render set follows {second}"]
-
-    rule = drive.PacingProgress.rule
-    assert rule(SimpleNamespace(Rule="Cameras", Cameras=2, Held=1)) == \
-        "by 2 camera footprint(s), 1 held by the release lag"
-    assert rule(SimpleNamespace(Rule="Circle", Cameras=0, Held=0)) == "by the circle"
-
-
-def test_the_flown_camera_is_followed_and_let_go_of_before_it_is_destroyed(drive):
-    log: list = []
-    parts = drive.FreeViewParts()
-    parts.rig = SimpleNamespace(camera=SimpleNamespace(id=4121),
-                                cleanup=lambda: log.append(("destroy", 4121)))
-
-    parts.follow(_FollowingSession(log))
-    parts.close()
-
-    # The RGB camera alone: the rig's depth camera shares its view.
-    assert log == [("add", 4121), ("remove", 4121), ("destroy", 4121)]
+@pytest.mark.parametrize("option", ["--capacity", "--maximum-bodies", "--region-radius",
+                                    "--render-set", "--render-release-lag"])
+def test_the_options_that_once_limited_the_render_set_are_gone(drive, monkeypatch, option):
+    with pytest.raises(SystemExit):
+        _arguments(drive, monkeypatch, option, "1")

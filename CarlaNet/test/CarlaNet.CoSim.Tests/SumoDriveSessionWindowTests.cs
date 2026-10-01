@@ -204,9 +204,7 @@ public sealed class SumoDriveSessionWindowTests
         new(CoSimFixtures.RightAngleTurnScenario,
             world.PackagePath,
             CoSimFixtures.VehicleCatalogue,
-            "test://" + Guid.NewGuid().ToString("n"),
-            new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 60.0,
-                                      hysteresisMetres: 15.0, capacity: 8))
+            "test://" + Guid.NewGuid().ToString("n"))
         {
             World = carla,
             Epoch = SolarEpoch.Declare("2026-03-21T07:00:00+03:30", 3.5, "2026-03-21T03:30:00Z",

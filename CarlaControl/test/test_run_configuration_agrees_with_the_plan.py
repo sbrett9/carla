@@ -5,7 +5,8 @@ run configuration's field table is the single definition of its defaults, and §
 an operator reads them, so the two are held equal here by reading the plan's tables themselves: every
 field has a row, and every row whose default cell holds one value per field it names gives the
 field table's value. §6.2.1's table of where each check is carried out is held equal to the check
-catalogue the same way, and every check the catalogue numbers appears in §6.2.
+catalogue the same way, a retired number aside, and every check the catalogue numbers appears in
+§6.2.
 """
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
 from carlacontrol.RunConfiguration import RunConfiguration  # noqa: E402
 from carlacontrol.RunConfigurationCheckCatalogue import (  # noqa: E402
+    RETIRED,
     RunConfigurationCheckCatalogue,
 )
 
@@ -115,8 +117,11 @@ def _where_table() -> dict[int, tuple[str, str]]:
 def test_the_plan_says_where_every_check_is_carried_out_as_the_catalogue_does():
     labels = {"run_capture": "`run_capture`", "session": "the session",
               "by_construction": "by construction", "not_built": "**not built**"}
-    rows = _where_table()
+    # A retired number may keep its row in the plan, saying it is retired, or lose it; the catalogue
+    # carries no check under it either way.
+    rows = {check_id: row for check_id, row in _where_table().items() if check_id not in RETIRED}
     catalogue = {check.check_id: check for check in RunConfigurationCheckCatalogue.all()}
+    assert not set(catalogue) & set(RETIRED)
     assert set(rows) == set(catalogue)
     for check_id, (_phase, status) in rows.items():
         assert status == labels[catalogue[check_id].status], check_id

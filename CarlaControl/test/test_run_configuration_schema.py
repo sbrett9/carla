@@ -39,31 +39,31 @@ def refusal(document: dict) -> RunConfigurationRefusedError:
 
 def test_a_document_of_known_fields_flattens_to_their_paths():
     document = RunConfiguration.from_document(
-        {"capture": {"window": "morning", "render_cap": 96}, "pacing": {"mode": "wall_clock"}},
+        {"capture": {"window": "morning", "prewarm_s": 600}, "pacing": {"mode": "wall_clock"}},
         "test.run.json")
-    assert document.values == {"capture.window": "morning", "capture.render_cap": 96,
+    assert document.values == {"capture.window": "morning", "capture.prewarm_s": 600,
                                "pacing.mode": "wall_clock"}
 
 
 def test_an_unknown_key_is_refused_with_the_nearest_names():
-    raised = refusal({"capture": {"render_capp": 192}})
+    raised = refusal({"capture": {"prewarm_ss": 600}})
     assert raised.outcome == "usage_error"
     [finding] = raised.findings.refusals
     assert finding.check_id == 1
-    assert finding.subject == "capture.render_capp"
-    assert "did you mean 'capture.render_cap'" in finding.message
+    assert finding.subject == "capture.prewarm_ss"
+    assert "did you mean 'capture.prewarm_s'" in finding.message
 
 
 def test_every_problem_is_named_together():
-    raised = refusal({"capture": {"render_capp": 1, "window": 7}, "solar": {"policy": "noon"}})
+    raised = refusal({"capture": {"prewarm_ss": 1, "window": 7}, "solar": {"policy": "noon"}})
     subjects = {finding.subject for finding in raised.findings.refusals}
-    assert subjects == {"capture.render_capp", "capture.window", "solar.policy"}
+    assert subjects == {"capture.prewarm_ss", "capture.window", "solar.policy"}
 
 
 def test_a_value_of_the_wrong_type_is_refused_naming_the_field():
-    raised = refusal({"capture": {"render_cap": "lots"}})
+    raised = refusal({"occlusion": {"samples": "lots"}})
     [finding] = raised.findings.refusals
-    assert finding.check_id == 1 and finding.subject == "capture.render_cap"
+    assert finding.check_id == 1 and finding.subject == "occlusion.samples"
     assert "integer" in finding.message
 
 
@@ -95,21 +95,20 @@ def test_a_group_given_a_scalar_is_refused():
 
 
 @pytest.mark.parametrize(("text", "expected"), [
-    ("capture.render_cap=192", ("capture.render_cap", 192)),
+    ("occlusion.samples=32", ("occlusion.samples", 32)),
     ("capture.window=night", ("capture.window", "night")),
     ("capture.window=3600:5400", ("capture.window", "3600:5400")),
     ('caller_label="123"', ("caller_label", "123")),
     ("caller_label=123", ("caller_label", "123")),
     ("capture.road_layer_visible=true", ("capture.road_layer_visible", True)),
     ("capture.channels[1].fov=60", ("capture.channels[1].fov", 60)),
-    ('capture.render_region={"x_m": 1, "y_m": 2, "radius_m": 300}',
-     ("capture.render_region", {"x_m": 1, "y_m": 2, "radius_m": 300})),
+    ('on_warning={"prewarm_clipped": "proceed"}', ("on_warning", {"prewarm_clipped": "proceed"})),
 ])
 def test_an_override_is_parsed_for_its_field(text, expected):
     assert RunConfiguration.parse_override(text) == expected
 
 
-@pytest.mark.parametrize("text", ["capture.render_cap=lots", "capture.renders=3", "no-equals",
+@pytest.mark.parametrize("text", ["occlusion.samples=lots", "capture.renders=3", "no-equals",
                                   "capture.channels[0].fovv=3"])
 def test_a_bad_override_is_refused(text):
     with pytest.raises(RunConfigurationRefusedError) as raised:

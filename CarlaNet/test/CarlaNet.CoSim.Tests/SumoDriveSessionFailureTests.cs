@@ -373,7 +373,7 @@ public sealed class SumoDriveSessionFailureTests : IDisposable
         Assert.Equal(1, session.Report.Releases[RenderSetReleaseReason.Vanished]);
         Assert.DoesNotContain(released, interval => interval.VehicleId != vehicle
                                                     && interval.ReleaseReason == RenderSetReleaseReason.Vanished);
-        Assert.Contains(released, interval => interval.ReleaseReason == RenderSetReleaseReason.LeftTheRegion);
+        Assert.Contains(released, interval => interval.ReleaseReason == RenderSetReleaseReason.LeftTheSimulation);
 
         // From its release on, nothing is written for it: no pose is computed for it, its body goes
         // back to its slot at the head of the next batch, and every later transform to that body is the
@@ -783,9 +783,7 @@ public sealed class SumoDriveSessionFailureTests : IDisposable
         new(CoSimFixtures.RightAngleTurnScenario,
             world.PackagePath,
             CoSimFixtures.VehicleCatalogue,
-            "test://" + Guid.NewGuid().ToString("n"),
-            new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 60.0,
-                                      hysteresisMetres: 15.0, capacity: 8))
+            "test://" + Guid.NewGuid().ToString("n"))
         {
             TickWorld = () => true,
             Epoch = SolarLeaseTests.PortEpoch(),

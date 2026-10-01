@@ -3,7 +3,8 @@ using CarlaNet.Types.Rpc.Commands;
 namespace CarlaNet.CoSim.Tests;
 
 /// <summary>
-/// Lending bodies to vehicles: spawn once, reuse, refuse past the budget, destroy at the end.
+/// Lending bodies to vehicles: spawn once, reuse, grow to whatever the scenario needs, destroy at the
+/// end.
 /// </summary>
 public sealed class VehicleBodyPoolTests
 {
@@ -13,12 +14,12 @@ public sealed class VehicleBodyPoolTests
     public void ABodyIsSpawnedOnceAndLentAgainToTheNextVehicleOfItsBlueprint()
     {
         var world = new RecordedWorld();
-        var pool = new VehicleBodyPool(world, Parking, maximumBodies: 8);
+        var pool = new VehicleBodyPool(world, Parking);
 
-        Assert.True(pool.TryCheckOut("first", "vehicle.dodge.charger", out PooledBody held));
+        PooledBody held = pool.CheckOut("first", "vehicle.dodge.charger");
         Assert.True(pool.TryCheckIn("first", out PooledBody returned));
         Assert.Equal(held.Actor, returned.Actor);
-        Assert.True(pool.TryCheckOut("second", "vehicle.dodge.charger", out PooledBody again));
+        PooledBody again = pool.CheckOut("second", "vehicle.dodge.charger");
 
         Assert.Equal(held.Actor, again.Actor);
         Assert.Equal(["vehicle.dodge.charger"], world.Spawned);
@@ -28,10 +29,10 @@ public sealed class VehicleBodyPoolTests
     public void EveryBodyStandsInItsOwnSlotWithNoPhysicsAndNoGravity()
     {
         var world = new RecordedWorld();
-        var pool = new VehicleBodyPool(world, Parking, maximumBodies: 8);
+        var pool = new VehicleBodyPool(world, Parking);
 
-        pool.TryCheckOut("first", "vehicle.dodge.charger", out PooledBody first);
-        pool.TryCheckOut("second", "vehicle.dodge.charger", out PooledBody second);
+        PooledBody first = pool.CheckOut("first", "vehicle.dodge.charger");
+        PooledBody second = pool.CheckOut("second", "vehicle.dodge.charger");
 
         // Two bodies of one blueprint, because the first is still out. Neither may be spawned onto
         // the other: CARLA refuses a spawn whose point is occupied.
@@ -52,33 +53,50 @@ public sealed class VehicleBodyPoolTests
     }
 
     [Fact]
-    public void TheBudgetIsSpentRatherThanExceeded()
+    public void ThePoolGrowsToEveryVehicleTheScenarioHoldsAtOnce()
+    {
+        // Three hundred vehicles at once, of three blueprints: every one is lent a body of its own,
+        // each standing in its own slot, and none is refused.
+        var world = new RecordedWorld();
+        var pool = new VehicleBodyPool(world, Parking);
+        string[] blueprints = ["vehicle.dodge.charger", "vehicle.lincoln.mkz", "vehicle.mini.cooper"];
+
+        List<PooledBody> lent = [.. Enumerable.Range(0, 300)
+            .Select(index => pool.CheckOut($"v{index:000}", blueprints[index % blueprints.Length]))];
+
+        Assert.Equal(300, pool.HeldBodies);
+        Assert.Equal(300, pool.Bodies.Count);
+        Assert.Equal(300, world.Spawned.Count);
+        Assert.Equal(300, lent.Select(body => body.Actor).Distinct().Count());
+        Assert.Equal(300, lent.Select(body => (body.Parking.Location.X, body.Parking.Location.Y))
+                              .Distinct().Count());
+    }
+
+    [Fact]
+    public void ABodyGivenBackIsLentOnlyToAVehicleOfItsOwnBlueprint()
     {
         var world = new RecordedWorld();
-        var pool = new VehicleBodyPool(world, Parking, maximumBodies: 2);
+        var pool = new VehicleBodyPool(world, Parking);
 
-        Assert.True(pool.TryCheckOut("first", "vehicle.dodge.charger", out _));
-        Assert.True(pool.TryCheckOut("second", "vehicle.lincoln.mkz", out _));
-        Assert.False(pool.TryCheckOut("third", "vehicle.mini.cooper", out _));
-
-        Assert.Equal(1, pool.Exhaustions);
-        Assert.Equal(2, world.Spawned.Count);
-
-        // A decline is not a refusal for ever: the next release frees a body, though only for a
-        // vehicle that wants that blueprint.
+        PooledBody charger = pool.CheckOut("first", "vehicle.dodge.charger");
         pool.TryCheckIn("first", out _);
-        Assert.False(pool.TryCheckOut("third", "vehicle.mini.cooper", out _));
-        Assert.True(pool.TryCheckOut("fourth", "vehicle.dodge.charger", out _));
+
+        // Another blueprint gets a body of its own shape, spawned for it; the free body waits for one
+        // of its own.
+        PooledBody mini = pool.CheckOut("second", "vehicle.mini.cooper");
+        Assert.NotEqual(charger.Actor, mini.Actor);
+        Assert.Equal(charger.Actor, pool.CheckOut("third", "vehicle.dodge.charger").Actor);
+        Assert.Equal(["vehicle.dodge.charger", "vehicle.mini.cooper"], world.Spawned);
     }
 
     [Fact]
     public void TheSessionSEndDestroysEveryBodyInOneBatch()
     {
         var world = new RecordedWorld();
-        var pool = new VehicleBodyPool(world, Parking, maximumBodies: 8);
+        var pool = new VehicleBodyPool(world, Parking);
 
-        pool.TryCheckOut("first", "vehicle.dodge.charger", out _);
-        pool.TryCheckOut("second", "vehicle.lincoln.mkz", out _);
+        pool.CheckOut("first", "vehicle.dodge.charger");
+        pool.CheckOut("second", "vehicle.lincoln.mkz");
         pool.TryCheckIn("second", out _);
 
         IReadOnlyList<CommandResponse> responses = pool.DestroyAll();
@@ -93,10 +111,10 @@ public sealed class VehicleBodyPoolTests
     public void AVehicleAskingTwiceIsLentTheSameBodyRatherThanASecond()
     {
         var world = new RecordedWorld();
-        var pool = new VehicleBodyPool(world, Parking, maximumBodies: 8);
+        var pool = new VehicleBodyPool(world, Parking);
 
-        pool.TryCheckOut("first", "vehicle.dodge.charger", out PooledBody once);
-        pool.TryCheckOut("first", "vehicle.dodge.charger", out PooledBody twice);
+        PooledBody once = pool.CheckOut("first", "vehicle.dodge.charger");
+        PooledBody twice = pool.CheckOut("first", "vehicle.dodge.charger");
 
         Assert.Equal(once.Actor, twice.Actor);
         Assert.Single(world.Spawned);

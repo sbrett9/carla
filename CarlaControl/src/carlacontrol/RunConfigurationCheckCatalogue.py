@@ -1,7 +1,8 @@
 """Every check a capture run's configuration is subject to, by the number the plan gives it.
 
 `12_Operator_Control_Surface.md` §6.2 numbers the checks, and the numbers are stable and never
-reused because other sections cite them (`08_Collection_And_EPoL.md` §15 cites check 17). They are a
+reused because other sections cite them (`08_Collection_And_EPoL.md` §15 cites check 17). A check
+withdrawn is retired with its number (`RETIRED`), which no other check is ever given. They are a
 different numbering from the scenario compiler's (`ScenarioCheckCatalogue`): a run's findings are
 reported under this catalogue, and a resolution report says which catalogue it cites.
 
@@ -132,10 +133,6 @@ _CHECKS: tuple[RunCheck, ...] = (
     RunCheck(19, OFFLINE, "Free space under the capture root holds the window, in captured seconds",
              _RW, RUN_CAPTURE, "RunConfigurationValidator, from doc 10's measured capture sizes",
              warning_code="capture_may_outrun_disk"),
-    RunCheck(20, OFFLINE, "capture.render_region is present and sized, and render_cap does not "
-             "exceed render_cap_hard", _R, RUN_CAPTURE, "RunConfigurationValidator"),
-    RunCheck(21, OFFLINE, "The predicted in-region population stays under render_cap", (),
-             NOT_BUILT, "no headless population profile of a scenario is published"),
     RunCheck(34, OFFLINE, "Under caller unattended, every warning raised has an on_warning "
              "adjudication", _R, RUN_CAPTURE, "RunConfigurationValidator"),
     RunCheck(35, OFFLINE, "Every declared expectation holds against the resolved value", _R,
@@ -191,11 +188,6 @@ _CHECKS: tuple[RunCheck, ...] = (
              "SolarAuditFailedException"),
     RunCheck(32, PRE_ROLL, "The first cued tick delivers a frame on every channel", (), NOT_BUILT,
              "the recorder publishes no count of frames received"),
-    RunCheck(33, PRE_ROLL, "The population eligible for the render set at the window's begin against "
-             "render_cap", _RW,
-             RUN_CAPTURE, "CaptureSession, from the session's admission pass for the window's "
-             "begin; refused only as on_warning or an unattended caller requires",
-             warning_code="render_cap_bound_at_window_open"),
     RunCheck(44, PRE_ROLL, "Under pacing.mode wall_clock, the prewarm held min_achieved_factor", _R,
              RUN_CAPTURE, "CaptureSession, from the session's RealTimePacer"),
     RunCheck(45, PRE_ROLL, "The handover transport opens", (), NOT_BUILT,
@@ -211,6 +203,15 @@ _CHECKS: tuple[RunCheck, ...] = (
              "RunConfigurationValidator at launch; CaptureSession while the run proceeds"),
 )
 
+# Numbers whose checks were withdrawn, with why. Each stays retired: a finding never cites one, and no
+# other check is given it.
+RETIRED: dict[int, str] = {
+    20: "compared a render region and cap that no longer exist: the session renders every vehicle "
+        "SUMO has",
+    21: "predicted the in-region population against a render cap that no longer exists",
+    33: "compared the population at the window's begin with a render cap that no longer exists",
+}
+
 
 class RunConfigurationCheckCatalogue:
     """The run checks, looked up by number."""
@@ -225,10 +226,14 @@ class RunConfigurationCheckCatalogue:
 
     @classmethod
     def get(cls, check_id: int) -> RunCheck:
-        """The check with this number. A number nobody assigned is a bug, and says so."""
+        """The check with this number. A number nobody assigned, or one retired, is a bug, and says
+        so."""
         try:
             return cls._BY_ID[check_id]
         except KeyError:
+            if check_id in RETIRED:
+                raise KeyError(f"run check {check_id} is retired ({RETIRED[check_id]}); a finding "
+                               "may only cite a check that exists") from None
             raise KeyError(f"run check {check_id} is not in the catalogue; a finding may only cite "
                            "a check that exists") from None
 
@@ -247,4 +252,5 @@ class RunConfigurationCheckCatalogue:
                 "outcomes": {REFUSE: "nothing is emitted and no session starts",
                              WARN: "the launch goes on, and the warning is carried in full into the "
                                    "resolution report and the run result"},
-                "checks": [check.to_dict() for check in _CHECKS]}
+                "checks": [check.to_dict() for check in _CHECKS],
+                "retired": {str(check_id): reason for check_id, reason in sorted(RETIRED.items())}}

@@ -3,7 +3,6 @@ using System.Globalization;
 using CarlaNet.Map.WorldPackage;
 using CarlaNet.Recording;
 using CarlaNet.Sumo;
-using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Commands;
 using CarlaNet.Types.Rpc.Lighting;
 
@@ -24,10 +23,16 @@ namespace CarlaNet.CoSim;
 /// imagery finds it. Computed and not applied, the same error is a residual in a report.</para>
 ///
 /// <para>Everything except the application of a pose runs: the clock's validation, the frame
-/// identity check, the population lease, the two-tier subscription, the render set, the one-step
+/// identity check, the population lease, the subscription, the render set, the one-step
 /// lookahead, the lane interpolation and the pose conversion. The world is ticked, by whatever the
 /// caller supplied, so the session owns the advance of simulated time on both sides exactly as it
 /// will when it drives.</para>
+///
+/// <para><b>Every vehicle SUMO has is drawn.</b> The scenario is the only arbiter of population: a
+/// vehicle holds a body from the frame after SUMO first reports it until SUMO removes it or the
+/// session ends, parked vehicles included. Nothing here limits how many; a scenario heavier than the
+/// machine is comfortable with makes a synchronous run slower on the wall clock, never different in
+/// content.</para>
 /// </remarks>
 public sealed class SumoDriveSession : IDisposable
 {
@@ -68,7 +73,6 @@ public sealed class SumoDriveSession : IDisposable
     private readonly Dictionary<string, (string TypeId, ulong? AdmittedTick)> _renderedSpans = [];
     private readonly TickBatch _batch = new();
     private readonly List<(string VehicleId, ActorId Actor, VehiclePose Pose)> _commanded = [];
-    private readonly Dictionary<string, (double X, double Y)> _positions = [];
     private readonly Dictionary<string, CoSimVehicleFrame> _previous = [];
     private readonly Dictionary<string, CoSimVehicleFrame> _next = [];
     private readonly Stopwatch _bridgeClock = new();
@@ -81,12 +85,6 @@ public sealed class SumoDriveSession : IDisposable
     private readonly HashSet<string> _stillAwaiting = [];
     private readonly HeadlightRule? _headlights;
     private readonly Dictionary<string, (ActorId Actor, VehicleLightStateFlags Lamps)> _lampsWritten = [];
-    private readonly GroundSurface _ground;
-    private readonly SortedDictionary<ActorId, CameraOptics> _cameras = [];
-    private readonly List<CameraView> _cameraViews = [];
-    private readonly long _seed;
-    private readonly double _longestBody;
-    private readonly double _bodyReach;
 
     private readonly (double Latitude, double Longitude) _origin;
     private SolarLease? _sun;
@@ -96,7 +94,6 @@ public sealed class SumoDriveSession : IDisposable
     private double? _lastCompleteSeconds;
     private double? _reportedSunElevation;
     private RenderSet? _renderSetNow;
-    private ulong? _lastFrame;
     private bool _disposed;
 
     private SumoDriveSession(SumoDriveSessionOptions options,
@@ -123,10 +120,6 @@ public sealed class SumoDriveSession : IDisposable
         _options = options;
         _world = world;
         _origin = origin;
-        _ground = ground;
-        _seed = seed;
-        _longestBody = catalogue.LongestBodyMetres;
-        _bodyReach = catalogue.BodyReachMetres;
         _sumo = sumo;
         _console = console;
         _collisionHandling = collisionHandling;
@@ -143,7 +136,7 @@ public sealed class SumoDriveSession : IDisposable
             ? driven.Tick
             : () => counted() ? (ulong)(_tickIndex + 1) : null;
         _population = new SubscribedPopulation(sumo.TraCI);
-        _renderSet = new RenderSetManager(options.RenderSet, Release);
+        _renderSet = new RenderSetManager(Release);
         _binder = new VehicleTypeBinder(sumo.TraCI, catalogue);
         _converter = new PoseConverter(ground, options.MeasuredSeatHeights);
         _interpolator = new LaneArcInterpolator(network);
@@ -172,8 +165,7 @@ public sealed class SumoDriveSession : IDisposable
             LayerVisibility = layers?.Applied ?? new Dictionary<string, bool>(),
             Epoch = options.Epoch,
             Illumination = options.Illumination,
-            RenderSetPolicy = options.RenderSet.Description,
-            RenderSetSeed = seed,
+            SumoSeed = seed,
         };
     }
 
@@ -234,56 +226,6 @@ public sealed class SumoDriveSession : IDisposable
     /// frames are held.
     /// </remarks>
     public IRenderSetSource RenderSet => _renderSets;
-
-    /// <summary>The cameras registered with the session, in actor order.</summary>
-    public IReadOnlyCollection<ActorId> Cameras => _cameras.Keys;
-
-    /// <summary>
-    /// Register a camera whose view the render set follows: from the next admission pass, a policy that
-    /// follows cameras renders the vehicles inside and approaching its ground footprint.
-    /// </summary>
-    /// <param name="camera">The camera's actor id, spawned by the caller.</param>
-    /// <remarks>
-    /// <para>The camera's image size and field of view are read from its attributes now, in one round
-    /// trip; its pose is read at every pass from the client's snapshot of the last frame rendered, so a
-    /// camera flown or orbited between passes is followed wherever it goes. Registering one already
-    /// registered reads its attributes again and changes nothing else.</para>
-    ///
-    /// <para>Cameras come and go during a run -- a free view opened late, a rig taken down -- and each
-    /// pass decides from the ones registered then. With none registered a policy that follows cameras
-    /// renders its configured circle, never nothing. Registered between advances, from the thread that
-    /// advances the session, as every other call on it is.</para>
-    /// </remarks>
-    /// <exception cref="InvalidOperationException">The session renders no world to read a camera from.</exception>
-    /// <exception cref="ArgumentException">The world has no such actor, or the actor is not a camera.</exception>
-    public void AddCamera(ActorId camera)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        if (_world is not { } world)
-        {
-            throw new InvalidOperationException(
-                "The session renders no world, so it has no camera to follow: a camera is read from the "
-                + "world it was spawned in.");
-        }
-
-        _cameras[camera] = world.DescribeCamera(camera)
-                           ?? throw new ArgumentException(
-                               $"Actor {camera} is not a camera the world knows: it has no image_size_x, "
-                               + "image_size_y and fov to take a footprint from.", nameof(camera));
-    }
-
-    /// <summary>
-    /// Stop following a camera, from the next admission pass. Answers whether it was registered.
-    /// </summary>
-    /// <remarks>
-    /// Call it before destroying the camera: a registered camera the world no longer has is left out of
-    /// every pass, and counted on the report, but it is still registered.
-    /// </remarks>
-    public bool RemoveCamera(ActorId camera)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return _cameras.Remove(camera);
-    }
 
     /// <summary>
     /// The SUMO this session drives, for a test that has to act on it as something outside the
@@ -453,7 +395,7 @@ public sealed class SumoDriveSession : IDisposable
         // there is anything to ask SUMO for on each step.
         SumoCollisionHandling collisionHandling = SumoCollisionHandling.Read(options.ScenarioPath);
 
-        // The seed SUMO will run under, which a ranking under the render set's capacity is drawn from.
+        // The seed SUMO will run under, which the report names so the run's traffic can be reproduced.
         long seed = ReadTheSeed(options.ScenarioPath);
 
         List<string> extraArguments = [];
@@ -518,8 +460,7 @@ public sealed class SumoDriveSession : IDisposable
             try
             {
                 pool = world is { } bodies
-                    ? new VehicleBodyPool(bodies, VehicleParking.BeyondTheSurface(ground),
-                                          options.MaximumBodies)
+                    ? new VehicleBodyPool(bodies, VehicleParking.BeyondTheSurface(ground))
                     : null;
                 session = new SumoDriveSession(options, world, sumo, console, release, compiled,
                                                teleporting, routeErrors, collisionHandling, headlights, clock,
@@ -693,7 +634,6 @@ public sealed class SumoDriveSession : IDisposable
                 };
             }
 
-            _lastFrame = frame;
             RecordTheRenderSet(frame);
             AuditTheSun(frame);
             MeasureDivergence();
@@ -734,7 +674,6 @@ public sealed class SumoDriveSession : IDisposable
         Attempt(failures, "complete the report", () =>
         {
             Report.Admissions = _renderSet.Admissions;
-            Report.CapacityDeclines = _renderSet.CapacityDeclines;
             foreach (UnrenderableReason reason in _binder.RefusedTypes.Values)
             {
                 Report.CountRefusedType(reason);
@@ -745,7 +684,6 @@ public sealed class SumoDriveSession : IDisposable
             if (_pool is { } counted)
             {
                 Report.BodiesSpawned = counted.Bodies.Count;
-                Report.BodyDeclines = counted.Exhaustions;
             }
         });
         Attempt(failures, "give back the world's sun", () => _sun?.Dispose());
@@ -994,88 +932,34 @@ public sealed class SumoDriveSession : IDisposable
     }
 
     /// <summary>
-    /// Read the SUMO frame just stepped to: who departed and arrived, where everyone is, the render set
-    /// that follows, and the collisions SUMO registered. Answers the departures, which the insertion
+    /// Read the SUMO frame just stepped to: who departed and arrived, every vehicle's state, the render
+    /// set that follows, and the collisions SUMO registered. Answers the departures, which the insertion
     /// queue is compared against.
     /// </summary>
     private IReadOnlyList<string> ReconcileAndRead()
     {
         IReadOnlyList<string> departed = _sumo.Simulation.DepartedVehicleIds;
         _population.Reconcile(departed, _sumo.Simulation.ArrivedVehicleIds);
-        _population.ReadPositions(_positions);
-        BeginThePass();
-        _renderSet.ReconcileSubscriptions(_population, _positions);
         _population.ReadFrames(_next);
         _renderSet.ReconcileRenderSet(_frameSeconds, _next, _population.LastVanished);
         Report.Admissions = _renderSet.Admissions;
-        Report.CapacityDeclines = _renderSet.CapacityDeclines;
         PublishTheAdmissionPass();
         RecordCollisions();
         return departed;
     }
 
     /// <summary>
-    /// Tell the render-set policy what the session holds for the pass about to be made: the frame the
-    /// pass decides, SUMO's step, the seed, the bodies' reach, and every registered camera's pose on
-    /// the last frame rendered.
-    /// </summary>
-    /// <remarks>
-    /// <para>A camera's pose comes from the client's snapshot of that frame, a read with no round trip.
-    /// Before the first tick there is no frame, and the newest snapshot is read. A registered camera the
-    /// snapshot does not hold -- destroyed without being removed -- is left out and counted: it has no
-    /// view to follow.</para>
-    ///
-    /// <para>What the policy made of the pass -- the rule in force and every camera's footprint and range
-    /// cap -- goes on the report as it is made.</para>
-    /// </remarks>
-    private void BeginThePass()
-    {
-        _cameraViews.Clear();
-        if (_world is { } world)
-        {
-            foreach ((ActorId camera, CameraOptics optics) in _cameras)
-            {
-                Transform? pose = _lastFrame is { } frame
-                    ? world.ObservedTransformAt(camera, frame)
-                    : world.ObservedTransform(camera);
-                if (pose is { } seen)
-                {
-                    _cameraViews.Add(new CameraView(camera, seen, optics));
-                }
-                else
-                {
-                    Report.CameraPosesUnread++;
-                }
-            }
-        }
-
-        _renderSet.BeginPass(new RenderSetPass(_frameSeconds, Clock.SumoStepSeconds, _seed, _longestBody,
-                                               _bodyReach, [.. _cameraViews], GroundHeightAt));
-        IRenderSetPolicy policy = _options.RenderSet;
-        Report.CountPass(policy.ActiveRule);
-        foreach (CameraFootprint footprint in policy.Footprints)
-        {
-            Report.RecordFootprint(footprint);
-        }
-    }
-
-    /// <summary>The ground surface's CARLA-local height under a CARLA-frame position, or null off the grid.</summary>
-    private double? GroundHeightAt(double carlaX, double carlaY) =>
-        _ground.Sample(carlaX, carlaY) is { } surface ? surface - _ground.OriginHeightMetres : null;
-
-    /// <summary>
     /// The seed the scenario's configuration runs SUMO under, or SUMO's own default where it declares
     /// none.
     /// </summary>
     /// <remarks>
-    /// Read from the configuration SUMO is about to be started on, the way SUMO reads it, so the seed a
-    /// ranking is drawn from is the one the traffic is: a run configuration's recorded seed is the same
-    /// number, compiled into the same file.
+    /// Read from the configuration SUMO is about to be started on, the way SUMO reads it, so the seed the
+    /// report names is the one the traffic is simulated under.
     /// </remarks>
     private static long ReadTheSeed(string scenarioPath)
     {
         IReadOnlyList<string> declared = SumoConfiguration
-            .Load(scenarioPath, "the seed the render set is ranked by cannot be read")
+            .Load(scenarioPath, "the seed SUMO runs under cannot be read")
             .ValuesOf("seed");
         return declared.Count > 0
                && long.TryParse(declared[^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out long seed)
@@ -1213,8 +1097,8 @@ public sealed class SumoDriveSession : IDisposable
     }
 
     /// <summary>
-    /// Publish the pass just made -- the population, the eligible, the admitted and the shed -- on
-    /// the report and to the caller's writer, as it happens.
+    /// Publish the pass just made -- the population, and the vehicles admitted and released -- on the
+    /// report and to the caller's writer, as it happens.
     /// </summary>
     /// <remarks>
     /// Once per SUMO step, not per tick: the render set is decided when SUMO's state is read and holds
@@ -1223,25 +1107,13 @@ public sealed class SumoDriveSession : IDisposable
     /// </remarks>
     private void PublishTheAdmissionPass()
     {
-        int admitted = _renderSet.RenderedVehicleIds.Count;
         var pass = new AdmissionPass(
             _tickIndex,
             _frameSeconds,
-            _positions.Count,
-            _population.PromotedVehicleIds.Count,
-            _renderSet.LastEligible,
-            admitted,
-            _renderSet.LastShed,
-            _options.RenderSet.Capacity,
+            _population.SubscribedVehicleIds.Count,
             _renderSet.LastNewlyAdmitted,
             _renderSet.LastReleased,
-            _renderSet.Admissions,
-            _renderSet.CapacityDeclines)
-        {
-            Rule = _options.RenderSet.ActiveRule,
-            Cameras = _options.RenderSet.Footprints.Count,
-            Held = _renderSet.LastHeld,
-        };
+            _renderSet.Admissions);
         Report.LastAdmissionPass = pass;
         _options.OnAdmissionPass?.Invoke(pass);
     }
@@ -1311,23 +1183,16 @@ public sealed class SumoDriveSession : IDisposable
             VehicleLightStateFlags lamps = VehicleLightStateFlags.None;
             if (_pool is { } pool)
             {
-                if (pool.TryCheckOut(vehicleId, extent.BlueprintId, out PooledBody body))
+                actor = pool.CheckOut(vehicleId, extent.BlueprintId).Actor;
+                if (_renderedSpans.TryAdd(vehicleId, (to.TypeId, null)))
                 {
-                    actor = body.Actor;
-                    if (_renderedSpans.TryAdd(vehicleId, (to.TypeId, null)))
-                    {
-                        // A body newly lent changes the render set from this tick's frame on.
-                        _renderSetNow = null;
-                    }
+                    // A body newly lent changes the render set from this tick's frame on.
+                    _renderSetNow = null;
+                }
 
-                    _batch.Pose(actor, applied);
-                    _commanded.Add((vehicleId, actor, applied));
-                    lamps = WriteTheLamps(vehicleId, actor, from.Signals, headlights);
-                }
-                else
-                {
-                    Report.PoseDeclinesForNoBody++;
-                }
+                _batch.Pose(actor, applied);
+                _commanded.Add((vehicleId, actor, applied));
+                lamps = WriteTheLamps(vehicleId, actor, from.Signals, headlights);
             }
 
             _options.OnPose?.Invoke(new CoSimPoseRecord(
@@ -1338,7 +1203,6 @@ public sealed class SumoDriveSession : IDisposable
         if (_pool is { } counted)
         {
             Report.BodiesSpawned = counted.Bodies.Count;
-            Report.BodyDeclines = counted.Exhaustions;
         }
     }
 

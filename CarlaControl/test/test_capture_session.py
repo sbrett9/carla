@@ -121,9 +121,6 @@ def test_the_session_is_started_from_the_compiled_package_and_the_resolved_field
     started = started_with(server)
     assert Path(started["scenario"]) == layout.lock.parent / f"{SCENARIO_ID}.sumocfg"
     assert Path(started["world_package"]) == layout.world_package.resolve()
-    assert started["region_centre"] == (0.0, -0.0)
-    assert started["admit_radius_m"] == 300.0
-    assert (started["capacity"], started["maximum_bodies"]) == (128, 192)
     assert (started["fixed_delta"], started["record_hz"]) == (0.05, 2.0)
     assert started["warm_up_to"] == 25200.0 - 300.0
     assert started["window_opens_at"] == 25200.0
@@ -142,62 +139,32 @@ def test_every_admission_pass_is_asked_for_and_poses_only_where_a_stare_aims_at_
     assert started["on_pose"] is None
 
 
-def test_the_render_set_follows_the_cameras_unless_the_circle_is_chosen(layout, server):
-    capture(layout, server)
-    started = started_with(server)
-    # The defaults: the cameras, capped where the longest body covers 2 px, admitted 3 s ahead and
-    # held 5 s after (10 §8's frustum_lead_s and exit_lag_s).
-    assert (started["render_set"], started["render_min_pixels"], started["render_admit_lead_s"],
-            started["render_release_lag_s"]) == ("cameras", 2.0, 3.0, 5.0)
-
-    circle = FakeServer()
-    capture(layout, circle, overrides=["capture.render_set=circle", "capture.render_min_pixels=3",
-                                       "capture.render_admit_lead_s=1.5",
-                                       "capture.render_release_lag_s=0"])
-    started = started_with(circle)
-    assert (started["render_set"], started["render_min_pixels"], started["render_admit_lead_s"],
-            started["render_release_lag_s"]) == ("circle", 3.0, 1.5, 0.0)
-
-
-def test_every_channel_s_camera_is_registered_before_the_prewarm_and_let_go_before_it_goes(layout, server):
-    # A stare measuring occlusion: its RGB camera is registered, and its depth camera, which shares
-    # the RGB camera's view, is not.
-    capture(layout, server)
-    rgb, depth = server.actors
-    assert (rgb.type_id, depth.type_id) == ("sensor.camera.rgb", "sensor.camera.depth")
-    assert [event[1] for event in server.events.of("add_camera")] == [rgb.id]
-    # Registered before the first step, so the prewarm is rendered for the views the window holds.
-    assert server.events.index("add_camera") < server.events.index("advance")
-    # Let go before the camera is destroyed, so the session never follows a camera the world lacks.
-    assert server.session.cameras == []
-    log = server.events.log
-    assert log.index(("remove_camera", rgb.id)) < log.index(("destroy", "sensor.camera.rgb", rgb.id))
-
-    # A stare and an orbit: both, the orbit's followed as it flies.
-    both = FakeServer()
+def test_nothing_the_session_is_handed_limits_which_vehicles_are_rendered(layout, server):
+    # Every vehicle SUMO has is rendered, so the session is given no region, no cap and no camera to
+    # follow -- in a stare's run and in a run with an orbit flying.
     document = run_document()
     document["capture"]["channels"] = [A_STARE, dict(AN_ORBIT, sensor_id="ORBIT-2")]
-    _, result = capture(layout, both, document, ["occlusion.enabled=false"])
+    _, result = capture(layout, server, document, ["occlusion.enabled=false"])
     assert result.outcome == "run_finished"
-    cameras = [actor.id for actor in both.actors if actor.type_id == "sensor.camera.rgb"]
-    assert len(cameras) == 2
-    assert [event[1] for event in both.events.of("add_camera")] == cameras
-    assert sorted(event[1] for event in both.events.of("remove_camera")) == sorted(cameras)
-    assert both.session.cameras == []
+    started = started_with(server)
+    assert not {"region_centre", "admit_radius_m", "hysteresis_m", "capacity", "maximum_bodies",
+                "render_set", "render_min_pixels", "render_admit_lead_s", "render_release_lag_s",
+                "render_max_speed_mps"} & set(started)
+    # Each camera still leaves the world at the end.
+    cameras = [actor for actor in server.actors if actor.type_id == "sensor.camera.rgb"]
+    assert len(cameras) == 2 and all(camera.destroyed for camera in cameras)
 
 
-def test_an_unusable_render_setting_is_refused_as_a_usage_error(layout, server):
-    for override in ("capture.render_set=everything", "capture.render_min_pixels=0",
-                     "capture.render_admit_lead_s=-1"):
+def test_a_render_setting_from_before_every_vehicle_was_drawn_is_refused_by_name(layout, server):
+    # A run configuration written for the old render region and caps is refused as naming fields the
+    # schema has no more, rather than run as though they meant something.
+    for override in ("capture.render_cap=128", "capture.render_cap_hard=192",
+                     "capture.render_set=cameras",
+                     'capture.render_region={"x_m": 0, "y_m": 0, "radius_m": 300}'):
         _, result = capture(layout, server, overrides=[override])
         assert result.outcome == "usage_error", override
+        assert override.split("=", 1)[0] in result.refusals[0]["message"], override
     assert server.events.of("start_sumo_drive") == []
-
-
-def test_the_render_region_is_handed_over_in_sumo_s_frame(layout, server):
-    capture(layout, server, overrides=['capture.render_region={"x_m": 120.0, "y_m": -340.0, '
-                                       '"radius_m": 250.0}'])
-    assert started_with(server)["region_centre"] == (120.0, 340.0)
 
 
 def test_wall_clock_pacing_is_handed_to_the_session(layout, server):
@@ -406,11 +373,11 @@ def test_an_unreachable_server_is_refused_server(layout, server):
 
 
 def test_a_malformed_override_is_a_usage_error_with_a_result(layout, server):
-    _, result = capture(layout, server, overrides=["capture.render_capp=3"])
+    _, result = capture(layout, server, overrides=["capture.prewarm_ss=3"])
     assert (result.outcome, result.exit_status) == ("usage_error", 1)
     written = RunResult.read(layout.runs_root / SESSION_ID / "run.result.json")
     assert written["outcome"] == "usage_error"
-    assert "render_capp" in written["refusals"][0]["message"]
+    assert "prewarm_ss" in written["refusals"][0]["message"]
     assert (layout.runs_root / SESSION_ID / "run.resolution.json").is_file()
 
 
@@ -508,7 +475,7 @@ def test_a_warning_adjudicated_in_writing_is_recorded_with_its_source(layout, se
 
 
 def test_the_replayable_configuration_reproduces_the_run_s_digest(layout, server):
-    first_session, first = capture(layout, server, overrides=["capture.render_cap=96"])
+    first_session, first = capture(layout, server, overrides=["occlusion.samples=32"])
     replay = json.loads((layout.runs_root / SESSION_ID / "run.effective.json").read_text("utf-8"))
     second_session, second = capture(layout, FakeServer(), replay)
     assert second.effective_configuration_digest == first.effective_configuration_digest

@@ -11,6 +11,12 @@ internal static class CoSimFixtures
     /// <summary>The cross of four approaches, and the four vehicles crossing it.</summary>
     public static string RightAngleTurnScenario => Fixture("RightAngleTurn.sumocfg");
 
+    /// <summary>
+    /// The same cross with two measured vehicles one after the other, so the second borrows the body the
+    /// first gave back, and an unmeasured one alone on the network in between.
+    /// </summary>
+    public static string SuccessionScenario => Fixture("Succession.sumocfg");
+
     /// <summary>The same network on its own, for reading lane geometry with no simulation running.</summary>
     public static string RightAngleTurnNetwork => Fixture("RightAngleTurn.net.xml");
 

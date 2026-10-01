@@ -3,7 +3,7 @@
 `12_Operator_Control_Surface.md` §6.4, D12.24. One block, computed once after the offline checks and before
 anything is acquired, containing what a reader has to be told to notice that the run is not the run
 they meant: the simulated span and the captures it will make, the civil span, the sun at the window's
-first and last captured instants and the policy holding it, the world, the render region, the disk it
+first and last captured instants and the policy holding it, the world, what is rendered, the disk it
 will cost, where it writes, the wait for every channel's view before the window opens, and the
 warnings raised.
 
@@ -22,8 +22,9 @@ the instant every view's wait begins is `ViewReadiness.wait_begins_s`, which `Ca
 check 51 read too.
 
 What it does not predict, and says so: the wall-clock duration (no measured tick rate exists for a
-configuration before it runs), the in-region population (no population profile is published,
-check 21), and, where a stare is aimed at the rendered traffic, where it will look.
+configuration before it runs), how many vehicles will be rendered (every vehicle SUMO has, which no
+profile published before the run counts), and, where a stare is aimed at the rendered traffic, where
+it will look.
 """
 from __future__ import annotations
 
@@ -53,7 +54,8 @@ from carlacontrol.WindowSun import WindowSun
 LAUNCH_ECHO_VERSION = 1
 NOT_PREDICTED = (
     "wall-clock duration: no measured tick rate exists for a configuration before it runs",
-    "in-region population: no population profile of the scenario is published (check 21)",
+    "the rendered population: every vehicle SUMO has is rendered, and no population profile of the "
+    "scenario is published to say how many that is at once",
 )
 NOT_PREDICTED_TRAFFIC_AIM = ("where a stare aimed at the rendered traffic will look: the point is "
                              "measured on the last frame before its camera holds for the window, "
@@ -101,20 +103,14 @@ class LaunchEcho:
                       "network_fingerprint": effective.value("world.network_fingerprint"),
                       "origin": [effective.value("world.origin_latitude"),
                                  effective.value("world.origin_longitude")]},
-            "render": {"set": effective.value("capture.render_set"),
-                       "region": effective.value("capture.render_region"),
-                       "hysteresis_m": effective.value("capture.render_hysteresis_m"),
-                       "min_pixels": effective.value("capture.render_min_pixels"),
-                       "admit_lead_s": effective.value("capture.render_admit_lead_s"),
-                       "release_lag_s": effective.value("capture.render_release_lag_s"),
-                       "cap": effective.value("capture.render_cap"),
-                       "cap_hard": effective.value("capture.render_cap_hard"),
+            "render": {"vehicles": "every vehicle SUMO has",
                        "road_layer_visible": effective.value("capture.road_layer_visible"),
                        "signal_layer_visible": effective.value("capture.signal_layer_visible")},
             "cost": {"bytes_per_captured_second": bytes_per_captured_second,
                      "estimated_bytes": bytes_per_captured_second * window.length_s,
                      "free_bytes": free_bytes, "headroom_s": headroom_s,
-                     "basis": "doc 10 §4.6's measured capture sizes; content-dependent"},
+                     "basis": "doc 10 §4.6's measured PNG size; content-dependent; the truth "
+                              "sidecars, which grow with the traffic in frame, are not counted"},
             "writes": {"capture_directory": str(capture_directory),
                        "result_path": str(result_path)},
             "pacing": {"mode": effective.value("pacing.mode"),
@@ -232,14 +228,7 @@ class LaunchEcho:
                      f"{str(world['network_fingerprint'])[:12]}   origin "
                      f"{world['origin'][0]}, {world['origin'][1]}")
         render = b["render"]
-        region = render["region"] or {}
-        circle = (f"region {region.get('radius_m', '?')} m at "
-                  f"({region.get('x_m', '?')}, {region.get('y_m', '?')})")
-        chosen = (f"the cameras (lead {render['admit_lead_s']:g} s, lag {render['release_lag_s']:g} "
-                  f"s, {render['min_pixels']:g} px), {circle} until they are placed"
-                  if render["set"] == "cameras" else circle)
-        lines.append(f"  render      {chosen}   cap {render['cap']}"
-                     f" (hard {render['cap_hard']})   road "
+        lines.append(f"  render      {render['vehicles']}   road "
                      f"{'drawn' if render['road_layer_visible'] else 'hidden'}, signals "
                      f"{'drawn' if render['signal_layer_visible'] else 'hidden'}")
         cost = b["cost"]

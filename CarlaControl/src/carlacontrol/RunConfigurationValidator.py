@@ -18,14 +18,14 @@ by construction, and which have nothing in the tree to compare.
   the server --
   the sun, the camera blueprints' attributes, the vehicle blueprints -- before anything is spawned.
 * **Pre-roll** (`preroll_pace`) compares the prewarm's achieved real-time factor with the floor a
-  live run declares (check 44), and (`window_open_population`) the vehicles inside the render region
-  at the window's begin with the render cap, from the session's admission pass (check 33).
+  live run declares (check 44).
 
 **What the disk figures rest on.** Check 19 and check 46 express free space in captured seconds from
-doc 10's measured capture sizes: 2.25 MB per 1280x720 PNG (10 §4.6, read as MiB, the larger of the two
-readings, since the figure guards a disk) and 662 bytes of sidecar per vehicle (10 §4.6, over 54
-sidecars), with every channel assumed to see `render_cap` vehicles. A PNG's size depends on what is in
-frame, so the figure is an estimate and the refusal says so.
+doc 10's measured PNG size: 2.25 MB per 1280x720 PNG (10 §4.6, read as MiB, the larger of the two
+readings, since the figure guards a disk). The truth sidecars are left out: a sidecar grows with the
+vehicles in frame, every vehicle SUMO has is rendered, and how many a channel will see is not known
+before the run. A PNG's size depends on what is in frame too, so the figure is an estimate and the
+refusal says so.
 """
 from __future__ import annotations
 
@@ -57,7 +57,6 @@ from carlacontrol.ViewReadiness import (
 
 MEASURED_PNG_BYTES = 2.25 * 2**20
 MEASURED_PNG_PIXELS = 1280 * 720
-MEASURED_SIDECAR_BYTES_PER_VEHICLE = 662.0
 PNG_BYTES_PER_PIXEL = MEASURED_PNG_BYTES / MEASURED_PNG_PIXELS
 
 RGB_BLUEPRINT = "sensor.camera.rgb"
@@ -66,7 +65,7 @@ RGB_ATTRIBUTES = ("image_size_x", "image_size_y", "fov", "sensor_tick", "post_pr
 DEPTH_ATTRIBUTES = ("image_size_x", "image_size_y", "fov", "sensor_tick", "max_range")
 
 # Fields a more specific check refuses when no layer supplies them.
-_SPECIFIC_ABSENCE = {"scenario.epoch": 12, "capture.render_region": 20}
+_SPECIFIC_ABSENCE = {"scenario.epoch": 12}
 
 
 class RunConfigurationValidator:
@@ -96,7 +95,6 @@ class RunConfigurationValidator:
             self._readiness_prewarm(effective, findings)
         self._epoch(effective, findings)
         self._illumination(effective, findings)
-        self._render(effective, findings)
         self._pacing(effective, findings)
         self._result_path(effective, result_path, capture_directory, findings)
         if window_ok:
@@ -122,9 +120,6 @@ class RunConfigurationValidator:
                 findings.refuse(12, "scenario.epoch", f"scenario {effective.scenario.describe()} "
                                 "declares no epoch. A capture cannot set a sun from simulated "
                                 "seconds without one (12 §4.3)")
-            elif check == 20:
-                findings.refuse(20, path, "capture.render_region has no value; it is never "
-                                "defaulted (10 D10.5). Give x_m, y_m and radius_m in CARLA's frame")
             elif path == "capture.window":
                 names = ", ".join(sorted(effective.scenario.windows)) or "none declared"
                 findings.refuse(2, path, "'capture.window' has no value and no default. Supply it "
@@ -402,16 +397,6 @@ class RunConfigurationValidator:
                           "holds it, so the run's lighting honours no epoch and depends on whatever "
                           "the last session left")
 
-    # -- check 20 ---------------------------------------------------------------------------------
-    @staticmethod
-    def _render(effective: EffectiveRunConfiguration, findings: RunConfigurationFindings) -> None:
-        cap = effective.value("capture.render_cap")
-        hard = effective.value("capture.render_cap_hard")
-        if cap is not None and hard is not None and cap > hard:
-            findings.refuse(20, "capture.render_cap", f"render_cap {cap} exceeds render_cap_hard "
-                            f"{hard}: the session could admit more vehicles than it may own bodies "
-                            "for")
-
     # -- check 41 ---------------------------------------------------------------------------------
     @staticmethod
     def _pacing(effective: EffectiveRunConfiguration, findings: RunConfigurationFindings) -> None:
@@ -465,7 +450,8 @@ class RunConfigurationValidator:
                    f"{effective.value('capture.capture_hz'):g} Hz x {effective.channel_count} "
                    f"channel(s); {free / 1e9:.1f} GB free under {capture_directory} is "
                    f"{headroom_s / 3600:.2f} h of capture, and the floor keeps {floor_s:g} s of it. "
-                   "Estimated from doc 10's measured capture sizes")
+                   "Estimated from doc 10's measured PNG size; the truth sidecars, which grow with "
+                   "the traffic in frame, are not counted")
         if window.end_source == "the scenario's own end: the window declares none":
             findings.warn(19, "capture.window", message + ". This window declares no end")
         else:
@@ -483,10 +469,10 @@ class RunConfigurationValidator:
 
     @staticmethod
     def bytes_per_capture(effective: EffectiveRunConfiguration, index: int) -> float:
+        """One capture's PNG, from doc 10's measured size per pixel. Its truth sidecar is not
+        counted: it grows with the vehicles in frame, which no figure known before the run bounds."""
         values = effective.channel_values(index)
-        pixels = float(values["width"]) * float(values["height"])
-        vehicles = float(effective.value("capture.render_cap") or 0)
-        return PNG_BYTES_PER_PIXEL * pixels + MEASURED_SIDECAR_BYTES_PER_VEHICLE * vehicles
+        return PNG_BYTES_PER_PIXEL * float(values["width"]) * float(values["height"])
 
     @classmethod
     def bytes_per_captured_second(cls, effective: EffectiveRunConfiguration) -> float:
@@ -623,52 +609,6 @@ class RunConfigurationValidator:
     # =============================================================================================
     # pre-roll
     # =============================================================================================
-    @staticmethod
-    def window_open_population(effective: EffectiveRunConfiguration,
-                               at_window_open: dict | None) -> RunConfigurationFindings:
-        """Check 33: the vehicles eligible for the render set at the window's begin against the cap --
-        inside the render region, or under `capture.render_set` `cameras` within reach of a channel
-        camera's view.
-
-        `at_window_open` is the session's admission pass for the window's begin, as
-        `WindowAdmissions.describe` states it. Where more vehicles were eligible than the capacity,
-        it warns with the numbers; the warning is then adjudicated as a phase-0 warning is, except
-        that nobody is asked: `on_warning.<code>` `refuse` refuses, `proceed` proceeds, and with no
-        adjudication an unattended caller refuses (12 §6.4) and an attended one proceeds with the
-        warning on record, unadjudicated. With no pass it concludes nothing.
-        """
-        findings = RunConfigurationFindings()
-        if at_window_open is None:
-            return findings
-        eligible, capacity = at_window_open["eligible"], at_window_open["capacity"]
-        if eligible <= capacity:
-            return findings
-        # Under the cameras the eligible are the vehicles within reach of a channel's view, and the
-        # region only decides until the cameras are placed.
-        cameras = effective.value("capture.render_set") == "cameras"
-        where = ("within reach of a channel camera's view" if cameras
-                 else "inside the render region")
-        narrow = ("narrow a channel's view" if cameras else "narrow capture.render_region")
-        message = (f"at the window's begin, t={at_window_open['sim_time_s']:g}, {eligible} vehicles "
-                   f"were {where} against render_cap {capacity}, so "
-                   f"{at_window_open['shed']} were not rendered: the cap binds, and a binding cap "
-                   f"makes scene density a function of the label (00 §6). Raise "
-                   f"capture.render_cap (render_cap_hard is "
-                   f"{effective.value('capture.render_cap_hard')}), or {narrow}")
-        findings.warn(33, "capture.render_cap", message)
-        code = RunConfigurationFindings.warning_code(findings.warnings[0])
-        decision = (effective.value("on_warning") or {}).get(code)
-        if decision == "refuse":
-            findings.refuse(33, f"on_warning.{code}", f"warning '{code}' was raised and "
-                            f"on_warning.{code} is 'refuse': {message}")
-        elif decision is None and effective.value("caller") == "unattended":
-            findings.refuse(33, f"on_warning.{code}", f"warning '{code}' was raised and the caller "
-                            f"is unattended. Set on_warning.{code} to 'proceed' -- which is "
-                            "recorded against this configuration -- or change what raised it. An "
-                            f"unattended run does not proceed past an unadjudicated warning "
-                            f"(12 §6.4): {message}")
-        return findings
-
     @staticmethod
     def preroll_pace(effective: EffectiveRunConfiguration,
                      achieved: float | None) -> RunConfigurationFindings:

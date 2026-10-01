@@ -1,9 +1,9 @@
 """A grid of vehicles with physics off, moved by one batch of transforms per tick.
 
-This is the fixture the rendered-actor ceiling and the batch cost are measured on. Under SUMO drive
-the bridge holds the population and writes every vehicle's pose itself, so what has to be sized is
-exactly this: N bodies whose transforms are written from outside the engine, every tick, while a
-camera renders them.
+This is the fixture the cost of rendering N vehicles, and of the batch that poses them, is measured
+on. Under SUMO drive the bridge holds the population and writes every vehicle's pose itself, so what
+a scene of N vehicles costs is exactly this: N bodies whose transforms are written from outside the
+engine, every tick, while a camera renders them.
 
 Two properties of the fixture are load-bearing and neither is obvious.
 
@@ -17,7 +17,7 @@ makes in one 0.05 s step.
 the wrong one: 512 bodies at a spacing that keeps them apart needs a radius far outside the swath a
 detector can use, so most of them fall outside the frustum and are culled, and the sweep measures
 culling rather than rendering. A grid inside the footprint keeps every body in frame at every N,
-which is what makes the number a rendered-actor ceiling. Displacing the same grid outside the
+which is what makes the number the cost of rendering N. Displacing the same grid outside the
 footprint is the control that separates what the render costs from what the pose write costs.
 """
 from __future__ import annotations
@@ -41,8 +41,8 @@ ORBIT_STEP_RADIANS = 0.25
 # but the Python that builds N command objects and marshals them is paid once per cycle instead of
 # once per tick -- otherwise the sweep measures the client's object churn and calls it an actor cost.
 POSE_CYCLE_LENGTH = 25
-# The measured fraction of a render set that changes its signal mask per 0.05 s step inside the
-# 300 m render region on the binding scenario (10_Scale_And_Performance.md section 4.8.1).
+# The measured fraction of the vehicles within 300 m of a point on the binding scenario that change
+# their signal mask per 0.05 s step (10_Scale_And_Performance.md section 4.8.1).
 LIGHT_TRANSITION_FRACTION = 0.075
 
 

@@ -17,19 +17,22 @@ namespace CarlaNet.CoSim;
 /// What identifies the world to every component that could claim its population -- a server address
 /// and the map it has loaded.
 /// </param>
-/// <param name="RenderSet">Which vehicles hold a place in the render set, and how many may.</param>
 /// <remarks>
-/// The five that decide what a session <i>is</i> are constructor parameters and the rest are
+/// <para>The four that decide what a session <i>is</i> are constructor parameters and the rest are
 /// settable. A session is orchestrated from Python, where an object initialiser is not expressible
 /// and an init-only property cannot be written at all, so an options object that can only be built
-/// with one is an options object the orchestrator cannot build.
+/// with one is an options object the orchestrator cannot build.</para>
+///
+/// <para>Nothing here limits how many vehicles are rendered. The scenario is the only arbiter of
+/// population: every vehicle SUMO has gets a body, and a scenario heavier than the machine is
+/// comfortable with makes a synchronous run slower on the wall clock, never different in
+/// content.</para>
 /// </remarks>
 public sealed record SumoDriveSessionOptions(
     string ScenarioPath,
     string WorldPackagePath,
     string CataloguePath,
-    string WorldKey,
-    IRenderSetPolicy RenderSet)
+    string WorldKey)
 {
     /// <summary>
     /// The fixed delta the world ticks at: what a session with a <see cref="World"/> sets it to,
@@ -63,17 +66,6 @@ public sealed record SumoDriveSessionOptions(
     /// instead of a world -- so what it exercises is the whole bridge bar the writing.
     /// </remarks>
     public ICarlaWorld? World { get; set; }
-
-    /// <summary>
-    /// How many CARLA actors the session may own at once, across every blueprint.
-    /// </summary>
-    /// <remarks>
-    /// The pool grows to demand and never past this. It is above the render-set capacity on purpose:
-    /// capacity bounds how many vehicles are rendered at one instant, while the pool also holds the
-    /// bodies of blueprints that were busy earlier and are parked now, and a mix that shifts over a
-    /// run needs both.
-    /// </remarks>
-    public int MaximumBodies { get; set; } = 192;
 
     /// <summary>
     /// Advance the CARLA world by one tick, answering false where the tick did not produce a frame.
@@ -291,7 +283,7 @@ public sealed record SumoDriveSessionOptions(
     /// </remarks>
     public Action<PoseDivergence>? OnDivergence { get; set; }
 
-    /// <summary>Where each admission pass goes: one per SUMO step, the shedding ledger's row.</summary>
+    /// <summary>Where each admission pass goes: one per SUMO step.</summary>
     /// <remarks>
     /// The same record <see cref="CoSimRunReport.LastAdmissionPass"/> holds, handed out as it is made
     /// so a writer can keep every row -- including the two made while the session starts, before the
