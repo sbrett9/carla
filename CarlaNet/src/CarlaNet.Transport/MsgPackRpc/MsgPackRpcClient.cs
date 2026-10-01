@@ -97,7 +97,7 @@ internal sealed class MsgPackRpcClient : IAsyncDisposable
         return MessagePackSerializer.Deserialize<T>(ref reader);
     }
 
-    private static byte[] BuildRequest(uint msgId, string method, object?[] args)
+    internal static byte[] BuildRequest(uint msgId, string method, object?[] args)
     {
         // Raw msgpack — no length prefix (rpclib uses streaming unpacker).
         // CARLA wraps every bound function with Metadata as the first param.
@@ -122,11 +122,11 @@ internal sealed class MsgPackRpcClient : IAsyncDisposable
             }
             else
             {
-                // Serialize using the runtime type so generic collections
-                // (e.g. IReadOnlyList<uint>) resolve to the correct formatter.
-                // The non-generic Serialize(ref writer, object) overload only
-                // knows `object` and fails on complex types.
-                MessagePackSerializer.Serialize(arg.GetType(), ref writer, arg,
+                // Serialize by a concrete type rather than as `object`: the non-generic
+                // Serialize(ref writer, object) overload only knows `object` and fails on complex
+                // types. A list of any kind is written by its element type (MsgPackWireType), so a
+                // collection expression serializes as an array does.
+                MessagePackSerializer.Serialize(MsgPackWireType.Of(arg), ref writer, arg,
                     MessagePackSerializerOptions.Standard);
             }
         }
