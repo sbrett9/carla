@@ -2114,8 +2114,10 @@ class World:
         for it.
 
         Every vehicle SUMO has is rendered: the scenario is the only arbiter of population. A vehicle
-        holds a body from the frame after SUMO first reports it until SUMO removes it or the session
-        ends, wherever it is and however many others there are, parked vehicles included. Nothing
+        holds a body from the frame SUMO first reports it in until SUMO removes it or the session
+        ends, wherever it is and however many others there are, parked vehicles included; one SUMO
+        inserts during the run is drawn first where SUMO inserted it, moving from there, and never
+        before. Every vehicle SUMO has at `warm_up_to` is drawn on the first rendered frame. Nothing
         caps the count; a scenario heavier than the machine is comfortable with makes a synchronous
         run slower on the wall clock, never different in content. `warm_up_to` fast-forwards SUMO to
         a simulated second before the first world tick, and `step_length` overrides the scenario's

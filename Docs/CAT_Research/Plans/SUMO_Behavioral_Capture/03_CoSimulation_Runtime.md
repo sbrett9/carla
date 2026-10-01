@@ -50,6 +50,7 @@ advancement policy, the headlight predicate),
 | 2026-09-30 | §9.5.1: measured on Bahonar, traffic in view defeats a whole-view picture comparison, and the renderer settles on ticks; the picture is compared ten ticks apart with a 120-tick ceiling, and the blocks rendered vehicles cover are left out, half the view to be judged. |
 | 2026-09-30 | §8.3, §8.3.1, D3.38: the policy interface as built, and the render set that follows the registered cameras' ground footprints -- range-capped, admitted ahead, held after, ranked by the seed -- with the circle deciding while no camera is registered. §8.8: the eligible include the vehicles the release lag holds. |
 | 2026-09-30 | Render cap removed: the cap (128, hard 192) was never measured -- M2 never ran -- and the scenario is the arbiter of population, so every vehicle SUMO has is drawn and a heavier scenario runs slower, never thinner. §8.3 now states that rule; §8.3.1 and D3.38 are withdrawn, and with them the circle, the camera-footprint render set, capacity, shedding and the subscription tiers. The pool still parks and reuses bodies, with no ceiling (§8.2, D3.9). §8.5 and D3.10 describe the entry and exit this gives, §8.8 and D3.31 the pass's counts, and §9.5.1 a stare at the traffic starting over the staging bounds. |
+| 2026-10-01 | D3.6, §6.3, §8.3, §8.4, §8.5, §8.8, §9.7, §9.8: a vehicle SUMO inserts is drawn from the frame SUMO first reports it in, at that position and moving, and never before SUMO inserted it. Measured live on Bahonar, the bridge had drawn every inserted vehicle a step early, standing at its insertion point while the truth reported SUMO's speed. A vehicle SUMO has when rendering begins is still drawn on the first rendered frame. |
 
 ---
 
@@ -1370,10 +1371,26 @@ a chordal deviation of **1.54 m**, against a lane half-width of 1.68 m: the vehi
 up on the lane edge.
 
 > **D3.6 — The bridge runs SUMO exactly one step ahead of the rendered clock and produces every
-> sub-step pose by interpolating between the two buffered SUMO frames along the lane's own geometry.**
-> The SUMO step-length is whatever the scenario authored; the bridge reads it with
-> `Simulation.getDeltaT()` and does not change it. An operator override exists but is a
-> behaviour-changing knob and the run manifest must record it.
+> sub-step pose by interpolating between the two buffered SUMO frames along the lane's own geometry.
+> A vehicle is drawn over a step only where SUMO reported it at both of the step's frames, so a
+> vehicle SUMO inserts is drawn from the frame SUMO first reports it in, at that position and moving
+> from then, and never before SUMO inserted it.** The SUMO step-length is whatever the scenario
+> authored; the bridge reads it with `Simulation.getDeltaT()` and does not change it. An operator
+> override exists but is a behaviour-changing knob and the run manifest must record it.
+
+**Measured 2026-10-01: the first-draw rule as first built put an inserted vehicle a step early.** It
+drew a vehicle from the step before the frame SUMO first reported it in, interpolating that first frame
+to itself, so the body stood at its insertion point for a whole SUMO step and then moved off. Live on
+Bahonar at a 1.0 s step, in two runs with identical results, all 9 vehicles SUMO inserted inside each
+capture window did this: their first three 2 Hz captures were 0.00 m apart, then 16.5 m per half-second,
+while the truth sidecar reported SUMO's ≈33 m/s for the motionless frames. A picture that disagrees
+with its truth for a second at the start of every inserted track is what the bridge exists to prevent,
+so the vehicle now holds no body and is in no frame's render set until the rendered clock reaches its
+first frame. A vehicle SUMO already has when rendering begins is unaffected: the fast-forward's frame
+is read, with every vehicle on it subscribed, before the step of lookahead, so each has both frames
+and is drawn on the first rendered frame (§8.3). Exercised by `SumoDriveSessionInsertionTests`, which
+fails against the step-early draw, against a body lent before the insertion frame and posed nowhere,
+and against an unrenderable vehicle's ticks counted from the step before its insertion.
 
 ### 6.4 The interpolator
 
@@ -1859,10 +1876,12 @@ clear parking pose, and never spawn again during the run.
 ### 8.3 Admission — every vehicle SUMO has
 
 **Every vehicle SUMO has is drawn while the session renders.** A vehicle is admitted at the first
-admission pass that sees it (§8.8) and drawn from the frame after it is first seen, first where the
-previous frame had it (D3.6). It is released when SUMO removes it, or when the capture window closes
-or the session stops ([`04`](04_Contracts.md) §4.3, E1 and E3). A vehicle SUMO holds parked is drawn
-too. No policy chooses among them — no region, no camera footprint, no ranking, no capacity — and the
+admission pass that sees it (§8.8) and drawn from the frame SUMO first reports it in: where SUMO
+inserted it, moving from then, and never on a frame before SUMO inserted it (D3.6). A vehicle SUMO
+already has at the instant the session starts rendering — where SUMO was fast-forwarded to, the
+prewarm's first frame where there is a prewarm — is drawn on that first rendered frame. It is released
+when SUMO removes it, or when the capture window closes or the session stops
+([`04`](04_Contracts.md) §4.3, E1 and E3). A vehicle SUMO holds parked is drawn too. No policy chooses among them — no region, no camera footprint, no ranking, no capacity — and the
 pool lends a body to each, growing without a ceiling (§8.2). The population is the scenario's: a
 heavier one makes a synchronous run slower on the wall clock, never different in content
 ([`10`](10_Scale_And_Performance.md) §4.3). The render set keeps one meaning, the bodies a frame drew,
@@ -1897,7 +1916,9 @@ Because the bridge holds one full SUMO step of future (D3.6), `Simulation.getArr
 that SUMO removes is known about a whole SUMO step before the rendered clock reaches it, and it is
 released at its arrival instant rather than vanishing wherever it happened to be when the bridge
 noticed. The same applies to departures via `getDepartedIDList()` (`_simulation.py:314`): a vehicle
-can be placed before its first rendered frame. Under D3.10 this lookahead is doing the work the
+SUMO inserts is known a whole step before the rendered clock reaches the frame it was inserted at, so
+its body is lent and posed for exactly that frame, where SUMO inserted it and already moving, rather
+than on the step before it (D3.6). Under D3.10 this lookahead is doing the work the
 dissolve used to do, and doing it better: a vehicle appears and disappears exactly where and when the
 scenario inserts and removes it, which is an event the scenario holds and the step record records,
 rather than a smoothed transition the scenario never had.
@@ -1933,9 +1954,9 @@ mid-scene does so because the scenario began or ended it there, and a camera tha
 the scenario holds. A dissolve would change the imagery around that event without recording that it
 did.
 
-**The timing is the lookahead's.** §8.4's one SUMO step of lookahead lets the bridge place a departing
-vehicle before its first *rendered* frame and release an arriving one at its arrival instant, so
-neither appears or disappears a step early or late. Vehicles alive when a window's prewarm begins are
+**The timing is the lookahead's.** §8.4's one SUMO step of lookahead lets the bridge lend a departing
+vehicle its body for exactly the frame SUMO inserted it at and release an arriving one at its arrival
+instant, so neither appears or disappears a step early or late. Vehicles alive when a window's prewarm begins are
 drawn from the prewarm, before the window's first frame, so a window opens on traffic already in
 place rather than on vehicles appearing in its first frame.
 
@@ -2048,7 +2069,7 @@ D3.31), and carries:
 |---|---|
 | when | the world ticks rendered when the pass was made, and the SUMO frame it decided, one step ahead of the last rendered frame (§8.4) |
 | the population | every vehicle SUMO has at that frame, each of them subscribed (§8.3) |
-| rendered | the vehicles holding a body after the pass: every vehicle of the population whose type has a measured body. A vehicle of a type with no measured body is simulated and not drawn (§8.3), and `VehicleTicksWithNoMeasuredBody` counts its vehicle-ticks |
+| rendered | the vehicles holding a body: every vehicle of the population whose type has a measured body; one the pass admits holds its body from the frame the pass is for, the first SUMO reports it in (D3.6). A vehicle of a type with no measured body is simulated and not drawn (§8.3), and `VehicleTicksWithNoMeasuredBody` counts its vehicle-ticks from that same frame |
 | admitted and released | the vehicles admitted at this pass, and those released at it for any reason |
 | total admissions | the running total since the session started; a vehicle admitted again counts again |
 
@@ -2688,7 +2709,7 @@ session.run():
             alpha = i / R
             poses = interpolate(P_prev, P_next, alpha)    # along lane geometry, §6.4
             batch = []
-            for v in renderSet:
+            for v in renderSet where v in P_prev:         # one first in P_next is drawn from the next step, D3.6
                 batch += ApplyTransformCommand(v.actor, poses[v].transform)
                 batch += ApplyTargetVelocityCommand(v.actor, poses[v].velocity)
             if i == 0:
@@ -2777,8 +2798,8 @@ sequenceDiagram
     CLK->>SU: getDepartedIDList / getArrivedIDList / getCollisions
     SU-->>RS: lifecycle deltas for the step just simulated
 
-    RS->>RS: admit every vehicle newly seen, release every vehicle SUMO removed,<br/>with one step of lookahead
-    RS->>CC: pool check-out: SetSimulatePhysics false, SetEnableGravity false,<br/>first pose at full opacity, LIGHT STATE RESET (predecessor's is stale)
+    RS->>RS: admit every vehicle newly seen, to be drawn from its first frame, P(k+1) (D3.6),<br/>and release every vehicle SUMO removed, with one step of lookahead
+    RS->>CC: pool check-out for each vehicle first seen in P(k), the frame this step starts from:<br/>SetSimulatePhysics false, SetEnableGravity false,<br/>first pose at full opacity, LIGHT STATE RESET (predecessor's is stale)
     RS->>RS: record admission and release instants
 
     loop R world ticks (R = Δs / Δw)
@@ -3612,7 +3633,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.3** | One `apply_batch` per world tick carries every pose write; the tick is a separate `SendTickCueAsync` because `do_tick_cue` does not wait for the frame (G6). `apply_batch_sync` only for the admission batch. |
 | **D3.4** | A SUMO-driven actor is kinematic: physics off, gravity off, **collision response left on** so sensors still see it. |
 | **D3.5** | A pose-applied vehicle reports the velocity its driver supplies: `FVehicleActor::SetActorTargetVelocity` on a vehicle whose physics is disabled writes the pawn movement component's `Velocity` and the root's `ComponentVelocity` (candidate **e**), and the bridge sends an `ApplyTargetVelocityCommand` beside every `ApplyTransformCommand` and a zero one at check-in (§5.4). Vehicles with physics on, and every other actor, are unchanged. Candidate (b) is **verified impossible** (§5.3). Candidate (d) is a fallback for actors nobody drives; candidates (c) and (f) are not taken. |
-| **D3.6** | SUMO runs **one step ahead** of the rendered clock; every sub-step pose is interpolated between the two buffered frames **along the lane's own geometry**, never chordally. The SUMO step-length is the scenario's; the bridge reads it and does not change it. |
+| **D3.6** | SUMO runs **one step ahead** of the rendered clock; every sub-step pose is interpolated between the two buffered frames **along the lane's own geometry**, never chordally. A vehicle is drawn over a step only where SUMO reported it at both frames: **one SUMO inserts is drawn from the frame SUMO first reports it in, at that position and moving, and never before SUMO inserted it** (§6.3). The SUMO step-length is the scenario's; the bridge reads it and does not change it. |
 | **D3.7** | The reference-point shift uses the **CARLA front overhang** `b.x + e.x`, so the rendered front bumper sits exactly on SUMO's reference point. The catalogue must set each vType's `length`/`width` from the blueprint's bounding box, at **authoring** time. |
 | **D3.8** | Z, pitch and roll come from `CarlaClient.SampleDrapeGroundElevation`, sampled in the **CARLA** frame `(x_s, −y_s)`. `z_seat` per blueprint is **measured**, not computed from the bounding box. |
 | **D3.9** | Actors come from a **per-blueprint pool**, checked out on admission and in on release, and no pooled actor is destroyed during a session. The pool has **no ceiling**: it grows to what the scenario's population needs, spawning a body onto its own clear parking slot only when a vehicle needs one and none of its blueprint is parked, and no vehicle goes without a body for want of one (§8.2). |

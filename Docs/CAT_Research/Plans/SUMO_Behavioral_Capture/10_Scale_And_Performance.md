@@ -17,6 +17,7 @@
 | 2026-09-18 | Traffic-light state carries no RPC, batch or byte cost; network signal counts kept as SUMO behaviour inputs. |
 | 2026-09-21 | A subscription is charged inside the step unread, so the subscribed set is its own budget line (§4.5, `D10.6`). |
 | 2026-09-30 | Removed the render cap (`render_cap` 128, hard 192) and everything built on it: the render region and its radial-concentration analysis (§4.3.1, `D10.5`), the lead, lag and halo parameters (§8), and vehicle shedding (§7 rows 1–3, `shedding[]`, the rendered-fraction floor). The cap was never measured — M2 never ran — and the scenario is the only arbiter of population: every vehicle SUMO has is drawn, and a heavier scenario runs slower, never thinner. Added the compiled Bahonar scenario's measured population (§3.1.5); per-vehicle costs re-expressed against the measured populations; light-state cost taken from the whole-map rate; M2 redefined as the pace of a drive at Arapahoe's full population. |
+| 2026-10-01 | §4.3: a vehicle SUMO inserts is drawn from the frame SUMO first reports it in, where SUMO inserted it and moving, and on no frame before (`03` D3.6). |
 
 ---
 
@@ -795,8 +796,9 @@ that the co-simulation runtime can read it per window is this section's.
 ### 4.3 The render set — every vehicle SUMO has
 
 **There is no cap.** Every vehicle SUMO has during a capture window or its prewarm is drawn, from the
-frame after it is first seen until SUMO removes it or the window closes (`04` §4.2–4.4); parked vehicles
-are drawn too. The population is the scenario's, and it is measured: Bahonar's compiled scenario peaks at
+frame SUMO first reports it in until SUMO removes it or the window closes (`04` §4.2–4.4); parked
+vehicles are drawn too. One SUMO inserts is drawn first where SUMO inserted it, moving from then, and
+on no frame before (`03` D3.6). The population is the scenario's, and it is measured: Bahonar's compiled scenario peaks at
 **170** with a median of **42** (§3.1.5); Arapahoe Underpass peaks at **437** with a median of **336**
 (§3.2). The only vehicles SUMO has in a window that are not drawn are those whose vType has no measured
 body (`no_blueprint`, `unknown_extent`): they are simulated and their truth is recorded, and they are

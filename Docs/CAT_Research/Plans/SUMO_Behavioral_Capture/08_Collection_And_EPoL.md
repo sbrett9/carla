@@ -27,6 +27,7 @@ Findings set. Every external claim is cited.
 | 2026-09-30 | §3.4: a camera flown inside the driving process records its spans there, with the session's render set, which satisfies the co-location the render set depends on. |
 | 2026-09-30 | §3.4: a capture's pose is the camera's in the snapshot of its own frame, with the image header checked against it; the header carried the next frame's pose until the server stamped it at capture. |
 | 2026-09-30 | §5.7, §7.5, §8.4, §8.6, §10.2, §10.5, §12.2, §13, D8.5, D8.36: the render volume, its margin and the render-cap leak removed; D8.16a withdrawn. The cap (128, hard 192) was never measured — M2 never ran — and the scenario is the arbiter of population: every vehicle SUMO has is drawn, so a vehicle appears in frame only where SUMO inserts it, and a heavier scenario runs slower, never thinner. |
+| 2026-10-01 | §5.7: a vehicle SUMO inserts in view appears on the frame SUMO first reports it in, already moving, never on a frame before; measured live on Bahonar, it had appeared a step early, standing at its insertion point. |
 
 > **The boundary this section is written against.** This pipeline **labels; it never scores.** It does
 > not run a detector, a tracker or an EPoL model; it does not associate external model output to truth;
@@ -1603,8 +1604,10 @@ opacity**. Every vehicle SUMO has in a capture window is drawn ([`03`](03_CoSimu
 §8.3; a type with no measured body is the one exception, and is never drawn at all, §10.2), and the
 window's prewarm gives every body its place before the first captured frame (§4.7), so a body appears
 inside a frame only where SUMO inserts the vehicle and disappears only where SUMO removes it — at the
-start and at the end of its route. A vehicle SUMO inserts inside a camera's view appears there; that is
-the scenario's insertion, and nothing in the co-simulation moves it. This section owns what that does to
+start and at the end of its route. A vehicle SUMO inserts inside a camera's view appears there, on the
+frame SUMO first reports it in and already moving at the speed SUMO gave it, never on a frame before
+([`03`](03_CoSimulation_Runtime.md) D3.6); that is the scenario's insertion, and nothing in the
+co-simulation moves it. This section owns what that does to
 the imagery, because the failure is visible in the pixels and ends up in the tracks.
 
 **What the artefact does.** A vehicle that materialises inside a frame is a correct detection on the

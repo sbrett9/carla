@@ -29,10 +29,11 @@ namespace CarlaNet.CoSim;
 /// will when it drives.</para>
 ///
 /// <para><b>Every vehicle SUMO has is drawn.</b> The scenario is the only arbiter of population: a
-/// vehicle holds a body from the frame after SUMO first reports it until SUMO removes it or the
-/// session ends, parked vehicles included. Nothing here limits how many; a scenario heavier than the
-/// machine is comfortable with makes a synchronous run slower on the wall clock, never different in
-/// content.</para>
+/// vehicle holds a body from the frame SUMO first reports it in until SUMO removes it or the session
+/// ends, parked vehicles included. One SUMO inserts during the run is drawn first at the position SUMO
+/// first reported, moving from there, and never on a frame before SUMO inserted it. Nothing here
+/// limits how many; a scenario heavier than the machine is comfortable with makes a synchronous run
+/// slower on the wall clock, never different in content.</para>
 /// </remarks>
 public sealed class SumoDriveSession : IDisposable
 {
@@ -191,7 +192,11 @@ public sealed class SumoDriveSession : IDisposable
     /// </summary>
     public double WindowOpensAtSeconds { get; private set; }
 
-    /// <summary>The vehicles that would hold a rendered actor right now.</summary>
+    /// <summary>
+    /// The vehicles in the render set as of the SUMO frame last read, one step ahead of the rendered
+    /// clock: every vehicle SUMO has. One SUMO inserted at that frame holds its body from that frame
+    /// on, once the rendered clock reaches it.
+    /// </summary>
     public IReadOnlyCollection<string> RenderedVehicleIds => _renderSet.RenderedVehicleIds;
 
     /// <summary>
@@ -705,6 +710,12 @@ public sealed class SumoDriveSession : IDisposable
     /// Fast-forward SUMO to the window's start and buffer the first two frames, so every sub-step
     /// pose is interpolated between two known states rather than extrapolated from one.
     /// </summary>
+    /// <remarks>
+    /// Every vehicle SUMO has at the fast-forward's frame is subscribed there and delivers its state on
+    /// that frame, so each has both frames and is drawn on the first rendered frame. A vehicle SUMO
+    /// inserts in the step of lookahead after it has only the later frame, and is drawn from that one,
+    /// as any vehicle SUMO inserts later is.
+    /// </remarks>
     private void Prime()
     {
         while (_sumo.Time < _options.WarmUpToSimulatedSecond)
@@ -995,8 +1006,9 @@ public sealed class SumoDriveSession : IDisposable
             _collisionsReported.Add(pair);
             if (_collisions.TryGetValue(pair, out CollisionSpan open))
             {
-                // A vehicle admitted on the step its collision began is given its body on the next
-                // tick, so a body not yet named is named once the vehicle holds one.
+                // A vehicle SUMO inserted on the step its collision began is given its body only once
+                // the rendered clock reaches the frame it was inserted at, so a body not yet named is
+                // named once the vehicle holds one.
                 if (open.ColliderActor == 0 || open.VictimActor == 0)
                 {
                     _collisions[pair] = open with
@@ -1102,8 +1114,9 @@ public sealed class SumoDriveSession : IDisposable
     /// </summary>
     /// <remarks>
     /// Once per SUMO step, not per tick: the render set is decided when SUMO's state is read and holds
-    /// for the ticks the step is worth. A new record each time, replaced whole, so a reader between
-    /// two advances reads one pass.
+    /// for the ticks the step is worth, except that a vehicle the pass admits is drawn from the frame
+    /// the pass was made for, the first SUMO reports it in. A new record each time, replaced whole, so
+    /// a reader between two advances reads one pass.
     /// </remarks>
     private void PublishTheAdmissionPass()
     {
@@ -1134,15 +1147,21 @@ public sealed class SumoDriveSession : IDisposable
                 continue;
             }
 
+            // A vehicle with no earlier frame is one SUMO inserted in the step just read: admitted at
+            // the frame it first appears in, and drawn from that frame on, when the next step's ticks
+            // interpolate from it. The ticks before that frame are SUMO's last step without it, so it
+            // holds no body, writes nothing and is in no frame's render set for them.
+            if (!_previous.TryGetValue(vehicleId, out CoSimVehicleFrame from))
+            {
+                continue;
+            }
+
             if (!_binder.TryBind(to.TypeId, out VehicleExtent extent))
             {
                 Report.VehicleTicksWithNoMeasuredBody++;
                 continue;
             }
 
-            CoSimVehicleFrame from = _previous.TryGetValue(vehicleId, out CoSimVehicleFrame held)
-                ? held
-                : to;
             InterpolatedState state = _interpolator.Interpolate(from, to, fraction,
                                                                 Clock.SumoStepSeconds);
             Report.CountCase(state.Case);

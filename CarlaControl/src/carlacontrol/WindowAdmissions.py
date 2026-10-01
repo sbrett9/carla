@@ -5,7 +5,8 @@ The co-simulation session makes an admission pass once per SUMO step and hands e
 §8.8): the vehicles SUMO has -- every one of which is rendered -- and those admitted and released at
 the pass. A pass is made for the SUMO frame it names (`SimulatedTimeSeconds`), one step ahead of the
 last frame rendered, and its render set is what the next step renders: a pass for frame F governs
-the ticks from F - step up to F.
+the ticks from F - step up to F. The vehicles it newly admits are the exception: SUMO inserted them
+at F, and they are drawn from F on, never on those ticks.
 
 Two things are kept, and nothing else per pass, so a window with no end costs no memory:
 
