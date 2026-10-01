@@ -2,9 +2,10 @@
 
 The constraints every section of this plan was written under, kept as provenance rather than as a
 deliverable. [`00_Overview.md`](00_Overview.md) is the entry point; this file records the standing
-rules, the user's fixed decisions, the ground truth the team started from, and the two corrections
-issued mid-way (the retired `SCTMV.py` path, and the demotion of vehicle fade). Read it if you want
-to know *why* a section decided something the way it did, or before adding a section of your own.
+rules, the user's fixed decisions, the ground truth the team started from, and the three corrections
+issued along the way (the retired `SCTMV.py` path, the demotion of vehicle fade, and the removal of the
+render cap). Read it if you want to know *why* a section decided something the way it did, or before
+adding a section of your own.
 
 ---
 
@@ -427,11 +428,22 @@ case. Measured from the archive:
 
 Two consequences are load-bearing for the whole plan and every section should be written knowing
 them. First, **a seven-day simulation at one-second steps cannot be rendered frame-for-frame**; the
-set of SUMO vehicles is far larger than the set CARLA should ever instantiate, and the design needs
-an explicit, stated rule for which vehicles become CARLA actors and over what span of simulated time.
+design needs an explicit, stated rule for which spans of simulated time are rendered. Within a rendered
+span every vehicle SUMO has becomes a CARLA actor (below).
 Second, **a one-second SUMO step is far coarser than any usable capture rate**, so the relationship
 between the SUMO step, the CARLA fixed delta and the camera rate is a contract, not a configuration
 detail.
+
+### The render cap was fabricated, and is removed
+
+**Correction, 2026-09-30.** An earlier revision of the plan limited how many SUMO vehicles get a CARLA
+body — a render cap of 128 with a hard cap of 192 — and built a render region, priority tiers, eviction
+by capacity, the shedding of vehicles and a camera-footprint render set on it. The number was never
+measured: the measurement meant to justify it (doc 10's M2) never ran. All of it is removed. **SUMO's
+scenario is the only arbiter of population: every vehicle SUMO has during a rendered span is drawn,
+parked ones included. If the machine cannot keep up, the synchronous run is slower on the wall clock,
+never different in content.** The only vehicles in a window that are not drawn are those whose type
+names no measured blueprint; they are simulated and recorded, but never placed at a guessed size.
 
 ### A correction that invalidates citations in both source documents
 

@@ -7,6 +7,10 @@ was run.
 - 2026-09-18: scoped out model scoring; this pipeline labels, it never scores (brief §3b).
 - 2026-09-18: restored the live exercise to primary status; added unattended regeneration (brief §3c).
 - 2026-09-18: cyclic generation is driven and terminated externally, not judged by us (brief §3d).
+- 2026-09-30: removed the actor cap and the render volume — UC-7's cap-binding failure, cap-bound spans in
+  the handover, the render caps an operator chose. The cap was never measured (M2 never ran) and the
+  scenario is the arbiter of population: every vehicle SUMO has is drawn, and a heavier scenario runs
+  slower, never thinner.
 **Owner role:** Systems architect. Companion section: [01 — Architecture](01_Architecture.md), whose
 component names, modes and authority model this section uses without restating them.
 **Scope:** The actors, the use cases each one drives, and the four flows that carry the most risk drawn as
@@ -165,7 +169,7 @@ never starts a session, configures a run, loads a world, or calls anything.
 | Requirement | Where it lives |
 |---|---|
 | Know the corpus's illumination strata, to know what a training set is balanced over | Published corpus metadata: prevalence in three units **per illumination band**, with the band cut points recorded beside the numbers ([06 §5.3](06_Truth_And_Annotation.md)); handed over at UC-10 step 4; D2.19 |
-| Compute a denominator the capture cannot silently distort | Observability accounting: observed intervals gated first on rendered spans, published per sensor and unioned, with admissions, releases, refusals and cap-bound spans alongside ([06 §5.1](06_Truth_And_Annotation.md), [§10.4](06_Truth_And_Annotation.md)); handed over at UC-10 steps 4 and 5; D2.8 |
+| Compute a denominator the capture cannot silently distort | Observability accounting: observed intervals gated first on rendered spans, published per sensor and unioned, with admissions, releases and refused vehicle types alongside ([06 §5.1](06_Truth_And_Annotation.md), [§10.4](06_Truth_And_Annotation.md)); handed over at UC-10 steps 4 and 5; D2.8 |
 | Read it per illumination stratum as well as per sensor | Both breakdowns are published, and both are refused as a pooled aggregate (UC-10 failure flows) |
 
 The pattern is the same in all three rows: **we compute and publish the quantity a score would need; we
@@ -898,8 +902,9 @@ renders in daylight (brief §3a).
   unmirrored entity is invisible to every SUMO vehicle ([01 §5.2](01_Architecture.md)).
 - *The world does not deliver a cued frame* — session fault, stop, and the manifest records where. A
   capture that silently drops frames has a tick spacing its manifest misreports.
-- *The actor cap binds* — admissions are refused by priority, ambient first, and every refusal is recorded.
-  A demand-limited capture must be distinguishable afterwards from a quiet one.
+- *A vehicle's type names no measured blueprint* — the vehicle is simulated and its truth recorded, but
+  it is never drawn at a guessed size, and the refusal is counted per type with its reason. Every other
+  vehicle is drawn: a scenario heavier than the machine renders makes the run slower, never thinner.
 - *A capture window falls outside the scenario's end time* — refuse at session start rather than
   discovering an empty world at hour 170.
 
@@ -1338,16 +1343,13 @@ version recorded; a named recipient.
      ([06 §5.3](06_Truth_And_Annotation.md));
    - the run's solar record: the epoch, the derived civil date and time, the policy and rate, the
      solar-frame offset, any override, and the achieved sun (UC-7 step 10);
-   - the render-set accounting: admissions, releases, refusals and the spans in which the actor cap bound
+   - the render-set accounting: admissions, releases and refused vehicle types
      ([06 §10.4](06_Truth_And_Annotation.md)).
 5. **State what it does not contain**, as explicit rows rather than as an absence. This is the half a
    recipient cannot reconstruct and the half that decides whether their denominator is honest:
    - **intervals whose participants were never instantiated.** They are `not_rendered`, they are in the
      manifest, and they are not something anyone may count against a model. Only we can know which they
      were (D2.8);
-   - **spans where the actor cap bound.** While the cap binds, "was rendered" correlates with "is
-     annotated", so those spans are excluded from the training export and kept in the full one
-     ([06 §10.4](06_Truth_And_Annotation.md));
    - **windows retained as truth-only.** The sizing scenario's 23:00 window is exactly this case: the sun
      there is 38.1° to 79.5° below the horizon at 23:00 **on every date of the year**, so the window is
      kept for truth and the imagery regime it was meant to sample is re-placed onto 17:00–18:00
@@ -1603,7 +1605,7 @@ entry from UC-6 or an operator composing one directly. A running server is neede
    The surface shows the resulting sun elevation at the window's begin and, for an advancing policy, at
    its end — **so a night window is visibly a night window before a single actor is spawned**, and an
    override is visibly an override.
-5. Operator chooses the camera set, the seed, the render caps, the recorders, and whether a live TAK feed
+5. Operator chooses the camera set, the seed, the recorders, and whether a live TAK feed
    and the engine recorder run alongside.
 6. The surface composes one **run configuration** and validates it as a whole, re-running UC-5 including
    the epoch, reach, solar-frame and window-sanity checks against the values actually chosen — not against
@@ -1611,7 +1613,7 @@ entry from UC-6 or an operator composing one directly. A running server is neede
 7. Operator launches. The run configuration is handed to UC-7 (or UC-8) intact and is copied verbatim into
    the manifest, so what was launched is recoverable from the corpus without reading anyone's shell
    history.
-8. While the run is live, the surface shows health — render-set occupancy, refusal rate, frame delivery,
+8. While the run is live, the surface shows health — vehicles rendered, refusal rate, frame delivery,
    SUMO step budget — and the live solar readback, which costs nothing because `get_solar_state` reads the
    tick-paired world-observer cache with no RPC (`carlanet/__init__.py:1511-1533`; `CarlaClient.cs:1991`).
    The instrumentation behind the health figures is [10](10_Scale_And_Performance.md)'s; the surface
@@ -2013,7 +2015,7 @@ flowchart TB
 
     subgraph BRIDGE["RenderSetSelector and RenderedVehicleRegistry"]
         direction TB
-        R1["Reconcile the render set:<br/>window, render volume,<br/>annotated participants first"]
+        R1["Reconcile the render set:<br/>every vehicle SUMO has,<br/>inside the window"]
         R2["Bind and spawn at full opacity;<br/>record the admission tick"]
         R3["Destroy;<br/>record the release tick"]
         R4["Record admissions and refusals"]
@@ -2336,7 +2338,7 @@ flowchart TB
         E1["Training export:<br/>nothing a fielded system<br/>could not also have"]
         E2["Full export: truth, residuals,<br/>render-set accounting"]
         E3["Contents: observability spans,<br/>prevalence in 3 units per band,<br/>band cut points, solar record,<br/>admissions and refusals"]
-        E4["Omissions: not_rendered intervals,<br/>cap-bound spans, truth-only windows,<br/>no pedestrians, the kinematics caveat"]
+        E4["Omissions: not_rendered intervals,<br/>truth-only windows,<br/>no pedestrians, the kinematics caveat"]
         E5["The transfer rule and the<br/>association-quality format,<br/>as versioned contracts"]
     end
 
@@ -2370,9 +2372,9 @@ Five things this diagram is asserting:
 - **Every gate is a refusal to *hand over*, not a refusal to score.** The four conditions are the first
   draft's four refusals with their verb corrected; the conditions themselves were already right.
 - **Contents and omissions are two artifacts, not two paragraphs of an email.** `E3` is what the manifest
-  already carries; `E4` is the half nobody can reconstruct — `not_rendered` intervals, cap-bound spans, a
-  window kept as truth-only because the imagery was not viable. A recipient without `E4` reads a hole in
-  the corpus as a hole in reality.
+  already carries; `E4` is the half nobody can reconstruct — `not_rendered` intervals, a window kept as
+  truth-only because the imagery was not viable. A recipient without `E4` reads a hole in the corpus as a
+  hole in reality.
 - **The boundary is a single arrow and it points one way.** Nothing returns. There is no edge on which a
   recipient's findings about a model could arrive, which is the structural form of
   [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b.

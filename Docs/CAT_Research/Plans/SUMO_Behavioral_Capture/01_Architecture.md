@@ -7,7 +7,7 @@
 ownership of simulated civil time and of the world's illumination, the ownership of real-time pacing for
 a live exercise, the resolution of the conflict between
 [23](../../Findings/23_SUMO_Traffic_Integration.md) §4 and the accepted teleport decision, and the
-architectural answer to a simulation vastly larger than the renderable set.
+architectural answer to a simulation far longer than can be rendered.
 **Audience:** An engineer who has not read the conversation that produced this plan, and who will
 implement or review one of the other sections in this folder.
 **Grounding:** Every claim about existing behaviour is cited `path:line` against the working tree as read
@@ -24,6 +24,7 @@ cited is marked **inference**.
 | 3 — 2026-09-18 | Detect-and-track and EPoL model fixed as external; no evaluation or association component. |
 | 4 — 2026-09-18 | Live exercise a primary use case; real-time pacing owned by `PlaybackClock`. Adds D1.26–D1.29. |
 | 5 — 2026-09-28 | D1.4 and §4.3: a pose-applied body reports the SUMO velocity the bridge writes, measured. |
+| 6 — 2026-09-30 | §7, §9.2, §9.4, D1.14, §13: the render volume, the concurrent-actor cap and participant priority removed. The cap was never measured — M2 never ran — and the scenario is the arbiter of population: every vehicle SUMO has in a window is drawn, and a heavier scenario runs slower, never thinner. |
 
 **Out of scope, deliberately.** The per-tick mechanism of the co-simulation loop
 ([03](03_CoSimulation_Runtime.md)), the wire-level shape of any contract
@@ -1170,16 +1171,16 @@ already matched to the same tick at the source — only the client-side read is 
 stateDiagram-v2
     [*] --> Declared: flow or scheduled vehicle in the route file
     Declared --> Simulated: SUMO inserts it
-    Simulated --> Admitted: inside the render volume and the capture window, above the cap by priority
+    Simulated --> Admitted: inside a capture window or its prewarm
     Admitted --> Bound: VehicleTypeCatalogueBinder picks a blueprint by run seed
     Bound --> Rendered: spawned at full opacity, physics off, set down on the drape, light state applied from the first tick. Admission instant recorded
-    Rendered --> Released: leaves the render volume, or SUMO removes it. Actor destroyed, blueprint returned to the pool, release instant recorded
-    Released --> Simulated: still simulating, out of view
+    Rendered --> Released: SUMO removes it, or the capture window closes. Actor destroyed, blueprint returned to the pool, release instant recorded
+    Released --> Simulated: still simulating, between windows
     Released --> [*]: SUMO arrival or removal
 
     Simulated --> [*]: SUMO arrival or removal, never rendered
 
-    Admitted --> Simulated: admission refused, pool exhausted or no blueprint within tolerance
+    Admitted --> Simulated: its type names no measured blueprint
     Bound --> Simulated: spawn failed
 ```
 
@@ -1393,7 +1394,7 @@ That figure is an estimate offered to size the problem, not a result; bounding i
 ### 9.2 Where the reduction happens, and who owns it
 
 There is exactly one component that decides what CARLA instantiates: **`RenderSetSelector`**. It applies
-two independent reductions and one priority rule.
+one reduction, in simulated time, and none in space.
 
 **Temporal reduction — the capture window.** A capture covers a window of simulated time, not the whole
 authored span. The `PlaybackClock` reaches the window by stepping SUMO with nothing rendered at all, then
@@ -1403,23 +1404,19 @@ in civil time because that is what a pattern of life is
 organised around, and choosing it therefore chooses an illumination. §9.3 makes that consequence
 explicit. This is cheap because SUMO steps a network this size far faster than real time —
 `SumoCotBridge` already reports an achieved real-time factor for exactly this reason
-(`SumoCotBridge.py:165-168`, `:289-291`). It is also the reduction that does most of the work: the ratio
-between a seven-day span and a twenty-minute window is about 500 to 1, before any spatial filter runs.
+(`SumoCotBridge.py:165-168`, `:289-291`). It is also the only reduction: the ratio between a seven-day
+span and a twenty-minute window is about 500 to 1.
 
-**Spatial reduction — the render volume.** Within the window, a vehicle becomes an actor only inside the
-render volume: the union of every collection camera's footprint, expanded by a margin large enough that a
-vehicle is instantiated and settled before it could first be seen. With vehicles appearing at full
-opacity the margin has only one job — to keep an appearance from happening inside a frame — so it is
-derived from the approach speed and the settle time rather than tuned.
+**No spatial reduction.** Within the window every vehicle SUMO has is an actor, wherever it is and
+whether it is moving or parked. SUMO's scenario is the only arbiter of population: a scenario heavier
+than the machine can render at the capture rate makes the synchronous run slower on the wall clock, never
+different in content. An annotated participant is drawn because every vehicle is; nothing ranks it above
+ambient traffic, so nothing can drop it.
 
-**Priority, not exemption.** Participants of an annotated pattern instance rank above ambient vehicles
-when the concurrent-actor cap binds. They are not exempt from the render volume — a vehicle outside every
-footprint cannot be seen and rendering it buys nothing — but they are never displaced by ambient traffic
-inside it. Without this, a busy hour silently drops the very vehicles the capture exists to record.
-
-**And it is recorded.** Every admission and every refusal is a fact about the corpus, so both go to the
-run manifest. A refusal is the only evidence that a capture was demand-limited rather than
-content-limited, and it is invisible in the imagery.
+**And it is recorded.** Every admission and every release is a fact about the corpus, so both go to the
+run manifest. The only vehicles in a window that are not drawn are those whose type names no measured
+blueprint; each is still simulated, its truth is recorded, and the refusal is counted per type with its
+reason ([04](04_Contracts.md) §4.5).
 
 ### 9.3 Where a window lands is an illumination choice, and it should be visible as one
 
@@ -1484,12 +1481,13 @@ long run starts, is [12](12_Operator_Control_Surface.md)'s.
 
 Stated as properties, not as a design:
 
-1. **A measured concurrent-actor bound** at the capture rate, for one camera and for N, at which the world
-   still delivers every cued frame within the clock's budget. `RenderSetSelector`'s cap is that number;
-   the architecture does not choose it.
+1. **The measured pace at the scenario's full population** — ticks per wall-second at the capture rate,
+   for one camera and for N, with every vehicle the scenario has drawn — because that is what a capture
+   window costs in wall clock. It is information for the budget, not a bound: nothing caps the vehicles
+   drawn.
 2. **A measured per-vehicle per-tick cost** decomposed into pose application, positional truth computation
    and occlusion sampling, because those three scale differently in the number of cameras and the
-   selector needs to know which one binds first.
+   budget needs to know which grows fastest.
 3. **A measured cost of one SUMO step** at Bahonar scale, and of the bulk subscription read, so the clock
    knows whether a SUMO step fits inside a world tick or must be overlapped with the render.
 4. **A measured headless step rate**, which sets what a capture window's lead-in costs and therefore
@@ -1497,9 +1495,9 @@ Stated as properties, not as a design:
 5. **A statement of whether `apply_batch`** (`CarlaClient.cs:1779-1785`) applies a batch of transforms
    atomically with respect to a frame, because if it does not, a large render set can straddle a frame
    boundary and half the vehicles in a capture will be one tick stale.
-6. **The marginal per-tick cost of the light commands** that §8.5 adds to the same batch, at the render
-   cap and in the worst case for change frequency, which is stop-and-go traffic where brake lamps toggle
-   constantly. The architecture's claim is that this adds entries to an existing batch rather than a new
+6. **The marginal per-tick cost of the light commands** that §8.5 adds to the same batch, at the
+   scenario's full population and in the worst case for change frequency, which is stop-and-go traffic
+   where brake lamps toggle constantly. The architecture's claim is that this adds entries to an existing batch rather than a new
    round trip; the size of that addition is a measurement, not an argument.
 7. **Whether a night window costs the same as a day window.** Render cost at very low sun is not
    obviously equal to render cost at noon — shadow, sky and tile-streaming behaviour all change — and
@@ -1677,7 +1675,7 @@ on opacity.
 | D1.11 | **This architecture designs no fade behaviour.** A vehicle admitted to the render set appears at full opacity and a released one disappears. `RenderedVehicleRegistry` owns existence, not appearance. What the capture records is the admission and release **tick**, which delimits the rendered span of D1.15; it is an instant, not a visual transition (§7, §8.2, §11) |
 | D1.12 | **The default deployment is one `CaptureSessionHost` process holding the clock, the bridge and every camera's recorder.** Extra camera processes are permitted and are tick followers. The shim's one-recorder-per-`World` limit (`carlanet/__init__.py:1908,1924`) is a defect to fix, not a reason to fan out (§3.4) |
 | D1.13 | **The SUMO step, the world delta and the capture rate are an integer-ratio contract validated at session start**, and the bridge runs SUMO one step ahead so sub-step pose is interpolated rather than stepped (§6.1) |
-| D1.14 | **`RenderSetSelector` is the single place the size reduction happens**, and it reduces twice — a capture window in simulated time, and a render volume in space — with annotated participants prioritised over ambient traffic under the cap, and every refusal recorded in the manifest (§9.2) |
+| D1.14 | **`RenderSetSelector` reduces once, in simulated time: the capture window.** Inside a window every vehicle SUMO has is drawn — no render volume, no cap, no priority — and every admission and release is recorded in the manifest (§9.2) |
 | D1.15 | **A rendered-span gate sits upstream of doc 20's observed-span gate.** An annotated interval can fail to be observable because nothing rendered the participant or because nothing saw it, and both must be recorded per interval (§7) |
 | D1.16 | **Pose application and the control-loop shape of [23 §4.1](../../Findings/23_SUMO_Traffic_Integration.md) are two actuation strategies behind one bridge**, not two systems. Playback is built first; the actuated strategy is retained as the tracking oracle and as the path to believable storyboard coupling (§8.4) |
 | D1.17 | **The losses of pose application are named and bounded to this mode**: collision response, suspension dynamics, and the staging spawn model. SUMO collision warnings are recorded into the manifest as corpus-affecting events. The other modes retain all three (§8.3, §11) |
@@ -1701,14 +1699,10 @@ on opacity.
    [09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md)'s measurement that a vehicle is about three
    pixels long at 1.1 km. That is an argument, not a measurement of *this* question. The cheap experiment
    is one scene captured twice — physics-driven and pose-applied along the same path — and the detector run
-   over both. Recommend running it before the render-set cap is tuned, because the answer decides whether
+   over both. Recommend running it before the first corpus is captured, because the answer decides whether
    the actuated strategy of §8.4 is optional or necessary.
-2. **How large must the render-volume margin be?** With vehicles appearing at full opacity the margin only
-   has to keep an appearance out of frame, so it is derived from approach speed and settle time rather
-   than from a dissolve duration. Options: a fixed margin sized for the fastest road class in the network,
-   or a per-vehicle lead time computed from that vehicle's own speed. Recommend the second — it is no
-   harder and it does not pay freeway margin for a service road. Note the answer is smaller than it
-   would be with a dissolve, which is a second way the fade being off buys actor slots.
+2. *Withdrawn 2026-09-30.* There is no render volume, so there is no margin to size: every vehicle
+   SUMO has in a window is drawn.
 3. **Where does the capture window come from?** Either the author declares it in the scenario package, or
    the capture operator chooses it at session start. Both are wanted for different reasons: an annotated
    pattern instance implies a window, and an operator wants to capture an arbitrary hour of ambient life.
