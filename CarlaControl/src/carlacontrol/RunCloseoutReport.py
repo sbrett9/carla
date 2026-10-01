@@ -28,14 +28,12 @@ tree does not publish is recorded as `skipped` with the reason, so *not measured
 | `solar.applied_equals_confirmed` | the audit's worst angle between the world's sun and the declared one, against its tolerance | measured where the policy binds the sun |
 | `launch.warnings_adjudicated` | warnings raised with no adjudication, threshold 0 | measured |
 | `capture.captured_minus_written` | -- | skipped: the recorder counts no capture accepted into its queue |
-| `render_accounting.rendered_fraction` | -- | skipped: the session publishes no rendered fraction |
 | `radiometry.profile_digest_present` | -- | skipped: nothing reads back the profile a camera loaded |
 | `supervision.manifest_closing_record` | -- | skipped: no run manifest is written |
 
-**Two loud conditions are observable** (D12.15): a recorder's `Dropped` becoming non-zero, and -- in a
-live run -- the achieved factor falling below its floor. The other two D12.15 names (a participant in
-an open annotated interval refused admission; the rendered fraction below its floor) read quantities
-nothing in the tree publishes.
+**One loud condition interrupts every run** (D12.15): a recorder's `Dropped` becoming non-zero; a live
+run adds the achieved factor falling below its floor. A participant is always drawn, because every
+vehicle SUMO has is drawn, so nothing else interrupts.
 """
 from __future__ import annotations
 
@@ -53,8 +51,6 @@ SKIPPED = {
     "capture.captured_minus_written": ("captures accepted but not written",
                                        "the recorder counts no capture accepted into its encode "
                                        "queue, only captures written and dropped"),
-    "render_accounting.rendered_fraction": ("rendered fraction against its floor",
-                                            "the session publishes no rendered fraction"),
     "radiometry.profile_digest_present": ("the loaded post-process profile is digested",
                                           "nothing reads back which profile a camera loaded"),
     "supervision.manifest_closing_record": ("the run manifest's closing record",

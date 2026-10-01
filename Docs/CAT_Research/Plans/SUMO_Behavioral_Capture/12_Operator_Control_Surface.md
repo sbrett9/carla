@@ -869,7 +869,9 @@ ready before the window opened (`readiness`: the ceilings, where the wait began,
 frame, ticks and wall clock at which its tiles were in, the frame, ticks and frames at which its
 picture settled and the residual, the blocks rendered vehicles took out of that comparison and the
 share of the view judged, how many comparisons were judged and how many could not be and why, where a
-witness stood if it did not finish, and any return of the tiles to streaming; §6.3), the gate
+witness stood if it did not finish, and any return of the tiles to streaming; §6.3), the window's
+population (`admissions`: the vehicles SUMO had, every one drawn, at the pass the window opened on, and
+over the passes inside the window how many there were and the largest population at one), the gate
 records, the session's clock, SUMO release, pace,
 sun and layers, its compile lock — whether the scenario was compiled, the SUMO release that routed it
 and the world it was compiled for — and whether SUMO could teleport a blocked vehicle, the prewarm's

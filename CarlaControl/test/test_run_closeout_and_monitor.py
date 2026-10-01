@@ -149,8 +149,8 @@ def test_an_unmeasured_gate_is_skipped_with_its_reason_never_passed(layout):
     report, session, _ = closeout(layout)
     session.Advance()
     gates = report.gates(report.snapshot(), 0)
-    for gate_id in ("capture.captured_minus_written", "render_accounting.rendered_fraction",
-                    "radiometry.profile_digest_present", "supervision.manifest_closing_record"):
+    for gate_id in ("capture.captured_minus_written", "radiometry.profile_digest_present",
+                    "supervision.manifest_closing_record"):
         record = gate(gates, gate_id)
         assert record["status"] == "skipped" and record["met"] is None and record["skip_reason"]
 

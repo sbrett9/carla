@@ -9,8 +9,7 @@ closes. So it can be started before, during or after a drive (run_sumo_drive.py)
 while the drive owns the clock: frames arrive at the drive's tick rate while it runs, and at the
 server's own rate when nothing does.
 
-A drive renders vehicles only inside its region (its --region-x, --region-y and --region-radius), so
-fly there to see traffic.
+A drive renders every vehicle SUMO has, so traffic is wherever the scenario puts it.
 
 Controls (hold RIGHT MOUSE to fly):
     RMB + mouse   look around
