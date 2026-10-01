@@ -16,7 +16,8 @@ namespace CarlaNet.CoSim;
 ///
 /// <para>The pass decides the render set for the SUMO frame the session has just read, which is one
 /// step ahead of the frame the world last rendered (the lookahead), so
-/// <see cref="SimulatedTimeSeconds"/> is that frame's instant.</para>
+/// <see cref="SimulatedTimeSeconds"/> is that frame's instant. A vehicle the pass admits is drawn from
+/// that instant on, at the position SUMO first reported, and on no frame before it.</para>
 /// </remarks>
 /// <param name="WorldTick">World ticks the session had rendered when the pass was made.</param>
 /// <param name="SimulatedTimeSeconds">The SUMO frame the pass decided the render set for.</param>
@@ -26,7 +27,8 @@ namespace CarlaNet.CoSim;
 /// <see cref="CoSimRunReport.VehicleTicksWithNoMeasuredBody"/> counts the difference.
 /// </param>
 /// <param name="NewlyAdmitted">
-/// Vehicles that took up a place at this pass: the ones SUMO inserted since the pass before.
+/// Vehicles that took up a place at this pass: the ones SUMO inserted since the pass before, each
+/// drawn from <see cref="SimulatedTimeSeconds"/>, the frame SUMO first reports it in.
 /// </param>
 /// <param name="Released">Vehicles that gave one up at this pass, for any reason.</param>
 /// <param name="TotalAdmissions">Admissions since the session started.</param>

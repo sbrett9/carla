@@ -35,18 +35,16 @@ public sealed class SumoDriveSessionLampTests
         List<CoSimPoseRecord> poses = [];
         SumoDriveSessionOptions options = Driving(world, carla, Noon());
         options.OnPose = poses.Add;
-        double step;
 
         using (SumoDriveSession session = SumoDriveSession.Start(options))
         {
-            for (int advanced = 0; advanced < 400 && session.Advance(); advanced++)
+            for (int step = 0; step < 400 && session.Advance(); step++)
             {
             }
 
             _output.WriteLine(session.Report.ToString());
             Assert.False(session.Report.Headlights!.OnAtStart);
             Assert.Equal(0, session.Report.Headlights.Switches);
-            step = session.Clock.SumoStepSeconds;
         }
 
         // What SUMO signalled, frame by frame, running the same scenario and seed alone.
@@ -56,15 +54,10 @@ public sealed class SumoDriveSessionLampTests
         Assert.NotEmpty(bodies);
         foreach (CoSimPoseRecord record in bodies)
         {
-            // The frame a pose is rendered from is SUMO's at the tick's instant -- or, on the step
-            // before the frame SUMO first reports a vehicle in, that first frame, where the vehicle is
-            // first drawn.
-            string vehicle = record.Pose.VehicleId;
-            SumoVehicleSignals given = signalled.TryGetValue((Millisecond(record.SimulatedTimeSeconds), vehicle),
-                                                             out SumoVehicleSignals atTheTick)
-                ? atTheTick
-                : signalled[(Millisecond(record.SimulatedTimeSeconds + step), vehicle)];
-            Assert.Equal(given, record.Signals);
+            // The frame a pose is rendered from is SUMO's at the tick's instant, a vehicle's first
+            // included: no vehicle is drawn on a tick before the frame SUMO first reports it in.
+            Assert.Equal(signalled[(Millisecond(record.SimulatedTimeSeconds), record.Pose.VehicleId)],
+                         record.Signals);
             Assert.Equal(VehicleLampMapping.FromSumo(record.Signals), record.Lamps);
         }
 

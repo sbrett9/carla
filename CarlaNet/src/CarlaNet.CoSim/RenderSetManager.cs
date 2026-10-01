@@ -10,7 +10,8 @@ namespace CarlaNet.CoSim;
 /// wall clock, never thinner in content.</para>
 ///
 /// <para>Nothing here spawns, destroys or moves an actor. The manager says which vehicles a pool
-/// would be checked out for; what is done about it is the driving stage's.</para>
+/// would be checked out for; what is done about it, and from which frame, is the driving stage's,
+/// which draws a vehicle admitted at a step from that step's frame on.</para>
 /// </remarks>
 public sealed class RenderSetManager
 {
