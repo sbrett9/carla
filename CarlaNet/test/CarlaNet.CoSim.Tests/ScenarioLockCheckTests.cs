@@ -232,15 +232,27 @@ public sealed class ScenarioLockCheckTests
     }
 
     [Fact]
-    public void TheShippedGeneratedScenarioHasNoLockAndRunsAsUncompiled()
+    public void TheShippedArapahoeScenarioIsTheOneItsLockBinds()
     {
+        // Arapahoe's generator writes a specification and compiles it into Import/, lane closure and
+        // all; the session reads that lock as it reads Gardnerville's.
         string scenario = RepositoryFile("Import", "Arapahoe_I25_UnderpassDwell.sumocfg");
+        JsonNode specification = JsonNode.Parse(File.ReadAllText(
+            RepositoryFile("Import", "Arapahoe_I25_UnderpassDwell.scenario.json")))!;
+        SolarEpoch epoch = SolarEpoch.FromJson(specification["epoch"]!.ToJsonString());
 
-        ScenarioLockCheck check = ScenarioLockCheck.Require(scenario, CompiledFixture.Catalogue,
-                                                            SolarLeaseTests.PortEpoch());
+        ScenarioLockCheck check = ScenarioLockCheck.Require(scenario, CompiledFixture.Catalogue, epoch);
 
-        Assert.False(check.Compiled);
-        Assert.Contains("an uncompiled scenario", check.ToString());
+        _output.WriteLine(check.ToString());
+        _output.WriteLine(check.WorldText);
+        Assert.True(check.Compiled);
+        Assert.True(check.EpochCompared);
+        Assert.Equal("Arapahoe_I25_UnderpassDwell", check.Lock!.ScenarioId);
+        Assert.Equal(epoch.Digest, check.Lock.EpochDigest);
+        Assert.Equal("1.27.0", check.Lock.RoutedByRelease);
+        Assert.Equal("Arapahoe_I25.cwp", check.Lock.WorldPackage);
+        Assert.StartsWith("ac83aa8b", check.Lock.WorldNetworkFingerprint);
+        Assert.Equal("-1", check.Lock.TimeToTeleport);
     }
 
     private static CoSimSessionRefusedException Refusal(CompiledFixture compiled) =>
