@@ -20,7 +20,7 @@
     },
     "network": {
       "path": "Arapahoe_I25.net.xml",
-      "sha256": "193b6d55c90a8edf5ff065329080ec2da1168861688de381375955bcdcfce984"
+      "sha256": "11e2bba84b33514e37249ce67d05275df7d9166ea4685c4ddeaa5ce5b29e16ba"
     },
     "additional": {
       "path": "Arapahoe_I25_UnderpassDwell.add.xml",
@@ -71,7 +71,7 @@
       "true"
     ],
     "netconvert_version": "Eclipse SUMO netconvert 1.27.0",
-    "opendrive_sha256": "fe3e30adee09d6e2d9142513752ebcba75a595f48d193f2288b0c2a977c9fbd1",
+    "opendrive_sha256": "b6bb52668042454cc936e23ada2e8692a3759bd7ac17b1281937b895736614bb",
     "source_osm_sha256": "f366f0d0e615ad4a663d93d672b8a95589ed3d8e58bdb60b146a423aabf2cecc",
     "origin_latitude": 39.59431,
     "origin_longitude": -104.88449,
