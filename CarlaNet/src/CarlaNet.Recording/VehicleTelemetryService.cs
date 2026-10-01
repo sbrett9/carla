@@ -1,6 +1,7 @@
 using CarlaNet.Transport;
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Actors;
+using CarlaNet.Types.Streaming;
 
 namespace CarlaNet.Recording;
 
@@ -12,6 +13,13 @@ namespace CarlaNet.Recording;
 /// `hae` is the BARE-EARTH ellipsoidal-WGS84 altitude: the per-vehicle physical altitude with the
 /// photoreal-seating bias removed (a constant offset in 'area'/'origin' modes, or the per-cell drape
 /// offset in 'drape' mode), matching the documented telemetry contract.
+///
+/// During a SUMO drive the world's vehicle actors are a pool of bodies, each lent to a SUMO vehicle
+/// while it is drawn and parked out of sight between loans. The session names each body to the
+/// server as it lends it and gives it back, and every world-observer snapshot carries what it named
+/// (<see cref="ObservedRenderSet"/>), so the truth here -- the live pull of any process as much as a
+/// recorder beside the session -- leaves out a body parked on the frame it describes and names a lent
+/// one by its SUMO vehicle. An actor no session named is reported as it always was.
 /// </summary>
 public sealed class VehicleTelemetryService
 {
@@ -43,19 +51,38 @@ public sealed class VehicleTelemetryService
     /// it, otherwise the nearest it does hold, so a caller can record what it got rather than assume.
     /// </summary>
     public IReadOnlyList<VehicleTelemetry> Compute(GeoLocation origin, ulong? frame, out ulong telemetryFrame)
+        => Compute(origin, frame, out telemetryFrame, out _);
+
+    /// <summary>
+    /// Truth as <see cref="Compute(GeoLocation, ulong?, out ulong)"/> answers it, and the render set
+    /// the records' own frame carried: <see cref="ObservedRenderSet.None"/> where it carried none, so
+    /// the records are every vehicle actor, and otherwise the set they were cut to and named from.
+    /// </summary>
+    /// <remarks>
+    /// Where no frame is asked for and the newest snapshot carries a render set -- a SUMO drive -- the
+    /// records are read from that newest retained frame rather than the actor cache, so a body's pose
+    /// and its naming always come from one frame: a body is lent or given back between two ticks, and
+    /// the cache is refreshed in place while it is read.
+    /// </remarks>
+    public IReadOnlyList<VehicleTelemetry> Compute(GeoLocation origin, ulong? frame, out ulong telemetryFrame,
+                                                   out ObservedRenderSet renderSet)
     {
         IReadOnlyDictionary<ActorId, ActorSnapshot>? atFrame = null;
         telemetryFrame = 0;
+        renderSet = ObservedRenderSet.None;
         if (frame.HasValue)
-            atFrame = _client.GetSnapshotFrame(frame.Value, out telemetryFrame);
+            atFrame = _client.GetSnapshotFrame(frame.Value, out telemetryFrame, out renderSet);
+        else if (!_client.GetCachedRenderSet().IsEmpty)
+            atFrame = _client.GetSnapshotFrame(_client.LatestObservedFrame, out telemetryFrame, out renderSet);
         if (atFrame is null)
             telemetryFrame = _client.LatestObservedFrame;
         IReadOnlyList<ActorId> ids = atFrame is not null ? atFrame.Keys.ToArray() : _client.GetCachedActorIds();
 
         // Refresh descriptions only for actors we have not seen (RPC once per new actor, not per call).
+        // A parked body is never reported, so its description waits until it is lent.
         List<ActorId>? unknown = null;
         foreach (var id in ids)
-            if (!_meta.ContainsKey(id))
+            if (!_meta.ContainsKey(id) && !renderSet.IsParked(id))
                 (unknown ??= new List<ActorId>()).Add(id);
         if (unknown is { Count: > 0 })
         {
@@ -76,6 +103,9 @@ public sealed class VehicleTelemetryService
         var outp = new List<VehicleTelemetry>(ids.Count);
         foreach (var id in ids)
         {
+            // A body a SUMO drive's pool had parked on this frame stands out of sight below the
+            // ground, drawn for nobody: not a vehicle in the scene, so not reported.
+            if (renderSet.IsParked(id)) continue;
             if (!_meta.TryGetValue(id, out var meta)) continue;
             string typeId = meta.Description.Id;
             if (!typeId.StartsWith("vehicle.", StringComparison.Ordinal)) continue;
@@ -132,6 +162,11 @@ public sealed class VehicleTelemetryService
                 // a projected bounding box — works from the same pose this record was built from.
                 ActorTransform = snap.Transform,
                 BoundingBox = meta.BoundingBox,
+                // The SUMO vehicle a lent body was drawn for on this frame, so the record names the
+                // vehicle rather than the body, which carries a succession of them over a run.
+                Rendered = renderSet.TryGetLent(id, out var lent)
+                    ? new RenderedVehicle(id, lent.VehicleId, lent.VehicleTypeId, lent.AdmittedFrame)
+                    : null,
             });
         }
         // Drop cached descriptions for actors no longer present so this cache tracks the live world too

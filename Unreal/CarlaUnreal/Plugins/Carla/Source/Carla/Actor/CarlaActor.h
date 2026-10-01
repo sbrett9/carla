@@ -8,6 +8,7 @@
 
 #include "Carla/Actor/ActorInfo.h"
 #include "Carla/Actor/ActorData.h"
+#include "Carla/Actor/RenderSetMembership.h"
 #include "Carla/Vehicle/CarlaWheeledVehicle.h"
 #include "Carla/Walker/WalkerController.h"
 #include "Carla/Traffic/TrafficLightState.h"
@@ -146,6 +147,18 @@ public:
   carla::rpc::AttachmentType GetAttachmentType() const
   {
     return Attachment;
+  }
+
+  /// Where a co-simulation session's body pool holds this actor, if a session has named it. Kept
+  /// on this record, whether the actor is awake or dormant, until the actor is destroyed.
+  const FRenderSetMembership &GetRenderSetMembership() const
+  {
+    return RenderSetMembership;
+  }
+
+  void SetRenderSetMembership(const FRenderSetMembership &InMembership)
+  {
+    RenderSetMembership = InMembership;
   }
 
   void BuildActorData();
@@ -458,6 +471,8 @@ private:
   carla::rpc::AttachmentType Attachment = carla::rpc::AttachmentType::INVALID;
 
   TArray<IdType> Children;
+
+  FRenderSetMembership RenderSetMembership;
 
 protected:
 

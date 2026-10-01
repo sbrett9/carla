@@ -50,12 +50,16 @@ internal sealed class WorldConnectionGuard : ICarlaWorld
         Guard(nameof(WriteSettings), () => _world.WriteSettings(settings));
 
     /// <inheritdoc/>
-    public ActorId Spawn(string blueprintId, Transform at) =>
-        Guard(nameof(Spawn), () => _world.Spawn(blueprintId, at));
+    public ActorId Spawn(string blueprintId, Transform at, string roleName) =>
+        Guard(nameof(Spawn), () => _world.Spawn(blueprintId, at, roleName));
 
     /// <inheritdoc/>
     public IReadOnlyList<CommandResponse> ApplyBatch(IReadOnlyList<Command> commands) =>
         Guard(nameof(ApplyBatch), () => _world.ApplyBatch(commands));
+
+    /// <inheritdoc/>
+    public RenderSetWrite WriteRenderSet(IReadOnlyList<LentBody> lent, IReadOnlyList<ActorId> parked) =>
+        Guard(nameof(WriteRenderSet), () => _world.WriteRenderSet(lent, parked));
 
     /// <inheritdoc/>
     public Transform? ObservedTransform(ActorId actor) =>

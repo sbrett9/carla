@@ -5,6 +5,11 @@
 [../Discussions/2026-06-12_Telemetry_Serving_Options.md](../Discussions/2026-06-12_Telemetry_Serving_Options.md).
 **Datum:** ellipsoidal WGS84 (HAE) — `project_datum_decision`.
 
+> **Revision (2026-10-01):** During a SUMO drive the live pull (`get_vehicle_telemetry`), and so the
+> live CoT feed and a recorder in any process, lists only the bodies each frame drew, each named by
+> its SUMO vehicle, and no parked body — from the render set the server now carries on every
+> world-observer snapshot (§5.2). A SUMO-driven body's `role_name` is `sumo` (§5).
+
 ## 1. Purpose
 
 One CoT event schema emitted by **both** producers so they are directly comparable in WinTAK and in a
@@ -47,7 +52,7 @@ Same shape ⇒ truth-vs-detection scoring is a direct diff (position error, clas
 | Field | Convention |
 |---|---|
 | `version` | CoT `2.0` |
-| `uid` | stable per (source, track). TRUTH: `CARLA-TRUTH-<actor_id>`. DETECTION: `CARLA-DET-<track_id>`. (Scoring associates truth↔detection by position/time, **not** uid.) In a SUMO drive, where a pooled actor renders a succession of SUMO vehicles, the track is the SUMO vehicle: TRUTH `CARLA-TRUTH-SUMO-<sumo_id>` (§5.2). |
+| `uid` | stable per (source, track). TRUTH: `CARLA-TRUTH-<actor_id>`. DETECTION: `CARLA-DET-<track_id>`. (Scoring associates truth↔detection by position/time, **not** uid.) In a SUMO drive, where a pooled actor renders a succession of SUMO vehicles, the track is the SUMO vehicle: TRUTH `CARLA-TRUTH-SUMO-<sumo_id>` (§5.2), in the recorded sidecar and on the live feed alike. |
 | `type` | 2525 CoT atom type — §4 |
 | `how` | TRUTH `m-g` (machine/GPS). DETECTION `m-f` (machine/fused) so the provenance differs. |
 | `time`/`start` | generation instant, ISO-8601 UTC ("Zulu"), millisecond precision |
@@ -93,7 +98,12 @@ detail children. Attributes: `source` (`truth`|`detection`), `actor_id`, `type_i
 raw `vx`/`vy`/`vz`. (Detection fills what it can: `source="detection"`, confidence, predicted class.)
 In a SUMO drive a recorded sidecar adds, per vehicle, `sumo_id` (the SUMO vehicle the body rendered
 on that frame), `vtype_id` (its declared vType) and `admitted_tick` (the first frame of its current
-rendered span); `actor_id` is then the body that drew it on that frame (§5.2).
+rendered span); `actor_id` is then the body that drew it on that frame (§5.2). The live pull's
+records carry the same three, as `sumo_id`, `vtype_id` and `admitted_tick` keys, and the live CoT
+emitters (`CotUdpEmitter`, `cot_telemetry.py`) write them into `_carla` (2026-10-01). A SUMO-driven
+body's `role_name` is `sumo`, the authority that drives it
+([04 D4.9](../Plans/SUMO_Behavioral_Capture/04_Contracts.md)); traffic-manager traffic reads
+`autopilot`.
 
 ### 5.1 Occlusion (recorded captures only)
 
@@ -134,8 +144,22 @@ SUMO vehicle while it is rendered and parked out of sight, about 300 m below the
 exactly the bodies its frame drew, as the session publishes them per frame, each named by its SUMO
 vehicle, and marks its container `vehicles="rendered"`; a parked body is not reported. A frame whose
 set is no longer held lists none and says `vehicles="unknown"`, which is not a claim that the scene
-was empty (03 §8.9). A run with no render set is reported as above, unchanged. The live pull
-(`get_vehicle_telemetry`) has no render set, and during a SUMO drive still returns the parked bodies.
+was empty (03 §8.9). A run with no render set is reported as above, unchanged.
+
+**Every other reader gets the same set from the server (2026-10-01).** The session names each body
+to the server as it lends it and as it gives it back, before the tick cue of the frame the change is
+drawn in, and the world observer carries every named body on each snapshot
+([03 §8.9, D3.39](../Plans/SUMO_Behavioral_Capture/03_CoSimulation_Runtime.md)). So the live pull
+(`get_vehicle_telemetry`) of any process — the live CoT feed, `cot_telemetry.py`, CarlaControl's
+`TelemetryController` — lists only the bodies its frame drew, each with its `sumo_id`, `vtype_id`
+and `admitted_tick`, and no parked body; it reads the newest frame's actors and render set together,
+so a body lent or given back between two ticks is never paired with the other frame's naming. A
+recorder with no source of its own writes the same set and says `vehicles="rendered"`. Only bodies a
+session named are left out, and the server holds the naming on each body's own record, so it ends
+when the session destroys its bodies; a world no session has named a body in — traffic-manager
+traffic, scenario entities — is reported exactly as above. Against a server built before this, the
+session records the server's refusal on its report and the live pull lists every vehicle actor, as
+it did before.
 
 ## 6. Producers
 

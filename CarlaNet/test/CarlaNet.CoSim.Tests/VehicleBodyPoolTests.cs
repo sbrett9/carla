@@ -120,4 +120,25 @@ public sealed class VehicleBodyPoolTests
         Assert.Single(world.Spawned);
         Assert.Equal(1, pool.HeldBodies);
     }
+
+    [Fact]
+    public void EveryBodyIsSpawnedAsSumoDrivenAndNotAsTheTrafficManagersTraffic()
+    {
+        // role_name is provenance (doc 04 D4.9): left to the blueprint's default, every body read
+        // "autopilot", and the truth record named the traffic manager as the driver of every SUMO
+        // vehicle -- 152 of 152 in a Bahonar sidecar.
+        var world = new RecordedWorld();
+        var pool = new VehicleBodyPool(world, Parking);
+
+        pool.CheckOut("first", "vehicle.dodge.charger");
+        pool.CheckOut("second", "vehicle.lincoln.mkz");
+        pool.TryCheckIn("first", out _);
+        pool.CheckOut("third", "vehicle.dodge.charger");
+        pool.CheckOut("fourth", "vehicle.dodge.charger");
+
+        Assert.Equal("sumo", VehicleBodyPool.RoleName);
+        Assert.Equal(3, world.Spawned.Count);
+        Assert.Equal(world.Spawned.Count, world.SpawnedRoleNames.Count);
+        Assert.All(world.SpawnedRoleNames, role => Assert.Equal("sumo", role));
+    }
 }

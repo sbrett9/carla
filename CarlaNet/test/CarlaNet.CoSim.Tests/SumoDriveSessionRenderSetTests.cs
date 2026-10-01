@@ -148,6 +148,117 @@ public sealed class SumoDriveSessionRenderSetTests
         }
 
         Assert.Equal(300, carla.Spawned.Count);
+
+        // Every body was spawned as SUMO-driven, so the truth record names SUMO, not the traffic
+        // manager, as the authority behind each of them (doc 04 D4.9).
+        Assert.Equal(300, carla.SpawnedRoleNames.Count);
+        Assert.All(carla.SpawnedRoleNames, role => Assert.Equal("sumo", role));
+    }
+
+    [RequiresSumoFact]
+    public void EveryFrameTheServerCarriesNamesTheBodiesTheRecorderListsAndParksTheRest()
+    {
+        // The same run as above, read from the server's side: what the world was told, and what each
+        // frame's snapshot carried as a result. A reader in another process -- the live pull, the CoT
+        // feed -- sees only that, so it has to be the recorder's set, frame for frame.
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
+        SumoDriveSessionOptions options = Options(CoSimFixtures.SuccessionScenario, world, []);
+        options.World = carla;
+
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            for (int step = 0; step < 400 && session.Advance(); step++)
+            {
+            }
+
+            _output.WriteLine(session.Report.ToString());
+            IRenderSetSource source = session.RenderSet;
+            ulong newest = (ulong)session.Report.Ticks;
+            ulong oldestHeld = newest - RenderSetFrames.Capacity + 1;
+
+            // The first tick each body was named on: from the next frame on, every snapshot names it.
+            Dictionary<uint, long> firstNamed = [];
+            foreach ((IReadOnlyList<LentBody> lent, _, long atTick) in carla.RenderSetWrites)
+            {
+                foreach (LentBody body in lent)
+                {
+                    firstNamed.TryAdd(body.Actor, atTick);
+                }
+            }
+
+            HashSet<long> namedAtTick = [.. carla.RenderSetWrites.Select(write => write.AtTick)];
+            bool sawAParkedBody = false;
+            for (ulong frame = oldestHeld; frame <= newest; frame++)
+            {
+                Assert.True(source.TryGetRenderSet(frame, out RenderSet recorded));
+                PublishedRenderSet? published = carla.PublishedRenderSetOf(frame);
+                var lentOnFrame = published?.Lent
+                    ?? new Dictionary<uint, (string VehicleId, string VehicleTypeId, ulong AdmittedFrame)>();
+                IReadOnlySet<uint> parkedOnFrame = published?.Parked ?? new HashSet<uint>();
+
+                // Lent: exactly the recorder's bodies, each named for the same vehicle and type, with
+                // the same first frame of its span.
+                Assert.Equal(
+                    recorded.ByActor.Values
+                        .Select(vehicle => (vehicle.ActorId, vehicle.SumoId, vehicle.VehicleTypeId, vehicle.AdmittedTick))
+                        .OrderBy(entry => entry.ActorId),
+                    lentOnFrame
+                        .Select(pair => (pair.Key, pair.Value.VehicleId, pair.Value.VehicleTypeId, pair.Value.AdmittedFrame))
+                        .OrderBy(entry => entry.Key));
+
+                // Parked: every other body the session had named by then, and nothing it never named.
+                Assert.Empty(parkedOnFrame.Intersect(lentOnFrame.Keys));
+                HashSet<uint> namedByThen = [.. firstNamed.Where(pair => pair.Value < (long)frame).Select(pair => pair.Key)];
+                Assert.Equal(namedByThen.Order(), parkedOnFrame.Union(lentOnFrame.Keys).Order());
+                sawAParkedBody |= parkedOnFrame.Count > 0;
+
+                // Named only on a change: the tick before a frame named something exactly when that
+                // frame's set differs from the frame before's.
+                if (frame > oldestHeld)
+                {
+                    Assert.True(source.TryGetRenderSet(frame - 1, out RenderSet before));
+                    Assert.Equal(!SameBodies(before, recorded), namedAtTick.Contains((long)frame - 1));
+                }
+            }
+
+            Assert.True(sawAParkedBody, "no held frame had a body parked");
+            Assert.Equal(carla.RenderSetWrites.Count, session.Report.RenderSetUpdates);
+            Assert.True(session.Report.RenderSetUpdates < session.Report.Ticks / 10,
+                        $"{session.Report.RenderSetUpdates} changes named over {session.Report.Ticks} ticks");
+            Assert.Equal(0, session.Report.RenderSetBodiesNotFound);
+            Assert.Null(session.Report.RenderSetRefused);
+        }
+
+        // Disposed: every body destroyed, and its naming with it, so the server hides nothing.
+        Assert.Equal(0, carla.NamedBodies);
+    }
+
+    [RequiresSumoFact]
+    public void AServerThatRefusesTheRenderSetIsAskedOnceAndTheRunGoesOn()
+    {
+        // A server built before it carried a render set has no such call. The run's own truth is cut
+        // to the render set in process either way, so the session says what the server said and goes
+        // on, rather than asking again on every change or stopping a run whose recording is sound.
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        const string refusal = "unknown method 'update_render_set'";
+        var carla = new RecordedWorld { Loaded = world.AsLoaded(), RefusesRenderSet = refusal };
+        SumoDriveSessionOptions options = Options(CoSimFixtures.SuccessionScenario, world, []);
+        options.World = carla;
+
+        using SumoDriveSession session = SumoDriveSession.Start(options);
+        for (int step = 0; step < 400 && session.Advance(); step++)
+        {
+        }
+
+        Assert.Single(carla.RenderSetWrites);
+        Assert.Equal(refusal, session.Report.RenderSetRefused);
+        Assert.Equal(0, session.Report.RenderSetUpdates);
+        Assert.Null(session.Report.Stopped);
+        Assert.Contains(refusal, session.Report.ToString());
+        Assert.True(session.RenderSet.TryGetRenderSet(session.RenderSet.NewestFrame!.Value, out _));
     }
 
     [RequiresSumoFact]
@@ -167,6 +278,12 @@ public sealed class SumoDriveSessionRenderSetTests
         Assert.Null(session.RenderSet.NewestFrame);
         Assert.False(session.RenderSet.TryGetRenderSet(1, out _));
     }
+
+    /// <summary>Whether two frames' sets hold the same bodies drawing the same vehicles.</summary>
+    private static bool SameBodies(RenderSet first, RenderSet second) =>
+        first.Count == second.Count
+        && first.ByActor.All(pair => second.TryGet(pair.Key, out RenderedVehicle other)
+                                     && other.SumoId == pair.Value.SumoId);
 
     private static SumoDriveSessionOptions Options(string scenario, SyntheticWorld world,
                                                    List<CoSimPoseRecord> computed) =>

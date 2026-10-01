@@ -20,7 +20,6 @@
 // camera was moved to afterwards -- and the cases around it; the depth capture occlusion is measured
 // against is checked the same way.
 using System.Buffers.Binary;
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
@@ -29,7 +28,6 @@ using System.Xml.Linq;
 using CarlaNet.Recording;
 using CarlaNet.Transport;
 using CarlaNet.Transport.MsgPackRpc.Server;
-using CarlaNet.Transport.Streaming;
 using CarlaNet.Types.Streaming;
 
 namespace CarlaNet.Tests.Recording;
@@ -71,7 +69,7 @@ public sealed class FrameRecorderSensorPoseTests : IAsyncLifetime
 
     private readonly string _dir =
         Path.Combine(Path.GetTempPath(), "carlanet-sensor-pose-" + Guid.NewGuid().ToString("N"));
-    private readonly StreamServer _streams = new();
+    private readonly StandInStreams _streams = new(Patience);
     private readonly SensorPlatformOptions _platform =
         new(90.0, "a-f-A-M-F-Q", "OVERWATCH", $"CARLA-SENSOR-{Camera}");
     private MsgPackRpcServer? _rpc;
@@ -332,80 +330,5 @@ public sealed class FrameRecorderSensorPoseTests : IAsyncLifetime
         int port = ((IPEndPoint)probe.LocalEndpoint).Port;
         probe.Stop();
         return port;
-    }
-
-    /// <summary>
-    /// The server's streaming side: a subscriber connects, names its stream by id, and is sent
-    /// length-prefixed frames of a 48-byte sensor header and a payload.
-    /// </summary>
-    private sealed class StreamServer : IDisposable
-    {
-        private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
-        private readonly ConcurrentDictionary<uint, TaskCompletionSource<NetworkStream>> _subscribers = new();
-        private readonly ConcurrentBag<TcpClient> _connections = [];
-        private readonly CancellationTokenSource _stop = new();
-
-        public StreamServer()
-        {
-            _listener.Start();
-            Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
-            _ = AcceptAsync();
-        }
-
-        public int Port { get; }
-
-        /// The 24-byte token a client subscribes to this stream with.
-        public byte[] Token(uint streamId)
-        {
-            var token = new byte[StreamToken.SizeBytes];
-            BinaryPrimitives.WriteUInt32LittleEndian(token, streamId);
-            BinaryPrimitives.WriteUInt16LittleEndian(token.AsSpan(4), (ushort)Port);
-            token[6] = (byte)StreamProtocol.Tcp;
-            token[7] = (byte)StreamAddressType.Ipv4;
-            IPAddress.Loopback.GetAddressBytes().CopyTo(token, 8);
-            return token;
-        }
-
-        public async Task SendAsync(uint streamId, ulong frame, double timestamp, Transform sensor, byte[] payload)
-        {
-            NetworkStream stream = await Subscriber(streamId).Task.WaitAsync(Patience);
-            var message = new byte[4 + SensorFrame.HeaderSize + payload.Length];
-            BinaryPrimitives.WriteUInt32LittleEndian(message, (uint)(SensorFrame.HeaderSize + payload.Length));
-            Span<byte> header = message.AsSpan(4, SensorFrame.HeaderSize);
-            BinaryPrimitives.WriteUInt64LittleEndian(header[8..], frame);
-            BinaryPrimitives.WriteDoubleLittleEndian(header[16..], timestamp);
-            WriteTransform(header[24..], sensor);
-            payload.CopyTo(message.AsSpan(4 + SensorFrame.HeaderSize));
-            await stream.WriteAsync(message);
-        }
-
-        private TaskCompletionSource<NetworkStream> Subscriber(uint streamId) =>
-            _subscribers.GetOrAdd(streamId, _ => new(TaskCreationOptions.RunContinuationsAsynchronously));
-
-        private async Task AcceptAsync()
-        {
-            try
-            {
-                while (true)
-                {
-                    TcpClient connection = await _listener.AcceptTcpClientAsync(_stop.Token);
-                    _connections.Add(connection);
-                    NetworkStream stream = connection.GetStream();
-                    var id = new byte[4];
-                    await stream.ReadExactlyAsync(id, _stop.Token);
-                    Subscriber(BinaryPrimitives.ReadUInt32LittleEndian(id)).TrySetResult(stream);
-                }
-            }
-            catch (Exception failure) when (failure is OperationCanceledException or ObjectDisposedException
-                                                or SocketException or IOException) { }
-        }
-
-        public void Dispose()
-        {
-            _stop.Cancel();
-            _listener.Stop();
-            foreach (TcpClient connection in _connections) connection.Dispose();
-            _stop.Dispose();
-        }
     }
 }

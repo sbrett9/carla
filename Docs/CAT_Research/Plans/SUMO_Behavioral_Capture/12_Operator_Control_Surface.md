@@ -8,6 +8,7 @@ the live parser object and grepping the live source tree on 2026-09-18; the furt
 §3.5, §3.10.1, §3.10.2, §5.2 and §7.6 were taken the same way, and each says where.
 **Date:** 2026-09-18
 **Revisions:**
+`2026-10-01` — §9.6: during a drive any process's truth -- `world.get_vehicle_telemetry()`, the CoT feed, a recorder started outside the drive -- lists only the bodies a frame drew, by SUMO vehicle, from the render set the server carries on each snapshot; the drive's report prints how many changes it named to the server, or the server's refusal.
 `2026-10-01` — §7.1 `population / rendered`: a vehicle SUMO has just inserted is drawn from the frame SUMO first reports it in, one SUMO step after the pass that admits it, never before.
 `2026-09-30` — The render cap (128, hard 192) was never measured — M2 never ran — and the scenario is the arbiter of population: every vehicle SUMO has is drawn, and a heavier scenario runs slower, never thinner. Removed with it: the settings `capture.render_region`, `capture.render_hysteresis_m`, `capture.render_cap`, `capture.render_cap_hard`, `capture.render_set`, `capture.render_min_pixels`, `capture.render_admit_lead_s` and `capture.render_release_lag_s` (§5.2); `run_sumo_drive.py`'s render-set, region and capacity options and the free view's region coverage (§9.6); checks 20, 21 and 33, withdrawn with their numbers retired, and the warning `render_cap_bound_at_window_open`; the rendered-fraction floor and its loud condition (§7.1, §7.2); D12.20, withdrawn. A stare aimed at the traffic starts over the centre of the world's staging bounds.
 `2026-09-30` — Measured on Bahonar, the picture witness failed with traffic in view: it now leaves out the blocks rendered vehicles cover, needs half the view judged, and is counted in ticks, ten apart with a 120-tick ceiling (check 50); a stare aimed at the traffic holds for one SUMO step and 120 ticks.
@@ -2322,6 +2323,15 @@ that writes the flown camera's captures with the session's render set and illumi
 fixed camera's are written. It is `carlacontrol.FreeView` for the window and
 `carlacontrol.SpanRecorder` for the key. `run_free_move_camera.py` stays the separate viewer that
 records nothing, and `run_capture` offers no flown camera: a capture run's camera track is declared.
+
+**What another process reads during a drive (2026-10-01).** The drive's render set is carried on every
+world-observer snapshot ([`03`](03_CoSimulation_Runtime.md) §8.9, D3.39), so the truth any other
+process reads -- `world.get_vehicle_telemetry()`, the CoT feed `run_SCTMV.py` toggles with Y,
+`cot_telemetry.py`, a recorder started outside the drive -- lists only the bodies each frame drew, each
+named by its SUMO vehicle, with `role_name` `sumo`, and no body parked below the ground. The drive's
+report prints a `render set` line: how many changes the session named to the server, any body the
+server did not find, and, against a server built before this, the server's refusal, after which other
+processes list every vehicle actor as they did before and the drive's own captures are unaffected.
 
 | Option | Default | What it does |
 |---|---|---|

@@ -10,9 +10,10 @@ namespace CarlaNet.CoSim;
 /// Everything the playback bridge asks of a CARLA world, and nothing else.
 /// </summary>
 /// <remarks>
-/// <para>Fourteen operations. The bridge asks which world is loaded, hands the world's truth
+/// <para>Fifteen operations. The bridge asks which world is loaded, hands the world's truth
 /// telemetry the package's ground once the package is established as that world's, places bodies,
-/// writes their poses and velocities in one batch, reads back where the world says they went and how
+/// writes their poses and velocities in one batch, names to the server which bodies are lent and
+/// which parked, reads back where the world says they went and how
 /// fast it says they are moving, advances the world a tick, reads and
 /// writes the episode settings so it can hand the world back as it found it, shows or hides the
 /// rendering layers whose presence is a property of the imagery, and reads and writes the sun the
@@ -63,19 +64,45 @@ public interface ICarlaWorld
     void WriteSettings(EpisodeSettings settings);
 
     /// <summary>
-    /// Place one body of the named blueprint at a transform, answering the actor it became.
+    /// Place one body of the named blueprint at a transform under a role name, answering the actor
+    /// it became.
     /// </summary>
     /// <remarks>
-    /// CARLA refuses a spawn whose point is occupied and offers no queue and no retry, so a caller
-    /// spawns at a point it knows to be clear and never spawns at a point a vehicle is driving
-    /// through.
+    /// <para>CARLA refuses a spawn whose point is occupied and offers no queue and no retry, so a
+    /// caller spawns at a point it knows to be clear and never spawns at a point a vehicle is
+    /// driving through.</para>
+    ///
+    /// <para>The role name is the actor's <c>role_name</c> attribute, in place of the blueprint's
+    /// default, and like every attribute it is fixed for the actor's life. It is provenance: which
+    /// authority drives the actor (doc 04 D4.9), and the truth record carries it.</para>
     /// </remarks>
-    ActorId Spawn(string blueprintId, Transform at);
+    ActorId Spawn(string blueprintId, Transform at, string roleName);
 
     /// <summary>
     /// Apply a batch of commands in one round trip, answering the server's response per command.
     /// </summary>
     IReadOnlyList<CommandResponse> ApplyBatch(IReadOnlyList<Command> commands);
+
+    /// <summary>
+    /// Name to the server the bodies lent since the last call, each with the vehicle it is drawn for,
+    /// and the bodies given back, which stand parked out of sight; answer what the server made of it.
+    /// </summary>
+    /// <remarks>
+    /// <para>The server carries every body named on each world-observer snapshot from the next frame
+    /// on, so the truth telemetry of every client -- the live pull and the CoT feed of any process,
+    /// not only a recorder beside the session -- lists the bodies a frame drew, each named by its
+    /// vehicle, and leaves the parked ones out. Only the bodies named are affected, and the server
+    /// holds the naming on its record of each actor, so destroying a body ends it.</para>
+    ///
+    /// <para>One round trip, made only on a tick whose lending changed and before that tick's cue,
+    /// so the frame the change is drawn in is the first to carry it. A body given back and lent again
+    /// in one call ends lent.</para>
+    ///
+    /// <para>A server built before it carried a render set refuses the call, and says why. That is
+    /// not a failed run: the session's own recorded truth is cut to its render set in its own process
+    /// either way, and only the truth other processes read goes back to every vehicle actor.</para>
+    /// </remarks>
+    RenderSetWrite WriteRenderSet(IReadOnlyList<LentBody> lent, IReadOnlyList<ActorId> parked);
 
     /// <summary>
     /// Where the world says an actor is, or <see langword="null"/> where it has reported nothing.

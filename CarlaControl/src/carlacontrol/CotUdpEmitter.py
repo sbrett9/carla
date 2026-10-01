@@ -76,6 +76,11 @@ class CotUdpEmitter:
             rec: Telemetry dict from world.get_vehicle_telemetry(). `type_id`, `special_type`,
                 `role_name` and `marked` are optional: each is written only when the record carries
                 it, so a producer whose categories are ground truth can withhold them at source.
+                A record that carries `sumo_id` -- a pooled body a SUMO drive lent, which draws a
+                succession of vehicles over a run -- is the track of that SUMO vehicle: its uid is
+                `<uid_prefix>-SUMO-<sumo_id>` and its callsign `<base_type>-<sumo_id>`, as the
+                recorded truth sidecar writes them, and `sumo_id`, `vtype_id` and `admitted_tick`
+                ride in `_carla` beside the actor id of the body that drew it.
             affiliation: CoT affiliation code (n=neutral, f=friendly, h=hostile)
             stale_seconds: How long until event is considered stale
             source: Source type ("truth" for ground truth, "m-f" for fusion)
@@ -89,11 +94,17 @@ class CotUdpEmitter:
         now = when or datetime.now(UTC)
         stale = now + timedelta(seconds=stale_seconds)
 
+        # The track is the SUMO vehicle where the record names one, and the actor otherwise; the
+        # uid says which, so a SUMO id that happens to be a number is never read as an actor id.
+        sumo_id = rec.get("sumo_id")
+        track = str(sumo_id) if sumo_id is not None else str(rec["id"])
+        uid = f"{uid_prefix}-SUMO-{track}" if sumo_id is not None else f"{uid_prefix}-{track}"
+
         ev = ET.Element(
             "event",
             {
                 "version": "2.0",
-                "uid": f"{uid_prefix}-{rec['id']}",
+                "uid": uid,
                 "type": f"a-{affiliation}-G-E-V",
                 "how": "m-g" if source == "truth" else "m-f",
                 "time": CotUdpEmitter.format_cot_timestamp(now),
@@ -127,7 +138,7 @@ class CotUdpEmitter:
             detail,
             "contact",
             {
-                "callsign": f"{rec['base_type']}-{rec['id']}",
+                "callsign": f"{rec['base_type']}-{track}",
             },
         )
         # `type_id`, `special_type` and `role_name` are written only when the caller supplies them.
@@ -157,6 +168,14 @@ class CotUdpEmitter:
         carla["vx"] = f"{rec['vx']:.2f}"
         carla["vy"] = f"{rec['vy']:.2f}"
         carla["vz"] = f"{rec['vz']:.2f}"
+        # Who a pooled body was drawing: the SUMO vehicle that joins the record to the scenario's
+        # supervision, its declared type, and the frame its rendered span began on.
+        if sumo_id is not None:
+            carla["sumo_id"] = str(sumo_id)
+            if "vtype_id" in rec:
+                carla["vtype_id"] = str(rec["vtype_id"])
+            if "admitted_tick" in rec:
+                carla["admitted_tick"] = str(rec["admitted_tick"])
         ET.SubElement(detail, "_carla", carla)
 
         if capture is not None:

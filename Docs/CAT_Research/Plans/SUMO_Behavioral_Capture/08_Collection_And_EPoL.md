@@ -28,6 +28,7 @@ Findings set. Every external claim is cited.
 | 2026-09-30 | §3.4: a capture's pose is the camera's in the snapshot of its own frame, with the image header checked against it; the header carried the next frame's pose until the server stamped it at capture. |
 | 2026-09-30 | §5.7, §7.5, §8.4, §8.6, §10.2, §10.5, §12.2, §13, D8.5, D8.36: the render volume, its margin and the render-cap leak removed; D8.16a withdrawn. The cap (128, hard 192) was never measured — M2 never ran — and the scenario is the arbiter of population: every vehicle SUMO has is drawn, so a vehicle appears in frame only where SUMO inserts it, and a heavier scenario runs slower, never thinner. |
 | 2026-10-01 | §5.7: a vehicle SUMO inserts in view appears on the frame SUMO first reports it in, already moving, never on a frame before; measured live on Bahonar, it had appeared a step early, standing at its insertion point. |
+| 2026-10-01 | §3.4: the render set is published on the world-observer snapshot, as D8.3 asks of every world-scoped fact, so a recorder, the live pull and the CoT feed in any process list only the bodies a frame drew, by SUMO vehicle, and correctness no longer depends on where a recorder runs. |
 
 > **The boundary this section is written against.** This pipeline **labels; it never scores.** It does
 > not run a detector, a tracker or an EPoL model; it does not associate external model output to truth;
@@ -777,6 +778,18 @@ fact whose correctness still depends on co-location, contrary to the first decis
 another process has no render set and lists every vehicle actor, parked bodies included, by actor id.
 Publishing the render set on the world-observer snapshot, as the first decision asks of every
 world-scoped fact, is not built; until it is, a capture keeps its recorders in the driving process.
+
+**Published on the snapshot (2026-10-01).** It is now built: the session names each body to the
+server as it lends it and as it gives it back, before the tick cue of the frame the change is drawn
+in, and the world observer carries every named body on each snapshot, paired to the frame like the
+sun ([03](03_CoSimulation_Runtime.md) §8.9, D3.39). A recorder in another process, given no source of
+its own, now lists exactly the bodies its frame drew, each named by its SUMO vehicle, and marks its
+sidecar `vehicles="rendered"`; the live pull and the CoT feed of any process do the same. So the
+render set's correctness no longer depends on co-location, as the first decision requires, and the
+second decision's one-process default stands for the reasons it gives — one tick owner, recorders off
+the interpreter — rather than for this one. The recorder beside the session still pairs with the
+session's own per-frame set, which holds 256 frames where a client holds 64, and the two agree frame
+for frame.
 
 **A camera flown by hand is recorded from the driving process too (2026-09-30).** An operator who
 wants imagery from wherever they fly does not need a recorder in a viewer process:
