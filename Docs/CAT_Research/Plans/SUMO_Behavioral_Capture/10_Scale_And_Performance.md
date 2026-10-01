@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | **Status** | Plan section. Nothing here is implemented. |
-| **Scope** | Whether the SUMO-driven behavioural-capture mode works at the size the user actually needs, and what has to be true for it to. Sizes the scenario corpus, the render set, the RPC and TraCI budgets, the solar and vehicle-light surfaces, the capture pipeline and memory; recommends an envelope, a degradation strategy and the measurements that must precede commitment. |
-| **Audience** | An engineer implementing or reviewing the co-simulation runtime, the render-set controller or the capture path, who has not read the conversation that produced this plan. |
-| **Owns** | The *numeric values* of the render-set parameters that [`04_Contracts.md`](04_Contracts.md) §4.2 declares and defers here, and the **cost** of the time-of-day and vehicle-light surfaces. |
+| **Scope** | Whether the SUMO-driven behavioural-capture mode works at the size the user actually needs, and what has to be true for it to. Sizes the scenario corpus, what drawing every vehicle the scenario has costs, the RPC and TraCI budgets, the solar and vehicle-light surfaces, the capture pipeline and memory; recommends an envelope, a degradation strategy and the measurements that must precede commitment. |
+| **Audience** | An engineer implementing or reviewing the co-simulation runtime or the capture path, who has not read the conversation that produced this plan. |
+| **Owns** | The *numeric values* of the capture-window parameters that [`04_Contracts.md`](04_Contracts.md) §4.2 declares and defers here (`prewarm_s`, `capture_windows[]`), the wall-clock budget, and the **cost** of the time-of-day and vehicle-light surfaces. |
 | **Machine for every "this box" figure** | Windows 11, 20 logical processors, Python 3.14.4, SUMO 1.27.0 from `Build/sumo-src/bin/sumo.exe`. |
 
 **Change history**
@@ -16,15 +16,15 @@
 | 2026-09-18 | Added sun-elevation, solar-surface and vehicle-light-state measurements; replaced the 23:00 window with a truth-only demotion. |
 | 2026-09-18 | Traffic-light state carries no RPC, batch or byte cost; network signal counts kept as SUMO behaviour inputs. |
 | 2026-09-21 | A subscription is charged inside the step unread, so the subscribed set is its own budget line (§4.5, `D10.6`). |
+| 2026-09-30 | Removed the render cap (`render_cap` 128, hard 192) and everything built on it: the render region and its radial-concentration analysis (§4.3.1, `D10.5`), the lead, lag and halo parameters (§8), and vehicle shedding (§7 rows 1–3, `shedding[]`, the rendered-fraction floor). The cap was never measured — M2 never ran — and the scenario is the only arbiter of population: every vehicle SUMO has is drawn, and a heavier scenario runs slower, never thinner. Added the compiled Bahonar scenario's measured population (§3.1.5); per-vehicle costs re-expressed against the measured populations; light-state cost taken from the whole-map rate; M2 redefined as the pace of a drive at Arapahoe's full population. |
 
 ---
 
 ## 0. What this section does not cover
 
-- **The admission predicate.** Which vehicles are admitted and in what order is
-  [`04_Contracts.md`](04_Contracts.md) §4.2–4.4. This section supplies the *numbers* that section types
-  (`render_cap`, `render_cap_hard`, `prewarm_s`, `entry_lead_m`, `exit_lag_m`, `exit_lag_s`,
-  `aoi_halo_m`, `frustum_lead_s`, `capture_windows[]`) and the evidence for each.
+- **The admission predicate.** Which vehicles get a body, and when, is [`04_Contracts.md`](04_Contracts.md)
+  §4.2–4.4: every vehicle SUMO has, in a capture window or its prewarm. This section supplies the
+  *numbers* that section types (`prewarm_s`, `capture_windows[]`) and the evidence for each.
 - **Which CarlaNet calls exist.** [`05_CarlaNet_Capability_Audit.md`](05_CarlaNet_Capability_Audit.md).
   This section states the RPC budget both ways — batched and unbatched — so the plan holds whichever
   answer that audit returns, and then records what it actually returned.
@@ -51,13 +51,12 @@
 
 | Question | Answer | Confidence |
 |---|---|---|
-| **Peak concurrent vehicles, Bahonar (seven days)** | **139**, at simulated t = 199,260 s (day 2, 07:21). Median 41, mean 43.9, p99 122. | **Measured** — a complete headless SUMO run of the shipped scenario. |
+| **Peak concurrent vehicles, Bahonar (seven days)** | **170** in the compiled scenario the pipeline runs today, at simulated t = 174,680 s, 17 of them parked; median 42, mean 48.2, p99 159 (§3.1.5). **139** in the shipped route file, at t = 199,260 s (day 2, 07:21); median 41, mean 43.9, p99 122 (§3.1.2). | **Measured** — complete headless SUMO runs of both. |
 | **Wall clock to render seven simulated days frame-for-frame** | **19 to 24 days** at the measured clock ratio for a 6.2 Mpx camera pair; **8.3 days** at the most favourable ratio ever recorded on this fork; **19.6 hours** at an unreachable upper bound with no client and no capture. Storage at the same time is **6 to 17 TB**. | **Measured ratios, derived extrapolation.** **Verdict: not acceptable. Windowing is mandatory, not an optimisation.** |
-| **Recommended render set** | **`render_cap` = 128, `render_cap_hard` = 192.** | 100 concurrent rendered, telemetered and occlusion-measured vehicles are **demonstrated** on this fork (§4.3). 128 is one step beyond demonstrated and is gated on measurement M2. |
-| **Largest scenario the design survives** | Bahonar, whole map, in **windows**: peak 139 is under the cap, so no shedding on 99.4% of its seven days. **Arapahoe Underpass is the harder case**, not Bahonar: 437 peak, 336 median, and the cap bites always. | **Measured.** |
+| **Heaviest scenario, and what it costs** | **Every scenario is drawn whole; a heavier one costs wall clock.** There is no cap and nothing is shed: every vehicle SUMO has is drawn, and a heavier population makes a synchronous run slower, never different in content (§4.3). Bahonar is not the heavy case (compiled peak 170, median 42); **Arapahoe Underpass is**: peak 437, median 336. What a tick costs at that population is M2. | **Measured** populations; the pace at Arapahoe's population is **M2**. 100 concurrent rendered vehicles are demonstrated on this fork (§4.3). |
 | **Does the 23:00 window survive contact with the sun?** | **No.** At the sizing site the sun is **38.1° to 79.5° below the horizon at 23:00, on every date in the year.** That is below astronomical twilight by a wide margin at every season; there is no date that rescues it. The window is retained as a **truth-only window** and the imagery regime it was meant to sample is re-placed onto 17:00–18:00 (§4.2.4). | **Measured** (NOAA solar geometry at the world-package origin, §3.5). |
 | **What does the solar surface cost?** | **Setting the sun does not stall the render thread** — the whole path is an enqueue (`RendererScene.cpp:3490`). But under the *advancing* policy the sun's direction changes every frame, and this project runs **virtual shadow maps** (`DefaultEngine.ini:54`), whose directional cache is **invalidated whenever the light direction changes** (`VirtualShadowMapCacheManager.cpp:311`). Advancing therefore re-renders the directional shadow set uncached **every frame**; freezing does not. The magnitude is unmeasured and is **M7**, which is a two-value cvar sweep. | **Read from source; magnitude unmeasured.** |
-| **What does vehicle light state cost?** | **Effectively nothing in the batch, and an unmeasured amount in the engine.** Measured inside the 300 m render region on the binding scenario: **7.5% of the rendered set changes its signal mask per 0.05 s step → 9.6 extra batch entries per tick at `render_cap` = 128**, which is **+1.9% of batch bytes** and **zero extra round trips**. The engine work is gated behind an 11-field equality early-out (`CarlaWheeledVehicle.cpp:686-696`), so only *transitions* cost anything — and what a transition costs is a Blueprint VM call, which is **M8**. | **Measured (rates and bytes); engine cost unmeasured.** |
+| **What does vehicle light state cost?** | **Effectively nothing in the batch, and an unmeasured amount in the engine.** Measured over the whole map of the heaviest scenario, Arapahoe Underpass, at 417 live vehicles: **9.61% of vehicles change their signal mask per 0.05 s step → ≈ 40 extra batch entries per tick**, which is **+2.4% of batch bytes** and **zero extra round trips** (§4.8). The engine work is gated behind an 11-field equality early-out (`CarlaWheeledVehicle.cpp:686-696`), so only *transitions* cost anything — and what a transition costs is a Blueprint VM call, which is **M8**. | **Measured (rates); bytes derived; engine cost unmeasured.** |
 | **Is reading solar state free?** | **Free to the client, not free to the server.** The client read is a field access with no RPC (`CarlaClient.cs:1991`) — the claim holds. But the value is put there by `WorldObserver.cpp:326` calling `GetSolarState` **on the game thread every tick**, and that function performs **three full actor-list sweeps** (§4.7.2) whether or not the sun can have changed and whether or not anyone reads it. | **Read from source.** |
 
 The headline is not the one the team brief anticipated. The brief expected the seven-day span to be the
@@ -136,8 +135,8 @@ Simulated span 604,800 s, step length 1.0 s, seed 42, `time-to-teleport -1`, `ma
 (`Shahid_Bahonar_Port_PatternOfLife.sumocfg`).
 
 The 338 parking stops matter to sizing in a way the brief did not anticipate: a guard parked at a tower
-for an eight-hour shift is a **stationary vehicle that still exists**, still occupies a SUMO id, and — if
-rendered — is a CARLA actor that must be posed and serialised every tick while contributing nothing but a
+for an eight-hour shift is a **stationary vehicle that still exists**, still occupies a SUMO id, and is
+drawn — a CARLA actor that must be posed and serialised every tick while contributing nothing but a
 parked car to the imagery. They are a floor under the population, not a spike.
 
 #### 3.1.2 The measured run
@@ -178,7 +177,7 @@ Time above a threshold, over the whole 168 simulated hours:
 | > 32 | 61.68% | 103.6 |
 | > 64 | 13.63% | 22.9 |
 | > 100 | 4.08% | 6.8 |
-| > 128 | **0.58%** | **1.0** |
+| > 128 | 0.58% | 1.0 |
 | > 150 | 0.00% | 0.0 |
 
 The excursions are short and countable: **108 contiguous spans above 100 vehicles**, the longest 1,652 s,
@@ -252,6 +251,31 @@ measured 93, 95, 95, 98, 101; Gardnerville over t = 59…64 s gave a median rati
 bound to be confirmed by a run.** It costs seconds and needs no SUMO. But the run costs 140 seconds, so
 for any scenario that will actually be captured, **run it**.
 
+#### 3.1.5 The compiled scenario the pipeline runs today
+
+§3.1.2 measures the shipped route file, and it stays a measurement of that file. The scenario the
+pipeline actually runs is the compiled one, `Import/Shahid_Bahonar_Port_PatternOfLife.sumocfg`, written
+by the scenario compiler ([`07`](07_Scenario_Authoring.md)). It was measured on 2026-09-30 the same way:
+SUMO 1.27.0 alone, no CARLA, seed 42, `time-to-teleport -1`, begin 0, end 604,800, `--summary-output`;
+604,800 one-second rows in **101 s** of wall clock. Its `t = 0` is **2026-09-29 07:00 +03:30** (the
+compiled `.sumocfg` says so), not the shipped file's civil midnight, so its clock reads seven hours later
+than §3.1.3's for the same simulated second.
+
+| Statistic | `running` (all vehicles in the network) |
+|---|---|
+| **median** | **42** |
+| mean | 48.2 |
+| p90 | 74 |
+| p99 | 159 |
+| p99.9 | 166 |
+| **peak** | **170** @ t = 174,680 s (day 3, 07:31 on the compiled clock), of which **17 stopped** (parked) |
+
+**The live session and SUMO alone agree.** At t = 1,501 s this run has 157 vehicles running, 15 of them
+stopped — exactly the population a live drive reported at that instant on 2026-09-30.
+
+Wherever this document re-expresses a per-vehicle cost against Bahonar's population, it uses this run:
+**peak 170, median 42**.
+
 ### 3.2 The other two scenarios
 
 Same treatment, measured the same way.
@@ -272,7 +296,8 @@ Same treatment, measured the same way.
 | Wall clock for the whole run | **140.41 s** | **126.10 s** | **6.69 s** |
 | Real-time factor | **4,307×** | **21.4×** | **331.9×** |
 
-**Arapahoe Underpass is the binding scenario for the render set, not Bahonar.** Its two freeway flows are
+**Arapahoe Underpass is the heaviest scenario, not Bahonar.** Every one of its vehicles is drawn, so it
+is the scenario that sets the per-actor cost of a tick (§4.3). Its two freeway flows are
 3,300 and 3,000 veh/h over a 2.1 km route; Little's law alone puts 2·(3,150/3,600)·73 s ≈ 128 vehicles on
 I-25 before any surface street is counted. Its concurrent population is **2.4× Bahonar's peak as its
 median** and it never drops below 42.
@@ -352,8 +377,9 @@ Verified on all three: `60 + 8·cols·rows` equals the file size **exactly**.
 and one flat index — O(1), no interpolation, no search. Measured on the Bahonar grid, 200,000 random
 points: **0.557 µs per lookup**, 1.8 M lookups/s.
 
-At the recommended cap of 128 rendered vehicles and 20 ticks/s that is 2,560 lookups/s = **1.4 ms per
-wall-second**, 0.14% of one core. **The hot path is not hot.**
+Every drawn vehicle needs one lookup per tick. At Arapahoe's peak of 437 drawn vehicles and 20 ticks/s
+that is 8,740 lookups/s = **4.9 ms per wall-second**, 0.49% of one core; at Bahonar's compiled peak of
+170, 3,400 lookups/s = 1.9 ms (scaled from the measured per-lookup cost). **The hot path is not hot.**
 
 **The load path is.** Measured on this box:
 
@@ -376,7 +402,7 @@ saving should re-measure with a cold cache first.
 ### 3.5 The sizing scenario's illumination profile
 
 §3.1.3 measured three daily population regimes and §4.2.3 recommends windows placed on them. Those
-windows land at civil clock times, and a civil clock time plus a date plus a position is a sun
+windows fall at civil clock times, and a civil clock time plus a date plus a position is a sun
 elevation: this section computes it.
 
 #### 3.5.1 Where and when the sun is
@@ -593,31 +619,23 @@ flowchart TD
     end
 
     subgraph PHASE2["Phase 2 — co-simulation, CARLA attached"]
-        D --> E["full SUMO population at t<br/>Bahonar peak 139 / Arapahoe peak 437"]
-        E --> F["GATE 1 capture window<br/>t in capture_windows[] or within prewarm_s"]
-        F --> G["GATE 2 participant<br/>open annotated or nominal interval"]
-        F --> H["GATE 3 region<br/>inside render_region + entry_lead_m"]
-        G --> I["priority order<br/>participant &gt; aoi_member &gt; in_frustum &gt; ambient"]
-        H --> I
-        I --> J{"GATE 4 capacity<br/>count(rendered) &lt; render_cap ?"}
-        J -- yes --> K["ADMIT: spawn + physics off<br/>one apply_batch entry"]
-        J -- "no, and participant" --> L{"count(rendered) &lt; render_cap_hard ?"}
-        L -- yes --> K
-        L -- no --> M["FAIL THE RUN, loudly<br/>04 §4.4 D4.6"]
-        J -- "no, ambient" --> N["SHED<br/>render_state = simulated_only<br/>reason = capped<br/>+ shedding[] ledger entry"]
-        K --> O["rendered set, ≤ render_cap"]
+        D --> E["full SUMO population at t<br/>Bahonar compiled peak 170 / Arapahoe peak 437"]
+        E --> F["capture window<br/>t in capture_windows[] or within prewarm_s"]
+        F --> G{"alive in SUMO, and its vType<br/>has a measured body?"}
+        G -- yes --> K["ADMIT: reuse a pooled body or spawn one<br/>physics off, one apply_batch entry"]
+        G -- "no measured body<br/>no_blueprint / unknown_extent" --> N["simulated only<br/>truth recorded, never drawn"]
+        K --> O["render set: every vehicle SUMO has<br/>with a measured body"]
         O --> P["per tick: 1 apply_batch + 1 tick_cue"]
         P --> Q["capture at record_hz<br/>PNG + CoT sidecar"]
     end
 
     subgraph PHASE3["Phase 3 — release"]
-        O --> R{"E1 SUMO removed<br/>E2 outside region exit_lag_s<br/>E3 window closed<br/>E4 capacity, lowest priority"}
-        R --> S["release, close rendered_spans[]"]
+        O --> R{"E1 SUMO removed it<br/>E3 window closed"}
+        R --> S["park the body for reuse,<br/>close rendered_spans[]"]
     end
 
-    N -.->|"counted in the behaviour denominator,<br/>NOT in the imagery denominator"| T["run manifest<br/>render_states[] + shedding[]"]
+    N -.->|"counted in the behaviour denominator,<br/>NOT in the imagery denominator"| T["run manifest<br/>render_states[]"]
     S -.-> T
-    M -.-> T
 ```
 
 #### 4.2.1 How SUMO fast-forwards, measured
@@ -677,15 +695,15 @@ route file is re-read from the top and the state carries only the *instantiated*
 | Loss | Consequence | Handling |
 |---|---|---|
 | **A vehicle's history before the window** | A vehicle already mid-trip at `window.begin` appears in the imagery with no observable past. A tracker cannot tell it from one that just entered. | **Not a loss under D10.2** — SUMO fast-forwards, so the *simulation* history is complete and is in the truth record. Only the *imagery* history is absent, which is exactly what `04` §4.5's `rendered_spans[]` and `observed_spans[]` exist to state. Every such vehicle carries a `rendered_spans[0].begin_s` equal to the window open, and a `sumo_span_s[0]` earlier than it. A consumer that ignores the difference is reading the record wrong. |
-| **Warm-up state** | Under a cold start, the first ~300 s of a window is under-populated by 5–87%. | **`prewarm_s = 300`** (§8). Under D10.2 there is no warm-up state to lose; `prewarm_s` instead buys the *render set* time to fill: it is the span before `window.begin` during which vehicles are admitted and posed but **nothing is captured**. It also absorbs `entry_lead_m` and the frustum lead. |
-| **An annotated interval that straddles a window edge** | A pattern instance whose interval runs from before `window.begin` to inside it, or from inside it to after `window.end`, is captured in part. A partially observed positive is worse than an unobserved one: it teaches the model a truncated pattern. | **Three-valued, and refused silently never.** (1) At authoring time, `07`'s validator rejects a `capture_windows[]` entry that cuts a declared interval, naming the instance — a window that cuts an interval is an authoring error, not a runtime event. (2) If it happens anyway — an interval whose `observed_start_tick` is only determined at runtime — the vehicle's `render_states[]` entry records `render_state = partially_rendered`, and the instance carries `straddles_window = true`. (3) A consumer building a training set must be able to exclude straddling instances with one predicate, so the flag is on the *instance*, not inferred from span arithmetic. **The participant guarantee (`04` D4.6) is unchanged**: a participant is admitted at `interval.start − prewarm_s`, so the only straddle that can survive validation is one at `window.end`. |
+| **Warm-up state** | Under a cold start, the first ~300 s of a window is under-populated by 5–87%. | **`prewarm_s = 300`** (§8). Under D10.2 there is no warm-up state to lose; `prewarm_s` instead buys the bodies time to be spawned and posed: it is the span before `window.begin` during which every vehicle SUMO has is admitted and posed but **nothing is captured**. |
+| **An annotated interval that straddles a window edge** | A pattern instance whose interval runs from before `window.begin` to inside it, or from inside it to after `window.end`, is captured in part. A partially observed positive is worse than an unobserved one: it teaches the model a truncated pattern. | **Three-valued, and refused silently never.** (1) At authoring time, `07`'s validator rejects a `capture_windows[]` entry that cuts a declared interval, naming the instance — a window that cuts an interval is an authoring error, not a runtime event. (2) If it happens anyway — an interval whose `observed_start_tick` is only determined at runtime — the vehicle's `render_states[]` entry records `render_state = partially_rendered`, and the instance carries `straddles_window = true`. (3) A consumer building a training set must be able to exclude straddling instances with one predicate, so the flag is on the *instance*, not inferred from span arithmetic. **The participant guarantee (`04` D4.6) holds by construction**: every vehicle SUMO has inside a window or its prewarm is drawn, so a participant always is. |
 | **Continuity of the corpus across two windows** | Two windows of the same run produce two disjoint imagery spans that a naive consumer may concatenate. | Windows are separate `observed_spans[]` entries and each capture carries its tick (`CaptureIdentity`, measured present in every PNG on disk). Concatenation across a gap is detectable from the ticks alone. The run manifest lists `capture_windows[]` verbatim. |
 
 #### 4.2.3 Window sizing
 
 At the measured 29.5% clock ratio, a 6.2 Mpx camera pair and 2 Hz capture on one recorded camera:
 
-| Window | Wall clock | Frames | PNG | Sidecar @128 veh |
+| Window | Wall clock | Frames | PNG | Sidecar, 100 vehicles |
 |---|---|---|---|---|
 | 60 s | 3.4 min | 120 | 1.7 GB | 0.01 GB |
 | **300 s** | **16.9 min** | 600 | 8.7 GB | 0.04 GB |
@@ -694,6 +712,10 @@ At the measured 29.5% clock ratio, a 6.2 Mpx camera pair and 2 Hz capture on one
 | 3,600 s | 3.4 h | 7,200 | 104.1 GB | 0.48 GB |
 | 7,200 s | 6.8 h | 14,400 | 208.2 GB | 0.96 GB |
 | 21,600 s (6 h) | 20.3 h | 43,200 | 624.7 GB | 2.89 GB |
+
+The sidecar column is the measured 66,875-byte sidecar of a 100-vehicle frame (§4.6) times the frame
+count. It scales with the population drawn: at Arapahoe's median of 336 it is 3.4× the column (scaled),
+and still a rounding error against the PNG.
 
 Because **days 1–6 of Bahonar are within 1.5% of each other** (§3.1.3), a capture plan covering the
 scenario's pattern does not need many hours. Six windows of 1,800 s is 3 hours of simulated time,
@@ -768,15 +790,22 @@ entry currently types `{ begin_s, end_s }` (`04` §4.2). It needs a third compon
 date**, or an epoch that supplies one — because two windows at identical `begin_s` and `end_s` on
 different dates are different captures with identical population, and there is presently nothing in the
 contract that distinguishes them. The grammar is [`11`](11_Time_And_Illumination.md)'s; the requirement
-that the render-set controller can read it per window is this section's.
+that the co-simulation runtime can read it per window is this section's.
 
-### 4.3 The render set — the number
+### 4.3 The render set — every vehicle SUMO has
 
-`04` §4.2 owns the predicate. This section owns the number.
+**There is no cap.** Every vehicle SUMO has during a capture window or its prewarm is drawn, from the
+frame after it is first seen until SUMO removes it or the window closes (`04` §4.2–4.4); parked vehicles
+are drawn too. The population is the scenario's, and it is measured: Bahonar's compiled scenario peaks at
+**170** with a median of **42** (§3.1.5); Arapahoe Underpass peaks at **437** with a median of **336**
+(§3.2). The only vehicles SUMO has in a window that are not drawn are those whose vType has no measured
+body (`no_blueprint`, `unknown_extent`): they are simulated and their truth is recorded, and they are
+never placed at a guessed size.
 
-**What is demonstrated.** `carla/Build/SCTMV_recordings/SCTMV_2026.09.16_14.44.31.487.xml` — a file on
-disk, written by a real run — contains **101 CoT events: one collection platform and 100 vehicles**, at a
-single tick, each with a full `_carla` block, 44 of them carrying a measured `occlusion` attribute. The
+**What is demonstrated**, as information rather than as a limit.
+`carla/Build/SCTMV_recordings/SCTMV_2026.09.16_14.44.31.487.xml` — a file on disk, written by a real run —
+contains **101 CoT events: one collection platform and 100 vehicles**, at a single tick, each with a full
+`_carla` block, 44 of them carrying a measured `occlusion` attribute. The
 same run's captures show **5.90 ticks per wall-second** with a 6.24 Mpx RGB camera plus a 6.24 Mpx depth
 camera streaming every tick and no dropped captures. **One hundred concurrent, rendered, telemetered,
 occlusion-measured vehicles are a fact about this fork, not a projection.**
@@ -786,12 +815,12 @@ Doc 17 §12.4 reports a collect in which "234 vehicle records carried 104 occlus
 though the text does not say unambiguously whether that is one tick or a whole collect. Treated as
 supporting, not load-bearing.
 
-**What limits it.** Per rendered actor per tick, on the game thread:
+**What a heavier population costs.** Per drawn actor per tick, on the game thread:
 
 | Cost | Where | Scales as |
 |---|---|---|
 | `set_actor_transform` | `CarlaServer.cpp:3175` → `FCarlaActor::SetActorGlobalTransform` (`CarlaActor.cpp:335-359`) → `AActor::SetActorTransform(local, **bSweep = false**, nullptr, TeleportType)` | O(N). **No sweep, so no collision query** — this is the cheapest transform write UE offers. |
-| World-observer serialisation | `WorldObserver.cpp:344-390`, for **every actor in the registry**, every tick, on the game thread; `GetActor()->GetVelocity()`, `GetActorGlobalTransform()`, `FWorldObserver_GetActorState` | O(N). **119 bytes per actor** (`LibCarla/source/carla/sensor/data/ActorDynamicState.h:147-148`, a `static_assert`). At 128 actors that is 15.2 KB/tick, 305 KB/s. Bandwidth is nothing; the per-actor game-thread reads are the cost. |
+| World-observer serialisation | `WorldObserver.cpp:344-390`, for **every actor in the registry**, every tick, on the game thread; `GetActor()->GetVelocity()`, `GetActorGlobalTransform()`, `FWorldObserver_GetActorState` | O(N). **119 bytes per actor** (`LibCarla/source/carla/sensor/data/ActorDynamicState.h:147-148`, a `static_assert`). At Arapahoe's peak of 437 actors that is 52.0 KB/tick, 1.04 MB/s; at Bahonar's compiled peak of 170, 20.2 KB/tick, 405 KB/s (scaled). Bandwidth is nothing; the per-actor game-thread reads are the cost. |
 | Truth computation | `VehicleTelemetryService.Compute`, called per capture (`FrameRecorder.cs:143`), not per tick | O(N) **at capture rate**, ×0.1 relative to the tick. |
 | Occlusion | `OcclusionEstimator.Estimate` over N boxes, `--occlusion-samples 24` across the longer side (`CarlaControlArgumentParser.py:563-569`) | O(N × samples²) at capture rate, on the recorder's worker threads, not the tick thread. |
 | Live CoT emission | [issue #14](https://github.com/sbrett9/carla/issues/14) — one datagram per vehicle, serialised **on the tick thread** | O(N) **on the tick thread**. At 5 Hz and 200 vehicles that is 1,000 serialise-and-send per second inside the tick budget. |
@@ -801,49 +830,21 @@ at roughly 84% of real time under ordinary load". **In a SUMO-drive session the 
 on the tick thread.** The recorder already shows the pattern — a bounded channel drained by workers
 (`FrameRecorder.cs:115-122, 214-241`) — and issue #14 recommends exactly that.
 
-**The recommendation.**
+**A heavier population costs wall clock, never content.** A synchronous run at Arapahoe's population is
+slower than one at Bahonar's and draws every vehicle in both. How much slower is **M2** (§9): the pace
+of a drive at Arapahoe's full population. The evidence says the tick is dominated by streamed pixels
+(13.3 ms/Mpx) with a 5.85 ms engine base, and that 100 actors fitted inside that without visible cost.
+The 100-vehicle run had physics **on** and the traffic manager driving, whereas a SUMO-driven actor is
+kinematic (`03` D3.4), which removes the Chaos vehicle simulation entirely. That is a reason to expect the
+per-actor terms to stay small against the camera, not a claim that they do.
 
-> **D10.4 — `render_cap` = 128, `render_cap_hard` = 192.**
->
-> - 100 is demonstrated (above). 128 is one binary step beyond demonstrated.
-> - It clears Bahonar: the population exceeds 128 for **0.58% of the seven days (1.0 hour of 168)**, and
->   never exceeds 139.
-> - It does **not** clear Arapahoe, whose median is 336. Arapahoe is handled by the region gate and by
->   shedding (§4.3.1, §7).
-> - `render_cap_hard` = 192 exists only to serve `04` D4.6's participant guarantee, and 1.5× the soft cap
->   is a **guess** — no measurement bounds it. It is the right shape (a headroom multiple) at an unmeasured
->   value.
->
-> **The binding constraint is not yet identified.** The evidence says the tick is dominated by streamed
-> pixels (13.3 ms/Mpx) with a 5.85 ms engine base, and that 100 actors fitted inside that without visible
-> cost — but no one has swept actor count with the camera held fixed. **Measurement M2 (§9) must run
-> before this number is committed.** It may well come back much higher: the 100-vehicle run had physics
-> **on** and the traffic manager driving, whereas a SUMO-driven actor is kinematic (`03` D3.4), which
-> removes the Chaos vehicle simulation entirely. That is a reason to expect headroom, not a claim of it.
+> **D10.4 — withdrawn 2026-09-30.** There is no render cap: every vehicle SUMO has is drawn, and a
+> heavier scenario runs slower, never thinner.
 
-#### 4.3.1 What the region gate is actually worth
+#### 4.3.1 Withdrawn
 
-Measured, over TraCI, at each scenario's busiest moment: the fraction of the live population within a
-radius of the population centroid.
-
-| Radius | **Arapahoe** (400 live at t = 1,100 s) | **Bahonar** (130 live at t = 199,000 s) |
-|---|---|---|
-| 200 m | 82 (20.3%) | 17 (13.1%) |
-| 300 m | 128 (31.8%) | 39 (30.0%) |
-| 400 m | 198 (49.6%) | 47 (36.2%) |
-| 600 m | 276 (68.9%) | 58 (45.0%) |
-| 800 m | 334 (83.3%) | 71 (54.6%) |
-| 1,200 m | 400 (100%) | 96 (73.5%) |
-| 2,000 m | 400 (100%) | 107 (82.3%) |
-| 3,000 m | 400 (100%) | 114 (87.7%) |
-
-Read this as the cost of a wide region. On Arapahoe, a **300 m** region holds exactly `render_cap`; a
-600 m region holds 276 and sheds 54% of what it admits. On Bahonar the population is spread over 29 km²,
-so even a 3 km region holds only 114 — under the cap — which is why Bahonar never sheds.
-
-> **D10.5 — `render_region` is sized per scenario against this measurement, not defaulted.** A region
-> wider than the camera footprint buys nothing and costs actors. The cheapest probe is the one used here:
-> subscribe positions over TraCI at the busiest minute and take the radial CDF. It needs no CARLA.
+> **D10.5 — withdrawn 2026-09-30.** There is no render region: every vehicle SUMO has is drawn, wherever
+> it is.
 
 ### 4.4 RPC round trips per tick
 
@@ -861,8 +862,8 @@ The budget, stated both ways so it holds whichever answer the audit had returned
 |---|---|---|
 | Round trips per step | **2** | **N + 1** |
 | Game-thread work per step | N visitor dispatches inside one queued call | N queued calls, each with its own dispatch and response |
-| **Synchronous mode** | The queue is drained until the tick cue arrives (`CarlaEngine.cpp:331-343`: `do { Server.RunSome(1u); } while (!Server.TickCueReceived())`). Both shapes complete before the tick; the batched one costs one network round trip instead of N. At 128 vehicles and a 0.2 ms round trip, that is **0.4 ms versus 25.8 ms** — half a tick budget spent on nothing but latency. | as left |
-| **Asynchronous mode** | One call, one slice. | The queue gets **5 ms of game thread per frame** (`CarlaEngine.cpp:66-78`, `-RPCBudgetMs=`, default 5). A request that misses its slice waits a whole frame. N sequential calls therefore cost up to N frames — at N = 128 and 20 fps, **6.4 seconds per simulated step.** Unusable. |
+| **Synchronous mode** | The queue is drained until the tick cue arrives (`CarlaEngine.cpp:331-343`: `do { Server.RunSome(1u); } while (!Server.TickCueReceived())`). Both shapes complete before the tick; the batched one costs one network round trip instead of N. At Arapahoe's peak of 437 vehicles and a 0.2 ms round trip, that is **0.4 ms versus 87.6 ms** (scaled) — 1.75 times a 50 ms tick spent on nothing but latency. | as left |
+| **Asynchronous mode** | One call, one slice. | The queue gets **5 ms of game thread per frame** (`CarlaEngine.cpp:66-78`, `-RPCBudgetMs=`, default 5). A request that misses its slice waits a whole frame. N sequential calls therefore cost up to N frames — at Arapahoe's N = 437 and 20 fps, **21.9 seconds per simulated step** (scaled). Unusable. |
 
 Three consequences the plan must carry:
 
@@ -924,18 +925,20 @@ results are never collected against a run with nothing subscribed at all:
 | seven variables subscribed, results **never read** | **9.26 ms** |
 
 So **5.5 ms of the 388-vehicle figure is bought by subscribing, not by reading** — SUMO fills the results
-as part of advancing. Two consequences the render-set budget has to carry:
+as part of advancing. Two consequences the budget has to carry:
 
-- **The subscribed set is a budget line of its own.** Subscribing the whole population and rendering a
-  capped subset spends the full 5.5 ms to render `render_cap` vehicles. `03` §8.3 makes the subscribed
-  set a governed quantity with its own margins rather than a side effect of the render predicate.
+- **The subscribed set is a budget line of its own, and it is the whole population.** Every vehicle
+  SUMO has is subscribed and every one is drawn (`03` §8.3), so the cost measured at 388 vehicles is the
+  budget line for a population of that size: **9.26 ms** of `simulationStep` with the seven-variable set
+  subscribed, 5.5 ms of it bought by subscribing.
 - **The per-vehicle marginal constant above is a subscription constant, not a read constant.** At
-  ≈ 21.4 µs per vehicle per step for the seven-variable set, a decision to subscribe 100 extra vehicles
-  for truth costs 2.1 ms per step whether or not anything renders or records them.
+  ≈ 21.4 µs per vehicle per step for the seven-variable set, every 100 vehicles the scenario adds cost
+  2.1 ms per step whether or not anything records them.
 
 This is a property of SUMO, so it holds for any client and is not affected by `03` D3.2.
 
-> **D10.6 — Subscriptions, and only the variables the bridge and the truth record actually consume.**
+> **D10.6 — Subscriptions, for every vehicle SUMO has, and only the variables the bridge and the truth
+> record actually consume.**
 > Measured 14× on total step cost and 48× on the read itself. Subscribe position and angle for the pose
 > path; add speed, type, road and lane only because the truth record needs them, and know they cost 3.5×
 > the pose-only set. Per-vehicle getters in the step loop are a defect, not a tuning choice.
@@ -1056,19 +1059,20 @@ the kind doc 20 §2.5 forbids.
 for 101 events. Doc 20 §7.4's `<_aoi>` warning, quantified — a `<relation>` element of the shape doc 20
 gives is **78 bytes**:
 
-| Relations per vehicle | Event | ×base | Sidecar @128 veh | At 2 Hz | Per simulated hour |
+| Relations per vehicle | Event | ×base | Sidecar @437 veh (Arapahoe peak, scaled) | At 2 Hz | Per simulated hour |
 |---|---|---|---|---|---|
-| 0 | 662 B | 1.00× | 85 KB | 0.169 MB/s | 0.61 GB |
-| **4** | 987 B | **1.49×** | 126 KB | 0.253 MB/s | **0.91 GB** |
-| 8 | 1,299 B | 1.96× | 166 KB | 0.333 MB/s | 1.20 GB |
-| 16 | 1,923 B | 2.90× | 246 KB | 0.492 MB/s | 1.77 GB |
-| **50** | 4,575 B | **6.91×** | 586 KB | 1.171 MB/s | **4.22 GB** |
+| 0 | 662 B | 1.00× | 289 KB | 0.579 MB/s | 2.08 GB |
+| **4** | 987 B | **1.49×** | 431 KB | 0.863 MB/s | **3.11 GB** |
+| 8 | 1,299 B | 1.96× | 568 KB | 1.135 MB/s | 4.09 GB |
+| 16 | 1,923 B | 2.90× | 840 KB | 1.681 MB/s | 6.05 GB |
+| **50** | 4,575 B | **6.91×** | 1,999 KB | 3.999 MB/s | **14.39 GB** |
 
 Doc 20 §7.4 says a map with fifty areas "triples the sidecar". **Measured, it is worse: 6.9×.** The
 correction matters because the sidecar is the artefact a consumer parses per frame.
 
 > **D10.8 — `aoi_max_relations_per_vehicle` = 4, nearest always present**, selected as (areas containing
-> the vehicle) ∪ (areas within `aoi_halo_m`) ∪ (the single nearest), truncated in that order of priority.
+> the vehicle) ∪ (areas within `near_m`, `04` §7.3) ∪ (the single nearest), truncated in that order of
+> priority.
 > Measured cost 1.49× the base sidecar; the uncapped fifty-area case is 6.91×. The truncation must be
 > visible: when relations were dropped, `<_aoi truncated="true">`, so a consumer never reads absence as
 > "not near any area".
@@ -1179,18 +1183,20 @@ The value gets into that field because `FWorldObserver_Serialize` calls
 A `TActorIterator` is a linear walk of the level's actor array with a virtual `IsA` per element
 (`EngineUtils.h:324-365`, the type test at `:285`; Epic's own comment at `:235` calls `IsA()`
 "expensive"). So the cost is **O(total actors in the world) per sweep, per tick**, and total actors in a
-capture window is `render_cap` vehicles plus the sensor rig plus every generated signal actor.
+capture window is every vehicle SUMO has (437 at Arapahoe's peak), plus any pooled bodies parked for
+reuse, plus the sensor rig, plus every generated signal actor.
 
 Two consequences that matter to this budget:
 
-1. **The cost scales with `render_cap`.** It is one of only three per-tick game-thread terms that does
-   (the others are the `apply_batch` visitor and the world-observer per-actor loop, §4.11), so it belongs
-   in the same measurement as those — it is folded into **M2**, not given a probe of its own.
+1. **The cost scales with the actor count.** It is one of only three per-tick game-thread terms that
+   does (the others are the `apply_batch` visitor and the world-observer per-actor loop, §4.11), so it
+   belongs in the same measurement as those — it is inside **M2**'s pace at full population, not given a
+   probe of its own.
 2. **It is largest in exactly the configuration chosen to be cheapest.** Under the frozen policy the
    answer cannot change from tick to tick, and sweep 3 has nothing to find, so the work is entirely
    wasted. Caching the three pointers and the packed block would make the frozen policy genuinely free.
    [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md) records this as a defect; this section
-   records it as a per-tick budget line that scales with the render cap.
+   records it as a per-tick budget line that scales with the actor count.
 
 **Magnitude: not measured.** `FWorldObserver::BroadcastTick` already carries
 `TRACE_CPUPROFILER_EVENT_SCOPE_STR(__FUNCTION__)` (`WorldObserver.cpp:406`), so an Unreal Insights
@@ -1343,24 +1349,12 @@ Which bits move, over 700 measured steps across both scenarios:
    the headlight decision is a client-side function of a value the client already has. The mapping is
    [`11`](11_Time_And_Illumination.md)'s; the fact that it is free is this section's.
 
-**Measured against the render set, not against the whole population.** The rate that matters is the rate
-among *rendered* vehicles, and the region gate of §4.3.1 selects a spatial subset rather than a random
-one — so the map-wide figure is not automatically the right one. Measured at t = 1,100 s over 400 steps,
-region centred on the population centroid exactly as in §4.3.1:
-
-| Region | Live in region | Rendered (capped at 128) | Signal changes per step, in region | % of region | **Light commands per tick at `render_cap`** |
-|---|---|---|---|---|---|
-| **300 m** (the region §4.3.1 recommends) | 134 | 128 | 10.10 | **7.54%** | **9.6** |
-| 600 m | 281 | 128 | 21.92 | 7.80% | 10.0 |
-| 1,200 m (whole map) | 417 | 128 | 40.07 | 9.61% | 12.3 |
-
-**The rate inside the render region is *lower* than the map-wide rate, not higher** — 7.54% against
-9.61% — which is the opposite of what a congested-core assumption would predict and is the reason the
-measurement was worth taking rather than reasoning about. The 300 m region around the population
-centroid is freeway mainline, where vehicles run at speed and brake rarely; the braking that raises the
-map-wide figure is on the ramps and surface streets outside it. The rate is nevertheless **flat at
-7.5–9.6% across a 4× range of region size**, so the resulting budget is insensitive to how
-`render_region` is chosen, and **7.54% is used below as the figure for the recommended 300 m region.**
+**Every vehicle is drawn, so the rate that applies is the whole-map rate**, and both rows above are
+whole-map measurements: Arapahoe at t = 1,100 s, **417 live, 40.07 changes per step, 9.61%**; Bahonar at
+its 07:00 peak, 132 live, 36.17 changes per 1.0 s step, 27.2%. Over 400 steps at the same Arapahoe
+instant, the vehicles nearer the population centroid changed at a lower rate — 7.54% of those within
+300 m of it, 7.80% within 600 m — because freeway mainline brakes less than the ramps and surface streets
+around it. The whole-map rate is therefore the upper end, and it is the figure used below.
 
 #### 4.8.2 What it costs in the batch — derived, arithmetic shown
 
@@ -1380,21 +1374,25 @@ Command sizes on the wire, derived from the serialisers. `SetVehicleLightState` 
 not a captured packet; the exact figure is a byte count of one `apply_batch` frame off the socket and
 nothing in this budget needs it.)*
 
-Now the growth, at `render_cap` = 128:
+Now the growth, with every vehicle drawn, at the measured populations of §4.8.1 (derived):
 
 | Scenario | Light commands per tick | Batch entries | Batch bytes | **Growth in bytes** | **Extra round trips** |
 |---|---|---|---|---|---|
-| **Arapahoe**, 0.05 s step (one SUMO step per world tick) | **9.6** | 128 + 9.6 = 137.6 | 128×40 + 9.6×10 = 5,216 B vs 5,120 B | **+1.9%** | **0** |
-| **Bahonar**, 1.0 s step (one SUMO step per 20 world ticks) | 34.8 on one tick in 20 | 162.8 on that tick, 128 on the other 19 | 5,468 B on that tick | **+6.8% on 1 tick in 20 = +0.34% amortised** | **0** |
+| **Arapahoe**, 0.05 s step (one SUMO step per world tick), 417 live | **40.07** | 417 + 40.07 = 457.07 | 417×40 + 40.07×10 = 17,081 B vs 16,680 B | **+2.4%** | **0** |
+| **Bahonar**, 1.0 s step (one SUMO step per 20 world ticks), 132 live | 36.17 on one tick in 20 | 168.17 on that tick, 132 on the other 19 | 132×40 + 36.17×10 = 5,642 B vs 5,280 B on that tick | **+6.9% on 1 tick in 20 = +0.34% amortised** | **0** |
+
+The light commands are a fixed fraction of the population, so the byte growth does not change with it:
+at Arapahoe's peak of 437 they are ≈ 42 per tick, and at Bahonar's compiled peak of 170 ≈ 46 on its step
+tick (scaled from the measured rates), for the same +2.4% and +6.9%.
 
 > **D10.15 — Vehicle light state rides the existing per-tick `apply_batch` as deltas, and the batch cost
-> of doing so is negligible.** Measured change rates (§4.8.1) with derived command sizes give **+1.9% of
-> batch bytes per tick on the binding scenario** and **+0.34% amortised on the sizing scenario**, with
+> of doing so is negligible.** Measured change rates (§4.8.1) with derived command sizes give **+2.4% of
+> batch bytes per tick on Arapahoe Underpass** and **+0.34% amortised on Bahonar**, with
 > **no change to the two-round-trip-per-step budget of §4.4**. Emitting light state as a per-actor RPC
 > instead would be **one blocking round trip per changed vehicle** — the same shape as the vehicle-fade
 > call the team brief records as *"the heaviest load this client puts on the server's per-frame RPC
-> budget"* — and at 9.6 changes per tick and a 0.2 ms round trip that is **1.9 ms of a 50 ms tick spent on
-> latency alone**, against **zero** batched, because the light commands ride a round trip the tick was
+> budget"* — and at ≈ 40 changes per tick and a 0.2 ms round trip that is **≈ 8 ms of a 50 ms tick spent
+> on latency alone**, against **zero** batched, because the light commands ride a round trip the tick was
 > already paying for. Both paths exist in the shim: the per-actor RPC at
 > `carlanet/__init__.py:781-784`, the batch command at `:1141-1147`. **Use the batch.**
 
@@ -1422,10 +1420,9 @@ by every vehicle. The graph's internal names include `GetComponentsByClass`, `Ge
 both light components and a dynamic material instance.
 
 > **What one transition costs is not settled by source and is measurement M8.** It is Blueprint graph
-> work, so nothing short of running it answers the question. The probe is cheap and shares M2's harness:
-> spawn N kinematic actors, drive a light-state sweep at the measured 7.5% per tick, and difference the
-> clock ratio against the same run with the sweep absent. **The budget line to measure is 9.6 transitions
-> per tick at `render_cap` = 128, not 128.**
+> work, so nothing short of running it answers the question. The probe is cheap and is taken on M2's
+> drive: run the same span with `vehicle_lights` on and off, and difference the clock ratio. **The budget
+> line to measure is the measured ≈ 40 transitions per tick at 417 live vehicles, not 417.**
 
 **Light state is not in the truth stream, and that is a cost.** The 119-byte `ActorDynamicState`
 (`ActorDynamicState.h:124-143`, `static_assert` at `:147-152`) carries `control`, `speed_limit`,
@@ -1435,7 +1432,8 @@ RPC. Two consequences:
 
 1. **The bridge must hold the authoritative light state client-side** and send deltas from its own
    record, because reading back what it sent would cost a round trip per tick and `D10.10` forbids the
-   polling. This is free — it is a `uint32` per rendered vehicle, 512 B at `render_cap` = 128.
+   polling. This is free — it is a `uint32` per drawn vehicle, 1,748 B at Arapahoe's peak of 437
+   (scaled).
 2. **The bulk read-back path is broken today and must not be relied on.** `CarlaClient.cs:1631` calls
    the RPC `"get_vehicles_light_states"`; the server binds `"get_vehicle_light_states"`
    (`CarlaServer.cpp:2824`) and the C++ client uses the singular correct name (`Client.cpp:559`). The
@@ -1449,18 +1447,19 @@ RPC. Two consequences:
 
 #### 4.8.4 Is it worth doing at all?
 
-**At 2 Hz capture and `render_cap` = 128, the measured 9.6 transitions per tick means roughly 0.75
-signal transitions per rendered vehicle per captured frame** — `9.6 changes/tick × 10 ticks per capture
-÷ 128 vehicles = 0.75`, of which the 91.8% brake share dominates. So brake state in the imagery is not a
-rare event: **between two consecutive captures, three quarters of the render set changed its lights at
-least once.** A corpus captured with lights off is not one that merely lacks a detail; it is one in which
-a per-frame property of most vehicles is systematically absent.
+**At 2 Hz capture, the measured whole-map rate on Arapahoe means roughly one signal transition per drawn
+vehicle per captured frame** — `40.07 changes/tick × 10 ticks per capture ÷ 417 vehicles = 0.96`
+(derived), of which the 91.8% brake share dominates, and the figure does not depend on the population
+because the rate is a fraction of it. So brake state in the imagery is not a rare event: **between two
+consecutive captures, the average drawn vehicle changed its lights about once.** A corpus captured with
+lights off is not one that merely lacks a detail; it is one in which a per-frame property of most vehicles
+is systematically absent.
 
 Whether a brake light is **resolvable** at the collection altitude is not a scale question and is not
 answered here — [`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md) and
 [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md) own it. What this section establishes is
 that **the cost is not the reason to decide either way**: TraCI carries the variable for 0.9–1.5 µs per
-vehicle per step (§4.5.1), the batch grows by under 2% of its bytes (§4.8.2), and the round-trip budget
+vehicle per step (§4.5.1), the batch grows by about 2.4% of its bytes (§4.8.2), and the round-trip budget
 does not move at all.
 
 ### 4.9 Night rendering cost, and why there is nothing to pay for
@@ -1511,15 +1510,16 @@ expensive:
 | B — moon as a second directional light | **One more shadow-casting directional light**, i.e. **a second VSM clipmap set** | The §4.7.3 cost, doubled, and invalidated every frame if the moon is driven from an ephemeris |
 | C — night exposure | A post-process value | Free at runtime; the surface gap is [`08`](08_Collection_And_EPoL.md) §2.9's |
 | D — street lamps and emissive facades from OSM | **Many point/spot lights.** Bahonar's OSM supplies **zero**, so they would have to be synthesised — one per junction would be 651, one per 50 m of the measured 199.8 km of lane would be ~4,000 | Unbounded, and the dominant term the moment it is built |
-| Headlights on the render set | **128 vehicles × an unknown number of shadow-casting spot lights each** | **The measurement that decides whether night is affordable at all** |
+| Headlights on every drawn vehicle | **437 vehicles at Arapahoe's peak (170 at Bahonar's compiled peak) × an unknown number of shadow-casting spot lights each** | **The measurement that decides whether night is affordable at all** |
 
 > **D10.16 — Night rendering cost is a question about light sources, and the only light sources a
 > generated world has are vehicle headlights. Its cost must be measured before any night capture is
 > planned, and it is measurement M10.** Today the count is not even known: the light components are
 > assembled at runtime by the shared `BaseVehiclePawn` graph rather than declared as construction-script
-> variables, so the per-vehicle count cannot be read from the assets. At `render_cap` = 128 the
-> difference between two shadow-casting spot lights per vehicle and six is the difference between 256
-> and 768 dynamic lights, and no figure in §4.1's budget survives contact with the upper end of that.
+> variables, so the per-vehicle count cannot be read from the assets. At Arapahoe's peak of 437 drawn
+> vehicles the difference between two shadow-casting spot lights per vehicle and six is the difference
+> between 874 and 2,622 dynamic lights (at Bahonar's compiled peak of 170, 340 and 1,020; scaled), and
+> no figure in §4.1's budget survives contact with the upper end of that.
 > **This is the reason the night question is a cost question and not only a viability question**, and it
 > is why §6's envelope carries an illumination dimension rather than a footnote.
 
@@ -1544,27 +1544,28 @@ undecoded frames plus ~0.3 GB of encode scratch. Two recorded cameras double it.
 > **D10.9 — Read the bare-earth plane as `array.array('f')` (or a `numpy` view), not a tuple of Python
 > floats.** Measured: 243.6 MB → 32.3 MB and 5.61 s → 0.011 s, with identical lookup semantics, at
 > `SumoCotBridge.py:112`. A vectorised `numpy` batch lookup is a further 16× on the lookup itself and is
-> worth taking if the bridge ever needs a per-tick ground height for every rendered vehicle at once.
+> worth taking if the bridge ever needs a per-tick ground height for every drawn vehicle at once.
 
 ### 4.11 Budget table per subsystem
 
-One simulated second, at `fixed_delta = 0.05` (20 ticks), SUMO step 1.0 s, 128 rendered vehicles, one
-1920 × 1080 RGB camera plus its depth camera, capture at 2 Hz, **solar policy frozen**.
+One simulated second, at `fixed_delta = 0.05` (20 ticks), SUMO step 1.0 s, **170 drawn vehicles —
+Bahonar's compiled peak (§3.1.5)**, one 1920 × 1080 RGB camera plus its depth camera, capture at 2 Hz,
+**solar policy frozen**. Every per-vehicle figure is a measured constant times 170 (scaled).
 
 | Subsystem | Per simulated second | Basis | Consumer | Headroom vs. real time |
 |---|---|---|---|---|
-| **SUMO step** | 1 step × 128 × 5.7 µs = **0.73 ms** | measured, §3.2 | `sumo.exe` process | 1,370× |
-| **TraCI read** (subscriptions, 7 vars) | 1 step × 128 × 21.4 µs + 0.23 ms = **2.97 ms** | measured, §4.5 | bridge thread | 337× |
-| **TraCI read, the signals variable** | 1 step × 128 × 0.9 µs = **0.12 ms** | measured, §4.5.1 | bridge thread | 8,300× |
-| **Interpolation** (`03` §6.4) | 20 ticks × 128 lane evaluations | not measured — **guess**: ≪ 1 ms, it is a polyline arc-length lookup | bridge thread | — |
-| **Bare-earth lookups** | 20 × 128 × 0.557 µs = **1.43 ms** (0.09 ms with `numpy`) | measured, §3.4 | bridge thread | 700× |
+| **SUMO step** | 1 step × 170 × 5.7 µs = **0.97 ms** | measured, §3.2 | `sumo.exe` process | 1,030× |
+| **TraCI read** (subscriptions, 7 vars) | 1 step × 170 × 21.4 µs + 0.23 ms = **3.87 ms** | measured, §4.5 | bridge thread | 258× |
+| **TraCI read, the signals variable** | 1 step × 170 × 0.9 µs = **0.15 ms** | measured, §4.5.1 | bridge thread | 6,500× |
+| **Interpolation** (`03` §6.4) | 20 ticks × 170 lane evaluations | not measured — **guess**: ≪ 1 ms, it is a polyline arc-length lookup | bridge thread | — |
+| **Bare-earth lookups** | 20 × 170 × 0.557 µs = **1.89 ms** (0.12 ms with `numpy`) | measured, §3.4 | bridge thread | 530× |
 | **RPC round trips** | 20 ticks × 2 = **40 round trips**, unchanged by light state | measured from source, §4.4, §4.8.2 | network + game thread | see §4.4 |
 | **Traffic-light state** | **0 round trips, 0 batch entries, 0 bytes** — none is written, on any map | [`03`](03_CoSimulation_Runtime.md) `D3.24`; signals are simulated in SUMO and rendered nowhere | — | — |
-| **`apply_batch` dispatch** | 20 × 128 = 2,560 visitor dispatches, each a no-sweep `SetActorTransform` | not measured — **M2** | **game thread** | — |
-| **`apply_batch` growth from light state** | **+35 entries on 1 tick in 20** (Bahonar) / **+9.6 every tick** (Arapahoe); **+0.34% / +1.9% of batch bytes** | measured rates §4.8.1 × derived sizes §4.8.2 | game thread | — |
-| **Vehicle light transitions, engine side** | **35 `RefreshLightState` Blueprint calls on 1 tick in 20** (Bahonar) / **9.6 per tick** (Arapahoe); a no-op write is 11 bool compares | rate measured §4.8.1; per-transition cost **not measured — M8** | **game thread** | — |
-| **World observer** | 20 × 128 × 119 B = **305 KB/s**; 2,560 per-actor `GetVelocity` + transform reads | measured size, unmeasured cost | **game thread** | — |
-| **World observer, solar block** | 20 ticks × **3 full actor-list sweeps** (`GetSolarState`), paid whether frozen or advancing | read from source §4.7.2; cost **not measured — folded into M2** | **game thread — scales with `render_cap`** | — |
+| **`apply_batch` dispatch** | 20 × 170 = 3,400 visitor dispatches, each a no-sweep `SetActorTransform` | not measured — inside **M2**'s pace | **game thread** | — |
+| **`apply_batch` growth from light state** | **≈ 46 entries on 1 tick in 20** (Bahonar at 170, scaled from the measured 27.2%) / **≈ 40 every tick** (Arapahoe, measured at 417 live); **+0.34% / +2.4% of batch bytes** | measured rates §4.8.1 × derived sizes §4.8.2 | game thread | — |
+| **Vehicle light transitions, engine side** | **≈ 46 `RefreshLightState` Blueprint calls on 1 tick in 20** (Bahonar at 170, scaled) / **≈ 40 per tick** (Arapahoe, measured at 417 live); a no-op write is 11 bool compares | rate measured §4.8.1; per-transition cost **not measured — M8** | **game thread** | — |
+| **World observer** | 20 × 170 × 119 B = **405 KB/s**; 3,400 per-actor `GetVelocity` + transform reads | measured size, unmeasured cost | **game thread** | — |
+| **World observer, solar block** | 20 ticks × **3 full actor-list sweeps** (`GetSolarState`), paid whether frozen or advancing | read from source §4.7.2; cost **not measured — inside M2's pace** | **game thread — scales with the actor count** | — |
 | **Solar clock, frozen** | **1** `UpdateSun` per window, outside the capture loop | read from source, §4.7.1 | game thread | — |
 | **Solar clock, advancing** | 20 `UpdateSun` per second on the game thread (small) **plus a VSM directional-clipmap invalidation every frame**, i.e. the directional shadow set re-rendered uncached 20 times per second | read from source, §4.7.3; magnitude **not measured — M7** | **render thread** | — |
 | **Sky-light real-time capture** | fixed per-frame floor, time-sliced over ~16 frames; **independent of sun motion** | read from source, §4.7.3 | render thread | — |
@@ -1572,12 +1573,17 @@ One simulated second, at `fixed_delta = 0.05` (20 ticks), SUMO step 1.0 s, 128 r
 | **Camera render + stream** | 20 ticks × 4.15 Mpx × 13.3 ms = **1,104 ms** *(→ 110 ms with `sensor_tick = 0.5`, hypothesis M1)* | measured ratio, §4.1 | **game thread — dominant** | **0.91×** *(→ 9.1×)* |
 | **PNG encode** | 2 frames × 118 ms = **236 ms** of worker time, on 2 of 10 workers | measured, §4.6 | .NET thread pool | 42× |
 | **Disk write** | 2 × 5.00 MB = **10.0 MB/s** | measured, §4.6 | disk | ~50× on NVMe |
-| **CoT sidecar** | 2 × 128 × 987 B = **253 KB/s** | measured, §4.6 | .NET thread pool | — |
-| **Live CoT feed** (if enabled) | 5 Hz × 128 = **640 serialise+send**, today **on the tick thread** | [issue #14](https://github.com/sbrett9/carla/issues/14) | **game thread — must be moved off** | — |
+| **CoT sidecar** | 2 × 170 × 987 B = **336 KB/s** | measured, §4.6 | .NET thread pool | — |
+| **Live CoT feed** (if enabled) | 5 Hz × 170 = **850 serialise+send**, today **on the tick thread** | [issue #14](https://github.com/sbrett9/carla/issues/14) | **game thread — must be moved off** | — |
+
+**At Arapahoe's population the SUMO and TraCI rows are paid on every tick**, because its SUMO step is
+0.05 s rather than 1.0 s: §4.5 measured 10.1 ms per step for the seven-variable set at 388 vehicles, so
+≈ 202 ms per simulated second (derived) — large against the other bridge rows, and still under a fifth of
+the camera's 1,104 ms.
 
 **The camera is still the budget.** Everything the illumination requirement adds on the *measured* side
-is under 0.2 ms of a 1,000 ms second: the signals variable is 0.12 ms and the light commands are 96 bytes
-a tick. The two things it adds that are **not** measured — the per-tick solar sweeps and the advancing
+is under 0.2 ms of a 1,000 ms second: the signals variable is 0.15 ms at 170 vehicles, and the light
+commands are ≈ 400 bytes a tick at Arapahoe's 417. The two things it adds that are **not** measured — the per-tick solar sweeps and the advancing
 policy's shadow invalidation — are on the game thread and the render thread respectively, and they are
 M2 and M7. **Under the frozen policy, which §4.2.4's plan uses for five of its six windows, the second of
 those is zero by construction.**
@@ -1600,25 +1606,25 @@ sequenceDiagram
     Note over Sumo,Bridge: ONCE PER SUMO STEP (1.0 s on Bahonar = every 20 world ticks)
     Bridge->>Sumo: simulationStep()
     Sumo-->>Bridge: step + all subscription results<br/>(position, angle, truth vars, SIGNALS)
-    Note right of Sumo: MEASURED 2.97 ms at 128 veh<br/>(0.73 ms step + 2.24 ms subscriptions)<br/>+0.12 ms for VAR_SIGNALS (4.5.1)<br/>naive per-vehicle getters would be 37 ms
+    Note right of Sumo: SCALED 3.87 ms at 170 veh (Bahonar compiled peak)<br/>(0.97 ms step + 2.90 ms subscriptions)<br/>+0.15 ms for VAR_SIGNALS (4.5.1)<br/>naive per-vehicle getters would be 50 ms
 
     Note over Bridge: EVERY WORLD TICK (20 per SUMO step)
-    Bridge->>Bridge: interpolate 128 poses along lane geometry
+    Bridge->>Bridge: interpolate every drawn pose along lane geometry
     Note right of Bridge: not measured — expected sub-ms
     Bridge->>Bridge: bare-earth height per pose
-    Note right of Bridge: MEASURED 0.071 ms (128 x 0.557 us)<br/>0.0045 ms with a numpy batch
+    Note right of Bridge: SCALED 0.095 ms (170 x 0.557 us)<br/>0.006 ms with a numpy batch
     Bridge->>Bridge: light deltas vs the client-side record<br/>(brake/indicator from SUMO, headlights from sun elevation)
-    Note right of Bridge: MEASURED 9.6 changed vehicles/tick at cap<br/>SUMO never asserts frontlight (0 in 700 steps)<br/>sun elevation is already in the observer header
+    Note right of Bridge: MEASURED 9.61% of vehicles per 0.05 s step<br/>(40 per tick at Arapahoe's 417 live)<br/>SUMO never asserts frontlight (0 in 700 steps)<br/>sun elevation is already in the observer header
 
-    Bridge->>Rpc: ApplyBatchSyncAsync(128 transforms + ~9.6 light commands)
+    Bridge->>Rpc: ApplyBatchSyncAsync(one transform per drawn vehicle + changed light commands)
     Rpc->>Game: apply_batch — ROUND TRIP 1 of 2
-    Game->>Game: std::visit x137, each a no-sweep SetActorTransform<br/>or a SetVehicleLightState behind an 11-field early-out
-    Note right of Game: NOT MEASURED — measurements M2 and M8<br/>no collision query (CarlaActor.cpp:354-359)<br/>light commands are +1.9% of batch bytes, +0 round trips
-    Game-->>Bridge: 137 CommandResponse
+    Game->>Game: std::visit once per command, each a no-sweep SetActorTransform<br/>or a SetVehicleLightState behind an 11-field early-out
+    Note right of Game: NOT MEASURED — measurements M2 and M8<br/>no collision query (CarlaActor.cpp:354-359)<br/>light commands are +2.4% of batch bytes, +0 round trips
+    Game-->>Bridge: one CommandResponse per command
 
     Bridge->>Rpc: SendTickCueAsync()
     Rpc->>Game: tick_cue — ROUND TRIP 2 of 2
-    Note right of Game: sync mode drains the queue to the cue<br/>(CarlaEngine.cpp:331-343): every OTHER<br/>client's pending work lands here too
+    Note right of Game: sync mode drains the queue to the cue<br/>(CarlaEngine.cpp:331-343): every OTHER<br/>client's pending work is served here too
 
     Game->>Sun: (advancing policy only) TimeOfDayController::Tick
     Sun->>Sun: SolarTime += dt*rate; UpdateSun()
@@ -1629,9 +1635,9 @@ sequenceDiagram
 
     Game->>Obs: BroadcastTick
     Obs->>Obs: GetSolarState: THREE full actor-list sweeps,<br/>every tick, frozen or not
-    Note right of Obs: READ FROM SOURCE, cost NOT measured<br/>scales with render_cap — folded into M2<br/>(CesiumHeightSampler.cpp:683-697, 753-797)
+    Note right of Obs: READ FROM SOURCE, cost NOT measured<br/>scales with the actor count — inside M2's pace<br/>(CesiumHeightSampler.cpp:683-697, 753-797)
     Obs->>Obs: serialise every actor, 119 B each<br/>(no light_state field — ActorDynamicState.h:124-143)
-    Note right of Obs: MEASURED 119 B/actor (ActorDynamicState.h:147)<br/>15.2 KB/tick at 128 — per-actor reads NOT measured
+    Note right of Obs: MEASURED 119 B/actor (ActorDynamicState.h:147)<br/>20.2 KB/tick at 170 — per-actor reads NOT measured
     Obs-->>Bridge: episode-state frame + solar header (push, no RPC)
     Note right of Bridge: client-side solar read is a field access<br/>(CarlaClient.cs:1991) — genuinely free
 
@@ -1640,7 +1646,7 @@ sequenceDiagram
         Rec->>Rec: VehicleTelemetryService.Compute + occlusion
         Rec->>Rec: PngEncoder: BGRA to RGB repack, zlib level 6
         Note right of Rec: MEASURED 118 ms at 1080p, 356 ms at 2888x2160<br/>10 workers, 42x headroom at 2 Hz<br/>OFF the tick thread — this is the pattern to copy
-        Rec->>Rec: CotWriter: 128 events x 987 B
+        Rec->>Rec: CotWriter: one event per drawn vehicle x 987 B
     end
 
     Note over Bridge,Rec: engine base with no client and no camera:<br/>5.85 ms/frame (171 tick/s, doc 18 §6, carried forward)
@@ -1657,7 +1663,7 @@ constraint that binds it, and whether that constraint is measured.
 |---|---|---|---|
 | **Scenario span** | Unbounded. Seven days is 140 s of SUMO. | SUMO fast-forward, 4,307× real time | **Yes** |
 | **Total SUMO population** | ≥ 437 concurrent; no ceiling found | SUMO at 4–7 µs/vehicle-step | **Yes** |
-| **Rendered actors** | **128** (`render_cap`), 192 hard | game-thread pose write + world-observer serialisation | **No — M2.** 100 is demonstrated |
+| **Rendered actors** | **Every vehicle SUMO has**, with no cap: 437 at Arapahoe's peak, 170 at Bahonar's compiled peak | none on content. A heavier population costs wall clock: per-actor game-thread work (pose write, world-observer serialisation) | **Populations yes; the pace at 437 is M2.** 100 concurrent rendered vehicles are demonstrated |
 | **Simulated time rendered per run** | **1,800 s** default per window, 4–8 windows | wall clock (§4.1) and storage (§4.6) | **Yes** |
 | **Wall clock per 1,800 s window** | **1.7 h** at 2888 × 2160 ×2; **0.5 h** at 1920 × 1080 ×2 | clock ratio 29.5% measured / 82% derived | **Measured / derived** |
 | **Cameras** | **1 recorded RGB + 1 depth** at 1920 × 1080 at **82%** of real time; one RGB alone at 100%; two recorded pairs at 43% | 13.3 ms per streamed megapixel | **Measured ratio, derived extrapolation** |
@@ -1671,11 +1677,11 @@ constraint that binds it, and whether that constraint is measured.
 | **Illumination — renderable fraction of the scenario** | **59% to 77% of the sizing scenario's daily vehicle-hours**, depending on the declared date | the scenario's authored timeline against the site's solar geometry | **Measured (§3.5.2)** |
 | **Illumination — strata per window** | **Unbounded in principle, linear in wall clock in practice.** The *same* window at a different declared date is a different illumination with an identical population, an identical render set and an identical corpus size | none — each stratum is a separate run | **Measured (§3.5.1: 21° of sun elevation at 07:00 purely from the date)** |
 | **Illumination — solar policy** | **Frozen: no marginal render cost. Advancing: a VSM directional invalidation every tick, magnitude unmeasured** | virtual shadow map cache key on light direction | **Read from source; magnitude is M7** |
-| **Vehicle lights** | **On, at `render_cap` = 128, at 9.6 transitions per tick** | batch bytes +1.9%, round trips +0 | **Rates measured; engine transition cost is M8** |
+| **Vehicle lights** | **On, at ≈ 40 transitions per tick at Arapahoe's 417 live (9.61%)** | batch bytes +2.4%, round trips +0 | **Rates measured; engine transition cost is M8** |
 | **Night** | **Not in the envelope.** A night window is truth-only | there is nothing to light the scene with | **Measured (§4.9)** |
 
 **Illumination is a new dimension of the envelope and it behaves unlike the others.** Every other axis
-here trades against wall clock or against actors. This one does not: **changing a window's declared date
+here trades against wall clock. This one does not: **changing a window's declared date
 changes the sun by up to 21° at no cost in population, render set, tick rate or bytes** (§3.5.1). What it
 costs is that each stratum is its own run, so **`n` illumination strata cost `n ×` the wall clock of one**
 — which is the ordinary windowing arithmetic of §4.2.3 and nothing new. That makes illumination the
@@ -1684,17 +1690,14 @@ simulated seconds.
 
 **The three scenarios, placed in the envelope:**
 
-- **Bahonar** fits entirely on population. Peak 139 against a cap of 128 means shedding on 0.58% of the
-  week; a 3 km render region holds 114 of 130 at peak. **It does not fit entirely on illumination**: at
-  best 77% and at worst 59% of its daily vehicle-hours fall in renderable light (§3.5.2), and its 23:00
-  regime falls outside at every date. The recommended plan is §4.2.4's five imagery windows plus one
+- **Bahonar** is light on population: its compiled scenario peaks at 170 with a median of 42 (§3.1.5),
+  every vehicle drawn. **It does not fit entirely on illumination**: at best 77% and at worst 59% of its
+  daily vehicle-hours fall in renderable light (§3.5.2), and its 23:00 regime falls outside at every date. The recommended plan is §4.2.4's five imagery windows plus one
   truth-only window: **2.5 wall-clock hours and 90 GB at 1920 × 1080 ×2**, spanning +1.8° to +37.6° of
   sun elevation.
-- **Arapahoe Underpass** does not fit without the region gate. Median 336 against a cap of 128 means the
-  cap binds essentially always. A 300 m region holds exactly 128; a 600 m region holds 276 and sheds 54%.
-  **This is the scenario the degradation strategy exists for**, it is the one to run M2 against, and it is
-  also the one whose light-state rate was measured inside the render region (§4.8.1) because that is
-  where braking concentrates.
+- **Arapahoe Underpass** is the heavy case on population: median 336, peak 437, every one drawn. It
+  costs wall clock, not content. **It is the scenario M2 measures the pace of a drive against**, and the
+  one whose whole-map light-state rate sets the light budget (§4.8.1).
 - **Gardnerville Orbit** fits on every axis and is the right scenario for M7 and M10, because at a peak
   of 51 vehicles nothing else is competing for the frame and a shadow or light-source cost shows up
   cleanly.
@@ -1703,52 +1706,36 @@ simulated seconds.
 
 ## 7. Degradation, made visible
 
-Every shed is a hole in the observability denominator (doc 20 §2.5). The design's obligation is not to
-avoid shedding — on Arapahoe it cannot — but to make every shed **countable, attributable and joinable**.
+No vehicle is ever shed. Every vehicle SUMO has is drawn, and a heavier population makes a synchronous
+run slower on the wall clock, never thinner (§4.3). What can be traded for wall clock is the cost of each
+frame, and every such trade changes what the corpus is, so the design's obligation is to make each one
+**declared, recorded and joinable** — never silent.
 
-**The order in which things are shed**, most expendable first:
+**The order in which wall-clock trades are taken**, most expendable first:
 
-| # | Shed | Recorded as | Never |
+| # | Trade | Recorded as | Never |
 |---|---|---|---|
-| 1 | `ambient` vehicles, by longest time since last inside any sensor frustum | `render_states[].render_state = simulated_only`, `reason = capped` | — |
-| 2 | `in_frustum` vehicles beyond `render_cap`, farthest first | same | — |
-| 3 | `aoi_member` vehicles not in an open interval | same | — |
 | 4 | **Solar policy: advancing → frozen at the window's start instant** | `solar_policy` in the manifest, per window | Silently. A window that was declared advancing and ran frozen is a different capture, and §4.7.3 says it is also a much cheaper one — so the substitution would otherwise hide as a good clock ratio |
-| 5 | **Vehicle lights: `sumo_signals` → off** | `vehicle_lights` in the manifest, per window | Silently. Recovers the 9.6 transitions per tick of §4.8, which is the smallest saving on this list and should be tried last among the cheap ones |
+| 5 | **Vehicle lights: `sumo_signals` → off** | `vehicle_lights` in the manifest, per window | Silently. Recovers the ≈ 40 transitions per tick of §4.8 (Arapahoe, 417 live), which is the smallest saving on this list and should be tried last among the cheap ones |
 | 6 | Capture rate: 2 Hz → 1 Hz | `capture_rate_hz` in the run manifest, per window | Silently. A changed rate changes the corpus's temporal sampling and must be in the manifest |
 | 7 | Camera count: drop the second recorded camera | `sensors[]` in the manifest | — |
 | 8 | Resolution | `_carla_intrinsics` already carries it per capture (measured present on disk) | — |
-| — | **The declared date, and therefore the illumination** | — | **Never shed.** It costs nothing to keep (§6) and silently changing it makes two runs of the same window incomparable while looking identical in every other field |
-| — | **Participants in an open interval** | — | **Never shed. `04` D4.6: the run fails, loudly, at that tick.** A run that silently drops its subject is indistinguishable from a run whose model missed it |
+| — | **The declared date, and therefore the illumination** | — | **Never traded.** It costs nothing to keep (§6) and silently changing it makes two runs of the same window incomparable while looking identical in every other field |
+| — | **Any vehicle SUMO has, participant or not** | — | **Never traded.** Every vehicle is drawn (§4.3); a heavier population costs wall clock instead. A participant is therefore always drawn (`04` D4.6) |
 
-**What must be written for the shedding to be visible**, beyond `04`'s `render_states[]`:
+Rows 1–3, which shed vehicles, were withdrawn on 2026-09-30 with the render cap; the surviving rows keep
+their numbers.
 
-```
-shedding[]                # in the run manifest, one entry per admission pass that shed
-  tick                    # the world tick of the pass
-  sim_time_s
-  sumo_population         # how many vehicles SUMO had live
-  eligible                # how many passed gates 1-3
-  admitted                # how many were rendered
-  shed                    # eligible - admitted
-  cap                     # the render_cap in force
-  reason                  # capped | region | window
-```
-
-Three properties this must have:
-
-1. **`sumo_population` is recorded whether or not anything was shed**, so a consumer can compute the
-   rendered fraction at any tick without reconstructing it from `render_states[]`.
-2. **It is written incrementally**, like `render_states[]`, so a crash does not lose it.
-3. **A run whose median rendered fraction falls below a declared floor fails its quality gate rather than
-   producing a quietly thin corpus.** The floor is a scenario property, not a global constant, because on
-   Bahonar it should be 1.0 and on Arapahoe it cannot be.
+**What every window records, whichever trades were taken:** the trades in force, each in the field the
+table names, and per admission pass the `sumo_population` — how many vehicles SUMO had live — beside the
+number of bodies drawn. The two differ only by the vehicles of a type with no measured body
+(`no_blueprint`, `unknown_extent`), so the gap is attributable on sight. Both are written incrementally,
+like `render_states[]`, so a crash does not lose them.
 
 ### 7.1 When a window cannot be lit
 
-Shedding is what happens when there are too many vehicles for the frame. **A window that cannot be lit is
-a different failure and needs a different answer**, because no amount of shedding helps and the run is
-not short of capacity — it is short of photons.
+**A window that cannot be lit is a different problem from a slow one and needs a different answer**,
+because no wall-clock trade helps: the run is not short of time — it is short of photons.
 
 The measured facts that force the answer: at 23:00 the sun is 38–79° below the horizon at every date
 (§3.5.1); the world contains no moon, no street lamps and no emissive facades (§4.9); the wall clock of a
@@ -1811,25 +1798,16 @@ label.
 
 | Parameter | **Value** | Derivation | Label |
 |---|---|---|---|
-| `render_cap` | **128** | 100 demonstrated (§4.3); one binary step beyond; clears Bahonar for 99.4% of the week | **Derived from measurement, gated on M2** |
-| `render_cap_hard` | **192** | 1.5 × soft cap, to serve `04` D4.6 | **Guess** — no measurement bounds it |
-| `prewarm_s` | **300** | Measured cold-start convergence to within 5% at 300 simulated seconds (§4.2.1b). Under D10.2 it is instead the render-set fill time, and 300 s comfortably exceeds `entry_lead_m` at the measured max speed | **Measured** |
+| `prewarm_s` | **300** | Measured cold-start convergence to within 5% at 300 simulated seconds (§4.2.1b). Under D10.2 it is instead the time every vehicle SUMO has is given to be spawned and posed before capture begins | **Measured** |
 | `capture_windows[]` | **1,800 s each, 4–8 per seven-day scenario, placed on authored events *and on a sun that exists*. For the sizing scenario: the five imagery windows and one truth-only window of `D10.14`** | §4.2.3 wall-clock and storage table, the measured 1.5% day-to-day repeatability, and the measured sun elevation at each candidate hour (§3.5) | **Derived from measurement** |
 | **window declared date** | **Part of the window, not of the run.** Sizing scenario: 21 Dec for W1, 21 Jun for W2, 21 Mar for W3–W5 | Measured: the date moves the 07:00 sun by 21° at constant population (§3.5.1), so it is the illumination axis and it must be per-window or two strata cannot coexist in one run. **The grammar is [`11`](11_Time_And_Illumination.md)'s; the requirement that it be per-window is this section's** | **Measured** |
 | `window_kind` | **`imagery` or `truth_only`** | `D10.17`: a window below the renderable sun threshold costs 0.42 s of wall clock and zero bytes as truth-only, against near-full cost and a black frame as imagery (§7.1) | **Derived from measurement** |
-| `vehicle_lights` | **on**, as deltas over the existing batch | Measured 9.6 transitions/tick at `render_cap` on the binding scenario: +1.9% batch bytes, +0 round trips, +0.12 ms of TraCI (§4.8). **Cost is not the reason to turn it off**; whether the lights are resolvable is [`08`](08_Collection_And_EPoL.md)'s and [`11`](11_Time_And_Illumination.md)'s | **Measured (rates); M8 gates the engine-side cost** |
-| `render_region` | **Per scenario, from the radial CDF of §4.3.1.** Arapahoe 300 m; Bahonar the whole staging rectangle | Measured population concentration | **Measured** |
-| `entry_lead_m` | **200** | `frustum_lead_s` (3 s) + one SUMO step of interpolation buffer (1 s) + one admission-pass period (1 s) = 5 s, × the measured max speed 35.0 m/s = 175 m, rounded up | **Derived** from measured speeds |
-| `exit_lag_m` | **100** | Must exceed two SUMO steps of travel at max speed (2 × 35 m = 70 m) or a vehicle can cross the hysteresis band inside one pass | **Derived** |
-| `exit_lag_s` | **5.0** | Five SUMO steps on Bahonar; enough that a vehicle stopped at the region edge does not flicker | **Guess**, shaped by the measured step length |
-| `aoi_halo_m` | **50** | Half `exit_lag_m`; a vehicle within 50 m of an area is plausibly about to interact with it | **Guess** |
-| `frustum_lead_s` | **3.0** | 105 m at the measured max speed 35.0 m/s, so a vehicle is rendered and settled before its first in-frame capture at 2 Hz | **Derived** from measured speeds |
+| `vehicle_lights` | **on**, as deltas over the existing batch | Measured ≈ 40 transitions/tick at 417 live on Arapahoe Underpass: +2.4% batch bytes, +0 round trips; the signals variable costs +0.12 ms of TraCI per step at 133 vehicles and +0.56 ms at 410 (§4.5.1, §4.8). **Cost is not the reason to turn it off**; whether the lights are resolvable is [`08`](08_Collection_And_EPoL.md)'s and [`11`](11_Time_And_Illumination.md)'s | **Measured (rates); M8 gates the engine-side cost** |
 | `aoi_max_relations_per_vehicle` | **4** | §4.6: 1.49× base sidecar, against 6.91× uncapped at 50 areas | **Measured** |
 
-Measured speed evidence behind the three speed-derived rows: Bahonar whole-run mean **24.56 m/s**; the
-shipped Bahonar CoT sample mean 28.0 m/s, **max 34.98 m/s**; Arapahoe whole-run mean 21.02 m/s, sample max
-37.59 m/s; Gardnerville mean 15.08 m/s. Bahonar's fastest lane is 39.44 m/s and its `vType` cap is
-35 m/s, so 35.0 m/s is the binding speed on the sizing case.
+The render cap and the render region's parameters (`render_cap`, `render_cap_hard`, `render_region`,
+`entry_lead_m`, `exit_lag_m`, `exit_lag_s`, `aoi_halo_m`, `frustum_lead_s`) were withdrawn on 2026-09-30:
+every vehicle SUMO has is drawn, so there is nothing for them to size.
 
 ---
 
@@ -1841,9 +1819,9 @@ table and the order of the identifiers deliberately differ.
 
 **Do the illumination measurements displace the current top three? No, and it is worth saying why
 plainly rather than finding a way to make the new work look urgent.** M1 is worth roughly an order of
-magnitude on the clock ratio and nothing else in this document approaches that. M2 is the only
-unmeasured number the envelope structurally depends on, and the illumination work has *added* to what it
-must cover (the three per-tick solar sweeps of §4.7.2 now ride inside it). M3 shares M2's harness.
+magnitude on the clock ratio and nothing else in this document approaches that. M2 is the pace of a drive
+at the heaviest population the scenarios have, which is what the wall clock of every Arapahoe-sized window
+rests on, and the three per-tick solar sweeps of §4.7.2 ride inside it. M3 is taken on the same drive.
 What the illumination requirement contributes to the top of the register is **one new entry at rank 4**
 — M9, which is cheaper than any of the first three and which underwrites the entire window
 recommendation — and a reordering below that. The rest sit where their cost and their consequence put
@@ -1852,42 +1830,41 @@ them.
 | Rank | # | Question | Cheapest probe | What it decides | Cost |
 |---|---|---|---|---|---|
 | **1** | **M1** | **Does `sensor_tick` remove the render and readout of discarded frames, or only the enqueue?** | Spawn the existing rig twice — once as today, once with `sensor_tick` set to the capture period — and difference the clock ratio using the method of §4.1 (capture `tEXt` tick vs. filename wall clock). **No new instrumentation: the data is already in every PNG.** | The clock ratio, and therefore the wall-clock cost of every window in the plan. Potentially **an order of magnitude.** Nothing else in this document is worth as much. | Two short runs |
-| **2** | **M2** | **What is the actual ceiling on rendered actors?** Sweep 32 → 64 → 128 → 256 → 512 kinematic actors (physics off, gravity off) with the camera configuration held fixed, and plot ticks per wall-second. | A script that spawns N actors, sets physics off, teleports all N in one `apply_batch` per tick, and reads the clock ratio from capture metadata. **No SUMO needed** — a circle of poses will do. **Now also covers the three per-tick `GetSolarState` actor sweeps of §4.7.2**, because they scale with the same N and would otherwise need an identical harness. | `render_cap` and `render_cap_hard` (§4.3), and whether the solar block in the world-observer header is a budget line or a rounding error. It is the only unmeasured number in the envelope that the design depends on. | One run per N |
-| **3** | **M3** | **What does one `apply_batch` of N transforms actually cost on the game thread?** | Same harness as M2, differencing the clock ratio with the batch present and absent at each N. Also answers whether the world-observer per-actor loop or the transform write dominates. | Whether the render cap is set by the pose write or by the camera — which decides whether M1's win is spendable on more actors. | Shares M2's harness |
+| **2** | **M2** | **What is the pace of a drive at Arapahoe's full population?** Peak 437, median 336 live vehicles: ticks per wall-second, and what a tick costs at that population. | A SUMO drive of Arapahoe Underpass across its busiest span with the camera configuration held fixed, reading the clock ratio from capture metadata by the method of §4.1. The three per-tick `GetSolarState` actor sweeps of §4.7.2 scale with the actor count and are inside the figure. | The wall-clock budget (§4.1) at the heaviest measured population, and whether the solar block in the world-observer header is a budget line or a rounding error. **It sets no limit**: every vehicle is drawn whatever it returns. | One run |
+| **3** | **M3** | **What does the per-tick `apply_batch` cost on the game thread at full population?** | Taken on M2's drive: an Unreal Insights capture of the same span (`FWorldObserver::BroadcastTick` already carries a trace scope, §4.7.2) separates the batch's visitor dispatches from the world-observer per-actor loop and the camera. | Whether a tick at full population is set by the pose write or by the camera — which decides how much of M1's win an Arapahoe-sized window actually gets. | Taken on M2's drive |
 | **4** | **M9** | **Does the engine's sun agree with the model §3.5 is built on?** Set a known epoch, read `get_solar_state`, and compare `sun_elevation_deg` against the NOAA model at the same instant, at the sizing site, at three dates and at 06:00 / 07:00 / 17:00 / 23:00. | One RPC per point. **Twelve RPCs and no rendering.** | **The entire window recommendation, `D10.14`.** §3.5 is a model of what `CesiumSunSky` will produce, not a reading of it; if the engine disagrees — through the 14.72-minute time-zone gap of §3.5.3, through a rounding defect, or through anything else — the windows are placed on the wrong sun and the low-sun ones are placed on the wrong side of the horizon. **This is the cheapest high-consequence measurement in the document.** | Minutes |
 | **5** | **M7** | **What does an advancing sun cost on the render thread?** §4.7.3 reads from source that the VSM directional clipmap cache is invalidated on every frame in which the light direction changes; the magnitude is unknown. | **`r.Shadow.Virtual.Cache.ForceInvalidateDirectional` 1 versus 0**, sun frozen in both, everything else identical, differencing the clock ratio. Epic added the cvar for exactly this purpose (`VirtualShadowMapClipmap.cpp:23-27`). **No code change, no scenario change, no SUMO.** Run it on Gardnerville, where 51 vehicles leave the frame uncontended. Capture the `SkyAtmosphere` LUT pass count in the same trace to settle §4.7.3's atmosphere caveat at no extra cost. | Whether the *advancing* solar policy is affordable on a long window. It does **not** gate the recommended plan, which freezes the sun on five windows of six — which is why it is rank 5 and not rank 1 despite being the cheapest probe here. | One cvar sweep |
-| **6** | **M8** | **What does one `RefreshLightState` transition cost?** It is Blueprint graph work (`CarlaWheeledVehicle.h:310-311`, implemented in `BaseVehiclePawn.uasset`), so source cannot answer it. | Shares M2's harness: at each N, drive a light-state sweep at the measured 7.5% of the render set per tick and difference the clock ratio against the same run with the sweep absent. **The budget line is 9.6 transitions per tick at `render_cap` = 128, not 128.** | Whether `vehicle_lights = on` (§8) survives, and whether the shed order of §7 has it in the right place. | Shares M2's harness |
+| **6** | **M8** | **What does one `RefreshLightState` transition cost?** It is Blueprint graph work (`CarlaWheeledVehicle.h:310-311`, implemented in `BaseVehiclePawn.uasset`), so source cannot answer it. | Taken on M2's drive: run the same span with `vehicle_lights` on and off and difference the clock ratio. **The budget line is the measured ≈ 40 transitions per tick at 417 live vehicles, not 417.** | Whether `vehicle_lights = on` (§8) survives, and whether §7's trade order has it in the right place. | One more run of M2's drive |
 | **7** | **M4** | **Does moving the live CoT feed off the tick thread recover the ratio?** ([issue #14](https://github.com/sbrett9/carla/issues/14), whose own verification section specifies this) | Run one window with the feed on and one with it off at the same N, and difference the clock ratio. | Whether the live mode and the capture mode can share a session, or must be separate runs. | Two short runs |
-| **8** | **M10** | **How many dynamic lights does a vehicle actually have, and what do N of them cost?** The light components are assembled at runtime by the shared vehicle graph rather than declared as construction-script variables, so the count cannot be read from the assets (§4.9). | `r.DumpLights` / the light-complexity view mode / `stat SceneRendering` at N = 1 and N = 128, headlights off versus on. Gardnerville again, for a clean frame. | **`D10.16`** — whether a lit night is affordable at all, and therefore whether any of [`Findings/13`](../../Findings/13_Usable_Night_Lighting.md) §3's options B and D can be costed. It is rank 8 rather than higher **only because night is already ruled out on viability grounds** ([`11`](11_Time_And_Illumination.md) §5); it becomes rank 2 the moment anyone proposes to build a night capability. | One run per configuration |
+| **8** | **M10** | **How many dynamic lights does a vehicle actually have, and what do N of them cost?** The light components are assembled at runtime by the shared vehicle graph rather than declared as construction-script variables, so the count cannot be read from the assets (§4.9). | `r.DumpLights` / the light-complexity view mode / `stat SceneRendering` at one vehicle and at Gardnerville's full population (peak 51), headlights off versus on. Gardnerville again, for a clean frame. | **`D10.16`** — whether a lit night is affordable at all, and therefore whether any of [`Findings/13`](../../Findings/13_Usable_Night_Lighting.md) §3's options B and D can be costed. It is rank 8 rather than higher **only because night is already ruled out on viability grounds** ([`11`](11_Time_And_Illumination.md) §5); it becomes rank 2 the moment anyone proposes to build a night capability. | One run per configuration |
 | **9** | **M11** | **What does a frame at a given sun elevation actually look like?** Pixel mean, 5th and 95th percentile, and the fraction of pixels at zero, at sun elevations of roughly −61°, −34°, −3°, 0°, +3° and +6°. | One short headless run on an existing world, stepping the epoch between captures. | The *viability* threshold is [`11`](11_Time_And_Illumination.md) §9.2's `M-SOL-1`, not this section's. But **the same run answers a cost question for free**: differencing the clock ratio across the sweep separates the content-dependent part of §4.1's 13.3 ms per streamed megapixel from the readout, which is the one unmeasured term in §4.9's claim that a dark window costs nearly as much as a lit one. Record the clock ratio per elevation as well as the pixel statistics. §4.6's attenuation bound is a synthetic stand-in until this exists. | One short run |
 | **10** | **M12** | **Is a vehicle's brake light legible at the collection altitude?** | [`11`](11_Time_And_Illumination.md) §9.2's `M-SOL-2`: capture one vehicle at each rig altitude with `Brake` asserted and cleared, and difference the frames. | **Not this section's question.** Listed because §4.8.4 establishes that cost is not the reason to decide either way, so this is the measurement that actually decides it. | Two captures |
 | **11** | **M5** | **Does `--load-state` compose with a pre-routed route file?** | `duarouter` the Bahonar route file into explicit `<route edges="…"/>`, then repeat §4.2.1(c). | Nothing, under D10.2 — this is insurance against a future scenario whose fast-forward exceeds ~10 minutes. **Do not do this until one exists.** | Minutes, no CARLA |
 | **12** | **M6** | **What does the C# TraCI client cost per step against the Python client measured in §4.5?** | Re-run the §4.5 and §4.5.1 probes through `CarlaNet.Sumo`, same network, same seed, same population. | Nothing in the envelope — §4.5's numbers already fit, and §4.5 establishes that the language is not where a saving would come from. **It is worth taking for correctness rather than for cost**: run against the same `sumo` at the same instant, it is also the differencing check that two independent decoders of the same frames agree (`03` §2.5). | Low |
 
 **One measurement `11` handed this section has already been taken and needs no run.** Its `M-SOL-5`
-asked for the added batch entries from light-state deltas at `render_cap`, confirmed on Arapahoe
-Underpass because that is the binding scenario. §4.8.1 measures it directly, inside the 300 m render
-region rather than over the whole map: **7.5% of the rendered set per 0.05 s step, 9.6 commands per tick,
-+1.9% of batch bytes, zero extra round trips.** Its `M-SOL-4` is folded into M2 above rather than run
-separately, because it needs the same actor-count sweep and would otherwise duplicate the harness.
+asked for the added batch entries from light-state deltas, confirmed on Arapahoe Underpass because it is
+the heaviest scenario. §4.8.1 measures it directly over the whole map: **9.61% of the vehicles per 0.05 s
+step, ≈ 40 commands per tick at 417 live, +2.4% of batch bytes, zero extra round trips.** Its `M-SOL-4`
+is folded into M2 above rather than run separately, because the solar sweeps scale with the actor count
+and M2's drive at full population already contains them.
 
 **What is measured, what is derived, what is a guess — the whole document, in one place:**
 
 | Measured | Derived | Guess |
 |---|---|---|
-| Every population figure (§3.1, §3.2), from complete SUMO runs | Wall clock for seven days (§4.1) — measured ratios × arithmetic | `render_cap_hard` = 192 |
-| Every network and grid figure (§3.3, §3.4) | Corpus sizes (§4.1, §4.2.3, §4.2.4) — measured PNG sizes × frame counts | `exit_lag_s` = 5.0 |
-| Bare-earth load, memory and lookup, and all three alternatives (§3.4) | `ms` per streamed megapixel (§4.1) — measured ratios ÷ measured pixels | `aoi_halo_m` = 50 |
-| Clock ratios of four real capture sessions (§4.1) | The `sensor_tick` table (§4.6) — **explicitly a hypothesis, M1** | Interpolation cost (§4.11) |
-| 100 concurrent rendered vehicles (§4.3) | `entry_lead_m`, `exit_lag_m`, `frustum_lead_s` — measured speeds × stated latencies | |
-| TraCI naive vs. subscription, three populations (§4.5) | `render_cap` = 128 — one step beyond a measured 100 | |
-| **TraCI cost of the signals variable, two scenarios, four variable sets (§4.5.1)** | Budget table (§4.11) | |
-| PNG level, size, ratio and encode cost at five resolutions (§4.6) | **Batch growth from light state (§4.8.2)** — measured rates × derived msgpack sizes | |
-| **PNG size and tonal entropy of an attenuated capture (§4.6)** — **synthetic attenuation, labelled** | **Renderable fraction of the scenario's vehicle-hours (§3.5.2)** — measured population × modelled sun | |
-| Sidecar bytes per event and `<_aoi>` growth (§4.6) | **Shadow-length ratios from the time-zone gap (§3.5.3)** — `cot` of modelled elevations | |
-| Spatial concentration of the population (§4.3.1) | **The `D10.14` window plan's wall clock and storage (§4.2.4)** — measured rates × window count | |
+| Every population figure (§3.1, §3.2), from complete SUMO runs — the shipped Bahonar route file and the compiled scenario (§3.1.5) both | Wall clock for seven days (§4.1) — measured ratios × arithmetic | Interpolation cost (§4.11) |
+| Every network and grid figure (§3.3, §3.4) | Corpus sizes (§4.1, §4.2.3, §4.2.4) — measured PNG sizes × frame counts | |
+| Bare-earth load, memory and lookup, and all three alternatives (§3.4) | `ms` per streamed megapixel (§4.1) — measured ratios ÷ measured pixels | |
+| Clock ratios of four real capture sessions (§4.1) | The `sensor_tick` table (§4.6) — **explicitly a hypothesis, M1** | |
+| 100 concurrent rendered vehicles (§4.3) | Per-vehicle costs at the measured populations (§3.4, §4.3, §4.4, §4.6, §4.11) — measured per-vehicle constants × measured populations, labelled scaled | |
+| TraCI naive vs. subscription, three populations (§4.5) | Budget table (§4.11) | |
+| **TraCI cost of the signals variable, two scenarios, four variable sets (§4.5.1)** | **Batch growth from light state (§4.8.2)** — measured rates × derived msgpack sizes | |
+| PNG level, size, ratio and encode cost at five resolutions (§4.6) | **Renderable fraction of the scenario's vehicle-hours (§3.5.2)** — measured population × modelled sun | |
+| **PNG size and tonal entropy of an attenuated capture (§4.6)** — **synthetic attenuation, labelled** | **Shadow-length ratios from the time-zone gap (§3.5.3)** — `cot` of modelled elevations | |
+| Sidecar bytes per event and `<_aoi>` growth (§4.6) | **The `D10.14` window plan's wall clock and storage (§4.2.4)** — measured rates × window count | |
 | SUMO fast-forward and cold-start convergence (§4.2.1) | | |
-| **SUMO signal-transition rates, whole map and inside the render region, two scenarios (§4.8.1)** | | |
+| **SUMO signal-transition rates over the whole map, two scenarios (§4.8.1)** | | |
 | **Sun elevation at every window hour, eight dates, and the twilight bands (§3.5.1)** — **modelled from the engine's own algorithm, confirmation is M9** | | |
 | **Street-lamp and building counts in all three shipped OSM extracts, and light-actor counts in the generated world (§4.9)** | | |
 | `apply_batch` shape, `sensor_tick` default, `Dropped` having no reader — read from source | | |
@@ -1902,18 +1879,18 @@ separately, because it needs the same actor-count sweep and would otherwise dupl
 | **D10.1** | **Rendering seven simulated days frame-for-frame is rejected.** Measured: 19–24 wall-clock days at the measured clock ratio for a 6.2 Mpx camera pair, 8.3 days at the most favourable ratio ever recorded on this fork, 19.6 hours at an unreachable ceiling with no client and no camera; and 6–17 TB of corpus for one camera. **Windowing is mandatory and the window is an authored, recorded object** (§4.1). |
 | **D10.2** | **A window is reached by running `sumo.exe` from t = 0 with no output until the window opens, then attaching CARLA.** Not `--begin` (loses identity, history and the parked population, and is 5–87% under-populated for the first 300 s), and not state save/load (does not compose with unrouted `<trip>`/`<flow>`). Measured: the whole seven days costs 140.41 s of wall clock, so there is nothing to buy by skipping it (§4.2.1). |
 | **D10.3** | **Default window length 1,800 simulated seconds; 4–8 windows per seven-day scenario, placed on authored events rather than contiguously.** Measured: days 1–6 of Bahonar peak within 1.5% of each other, so six 1,800 s windows cover every population regime in the week for 10 wall-clock hours and 313 GB (§4.2.3). |
-| **D10.4** | **`render_cap` = 128, `render_cap_hard` = 192**, gated on measurement M2. 100 concurrent rendered, telemetered, occlusion-measured vehicles are demonstrated on this fork; 128 clears Bahonar's seven days for 99.4% of their duration (§4.3). |
-| **D10.5** | **`render_region` is sized per scenario against the measured radial CDF of the live population, never defaulted.** A region wider than the camera footprint buys nothing and costs actors: on Arapahoe a 300 m region holds exactly `render_cap` while a 600 m region holds 276 (§4.3.1). |
-| **D10.6** | **TraCI reads are subscriptions, restricted to the variables — and the vehicles — the bridge and truth record consume.** Measured 116.0 ms → 8.1 ms per step at 388 vehicles (14×), and the naive path alone exceeds a 50 ms tick budget by 2.3× (§4.5). A subscription is charged inside the step whether or not it is read (3.73 ms → 9.26 ms subscribed and unread), so the **subscribed** set is a budget line in its own right, governed by `03` §8.3 rather than left to follow the render set. |
+| **D10.4** | **Withdrawn 2026-09-30.** There is no render cap: every vehicle SUMO has is drawn, and a heavier scenario runs slower, never thinner. |
+| **D10.5** | **Withdrawn 2026-09-30.** There is no render region: every vehicle SUMO has is drawn, wherever it is. |
+| **D10.6** | **TraCI reads are subscriptions, for every vehicle SUMO has, restricted to the variables the bridge and truth record consume.** Measured 116.0 ms → 8.1 ms per step at 388 vehicles (14×), and the naive path alone exceeds a 50 ms tick budget by 2.3× (§4.5). A subscription is charged inside the step whether or not it is read (3.73 ms → 9.26 ms subscribed and unread), so the **subscribed** population is a budget line in its own right, and at 388 vehicles it is the measured 9.26 ms. |
 | **D10.7** | **`FrameRecorder.Dropped` is read at window close, written into the run manifest, and a non-zero value fails the run's quality gate.** It is incremented today (`FrameRecorder.cs:184`) and has no reader anywhere in the tree (§4.6). |
 | **D10.8** | **`aoi_max_relations_per_vehicle` = 4, nearest always present, and truncation is marked `<_aoi truncated="true">`.** Measured: 4 relations cost 1.49× the base sidecar; 50 cost 6.91×, not the 3× doc 20 §7.4 estimates (§4.6). |
 | **D10.9** | **The bare-earth plane is read as `array.array('f')` or a `numpy` view, not a tuple of Python floats.** Measured: 243.6 MB → 32.3 MB, 5.61 s → 0.011 s, identical semantics, one line at `SumoCotBridge.py:112` (§3.4). |
 | **D10.10** | **A capture window runs in synchronous mode with no other polling client attached.** In sync mode the server drains every client's pending requests on the game thread before advancing (`CarlaEngine.cpp:331-343`), so a second client's service time is added directly to the tick. A consumer needing world state reads the world-observer push stream, which costs no RPC (§4.4). |
-| **D10.11** | **The live CoT feed does not run on the tick thread in a SUMO-drive session.** [Issue #14](https://github.com/sbrett9/carla/issues/14) is a prerequisite of the render cap, not an adjacent concern: at 128 vehicles and 5 Hz it puts 640 serialisations and sends per second inside the tick budget (§4.3, M4). |
-| **D10.12** | **Every window records its achieved ticks per wall-second, its `sumo_population`/`admitted` pair per admission pass, and its capture rate.** The clock ratio is measured to be non-constant (84%, 99%, 29.5% across sessions) and is recoverable today only by differencing PNG metadata against file timestamps (§7). |
+| **D10.11** | **The live CoT feed does not run on the tick thread in a SUMO-drive session.** [Issue #14](https://github.com/sbrett9/carla/issues/14) is a prerequisite of drawing every vehicle, not an adjacent concern: at Arapahoe's peak of 437 vehicles and 5 Hz it would put 2,185 serialisations and sends per second inside the tick (scaled; §4.3, M4). |
+| **D10.12** | **Every window records its achieved ticks per wall-second, its `sumo_population` beside the number of bodies drawn per admission pass, and its capture rate.** The clock ratio is measured to be non-constant (84%, 99%, 29.5% across sessions) and is recoverable today only by differencing PNG metadata against file timestamps; the two counts differ only by vehicles of a type with no measured body (§7). |
 | **D10.13** | **The analytic population model of §3.1.4 is the estimator for a scenario that has not been run; a scenario that will be captured is run.** At `κ = 1.5` it is an upper bound on peak concurrency and costs seconds; the run costs 140 s and is exact (§3.1.4). |
 | **D10.14** | **The recommended window plan for the sizing scenario is five imagery windows and one truth-only window, and the date is an explicit part of each window's declaration.** The 23:00 population regime is demoted to truth-only because the sun is 38–79° below the horizon there on **every** date; its imagery regime is re-placed onto 17:00 and 06:00, and the 07:00 peak is captured twice — on 21 December at +5.0° and on 21 June at +25.9° — because the date is a 21-degree illumination axis at constant population. **2.5 wall-clock hours and 90 GB at 1920 × 1080 ×2**, against 3.0 h and 108 GB for six imagery windows with no truth-only demotion at the same camera, spanning +1.8° to +37.6° of sun elevation instead of whatever noon happened to give (§4.2.4). |
-| **D10.15** | **Vehicle light state rides the existing per-tick `apply_batch` as deltas, and the batch cost of doing so is negligible.** Measured: 9.6 changed vehicles per tick inside the 300 m render region at `render_cap` = 128 on the binding scenario → **+1.9% of batch bytes, zero extra round trips**, and +0.12 ms of TraCI at 128 vehicles. The per-actor RPC alternative is the vehicle-fade shape the team brief records as the heaviest client load on the server, and at 9.6 changes per tick it is 1.9 ms of a 50 ms tick spent on latency alone (§4.8). |
+| **D10.15** | **Vehicle light state rides the existing per-tick `apply_batch` as deltas, and the batch cost of doing so is negligible.** Measured: ≈ 40 changed vehicles per tick over the whole map at 417 live on Arapahoe Underpass, the heaviest scenario → **+2.4% of batch bytes, zero extra round trips** (derived); the signals variable costs +0.12 ms of TraCI per step at 133 vehicles and +0.56 ms at 410. The per-actor RPC alternative is the vehicle-fade shape the team brief records as the heaviest client load on the server, and at ≈ 40 changes per tick it is ≈ 8 ms of a 50 ms tick spent on latency alone (§4.8). |
 | **D10.16** | **Night rendering cost is a question about light sources, and the only light sources a generated world has are vehicle headlights.** Measured: **zero** `highway=street_lamp` nodes in the Bahonar and Gardnerville OSM extracts and two in Arapahoe; **zero** `CarlaLight`, `PointLight` or `SpotLight` in the generated world's map against 140 `BP_StreetLight` references in `Town10HD_Opt`; and no moon in `ACesiumSunSky`. The per-vehicle dynamic-light count is assembled at runtime and cannot be read from the assets, so it is **M10** (§4.9). |
 | **D10.17** | **A window whose sun is below the renderable threshold is demoted to a truth-only window, not rendered at reduced quality and not silently rendered dark.** SUMO runs the span alone at the measured 4,307× real time — 0.42 s of wall clock for 1,800 simulated seconds and zero bytes — and the behavioural truth is complete while the record states that the imagery is absent. Rendering it instead costs close to a lit window (the tick is pixel-rate work) and returns a frame with 8 of 256 tonal levels (§4.6, §7.1). |
 | **D10.18** | **The frozen solar policy is free and the advancing policy is not, and the difference is on the render thread.** Setting the sun does not stall the game thread (`RendererScene.cpp:3490-3495` is an enqueue), but this project enables virtual shadow maps (`DefaultEngine.ini:54`) whose directional clipmap cache keys on light direction (`VirtualShadowMapCacheManager.cpp:311`), so a sun whose direction changes is re-rendered uncached. Under a SUMO drive the written clock, and so the direction, changes once per whole second (once per 20 ticks at 0.05 s and rate 1); whether a rewrite of an unchanged clock keeps the cache is unmeasured. Magnitude unmeasured; **M7** is a two-value cvar sweep (§4.7.3). |
@@ -1928,18 +1905,15 @@ separately, because it needs the same actor-count sweep and would otherwise dupl
    pessimistic by that factor. If it only suppresses the enqueue, the camera stays the budget and the
    envelope stands as written. **This is the single largest unknown in the plan.** Recommendation: run M1
    before anything else, because it changes what the rest is worth.
-2. **Is the render cap set by the pose write or by the camera?** (M2, M3.) The evidence points hard at the
-   camera — 13.3 ms per streamed megapixel against a 5.85 ms engine base, with 100 actors fitting inside
-   that without visible cost, and kinematic actors being cheaper than the physics-driven ones measured.
-   But nobody has swept actor count. If the answer is "the camera", `render_cap` can rise substantially
-   and Arapahoe may not need shedding at all. Recommendation: **do not commit `render_cap` = 128 as a
-   permanent number**; commit it as the value M2 will replace.
-3. **What is the acceptable rendered fraction on a scenario like Arapahoe?** At `render_cap` = 128 against
-   a median of 336, 62% of the population is `simulated_only`. That is a legitimate corpus — the truth
-   record says so explicitly and the behaviour denominator is unaffected — but it is a decision about the
-   product, not about performance. **Needs the user.** Options: (a) accept the fraction and record it;
-   (b) shrink `render_region` to 300 m so the cap does not bite, at the cost of a narrower scene;
-   (c) raise `render_cap` pending M2. Recommendation: (c) then (a), with (b) available per scenario.
+2. **Is a tick at full population set by the pose write or by the camera?** (M2, M3.) The evidence points
+   hard at the camera — 13.3 ms per streamed megapixel against a 5.85 ms engine base, with 100 actors
+   fitting inside that without visible cost, and kinematic actors being cheaper than the physics-driven
+   ones measured. But nobody has run a drive at Arapahoe's 437. If the answer is "the camera", an
+   Arapahoe window costs what §4.1's ratios say; if it is the pose write, it costs more, and part of M1's
+   win is spent there. Either way every vehicle is drawn: the answer is a wall-clock figure, not a limit.
+   Recommendation: take M2 and M3 on one drive, after M1.
+3. *Withdrawn 2026-09-30.* It asked what rendered fraction is acceptable under the render cap; there is no
+   cap, and every vehicle SUMO has is drawn.
 4. **Does a capture window need imagery continuity across its edges, or is a per-window corpus acceptable?**
    §4.2.2 handles the truth-record side, but if a downstream tracker needs unbroken tracks across an
    authored pattern that spans hours, windows cannot deliver it and the pattern must be re-authored to fit
@@ -1980,10 +1954,10 @@ separately, because it needs the same actor-count sweep and would otherwise dupl
    21° illumination axis of §3.5.1 is actually usable, and therefore how much value question 7's
    arithmetic is buying. Recommendation: settle it with M11, which is already a short run, before
    committing `D10.14`'s W1 and W5 to the low-sun end.
-9. **Does `render_cap` = 128 still hold once headlights are on?** Every figure behind `D10.4` was
-   measured or reasoned in daylight, where a vehicle contributes a mesh and no light. §4.9 establishes
-   that vehicle lights are real shadow-casting spot and point lights, and M10 will say how many per
-   vehicle. If the answer is six and they cast shadows, then `render_cap` is **two numbers, not one** —
-   a daylight cap and a lit-vehicle cap — and the envelope of §6 needs a second row. Recommendation: run
-   M2 in daylight first, because that is the number the plan depends on; run M10 before any window is
-   declared with `vehicle_lights = on` at a sun elevation low enough for the lights to matter.
+9. **Does M2's pace hold once headlights are on?** Every wall-clock figure in this document was measured
+   or reasoned in daylight, where a vehicle contributes a mesh and no light. §4.9 establishes that vehicle
+   lights are real shadow-casting spot and point lights, and M10 will say how many per vehicle. If the
+   answer is six and they cast shadows, the pace of a drive at full population is **two numbers, not
+   one** — daylight and lit — and the envelope of §6 needs a second row. Every vehicle is drawn either
+   way; what changes is the wall clock. Recommendation: run M2 in daylight first; run M10 before any
+   window is declared with `vehicle_lights = on` at a sun elevation low enough for the lights to matter.

@@ -15,9 +15,9 @@ is not.
 §5.6 (the vehicle catalogue), [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) (§3a for the time-of-day requirement).
 
 **Depends on decisions owned elsewhere:** [`04_Contracts.md`](04_Contracts.md) (vehicle catalogue,
-render-set contract), [`05_CarlaNet_Capability_Audit.md`](05_CarlaNet_Capability_Audit.md) (every gap
+admission contract), [`05_CarlaNet_Capability_Audit.md`](05_CarlaNet_Capability_Audit.md) (every gap
 in §12), [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) (what the per-step record
-carries), [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md) (render-set budget, capture
+carries), [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md) (wall-clock budget, capture
 windows), [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md) (the scenario epoch, the
 advancement policy, the headlight predicate),
 [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md) (how a run selects any of it).
@@ -49,15 +49,17 @@ advancement policy, the headlight predicate),
 | 2026-09-30 | §9.5.1: `run_capture` waits on both witnesses inside the prewarm, once every camera holds its opening pose; a view not ready by the window's opening refuses at `PreRoll` and the window is not moved. |
 | 2026-09-30 | §9.5.1: measured on Bahonar, traffic in view defeats a whole-view picture comparison, and the renderer settles on ticks; the picture is compared ten ticks apart with a 120-tick ceiling, and the blocks rendered vehicles cover are left out, half the view to be judged. |
 | 2026-09-30 | §8.3, §8.3.1, D3.38: the policy interface as built, and the render set that follows the registered cameras' ground footprints -- range-capped, admitted ahead, held after, ranked by the seed -- with the circle deciding while no camera is registered. §8.8: the eligible include the vehicles the release lag holds. |
+| 2026-09-30 | Render cap removed: the cap (128, hard 192) was never measured -- M2 never ran -- and the scenario is the arbiter of population, so every vehicle SUMO has is drawn and a heavier scenario runs slower, never thinner. §8.3 now states that rule; §8.3.1 and D3.38 are withdrawn, and with them the circle, the camera-footprint render set, capacity, shedding and the subscription tiers. The pool still parks and reuses bodies, with no ceiling (§8.2, D3.9). §8.5 and D3.10 describe the entry and exit this gives, §8.8 and D3.31 the pass's counts, and §9.5.1 a stare at the traffic starting over the staging bounds. |
 
 ---
 
 ## 0. What this section does not cover
 
-- **Which** SUMO vehicles become CARLA actors. This section specifies the *mechanism* of admission
-  and release and the interface the policy must satisfy (§8.3); the policy itself is the render-set
-  contract, owned by [`04_Contracts.md`](04_Contracts.md), sized by
-  [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md).
+- **The admission contract.** Every vehicle SUMO has is drawn while it is rendered (§8.3); this
+  section specifies the *mechanism* of admission and release. The contract — when a vehicle is
+  admitted and released, and what the truth record says of one that is simulated and not drawn — is
+  [`04_Contracts.md`](04_Contracts.md)'s, and what a population costs in wall clock is
+  [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md)'s.
 - The vType ↔ blueprint map. Named here only where playback geometry depends on it (§7.4).
 - **The meaning of a civil time.** The scenario epoch (what civil instant `t = 0` is), the civil UTC
   offset, the choice between a frozen and an advancing sun, the *rationale* for a headlight
@@ -87,7 +89,8 @@ connection, which:
 3. writes those poses to the server as a batch, once per world tick;
 4. maps SUMO's per-vehicle signal bits onto CARLA vehicle light state and puts the changes in the
    same batch;
-5. manages which SUMO vehicles hold a CARLA actor;
+5. lends every SUMO vehicle whose type has a measured body a CARLA actor from a pool while it is
+   rendered, and takes the actor back when SUMO removes the vehicle;
 6. emits a per-step record of *every* SUMO vehicle — rendered or not — for the truth path.
 
 Item 1's second clause is load-bearing. A capture window is a span of
@@ -241,7 +244,7 @@ own.
    actor for each of them.
 2. **The bridge runs at the world-tick rate, not the SUMO-step rate.** Sub-step motion (§6) means the
    pose arithmetic happens 20× per SUMO step at the default `--fixed-delta` of 0.05 s
-   (`CarlaControl/src/carlacontrol/CarlaControlArgumentParser.py:69-75`). That work lands on the
+   (`CarlaControl/src/carlacontrol/CarlaControlArgumentParser.py:69-75`). That work runs on the
    thread that owns the world clock. [Issue #14](https://github.com/sbrett9/carla/issues/14) is
    already open for exactly this failure mode against a *much* lighter Python loop — 5 Hz of CoT
    datagram serialisation — and records simulation time already running at roughly 84% of real time
@@ -315,12 +318,13 @@ Four properties the bridge depends on, each with the thing that establishes it.
 | **The decoded state is the state SUMO holds** | Differencing against the reference client is available and cheap: run `tools/traci` and `CarlaNet.Sumo` against the same network and the same seed, and compare a whole subscribed state for a moving vehicle. Two independent decoders of the same frames cannot agree by accident |
 | **The server is the build the client was written for** | `CMD_GETVERSION` on connect (`connection.py:381-388`), asserted against the pin. This is a thing the protocol offers and a linked binding cannot ask for |
 
-**And one property of SUMO, not of the client, that the bridge has to design around: a subscription is
+**And one property of SUMO, not of the client, that sets what a step costs: a subscription is
 charged inside `simulationStep`, whether or not anyone reads it.** Measured at 388 live vehicles on
 Arapahoe: **3.73 ms** per step with nothing subscribed, **9.26 ms** with the seven-variable set
 subscribed and never read (doc 23 §6.11). SUMO fills the results as part of advancing; the read is only
-what it costs to collect them afterwards. So the **subscribed** set is a cost the bridge controls in its
-own right, and §8.3 states the consequence for admission.
+what it costs to collect them afterwards. The bridge subscribes every vehicle SUMO has (§8.3), so this
+is a cost of the scenario's population, paid inside SUMO's step; what it costs a run in wall clock is
+[`10_Scale_And_Performance.md`](10_Scale_And_Performance.md)'s.
 
 **The client is `CarlaNet/src/CarlaNet.Sumo`, and each property above has a check that runs.** The
 checks are in `CarlaNet/test/CarlaNet.Sumo.Tests` under `dotnet test`, and skip rather than fail where
@@ -611,7 +615,7 @@ single batch.
 | admission, once | `SetVehicleLightStateCommand(actor, flags)` | yes | one-off, and **mandatory** — a pooled actor carries its predecessor's light state (§3.5, §8.2) |
 | **every world tick** | `ApplyTransformCommand(actor, pose)` | yes | 1 command per rendered vehicle |
 | **every world tick** | `ApplyTargetVelocityCommand(actor, v)` | yes | 1 command per body whose pose is written, straight after its `ApplyTransformCommand`; **zero** for a held body that gets no pose and after a parking transform. **Built** (`TickBatch`), and read back through D3.5 on every tick by the self-check (§5.4) |
-| on a SUMO signal-word change only | `SetVehicleLightStateCommand(actor, flags)` | yes | **measured** on Bahonar: mean 14.44, p90 31, max 47 per *SUMO step* map-wide, all landing in one of the R sub-step batches (§3.5) |
+| on a SUMO signal-word change only | `SetVehicleLightStateCommand(actor, flags)` | yes | **measured** on Bahonar: mean 14.44, p90 31, max 47 per *SUMO step* map-wide, all carried in one of the R sub-step batches (§3.5) |
 | on a sun-elevation threshold crossing | `SetVehicleLightStateCommand(actor, flags)` | yes | at most \|render set\| commands, at most twice per window, and **never** under a frozen sun (§3.5) |
 | at window open, and every tick under `advance` | `set_solar_epoch` | **no — a plain RPC**; no batch command sets the sun | 1 per window under a freeze; 1 per tick under `advance`, measured at a 0.128 ms median round trip (§9.2) |
 | session start, once | `set_layer_visible` for `road` and for `signals` | **no — a plain RPC** | 2 RPCs per session, before the first tick, and 2 more when it is disposed (§3.4) |
@@ -623,9 +627,12 @@ single batch.
 > path, and `apply_batch_sync` allocates a response per command. Use `apply_batch_sync` only for the
 > admission batch, where a spawn can fail.
 
-At the measured Bahonar peak of 131 concurrent vehicles (§8.1), a fully-rendered map is 131–262
-commands in one msgpack array per tick, 20 times a second. A render set limited by camera footprint
-is far smaller. Sizing is [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md)'s.
+Every vehicle SUMO has is drawn (§8.3), so the array grows with the population, one or two commands
+per vehicle. At the measured Bahonar peak of 131 concurrent vehicles in the hour of §8.1 it is 131–262
+commands per tick, 20 times a second; scaled from the measured populations, the compiled Bahonar
+scenario's peak of 170 is 170–340 and Arapahoe's peak of 437 is 437–874
+([`10_Scale_And_Performance.md`](10_Scale_And_Performance.md) §3.1, §3.2). What that costs in wall
+clock is `10`'s.
 
 **The steady-state write is exactly one RPC per tick, with no variable tail.** That is a direct
 consequence of D3.10 (§8.5): with the per-vehicle opacity dissolve removed, nothing in the per-tick
@@ -847,7 +854,7 @@ Four things make that work, each read from source:
    commands"* (`VehicleLightStage.cs:289-295`), and emits it **only on a change**
    (`:289`). The structure is proven; only its inputs change here.
 3. **The read is free.** `VAR_SIGNALS` is one more variable id in the `IntVector` already passed to
-   `subscribe` (`domain.py:188-202`), and the whole render set's values arrive in the
+   `subscribe` (`domain.py:188-202`), and every vehicle's values arrive in the
    single `getAllSubscriptionResults` call the bridge already makes (`domain.py:223`). Adding
    signals costs **zero** additional TraCI calls.
 4. **The server-side write is idempotent-guarded.** `ACarlaWheeledVehicle::SetVehicleLightState`
@@ -856,7 +863,7 @@ Four things make that work, each read from source:
    a material update — the change filter is a wire-size optimisation, not a correctness requirement.
 
 **The cost, from the measurement above.** SUMO state changes only at step boundaries, so all of a
-step's signal changes land in **one** of the `R = 20` sub-step batches:
+step's signal changes go into **one** of the `R = 20` sub-step batches:
 
 | | |
 |---|---|
@@ -866,8 +873,8 @@ step's signal changes land in **one** of the `R = 20` sub-step batches:
 | Against a fully-rendered 131-vehicle pose+velocity batch of 262 commands | **+0.28%** amortised; **+18%** on one tick in twenty, in the worst step of the hour |
 | Additional RPCs per tick | **zero** |
 
-A render set smaller than the whole map scales this down with it: the transition count is a property
-of the *rendered* vehicles, not of the map.
+Every vehicle SUMO has is drawn (§8.3), so the map-wide count is the count the batch carries, and it
+scales with the scenario's population.
 
 **Headlights are the cheap case, and the frozen policy is free.** The sun-driven bits change only
 when `sun_elevation_deg` crosses a predicate boundary. Under a **frozen** sun (`11`'s policy) the
@@ -987,7 +994,7 @@ This is not an assumption that solar is cheap; it is the arithmetic, and the inp
 | **Wheel spin** | no movement component | none today. Note that `ACarlaWheeledVehicle::SetWheelSteerDirection` is **already stubbed out in this port** — the physics-off branch has its only effective line commented out with `// ToDo We need to investigate about this` (`CarlaWheeledVehicle.cpp:717-731`), and `GetWheelSteerAngle` is inside `#if 0 // @CARLAUE5` (`:733-740`). So steering angle is *also* unavailable, for physics-on and physics-off alike. See §12 G8. |
 | **Real velocity in the world-observer snapshot** | §5 | **compensated** by D3.5. |
 | **Terrain seating from collision** | body is kinematic | **compensated**: Z comes from the drape grid analytically (§7.5), which is the same surface the collision heightfield was built from (`CarlaClient.cs:933-938`). Seating becomes exact rather than settled. |
-| **Vehicle fade / staging ring** | the staging controller owns the registry | **not used** — D3.10. The dissolve costs one blocking RPC per vehicle per reconcile and is already off by default in the working tree (`CarlaControlArgumentParser.py:318-328`); entry and exit are handled geometrically instead (§8.5). The mechanism is untouched and still available to every other client. |
+| **Vehicle fade / staging ring** | the staging controller owns the registry | **not used** — D3.10. The dissolve costs one blocking RPC per vehicle per reconcile and is already off by default in the working tree (`CarlaControlArgumentParser.py:318-328`); a vehicle appears and disappears where and when SUMO inserts and removes it, timed by the lookahead (§8.4, §8.5). The mechanism is untouched and still available to every other client. |
 
 Pitch/roll and exact seating are arguably *better* than today's settled physics. The suspension and
 wheel-spin losses are real and are the price of this mode.
@@ -1333,7 +1340,7 @@ matter a great deal.
 *Extrapolate forward from pose(k), speed(k), angle(k)*, correcting at k+1. No latency, but the
 correction is a visible jump. SUMO's default deceleration is 4.5 m/s²; a vehicle that brakes hard
 during a step diverges by ≈ ½·4.5·1² = **2.25 m** by the end of it, and the speed error at the
-correction is 4.5 m/s. That jump lands at a known instant once per second, in every frame, for every
+correction is 4.5 m/s. That jump comes at a known instant once per second, in every frame, for every
 braking vehicle — a systematic artefact a tracker will learn.
 
 *Buffer one SUMO step and interpolate between two known endpoints.* Exact at both ends, no jump. The
@@ -1410,7 +1417,7 @@ id, lane position. Cases, in order:
 
 **Distance is advanced by integrating the speed ramp, not linearly in time.** A step during which the
 vehicle's speed changed does not cover its distance at a constant rate, and the error from pretending
-it does lands entirely along the vehicle's own track. **Measured** on a recorded run subsampled to
+it does lies entirely along the vehicle's own track. **Measured** on a recorded run subsampled to
 1.0 s steps: **0.563 m** at the worst instant, worst where a vehicle brakes for a junction. The bound
 is `a · Δs² / 8`, and SUMO's default deceleration of 4.5 m/s² over a one-second step gives exactly
 that. Integrating a linear ramp between the two reported speeds — three multiplications, and the step
@@ -1636,7 +1643,7 @@ This confirms doc 23 §6.7 and `_TEAM_BRIEF.md` §5 from an independent derivati
 
 SUMO reports the front-bumper centre; CARLA's actor location is the actor origin, which is **not**
 necessarily the body centre — the body centre is `b` in actor-local coordinates. The exact
-requirement is that the *rendered* front-bumper centre lands on SUMO's reference point. With
+requirement is that the *rendered* front-bumper centre sits on SUMO's reference point. With
 `R(ψ) = [[cos ψ, −sin ψ], [sin ψ, cos ψ]]` (the standard UE yaw rotation):
 
 ```
@@ -1793,8 +1800,10 @@ Over the whole authored seven days, summing the flow definitions in
 `Shahid_Bahonar_Port_PatternOfLife.rou.xml`: **68,880 vehicle insertions**, peak simultaneous
 insertion rate 1,200 veh/h, mean 457 veh/h. 245 flows, zero individually-declared vehicles.
 
-So: a *map-wide* render set peaks around 131 actors in a busy hour, but the scenario creates 68,880
-distinct vehicles over its span. Spawn-and-destroy per vehicle would mean 68,880 spawns.
+So: the population peaks around 131 vehicles in a busy hour, and every one of them is drawn (§8.3);
+the compiled scenario the pipeline runs today peaks at 170 over its seven days
+([`10`](10_Scale_And_Performance.md) §3.1). But the scenario creates 68,880 distinct vehicles over its
+span, and spawn-and-destroy per vehicle would mean 68,880 spawns.
 
 ### 8.2 Pool, not spawn/destroy
 
@@ -1814,15 +1823,12 @@ clear parking pose, and never spawn again during the run.
 - Pool keyed by **blueprint id**, because an actor's blueprint cannot change. The catalogue's
   vType→blueprint map therefore also determines the pool's shape.
 - **The pool grows to demand rather than being spawned in full at session start**, which is what was
-  built and is a departure from the paragraph above. Spawning the full depth of every blueprint
-  before the first tick is, for the shipped seventeen-blueprint catalogue at a capacity of 128, two
-  thousand actors, nearly all parked for the whole run. Growing on demand spawns a body the first
-  time a blueprint is actually needed and never again, so the spawn-once property that makes the
-  pool safe is kept while the actor count stays near what the scene holds. Each body gets its own
-  parking slot, so every spawn is still onto ground known to be clear. The ceiling is a **total**
-  across blueprints, because which bodies a scenario asks for is a property of its traffic mix and
-  the total is the budget that binds; sizing is
-  [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md)'s.
+  built and is a departure from the paragraph above. A body is spawned only when a vehicle needs one
+  and no parked body of its blueprint is free, and it is never spawned again, so the spawn-once
+  property that makes the pool safe is kept while the actor count stays near the most vehicles of
+  each blueprint the scene has held at once. Each body gets its own parking slot, so every spawn is
+  still onto ground known to be clear. **The pool has no ceiling:** it holds as many bodies as the
+  scenario's population needs, and no vehicle goes without a body for want of one.
 - Parking pose: below the drape surface and outside the OSM sandbox, physics and gravity off, **light
   state cleared to `None`**. A parked actor costs one entry in the world-observer snapshot per tick
   and nothing else. No opacity call is involved: it is out of sight because of where it is, not
@@ -1849,269 +1855,58 @@ clear parking pose, and never spawn again during the run.
   reuse did interact with truth reporting in two other ways, both measured and both closed in §8.9:
   a parked body was reported as a vehicle, and the truth uid was built on an actor id that names each
   vehicle its body carries in turn.
-- Exhaustion is a **policy** event, not an error: the render-set manager declines to admit and records
-  the decline in the step record. It must never be a spawn attempt.
 
-### 8.3 Admission — the policy interface, and the render set that follows the cameras
+### 8.3 Admission — every vehicle SUMO has
 
-The render-set predicate is not this section's to own (§0). What this section fixed is the interface
-the bridge asks it through and the properties it must have, specified as follows; §8.3.1 is the policy
-now built against it (D3.38). The bridge requires it to be expressible as:
+**Every vehicle SUMO has is drawn while the session renders.** A vehicle is admitted at the first
+admission pass that sees it (§8.8) and drawn from the frame after it is first seen, first where the
+previous frame had it (D3.6). It is released when SUMO removes it, or when the capture window closes
+or the session stops ([`04`](04_Contracts.md) §4.3, E1 and E3). A vehicle SUMO holds parked is drawn
+too. No policy chooses among them — no region, no camera footprint, no ranking, no capacity — and the
+pool lends a body to each, growing without a ceiling (§8.2). The population is the scenario's: a
+heavier one makes a synchronous run slower on the wall clock, never different in content
+([`10`](10_Scale_And_Performance.md) §4.3). The render set keeps one meaning, the bodies a frame drew,
+published per frame for the truth (§8.9).
 
-```
-RenderSetPolicy:
-    bool ShouldRender(SumoVehicleState v, CameraState[] cameras, SessionState s)
-    int  Capacity(string blueprintId)
-    double AdmitLead                 # simulated seconds before the vehicle enters any footprint
-    double ReleaseLag                # simulated seconds after it leaves every footprint
-```
+**The only vehicles in the rendered span that are not drawn are those whose type has no measured
+body** — a vType that names no CARLA blueprint, or names one the catalogue holds no measurement for.
+Such a type is refused per type, not per session: the binder asks once per type and keeps the answer, the vehicle is still
+simulated and its truth recorded, and it is never placed at a guessed size. The run report counts the
+refused types by reason and the vehicle-ticks with no measured body (`VehicleTicksWithNoMeasuredBody`).
+Upstream, the scenario compiler refuses a vehicle class naming a blueprint the catalogue did not measure
+([`07`](07_Scenario_Authoring.md) scenario-compiler check 14). What the truth record says of such a
+vehicle, and of one outside any capture window, is [`04`](04_Contracts.md)'s.
 
-and to have three properties, each for a reason:
+**Every vehicle is subscribed, with the whole set the bridge reads**: the client's seven-variable state
+plus `VAR_LANEPOSITION`, the parameter the lane polyline is evaluated at. There are no tiers and no
+margin. A vehicle subscribed as it departs delivers its state on the step the subscription is made,
+because SUMO answers a subscribe command with the current values of everything subscribed, and those
+arrive in the same per-step store the step response fills. Subscribing the population is charged
+inside SUMO's step (§2.5) — through this client, 8.16 ms per step with Arapahoe's 388 vehicles
+subscribed and unread against 4.40 ms with none — and what that costs a run in wall clock is
+[`10`](10_Scale_And_Performance.md)'s.
 
-1. **Stable under hysteresis.** A vehicle must not oscillate in and out across a boundary; the
-   predicate needs distinct admit and release thresholds. Without this a marginal vehicle flickers
-   into and out of existence on consecutive ticks — which, with no dissolve to soften it (D3.10), is
-   the most visible failure this design has.
-2. **Evaluable one SUMO step ahead.** The bridge already holds frame k+1 (D3.6), so it can admit a
-   vehicle `AdmitLead` seconds before it is needed. With D3.10 that lead is no longer buying a
-   dissolve; it is buying **distance** — the vehicle is placed while it is still outside every camera
-   footprint, which is what makes its appearance unobserved (§8.5).
-3. **Budget-bounded and deterministic.** When more vehicles pass the predicate than there is capacity
-   for, the ranking must be a pure function of the session seed and the vehicle state, so two runs of
-   the same seed admit the same set.
+#### 8.3.1 Withdrawn
 
-**A fourth property, which is about the subscription rather than the render set, and which the two are
-easy to conflate.** SUMO charges for a subscription inside `simulationStep` whether or not the client
-reads it — 3.73 ms against 9.26 ms at 388 vehicles, subscribed and unread (§2.5). So **subscribing is
-not free for a vehicle the bridge decides not to render**, and the render-set policy has to govern
-*two* sets rather than one:
-
-| Set | What it costs | Who decides it |
-|---|---|---|
-| **Subscribed** | SUMO's step time, paid whether or not the result is read | the bridge, from the same predicate, with a wider margin — a vehicle must be subscribed before it can be admitted, because admission needs its state |
-| **Rendered** | a CARLA actor, a pose write and a batch entry per tick | the render-set predicate |
-
-The bridge therefore subscribes on a lead ahead of `AdmitLead` and unsubscribes on a lag behind
-`ReleaseLag`, and the truth record for an unrendered-but-subscribed vehicle is available for free
-because it is already being paid for. What is **not** free is subscribing the whole population: at
-Arapahoe's 388 that is 5.5 ms of the 50 ms tick spent on vehicles nothing is looking at.
-
-**Two tiers, because the predicate's own input is a subscription.** A vehicle's position is what the
-render set is decided from, and a vehicle nothing is subscribed to has no position to decide on. So
-the subscribed set is not one set but two sizes of one: every vehicle in the simulation carries a
-**screening** subscription of a single variable, `VAR_POSITION`, and one inside the margin is
-**promoted** to the eight the bridge reads — the client's seven-variable state plus `VAR_LANEPOSITION`,
-which is the parameter the lane polyline is evaluated at. A promotion delivers its state on the step
-it is made, because SUMO answers a subscribe command with the current values of everything
-subscribed, and those land in the same per-step store the step response fills.
-
-**A TraCI subscription only ever grows, and a demotion is therefore two commands.** Measured
-2026-09-22 against SUMO's own Python client on a fixture network: subscribing a vehicle to one
-variable and then to eight delivers eight, and subscribing it back to one **still delivers eight**,
-on that step and on every step after. Only an explicit `unsubscribe` clears the set, and a
-`subscribe` after it takes effect from the following step. A demotion written as a plain re-subscribe
-keeps paying for the seven variables it meant to give back for the rest of the vehicle's life, and
-nothing shows it: the values keep arriving and everything reads correctly.
-
-**What [`04_Contracts.md`](04_Contracts.md) owns:** the predicate itself, and what the truth record
-says about a SUMO vehicle that is simulated but not rendered — noting that "simulated but not
-rendered" now divides into *subscribed* and *not subscribed*, and only the first has per-step state to
-record. **What [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md) owns:** `Capacity`, the
-subscription margins, and whether the budget is per blueprint, per camera footprint or global.
-
-#### 8.3.1 As built: the circle, and the render set that follows the cameras
-
-**The interface.** `IRenderSetPolicy` takes the cameras and the session's state once per admission
-pass rather than once per vehicle, because a camera's footprint is the same for every vehicle a pass
-asks about:
-
-```
-IRenderSetPolicy:
-    void   BeginPass(RenderSetPass p)      # frame instant, SUMO step, seed, longest body, bodies' reach,
-                                           #   CameraView[] (actor, pose, optics), ground height
-    bool   ShouldSubscribe(x, y, alreadySubscribed)
-    bool   ShouldRender(CoSimVehicleFrame v, alreadyRendered)
-    double Rank(CoSimVehicleFrame v, alreadyRendered)          # lowest first
-    int    Capacity                                            # one number, global
-    double AdmitLeadSeconds, ReleaseLagSeconds                 # of the rule in force at this pass
-    RenderSetRule ActiveRule;  CameraFootprint[] Footprints;  string Description
-```
-
-`Capacity` is global rather than per blueprint: [`10`](10_Scale_And_Performance.md) D10.4 sizes one
-number and the pool's ceiling is a total (§8.2). The release lag is kept by `RenderSetManager`, not by
-the policy, so that every policy's releases are timed, counted and recorded the same way: a rendered
-vehicle that stops passing the predicate is held, still rendered and still eligible, until it has
-failed for the lag, counted from its first failing pass and started again if it passes in between.
-Under a lag of zero, the circle's, a vehicle is released at the first pass it fails, as before. A
-rendered vehicle is never demoted from the subscription tier: it is released first and demoted at a
-later pass, so a vehicle held by the lag, or one that jumps across the margin in a step, is not
-released as though it had left the simulation.
-
-**Two policies.** `RegionRenderSetPolicy` is the circle, unchanged. `CameraFootprintRenderSetPolicy`
-follows every camera registered with the session and falls back to a `RegionRenderSetPolicy` while
-none is, **never to rendering nothing**; the circle's capacity is the render set's, and its hysteresis
-is the band a rendered vehicle is kept inside (below). Chosen per run as `render_set`, `cameras` by
-default ([`12`](12_Operator_Control_Surface.md) §5.2, §9.6); a session given no camera behaves under
-`cameras` exactly as under `circle`, pass for pass.
-
-**Which cameras.** The caller spawns a camera and registers its actor id
-(`SumoDriveSession.AddCamera`), and may register or remove one at any point between advances
-(`RemoveCamera`) -- a free view opened late, a rig taken down. The camera's image size and horizontal
-field of view are read once, from the attributes it was spawned with (`ICarlaWorld.DescribeCamera`,
-one `get_actors_by_id`); its pose is read at every pass from the client's snapshot of the last frame
-the session rendered (`ICarlaWorld.ObservedTransformAt`, which is `CarlaClient.GetSnapshotFrame`, no
-round trip), so an orbit or a flown camera is followed wherever it goes. `run_capture` registers every
-channel's RGB camera, orbits included, as it is placed and before the prewarm; `run_sumo_drive.py`
-registers the fixed camera once it is spawned and the flown camera when the free view opens, and lets
-either go before destroying it. Neither registers a depth camera, whose view is its RGB camera's. A
-registered camera the snapshot does not hold -- destroyed without being removed -- is left out of the
-pass and counted (`CameraPosesUnread`); a pass with no camera view is the circle's.
-
-**The footprint.** The field of view is a four-sided pyramid with its apex at the camera, and a ground
-point is in view when it is inside all four sides. On a level plane each side is a half-plane, so the
-footprint is a disc around the camera's nadir -- the range cap, below -- cut by four lines: exact,
-convex and bounded whatever the camera looks at (`CameraFootprint.Project`, the axes CARLA's own,
-`Math::GetForwardVector`/`GetRightVector`/`GetUpVector`). **The ground is two planes bracketing the
-world package's ground surface under the view, not one plane and not the grid.** The surface is the
-one every body is seated on (`GroundSurface`, §7.5), sampled under a first footprint taken at the height
-where the optical axis meets it; the footprint is taken again at the lowest and highest heights found
-and the two combined in their hull. A ray's first hit on the surface lies between its crossings of
-those two planes, and a frustum's cross-sections at two heights are one polygon scaled about the
-nadir, so the hull holds everything a camera over relief sees. One plane misses it -- over a 50 m drop
-a view 10 degrees down at its top edge reaches 284 m farther than the plane at the axis's height says
-(`CameraFootprintTests`) -- and marching rays through the grid for every vehicle on every pass buys a
-difference the margin already covers. Over flat ground the two planes are one. Taken once per camera
-per pass: a few hundred bilinear samples.
-
-**The range cap, and the pixel threshold.** A view that takes in the horizon has an unbounded
-footprint, so each is capped at the slant range past which a body covers fewer than `N` pixels along
-its length: `range = L × p / N`, with `p` the pixels one radian covers **at the picture's corners**,
-`f (1 + tan² h + tan² v)` for focal length `f` and half-angles `h`, `v` -- a rectilinear image spreads a
-ray at angle θ off its axis over `1 / cos² θ` times the axial pixels, 1.44 times at the corner of a
-60-degree 16:9 picture and 2.32 times at a 90-degree one -- and `L` the longest body the catalogue
-measures, 10.17 m (`vehicle.fuso.mitsubishi`). Beyond the cap no measured body, broadside, anywhere in
-the picture, reaches `N` pixels. **`N` = 2 by default**, a run setting (`render_min_pixels`) recorded in
-the run report: detection is the coarsest EO task, and Johnson's criterion puts it at about one cycle
-across the target -- two pixels, the Nyquist limit -- so a body under two pixels along its longest
-dimension is below anything a detector can sample, and practice treats vehicles under two to three
-pixels as no detection target. Two rather than three, the longest body rather than a typical one, and
-the corners' scale rather than the axis's all err the same way: toward rendering. A vehicle missing
-from a frame it should be visible in is a truth defect; one rendered at a pixel and a half costs a body
-only when the capacity binds, and then ranks behind every vehicle in view of a nearer camera no better
-than any other. At the defaults the fixed camera's cap is 12,170 m (1920 × 1080, 60 degrees) and the
-free view's 7,542 m (1280 × 720, 90 degrees).
-
-**Margins, lead, lag and hysteresis.** Every distance is on the ground from the point SUMO reports, the
-centre of the front bumper, to the nearest swept footprint. The margin `m` is the bodies' reach -- the
-farthest any measured body extends from that point, its rear corner, 10.25 m -- plus one SUMO step of
-travel at the fastest plausible speed `v_max`, 40 m/s by default (the sizing scenario's fastest lane is
-39.44 m/s and the fastest vehicle sampled on any shipped scenario 37.59 m/s, `10` §8). A vehicle at
-speed `v` is:
-
-| | Threshold | Bahonar, 1 s step, at 25 m/s |
-|---|---|---|
-| admitted | `d ≤ m + v × AdmitLead` | 125 m |
-| kept | `d ≤ m + v_max × AdmitLead + h`, and for `ReleaseLag` after it last was | 230 m, then 5 s |
-| subscribed | `d ≤ m + v_max × AdmitLead + v_max × step`, against the footprint swept a step further | 210 m |
-| unsubscribed | beyond that plus `h` | 270 m |
-
-with `AdmitLead` 3 s and `ReleaseLag` 5 s by default -- `10` §8's `frustum_lead_s` and `exit_lag_s` --
-and `h` the circle's hysteresis, 60 m by default. The kept band sits above the widest admission
-threshold, so a vehicle that slows on the boundary is not released and admitted again; the lag holds a
-vehicle that has left while a camera may pan back. **Why an appearance is unobserved:** a vehicle
-admitted at a pass is first drawn where the previous frame had it (D3.6), which the previous pass found
-farther than `m + v × AdmitLead` from the view -- at least the reach and a step clear, and a lead's travel
-further for a moving one -- and it was subscribed at that pass, because the subscription threshold
-covers the admission threshold one step of travel out. A vehicle SUMO inserts inside a view appears
-there; that is the scenario's insertion, not the render set's.
-
-**A moving camera.** The render set a pass decides is drawn from the last rendered frame, where the
-camera's pose is read, to the frame the pass read a step later, and the ground a moving camera will look
-at within the lead has to hold its vehicles already. So each camera's motion since the previous pass --
-position, and the three angles as shortest arcs -- is carried forward over the step and the lead, and
-the admission footprint is the hull of the footprint at the pose read and at the pose it is carried to:
-under a translation, exactly the ground it sweeps. The subscription footprint is carried a step further.
-A move faster than 1,000 m/s between passes, a camera sent back to its start pose, is a jump and is
-carried nowhere.
-
-**Ranked under the capacity by what is in view, then by the seed.** A vehicle with part of its body
-inside a swept footprint ranks ahead of one only approaching; among either, one already rendered ranks
-ahead of a newcomer, so a place is never taken from a vehicle in view to give to one arriving; within
-those, by its place in the scenario seed's order (`SeededOrder`: FNV-1a over the id, mixed with the seed
-by SplitMix64's finaliser, never .NET's per-process string hash). Vehicles held by the lag rank after all
-of them, the longest out of view first to go. The seed is the one the scenario's `.sumocfg` runs SUMO
-under, read by the session, SUMO's default 23423 where it declares none, and recorded on the report. So
-the rank is a pure function of the seed, the vehicle's state and whether it is rendered -- itself decided
-from the same inputs at earlier passes -- and one seed admits one set. **Two departures, recorded for
-their owners.** [`10`](10_Scale_And_Performance.md) §7 row 2 sheds in-frustum vehicles farthest first;
-within a tier this sheds by the seed's order instead, because an order by distance reshuffles as
-vehicles pass one another -- a place changing hands between two vehicles in view -- and biases the
-rendered sample toward the camera, where a seeded order is fixed for a vehicle's life and unbiased.
-[`04`](04_Contracts.md) §4.2 makes frustum membership a priority and never an admission gate, because a
-vehicle admitted only as it enters frame pops into existence; here the gate is the footprint dilated by
-the margin and the lead, so admission happens out of frame, which is the concern that rule answers. The
-participant and area-of-interest tiers of `04` §4.2 gate 4 have no input yet and are not built.
-
-**What a run says.** Each `AdmissionPass` carries the `Rule` it decided by, the `Cameras` whose
-footprints it used and the vehicles the lag `Held` among the eligible (§8.8). The report states the
-policy in its own words, the seed, the passes by rule, and for every camera followed its optics, range
-cap, altitude and footprint as of the last pass that followed it; its releases by reason and capacity
-declines are as before. `run_sumo_drive.py` logs the policy at start, each camera's footprint the first
-time it is followed, and the rule with each admission line.
-
-**The truth is unchanged.** Each frame's render set (§8.9) is still read from the pool as the tick left
-it, so it is exactly the bodies the frame drew under either policy -- checked frame by frame under the
-cameras by `SumoDriveSessionCameraTests` -- and the recorder lists it as before. A vehicle released as
-a camera moves off and admitted again as it comes back keeps its uid, which follows the SUMO vehicle, so
-`CarlaControl/scripts/audit_truth_sidecars.py` reads a capture under the cameras as it reads one under
-the circle.
-
-**What it does not do.** A body's height is not in the margin: its top can reach into a grazing view
-from as far out as its height over the tangent of the view's depression, 23 m for a 4 m body at 10
-degrees, which the margin covers on a one-second step and not on Arapahoe's 0.05 s for a vehicle
-standing still. Under `run_capture` the two passes made while the session starts are the circle's,
-because the cameras are placed once it has started, so the prewarm's first step renders the circle's
-vehicles and they are released a lag later; and a stare aimed at the rendered traffic aims at what its
-own view renders. Not yet exercised live.
-
-**Exercised by** `CameraFootprintTests` (straight down, the picture's width along the camera's right;
-an oblique trapezoid at the edges its rays meet the ground; a horizon view bounded by the cap alone; the
-cap worked independently from the slope of `f tan θ` at the corner; a view of the sky and one from
-underground empty; a drop in the ground covered where one plane stops short; the swept hull),
-`CameraFootprintRenderSetPolicyTests` (admitted a lead ahead so the first pose is out of view; a stopped
-vehicle inside the margin and not beyond it; held the lag after leaving the kept band, then released;
-a vehicle back within the lag never released; no flicker on the admission threshold with no lag to hide
-behind; one seed one set in either presentation order, the set the seed's order, ten seeds not all one
-set; incumbency and what is in view; a camera added and removed mid-run against the circle; no camera
-exactly the circle; a moving camera swept and a jump not; the subscription a step ahead; settings
-refused) and `SumoDriveSessionCameraTests` (on the fixture with a recorded world: the rule pass by pass
-either side of registration and removal, poses read at the last rendered frame, the report's lines, only
-the vehicle that crosses the view drawn under it, every span opening with its body clear of the view,
-the circle's vehicle held the lag and released as having left the render set, every held frame's render
-set its posed bodies; an actor that is not a camera refused and a destroyed camera counted and the
-circle deciding; no world, no camera). Each was seen failing against a wrong implementation: frustum
-sides not turned to face the axis; the picture's width and height swapped; the cap ignored; the cap from
-the axis's scale; one ground plane; no lead; no hysteresis band; no lag; the seed ignored; no incumbency;
-in view not outranking approaching; no camera rendering nothing; no sweep; a jump carried; no step of
-lead on the subscription; a rendered vehicle demoted; a removed camera still followed; the pose read
-from the newest snapshot; an actor that is not a camera accepted.
+**Withdrawn 2026-09-30 with D3.38.** No policy chooses which vehicles are drawn; the rule is §8.3.
 
 ### 8.4 The lookahead dividend
 
 Because the bridge holds one full SUMO step of future (D3.6), `Simulation.getArrivedIDList()`
 (`_simulation.py:329`) tells it about an arrival **before** the rendered clock reaches it. So a vehicle
-that SUMO removes is known about a whole SUMO step before the rendered clock reaches it, so it can be
-released at a moment the bridge chooses — outside a camera footprint, or at the arrival instant —
-rather than vanishing wherever it happened to be. The same applies to departures via
-`getDepartedIDList()` (`_simulation.py:314`): a vehicle can be placed before its first rendered frame.
-Under D3.10 this lookahead is doing the work the dissolve used to do, and doing it better: an
-unobserved appearance is strictly more honest than a visible one that has been smoothed.
+that SUMO removes is known about a whole SUMO step before the rendered clock reaches it, and it is
+released at its arrival instant rather than vanishing wherever it happened to be when the bridge
+noticed. The same applies to departures via `getDepartedIDList()` (`_simulation.py:314`): a vehicle
+can be placed before its first rendered frame. Under D3.10 this lookahead is doing the work the
+dissolve used to do, and doing it better: a vehicle appears and disappears exactly where and when the
+scenario inserts and removes it, which is an event the scenario holds and the step record records,
+rather than a smoothed transition the scenario never had.
 
 This directly answers "a vehicle SUMO removes while CARLA still holds it" (§11.3): with the
 lookahead, that situation does not arise on the normal path, and when it does arise it is one of the
 abnormal paths in §10 rather than a race.
 
-### 8.5 Visual entry and exit — full opacity, and a geometric margin
+### 8.5 Visual entry and exit — full opacity, where SUMO inserts and removes
 
 > **D3.10 — A vehicle admitted to the render set appears at full opacity and a released one
 > disappears. The bridge issues no per-vehicle opacity RPC and publishes no fade state.**
@@ -2131,20 +1926,18 @@ the reason:
 `--no-fade` is retained at `:329-334` so existing command lines keep working. The bridge does not call
 `set_actor_fade` at all.
 
-**What this costs, stated plainly.** A vehicle popping into existence is visible. If the render-volume
-boundary falls inside an active camera's footprint, a collect will contain frames in which a car
-appears from nothing — and, worse for the product, a track that begins mid-scene with no approach.
+**What this means, stated plainly.** A vehicle appearing at full opacity is visible where it appears.
+Every vehicle SUMO has is drawn (§8.3), so a vehicle appears where and when SUMO inserts it — the
+scenario's own insertion — and disappears where and when SUMO removes it. A track that begins or ends
+mid-scene does so because the scenario began or ended it there, and a camera that sees it sees an event
+the scenario holds. A dissolve would change the imagery around that event without recording that it
+did.
 
-**The mitigation is geometric, not visual.** Size the render volume so that admission and release both
-happen outside every active camera's footprint. Then nothing observes the transition and there is
-nothing to dissolve. This costs nothing new here: §8.4's one-SUMO-step lookahead already lets the
-bridge admit a vehicle before its first *rendered* frame, and the render-volume margin is already an
-open question for the architect. The two together are the whole answer.
-
-Where a camera geometry makes the margin impossible — a wide oblique field that reaches past any
-affordable render volume — that is **a fact the run manifest records**, not something to fade over. A
-manifest entry saying "admission was inside camera 2's footprint for this run" is honest and
-filterable; a dissolve is neither, because it changes the imagery without recording that it did.
+**The timing is the lookahead's.** §8.4's one SUMO step of lookahead lets the bridge place a departing
+vehicle before its first *rendered* frame and release an arriving one at its arrival instant, so
+neither appears or disappears a step early or late. Vehicles alive when a window's prewarm begins are
+drawn from the prewarm, before the window's first frame, so a window opens on traffic already in
+place rather than on vehicles appearing in its first frame.
 
 **The arrival gate needs no replacement, and this is the good news.**
 `CarlaClient.IsActorEstablished` returns `true` for any actor with no fade record —
@@ -2216,7 +2009,7 @@ stateDiagram-v2
     }
 
     state "CARLA side" as C {
-        [*] --> Parked : pool actor spawned once at session start;<br/>lights None
+        [*] --> Parked : pool actor spawned once, when a vehicle needs a body<br/>and none of its blueprint is parked; lights None
         Parked --> Rendered : ADMISSION INSTANT recorded;<br/>teleported to first pose at full opacity;<br/>LIGHT STATE WRITTEN (predecessor's is stale)
         Rendered --> Rendered : ApplyTransform + ApplyTargetVelocity each world tick;<br/>SetVehicleLightState only on a change
         Rendered --> Reseated : discontinuity detected
@@ -2235,7 +2028,7 @@ stateDiagram-v2
         Advancing --> [*] : window close
     }
 
-    S --> C : admission is driven by SUMO state plus the render-set policy
+    S --> C : every running vehicle with a measured body is admitted;<br/>SUMO's removal releases it
     W --> C : sun elevation drives the Position / LowBeam bits of the light state
 ```
 
@@ -2247,59 +2040,39 @@ coupling of lifetimes.
 
 ### 8.8 Each admission pass, published as it is made
 
-The render set is decided once per SUMO step, when SUMO's state is read, and holds for the ticks the
-step is worth. Each such **admission pass** is published as it is made (`AdmissionPass`, D3.31) — the
-row [`10`](10_Scale_And_Performance.md) §7's shedding ledger asks for and
-[`12`](12_Operator_Control_Surface.md) §7.1's `population / eligible / admitted / shed` monitor row
-shows:
+Admission and release are decided once per SUMO step, when SUMO's state is read, and hold for the
+ticks the step is worth. Each such **admission pass** is published as it is made (`AdmissionPass`,
+D3.31), and carries:
 
-| Field | What it counts |
+| What | What it counts |
 |---|---|
-| `WorldTick`, `SimulatedTimeSeconds` | ticks rendered when the pass was made; the SUMO frame it decided, one step ahead of the last rendered frame (§8.4) |
-| `Population` | every vehicle SUMO has — each carries the screening subscription the region is decided from (§8.3) |
-| `Subscribed` | of those, inside the subscription margin, delivering full state |
-| `Eligible` | of those, admitted a place by the render-set predicate — the circle, or a camera's footprint with its margin and lead (§8.3.1) — and the rendered vehicles the release lag holds |
-| `Rule`, `Cameras`, `Held` | the rule the pass decided by, how many camera footprints it used, and how many of the eligible the lag held; `Circle`, 0 and 0 under the circle |
-| `Admitted` | holding a place after the pass: the eligible, up to the capacity |
-| `Shed` | the eligible the capacity declined, `Eligible − Admitted` |
-| `Capacity` | the capacity in force |
-| `NewlyAdmitted`, `Released` | took up a place, and gave one up for any reason, at this pass |
-| `TotalAdmissions`, `TotalCapacityDeclines` | the running totals; a vehicle admitted again counts again, and a shed vehicle counts per pass |
-
-A place is a body only where the vehicle's type names a measured blueprint and the pool has one to lend;
-`VehicleTicksWithNoMeasuredBody` and `PoseDeclinesForNoBody` count the difference. Shedding here is
-always by capacity: the circle or the footprints are the eligibility, so there is no second reason to
-record.
+| when | the world ticks rendered when the pass was made, and the SUMO frame it decided, one step ahead of the last rendered frame (§8.4) |
+| the population | every vehicle SUMO has at that frame, each of them subscribed (§8.3) |
+| rendered | the vehicles holding a body after the pass: every vehicle of the population whose type has a measured body. A vehicle of a type with no measured body is simulated and not drawn (§8.3), and `VehicleTicksWithNoMeasuredBody` counts its vehicle-ticks |
+| admitted and released | the vehicles admitted at this pass, and those released at it for any reason |
+| total admissions | the running total since the session started; a vehicle admitted again counts again |
 
 **Two surfaces, one record.** `CoSimRunReport.LastAdmissionPass` holds the latest pass, replaced whole
 — immutable, so a reader between two advances reads one pass, never half of two — for a monitor that
 reads between advances. `SumoDriveSessionOptions.OnAdmissionPass` (`on_admission_pass`) is handed every
 pass, including the two the session makes while starting (the fast-forward's frame and the step of
-lookahead), for a writer that keeps the whole ledger. From Python a read of the pass is one object off
-the report and a handful of integers off it: measured through pythonnet on a scratch build, **3.4 µs**
-for the five a monitor shows. The run's `Admissions` and `CapacityDeclines` have been the running
-totals of the latest pass all along; the pass adds the rest of the row. The report's text prints the
-last pass (`last pass` line), and `run_sumo_drive.py` logs the row with its pacing line.
+lookahead), for a writer that keeps every pass. From Python a read of the pass is one object off the
+report and a handful of integers off it: measured through pythonnet on a scratch build, **3.4 µs** for
+five of its counts. The report's running count of admissions has been the latest pass's total all
+along; the pass adds the rest. The report's text prints the last pass (`last pass` line), and
+`run_sumo_drive.py` logs it with its pacing line.
 
-**Measured offline** on the shipped compiled Gardnerville scenario against its package, no world, a
-250 m region of capacity 4 around the origin, fast-forwarded to t = 290 with the window at 300: 402
-passes over 400 advances (two while starting), and at t = 310.05 a population of 35, 10 subscribed, 7
-eligible, 4 admitted and 3 shed.
-
-**What it cannot see.** Whether an admitted vehicle got a body, which the report's own counts say; and
-anything between passes, since the render set does not change between them.
+**What it cannot see.** Anything between passes, since admission and release do not change between
+them.
 
 **Exercised by** `SumoDriveSessionAdmissionTests`: every pass handed out and on the report by the time
 the advance that made it returns, of the SUMO frame the step read and the tick it was made at; the
-counts' relations on every pass (subscribed within population, eligible within subscribed, admitted
-the eligible up to the capacity, shed the difference, the totals the running sums) with a capacity that
-sheds; the population equal, pass for pass, to the vehicles a second SUMO running the same scenario and
-seed alone has, in a region narrow enough that some are unsubscribed; and a region taking in the whole
-network admitting the whole population. Each was seen failing against a wrong implementation: passes
-published only at disposal; the report not updated as passes are made; the writer never handed one;
-shed reported as the eligible; the population reported as the subscribed; the tick not recorded; every
-rendered vehicle counted as newly admitted; releases not counted; the eligible capped at the capacity;
-and per-pass counts never reset.
+counts' relations on every pass (the rendered within the population, the totals the running sums); the
+population equal, pass for pass, to the vehicles a second SUMO running the same scenario and seed alone
+has. Each was seen failing against a wrong
+implementation: passes published only at disposal; the report not updated as passes are made; the
+writer never handed one; the tick not recorded; every rendered vehicle counted as newly admitted;
+releases not counted; and per-pass counts never reset.
 
 ### 8.9 Each frame's render set, published for the truth
 
@@ -2332,8 +2105,9 @@ uid. A record could not be joined to the scenario's supervision, whose participa
 - **Why per frame and not the latest.** Bodies change hands between two ticks, and an image arrives
   several ticks after its frame (measured up to seven, `SnapshotHistory`). Read against the newest
   set, a body's pose is named for the vehicle it carries by the time the image arrives, and a body just
-  given back is listed as the vehicle it no longer renders. On the test fixture at a capacity of one,
-  body 1 renders `turner` on frame 134 and `goer` on frame 135.
+  given back is listed as the vehicle it no longer renders. A body given back by one vehicle and lent
+  to the next vehicle of its blueprint between two ticks renders the first on one frame and the second
+  on the next, and each frame's set names the vehicle it drew.
 - **The history, and a frame that is gone.** `RenderSetFrames` holds the last **256** frames (12.8 s at
   0.05 s), more than the client's 64 frames of snapshot history, so any frame whose truth is still held
   has its set held. The recorder asks for the frame its truth records describe — the image's own
@@ -2359,7 +2133,8 @@ With no source — a run of traffic-manager traffic, where every vehicle actor i
 recorder writes exactly what it wrote before, byte for byte.
 
 **Exercised by** `SumoDriveSessionRenderSetTests` (every held frame's set equal to the bodies posed
-for it, by SUMO vehicle and vType; the hand-over from `turner` to `goer` named on each side of it; the
+for it, by SUMO vehicle and vType; a body handed from one vehicle to another named for each on its own
+side of the hand-over; the
 span's opening frame; a parked body in no set; an aged-out frame and an unrendered one answered with
 nothing), `RenderSetFramesTests`, `RenderSetPairingTests` (a sidecar listing exactly its frame's set
 while the next frame has changed hands; an aged-out frame written with no vehicles and counted; a
@@ -2747,12 +2522,14 @@ were not left out; the next paragraphs give the measurement that changed both.
 
 **Traffic in view, and the unit the picture settles in.** Measured on Bahonar (2026-09-30), two runs of
 one stare — (−1400, −600) from 450 m, straight down, 1280×720 at 2 Hz, synchronous at 0.05 s, the
-picture then compared frame against the camera's frame ten frames earlier:
+picture then compared frame against the camera's frame ten frames earlier — one with traffic in view
+and one with none. (Drives then drew only the vehicles inside a circle, placed over the view for the
+first run, 800 m around (−1200, −600), and away from it for the second, 300 m around (3000, 1500).)
 
 | Run | Rendered vehicles | Tiles in | Picture |
 |---|---|---|---|
-| Render region (−1200, −600), 800 m | 56 admitted | 80 ticks, 2.1 s | never settled: the worst block held at 1.77–2.04 grey levels, at pixel (480, 480), over 120 frames; refused at pre-roll |
-| Render region (3000, 1500), 300 m | none | 20 ticks, 0.3 s | settled after 16 frames, worst block 0.46 |
+| Traffic in view | 56 | 80 ticks, 2.1 s | never settled: the worst block held at 1.77–2.04 grey levels, at pixel (480, 480), over 120 frames; refused at pre-roll |
+| No traffic in view | none | 20 ticks, 0.3 s | settled after 16 frames, worst block 0.46 |
 
 Two facts come out of the pair. **Moving vehicles defeat a whole-view comparison.** At the capture
 rate, ten of the camera's frames are 100 ticks — 5 s, in which traffic moves about 100 m — so the
@@ -2807,19 +2584,18 @@ cover (`SessionFrameVehicles`); a view whose tiles stop being in starts its pict
 the tiles' figures cover every registered view and a camera that moves between its frames never reads
 settled: a stare at a point or a pose from the prewarm's first step; an orbit, which is held at the
 pose it opens on through the prewarm and sweeps from the window's opening; and a stare aimed at the
-rendered traffic, which follows it until one SUMO step and the picture's 120-tick ceiling before the
-window opens — seven one-second steps at the defaults — and holds from there
+rendered traffic, which starts over the centre of the world's staging bounds (`get_staging_bounds`),
+follows the traffic through the prewarm until one SUMO step and the picture's 120-tick ceiling before
+the window opens — seven one-second steps at the defaults — and holds from there
 ([`12`](12_Operator_Control_Surface.md) §5.2, D12.37).
 
 **A view not ready by the window's opening refuses the run at `PreRoll`, and the window is not
 moved** ([`12`](12_Operator_Control_Surface.md) D12.38). The prewarm is the lead: `capture.prewarm_s`,
 300 s by default ([`10`](10_Scale_And_Performance.md) §8), fixed for the session and recorded in the
-effective configuration and the lock. It is not lengthened while a run is under way, for three
+effective configuration and the lock. It is not lengthened while a run is under way, for two
 reasons. SUMO has been fast-forwarded to the prewarm's first instant before the wait begins and cannot
-be taken back to start earlier ([`10`](10_Scale_And_Performance.md) D10.2). The render set at the
-window's opening depends on where rendering began, through its release hysteresis and its cap (§8.3),
-so a lead chosen from how long the tiles took would make the traffic the window renders a function of
-the network. And a window opened later than declared is not the window D3.21 binds the sun for. So a
+be taken back to start earlier ([`10`](10_Scale_And_Performance.md) D10.2). And a window opened later
+than declared is not the window D3.21 binds the sun for. So a
 ceiling reached, or a view not ready when the window opens, ends the run `refused_preroll`, naming the
 channel, the witness and where it stood; a prewarm too short for the camera to render two frames ten
 ticks apart after its tiles are first asked about is refused before anything starts (check 51). The
@@ -2882,12 +2658,13 @@ session.start():
     assert sumocfg time-to-teleport <= 0                  # absent is 300; unless accepted, §11.6
     assert world.settings.synchronous_mode and world.settings.fixed_delta_seconds == Δw
     Δs = Simulation.getDeltaT();  R = Δs / Δw;  assert R is a positive integer
-    assert 1 / captureRateHz is a whole number of Δw      # a frame lands on the tick it is stamped
+    assert 1 / captureRateHz is a whole number of Δw      # a frame falls on the tick it is stamped
     Vehicle.subscribe(each vehicle, [VAR_POSITION, VAR_ANGLE, VAR_SPEED,
                                      VAR_ROAD_ID, VAR_LANE_ID, VAR_LANEPOSITION,
                                      VAR_TYPE, VAR_SIGNALS])       # signals ride the same call, §3.5
     client.setLayerVisible("signals", false)              # once; fixed off for the session, D3.24
-    pool.spawnAll()                                       # one apply_batch_sync
+                                                          # no bodies yet: the pool spawns one when a
+                                                          #   vehicle needs it and none is parked, §8.2
 
     # ── SUMO fast-forward: wall clock only, no world ticks, sun untouched (§9.5) ──
     while Simulation.getTime() < window.begin - prewarm_s:
@@ -2956,8 +2733,8 @@ Measured 2026-09-22: a fresh client on a synchronous world read **0** actors bef
 immediately after one, while `get_actors([id])` on that same client resolved straight away because it
 goes to the server by id. A bridge enumerates the world at session start, which is before its first
 tick, so **the bridge must not depend on enumeration** — its one whole-population question is SUMO's
-`Vehicle.getIDList()` when it seeds the screening tier, and everything after that is departure and
-arrival deltas.
+`Vehicle.getIDList()` when it subscribes the vehicles already running, and everything after that is
+departure and arrival deltas.
 
 **When SUMO is slower than the world.** It cannot be, in any way that matters: the loop is serial and
 the world clock is simulated, not wall. A heavy SUMO step delays the next world tick in *wall* time
@@ -3000,7 +2777,7 @@ sequenceDiagram
     CLK->>SU: getDepartedIDList / getArrivedIDList / getCollisions
     SU-->>RS: lifecycle deltas for the step just simulated
 
-    RS->>RS: evaluate ShouldRender with one step of lookahead
+    RS->>RS: admit every vehicle newly seen, release every vehicle SUMO removed,<br/>with one step of lookahead
     RS->>CC: pool check-out: SetSimulatePhysics false, SetEnableGravity false,<br/>first pose at full opacity, LIGHT STATE RESET (predecessor's is stale)
     RS->>RS: record admission and release instants
 
@@ -3319,8 +3096,8 @@ On the normal path the lookahead prevents it (§8.4). When it happens anyway —
 subscription missed, or a removal inside the step — the vehicle id is absent from the new
 subscription results. The bridge releases the actor immediately: park, check in, record the release
 instant with `released: vanished` so the count is visible rather than inferred. This is the one case
-where a vehicle disappears mid-scene without the lookahead having placed the release outside a camera
-footprint (§8.5), which is exactly why the reason code matters.
+where a vehicle disappears mid-scene without the lookahead having timed the release to an arrival SUMO
+reported (§8.4, §8.5), which is exactly why the reason code matters.
 
 **Where it happens, measured.** SUMO lists as arrivals only the vehicles it removed during the step: a
 vehicle taken out between two steps — by a TraCI `vehicle.remove`, as another client would — has its
@@ -3342,15 +3119,15 @@ vehicle it was lent to afterwards.
 
 **Exercised by** `SumoDriveSessionFailureTests` (a rendered vehicle removed through the session's own
 connection between two advances: one `Vanished` release naming its body, nothing posed for it after, its
-body parked at the head of the next batch, the other releases `LeftTheRegion` or `LeftTheSimulation`) and
+body parked at the head of the next batch, every other release an arrival SUMO listed) and
 `RenderSetManagerTests` (a vanished and an arrived vehicle in one pass). Each was seen failing against a
 wrong implementation: a population that does not name what vanished; a render set that ignores it; and a
 released body that is not parked.
 
 The inverse — CARLA loses an actor SUMO still has — shows up as the actor id disappearing from the
 world-observer snapshot (`CarlaClient.cs:1901-1908`). The bridge detects the absent id, removes it
-from the pool, records `actor: lost`, and admits the SUMO vehicle to a different pool actor if
-capacity allows. **Not built**: a body the world stops reporting is counted per vehicle-tick as
+from the pool, records `actor: lost`, and lends the SUMO vehicle another body from the pool, spawning
+one if none of its blueprint is parked. **Not built**: a body the world stops reporting is counted per vehicle-tick as
 `VehicleTicksWithNoReadBack`, and the session goes on writing to it.
 
 ### 11.4 Route errors mid-run
@@ -3635,9 +3412,9 @@ flowchart TD
 
   subgraph LANE_RS["RenderSetManager and ActorPool"]
     D1[Apply lifecycle deltas]
-    D2{"ShouldRender and<br/>capacity free?"}
-    D3[Check out actor,<br/>physics off, gravity off,<br/>full opacity]
-    D4[["Record admission declined;<br/>vehicle stays truth-only"]]
+    D2{"New vehicle's type<br/>has a measured body?"}
+    D3[Check out actor,<br/>spawned if none parked,<br/>physics off, gravity off,<br/>full opacity]
+    D4[["No body: simulated,<br/>not drawn, truth recorded"]]
     D5[Record admission and<br/>release instants]
   end
 
@@ -3809,7 +3586,7 @@ Per `_TEAM_BRIEF.md` §4, nothing is lost silently.
 | L2 | Terrain seating | **preserved and improved** | analytic Z from the drape grid (§7.5), the same surface the collision heightfield was built from — exact rather than settled |
 | L3 | Body pitch and roll over undulations | **preserved** | drape-grid gradient (§7.5), four extra in-process samples per vehicle per tick |
 | L4 | The CARLA-free SUMO→CoT path | **preserved, untouched** | `SumoCotBridge` and `sumo_cot_telemetry.py` stay a supported product; the bridge does not replace them (D3.1) |
-| L5 | Vehicle fade / staging dissolve | **not used in this mode — and it is already off by default in the working tree** | `--fade` carries `default=False` (`CarlaControlArgumentParser.py:318-328`); the mechanism is untouched and still available to any other client. The mitigation here is geometric, not visual: size the render volume so admission and release fall outside every camera footprint (§8.5). Where that is impossible for a given camera geometry, the manifest records it. |
+| L5 | Vehicle fade / staging dissolve | **not used in this mode — and it is already off by default in the working tree** | `--fade` carries `default=False` (`CarlaControlArgumentParser.py:318-328`); the mechanism is untouched and still available to any other client. Nothing needs dissolving: every vehicle SUMO has is drawn, so a vehicle appears where and when SUMO inserts it and disappears where and when SUMO removes it, timed by the lookahead, and its admission and release instants are recorded (§8.4, §8.5). |
 | L5b | **Gained:** the per-frame client RPC budget the fade used to consume | **headroom** | Removing one blocking RPC per vehicle per reconcile — *"the heaviest load this client puts on the server's per-frame RPC budget"* (`CarlaControlArgumentParser.py:318-328`) — is what lets the per-tick write be a single `apply_batch` with no variable tail (§3.3). A capability table should record a gain as carefully as a loss. |
 | L6 | The .NET traffic manager and the OpenSCENARIO executor | **preserved outside this mode** | locked out only for the session's lifetime (D3.13); clears on exit and on disconnect |
 | L6b | Rendered traffic-light and sign actors | **not rendered in this mode, by decision** | D3.24, and the reason is the imagery: the available meshes are limited and are frequently misaligned against the photoreal, so a rendered signal is an object in frame that does not correspond to the world the photoreal shows (`_TEAM_BRIEF.md` §3e). **The behaviour they govern is not lost** — SUMO's `tlLogic` programs and right-of-way rows still run and its vehicles still obey them, and that behaviour is exactly what the pose stream carries (§3.4). The sensor streams do not change either: generated lights and signs in this fork are **sensor-invisible by design**, returning nothing to semantic lidar or radar, so what is withdrawn is the RGB mesh and the human view of it. The world build is untouched — the actors are hidden, not removed — so any other mode renders them as before. |
@@ -3836,10 +3613,10 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.4** | A SUMO-driven actor is kinematic: physics off, gravity off, **collision response left on** so sensors still see it. |
 | **D3.5** | A pose-applied vehicle reports the velocity its driver supplies: `FVehicleActor::SetActorTargetVelocity` on a vehicle whose physics is disabled writes the pawn movement component's `Velocity` and the root's `ComponentVelocity` (candidate **e**), and the bridge sends an `ApplyTargetVelocityCommand` beside every `ApplyTransformCommand` and a zero one at check-in (§5.4). Vehicles with physics on, and every other actor, are unchanged. Candidate (b) is **verified impossible** (§5.3). Candidate (d) is a fallback for actors nobody drives; candidates (c) and (f) are not taken. |
 | **D3.6** | SUMO runs **one step ahead** of the rendered clock; every sub-step pose is interpolated between the two buffered frames **along the lane's own geometry**, never chordally. The SUMO step-length is the scenario's; the bridge reads it and does not change it. |
-| **D3.7** | The reference-point shift uses the **CARLA front overhang** `b.x + e.x`, so the rendered front bumper lands exactly on SUMO's reference point. The catalogue must set each vType's `length`/`width` from the blueprint's bounding box, at **authoring** time. |
+| **D3.7** | The reference-point shift uses the **CARLA front overhang** `b.x + e.x`, so the rendered front bumper sits exactly on SUMO's reference point. The catalogue must set each vType's `length`/`width` from the blueprint's bounding box, at **authoring** time. |
 | **D3.8** | Z, pitch and roll come from `CarlaClient.SampleDrapeGroundElevation`, sampled in the **CARLA** frame `(x_s, −y_s)`. `z_seat` per blueprint is **measured**, not computed from the bounding box. |
-| **D3.9** | Actors come from a **per-blueprint pool**, checked out and in. No actor is spawned or destroyed during a session. Pool exhaustion is a policy decline, never a spawn attempt. |
-| **D3.10** | **A vehicle admitted to the render set appears at full opacity; a released one disappears.** No dissolve, no per-vehicle opacity RPC, no fade state published. The mitigation for a visible pop is **geometric** — size the render volume so admission and release fall outside every active camera footprint, which §8.4's lookahead already pays for — and where the margin cannot be made large enough, the **manifest records that fact** rather than a fade papering over it. The arrival gate needs no replacement: with no fade record, `IsActorEstablished` is `true` and the truth gate is inert (`CarlaClient.cs:1571`; `VehicleTelemetryService.cs:66-73`). `VehicleTelemetry.Opacity` is a constant 1.0 in this mode. What is still required is the **recorded admission and release instant** per vehicle. |
+| **D3.9** | Actors come from a **per-blueprint pool**, checked out on admission and in on release, and no pooled actor is destroyed during a session. The pool has **no ceiling**: it grows to what the scenario's population needs, spawning a body onto its own clear parking slot only when a vehicle needs one and none of its blueprint is parked, and no vehicle goes without a body for want of one (§8.2). |
+| **D3.10** | **A vehicle admitted to the render set appears at full opacity; a released one disappears.** No dissolve, no per-vehicle opacity RPC, no fade state published. Every vehicle SUMO has is drawn (§8.3), so a vehicle appears where and when SUMO inserts it and disappears where and when SUMO removes it — the scenario's own events, timed by §8.4's lookahead — rather than at a transition a fade would paper over. The arrival gate needs no replacement: with no fade record, `IsActorEstablished` is `true` and the truth gate is inert (`CarlaClient.cs:1571`; `VehicleTelemetryService.cs:66-73`). `VehicleTelemetry.Opacity` is a constant 1.0 in this mode. What is still required is the **recorded admission and release instant** per vehicle. |
 | **D3.11** | In a SUMO-drive session **SUMO is the only removal authority**. The bridge translates removals; it never originates one. This resolves [issue #18](https://github.com/sbrett9/carla/issues/18) for this mode by deleting both of its deciders rather than adding a third. |
 | **D3.12** | `SumoDriveSession` owns the advance of simulated time on both sides. `R = Δs/Δw` must be a positive integer; the session refuses to start otherwise. Neither side can outrun the other, because the loop is serial and the world clock is simulated. |
 | **D3.13** | The lockout is **four mechanisms**: per-actor server-side control authority (the one that actually stops the .NET TM, which drives via `ApplyControlToVehicle`), an episode-level drive-mode flag that refuses `set_actor_autopilot` for *any* actor (the one that stops a second process), a client-side lease for a legible error at the call site, and the same episode flag refusing **`set_solar_time` / `set_solar_date` / `set_solar_epoch` / `set_time_advance`** to anyone but the lease holder — because illumination is world-scoped state that a capture records, and today those RPCs have no ownership check whatever. |
@@ -3859,13 +3636,13 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.28** | **A session refuses a scenario whose network is not the one the world package carries**, compared by canonical fingerprint (`NetworkFingerprint`, the parsed graph rather than the bytes) and settled before SUMO is started, naming both networks and both fingerprints. It also refuses a package whose carried network does not fingerprint as the `NetworkFingerprint` its manifest records. The scenario's network is read the way SUMO reads the configuration. There is no override: a scenario for another network is compiled against this world's package, and the compiler writes the package's own network beside the configuration (§7.2). |
 | **D3.29** | **A session refuses a compiled scenario that is not the one its compile lock binds**, before SUMO is started: the configuration, the route file and the network by SHA-256 of their bytes, the catalogue by its declared digest, and the epoch by `SolarEpoch.Digest` where the session declares one, every disagreement named in one refusal. A scenario with no `<stem>.lock.json` beside it runs and is recorded as uncompiled. The lock's routing release and world identity are recorded on every compiled run's report, not compared (§2.7). |
 | **D3.30** | **Every refusal a session raises carries the stage it was raised at** — `Validation`, `Launch`, `Authority`, `PreRoll` or `Window`, named by what the session had taken — so a caller maps it onto an outcome without reading the message. A SUMO failure while SUMO is started, fast-forwarded or stepped is such a refusal, quoting SUMO's console; so is a failure of the connection to the CARLA server — a socket closed or reset, or a call left unanswered past the client's timeout — at the stage it happens in, with the connection's failure as its inner exception. A failure of one side also names the side (`Cause`), and a refusal from `Advance` stops the run for good and is recorded on the report with the last complete frame. Every other exception passes through unwrapped (§11.10). |
-| **D3.31** | **Each render-set admission pass is published as it is made**, once per SUMO step: the population SUMO has, the subscribed, the eligible, the admitted, the shed, the capacity, the pass's admissions and releases and the running totals, as an immutable `AdmissionPass` replaced whole on `CoSimRunReport.LastAdmissionPass` and handed to `OnAdmissionPass` — the shedding ledger's row (`10` §7), live (§8.8). |
+| **D3.31** | **Each admission pass is published as it is made**, once per SUMO step: the population SUMO has, the vehicles rendered after the pass, those admitted and released at it, and the running total of admissions, as an immutable `AdmissionPass` replaced whole on `CoSimRunReport.LastAdmissionPass` and handed to `OnAdmissionPass` (§8.8). |
 | **D3.32** | **Every answer SUMO owes the session is bounded** (`SumoAnswerTimeoutSeconds`, 60 s by default), and one that does not come stops the run as any other SUMO failure does; the `sumo` that stopped answering is ended at shutdown without the grace an exiting one gets, and no close waits longer than 5 s for SUMO's answer. A hung SUMO keeps its socket open, so without a bound a session would hold the world in synchronous mode indefinitely with nothing ticking it (§11.1). |
 | **D3.33** | **A collision SUMO registers is recorded as one span and never stops the run** — the collision as first registered, the simulated seconds it began and ended at, and the bodies that rendered both vehicles — handed out once it is over and counted on the report, with the `collision.action` that governed the run. SUMO reports an ongoing collision on every step it lasts, so a span, not a report, is the unit. Which actions a corpus may carry belongs to behavioural truth ([`13`](13_Work_Breakdown.md) §11; §11.5). |
 | **D3.34** | **A route SUMO cannot follow stops the run, and a vehicle SUMO cannot insert is recorded.** A scenario setting `ignore-route-errors` is refused before SUMO starts, because SUMO then keeps an unroutable vehicle standing at the end of an edge and says nothing (measured); a vehicle that leaves SUMO's insertion queue without departing is recorded with the frame it was last waiting and the first it was gone, because SUMO drops it without a word; SUMO's console warnings are counted and kept verbatim (§11.4). |
 | **D3.35** | **A rendered vehicle that stops reporting without SUMO listing it as arrived is released as `Vanished`**, its body parked at the head of the next batch and written to for nothing else of that vehicle's; it is the one release the lookahead cannot place, so it has its own reason (§11.3). |
 | **D3.36** | **A session can launch `sumo-gui` in place of `sumo`** (`SumoGui`; `run_sumo_drive.py --sumo-gui`), from the installation it resolved and no other, with `sumo`'s arguments followed by `--start --quit-on-end --delay 0 --message-log stdout --error-log stderr`, so the one SUMO process the session steps is on screen, follows the session with nobody at the window, exits when the session closes it, never sets the pace and keeps the console the session reads. The release pin holds for the binary that runs: the release compared with the world's converter is `sumo-gui`'s own. An installation without `sumo-gui` is refused before anything starts, naming the file and the setup script that stages it. The report records the binary that ran on every run (§2.6). |
-| **D3.38** | **The render set follows the registered cameras, and the circle decides while none is.** A vehicle is rendered while it is within a margin -- the bodies' reach and one SUMO step at the fastest plausible speed -- plus `AdmitLead` of its own travel of any registered camera's ground footprint, the footprint exact on two planes bracketing the ground surface under the view, capped at the slant range past which the catalogue's longest body covers fewer than `N` pixels (2 by default) at the picture's corners, and swept along the camera's motion over the step and the lead. It is kept inside a band `h` above the widest admission threshold and held `ReleaseLag` after it last was, the lag timed by the render-set manager for every policy; a rendered vehicle is never demoted. Under the capacity: in view before approaching, rendered before new, then the scenario seed's order. Cameras are registered and removed between advances, their optics read once and their poses from the snapshot of the last rendered frame. Each pass records its rule; the report its policy, seed and every camera's cap (§8.3.1). |
+| **D3.38** | **Withdrawn 2026-09-30.** No policy chooses which vehicles are drawn: every vehicle SUMO has is drawn, so the render set no longer follows the cameras (§8.3). |
 | **D3.37** | **Each frame's render set is published for the truth, keyed by the frame the tick produced** — every body lent, the SUMO vehicle it rendered, its vType and the first frame of its rendered span, read from the pool as the tick left it and recorded as the tick returns, the last 256 frames held (`SumoDriveSession.RenderSet`, `IRenderSetSource`). The recorder lists exactly the set of the frame its truth describes, named by SUMO vehicle, and no parked body; a frame whose set is no longer held is written with no vehicles, marked `vehicles="unknown"`, and counted, never guessed. With no source the recorder is unchanged (§8.9). |
 
 ---

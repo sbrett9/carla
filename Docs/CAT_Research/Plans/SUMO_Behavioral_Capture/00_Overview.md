@@ -12,6 +12,7 @@ from inferences, and inferences labelled.
 | 4 · 2026-09-18 | Live exercise made primary and generic past our boundary; cyclic generation driven externally. |
 | 5 · 2026-09-21 | One distribution; authoring skill into the repository; shipped-defect figures re-measured against the tree. |
 | 6 · 2026-09-21 | One netconvert flag set, every world regenerated; the annotation vocabulary layered. |
+| 7 · 2026-09-30 | Render cap removed: the cap (128, hard 192) was never measured — M2 never ran — and the scenario is the arbiter of population. Every vehicle SUMO has is drawn; a heavier scenario runs slower, never thinner. §6's cap-versus-export conflict no longer exists. |
 
 **Scope:** Realising, as one system, the supervision model of
 [`Findings/20`](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) and the SUMO
@@ -76,7 +77,7 @@ skew to reconcile.
 | **Who knows when a behaviour began** | The executor, from its own speed-action ramp | Not addressed | SUMO's own model. The onsets are renamed for the authority producing each — **declared**, **committed**, **observed** ([06](06_Truth_And_Annotation.md) §3.3) |
 | **Actuation** | Not addressed | "SUMO decides, CARLA physics executes"; teleporting regresses capabilities | Pose application, with doc 23's shape retained as a second **actuation strategy behind the same bridge** ([01](01_Architecture.md) D1.15) |
 | **Truth producer** | CARLA's `VehicleTelemetryService` | Notes a teleported body reports zero velocity | Authority settled **field by field**, not producer by producer ([06](06_Truth_And_Annotation.md) D6.9) |
-| **Scale** | Hand-sited scenarios | Ordinary ambient traffic | Windowed capture over a simulation far larger than the rendered set ([10](10_Scale_And_Performance.md)) |
+| **Scale** | Hand-sited scenarios | Ordinary ambient traffic | Windowed capture over a simulation far longer than can be rendered; inside a window every vehicle SUMO has is drawn ([10](10_Scale_And_Performance.md), [03](03_CoSimulation_Runtime.md) §8.3) |
 | **Time of day** | Not addressed | Not addressed | A scenario declares an epoch; the clock owner projects civil time through it; the sun is bound per window and the policy is asserted, never defaulted ([11](11_Time_And_Illumination.md), [04](04_Contracts.md) C9) |
 
 **Doc 23 is not overturned.** Its recommendation was made for believable ambient background at
@@ -101,6 +102,7 @@ a reader must hold in mind.
 | **Observer-derivability governs the model boundary** | An input may reach the model iff a fielded system with the same sensor, navigation solution, clock and public reference data could compute it **without observing the scene's contents**. Solar state passes; `advancing`, `rate`, policy and residual do not | [08](08_Collection_And_EPoL.md), [04](04_Contracts.md) D4.20 |
 | **The pipeline labels; it never scores** | The external models are trained and validated downstream. What stays is everything that describes *our own* data honestly — observability, prevalence, illumination bands, render states, and an explicit statement of what the corpus does **not** contain | [04](04_Contracts.md) C8, D4.26 · [02](02_Use_Cases.md) UC-10 |
 | **Ambient traffic and the idle cull are off, structurally** | Population authority is an exclusive engine-held lease, so starting ambient traffic under SUMO drive is a failed session start; SUMO-driven vehicles are never registered with the traffic manager, so its idle cull cannot reach them. A forty-five-minute park stays parked | [01](01_Architecture.md) D1.7, §4.1 · [13](13_Work_Breakdown.md) §13.1 |
+| **The scenario is the only arbiter of population** | Every vehicle SUMO has in a capture window is drawn, parked ones included; no cap, region or policy chooses which. A scenario too heavy for the machine makes the synchronous run slower on the wall clock, never different in content | [03](03_CoSimulation_Runtime.md) §8.3, [04](04_Contracts.md) §4.2 |
 | **A scenario is rendered in windows, never in full** | A scenario runs for as long as its author declared; nothing here bounds that. What is bounded is what can be *rendered*, and the sizing case makes the limit concrete: seven simulated days would cost 19–24 days of wall clock and 6–17 TB for one camera. Capture is windowed, with SUMO fast-forwarded from t = 0 | [10](10_Scale_And_Performance.md) D10.1 |
 | **Night imagery is not viable; night truth is free** | The 23:00 window is 38–79° below the horizon on every date. It becomes a **truth-only window** — SUMO runs it alone at 4,307× real time, costing 0.42 s of wall clock and zero bytes (§5) | [10](10_Scale_And_Performance.md) D10.14, [11](11_Time_And_Illumination.md), [08](08_Collection_And_EPoL.md) D8.29 |
 
@@ -111,13 +113,13 @@ wrong here. These are the load-bearing numbers.
 
 | Measurement | Value | Consequence |
 |---|---|---|
-| Concurrent vehicles, Bahonar / Arapahoe | peak **139** / **437**, median 41 / **336** | **Arapahoe is the binding scenario**, not the seven-day one |
+| Concurrent vehicles, Bahonar / Arapahoe | peak **139** / **437**, median 41 / **336**; Bahonar as compiled and run today, peak **170**, median 42 | **Arapahoe is the heaviest scenario**, not the seven-day one: every one of its vehicles is drawn, so its population sets the cost of a tick |
 | Wall clock for seven simulated days | **19–24 days**, from PNG tick metadata across four real recorder runs | Windowing is mandatory |
 | SUMO step 1.0 s → 0.1 s | insertions identical, routes +0.06%, **mean time loss −62%** | Changing the step changes the behaviour; keep it and interpolate |
 | Chordal vs lane interpolation | a right-angle turn between samples 15 m apart misses the corner by **10.6 m** | Interpolation follows the lane polyline |
 | TraCI subscriptions vs per-vehicle getters | **8.1 ms vs 116.0 ms** per step at 388 vehicles | The naive path alone exceeds twice a 50 ms tick |
 | `apply_batch` command coverage | **all 22** types, verified at both ends | A teleport of N vehicles is **one** round trip |
-| Vehicle light-state traffic, inside the render region | **7.54%** of vehicles per step ≈ **9.6 commands/tick** at cap 128; +1.9% of batch bytes on Arapahoe | Lamps ride the existing batch; zero extra round trips |
+| Vehicle light-state traffic, Arapahoe, whole map | **9.61%** of 417 live vehicles per step ≈ **40 commands/tick**; +2.4% of batch bytes | Lamps ride the existing batch; zero extra round trips |
 | Sun elevation at the recommended windows | 07:00 spans **+3.97° to +25.92°** by date alone; 23:00 is **−38.1° to −79.5°** on every date | The date is a free 21° illumination axis; 23:00 is unphotographable |
 | Renderable share of the sizing scenario | only **59–77%** of daily vehicle-hours have the sun above −6° | A quarter to two-fifths of the traffic cannot be photographed at any price |
 | Hour-to-label mutual information, Bahonar | **I(hour; label)/H(label) = 0.600** | Hour carries 60% of the label; a corpus needs an illumination-only **leakage probe** to detect it |
@@ -148,19 +150,7 @@ Listed here rather than buried, because several affect data that exists now.
 
 ## 6. Conflicts the sections create together, and their resolutions
 
-Each section is internally consistent. Two *combinations* were not, and both are settled here.
-
-**The render cap versus the training export.** [06](06_Truth_And_Annotation.md) observes that
-prioritising annotated participants under the render cap makes scene density a function of the label,
-and proposes excluding cap-bound spans from the training export.
-[10](10_Scale_And_Performance.md) then measures that on Arapahoe **the cap binds essentially always**.
-Together those would exclude an Arapahoe-class corpus entirely.
-
-> **Resolution — size `render_region` per scenario so the cap does not bind.** The region gate is
-> spatial and label-independent and therefore cannot make density a function of the label; the cap is
-> priority-ordered and label-dependent and therefore can. A 300 m region on Arapahoe holds exactly
-> `render_cap`. Where that cannot be achieved, the run records `cap_bound_ticks` and the training
-> exclusion applies — the degraded case, not the design point.
+Each section is internally consistent. One *combination* was not, and it is settled here.
 
 **Freeze versus advance.** [11](11_Time_And_Illumination.md) and
 [08](08_Collection_And_EPoL.md) independently recommend **frozen**, measuring that a default window

@@ -36,7 +36,7 @@ choice. §3.9 draws the boundary.
 
 **Out of scope, deliberately.**
 
-- The **runtime**. Which SUMO vehicles CARLA instantiates, how the two clocks relate, and what
+- The **runtime**. When CARLA draws each SUMO vehicle, how the two clocks relate, and what
   happens to a vehicle's velocity in truth are [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md)
   and [`04_Contracts.md`](04_Contracts.md). This section stops at the moment a validated scenario
   package is handed to a run.
@@ -57,7 +57,8 @@ choice. §3.9 draws the boundary.
 - The **vehicle catalogue's content and its blueprint binding**, which is
   [`04_Contracts.md`](04_Contracts.md) contract 1. §2.6 states the properties this section needs it
   to have.
-- **Scale**. Whether a seven-day scenario is renderable at all is
+- **Scale**. What rendering a seven-day scenario costs in wall-clock time — every vehicle SUMO has is
+  drawn, so a heavier scenario runs slower, never thinner — is
   [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md). This section treats the Bahonar
   scenario purely as the authoring sizing case.
 - **Pedestrians**, excluded by the brief's decision 5.
@@ -71,6 +72,7 @@ choice. §3.9 draws the boundary.
 | 2026-09-28 | Epoch is the C9 object; the session writes the zone; compiler, checks, report, association and sweeps built. |
 | 2026-09-28 | Check 6 refuses a SUMO release mismatch; the fence is the world's type map (D7.33); the bands are doc 11's; route phases and point, gateway and movement places built; the Gardnerville generator writes a specification; the skill's examples and references written. |
 | 2026-09-29 | The Bahonar generator writes a specification on the rebuilt world's own network under a 07:00 epoch, with named vehicle mixes, areas of interest and its six anomalies as supervision (§3.4.1, D7.34–D7.36); its compile waits on the catalogue measuring the European heavy goods vehicle. |
+| 2026-09-30 | The out-of-scope notes no longer ask whether a scenario is renderable at all: the render cap (128, hard 192) was never measured — M2 never ran — and the scenario is the arbiter of population, so every vehicle SUMO has is drawn and a heavier scenario runs slower, never thinner. Scale is now its wall-clock cost (doc 10). |
 
 ---
 
@@ -2476,12 +2478,12 @@ has neither its areas nor its type map; that is stage D's to close.
   [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md).
 - The vehicle catalogue's format, generation and blueprint binding —
   [`04_Contracts.md`](04_Contracts.md) contract 1. §2.6 states four properties this section needs.
-- The render-set contract — which authored vehicles become CARLA actors and when —
+- The render-set contract — when each SUMO vehicle becomes a CARLA actor and when it is released —
   [`04_Contracts.md`](04_Contracts.md) contract 2. The specification declares intent; it does not
   decide admission.
 - Tick and clock ownership, and the SUMO-step-to-fixed-delta relationship —
   [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md).
-- Whether the Bahonar-sized scenario is renderable —
+- What rendering the Bahonar-sized scenario costs in wall-clock time —
   [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md).
 - Staging, packaging and distribution of the SUMO toolchain —
   [`09_Toolchain_And_Packaging.md`](09_Toolchain_And_Packaging.md). §9.4 and §9.6 raise the two
