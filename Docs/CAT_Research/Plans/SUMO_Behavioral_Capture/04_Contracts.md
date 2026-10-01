@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 15 | 2026-09-30. `C2` draws every vehicle SUMO has in a capture window. The render cap (128, hard 192) was never measured — M2 never ran — and the scenario is the arbiter of population, so a heavier scenario runs slower, never thinner. The input is `capture_windows[]` and `prewarm_s`; the region, priority and capacity gates, E2, E4, V2.3, V2.4, the reasons `outside_region` and `capped`, the rendered-fraction gate and open question 3 are withdrawn; `D4.6` holds by construction |
 | 14 | `C1`: the registry carries corrected class metadata and the European HGV; the content's unregistered blueprints inventoried; the Fuso Rosa is a bus; the default class set stated |
 | 13 | `C3` is the directory of loose files the scenario compiler writes, bound by its lock; the clipped OSM is not carried, and each validation rule states where it is enforced |
 | 12 | `C9`'s package-build rules carried out by the scenario compiler with the session's own readers |
@@ -243,7 +244,7 @@ flowchart TB
 |---|---|---|---|
 | `vehicles.catalogue.json` | the catalogue sweep, against a running server | scenario builder, assistant author, human author, validator, **and the co-simulation bridge at runtime — the pose conversion needs the measured extent** (`C1` §3.2) | `C1` |
 | `<name>.rou.xml` `vType` set | scenario builder, from the catalogue | SUMO, playback bridge | `C1` |
-| render-set parameters in the specification (not built) | scenario author | render-set controller | `C2` |
+| `capture_windows[]` in the lock, and `prewarm_s` given at run start | scenario author, through the compiler; operator | render-set controller | `C2` |
 | `render_states[]` in the run manifest | render-set controller | truth consumers, corpus auditor, corpus builder | `C2` |
 | scenario package: `<scenario_id>.lock.json` and the files beside it | scenario compiler | co-simulation session, operator surface | `C3` |
 | spawn attributes `capture:*` | playback bridge at spawn | truth producer, recorder log, replayer | `C4` |
@@ -1298,20 +1299,27 @@ defaults). Under `C1` those numbers become the blueprint's real 4.55 × 2.10 × 
 
 ## 4. C2 — The render set
 
-Which SUMO vehicles CARLA instantiates, when they appear, when they are released, and what the truth
-record says about one that SUMO simulated and CARLA never rendered.
+When CARLA draws a SUMO vehicle, when the body appears, when it is released, and what the truth record
+says about a vehicle that SUMO simulated and CARLA did not draw.
 
-The problem is stated by the scale: the sizing case is seven simulated days at one-second steps with
-245 flows ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §5, re-measured here as 245 `<flow>` and 0 `<vehicle>`),
-against a CARLA world that can hold some hundreds of actors. The set of SUMO vehicles is therefore
-much larger than the set CARLA should ever instantiate, and the rule for choosing must be explicit.
+The sizing case is seven simulated days at one-second steps with 245 flows
+([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §5, re-measured here as 245 `<flow>` and 0 `<vehicle>`). Over that
+span SUMO creates far more distinct vehicles than are alive at any one time, and most of the span lies
+outside every capture window. What `C2` fixes is that every vehicle alive in a capture window is drawn,
+the instant it is admitted and the instant it is released, and what the truth record says about one
+SUMO simulated and CARLA did not draw. Nothing limits how many are drawn at once: the scenario decides
+the population, and a heavier population makes a synchronous run slower on the wall clock, never
+different in content ([`10`](10_Scale_And_Performance.md) §4.3).
 
 ### 4.1 Artifact
 
 Two halves, both named:
 
-- **Input** — a `render_set` object in the scenario specification, written by the scenario author and
-  carried in the lock (`C3`). Not built.
+- **Input** — `capture_windows[]` and `prewarm_s`, typed in §4.2. The authored candidate windows are
+  carried in the lock (`C3` §5.3), and the operator chooses which a run captures
+  ([`12`](12_Operator_Control_Surface.md) D12.4). `prewarm_s` is given at run start and valued in
+  [`10`](10_Scale_And_Performance.md) §8. Nothing else is input: no parameter chooses which vehicles
+  are drawn.
 - **Output** — a `render_states[]` array in the run manifest, written by the render-set controller as
   append-only rows: an admission row when a vehicle is admitted, a release row when it is released. A
   vehicle still rendered when the run stops has an admission row and no release row, which is exactly
@@ -1325,36 +1333,34 @@ pass runs at most once per SUMO step.
 
 ```
 admit(v, t) ⟺  in_window(t)
-           ∧  ( is_participant(v, t) ∨ in_region(v, t) )
+           ∧  alive(v, t)
            ∧  ¬ rendered(v)
-           ∧  capacity_allows(v)
+           ∧  measured_body(v)
 ```
 
-with the gates evaluated in this order and defined as:
+with the terms defined as:
 
-| Gate | Definition | Parameter (typed here, valued in [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md)) |
+| Term | Definition | Parameter (typed here, valued in [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md)) |
 |---|---|---|
-| **1. Capture window** | `t` lies in one of the declared `capture_windows[]`, each `{ begin_s, end_s }` in simulated seconds, or within `prewarm_s` before one | `capture_windows[]`, `prewarm_s` |
-| **2. Participant** | `v` participates in a pattern instance whose interval is open, or opens within `prewarm_s` | — |
-| **3. Region** | `v`'s SUMO position, converted to CARLA-local, lies inside `render_region` dilated by `entry_lead_m` | `render_region`, `entry_lead_m` |
-| **4. Priority** | `participant` > `aoi_member` > `in_frustum` > `ambient` | `aoi_halo_m`, `frustum_lead_s` |
-| **5. Capacity** | `\|rendered\| < render_cap`, admitting in priority order | `render_cap`, `render_cap_hard` |
+| **`in_window`** | `t` lies in one of the run's `capture_windows[]`, each `{ begin_s, end_s }` in simulated seconds, or within `prewarm_s` before one | `capture_windows[]`, `prewarm_s` |
+| **`alive`** | SUMO holds `v` at `t`, moving or parked | — |
+| **`rendered`** | `v` already has a body | — |
+| **`measured_body`** | `v`'s vType names a catalogue blueprint whose extent the catalogue measured (`C1` §3.2, `D4.17`) | — |
 
-Definitions of the sub-terms, so two implementations agree:
+Every vehicle SUMO has in a window is drawn, wherever it is and whether or not any sensor can see it;
+there is no region, no priority order and no capacity. An admitted vehicle is first drawn where the
+previous frame had it ([`03`](03_CoSimulation_Runtime.md) D3.6). No vehicle waits for a body: bodies
+are spawned or reused as the population needs, with no ceiling ([`03`](03_CoSimulation_Runtime.md)
+§8.2), and what a larger population costs is wall-clock time ([`10`](10_Scale_And_Performance.md)
+§4.3).
 
-- **`render_region`** is the intersection of (a) the world's staging rectangle inset by its margin —
-  read from `get_staging_bounds`, which returns `[minX, minY, maxX, maxY, margin]` in CARLA-local
-  metres (`Unreal/.../Carla/Server/CarlaServer.cpp:828-840`; measured for Arapahoe as
-  `[-476.79, -969.28, 477.21, 970.72]` with `margin = 30.48`) and (b), when the author declares one,
-  either an area-of-interest id (`C5`) or an explicit rectangle in the scenario specification.
-- **`aoi_member`** — `v` is inside a declared area, or within `aoi_halo_m` of one.
-- **`in_frustum`** — `v`'s position, advanced by `frustum_lead_s × v.speed` along its heading, projects
-  inside the image rectangle of any collection sensor, using the pinhole intrinsics the sidecar
-  already carries (`CarlaNet.Recording/VehicleTelemetryService.cs:167-177`). Frustum membership is a
-  *priority* input, never an admission gate on its own: a vehicle admitted only when it enters frame
-  pops into existence in the imagery.
-- **`capacity_allows`** — true when admitting `v` keeps `|rendered| ≤ render_cap`, **or** when `v` is a
-  participant, in which case capacity is checked against `render_cap_hard` instead.
+**`measured_body` is the one exclusion, and it is per type, not per vehicle.** A vType that names no
+blueprint, or names one the catalogue holds no measurement for, is refused the first time it is seen
+and the answer is kept for the run: its vehicles are simulated and their behavioural truth recorded,
+and they are never placed at a guessed size (`C1` §3.2). The scenario compiler refuses to write a
+package with such a type ([`07`](07_Scenario_Authoring.md) check 14), and `run_capture` re-runs that
+check against the live server ([`12`](12_Operator_Control_Surface.md) check 25), so inside a compiled
+package the exclusion is never met.
 
 ### 4.3 The eviction rule
 
@@ -1363,9 +1369,11 @@ A rendered vehicle is released when any of:
 | # | Condition | Notes |
 |---|---|---|
 | E1 | SUMO removed the vehicle (arrival, `remove`, collision removal) | SUMO is the authority on existence |
-| E2 | `v` has been outside `render_region` dilated by `exit_lag_m` for `exit_lag_s` continuous simulated seconds | The hysteresis is what stops a vehicle on the boundary flickering |
+| E2 | *Withdrawn 2026-09-30* with the render region: there is no region for a vehicle to leave | — |
 | E3 | The capture window closed and no window opens within `prewarm_s` | |
-| E4 | Capacity is exceeded and `v` is the lowest-priority candidate, tie-broken by longest time since last in any sensor's frustum | |
+| E4 | *Withdrawn 2026-09-30* with the render cap: there is no capacity to exceed | — |
+
+A vehicle still drawn when the run stops is not released; §4.1 says what its rows then show.
 
 **A release is abrupt, and the instant is recorded.** Per-actor opacity fade is demoted and is not to be
 designed around ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md), *Vehicle fade is demoted*): an admitted vehicle
@@ -1388,16 +1396,21 @@ instant is recorded and that exactly one component decides it.
 
 ### 4.4 The participant guarantee
 
-> **D4.6 — a vehicle participating in an open annotated or nominal interval is admitted at
-> `interval.start − prewarm_s`, is never evicted by E4 while any of its intervals is open, and is
-> never denied admission by capacity below `render_cap_hard`. If admitting it would exceed
-> `render_cap_hard`, the run fails, loudly, at that tick.**
+> **D4.6 — a vehicle participating in an open annotated or nominal interval is drawn throughout it:
+> from its departure, or from `window.begin_s − prewarm_s` if it departed earlier, until SUMO removes
+> it (E1) or the window closes (E3). This holds by construction — every vehicle SUMO has in a window
+> is drawn (§4.2), so nothing can displace a participant and there is no limit to refuse it under.**
 
 The reasoning is the whole point of the capture: an authored subject that was never rendered produced
 no imagery, so the run has no evidence for the very thing it was built to produce, and a run that
-*silently* drops its subject looks exactly like a run whose model missed it. Failing is the only
-honest response. E1, E2 and E3 still apply to participants — a participant that SUMO removed is gone,
-and a participant outside the region was never observable anyway — but E4 never does.
+*silently* drops its subject looks exactly like a run whose model missed it. V2.5 puts every
+participant's interval inside a capture window, and within the window a run captures the admission
+rule alone draws every participant. The one way a participant could have no body is a vehicle type
+with no measured body, and that is refused before a run starts: by the scenario compiler
+([`07`](07_Scenario_Authoring.md) check 14) and again by `run_capture` against the live server
+([`12`](12_Operator_Control_Surface.md) check 25). A participant undrawn inside an open interval all
+the same — a spawn the server refused, or a package that bypassed both checks — is written as such in
+`render_states[]` (§4.5), and V2.6 and `C10`'s `D4.6` gate row report it (§12.5).
 
 ### 4.5 What truth says about a simulated-but-unrendered vehicle
 
@@ -1417,7 +1430,7 @@ window:
 | `class_id` | string | — | yes | The catalogue class |
 | `entity_id` | string | — | no | Present for authored vehicles only |
 | `render_state` | string | — | yes | `rendered` \| `partially_rendered` \| `simulated_only` |
-| `reason` | string | — | yes when not `rendered` | `outside_window` \| `outside_region` \| `capped` \| `no_blueprint` \| `unknown_extent` \| `spawn_failed`. The middle two are `C1` §3.2's runtime cases |
+| `reason` | string | — | yes when not `rendered` | `outside_window` \| `no_blueprint` \| `unknown_extent` \| `spawn_failed`. `outside_window` covers the part of a vehicle's life outside every window CARLA was attached for, a truth-only window included; `no_blueprint` and `unknown_extent` are `C1` §3.2's runtime cases (`D4.17`) |
 | `sumo_span_s` | `[begin, end]` | s | yes | Simulated seconds of the vehicle's whole life in SUMO |
 | `rendered_spans` | array of `{ begin_s, end_s, actor_id }` | s | yes | Empty for `simulated_only`. One entry per *rendering* — a vehicle released and re-admitted has two, with two different `actor_id`s (`C4`) |
 | `observed_spans` | array of `{ sensor_id, begin_s, end_s }` | s | yes | In-frustum coverage per collection sensor. Empty is meaningful and must be written |
@@ -1433,8 +1446,10 @@ window:
   honest one, not about what any consumer would be charged for.)*
 - `observed_union_s` and the per-sensor `observed_spans` are the honest denominators. `sumo_span_s` is
   not.
-- `reason = "capped"` on **any** vehicle is a capture-quality signal; on a participant it is
-  unreachable by `D4.6` and, if ever seen, means the guarantee was not implemented.
+- Inside a window CARLA was attached for, a vehicle goes undrawn for exactly two causes: its type has
+  no measured body (`no_blueprint`, `unknown_extent`), or the server refused its spawn
+  (`spawn_failed`). Neither is a choice about which vehicles to draw, so no consumer has to treat the
+  drawn vehicles as a sample of the simulated ones.
 - A vehicle with `render_state = partially_rendered` has a behavioural interval that is only partly
   evidenced; an interval clipped to `rendered_spans ∩ observed_spans` is the supervisable part.
 
@@ -1444,13 +1459,15 @@ window:
 |---|---|---|
 | V2.1 | `capture_windows[]` non-empty, each `begin_s < end_s`, non-overlapping, sorted | refuse at scenario build |
 | V2.2 | Every window lies within the SUMO config's `[begin, end]` | refuse |
-| V2.3 | `render_region`, if an area id, resolves against the area table (`C5`) | refuse |
-| V2.4 | `render_cap ≤ render_cap_hard` | refuse |
+| V2.3 | *Withdrawn 2026-09-30* with the render region: there is no region to resolve | — |
+| V2.4 | *Withdrawn 2026-09-30* with the render cap: there is no cap to compare | — |
 | V2.5 | Every participant's interval lies within some capture window | refuse — an annotated interval nobody could render is an authoring error, not a runtime outcome |
 | V2.6 | At an orderly run end, no `render_states[]` entry has `render_state != "rendered"` with an `entity_id` and an open interval. **Evaluated at closeout only**: a run the caller stops leaves intervals open by construction, which is a fact about when it was stopped and not a violation (`C10` §12.5, §12.7) | run is marked invalid |
 | V2.7 | `render_states[]` covers every SUMO vehicle that existed in a window | run is marked incomplete |
 
-`render_set` carries its own `render_set_version` integer; a driver that does not implement it refuses.
+The input has no version of its own: the windows travel in the lock under its `lock_version` (`C3`
+§5.3), and `prewarm_s` is recorded in the run's effective configuration
+([`12`](12_Operator_Control_Surface.md) §3.7).
 
 ### 4.7 What breaks if C2 is violated
 
@@ -1464,8 +1481,10 @@ window:
   inherits the error.
 - **Prevalence is overstated**, which bites hardest at the low base rates doc 20 §2.6 records, where a
   small error in the denominator moves the reported rate by a large factor.
-- **The subject of a run silently disappears.** Without `D4.6` the capture is missing the one vehicle
-  it was built for, and the run looks superficially fine.
+- **The imagery's traffic stops being the scenario's.** A rule that drew fewer vehicles than SUMO has
+  would make what the imagery holds depend on the machine rather than on the scenario, and the first
+  vehicle it left out could be the one the run was built for — after which the run looks
+  superficially fine. `D4.6` holds because nothing chooses.
 - **An abrupt appearance becomes unaccounted for.** Vehicles appear and vanish at full opacity by
   decision, which is acceptable — but only because `rendered_spans[]` records exactly when. Without it,
   a body that pops into frame is indistinguishable from a detection artifact, and the observability
@@ -1567,8 +1586,9 @@ Three findings from that measurement:
 staging rectangle are the world package's, which the lock binds. The run's fixed delta and substep count
 are the run's (`C6`). `generated_at_utc` is absent on purpose: a timestamp would break byte-identity. The
 clipped OSM's digest went with the OSM (§5.1 finding 2). `appearance_seed` is not declared, because SUMO's
-own seeded `vTypeDistribution` draw chooses the body (07 D7.11). `area_block_sha256`, `render_set` and
-`render_uses_vtype_colour` are not built.
+own seeded `vTypeDistribution` draw chooses the body (07 D7.11). `area_block_sha256` and
+`render_uses_vtype_colour` are not built. There is no `render_set` field: nothing in a scenario chooses
+which vehicles are drawn (`C2` §4.1).
 
 ### 5.4 Validation and the mismatch tiers
 
@@ -1793,12 +1813,12 @@ stateDiagram-v2
   [*] --> Declared : author writes a flow/trip in the routes file
   Declared --> Simulated : SUMO inserts it, assigns sumo_vehicle_id
   Simulated --> Rendered : C2 admits it; server assigns actor_id;\ncapture:sumo_id stamped at spawn
-  Simulated --> SimulatedOnly : C2 declines\n(outside_window / outside_region / capped)
+  Simulated --> SimulatedOnly : C2 does not draw it\n(outside_window / no_blueprint / unknown_extent / spawn_failed)
   Rendered --> Observed : projects inside a sensor frustum;\ntruth event written with both ids
   Observed --> HandedOver : C8 — imagery and truth leave this system
   HandedOver --> [*] : what a consumer does with it, including\nsupervision transfer by the documented\nrule (C8 §10.6), happens outside this system
   Observed --> Rendered : leaves frame, still rendered
-  Rendered --> Released : C2 eviction E2/E3/E4 — actor destroyed, release instant recorded
+  Rendered --> Released : C2 eviction E3, the window closed — body released, release instant recorded
   Released --> Rendered : re-admitted — NEW actor_id, SAME sumo_vehicle_id
   Rendered --> Removed : SUMO removes it (E1)
   Released --> Removed : SUMO removes it while released
@@ -1998,9 +2018,8 @@ stretch begins at 58.9 − 25 = 33.9.
    further than `near_m` — counts as disagreeing.
 
 **`near_m` = 50 m**, the resolver's default and recorded in every table. [`10`](10_Scale_And_Performance.md)
-does not value it; it is set equal to `aoi_halo_m` so that a vehicle on a lane the table calls `near`
-is, at the lane's closest point, one the truth producer counts as an `aoi_member` (`C2` §4.2). A guess by the
-same reasoning as `aoi_halo_m`'s, and overridable per publication.
+does not value it. It is a guess, on the reasoning that a vehicle on a lane within 50 m of an area is
+plausibly about to interact with it, and it is overridable per publication.
 
 ### 7.4 At runtime in the world
 
@@ -2228,7 +2247,7 @@ After the driver returns from one advance, all of the following hold:
 | G2 | Every rendered actor's transform is SUMO's pose at the bracketing SUMO steps, interpolated by the sub-step index, with the bumper shift of `C7` applied and Z taken from the drape |
 | G3 | The truth record for tick `n` describes the world **after** every write for tick `n`, never a mixture |
 | G4 | No sensor frame for tick `n` is delivered to a recorder before the driver has applied tick `n`'s poses |
-| G5 | The render-set admission and eviction decisions for a SUMO step are applied before the first world sub-step of that SUMO step |
+| G5 | The admissions and releases of a SUMO step (`C2` §4.2, §4.3) are applied before the first world sub-step of that SUMO step |
 | G6 | The annotation state a capture is stamped with is the snapshot for **that capture's tick**, not "current" — the recorder's workers encode asynchronously while the world keeps ticking (`CarlaNet.Recording/FrameRecorder.cs` worker path), so a registry read at write time would annotate a frame with a later state |
 | G7 | A given `(scenario package, sumo_seed, appearance_seed)` produces the same sequence of `(tick, sumo_vehicle_id, pose)` triples on every run, provided the world is in synchronous mode |
 | G8 | **Civil time.** Every tick has exactly one civil instant, `civil(n) = epoch.civil_datetime + t_render(n)` seconds, computed in the epoch's declared offset. It is the same for every participant, every sensor and every artifact of that tick; it is a pure function of the epoch and the tick index; and it is independent of wall-clock time, host time zone, host locale and the order in which components ask for it (`D4.25`) |
@@ -4287,7 +4306,7 @@ absence would let a corpus be misread:
 
 | Gate | Owner | Severity |
 |---|---|---|
-| A participant in an open annotated interval was admitted, every time | `04` `D4.6` | fail |
+| Every participant was drawn throughout each open annotated interval | `04` `D4.6` | fail |
 | `render_states[]` covers every SUMO vehicle, and no participant ended un-rendered with an open interval | `04` V2.6, V2.7 | fail |
 | Neither side stalled | `04` `D4.12`, `C6` §8.5 | fail |
 | `corpus_eligible` | `04` `C9` §11.8 | fail |
@@ -4296,7 +4315,6 @@ absence would let a corpus be misread:
 | Every declared omission is declared | `04` V8.9 | fail |
 | Drop counters and coverage agree | `04` V8.16 | fail |
 | `Dropped` is zero on every channel | `10` `D10.7` | fail |
-| The rendered fraction held its floor | `10` §7 | fail |
 | The clock ratio was recorded | `12` §7.2 | fail |
 | Corpus-affecting events — collisions, teleports, emergency stops, reconciliation refusals | `01` | warn |
 | Lamp gaps (`lamp_gaps[]` non-empty) | `04` `C1` V1.18 | warn |
@@ -4683,7 +4701,7 @@ Stated as properties needed, not as requests.
 | [`07_Scenario_Authoring.md`](07_Scenario_Authoring.md) | An authoring surface that emits only catalogue classes, never bare vTypes; area references rather than raw edge ids where an area exists; and an `epoch` that is **authored**, not defaulted — the authoring surface is where the 3.5-hour contradiction of Measurement 7 gets fixed at source |
 | [`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md) | **Two** artifact roots, not three (`D4.26`) — `08` owns the collection rationale for how they are laid out, named and sessioned; `C8` owns the ruling that there is no third. An observation writer with no reference to truth artifacts, and the split performed at the writer rather than by a stripping step (`D4.16`, and `08`'s own `D8.17` mechanism 2). A `context` block whose `solar` and `epoch` fields are exactly §10.4a's allow-list, taken from the sidecar and the PNG chunk rather than from the run manifest (`D4.21`). The per-label quality fields of `D4.28` — `occlusion`, `visible_signature`, `label_crowding`, `nearest_label_px`, `supervision_transfer_ambiguous` — computed from truth and the rendered frame alone and written onto the label record. If `08` reserves a partition whose truth is not released, that the corpus manifest declares it (V8.9). **And for the live delivery mode** (`D4.29`): a transport binding satisfying §10.9.1's three properties; one endpoint per root, with the truth endpoint off by default (`08` §11.4, guarantee L7); drop-oldest at the emitter with a per-sensor counter and the covered-but-not-delivered coverage row (`08` §11.3, V8.16); a real-time factor observed rather than owned (`08` §11.1); and one world-observer snapshot per tick behind every stream (`08` §3.4, guarantee L6) |
 | [`09_Toolchain_And_Packaging.md`](09_Toolchain_And_Packaging.md) | `vehicles.catalogue.json` shipped in the distribution under `catalogue/`; `sumo` and `duarouter` staged with `tools/traci` and `SUMO_HOME` set |
-| [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md) | Values for `render_cap`, `render_cap_hard`, `prewarm_s`, `entry_lead_m`, `exit_lag_m`, `exit_lag_s`, `aoi_halo_m`, `frustum_lead_s`, `near_m`, `sumo_step_timeout_wall_s`, **`solar_audit_tolerance_s`, `solar_audit_tolerance_elev_deg`, `solar_audit_every_n_ticks`, the bound on a per-scenario tolerance override, the solar-bin edges `C8` V8.6 stratifies on, the live emitter's `queue_depth_frames` (§10.9.2, guarantee L4), and the transcript's per-record and per-run byte caps (§10.10 rule 5)** |
+| [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md) | Values for `prewarm_s`, `near_m`, `sumo_step_timeout_wall_s`, **`solar_audit_tolerance_s`, `solar_audit_tolerance_elev_deg`, `solar_audit_every_n_ticks`, the bound on a per-scenario tolerance override, the solar-bin edges `C8` V8.6 stratifies on, the live emitter's `queue_depth_frames` (§10.9.2, guarantee L4), and the transcript's per-record and per-run byte caps (§10.10 rule 5)** |
 | [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md) | The five properties listed in §11.13: a recommended default policy, the headlight thresholds in the `sun_elevation_deg` convention, the `freeze_date_advances` default, whether illumination is a declared stratifier, and a view on a time-zone setter. `C9` carries and checks whatever `11` decides; it does not decide any of them |
 | [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md) | An override that produces exactly an `illumination` object of §11.5's shape, so the driver validates the operator's choice with the same rules as the author's; and a surface that can express the four policies without inventing a fifth. `C9` requires only that whatever an operator expresses resolves to `illumination_in_force` in the manifest (§11.8). **And for non-interactive invocation**: the five properties of §12.11 — non-interactive, parameterised from artifacts only, reproducible, addressed by `run_id`, and a record always written that depends on no exit status, because a killed process has none. `12` owns the surface, the configuration resolution, the exit-status set and the closeout rendering; `C10` owns the record artifact, and its gate rows are `12` §7.2's gate record projected rather than a second set of gates. `C10` publishes no aggregate verdict (`D4.36`, §12), so `12`'s `quality_gate` rendering is the only summary in the plan and is `12`'s to justify |
 
@@ -4698,7 +4716,7 @@ Stated as properties needed, not as requests.
 | **D4.3** | **One `vType` per catalogue blueprint with dimensions copied verbatim; one `vTypeDistribution` per catalogue class.** The author asks for a class, SUMO draws the member, the member *is* the blueprint. No matching, no nearest neighbour, tolerance 0.01 m for rounding only (§3.6) |
 | **D4.4** | **Colours are `#RRGGBB` in every SUMO artifact and `"R,G,B"` 0–255 in every CARLA artifact.** SUMO reinterprets an all-≤1 integer triple as fractions (`RGBColor.cpp:308-311`); hex removes the ambiguity (§3.7) |
 | **D4.5** | **`vType@color` is a `sumo-gui` property and is never rendered.** Measured: Bahonar's four anomaly types are the only conspicuous colours in the file and cover all nine marked vehicles, so carrying colour through would make it a perfect separator of the positive class. The rendered colour is drawn from the blueprint's own palette by a seeded rule, identically for marked and unmarked vehicles of one class (§3.7.1) |
-| **D4.6** | **A participant in an open interval is admitted early, never evicted by capacity, and never denied admission below the hard cap. Exceeding the hard cap fails the run** rather than silently dropping the subject (§4.4) |
+| **D4.6** | **A participant in an open interval is drawn throughout it, by construction** — every vehicle SUMO has in a window is drawn, from its departure or its window's prewarm until SUMO removes it or the window closes, so nothing can displace a participant. The one way it could go without a body, a vehicle type with no measured body, is refused before a run starts (07 check 14, 12 check 25) (§4.4) |
 | **D4.7** | **Behavioural truth exists for every SUMO vehicle; imagery truth only for rendered ones; every SUMO vehicle carries an explicit `render_state` with a reason and its rendered and observed spans.** Absence never carries that fact (§4.5) |
 | **D4.8** | **`sumo_vehicle_id` → `actor_id` is one-to-many.** A released and re-admitted vehicle is a new actor with the same SUMO id; `rendered_spans[]` is how the mapping stays recoverable (§6.2) |
 | **D4.9** | **`role_name` is a provenance field and carries the authority class** — `autopilot`, `scenario`, `sumo`. `hero` and `ego` are never used, because they change what the simulation does (§6.4) |
@@ -4758,12 +4776,8 @@ Each carries the options and a recommendation; none is decided here.
    the catalogue *at runtime* for the pose conversion, a scenario package handed over without its
    catalogue is not runnable at all, not merely unvalidatable. **Recommend embedding a copy**, bound by
    the digests the lock already records.
-3. **Whether `render_cap` is a count or a budget.** `C2` specifies a count because it is checkable at
-   the admission pass with no measurement. A rendering-cost budget would be more honest — a fire truck
-   is not a Mini — but it needs a per-blueprint cost the catalogue does not measure. Options: count
-   now, budget later with a `render_cost` field added to `vehicles[]` in `catalogue_version 2`; or
-   budget from the start. **Recommend count now**, and note the field name so the later change is
-   additive. Belongs jointly to [`10`](10_Scale_And_Performance.md).
+3. *Withdrawn 2026-09-30.* Whether the render cap was a count or a budget: there is no render cap, and
+   every vehicle SUMO has in a window is drawn (`C2` §4.2).
 4. **What `render_state` should say about a vehicle SUMO teleported.** The shipped configs set
    `<time-to-teleport value="-1"/>`, forbidding it, with the comment that a teleport is a vehicle
    jumping position that nothing downstream can reproduce faithfully. If a scenario ever raises it,

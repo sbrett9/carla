@@ -16,14 +16,15 @@
 | 3 — 2026-09-18 | Traffic-light findings marked present, audited, not required by this plan; vehicle lights unaffected. |
 | 4 — 2026-09-25 | §7 velocity chain corrected through `APawn`; D3.5's engine shape recorded. §7 citations against `feature/sumo-behavioral-capture`. |
 | 5 — 2026-09-28 | Pose-applied vehicle velocity present, measured live; angular velocity measured absent (§1, §3, §7.4, G5.1, §18). |
+| 6 — 2026-09-30 | Open question 3 no longer says batch latency decides how many vehicles can be rendered, and the scope list names admission and release rather than a render-set rule: the render cap (128, hard 192) was never measured, M2 never ran, and the scenario is the arbiter of population, so every vehicle SUMO has is rendered and a heavier scenario runs slower, never thinner. |
 
 ## What this section does **not** cover
 
 - Whether the SUMO side can produce what CARLA needs (network, demand, `tlLogic`, per-vehicle
   signals). That is [`07_Scenario_Authoring.md`](07_Scenario_Authoring.md) and
   [doc 23](../../Findings/23_SUMO_Traffic_Integration.md).
-- The render-set rule, the clock contract, or physics authority. Those are decisions for
-  [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) and [`04_Contracts.md`](04_Contracts.md);
+- The admission and release of rendered vehicles, the clock contract, or physics authority. Those are
+  decisions for [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) and [`04_Contracts.md`](04_Contracts.md);
   this section supplies the mechanisms they may assume exist and names the ones they may not.
 - **What the sun should be set to**, how a scenario declares its civil epoch, and whether a capture
   window freezes or advances it. Those belong to
@@ -1935,9 +1936,10 @@ number. `D5.13`–`D5.20` all concern time of day, illumination and vehicle ligh
 3. **What is the real per-step latency of one `apply_batch` carrying *N* transforms?** Commit
    `37a2e4145` records ~20 ms for the traffic manager's control-frame round trip against a
    free-running server, which is the only figure in the tree and was not measured at SUMO's scale.
-   This is the number that decides how many vehicles can be rendered per step and it should be
-   measured against a real batch before any sizing claim is made. It is also the number open question
-   2 of [doc 23 §9](../../Findings/23_SUMO_Traffic_Integration.md) depends on.
+   It decides what a step costs on the wall clock at a given population — every vehicle SUMO has is
+   rendered, so a larger population makes a step slower and never leaves a vehicle out — and it
+   should be measured against a real batch before any wall-clock claim is made. It is also the number
+   open question 2 of [doc 23 §9](../../Findings/23_SUMO_Traffic_Integration.md) depends on.
 4. **Should the shim's batch-command and traffic-light gaps be closed anyway?** They block nothing in
    this plan (D5.12), but the shim is the fork's public API, `PythonAPI/util/start_replaying.py`
    already breaks against it (§12.1), and each gap is small. **Recommendation:** close G5.2, G5.3,
