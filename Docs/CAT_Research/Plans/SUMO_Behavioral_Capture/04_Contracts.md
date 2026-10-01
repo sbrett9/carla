@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 17 | 2026-10-01. `C3`: a scenario that declares lane closures carries a fifth file, the rerouter `.add.xml`, named by its configuration and digested in its lock |
 | 16 | 2026-10-01. `C2`: a vehicle SUMO inserts is drawn from the frame SUMO first reports it in, at that position and moving, and never before SUMO inserted it, and its admission instant is that frame (§4.2, §4.3). A vehicle SUMO has when rendering begins is drawn on the first rendered frame |
 | 15 | 2026-09-30. `C2` draws every vehicle SUMO has in a capture window. The render cap (128, hard 192) was never measured — M2 never ran — and the scenario is the arbiter of population, so a heavier scenario runs slower, never thinner. The input is `capture_windows[]` and `prewarm_s`; the region, priority and capacity gates, E2, E4, V2.3, V2.4, the reasons `outside_region` and `capped`, the rendered-fraction gate and open question 3 are withdrawn; `D4.6` holds by construction |
 | 14 | `C1`: the registry carries corrected class metadata and the European HGV; the content's unregistered blueprints inventoried; the Fuso Rosa is a bus; the default class set stated |
@@ -1549,9 +1550,10 @@ Three findings from that measurement:
 
 | File | Content |
 |---|---|
-| `<scenario_id>.lock.json` | The manifest, §5.3: every binding, digest and declaration a run needs, and the digests of the four files below |
+| `<scenario_id>.lock.json` | The manifest, §5.3: every binding, digest and declaration a run needs, and the digests of the files below -- four, and a fifth where the scenario closes lanes |
 | `<scenario_id>.sumocfg` | The SUMO configuration: the network and route file by relative name, `begin` 0, `end`, `step-length`, the seed and the processing options, the epoch restated in a comment |
 | `<scenario_id>.rou.xml` | Vehicle types bound to measured bodies (`C1`), every actor and flow already routed, departure-sorted, in plain seconds, with no supervision |
+| `<scenario_id>.add.xml` | Only where the specification declares `lane_closures`: the rerouter that closes each set of lanes for its interval, named by the configuration ([`07`](07_Scenario_Authoring.md) check 55) |
 | `<MapName>.net.xml` | The world package's `map.net.xml`, byte for byte |
 | `<scenario_id>.supervision.json` | The supervision plan — the annotation set, payload owned by [`06`](06_Truth_And_Annotation.md) §8.1 — carrying the resolved vocabulary it was checked against, import-flattened, with its digest ([`06`](06_Truth_And_Annotation.md) §8.7) |
 | `<scenario_id>.resolution.json`, `.resolution.md` | What the compile resolved, and every finding ([`07`](07_Scenario_Authoring.md) §5.3). Written by every compile; the only files a refused compile writes |
