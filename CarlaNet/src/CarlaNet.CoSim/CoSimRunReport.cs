@@ -269,6 +269,31 @@ public sealed class CoSimRunReport
     public long BodiesSpawned { get; internal set; }
 
     /// <summary>
+    /// Changes to the render set named to the server: one round trip on each tick whose lending
+    /// changed -- a body lent or given back -- and none on any other.
+    /// </summary>
+    /// <remarks>
+    /// The server carries what it was told on every world-observer snapshot, so the truth telemetry
+    /// of every process lists only the bodies a frame drew, each named by its SUMO vehicle. Read
+    /// against <see cref="Ticks"/>: at most one per tick, and in a steady scene far fewer.
+    /// </remarks>
+    public long RenderSetUpdates { get; internal set; }
+
+    /// <summary>
+    /// Bodies named to the server that it did not find, summed over the changes: a body the server no
+    /// longer had, whose naming therefore reached no snapshot. Zero in a healthy run.
+    /// </summary>
+    public long RenderSetBodiesNotFound { get; internal set; }
+
+    /// <summary>
+    /// Why the server refused the render set, in its words, or <see langword="null"/> where it took
+    /// every change or none was sent. A server built before it carried a render set refuses the first
+    /// change, and the session names nothing more: its own recorded truth is cut to the render set in
+    /// process either way, and only the truth other processes read lists every vehicle actor again.
+    /// </summary>
+    public string? RenderSetRefused { get; internal set; }
+
+    /// <summary>
     /// Round trips spent writing poses: one per world tick that had a pose to write, never more.
     /// </summary>
     /// <remarks>
@@ -681,6 +706,9 @@ public sealed class CoSimRunReport
             text.AppendLine($"  warning          {warning}");
         }
         text.AppendLine($"bodies             {BodiesSpawned} spawned");
+        text.AppendLine($"render set         {RenderSetUpdates} change(s) named to the server"
+                        + (RenderSetBodiesNotFound > 0 ? $", {RenderSetBodiesNotFound} body(ies) not found" : string.Empty)
+                        + (RenderSetRefused is { } refused ? $"; refused, so other processes list every vehicle actor: {refused}" : string.Empty));
         text.AppendLine("lamps              "
                         + (!VehicleLampsDriven
                             ? "not driven; every body kept the lamps it was spawned with"

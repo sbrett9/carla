@@ -74,9 +74,10 @@ public sealed record VehicleTelemetry(
     public BoundingBox BoundingBox { get; init; }
 
     /// <summary>
-    /// The vehicle this body rendered at the record's frame, where a render-set source lent it: a
-    /// pooled body carries a succession of vehicles over a run, so the actor id alone names none of
-    /// them. Null where no source was given, which is every run whose actors are their vehicles.
+    /// The vehicle this body rendered at the record's frame, where a render set lent it -- the set
+    /// the server published with the frame, or a source in the recorder's own process: a pooled body
+    /// carries a succession of vehicles over a run, so the actor id alone names none of them. Null
+    /// where no render set named the body, which is every run whose actors are their vehicles.
     /// </summary>
     public RenderedVehicle? Rendered { get; init; }
 }

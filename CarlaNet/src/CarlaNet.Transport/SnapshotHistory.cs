@@ -28,6 +28,7 @@ public sealed class SnapshotHistory
     private readonly int _capacity;
     private readonly object _lock = new();
     private readonly Dictionary<ulong, IReadOnlyDictionary<ActorId, ActorSnapshot>> _byFrame = new();
+    private readonly Dictionary<ulong, ObservedRenderSet> _renderSets = new();
     private readonly Queue<ulong> _order = new();
 
     public SnapshotHistory(int capacity = DefaultCapacity)
@@ -57,19 +58,50 @@ public sealed class SnapshotHistory
     /// <summary>Keep the actors of <paramref name="frame"/>, dropping the oldest frame once over capacity.
     /// Retaining a frame already held replaces it without disturbing the order.</summary>
     public void Retain(ulong frame, IReadOnlyDictionary<ActorId, ActorSnapshot> actors)
+        => Retain(frame, actors, ObservedRenderSet.None);
+
+    /// <summary>
+    /// Keep the actors of <paramref name="frame"/> and the render set its snapshot carried, together,
+    /// so a reader of either has the other as of the same frame.
+    /// </summary>
+    public void Retain(ulong frame, IReadOnlyDictionary<ActorId, ActorSnapshot> actors, ObservedRenderSet renderSet)
     {
         ArgumentNullException.ThrowIfNull(actors);
+        ArgumentNullException.ThrowIfNull(renderSet);
         lock (_lock)
         {
             if (_byFrame.ContainsKey(frame))
             {
                 _byFrame[frame] = actors;
+                _renderSets[frame] = renderSet;
                 return;
             }
             _byFrame[frame] = actors;
+            _renderSets[frame] = renderSet;
             _order.Enqueue(frame);
             while (_order.Count > _capacity)
-                _byFrame.Remove(_order.Dequeue());
+            {
+                ulong dropped = _order.Dequeue();
+                _byFrame.Remove(dropped);
+                _renderSets.Remove(dropped);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The render set the snapshot of <paramref name="frame"/> carried, where that frame itself is
+    /// held; null otherwise. <see cref="ObservedRenderSet.None"/> for a held frame that carried none.
+    /// </summary>
+    /// <remarks>
+    /// Exact, never the nearest frame's: it is asked for beside a frame's actors, which
+    /// <see cref="Nearest"/> names, and a set from another frame would name a body for the vehicle it
+    /// carried then.
+    /// </remarks>
+    public ObservedRenderSet? RenderSetOf(ulong frame)
+    {
+        lock (_lock)
+        {
+            return _renderSets.TryGetValue(frame, out ObservedRenderSet? renderSet) ? renderSet : null;
         }
     }
 
@@ -100,11 +132,30 @@ public sealed class SnapshotHistory
         }
     }
 
+    /// <summary>
+    /// The actors of <paramref name="frame"/>, or of the retained frame closest to it, together with
+    /// the render set that same frame's snapshot carried, read under one lock so the two are always
+    /// of the frame <paramref name="servedFrame"/> names. Null, with <paramref name="renderSet"/>
+    /// <see cref="ObservedRenderSet.None"/>, when nothing has been retained.
+    /// </summary>
+    public IReadOnlyDictionary<ActorId, ActorSnapshot>? Nearest(ulong frame, out ulong servedFrame,
+                                                               out ObservedRenderSet renderSet)
+    {
+        lock (_lock)
+        {
+            IReadOnlyDictionary<ActorId, ActorSnapshot>? actors = Nearest(frame, out servedFrame);
+            renderSet = actors is not null && _renderSets.TryGetValue(servedFrame, out ObservedRenderSet? held)
+                ? held
+                : ObservedRenderSet.None;
+            return actors;
+        }
+    }
+
     /// <summary>Whether <paramref name="frame"/> itself is held.</summary>
     public bool Holds(ulong frame) { lock (_lock) return _byFrame.ContainsKey(frame); }
 
     public void Clear()
     {
-        lock (_lock) { _byFrame.Clear(); _order.Clear(); }
+        lock (_lock) { _byFrame.Clear(); _renderSets.Clear(); _order.Clear(); }
     }
 }

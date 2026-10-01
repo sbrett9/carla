@@ -72,6 +72,10 @@ public sealed class SumoDriveSession : IDisposable
     private readonly IlluminationFrames _illumination = new();
     private readonly RenderSetFrames _renderSets = new();
     private readonly Dictionary<string, (string TypeId, ulong? AdmittedTick)> _renderedSpans = [];
+    private readonly Dictionary<ActorId, string> _namedToServer = [];
+    private readonly HashSet<ActorId> _heldNow = [];
+    private readonly List<LentBody> _lentSinceNamed = [];
+    private readonly List<ActorId> _parkedSinceNamed = [];
     private readonly TickBatch _batch = new();
     private readonly List<(string VehicleId, ActorId Actor, VehiclePose Pose)> _commanded = [];
     private readonly Dictionary<string, CoSimVehicleFrame> _previous = [];
@@ -623,6 +627,7 @@ public sealed class SumoDriveSession : IDisposable
             double fraction = Clock.InterpolationFraction(tick);
             ComputePoses(fraction);
             WriteTheBatch();
+            NameTheRenderSet();
             WriteTheSun();
             _bridgeClock.Stop();
 
@@ -836,6 +841,85 @@ public sealed class SumoDriveSession : IDisposable
         }
 
         _renderSets.Record(frame, _renderSetNow);
+    }
+
+    /// <summary>
+    /// Name to the server every body lent and every body given back since the last change it was
+    /// told of, so the snapshot of the frame this tick produces carries the render set that frame
+    /// draws.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why the server has to be told.</b> The render set kept for the recorder is in this
+    /// process, and every other reader of the world -- the live pull, the CoT feed, a recorder in
+    /// another process -- sees only the world's vehicle actors, a parked body among them standing 300 m
+    /// below the ground with no SUMO vehicle to its name. Told, the server carries the set on every
+    /// world-observer snapshot, and every one of those readers lists the bodies a frame drew, each named
+    /// by its vehicle, and no parked body.</para>
+    ///
+    /// <para><b>The same set as the recorder's, frame for frame.</b> Read from the pool after this
+    /// tick's batch, as <see cref="RecordTheRenderSet"/> reads it once the tick returns, and nothing
+    /// lends or takes back a body in between; named before the tick cue, so the server applies it in
+    /// the drain the frame is cued from and the frame's snapshot is the first to carry it. A body given
+    /// back since the last tick is named parked; one lent is named with its vehicle, including one
+    /// handed straight from one vehicle to the next.</para>
+    ///
+    /// <para><b>Only on a change.</b> Nothing is sent on a tick whose lending did not change, which
+    /// <see cref="_renderSetNow"/> already says: it is cleared exactly when a body is lent or given
+    /// back. A server that refuses the first change is told nothing more, and the report says why.</para>
+    /// </remarks>
+    private void NameTheRenderSet()
+    {
+        if (_world is not { } world || _pool is not { } pool || _renderSetNow is not null
+            || Report.RenderSetRefused is not null)
+        {
+            return;
+        }
+
+        _lentSinceNamed.Clear();
+        _parkedSinceNamed.Clear();
+        _heldNow.Clear();
+        foreach ((string vehicleId, PooledBody body) in pool.Held)
+        {
+            _heldNow.Add(body.Actor);
+            if (!_namedToServer.TryGetValue(body.Actor, out string? named) || named != vehicleId)
+            {
+                string typeId = _renderedSpans.TryGetValue(vehicleId, out var span) ? span.TypeId : string.Empty;
+                _lentSinceNamed.Add(new LentBody(body.Actor, vehicleId, typeId));
+            }
+        }
+
+        foreach (ActorId actor in _namedToServer.Keys)
+        {
+            if (!_heldNow.Contains(actor))
+            {
+                _parkedSinceNamed.Add(actor);
+            }
+        }
+
+        if (_lentSinceNamed.Count == 0 && _parkedSinceNamed.Count == 0)
+        {
+            return;
+        }
+
+        RenderSetWrite written = world.WriteRenderSet(_lentSinceNamed, _parkedSinceNamed);
+        if (!written.Taken)
+        {
+            Report.RenderSetRefused = written.Refusal;
+            return;
+        }
+
+        foreach (ActorId actor in _parkedSinceNamed)
+        {
+            _namedToServer.Remove(actor);
+        }
+
+        foreach (LentBody lent in _lentSinceNamed)
+        {
+            _namedToServer[lent.Actor] = lent.VehicleId;
+        }
+
+        Report.RenderSetUpdates++;
+        Report.RenderSetBodiesNotFound += Math.Max(0, _lentSinceNamed.Count + _parkedSinceNamed.Count - written.BodiesFound);
     }
 
     /// <summary>

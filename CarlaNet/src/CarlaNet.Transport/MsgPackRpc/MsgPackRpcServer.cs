@@ -86,6 +86,13 @@ public sealed class MsgPackRpcServer : IAsyncDisposable
     public void RegisterHandler<TArg1, TArg2, TArg3, TResult>(string method, Func<TArg1, TArg2, TArg3, TResult> handler)
         => _handlers[method] = new ThreeArgHandler<TArg1, TArg2, TArg3, TResult>(handler);
 
+    /// <summary>
+    /// Register a handler with four arguments and a return value.
+    /// </summary>
+    public void RegisterHandler<TArg1, TArg2, TArg3, TArg4, TResult>(
+        string method, Func<TArg1, TArg2, TArg3, TArg4, TResult> handler)
+        => _handlers[method] = new FourArgHandler<TArg1, TArg2, TArg3, TArg4, TResult>(handler);
+
     /// <summary>Register a void handler with no arguments.</summary>
     public void RegisterVoidHandler(string method, Action handler)
         => _handlers[method] = new ZeroArgVoidHandler(handler);
@@ -411,6 +418,21 @@ public sealed class MsgPackRpcServer : IAsyncDisposable
             var b = MessagePackSerializer.Deserialize<TArg2>(ref rdr);
             var c = MessagePackSerializer.Deserialize<TArg3>(ref rdr);
             return fn(a, b, c);
+        }
+    }
+
+    private sealed class FourArgHandler<TArg1, TArg2, TArg3, TArg4, TResult>(
+        Func<TArg1, TArg2, TArg3, TArg4, TResult> fn) : IRpcHandler
+    {
+        public int ArgCount => 4;
+        public bool HasReturn => true;
+        public object? Invoke(ref MessagePackReader rdr)
+        {
+            var a = MessagePackSerializer.Deserialize<TArg1>(ref rdr);
+            var b = MessagePackSerializer.Deserialize<TArg2>(ref rdr);
+            var c = MessagePackSerializer.Deserialize<TArg3>(ref rdr);
+            var d = MessagePackSerializer.Deserialize<TArg4>(ref rdr);
+            return fn(a, b, c, d);
         }
     }
 

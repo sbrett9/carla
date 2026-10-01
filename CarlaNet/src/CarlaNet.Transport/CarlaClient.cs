@@ -181,6 +181,13 @@ public sealed class CarlaClient : IAsyncDisposable
     // world has no sun to report (see EpisodeStateLayout.ReadSolar).
     private volatile double[] _solar = System.Array.Empty<double>();
 
+    // The render set from the latest world-observer snapshot: the bodies a co-simulation session's
+    // pool had lent, each with the vehicle it was drawn for, and those it had parked. None until a
+    // session names a body, and for as long as no snapshot carries a set. Replaced whole on the
+    // observer thread, and the same instance is kept while the block's bytes do not change.
+    private volatile ObservedRenderSet _renderSet = ObservedRenderSet.None;
+    private long _renderSetBlocksUnreadable;
+
     // ── Staging-fade state (see SetActorFadeAsync / GetActorOpacity / IsActorEstablished) ──
     // set_actor_fade writes straight to render state server-side and has no read-back, so the client
     // that issued it is the only holder of the value. Recording it here is what lets consumers in this
@@ -1670,6 +1677,40 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<bool> DestroyActorAsync(ActorId id)
         => _rpc.CallAsync<bool>("destroy_actor", id);
 
+    /// <summary>
+    /// Name to the server the bodies a co-simulation session's pool has lent since it last named
+    /// any -- each with the vehicle it is drawn for and that vehicle's declared type -- and the
+    /// bodies it has given back, which stand parked out of sight. The world observer carries every
+    /// named body on each snapshot from the next frame on (<see cref="GetCachedRenderSet"/>), so the
+    /// truth telemetry of every client, in any process, lists the bodies a frame drew, named by their
+    /// vehicles, and leaves the parked ones out. Answers how many of the named actors the server found.
+    /// </summary>
+    /// <remarks>
+    /// <para>Sent only when the lending changes, and before the tick cue of the frame the change is
+    /// drawn in. Only the actors named are affected, and the naming is held on the server's record of
+    /// each actor, so it ends with the actor: nothing outlives the bodies it names.</para>
+    ///
+    /// <para><paramref name="vehicleIds"/> and <paramref name="vehicleTypeIds"/> run beside
+    /// <paramref name="lentIds"/>, one entry per lent body. A body given back and lent again in one
+    /// call ends lent.</para>
+    /// </remarks>
+    public Task<uint> UpdateRenderSetAsync(IReadOnlyList<ActorId> lentIds, IReadOnlyList<string> vehicleIds,
+                                           IReadOnlyList<string> vehicleTypeIds, IReadOnlyList<ActorId> parkedIds)
+    {
+        ArgumentNullException.ThrowIfNull(lentIds);
+        ArgumentNullException.ThrowIfNull(vehicleIds);
+        ArgumentNullException.ThrowIfNull(vehicleTypeIds);
+        ArgumentNullException.ThrowIfNull(parkedIds);
+        if (vehicleIds.Count != lentIds.Count || vehicleTypeIds.Count != lentIds.Count)
+        {
+            throw new ArgumentException(
+                $"Every lent body needs one vehicle id and one vehicle type: {lentIds.Count} bodies, "
+                + $"{vehicleIds.Count} vehicle ids, {vehicleTypeIds.Count} vehicle types.");
+        }
+
+        return _rpc.CallAsync<uint>("update_render_set", lentIds, vehicleIds, vehicleTypeIds, parkedIds);
+    }
+
     // ── §8.8 Actor Transform and Physics ──────────────────────────────────────
 
     public Task SetActorLocationAsync(ActorId id, Location location)
@@ -2014,11 +2055,13 @@ public sealed class CarlaClient : IAsyncDisposable
         {
             double platformTs = 0;
             float deltaS = 0;
-            ParseEpisodeState(frame.Payload.Span, out platformTs, out deltaS, out var frameActors);
+            ParseEpisodeState(frame.Payload.Span, out platformTs, out deltaS, out var frameActors,
+                              out var frameRenderSet);
             // Retained before the gate is pulsed, so a tick-cue waiter woken by this frame can read
-            // the frame's own actors straight away.
+            // the frame's own actors straight away -- and the render set the same snapshot carried
+            // beside them, so the two are never read from different frames.
             if (frameActors is not null)
-                _history.Retain(frame.Header.Frame, frameActors);
+                _history.Retain(frame.Header.Frame, frameActors, frameRenderSet);
             lock (_frameGate)
             {
                 _latestObservedFrame = frame.Header.Frame;
@@ -2045,11 +2088,13 @@ public sealed class CarlaClient : IAsyncDisposable
     }
 
     private void ParseEpisodeState(ReadOnlySpan<byte> payload, out double platformTimestamp, out float deltaSeconds,
-                                   out Dictionary<ActorId, ActorSnapshot>? frameActors)
+                                   out Dictionary<ActorId, ActorSnapshot>? frameActors,
+                                   out ObservedRenderSet frameRenderSet)
     {
         platformTimestamp = 0;
         deltaSeconds = 0;
         frameActors = null;
+        frameRenderSet = ObservedRenderSet.None;
         // Header layout: episode_id(8) platform_ts(8) delta_s(4) map_origin(12) state(1) pad(3),
         // then the solar block at offset 36 -- eleven doubles, or twelve from a server that carries
         // the refraction-corrected elevation, which the flags byte says (§10.14 extended header).
@@ -2066,8 +2111,23 @@ public sealed class CarlaClient : IAsyncDisposable
         // EpisodeStateSerializer::SolarStateValid. Leaving the cache empty is what stops a recorded
         // artifact asserting a sun that was never there.
         _solar = EpisodeStateLayout.ReadSolar(payload);
+        // The render set, where a co-simulation session has named the bodies of its pool. A block
+        // that cannot be read is counted and read as no set, and the frame's actors are read all
+        // the same: the block states its own size, so the actors are found either way, and a frame
+        // that went unparsed would hold every tick cue waiting on it.
+        try
+        {
+            frameRenderSet = EpisodeStateLayout.ReadRenderSet(payload, _renderSet);
+        }
+        catch (InvalidDataException ex)
+        {
+            Interlocked.Increment(ref _renderSetBlocksUnreadable);
+            _log?.LogWarning(ex, "World observer render set unreadable");
+            frameRenderSet = ObservedRenderSet.None;
+        }
+        _renderSet = frameRenderSet;
         const int ActorSize  = 119;
-        var actors = payload[headerSize..];
+        var actors = payload[EpisodeStateLayout.ActorsOffset(payload)..];
         int count  = actors.Length / ActorSize;
         _observedIds.Clear();
         frameActors = new Dictionary<ActorId, ActorSnapshot>(count);
@@ -2142,6 +2202,17 @@ public sealed class CarlaClient : IAsyncDisposable
     /// </summary>
     public IReadOnlyDictionary<ActorId, ActorSnapshot>? GetSnapshotFrame(ulong frame, out ulong servedFrame)
         => _history.Nearest(frame, out servedFrame);
+
+    /// <summary>
+    /// Every actor's snapshot as of <paramref name="frame"/>, or the nearest frame still held, as
+    /// <see cref="GetSnapshotFrame(ulong, out ulong)"/> answers, together with the render set the
+    /// same snapshot carried (<see cref="ObservedRenderSet.None"/> where it carried none). Both are
+    /// read at once, so a body lent or given back between two ticks is never paired with the other
+    /// frame's naming.
+    /// </summary>
+    public IReadOnlyDictionary<ActorId, ActorSnapshot>? GetSnapshotFrame(ulong frame, out ulong servedFrame,
+                                                                        out ObservedRenderSet renderSet)
+        => _history.Nearest(frame, out servedFrame, out renderSet);
 
     /// <summary>How many recent frames <see cref="GetSnapshotFrame"/> can answer for exactly.</summary>
     public int RetainedSnapshotFrames => _history.Count;
@@ -2224,6 +2295,33 @@ public sealed class CarlaClient : IAsyncDisposable
     /// present from a server whose header carries it; one built before that publishes the first
     /// eleven only, and GetSolarStateAsync then remains the way to read it.
     public IReadOnlyList<double> GetCachedSolarState() => _solar;
+
+    /// <summary>
+    /// The render set the latest world-observer snapshot carried: the bodies a co-simulation
+    /// session's pool had lent, each with the vehicle it was drawn for, and those it had parked out
+    /// of sight. <see cref="ObservedRenderSet.None"/> before the first snapshot, and whenever no
+    /// session has named a body -- every run of traffic-manager traffic or scenario entities. Requires
+    /// the world observer to be running (StartWorldObserverAsync).
+    /// </summary>
+    /// <remarks>
+    /// The newest frame's, like the actor cache. A reader that pairs it with actor state should take
+    /// both from one frame -- <see cref="GetSnapshotFrame(ulong, out ulong, out ObservedRenderSet)"/>
+    /// answers both at once -- because a body is lent or given back between two ticks.
+    /// </remarks>
+    public ObservedRenderSet GetCachedRenderSet() => _renderSet;
+
+    /// <summary>
+    /// The render set the snapshot of <paramref name="frame"/> carried, where the client still holds
+    /// that frame; null where it does not. <see cref="ObservedRenderSet.None"/> for a held frame that
+    /// carried none.
+    /// </summary>
+    public ObservedRenderSet? GetRenderSetFrame(ulong frame) => _history.RenderSetOf(frame);
+
+    /// <summary>
+    /// World-observer snapshots whose render set block could not be read, and were read as carrying
+    /// none. Nonzero only where the server lays the block out differently from this client.
+    /// </summary>
+    public long RenderSetBlocksUnreadable => Interlocked.Read(ref _renderSetBlocksUnreadable);
 
     // Decode VehicleControl from the cached TypeDependentState union.
     // VehicleData layout (pack=1): throttle(f) steer(f) brake(f) hand_brake(bool)

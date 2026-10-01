@@ -156,6 +156,38 @@ public sealed class CarlaClientWorld : ICarlaWorld
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// A server that answers with an error -- one built before it carried a render set, which has no
+    /// such call -- is answered as a refusal carrying its words, as the grid digests are, rather than
+    /// thrown: the run goes on, and the report says what the server said.
+    /// </remarks>
+    public RenderSetWrite WriteRenderSet(IReadOnlyList<LentBody> lent, IReadOnlyList<ActorId> parked)
+    {
+        ArgumentNullException.ThrowIfNull(lent);
+        ArgumentNullException.ThrowIfNull(parked);
+        var lentIds = new ActorId[lent.Count];
+        var vehicleIds = new string[lent.Count];
+        var vehicleTypeIds = new string[lent.Count];
+        for (int index = 0; index < lent.Count; index++)
+        {
+            lentIds[index] = lent[index].Actor;
+            vehicleIds[index] = lent[index].VehicleId;
+            vehicleTypeIds[index] = lent[index].VehicleTypeId;
+        }
+
+        try
+        {
+            uint found = _client.UpdateRenderSetAsync(lentIds, vehicleIds, vehicleTypeIds, parked.ToArray())
+                .GetAwaiter().GetResult();
+            return new RenderSetWrite((int)found, null);
+        }
+        catch (CarlaRpcException refused)
+        {
+            return new RenderSetWrite(0, refused.Message);
+        }
+    }
+
+    /// <inheritdoc/>
     public Transform? ObservedTransform(ActorId actor) =>
         _client.GetActorSnapshot(actor) is { } snapshot ? snapshot.Transform : null;
 

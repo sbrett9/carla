@@ -4,6 +4,7 @@ using CarlaNet.Sensors;
 using CarlaNet.Transport;
 using CarlaNet.Transport.Streaming;
 using CarlaNet.Types.Geom;
+using CarlaNet.Types.Streaming;
 
 namespace CarlaNet.Recording;
 
@@ -198,8 +199,10 @@ public sealed class FrameRecorder : IDisposable
     /// <param name="renderSet">What lent the vehicle bodies this run renders, where they are lent from
     /// a pool. Supplying it lists, in each capture, only the bodies its frame rendered, each named by
     /// the vehicle it rendered (<c>sumo_id</c>), and leaves out every body parked between loans; a
-    /// frame whose set is no longer held lists no vehicle and says so. Null lists every vehicle actor,
-    /// which is right wherever each actor is its own vehicle.</param>
+    /// frame whose set is no longer held lists no vehicle and says so. Null lists, where the server
+    /// published a session's render set with the frame, the bodies that set says the frame drew, each
+    /// named by its vehicle; and otherwise every vehicle actor, which is right wherever each actor is
+    /// its own vehicle.</param>
     /// <param name="cameraActorId">The recorded camera actor. Given, each capture's pose -- its
     /// platform point and boresight, and the pose its occlusion is measured from -- is the camera's
     /// in the snapshot of the image's own frame, with the image header's checked against it and
@@ -323,6 +326,7 @@ public sealed class FrameRecorder : IDisposable
     {
         IReadOnlyList<VehicleTelemetry> recs = Array.Empty<VehicleTelemetry>();
         ulong? telemetryTick = null;
+        ObservedRenderSet servedRenderSet = ObservedRenderSet.None;
         if (_haveOrigin)
         {
             // The truth is read as of the frame named in this image's header, not as of whatever the
@@ -332,7 +336,7 @@ public sealed class FrameRecorder : IDisposable
             // so this is fast once every actor has been seen.
             try
             {
-                recs = _telemetry.Compute(_origin, arrival.Frame, out ulong served);
+                recs = _telemetry.Compute(_origin, arrival.Frame, out ulong served, out servedRenderSet);
                 telemetryTick = served;
                 if (served == arrival.Frame)
                     Interlocked.Increment(ref _telemetryExact);
@@ -359,6 +363,13 @@ public sealed class FrameRecorder : IDisposable
             PairedTruth paired = _renderSet.Pair(recs, described);
             recs = paired.Records;
             vehicles = paired.Vehicles;
+        }
+        else if (!servedRenderSet.IsEmpty)
+        {
+            // No source in this process, and the server published the session's render set with the
+            // records' own frame: the records are already cut to the bodies that frame drew, each
+            // named by its vehicle, so the sidecar says so rather than claiming every vehicle actor.
+            vehicles = SidecarVehicles.Rendered;
         }
 
         // The pose these pixels were taken from: the camera in the snapshot of the image's own frame,

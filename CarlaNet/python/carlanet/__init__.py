@@ -1860,9 +1860,18 @@ class World:
         opaque has not arrived yet and is left out. Vehicles nobody fades are reported from the moment
         they spawn, so this makes no difference to a run without staging traffic.
 
+        During a SUMO drive the vehicles are a pool of bodies, each lent to a SUMO vehicle while it
+        is drawn and parked out of sight 300 m below the ground between loans. The session names each
+        body to the server as it lends it and gives it back, and every world-observer snapshot carries
+        that render set, so this lists the bodies the newest frame drew and no parked body, whichever
+        process calls it, and a lent body's dict also carries sumo_id (the SUMO vehicle it was drawn
+        for), vtype_id (that vehicle's declared type) and admitted_tick (the first frame it was drawn
+        for that vehicle) -- the same names the recorded truth sidecar gives it. Outside a drive no
+        body is named and every vehicle is reported, without those three keys.
+
         Each dict: id, type_id, base_type, special_type, color, role_name, lat, lon, hae, hae_dtm,
-        speed_mps, course_deg, vx, vy, vz, length_m, width_m, height_m. Heights are ELLIPSOIDAL
-        WGS84 (HAE)."""
+        speed_mps, course_deg, vx, vy, vz, length_m, width_m, height_m, and sumo_id, vtype_id,
+        admitted_tick for a body a SUMO drive lent. Heights are ELLIPSOIDAL WGS84 (HAE)."""
         # Recover the surface shift before either path reads it, so a client that did not build this
         # world reports the same bare-earth truth as the one that did.
         self._ensure_bare_earth_reference()
@@ -1880,10 +1889,18 @@ class World:
             offset = 0.0
         drape = self._drape_grid()                       # per-cell offset/ground grids (or None)
         table = None if drape is not None else self._bare_earth_dtm_table()
+        # The render set the newest snapshot carried, where a SUMO drive named its bodies: a parked
+        # body is not a vehicle in the scene, and a lent one is named by its SUMO vehicle.
+        try:
+            render_set = self._client.GetCachedRenderSet()
+        except Exception:
+            render_set = None                              # a client built before the render set
         out = []
         for v in self.get_actors().filter("vehicle.*"):
             if not self._client.IsActorEstablished(v.id):
                 continue                                   # still fading in from the staging ring
+            if render_set is not None and render_set.IsParked(v.id):
+                continue                                   # parked out of sight between loans
             tf = v.get_transform()
             vel = v.get_velocity()
             loc = tf.location
@@ -1912,7 +1929,7 @@ class World:
             ext = v.bounding_box.extent
             base = attrs.get("base_type", "") or (
                 "motorcycle" if attrs.get("number_of_wheels", "4") == "2" else "car")
-            out.append({
+            rec = {
                 "id": v.id, "type_id": v.type_id,
                 "base_type": base, "special_type": attrs.get("special_type", ""),
                 "color": attrs.get("color", ""), "role_name": attrs.get("role_name", ""),
@@ -1920,7 +1937,12 @@ class World:
                 "speed_mps": speed, "course_deg": course,
                 "vx": vx, "vy": vy, "vz": vz,
                 "length_m": 2.0 * ext.x, "width_m": 2.0 * ext.y, "height_m": 2.0 * ext.z,
-            })
+            }
+            body = render_set.Lent(v.id) if render_set is not None else None
+            if body is not None:
+                rec.update(sumo_id=str(body.VehicleId), vtype_id=str(body.VehicleTypeId),
+                           admitted_tick=int(body.AdmittedFrame))
+            out.append(rec)
         return out
 
     def _vehicle_telemetry_native(self, origin=None):
@@ -1937,7 +1959,7 @@ class World:
         cs_origin = GeoLocation(float(origin[0]), float(origin[1]), float(origin[2]))
         out = []
         for r in svc.Compute(cs_origin):
-            out.append({
+            rec = {
                 "id": int(r.Id), "type_id": r.TypeId,
                 "base_type": r.BaseType, "special_type": r.SpecialType,
                 "color": r.Color, "role_name": r.RoleName,
@@ -1946,7 +1968,13 @@ class World:
                 "speed_mps": float(r.SpeedMps), "course_deg": float(r.CourseDeg),
                 "vx": float(r.Vx), "vy": float(r.Vy), "vz": float(r.Vz),
                 "length_m": float(r.LengthM), "width_m": float(r.WidthM), "height_m": float(r.HeightM),
-            })
+            }
+            # The SUMO vehicle a lent body was drawn for, named as the recorded sidecar names it.
+            rendered = getattr(r, "Rendered", None)
+            if rendered is not None:
+                rec.update(sumo_id=str(rendered.SumoId), vtype_id=str(rendered.VehicleTypeId),
+                           admitted_tick=int(rendered.AdmittedTick))
+            out.append(rec)
         return out
 
     def start_recording(self, camera, record_dir, hz=2.0, affiliation="n", stale=3.0,

@@ -11,10 +11,11 @@ namespace CarlaNet.CoSim.Tests;
 /// A CARLA world that records what was asked of it and answers as a server would.
 /// </summary>
 /// <remarks>
-/// <para>Everything the bridge does to a world is fourteen operations wide, so a world that keeps a
+/// <para>Everything the bridge does to a world is fifteen operations wide, so a world that keeps a
 /// dictionary of actors, a list of batches and a simulated sun exercises the whole driving path --
-/// the check of which world is loaded, the pool, the batch, the read-back, the tick, the settings
-/// restoration and the sun's binding and audit -- with no server, no engine and no render. What it
+/// the check of which world is loaded, the pool, the batch, the render set named to the server, the
+/// read-back, the tick, the settings restoration and the sun's binding and audit -- with no server,
+/// no engine and no render. What it
 /// cannot establish is what a body looks like once the pose is applied, which is the one thing only
 /// a live run can answer.</para>
 ///
@@ -41,6 +42,10 @@ internal class RecordedWorld : ICarlaWorld
     private readonly List<long> _batchTicks = [];
     private readonly List<(string Layer, bool Visible, long AtTick)> _layerWrites = [];
     private readonly List<(string Call, long AtTick)> _solarWrites = [];
+    private readonly Dictionary<ActorId, (string VehicleId, string VehicleTypeId, ulong AdmittedFrame)> _namedLent = [];
+    private readonly HashSet<ActorId> _namedParked = [];
+    private readonly Dictionary<ulong, PublishedRenderSet> _published = [];
+    private readonly List<(IReadOnlyList<LentBody> Lent, IReadOnlyList<ActorId> Parked, long AtTick)> _renderSetWrites = [];
     private ActorId _nextActor = 1;
     private (string Operation, Exception Failure)? _severAt;
     private Exception? _severedWith;
@@ -165,6 +170,30 @@ internal class RecordedWorld : ICarlaWorld
     /// </summary>
     public bool IgnoresSettingsWrites { get; set; }
 
+    /// <summary>
+    /// Set to have the world refuse every change to the render set with this message, as a server
+    /// built before it carried a render set does: it has no such call.
+    /// </summary>
+    public string? RefusesRenderSet { get; set; }
+
+    /// <summary>
+    /// Every change to the render set named to the world, with the tick the world was on when it
+    /// arrived -- which is the session's index of the tick it was named for.
+    /// </summary>
+    public IReadOnlyList<(IReadOnlyList<LentBody> Lent, IReadOnlyList<ActorId> Parked, long AtTick)> RenderSetWrites =>
+        _renderSetWrites;
+
+    /// <summary>
+    /// The render set the world-observer snapshot of a frame carried, as the server publishes it:
+    /// every body named lent, with its vehicle, its type and the frame its span began on, and every
+    /// body named parked, as the naming stood when the frame was produced. Null for a frame the world
+    /// did not produce, or one produced before any body was named.
+    /// </summary>
+    public PublishedRenderSet? PublishedRenderSetOf(ulong frame) => _published.GetValueOrDefault(frame);
+
+    /// <summary>Bodies the world holds named lent or parked right now.</summary>
+    public int NamedBodies => _namedLent.Count + _namedParked.Count;
+
     /// <inheritdoc/>
     public LoadedWorld DescribeLoadedWorld()
     {
@@ -275,6 +304,9 @@ internal class RecordedWorld : ICarlaWorld
                     _lamps.Remove(destroy.Actor);
                     _velocities.Remove(destroy.Actor);
                     _simulating.Remove(destroy.Actor);
+                    // The naming is held on the actor's own record, so it ends with the actor.
+                    _namedLent.Remove(destroy.Actor);
+                    _namedParked.Remove(destroy.Actor);
                     responses.Add(CommandResponse.Success(destroy.Actor));
                     break;
                 default:
@@ -284,6 +316,55 @@ internal class RecordedWorld : ICarlaWorld
         }
 
         return responses;
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Named as the server names them: on the world's record of each actor, so a body the world does
+    /// not have is not found and a destroyed body loses its naming; bodies given back before bodies
+    /// lent; a body still lent to the same vehicle keeps the frame its span began on, and one lent anew
+    /// begins its span on the next frame the world produces.
+    /// </remarks>
+    public RenderSetWrite WriteRenderSet(IReadOnlyList<LentBody> lent, IReadOnlyList<ActorId> parked)
+    {
+        Connected(nameof(WriteRenderSet));
+        // Copies, because the session reuses its lists from one change to the next.
+        _renderSetWrites.Add(([.. lent], [.. parked], Ticks));
+        if (RefusesRenderSet is { } refusal)
+        {
+            return new RenderSetWrite(0, refusal);
+        }
+
+        int found = 0;
+        foreach (ActorId actor in parked)
+        {
+            if (!_actors.ContainsKey(actor))
+            {
+                continue;
+            }
+
+            _namedLent.Remove(actor);
+            _namedParked.Add(actor);
+            found++;
+        }
+
+        ulong next = (ulong)Ticks + 1;
+        foreach (LentBody body in lent)
+        {
+            if (!_actors.ContainsKey(body.Actor))
+            {
+                continue;
+            }
+
+            ulong admitted = _namedLent.TryGetValue(body.Actor, out var held) && held.VehicleId == body.VehicleId
+                ? held.AdmittedFrame
+                : next;
+            _namedParked.Remove(body.Actor);
+            _namedLent[body.Actor] = (body.VehicleId, body.VehicleTypeId, admitted);
+            found++;
+        }
+
+        return new RenderSetWrite(found, null);
     }
 
     /// <inheritdoc/>
@@ -327,6 +408,14 @@ internal class RecordedWorld : ICarlaWorld
             // The time-of-day controller is an actor, and actors tick before the world observer
             // publishes the frame, so the sun a frame is published with has already moved.
             Sun?.Tick(Settings.FixedDeltaSeconds ?? 0.0);
+
+            // And the frame's snapshot carries every body named so far, as the naming stands now.
+            if (NamedBodies > 0)
+            {
+                _published[(ulong)Ticks] = new PublishedRenderSet(
+                    _namedLent.ToDictionary(pair => pair.Key, pair => pair.Value),
+                    new HashSet<ActorId>(_namedParked));
+            }
         }
 
         return ProducesFrames ? (ulong)Ticks : null;
@@ -397,3 +486,13 @@ internal class RecordedWorld : ICarlaWorld
         }
     }
 }
+
+/// <summary>
+/// The render set one frame's world-observer snapshot carried, as <see cref="RecordedWorld"/>
+/// publishes it.
+/// </summary>
+/// <param name="Lent">Every body named lent: the vehicle it was drawn for, its type, and the frame its span began on.</param>
+/// <param name="Parked">Every body named parked.</param>
+internal sealed record PublishedRenderSet(
+    IReadOnlyDictionary<ActorId, (string VehicleId, string VehicleTypeId, ulong AdmittedFrame)> Lent,
+    IReadOnlySet<ActorId> Parked);

@@ -24,6 +24,8 @@
 #include "Carla/Vehicle/MovementComponents/ChronoMovementComponent.h"
 #include "Carla/Lights/CarlaLightSubsystem.h"
 #include "Carla/Actor/ActorData.h"
+#include "Carla/Actor/CarlaActor.h"
+#include "Carla/Actor/RenderSetMembership.h"
 #include "CarlaServerResponse.h"
 #include "Carla/Util/BoundingBoxCalculator.h"
 #include "Components/PrimitiveComponent.h"
@@ -85,7 +87,9 @@
 
 #include <vector>
 #include <atomic>
+#include <cstdint>
 #include <map>
+#include <string>
 #include <tuple>
 #include <limits>
 
@@ -1529,6 +1533,71 @@ void FCarlaServer::FPimpl::BindActions()
       RESPOND_ERROR("internal error: unable to destroy actor");
     }
     return true;
+  };
+
+  // Name the bodies a co-simulation session's pool has lent, each with the vehicle it is drawn for
+  // and that vehicle's declared type, and the bodies it has given back, which stand parked out of
+  // sight and are drawn for nobody. Sent by the session only when its lending changes, before the
+  // tick cue of the frame the change is drawn in. The world observer carries every named body on
+  // each snapshot from the next frame on, so the truth telemetry of every client lists the bodies a
+  // frame drew, named by their vehicles, and leaves the parked ones out.
+  //
+  // Only the actors named here are affected, and what they are named is held on the actor's own
+  // record, so it ends with the actor: a session that destroys its bodies leaves nothing behind,
+  // and one that stops without doing so leaves its parked bodies named parked, which is what they
+  // are. Bodies given back are applied before bodies lent, so one given back and lent again in one
+  // change ends lent. Answers how many of the named actors were found.
+  BIND_SYNC(update_render_set) << [this](
+      const std::vector<FCarlaActor::IdType> &lent_ids,
+      const std::vector<std::string> &vehicle_ids,
+      const std::vector<std::string> &vehicle_type_ids,
+      const std::vector<FCarlaActor::IdType> &parked_ids) -> R<uint32_t>
+  {
+    REQUIRE_CARLA_EPISODE();
+    if (vehicle_ids.size() != lent_ids.size() || vehicle_type_ids.size() != lent_ids.size())
+    {
+      RESPOND_ERROR("update_render_set: every lent body needs one vehicle id and one vehicle type");
+    }
+
+    // The first frame a body lent now is drawn in: the frame after the one in progress, which is
+    // also the frame tick_cue answers with.
+    const uint64_t NextFrame = FCarlaEngine::GetFrameCounter() + 1u;
+    uint32_t Found = 0u;
+
+    for (const FCarlaActor::IdType Id : parked_ids)
+    {
+      FCarlaActor* View = Episode->FindCarlaActor(Id);
+      if (View == nullptr)
+      {
+        continue;
+      }
+      FRenderSetMembership Parked;
+      Parked.State = FRenderSetMembership::EState::Parked;
+      View->SetRenderSetMembership(Parked);
+      ++Found;
+    }
+
+    for (size_t Index = 0u; Index < lent_ids.size(); ++Index)
+    {
+      FCarlaActor* View = Episode->FindCarlaActor(lent_ids[Index]);
+      if (View == nullptr)
+      {
+        continue;
+      }
+      const FRenderSetMembership &Held = View->GetRenderSetMembership();
+      // A body still lent to the same vehicle keeps the frame that vehicle's span began on.
+      const bool bSameVehicle =
+          Held.State == FRenderSetMembership::EState::Lent && Held.VehicleId == vehicle_ids[Index];
+      FRenderSetMembership Lent;
+      Lent.State = FRenderSetMembership::EState::Lent;
+      Lent.VehicleId = vehicle_ids[Index];
+      Lent.VehicleTypeId = vehicle_type_ids[Index];
+      Lent.AdmittedFrame = bSameVehicle ? Held.AdmittedFrame : NextFrame;
+      View->SetRenderSetMembership(Lent);
+      ++Found;
+    }
+
+    return Found;
   };
 
   BIND_SYNC(console_command) << [this](std::string cmd) -> R<bool>

@@ -35,12 +35,18 @@ def _iso(dt: datetime) -> str:
 
 
 def to_cot(rec, affiliation="n", stale_seconds=3.0, source="truth", uid_prefix="CARLA-TRUTH") -> str:
-    """Render one get_vehicle_telemetry() dict as a CoT <event> XML string (contract §2)."""
+    """Render one get_vehicle_telemetry() dict as a CoT <event> XML string (contract §2).
+
+    A record carrying `sumo_id` -- a pooled body a SUMO drive lent -- is the track of that SUMO
+    vehicle: uid `<uid_prefix>-SUMO-<sumo_id>` and callsign `<base_type>-<sumo_id>`, as the recorded
+    sidecar names it (contract §3, §5)."""
     now = datetime.now(timezone.utc)
     stale = now + timedelta(seconds=stale_seconds)
+    sumo_id = rec.get("sumo_id")
+    track = str(sumo_id) if sumo_id is not None else str(rec["id"])
     ev = ET.Element("event", {
         "version": "2.0",
-        "uid": f"{uid_prefix}-{rec['id']}",
+        "uid": f"{uid_prefix}-SUMO-{track}" if sumo_id is not None else f"{uid_prefix}-{track}",
         "type": f"a-{affiliation}-G-E-V",                 # ground equipment vehicle (v0 single symbol)
         "how": "m-g" if source == "truth" else "m-f",
         "time": _iso(now), "start": _iso(now), "stale": _iso(stale),
@@ -53,15 +59,19 @@ def to_cot(rec, affiliation="n", stale_seconds=3.0, source="truth", uid_prefix="
     detail = ET.SubElement(ev, "detail")
     ET.SubElement(detail, "track",
                   {"course": f"{rec['course_deg']:.1f}", "speed": f"{rec['speed_mps']:.2f}"})
-    ET.SubElement(detail, "contact", {"callsign": f"{rec['base_type']}-{rec['id']}"})
+    ET.SubElement(detail, "contact", {"callsign": f"{rec['base_type']}-{track}"})
     # Truth extras (contract §5) — WinTAK ignores unknown detail children; the scoring harness reads them.
-    ET.SubElement(detail, "_carla", {
+    extras = {
         "source": source, "actor_id": str(rec["id"]), "type_id": rec["type_id"],
         "base_type": rec["base_type"], "special_type": rec["special_type"],
         "length_m": f"{rec['length_m']:.2f}", "width_m": f"{rec['width_m']:.2f}",
         "height_m": f"{rec['height_m']:.2f}", "color": rec["color"], "role_name": rec["role_name"],
         "vx": f"{rec['vx']:.2f}", "vy": f"{rec['vy']:.2f}", "vz": f"{rec['vz']:.2f}",
-    })
+    }
+    if sumo_id is not None:
+        extras.update(sumo_id=str(sumo_id), vtype_id=str(rec.get("vtype_id", "")),
+                      admitted_tick=str(rec.get("admitted_tick", "")))
+    ET.SubElement(detail, "_carla", extras)
     return ET.tostring(ev, encoding="unicode")
 
 

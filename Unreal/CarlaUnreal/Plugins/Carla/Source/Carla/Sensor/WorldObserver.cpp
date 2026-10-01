@@ -8,6 +8,8 @@
 #include "Carla.h"
 #include "Carla/Actor/ActorData.h"
 #include "Carla/Actor/ActorRegistry.h"
+#include "Carla/Actor/CarlaActor.h"
+#include "Carla/Actor/RenderSetMembership.h"
 #include "Carla/Game/CarlaEpisode.h"
 #include "Carla/Game/CarlaEngine.h"
 #include "Carla/Traffic/TrafficLightBase.h"
@@ -23,11 +25,18 @@
 #include <carla/rpc/String.h>
 #include <carla/sensor/SensorRegistry.h>
 #include <carla/sensor/data/ActorDynamicState.h>
+#include <carla/sensor/s11n/EpisodeStateSerializer.h>
 #include <util/enable-ue4-macros.h>
 
 #include <util/ue-header-guard-begin.h>
 #include "CoreGlobals.h"
 #include <util/ue-header-guard-end.h>
+
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
+#include <limits>
+#include <string>
 
 static auto FWorldObserver_GetActorState(const FCarlaActor &View, const FActorRegistry &Registry)
 {
@@ -277,6 +286,24 @@ static carla::geom::Vector3D FWorldObserver_GetAcceleration(
   };
 }
 
+/// The bytes of a render set name that fit its 16-bit length prefix.
+static uint16_t FWorldObserver_RenderSetNameSize(const std::string &Name)
+{
+  constexpr size_t MaxSize = (std::numeric_limits<uint16_t>::max)();
+  return static_cast<uint16_t>((std::min)(Name.size(), MaxSize));
+}
+
+/// One render set entry's size: actor id, state, admitted frame, and the vehicle and its type, each
+/// behind a 16-bit length and written only for a body that is lent
+/// (EpisodeStateSerializer::RenderSetEntryState describes the layout).
+static size_t FWorldObserver_RenderSetEntrySize(const FRenderSetMembership &Membership)
+{
+  const bool bLent = Membership.State == FRenderSetMembership::EState::Lent;
+  return sizeof(uint32_t) + sizeof(uint8_t) + sizeof(uint64_t)
+      + sizeof(uint16_t) + (bLent ? FWorldObserver_RenderSetNameSize(Membership.VehicleId) : 0u)
+      + sizeof(uint16_t) + (bLent ? FWorldObserver_RenderSetNameSize(Membership.VehicleTypeId) : 0u);
+}
+
 static carla::Buffer FWorldObserver_Serialize(
     carla::Buffer &&buffer,
     const UCarlaEpisode &Episode,
@@ -287,12 +314,35 @@ static carla::Buffer FWorldObserver_Serialize(
   TRACE_CPUPROFILER_EVENT_SCOPE_STR(__FUNCTION__);
   using Serializer = carla::sensor::s11n::EpisodeStateSerializer;
   using SimulationState = carla::sensor::s11n::EpisodeStateSerializer::SimulationState;
+  using RenderSetEntryState = carla::sensor::s11n::EpisodeStateSerializer::RenderSetEntryState;
   using ActorDynamicState = carla::sensor::data::ActorDynamicState;
 
 
   const FActorRegistry &Registry = Episode.GetActorRegistry();
 
-  auto total_size = sizeof(Serializer::Header) + sizeof(ActorDynamicState) * Registry.Num();
+  // Every body a co-simulation session has named, gathered before anything is written: the render
+  // set block they make sits between the header and the first actor, so its size is part of the
+  // buffer's. A world in which no session has named a body carries no block and is laid out as it
+  // always was.
+  TArray<const FCarlaActor *> RenderSetBodies;
+  size_t RenderSetEntriesSize = 0u;
+  for (auto& Named : Registry)
+  {
+    const FCarlaActor* Body = Named.Value.Get();
+    if (Body != nullptr &&
+        Body->GetRenderSetMembership().State != FRenderSetMembership::EState::None)
+    {
+      RenderSetBodies.Add(Body);
+      RenderSetEntriesSize += FWorldObserver_RenderSetEntrySize(Body->GetRenderSetMembership());
+    }
+  }
+  const bool bRenderSetCarried = RenderSetBodies.Num() > 0;
+  // The block's own size and its entry count, then the entries.
+  const size_t RenderSetBlockSize =
+      bRenderSetCarried ? sizeof(uint32_t) + sizeof(uint32_t) + RenderSetEntriesSize : 0u;
+
+  auto total_size = sizeof(Serializer::Header) + RenderSetBlockSize +
+      sizeof(ActorDynamicState) * Registry.Num();
   auto current_size = 0;
   // Set up buffer for writing.
   buffer.reset(total_size);
@@ -301,6 +351,16 @@ static carla::Buffer FWorldObserver_Serialize(
     auto begin = buffer.begin() + current_size;
     std::memcpy(begin, &data, sizeof(data));
     current_size += sizeof(data);
+  };
+  auto write_name = [&current_size, &buffer, &write_data](const std::string &Name)
+  {
+    const uint16_t Size = FWorldObserver_RenderSetNameSize(Name);
+    write_data(Size);
+    if (Size > 0u)
+    {
+      std::memcpy(buffer.begin() + current_size, Name.data(), Size);
+      current_size += Size;
+    }
   };
 
   constexpr float TO_METERS = 1e-2;
@@ -349,9 +409,40 @@ static carla::Buffer FWorldObserver_Serialize(
     header.solar_corrected_elevation = Solar[11];
   }
 
+  // Set only when the block is written, because it says where the actors start.
+  if (bRenderSetCarried)
+  {
+    simulation_state |= SimulationState::RenderSetCarried;
+  }
+
   header.simulation_state = static_cast<SimulationState>(simulation_state);
 
   write_data(header);
+
+  // The render set: each named body, lent with the vehicle it is drawn for, or parked. What the
+  // session last named is what this frame drew, because the session names a change before the tick
+  // cue of the frame it is drawn in.
+  if (bRenderSetCarried)
+  {
+    const uint32_t BlockSize = static_cast<uint32_t>(RenderSetBlockSize - sizeof(uint32_t));
+    const uint32_t EntryCount = static_cast<uint32_t>(RenderSetBodies.Num());
+    write_data(BlockSize);
+    write_data(EntryCount);
+    for (const FCarlaActor* Body : RenderSetBodies)
+    {
+      const FRenderSetMembership &Membership = Body->GetRenderSetMembership();
+      const bool bLent = Membership.State == FRenderSetMembership::EState::Lent;
+      const uint32_t EntryActorId = static_cast<uint32_t>(Body->GetActorId());
+      const uint8_t EntryState = static_cast<uint8_t>(
+          bLent ? RenderSetEntryState::Lent : RenderSetEntryState::Parked);
+      const uint64_t EntryAdmittedFrame = bLent ? Membership.AdmittedFrame : 0u;
+      write_data(EntryActorId);
+      write_data(EntryState);
+      write_data(EntryAdmittedFrame);
+      write_name(bLent ? Membership.VehicleId : std::string());
+      write_name(bLent ? Membership.VehicleTypeId : std::string());
+    }
+  }
 
   // Write every actor.
   for (auto& It : Registry)

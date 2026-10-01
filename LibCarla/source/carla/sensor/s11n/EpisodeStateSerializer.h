@@ -14,7 +14,9 @@
 #include "carla/sensor/RawData.h"
 #include "carla/sensor/data/ActorDynamicState.h"
 
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 
 namespace carla {
 namespace sensor {
@@ -42,7 +44,40 @@ namespace s11n {
       /// has to know which size it is reading before it can read anything after it. A reader that
       /// does not know this flag reads the actors eight bytes early, so readers are rebuilt with
       /// the server that sets it.
-      SolarCorrectedElevationCarried = (0x1 << 3)
+      SolarCorrectedElevationCarried = (0x1 << 3),
+      /// A render set block follows the header, before the first actor (see
+      /// RenderSetEntryState). Set only on a snapshot that carries one -- once a co-simulation
+      /// session has named a body of its pool -- so a world no session has named a body in is laid
+      /// out exactly as before. Like the flag above it describes where the actors start, and a
+      /// reader that does not know it reads the block as actors, so readers are rebuilt with the
+      /// server that sets it.
+      RenderSetCarried = (0x1 << 4)
+    };
+
+    /// How one body in the render set block is held.
+    ///
+    /// The block follows the header when simulation_state carries RenderSetCarried, little-endian
+    /// and unpadded:
+    ///
+    ///   uint32 size              bytes after this field, up to the first actor
+    ///   uint32 count             entries that follow
+    ///   count entries, each:
+    ///     uint32 actor_id
+    ///     uint8  state            a RenderSetEntryState
+    ///     uint64 admitted_frame   the first frame the body was drawn for its vehicle; 0 if parked
+    ///     uint16 n, then n bytes  the vehicle the body is lent to, UTF-8; empty if parked
+    ///     uint16 n, then n bytes  that vehicle's declared type, UTF-8; empty if parked
+    ///
+    /// A pooled body is an ordinary vehicle actor, and between loans it stands parked out of sight
+    /// below the ground, so the actor array alone says neither which vehicles a frame drew nor who
+    /// any of them is. The session that lends the bodies names each one as it lends it and as it
+    /// gives it back, and the block carries what it named, paired to the frame like everything else
+    /// in the snapshot. An actor with no entry is one no session named, and reads as it always did.
+    enum class RenderSetEntryState : uint8_t {
+      /// Lent to a vehicle and drawn for it on this frame.
+      Lent   = 1u,
+      /// Given back and parked out of sight: drawn for nobody on this frame.
+      Parked = 2u
     };
 
 #pragma pack(push, 1)
@@ -81,6 +116,23 @@ namespace s11n {
 
     static const Header &DeserializeHeader(const RawData &message) {
       return *reinterpret_cast<const Header *>(message.begin());
+    }
+
+    /// Where the first actor starts: straight after the header, or after the render set block
+    /// where the snapshot carries one.
+    static size_t ActorsOffset(const RawData &message) {
+      if (message.size() < header_offset + sizeof(uint32_t)) {
+        return header_offset;
+      }
+      const Header &header = DeserializeHeader(message);
+      const uint32_t flags = static_cast<uint32_t>(header.simulation_state);
+      if ((flags & static_cast<uint32_t>(RenderSetCarried)) == 0u) {
+        return header_offset;
+      }
+      uint32_t block_size = 0u;
+      std::memcpy(&block_size, message.begin() + header_offset, sizeof(block_size));
+      const size_t offset = header_offset + sizeof(block_size) + block_size;
+      return offset <= message.size() ? offset : message.size();
     }
 
     template <typename SensorT>

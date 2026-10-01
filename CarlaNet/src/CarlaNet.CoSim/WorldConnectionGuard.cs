@@ -58,6 +58,10 @@ internal sealed class WorldConnectionGuard : ICarlaWorld
         Guard(nameof(ApplyBatch), () => _world.ApplyBatch(commands));
 
     /// <inheritdoc/>
+    public RenderSetWrite WriteRenderSet(IReadOnlyList<LentBody> lent, IReadOnlyList<ActorId> parked) =>
+        Guard(nameof(WriteRenderSet), () => _world.WriteRenderSet(lent, parked));
+
+    /// <inheritdoc/>
     public Transform? ObservedTransform(ActorId actor) =>
         Guard(nameof(ObservedTransform), () => _world.ObservedTransform(actor));
 

@@ -14,6 +14,12 @@ namespace CarlaNet.Types.Streaming;
 /// light is rotated by. The server says which in its flags byte, whatever the sun, because the flag
 /// describes the layout rather than the reading.</para>
 ///
+/// <para>A render set block can follow the header, before the first actor: the bodies a
+/// co-simulation session's pool has lent, each with the vehicle it is drawn for, and those it has
+/// parked out of sight (<see cref="ObservedRenderSet"/>). The server carries it only once a session
+/// has named a body, and says so with <see cref="RenderSetCarried"/>, so a snapshot of a world no
+/// session has named a body in is laid out exactly as before.</para>
+///
 /// <para>Both readers of the header in this tree -- the client's own world-observer parse and the
 /// episode-state sensor decoder -- read it through here, so the two cannot come to disagree about
 /// where the actors start.</para>
@@ -37,6 +43,75 @@ public static class EpisodeStateLayout
 
     /// <summary>Solar doubles in a header that also carries the refraction-corrected elevation.</summary>
     public const int CorrectedSolarValues = 12;
+
+    /// <summary>
+    /// The flag saying a render set block follows the header, before the first actor. Mirrors
+    /// <c>EpisodeStateSerializer::RenderSetCarried</c>.
+    /// </summary>
+    public const byte RenderSetCarried = 0x10;
+
+    /// <summary>
+    /// Where the first actor starts: straight after the header, or after the render set block where
+    /// the snapshot carries one. Zero where the payload is too short to say.
+    /// </summary>
+    /// <remarks>
+    /// The block states its own size, so the actors are found whether or not its entries can be
+    /// read. A size that runs past the payload answers the payload's end: no actor is read from a
+    /// truncated snapshot rather than a block's bytes read as actors.
+    /// </remarks>
+    public static int ActorsOffset(ReadOnlySpan<byte> payload)
+    {
+        int header = HeaderSize(payload);
+        if (header == 0 || payload.Length < header || (payload[FlagsOffset] & RenderSetCarried) == 0)
+        {
+            return header;
+        }
+
+        if (payload.Length < header + 4)
+        {
+            return payload.Length;
+        }
+
+        long offset = header + 4L + BinaryPrimitives.ReadUInt32LittleEndian(payload[header..]);
+        return offset > payload.Length ? payload.Length : (int)offset;
+    }
+
+    /// <summary>
+    /// The render set the snapshot carried, or <see cref="ObservedRenderSet.None"/> where it carried
+    /// none.
+    /// </summary>
+    /// <param name="payload">The snapshot, from its episode-state header on.</param>
+    /// <param name="previous">
+    /// The set read from the frame before, which is answered again, instance and all, where this
+    /// snapshot's block is the same bytes: a set changes only when a body is lent or given back.
+    /// </param>
+    /// <exception cref="InvalidDataException">The block is shorter than it says, or ends part-way
+    /// through an entry.</exception>
+    public static ObservedRenderSet ReadRenderSet(ReadOnlySpan<byte> payload, ObservedRenderSet? previous = null)
+    {
+        int header = HeaderSize(payload);
+        if (header == 0 || payload.Length < header || (payload[FlagsOffset] & RenderSetCarried) == 0)
+        {
+            return ObservedRenderSet.None;
+        }
+
+        if (payload.Length < header + 4)
+        {
+            throw new InvalidDataException(
+                $"The snapshot says it carries a render set and ends {payload.Length - header} byte(s) "
+                + "after its header, before the block's size.");
+        }
+
+        uint size = BinaryPrimitives.ReadUInt32LittleEndian(payload[header..]);
+        if (header + 4L + size > payload.Length)
+        {
+            throw new InvalidDataException(
+                $"The snapshot's render set block says it is {size} bytes, and the snapshot ends "
+                + $"{payload.Length - header - 4} bytes after its size.");
+        }
+
+        return ObservedRenderSet.Read(payload.Slice(header + 4, (int)size), previous);
+    }
 
     /// <summary>
     /// The header's size, and so the offset of the first actor, or zero where the payload is too

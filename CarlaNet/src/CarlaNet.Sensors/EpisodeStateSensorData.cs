@@ -2,6 +2,8 @@
 // After 48-byte header: the EpisodeState header + N * 119-byte ActorDynamicState.
 // The EpisodeState header is the original 36 bytes plus the solar block at offset 36: 11 doubles,
 // or 12 where the server also carries the refraction-corrected elevation (EpisodeStateLayout).
+// A render set block sits between the header and the actors where the server carries one
+// (SimulationState.RenderSetCarried; EpisodeStateLayout.ActorsOffset).
 // static_assert(sizeof(ActorDynamicState) == 119) — verified in source (§13.6).
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Enums;
@@ -22,7 +24,11 @@ public enum SimulationState : byte
     /// The header's solar block is twelve doubles wide: the refraction-corrected elevation follows
     /// the rate. Set on every snapshot from a server that carries it, sun or no sun, because it
     /// describes where the actors start rather than what was measured.
-    SolarCorrectedElevationCarried = 0x8
+    SolarCorrectedElevationCarried = 0x8,
+    /// A render set block follows the header, before the first actor: the bodies a co-simulation
+    /// session's pool has lent and parked. Set only on a snapshot that carries one, and, like the
+    /// flag above, it says where the actors start.
+    RenderSetCarried = 0x10
 }
 
 public sealed class EpisodeStateHeader
@@ -39,6 +45,11 @@ public sealed class EpisodeStateHeader
     /// Empty when the world has no CesiumSunSky (SimulationState.SolarStateValid clear), so a
     /// consumer never mistakes the header's defaults for a measured sun.
     public IReadOnlyList<double> Solar { get; init; } = System.Array.Empty<double>();
+
+    /// The render set the snapshot carried: the bodies a co-simulation session's pool had lent, each
+    /// with the vehicle it was drawn for, and those it had parked. ObservedRenderSet.None where the
+    /// snapshot carried none.
+    public ObservedRenderSet RenderSet { get; init; } = ObservedRenderSet.None;
 }
 
 public sealed class ActorDynamicState
@@ -77,11 +88,12 @@ public sealed class EpisodeStateSensorData
         {
             EpisodeId = episodeId, PlatformTimestamp = platformTs,
             DeltaSeconds = deltaSeconds, MapOrigin = new Vector3DInt(mx, my, mz),
-            SimulationState = simState, Solar = solar
+            SimulationState = simState, Solar = solar,
+            RenderSet = ReadRenderSet(payload)
         };
 
-        int stateHeaderSize = EpisodeStateLayout.HeaderSize(payload);
-        var actorData = payload[stateHeaderSize..];
+        int actorsOffset = EpisodeStateLayout.ActorsOffset(payload);
+        var actorData = payload[actorsOffset..];
         const int ActorSize = 119;
         int count = actorData.Length / ActorSize;
         var actors = new ActorDynamicState[count];
@@ -120,5 +132,19 @@ public sealed class EpisodeStateSensorData
             };
         }
         return new EpisodeStateSensorData(header, actors);
+    }
+
+    // A block that cannot be read is read as no set, and the actors after it are read all the same:
+    // the block states its own size, so they are found either way.
+    private static ObservedRenderSet ReadRenderSet(ReadOnlySpan<byte> payload)
+    {
+        try
+        {
+            return EpisodeStateLayout.ReadRenderSet(payload);
+        }
+        catch (InvalidDataException)
+        {
+            return ObservedRenderSet.None;
+        }
     }
 }
