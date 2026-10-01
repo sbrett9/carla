@@ -36,8 +36,9 @@ check 29.
 netconvert declines to pair lanes trimmed differently at their junctions, which is most of them, so
 overtaking across the centre line needs the pairs named.
 
-**Not in a specification.** Naming pairs edits a network, which is a world-build decision; the legacy
-builder does it for the Arapahoe dwell —
+**Not in a specification.** Naming pairs edits a network, which is a world-build decision, and a
+compiled scenario runs the world's network byte for byte, so no compiled scenario has them; the Arapahoe
+dwell parks its vehicle off the running lane instead (gotcha 7). The legacy builder's edit is
 `CarlaControl/src/carlacontrol/SumoScenarioBuilder.py::allow_opposite_overtaking`.
 
 ## 5. Guessed traffic lights are fixed-time 90 s programmes
