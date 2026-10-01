@@ -3,6 +3,7 @@ using CarlaNet.Transport.MsgPackRpc;
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Actors;
 using CarlaNet.Types.Rpc.Commands;
+using CarlaNet.Types.Rpc.Enums;
 using CarlaNet.Types.Rpc.Environment;
 
 using ActorId = uint;
@@ -23,6 +24,9 @@ namespace CarlaNet.CoSim;
 /// </remarks>
 public sealed class CarlaClientWorld : ICarlaWorld
 {
+    /// <summary>The attribute an actor's role name is carried in.</summary>
+    public const string RoleNameAttribute = "role_name";
+
     private readonly CarlaClient _client;
     private readonly Dictionary<string, ActorDescription> _blueprints = [];
 
@@ -126,9 +130,10 @@ public sealed class CarlaClientWorld : ICarlaWorld
     /// The content build carries no blueprint of that id, which is a catalogue measured against a
     /// different build and not something to substitute a body for.
     /// </exception>
-    public ActorId Spawn(string blueprintId, Transform at)
+    public ActorId Spawn(string blueprintId, Transform at, string roleName)
     {
         ArgumentException.ThrowIfNullOrEmpty(blueprintId);
+        ArgumentException.ThrowIfNullOrEmpty(roleName);
         if (!_blueprints.TryGetValue(blueprintId, out ActorDescription description))
         {
             throw new CoSimSessionRefusedException(
@@ -142,8 +147,42 @@ public sealed class CarlaClientWorld : ICarlaWorld
             };
         }
 
-        Actor actor = _client.SpawnActorAsync(description, at).GetAwaiter().GetResult();
+        Actor actor = _client.SpawnActorAsync(WithRole(description, roleName), at).GetAwaiter().GetResult();
         return actor.Id;
+    }
+
+    /// <summary>
+    /// A blueprint's description with its <c>role_name</c> set to the role given, in place of the
+    /// default the definition carries, and every other attribute as the definition gives it.
+    /// </summary>
+    /// <remarks>
+    /// Every vehicle definition declares <c>role_name</c> as a variation that is not restricted to its
+    /// recommended values (doc 04 D4.9), so the server takes any role. One that declares none is given
+    /// the attribute, rather than spawned with no provenance.
+    /// </remarks>
+    private static ActorDescription WithRole(ActorDescription description, string roleName)
+    {
+        var attributes = new List<ActorAttributeValue>(description.Attributes.Count + 1);
+        bool named = false;
+        foreach (ActorAttributeValue attribute in description.Attributes)
+        {
+            if (attribute.Id == RoleNameAttribute)
+            {
+                attributes.Add(attribute with { Value = roleName });
+                named = true;
+            }
+            else
+            {
+                attributes.Add(attribute);
+            }
+        }
+
+        if (!named)
+        {
+            attributes.Add(new ActorAttributeValue(RoleNameAttribute, ActorAttributeType.String, roleName));
+        }
+
+        return description with { Attributes = attributes };
     }
 
     /// <inheritdoc/>

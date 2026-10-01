@@ -64,14 +64,19 @@ public interface ICarlaWorld
     void WriteSettings(EpisodeSettings settings);
 
     /// <summary>
-    /// Place one body of the named blueprint at a transform, answering the actor it became.
+    /// Place one body of the named blueprint at a transform under a role name, answering the actor
+    /// it became.
     /// </summary>
     /// <remarks>
-    /// CARLA refuses a spawn whose point is occupied and offers no queue and no retry, so a caller
-    /// spawns at a point it knows to be clear and never spawns at a point a vehicle is driving
-    /// through.
+    /// <para>CARLA refuses a spawn whose point is occupied and offers no queue and no retry, so a
+    /// caller spawns at a point it knows to be clear and never spawns at a point a vehicle is
+    /// driving through.</para>
+    ///
+    /// <para>The role name is the actor's <c>role_name</c> attribute, in place of the blueprint's
+    /// default, and like every attribute it is fixed for the actor's life. It is provenance: which
+    /// authority drives the actor (doc 04 D4.9), and the truth record carries it.</para>
     /// </remarks>
-    ActorId Spawn(string blueprintId, Transform at);
+    ActorId Spawn(string blueprintId, Transform at, string roleName);
 
     /// <summary>
     /// Apply a batch of commands in one round trip, answering the server's response per command.

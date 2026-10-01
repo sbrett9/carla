@@ -103,6 +103,8 @@ public sealed class LiveTruthRenderSetTests : IAsyncLifetime
         Assert.Equal([BodyA, Ambient], records.Select(record => record.Id).Order());
         VehicleTelemetry lent = records.Single(record => record.Id == BodyA);
         Assert.Equal(new RenderedVehicle(BodyA, "escort_0", "military_truck", 96), lent.Rendered);
+        // The provenance the pool spawned the body under, read from the actor's own description.
+        Assert.Equal("sumo", lent.RoleName);
         // A vehicle no session named is reported as it always was.
         Assert.Null(records.Single(record => record.Id == Ambient).Rendered);
     }
@@ -174,6 +176,7 @@ public sealed class LiveTruthRenderSetTests : IAsyncLifetime
         Assert.Equal("escort_0", (string?)extras.Attribute("sumo_id"));
         Assert.Equal("military_truck", (string?)extras.Attribute("vtype_id"));
         Assert.Equal("96", (string?)extras.Attribute("admitted_tick"));
+        Assert.Equal("sumo", (string?)extras.Attribute("role_name"));
         Assert.Equal("car-escort_0", (string?)escort.Element("detail")!.Element("contact")!.Attribute("callsign"));
     }
 

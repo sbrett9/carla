@@ -76,6 +76,9 @@ internal class RecordedWorld : ICarlaWorld
     /// <summary>Blueprints spawned, in order, one entry per body.</summary>
     public List<string> Spawned { get; } = [];
 
+    /// <summary>The role name each body was spawned under, beside <see cref="Spawned"/>.</summary>
+    public List<string> SpawnedRoleNames { get; } = [];
+
     /// <summary>World ticks asked for.</summary>
     public long Ticks { get; private set; }
 
@@ -236,10 +239,11 @@ internal class RecordedWorld : ICarlaWorld
     }
 
     /// <inheritdoc/>
-    public ActorId Spawn(string blueprintId, Transform at)
+    public ActorId Spawn(string blueprintId, Transform at, string roleName)
     {
         Connected(nameof(Spawn));
         Spawned.Add(blueprintId);
+        SpawnedRoleNames.Add(roleName);
         ActorId actor = _nextActor++;
         _actors[actor] = at;
 

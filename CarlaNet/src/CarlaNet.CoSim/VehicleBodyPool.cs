@@ -29,9 +29,19 @@ namespace CarlaNet.CoSim;
 /// settles: between a spawn and the next tick the world does not advance, and the world is the only
 /// thing that could move it. A pose-driven body under physics would coast, collide and roll between
 /// corrections, which is the vehicle dynamics this mode exists to replace with SUMO's.</para>
+///
+/// <para><b>Every body is spawned under the role <see cref="RoleName"/>.</b> <c>role_name</c> is
+/// provenance, naming the authority that drives an actor: <c>autopilot</c> for traffic-manager
+/// traffic, <c>scenario</c> for storyboard entities, <c>sumo</c> for SUMO-driven ones (doc 04 D4.9).
+/// Left to the blueprint's default, every body read <c>autopilot</c>, and the truth record named the
+/// traffic manager as the driver of every SUMO vehicle. An attribute is fixed for the actor's life,
+/// and SUMO drives a body for all of its, so the role holds whichever vehicle the body carries.</para>
 /// </remarks>
 public sealed class VehicleBodyPool
 {
+    /// <summary>The role every body is spawned under: SUMO drives it.</summary>
+    public const string RoleName = "sumo";
+
     private readonly ICarlaWorld _world;
     private readonly VehicleParking _parking;
     private readonly Dictionary<string, Stack<PooledBody>> _free = [];
@@ -134,7 +144,7 @@ public sealed class VehicleBodyPool
     private PooledBody Spawn(string blueprintId)
     {
         Transform slot = _parking.Slot(_bodies.Count);
-        ActorId actor = _world.Spawn(blueprintId, slot);
+        ActorId actor = _world.Spawn(blueprintId, slot, RoleName);
         var body = new PooledBody(actor, blueprintId, slot);
         _bodies.Add(body);
 

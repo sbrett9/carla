@@ -148,6 +148,11 @@ public sealed class SumoDriveSessionRenderSetTests
         }
 
         Assert.Equal(300, carla.Spawned.Count);
+
+        // Every body was spawned as SUMO-driven, so the truth record names SUMO, not the traffic
+        // manager, as the authority behind each of them (doc 04 D4.9).
+        Assert.Equal(300, carla.SpawnedRoleNames.Count);
+        Assert.All(carla.SpawnedRoleNames, role => Assert.Equal("sumo", role));
     }
 
     [RequiresSumoFact]

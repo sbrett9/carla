@@ -126,8 +126,8 @@ public sealed class TickBatchTests
     private static (RecordedWorld World, ActorId First, ActorId Second) TwoKinematicBodies()
     {
         var world = new RecordedWorld();
-        ActorId first = world.Spawn("vehicle.fuso.mitsubishi", Parking);
-        ActorId second = world.Spawn("vehicle.fuso.mitsubishi", Parking);
+        ActorId first = world.Spawn("vehicle.fuso.mitsubishi", Parking, VehicleBodyPool.RoleName);
+        ActorId second = world.Spawn("vehicle.fuso.mitsubishi", Parking, VehicleBodyPool.RoleName);
         world.ApplyBatch([
             new SetSimulatePhysicsCommand(first, false),
             new SetSimulatePhysicsCommand(second, false),
