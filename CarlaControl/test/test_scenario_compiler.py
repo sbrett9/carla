@@ -158,6 +158,20 @@ def test_the_lock_binds_the_four_files_the_epoch_and_the_traffic(world, installa
     assert plan["routes_digest"] == lock["files"]["routes"]["sha256"]
 
 
+def test_a_lane_change_takes_three_seconds_and_the_lock_and_the_report_say_so(world, installation,
+                                                                             tmp_path):
+    """SUMO's default lane change crosses a lane width inside one step, which renders as a sideways
+    jump (06 §6.2); the compiler writes a physical duration into the configuration and records it."""
+    result = compile_spec(world, installation, tmp_path)
+    configuration = ET.parse(result.files["config"]).getroot()
+    assert configuration.find("processing/lanechange.duration").get("value") == "3"
+    assert result.lock["traffic"]["processing"]["lanechange.duration"] == "3"
+    assert result.report["lock"]["traffic"]["processing"]["lanechange.duration"] == "3"
+    report = result.files["resolution_md"].read_text(encoding="utf-8")
+    assert "| `lanechange.duration` | 3 |" in report
+    assert "| `time-to-teleport` | -1 |" in report
+
+
 def test_the_plan_states_every_subject_explicitly(world, installation, tmp_path):
     plan = compile_spec(world, installation, tmp_path).plan
     assert {row["entity_id"]: row["supervision"] for row in plan["entities"]} == {

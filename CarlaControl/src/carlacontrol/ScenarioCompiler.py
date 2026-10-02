@@ -101,6 +101,10 @@ PROCESSING_OPTIONS = {
     "time-to-teleport": "-1",
     "max-depart-delay": "900",
     "collision.action": "warn",
+    # A lane change takes this long, the vehicle moving sideways at a steady rate, where SUMO's
+    # default of 0 crosses a lane width inside one step and renders as a sideways jump (06 §6.2).
+    # 3 s is a physical lane-change time for a passenger car, held for every vehicle (04 §5.3).
+    "lanechange.duration": "3",
 }
 
 # The only <param> keys the emitted route file may carry: the vehicle-type binding's. Anything else

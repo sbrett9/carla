@@ -8,7 +8,7 @@ with its second and its civil time, every rota and every skip with its reason, e
 `duarouter` produced it, every lane closure and its window, every vehicle type and the body it binds,
 every supervision instance with its intervals in seconds and civil time, every capture window with its
 civil date and the sun the session will declare, the illumination-label association in full, every
-warning in full, and the lock.
+warning in full, the SUMO options the compiler fixed, and the lock.
 
 `<scenario>.resolution.json` is the record; `<scenario>.resolution.md` renders it for reading. A
 refused compile writes the report too, marked refused, with every refusal.
@@ -75,9 +75,22 @@ class ResolutionReport:
         lines += self._lane_closures(d.get("lane_closures"))
         lines += self._supervision(d.get("supervision"))
         if "lock" in d:
+            lines += self._traffic(d["lock"].get("traffic"))
             lines += ["## Lock", "", "```json", json.dumps(d["lock"].get("files", {}), indent=2),
                       "```", ""]
         return "\n".join(lines).rstrip() + "\n"
+
+    @staticmethod
+    def _traffic(traffic) -> list[str]:
+        """The seed, the step and the SUMO options the compiler fixed, as the lock records them."""
+        if not traffic:
+            return []
+        lines = ["## Traffic", "",
+                 f"SUMO seed {traffic['sumo_seed']}, step {traffic['step_length_s']:g} s, end "
+                 f"{traffic['end_s']:g} s. The processing options, each written into the configuration "
+                 "rather than left to SUMO's default:", "", "| Option | Value |", "|---|---|"]
+        lines += [f"| `{name}` | {value} |" for name, value in traffic.get("processing", {}).items()]
+        return [*lines, ""]
 
     @staticmethod
     def _num(value) -> str:

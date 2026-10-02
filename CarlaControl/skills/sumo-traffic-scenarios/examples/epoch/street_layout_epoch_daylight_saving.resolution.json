@@ -423,7 +423,7 @@
       },
       "config": {
         "path": "street_layout_epoch_daylight_saving.sumocfg",
-        "sha256": "7e13c56853ea42d623c0bf7f4246bc1205a9f8b2bd6417a87734aab7852ad428"
+        "sha256": "e874d900f6416ff64cb6356af96b49aba8d819a5c3395b244fbe7b47461fe1c1"
       },
       "network": {
         "path": "StreetLayout.net.xml",
@@ -431,7 +431,7 @@
       },
       "supervision": {
         "path": "street_layout_epoch_daylight_saving.supervision.json",
-        "sha256": "2f33db81e1e82f0816f94fa975e73dcfe6a6f8bf102745346fc3b46229d76885"
+        "sha256": "b0184a56c053df2c225ee5b4f6cc814b1d11164654e6f20c13a4525ebd64013d"
       }
     },
     "world": {
@@ -498,7 +498,8 @@
       "processing": {
         "time-to-teleport": "-1",
         "max-depart-delay": "900",
-        "collision.action": "warn"
+        "collision.action": "warn",
+        "lanechange.duration": "3"
       },
       "routed_by": {
         "tool": "duarouter",

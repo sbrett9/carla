@@ -422,7 +422,7 @@
       },
       "config": {
         "path": "street_layout_minimal.sumocfg",
-        "sha256": "f149fdc950c8aff66560ad7f76b336c857280b47eb9d02cadbe97ab8be713954"
+        "sha256": "056879483ab71d83371c9f488a9e7f49b8be8aa6fd312b961ed306392ce06c66"
       },
       "network": {
         "path": "StreetLayout.net.xml",
@@ -430,7 +430,7 @@
       },
       "supervision": {
         "path": "street_layout_minimal.supervision.json",
-        "sha256": "4c648b6f6ecffb1f9189e9a296042010ee4164fb1d193d4efac8e71619d0e604"
+        "sha256": "b509e35c0d0a986f94cd40688c7cb92d7d72c77e1c6ce88080d89780291e0c25"
       }
     },
     "world": {
@@ -497,7 +497,8 @@
       "processing": {
         "time-to-teleport": "-1",
         "max-depart-delay": "900",
-        "collision.action": "warn"
+        "collision.action": "warn",
+        "lanechange.duration": "3"
       },
       "routed_by": {
         "tool": "duarouter",

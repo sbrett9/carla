@@ -435,7 +435,7 @@
       },
       "config": {
         "path": "street_layout_epoch_half_hour.sumocfg",
-        "sha256": "a8378a751e77d92fe2b18cf449efa9d7ba702a49cc4df2b70915f8f9b63d6005"
+        "sha256": "0c05fb985ff331a32653e9535728e0b5af314eecc1d5d726cfc08920acd492a7"
       },
       "network": {
         "path": "StreetLayout.net.xml",
@@ -443,7 +443,7 @@
       },
       "supervision": {
         "path": "street_layout_epoch_half_hour.supervision.json",
-        "sha256": "e2b45f5798bf8182c87b30783817207c36d59bcb35d3cebfc9bcab1bda6ee5f2"
+        "sha256": "03baac412fd6291bbb228ae9b81954dc9a5b63d5f0bc4ed50806a1fe22849dd0"
       }
     },
     "world": {
@@ -510,7 +510,8 @@
       "processing": {
         "time-to-teleport": "-1",
         "max-depart-delay": "900",
-        "collision.action": "warn"
+        "collision.action": "warn",
+        "lanechange.duration": "3"
       },
       "routed_by": {
         "tool": "duarouter",
