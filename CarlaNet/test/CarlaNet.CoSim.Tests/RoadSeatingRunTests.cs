@@ -77,6 +77,8 @@ public sealed class RoadSeatingRunTests
         double worstProfile = 0.0;
         double worstEvaluation = 0.0;
         double worstOnStructure = 0.0;
+        long steepOnRoad = 0;
+        long steepOnGround = 0;
         string worstProfileAt = string.Empty;
         HashSet<uint> decks = [];
         var groups = new SortedDictionary<string, Group>(StringComparer.Ordinal);
@@ -90,6 +92,15 @@ public sealed class RoadSeatingRunTests
 
             onRoad++;
             double seatHeight = record.Pose.Z - seat.SurfaceZMetres;
+            if (Math.Abs(record.Pose.PitchDegrees) > SteepDegrees)
+            {
+                steepOnRoad++;
+            }
+
+            if (Math.Abs(GroundPitch(ground, record.Pose)) > SteepDegrees)
+            {
+                steepOnGround++;
+            }
             double old = ground.Sample(record.Pose.X, record.Pose.Y)!.Value - ground.OriginHeightMetres;
             CarlaNet.Map.Road.Road road = map.Roads[seat.RoadId];
 
@@ -151,6 +162,8 @@ public sealed class RoadSeatingRunTests
                           + $"{worstEvaluation:0.000000} m; worst gap to the densely evaluated profile on a "
                           + $"carriageway {worstProfile:0.0000} m ({worstProfileAt}), on a structure "
                           + $"{worstOnStructure:0.0000} m");
+        _output.WriteLine($"poses on a road pitched more than {SteepDegrees} degrees: {steepOnRoad} by their road's "
+                          + $"profile, against {steepOnGround} the ground's gradient would have pitched so");
         _output.WriteLine("bodies seated off the ground by more than "
                           + $"{PoseConverter.OnStructureDepartureMetres} m, by the road they were on "
                           + "(height above the ground surface the bridge used to seat them on):");
@@ -233,6 +246,22 @@ public sealed class RoadSeatingRunTests
         Assert.True(worstEvaluation < 1e-3, $"a seat's height differs from the engine's profile by {worstEvaluation} m");
         Assert.True(worstOnStructure < 0.05,
                     $"a body on a structure sat {worstOnStructure:0.000} m off its road's densely evaluated profile");
+    }
+
+    /// <summary>A pitch steeper than any road a vehicle is built for, degrees.</summary>
+    private const double SteepDegrees = 10.0;
+
+    /// <summary>
+    /// The pitch the ground surface's gradient gives a body at a pose, as the bridge seated every body
+    /// before it read the road: a central difference one cell either side along the yaw.
+    /// </summary>
+    private static double GroundPitch(GroundSurface ground, in VehiclePose pose)
+    {
+        double radians = pose.YawDegrees * (Math.PI / 180.0);
+        double step = ground.CellSizeMetres;
+        double? ahead = ground.Sample(pose.X + (step * Math.Cos(radians)), pose.Y + (step * Math.Sin(radians)));
+        double? behind = ground.Sample(pose.X - (step * Math.Cos(radians)), pose.Y - (step * Math.Sin(radians)));
+        return ahead is { } a && behind is { } b ? Math.Atan((a - b) / (2.0 * step)) * (180.0 / Math.PI) : 0.0;
     }
 
     /// <summary>

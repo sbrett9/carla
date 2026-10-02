@@ -1916,7 +1916,21 @@ SUMO 1.27.0, fast-forwarded to 600 s, 2,400 ticks of 0.05 s, 335 vehicles on ave
 | Continuity, height between consecutive ticks less the climb the vertical velocity predicts | p50 0.000 m, p99 0.005 m, p99.9 0.035 m over 801,964 pairs; worst **0.28 m**, at a junction's mouth where SUMO's own heading turns 20–23° inside one tick and the origin swings across the connector |
 | Across 539 changes onto or off a deck road | worst **0.20 m**; no step in any profile |
 
-**The deck ends do not step.** Every road in the package meets the next at one height
+On Bahonar (`Import/Shahid_Bahonar_Port_PatternOfLife.sumocfg`, fast-forwarded to 08:00, 300 steps of
+1 s = 6,000 ticks): 384,360 poses, **288,360 on a road** and 96,000 `NoLane` — the sixteen guards parked
+off their lanes at their tower stops — and none `NoRoad` or `OffTheRoad`; on a structure, to 17 mm of the
+densely evaluated profile.
+
+**A steep pitch is the profile's own.** Of the poses seated on a road, those pitched over 10°: on
+Arapahoe **280**, against the 4,437 the ground's gradient would have pitched so — the profile is
+smoother than the photoreal it was fitted to; on Bahonar **7,822**, against 7,186. Where the profile is
+the steeper, the road is: on Bahonar's Pasdaran Boulevard flyovers (roads 5042, 5044, 5046, 5054) the
+profile climbs 4.6 m between two elevation records 10 m apart — 63 % at its steepest on road 5046 — and a
+body seated there pitches up to 32°. The engine's road mesh climbs the same; the ground had hidden it
+by seating the body under the deck. It is the world build's to shape, as `BridgeProfileShaper` shapes
+Arapahoe's decks.
+
+**The deck ends do not step.** Every road in Arapahoe's package meets the next at one height
 (`ElevationContinuityInjector`, `JunctionSurfaceReconciler`), and the seat follows the profile across
 the joint: I-25's deck road 2068 ends at −16.79 m, the 3.6 m connector 2639 climbs 0.35 m at 9.6 % to
 road 2054's −16.44 m, and a body crossing it rides a short steep ramp rather than a step. The worst
