@@ -12,7 +12,7 @@
   "files": {
     "routes": {
       "path": "Arapahoe_I25_UnderpassDwell.rou.xml",
-      "sha256": "1715bb1d4cc2504f6c3794081e4dcc7da9e3b35d4be9aeb7ce3275d1caccfea9"
+      "sha256": "cb639883eacc8c504c7811c3846694440298200e208cd5aee6c8aaa2f3215edd"
     },
     "config": {
       "path": "Arapahoe_I25_UnderpassDwell.sumocfg",
@@ -28,7 +28,7 @@
     },
     "supervision": {
       "path": "Arapahoe_I25_UnderpassDwell.supervision.json",
-      "sha256": "c39d2b56e3c4908fff6672de0c64bb9b2705603040e15d59854885790f37e79f"
+      "sha256": "e0b9fee134b626810acbce3026ef7b045d3966158c84be5353ba3000fa6b40e9"
     }
   },
   "world": {
@@ -79,7 +79,7 @@
   },
   "catalogue": {
     "catalogue_id": "carla-0.10.0-windows",
-    "catalogue_digest": "c31294d8410a313d21b9e1f4343f293b9d590f51f3eba4843de4950ecf4a9850",
+    "catalogue_digest": "6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d",
     "blueprint_set_digest": "a51cfaacc5ceb15351f445575e8d3208e47dfe5c4c239c9805717be6cc9770b4",
     "content_build_id": "carla-0.10.0-windows"
   },

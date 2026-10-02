@@ -2340,7 +2340,7 @@
     "catalogue": {
       "path": "vehicles.catalogue.json",
       "catalogue_id": "carla-0.10.0-windows",
-      "catalogue_digest": "c31294d8410a313d21b9e1f4343f293b9d590f51f3eba4843de4950ecf4a9850",
+      "catalogue_digest": "6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d",
       "blueprint_set_digest": "a51cfaacc5ceb15351f445575e8d3208e47dfe5c4c239c9805717be6cc9770b4"
     },
     "classes": [
@@ -2374,84 +2374,98 @@
         "blueprint": "vehicle.ue4.audi.tt",
         "length_m": 4.1812,
         "width_m": 1.9941,
+        "body_width_m": 1.9667,
         "height_m": 1.3853
       },
       "car.vehicle.mini.cooper": {
         "blueprint": "vehicle.mini.cooper",
         "length_m": 4.5526,
         "width_m": 2.0956,
+        "body_width_m": 2.0897,
         "height_m": 1.7725
       },
       "car.vehicle.ue4.bmw.grantourer": {
         "blueprint": "vehicle.ue4.bmw.grantourer",
         "length_m": 4.611,
         "width_m": 2.2417,
+        "body_width_m": 2.144,
         "height_m": 1.6673
       },
       "car.vehicle.ue4.mercedes.ccc": {
         "blueprint": "vehicle.ue4.mercedes.ccc",
         "length_m": 4.6736,
         "width_m": 1.8118,
+        "body_width_m": 1.805,
         "height_m": 1.4419
       },
       "car.vehicle.ue4.ford.mustang": {
         "blueprint": "vehicle.ue4.ford.mustang",
         "length_m": 4.7175,
         "width_m": 1.8948,
+        "body_width_m": 1.8354,
         "height_m": 1.3009
       },
       "car.vehicle.lincoln.mkz": {
         "blueprint": "vehicle.lincoln.mkz",
         "length_m": 4.892,
         "width_m": 1.8356,
+        "body_width_m": 1.8335,
         "height_m": 1.5241
       },
       "car.vehicle.dodge.charger": {
         "blueprint": "vehicle.dodge.charger",
         "length_m": 5.006,
         "width_m": 1.881,
+        "body_width_m": 1.854,
         "height_m": 1.5403
       },
       "car.vehicle.ue4.chevrolet.impala": {
         "blueprint": "vehicle.ue4.chevrolet.impala",
         "length_m": 5.3575,
         "width_m": 2.0332,
+        "body_width_m": 1.7793,
         "height_m": 1.4107
       },
       "car.vehicle.ue4.ford.crown": {
         "blueprint": "vehicle.ue4.ford.crown",
         "length_m": 5.3657,
         "width_m": 1.8007,
+        "body_width_m": 1.7822,
         "height_m": 1.575
       },
       "suv.vehicle.nissan.patrol": {
         "blueprint": "vehicle.nissan.patrol",
         "length_m": 5.5912,
         "width_m": 2.1466,
+        "body_width_m": 2.1466,
         "height_m": 2.059
       },
       "van.vehicle.sprinter.mercedes": {
         "blueprint": "vehicle.sprinter.mercedes",
         "length_m": 5.9151,
         "width_m": 1.9884,
+        "body_width_m": 1.9817,
         "height_m": 2.726
       },
       "truck.vehicle.carlacola.actors": {
         "blueprint": "vehicle.carlacola.actors",
         "length_m": 8.0037,
         "width_m": 2.9118,
+        "body_width_m": 2.787,
         "height_m": 4.0546
       },
       "truck.vehicle.carlamotors.european_hgv": {
         "blueprint": "vehicle.carlamotors.european_hgv",
         "length_m": 7.9241,
         "width_m": 2.8647,
+        "body_width_m": 2.787,
         "height_m": 3.7833
       },
       "orbiter.vehicle.lincoln.mkz": {
         "blueprint": "vehicle.lincoln.mkz",
         "length_m": 4.892,
         "width_m": 1.8356,
+        "body_width_m": 1.8335,
         "height_m": 1.5241
       }
     }
@@ -2626,7 +2640,7 @@
     "files": {
       "routes": {
         "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.rou.xml",
-        "sha256": "36663363c98beeb0c28b116520b7ab155612913ad930fdfebb4f76ab3be82f6d"
+        "sha256": "948937c47d9be280a42e083a56160f22440a94a74b448bc69acd0d34e85d8449"
       },
       "config": {
         "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg",
@@ -2638,7 +2652,7 @@
       },
       "supervision": {
         "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.supervision.json",
-        "sha256": "78a2244ec3f7389fa27ef98ad178cb0cd36ca183d41d78855b225ce0b3dbbe77"
+        "sha256": "4528c23f91c4677ef69f8997f12b7407acde6df3a94dec5af843a58111c4d93e"
       }
     },
     "world": {
@@ -2689,7 +2703,7 @@
     },
     "catalogue": {
       "catalogue_id": "carla-0.10.0-windows",
-      "catalogue_digest": "c31294d8410a313d21b9e1f4343f293b9d590f51f3eba4843de4950ecf4a9850",
+      "catalogue_digest": "6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d",
       "blueprint_set_digest": "a51cfaacc5ceb15351f445575e8d3208e47dfe5c4c239c9805717be6cc9770b4",
       "content_build_id": "carla-0.10.0-windows"
     },
