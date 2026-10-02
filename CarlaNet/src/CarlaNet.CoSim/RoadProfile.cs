@@ -86,7 +86,18 @@ internal sealed class RoadProfile
         for (int index = 0; index <= segments; index++)
         {
             double at = index == segments ? road.Length : index * (road.Length / segments);
-            DirectedPoint point = RoadMap.GetDirectedPointIn(road, at);
+            DirectedPoint point;
+            try
+            {
+                point = RoadMap.GetDirectedPointIn(road, at);
+            }
+            catch (InvalidOperationException)
+            {
+                // A road whose geometry does not cover its own length is not one a body can be placed
+                // on; the engine could not build it either.
+                return null;
+            }
+
             s[index] = at;
             x[index] = point.Location.X;
             y[index] = point.Location.Y;
