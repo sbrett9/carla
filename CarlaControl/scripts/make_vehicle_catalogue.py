@@ -33,6 +33,7 @@ from carlacontrol.VehicleClassAssignment import VehicleClassAssignment
 from carlacontrol.VehicleLampProbe import LampProbeSettings, VehicleLampProbe
 
 DEFAULT_OUTPUT = Path("CarlaControl") / "catalogue"
+DEFAULT_BODY_WIDTHS = DEFAULT_OUTPUT / "vehicle_body_widths.json"
 STAGED_SUMO_INSTALL = Path("Build") / "sumo-install"
 DEFAULT_SERVER_LOG = Path("Unreal") / "CarlaUnreal" / "Saved" / "Logs" / "CarlaUnreal.log"
 DEFAULT_VEHICLE_PARAMETERS = (Path("Unreal") / "CarlaUnreal" / "Content" / "Carla" / "Config"
@@ -63,6 +64,10 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--curation", type=Path, default=None,
                         help="JSON file of class assignments and overrides, replacing the built-in "
                              "ones; validated by the same rules either way")
+    parser.add_argument("--body-widths", type=Path, default=DEFAULT_BODY_WIDTHS,
+                        help="the editor-side measurement of every body's width without its mirrors "
+                             "(measure_vehicle_body_widths.py), merged into the catalogue; a measured "
+                             "blueprint it has no width for leaves the catalogue unwritten")
     parser.add_argument("--sumo-home", type=Path, default=None,
                         help="SUMO installation whose route schema the emitted vehicle types are "
                              "validated against")
@@ -118,7 +123,8 @@ def main(argv: list[str] | None = None) -> int:
         content_build_id=arguments.content_build_id,
         server_log=arguments.server_log if arguments.server_log.exists() else None,
         assignment=assignment,
-        lamp_probe=probe)
+        lamp_probe=probe,
+        body_widths=VehicleCatalogueBuilder.load_body_widths(arguments.body_widths))
 
     document = builder.build(probe_lamps=not arguments.no_lamp_probe)
     written = builder.write(

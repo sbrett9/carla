@@ -28,10 +28,10 @@
         "note": "one lighting condition per window"
       },
       "files": {
-        "routes": "ce893a017d7cd1b4e4048f8f5ebcc1d0efc9c29f8d3cc860ef72649807033423",
+        "routes": "07418a2806a7deaaa25ab796ec1338dafb3ebab3e2b874967e028027328bbb2f",
         "config": "d87ed6f660e70b61d71df38532188aa6ccaef78f01f44a6abb68e814fa5a998c",
         "network": "09aa2a8cad92df5f08c0bb8259b23cb6d3303ec3e88ccf62f87e6133d460f9ae",
-        "supervision": "f29b6b71a1e69d4cf178be644bd462435f81d5e67ba03f710eeb815ef9c1a93a"
+        "supervision": "5e9c63601dd2fef08ad56364f93b09e4642ed6a48ef335b33e8112069d1b5f55"
       },
       "windows": [
         {
@@ -75,10 +75,10 @@
         "note": "one lighting condition per window"
       },
       "files": {
-        "routes": "1b633689edf3a65bfee71527977d0a492ccd66954449268dc81e1e29ea59f166",
+        "routes": "b84512c7d9817dddfee7e60e503a50eba2854930d0257daf5244ab378d38a6ee",
         "config": "bf99e9203dfa0283f1897a52f81202f8279a0addadb3a100aab906e0721e7a02",
         "network": "09aa2a8cad92df5f08c0bb8259b23cb6d3303ec3e88ccf62f87e6133d460f9ae",
-        "supervision": "a035c7d11aef0cba3890c2a2bbbb0f1b4baddd68876ac584265c0aa7ed876233"
+        "supervision": "a5676299215d34024bfa52b601d15f913d42a099bc3d5e2a72bb58dd7e50fc48"
       },
       "windows": [
         {
@@ -133,10 +133,10 @@
         "note": "one lighting condition per window"
       },
       "files": {
-        "routes": "1ec246519fe0b189075699ccc42ebc11b6472ecf177b8a46ed5ee8d55e1edc4d",
+        "routes": "e2895e6d2a67d48490cdb19b12a5c0ad2b0b64934d89c78a2263750c2eadbe9e",
         "config": "34a205babe0f14509fba15488576c1cce29cd61fb04e75ef252dde966dbfacee",
         "network": "09aa2a8cad92df5f08c0bb8259b23cb6d3303ec3e88ccf62f87e6133d460f9ae",
-        "supervision": "80414a7824a3cac55af2f223cdb4756644e58529a190dcf86fffecd6aa1b00e6"
+        "supervision": "1a48157a3a6535fbe75a1448c95401d6d30f5e6c7474181abbf985ced729fcaf"
       },
       "windows": [
         {
@@ -191,10 +191,10 @@
         "note": "one lighting condition per window"
       },
       "files": {
-        "routes": "b44b7b51573ed2bf53f57319af99f608f813fe0613a5c179ab4df96ab218da63",
+        "routes": "c7e304c863280dae1cbc7dcc156941faf13d837184d6a171ffe478eb96edaa94",
         "config": "8cc212344e3f1a9c66937c1acd6bccf537185250a35f4a340774917531cd1090",
         "network": "09aa2a8cad92df5f08c0bb8259b23cb6d3303ec3e88ccf62f87e6133d460f9ae",
-        "supervision": "c0210fd863a0f7bc22e323b773cce32b19c4e71072a5a623d6bcef9927c6abda"
+        "supervision": "020880fc5fdeea7cdf3c5a2bcb2530c5d4c0ac37cf1ea04d4ff225962128434b"
       },
       "windows": [
         {

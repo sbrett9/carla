@@ -411,8 +411,9 @@ class ScenarioCompiler:
 
     def _body(self, blueprint: str) -> dict:
         extent = self.catalogue.extent_of(blueprint)
+        # The box's width, mirrors included, is the drawn body's; the width without them is SUMO's.
         return {"blueprint": blueprint, "length_m": extent.length_m, "width_m": extent.width_m,
-                "height_m": extent.height_m}
+                "body_width_m": extent.body_width_m, "height_m": extent.height_m}
 
     def _resolve_rotas(self) -> None:
         self.rota_entries: dict[str, list[RotaEntry]] = {}

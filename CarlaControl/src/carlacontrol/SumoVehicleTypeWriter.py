@@ -1,7 +1,8 @@
 """Project the measured vehicle catalogue into SUMO vehicle types, and check them against SUMO's schema.
 
-One `<vType>` per measured blueprint, with `length`, `width` and `height` copied verbatim from the
-sweep, and one `<vTypeDistribution>` per authoring class. An author asks for a class, SUMO draws a
+One `<vType>` per measured blueprint, with `length` and `height` copied verbatim from the sweep and
+`width` the body's without its mirrors where the catalogue measured one, and one
+`<vTypeDistribution>` per authoring class. An author asks for a class, SUMO draws a
 member from it, and the member *is* a blueprint -- so the body SUMO reserves road space for and the
 body CARLA renders are the same body by construction, with no tolerance to argue about.
 
@@ -76,12 +77,13 @@ class SumoVehicleTypeWriter:
                 f"class {class_entry['class_id']!r} names {blueprint_id!r}, which has no measured "
                 "entry in the catalogue")
         # The dimensions come from the measurement and everything else from the class the blueprint
-        # belongs to, so a type and the body it renders as cannot disagree about size.
+        # belongs to, so a type and the body it renders as cannot disagree about size. The width is
+        # the body's without its mirrors where one was measured, which is SUMO's convention.
         declared = [
             ("id", blueprint_id),
             ("vClass", class_entry["sumo_vclass"]),
             ("length", self._number(vehicle["length_m"])),
-            ("width", self._number(vehicle["width_m"])),
+            ("width", self._number(vehicle.get("body_width_m", vehicle["width_m"]))),
             ("height", self._number(vehicle["height_m"])),
             ("minGap", self._number(class_entry["min_gap_m"])),
             ("maxSpeed", self._number(class_entry["max_speed_mps"])),

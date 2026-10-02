@@ -41,6 +41,7 @@ SUPPORTED_CATALOGUE_VERSION = 1
 
 NO_BLUEPRINT = "no_blueprint"
 UNKNOWN_EXTENT = "unknown_extent"
+NO_BODY_WIDTH = "no_body_width"
 
 # The eleven lamps a CARLA vehicle light state can command, in snake case, with the bit each one
 # occupies in the mask. The bits mirror `carla::rpc::VehicleLightState`; `NONE` and `All` are the
@@ -88,7 +89,12 @@ class VehicleExtent:
 
     `length_m`, `width_m` and `height_m` are twice the measured bounding-box extent, and
     `bbox_centre_m` is that box's centre in the actor's own frame -- so a body whose mesh is not
-    centred on its origin is placed correctly rather than silently shifted.
+    centred on its origin is placed correctly rather than silently shifted. The box is the whole mesh,
+    wing mirrors included, which is what the truth box and the seating are taken from.
+
+    `body_width_m` is the body's width without its mirrors, measured separately (`body_width` in the
+    catalogue's header says how), where it was: SUMO's width is the body's, and the mirrors' extent
+    made the Fuso bus 3.93 m wide on 3.35 m lanes, where its body is 3.18 m.
     """
 
     blueprint_id: str
@@ -96,6 +102,21 @@ class VehicleExtent:
     width_m: float
     height_m: float
     bbox_centre_m: tuple[float, float, float]
+    body_width_m: float | None = None
+
+    @property
+    def sumo_width_m(self) -> float:
+        """The width a SUMO vehicle type is given: the body's without its mirrors.
+
+        Raises `UnrenderableVehicleTypeError` (`no_body_width`) where the catalogue measured none,
+        rather than giving SUMO the box's width with the mirrors in it.
+        """
+        if self.body_width_m is None:
+            raise UnrenderableVehicleTypeError(
+                self.blueprint_id, NO_BODY_WIDTH,
+                "the catalogue holds no body width without the mirrors for it; measure the mesh in "
+                "the editor (measure_vehicle_body_widths.py) and merge vehicle_body_widths.json")
+        return self.body_width_m
 
     @property
     def bumper_to_origin_m(self) -> float:
@@ -150,6 +171,7 @@ class VehicleCatalogue:
                 width_m=float(entry["width_m"]),
                 height_m=float(entry["height_m"]),
                 bbox_centre_m=(float(centre[0]), float(centre[1]), float(centre[2])),
+                body_width_m=(float(entry["body_width_m"]) if "body_width_m" in entry else None),
             )
         self.classes: dict[str, dict] = {c["class_id"]: c for c in document.get("classes", [])}
 
