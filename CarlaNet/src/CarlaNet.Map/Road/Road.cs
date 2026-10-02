@@ -33,6 +33,17 @@ public sealed class Road
     public RoadId PredecessorRoadId { get; internal set; }
 
     /// <summary>
+    /// Which end of the predecessor road this road joins, as its link's <c>contactPoint</c> says --
+    /// <c>start</c> or <c>end</c> -- or empty where the link names a junction or gives none. A road that
+    /// loops back to its own junction has both its ends at one point, and only this says which one a
+    /// connector meets.
+    /// </summary>
+    public string PredecessorContactPoint { get; internal set; } = string.Empty;
+
+    /// <summary>Which end of the successor road this road joins; empty as for <see cref="PredecessorContactPoint"/>.</summary>
+    public string SuccessorContactPoint { get; internal set; } = string.Empty;
+
+    /// <summary>
     /// The road's own <c>&lt;userData code="…" value="…"/&gt;</c> entries, by code; the first value
     /// where a code repeats. netconvert writes <c>sumoId</c> on every road that is not a junction
     /// connector, naming the SUMO edge the road was converted from, which is the only record in the

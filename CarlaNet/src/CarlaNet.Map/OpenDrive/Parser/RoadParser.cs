@@ -1,7 +1,8 @@
 // Source: carla/opendrive/parser/RoadParser.{h,cpp}
 //
 // Parses every <road> element: metadata (id/name/length/junction), link
-// (predecessor/successor at the road level), road-type/speed records, lane
+// (predecessor/successor at the road level, with the contact point upstream
+// does not keep on the road), road-type/speed records, lane
 // offsets, lane-section structure (left/center/right lane lists with
 // per-lane link info), and the road's own <userData> entries (netconvert's
 // sumoId among them), which upstream does not read. Lane-internal records
@@ -31,16 +32,28 @@ internal static class RoadParser
 
             RoadId predecessor = 0;
             RoadId successor = 0;
+            string predecessorContact = string.Empty;
+            string successorContact = string.Empty;
             var link = roadNode.Element("link");
             if (link != null)
             {
                 var pred = link.Element("predecessor");
-                if (pred != null) predecessor = XmlExt.AsUInt(pred.Attribute("elementId"));
+                if (pred != null)
+                {
+                    predecessor = XmlExt.AsUInt(pred.Attribute("elementId"));
+                    predecessorContact = XmlExt.AsString(pred.Attribute("contactPoint"));
+                }
                 var succ = link.Element("successor");
-                if (succ != null) successor = XmlExt.AsUInt(succ.Attribute("elementId"));
+                if (succ != null)
+                {
+                    successor = XmlExt.AsUInt(succ.Attribute("elementId"));
+                    successorContact = XmlExt.AsString(succ.Attribute("contactPoint"));
+                }
             }
 
             var road = builder.AddRoad(id, name, length, junctionId, predecessor, successor, isRht);
+            road.PredecessorContactPoint = predecessorContact;
+            road.SuccessorContactPoint = successorContact;
 
             // userData on the road itself (not on its lanes or objects). netconvert names the SUMO
             // edge a road came from here, and nothing else in the file records it.
