@@ -14,12 +14,14 @@ namespace CarlaNet.CoSim;
 /// alongside, so a vehicle's lane and lane position name the road it is on and where along it.
 /// </summary>
 /// <remarks>
-/// <para><b>Why the road and not the ground.</b> The ground surface holds one height per cell, and
+/// <para><b>Why the road as well as the ground.</b> The ground surface holds one height per cell, and
 /// under every bridge deck it is deliberately the ground beneath: the deck carries its own road-mesh
 /// collision. The road profile is the only record that knows both levels -- a deck lifted to the
 /// photoreal deck and shaped ramp-deck-ramp, a road passing beneath it spanned on a chord -- and the
-/// engine builds its road mesh, waypoints and paths from it. A body takes its height from the road it
-/// is on, so a body on the deck rides the deck and one beneath it rides its own road.</para>
+/// engine builds its road mesh, waypoints and paths from it. So the road a body is on says where it is
+/// a structure, and there the body rides its profile: a body on the deck rides the deck and one beneath
+/// it rides its own road. At grade the ground is the road a camera sees, across its whole width, and
+/// the body rides the ground (<see cref="PoseConverter"/>).</para>
 ///
 /// <para><b>How a lane finds its road.</b> netconvert writes the SUMO edge a road came from as the
 /// road's <c>sumoId</c> user data, which places every normal edge with a road of its own.
@@ -103,6 +105,12 @@ public sealed class RoadSurface
     public const double OffTheRoadMetres = 5.0;
 
     /// <summary>
+    /// How far into the carriageway sections either side of a merge's absorbed connector its ground weight
+    /// is carried from, metres.
+    /// </summary>
+    private const double MergedConnectorMarginMetres = 2.0;
+
+    /// <summary>
     /// The byte-order mark netconvert writes, which survives a decode that does not strip it and makes
     /// the parser reject the document at its first character.
     /// </summary>
@@ -175,7 +183,10 @@ public sealed class RoadSurface
     /// <param name="forwardX">The heading's easting component, a unit vector in the SUMO frame.</param>
     /// <param name="forwardY">The heading's northing component.</param>
     /// <param name="behindBumperMetres">How far behind the front bumper the point is, along the heading.</param>
-    /// <param name="seat">The road and the profile there; its departure and roll weight left for the caller.</param>
+    /// <param name="seat">
+    /// The road, the s the point projects to, and the profile there; how the seat is shared with the
+    /// ground is left for the caller.
+    /// </param>
     /// <param name="reason">Why there is no road under the point, where there is none.</param>
     /// <remarks>
     /// <para>The origin of a body is behind its bumper, so for a moment after the bumper crosses onto a
@@ -193,7 +204,7 @@ public sealed class RoadSurface
     /// </remarks>
     internal bool TrySeat(string laneId, double lanePositionMetres, double x, double y,
                           double forwardX, double forwardY, double behindBumperMetres,
-                          out RoadSeat seat, out GroundSeatReason reason)
+                          out RoadPlace seat, out GroundSeatReason reason)
     {
         seat = default;
         if (laneId.Length == 0)
@@ -253,7 +264,7 @@ public sealed class RoadSurface
             alongPerMetre = (ahead.S - at.S) / HeadingStepMetres;
         }
 
-        seat = new RoadSeat(used.Road.Id, at.S, z, slope * alongPerMetre);
+        seat = new RoadPlace(used.Road, at.S, z, slope, alongPerMetre);
         reason = GroundSeatReason.None;
         return true;
     }
@@ -418,6 +429,11 @@ public sealed class RoadSurface
                 {
                     JoinBestOf(lane, siblings, PortionOf(lane), RoadMappingKind.JunctionConnector);
                 }
+            }
+
+            foreach (RoadProfile connector in _roads.Values.Where(road => road.IsJunction))
+            {
+                CarryAcross(connector);
             }
 
             (Dictionary<string, LaneSpan[]> predecessors, Dictionary<string, LaneSpan[]> successors) = Neighbours();
@@ -594,6 +610,57 @@ public sealed class RoadSurface
         }
 
         /// <summary>
+        /// Record the carriageways a junction connector's links join, and the end of each it meets, so its
+        /// ground weight can be made to meet theirs (<see cref="CarriedWeight"/>).
+        /// </summary>
+        /// <remarks>
+        /// netconvert draws a connector's reference line along the left edge of the connection it was
+        /// drawn from, which need not be where the road it joins draws its own: measured on Arapahoe, the
+        /// two stand a lane width or more apart at one joint in ten, and as far as 20 m. Under one the
+        /// ground can be a kerb or a raised median the other clears, so the two departures read at one
+        /// joint can differ by a metre, and weighed by them alone a body's seat stepped there by up to half
+        /// a metre. A link to no carriageway -- none, or another connector -- leaves the connector's own
+        /// weight at that end.
+        /// </remarks>
+        private void CarryAcross(RoadProfile connector)
+        {
+            (RoadProfile before, double beforeS) = JoinedAt(connector, connector.Road.PredecessorRoadId,
+                                                            connector.Road.PredecessorContactPoint, 0.0);
+            (RoadProfile after, double afterS) = JoinedAt(connector, connector.Road.SuccessorRoadId,
+                                                          connector.Road.SuccessorContactPoint, connector.Length);
+            if (!ReferenceEquals(before, connector) || !ReferenceEquals(after, connector))
+            {
+                connector.CarryWeight(new CarriedWeight(0.0, connector.Length, before, beforeS, after, afterS));
+            }
+        }
+
+        /// <summary>
+        /// The carriageway a connector's link names and the end of it the link's contact point names --
+        /// or, where it names none, the end nearer the connector's own end at <paramref name="atS"/>; the
+        /// connector itself, at that end, where the link names no carriageway.
+        /// </summary>
+        private (RoadProfile Road, double S) JoinedAt(RoadProfile connector, uint linkedRoadId,
+                                                      string contactPoint, double atS)
+        {
+            if (!_roads.TryGetValue(linkedRoadId, out RoadProfile? linked) || linked.IsJunction)
+            {
+                return (connector, atS);
+            }
+
+            if (contactPoint is "start" or "end")
+            {
+                return (linked, contactPoint == "start" ? 0.0 : linked.Length);
+            }
+
+            (double x, double y) = connector.ReferencePoint(atS);
+            (double startX, double startY) = linked.ReferencePoint(0.0);
+            (double endX, double endY) = linked.ReferencePoint(linked.Length);
+            double toStart = ((startX - x) * (startX - x)) + ((startY - y) * (startY - y));
+            double toEnd = ((endX - x) * (endX - x)) + ((endY - y) * (endY - y));
+            return (linked, toStart <= toEnd ? 0.0 : linked.Length);
+        }
+
+        /// <summary>
         /// Join the edge a road carries to its first lane section, and walk the sections a merge
         /// appended -- a connector, then the next edge, in turn -- along the SUMO connections.
         /// </summary>
@@ -618,6 +685,14 @@ public sealed class RoadSurface
                     JoinEdge(connector, road, SectionStart(index), SectionEnd(index),
                              RoadMappingKind.MergedConnector);
                 }
+
+                // The absorbed connector is drawn as its junction drew it, and weighed as one: across it,
+                // from the carriageway section before to the one after, read a little way into each --
+                // round a collapsed dead end's turnaround the reference line is still swinging back
+                // across the street for the first half-metre of the way back (measured on Bahonar).
+                double from = Math.Max(0.0, SectionStart(index) - MergedConnectorMarginMetres);
+                double to = Math.Min(road.Length, SectionEnd(index) + MergedConnectorMarginMetres);
+                road.CarryWeight(new CarriedWeight(from, to, road, from, road, to));
 
                 JoinEdge(next, road, SectionStart(index + 1), SectionEnd(index + 1),
                          RoadMappingKind.MergedEdge);

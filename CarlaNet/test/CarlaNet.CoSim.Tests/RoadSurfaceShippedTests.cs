@@ -62,7 +62,7 @@ public sealed class RoadSurfaceShippedTests
             for (double position = 0.0; position <= lane.DeclaredLengthMetres; position += 2.0)
             {
                 (double x, double y, double dx, double dy) = lane.PointAt(position);
-                if (!roads.TrySeat(lane.Id, position, x, y, dx, dy, 0.0, out RoadSeat seat, out _)
+                if (!roads.TrySeat(lane.Id, position, x, y, dx, dy, 0.0, out RoadPlace seat, out _)
                     || ground.SampleForSumoPosition(x, y) is not { } height)
                 {
                     continue;
@@ -93,7 +93,13 @@ public sealed class RoadSurfaceShippedTests
         // Along every one of them, the seat is the road's profile, densely evaluated by the engine's own
         // reference line and elevation, and nowhere near the ground where the road is clear of it.
         double worst = 0.0;
+        // And a body there is seated on that profile wherever the road is a structure at its reference
+        // line, which is where the converter stops taking the ground.
+        var converter = new PoseConverter(ground, roads: roads);
+        var point = new VehicleExtent("vehicle.test.point", 0.0, 2.0, 1.5, (0.0, 0.0, 0.75));
         int checkedPoints = 0;
+        int onTheProfile = 0;
+        double worstSeat = 0.0;
         foreach (string edge in decks.Concat(beneath))
         {
             foreach (SumoLane lane in network.LanesOfEdge(edge))
@@ -102,18 +108,29 @@ public sealed class RoadSurfaceShippedTests
                 for (double position = 0.5; position <= lane.DeclaredLengthMetres - 0.5; position += 1.0)
                 {
                     (double x, double y, double dx, double dy) = lane.PointAt(position);
-                    Assert.True(roads.TrySeat(lane.Id, position, x, y, dx, dy, 0.0, out RoadSeat seat, out _));
+                    Assert.True(roads.TrySeat(lane.Id, position, x, y, dx, dy, 0.0, out RoadPlace seat, out _));
                     CarlaNet.Map.Road.Road road = map.Roads[seat.RoadId];
                     double profile = Dense(road, x, y, seat.S);
                     worst = Math.Max(worst, Math.Abs(seat.SurfaceZMetres - profile));
                     checkedPoints++;
+
+                    VehiclePose pose = converter.Convert("d", point, x, y, Math.Atan2(dx, dy) * (180.0 / Math.PI),
+                                                         0.0, lane.Id, position)!.Value;
+                    if (pose.Road is { GroundWeight: <= 0.0 })
+                    {
+                        onTheProfile++;
+                        worstSeat = Math.Max(worstSeat, Math.Abs(pose.Z - profile));
+                    }
                 }
             }
         }
 
         _output.WriteLine($"{checkedPoints} points on {decks.Count} deck edges and {beneath.Count} beneath; "
-                          + $"worst gap to the profile {worst:0.0000} m");
+                          + $"worst gap to the profile {worst:0.0000} m; {onTheProfile} on a structure at the "
+                          + $"reference line, seated to {worstSeat:0.0000} m of the profile");
         Assert.True(worst < 0.02, $"a seat sat {worst:0.000} m off its road's profile");
+        Assert.True(onTheProfile > checkedPoints / 3, $"{onTheProfile} of {checkedPoints} points seated on the profile");
+        Assert.True(worstSeat < 0.02, $"a body on a structure sat {worstSeat:0.000} m off its road's profile");
     }
 
     [ShippedWorldPackagesFact]
@@ -141,7 +158,7 @@ public sealed class RoadSurfaceShippedTests
             for (double position = 0.0; position <= lane.DeclaredLengthMetres; position += 2.0)
             {
                 (double x, double y, double dx, double dy) = lane.PointAt(position);
-                if (!roads.TrySeat(lane.Id, position, x, y, dx, dy, 0.0, out RoadSeat seat, out _)
+                if (!roads.TrySeat(lane.Id, position, x, y, dx, dy, 0.0, out RoadPlace seat, out _)
                     || ground.SampleForSumoPosition(x, y) is not { } surface)
                 {
                     continue;

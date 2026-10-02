@@ -69,6 +69,19 @@ internal sealed class RoadProfile
     public OpenDriveRoad Road { get; }
 
     /// <summary>
+    /// Where a body's ground weight on this road is not its own reference line's alone: a junction
+    /// connector, whose weight is made to meet the carriageways it joins at its ends, and the connector
+    /// section a merge absorbed, across which the weight is carried from the sections either side. Empty
+    /// for a carriageway.
+    /// </summary>
+    public IReadOnlyList<CarriedWeight> CarriedWeights => _carried;
+
+    private readonly List<CarriedWeight> _carried = [];
+
+    /// <summary>Record a stretch of this road whose weight the carriageways either side decide; set once, when the roads are joined.</summary>
+    internal void CarryWeight(in CarriedWeight carried) => _carried.Add(carried);
+
+    /// <summary>
     /// The profile of one road, or <see langword="null"/> for a road with no geometry to project onto.
     /// </summary>
     public static RoadProfile? From(OpenDriveRoad road)
@@ -131,6 +144,19 @@ internal sealed class RoadProfile
         double z = record.Evaluate(inside);
         double slope = record.Tangent(inside);
         return (z + (slope * (s - inside)), slope);
+    }
+
+    /// <summary>
+    /// The reference line's point at <paramref name="s"/>, in the OpenDRIVE frame: interpolated along the
+    /// sampled polyline inside the road, carried straight on along its end segments off either end.
+    /// </summary>
+    public (double X, double Y) ReferencePoint(double s)
+    {
+        int segment = Math.Clamp(SegmentAt(Math.Clamp(s, 0.0, Length)), 0, _s.Length - 2);
+        double span = _s[segment + 1] - _s[segment];
+        double u = span > 0.0 ? (s - _s[segment]) / span : 0.0;
+        return (_x[segment] + (u * (_x[segment + 1] - _x[segment])),
+                _y[segment] + (u * (_y[segment + 1] - _y[segment])));
     }
 
     /// <summary>
@@ -251,3 +277,22 @@ internal sealed class RoadProfile
 /// <param name="Lateral">Signed offset from the reference line, positive to the left of increasing s.</param>
 /// <param name="DistanceSquared">Squared distance to the projected point, infinite where nothing was searched.</param>
 internal readonly record struct RoadProjection(double S, double Lateral, double DistanceSquared);
+
+/// <summary>
+/// A stretch of road whose ground weight the carriageways either side decide at its ends: on a junction
+/// connector, its own weight is corrected on a smoothstep along it to meet theirs; on a merge's absorbed
+/// connector section, the weight is carried across it from one to the other on a smoothstep.
+/// </summary>
+/// <param name="FromS">Where the stretch begins on its road.</param>
+/// <param name="ToS">Where it ends.</param>
+/// <param name="Before">The carriageway whose weight holds at the stretch's start.</param>
+/// <param name="BeforeS">Where on <paramref name="Before"/> that weight is read: the end it meets the stretch at.</param>
+/// <param name="After">The carriageway whose weight holds at the stretch's end.</param>
+/// <param name="AfterS">Where on <paramref name="After"/> that weight is read.</param>
+internal readonly record struct CarriedWeight(
+    double FromS,
+    double ToS,
+    RoadProfile Before,
+    double BeforeS,
+    RoadProfile After,
+    double AfterS);

@@ -10,17 +10,18 @@ namespace CarlaNet.CoSim;
 /// <param name="Y">CARLA-local northing negated, metres.</param>
 /// <param name="Z">
 /// CARLA-local height, metres above the georeference origin: the surface under the body's origin plus
-/// its seat height. The surface is the profile of the OpenDRIVE road the body is on (<see cref="Road"/>),
-/// or the draped ground surface where it is on none (<see cref="GroundReason"/>).
+/// its seat height. The surface is the draped ground surface off every road and on a road at grade, the
+/// profile of the OpenDRIVE road the body is on where that road is a structure, and a blend of the two
+/// between (<see cref="Road"/>, <see cref="RoadSeat.GroundWeight"/>).
 /// </param>
 /// <param name="YawDegrees">CARLA yaw, normalised to the half-open turn ending at 180.</param>
 /// <param name="PitchDegrees">
-/// Nose-up angle from the same surface's slope along the heading: the road profile's on a road, the
-/// ground surface's gradient off one.
+/// Nose-up angle from the same seat's slope along the heading: the ground surface's gradient at grade
+/// and off the road, the road profile's on a structure, the blended seat's own between.
 /// </param>
 /// <param name="RollDegrees">
 /// Right-down angle from the ground surface's across-heading gradient: in full off a road and on a road
-/// at grade, not at all on a structure, blended between (<see cref="RoadSeat.RollWeight"/>).
+/// at grade, not at all on a structure, scaled by the weight between.
 /// </param>
 /// <param name="VelocityX">
 /// CARLA-frame velocity, metres per second: SUMO's speed along the lane times the forward vector of
@@ -52,14 +53,13 @@ public readonly record struct VehiclePose(
     bool SeatHeightWasApproximated)
 {
     /// <summary>
-    /// The road the height and pitch were taken from, and how much of the ground's cross-slope the body
-    /// was rolled by; <see langword="null"/> where the body was seated on the ground surface.
+    /// The road the body was on, how far it departs from the ground at its reference line, and how much
+    /// of the seat the ground gave; <see langword="null"/> where the body was on no road.
     /// </summary>
     public RoadSeat? Road { get; init; }
 
     /// <summary>
-    /// Why the body was seated on the ground surface; <see cref="GroundSeatReason.None"/> where it sits on
-    /// its road.
+    /// Why the body was on no road; <see cref="GroundSeatReason.None"/> where it was on one.
     /// </summary>
     public GroundSeatReason GroundReason { get; init; }
 }

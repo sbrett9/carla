@@ -26,7 +26,7 @@ public sealed class RoadSeatingRunTests
     }
 
     [NamedCoSimRunFact]
-    public void EveryBodyOnARoadIsSeatedOnItsProfileAndMovesContinuously()
+    public void EveryBodyOnARoadIsSeatedByItsRoadsDepartureFromTheGroundAndMovesContinuously()
     {
         string package = NamedCoSimRunFactAttribute.WorldPackage!;
         WorldPackageManifest manifest = WorldPackage.ReadManifest(package);
@@ -82,13 +82,40 @@ public sealed class RoadSeatingRunTests
         string worstProfileAt = string.Empty;
         HashSet<uint> decks = [];
 
-        // At grade -- a body taking the ground's roll in full -- how far its seat on the profile stands from
-        // where the ground would have seated it, and how each follows the photoreal, by distance across the
-        // road from its reference line. The photoreal comes from the build's drape cache, where found.
+        // The roads at grade: their profile never further from the ground than a structure's smallest lift
+        // anywhere along the reference line, judged per road so that a body counts as at grade whatever
+        // weight its seat was given.
+        double h0 = ground.OriginHeightMetres;
+        HashSet<uint> atGradeRoads = [];
+        foreach (RoadProfile profile in roads.Roads.Values)
+        {
+            double worst = 0.0;
+            for (double s = 0.0; s <= profile.Length; s += 2.0)
+            {
+                (double x, double y) = profile.ReferencePoint(s);
+                if (ground.SampleForSumoPosition(x, y) is { } height)
+                {
+                    worst = Math.Max(worst, Math.Abs(profile.Elevation(s).Z + h0 - height));
+                }
+            }
+
+            if (worst < PoseConverter.OnStructureDepartureMetres)
+            {
+                atGradeRoads.Add(profile.Id);
+            }
+        }
+
+        // At grade, every fifth pose: how far the seat stands from where the ground seats a body, and how
+        // far the road's profile does, and how the seat, the ground and the profile each follow the
+        // photoreal, by distance across the road from its reference line. The photoreal comes from the
+        // build's drape cache, where found.
         PhotorealSurface? photoreal = PhotorealSurface.ForPackage(package);
-        var atGrade = new SurfaceAgreement();
-        var seatGap = new List<(double Across, double Gap)>();
+        var atGrade = new SurfaceAgreement("seat", "ground", "profile");
+        var seatGap = new List<(double Across, double Seat, double Profile)>();
+        long atGradePoses = 0;
+        long atGradeLosingRoll = 0;
         var groups = new SortedDictionary<string, Group>(StringComparer.Ordinal);
+        Dictionary<string, (double Lowest, double Highest)> seatHeights = [];
         long onRoad = 0;
         foreach (CoSimPoseRecord record in byVehicle.Values.SelectMany(track => track))
         {
@@ -98,22 +125,40 @@ public sealed class RoadSeatingRunTests
             }
 
             onRoad++;
-            double seatHeight = record.Pose.Z - seat.SurfaceZMetres;
-            if (seat.RollWeight >= 1.0 && onRoad % 5 == 0)
+
+            // The surface the body was seated on: the ground under its origin, the road's profile, and the
+            // weight between them. The body's own seat height above it is the same at every pose.
+            double old = ground.Sample(record.Pose.X, record.Pose.Y)!.Value - h0;
+            double seated = (seat.GroundWeight * old) + ((1.0 - seat.GroundWeight) * seat.SurfaceZMetres);
+            double seatHeight = record.Pose.Z - seated;
+            seatHeights[record.Pose.VehicleId] = seatHeights.TryGetValue(record.Pose.VehicleId, out var range)
+                ? (Math.Min(range.Lowest, seatHeight), Math.Max(range.Highest, seatHeight))
+                : (seatHeight, seatHeight);
+            if (atGradeRoads.Contains(seat.RoadId))
             {
-                RoadProfile seatedOn = roads.Roads[seat.RoadId];
-                double across = seatedOn.Project(record.Pose.X, -record.Pose.Y, seat.S - 1.0, seat.S + 1.0).Lateral;
-                seatGap.Add((across, Math.Abs(seat.DepartureFromGroundMetres)));
-                // Where the photoreal is the ground: within the five metres of bare earth the world build
-                // drapes onto, and not a canopy, a gantry or a tree over the road.
-                if (photoreal?.Surface(record.Pose.X, record.Pose.Y) is { } surface
-                    && photoreal.BareEarth(record.Pose.X, record.Pose.Y) is { } bareEarth
-                    && Math.Abs(surface - bareEarth) <= 5.0
-                    && ground.Sample(record.Pose.X, record.Pose.Y) is { } height)
+                atGradePoses++;
+                if (seat.GroundWeight < 1.0)
                 {
-                    atGrade.Add(across, seat.SurfaceZMetres + ground.OriginHeightMetres - surface, height - surface);
+                    atGradeLosingRoll++;
+                }
+
+                if (atGradePoses % 5 == 0)
+                {
+                    RoadProfile seatedOn = roads.Roads[seat.RoadId];
+                    double across = seatedOn.Project(record.Pose.X, -record.Pose.Y, seat.S - 1.0, seat.S + 1.0).Lateral;
+                    seatGap.Add((across, Math.Abs(seated - old), Math.Abs(seat.SurfaceZMetres - old)));
+
+                    // Where the photoreal is the ground: within the five metres of bare earth the world
+                    // build drapes onto, and not a canopy, a gantry or a tree over the road.
+                    if (photoreal?.Surface(record.Pose.X, record.Pose.Y) is { } surface
+                        && photoreal.BareEarth(record.Pose.X, record.Pose.Y) is { } bareEarth
+                        && Math.Abs(surface - bareEarth) <= 5.0)
+                    {
+                        atGrade.Add(across, seated + h0 - surface, old + h0 - surface, seat.SurfaceZMetres + h0 - surface);
+                    }
                 }
             }
+
             if (Math.Abs(record.Pose.PitchDegrees) > SteepDegrees)
             {
                 steepOnRoad++;
@@ -123,7 +168,6 @@ public sealed class RoadSeatingRunTests
             {
                 steepOnGround++;
             }
-            double old = ground.Sample(record.Pose.X, record.Pose.Y)!.Value - ground.OriginHeightMetres;
             CarlaNet.Map.Road.Road road = map.Roads[seat.RoadId];
 
             // The profile at the seat's own s, as the engine evaluates it, for every pose; and where the
@@ -176,27 +220,33 @@ public sealed class RoadSeatingRunTests
                 groups[key] = group;
             }
 
-            group.Add(record.Pose.VehicleId, seat.SurfaceZMetres + seatHeight - (old + seatHeight),
-                      record.Pose.PitchDegrees, record.Pose.RollDegrees);
+            group.Add(record.Pose.VehicleId, seated - old, record.Pose.PitchDegrees, record.Pose.RollDegrees);
         }
 
+        double worstSeatHeightSpread = seatHeights.Values.Select(range => range.Highest - range.Lowest).DefaultIfEmpty().Max();
         _output.WriteLine($"poses on a road {onRoad}; worst gap to the engine's evaluation at the seat's s "
                           + $"{worstEvaluation:0.000000} m; worst gap to the densely evaluated profile on a "
                           + $"carriageway {worstProfile:0.0000} m ({worstProfileAt}), on a structure "
-                          + $"{worstOnStructure:0.0000} m");
-        _output.WriteLine($"at grade (full roll), every fifth pose: |profile seat - ground seat| over {seatGap.Count} poses");
+                          + $"{worstOnStructure:0.0000} m; a body's height above its blended seat varies by at most "
+                          + $"{worstSeatHeightSpread:0.000000} m");
+        _output.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"{atGradeRoads.Count} of {roads.Roads.Count} roads at grade; {atGradePoses} poses on them, {atGradeLosingRoll} "
+            + $"({atGradeLosingRoll / (double)Math.Max(atGradePoses, 1):0.000%}) given less than the ground's whole seat"));
+        _output.WriteLine($"at grade, every fifth pose: |seat - ground seat| and |profile - ground seat| over {seatGap.Count} poses");
         foreach ((string name, double low, double high) in new[]
                  {
                      ("< 3 m", 0.0, 3.0), ("3-6.5 m", 3.0, 6.5), ("6.5-10 m", 6.5, 10.0),
                      ("10-13.5 m", 10.0, 13.5), (">= 13.5 m", 13.5, double.PositiveInfinity), ("all", 0.0, double.PositiveInfinity),
                  })
         {
-            double[] gaps = [.. seatGap.Where(each => Math.Abs(each.Across) >= low && Math.Abs(each.Across) < high)
-                                       .Select(each => each.Gap).Order()];
-            _output.WriteLine(gaps.Length == 0
+            var inBand = seatGap.Where(each => Math.Abs(each.Across) >= low && Math.Abs(each.Across) < high).ToList();
+            double[] seats = [.. inBand.Select(each => each.Seat).Order()];
+            double[] profiles = [.. inBand.Select(each => each.Profile).Order()];
+            _output.WriteLine(seats.Length == 0
                 ? $"    {name,-12} 0"
                 : string.Create(CultureInfo.InvariantCulture,
-                    $"    {name,-12} {gaps.Length,8}  p50 {gaps[gaps.Length / 2]:0.000}  p90 {gaps[(int)(0.9 * (gaps.Length - 1))]:0.000}  p99 {gaps[(int)(0.99 * (gaps.Length - 1))]:0.000}  max {gaps[^1]:0.000} m"));
+                    $"    {name,-12} {seats.Length,8}  seat p50 {seats[seats.Length / 2]:0.000} p99 {seats[(int)(0.99 * (seats.Length - 1))]:0.000} max {seats[^1]:0.000}"
+                    + $"  | profile p50 {profiles[profiles.Length / 2]:0.000} p90 {profiles[(int)(0.9 * (profiles.Length - 1))]:0.000} p99 {profiles[(int)(0.99 * (profiles.Length - 1))]:0.000} max {profiles[^1]:0.000} m"));
         }
 
         _output.WriteLine(photoreal is null
@@ -204,9 +254,9 @@ public sealed class RoadSeatingRunTests
             : $"  against the photoreal ({Path.GetFileName(photoreal.Path)}):{Environment.NewLine}{atGrade.Describe()}");
         _output.WriteLine($"poses on a road pitched more than {SteepDegrees} degrees: {steepOnRoad} by their road's "
                           + $"profile, against {steepOnGround} the ground's gradient would have pitched so");
-        _output.WriteLine("bodies seated off the ground by more than "
-                          + $"{PoseConverter.OnStructureDepartureMetres} m, by the road they were on "
-                          + "(height above the ground surface the bridge used to seat them on):");
+        _output.WriteLine("bodies on a road departing from the ground by more than "
+                          + $"{PoseConverter.OnStructureDepartureMetres} m at its reference line, by the road "
+                          + "(height of the seat above the ground surface the bridge used to seat them on):");
         foreach ((string key, Group group) in groups)
         {
             _output.WriteLine($"  {key,-48} {group}");
@@ -223,6 +273,22 @@ public sealed class RoadSeatingRunTests
         double worstDeckEnd = 0.0;
         string worstDeckEndAt = string.Empty;
         double worstDeckEndClimbRate = 0.0;
+        var blendSteps = new List<(double Residual, string Where)>();
+        double worstBlendPitchStep = 0.0;
+        double worstBlendRollStep = 0.0;
+        double worstBlendWeightStep = 0.0;
+        string worstBlendPitchAt = string.Empty;
+        double worstPitchStep = 0.0;
+        double worstRollStep = 0.0;
+
+        // The same pairs as the ground alone would have seated them, as the bridge did before it read the
+        // road: its height under the origin, and the climb of its gradient along the heading.
+        var groundSteps = new List<double>();
+
+        // And through the blend, the pitch the two slopes blended alone would give -- without the change of
+        // the weight -- against the seat's own: how far the height would part from the climb, and how
+        // sharply each pitch turns.
+        var slopesAlone = new List<(double Residual, double PitchStep, double SeatPitchStep)>();
         foreach ((string vehicle, List<CoSimPoseRecord> track) in byVehicle)
         {
             for (int index = 1; index < track.Count; index++)
@@ -243,6 +309,39 @@ public sealed class RoadSeatingRunTests
                 string where = string.Create(CultureInfo.InvariantCulture,
                     $"{vehicle} tick {after.TickIndex} road {from.RoadId}->{to.RoadId} s {from.S:0.00}->{to.S:0.00} dz {after.Pose.Z - before.Pose.Z:+0.000;-0.000} climb {climb:+0.000;-0.000}; origin moved {moved:0.00} m, yaw turned {turned:0.0} deg; {before.Case}->{after.Case}; lane {before.LaneId}@{before.LanePositionMetres:0.00} -> {after.LaneId}@{after.LanePositionMetres:0.00}");
                 steps.Add((residual, where));
+                double groundClimb = 0.5 * ((Speed(before.Pose) * Math.Tan(GroundPitch(ground, before.Pose) * (Math.PI / 180.0)))
+                                            + (Speed(after.Pose) * Math.Tan(GroundPitch(ground, after.Pose) * (Math.PI / 180.0))))
+                                     * tickSeconds;
+                groundSteps.Add(Math.Abs(ground.Sample(after.Pose.X, after.Pose.Y)!.Value
+                                         - ground.Sample(before.Pose.X, before.Pose.Y)!.Value - groundClimb));
+
+                // Through the blend: a pair either of whose poses took part of its seat from each surface,
+                // or that crossed from one weight to another.
+                if (from.GroundWeight != to.GroundWeight || (from.GroundWeight > 0.0 && from.GroundWeight < 1.0))
+                {
+                    double slopeBefore = BlendedSlopes(ground, before.Pose, from);
+                    double slopeAfter = BlendedSlopes(ground, after.Pose, to);
+                    double climbAlone = 0.5 * ((Speed(before.Pose) * slopeBefore) + (Speed(after.Pose) * slopeAfter)) * tickSeconds;
+                    slopesAlone.Add((Math.Abs((after.Pose.Z - before.Pose.Z) - climbAlone),
+                                     Math.Abs(Math.Atan(slopeAfter) - Math.Atan(slopeBefore)) * (180.0 / Math.PI),
+                                     Math.Abs(after.Pose.PitchDegrees - before.Pose.PitchDegrees)));
+                    blendSteps.Add((residual, where));
+                    if (Math.Abs(after.Pose.PitchDegrees - before.Pose.PitchDegrees) > worstBlendPitchStep)
+                    {
+                        worstBlendPitchStep = Math.Abs(after.Pose.PitchDegrees - before.Pose.PitchDegrees);
+                        worstBlendPitchAt = string.Create(CultureInfo.InvariantCulture,
+                            $"{where}; weight {from.GroundWeight:0.000}->{to.GroundWeight:0.000}, departure {from.DepartureFromGroundMetres:0.00}->{to.DepartureFromGroundMetres:0.00}, pitch {before.Pose.PitchDegrees:0.00}->{after.Pose.PitchDegrees:0.00}");
+                    }
+
+                    worstBlendRollStep = Math.Max(worstBlendRollStep, Math.Abs(after.Pose.RollDegrees - before.Pose.RollDegrees));
+                    worstBlendWeightStep = Math.Max(worstBlendWeightStep, Math.Abs(to.GroundWeight - from.GroundWeight));
+                }
+                else
+                {
+                    worstPitchStep = Math.Max(worstPitchStep, Math.Abs(after.Pose.PitchDegrees - before.Pose.PitchDegrees));
+                    worstRollStep = Math.Max(worstRollStep, Math.Abs(after.Pose.RollDegrees - before.Pose.RollDegrees));
+                }
+
                 if (from.RoadId != to.RoadId)
                 {
                     transitions++;
@@ -281,15 +380,59 @@ public sealed class RoadSeatingRunTests
             _output.WriteLine($"  {residual:0.0000} m  {where}");
         }
 
+        groundSteps.Sort();
+        double G(double q) => groundSteps.Count == 0 ? 0.0 : groundSteps[(int)(q * (groundSteps.Count - 1))];
+        _output.WriteLine($"  the ground's seat alone over the same pairs: p50 {G(0.5):0.0000} m, p99 {G(0.99):0.0000} m, "
+                          + $"p99.9 {G(0.999):0.0000} m, worst {(groundSteps.Count > 0 ? groundSteps[^1] : 0.0):0.0000} m");
+
+        blendSteps.Sort((a, b) => b.Residual.CompareTo(a.Residual));
+        double B(double q) => blendSteps.Count == 0 ? 0.0 : blendSteps[(int)((1.0 - q) * (blendSteps.Count - 1))].Residual;
+        _output.WriteLine($"through the blend, {blendSteps.Count} pairs: residual p50 {B(0.5):0.0000} m, p99 {B(0.99):0.0000} m, "
+                          + $"worst {(blendSteps.Count > 0 ? blendSteps[0].Residual : 0.0):0.0000} m; worst change per tick: "
+                          + $"weight {worstBlendWeightStep:0.000}, pitch {worstBlendPitchStep:0.00} deg, roll {worstBlendRollStep:0.00} deg "
+                          + $"(elsewhere pitch {worstPitchStep:0.00} deg, roll {worstRollStep:0.00} deg)");
+        foreach ((double residual, string where) in blendSteps.Take(4))
+        {
+            _output.WriteLine($"  {residual:0.0000} m  {where}");
+        }
+
+        _output.WriteLine($"  the sharpest turn of the pitch through the blend: {worstBlendPitchAt}");
+        if (slopesAlone.Count > 0)
+        {
+            double[] residuals = [.. slopesAlone.Select(each => each.Residual).Order()];
+            double[] alone = [.. slopesAlone.Select(each => each.PitchStep).Order()];
+            double[] seat = [.. slopesAlone.Select(each => each.SeatPitchStep).Order()];
+            double Q(double[] values, double q) => values[(int)(q * (values.Length - 1))];
+            _output.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                $"  turn of the pitch per tick through the blend: the seat's own p99 {Q(seat, 0.99):0.00} deg, worst {seat[^1]:0.00}, "
+                + $"over 10 deg {seat.Count(value => value > 10.0)}; the two slopes blended alone p99 {Q(alone, 0.99):0.00} deg, "
+                + $"worst {alone[^1]:0.00}, over 10 deg {alone.Count(value => value > 10.0)} -- but their climb parts from the "
+                + $"height by p99 {Q(residuals, 0.99):0.0000} m, worst {residuals[^1]:0.0000} m"));
+        }
+
         _output.WriteLine($"package origin height {manifest.OriginHeightMeters:0.000} m");
         Assert.True(onRoad > 0, "no body was ever seated on a road");
         Assert.True(worstEvaluation < 1e-3, $"a seat's height differs from the engine's profile by {worstEvaluation} m");
+        Assert.True(worstSeatHeightSpread < 1e-6,
+                    $"a body's height above the blend of the ground and its road's profile varied by {worstSeatHeightSpread} m");
         Assert.True(worstOnStructure < 0.05,
                     $"a body on a structure sat {worstOnStructure:0.000} m off its road's densely evaluated profile");
     }
 
     /// <summary>A pitch steeper than any road a vehicle is built for, degrees.</summary>
     private const double SteepDegrees = 10.0;
+
+    /// <summary>
+    /// The slope along the heading the ground's gradient and the road's profile, blended by the pose's
+    /// weight alone, would give it: without the change of the weight that its seat's own slope carries.
+    /// </summary>
+    private static double BlendedSlopes(GroundSurface ground, in VehiclePose pose, in RoadSeat seat) =>
+        (seat.GroundWeight * Math.Tan(GroundPitch(ground, pose) * (Math.PI / 180.0)))
+        + ((1.0 - seat.GroundWeight) * seat.SlopeAlongHeading);
+
+    /// <summary>A pose's horizontal speed: SUMO's own.</summary>
+    private static double Speed(in VehiclePose pose) =>
+        Math.Sqrt((pose.VelocityX * pose.VelocityX) + (pose.VelocityY * pose.VelocityY));
 
     /// <summary>
     /// The pitch the ground surface's gradient gives a body at a pose, as the bridge seated every body

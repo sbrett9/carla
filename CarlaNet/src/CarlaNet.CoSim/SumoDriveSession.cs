@@ -1261,8 +1261,8 @@ public sealed class SumoDriveSession : IDisposable
                 Report.SampleDiscontinuity(from, to, _interpolator.RouteDistance(from, to));
             }
 
-            // The lane the interpolation walked names the road the body is seated on, and where
-            // along it: SUMO's position alone does not, where a deck and the road beneath it share it.
+            // The lane the interpolation walked names the road the body is on, and where along it:
+            // SUMO's position alone does not, where a deck and the road beneath it share it.
             VehiclePose? pose = _converter.Convert(vehicleId, extent, state.X, state.Y,
                                                    state.HeadingDegrees,
                                                    state.SpeedMetresPerSecond,

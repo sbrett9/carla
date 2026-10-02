@@ -250,8 +250,14 @@ public sealed class CoSimRunReport
     /// </summary>
     public RoadMappingSummary? RoadMapping { get; init; }
 
-    /// <summary>Poses whose height and pitch came from the profile of the road the vehicle was on.</summary>
+    /// <summary>
+    /// Poses of vehicles on a road: seated on the ground where the road is at grade, on the road's profile
+    /// where it is a structure, blended between.
+    /// </summary>
     public long PosesSeatedOnTheRoad { get; internal set; }
+
+    /// <summary>Poses on a road at grade, seated on the ground surface exactly.</summary>
+    public long PosesAtGrade { get; internal set; }
 
     /// <summary>
     /// Poses seated on the ground surface instead, by why: the vehicle was on no lane, its lane was on
@@ -261,16 +267,16 @@ public sealed class CoSimRunReport
 
     /// <summary>
     /// Poses on a road that departs from the ground by enough to be a structure -- a deck, or a road
-    /// spanning the ground beneath one -- and that took none of the ground's roll.
+    /// spanning the ground beneath one -- seated on the road's profile with no roll.
     /// </summary>
     public long PosesOnAStructure { get; internal set; }
 
-    /// <summary>Poses on a road between at grade and a structure, whose roll was blended.</summary>
+    /// <summary>Poses on a road between at grade and a structure, whose seat was blended.</summary>
     public long PosesOnAnApproach { get; internal set; }
 
     /// <summary>
-    /// The furthest any road a body was seated on stood from the ground surface under it, metres, signed:
-    /// positive for a deck above the ground.
+    /// The furthest any road a body was on stood from the ground surface at its reference line, metres,
+    /// signed: positive for a deck above the ground.
     /// </summary>
     public double WorstRoadDepartureFromGroundMetres { get; private set; }
 
@@ -510,13 +516,17 @@ public sealed class CoSimRunReport
         }
 
         PosesSeatedOnTheRoad++;
-        if (road.RollWeight <= 0.0)
+        if (road.GroundWeight <= 0.0)
         {
             PosesOnAStructure++;
         }
-        else if (road.RollWeight < 1.0)
+        else if (road.GroundWeight < 1.0)
         {
             PosesOnAnApproach++;
+        }
+        else
+        {
+            PosesAtGrade++;
         }
 
         if (Math.Abs(road.DepartureFromGroundMetres) > Math.Abs(WorstRoadDepartureFromGroundMetres))
@@ -731,8 +741,8 @@ public sealed class CoSimRunReport
         text.AppendLine($"  approximated Z   {PosesOnAnApproximatedSeatHeight}");
         text.AppendLine($"  no ground        {PosesRefusedForMissingGround}");
         text.AppendLine($"  no measured body {VehicleTicksWithNoMeasuredBody} vehicle-ticks");
-        text.AppendLine($"  on the road      {PosesSeatedOnTheRoad}: {PosesOnAStructure} on a structure, "
-                        + $"{PosesOnAnApproach} on an approach; furthest from the ground "
+        text.AppendLine($"  on the road      {PosesSeatedOnTheRoad}: {PosesAtGrade} at grade, {PosesOnAnApproach} "
+                        + $"on an approach, {PosesOnAStructure} on a structure; furthest from the ground "
                         + $"{WorstRoadDepartureFromGroundMetres:+0.000;-0.000;0} m");
         text.AppendLine("  on the ground    "
                         + (_groundSeats.Count == 0
