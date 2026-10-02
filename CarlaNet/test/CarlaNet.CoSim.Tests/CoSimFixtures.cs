@@ -20,6 +20,13 @@ internal static class CoSimFixtures
     /// <summary>The same network on its own, for reading lane geometry with no simulation running.</summary>
     public static string RightAngleTurnNetwork => Fixture("RightAngleTurn.net.xml");
 
+    /// <summary>
+    /// The OpenDRIVE netconvert 1.27.0 writes from that network with <c>--output.original-names</c>, as a
+    /// world build asks for it: every road carrying its edge's <c>sumoId</c>, every connector named after
+    /// its internal edge, and every road flat at zero.
+    /// </summary>
+    public static string RightAngleTurnOpenDrive => Fixture("RightAngleTurn.xodr");
+
     /// <summary>The measured vehicle catalogue, as the blueprint sweep wrote it.</summary>
     public static string VehicleCatalogue => Fixture("vehicles.catalogue.json");
 

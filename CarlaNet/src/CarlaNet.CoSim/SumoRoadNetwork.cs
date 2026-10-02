@@ -70,6 +70,9 @@ public sealed class SumoRoadNetwork
     /// <summary>How many lanes the network has, internal ones included.</summary>
     public int LaneCount => _lanes.Count;
 
+    /// <summary>Every lane the network describes with a shape, internal ones included.</summary>
+    public IEnumerable<SumoLane> Lanes => _lanes.Values;
+
     /// <summary>Read the network a world package carries.</summary>
     public static SumoRoadNetwork FromWorldPackage(string packagePath) =>
         Parse(WorldPackage.ReadNetwork(packagePath));

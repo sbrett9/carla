@@ -28,6 +28,11 @@ namespace CarlaNet.CoSim;
 /// The lamps the body holds after this tick's batch: <see cref="Signals"/> mapped bit by bit, and the
 /// headlights the sun asserts; <see cref="VehicleLightStateFlags.None"/> where the session drives no lamps.
 /// </param>
+/// <param name="LaneId">
+/// The lane the interpolation put the front bumper on at this tick, which named the road the body was
+/// seated on; empty where the vehicle was on no lane.
+/// </param>
+/// <param name="LanePositionMetres">How far along <paramref name="LaneId"/> the front bumper was.</param>
 public readonly record struct CoSimPoseRecord(
     long TickIndex,
     double SimulatedTimeSeconds,
@@ -39,4 +44,6 @@ public readonly record struct CoSimPoseRecord(
     double SumoY,
     double SumoHeadingDegrees,
     SumoVehicleSignals Signals = SumoVehicleSignals.None,
-    VehicleLightStateFlags Lamps = VehicleLightStateFlags.None);
+    VehicleLightStateFlags Lamps = VehicleLightStateFlags.None,
+    string LaneId = "",
+    double LanePositionMetres = 0.0);

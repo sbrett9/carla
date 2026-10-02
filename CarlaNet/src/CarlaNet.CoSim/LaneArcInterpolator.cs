@@ -204,8 +204,11 @@ public sealed class LaneArcInterpolator
         double directionX = fromDirectionX + ((toDirectionX - fromDirectionX) * blend);
         double directionY = fromDirectionY + ((toDirectionY - fromDirectionY) * blend);
 
+        // Carried on whichever lane the blend is nearer: both are lanes of one edge, alongside each
+        // other at one lane position, so either names the same road at the same s.
         return new InterpolatedState(x, y, Heading(directionX, directionY), speed,
-                                     LaneInterpolationCase.LaneChange);
+                                     LaneInterpolationCase.LaneChange,
+                                     blend < 0.5 ? fromLane.Id : toLane.Id, along);
     }
 
     private InterpolatedState AlongRoute(SumoLane fromLane,
@@ -282,7 +285,9 @@ public sealed class LaneArcInterpolator
             Heading(alongDirectionX + ((sideDirectionX - alongDirectionX) * blend),
                     alongDirectionY + ((sideDirectionY - alongDirectionY) * blend)),
             speed,
-            which);
+            which,
+            blend < 0.5 ? last.Id : toLane.Id,
+            travelled);
     }
 
     /// <summary>
@@ -322,7 +327,8 @@ public sealed class LaneArcInterpolator
                                               LaneInterpolationCase which)
     {
         (double x, double y, double directionX, double directionY) = lane.PointAt(lanePosition);
-        return new InterpolatedState(x, y, Heading(directionX, directionY), speed, which);
+        return new InterpolatedState(x, y, Heading(directionX, directionY), speed, which,
+                                     lane.Id, lanePosition);
     }
 
     /// <summary>
@@ -346,7 +352,8 @@ public sealed class LaneArcInterpolator
             return Reported(to, speed, LaneInterpolationCase.Discontinuous);
         }
 
-        // The shorter way round, so a heading near north does not swing through south.
+        // The shorter way round, so a heading near north does not swing through south. On no lane:
+        // the blended point is between the lane and the kerb, or at the kerb, and on no road.
         double turn = ((to.HeadingDegrees - from.HeadingDegrees + 540.0) % 360.0) - 180.0;
         double heading = (from.HeadingDegrees + (turn * fraction) + 360.0) % 360.0;
         return new InterpolatedState(from.X + (deltaX * fraction), from.Y + (deltaY * fraction),
@@ -356,7 +363,7 @@ public sealed class LaneArcInterpolator
     private static InterpolatedState Reported(in CoSimVehicleFrame frame,
                                               double speed,
                                               LaneInterpolationCase which) =>
-        new(frame.X, frame.Y, frame.HeadingDegrees, speed, which);
+        new(frame.X, frame.Y, frame.HeadingDegrees, speed, which, frame.LaneId, frame.LanePositionMetres);
 
     /// <summary>A direction in the projected frame, as degrees clockwise from north.</summary>
     private static double Heading(double directionX, double directionY)

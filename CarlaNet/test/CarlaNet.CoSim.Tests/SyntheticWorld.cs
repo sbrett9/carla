@@ -19,6 +19,9 @@ internal sealed class SyntheticWorld : IDisposable
     private const double MinX = -100.0;
     private const double OriginHeight = 1000.0;
 
+    /// <summary>An OpenDRIVE document with no roads in it.</summary>
+    public const string NoRoads = "<OpenDRIVE/>";
+
     private SyntheticWorld(string directory, string packagePath)
     {
         Directory = directory;
@@ -57,13 +60,18 @@ internal sealed class SyntheticWorld : IDisposable
     /// The network fingerprint the manifest records, as a world build writes it from the network it
     /// converted, or empty for a package that records none.
     /// </param>
+    /// <param name="openDrive">
+    /// The OpenDRIVE the package carries; by default one with no roads, on which every vehicle is seated
+    /// on the ground surface.
+    /// </param>
     public static SyntheticWorld Write(Func<(double X, double Y), double> heightAbove,
                                        string networkPath,
                                        string geoReference,
                                        string netconvertVersion = "",
-                                       string recordedNetworkFingerprint = "") =>
+                                       string recordedNetworkFingerprint = "",
+                                       string openDrive = NoRoads) =>
         Write(heightAbove, networkPath, geoReference, CellSize, MinX, Columns, netconvertVersion,
-              recordedNetworkFingerprint);
+              recordedNetworkFingerprint, openDrive);
 
     /// <summary>
     /// A package whose ground surface is a square grid of the caller's choosing, for a test that
@@ -79,6 +87,7 @@ internal sealed class SyntheticWorld : IDisposable
     /// <param name="recordedNetworkFingerprint">
     /// The network fingerprint the manifest records, or empty for none.
     /// </param>
+    /// <param name="openDrive">The OpenDRIVE the package carries; by default one with no roads.</param>
     /// <remarks>
     /// A session accepts a network that overhangs the grid by up to one cell, so a coarse grid a
     /// little smaller than the network is a world the session starts on and in which a vehicle near
@@ -91,7 +100,8 @@ internal sealed class SyntheticWorld : IDisposable
                                        double min,
                                        int cells,
                                        string netconvertVersion = "",
-                                       string recordedNetworkFingerprint = "")
+                                       string recordedNetworkFingerprint = "",
+                                       string openDrive = NoRoads)
     {
         string directory = Path.Combine(Path.GetTempPath(),
                                         "carlanet-cosim-" + Guid.NewGuid().ToString("n"));
@@ -127,7 +137,7 @@ internal sealed class SyntheticWorld : IDisposable
         }
 
         string network = networkPath.Length > 0 ? File.ReadAllText(networkPath) : string.Empty;
-        WorldPackage.Write(directory, manifest, "<OpenDRIVE/>", network, offset, bareEarth);
+        WorldPackage.Write(directory, manifest, openDrive, network, offset, bareEarth);
         return new SyntheticWorld(directory,
                                   WorldPackage.PackagePath(directory, manifest.MapName));
     }
