@@ -18,6 +18,7 @@ the real scenario artifacts. No code changed, no build run.
 | 10 · 2026-10-01 | Every reader of the truth, not only the recorder beside the session, lists the bodies a frame drew, named by SUMO vehicle, and no parked body: the server carries the render set on every world-observer snapshot. A pooled body's `role_name` is `sumo` (§4.1, §8.2). |
 | 11 · 2026-10-01 | A body is seated on the ground where its road is at grade and on the road's profile where the road is a structure, so at grade its `hae` is the ground's as before, and on a bridge deck the deck's altitude, with `hae_dtm` the ground beneath it and their difference the deck's height plus the pivot, not a body in the air (§4.2). |
 | 12 · 2026-10-01 | §6.2's instantaneous lane change is set above zero as ruled: the compiler writes `lanechange.duration` 3, the value [04](04_Contracts.md) D4.42 owns, the lock records it and the session's report states it, and the bridge renders a changing vehicle where SUMO has it. Bahonar is not yet recompiled with it. The heading a body takes through a lane change and a junction is measured and open. |
+| 13 · 2026-10-02 | A driven body's heading is the heading of its own path, and the truth carries it as `heading_deg` beside the course; course and speed are the path's, lateral movement included; SUMO's reported angle rides beside them as `sumo_angle_deg` for audit (§8.2). Through a lane change the body now turns with its sideways movement (§6.2). Bahonar is recompiled with 3 s lane changes once SUMO is given body widths without mirrors (§2.5). |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -275,14 +276,15 @@ Read from `carla/Build/sumo-src/src/microsim/MSFrame.cpp` and
 | `random-depart-offset` | `0` (`MSFrame.cpp:486`) | Uniform random jitter on every `depart` | not set |
 | `ignore-route-errors` | `false` (`MSFrame.cpp:393`) | Unroutable vehicles dropped instead of failing the load | not set |
 | `seed` | `23423` (`RandHelper.cpp:67`) | Fixed by default, but `--random` (`:63`) reseeds from wall clock | `42` |
-| `lanechange.duration` | **`0`** (`MSFrame.cpp:489`) | A lane change is laterally **instantaneous** | not set |
+| `lanechange.duration` | **`0`** (`MSFrame.cpp:489`) | A lane change is laterally **instantaneous** | not set until 2026-10-02; `3` since |
 
 The last row is not a population edit but reaches truth and imagery directly: at the default a vehicle
 crosses a lane width within one 1.0 s step, which renders as a sideways jump and shows up in the
 reconciliation residual of §4.3 as a spurious spike. §6.2 takes it up. Since 2026-10-01 the scenario
 compiler writes 3 s ([04](04_Contracts.md) D4.42) into every scenario it compiles; the committed Bahonar
-scenario still sets none, because with it Bahonar deadlocks behind a body wider than its lanes
-([04](04_Contracts.md) §5.2a).
+scenario set none until 2026-10-02, because with it Bahonar deadlocked behind a body measured wider
+than its lanes, mirrors included; with SUMO given each body's width without its mirrors it is
+recompiled with 3 s and runs as before ([04](04_Contracts.md) §5.2a, D4.43).
 
 ### 2.6 The two prevalence numbers
 
@@ -1681,7 +1683,7 @@ SUMO's housekeeping is not absent, it is different, and three of its mechanisms 
 | **Departure jitter** — `random-depart-offset`, default 0 | Uniform random offset on every `depart`, which moves every declared onset | **Forbid** | It would make the declared onset of §3.3 a lie |
 | **Route errors** — `ignore-route-errors`, default false | Unroutable vehicles dropped instead of failing the load | **Keep at the default** | The authoring skill already validates every route with `duarouter` rather than a graph check |
 | **Unseeded run** — `--random` (`RandHelper.cpp:63`) | Reseeds from wall clock | **Forbid** | An unreproducible corpus. The seed is recorded in the manifest |
-| **Instantaneous lane change** — `lanechange.duration`, default 0 | Not a population edit, but the vehicle crosses a lane width inside one step | **Set above zero and record the value** | At the default the imagery shows a sideways jump and §4.3's residual spikes at every lane change. The right value is a physical one; [04](04_Contracts.md) owns it. **Built 2026-10-01:** the compiler writes 3 s ([04](04_Contracts.md) D4.42), the lock records it and the session's run report states it; SUMO then moves the vehicle across steadily and the bridge renders it where SUMO has it ([03](03_CoSimulation_Runtime.md) §6.4), so the position neither jumps nor leaves SUMO's. The body's heading through the change is still its lane's tangent, so it crosses without yawing and its velocity points along the road; which heading the truth carries is the owner's decision ([03](03_CoSimulation_Runtime.md) Q3.11) |
+| **Instantaneous lane change** — `lanechange.duration`, default 0 | Not a population edit, but the vehicle crosses a lane width inside one step | **Set above zero and record the value** | At the default the imagery shows a sideways jump and §4.3's residual spikes at every lane change. The right value is a physical one; [04](04_Contracts.md) owns it. **Built 2026-10-01:** the compiler writes 3 s ([04](04_Contracts.md) D4.42), the lock records it and the session's run report states it; SUMO then moves the vehicle across steadily and the bridge renders it where SUMO has it ([03](03_CoSimulation_Runtime.md) §6.4), so the position neither jumps nor leaves SUMO's. Since 2026-10-02 the body turns with the change: its heading is the heading of its own path, sideways movement included, and its velocity the path's, so the truth's course follows the change ([03](03_CoSimulation_Runtime.md) §6.4, D3.40) |
 
 The pattern: **SUMO's edits are on insertion and on jam resolution, where the traffic manager's were on
 idleness.** Doc 20's diagnosis — that housekeeping silently reshapes the distribution being learned and
@@ -2222,6 +2224,22 @@ server as it lends it and gives it back, the server carries that set on every wo
 names each lent body by its SUMO vehicle. So the live pull, the live CoT feed and a recorder with no
 source of its own carry `sumo_id`, `vtype_id` and `admitted_tick`, key the uid and callsign on the
 SUMO vehicle, and list no parked body; such a recorder marks its sidecar `vehicles="rendered"`.
+
+**As built (2026-10-02): the heading, the course and SUMO's angle.** A driven body's heading is the
+heading of its own path -- the rear axle trailing the front bumper along the path the bridge renders it
+on, turned only by forward travel ([03](03_CoSimulation_Runtime.md) §6.4, D3.40) -- and its velocity is
+the path's, the bumper's movement over the tick with a lane change's sideways movement in it. So in
+the truth record the **course and speed** (`track.course`, `track.speed`, `vx`/`vy`/`vz`) are the motion
+the imagery shows, and every vehicle record carries **`heading_deg`**, the direction the body points,
+from its transform -- which differs from the course through a turn and a lane change, and is what a
+box drawn on the image is oriented by. **`sumo_angle_deg`**, the angle SUMO reported for the vehicle at
+the frame, is written beside them for audit by a recorder handed the session's render set; the live
+pull and a recorder in another process carry `heading_deg` and not SUMO's angle, which the server is
+not told. The bumper is SUMO's position exactly, so positional truth is unchanged. While moving, the
+body's heading is within 10.3° (Gardnerville) and 10.9° (Arapahoe) of SUMO's angle at the 99th
+percentile: SUMO's angle is the chord from the vehicle's back to its front, and over 300 s of Arapahoe
+it steps by more than 15° 363 times where the path heading does 18 times. This is the `heading_separation_deg`
+the reconciler above will report; until it exists, the two angles side by side are the record of it.
 
 ### 8.3 The world truth track
 

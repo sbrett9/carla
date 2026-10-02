@@ -15,6 +15,12 @@
 > `point.hae` is the deck's altitude in the bare-earth datum and the sidecar's `hae_dtm` the ground
 > beneath it (§3); at grade it is the ground's, as before. Nothing in the computation changed.
 
+> **Revision (2026-10-02):** Every truth record carries `heading_deg` in `_carla`, the direction the
+> body points, beside `track.course`, the direction it moves (§3, §5); the live pull's dicts carry it as
+> `heading_deg`. During a SUMO drive the body's heading is the heading of its own path and its velocity
+> the path's, so course and speed are the motion the imagery shows; a recorder beside the session also
+> writes `sumo_angle_deg`, SUMO's reported angle, for audit (§5).
+
 ## 1. Purpose
 
 One CoT event schema emitted by **both** producers so they are directly comparable in WinTAK and in a
@@ -65,7 +71,7 @@ Same shape ⇒ truth-vs-detection scoring is a direct diff (position error, clas
 | `point.lat`/`lon` | WGS84 degrees |
 | `point.hae` | **ellipsoidal** height, metres (matches datum; = ground sample + local Z). On a bridge deck it is the deck's altitude, not the ground's: the body is seated on the deck's road profile there, and the surface shift taken off under a deck is the same systematic one the deck's height was measured against, so a deck vehicle's `hae` stands the deck's height above the bare-earth `hae_dtm` beneath it — 3–7 m on Arapahoe — and is not a vehicle in the air |
 | `point.ce`/`le` | error metres. **TRUTH = 0.0** (exact). DETECTION = estimated. (CoT "unknown" sentinel 9999999 is NOT used.) |
-| `track.course` | heading **degrees true north, 0–360**. Course-over-ground from velocity: `bearing = atan2(East, North) = atan2(vx, -vy)` (CARLA +X=East, −Y=North); fall back to vehicle yaw below a speed threshold. *Verify empirically (drive north ⇒ ~0°), as with the pick math.* |
+| `track.course` | **degrees true north, 0–360**. Course-over-ground from velocity: `bearing = atan2(East, North) = atan2(vx, -vy)` (CARLA +X=East, −Y=North); fall back to vehicle yaw below a speed threshold. *Verify empirically (drive north ⇒ ~0°), as with the pick math.* The direction the vehicle moves; the direction its body points is `_carla.heading_deg` (§5), and the two differ through a turn and a lane change |
 | `track.speed` | horizontal ground speed `sqrt(vx²+vy²)`, **m/s** |
 | `contact.callsign` | human-readable; default `<base_type>-<actor_id>` (e.g. `car-123`); `<base_type>-<sumo_id>` in a SUMO drive (e.g. `car-escort_0`) |
 
@@ -100,7 +106,13 @@ Vehicle class source: CARLA blueprint attributes `base_type` (car/truck/van/moto
 Carries the richer-than-ADS-B fields for the scoring harness / any TAK plugin; WinTAK ignores unknown
 detail children. Attributes: `source` (`truth`|`detection`), `actor_id`, `type_id`, `base_type`,
 `special_type`, `length_m`/`width_m`/`height_m` (from `bounding_box.extent × 2`), `color`, `role_name`,
-raw `vx`/`vy`/`vz`. (Detection fills what it can: `source="detection"`, confidence, predicted class.)
+raw `vx`/`vy`/`vz`, and `heading_deg` -- the direction the body points, degrees true north from its yaw
+(`atan2(cos yaw, −sin yaw)`), beside `track.course`, the direction it moves (2026-10-02). (Detection
+fills what it can: `source="detection"`, confidence, predicted class.) During a SUMO drive the body's
+heading is the heading of its own path, the rear axle trailing the front bumper, and its velocity the
+path's, lateral movement included; a recorder handed the session's render set also writes
+`sumo_angle_deg`, the angle SUMO reported for the vehicle at the frame, for audit. The live pull and a
+recorder in another process carry `heading_deg` and no SUMO angle, which the server is not told.
 In a SUMO drive a recorded sidecar adds, per vehicle, `sumo_id` (the SUMO vehicle the body rendered
 on that frame), `vtype_id` (its declared vType) and `admitted_tick` (the first frame of its current
 rendered span); `actor_id` is then the body that drew it on that frame (§5.2). The live pull's
@@ -188,7 +200,8 @@ it did before.
 2. **Symbol granularity = v0 single `a-n-G-E-V`** for every vehicle; fine class rides in `_carla`
    (`base_type`, `type_id`). Per-class SIDCs deferred to v1 (§4 table, pending an authoritative 2525 check).
 3. Heading = **course-over-ground** from velocity (`atan2(vx, -vy)`), vehicle-yaw fallback below ~0.5 m/s;
-   callsign = **`<base_type>-<id>`**; **`STALE_SECONDS = 3`**; truth **`ce = le = 0`**.
+   callsign = **`<base_type>-<id>`**; **`STALE_SECONDS = 3`**; truth **`ce = le = 0`**. The track's
+   course stays the course; the body's own heading rides in `_carla.heading_deg` (2026-10-02, §5).
 
 ## 9. Verification (the payoff)
 
