@@ -68,6 +68,8 @@ def to_cot(rec, affiliation="n", stale_seconds=3.0, source="truth", uid_prefix="
         "height_m": f"{rec['height_m']:.2f}", "color": rec["color"], "role_name": rec["role_name"],
         "vx": f"{rec['vx']:.2f}", "vy": f"{rec['vy']:.2f}", "vz": f"{rec['vz']:.2f}",
     }
+    if "heading_deg" in rec:
+        extras["heading_deg"] = f"{rec['heading_deg']:.1f}"   # where the body points; course is where it moves
     if sumo_id is not None:
         extras.update(sumo_id=str(sumo_id), vtype_id=str(rec.get("vtype_id", "")),
                       admitted_tick=str(rec.get("admitted_tick", "")))
