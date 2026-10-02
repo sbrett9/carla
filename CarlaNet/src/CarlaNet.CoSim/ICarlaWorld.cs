@@ -10,10 +10,11 @@ namespace CarlaNet.CoSim;
 /// Everything the playback bridge asks of a CARLA world, and nothing else.
 /// </summary>
 /// <remarks>
-/// <para>Fifteen operations. The bridge asks which world is loaded, hands the world's truth
+/// <para>Sixteen operations. The bridge asks which world is loaded, hands the world's truth
 /// telemetry the package's ground once the package is established as that world's, places bodies,
 /// writes their poses and velocities in one batch, names to the server which bodies are lent and
-/// which parked, reads back where the world says they went and how
+/// which parked, sets how far from a camera the bodies are drawn, reads back where the world says
+/// they went and how
 /// fast it says they are moving, advances the world a tick, reads and
 /// writes the episode settings so it can hand the world back as it found it, shows or hides the
 /// rendering layers whose presence is a property of the imagery, and reads and writes the sun the
@@ -103,6 +104,24 @@ public interface ICarlaWorld
     /// either way, and only the truth other processes read goes back to every vehicle actor.</para>
     /// </remarks>
     RenderSetWrite WriteRenderSet(IReadOnlyList<LentBody> lent, IReadOnlyList<ActorId> parked);
+
+    /// <summary>
+    /// Set how far from a camera the named bodies are drawn, in metres, zero for no limit; answer what
+    /// the server made of it.
+    /// </summary>
+    /// <remarks>
+    /// <para>Rendering only, and per view: the renderer culls each of a body's meshes and lamps by its
+    /// own bounds against every camera's position, so one setting holds for every camera, the ones
+    /// spawned after it included. A body beyond the distance from a camera keeps its pose, its
+    /// velocity and its place in the truth, and is simply not in that camera's image.</para>
+    ///
+    /// <para>One round trip for any number of bodies, and set once on a body: a pooled body keeps it
+    /// across every vehicle it is lent to.</para>
+    ///
+    /// <para>A server built before it carried the call refuses it, and says why. That is not a failed
+    /// run: every body is then drawn at any range, as with no limit, and the run says so.</para>
+    /// </remarks>
+    DrawDistanceWrite WriteDrawDistance(IReadOnlyList<ActorId> bodies, double metres);
 
     /// <summary>
     /// Where the world says an actor is, or <see langword="null"/> where it has reported nothing.

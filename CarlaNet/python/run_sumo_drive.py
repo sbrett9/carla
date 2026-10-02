@@ -129,6 +129,12 @@ Gardnerville at the pace of real traffic:
     python run_sumo_drive.py --scenario ... --world-package ... --epoch ... \\
         --illumination freeze_at_window_start --real-time-factor 1.0 --steps 0 --view free
 
+`--draw-distance METRES` is an optional performance control, off unless given: no camera draws a
+vehicle's body farther than that from it. Rendering only -- every vehicle still gets its body, is
+posed and is in the truth -- and each capture's sidecar marks the vehicles its camera did not draw
+(`beyond_draw_distance`), so none is read as a vehicle the image shows. A server built before it
+carried the call refuses it, and the drive goes on drawing every body at any range and says so.
+
 Flying: hold the right mouse button and move the mouse to look; W/S A/D E/Q to fly; the wheel sets
 the speed, Shift triples it; Ctrl+click measures a point; B/M draw the perimeter and margin; Space
 returns to the start pose. run_free_move_camera.py stays the separate viewer that records nothing.
@@ -232,6 +238,12 @@ def parse_args() -> argparse.Namespace:
                         help="override the scenario's SUMO step length (behaviour-changing)")
     parser.add_argument("--fixed-delta", type=float, default=0.05,
                         help="simulated seconds per CARLA tick")
+    parser.add_argument("--draw-distance", type=float, default=None, metavar="METRES",
+                        help="an optional performance control, off unless given: how far from a "
+                             "camera a vehicle's body is drawn. Rendering only: every vehicle still "
+                             "has its body, is posed and is in the truth, and each capture marks "
+                             "the vehicles its camera did not draw. Default: every body drawn at "
+                             "any range")
 
     parser.add_argument("--show-road-mesh", action="store_true",
                         help="draw the generated road surface. Hidden by default: it is a flat grey "
@@ -518,6 +530,15 @@ class PacingProgress:
                         admission.NewlyAdmitted, admission.Released, admission.TotalAdmissions)
 
 
+def describe_draw_distance(metres: float | None) -> str:
+    """The draw distance as the launch states it: none, or what it does and does not change."""
+    if metres is None:
+        return "none; every body is drawn at any range"
+    return (f"{metres:g} m, rendering only: every vehicle has its body, is posed and is in the "
+            "truth; a body farther than that from a camera is not drawn in that camera's image, and "
+            "each capture's sidecar marks it")
+
+
 def camera_transform(args: argparse.Namespace, centre: tuple[float, float]) -> carla.Transform:
     """An oblique view of a point, standing off along a bearing and looking back at it."""
     centre_x, centre_y = centre
@@ -562,6 +583,13 @@ def report_captures(recorder) -> None:
     logger.info("captures           %s written, %s dropped; %s carry their frame's "
                 "illumination declaration, %s do not", recorder.Saved, recorder.Dropped,
                 recorder.IlluminationPaired, recorder.IlluminationUnpaired)
+    drawn_under = getattr(recorder, "DrawDistanceCaptures", 0)
+    if drawn_under:
+        # Vehicles in the world and in the truth that a capture's image did not show, each marked in
+        # its sidecar so none is read as seen.
+        logger.info("draw distance      %s captures drawn under it; %s vehicle records marked "
+                    "wholly beyond it, %s partly", drawn_under, recorder.VehiclesBeyondDrawDistance,
+                    recorder.VehiclesPartlyBeyondDrawDistance)
     # A capture whose frame's render set the session no longer held lists no vehicle rather
     # than a guessed set, so any such capture is truth missing, and is said louder.
     (logger.warning if recorder.RenderSetUnpaired or recorder.RenderSetBodiesMissing
@@ -770,6 +798,7 @@ def main() -> int:
             vehicle_lamps=not args.no_vehicle_lamps,
             headlight_on_below_deg=args.headlight_on_below,
             headlight_off_above_deg=args.headlight_off_above,
+            draw_distance_m=args.draw_distance,
             # Bound only where the aim needs it: the session hands out a pose per rendered
             # vehicle per tick, and a callback that spends the whole run declining them is a
             # crossing into Python per vehicle per tick for nothing. No divergence callback for
@@ -806,6 +835,7 @@ def main() -> int:
             for layer in session.Report.LayerVisibility.Keys))
         logger.info("render set: every vehicle SUMO has; SUMO runs under seed %d",
                     session.Report.SumoSeed)
+        logger.info("draw distance: %s", describe_draw_distance(session.Report.DrawDistanceMetres))
 
         steps = 0
         # Everything up to the recorder starting happens with the world already in synchronous mode:

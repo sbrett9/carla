@@ -3,7 +3,12 @@ namespace CarlaNet.Recording;
 /// <summary>A capture's vehicle records once paired with a render set, and which vehicles they are.</summary>
 /// <param name="Records">The records the sidecar lists.</param>
 /// <param name="Vehicles">What that list is: the frame's render set, or nothing because it was unknown.</param>
-public readonly record struct PairedTruth(IReadOnlyList<VehicleTelemetry> Records, SidecarVehicles Vehicles);
+/// <param name="DrawDistanceMetres">
+/// The draw distance the frame's set says it was drawn under, or null where it drew every body at any
+/// range or the set was unknown.
+/// </param>
+public readonly record struct PairedTruth(IReadOnlyList<VehicleTelemetry> Records, SidecarVehicles Vehicles,
+                                          double? DrawDistanceMetres = null);
 
 /// <summary>
 /// Pairs each capture's truth records with the render set of the frame they describe, and counts the
@@ -92,7 +97,7 @@ public sealed class RenderSetPairing
             Interlocked.Add(ref _bodiesMissing, missing);
         }
 
-        return new PairedTruth(selected, SidecarVehicles.Rendered);
+        return new PairedTruth(selected, SidecarVehicles.Rendered, renderSet.DrawDistanceMetres);
     }
 
     private bool TryWaitFor(ulong frame, out RenderSet renderSet)

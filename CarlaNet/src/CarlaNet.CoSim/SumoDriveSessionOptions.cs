@@ -23,10 +23,11 @@ namespace CarlaNet.CoSim;
 /// and an init-only property cannot be written at all, so an options object that can only be built
 /// with one is an options object the orchestrator cannot build.</para>
 ///
-/// <para>Nothing here limits how many vehicles are rendered. The scenario is the only arbiter of
-/// population: every vehicle SUMO has gets a body, and a scenario heavier than the machine is
-/// comfortable with makes a synchronous run slower on the wall clock, never different in
-/// content.</para>
+/// <para>By default nothing here limits how many vehicles are rendered. The scenario is the only
+/// arbiter of population: every vehicle SUMO has gets a body, and a scenario heavier than the machine
+/// is comfortable with makes a synchronous run slower on the wall clock, never different in
+/// content. <see cref="DrawDistanceMetres"/> is an optional performance control, off unless set, that
+/// trades what a camera draws far away for speed; it changes no vehicle's body, pose or truth.</para>
 /// </remarks>
 public sealed record SumoDriveSessionOptions(
     string ScenarioPath,
@@ -266,6 +267,31 @@ public sealed record SumoDriveSessionOptions(
     /// so their stop-line triggers stay live.
     /// </remarks>
     public bool SignalLayerVisible { get; set; }
+
+    /// <summary>
+    /// How far from a camera, in metres, a vehicle's body is drawn; null, the default, draws every
+    /// body at any range.
+    /// </summary>
+    /// <remarks>
+    /// <para>An optional performance control, off unless set, and rendering only. Every vehicle still
+    /// gets its body, is posed on every tick and is in the truth exactly as without it; a body farther
+    /// than this from a camera is simply not drawn in that camera's image. The distance is set once on
+    /// each pooled body as it is spawned, and kept across every vehicle the body is lent to, as the
+    /// maximum draw distance of its meshes and lamps (<see cref="ICarlaWorld.WriteDrawDistance"/>):
+    /// the renderer culls by it per view, so it holds for every camera at once, the fixed camera, a
+    /// flown one and a capture run's channels alike. <see cref="SumoDriveSession.SetDrawDistance"/>
+    /// changes it during a run.</para>
+    ///
+    /// <para>Each frame's render set carries the distance the frame was drawn under
+    /// (<see cref="CarlaNet.Recording.RenderSet.DrawDistanceMetres"/>), so a recorder marks, in that
+    /// camera's sidecar, every vehicle the camera did not draw for it. A server built before it
+    /// carried the call refuses it: the run goes on with every body drawn at any range, the frames
+    /// carry no distance, and the report names the refusal.</para>
+    ///
+    /// <para>A positive number of metres, or null. Anything else is refused before anything is
+    /// started.</para>
+    /// </remarks>
+    public double? DrawDistanceMetres { get; set; }
 
     /// <summary>Where each computed pose goes.</summary>
     public Action<CoSimPoseRecord>? OnPose { get; set; }

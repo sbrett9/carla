@@ -11,10 +11,11 @@ namespace CarlaNet.CoSim.Tests;
 /// A CARLA world that records what was asked of it and answers as a server would.
 /// </summary>
 /// <remarks>
-/// <para>Everything the bridge does to a world is fifteen operations wide, so a world that keeps a
+/// <para>Everything the bridge does to a world is sixteen operations wide, so a world that keeps a
 /// dictionary of actors, a list of batches and a simulated sun exercises the whole driving path --
 /// the check of which world is loaded, the pool, the batch, the render set named to the server, the
-/// read-back, the tick, the settings restoration and the sun's binding and audit -- with no server,
+/// draw distance set on the bodies, the read-back, the tick, the settings restoration and the sun's
+/// binding and audit -- with no server,
 /// no engine and no render. What it
 /// cannot establish is what a body looks like once the pose is applied, which is the one thing only
 /// a live run can answer.</para>
@@ -46,6 +47,8 @@ internal class RecordedWorld : ICarlaWorld
     private readonly HashSet<ActorId> _namedParked = [];
     private readonly Dictionary<ulong, PublishedRenderSet> _published = [];
     private readonly List<(IReadOnlyList<LentBody> Lent, IReadOnlyList<ActorId> Parked, long AtTick)> _renderSetWrites = [];
+    private readonly List<(IReadOnlyList<ActorId> Bodies, double Metres, long AtTick)> _drawDistanceWrites = [];
+    private readonly Dictionary<ActorId, double> _drawDistances = [];
     private ActorId _nextActor = 1;
     private (string Operation, Exception Failure)? _severAt;
     private Exception? _severedWith;
@@ -194,6 +197,26 @@ internal class RecordedWorld : ICarlaWorld
     /// </summary>
     public PublishedRenderSet? PublishedRenderSetOf(ulong frame) => _published.GetValueOrDefault(frame);
 
+    /// <summary>
+    /// Set to have the world refuse every draw distance with this message, as a server built before
+    /// it carried the call does.
+    /// </summary>
+    public string? RefusesDrawDistance { get; set; }
+
+    /// <summary>
+    /// Every draw distance set, with the bodies it was sent for and the tick the world was on when it
+    /// arrived -- the session's index of the tick it was set before.
+    /// </summary>
+    public IReadOnlyList<(IReadOnlyList<ActorId> Bodies, double Metres, long AtTick)> DrawDistanceWrites =>
+        _drawDistanceWrites;
+
+    /// <summary>
+    /// The draw distance an actor carries, metres, as the server holds it on the actor's components;
+    /// null for one never set, or set to zero, which is drawn at any range.
+    /// </summary>
+    public double? DrawDistanceOf(ActorId actor) =>
+        _drawDistances.TryGetValue(actor, out double metres) && metres > 0.0 ? metres : null;
+
     /// <summary>Bodies the world holds named lent or parked right now.</summary>
     public int NamedBodies => _namedLent.Count + _namedParked.Count;
 
@@ -311,6 +334,7 @@ internal class RecordedWorld : ICarlaWorld
                     // The naming is held on the actor's own record, so it ends with the actor.
                     _namedLent.Remove(destroy.Actor);
                     _namedParked.Remove(destroy.Actor);
+                    _drawDistances.Remove(destroy.Actor);
                     responses.Add(CommandResponse.Success(destroy.Actor));
                     break;
                 default:
@@ -369,6 +393,34 @@ internal class RecordedWorld : ICarlaWorld
         }
 
         return new RenderSetWrite(found, null);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Held as the server holds it, on each actor it finds: a body the world does not have is not
+    /// found, and a destroyed body loses it.
+    /// </remarks>
+    public DrawDistanceWrite WriteDrawDistance(IReadOnlyList<ActorId> bodies, double metres)
+    {
+        Connected(nameof(WriteDrawDistance));
+        // A copy, because the session reuses its list from one write to the next.
+        _drawDistanceWrites.Add(([.. bodies], metres, Ticks));
+        if (RefusesDrawDistance is { } refusal)
+        {
+            return new DrawDistanceWrite(0, refusal);
+        }
+
+        int found = 0;
+        foreach (ActorId actor in bodies)
+        {
+            if (_actors.ContainsKey(actor))
+            {
+                _drawDistances[actor] = metres;
+                found++;
+            }
+        }
+
+        return new DrawDistanceWrite(found, null);
     }
 
     /// <inheritdoc/>

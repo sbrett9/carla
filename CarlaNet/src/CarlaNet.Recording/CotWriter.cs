@@ -16,6 +16,13 @@ namespace CarlaNet.Recording;
 /// <c>CARLA-TRUTH-SUMO-&lt;sumo_id&gt;</c> and its callsign <c>&lt;base_type&gt;-&lt;sumo_id&gt;</c>, and
 /// the actor id stays in the extras, where it says which body drew the vehicle on this frame. A record
 /// with no vehicle named is written exactly as before.
+///
+/// <para>A capture whose image was rendered under a draw distance says so on its container
+/// (<c>draw_distance_m</c>), and every vehicle the distance kept out of the image, wholly or in part,
+/// carries <c>beyond_draw_distance</c> and the <c>camera_range_m</c> it rests on in its extras: it is in
+/// the world and in the truth, a vehicle wholly beyond the distance is not in this image at all, and
+/// one partly beyond it may be drawn without the parts beyond (<see cref="DrawDistanceReach"/>). A
+/// capture with no draw distance carries neither.</para>
 /// </remarks>
 public static class CotWriter
 {
@@ -23,7 +30,7 @@ public static class CotWriter
         IReadOnlyList<VehicleTelemetry> recs, string affiliation = "n", double staleSeconds = 3.0,
         IReadOnlyList<double>? solar = null, SensorPose? sensor = null,
         CaptureIdentity? capture = null, IlluminationDeclaration? illumination = null,
-        SidecarVehicles vehicles = SidecarVehicles.World)
+        SidecarVehicles vehicles = SidecarVehicles.World, double? drawDistanceMetres = null)
     {
         var settings = new XmlWriterSettings
         {
@@ -66,6 +73,12 @@ public static class CotWriter
         // rather than guessed, and not to be read as an empty scene.
         if (vehicles == SidecarVehicles.Rendered) w.WriteAttributeString("vehicles", "rendered");
         else if (vehicles == SidecarVehicles.Unknown) w.WriteAttributeString("vehicles", "unknown");
+
+        // The draw distance the image was rendered under, where one was in force: every vehicle below
+        // farther than this from the camera is in the world and not in the image, and says so. Absent,
+        // the image drew every vehicle at any range.
+        if (drawDistanceMetres is { } drawDistance)
+            w.WriteAttributeString("draw_distance_m", F(drawDistance, "0.###"));
 
         // Scene-level solar state (unbreakably tied to the imagery too, via the PNG tEXt chunk). Written
         // once here, before the per-vehicle events, so it is present even for a vehicle-free frame.
@@ -232,6 +245,15 @@ public static class CotWriter
                                        r.ApparentWidthPx.ToString(CultureInfo.InvariantCulture));
                 w.WriteAttributeString("apparent_height_px",
                                        r.ApparentHeightPx.ToString(CultureInfo.InvariantCulture));
+            }
+            // Kept out of this image by the draw distance, wholly or in part, and how far from the
+            // camera it stood: in the world and in the truth, and not a vehicle this image shows.
+            // Written only where the distance reached it, so its absence under a draw distance means
+            // the image drew all of it.
+            if (DrawDistanceCheck.SidecarValue(r.DrawDistance) is { } beyond)
+            {
+                w.WriteAttributeString("beyond_draw_distance", beyond);
+                w.WriteAttributeString("camera_range_m", F(r.CameraRangeMetres, "0.0"));
             }
             // Who this body was drawing on this frame, where it was lent one: the SUMO vehicle that
             // joins the record to the scenario's supervision, its declared type, and the frame its

@@ -1983,7 +1983,7 @@ class World:
                         platform_callsign="OVERWATCH", platform_uid=None, distortion="none",
                         run_id=None, scenario_id=None, seed=None, depth_camera=None,
                         occlusion_margin_m=1.0, occlusion_samples=24, illumination=None,
-                        render_set=None):
+                        render_set=None, draw_distance_m=None):
         """Start native (C#) recording of `camera`'s imagery to `record_dir`: every 1/hz seconds a
         lossless PNG of the clean frame + a paired CoT-XML telemetry sidecar, encoded on the .NET thread
         pool (no Python/GIL in the hot path). Returns the FrameRecorder, or None if unavailable.
@@ -2028,6 +2028,18 @@ class World:
         record described. Without it every vehicle actor is listed, which is right wherever each
         actor is its own vehicle.
 
+        A SUMO drive run with a draw distance (`start_sumo_drive(draw_distance_m=...)`, off by
+        default) draws no body farther than that from a camera, while every vehicle stays in the
+        world and in the truth. Each capture then states the distance on its container
+        (`draw_distance_m`) and marks, in the truth extras, every vehicle its camera did not draw:
+        `beyond_draw_distance="wholly"` for one the image shows nothing of, `"partly"` for one the
+        distance falls across, each with the `camera_range_m` it rests on; a vehicle wholly beyond it
+        is never measured for occlusion. With `render_set` given, each frame's own set says the
+        distance it was drawn under -- none where the server refused it -- and `draw_distance_m` here
+        is not read; give it to a recorder with no `render_set`, in another process, with the
+        distance the drive's report states. `DrawDistanceCaptures`, `VehiclesBeyondDrawDistance` and
+        `VehiclesPartlyBeyondDrawDistance` count what was marked.
+
         Each capture's platform pose, and the pose its occlusion is measured from, is the camera's in
         the client's snapshot of the image's own frame, with the transform in the image's header
         checked against it rather than trusted; the depth camera's capture is checked the same way.
@@ -2064,7 +2076,8 @@ class World:
                                        None if seed is None else int(seed),
                                        depth_token, occlusion, illumination, render_set,
                                        int(camera.id),
-                                       None if depth_camera is None else int(depth_camera.id))
+                                       None if depth_camera is None else int(depth_camera.id),
+                                       None if draw_distance_m is None else float(draw_distance_m))
         return self._recorder
 
     def start_scenario(self, path, traffic_manager, report=None):
@@ -2122,7 +2135,7 @@ class World:
                          sumo_home=None, allow_sumo_version_mismatch=False, sumo_gui=False,
                          allow_teleporting=False, sumo_answer_timeout_s=60.0,
                          vehicle_lamps=True, headlight_on_below_deg=3.0,
-                         headlight_off_above_deg=6.0,
+                         headlight_off_above_deg=6.0, draw_distance_m=None,
                          on_pose=None, on_release=None, on_divergence=None,
                          on_admission_pass=None, on_collision=None,
                          on_vehicle_not_inserted=None):
@@ -2151,6 +2164,20 @@ class World:
         run slower on the wall clock, never different in content. `warm_up_to` fast-forwards SUMO to
         a simulated second before the first world tick, and `step_length` overrides the scenario's
         own SUMO step (behaviour-changing, and recorded as such).
+
+        `draw_distance_m` is an optional performance control, off by default (None): how far from a
+        camera, in metres, a vehicle's body is drawn. Rendering only -- every vehicle still gets its
+        body, is posed on every tick and is in the truth; a body farther than this from a camera is
+        simply not drawn in that camera's image. The session sets it once on each pooled body as the
+        body is spawned (the server's `set_actors_max_draw_distance`, the maximum draw distance of the
+        body's meshes and lamps), so it holds for every camera at once, and
+        `session.SetDrawDistance(metres)` changes it during a run (None draws every body at any range
+        again). Each frame's render set records the distance it was drawn under, so a recorder given
+        `session.RenderSet` marks in that camera's sidecar every vehicle beyond it. A server built
+        before it carried the call refuses it: the run goes on with every body drawn at any range,
+        and `session.Report.DrawDistanceRefused` says why. `session.Report.DrawDistanceMetres` is
+        what was asked for, `session.DrawDistanceMetres` what the bodies carry. A value that is not a
+        positive number of metres is refused before anything starts.
 
         `road_layer_visible` and `signal_layer_visible` decide what is in frame. Both are off,
         because the imagery this mode produces is of the photogrammetry: the generated road mesh is
@@ -2362,6 +2389,8 @@ class World:
         options.VehicleLampsDriven = bool(vehicle_lamps)
         options.HeadlightOnBelowDegrees = float(headlight_on_below_deg)
         options.HeadlightOffAboveDegrees = float(headlight_off_above_deg)
+        if draw_distance_m is not None:
+            options.DrawDistanceMetres = float(draw_distance_m)
         # Both are read by the C# side, which is the one validator: a declaration checked twice is
         # a declaration two implementations will eventually disagree about.
         if epoch is not None:

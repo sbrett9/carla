@@ -19,7 +19,10 @@ world (D1.12):
   the sun for the window's opening -- `window_opens_at`, the window's begin, so a frozen sun is
   pinned there and the prewarm is lit by it. It is handed `on_admission_pass`, so every admission
   pass reaches `WindowAdmissions`, and -- only where a channel aims at the rendered traffic --
-  `on_pose`, feeding `RenderedTrafficCentre`.
+  `on_pose`, feeding `RenderedTrafficCentre`. Where `capture.draw_distance_m` is set (an optional
+  performance control, off by default) it is handed over too, and the session gives every body it
+  spawns that draw distance: no camera draws a body farther away, while every vehicle keeps its
+  body, its pose and its truth.
 * **Map every refusal by its stage.** A refusal from the session's start or from `Advance` is a
   `CoSimSessionRefusedException` whose `StageName` says how far the session had got: `Validation`
   and `Launch` are `refused_server`; `Authority` is `refused_authority`, with the holder a held
@@ -54,7 +57,8 @@ world (D1.12):
   own `World` handle because the shim holds one recorder per handle, all given this session's id as
   their run id, the session's illumination source and its render set -- so each sidecar lists the
   bodies its own frame rendered, named by SUMO vehicle, and none of the bodies parked out of sight
-  between loans. An orbit starts to sweep as the window opens.
+  between loans, and, under a draw distance, marks every vehicle its camera did not draw. An orbit
+  starts to sweep as the window opens.
 * **Advance** until the window's end, the scenario's end, a stop, a loud condition under an
   unattended caller, or write headroom running out (check 46).
 * **Terminate** through `RunTerminationSequence`: drain the recorders, take the closing snapshot and
@@ -461,6 +465,7 @@ class CaptureSession:
             pacing_window_s=float(effective.value("pacing.window_s")),
             sumo_home=effective.value("sumo.home"),
             allow_sumo_version_mismatch=bool(effective.value("sumo.allow_version_mismatch")),
+            draw_distance_m=effective.value("capture.draw_distance_m"),
             # Bound only where a channel aims at the traffic: the session reads its callbacks once
             # and hands this a record per rendered vehicle per tick for the whole run.
             on_pose=None if self.traffic is None else self.traffic.collect,
@@ -508,6 +513,11 @@ class CaptureSession:
                  else "left as the world holds it; the run's lighting honours no epoch"}
         layers = report.LayerVisibility
         facts["layers"] = {str(key): bool(layers[key]) for key in layers.Keys}
+        asked = report.DrawDistanceMetres
+        facts["draw_distance"] = (
+            "none: every body drawn at any range" if asked is None
+            else f"{float(asked):g} m, rendering only: a body farther than that from a channel's "
+                 "camera is not in its images, and its sidecars mark it")
         return facts
 
     # -- the cameras -------------------------------------------------------------------------------------

@@ -227,6 +227,26 @@ public sealed class CarlaClientWorld : ICarlaWorld
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// A server that answers with an error -- one built before it carried the call -- is answered as
+    /// a refusal carrying its words, as the render set is, rather than thrown: the run goes on with
+    /// every body drawn at any range, and the report says what the server said.
+    /// </remarks>
+    public DrawDistanceWrite WriteDrawDistance(IReadOnlyList<ActorId> bodies, double metres)
+    {
+        ArgumentNullException.ThrowIfNull(bodies);
+        try
+        {
+            uint found = _client.SetActorsMaxDrawDistanceAsync(bodies, metres).GetAwaiter().GetResult();
+            return new DrawDistanceWrite((int)found, null);
+        }
+        catch (CarlaRpcException refused)
+        {
+            return new DrawDistanceWrite(0, refused.Message);
+        }
+    }
+
+    /// <inheritdoc/>
     public Transform? ObservedTransform(ActorId actor) =>
         _client.GetActorSnapshot(actor) is { } snapshot ? snapshot.Transform : null;
 

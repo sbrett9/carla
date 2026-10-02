@@ -84,6 +84,41 @@ def test_the_snapshot_carries_the_session_s_checks_and_the_closeout_shows_them(l
     assert "admission passes in the window: 0; most population" in text
 
 
+def test_with_no_draw_distance_the_closeout_says_nothing_of_one(layout):
+    report, session, _ = closeout(layout)
+    session.Advance()
+    snapshot = report.snapshot()
+    assert snapshot["render"]["draw_distance_m"] is None
+    assert snapshot["channels"][0]["vehicles_beyond_draw_distance"] == 0
+    assert "draw distance" not in RunCloseoutReport.render(snapshot, report.gates(snapshot, 0))
+
+
+def test_a_draw_distance_and_what_each_channel_marked_beyond_it_reach_the_closeout(layout):
+    report, session, recorder = closeout(layout)
+    session.Report.DrawDistanceMetres = 750.0
+    session.DrawDistanceMetres = 750.0
+    session.Advance()
+    recorder.DrawDistanceCaptures = 2
+    recorder.VehiclesBeyondDrawDistance = 31
+    recorder.VehiclesPartlyBeyondDrawDistance = 4
+    snapshot = report.snapshot()
+    assert (snapshot["render"]["draw_distance_m"], snapshot["render"]["draw_distance_in_force_m"],
+            snapshot["render"]["draw_distance_refused"]) == (750.0, 750.0, None)
+    channel = snapshot["channels"][0]
+    assert (channel["draw_distance_captures"], channel["vehicles_beyond_draw_distance"],
+            channel["vehicles_partly_beyond_draw_distance"]) == (2, 31, 4)
+    text = RunCloseoutReport.render(snapshot, report.gates(snapshot, 0))
+    assert "draw distance 750 m, rendering only" in text
+    assert "under the draw distance 2 captures: 31 vehicle records marked wholly beyond it, 4 partly" \
+        in text
+
+    # A server that refused it drew every body at any range, and the closeout says so.
+    session.Report.DrawDistanceRefused = "unknown method 'set_actors_max_draw_distance'"
+    session.DrawDistanceMetres = None
+    text = RunCloseoutReport.render(report.snapshot(), [])
+    assert "refused by the server, so every body was drawn at any range" in text
+
+
 def test_a_clean_run_meets_every_measured_gate(layout):
     report, session, _ = closeout(layout)
     session.Advance()

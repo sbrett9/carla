@@ -3,8 +3,8 @@
 `12_Operator_Control_Surface.md` §6.4, D12.24. One block, computed once after the offline checks and before
 anything is acquired, containing what a reader has to be told to notice that the run is not the run
 they meant: the simulated span and the captures it will make, the civil span, the sun at the window's
-first and last captured instants and the policy holding it, the world, what is rendered, the disk it
-will cost, where it writes, the wait for every channel's view before the window opens, and the
+first and last captured instants and the policy holding it, the world, what is rendered and how far
+from a camera, the disk it will cost, where it writes, the wait for every channel's view before the window opens, and the
 warnings raised.
 
 **One computation, two renderings.** `to_dict()` is the block, serialised into the resolution report
@@ -105,7 +105,9 @@ class LaunchEcho:
                                  effective.value("world.origin_longitude")]},
             "render": {"vehicles": "every vehicle SUMO has",
                        "road_layer_visible": effective.value("capture.road_layer_visible"),
-                       "signal_layer_visible": effective.value("capture.signal_layer_visible")},
+                       "signal_layer_visible": effective.value("capture.signal_layer_visible"),
+                       "draw_distance_m": effective.value("capture.draw_distance_m"),
+                       "draw_distance": cls._draw_distance(effective.value("capture.draw_distance_m"))},
             "cost": {"bytes_per_captured_second": bytes_per_captured_second,
                      "estimated_bytes": bytes_per_captured_second * window.length_s,
                      "free_bytes": free_bytes, "headroom_s": headroom_s,
@@ -155,6 +157,16 @@ class LaunchEcho:
                                          + (f", and the prewarm from t={first:g} is lit by it"
                                             if first < opens_at else ""))
         return block
+
+    @staticmethod
+    def _draw_distance(metres: float | None) -> str:
+        """What the draw distance does to the run, in words: nothing, or what it changes and what it
+        leaves alone."""
+        if metres is None:
+            return "none: every body is drawn at any range"
+        return (f"{float(metres):g} m, rendering only: every vehicle keeps its body, its pose and its "
+                "truth; a body farther than that from a channel's camera is not in that channel's "
+                "images, and its sidecars mark it beyond_draw_distance")
 
     @staticmethod
     def _readiness(effective: EffectiveRunConfiguration) -> dict:
@@ -231,6 +243,7 @@ class LaunchEcho:
         lines.append(f"  render      {render['vehicles']}   road "
                      f"{'drawn' if render['road_layer_visible'] else 'hidden'}, signals "
                      f"{'drawn' if render['signal_layer_visible'] else 'hidden'}")
+        lines.append(f"              draw distance {render['draw_distance']}")
         cost = b["cost"]
         headroom = cost["headroom_s"]
         lines.append(f"  cost        ~{cost['estimated_bytes'] / 1e9:.1f} GB estimated; "

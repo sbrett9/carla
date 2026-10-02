@@ -35,7 +35,10 @@ from RunCaptureFixture import (  # noqa: E402
 from carlacontrol.LaunchEcho import LaunchEcho  # noqa: E402
 from carlacontrol.RunConfiguration import RunConfiguration  # noqa: E402
 from carlacontrol.RunConfigurationCheckCatalogue import RunConfigurationCheckCatalogue  # noqa: E402
-from carlacontrol.RunConfigurationFindings import RunConfigurationFindings  # noqa: E402
+from carlacontrol.RunConfigurationFindings import (  # noqa: E402
+    RunConfigurationFindings,
+    RunConfigurationRefusedError,
+)
 from carlacontrol.RunConfigurationResolver import RunConfigurationResolver  # noqa: E402
 from carlacontrol.RunConfigurationValidator import (  # noqa: E402
     PNG_BYTES_PER_PIXEL,
@@ -217,6 +220,76 @@ def test_no_field_bounds_the_rendered_population_and_its_checks_are_retired(layo
     for retired in (20, 21, 33):
         with pytest.raises(KeyError, match="retired"):
             RunConfigurationCheckCatalogue.get(retired)
+
+
+def test_no_draw_distance_is_set_unless_asked_for(layout):
+    # An optional performance control, off by default: every body drawn at any range.
+    effective, _validator, findings, _, _ = offline(layout)
+    assert effective.value("capture.draw_distance_m") is None
+    assert 52 not in checks(findings)
+
+
+def test_a_draw_distance_that_reaches_every_channel_s_point_launches_clean(layout):
+    # The fixture's stare stands 400 m back and 300 m up: 500 m from the point it looks at.
+    assert launch(layout, overrides=["capture.draw_distance_m=500"]).findings == []
+
+
+def test_a_draw_distance_short_of_a_stare_s_point_is_refused_naming_the_range(layout):
+    *_, findings, _, _ = offline(layout, overrides=["capture.draw_distance_m=499"])
+    finding = only(findings, 52)
+    assert finding.subject == "capture.draw_distance_m"
+    assert "channel OVERWATCH-1's camera stands 500.0 m from the point it is aimed at" in \
+        finding.message
+    assert "leave it unset to draw every body at any range" in finding.message
+
+
+def test_a_draw_distance_short_of_an_orbit_s_centre_is_refused(layout):
+    # An orbit flies 200 m out and 518.2 m up: 555.5 m from its centre.
+    document = run_document()
+    document["capture"]["channels"] = [AN_ORBIT]
+    *_, findings, _, _ = offline(layout, document, overrides=["occlusion.enabled=false",
+                                                              "capture.draw_distance_m=550"])
+    assert "555.5 m" in only(findings, 52).message
+    *_, findings, _, _ = offline(layout, document, overrides=["occlusion.enabled=false",
+                                                              "capture.draw_distance_m=560"])
+    assert findings.findings == []
+
+
+def test_a_stare_given_as_a_pose_names_no_point_and_is_not_judged(layout):
+    document = run_document()
+    document["capture"]["channels"] = [{"sensor_id": "POSE-1", "stare_x_m": 0.0, "stare_y_m": 0.0,
+                                        "stare_z_m": 3000.0, "stare_pitch_deg": -90.0,
+                                        "stare_yaw_deg": 0.0}]
+    *_, findings, _, _ = offline(layout, document, overrides=["capture.draw_distance_m=50"])
+    assert 52 not in checks(findings)
+
+
+@pytest.mark.parametrize("metres", [0, -10])
+def test_a_draw_distance_that_is_not_a_positive_number_is_refused_by_the_schema(metres):
+    with pytest.raises(RunConfigurationRefusedError) as raised:
+        RunConfiguration.from_document({"capture": {"draw_distance_m": metres}}, "test.run.json")
+    [finding] = raised.value.findings.refusals
+    assert (finding.check_id, finding.subject) == (1, "capture.draw_distance_m")
+
+
+def test_the_echo_states_the_draw_distance_and_what_it_leaves_alone(layout):
+    effective, validator, findings, result_path, capture = offline(
+        layout, overrides=["capture.draw_distance_m=750"])
+    assert not findings.refused
+    free, headroom = validator.headroom(effective, capture)
+    echo = LaunchEcho.compute(effective, "cap-test", capture, result_path, free, headroom,
+                              validator.bytes_per_captured_second(effective), [])
+    render = echo.to_dict()["render"]
+    assert render["draw_distance_m"] == 750
+    assert render["draw_distance"].startswith("750 m, rendering only: every vehicle keeps its body")
+    assert "draw distance 750 m, rendering only" in echo.render()
+    assert echo.values()["launch_echo.render.draw_distance_m"] == 750
+
+    effective, validator, _findings, result_path, capture = offline(layout)
+    unset = LaunchEcho.compute(effective, "cap-test", capture, result_path, free, headroom,
+                               validator.bytes_per_captured_second(effective), [])
+    assert unset.to_dict()["render"]["draw_distance_m"] is None
+    assert "draw distance none: every body is drawn at any range" in unset.render()
 
 
 def test_the_disk_estimate_counts_the_pictures_and_says_it_leaves_the_sidecars_out(layout):

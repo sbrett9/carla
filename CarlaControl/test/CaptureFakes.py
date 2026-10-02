@@ -161,6 +161,9 @@ class FakeRecorder:
         self.ChecksDepthPose = False
         self.OcclusionDepthPoseHeaderDisagreed = 0
         self.OcclusionDepthPoseFromHeader = 0
+        self.DrawDistanceCaptures = 0
+        self.VehiclesBeyondDrawDistance = 0
+        self.VehiclesPartlyBeyondDrawDistance = 0
         self.stopped = False
         self.drop_every_step = 0
 
@@ -395,6 +398,8 @@ class _Report:
         self.BatchFailures = 0
         self.Admissions = 0
         self.LastAdmissionPass = None
+        self.DrawDistanceMetres = None
+        self.DrawDistanceRefused = None
         self.WorstSolarResidualDegrees = 0.002
         self.WorstSolarClockResidualSeconds = 0.1
 
@@ -431,6 +436,9 @@ class FakeSession:
         self.Illumination = _Illumination()
         self.RenderSet = _RenderSet(world)
         self.RenderedVehicleIds = _RenderedIds()
+        # The draw distance the session was asked for, which the bodies carry from their spawn.
+        self.Report.DrawDistanceMetres = kwargs.get("draw_distance_m")
+        self.DrawDistanceMetres = kwargs.get("draw_distance_m")
         self.disposed = False
         self.advances = 0
         self.ticks = 0

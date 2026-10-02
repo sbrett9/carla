@@ -167,6 +167,27 @@ def test_a_render_setting_from_before_every_vehicle_was_drawn_is_refused_by_name
     assert server.events.of("start_sumo_drive") == []
 
 
+def test_no_draw_distance_is_handed_to_the_session_unless_one_is_set(layout, server):
+    # An optional performance control, off by default: every body drawn at any range.
+    _, result = capture(layout, server)
+    assert started_with(server)["draw_distance_m"] is None
+    assert result.produced["session"]["draw_distance"] == "none: every body drawn at any range"
+
+
+def test_a_draw_distance_reaches_the_session_and_the_run_s_record(layout, server):
+    _, result = capture(layout, server, overrides=["capture.draw_distance_m=750"])
+    assert result.outcome == "run_finished"
+    assert started_with(server)["draw_distance_m"] == 750
+    session = result.produced["session"]
+    assert session["draw_distance"].startswith("750 m, rendering only")
+    render = session["last_snapshot"]["render"]
+    assert (render["draw_distance_m"], render["draw_distance_in_force_m"],
+            render["draw_distance_refused"]) == (750, 750, None)
+    # The recorders are given the session's render set, whose frames say what each was drawn
+    # under, and not the distance again.
+    assert all("draw_distance_m" not in event[4] for event in server.events.of("start_recording"))
+
+
 def test_wall_clock_pacing_is_handed_to_the_session(layout, server):
     capture(layout, server, overrides=["pacing.mode=wall_clock", "pacing.real_time_factor=1.0",
                                        "pacing.min_achieved_factor=0.8"])

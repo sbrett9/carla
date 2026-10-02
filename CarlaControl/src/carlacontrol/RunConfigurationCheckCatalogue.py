@@ -154,6 +154,8 @@ _CHECKS: tuple[RunCheck, ...] = (
              "only on a stare, and a stare aimed at the rendered traffic has a prewarm of at least "
              "one SUMO step to measure it over", _R, RUN_CAPTURE,
              "ChannelDescription, RunConfigurationValidator"),
+    RunCheck(52, OFFLINE, "capture.draw_distance_m, where set, reaches the point every channel's "
+             "camera is aimed at", _R, RUN_CAPTURE, "RunConfigurationValidator"),
     RunCheck(48, OFFLINE, "The catalogue at paths.catalogue is the one the scenario was compiled "
              "against", _R, RUN_CAPTURE, "RunConfigurationValidator"),
     RunCheck(51, OFFLINE, "The prewarm leaves every camera, at the pose it holds as the window "

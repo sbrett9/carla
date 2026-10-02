@@ -344,6 +344,39 @@ public sealed class CoSimRunReport
     public string? RenderSetRefused { get; internal set; }
 
     /// <summary>
+    /// How far from a camera, in metres, the run asked for its bodies to be drawn -- the optional
+    /// performance control, as it stands now -- or null for no limit, which is the default: every body
+    /// drawn at any range.
+    /// </summary>
+    /// <remarks>
+    /// Rendering only. Every vehicle keeps its body, its pose and its truth whatever this is; a body
+    /// farther than this from a camera is not in that camera's image, and the recorder marks it so in
+    /// that camera's sidecar. Read with <see cref="DrawDistanceRefused"/>: a server that refused it drew
+    /// every body at any range.
+    /// </remarks>
+    public double? DrawDistanceMetres { get; internal set; }
+
+    /// <summary>
+    /// Round trips that set the draw distance: one for each tick on which the pool spawned a body, and
+    /// one for each change of the distance during the run; none where no distance was asked for.
+    /// </summary>
+    public long DrawDistanceWrites { get; internal set; }
+
+    /// <summary>
+    /// Bodies the draw distance was sent for that the server did not find, summed over the writes.
+    /// Zero in a healthy run.
+    /// </summary>
+    public long DrawDistanceBodiesNotFound { get; internal set; }
+
+    /// <summary>
+    /// Why the server refused the draw distance, in its words, or <see langword="null"/> where it took
+    /// every write or none was sent. A server built before it carried the call refuses the first, and
+    /// the session sends nothing more: every body is then drawn at any range, as with no limit, and
+    /// the frames record no distance.
+    /// </summary>
+    public string? DrawDistanceRefused { get; internal set; }
+
+    /// <summary>
     /// Round trips spent writing poses: one per world tick that had a pose to write, never more.
     /// </summary>
     /// <remarks>
@@ -695,6 +728,29 @@ public sealed class CoSimRunReport
     private static string Seconds(double value) =>
         value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
 
+    /// <summary>The draw distance line: none, the distance and what it means, or its refusal.</summary>
+    private string DescribeDrawDistance()
+    {
+        if (DrawDistanceMetres is not { } metres)
+        {
+            return "none: every body drawn at any range"
+                   + (DrawDistanceWrites > 0
+                       ? $" now; one was set during the run and cleared, over {DrawDistanceWrites} write(s)"
+                       : string.Empty);
+        }
+
+        string distance = metres.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+        if (DrawDistanceRefused is { } refused)
+        {
+            return $"{distance} m asked for and refused, so every body was drawn at any range: {refused}";
+        }
+
+        return $"{distance} m, rendering only: every vehicle has its body, is posed and is in the truth; a body "
+               + "farther than that from a camera is not in that camera's image, and its sidecar says so; "
+               + $"{DrawDistanceWrites} write(s)"
+               + (DrawDistanceBodiesNotFound > 0 ? $", {DrawDistanceBodiesNotFound} body(ies) not found" : string.Empty);
+    }
+
     /// <summary>The bridge's own cost per world tick, in milliseconds.</summary>
     public double BridgeMillisecondsPerTick =>
         Ticks == 0 ? 0.0 : BridgeSecondsOnTicks * 1000.0 / Ticks;
@@ -804,6 +860,7 @@ public sealed class CoSimRunReport
         text.AppendLine($"render set         {RenderSetUpdates} change(s) named to the server"
                         + (RenderSetBodiesNotFound > 0 ? $", {RenderSetBodiesNotFound} body(ies) not found" : string.Empty)
                         + (RenderSetRefused is { } refused ? $"; refused, so other processes list every vehicle actor: {refused}" : string.Empty));
+        text.AppendLine($"draw distance      {DescribeDrawDistance()}");
         text.AppendLine("lamps              "
                         + (!VehicleLampsDriven
                             ? "not driven; every body kept the lamps it was spawned with"

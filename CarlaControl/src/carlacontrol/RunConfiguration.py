@@ -11,9 +11,10 @@ reads in the schema are the ones the tool validates, and a default exists once.
 **Field names are the tree's.** Where a field sets something the co-simulation session, the recorder
 or the camera blueprint already takes, it carries that thing's own name: the illumination fields are
 the `illumination` object `CarlaNet.CoSim.IlluminationPolicy` reads, and a channel's fields are
-`ChannelDescription`'s, with their defaults read from it. No field limits how many vehicles are
+`ChannelDescription`'s, with their defaults read from it. By default no field limits what is
 rendered: the scenario is the only arbiter of population, and the session draws every vehicle SUMO
-has.
+has at any range. `capture.draw_distance_m` is an optional performance control, null unless set,
+that limits how far from a camera a body is drawn and nothing else.
 
 **Positions are in CARLA's frame** -- metres, x east, y south, so north is -y -- as a channel's are.
 
@@ -222,6 +223,12 @@ _FIELDS: tuple[RunField, ...] = (
     _F("capture.signal_layer_visible", _BOOLEAN, False, SESSION_FIXED,
        help="Draw the generated traffic-light and sign meshes. Hidden by default; SUMO simulates "
             "the signals either way."),
+    _F("capture.draw_distance_m", _nullable(_POSITIVE), None, SESSION_FIXED,
+       help="An optional performance control, off when null (the default): how far from a camera, "
+            "in metres, a vehicle's body is drawn. Rendering only: every vehicle keeps its body, its "
+            "pose and its truth, and a body farther than this from a channel's camera is not in "
+            "that channel's images, whose sidecars mark it beyond_draw_distance. It must reach the "
+            "point every channel is aimed at (check 52)."),
     _F("capture.channels", {"type": "array", "minItems": 1, "items": {"type": "object"}},
        NO_DEFAULT, SESSION_FIXED,
        help="The cameras, one object each; see the channel fields below. Every channel is "

@@ -177,6 +177,21 @@
           "x-mutability": "session_fixed",
           "x-supplied-by": "tool"
         },
+        "draw_distance_m": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "An optional performance control, off when null (the default): how far from a camera, in metres, a vehicle's body is drawn. Rendering only: every vehicle keeps its body, its pose and its truth, and a body farther than this from a channel's camera is not in that channel's images, whose sidecars mark it beyond_draw_distance. It must reach the point every channel is aimed at (check 52).",
+          "default": null,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
         "channels": {
           "type": "array",
           "minItems": 1,

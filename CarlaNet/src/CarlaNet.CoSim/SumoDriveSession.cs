@@ -34,6 +34,12 @@ namespace CarlaNet.CoSim;
 /// first reported, moving from there, and never on a frame before SUMO inserted it. Nothing here
 /// limits how many; a scenario heavier than the machine is comfortable with makes a synchronous run
 /// slower on the wall clock, never different in content.</para>
+///
+/// <para><b>A draw distance, where one is asked for.</b> An optional performance control, off by
+/// default (<see cref="SumoDriveSessionOptions.DrawDistanceMetres"/>): each body is set, once, to be
+/// drawn no farther than that from any camera. Every vehicle keeps its body, its pose and its truth;
+/// a camera simply does not draw a body beyond the distance, and each frame's render set says what
+/// distance it was drawn under so a recorder marks those vehicles in that camera's sidecar.</para>
 /// </remarks>
 public sealed class SumoDriveSession : IDisposable
 {
@@ -92,6 +98,7 @@ public sealed class SumoDriveSession : IDisposable
     private readonly Dictionary<string, (ActorId Actor, VehicleLightStateFlags Lamps)> _lampsWritten = [];
     private readonly PathHeading _headings = new();
     private readonly Dictionary<string, double> _sumoAngles = [];
+    private readonly List<ActorId> _drawDistanceBodies = [];
 
     private readonly (double Latitude, double Longitude) _origin;
     private SolarLease? _sun;
@@ -101,6 +108,9 @@ public sealed class SumoDriveSession : IDisposable
     private double? _lastCompleteSeconds;
     private double? _reportedSunElevation;
     private RenderSet? _renderSetNow;
+    private double? _drawDistanceAsked;
+    private double? _drawDistanceApplied;
+    private int _bodiesGivenTheDrawDistance;
     private bool _disposed;
 
     private SumoDriveSession(SumoDriveSessionOptions options,
@@ -138,6 +148,7 @@ public sealed class SumoDriveSession : IDisposable
         _settings = settings;
         _layers = layers;
         _pool = pool;
+        _drawDistanceAsked = options.DrawDistanceMetres;
         // A delegate that only counts has no frames of its own, so its ticks are numbered by the
         // session; nothing records a frame of a world that does not exist.
         Func<bool> counted = options.TickWorld ?? (() => true);
@@ -177,6 +188,7 @@ public sealed class SumoDriveSession : IDisposable
             Illumination = options.Illumination,
             SumoSeed = seed,
             RoadMapping = roads.Mapping,
+            DrawDistanceMetres = options.DrawDistanceMetres,
         };
     }
 
@@ -241,6 +253,70 @@ public sealed class SumoDriveSession : IDisposable
     /// frames are held.
     /// </remarks>
     public IRenderSetSource RenderSet => _renderSets;
+
+    /// <summary>
+    /// How far from a camera, in metres, the bodies are drawn now, or null where every body is drawn
+    /// at any range: no draw distance was asked for, the server refused it, or no world is driven.
+    /// </summary>
+    /// <remarks>
+    /// The distance the bodies actually carry, which is what each frame's render set records
+    /// (<see cref="CarlaNet.Recording.RenderSet.DrawDistanceMetres"/>). What was asked for is on the
+    /// report (<see cref="CoSimRunReport.DrawDistanceMetres"/>), with the server's refusal where it
+    /// refused.
+    /// </remarks>
+    public double? DrawDistanceMetres => _drawDistanceApplied;
+
+    /// <summary>
+    /// Change how far from a camera the bodies are drawn, in metres, or draw every body at any range
+    /// again with null; it holds from the next tick's frame on.
+    /// </summary>
+    /// <remarks>
+    /// <para>An optional performance control, rendering only: every vehicle keeps its body, its pose
+    /// and its truth. Every body the pool holds is set in one round trip, now, and every body spawned
+    /// later as it is spawned. Called between advances, from the thread that advances the session,
+    /// as every other call on it is.</para>
+    ///
+    /// <para>A server built before it carried the call refuses it; the bodies are then drawn as they
+    /// were, the report names the refusal, and nothing more is sent.</para>
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">The distance is not a positive number of metres.</exception>
+    public void SetDrawDistance(double? metres)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (metres is { } asked && (!double.IsFinite(asked) || asked <= 0.0))
+        {
+            throw new ArgumentOutOfRangeException(nameof(metres), asked,
+                                                  "A draw distance is a positive number of metres, or null for none.");
+        }
+
+        _drawDistanceAsked = metres;
+        Report.DrawDistanceMetres = metres;
+        if (_world is not { } world || _pool is not { } pool || Report.DrawDistanceRefused is not null
+            || (metres is null && _drawDistanceApplied is null))
+        {
+            // No world to draw in, a server that refused, or nothing set to clear.
+            return;
+        }
+
+        _drawDistanceBodies.Clear();
+        foreach (PooledBody body in pool.Bodies)
+        {
+            _drawDistanceBodies.Add(body.Actor);
+        }
+
+        if (_drawDistanceBodies.Count == 0)
+        {
+            // Nothing to set yet: the bodies spawned from here on are set as they are spawned.
+            _drawDistanceApplied = null;
+            return;
+        }
+
+        if (WriteTheDrawDistance(world, metres ?? 0.0))
+        {
+            _drawDistanceApplied = metres;
+            _bodiesGivenTheDrawDistance = _drawDistanceBodies.Count;
+        }
+    }
 
     /// <summary>
     /// The SUMO this session drives, for a test that has to act on it as something outside the
@@ -350,6 +426,7 @@ public sealed class SumoDriveSession : IDisposable
         RequireOneWayToAdvanceTheWorld(options);
         RequireAWindowTheSessionRenders(options);
         RequireABoundOnSumoSAnswers(options);
+        RequireAUsableDrawDistance(options);
         HeadlightRule? headlights = options.VehicleLampsDriven
             ? new HeadlightRule(options.HeadlightOnBelowDegrees, options.HeadlightOffAboveDegrees)
             : null;
@@ -644,6 +721,7 @@ public sealed class SumoDriveSession : IDisposable
             double fraction = Clock.InterpolationFraction(tick);
             ComputePoses(fraction);
             WriteTheBatch();
+            ApplyTheDrawDistance();
             NameTheRenderSet();
             WriteTheSun();
             _bridgeClock.Stop();
@@ -858,11 +936,15 @@ public sealed class SumoDriveSession : IDisposable
         }
 
         // The membership changes only when a body is lent or given back; SUMO's angle changes every
-        // frame, so each frame's set carries this tick's.
+        // frame, so each frame's set carries this tick's, and the draw distance the frame was drawn
+        // under, which a recorder marks every vehicle beyond in its camera's sidecar against.
         _renderSets.Record(frame, new RenderSet(_renderSetNow.ByActor.Values.Select(rendered =>
             _sumoAngles.TryGetValue(rendered.SumoId, out double angle)
                 ? rendered with { SumoAngleDegrees = angle }
-                : rendered)));
+                : rendered))
+        {
+            DrawDistanceMetres = _drawDistanceApplied,
+        });
     }
 
     /// <summary>
@@ -953,6 +1035,59 @@ public sealed class SumoDriveSession : IDisposable
 
         Report.RenderSetUpdates++;
         Report.RenderSetBodiesNotFound += Math.Max(0, _lentSinceNamed.Count + _parkedSinceNamed.Count - written.BodiesFound);
+    }
+
+    /// <summary>
+    /// Set the draw distance on every body the pool has spawned since the last tick, before the cue
+    /// of the tick it is first drawn in.
+    /// </summary>
+    /// <remarks>
+    /// <para>A body is spawned during the tick's poses, parked or lent, and set here in the same
+    /// drain, so no frame draws it unset. One round trip for every body spawned since the last, and
+    /// none on a tick that spawned none, which in a steady scene is nearly every tick: a pooled body
+    /// keeps the distance across every vehicle it is lent to.</para>
+    ///
+    /// <para>Nothing is sent where no distance was asked for, which leaves every body exactly as it
+    /// is spawned, drawn at any range. A server that refuses the first is sent nothing more, and the
+    /// report says why.</para>
+    /// </remarks>
+    private void ApplyTheDrawDistance()
+    {
+        if (_world is not { } world || _pool is not { } pool || _drawDistanceAsked is not { } metres
+            || Report.DrawDistanceRefused is not null || pool.Bodies.Count == _bodiesGivenTheDrawDistance)
+        {
+            return;
+        }
+
+        _drawDistanceBodies.Clear();
+        for (int index = _bodiesGivenTheDrawDistance; index < pool.Bodies.Count; index++)
+        {
+            _drawDistanceBodies.Add(pool.Bodies[index].Actor);
+        }
+
+        if (WriteTheDrawDistance(world, metres))
+        {
+            _drawDistanceApplied = metres;
+            _bodiesGivenTheDrawDistance = pool.Bodies.Count;
+        }
+    }
+
+    /// <summary>
+    /// Send the draw distance for the bodies gathered, counting what the server made of it; answer
+    /// whether it took it.
+    /// </summary>
+    private bool WriteTheDrawDistance(ICarlaWorld world, double metres)
+    {
+        DrawDistanceWrite written = world.WriteDrawDistance(_drawDistanceBodies, metres);
+        if (!written.Taken)
+        {
+            Report.DrawDistanceRefused = written.Refusal;
+            return false;
+        }
+
+        Report.DrawDistanceWrites++;
+        Report.DrawDistanceBodiesNotFound += Math.Max(0, _drawDistanceBodies.Count - written.BodiesFound);
+        return true;
     }
 
     /// <summary>
@@ -1645,6 +1780,24 @@ public sealed class SumoDriveSession : IDisposable
                 + "long the session waits for SUMO to answer one command, a step included, before it "
                 + "decides SUMO has stopped answering and stops the run, so it has to be a positive "
                 + "number of seconds longer than the slowest step the scenario produces.");
+        }
+    }
+
+    /// <summary>
+    /// Refuse a draw distance that is not a positive number of metres.
+    /// </summary>
+    /// <remarks>
+    /// No limit is null, never zero or a negative number standing in for it: a value that means
+    /// something other than what it says is one a report would record as declared.
+    /// </remarks>
+    private static void RequireAUsableDrawDistance(SumoDriveSessionOptions options)
+    {
+        if (options.DrawDistanceMetres is { } metres && (!double.IsFinite(metres) || metres <= 0.0))
+        {
+            throw new CoSimSessionRefusedException(
+                $"The draw distance is {metres} m. It is how far from a camera a vehicle's body is "
+                + "drawn, so it has to be a positive number of metres; leave it unset to draw every "
+                + "body at any range.");
         }
     }
 

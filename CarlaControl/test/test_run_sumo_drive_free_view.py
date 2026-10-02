@@ -213,6 +213,22 @@ def test_the_session_is_handed_no_per_vehicle_divergence_callback(drive, monkeyp
     assert (world.drive_arguments["on_pose"] is None) == (view == "free")
 
 
+def test_no_draw_distance_is_handed_to_the_session_unless_one_is_given(drive, monkeypatch, tmp_path):
+    # An optional performance control, off unless asked for.
+    world = _run_main(drive, monkeypatch, tmp_path)
+    assert world.drive_arguments["draw_distance_m"] is None
+    world = _run_main(drive, monkeypatch, tmp_path, "--draw-distance", "400")
+    assert world.drive_arguments["draw_distance_m"] == 400.0
+
+
+def test_the_launch_says_what_a_draw_distance_does_and_what_it_leaves_alone(drive):
+    assert drive.describe_draw_distance(None) == "none; every body is drawn at any range"
+    said = drive.describe_draw_distance(400.0)
+    assert said.startswith("400 m, rendering only: every vehicle has its body, is posed and is in "
+                           "the truth")
+    assert "each capture's sidecar marks it" in said
+
+
 def test_a_world_with_no_staging_bounds_starts_the_flown_rig_over_carla_s_origin(drive):
     assert drive.world_centre(_StagedWorld(None)) == (0.0, 0.0)
 

@@ -62,6 +62,10 @@ internal sealed class WorldConnectionGuard : ICarlaWorld
         Guard(nameof(WriteRenderSet), () => _world.WriteRenderSet(lent, parked));
 
     /// <inheritdoc/>
+    public DrawDistanceWrite WriteDrawDistance(IReadOnlyList<ActorId> bodies, double metres) =>
+        Guard(nameof(WriteDrawDistance), () => _world.WriteDrawDistance(bodies, metres));
+
+    /// <inheritdoc/>
     public Transform? ObservedTransform(ActorId actor) =>
         Guard(nameof(ObservedTransform), () => _world.ObservedTransform(actor));
 

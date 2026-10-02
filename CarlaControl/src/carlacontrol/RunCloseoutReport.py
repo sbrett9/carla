@@ -6,7 +6,8 @@ newest frame's illumination declaration, its latest admission pass, and the comp
 teleporting checks it made before SUMO started), the window's admission passes (`WindowAdmissions`),
 the wait for each channel's view before the window opened (`ViewReadinessGate`) and each channel's
 recorder (`FrameRecorder`: captures written, captures dropped, illumination
-pairing, render-set pairing, occlusion pairing, and where each capture's pose came from) -- never at
+pairing, render-set pairing, occlusion pairing, where each capture's pose came from, and the vehicles
+it marked beyond the draw distance) -- never at
 the end only, so a run stopped at minute nine has everything it knew at minute nine. `snapshot()` is
 the one computation: the live monitor renders it (D12.14), the loud conditions are read from it, and
 the run result carries the last one taken. Nothing here measures anything of its own.
@@ -161,7 +162,11 @@ class RunCloseoutReport:
         snapshot["render"] = {"rendered_now": int(session.RenderedVehicleIds.Count),
                               "ticks": int(report.Ticks), "sumo_steps": int(report.SumoSteps),
                               "poses_computed": int(report.PosesComputed),
-                              "batch_failures": int(report.BatchFailures)}
+                              "batch_failures": int(report.BatchFailures),
+                              "draw_distance_m": self._number(report.DrawDistanceMetres),
+                              "draw_distance_in_force_m": self._number(session.DrawDistanceMetres),
+                              "draw_distance_refused": None if report.DrawDistanceRefused is None
+                              else str(report.DrawDistanceRefused)}
         snapshot["admission"] = WindowAdmissions.describe(report.LastAdmissionPass)
         audit = session.SunAudit
         snapshot["solar_audit"] = None if audit is None else {
@@ -203,7 +208,9 @@ class RunCloseoutReport:
                  "occlusion_measured": None, "occlusion_unmatched": None,
                  "sensor_pose_from_snapshot": None, "sensor_pose_header_disagreed": None,
                  "sensor_pose_from_header": None,
-                 "depth_pose_header_disagreed": None, "depth_pose_from_header": None}
+                 "depth_pose_header_disagreed": None, "depth_pose_from_header": None,
+                 "draw_distance_captures": None, "vehicles_beyond_draw_distance": None,
+                 "vehicles_partly_beyond_draw_distance": None}
         if recorder is None:
             return entry
         entry.update({"written": int(recorder.Saved), "recorder_dropped": int(recorder.Dropped),
@@ -212,7 +219,11 @@ class RunCloseoutReport:
                       "render_set_paired": int(recorder.RenderSetPaired),
                       "render_set_unpaired": int(recorder.RenderSetUnpaired),
                       "occlusion_measured": int(recorder.OcclusionMeasured),
-                      "occlusion_unmatched": int(recorder.OcclusionUnmatched)})
+                      "occlusion_unmatched": int(recorder.OcclusionUnmatched),
+                      "draw_distance_captures": int(recorder.DrawDistanceCaptures),
+                      "vehicles_beyond_draw_distance": int(recorder.VehiclesBeyondDrawDistance),
+                      "vehicles_partly_beyond_draw_distance":
+                          int(recorder.VehiclesPartlyBeyondDrawDistance)})
         if recorder.ChecksSensorPose:
             entry.update({"sensor_pose_from_snapshot": int(recorder.SensorPoseFromSnapshot),
                           "sensor_pose_header_disagreed": int(recorder.SensorPoseHeaderDisagreed),
@@ -347,6 +358,14 @@ class RunCloseoutReport:
             window = admissions["window"]
             lines.append(f"  admission passes in the window: {window['passes']}; most population "
                          f"{window['most_population']}")
+        render = snapshot.get("render")
+        if render is not None and render.get("draw_distance_m") is not None:
+            refused = render.get("draw_distance_refused")
+            lines.append(f"  draw distance {render['draw_distance_m']:g} m"
+                         + (f": refused by the server, so every body was drawn at any range "
+                            f"({refused})" if refused is not None
+                            else ", rendering only: vehicles beyond it from a camera are in the "
+                                 "truth and marked in that camera's sidecars"))
         readiness = snapshot.get("readiness")
         for view in (readiness or {}).get("channels", []):
             lines.append(f"  view {view['sensor_id']}: {describe_view(view)}")
@@ -355,6 +374,11 @@ class RunCloseoutReport:
                          f"recorder-dropped {channel['recorder_dropped']}, illumination unpaired "
                          f"{channel['illumination_unpaired']}, render set unpaired "
                          f"{channel['render_set_unpaired']}  -> {channel['directory']}")
+            if channel.get("draw_distance_captures"):
+                lines.append(f"    under the draw distance {channel['draw_distance_captures']} "
+                             f"captures: {channel['vehicles_beyond_draw_distance']} vehicle records "
+                             f"marked wholly beyond it, "
+                             f"{channel['vehicles_partly_beyond_draw_distance']} partly")
             if channel.get("sensor_pose_from_snapshot") is not None:
                 lines.append(f"    pose from its own frame's snapshot "
                              f"{channel['sensor_pose_from_snapshot']}, header disagreed "
