@@ -10,9 +10,10 @@
 > its SUMO vehicle, and no parked body — from the render set the server now carries on every
 > world-observer snapshot (§5.2). A SUMO-driven body's `role_name` is `sumo` (§5).
 
-> **Revision (2026-10-01):** A SUMO-driven body is seated on the road it is on, a bridge deck
-> included, so its `point.hae` there is the deck's altitude in the bare-earth datum and the sidecar's
-> `hae_dtm` the ground beneath it (§3). Nothing in the computation changed.
+> **Revision (2026-10-01):** A SUMO-driven body is seated on the ground where its road is at grade and
+> on the road's profile where the road is a structure, a bridge deck included, so on a deck its
+> `point.hae` is the deck's altitude in the bare-earth datum and the sidecar's `hae_dtm` the ground
+> beneath it (§3); at grade it is the ground's, as before. Nothing in the computation changed.
 
 ## 1. Purpose
 
@@ -62,7 +63,7 @@ Same shape ⇒ truth-vs-detection scoring is a direct diff (position error, clas
 | `time`/`start` | generation instant, ISO-8601 UTC ("Zulu"), millisecond precision |
 | `stale` | `time + STALE_SECONDS` (default **3 s** = 15 missed updates at 5 Hz) |
 | `point.lat`/`lon` | WGS84 degrees |
-| `point.hae` | **ellipsoidal** height, metres (matches datum; = ground sample + local Z). On a bridge deck it is the deck's altitude, not the ground's: the body is seated on the road it is on, and the surface shift taken off under a deck is the same systematic one the deck's height was measured against, so a deck vehicle's `hae` stands the deck's height above the bare-earth `hae_dtm` beneath it — 3–7 m on Arapahoe — and is not a vehicle in the air |
+| `point.hae` | **ellipsoidal** height, metres (matches datum; = ground sample + local Z). On a bridge deck it is the deck's altitude, not the ground's: the body is seated on the deck's road profile there, and the surface shift taken off under a deck is the same systematic one the deck's height was measured against, so a deck vehicle's `hae` stands the deck's height above the bare-earth `hae_dtm` beneath it — 3–7 m on Arapahoe — and is not a vehicle in the air |
 | `point.ce`/`le` | error metres. **TRUTH = 0.0** (exact). DETECTION = estimated. (CoT "unknown" sentinel 9999999 is NOT used.) |
 | `track.course` | heading **degrees true north, 0–360**. Course-over-ground from velocity: `bearing = atan2(East, North) = atan2(vx, -vy)` (CARLA +X=East, −Y=North); fall back to vehicle yaw below a speed threshold. *Verify empirically (drive north ⇒ ~0°), as with the pick math.* |
 | `track.speed` | horizontal ground speed `sqrt(vx²+vy²)`, **m/s** |

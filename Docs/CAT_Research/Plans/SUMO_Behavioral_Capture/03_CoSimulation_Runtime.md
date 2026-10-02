@@ -53,7 +53,7 @@ advancement policy, the headlight predicate),
 | 2026-10-01 | D3.6, §6.3, §8.3, §8.4, §8.5, §8.8, §9.7, §9.8: a vehicle SUMO inserts is drawn from the frame SUMO first reports it in, at that position and moving, and never before SUMO inserted it. Measured live on Bahonar, the bridge had drawn every inserted vehicle a step early, standing at its insertion point while the truth reported SUMO's speed. A vehicle SUMO has when rendering begins is still drawn on the first rendered frame. |
 | 2026-10-01 | §7.5: the pitch and roll signs confirmed live against the visible surface; bodies at two-level crossings measured seated on the wrong level. |
 | 2026-10-01 | §8.9, D3.39: the render set is named to the server on each change and carried on every world-observer snapshot, so the live pull, the CoT feed and a recorder in any process list only the bodies a frame drew, each by its SUMO vehicle. §8.2: every body is spawned with `role_name` `sumo`. Written; the plugin awaits a build. |
-| 2026-10-01 | §7.5, D3.8: a body takes its height from the road it is on. Z and pitch from the OpenDRIVE profile of the vehicle's road at its origin's s; roll from the ground grid at grade, none on a structure, blended by the road's departure from the ground; the grid alone off every road, counted by reason. Every lane of Arapahoe and Bahonar joined to its road; measured offline on the Arapahoe dwell, I-25's deck bodies now up to 6.8 m above where the grid seated them and East Arapahoe Road's 4.5 m below, for 0.25 ms a tick. Built and tested offline; the live check is the owner's to run. |
+| 2026-10-01 | §7.5, D3.8: a body is seated on the ground grid where its road is at grade and on the road's OpenDRIVE profile where the road is a structure — height, pitch and roll by one weight from the road's departure from the ground at its reference line at the body's s, blended between, held to change no faster than a smoothstep over 10 m, and made to meet the carriageways at a junction connector's ends; the grid alone off every road, counted by reason. The profile is the reference line's height built flat across: measured against the photoreal at grade, it stands a median 0.35 m above the visible road at a cambered road's outer lanes, where the grid agrees to 0.02 m. Every lane of Arapahoe and Bahonar joined to its road; measured offline on the Arapahoe dwell, I-25's deck bodies up to 6.8 m above where the grid seated them and East Arapahoe Road's 4.5 m below, every body at grade on the grid seat exactly, and the whole as continuous as the grid seat alone, for about 0.25 ms a tick. Built and tested offline; the live check is the owner's to run. |
 
 ---
 
@@ -134,8 +134,8 @@ flowchart LR
   subgraph deps["Existing CarlaNet"]
     CC["CarlaClient<br/>RPC + world-observer cache<br/>incl. GetCachedSolarState"]
     NET["RoadNetwork / net.xml reader<br/>lane shapes for interpolation"]
-    DRAPE["GroundSurface<br/>the package's drape grid, in-process bilinear, no RPC:<br/>roll at grade, everything off the road"]
-    ROADS["RoadSurface<br/>the package's OpenDRIVE joined to its lanes:<br/>Z and pitch from the road a body is on"]
+    DRAPE["GroundSurface<br/>the package's drape grid, in-process bilinear, no RPC:<br/>the seat at grade and off every road"]
+    ROADS["RoadSurface<br/>the package's OpenDRIVE joined to its lanes:<br/>the seat on a structure, and which roads are"]
   end
 
   subgraph eng["In the engine, per world tick"]
@@ -996,10 +996,10 @@ This is not an assumption that solar is cheap; it is the arithmetic, and the inp
 | Lost | Why | Compensation |
 |---|---|---|
 | **Suspension travel** | `DestroyPhysicsState()` | none. Bounded, deliberate, confined to this mode. |
-| **Body pitch and roll over terrain** | nothing tilts a kinematic body | **compensated**: pitch from the slope of the road profile the body is on, roll from the drape-grid gradient where that road is at grade and none on a structure (§7.5). In process, no RPC. |
+| **Body pitch and roll over terrain** | nothing tilts a kinematic body | **compensated**: pitch and roll from the drape-grid gradients where the body's road is at grade; on a structure, pitch from the slope of the road's profile and no roll; blended between (§7.5). In process, no RPC. |
 | **Wheel spin** | no movement component | none today. Note that `ACarlaWheeledVehicle::SetWheelSteerDirection` is **already stubbed out in this port** — the physics-off branch has its only effective line commented out with `// ToDo We need to investigate about this` (`CarlaWheeledVehicle.cpp:717-731`), and `GetWheelSteerAngle` is inside `#if 0 // @CARLAUE5` (`:733-740`). So steering angle is *also* unavailable, for physics-on and physics-off alike. See §12 G8. |
 | **Real velocity in the world-observer snapshot** | §5 | **compensated** by D3.5. |
-| **Terrain seating from collision** | body is kinematic | **compensated**: Z comes analytically from the profile of the road the body is on (§7.5), the surface the engine builds its road mesh from, deck or not; off every road, from the drape grid the collision heightfield was built from (`CarlaClient.cs:933-938`). Seating becomes exact rather than settled. |
+| **Terrain seating from collision** | body is kinematic | **compensated**: Z comes analytically from the drape grid the collision heightfield was built from (`CarlaClient.cs:933-938`) where the body's road is at grade and off every road, and from the profile of the road the body is on where that road is a deck or spans the ground beneath one (§7.5). Seating becomes exact rather than settled. |
 | **Vehicle fade / staging ring** | the staging controller owns the registry | **not used** — D3.10. The dissolve costs one blocking RPC per vehicle per reconcile and is already off by default in the working tree (`CarlaControlArgumentParser.py:318-328`); a vehicle appears and disappears where and when SUMO inserts and removes it, timed by the lookahead (§8.4, §8.5). The mechanism is untouched and still available to every other client. |
 
 Pitch/roll and exact seating are arguably *better* than today's settled physics. The suspension and
@@ -1468,6 +1468,7 @@ the way SUMO's did.
 | `h₀` | georeference origin height, metres ellipsoidal | `world.json` `OriginHeightMeters` |
 | `g(x,y)` | ground surface elevation, metres ellipsoidal | the world package's draped grid (`GroundSurface`), the surface `CarlaClient.SampleDrapeGroundElevation` samples |
 | `z_road(s)` | the elevation of the vehicle's OpenDRIVE road at `s`, metres above the georeference origin | the world package's `map.xodr`, joined to the SUMO lane (`RoadSurface`, §7.5.1) |
+| `w` | how much of its seat a body on a road takes from the ground: 1 at grade, 0 on a structure | the road's departure from the ground at its reference line (§7.5) |
 | `z_seat` | height of the actor origin above the contact surface, per blueprint | measured once (§7.5.2) |
 
 ### 7.2 Frame
@@ -1716,72 +1717,121 @@ visible in any oblique EO frame.
 
 ### 7.5 Z, pitch and roll
 
-**A body takes its height from the road it is on** (D3.8). The SUMO network is flat — no lane shape
-in it carries a `z` — so none of the three comes from SUMO, and the world offers two surfaces to take
-them from. The ground surface `g(x, y)` is the draped grid the collision heightfield was built from,
-one height per cell, read out of the world package (`GroundSurface`, `bareearth.bin`). The road
-profile `z_road(s)` is each OpenDRIVE road's elevation along its reference line, from which the
-engine builds the road mesh, the waypoints and the traffic manager's paths. They agree wherever a road
-is at grade. They part company at every two-level crossing, by construction: under every bridge deck
-the grid is **deliberately anchored to bare earth plus the systematic photoreal offset**
-(`DrapeTerrain.Despike`, `AnchorStructuresToGround`), because one height per cell cannot hold a deck
-and the road beneath it and the deck carries its own road-mesh collision, while the profile knows both
-levels — `GradeSeparation` lifts a deck road to the photoreal deck and spans a road passing beneath it
-on a chord, and `BridgeProfileShaper` shapes the deck ramp-deck-ramp.
+**A body is seated on the ground where its road is at grade and on its road where the road is a
+structure** (D3.8). The SUMO network is flat — no lane shape in it carries a `z` — so none of the three
+comes from SUMO, and the world offers two surfaces to take them from. The ground surface `g(x, y)` is the
+draped grid the collision heightfield was built from, one height per cell, read out of the world package
+(`GroundSurface`, `bareearth.bin`). The road profile `z_road(s)` is each OpenDRIVE road's elevation along
+its reference line, from which the engine builds the road mesh, the waypoints and the traffic manager's
+paths. **Each is right where the other is wrong.**
 
-Seated on the grid, as this section first specified, a body was right at grade and wrong at every
-structure. **Measured live on Arapahoe, 2026-10-01**: on I-25's overpass at Arapahoe Road the freeway's
-bodies sat 1.2 to 6.1 m below the visible deck, on the ground beneath it, and under the Yosemite Street
-bridge bodies were lifted toward the deck in humps of up to 7 m. The package's OpenDRIVE has I-25's deck
-roads up to 6.16 m above the grid and East Arapahoe Road beneath I-25 (road 2141) up to 3.17 m below it,
-at the reference line.
+The ground is wrong at every two-level crossing, by construction: under every bridge deck the grid is
+**deliberately anchored to bare earth plus the systematic photoreal offset** (`DrapeTerrain.Despike`,
+`AnchorStructuresToGround`), because one height per cell cannot hold a deck and the road beneath it and the
+deck carries its own road-mesh collision, while the profile knows both levels — `GradeSeparation` lifts a
+deck road to the photoreal deck and spans a road passing beneath it on a chord, and `BridgeProfileShaper`
+shapes the deck ramp-deck-ramp. Seated on the grid, as this section first specified, a body was right at
+grade and wrong at every structure. **Measured live on Arapahoe, 2026-10-01**: on I-25's overpass at
+Arapahoe Road the freeway's bodies sat 1.2 to 6.1 m below the visible deck, on the ground beneath it, and
+under the Yosemite Street bridge bodies were lifted toward the deck in humps of up to 7 m. The package's
+OpenDRIVE has I-25's deck roads up to 6.16 m above the grid and East Arapahoe Road beneath I-25 (road 2141)
+up to 3.17 m below it, at the reference line.
 
-**So Z and pitch come from the profile of the vehicle's own road, at the s its origin projects to:**
+The profile is wrong at grade across the road's width. CARLA builds a road flat across and ignores
+superelevation, so every lane stands at the reference line's height at the same s — and the reference line
+is the carriageway's left edge. On a cambered or cross-falling road the outer lanes stand above the road a
+camera sees, while the ground follows it across the whole width. **Measured against the photoreal**, at
+every lane centre of the shipped packages' at-grade roads, against the raw photoreal surface the world was
+built from (the build's drape cache, where it stands within 5 m of bare earth;
+`AtGradeSurfaceMeasurementTests`), median |height − photoreal| on carriageways:
+
+| Across the road from the reference line | Arapahoe, profile | Arapahoe, ground | Bahonar, profile | Bahonar, ground |
+|---|---|---|---|---|
+| under 3 m | 0.058 m | 0.035 m | 0.031 m | 0.010 m |
+| 3–6.5 m | 0.135 m | 0.026 m | 0.135 m | 0.010 m |
+| 6.5–10 m | 0.205 m | 0.027 m | 0.289 m | 0.010 m |
+| 10–13.5 m | 0.262 m | 0.021 m | — | — |
+| 13.5 m and more | **0.351 m** (above it: signed +0.347 m) | **0.019 m** | — | — |
+| all, median · 90th percentile | 0.128 · 0.412 m | 0.028 · 0.173 m | 0.037 · 0.208 m | 0.010 · 0.038 m |
+
+**So one weight decides height, pitch and roll alike:**
 
 ```
-z_local = z_road(s) + z_seat(blueprint)        z_road is local already: ellipsoidal − h₀
+Δ(s)    = z_road(s) − (g(p_ref(s)) − h₀)     the road's departure from the ground at its reference line at s
+w(s)    = W(Δ(s)):  1 for |Δ| ≤ 0.5 m;  0 for |Δ| ≥ 1.5 m;  1 − smoothstep between,
+          held to fall no faster along the road than a smoothstep over 10 m (below)
+z_g     = g(x_c, y_c) − h₀                   the ground's seat under the origin
+z_local = w · z_g + (1 − w) · z_road(s) + z_seat(blueprint)
 k       = ds per metre travelled along the heading   (+1 along +s, −1 against it; read geometrically)
-pitch   = +atan(k · dz_road/ds)    ·(180/π)    nose up on a climb
-v_z     = speed · k · dz_road/ds
-roll    = w(Δ) · roll_g             Δ = z_road(s) − (g(x_c, y_c) − h₀), the road's departure from the ground
-w(Δ)    = 1 for |Δ| ≤ 0.5 m;  0 for |Δ| ≥ 1.5 m;  1 − smoothstep between
+m       = w · a + (1 − w) · k · dz_road/ds + (z_g − z_road(s)) · k · dw/ds     the seat's own slope
+pitch   = +atan(m) ·(180/π)      nose up on a climb
+v_z     = speed · m
+roll    = w · roll_g
 ```
 
-CARLA builds a road flat across its width and ignores superelevation, so every lane of a road stands at
-the reference line's height at the same s, and the lane a body is in does not enter into its height.
-`k` is read by projecting a point a metre ahead along the heading onto the same road: it carries the
-sign of the direction of travel against +s, and the factor by which s advances faster than the body on
-the inside of a curve. The vertical velocity is the speed times the same slope the pitch comes from, so
-the two cannot disagree.
+At grade (`w` = 1) the seat is the ground's exactly — its height, the pitch and roll of its two gradients
+(`a`, `roll_g`; §7.5.2) and the climb of the pitch's slope, as the bridge computed them before it read the
+road. On a structure (`w` = 0) height and pitch are the profile's, signed for the direction of travel
+against +s, and there is no roll: the engine's road is flat across, so a body on a deck or on a road
+spanning the ground has no cross-slope. Between, height and roll are blended by `w`, and the pitch and the
+climb come from the blended seat's own slope along the heading — the two slopes blended and the change of
+the weight itself — so a body is tangent to the path it rides and the vertical velocity explains its
+change of height. The two slopes blended alone, without the weight's change, would turn the pitch less
+sharply through the blend but leave the height parting from the climb: measured on the Arapahoe dwell,
+by up to 0.30 m a tick at the 99th percentile where the seat's own slope parts by 0.05 m (§7.5.3).
+`k` is read by projecting a point a metre ahead along the heading onto the same road: it carries the sign
+of the direction of travel against +s, and the factor by which s advances faster than the body on the
+inside of a curve.
 
-**The roll is the ground's where the road is at grade, and none on a structure.** The engine's road is
-flat across, so a body on a deck or on a road spanning the ground has no cross-slope; but at grade the
-photoreal road has the crown and camber of the real one, which the ground surface follows and which
-shows from any altitude — a degree matters. The weight `w` is a function of how far the road departs
-from the ground under the body's origin. **Full roll up to 0.5 m**: the profile is the height at the
-reference line, the carriageway's left edge, and the ground under a lane several metres across a
-cambered surface stands a little higher or lower — measured on the Arapahoe package, an at-grade road
-agrees with the ground at its reference line to a few centimetres, and East Arapahoe Road's outer lane,
-11.7 m across, stands 0.36 m above the ground under it; half a metre is also the floor below which the
-live check against the photoreal could measure nothing. **No roll from 1.5 m**: the smallest lift the
-world build counts as a deck (`GradeSeparationOptions.MinStructureMeters`). Between them the weight
-falls on a smoothstep, continuous with a continuous derivative, so a body climbing an approach ramp
-sheds the cross-slope over the metres in which the ramp leaves the ground and never in a step — on a
-15 % ramp the whole of it in under 7 m. The same weight takes the roll off wherever else the ground
-under a body is not its road: a vehicle or a tree reconstructed into the photogrammetry, or the side
-slope of an embankment where the mapped lane runs a few metres off the real carriageway. Of the
-Arapahoe package's lane-centre samples, 92.7 % depart from the ground by under 0.5 m (median 0.11 m,
-90th percentile 0.42 m), 4.4 % fall in the blend, and 2.9 % — the structures — beyond it, reaching
-+7.29 m above the ground and 4.54 m below it.
+**Why at the reference line.** The profile is defined there, so the departure there is the road's own,
+and a lane's distance across a cambered road never enters into it. Taken under the body instead, as first
+built, cross-fall pushed outer lanes into the blend: of the lane centres on at-grade roads, **3.40 %** on
+Arapahoe and **3.91 %** on Bahonar would lose some of the ground's seat that way; taken at the reference
+line, **0.70 %** and **1.50 %**, most of them little — median weight 0.88 and 0.77. At grade the seat now
+follows the photoreal exactly as the ground does, to the millimetre at the median in every band above.
 
-**Off every road, the ground decides all three, exactly as before** — the grid's height and the grid's
-two gradients below — and the pose says why (`VehiclePose.GroundReason`, counted by reason on the run
-report as `PosesSeatedOnTheGround`): **`NoLane`**, a vehicle SUMO puts on no lane, parked at a stop off
-the carriageway or pulling into or out of one (the `OffLane` interpolation case); **`NoRoad`**, a lane
-on an edge no OpenDRIVE road was found for; **`OffTheRoad`**, a position more than 5 m across the road
-from its lane's own offset, which no lane change or connector misfit reaches. A vehicle outside the
-grid still has no pose at all, on a road or off one: the network is checked to lie inside the grid to
-one cell (§7.2), so this is the overhang of a cell at most.
+**The thresholds stand.** The profile was fitted to the ground along the reference line, so where the road
+is at grade the two agree there to the fit: every 2 m along the at-grade roads' reference lines, median
+0.013 m on Arapahoe and 0.005 m on Bahonar, 99th percentile 0.42 m and 0.51 m, 99.3 % and 99.0 % within
+0.5 m. Half a metre is also the floor below which the live check against the photoreal could measure
+nothing. 1.5 m is the smallest lift the world build counts as a deck
+(`GradeSeparationOptions.MinStructureMeters`).
+
+**The weight never changes faster than a smoothstep over 10 m** (`PoseConverter.WeightChangeMetres`). The
+departure can change far faster along a road than any ramp climbs: where a reference line crosses the edge
+of a deck's footprint the ground under it drops by a metre within a cell. Weighed by the departure alone,
+a body there moved from the ground onto the profile within a metre or two — its height continuous, but its
+pitch turning by up to **57°** in one tick on Arapahoe (Yosemite Street's deck, road 2086) and 61° on
+Bahonar. So each road's weight is tabulated every quarter-metre once, at session start, and held to the
+weight at every point within 10 m plus a smoothstep of the distance to it: where a structure begins, the
+weight falls over the at-grade side, where the two surfaces stand less than half a metre apart, and
+reaches zero with no slope, so the body meets the deck's profile without a kink; on the structure it stays
+zero. A ramp gentle enough already is moved by a few hundredths at most.
+
+**A junction connector meets the roads it joins.** netconvert draws a connector's reference line along the
+left edge of the connection it came from, which need not lie where the road it joins draws its own:
+measured on Arapahoe, the two stand **a lane width or more apart at one joint in ten**, and as far as
+20.1 m, and the ground under one can stand a metre from the ground under the other — East Peakview Avenue's
+(road 2133) reference line runs on ground about 1.5 m above its own lanes, and the connector into it on
+the road surface. Weighed at each reference line alone, the seat stepped at the joint: at 16 of Arapahoe's 2,880
+lane joints by more than 0.1 m, the worst 0.53 m, and by up to 1.37 m between two ticks of the dwell. So a
+connector keeps its own weight but is corrected at each end, fading over its length or 10 m, to meet the
+weight of the carriageway its link names at the end the link names; and the connector section a merge
+absorbed is weighed across from the sections either side, read 2 m into each, since round a collapsed dead
+end the reference line swings across the street. The seat now steps at no lane joint by more than the
+ground alone does — 0.040 m at the worst on Arapahoe; 0.157 m on Bahonar, against 0.926 m on the profile
+alone. Where a reference line runs off the ground grid — the left edge of a road along the grid's own edge
+— the ground is read at the grid's nearest point, so the departure carries on rather than changing what it
+measures.
+
+**Off every road, the ground decides all three, exactly as before** — the grid's height and the grid's two
+gradients below — and the pose says why (`VehiclePose.GroundReason`, counted by reason on the run report as
+`PosesSeatedOnTheGround`): **`NoLane`**, a vehicle SUMO puts on no lane, parked at a stop off the
+carriageway or pulling into or out of one (the `OffLane` interpolation case); **`NoRoad`**, a lane on an
+edge no OpenDRIVE road was found for; **`OffTheRoad`**, a position more than 5 m across the road from its
+lane's own offset, which no lane change or connector misfit reaches. A vehicle outside the grid still has
+no pose at all, on a road or off one: the network is checked to lie inside the grid to one cell (§7.2), so
+this is the overhang of a cell at most.
 
 #### 7.5.1 Which road, and where along it
 
@@ -1853,8 +1903,8 @@ bottom on every blueprint in the shipped catalogue, which says the measured boxe
 and that the gap to a settled measurement is of that order. The catalogue field belongs with the
 blueprint sweep that produces the rest of the measurements.
 
-The ground's tilt — the roll at grade, and pitch and roll off every road — comes from the grid, two
-extra samples each:
+The ground's tilt — pitch and roll at grade and off every road, blended toward the profile's pitch and
+no roll on a structure — comes from the grid, two extra samples each:
 
 ```
 δ = grid cell size (2.0 m on Bahonar, measured)
@@ -1907,41 +1957,53 @@ SUMO 1.27.0, fast-forwarded to 600 s, 2,400 ticks of 0.05 s, 335 vehicles on ave
 
 | | |
 |---|---|
-| Poses | 805,015: **802,615 on a road** (20,667 on a structure, 23,314 on an approach), 2,400 on the ground — `NoLane`, the one vehicle parked off its lane for the whole run — and none `NoRoad` or `OffTheRoad` |
-| On I-25's decks (roads 2055, 2068, South Valley Highway) | 102 and 103 vehicles, now **1.50–5.24 m and 1.50–6.79 m above** where the grid seated them |
-| On Yosemite Street's decks (roads 2013, 2016, 2086, 2163) | up to **5.28 m above** the grid seat |
-| East Arapahoe Road beneath I-25 (road 2141, under 2055, 2068 and the ramp 2137) | 29 vehicles, now **1.50–4.54 m below** the grid seat — the humps are gone |
-| The roads beneath the Yosemite Street bridge (2000, 2129) | within −0.48 to +0.68 m of the grid seat: the grid there already holds the ground the roads run on |
-| Seat against the profile | at the seat's own s, to 10⁻⁶ m of the engine's evaluation; on a structure, to 6 mm of the profile evaluated densely along the reference line |
-| Continuity, height between consecutive ticks less the climb the vertical velocity predicts | p50 0.000 m, p99 0.005 m, p99.9 0.035 m over 801,964 pairs; worst **0.28 m**, at a junction's mouth where SUMO's own heading turns 20–23° inside one tick and the origin swings across the connector |
-| Across 539 changes onto or off a deck road | worst **0.20 m**; no step in any profile |
+| Poses | 805,015: **802,615 on a road** — 770,947 at grade, 11,809 between, 19,859 on a structure — 2,400 on the ground (`NoLane`, the one vehicle parked off its lane for the whole run) and none `NoRoad` or `OffTheRoad` |
+| On I-25's decks (roads 2055, 2068, South Valley Highway) | 101 and 102 vehicles, **up to 5.24 m and 6.79 m above** where the grid seated them, with no roll — the profile's seat, unchanged |
+| On Yosemite Street's decks (roads 2013, 2016, 2086, 2163) | up to **5.28 m above** the grid seat, no roll |
+| East Arapahoe Road beneath I-25 (road 2141, under 2055, 2068 and the ramp 2137) | 28–29 vehicles, **1.61–4.54 m below** the grid seat — the humps are gone |
+| The connector beneath I-25's decks (road 2278) | 1.25–1.78 m below the grid seat, on its profile; corrected toward the carriageways only within 10 m of its ends |
+| The roads beneath the Yosemite Street bridge (2000, 2129) and South Valley Highway at grade (2054) | at grade, on the ground: within 0.02 m of the grid seat, with the ground's roll |
+| At grade (906 of the package's 917 roads) | the seat **is** the grid seat — \|seat − grid seat\| 0.000 m at the 99th percentile in every band across the road, where the profile stands 0.135 m off it at the median and 0.597 m at the 99th percentile; 0.39 % of the poses on them given less than the ground's whole seat |
+| Seat against the profile | at the seat's own s, to 10⁻⁶ m of the engine's evaluation; on a structure, to 5 mm of the profile evaluated densely along the reference line |
+| Continuity, height between consecutive ticks less the climb the vertical velocity predicts | p50 0.000 m, p99 0.018 m, p99.9 0.067 m, worst 0.90 m over 801,964 pairs — **the grid seat alone over the same pairs: p99 0.019 m, p99.9 0.067 m, worst 0.90 m**, the same pair: a lane change on East Arapahoe Road's outer lane, which near I-25 runs where the ground grid is a steep side slope and is at grade by its reference line, the origin moving 3.5 m across the slope in one tick |
+| Through the blend, 12,524 pairs | residual p50 0.003 m, p99 0.045 m, worst 0.36 m; the pitch turning by 7.5° a tick at the 99th percentile, 33.8° at the worst on that same slope, where the ground's own gradient swings |
+| Across changes of road; onto or off a deck road | worst 0.32 m, at a junction's mouth where SUMO's heading turns 13° inside a tick; worst 0.13 m onto or off a deck |
+
+The blend's pitch is the seat's own slope rather than the two slopes blended alone, because the latter
+leaves the height parting from the climb the vertical velocity predicts by 0.30 m a tick at the 99th
+percentile through the blend (worst 0.49 m), against 0.045 m — though it turns the pitch less sharply
+(2.9° a tick at the 99th percentile, worst 6.6°).
 
 On Bahonar (`Import/Shahid_Bahonar_Port_PatternOfLife.sumocfg`, fast-forwarded to 08:00, 300 steps of
-1 s = 6,000 ticks): 384,360 poses, **288,360 on a road** and 96,000 `NoLane` — the sixteen guards parked
-off their lanes at their tower stops — and none `NoRoad` or `OffTheRoad`; on a structure, to 17 mm of the
-densely evaluated profile.
+1 s = 6,000 ticks): 384,360 poses, **288,360 on a road** — 283,001 at grade, 4,148 between, 1,211 on a
+structure — and 96,000 `NoLane`, the sixteen guards parked off their lanes at their tower stops, and none
+`NoRoad` or `OffTheRoad`; on a structure, to 3 mm of the densely evaluated profile; continuity p99 0.038 m
+and worst 0.25 m against the grid seat alone's 0.044 m and 0.21 m; 1.1 % of the poses on its at-grade roads
+given less than the ground's whole seat. Through the blend the pitch turns by up to 16.7° a tick, on the
+Pasdaran Boulevard flyover (road 5054).
 
-**A steep pitch is the profile's own.** Of the poses seated on a road, those pitched over 10°: on
-Arapahoe **280**, against the 4,437 the ground's gradient would have pitched so — the profile is
-smoother than the photoreal it was fitted to; on Bahonar **7,822**, against 7,186. Where the profile is
-the steeper, the road is: on Bahonar's Pasdaran Boulevard flyovers (roads 5042, 5044, 5046, 5054) the
-profile climbs 4.6 m between two elevation records 10 m apart — 63 % at its steepest on road 5046 — and a
-body seated there pitches up to 32°. The engine's road mesh climbs the same; the ground had hidden it
-by seating the body under the deck. It is the world build's to shape, as `BridgeProfileShaper` shapes
-Arapahoe's decks.
+**A steep pitch.** Of the poses on a road, those pitched over 10°: on Arapahoe **892**, against the 4,437
+the ground's gradient alone would have pitched so, most of the difference on the humps the ground made
+beneath the decks; on Bahonar **7,632**, against 7,186. Where the profile is the steeper, the road is: on
+Bahonar's Pasdaran Boulevard flyovers (roads 5042, 5044, 5046, 5054) the profile climbs 4.6 m between two
+elevation records 10 m apart — 63 % at its steepest on road 5046 — and the engine's road mesh climbs the
+same. It is the world build's to shape, as `BridgeProfileShaper` shapes Arapahoe's decks.
 
 **The deck ends do not step.** Every road in Arapahoe's package meets the next at one height
-(`ElevationContinuityInjector`, `JunctionSurfaceReconciler`), and the seat follows the profile across
-the joint: I-25's deck road 2068 ends at −16.79 m, the 3.6 m connector 2639 climbs 0.35 m at 9.6 % to
-road 2054's −16.44 m, and a body crossing it rides a short steep ramp rather than a step. The worst
-change onto or off a deck road, 0.20 m, is a body whose origin crosses that connector in two ticks.
+(`ElevationContinuityInjector`, `JunctionSurfaceReconciler`), and on a structure the seat follows the
+profile across the joint: I-25's deck road 2068 ends at −16.79 m, the 3.6 m connector 2639 climbs 0.35 m
+at 9.6 % to road 2054's −16.44 m, and a body crossing it rides a short steep ramp rather than a step.
 
-**Cost, measured on the same run in Release:** the bridge's own work rose from **0.213 to 0.464 ms per
-tick** for 335 vehicles — 0.75 µs a vehicle: two projections onto a sampled reference line inside a
-window of a few dozen one-metre segments, one binary search and one cubic. Against the ~30 ms per tick of
-client work a rendered Arapahoe drive measures, under 1 %. The ground's five samples per vehicle are
-unchanged: 20 array reads, no allocation, no RPC. The join holds each road's reference line sampled at
-one metre: about 5 MB for Bahonar's 206 km of road.
+**Cost.** Measured directly over every lane of each package at 7 m steps, a body's seat costs **1.0 µs**
+on its road against 0.24–0.35 µs on the ground alone: two projections onto a sampled reference line inside
+a window of a few dozen one-metre segments, one binary search and one cubic for the profile, one more
+ground sample at the reference line, and a linear read of the road's weight table — about 0.25 ms a tick
+for 335 vehicles. The run above measured the bridge's whole work at 0.70–0.89 ms a tick, on a day the
+machine ran SUMO itself at 7.8–8.6 ms a step against the 5.2 ms of earlier runs. Against the ~30 ms per
+tick of client work a rendered Arapahoe drive measures, under 1 %. The ground's five samples per vehicle
+are unchanged: no allocation, no RPC. The join holds each road's reference line sampled at one metre
+(about 5 MB for Bahonar's 206 km of road), and the weight tables, built at session start in 43 ms on
+Arapahoe and 174 ms on Bahonar, hold 1.3 MB and 6.6 MB.
 
 **Memory cost of the grid, measured:** the Bahonar grid is 3,609 × 2,109 cells at 2.0 m = 7,611,381
 cells, two float32 planes = 60,891,048 bytes plus a 60-byte header, exactly the 60,891,108-byte
@@ -3856,8 +3918,8 @@ Per `_TEAM_BRIEF.md` §4, nothing is lost silently.
 | # | Capability | Status under SUMO drive | Compensation |
 |---|---|---|---|
 | L1 | Real velocity in the truth record | **preserved** | D3.5 — SUMO's own speed, written where `GetVelocity` reads a kinematic vehicle |
-| L2 | Terrain seating | **preserved and improved** | analytic Z from the profile of the road the body is on (§7.5) — a deck's own height on a deck, the road's own chord beneath one — and from the drape grid off every road; exact rather than settled |
-| L3 | Body pitch and roll over undulations | **preserved** | pitch from the road profile's slope; roll from the drape-grid gradient at grade, none on a structure, blended between (§7.5) |
+| L2 | Terrain seating | **preserved and improved** | analytic Z from the drape grid at grade and off every road, and from the profile of the road the body is on where it is a structure (§7.5) — a deck's own height on a deck, the road's own chord beneath one; exact rather than settled |
+| L3 | Body pitch and roll over undulations | **preserved** | pitch and roll from the drape-grid gradients at grade; pitch from the road profile's slope and no roll on a structure; blended between (§7.5) |
 | L4 | The CARLA-free SUMO→CoT path | **preserved, untouched** | `SumoCotBridge` and `sumo_cot_telemetry.py` stay a supported product; the bridge does not replace them (D3.1) |
 | L5 | Vehicle fade / staging dissolve | **not used in this mode — and it is already off by default in the working tree** | `--fade` carries `default=False` (`CarlaControlArgumentParser.py:318-328`); the mechanism is untouched and still available to any other client. Nothing needs dissolving: every vehicle SUMO has is drawn, so a vehicle appears where and when SUMO inserts it and disappears where and when SUMO removes it, timed by the lookahead, and its admission and release instants are recorded (§8.4, §8.5). |
 | L5b | **Gained:** the per-frame client RPC budget the fade used to consume | **headroom** | Removing one blocking RPC per vehicle per reconcile — *"the heaviest load this client puts on the server's per-frame RPC budget"* (`CarlaControlArgumentParser.py:318-328`) — is what lets the per-tick write be a single `apply_batch` with no variable tail (§3.3). A capability table should record a gain as carefully as a loss. |
@@ -3887,7 +3949,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.5** | A pose-applied vehicle reports the velocity its driver supplies: `FVehicleActor::SetActorTargetVelocity` on a vehicle whose physics is disabled writes the pawn movement component's `Velocity` and the root's `ComponentVelocity` (candidate **e**), and the bridge sends an `ApplyTargetVelocityCommand` beside every `ApplyTransformCommand` and a zero one at check-in (§5.4). Vehicles with physics on, and every other actor, are unchanged. Candidate (b) is **verified impossible** (§5.3). Candidate (d) is a fallback for actors nobody drives; candidates (c) and (f) are not taken. |
 | **D3.6** | SUMO runs **one step ahead** of the rendered clock; every sub-step pose is interpolated between the two buffered frames **along the lane's own geometry**, never chordally. A vehicle is drawn over a step only where SUMO reported it at both frames: **one SUMO inserts is drawn from the frame SUMO first reports it in, at that position and moving, and never before SUMO inserted it** (§6.3). The SUMO step-length is the scenario's; the bridge reads it and does not change it. |
 | **D3.7** | The reference-point shift uses the **CARLA front overhang** `b.x + e.x`, so the rendered front bumper sits exactly on SUMO's reference point. The catalogue must set each vType's `length`/`width` from the blueprint's bounding box, at **authoring** time. |
-| **D3.8** | **A body takes its height from the road it is on.** Z and pitch come from the OpenDRIVE profile of the vehicle's road at the s its origin projects to — the road found from its lane by `RoadSurface` (the edge's `sumoId`, a merge's lane sections, a connector's links), the s by projection at the lane's offset across the road — with the pitch signed for the direction of travel against +s and the vertical velocity the speed times the same slope. Roll is the ground grid's (`GroundSurface`, sampled in the **CARLA** frame `(x_s, −y_s)`) scaled by a weight that is 1 while the road departs from the ground by under 0.5 m and 0 from 1.5 m, smoothstep between: the crown at grade, none on a deck or a spanned road. A vehicle on no lane, on a lane with no road, or more than 5 m off its road is seated on the ground grid exactly as before, and the run report counts it by reason (§7.5). `z_seat` per blueprint is **measured**, not computed from the bounding box. |
+| **D3.8** | **A body is seated on the ground where its road is at grade and on its road where the road is a structure.** The road is found from the vehicle's lane by `RoadSurface` (the edge's `sumoId`, a merge's lane sections, a connector's links) and the s by projecting the origin at the lane's offset across the road. One weight `w`, 1 while the road's profile departs from the ground grid by under 0.5 m **at its reference line at that s** and 0 from 1.5 m, smoothstep between, decides height, pitch and roll alike: at grade (`w` = 1) the seat is the ground grid's exactly (`GroundSurface`, sampled in the **CARLA** frame `(x_s, −y_s)`) — the visible road across its whole width, camber included, where the profile is the reference line's height built flat across; on a structure (`w` = 0) height and pitch are the profile's, the pitch signed for the direction of travel against +s, and the roll is none; between, height and roll are blended by `w`, and pitch and vertical velocity come from the blended seat's own slope. A vehicle on no lane, on a lane with no road, or more than 5 m off its road is seated on the ground grid exactly as before, and the run report counts it by reason (§7.5). `z_seat` per blueprint is **measured**, not computed from the bounding box. |
 | **D3.9** | Actors come from a **per-blueprint pool**, checked out on admission and in on release, and no pooled actor is destroyed during a session. The pool has **no ceiling**: it grows to what the scenario's population needs, spawning a body onto its own clear parking slot only when a vehicle needs one and none of its blueprint is parked, and no vehicle goes without a body for want of one (§8.2). |
 | **D3.10** | **A vehicle admitted to the render set appears at full opacity; a released one disappears.** No dissolve, no per-vehicle opacity RPC, no fade state published. Every vehicle SUMO has is drawn (§8.3), so a vehicle appears where and when SUMO inserts it and disappears where and when SUMO removes it — the scenario's own events, timed by §8.4's lookahead — rather than at a transition a fade would paper over. The arrival gate needs no replacement: with no fade record, `IsActorEstablished` is `true` and the truth gate is inert (`CarlaClient.cs:1571`; `VehicleTelemetryService.cs:66-73`). `VehicleTelemetry.Opacity` is a constant 1.0 in this mode. What is still required is the **recorded admission and release instant** per vehicle. |
 | **D3.11** | In a SUMO-drive session **SUMO is the only removal authority**. The bridge translates removals; it never originates one. This resolves [issue #18](https://github.com/sbrett9/carla/issues/18) for this mode by deleting both of its deciders rather than adding a third. |
