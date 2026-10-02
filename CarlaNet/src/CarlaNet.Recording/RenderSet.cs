@@ -13,7 +13,16 @@ namespace CarlaNet.Recording;
 /// The first frame of the span this vehicle has been rendered over without a break: the frame its
 /// body was first drawn for it, so a track that begins mid-scene can be told from one that entered.
 /// </param>
-public sealed record RenderedVehicle(uint ActorId, string SumoId, string VehicleTypeId, ulong AdmittedTick);
+public sealed record RenderedVehicle(uint ActorId, string SumoId, string VehicleTypeId, ulong AdmittedTick)
+{
+    /// <summary>
+    /// The angle SUMO reported for the vehicle at the frame, degrees clockwise from north, where the
+    /// render set came from the session in this process; null where it came from the server, which is
+    /// told the set only when a body is lent or given back. Audit beside the body's own heading, which
+    /// is its transform's.
+    /// </summary>
+    public double? SumoAngleDegrees { get; init; }
+}
 
 /// <summary>
 /// The bodies one frame rendered, each with the vehicle it rendered.

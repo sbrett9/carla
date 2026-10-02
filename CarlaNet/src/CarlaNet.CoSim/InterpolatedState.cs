@@ -10,9 +10,9 @@ namespace CarlaNet.CoSim;
 /// </param>
 /// <param name="Y">Projected northing of the same point, metres.</param>
 /// <param name="HeadingDegrees">
-/// Degrees clockwise from north, taken from the tangent of the shape the vehicle is on rather than
-/// by blending the two reported angles -- a tangent is already right through a turn and a blended
-/// angle is not.
+/// Degrees clockwise from north: the tangent of the lane under the bumper. It steps at every corner of
+/// the lane's polyline and does not turn through a lane change, so the session does not turn a body by
+/// it; a body's heading comes from the path its bumper takes (<see cref="PathHeading"/>).
 /// </param>
 /// <param name="SpeedMetresPerSecond">Speed, interpolated linearly so it ramps as SUMO's did.</param>
 /// <param name="Case">Which of the cases produced it.</param>

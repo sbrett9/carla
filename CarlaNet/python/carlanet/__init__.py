@@ -1870,8 +1870,10 @@ class World:
         body is named and every vehicle is reported, without those three keys.
 
         Each dict: id, type_id, base_type, special_type, color, role_name, lat, lon, hae, hae_dtm,
-        speed_mps, course_deg, vx, vy, vz, length_m, width_m, height_m, and sumo_id, vtype_id,
-        admitted_tick for a body a SUMO drive lent. Heights are ELLIPSOIDAL WGS84 (HAE)."""
+        speed_mps, course_deg, heading_deg, vx, vy, vz, length_m, width_m, height_m, and sumo_id,
+        vtype_id, admitted_tick for a body a SUMO drive lent. heading_deg is the direction the body
+        points (its yaw), course_deg the direction it moves; during a SUMO drive the body's heading
+        comes from the path it takes. Heights are ELLIPSOIDAL WGS84 (HAE)."""
         # Recover the surface shift before either path reads it, so a client that did not build this
         # world reports the same bare-earth truth as the one that did.
         self._ensure_bare_earth_reference()
@@ -1919,12 +1921,10 @@ class World:
                 dtm_at_veh, _ = self._nearest_dtm(table, geo.Latitude, geo.Longitude)
             vx, vy, vz = float(vel.x), float(vel.y), float(vel.z)
             speed = _m.hypot(vx, vy)
-            # Course over ground, degrees true north (CARLA +X=East, -Y=North); yaw fallback ~stopped.
-            if speed >= 0.5:
-                course = _m.degrees(_m.atan2(vx, -vy)) % 360.0
-            else:
-                yaw = _m.radians(tf.rotation.yaw)
-                course = _m.degrees(_m.atan2(_m.cos(yaw), -_m.sin(yaw))) % 360.0
+            # Course over ground, degrees true north (CARLA +X=East, -Y=North); heading fallback ~stopped.
+            yaw = _m.radians(tf.rotation.yaw)
+            heading = _m.degrees(_m.atan2(_m.cos(yaw), -_m.sin(yaw))) % 360.0
+            course = _m.degrees(_m.atan2(vx, -vy)) % 360.0 if speed >= 0.5 else heading
             attrs = v.attributes
             ext = v.bounding_box.extent
             base = attrs.get("base_type", "") or (
@@ -1934,7 +1934,7 @@ class World:
                 "base_type": base, "special_type": attrs.get("special_type", ""),
                 "color": attrs.get("color", ""), "role_name": attrs.get("role_name", ""),
                 "lat": geo.Latitude, "lon": geo.Longitude, "hae": hae, "hae_dtm": dtm_at_veh,
-                "speed_mps": speed, "course_deg": course,
+                "speed_mps": speed, "course_deg": course, "heading_deg": heading,
                 "vx": vx, "vy": vy, "vz": vz,
                 "length_m": 2.0 * ext.x, "width_m": 2.0 * ext.y, "height_m": 2.0 * ext.z,
             }
@@ -1966,6 +1966,7 @@ class World:
                 "lat": float(r.Lat), "lon": float(r.Lon),
                 "hae": float(r.Hae), "hae_dtm": float(r.HaeDtm),
                 "speed_mps": float(r.SpeedMps), "course_deg": float(r.CourseDeg),
+                "heading_deg": float(r.HeadingDeg),
                 "vx": float(r.Vx), "vy": float(r.Vy), "vz": float(r.Vz),
                 "length_m": float(r.LengthM), "width_m": float(r.WidthM), "height_m": float(r.HeightM),
             }

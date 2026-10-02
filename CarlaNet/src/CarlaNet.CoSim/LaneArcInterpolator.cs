@@ -23,7 +23,8 @@ namespace CarlaNet.CoSim;
 /// lateral offset to the left of its lane, the offset taken linearly in time between the two frames
 /// as SUMO moves it, so the pose is SUMO's position at every frame and moves sideways between frames as
 /// SUMO moved it, and the step in which the reported lane changes is a few centimetres of that movement
-/// rather than a lane width. The heading stays the lane's tangent.</para>
+/// rather than a lane width. The heading stays the lane's tangent; the session turns a body by the
+/// path its bumper takes instead (<see cref="PathHeading"/>).</para>
 /// </remarks>
 public sealed class LaneArcInterpolator
 {

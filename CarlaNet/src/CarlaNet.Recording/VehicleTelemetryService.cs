@@ -135,14 +135,11 @@ public sealed class VehicleTelemetryService
 
             double vx = vel.X, vy = vel.Y, vz = vel.Z;
             double speed = Math.Sqrt(vx * vx + vy * vy);
-            double course;
-            if (speed >= 0.5)
-                course = Mod360(RadToDeg(Math.Atan2(vx, -vy)));        // course over ground, true north
-            else
-            {
-                double yaw = DegToRad(snap.Transform.Rotation.Yaw);    // ~stopped: fall back to heading
-                course = Mod360(RadToDeg(Math.Atan2(Math.Cos(yaw), -Math.Sin(yaw))));
-            }
+            double yaw = DegToRad(snap.Transform.Rotation.Yaw);
+            double heading = Mod360(RadToDeg(Math.Atan2(Math.Cos(yaw), -Math.Sin(yaw))));  // true north
+            double course = speed >= 0.5
+                ? Mod360(RadToDeg(Math.Atan2(vx, -vy)))                // course over ground, true north
+                : heading;                                             // ~stopped: fall back to heading
 
             var attrs = meta.Description.Attributes;
             string baseType = Attr(attrs, "base_type", "");
@@ -157,6 +154,7 @@ public sealed class VehicleTelemetryService
                 speed, course, vx, vy, vz,
                 2.0 * ext.X, 2.0 * ext.Y, 2.0 * ext.Z)
             {
+                HeadingDeg = heading,
                 Opacity = _client.GetActorOpacity(id),
                 // Carried alongside the truth so anything measuring against the imagery — occlusion,
                 // a projected bounding box — works from the same pose this record was built from.

@@ -67,11 +67,16 @@ namespace CarlaNet.CoSim;
 /// road or off one, as before. The two tilt signs are CARLA's own, taken from the code that turns a
 /// rotation into axes rather than chosen: see <see cref="Tilt"/>.</para>
 ///
-/// <para><b>The velocity.</b> SUMO's speed along the lane, pointed along the yaw, with a vertical
-/// component of that speed times the slope along the heading the pitch was taken from -- so the
-/// velocity is tangent to the path the body is seated on. SUMO's network is flat, so its speed is the
-/// horizontal speed, and the horizontal speed a truth record derives from this velocity is SUMO's
-/// own.</para>
+/// <para><b>The velocity.</b> The path's where the session gives one: the bumper's own movement since
+/// the body's last pose (<see cref="PathHeading"/>), lateral movement included, so a truth record's
+/// course and speed are the motion the imagery shows. Otherwise -- a body's first pose, a step across a
+/// jump -- SUMO's speed along the lane, pointed along the yaw. Either way the vertical component is the
+/// horizontal speed times the slope along the heading the pitch was taken from, so the body climbs as it
+/// is pitched.</para>
+///
+/// <para><b>The yaw is given, not derived.</b> The heading a body takes is the caller's: the session's
+/// is the heading of the body's own path, with SUMO's reported angle recorded beside it. Only the
+/// rotation about the bumper depends on it; the bumper is where the caller put it.</para>
 /// </remarks>
 public sealed class PoseConverter
 {
@@ -231,6 +236,10 @@ public sealed class PoseConverter
     /// reports none, which seats it on the ground.
     /// </param>
     /// <param name="lanePositionMetres">How far along that lane the front bumper is.</param>
+    /// <param name="pathVelocity">
+    /// The body's horizontal velocity from its path, in SUMO's frame (east, north), metres per second;
+    /// null to point SUMO's speed along the heading.
+    /// </param>
     public VehiclePose? Convert(string vehicleId,
                                 in VehicleExtent extent,
                                 double sumoX,
@@ -238,7 +247,8 @@ public sealed class PoseConverter
                                 double sumoAngleDegrees,
                                 double speedMetresPerSecond,
                                 string laneId,
-                                double lanePositionMetres)
+                                double lanePositionMetres,
+                                (double X, double Y)? pathVelocity = null)
     {
         ArgumentNullException.ThrowIfNull(vehicleId);
         ArgumentNullException.ThrowIfNull(laneId);
@@ -310,6 +320,11 @@ public sealed class PoseConverter
                                   departure, weight);
         }
 
+        // The horizontal velocity: the path's, in the CARLA frame, or SUMO's speed along the yaw.
+        (double velocityX, double velocityY) = pathVelocity is { } path
+            ? (path.X, -path.Y)
+            : (speedMetresPerSecond * forwardX, speedMetresPerSecond * forwardY);
+
         return new VehiclePose(
             vehicleId,
             extent.BlueprintId,
@@ -319,9 +334,9 @@ public sealed class PoseConverter
             yaw,
             pitch,
             roll,
-            speedMetresPerSecond * forwardX,
-            speedMetresPerSecond * forwardY,
-            speedMetresPerSecond * slope,
+            velocityX,
+            velocityY,
+            Math.Sqrt((velocityX * velocityX) + (velocityY * velocityY)) * slope,
             approximated)
         {
             Road = onRoad,

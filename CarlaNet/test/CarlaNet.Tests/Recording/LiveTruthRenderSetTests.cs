@@ -105,6 +105,11 @@ public sealed class LiveTruthRenderSetTests : IAsyncLifetime
         Assert.Equal(new RenderedVehicle(BodyA, "escort_0", "military_truck", 96), lent.Rendered);
         // The provenance the pool spawned the body under, read from the actor's own description.
         Assert.Equal("sumo", lent.RoleName);
+        // The direction each body points, from its transform's yaw: +Y is south, +X east.
+        Assert.Equal(180.0, lent.HeadingDeg, 6);
+        Assert.Equal(90.0, records.Single(record => record.Id == Ambient).HeadingDeg, 6);
+        // The server is told no SUMO angle, so the live pull carries none.
+        Assert.Null(lent.Rendered!.SumoAngleDegrees);
         // A vehicle no session named is reported as it always was.
         Assert.Null(records.Single(record => record.Id == Ambient).Rendered);
     }
