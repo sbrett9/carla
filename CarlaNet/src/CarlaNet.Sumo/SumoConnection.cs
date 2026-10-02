@@ -364,6 +364,9 @@ public sealed class SumoConnection : IDisposable
         return ((IPEndPoint)probe.LocalEndPoint!).Port;
     }
 
+    /// <summary>How long a launch that failed waits for its sumo to exit before disposing it.</summary>
+    private const int ConsoleDrainMilliseconds = 5000;
+
     private static void KillQuietly(Process process)
     {
         try
@@ -371,6 +374,15 @@ public sealed class SumoConnection : IDisposable
             if (!process.HasExited)
             {
                 process.Kill(entireProcessTree: true);
+            }
+
+            // Its console lines arrive on a reader thread a moment after they are written, so a sumo
+            // that printed why it stopped and exited could be disposed before they did, and the launch
+            // refused with no reason. Once the timed wait sees the exit, the untimed one returns only
+            // when the redirected output has all been handed over.
+            if (process.WaitForExit(ConsoleDrainMilliseconds))
+            {
+                process.WaitForExit();
             }
         }
         catch (Exception exception) when (exception is InvalidOperationException or SystemException)
