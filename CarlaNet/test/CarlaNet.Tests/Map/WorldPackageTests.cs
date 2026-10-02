@@ -296,6 +296,35 @@ public class WorldPackageTests : IDisposable
     }
 
     [Fact]
+    public void TheRampMetersProgrammeFileIsCarriedBesideTheNetwork()
+    {
+        // The recorded invocation names the file by a fixed name; the package holds what it said.
+        const string programs = "<tlLogics>\n    <tlLogic id=\"202\" type=\"static\" programID=\"0\" "
+                                + "offset=\"0\">\n        <phase duration=\"2\" state=\"s\"/>\n"
+                                + "        <phase duration=\"4\" state=\"r\"/>\n    </tlLogic>\n</tlLogics>\n";
+        var manifest = DrapedManifest(cols: 4, rows: 4);
+        var (offset, ground) = MakeGrids(4, 4);
+
+        WorldPackage.Write(_dir, manifest, Xodr, Net, offset, ground, programs);
+
+        Assert.True(WorldPackage.TryReadTrafficLightPrograms(Pkg, out var read));
+        Assert.Equal(programs, read);
+    }
+
+    [Fact]
+    public void AWorldWithNoRampMeterCarriesNoProgrammeFile()
+    {
+        var manifest = DrapedManifest(cols: 4, rows: 4);
+        var (offset, ground) = MakeGrids(4, 4);
+
+        WorldPackage.Write(_dir, manifest, Xodr, Net, offset, ground);
+
+        Assert.False(WorldPackage.TryReadTrafficLightPrograms(Pkg, out _));
+        using var archive = ZipFile.OpenRead(Pkg);
+        Assert.Null(archive.GetEntry(WorldPackage.TrafficLightProgramsEntry));
+    }
+
+    [Fact]
     public void APackageWithNoNetworkSaysSoRatherThanReturningNothing()
     {
         // A package written before the network was carried. Reading it must fail loudly: the network

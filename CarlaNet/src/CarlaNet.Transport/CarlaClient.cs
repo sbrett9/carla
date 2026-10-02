@@ -258,6 +258,9 @@ public sealed class CarlaClient : IAsyncDisposable
     public IReadOnlyList<string> LastNetconvertArgv { get; private set; } = [];
     public string LastNetconvertPath { get; private set; } = string.Empty;
     public string LastNetconvertVersion { get; private set; } = string.Empty;
+    // The ramp meters' programme file that invocation read, empty when it read none; the package
+    // carries it beside the network.
+    public string LastTrafficLightPrograms { get; private set; } = string.Empty;
 
     // Cached parse of the drape grids for point sampling (re-parsed only when the underlying bytes change).
     private float[]? _drapeDtmGrid, _drapeOffGrid;
@@ -621,7 +624,17 @@ public sealed class CarlaClient : IAsyncDisposable
         LastNetconvertArgv = conversion.NetconvertArgv;
         LastNetconvertPath = conversion.NetconvertPath;
         LastNetconvertVersion = conversion.NetconvertVersion;
+        LastTrafficLightPrograms = conversion.RampMeters?.ProgramFile ?? string.Empty;
         Console.WriteLine($"[netconvert] {conversion.NetconvertVersion} at {conversion.NetconvertPath}");
+        if (conversion.RampMeters is { } meters)
+        {
+            foreach (var meter in meters.Metered)
+                Console.WriteLine($"[ramp meters] {meter.Id}: {meter.Lanes} lane(s) metered, one vehicle per "
+                    + $"{CarlaNet.Map.RampMeterProgram.GreenSeconds} s green per lane on a "
+                    + $"{meter.CycleSeconds} s cycle");
+            foreach (var (id, reason) in meters.NotMetered)
+                Console.WriteLine($"[ramp meters] {id}: kept netconvert's programme -- {reason}");
+        }
 
         // 1a) Join up the junctions that offer no choice of route. netconvert wraps every
         //     surviving OSM node in a junction, so a node that exists only because two ways
@@ -1451,7 +1464,8 @@ public sealed class CarlaClient : IAsyncDisposable
         WorldPackage.Write(
             directory, manifest, elevatedXodr, LastSumoNetwork,
             LastDrapeActive ? ToFloatGrid(LastDrapedOffsetBytes) : [],
-            LastDrapeActive ? ToFloatGrid(LastDrapedDtmBytes) : []);
+            LastDrapeActive ? ToFloatGrid(LastDrapedDtmBytes) : [],
+            LastTrafficLightPrograms);
         return WorldPackage.PackagePath(directory, mapName);
     }
 

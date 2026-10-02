@@ -6,7 +6,9 @@ A world package (`<name>.cwp`) is a zip of STORED entries. `CarlaNet.Map` writes
   * `world.json` -- the manifest;
   * `map.xodr` -- the elevated OpenDRIVE;
   * `map.net.xml` -- the SUMO network from the same netconvert run;
-  * `bareearth.bin` -- the per-cell grids, when the world was seated on a draped surface.
+  * `bareearth.bin` -- the per-cell grids, when the world was seated on a draped surface;
+  * `map.tll.xml` -- the ramp meters' programme file that run read (`--tllogic-files`, recorded as
+    `<tllogic-files>`), only when the extract has ramp meters.
 
 The world build then publishes the authoring reference set into the same file
 (`carlacontrol.AuthoringReferenceSet`), which a scenario author and the scenario compiler read
@@ -51,6 +53,7 @@ class WorldPackageReader:
     AREAS_SOURCE_ENTRY = "areas.aoi.geojson"
     PLACE_INDEX_ENTRY = "places.json"
     SOLAR_FRAME_ENTRY = "solar.json"
+    TRAFFIC_LIGHT_PROGRAMS_ENTRY = "map.tll.xml"
 
     def __init__(self, package_path: str | Path) -> None:
         self.path = Path(package_path)
@@ -86,6 +89,11 @@ class WorldPackageReader:
     RECORDED_OUTPUTS = {"--opendrive-output": "<opendrive-output>", "--output-file": "<output-file>",
                         "-o": "<output-file>"}
 
+    # The ramp meters' programme file, a scratch file of the build too, recorded by this name from the
+    # first build that wrote one, so no older package needs it renamed. Its content is
+    # `traffic_light_programs()`.
+    RECORDED_PROGRAMS_INPUT = "<tllogic-files>"
+
     @property
     def netconvert_argv(self) -> list[str]:
         """Every argument netconvert was given, its output paths by fixed names.
@@ -119,6 +127,16 @@ class WorldPackageReader:
         """The elevated OpenDRIVE the CARLA world was generated from."""
         with zipfile.ZipFile(self.path) as package:
             return package.read(self.OPENDRIVE_ENTRY).decode("utf-8")
+
+    def traffic_light_programs(self) -> str | None:
+        """The ramp meters' programme file the world's netconvert run read, or None when it read none.
+
+        The recorded invocation names it `<tllogic-files>`; this is what that file said. The network
+        carries the same programmes, so this is the record of the invocation, not a second source of
+        them.
+        """
+        raw = self.entry_bytes(self.TRAFFIC_LIGHT_PROGRAMS_ENTRY)
+        return None if raw is None else raw.decode("utf-8")
 
     # ---- the authoring reference set --------------------------------------------------------------
 

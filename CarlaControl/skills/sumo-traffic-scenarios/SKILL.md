@@ -456,6 +456,14 @@ The compiler enforces four of these on a specification — departure order, `--`
   discharge (population climbs, never settles). Use `NetconvertSettings(traffic_light_type="actuated")`.
 - **A near-zero-length edge that spans real geometry** (two junctions netconvert failed to merge)
   blocks merging and stalls a ramp. `NetconvertSettings(junction_join_distance=25)` removes it.
+- **A world's ramp meters are meters, not junctions.** The world build keeps every OSM
+  `traffic_signals=ramp_meter` out of junction joining, so no meter signals the freeway, and runs it
+  on a 6 s cycle of 2 s greens, a two-lane meter's lanes in turn; the green is SUMO's `s`, so a vehicle
+  stops at the line and one leaves per green. Expect a few seconds' wait and a short queue at each.
+- **A lane closure's `notify` must name every edge a vehicle can stand on waiting for the closed
+  lanes**, at least the edge entering the closed one. SUMO refreshes a driver's choice of lanes only on
+  those edges and the closed edge when the closure begins and ends; a driver stopped anywhere else
+  keeps the choice it made while the lanes were shut, and with teleporting off it stays stopped.
 - **A long dwell blocks a single-lane road.** Model "parked on the shoulder" with a `<stop
   parking="true">`, not a stop in the running lane. A parked vehicle is still reported by TraCI, so
   it stays in the dataset — verified.

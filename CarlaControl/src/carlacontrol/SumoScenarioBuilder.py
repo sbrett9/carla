@@ -89,6 +89,12 @@ class NetconvertSettings:
     # drivable vehicle edges once the passenger vClass filter is off. Each entry is a netconvert
     # type name such as "highway.footway".
     remove_edge_types: tuple[str, ...] = ()
+    # The world's ramp meters, by OSM node id: the nodes its extract tags traffic_signals=ramp_meter.
+    # The world build keeps them out of junction joining and reads their metering programmes from a
+    # file it writes (OsmConverter, RampMeterProgram), so a world whose extract has meters records
+    # both options and a scenario on it states the same meters. Empty for a world with none, which
+    # adds nothing.
+    ramp_meters: tuple[str, ...] = ()
 
     def to_arguments(self, osm_path: Path, out_path: Path) -> list[str]:
         """The netconvert invocation this scenario requires of its world, minus the executable.
@@ -124,6 +130,10 @@ class NetconvertSettings:
         args += ["--junctions.join"] if self.traffic_lights else ["--tls.discard-loaded"]
         if self.traffic_lights and self.traffic_light_type != "static":
             args += ["--tls.default-type", self.traffic_light_type]
+        if self.traffic_lights and self.ramp_meters:
+            # In ordinal order, as the world build writes them; the programme file by its fixed name.
+            args += ["--junctions.join-exclude", ",".join(sorted(self.ramp_meters)),
+                     "--tllogic-files", WorldPackageReader.RECORDED_PROGRAMS_INPUT]
         if self.junction_join_distance is not None:
             args += ["--junctions.join-dist", str(self.junction_join_distance)]
         if self.guess_opposite_lanes:

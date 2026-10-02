@@ -11,10 +11,11 @@
 //   map.xodr        the elevated OpenDRIVE, exactly as the server received it
 //   map.net.xml     the SUMO network from the SAME netconvert run as map.xodr
 //   bareearth.bin   the per-cell surface reconciliation grids, float32 (see the format below)
+//   map.tll.xml     the ramp meters' programme file that run read, only when the extract has meters
 //
 // The world build then publishes the authoring reference set into the same archive
-// (carlacontrol.AuthoringReferenceSet), rewriting it whole and copying these four entries across
-// byte for byte:
+// (carlacontrol.AuthoringReferenceSet), rewriting it whole and copying these entries across byte
+// for byte:
 //   areas.resolved.json   areas of interest in CARLA metres and on SUMO lanes; always written
 //   areas.aoi.geojson     the GeoJSON those areas were resolved from, when any were declared
 //   places.json           the place index: street names to edges, and its coverage
@@ -247,6 +248,14 @@ public static class WorldPackage
     /// <summary>The solar frame of the authoring reference set.</summary>
     public const string SolarFrameEntry = "solar.json";
 
+    /// <summary>
+    /// The ramp meters' programme file the world's netconvert run read (<c>--tllogic-files</c>,
+    /// recorded in <see cref="WorldPackageManifest.NetconvertArgv"/> as
+    /// <see cref="OsmConverter.RecordedProgramsInput"/>), byte for byte. Absent when the run read
+    /// none, which is every world whose extract has no ramp meter.
+    /// </summary>
+    public const string TrafficLightProgramsEntry = "map.tll.xml";
+
     /// <summary>The package a world of this name occupies inside a directory.</summary>
     public static string PackagePath(string directory, string mapName)
         => Path.Combine(directory, mapName + Extension);
@@ -260,7 +269,9 @@ public static class WorldPackage
     /// says a drape is active; they are ignored otherwise, since a constant shift needs no grid.
     /// The manifest is written with <see cref="WorldPackageManifest.BareEarthOffsetSha1"/> and
     /// <see cref="WorldPackageManifest.BareEarthDtmSha1"/> set to the digests of the grids written,
-    /// or empty where none are.
+    /// or empty where none are. <paramref name="trafficLightPrograms"/> is the ramp meters' programme
+    /// file the same netconvert run read, written as <see cref="TrafficLightProgramsEntry"/> when not
+    /// empty.
     /// </summary>
     public static void Write(
         string directory,
@@ -268,12 +279,14 @@ public static class WorldPackage
         string elevatedXodr,
         string sumoNetwork,
         ReadOnlySpan<float> offsetMeters,
-        ReadOnlySpan<float> bareEarthDtmMeters)
+        ReadOnlySpan<float> bareEarthDtmMeters,
+        string trafficLightPrograms = "")
     {
         ArgumentNullException.ThrowIfNull(directory);
         ArgumentNullException.ThrowIfNull(manifest);
         ArgumentNullException.ThrowIfNull(elevatedXodr);
         ArgumentNullException.ThrowIfNull(sumoNetwork);
+        ArgumentNullException.ThrowIfNull(trafficLightPrograms);
 
         if (manifest.DrapeActive)
         {
@@ -319,6 +332,13 @@ public static class WorldPackage
             if (sumoNetwork.Length > 0)
             {
                 WriteTextEntry(archive, NetworkEntry, sumoNetwork);
+            }
+
+            // The file the recorded invocation names by a fixed name, so the record of that
+            // invocation is complete. Absent when the run read none.
+            if (trafficLightPrograms.Length > 0)
+            {
+                WriteTextEntry(archive, TrafficLightProgramsEntry, trafficLightPrograms);
             }
 
             // A constant shift is fully described by the manifest, so no grid entry is written at
@@ -474,6 +494,12 @@ public static class WorldPackage
     /// <summary>The solar frame, as JSON text. False when the package has no reference set.</summary>
     public static bool TryReadSolarFrame(string packagePath, out string solarFrameJson)
         => TryReadText(packagePath, SolarFrameEntry, out solarFrameJson);
+
+    /// <summary>
+    /// The ramp meters' programme file the world's netconvert run read. False when it read none.
+    /// </summary>
+    public static bool TryReadTrafficLightPrograms(string packagePath, out string programs)
+        => TryReadText(packagePath, TrafficLightProgramsEntry, out programs);
 
     private static bool TryReadText(string packagePath, string entryName, out string text)
     {

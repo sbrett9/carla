@@ -52,3 +52,24 @@ def test_the_inputs_and_flags_are_kept_as_recorded(tmp_path):
 def test_a_package_that_already_names_its_outputs_reads_unchanged(tmp_path):
     named = ["--opendrive-output", "<opendrive-output>", "--output-file", "<output-file>"]
     assert package_with(tmp_path, named, "named.cwp").netconvert_argv == named
+
+
+def test_a_metered_world_reads_with_its_meters_and_their_programme_file(tmp_path):
+    """The ramp meters' options read as recorded, and the file the second names is in the package."""
+    argv = built("0f") + ["--junctions.join-exclude", "582784737,582785322",
+                          "--tllogic-files", "<tllogic-files>"]
+    path = tmp_path / "metered.cwp"
+    programs = '<tlLogics>\n    <tlLogic id="582785322" type="static" programID="0" offset="0"/>\n</tlLogics>\n'
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("world.json", json.dumps({"MapName": "m", "NetconvertArgv": argv}))
+        archive.writestr("map.tll.xml", programs)
+    package = WorldPackageReader(path)
+
+    read = package.netconvert_argv
+    assert read[-4:] == ["--junctions.join-exclude", "582784737,582785322",
+                         "--tllogic-files", WorldPackageReader.RECORDED_PROGRAMS_INPUT]
+    assert package.traffic_light_programs() == programs
+
+
+def test_a_world_with_no_ramp_meter_carries_no_programme_file(tmp_path):
+    assert package_with(tmp_path, built("0f"), "plain.cwp").traffic_light_programs() is None
