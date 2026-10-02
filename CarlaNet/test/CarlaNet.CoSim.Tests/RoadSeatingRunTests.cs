@@ -81,6 +81,13 @@ public sealed class RoadSeatingRunTests
         long steepOnGround = 0;
         string worstProfileAt = string.Empty;
         HashSet<uint> decks = [];
+
+        // At grade -- a body taking the ground's roll in full -- how far its seat on the profile stands from
+        // where the ground would have seated it, and how each follows the photoreal, by distance across the
+        // road from its reference line. The photoreal comes from the build's drape cache, where found.
+        PhotorealSurface? photoreal = PhotorealSurface.ForPackage(package);
+        var atGrade = new SurfaceAgreement();
+        var seatGap = new List<(double Across, double Gap)>();
         var groups = new SortedDictionary<string, Group>(StringComparer.Ordinal);
         long onRoad = 0;
         foreach (CoSimPoseRecord record in byVehicle.Values.SelectMany(track => track))
@@ -92,6 +99,21 @@ public sealed class RoadSeatingRunTests
 
             onRoad++;
             double seatHeight = record.Pose.Z - seat.SurfaceZMetres;
+            if (seat.RollWeight >= 1.0 && onRoad % 5 == 0)
+            {
+                RoadProfile seatedOn = roads.Roads[seat.RoadId];
+                double across = seatedOn.Project(record.Pose.X, -record.Pose.Y, seat.S - 1.0, seat.S + 1.0).Lateral;
+                seatGap.Add((across, Math.Abs(seat.DepartureFromGroundMetres)));
+                // Where the photoreal is the ground: within the five metres of bare earth the world build
+                // drapes onto, and not a canopy, a gantry or a tree over the road.
+                if (photoreal?.Surface(record.Pose.X, record.Pose.Y) is { } surface
+                    && photoreal.BareEarth(record.Pose.X, record.Pose.Y) is { } bareEarth
+                    && Math.Abs(surface - bareEarth) <= 5.0
+                    && ground.Sample(record.Pose.X, record.Pose.Y) is { } height)
+                {
+                    atGrade.Add(across, seat.SurfaceZMetres + ground.OriginHeightMetres - surface, height - surface);
+                }
+            }
             if (Math.Abs(record.Pose.PitchDegrees) > SteepDegrees)
             {
                 steepOnRoad++;
@@ -162,6 +184,24 @@ public sealed class RoadSeatingRunTests
                           + $"{worstEvaluation:0.000000} m; worst gap to the densely evaluated profile on a "
                           + $"carriageway {worstProfile:0.0000} m ({worstProfileAt}), on a structure "
                           + $"{worstOnStructure:0.0000} m");
+        _output.WriteLine($"at grade (full roll), every fifth pose: |profile seat - ground seat| over {seatGap.Count} poses");
+        foreach ((string name, double low, double high) in new[]
+                 {
+                     ("< 3 m", 0.0, 3.0), ("3-6.5 m", 3.0, 6.5), ("6.5-10 m", 6.5, 10.0),
+                     ("10-13.5 m", 10.0, 13.5), (">= 13.5 m", 13.5, double.PositiveInfinity), ("all", 0.0, double.PositiveInfinity),
+                 })
+        {
+            double[] gaps = [.. seatGap.Where(each => Math.Abs(each.Across) >= low && Math.Abs(each.Across) < high)
+                                       .Select(each => each.Gap).Order()];
+            _output.WriteLine(gaps.Length == 0
+                ? $"    {name,-12} 0"
+                : string.Create(CultureInfo.InvariantCulture,
+                    $"    {name,-12} {gaps.Length,8}  p50 {gaps[gaps.Length / 2]:0.000}  p90 {gaps[(int)(0.9 * (gaps.Length - 1))]:0.000}  p99 {gaps[(int)(0.99 * (gaps.Length - 1))]:0.000}  max {gaps[^1]:0.000} m"));
+        }
+
+        _output.WriteLine(photoreal is null
+            ? "  no drape cache of the package's grid, so neither is measured against the photoreal"
+            : $"  against the photoreal ({Path.GetFileName(photoreal.Path)}):{Environment.NewLine}{atGrade.Describe()}");
         _output.WriteLine($"poses on a road pitched more than {SteepDegrees} degrees: {steepOnRoad} by their road's "
                           + $"profile, against {steepOnGround} the ground's gradient would have pitched so");
         _output.WriteLine("bodies seated off the ground by more than "
