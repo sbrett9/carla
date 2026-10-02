@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 19 | 2026-10-01. `C3`: a lane change takes 3 s for every vehicle — the compiler writes `lanechange.duration` 3 into every configuration and the lock records it (§5.2a, D4.42). Measured on the three shipped scenarios; Bahonar deadlocks behind a body wider than its lanes and is not recompiled with it |
 | 18 | 2026-10-01. `C4`: every pooled body is spawned with `role_name` `sumo` (D4.9, as built). `capture:sumo_id` is not stamped, because a pooled body draws a succession of vehicles; the vehicle a body draws is named per frame instead, on the world-observer snapshot for every reader (§6.4; [`03`](03_CoSimulation_Runtime.md) D3.39) |
 | 17 | 2026-10-01. `C3`: a scenario that declares lane closures carries a fifth file, the rerouter `.add.xml`, named by its configuration and digested in its lock |
 | 16 | 2026-10-01. `C2`: a vehicle SUMO inserts is drawn from the frame SUMO first reports it in, at that position and moving, and never before SUMO inserted it, and its admission instant is that frame (§4.2, §4.3). A vehicle SUMO has when rendering begins is drawn on the first rendered frame |
@@ -1569,6 +1570,54 @@ Three findings from that measurement:
   vehicle type by `carla:catalogue_digest`; and the areas of interest, which are the world package's own
   published table (`C5` §7.2) and which the supervision plan names by id.
 
+### 5.2a The processing options, and how long a lane change takes
+
+The compiler writes the SUMO options that decide how the traffic moves into every configuration and
+records them in the lock's `traffic.processing`, rather than leaving any to SUMO's default:
+`time-to-teleport` −1, `max-depart-delay` 900, `collision.action` warn, and `lanechange.duration` 3.
+Why each of the first three is fixed is [`07`](07_Scenario_Authoring.md) §7.1's; the value of the last is this contract's.
+
+> **D4.42 — a lane change takes 3 s, for every vehicle.** SUMO's default `lanechange.duration` is 0
+> (`MSFrame.cpp:489`): a vehicle crosses a lane width inside one step, which renders as a sideways jump
+> and spikes the reconciliation residual ([`06`](06_Truth_And_Annotation.md) §6.2, which sets it above
+> zero and leaves the value here). The value is a physical one: a passenger car takes about 3 to 5 s to
+> change lanes, and 3 s is taken for every vehicle until a value per vehicle class is decided.
+
+**What SUMO does with it, read from SUMO 1.27.0 and measured through TraCI.** A change is spread over
+time only where the duration is longer than the step (`MSAbstractLaneChangeModel::startLaneChangeManeuver`).
+The vehicle moves across at half the two lanes' widths per duration — 1.117 m/s between 3.35 m lanes —
+and SUMO keeps reporting the lane it started on until it is past halfway, then the lane it is moving to,
+its lateral offset carried over to that lane (`MSLaneChanger::continueChange`). The reported position
+includes the offset, and the reported angle turns with the movement (`MSVehicle::computeAngle`). The
+lane-change model caps the sideways rate at 1.0 m/s plus the forward speed (the vType's
+`lcMaxSpeedLatStanding` and `lcMaxSpeedLatFactor` at their defaults), so a vehicle standing in a queue
+still moves across at 1.0 m/s: 5.2 % of Arapahoe's lane-change vehicle-steps are below 0.5 m/s. The
+bridge renders the vehicle where SUMO has it ([`03`](03_CoSimulation_Runtime.md) §6.4).
+
+**What it does to the shipped scenarios, measured 2026-10-01** in SUMO 1.27.0 alone over each whole run:
+
+| Scenario | Live vehicles at 0 s: peak / median / p99 | At 3 s |
+|---|---|---|
+| Arapahoe underpass dwell | 440 / 338 / 427 | 441 / 345 / 431, all 7,433 inserted, none waiting |
+| Gardnerville orbit | 50 / 39 / 48 | 49 / 39 / 47 |
+| Bahonar pattern of life | 170 / 42 / 159 | **deadlocked**: 457 live at 1 h against 54, 1,820 at 6 h, 7,034 vehicles discarded by `max-depart-delay` by day 2 |
+
+Over 300 s of Arapahoe's morning peak, SUMO's own position jumps by more than a step's travel plus 1 m
+3,667 times at 0 s — the instantaneous changes — and 16 times at 3 s, every one at the step a spread
+change switches lanes between two lanes that are not parallel, eight of them inside a junction, the
+largest 15.9 m.
+
+**Why Bahonar deadlocks, measured.** The catalogue measures `vehicle.fuso.mitsubishi` at 3.93 m wide,
+wider than every lane on the three networks (3.35 m). Under a spread lane change SUMO holds a vehicle on
+every lane it overlaps: at 388 s the bus stops at the end of the right-hand lane of edge `168434252`,
+needing the left lane for its turn, "blocked by left leader, overlapping", while the head of the left
+lane holds the bus as its own leader 0.10 m ahead, and with teleporting forbidden the queue never
+clears. Every duration from 1.5 s to 5 s deadlocks it, at steps from 0.05 s to 1 s; the control, the
+same run at 3 s with the bus 2.5 m wide, does not (peak 157, 56 live at 1 h). **Bahonar is therefore not
+recompiled with D4.42**: its committed configuration keeps SUMO's instantaneous default, and its
+generator's regeneration test fails, until the bus's width or the classes' lane-change parameters are
+decided.
+
 ### 5.3 Lock fields
 
 `<scenario_id>.lock.json`, as `ScenarioCompiler._lock` writes it:
@@ -1583,7 +1632,7 @@ Three findings from that measurement:
 | **`world`** | `package`, `map_name`, `network_fingerprint`, `netconvert_argv`, `netconvert_version`, `opendrive_sha256`, `source_osm_sha256`, `origin_latitude`, `origin_longitude`, `georeference` — copied from the world package the specification was compiled against |
 | **`catalogue`** | `catalogue_id`, `catalogue_digest`, `blueprint_set_digest`, `content_build_id` (`C1` §3.11) |
 | **`vocabulary`** | `core_version`, `namespaces` with their versions, and `vocabulary_digest`, the digest of the vocabulary document the supervision plan carries |
-| **`traffic`** | `sumo_seed`, `step_length_s`, `end_s`, `processing` (the SUMO options that decide how traffic moves), and `routed_by`: the `duarouter` release that routed, the world's converter, how the two stand by release number and whether a mismatch was accepted ([`07`](07_Scenario_Authoring.md) check 6) |
+| **`traffic`** | `sumo_seed`, `step_length_s`, `end_s`, `processing` (the SUMO options that decide how traffic moves, §5.2a), and `routed_by`: the `duarouter` release that routed, the world's converter, how the two stand by release number and whether a mismatch was accepted ([`07`](07_Scenario_Authoring.md) check 6) |
 | `epoch`, `epoch_block_sha256` | The `C9` epoch object verbatim, and its digest canonicalised per §1 |
 | `illumination` | The authored `C9` illumination default. An operator may override it at run start (`C9` §11.8); the run manifest records which won |
 | `capture_windows` | The authored candidate windows: id, begin and end seconds, civil begin, end and date |
@@ -4771,6 +4820,7 @@ Stated as properties needed, not as requests.
 | **D4.38** | **Nothing in this contract requires a run to have a declared length.** A convenience limit may exist on the invocation surface; no field, rule, gate or reader here may assume one was set, and reaching the end of a limit is one ordinary way a run can end among several. The caller stops us, so a contract that needed a duration would be a contract that only worked for callers who did not want to use it that way (§12.9) |
 | **D4.39** | **The annotation vocabulary travels inside the scenario package and is bound by digest at the refuse tier, exactly as the annotation set and the epoch are.** A package that carries terms and not their definitions is a package whose labels only the author can read, and a vocabulary bound by nothing can be edited after the annotation set was compiled against it — after which every label still resolves, to a meaning nobody declared. The resolved vocabulary document is carried in the supervision plan, `<scenario_id>.supervision.json`; `vocabulary_digest` in the plan and in the lock binds it; and V3.15 refuses a mismatch. The **content** of the document — what the core holds, how an author term declares itself, how a namespace is versioned — is [`06`](06_Truth_And_Annotation.md) §3.7, §3.8 and §8.7's; this contract owns only that it travels, where, and what binds it (§5.2, §5.3, §5.4) |
 | **D4.40** | **Motorcycles, mopeds and bicycles are outside the vehicle mapping contract.** No catalogue class names one, no `vType` declares one, and an author asking for one is refused rather than substituted. A two-wheeler carries a rider and riders are not rendered; and the content build registers no two-wheeled blueprint for the sweep to measure (§3.1, V1.20) |
+| **D4.42** | **A lane change takes 3 s, for every vehicle**: the compiler writes `lanechange.duration` 3 and the lock records it. SUMO's default of 0 crosses a lane width inside one step; a passenger car takes about 3 to 5 s, and one value holds for every vehicle until a value per class is decided. A body wider than its lane deadlocks a spread lane change, which keeps Bahonar on the default for now (§5.2a) |
 
 ---
 

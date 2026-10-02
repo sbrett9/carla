@@ -2242,7 +2242,10 @@ class World:
         `session.Report.Teleporting` records that it was accepted. It refuses, with no override, a
         scenario that sets `ignore-route-errors`: SUMO then keeps a vehicle it cannot route standing at
         the end of the last edge it can reach and says nothing, where by default it stops at the route
-        and names it, and the run stops with it.
+        and names it, and the run stops with it. `session.Report.LaneChanges` says how long SUMO
+        takes over a lane change -- spread over the scenario's `lanechange.duration`, which the
+        scenario compiler sets to 3 s, or made inside one step at SUMO's default of 0 -- and through a
+        spread change each body is drawn where SUMO has it across its lane.
 
         `sumo_answer_timeout_s` bounds how long the session waits for SUMO to answer any one command,
         a step included. A SUMO that has hung keeps its socket open and never answers; past the bound

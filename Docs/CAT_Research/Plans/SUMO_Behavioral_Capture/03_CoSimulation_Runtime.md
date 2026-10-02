@@ -54,6 +54,7 @@ advancement policy, the headlight predicate),
 | 2026-10-01 | §7.5: the pitch and roll signs confirmed live against the visible surface; bodies at two-level crossings measured seated on the wrong level. |
 | 2026-10-01 | §8.9, D3.39: the render set is named to the server on each change and carried on every world-observer snapshot, so the live pull, the CoT feed and a recorder in any process list only the bodies a frame drew, each by its SUMO vehicle. §8.2: every body is spawned with `role_name` `sumo`. Written; the plugin awaits a build. |
 | 2026-10-01 | §7.5, D3.8: a body is seated on the ground grid where its road is at grade and on the road's OpenDRIVE profile where the road is a structure — height, pitch and roll by one weight from the road's departure from the ground at its reference line at the body's s, blended between, held to change no faster than a smoothstep over 10 m, and made to meet the carriageways at a junction connector's ends; the grid alone off every road, counted by reason. The profile is the reference line's height built flat across: measured against the photoreal at grade, it stands a median 0.35 m above the visible road at a cambered road's outer lanes, where the grid agrees to 0.02 m. Every lane of Arapahoe and Bahonar joined to its road; measured offline on the Arapahoe dwell, I-25's deck bodies up to 6.8 m above where the grid seated them and East Arapahoe Road's 4.5 m below, every body at grade on the grid seat exactly, and the whole as continuous as the grid seat alone, for about 0.25 ms a tick. Built and tested offline; the live check is the owner's to run. |
+| 2026-10-01 | §6.4, Q3.1, Q3.11: every pose is put at the frame's lateral offset from its lane, so a lane change SUMO spreads over time is rendered where SUMO has it; the session's report states the lane-change duration; the heading through junctions and lane changes is measured and open. |
 
 ---
 
@@ -1400,15 +1401,28 @@ and against an unrenderable vehicle's ticks counted from the step before its ins
 ### 6.4 The interpolator
 
 Inputs per vehicle for frames k and k+1, from one subscription: position, angle, speed, road id, lane
-id, lane position. Cases, in order:
+id, lane position, lateral lane position. Cases, in order:
 
 1. **Same lane.** Advance the *lane position* by the step's distance and evaluate the lane's polyline
    at that distance. The lane shape comes from the `.net.xml` the **world package** carries, read
    once at session start by `CarlaNet.CoSim.SumoRoadNetwork`. Exact on curves by construction.
-2. **Lane change on the same edge.** Advance along-lane as in (1) on each lane, then blend the two
-   resulting points laterally with a smoothstep over the step. SUMO's lane change is instantaneous in
-   the data; a linear lateral blend across 1.0 s at 3.35 m is a 3.35 m/s lateral rate, which is
-   brisk but not absurd. Consider a shorter blend window as a tuning knob.
+2. **Lane change on the same edge.** Advance along-lane as in (1) on each lane, each point at its
+   frame's lateral offset from its lane, then blend the two points laterally with a smoothstep over
+   the step. At SUMO's default `lanechange.duration` of 0 the change is instantaneous in the data and
+   the blend carries the vehicle a lane width inside one step. The scenario compiler writes 3 s
+   ([`04`](04_Contracts.md) D4.42), and then SUMO moves the vehicle across at a steady rate, reports
+   the lane it started on until it is past halfway and then the lane it is moving to, with the lateral
+   offset carried over to that lane; its reported position includes the offset and its reported angle
+   turns with the movement (`MSLaneChanger::continueChange`, `MSVehicle::computeAngle`). **As built,
+   every case puts its points the frame's lateral offset to the left of the lane** (the subscribed
+   `VAR_LANEPOSITION_LAT`), taken linearly in time between the two frames, so the pose is SUMO's
+   position at every frame and this case is only the step in which the reported lane changes: a few
+   centimetres of sideways movement, not a lane width. **Measured 2026-10-01** through the bridge's
+   subscription on the fixture network at 3 s: the lateral offset grows 0.056 m a step for sixty
+   0.05 s steps, the lane switches at +1.675 m to −1.619 m, and the pose is SUMO's position at every
+   frame to under a millimetre; over 300 s of Arapahoe in a world-less session, to 15 mm (the
+   floating-car output's rounding) against up to 1.675 m on the lane's centre line. The heading stays
+   the lane's tangent, so a body still crosses without yawing (Q3.11).
 3. **Crossed one or more edges.** Walk the route from lane(k) to lane(k+1) through the connecting
    internal lanes, accumulate arc length, and place the vehicle at the interpolated arc distance along
    that concatenated polyline. This is the case the corner-cut number is about, and it is the common
@@ -3989,7 +4003,8 @@ renumbered and a number is never reused; a new decision takes the next free numb
 
 | # | Question | Options | Recommendation |
 |---|---|---|---|
-| **Q3.1** | Is the sub-step **lateral blend** for a lane change (§6.4 case 2) right at 1.0 s? A full 3.35 m lane change spread over one second is a 3.35 m/s lateral rate. | (a) blend over the whole step; (b) blend over a fixed 0.4 s window inside the step; (c) derive from the vType's `lcSublane` parameters | (b), with the window as a recorded knob. Measure against imagery before fixing it. |
+| **Q3.1** | Is the sub-step **lateral blend** for a lane change (§6.4 case 2) right at 1.0 s? A full 3.35 m lane change spread over one second is a 3.35 m/s lateral rate. | (a) blend over the whole step; (b) blend over a fixed 0.4 s window inside the step; (c) derive from the vType's `lcSublane` parameters | **Superseded 2026-10-01:** the compiler writes `lanechange.duration` 3 ([`04`](04_Contracts.md) D4.42), SUMO spreads the change over 3 s itself, and the bridge follows SUMO's lateral position (§6.4 case 2); the blend now spans only SUMO's own sideways movement in the step its reported lane changes. |
+| **Q3.11** | What heading does a body take where the lane's polyline turns — at a junction, whose connectors netconvert draws in five points with a median largest corner of 31–35° — and through a lane change, where the lane tangent does not turn at all? ([issue #38](https://github.com/sbrett9/carla/issues/38)) | (a) finer junction shapes at world build; (b) smooth the rendered heading in the bridge; (c) the OpenDRIVE connector's tangent; (d) the heading of the body's own path, lateral movement included; and SUMO's reported angle as a fifth | Measured and reported to the owner; not decided. Every yaw step of the lane-tangent heading falls at a polyline vertex (all 21,230 on Gardnerville, all 49,455 on Arapahoe). |
 | **Q3.2** | Should the bridge also push CARLA's real poses **back** into SUMO with `moveToXY`, as doc 23 §4.1 step 1 does? | (a) no — under teleport CARLA has no independent pose, so the push is a no-op that costs an RPC per vehicle; (b) yes, for scenario actors that CARLA *does* drive independently (doc 23 §6.9) | (a) for pure SUMO drive; (b) becomes necessary the moment a storyboard actor shares the world, which is doc 23's Phase 5 and not this section's. |
 | **Q3.3** | Does a scenario ever need a **different** SUMO step at playback than at authoring? | (a) never — refuse; (b) allow with a manifest entry and a loud warning | (b), given the measured 62% change in mean time loss (§6.3) is a behaviour change and not a rendering one. The knob must be visible in the truth manifest so a corpus can be filtered on it. |
 | **Q3.4** | How is the **one-step lookahead latency** expressed in the truth record? | (a) invisible — everything is stamped `t_render`; (b) an explicit `lookahead_s` field in the run manifest | (b). It costs one field and it is the difference between a reader being able to reconstruct the pipeline and guessing at it. Belongs to [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md). |
