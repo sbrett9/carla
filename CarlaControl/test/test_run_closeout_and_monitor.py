@@ -119,6 +119,43 @@ def test_a_draw_distance_and_what_each_channel_marked_beyond_it_reach_the_closeo
     assert "refused by the server, so every body was drawn at any range" in text
 
 
+def test_an_optional_render_set_limit_and_what_it_left_out_reach_the_closeout_and_the_panel(layout):
+    site = SiteProfile.discover(layout.root, layout.write_profile(), environ={})
+    run = RunConfiguration.from_document(run_document(), "fixture.run.json")
+    effective = RunConfigurationResolver(site).resolve(run, [])
+    server = FakeServer()
+    admissions = WindowAdmissions(25200.0, 27000.0, 1.0)
+    session = FakeSession(server, {"warm_up_to": 25200.0, "real_time_factor": 0.0,
+                                   "illumination": {"policy": "freeze_at_window_start"},
+                                   "render_set": "all", "capacity": 4,
+                                   "on_admission_pass": admissions.observe})
+    report = RunCloseoutReport(effective, clock=iter(range(0, 10**6, 10)).__next__)
+    report.attach(session, admissions)
+    session.Report.Releases["Capacity"] = 2
+    for _ in range(3):
+        session.Advance()
+
+    snapshot = report.snapshot()
+    render = snapshot["render"]
+    assert (render["render_set_limits"], render["releases"]) == (True, {"Capacity": 2})
+    admission = snapshot["admission"]
+    assert (admission["limited"], admission["population"], admission["admitted"],
+            admission["left_out"], admission["capacity"]) == (True, 7, 4, 3, 4)
+    assert snapshot["admissions"]["window"]["limited"] is True
+    assert snapshot["admissions"]["window"]["most_left_out"] == 3
+
+    text = RunCloseoutReport.render(snapshot, report.gates(snapshot, 0))
+    assert "an optional limit; a vehicle outside it is simulated by SUMO and is not in CARLA" in text
+    assert "released 0 leaving the policy and 2 for the capacity" in text
+    assert "drawn 4, shed 3; 3 without a body" in text
+    assert "of them left vehicles without a body, at most 3 at once and 3 shed for the capacity" in text
+
+    rows = SessionMonitor.lines(snapshot)
+    assert any(row.startswith("sumo  population 7   eligible 7   drawn 4   shed 3   without a body 3")
+               for row in rows)
+    assert "population 7, drawn 4, 3 without a body" in SessionMonitor.line(snapshot)
+
+
 def test_a_clean_run_meets_every_measured_gate(layout):
     report, session, _ = closeout(layout)
     session.Advance()

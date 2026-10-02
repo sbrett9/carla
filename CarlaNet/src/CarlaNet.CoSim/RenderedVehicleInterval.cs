@@ -12,12 +12,14 @@ namespace CarlaNet.CoSim;
 /// that frame, or a run with no CARLA attached.
 /// </param>
 /// <param name="AdmittedAtSeconds">
-/// Simulated second the vehicle entered the render set: the SUMO frame it was first reported in, which
-/// is the first frame its body is drawn on.
+/// Simulated second the vehicle entered the render set: with no limit, the SUMO frame it was first
+/// reported in, which is the first frame its body is drawn on; under an optional limit, the frame of
+/// the pass that admitted it.
 /// </param>
 /// <param name="ReleasedAtSeconds">Simulated second it left, or the session's end.</param>
 /// <param name="ReleaseReason">
-/// Why it left: SUMO listing it as arrived, it vanishing without being listed, or the session ending.
+/// Why it left: SUMO listing it as arrived, it vanishing without being listed, or the session ending;
+/// under an optional limit, also the policy no longer admitting it, or a capacity ranking it out.
 /// </param>
 /// <remarks>
 /// <para>These two instants are what lets anyone later reconcile "SUMO simulated sixty-eight

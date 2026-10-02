@@ -1192,15 +1192,32 @@ that has since changed is refused naming both values.
 
 #### Render set
 
-Every vehicle SUMO has in a capture window, or in its prewarm, is drawn, from the frame after SUMO
-first reports it until SUMO removes it or the window closes; nothing here selects which. The one
-exception is a vehicle of a type with no measured body, which is simulated and never drawn; the
+By default every vehicle SUMO has in a capture window, or in its prewarm, is drawn, from the frame
+SUMO first reports it in until SUMO removes it or the window closes, at any range from a camera. The
+one exception is a vehicle of a type with no measured body, which is simulated and never drawn; the
 compiler refuses a scenario whose vehicle class names a blueprint the catalogue did not measure
 ([`07`](07_Scenario_Authoring.md) check 14), and check 25 re-runs that against the server.
 
+**Two optional performance controls trade fidelity for speed, and both are off unless set.**
+`capture.render_set` with the `capture.render_*` fields limits which vehicles get a body at all: a
+vehicle outside the limit is simulated by SUMO, so the traffic is the scenario's, and is not in
+CARLA -- no body, no frame, no truth record -- and the echo says so before anything is acquired,
+the closeout and the run result count what the limit left out ([`03`](03_CoSimulation_Runtime.md)
+D3.41, [`06`](06_Truth_And_Annotation.md) §4.4). `capture.draw_distance_m` limits only how far from a
+camera a body is drawn: every vehicle keeps its body, its pose and its truth, and each sidecar marks
+the vehicles its camera did not draw ([`03`](03_CoSimulation_Runtime.md) D3.40,
+[`06`](06_Truth_And_Annotation.md) §8.2). Neither is recommended for any scenario; each is a choice an
+operator makes for a run, and each is recorded in the lock with every other field.
+
 | Toggle | Default | Class | Source |
 |---|---|---|---|
-| which vehicles are drawn | not a field: every vehicle SUMO has in a window is drawn | Bound | [`01`](01_Architecture.md) D1.14 |
+| `capture.render_set` | `all` — every vehicle SUMO has | Session-fixed. `circle` draws only the vehicles inside `capture.render_region`; `cameras` those inside or about to enter any channel camera's ground footprint, orbits included, with the region deciding until the cameras are placed where one is given and every vehicle where none is. Each RGB camera is registered with the session and let go before it is destroyed | the session's `RenderSet` policy ([`03`](03_CoSimulation_Runtime.md) §8.3); check 53 |
+| `capture.render_region` | `null` | Session-fixed. `{x_m, y_m, radius_m}` in CARLA's frame, negated into SUMO's at the call; required under `circle`, read until the cameras are placed under `cameras`, refused under `all` (check 53) | `RegionRenderSetPolicy` |
+| `capture.render_hysteresis_m` | `60.0` | Session-fixed. How much further out than the radius a vehicle keeps its body; under `cameras`, the band beyond a footprint's widest admission threshold | `RegionRenderSetPolicy`, `CameraFootprintRenderSetPolicy` |
+| `capture.render_cap` | `null` — no limit on the count | Session-fixed. How many vehicles may hold a body at once, under any render set; the vehicles it declines are counted pass by pass | the policy's `Capacity` |
+| `capture.render_min_pixels` | `2.0` | Session-fixed. Under `cameras`, the range cap: where the catalogue's longest body covers fewer than this many pixels along its length anywhere in the picture | `CameraFootprintRenderSetPolicy` |
+| `capture.render_admit_lead_s` | `3.0` | Session-fixed. Under `cameras`, simulated seconds of a vehicle's own travel ahead of a footprint it is admitted at | `CameraFootprintRenderSetPolicy` |
+| `capture.render_release_lag_s` | `5.0` | Session-fixed. Under `cameras`, simulated seconds a vehicle drawn is held after it last was within reach of a footprint | `CameraFootprintRenderSetPolicy` |
 | `capture.road_layer_visible`, `capture.signal_layer_visible` | `false`, `false` | Session-fixed; written once by the session before the first tick and given back on every exit path | [`13`](13_Work_Breakdown.md) §10, `LayerVisibilityLease` |
 | `capture.draw_distance_m` | `null` — every body drawn at any range | Session-fixed. An optional performance control: no camera draws a body farther than this from it, while every vehicle keeps its body, its pose and its truth; each channel's sidecars mark the vehicles its camera did not draw (`beyond_draw_distance`). Check 52 refuses one that does not reach the point a channel is aimed at | the session's `DrawDistanceMetres`, set once on each pooled body by `set_actors_max_draw_distance` ([`03`](03_CoSimulation_Runtime.md) §8.3, D3.40); [`06`](06_Truth_And_Annotation.md) §8.2 |
 | `aoi_max_relations_per_vehicle` | *not offered*: areas of interest are not built | — | [`10`](10_Scale_And_Performance.md) §8, D10.8 |
@@ -1402,7 +1419,7 @@ laptop.
 
 #### Phase 0 — offline
 
-Checks 1–19 below (20 and 21 are withdrawn), plus 34–42, 46–49, 51 and 52 in the table that follows
+Checks 1–19 below (20 and 21 are withdrawn), plus 34–42, 46–49 and 51–53 in the table that follows
 the later phases.
 
 | # | Check | Outcome | Message shape |
@@ -1483,6 +1500,7 @@ the sequence rather than sitting inside a phase's table, and each states its own
 | 50 | 3 | Every channel's view is ready as the window opens: its photoreal tiles in — the camera published on the last tick, every visible tileset at load progress 100, no failed tile in view — and its picture settled — a frame within 0.5 grey levels of the camera's newest frame at least ten ticks before it, in its worst 80-pixel block that no rendered vehicle covers in either frame, with at least half the view's blocks left to judge, counting frames rendered once the tiles were in — each within its ceiling, 90 s of wall clock and 120 ticks ([`03`](03_CoSimulation_Runtime.md) §9.5.1) | refuse; the window's first frame is not moved (D12.38) | `channel OVERWATCH-1: its photoreal tiles were not in within 90 s of wall clock (03 §9.5.1): at frame 12345, 1800 ticks and 90.0 s into the wait, the tiles were 87%, 3 failed in view (ion 2275207: progress 87.0, queued 4/0, kicked 0, failed in view 3, failed loaded 3)` and `channel OVERWATCH-1: its view was not ready when the window opened at t=25200 (03 §9.5.1): the tiles were in at frame 7000, … and the picture had not settled: 1 of its frames arrived since, none 10 ticks after another to compare it with` and `channel OVERWATCH-1: its picture did not settle within 120 ticks of its tiles being in at frame 419713 (03 §9.5.1): rendered vehicles covered 80 of its 144 80-pixel blocks in frame 419833 or frame 419823, leaving 44% of the view to judge against the 50% the witness needs, so the view could not be judged (12 comparisons: 0 judged, 12 with too few blocks left, 0 with vehicles that could not be placed)` |
 | 51 | 0 | The prewarm leaves every camera, at the pose it holds as the window opens, enough ticks after its tiles are first asked about, one SUMO step into the hold, to render two frames at least ten ticks apart whatever the phase of its period: the fewest its picture can be witnessed settled on | refuse | `every channel's view is waited on inside the prewarm, and its picture is witnessed settled by comparing one of the camera's frames with its frame at least 10 ticks before it, … the prewarm is 1 s (capture.prewarm_s, clipped to the window's begin), which leaves 0 ticks against the 19 a camera rendering every 10 ticks may need for two such frames, so the run would be refused at pre-roll. Give a prewarm of at least 1.95 s` — check 50's certain refusal moved to phase 0 |
 | 52 | 0 | `capture.draw_distance_m`, where set, reaches the point every channel's camera is aimed at: a stare's standoff and altitude, an orbit's radius and altitude, measured as a slant range; a stare given as an explicit pose names no point and is not judged | refuse | `capture.draw_distance_m is 250 m, and channel OVERWATCH-1's camera stands 304.8 m from the point it is aimed at, so no vehicle there would be drawn in its images: a body farther than the draw distance from a camera is not in that camera's picture. Raise the draw distance above 304.8 m, bring the camera nearer, or leave it unset to draw every body at any range` |
+| 53 | 0 | An optional render-set limit is one the session can draw: `capture.render_set` `circle` has a `capture.render_region`, and a region is given only to a render set that reads it | refuse | `capture.render_set is circle and capture.render_region has no value: give x_m, y_m and radius_m in CARLA's frame, or leave capture.render_set at all to draw every vehicle SUMO has` and `capture.render_region is given and capture.render_set is all, which draws every vehicle SUMO has and reads no region. Set capture.render_set to circle or cameras to limit the render set to it, or drop the region` |
 
 Checks 34, 35, 44 and 46 are the four that earn their place. **34 and 35 are §6.4's whole mechanism** —
 the machine's substitute for a human reading an echo — and **44 moves the live run's dominant failure
@@ -1555,6 +1573,7 @@ resolved, with outcome `usage_error` (§3.10.2). A check the co-simulation sessi
 | 50 | pre-roll | `run_capture` | CaptureSession, ViewReadinessGate: world.get_view_readiness after every prewarm step, and the camera's own frames, each frame's rendered vehicles placed by SessionFrameVehicles |
 | 51 | offline | `run_capture` | RunConfigurationValidator, from ViewReadiness.wait_begins_s |
 | 52 | offline | `run_capture` | RunConfigurationValidator |
+| 53 | offline | `run_capture` | RunConfigurationValidator |
 
 ### 6.3 Launch, from command to first capture
 

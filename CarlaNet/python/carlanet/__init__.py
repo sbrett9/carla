@@ -2136,6 +2136,10 @@ class World:
                          allow_teleporting=False, sumo_answer_timeout_s=60.0,
                          vehicle_lamps=True, headlight_on_below_deg=3.0,
                          headlight_off_above_deg=6.0, draw_distance_m=None,
+                         render_set="all", region_centre=None, region_radius_m=None,
+                         region_hysteresis_m=60.0, capacity=None, render_min_pixels=2.0,
+                         render_admit_lead_s=3.0, render_release_lag_s=5.0,
+                         render_max_speed_mps=40.0,
                          on_pose=None, on_release=None, on_divergence=None,
                          on_admission_pass=None, on_collision=None,
                          on_vehicle_not_inserted=None):
@@ -2155,13 +2159,40 @@ class World:
         holds a measurement for is simulated and never rendered — no body of another shape stands in
         for it.
 
-        Every vehicle SUMO has is rendered: the scenario is the only arbiter of population. A vehicle
-        holds a body from the frame SUMO first reports it in until SUMO removes it or the session
-        ends, wherever it is and however many others there are, parked vehicles included; one SUMO
-        inserts during the run is drawn first where SUMO inserted it, moving from there, and never
-        before. Every vehicle SUMO has at `warm_up_to` is drawn on the first rendered frame. Nothing
-        caps the count; a scenario heavier than the machine is comfortable with makes a synchronous
-        run slower on the wall clock, never different in content. `warm_up_to` fast-forwards SUMO to
+        By default every vehicle SUMO has is rendered: the scenario is the only arbiter of
+        population. A vehicle holds a body from the frame SUMO first reports it in until SUMO removes
+        it or the session ends, wherever it is and however many others there are, parked vehicles
+        included; one SUMO inserts during the run is drawn first where SUMO inserted it, moving from
+        there, and never before. Every vehicle SUMO has at `warm_up_to` is drawn on the first
+        rendered frame. Nothing caps the count unless asked to; a scenario heavier than the machine is
+        comfortable with makes a synchronous run slower on the wall clock, never different in content.
+
+        `render_set` limits which vehicles get a body, an optional performance control: 'all', the
+        default, draws every vehicle SUMO has; 'circle' only those inside the circle of
+        `region_radius_m` around `region_centre` (SUMO's projected metres, y north), released
+        `region_hysteresis_m` beyond it; 'cameras' those inside or about to enter the ground footprint
+        of a camera registered with `session.AddCamera(camera.id)` -- remove one with
+        `session.RemoveCamera(camera.id)` before destroying it -- with the circle deciding while no
+        camera is registered where a radius is given, and every vehicle where none is. A footprint is
+        the camera's frustum on the ground, capped where the catalogue's longest body covers fewer than
+        `render_min_pixels` pixels along its length at the picture's corners and swept along the
+        camera's own motion; a vehicle is admitted `render_admit_lead_s` of its travel ahead of it, plus
+        the bodies' reach and a step at `render_max_speed_mps`, kept within `region_hysteresis_m`
+        beyond the widest admission threshold, and released `render_release_lag_s` after it last was.
+        `capacity` caps how many hold a body at once, under any of the three: under 'all' the vehicles
+        drawn keep their bodies and a newcomer takes a free place in the seed's order; under 'circle'
+        the nearest the centre are drawn; under 'cameras' a vehicle in view ranks ahead of one
+        approaching, one drawn ahead of a newcomer, then the seed. Every value is refused where it is
+        built if it is unusable, and a region given to 'all' is refused rather than ignored.
+
+        A vehicle a limit leaves out is still simulated by SUMO -- its traffic is the scenario's -- and
+        has no body in CARLA, so it is in no frame and in no truth record. Every vehicle inside the limit
+        is drawn exactly as with none: subscribed to its full state throughout, so one admitted
+        part-way through its drive is drawn from its admission at its interpolated position, and one
+        SUMO inserts from the frame SUMO first reports it in. `session.Report.RenderSetPolicy` states
+        the policy, `RenderSetLimits` whether it can leave a vehicle out, `VehiclePassesOutsideThePolicy`
+        and `CapacityDeclines` what it left out, `Releases` why each track ended -- 'LeftTheRegion'
+        and 'Capacity' among them -- and `CameraFootprints` each camera's range cap. `warm_up_to` fast-forwards SUMO to
         a simulated second before the first world tick, and `step_length` overrides the scenario's
         own SUMO step (behaviour-changing, and recorded as such).
 
@@ -2329,8 +2360,11 @@ class World:
 
         The render set's admission pass is published as it is made, once per SUMO step:
         `session.Report.LastAdmissionPass` holds the latest, replaced whole -- `Population` (every
-        vehicle SUMO has, every one holding a place), `NewlyAdmitted` and `Released` at that pass,
-        and the running `TotalAdmissions`. Read it between advances for a live monitor;
+        vehicle SUMO has), `NewlyAdmitted` and `Released` at that pass, and the running
+        `TotalAdmissions`; under a limit (`Limited`), also `Eligible` (admitted by the circle or the
+        cameras, or held by the release lag), `Admitted` (holding a body after the pass), `Shed`
+        (declined for the capacity), `Held`, `Capacity`, `Rule` and `Cameras`. With no limit `Eligible`
+        and `Admitted` are the population. Read it between advances for a live monitor;
         `on_admission_pass` is handed every pass, including the two made while the session starts,
         for a writer that keeps the whole ledger. It is called from the tick thread once per SUMO
         step and must not block.
@@ -2338,8 +2372,8 @@ class World:
         Vehicles are rendered by a pool of bodies, lent to a SUMO vehicle on admission and parked
         out of sight, about 300 m below the ground, between loans -- so the world's vehicle actors
         are not the scene's vehicles, and an actor id names each vehicle its body carries in turn.
-        The pool has no ceiling: it grows to as many bodies of each blueprint as the scenario ever
-        has vehicles of it at once (`session.Report.BodiesSpawned`).
+        The pool has no ceiling: it grows to as many bodies of each blueprint as the session ever
+        draws vehicles of it at once (`session.Report.BodiesSpawned`).
         `session.RenderSet` answers, for each frame the session rendered, which bodies the frame
         drew, the SUMO vehicle each one drew, its vType and the frame its rendered span began on,
         keyed by the frame the tick produced; the last 256 frames are held. Hand it to
@@ -2356,11 +2390,36 @@ class World:
             print("SUMO co-simulation unavailable: CarlaNet.CoSim assembly not loaded "
                   "(rebuild the wheel/DLLs).", file=sys.stderr)
             return None
-        from CarlaNet.CoSim import (AdmissionPass, CarlaClientWorld, CollisionSpan, CoSimPoseRecord,
-                                    IlluminationPolicy, PoseDivergence, RenderedVehicleInterval,
-                                    SolarEpoch, SumoDriveSession, SumoDriveSessionOptions,
-                                    VehicleNotInserted)
+        from CarlaNet.CoSim import (AdmissionPass, CameraFootprintRenderSetPolicy, CarlaClientWorld,
+                                    CollisionSpan, CoSimPoseRecord, EveryVehicleRenderSetPolicy,
+                                    IlluminationPolicy, PoseDivergence, RegionRenderSetPolicy,
+                                    RenderedVehicleInterval, SolarEpoch, SumoDriveSession,
+                                    SumoDriveSessionOptions, VehicleNotInserted)
         from System import Action
+
+        if render_set not in ("all", "circle", "cameras"):
+            raise ValueError(f"render_set is 'all', 'circle' or 'cameras', not {render_set!r}")
+        if render_set == "all" and region_radius_m is not None:
+            raise ValueError("render_set 'all' draws every vehicle SUMO has and reads no region; give "
+                             "render_set 'circle' or 'cameras' to limit the render set to it")
+        if render_set == "circle" and region_radius_m is None:
+            raise ValueError("render_set 'circle' needs the circle: give region_radius_m, and "
+                             "region_centre in SUMO's metres")
+        limit = None if capacity is None else int(capacity)
+        circle = None
+        if region_radius_m is not None:
+            centre_x, centre_y = region_centre if region_centre is not None else (0.0, 0.0)
+            circle = RegionRenderSetPolicy(float(centre_x), float(centre_y), float(region_radius_m),
+                                           float(region_hysteresis_m), limit)
+        if render_set == "all":
+            policy = EveryVehicleRenderSetPolicy(limit)
+        elif render_set == "circle":
+            policy = circle
+        else:
+            policy = CameraFootprintRenderSetPolicy(
+                circle if circle is not None else EveryVehicleRenderSetPolicy(limit),
+                float(region_hysteresis_m), float(render_admit_lead_s), float(render_release_lag_s),
+                float(render_min_pixels), float(render_max_speed_mps))
 
         options = SumoDriveSessionOptions(
             str(scenario), str(world_package), str(catalogue),
@@ -2391,6 +2450,7 @@ class World:
         options.HeadlightOffAboveDegrees = float(headlight_off_above_deg)
         if draw_distance_m is not None:
             options.DrawDistanceMetres = float(draw_distance_m)
+        options.RenderSet = policy
         # Both are read by the C# side, which is the one validator: a declaration checked twice is
         # a declaration two implementations will eventually disagree about.
         if epoch is not None:

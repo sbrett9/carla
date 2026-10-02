@@ -6,7 +6,9 @@ namespace CarlaNet.CoSim;
 /// Every SUMO vehicle, subscribed to the state the bridge reads, and delivering it with every step.
 /// </summary>
 /// <remarks>
-/// <para><b>Every vehicle SUMO has is subscribed, because every one of them is rendered.</b> A
+/// <para><b>Every vehicle SUMO has is subscribed, because by default every one of them is rendered</b>
+/// -- and under an optional render-set limit too, so the limit decides from each vehicle's full state
+/// and a vehicle it admits part-way through its drive has the frame before its admission. A
 /// subscription is charged inside SUMO's step whether or not anyone reads it -- measured at 388 live
 /// vehicles on the Arapahoe network, 3.73 ms per step with nothing subscribed and 9.26 ms with the
 /// eight-variable bridge set subscribed and never read (before the lateral offset was added to it) --

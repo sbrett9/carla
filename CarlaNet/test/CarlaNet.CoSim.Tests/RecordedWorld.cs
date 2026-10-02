@@ -11,14 +11,17 @@ namespace CarlaNet.CoSim.Tests;
 /// A CARLA world that records what was asked of it and answers as a server would.
 /// </summary>
 /// <remarks>
-/// <para>Everything the bridge does to a world is sixteen operations wide, so a world that keeps a
+/// <para>Everything the bridge does to a world is eighteen operations wide, so a world that keeps a
 /// dictionary of actors, a list of batches and a simulated sun exercises the whole driving path --
 /// the check of which world is loaded, the pool, the batch, the render set named to the server, the
-/// draw distance set on the bodies, the read-back, the tick, the settings restoration and the sun's
-/// binding and audit -- with no server,
+/// draw distance set on the bodies, the read-back, the tick, the settings restoration, the sun's
+/// binding and audit, and the cameras an optional render set follows -- with no server,
 /// no engine and no render. What it
 /// cannot establish is what a body looks like once the pose is applied, which is the one thing only
 /// a live run can answer.</para>
+///
+/// <para>A camera is placed and moved by the test (<see cref="PlaceCamera"/>, <see cref="MoveCamera"/>),
+/// as a script spawns and flies one, and its pose is answered for any frame as it stands now.</para>
 ///
 /// <para>It answers the read-back with exactly what was commanded, plus whatever
 /// <see cref="TransformDrift"/> is set to. A drift of zero is a world that does what it is told and
@@ -49,6 +52,7 @@ internal class RecordedWorld : ICarlaWorld
     private readonly List<(IReadOnlyList<LentBody> Lent, IReadOnlyList<ActorId> Parked, long AtTick)> _renderSetWrites = [];
     private readonly List<(IReadOnlyList<ActorId> Bodies, double Metres, long AtTick)> _drawDistanceWrites = [];
     private readonly Dictionary<ActorId, double> _drawDistances = [];
+    private readonly Dictionary<ActorId, CameraOptics> _cameras = [];
     private ActorId _nextActor = 1;
     private (string Operation, Exception Failure)? _severAt;
     private Exception? _severedWith;
@@ -446,6 +450,48 @@ internal class RecordedWorld : ICarlaWorld
     {
         Connected(nameof(ObservedVelocity));
         return _velocities.TryGetValue(actor, out Vector3D velocity) ? velocity : null;
+    }
+
+    /// <summary>The frames a camera pose was asked for, in order.</summary>
+    public List<ulong> PoseFramesAsked { get; } = [];
+
+    /// <summary>How many times a camera's attributes were asked for.</summary>
+    public int CameraDescriptions { get; private set; }
+
+    /// <summary>Spawn a camera with the attributes a camera blueprint gives it, as a script does.</summary>
+    public ActorId PlaceCamera(Transform at, int width, int height, double fovDegrees)
+    {
+        ActorId actor = _nextActor++;
+        _actors[actor] = at;
+        _cameras[actor] = new CameraOptics(width, height, fovDegrees);
+        return actor;
+    }
+
+    /// <summary>Move a camera, as a flight controller or an orbit does between ticks.</summary>
+    public void MoveCamera(ActorId camera, Transform to) => _actors[camera] = to;
+
+    /// <summary>Take a camera out of the world, as a script tearing its rig down does.</summary>
+    public void DestroyCamera(ActorId camera)
+    {
+        _actors.Remove(camera);
+        _cameras.Remove(camera);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>Answers where the actor stands now, which on a synchronous world is the last frame.</remarks>
+    public Transform? ObservedTransformAt(ActorId actor, ulong frame)
+    {
+        Connected(nameof(ObservedTransformAt));
+        PoseFramesAsked.Add(frame);
+        return _actors.TryGetValue(actor, out Transform held) ? held : null;
+    }
+
+    /// <inheritdoc/>
+    public CameraOptics? DescribeCamera(ActorId camera)
+    {
+        Connected(nameof(DescribeCamera));
+        CameraDescriptions++;
+        return _cameras.TryGetValue(camera, out CameraOptics optics) ? optics : null;
     }
 
     /// <inheritdoc/>

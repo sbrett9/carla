@@ -22,9 +22,15 @@ the instant every view's wait begins is `ViewReadiness.wait_begins_s`, which `Ca
 check 51 read too.
 
 What it does not predict, and says so: the wall-clock duration (no measured tick rate exists for a
-configuration before it runs), how many vehicles will be rendered (every vehicle SUMO has, which no
-profile published before the run counts), and, where a stare is aimed at the rendered traffic, where
-it will look.
+configuration before it runs), how many vehicles will be rendered (by default every vehicle SUMO has,
+which no profile published before the run counts, and under an optional limit fewer, by an amount
+nothing before the run can count), and, where a stare is aimed at the rendered traffic, where it will
+look.
+
+**An optional render-set limit is said plainly.** Under `capture.render_set` `circle` or `cameras`,
+or a `capture.render_cap`, the echo states the limit and that a vehicle outside it is simulated by
+SUMO and is not in CARLA or the truth, so a reader who did not mean a limit sees one before anything
+is acquired.
 """
 from __future__ import annotations
 
@@ -54,8 +60,9 @@ from carlacontrol.WindowSun import WindowSun
 LAUNCH_ECHO_VERSION = 1
 NOT_PREDICTED = (
     "wall-clock duration: no measured tick rate exists for a configuration before it runs",
-    "the rendered population: every vehicle SUMO has is rendered, and no population profile of the "
-    "scenario is published to say how many that is at once",
+    "the rendered population: no population profile of the scenario is published to say how many "
+    "vehicles SUMO has at once, so neither how many are drawn nor how many an optional render-set "
+    "limit would leave out is known before the run",
 )
 NOT_PREDICTED_TRAFFIC_AIM = ("where a stare aimed at the rendered traffic will look: the point is "
                              "measured on the last frame before its camera holds for the window, "
@@ -103,7 +110,7 @@ class LaunchEcho:
                       "network_fingerprint": effective.value("world.network_fingerprint"),
                       "origin": [effective.value("world.origin_latitude"),
                                  effective.value("world.origin_longitude")]},
-            "render": {"vehicles": "every vehicle SUMO has",
+            "render": {**cls._render_set(effective),
                        "road_layer_visible": effective.value("capture.road_layer_visible"),
                        "signal_layer_visible": effective.value("capture.signal_layer_visible"),
                        "draw_distance_m": effective.value("capture.draw_distance_m"),
@@ -156,6 +163,39 @@ class LaunchEcho:
                                          f"t={opens_at:g}"
                                          + (f", and the prewarm from t={first:g} is lit by it"
                                             if first < opens_at else ""))
+        return block
+
+    @staticmethod
+    def _render_set(effective: EffectiveRunConfiguration) -> dict:
+        """Which vehicles get a body: every vehicle SUMO has, or the optional limit chosen, its
+        settings, and what it leaves out."""
+        render_set = effective.value("capture.render_set")
+        cap = effective.value("capture.render_cap")
+        region = effective.value("capture.render_region")
+        block: dict = {"set": render_set, "region": region,
+                       "hysteresis_m": effective.value("capture.render_hysteresis_m"),
+                       "min_pixels": effective.value("capture.render_min_pixels"),
+                       "admit_lead_s": effective.value("capture.render_admit_lead_s"),
+                       "release_lag_s": effective.value("capture.render_release_lag_s"),
+                       "cap": cap, "limited": render_set != "all" or cap is not None}
+        circle = None if region is None else (f"the circle of {region['radius_m']:g} m at "
+                                              f"({region['x_m']:g}, {region['y_m']:g})")
+        if render_set == "circle":
+            chosen = f"the vehicles inside {circle}"
+        elif render_set == "cameras":
+            chosen = (f"the vehicles in or approaching a channel camera's view (lead "
+                      f"{block['admit_lead_s']:g} s, lag {block['release_lag_s']:g} s, "
+                      f"{block['min_pixels']:g} px), "
+                      + (f"{circle} until the cameras are placed" if circle is not None
+                         else "every vehicle until the cameras are placed"))
+        else:
+            chosen = "every vehicle SUMO has"
+        if cap is not None:
+            chosen += f", at most {cap} at once"
+        block["vehicles"] = chosen
+        block["left_out"] = (None if not block["limited"] else
+                             "an optional limit: a vehicle outside it is simulated by SUMO and is not "
+                             "in CARLA -- no body, no frame, no truth record")
         return block
 
     @staticmethod
@@ -243,6 +283,8 @@ class LaunchEcho:
         lines.append(f"  render      {render['vehicles']}   road "
                      f"{'drawn' if render['road_layer_visible'] else 'hidden'}, signals "
                      f"{'drawn' if render['signal_layer_visible'] else 'hidden'}")
+        if render["left_out"] is not None:
+            lines.append(f"              {render['left_out']}")
         lines.append(f"              draw distance {render['draw_distance']}")
         cost = b["cost"]
         headroom = cost["headroom_s"]

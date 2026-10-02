@@ -19,10 +19,12 @@ world (D1.12):
   the sun for the window's opening -- `window_opens_at`, the window's begin, so a frozen sun is
   pinned there and the prewarm is lit by it. It is handed `on_admission_pass`, so every admission
   pass reaches `WindowAdmissions`, and -- only where a channel aims at the rendered traffic --
-  `on_pose`, feeding `RenderedTrafficCentre`. Where `capture.draw_distance_m` is set (an optional
-  performance control, off by default) it is handed over too, and the session gives every body it
-  spawns that draw distance: no camera draws a body farther away, while every vehicle keeps its
-  body, its pose and its truth.
+  `on_pose`, feeding `RenderedTrafficCentre`. Two optional performance controls, off by default,
+  are handed over where set: `capture.draw_distance_m`, which the session gives every body it spawns,
+  so no camera draws a body farther away while every vehicle keeps its body, its pose and its truth;
+  and `capture.render_set` with its `capture.render_*` fields, which limits which vehicles get a body
+  at all -- the region given in CARLA's frame and negated into SUMO's -- leaving every vehicle
+  outside the limit simulated by SUMO and out of CARLA and the truth.
 * **Map every refusal by its stage.** A refusal from the session's start or from `Advance` is a
   `CoSimSessionRefusedException` whose `StageName` says how far the session had got: `Validation`
   and `Launch` are `refused_server`; `Authority` is `refused_authority`, with the holder a held
@@ -35,8 +37,11 @@ world (D1.12):
   depth camera at the stare's pose. The cameras exist through the prewarm, so the tiles their views
   select are streamed before the first capture. A stare aimed at the rendered traffic starts over
   the centre of the world's staging bounds. Every camera's frames are listened to from here until
-  the recorders start (`ViewReadinessGate`). Where the cameras look decides nothing about which
-  vehicles are rendered: the session renders every vehicle SUMO has.
+  the recorders start (`ViewReadinessGate`). Under the optional `capture.render_set` `cameras`, each
+  RGB camera is registered with the session (`AddCamera`), so the render set follows every channel's
+  view, an orbit's as it flies, and is let go (`RemoveCamera`) before the camera is destroyed; its
+  depth camera shares its view and is not registered. Under any other render set where the cameras
+  look decides nothing about which vehicles are rendered.
 * **Prewarm**: advance until the window's begin without recording, and wait there for every
   channel's view to be ready (03 §9.5.1, check 50): after each step the server is asked whether the
   camera's photoreal tiles are in, and once they are, the camera's own frames are compared until its
@@ -180,6 +185,8 @@ class ChannelRig:
     notes: list[str] = field(default_factory=list)
     # Where the camera is held now: spawned there, or moved there last.
     pose: Any = None
+    # Whether the session follows this camera, under the render set that follows the cameras.
+    followed: bool = False
 
     @property
     def aims_at_rendered_traffic(self) -> bool:
@@ -466,6 +473,7 @@ class CaptureSession:
             sumo_home=effective.value("sumo.home"),
             allow_sumo_version_mismatch=bool(effective.value("sumo.allow_version_mismatch")),
             draw_distance_m=effective.value("capture.draw_distance_m"),
+            **self._render_set_arguments(effective),
             # Bound only where a channel aims at the traffic: the session reads its callbacks once
             # and hands this a record per rendered vehicle per tick for the whole run.
             on_pose=None if self.traffic is None else self.traffic.collect,
@@ -490,6 +498,24 @@ class CaptureSession:
         self._log_scenario_checks(self.closeout.scenario_checks)
         self._check_stop()
 
+    @staticmethod
+    def _render_set_arguments(effective: EffectiveRunConfiguration) -> dict:
+        """The render set as `start_sumo_drive` takes it: every vehicle by default, or the optional
+        limit chosen, with the region moved from CARLA's frame into SUMO's, whose y is CARLA's
+        negated."""
+        region = effective.value("capture.render_region")
+        arguments = {"render_set": str(effective.value("capture.render_set")),
+                     "region_hysteresis_m": float(effective.value("capture.render_hysteresis_m")),
+                     "capacity": None if effective.value("capture.render_cap") is None
+                     else int(effective.value("capture.render_cap")),
+                     "render_min_pixels": float(effective.value("capture.render_min_pixels")),
+                     "render_admit_lead_s": float(effective.value("capture.render_admit_lead_s")),
+                     "render_release_lag_s": float(effective.value("capture.render_release_lag_s"))}
+        if region is not None:
+            arguments["region_centre"] = (float(region["x_m"]), -float(region["y_m"]))
+            arguments["region_radius_m"] = float(region["radius_m"])
+        return arguments
+
     def _log_scenario_checks(self, checks: dict) -> None:
         """Say what the session found of the compile lock and teleporting -- an uncompiled scenario
         and an accepted teleport louder than their ordinary cases."""
@@ -513,6 +539,10 @@ class CaptureSession:
                  else "left as the world holds it; the run's lighting honours no epoch"}
         layers = report.LayerVisibility
         facts["layers"] = {str(key): bool(layers[key]) for key in layers.Keys}
+        facts["render_set"] = (
+            str(report.RenderSetPolicy) if not bool(report.RenderSetLimits)
+            else f"{report.RenderSetPolicy}. An optional limit: a vehicle outside it is simulated by "
+                 "SUMO and is not in CARLA -- no body, no frame, no truth record")
         asked = report.DrawDistanceMetres
         facts["draw_distance"] = (
             "none: every body drawn at any range" if asked is None
@@ -575,7 +605,12 @@ class CaptureSession:
         rig.camera = rig.world.spawn_actor(rgb, transform)
         rig.pose = transform
         self.termination.add_step(RELEASE_WORLD, f"destroy camera {rig.sensor_id}",
-                                  rig.camera.destroy, CAMERA_TIMEOUT_S, ORDER_CAMERA)
+                                  lambda: self._release_camera(rig), CAMERA_TIMEOUT_S, ORDER_CAMERA)
+        if self._follows_cameras:
+            # The render set follows every channel's camera, an orbit's included, from the next step;
+            # its depth camera shares its pose and view, so it is not registered as well.
+            self.session.AddCamera(rig.camera.id)
+            rig.followed = True
         self.logger.info("channel %s: camera %s at %s", rig.sensor_id, rig.camera.id,
                          self._describe(transform))
         if description.pattern == "stare" and effective.value("occlusion.enabled"):
@@ -601,6 +636,19 @@ class CaptureSession:
             # Held at the pose it opens on until the window opens (`_set_orbits_moving`): the view
             # the window's first frame is written from is the one whose readiness is witnessed.
             rig.orbit.start_updater()
+
+    @property
+    def _follows_cameras(self) -> bool:
+        """Whether the optional render set that follows the cameras was chosen."""
+        return self.effective.value("capture.render_set") == "cameras"
+
+    def _release_camera(self, rig: ChannelRig) -> None:
+        """Let the session stop following a channel's camera, where it was, then destroy it: a
+        registered camera the world no longer has is counted as missing at every pass."""
+        if rig.followed:
+            rig.followed = False
+            self.session.RemoveCamera(rig.camera.id)
+        rig.camera.destroy()
 
     def _start_transform(self, rig: ChannelRig) -> carla.Transform:
         """Where a channel's camera is spawned, recording what it declared in `rig.aim_record`.

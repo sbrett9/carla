@@ -139,31 +139,80 @@ def test_every_admission_pass_is_asked_for_and_poses_only_where_a_stare_aims_at_
     assert started["on_pose"] is None
 
 
-def test_nothing_the_session_is_handed_limits_which_vehicles_are_rendered(layout, server):
-    # Every vehicle SUMO has is rendered, so the session is given no region, no cap and no camera to
-    # follow -- in a stare's run and in a run with an orbit flying.
+def test_by_default_the_session_is_handed_no_limit_and_follows_no_camera(layout, server):
+    # Every vehicle SUMO has is rendered unless an optional limit is chosen, so by default the session
+    # is given every vehicle, no region and no cap, and no camera to follow -- in a stare's run and in
+    # a run with an orbit flying.
     document = run_document()
     document["capture"]["channels"] = [A_STARE, dict(AN_ORBIT, sensor_id="ORBIT-2")]
     _, result = capture(layout, server, document, ["occlusion.enabled=false"])
     assert result.outcome == "run_finished"
     started = started_with(server)
-    assert not {"region_centre", "admit_radius_m", "hysteresis_m", "capacity", "maximum_bodies",
-                "render_set", "render_min_pixels", "render_admit_lead_s", "render_release_lag_s",
-                "render_max_speed_mps"} & set(started)
+    assert started["render_set"] == "all"
+    assert started["capacity"] is None
+    assert not {"region_centre", "region_radius_m"} & set(started)
+    assert server.events.of("add_camera") == []
+    assert result.produced["session"]["render_set"] == "every vehicle SUMO has"
     # Each camera still leaves the world at the end.
     cameras = [actor for actor in server.actors if actor.type_id == "sensor.camera.rgb"]
     assert len(cameras) == 2 and all(camera.destroyed for camera in cameras)
 
 
-def test_a_render_setting_from_before_every_vehicle_was_drawn_is_refused_by_name(layout, server):
-    # A run configuration written for the old render region and caps is refused as naming fields the
-    # schema has no more, rather than run as though they meant something.
-    for override in ("capture.render_cap=128", "capture.render_cap_hard=192",
-                     "capture.render_set=cameras",
-                     'capture.render_region={"x_m": 0, "y_m": 0, "radius_m": 300}'):
-        _, result = capture(layout, server, overrides=[override])
-        assert result.outcome == "usage_error", override
-        assert override.split("=", 1)[0] in result.refusals[0]["message"], override
+def test_an_optional_limit_reaches_the_session_with_its_region_in_sumo_s_frame(layout, server):
+    _, result = capture(layout, server, overrides=[
+        "capture.render_set=circle", 'capture.render_region={"x_m": 120, "y_m": -340, "radius_m": 300}',
+        "capture.render_cap=50", "capture.render_hysteresis_m=25"])
+    assert result.outcome == "run_finished"
+    started = started_with(server)
+    assert started["render_set"] == "circle"
+    # CARLA's y runs south and SUMO's north.
+    assert started["region_centre"] == (120.0, 340.0)
+    assert (started["region_radius_m"], started["region_hysteresis_m"], started["capacity"]) == \
+        (300.0, 25.0, 50)
+    # The run's record says plainly that vehicles outside the limit are not in CARLA.
+    assert "is not in CARLA" in result.produced["session"]["render_set"]
+    assert result.launch_echo["render"]["limited"] is True
+    assert "is not in CARLA" in result.launch_echo["render"]["left_out"]
+
+
+def test_under_the_cameras_every_channel_camera_is_followed_and_let_go_before_it_is_destroyed(
+        layout, server):
+    document = run_document()
+    document["capture"]["channels"] = [A_STARE, dict(AN_ORBIT, sensor_id="ORBIT-2")]
+    _, result = capture(layout, server, document, ["occlusion.enabled=false",
+                                                   "capture.render_set=cameras"])
+    assert result.outcome == "run_finished"
+    assert started_with(server)["render_set"] == "cameras"
+    cameras = [actor for actor in server.actors if actor.type_id == "sensor.camera.rgb"]
+    assert [event[1] for event in server.events.of("add_camera")] == [camera.id for camera in cameras]
+    names = server.events.names()
+    for camera in cameras:
+        removed = server.events.log.index(("remove_camera", camera.id))
+        destroyed = next(index for index, event in enumerate(server.events.log)
+                         if event[0] == "destroy" and event[2] == camera.id)
+        assert removed < destroyed
+    assert server.session.Cameras == []
+    assert names.index("dispose") > max(index for index, name in enumerate(names)
+                                        if name == "remove_camera")
+
+
+def test_under_the_cameras_a_depth_camera_is_never_followed(layout, server):
+    _, result = capture(layout, server, overrides=["capture.render_set=cameras"])
+    assert result.outcome == "run_finished"
+    rgb = [actor.id for actor in server.actors if actor.type_id == "sensor.camera.rgb"]
+    assert [event[1] for event in server.events.of("add_camera")] == rgb
+
+
+def test_a_body_ceiling_from_before_is_refused_by_name_and_an_unusable_limit_offline(layout, server):
+    # The pool's own ceiling is not an option: a run configuration naming it is refused as naming a
+    # field the schema does not have, rather than run as though it meant something.
+    _, result = capture(layout, server, overrides=["capture.render_cap_hard=192"])
+    assert result.outcome == "usage_error"
+    assert "capture.render_cap_hard" in result.refusals[0]["message"]
+    # A circle with no region to draw is refused before anything is started.
+    _, result = capture(layout, server, overrides=["capture.render_set=circle"])
+    assert result.outcome == "refused_offline"
+    assert result.refusals[0]["check"] == 53
     assert server.events.of("start_sumo_drive") == []
 
 

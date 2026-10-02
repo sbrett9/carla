@@ -10,15 +10,16 @@ namespace CarlaNet.CoSim;
 /// Everything the playback bridge asks of a CARLA world, and nothing else.
 /// </summary>
 /// <remarks>
-/// <para>Sixteen operations. The bridge asks which world is loaded, hands the world's truth
+/// <para>Eighteen operations. The bridge asks which world is loaded, hands the world's truth
 /// telemetry the package's ground once the package is established as that world's, places bodies,
 /// writes their poses and velocities in one batch, names to the server which bodies are lent and
 /// which parked, sets how far from a camera the bodies are drawn, reads back where the world says
 /// they went and how
 /// fast it says they are moving, advances the world a tick, reads and
 /// writes the episode settings so it can hand the world back as it found it, shows or hides the
-/// rendering layers whose presence is a property of the imagery, and reads and writes the sun the
-/// imagery is lit by. Anything larger
+/// rendering layers whose presence is a property of the imagery, reads and writes the sun the
+/// imagery is lit by, and reads the cameras an optional render set that follows them is decided
+/// from. Anything larger
 /// than that would be the client's whole surface, and a driving session tested against the client's
 /// whole surface is a session that can only be tested against a running server.</para>
 ///
@@ -148,6 +149,29 @@ public interface ICarlaWorld
     /// On a server built before it, such a vehicle reads zero whatever it was given.</para>
     /// </remarks>
     Vector3D? ObservedVelocity(ActorId actor);
+
+    /// <summary>
+    /// Where the world says an actor stood on a frame, or <see langword="null"/> where no snapshot the
+    /// client holds has it.
+    /// </summary>
+    /// <remarks>
+    /// A read of the client's snapshot of that frame -- the nearest it still holds, where it no longer
+    /// holds that one -- not a round trip. A render set that follows the cameras reads each registered
+    /// camera's pose here on the last frame the session rendered, which in synchronous mode is also the
+    /// newest frame, named by its number so that a camera flown from another thread is read where the
+    /// frame had it.
+    /// </remarks>
+    Transform? ObservedTransformAt(ActorId actor, ulong frame);
+
+    /// <summary>
+    /// A camera's image size and horizontal field of view, from the attributes it was spawned with, or
+    /// <see langword="null"/> where the actor is unknown or is not a camera.
+    /// </summary>
+    /// <remarks>
+    /// One round trip, asked once when a camera is registered with the session and never on the tick
+    /// thread's schedule: a camera's attributes are fixed when it is spawned.
+    /// </remarks>
+    CameraOptics? DescribeCamera(ActorId camera);
 
     /// <summary>
     /// Advance the world one tick, answering the simulation frame it produced, or

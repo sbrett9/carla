@@ -13,10 +13,14 @@ or the camera blueprint already takes, it carries that thing's own name: the ill
 the `illumination` object `CarlaNet.CoSim.IlluminationPolicy` reads, and a channel's fields are
 `ChannelDescription`'s, with their defaults read from it. By default no field limits what is
 rendered: the scenario is the only arbiter of population, and the session draws every vehicle SUMO
-has at any range. `capture.draw_distance_m` is an optional performance control, null unless set,
-that limits how far from a camera a body is drawn and nothing else.
+has at any range. Two optional performance controls are off unless set: `capture.draw_distance_m`
+limits how far from a camera a body is drawn and nothing else, and `capture.render_set` with its
+`capture.render_*` fields limits which vehicles get a body at all -- a vehicle outside that limit is
+simulated by SUMO and is not in CARLA or the truth.
 
 **Positions are in CARLA's frame** -- metres, x east, y south, so north is -y -- as a channel's are.
+The session takes its render region in SUMO's frame (y north); `CaptureSession` negates y once, at
+the call.
 
 A key the schema does not name is refused, with the nearest names it does (check 1). Two keys get a
 refusal of their own because a generic one would not help: a numeric exposure, which no camera
@@ -223,6 +227,43 @@ _FIELDS: tuple[RunField, ...] = (
     _F("capture.signal_layer_visible", _BOOLEAN, False, SESSION_FIXED,
        help="Draw the generated traffic-light and sign meshes. Hidden by default; SUMO simulates "
             "the signals either way."),
+    _F("capture.render_set", {"type": "string", "enum": ["all", "circle", "cameras"]}, "all",
+       SESSION_FIXED,
+       help="Which vehicles get a body. all (the default): every vehicle SUMO has. The others are "
+            "optional performance controls -- circle: those inside capture.render_region; cameras: "
+            "those inside, or about to enter, the ground footprint of any channel's camera, orbits "
+            "included, with capture.render_region deciding until the cameras are placed where it is "
+            "given, and every vehicle where it is not. A vehicle a limit leaves out is simulated by "
+            "SUMO and has no body, no frame and no truth record; the run's record counts it."),
+    _F("capture.render_region",
+       _nullable({"type": "object", "additionalProperties": False,
+                  "required": ["x_m", "y_m", "radius_m"],
+                  "properties": {"x_m": _NUMBER, "y_m": _NUMBER, "radius_m": _POSITIVE}}),
+       None, SESSION_FIXED,
+       help="The circle vehicles get a body inside, in CARLA's frame (x east, y south, metres): for "
+            "the whole run under render_set circle, which needs it, and under cameras only until the "
+            "channels' cameras are placed. Read by no other render set (check 53)."),
+    _F("capture.render_hysteresis_m", _POSITIVE, 60.0, SESSION_FIXED,
+       help="Under render_set circle, how much further out than the region's radius a vehicle keeps "
+            "its body; under cameras, the band beyond a footprint's widest admission threshold it is "
+            "kept inside."),
+    _F("capture.render_cap", _nullable(_POSITIVE_INTEGER), None, SESSION_FIXED,
+       help="How many vehicles may hold a body at once, under any render set; null (the default) for "
+            "no limit. Under all, a vehicle drawn keeps its body and a newcomer takes a free place in "
+            "the scenario seed's order; under circle the nearest the centre are drawn; under cameras a "
+            "vehicle in view ranks ahead of one approaching, one drawn ahead of a newcomer, then the "
+            "seed decides."),
+    _F("capture.render_min_pixels", _POSITIVE, 2.0, SESSION_FIXED,
+       help="Under render_set cameras: a camera's footprint is capped at the range beyond which the "
+            "catalogue's longest body covers fewer than this many pixels along its length, anywhere "
+            "in the picture."),
+    _F("capture.render_admit_lead_s", _NON_NEGATIVE, 3.0, SESSION_FIXED,
+       help="Under render_set cameras: simulated seconds of its own travel ahead of a camera's "
+            "footprint a vehicle is admitted, beyond a margin of its body and one SUMO step, so it "
+            "appears out of view."),
+    _F("capture.render_release_lag_s", _NON_NEGATIVE, 5.0, SESSION_FIXED,
+       help="Under render_set cameras: simulated seconds a vehicle drawn is held after it last was "
+            "within reach of a camera's footprint, before it is released."),
     _F("capture.draw_distance_m", _nullable(_POSITIVE), None, SESSION_FIXED,
        help="An optional performance control, off when null (the default): how far from a camera, "
             "in metres, a vehicle's body is drawn. Rendering only: every vehicle keeps its body, its "

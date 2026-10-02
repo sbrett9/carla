@@ -177,6 +177,97 @@
           "x-mutability": "session_fixed",
           "x-supplied-by": "tool"
         },
+        "render_set": {
+          "type": "string",
+          "enum": [
+            "all",
+            "circle",
+            "cameras"
+          ],
+          "description": "Which vehicles get a body. all (the default): every vehicle SUMO has. The others are optional performance controls -- circle: those inside capture.render_region; cameras: those inside, or about to enter, the ground footprint of any channel's camera, orbits included, with capture.render_region deciding until the cameras are placed where it is given, and every vehicle where it is not. A vehicle a limit leaves out is simulated by SUMO and has no body, no frame and no truth record; the run's record counts it.",
+          "default": "all",
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "render_region": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "x_m",
+                "y_m",
+                "radius_m"
+              ],
+              "properties": {
+                "x_m": {
+                  "type": "number"
+                },
+                "y_m": {
+                  "type": "number"
+                },
+                "radius_m": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The circle vehicles get a body inside, in CARLA's frame (x east, y south, metres): for the whole run under render_set circle, which needs it, and under cameras only until the channels' cameras are placed. Read by no other render set (check 53).",
+          "default": null,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "render_hysteresis_m": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Under render_set circle, how much further out than the region's radius a vehicle keeps its body; under cameras, the band beyond a footprint's widest admission threshold it is kept inside.",
+          "default": 60.0,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "render_cap": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How many vehicles may hold a body at once, under any render set; null (the default) for no limit. Under all, a vehicle drawn keeps its body and a newcomer takes a free place in the scenario seed's order; under circle the nearest the centre are drawn; under cameras a vehicle in view ranks ahead of one approaching, one drawn ahead of a newcomer, then the seed decides.",
+          "default": null,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "render_min_pixels": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Under render_set cameras: a camera's footprint is capped at the range beyond which the catalogue's longest body covers fewer than this many pixels along its length, anywhere in the picture.",
+          "default": 2.0,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "render_admit_lead_s": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Under render_set cameras: simulated seconds of its own travel ahead of a camera's footprint a vehicle is admitted, beyond a margin of its body and one SUMO step, so it appears out of view.",
+          "default": 3.0,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "render_release_lag_s": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Under render_set cameras: simulated seconds a vehicle drawn is held after it last was within reach of a camera's footprint, before it is released.",
+          "default": 5.0,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
         "draw_distance_m": {
           "anyOf": [
             {

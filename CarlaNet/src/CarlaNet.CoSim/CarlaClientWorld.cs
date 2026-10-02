@@ -256,6 +256,43 @@ public sealed class CarlaClientWorld : ICarlaWorld
 
     /// <inheritdoc/>
     /// <remarks>
+    /// <c>CarlaClient.GetSnapshotFrame</c>, the same history the recorder places a capture's camera
+    /// from. A client whose history holds nothing yet answers from the newest snapshot.
+    /// </remarks>
+    public Transform? ObservedTransformAt(ActorId actor, ulong frame)
+    {
+        if (_client.GetSnapshotFrame(frame, out _) is { } snapshots)
+        {
+            return snapshots.TryGetValue(actor, out ActorSnapshot? held) ? held.Transform : null;
+        }
+
+        return ObservedTransform(actor);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// One <c>get_actors_by_id</c> for the one actor. The ids go as a collection expression, which the
+    /// transport writes as the array of its element type that the server reads.
+    /// </remarks>
+    public CameraOptics? DescribeCamera(ActorId camera)
+    {
+        IReadOnlyList<Actor> actors = _client.GetActorsByIdAsync([camera]).GetAwaiter().GetResult();
+        if (actors.Count == 0 || actors[0].Id != camera)
+        {
+            return null;
+        }
+
+        Dictionary<string, string> attributes = [];
+        foreach (ActorAttributeValue attribute in actors[0].Description.Attributes ?? [])
+        {
+            attributes[attribute.Id] = attribute.Value;
+        }
+
+        return CameraOptics.FromAttributes(attributes);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
     /// The cue is answered with the frame it produced, and the client waits for the world observer
     /// to deliver that frame before returning. A tick whose frame never arrives answers null rather
     /// than throwing, because it is the session that decides a world which stopped producing frames

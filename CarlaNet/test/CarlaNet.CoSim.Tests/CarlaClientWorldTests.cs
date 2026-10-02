@@ -163,6 +163,36 @@ public sealed class CarlaClientWorldTests : IAsyncLifetime
     }
 
     [Fact]
+    public void A_Camera_Is_Described_From_The_Attributes_The_Server_Gives_It()
+    {
+        // The session reads a camera it is told to follow with one get_actors_by_id, asked with a
+        // collection expression -- which once failed at serialisation and refused a capture run placing
+        // its first camera, and now reaches the server as the ids given.
+        List<uint[]> asked = [];
+        _server!.RegisterHandler<uint[], SuccessResponse<Actor[]>>("get_actors_by_id", ids =>
+        {
+            asked.Add(ids);
+            return Ok(ids.Where(id => id is 41u or 42u).Select(id => new Actor(
+                id, 0u,
+                new ActorDescription(id, id == 41u ? "sensor.camera.rgb" : "vehicle.fuso.mitsubishi",
+                    id == 41u
+                        ? [
+                            new ActorAttributeValue("image_size_x", ActorAttributeType.Int, "1280"),
+                            new ActorAttributeValue("image_size_y", ActorAttributeType.Int, "720"),
+                            new ActorAttributeValue("fov", ActorAttributeType.Float, "90"),
+                        ]
+                        : [new ActorAttributeValue("number_of_wheels", ActorAttributeType.Int, "4")]),
+                new BoundingBox(), [], [])).ToArray());
+        });
+        CarlaClientWorld world = CarlaClientWorld.Attach(_client!, startWorldObserver: false);
+
+        Assert.Equal(new CameraOptics(1280, 720, 90.0), world.DescribeCamera(41u));
+        Assert.Null(world.DescribeCamera(42u));
+        Assert.Null(world.DescribeCamera(43u));
+        Assert.Equal([[41u], [42u], [43u]], asked);
+    }
+
+    [Fact]
     public void A_Body_Is_Spawned_Under_The_Role_It_Is_Given_In_Place_Of_The_Blueprint_s_Default()
     {
         CarlaClientWorld world = CarlaClientWorld.Attach(_client!, startWorldObserver: false);

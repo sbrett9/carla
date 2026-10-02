@@ -26,8 +26,10 @@ namespace CarlaNet.CoSim;
 /// <para>By default nothing here limits how many vehicles are rendered. The scenario is the only
 /// arbiter of population: every vehicle SUMO has gets a body, and a scenario heavier than the machine
 /// is comfortable with makes a synchronous run slower on the wall clock, never different in
-/// content. <see cref="DrawDistanceMetres"/> is an optional performance control, off unless set, that
-/// trades what a camera draws far away for speed; it changes no vehicle's body, pose or truth.</para>
+/// content. Two optional performance controls, off unless set, trade fidelity for speed:
+/// <see cref="DrawDistanceMetres"/> limits how far from a camera a body is drawn, and changes no
+/// vehicle's body, pose or truth; <see cref="RenderSet"/> limits which vehicles get a body at all, and a
+/// vehicle it leaves out is simulated by SUMO and in no frame and no truth record.</para>
 /// </remarks>
 public sealed record SumoDriveSessionOptions(
     string ScenarioPath,
@@ -292,6 +294,25 @@ public sealed record SumoDriveSessionOptions(
     /// started.</para>
     /// </remarks>
     public double? DrawDistanceMetres { get; set; }
+
+    /// <summary>
+    /// Which of the vehicles SUMO has hold a body, and how many may at once: every vehicle, with no
+    /// capacity, unless another policy is given.
+    /// </summary>
+    /// <remarks>
+    /// <para>The default, <see cref="EveryVehicleRenderSetPolicy"/> with no capacity, limits nothing.
+    /// A capacity on it, a circle (<see cref="RegionRenderSetPolicy"/>) or the registered cameras'
+    /// footprints (<see cref="CameraFootprintRenderSetPolicy"/>, with
+    /// <see cref="SumoDriveSession.AddCamera"/>) are optional performance controls. A vehicle the
+    /// policy leaves out is still simulated by SUMO -- its traffic is unchanged -- and has no body in
+    /// CARLA, so it is in no frame and in no truth record; the report states the policy and counts what
+    /// it left out, and the release reasons say why a track ended.</para>
+    ///
+    /// <para>Whatever the policy, every vehicle SUMO has stays subscribed to its full state, one SUMO
+    /// inserts is drawn from the frame SUMO first reports it in, and every body drawn is seated on its
+    /// road, turned along its path and placed across its lane exactly as with no limit.</para>
+    /// </remarks>
+    public IRenderSetPolicy RenderSet { get; set; } = new EveryVehicleRenderSetPolicy();
 
     /// <summary>Where each computed pose goes.</summary>
     public Action<CoSimPoseRecord>? OnPose { get; set; }

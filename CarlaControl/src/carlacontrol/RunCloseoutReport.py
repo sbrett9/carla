@@ -33,8 +33,10 @@ tree does not publish is recorded as `skipped` with the reason, so *not measured
 | `supervision.manifest_closing_record` | -- | skipped: no run manifest is written |
 
 **One loud condition interrupts every run** (D12.15): a recorder's `Dropped` becoming non-zero; a live
-run adds the achieved factor falling below its floor. A participant is always drawn, because every
-vehicle SUMO has is drawn, so nothing else interrupts.
+run adds the achieved factor falling below its floor. With no render-set limit -- the default -- a
+participant is always drawn, because every vehicle SUMO has is drawn. Under an optional limit a
+vehicle outside it is not in CARLA or the truth; the snapshot states the limit and counts what it left
+out, and nothing interrupts for it, since the operator chose it.
 """
 from __future__ import annotations
 
@@ -166,7 +168,14 @@ class RunCloseoutReport:
                               "draw_distance_m": self._number(report.DrawDistanceMetres),
                               "draw_distance_in_force_m": self._number(session.DrawDistanceMetres),
                               "draw_distance_refused": None if report.DrawDistanceRefused is None
-                              else str(report.DrawDistanceRefused)}
+                              else str(report.DrawDistanceRefused),
+                              "render_set": str(report.RenderSetPolicy),
+                              "render_set_limits": bool(report.RenderSetLimits),
+                              "vehicle_passes_outside_the_policy":
+                                  int(report.VehiclePassesOutsideThePolicy),
+                              "capacity_declines": int(report.CapacityDeclines),
+                              "releases": {str(reason): int(report.Releases[reason])
+                                           for reason in report.Releases.Keys}}
         snapshot["admission"] = WindowAdmissions.describe(report.LastAdmissionPass)
         audit = session.SunAudit
         snapshot["solar_audit"] = None if audit is None else {
@@ -349,15 +358,33 @@ class RunCloseoutReport:
                 lines.append(f"    routed by {lock['routed_by']}")
                 lines.append(f"    compiled for {lock['compiled_for']}")
             lines.append(f"  teleporting: {checks['teleporting']['statement']}")
+        render = snapshot.get("render")
+        if render is not None and render.get("render_set_limits"):
+            releases = render.get("releases") or {}
+            lines.append(f"  render set {render['render_set']}: an optional limit; a vehicle outside "
+                         f"it is simulated by SUMO and is not in CARLA or the truth -- "
+                         f"{render['vehicle_passes_outside_the_policy']} vehicle-passes outside the "
+                         f"policy, {render['capacity_declines']} declined for the capacity, released "
+                         f"{releases.get('LeftTheRegion', 0)} leaving the policy and "
+                         f"{releases.get('Capacity', 0)} for the capacity")
         admissions = snapshot.get("admissions")
         if admissions:
             opening = admissions["at_window_open"]
-            if opening is not None:
+            if opening is not None and opening.get("limited"):
+                lines.append(f"  admission at the window's begin, t={opening['sim_time_s']:g}: "
+                             f"population {opening['population']}, eligible {opening['eligible']}, "
+                             f"drawn {opening['admitted']}, shed {opening['shed']}; "
+                             f"{opening['left_out']} without a body")
+            elif opening is not None:
                 lines.append(f"  admission at the window's begin, t={opening['sim_time_s']:g}: "
                              f"population {opening['population']}, all rendered")
             window = admissions["window"]
             lines.append(f"  admission passes in the window: {window['passes']}; most population "
                          f"{window['most_population']}")
+            if window.get("limited"):
+                lines.append(f"    {window['passes_leaving_out']} of them left vehicles without a "
+                             f"body, at most {window['most_left_out']} at once and "
+                             f"{window['most_shed']} shed for the capacity")
         render = snapshot.get("render")
         if render is not None and render.get("draw_distance_m") is not None:
             refused = render.get("draw_distance_refused")
