@@ -852,9 +852,12 @@ per-actor terms to stay small against the camera, not a claim that they do.
 
 #### 4.3.2 Two optional performance controls
 
-Drives at Arapahoe's full population -- 350 to 460 vehicles -- have been seen to run at about 0.43× real
-time, an operator's observation rather than M2's measurement. That is the cost of drawing what the
-scenario holds, and it stays the default. For a run whose operator would rather have speed than every
+A drive at Arapahoe's full population -- 305 to about 440 vehicles drawn -- measured 0.43× real time
+on 2026-10-01 (0.4327× over 1,433 s of wall clock, 12,400 ticks of t = 780–1,400 s, one 1920×1080
+camera at 1,500 m recording at 2 Hz; worst 5 s window 0.35× at the population peak). Per tick, about
+30 ms was the drive's own work and 5.4 ms SUMO's step; the rest, about 80 ms, was the server's tick
+and render, and how that splits between drawing the vehicles and drawing the view is not yet
+measured. That is the cost of drawing what the scenario holds, and it stays the default. For a run whose operator would rather have speed than every
 vehicle in every picture, two controls trade some fidelity for it. Both are off unless a run sets
 them, neither is recommended for any scenario, and neither is sized here: this section owns the cost
 of what is drawn, and **no measured speed-up from either exists yet**, so none is claimed.
