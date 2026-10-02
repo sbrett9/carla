@@ -25,6 +25,7 @@ public sealed class CoSimRunReport
     private readonly Dictionary<LaneInterpolationCase, long> _cases = [];
     private readonly Dictionary<UnrenderableReason, long> _refusedTypes = [];
     private readonly Dictionary<RenderSetReleaseReason, long> _releases = [];
+    private readonly Dictionary<GroundSeatReason, long> _groundSeats = [];
 
     /// <summary>The clock the session resolved.</summary>
     public required CoSimClock Clock { get; init; }
@@ -241,6 +242,37 @@ public sealed class CoSimRunReport
 
     /// <summary>Vehicle-ticks where the ground surface had no height under the vehicle.</summary>
     public long PosesRefusedForMissingGround { get; internal set; }
+
+    /// <summary>
+    /// How the session joined the SUMO network to the world's OpenDRIVE roads: lanes joined, by the
+    /// record that joined them, the lanes left unjoined, and how closely the lanes lie on their roads.
+    /// Null for a report built without one.
+    /// </summary>
+    public RoadMappingSummary? RoadMapping { get; init; }
+
+    /// <summary>Poses whose height and pitch came from the profile of the road the vehicle was on.</summary>
+    public long PosesSeatedOnTheRoad { get; internal set; }
+
+    /// <summary>
+    /// Poses seated on the ground surface instead, by why: the vehicle was on no lane, its lane was on
+    /// no road, or it stood further from its road than a vehicle on it can.
+    /// </summary>
+    public IReadOnlyDictionary<GroundSeatReason, long> PosesSeatedOnTheGround => _groundSeats;
+
+    /// <summary>
+    /// Poses on a road that departs from the ground by enough to be a structure -- a deck, or a road
+    /// spanning the ground beneath one -- and that took none of the ground's roll.
+    /// </summary>
+    public long PosesOnAStructure { get; internal set; }
+
+    /// <summary>Poses on a road between at grade and a structure, whose roll was blended.</summary>
+    public long PosesOnAnApproach { get; internal set; }
+
+    /// <summary>
+    /// The furthest any road a body was seated on stood from the ground surface under it, metres, signed:
+    /// positive for a deck above the ground.
+    /// </summary>
+    public double WorstRoadDepartureFromGroundMetres { get; private set; }
 
     /// <summary>Vehicle-ticks skipped because the vehicle's type has no measured body.</summary>
     public long VehicleTicksWithNoMeasuredBody { get; internal set; }
@@ -468,6 +500,31 @@ public sealed class CoSimRunReport
     internal void CountCase(LaneInterpolationCase which) =>
         _cases[which] = _cases.GetValueOrDefault(which) + 1;
 
+    /// <summary>Count where a pose's height came from.</summary>
+    internal void CountSeat(in VehiclePose pose)
+    {
+        if (pose.Road is not { } road)
+        {
+            _groundSeats[pose.GroundReason] = _groundSeats.GetValueOrDefault(pose.GroundReason) + 1;
+            return;
+        }
+
+        PosesSeatedOnTheRoad++;
+        if (road.RollWeight <= 0.0)
+        {
+            PosesOnAStructure++;
+        }
+        else if (road.RollWeight < 1.0)
+        {
+            PosesOnAnApproach++;
+        }
+
+        if (Math.Abs(road.DepartureFromGroundMetres) > Math.Abs(WorstRoadDepartureFromGroundMetres))
+        {
+            WorstRoadDepartureFromGroundMetres = road.DepartureFromGroundMetres;
+        }
+    }
+
     internal void CountRelease(RenderSetReleaseReason reason) =>
         _releases[reason] = _releases.GetValueOrDefault(reason) + 1;
 
@@ -674,6 +731,18 @@ public sealed class CoSimRunReport
         text.AppendLine($"  approximated Z   {PosesOnAnApproximatedSeatHeight}");
         text.AppendLine($"  no ground        {PosesRefusedForMissingGround}");
         text.AppendLine($"  no measured body {VehicleTicksWithNoMeasuredBody} vehicle-ticks");
+        text.AppendLine($"  on the road      {PosesSeatedOnTheRoad}: {PosesOnAStructure} on a structure, "
+                        + $"{PosesOnAnApproach} on an approach; furthest from the ground "
+                        + $"{WorstRoadDepartureFromGroundMetres:+0.000;-0.000;0} m");
+        text.AppendLine("  on the ground    "
+                        + (_groundSeats.Count == 0
+                            ? "0"
+                            : string.Join(", ", _groundSeats.OrderBy(entry => entry.Key)
+                                .Select(entry => $"{entry.Key} {entry.Value}"))));
+        if (RoadMapping is { } mapping)
+        {
+            text.AppendLine($"road mapping       {mapping}");
+        }
         text.AppendLine($"admissions         {Admissions}, every vehicle SUMO had");
         if (LastAdmissionPass is { } pass)
         {

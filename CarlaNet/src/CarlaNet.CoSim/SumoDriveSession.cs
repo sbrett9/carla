@@ -114,6 +114,7 @@ public sealed class SumoDriveSession : IDisposable
                              CoSimClock clock,
                              SumoRoadNetwork network,
                              GroundSurface ground,
+                             RoadSurface roads,
                              VehicleCatalogue catalogue,
                              PopulationLease lease,
                              WorldSettingsLease? settings,
@@ -143,7 +144,7 @@ public sealed class SumoDriveSession : IDisposable
         _population = new SubscribedPopulation(sumo.TraCI);
         _renderSet = new RenderSetManager(Release);
         _binder = new VehicleTypeBinder(sumo.TraCI, catalogue);
-        _converter = new PoseConverter(ground, options.MeasuredSeatHeights);
+        _converter = new PoseConverter(ground, options.MeasuredSeatHeights, roads);
         _interpolator = new LaneArcInterpolator(network);
 
         // The factor is read here, once. The options object stays writable after the session starts,
@@ -171,6 +172,7 @@ public sealed class SumoDriveSession : IDisposable
             Epoch = options.Epoch,
             Illumination = options.Illumination,
             SumoSeed = seed,
+            RoadMapping = roads.Mapping,
         };
     }
 
@@ -370,6 +372,11 @@ public sealed class SumoDriveSession : IDisposable
             loaded.AdoptBareEarthGrids(options.WorldPackagePath);
         }
 
+        // The roads every body is seated on, joined once to the lanes SUMO drives. Read from the
+        // package's own OpenDRIVE, which the check above has just confirmed is the one the server built
+        // its road mesh, waypoints and paths from.
+        RoadSurface roads = RoadSurface.FromWorldPackage(options.WorldPackagePath, network);
+
         // Which SUMO, whether it has the binary the session is to launch, and whether that binary is
         // the release that converted this world: settled before it is started, like every other
         // refusal that needs no simulation to find out.
@@ -473,7 +480,7 @@ public sealed class SumoDriveSession : IDisposable
                     : null;
                 session = new SumoDriveSession(options, world, sumo, console, release, compiled,
                                                teleporting, routeErrors, collisionHandling, headlights, clock,
-                                               network, ground, catalogue, lease, settings, layers,
+                                               network, ground, roads, catalogue, lease, settings, layers,
                                                pool, (manifest.OriginLatitude, manifest.OriginLongitude),
                                                seed);
                 session.Prime();
@@ -1254,9 +1261,12 @@ public sealed class SumoDriveSession : IDisposable
                 Report.SampleDiscontinuity(from, to, _interpolator.RouteDistance(from, to));
             }
 
+            // The lane the interpolation walked names the road the body is seated on, and where
+            // along it: SUMO's position alone does not, where a deck and the road beneath it share it.
             VehiclePose? pose = _converter.Convert(vehicleId, extent, state.X, state.Y,
                                                    state.HeadingDegrees,
-                                                   state.SpeedMetresPerSecond);
+                                                   state.SpeedMetresPerSecond,
+                                                   state.LaneId, state.LanePositionMetres);
             if (pose is not { } applied)
             {
                 Report.PosesRefusedForMissingGround++;
@@ -1277,6 +1287,8 @@ public sealed class SumoDriveSession : IDisposable
             {
                 Report.PosesOnAnApproximatedSeatHeight++;
             }
+
+            Report.CountSeat(applied);
 
             Report.WorstBumperResidualMetres = Math.Max(
                 Report.WorstBumperResidualMetres,
@@ -1300,7 +1312,8 @@ public sealed class SumoDriveSession : IDisposable
 
             _options.OnPose?.Invoke(new CoSimPoseRecord(
                 _tickIndex, RenderedTimeSeconds, Clock.IsCaptureTick(_tickIndex), actor, applied,
-                state.Case, state.X, state.Y, state.HeadingDegrees, from.Signals, lamps));
+                state.Case, state.X, state.Y, state.HeadingDegrees, from.Signals, lamps,
+                state.LaneId, state.LanePositionMetres));
         }
 
         if (_pool is { } counted)
