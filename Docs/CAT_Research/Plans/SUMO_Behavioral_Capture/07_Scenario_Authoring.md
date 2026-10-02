@@ -76,6 +76,7 @@ choice. §3.9 draws the boundary.
 | 2026-10-01 | The Arapahoe generator writes a specification compiled against the regenerated world with measured bodies, its incident a lane closure (§3.4.2); lane closures are a specification block compiled into an additional file the lock binds, and check 55 refuses one that breaks a route (D7.37). |
 | 2026-10-01 | The compiler writes `lanechange.duration` 3 beside the other processing options (§5.1, §7.1; [`04`](04_Contracts.md) D4.42), the lock records it and the resolution report lists every processing option; Gardnerville and Arapahoe are recompiled with it, and Bahonar, which deadlocks with it behind a body wider than its lanes, is not. |
 | 2026-10-02 | The compiler gives SUMO each body's width without its mirrors and refuses a class whose body has none measured (§7.1; [`04`](04_Contracts.md) D4.43); all three shipped scenarios are recompiled with it and with 3 s lane changes, Bahonar included, which runs as before (§3.4.1, §3.4.2). |
+| 2026-10-02 | Ramp meters are a world-build decision (§6 gotcha 13, D7.38): the world build keeps every OSM `traffic_signals=ramp_meter` out of junction joining and gives it a one-vehicle-per-green cycle, so Arapahoe's freeway is no longer signalised by the loop ramp's meter. The Arapahoe incident is notified on the stretch the loop ramp joins as well (§3.4.2, gotcha 14, D7.39), measured offline on the metered network; the shipped files await the world's rebuild and a recompile. |
 
 ---
 
@@ -914,6 +915,31 @@ day with 3 s lane changes ([`04`](04_Contracts.md) D4.42), the routes unchanged:
 p99 431, every vehicle inserted, none waiting, no collision. Recompiled on 2026-10-02 with each body's
 width without its mirrors ([`04`](04_Contracts.md) D4.43): peak 461, median 344, p99 449, every vehicle
 inserted, none waiting, no collision.
+
+**Ramp meters, 2026-10-02.** The extract tags four ramp meters, all on two-lane on-ramps. The world build
+used to let netconvert treat them as junctions: meter `582785322` on the Arapahoe Road loop onto I-25
+northbound was joined with the merge and an I-25 node into `cluster_432157733_432193589_582785322`, an
+actuated signal alternating the loop with five lanes of I-25 on 10-50 s greens; the other three ran an 80 s
+green. The world build now meters them (gotcha 13, D7.38), and the network it produces from the same
+clipped extract fingerprints `ffe490b1ee677d5b48ac2350f3a579e8112f68155bbd80893eebd137c724bfdc`: the
+cluster is three junctions, the loop joins I-25 as its rightmost lane through an unsignalised priority
+merge, and the four meters run a 6 s cycle of 2 s greens, nothing else in the network changed. The
+generator now notifies the incident on that stretch, `1342047649`, as well as on `907700111` (gotcha 14,
+D7.39). *Measured offline,* that network carried in a scratch copy of the package, the scenario compiled
+against it and run in SUMO alone with the staged 1.27.0 and 3 s lane changes: **peak 435** at 1 120 s,
+**median 324**, p99 416, against 461, 344 and 449 on the current network; every vehicle inserted, none
+waiting, no collision, no deadlock. No green released more than one vehicle (217 releases at the busiest
+meter, read from each vehicle's exit time off the approach); queues reached three vehicles and 23 m,
+against approaches of 158 to 363 m, so nothing backed onto Arapahoe Road; a vehicle's longest wait at a
+meter was 5.8 s, and the mean time on a metered approach rose by about 5 s on the two ramps that were
+already unsignalised and fell by about 95 s on the loop, which the joined signal had held. Demand is well
+inside capacity: about 140 to 300 vehicles an hour on the three ramps the scenario uses — `582784737`
+carries none — where one lane of a meter releases 600, and SUMO drivers queue almost entirely in the lane
+that continues past the meter, so a two-lane meter works as a one-lane one here. The joined signal's emergency braking is gone (15 warnings on its lanes
+before, seven of them on I-25's); two vehicles in the lanes the incident closes still stop short as it
+begins, and two releases a run stop again within a centimetre of the line as the red returns. Notified
+on `907700111` alone the run deadlocks (732 live vehicles and climbing at the end; gotcha 14). The
+shipped files in `Import/` are still the current network's: they are recompiled once the world is rebuilt.
 
 **What the specification does not carry.** The opposite-lane pairs, a network edit (§6 gotcha 4). They
 matter only to a vehicle stopped in the running lane: under `--stop-in-lane` no lane lets a driver cross
@@ -1973,6 +1999,8 @@ validator check, a compiler default, or stays documentation, and where the enfor
 | 10 | Validate with `duarouter`, not `sumolib` (`:145-149`) | **Validator check**, unconditionally, plus the false-accept guard of §5.5 | **Built**: `RouteValidator`; checks 11, 12 |
 | 11 | Restricting private roads must also clear internal junction-connector lanes (`:135-139`) | **Does not arise under a world-build type map.** netconvert gives an internal lane the intersection of the permissions of the lanes it joins as it builds them (`NBEdge.cpp:1760`), so permissions set by type reach the junctions with no clearing; the trap belongs to a rewrite after netconvert, which `restrict_private_roads` still is | **Built** at world build (§9.8): *measured,* all 335 guard routes pass `duarouter` through the port's junctions; `restrict_private_roads`, which nothing calls, keeps its clearing |
 | 12 | **SUMO's `H:M:S` time literal is an elapsed offset, not a clock.** *Measured:* `sumo -n … --begin 7:00:00 --end 7:00:10 --summary-output` ran steps `time="25200.00"` to `time="25209.00"`, exit 0 | **Compiler default + self-check.** The specification's civil times are resolved against `epoch` (§4.5) and the compiler emits **plain seconds** into every SUMO file, with the epoch restated as a comment above `<begin>`; a bare clock on a multi-day run is refused before anything is emitted | **Built**: `CivilTimeResolver`; checks 47 and 44 |
+| 13 | *(Measured 2026-10-02.)* **A ramp meter is built as a junction.** netconvert reads `highway=traffic_signals` and not `traffic_signals=ramp_meter`, so `--junctions.join` merges a meter near a merge with the merge and the freeway beside it — on Arapahoe the joined signal held five lanes of I-25 on red for up to 56 s a cycle — and every meter gets a junction's 80 s green | **A world-build decision** (D7.38). `--junctions.join-exclude` names every OSM ramp meter, and the same invocation reads each meter's programme from `--tllogic-files`: 2 s greens on a 6 s cycle, red and green only, a two-lane meter's lanes released alternately | **Built**: `OsmRampMeters`, `RampMeterProgram`, `OsmConverter.ConvertFileWithNetworkAsync`; the package carries the file as `map.tll.xml` |
+| 14 | *(Measured 2026-10-02.)* **A driver standing between a closure's `notify` edges and its closed edge keeps the lanes it chose while the lanes were shut.** SUMO refreshes lane choice on a rerouter's edges and the closed edge when a closure begins and ends (`MSTriggeredRerouter::setPermissions`), nowhere else. On the metered Arapahoe network the loop ramp's drivers stopped at the end of their lane during the incident and, with teleporting off, stayed stopped after it reopened: 732 live vehicles and climbing | **Documentation, and the generator.** `notify` names every edge a vehicle can stand on waiting for the closed lanes — at least the edge entering the closed one (D7.39). A check that refuses a closure whose entering edges are not notified is not built | `make_arapahoe_scenario.py` `INCIDENT_NOTIFY` |
 
 Two of these — #5 and #6 — are the visible edge of §1.3. Moving them to the world build is not
 incidental tidying; it is the mechanism by which the author's graph and the rendered graph stay the
@@ -2622,6 +2650,8 @@ has neither its areas nor its type map; that is stage D's to close.
 | **D7.35** | **The sizing scenario's schedule is civil, and its `t = 0` is 07:00 at Bahonar on 2026-09-29 at +03:30.** The shipped schedule's hours were local clock times, so they are written as civil clocks and resolved under the epoch, and nothing moves in local time; the run is seven whole days from the first morning shift change, and a daily rhythm is written for every civil day the run touches and cut to the run. *Measured:* every shipped entry inside the run comes back with its id and local time (`test_bahonar_generator.py`) (§3.4.1) |
 | **D7.36** | **A planted vehicle is drawn from the class of the population it moves among unless its driving model is the behaviour itself.** A vehicle type carried by planted vehicles alone reaches the truth record as their label ([`06`](06_Truth_And_Annotation.md) §9.3). In Bahonar the probe is a civilian car and the escort military jeeps; the shadow's crawl and the stay-behind, a civilian car cleared into the port, keep classes of their own, named for the vehicle and not the anomaly (§3.4.1) |
 | **D7.37** | **A lane closure is a specification block, `lane_closures[]`, compiled into an additional file the configuration names and the lock digests.** SUMO closes a lane with a rerouter's `closingLaneReroute`, which no route-file element can carry, so a closure is the one element the compiler writes outside the route file: the lanes of the one edge a place names, by index from the right, closed to all but `authority` for a window in civil time, and the edges where a vehicle learns of it. It is not a network edit — the network stays the world's byte for byte (D7.32) — and it leaves the routes fixed at compile time in place, so check 55 refuses a closure that leaves a route no open lane into or out of its edge. *Measured* with the staged SUMO 1.27.0: closing the one lane of a flow's destination stopped the run at the first vehicle inserted during the closure, "has no valid route ... Quitting (on error)". The Arapahoe incident is one (§3.4.2) |
+| **D7.38** | **Ramp meters are metered at world build, for every world.** Every node an extract tags `highway=traffic_signals` and `traffic_signals=ramp_meter` is kept out of junction joining (`--junctions.join-exclude`), so a meter controls its ramp alone and the merge beyond it stays an unsignalised priority merge — no meter can signal the freeway — and is given a static metering programme read in the same netconvert invocation (`--tllogic-files`): each lane's green 2 s, its red at least 4 s, lanes released in turn 3 s apart, the green SUMO's stop-then-go `s` so one vehicle leaves per green and no red with no amber before it catches a vehicle at speed. Only a meter controlling one approach is metered; one that is also a junction of several roads, or controls a crossing, keeps netconvert's programme and the build says so. An extract with no meter converts exactly as before. Like D7.9's options it changes the graph, so a world gains it by being rebuilt (§6 gotcha 13) |
+| **D7.39** | **A lane closure's `notify` names every edge a vehicle can stand on waiting for the closed lanes**, at least the edge entering the closed one, because SUMO refreshes a driver's choice of lanes only on a rerouter's edges and the closed edge when the closure begins and ends, and a driver anywhere else keeps the choice it made while the lanes were shut. Measured on the metered Arapahoe network (§3.4.2, §6 gotcha 14) |
 
 ---
 

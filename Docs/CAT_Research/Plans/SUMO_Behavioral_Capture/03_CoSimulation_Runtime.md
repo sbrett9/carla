@@ -57,6 +57,7 @@ advancement policy, the headlight predicate),
 | 2026-10-01 | §6.4, Q3.1, Q3.11: every pose is put at the frame's lateral offset from its lane, so a lane change SUMO spreads over time is rendered where SUMO has it; the session's report states the lane-change duration; the heading through junctions and lane changes is measured and open. |
 | 2026-10-02 | §5.4, §5.5, §6.4, Q3.11, D3.40: a body's heading follows the path its bumper takes, the rear axle trailing it, turned only by forward travel and held across a jump; its velocity is the path's; SUMO's reported angle is recorded beside the pose and in the render set. |
 | 2026-10-02 | §8.3, §8.3.1, §8.3.2, §8.3.3, §8.8, §8.9, D3.10, D3.31, D3.38, D3.41, D3.42: two optional performance controls, off by default and recommended for no scenario. A draw distance, set once on each pooled body by the new `set_actors_max_draw_distance`, so no camera draws a body beyond it while every vehicle keeps its body, pose and truth; each frame's render set records the distance and the recorder marks every vehicle a camera did not draw. And the circle, the cameras' footprints and a capacity, restored from history as limits a caller chooses: a vehicle outside one is simulated by SUMO and in no frame and no truth record, and is counted; every vehicle stays subscribed, so the subscription tiers are not restored. D3.38 stays withdrawn as a default. Written and tested offline; the plugin awaits a build. |
+| 2026-10-02 | §3.4: a ramp meter reaches the imagery through the vehicles it holds, one leaving per green, with no meter head drawn. |
 
 ---
 
@@ -676,7 +677,11 @@ phase depends on the traffic present and is only knowable at runtime
 (`CarlaControl/skills/sumo-traffic-scenarios/SKILL.md`, "measured gotchas" — fixed-time 90 s programs
 cannot discharge a busy interchange), and SUMO resolves it every step. What arrives over the pose
 stream is already the behaviour those programs produced: a vehicle that waits at a junction waits
-because SUMO's signal held it. **What is dropped is the rendering of the signal, not the signal.**
+because SUMO's signal held it. **What is dropped is the rendering of the signal, not the signal.** A
+ramp meter reaches the imagery the same way: the world build gives every OSM ramp meter a
+one-vehicle-per-green cycle ([`07`](07_Scenario_Authoring.md) D7.38), so on a metered ramp vehicles
+come to a stop at the meter's line and leave one at a time a few seconds apart, and that is what the
+frames show, with no meter head drawn.
 
 **The generated road surface is suppressed the same way, and for a reason of the same kind.** The
 road mesh CARLA builds from the `.xodr` is a flat grey ribbon laid over the photogrammetry of the
