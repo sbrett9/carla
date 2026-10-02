@@ -19,6 +19,7 @@
 | 2026-09-30 | Removed the render cap (`render_cap` 128, hard 192) and everything built on it: the render region and its radial-concentration analysis (§4.3.1, `D10.5`), the lead, lag and halo parameters (§8), and vehicle shedding (§7 rows 1–3, `shedding[]`, the rendered-fraction floor). The cap was never measured — M2 never ran — and the scenario is the only arbiter of population: every vehicle SUMO has is drawn, and a heavier scenario runs slower, never thinner. Added the compiled Bahonar scenario's measured population (§3.1.5); per-vehicle costs re-expressed against the measured populations; light-state cost taken from the whole-map rate; M2 redefined as the pace of a drive at Arapahoe's full population. |
 | 2026-10-01 | §4.3: a vehicle SUMO inserts is drawn from the frame SUMO first reports it in, where SUMO inserted it and moving, and on no frame before (`03` D3.6). |
 | 2026-10-02 | §4.3.2, `D10.12`, `D10.20`, `D10.21`: two optional performance controls an operator may choose to trade fidelity for speed, both off by default and neither a sizing rule nor a recommendation -- a draw distance, which changes only how far from a camera a body is drawn, and a limit on which vehicles get a body (a circle, the cameras' footprints, a capacity). Neither has a measured speed-up yet; `D10.4` and `D10.5` stay withdrawn. |
+| 2026-10-02 | §4.3.3: the full-population tick measured on the owner's workstation -- what the camera, the vehicles and each optional control cost, the machine's power mode moving the pace more than any control, what is not yet known, and the options recorded but not pursued. M2 measured. |
 
 ---
 
@@ -854,24 +855,92 @@ per-actor terms to stay small against the camera, not a claim that they do.
 
 A drive at Arapahoe's full population -- 305 to about 440 vehicles drawn -- measured 0.43× real time
 on 2026-10-01 (0.4327× over 1,433 s of wall clock, 12,400 ticks of t = 780–1,400 s, one 1920×1080
-camera at 1,500 m recording at 2 Hz; worst 5 s window 0.35× at the population peak). Per tick, about
-30 ms was the drive's own work and 5.4 ms SUMO's step; the rest, about 80 ms, was the server's tick
-and render, and how that splits between drawing the vehicles and drawing the view is not yet
-measured. That is the cost of drawing what the scenario holds, and it stays the default. For a run whose operator would rather have speed than every
-vehicle in every picture, two controls trade some fidelity for it. Both are off unless a run sets
-them, neither is recommended for any scenario, and neither is sized here: this section owns the cost
-of what is drawn, and **no measured speed-up from either exists yet**, so none is claimed.
+camera at 1,500 m recording at 2 Hz; worst 5 s window 0.35× at the population peak). That run's
+machine state was not recorded, and the 2026-10-02 trials below show it matters. That is the cost of
+drawing what the scenario holds, and it stays the default. For a run whose operator would rather have
+speed than every vehicle in every picture, two controls trade some fidelity for it. Both are off
+unless a run sets them, and neither is recommended for any scenario; what each buys was measured on
+2026-10-02 (§4.3.3).
 
 | Control | What it saves | What it costs the corpus |
 |---|---|---|
 | **Draw distance** (`capture.draw_distance_m`, `run_sumo_drive.py --draw-distance`; [`03`](03_CoSimulation_Runtime.md) §8.3.3, D3.41) | The renderer's work on every mesh and lamp of a body farther than the distance from each camera -- its draw calls, its shadow casting, its lamps' light -- per view, every camera at once. Nothing else: every body is still posed in the batch every tick and serialised by the world observer, and SUMO's step is unchanged | Nothing in the truth: every vehicle keeps its body, pose and record. A camera's image lacks the vehicles beyond the distance, and that camera's sidecar marks each one ([`06`](06_Truth_And_Annotation.md) D6.39) |
 | **A limit on which vehicles get a body** (`capture.render_set` circle or cameras, `capture.render_cap`; `run_sumo_drive.py --render-set`, `--capacity`; [`03`](03_CoSimulation_Runtime.md) §8.3.2, D3.42) | Per left-out vehicle and per tick, everything the per-drawn-actor table above charges: its transform and velocity writes in the batch, its world-observer entry, its rendering; and the bodies the pool never has to spawn. SUMO's step is unchanged: every vehicle stays subscribed (`D10.6`), so a vehicle admitted part-way through its drive is drawn where it would be with no limit | A vehicle outside the limit has no body and no imagery-side truth, and is counted ([`06`](06_Truth_And_Annotation.md) D6.40). Under a binding capacity the scene's density is the limit's, not the scenario's |
 
-**Measure before relying on either.** The pace each buys on Arapahoe is M2's measurement taken again
-with the control set; until it is taken, a run that sets one is a run whose speed is unknown and
-whose content is known to be reduced. Whether the per-actor game-thread terms or the pixels dominate
-a full-population tick decides which of the two can help, and that is exactly what M2 has not yet
-measured.
+#### 4.3.3 What a full-population tick costs, and what each control buys (measured 2026-10-02)
+
+**Method.** Every trial drove the same Arapahoe traffic (SUMO seed 42) over the same simulated minute,
+t = 780–840 s (about 325 live vehicles), unpaced, 1,200 ticks of 0.05 s, varying one thing against a
+control, on the owner's workstation (i7-12700K: 8 P-cores with 16 threads and 4 E-cores; RTX 5090).
+CPU package power, clock and per-core load were sampled once a second from Windows' counters, and the
+GPU's from `nvidia-smi`. A tick's wall time is 50 ms ÷ pace. The harness is a scratch script, not
+part of the repository; its trial definitions are the rows below.
+
+**The machine's power mode moved the result more than any control did.** The suite was run twice.
+Under Windows' Balanced power mode, 60 s into the 1,500 m camera trial the pace fell from 0.66× to
+0.54× as the CPU clock, its power, its load and the GPU's clock all fell together, and every later
+trial ran in that state (an average clock of about 3.9 GHz against 4.6). The CPU drew 35–60 W against
+its 125 W limit, so no power limit was hit; the idle server, a headless `-game` process with no
+window, was seen using 3.5 logical processors with the four E-cores 93% busy and the P-cores 15%. With
+the power mode set to Best performance the clock held about 4.6 GHz with the E-cores about 11% busy
+in every trial and no slowdown occurred (the server was also restarted between the two suites). A
+synchronous tick is a relay -- the drive's poses, the batch round trip, the server's tick and render,
+the snapshot back, SUMO's step -- each leg mostly on one thread, so 25–35% total CPU load on 20 logical
+processors is not spare capacity, and a move to slower cores costs directly. **Every pace figure must
+state the machine's power mode and per-core load.**
+
+| Trial (Best performance) | Compared with | Pace | ms per tick | Bodies |
+|---|---|---|---|---|
+| No camera | -- | 0.785× | 63.7 | 325 |
+| 1920×1080 camera straight down from 1,500 m | -- | 0.715× | 69.9 | 325 |
+| The same from 500 m | -- | 0.714× | 70.0 | 324 |
+| 300 m up, 300 m back, 45° down | -- | 0.694× | 72.0 | 325 |
+| Draw distance 1,650 m, from 1,500 m | 1,500 m camera | 0.701× | 71.3 | 325 (~92 not drawn per frame) |
+| Draw distance 500 m, oblique | oblique camera | 0.692× | 72.3 | 325 (~220 not drawn per frame) |
+| Cameras' footprints, from 500 m | 500 m camera | 0.958× | 52.2 | 158 |
+| Circle of 500 m about the map centre | 1,500 m camera | 1.047× | 47.8 | 188 |
+| Capacity 200 | 1,500 m camera | 1.057× | 47.3 | 200 |
+
+Under Balanced the same trials ran 6–40% slower (the 1,500 m camera 0.625×, capacity 200 0.762×).
+
+**What the table says.**
+
+- **The draw distance buys nothing measurable.** Both trials left vehicles that were in view out of
+  the picture -- a pixel difference against the control's frame of the same instant shows each marked
+  vehicle absent and nothing else changed -- and neither ran faster. Drawing a vehicle is cheap. (A
+  first oblique trial at 800 m is void: that camera sees no farther than about 660 m.)
+- **The vehicles are most of a tick.** Each costs about **0.17 ms per tick** along the whole chain, so
+  about 55 ms of a 70 ms tick at 325 vehicles; two points and a rough figure. The limits on which
+  vehicles get a body buy 34–48% by removing that work, and remove the vehicles from the truth with it.
+  The cameras' footprints cost more than their body count suggests (158 bodies, slower than 200 under
+  a capacity), presumably the churn of bodies admitted and released at the footprint's edge.
+- **The camera costs about 6 ms per tick averaged over every tick**, and its height and angle barely
+  matter. It renders on one tick in ten (`sensor_tick` 0.5 s), so either a frame costs about 60 ms or
+  the camera costs something on ticks it does not capture; which is not measured.
+
+**What is not yet known.** The drive's `bridge cost` clock covers its pose computation **and** the
+`apply_batch` round trip, so it includes the server applying about 650 commands on its game thread;
+the remainder of a tick includes, besides the server's tick and render, the drive's own checks after
+each frame arrives. So the 0.17 ms is split between the drive, the RPC transport and encoding, and the
+server's game thread in proportions not measured. Loopback bandwidth is not the constraint: a tick
+carries tens of kilobytes each way, and frames come two per simulated second, about 10 MB per
+wall-clock second. The next measurements are per-leg timing in the drive and M3's Unreal Insights
+capture of the server (§9).
+
+**Options recorded, not pursued** (the owner halted this line on 2026-10-02):
+
+- Opt the server out of Windows' power throttling at startup (`SetProcessInformation`,
+  `ProcessPowerThrottling`), so a run is fast whatever the power mode.
+- Spread the per-vehicle work across worker threads started at launch and held on condition signals
+  (the owner's suggestion), in the drive, the server, or both.
+- Move the SUMO coupling into the CARLA plugin, or a plugin of its own, so poses are computed and
+  applied in-process with no batch round trip (the owner's suggestion; SUMO and the plugin are C++).
+- Compute poses on the GPU: assessed as unpromising while the cost is per-actor plumbing rather than
+  arithmetic (a pose's height lookup was measured at 0.557 µs, §3.4), unless the vehicles stop
+  being individual actors -- GPU instancing -- which gives up actor ids, the world-observer entries the
+  truth is built from, per-vehicle lamps and per-actor segmentation.
+- Stop the three per-tick `GetSolarState` sweeps of the actor list (§4.7.2), which scale with the
+  vehicle count while the sun does not change.
 
 ### 4.4 RPC round trips per tick
 
@@ -1857,7 +1926,7 @@ them.
 | Rank | # | Question | Cheapest probe | What it decides | Cost |
 |---|---|---|---|---|---|
 | **1** | **M1** | **Does `sensor_tick` remove the render and readout of discarded frames, or only the enqueue?** | Spawn the existing rig twice — once as today, once with `sensor_tick` set to the capture period — and difference the clock ratio using the method of §4.1 (capture `tEXt` tick vs. filename wall clock). **No new instrumentation: the data is already in every PNG.** | The clock ratio, and therefore the wall-clock cost of every window in the plan. Potentially **an order of magnitude.** Nothing else in this document is worth as much. | Two short runs |
-| **2** | **M2** | **What is the pace of a drive at Arapahoe's full population?** Peak 437, median 336 live vehicles: ticks per wall-second, and what a tick costs at that population. | A SUMO drive of Arapahoe Underpass across its busiest span with the camera configuration held fixed, reading the clock ratio from capture metadata by the method of §4.1. The three per-tick `GetSolarState` actor sweeps of §4.7.2 scale with the actor count and are inside the figure. | The wall-clock budget (§4.1) at the heaviest measured population, and whether the solar block in the world-observer header is a budget line or a rounding error. **It sets no limit**: every vehicle is drawn whatever it returns. | One run |
+| **2** | **M2** | **Measured 2026-10-02 (§4.3.3).** **What is the pace of a drive at Arapahoe's full population?** Peak 437, median 336 live vehicles: ticks per wall-second, and what a tick costs at that population. | A SUMO drive of Arapahoe Underpass across its busiest span with the camera configuration held fixed, reading the clock ratio from capture metadata by the method of §4.1. The three per-tick `GetSolarState` actor sweeps of §4.7.2 scale with the actor count and are inside the figure. | The wall-clock budget (§4.1) at the heaviest measured population, and whether the solar block in the world-observer header is a budget line or a rounding error. **It sets no limit**: every vehicle is drawn whatever it returns. | One run |
 | **3** | **M3** | **What does the per-tick `apply_batch` cost on the game thread at full population?** | Taken on M2's drive: an Unreal Insights capture of the same span (`FWorldObserver::BroadcastTick` already carries a trace scope, §4.7.2) separates the batch's visitor dispatches from the world-observer per-actor loop and the camera. | Whether a tick at full population is set by the pose write or by the camera — which decides how much of M1's win an Arapahoe-sized window actually gets. | Taken on M2's drive |
 | **4** | **M9** | **Does the engine's sun agree with the model §3.5 is built on?** Set a known epoch, read `get_solar_state`, and compare `sun_elevation_deg` against the NOAA model at the same instant, at the sizing site, at three dates and at 06:00 / 07:00 / 17:00 / 23:00. | One RPC per point. **Twelve RPCs and no rendering.** | **The entire window recommendation, `D10.14`.** §3.5 is a model of what `CesiumSunSky` will produce, not a reading of it; if the engine disagrees — through the 14.72-minute time-zone gap of §3.5.3, through a rounding defect, or through anything else — the windows are placed on the wrong sun and the low-sun ones are placed on the wrong side of the horizon. **This is the cheapest high-consequence measurement in the document.** | Minutes |
 | **5** | **M7** | **What does an advancing sun cost on the render thread?** §4.7.3 reads from source that the VSM directional clipmap cache is invalidated on every frame in which the light direction changes; the magnitude is unknown. | **`r.Shadow.Virtual.Cache.ForceInvalidateDirectional` 1 versus 0**, sun frozen in both, everything else identical, differencing the clock ratio. Epic added the cvar for exactly this purpose (`VirtualShadowMapClipmap.cpp:23-27`). **No code change, no scenario change, no SUMO.** Run it on Gardnerville, where 51 vehicles leave the frame uncontended. Capture the `SkyAtmosphere` LUT pass count in the same trace to settle §4.7.3's atmosphere caveat at no extra cost. | Whether the *advancing* solar policy is affordable on a long window. It does **not** gate the recommended plan, which freezes the sun on five windows of six — which is why it is rank 5 and not rank 1 despite being the cheapest probe here. | One cvar sweep |
