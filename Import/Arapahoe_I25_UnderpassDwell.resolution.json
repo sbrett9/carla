@@ -6,7 +6,7 @@
     "scenario_name": "Arapahoe I-25 underpass dwell",
     "description": "One marked vehicle enters northbound on I-25, leaves at the Arapahoe interchange, runs west on Arapahoe Road and north up South Yosemite Street, waits 30 minutes under the Yosemite Street bridge and leaves north on I-25, among heavy freeway traffic with a wide spread of speeds, dense arterial traffic heavy in vans and trucks, residential commuters on the west and south edges, and an incident closing 5 of the 6 northbound lanes for 3 minutes. Written by CarlaControl/scripts/make_arapahoe_scenario.py; edit that, not this.",
     "specification": "Arapahoe_I25_UnderpassDwell.scenario.json",
-    "specification_sha256": "38b4e0b1c5436865c24cc69a79bd05b5c203f7007183e6551a9da2b9eeb8ac8e",
+    "specification_sha256": "9b3508430dca72c7621754b543d02deedbbd37ffba54ac18dceb355cabf1b622",
     "spec_version": 1
   },
   "findings": [
@@ -159,7 +159,7 @@
   "world": {
     "package": "Arapahoe_I25.cwp",
     "map_name": "Arapahoe_I25",
-    "network_fingerprint": "ac83aa8b541158e60f012d185405ec20e5a924ff95f1a4609660ccd3a714191b",
+    "network_fingerprint": "ffe490b1ee677d5b48ac2350f3a579e8112f68155bbd80893eebd137c724bfdc",
     "netconvert_version": "Eclipse SUMO netconvert 1.27.0",
     "origin": [
       39.59431,
@@ -294,7 +294,7 @@
         {
           "edge": "907700111",
           "street": "South Valley Highway",
-          "length_m": 441.36,
+          "length_m": 452.92,
           "speed_mps": 29.06
         }
       ]
@@ -340,7 +340,7 @@
         {
           "edge": "1342047649",
           "street": "South Valley Highway",
-          "length_m": 106.59,
+          "length_m": 123.41,
           "speed_mps": 29.06
         }
       ]
@@ -1603,8 +1603,8 @@
         "37722913",
         "106308386"
       ],
-      "route_length_m": 2066.08,
-      "free_flow_s": 71.1,
+      "route_length_m": 2094.46,
+      "free_flow_s": 72.1,
       "stops": [],
       "begin": {
         "authored": 0,
@@ -1844,13 +1844,15 @@
         "626534263",
         "223306870",
         "223207864#0",
+        "223207864#2",
+        "982413823",
         "1342047649",
         "1001791386",
         "37722913",
         "106308386"
       ],
-      "route_length_m": 1657.36,
-      "free_flow_s": 67.9,
+      "route_length_m": 1690.37,
+      "free_flow_s": 69.2,
       "stops": [],
       "begin": {
         "authored": 0,
@@ -2864,13 +2866,15 @@
         "626534263",
         "223306870",
         "223207864#0",
+        "223207864#2",
+        "982413823",
         "1342047649",
         "1001791386",
         "37722913",
         "106308386"
       ],
-      "route_length_m": 2488.68,
-      "free_flow_s": 135.8,
+      "route_length_m": 2521.69,
+      "free_flow_s": 137.1,
       "stops": [],
       "begin": {
         "authored": 0,
@@ -2953,13 +2957,15 @@
         "626534263",
         "223306870",
         "223207864#0",
+        "223207864#2",
+        "982413823",
         "1342047649",
         "1001791386",
         "37722913",
         "106308386"
       ],
-      "route_length_m": 2723.46,
-      "free_flow_s": 145.3,
+      "route_length_m": 2756.47,
+      "free_flow_s": 146.6,
       "stops": [],
       "begin": {
         "authored": 0,
@@ -3137,13 +3143,15 @@
         "626534263",
         "223306870",
         "223207864#0",
+        "223207864#2",
+        "982413823",
         "1342047649",
         "1001791386",
         "37722913",
         "106308386"
       ],
-      "route_length_m": 2467.84,
-      "free_flow_s": 137.1,
+      "route_length_m": 2500.85,
+      "free_flow_s": 138.4,
       "stops": [],
       "begin": {
         "authored": 0,
@@ -3228,13 +3236,15 @@
         "626534263",
         "223306870",
         "223207864#0",
+        "223207864#2",
+        "982413823",
         "1342047649",
         "1001791386",
         "37722913",
         "106308386"
       ],
-      "route_length_m": 2796.54,
-      "free_flow_s": 152.0,
+      "route_length_m": 2829.55,
+      "free_flow_s": 153.3,
       "stops": [],
       "begin": {
         "authored": 0,
@@ -3515,13 +3525,15 @@
         "626534263",
         "223306870",
         "223207864#0",
+        "223207864#2",
+        "982413823",
         "1342047649",
         "1001791386",
         "37722913",
         "106308386"
       ],
-      "route_length_m": 2638.98,
-      "free_flow_s": 147.2,
+      "route_length_m": 2671.99,
+      "free_flow_s": 148.5,
       "stops": [],
       "begin": {
         "authored": 0,
@@ -3612,13 +3624,15 @@
         "626534263",
         "223306870",
         "223207864#0",
+        "223207864#2",
+        "982413823",
         "1342047649",
         "1001791386",
         "37722913",
         "106308386"
       ],
-      "route_length_m": 2667.82,
-      "free_flow_s": 140.2,
+      "route_length_m": 2700.83,
+      "free_flow_s": 141.5,
       "stops": [],
       "begin": {
         "authored": 0,
@@ -3768,13 +3782,15 @@
         "626534263",
         "223306870",
         "223207864#0",
+        "223207864#2",
+        "982413823",
         "1342047649",
         "1001791386",
         "37722913",
         "106308386"
       ],
-      "route_length_m": 2678.3,
-      "free_flow_s": 140.9,
+      "route_length_m": 2711.31,
+      "free_flow_s": 142.2,
       "stops": [],
       "begin": {
         "authored": 0,
@@ -4443,7 +4459,7 @@
     "scenario_name": "Arapahoe I-25 underpass dwell",
     "spec_version": 1,
     "specification": "Arapahoe_I25_UnderpassDwell.scenario.json",
-    "specification_sha256": "38b4e0b1c5436865c24cc69a79bd05b5c203f7007183e6551a9da2b9eeb8ac8e",
+    "specification_sha256": "9b3508430dca72c7621754b543d02deedbbd37ffba54ac18dceb355cabf1b622",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
       "version": "1.0.0"
@@ -4451,7 +4467,7 @@
     "files": {
       "routes": {
         "path": "Arapahoe_I25_UnderpassDwell.rou.xml",
-        "sha256": "cb639883eacc8c504c7811c3846694440298200e208cd5aee6c8aaa2f3215edd"
+        "sha256": "728d66ea19a2378b08ffbc090ce294fbfba5117fbcf735b80bc4b136fcff21b6"
       },
       "config": {
         "path": "Arapahoe_I25_UnderpassDwell.sumocfg",
@@ -4459,7 +4475,7 @@
       },
       "network": {
         "path": "Arapahoe_I25.net.xml",
-        "sha256": "d119b924ee54a872396b9b7a30b70d9f5156fca136886431eda2b3cb1d4c68cc"
+        "sha256": "69308e72de1d393178221fc9371469041d0adb747d925fefd248f276fbd0523a"
       },
       "additional": {
         "path": "Arapahoe_I25_UnderpassDwell.add.xml",
@@ -4467,13 +4483,13 @@
       },
       "supervision": {
         "path": "Arapahoe_I25_UnderpassDwell.supervision.json",
-        "sha256": "e0b9fee134b626810acbce3026ef7b045d3966158c84be5353ba3000fa6b40e9"
+        "sha256": "a376dccc10a7c80d863819594f685853cf39481181cd1253dafdd90b9ffb3c52"
       }
     },
     "world": {
       "package": "Arapahoe_I25.cwp",
       "map_name": "Arapahoe_I25",
-      "network_fingerprint": "ac83aa8b541158e60f012d185405ec20e5a924ff95f1a4609660ccd3a714191b",
+      "network_fingerprint": "ffe490b1ee677d5b48ac2350f3a579e8112f68155bbd80893eebd137c724bfdc",
       "netconvert_argv": [
         "--osm-files",
         "G:\\Projects\\CarlaUE_5_7_4\\carla\\Build\\sumo-smoketest\\Arapahoe_I25_clipped.osm",
@@ -4498,6 +4514,10 @@
         "--junctions.join",
         "--tls.default-type",
         "actuated",
+        "--junctions.join-exclude",
+        "2279085566,582784737,582785322,9559187336",
+        "--tllogic-files",
+        "<tllogic-files>",
         "--output-file",
         "<output-file>",
         "--junctions.join-dist",
@@ -4510,7 +4530,7 @@
         "true"
       ],
       "netconvert_version": "Eclipse SUMO netconvert 1.27.0",
-      "opendrive_sha256": "e4d4c7dfa78c969846794b6cf583b509374d61e3ca469c48e9ed570ec780c448",
+      "opendrive_sha256": "67157d5d2f52361a4570fcad34d2296c0c01443ad94b3253901c82ce8b3815be",
       "source_osm_sha256": "f366f0d0e615ad4a663d93d672b8a95589ed3d8e58bdb60b146a423aabf2cecc",
       "origin_latitude": 39.59431,
       "origin_longitude": -104.88449,
