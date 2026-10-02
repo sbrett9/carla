@@ -12,10 +12,29 @@ namespace CarlaNet.CoSim;
 /// angle is not.
 /// </param>
 /// <param name="SpeedMetresPerSecond">Speed, interpolated linearly so it ramps as SUMO's did.</param>
-/// <param name="Case">Which of the four cases produced it.</param>
+/// <param name="Case">Which of the cases produced it.</param>
+/// <param name="LaneId">
+/// The lane the front bumper is on at this instant: the lane of the route the interpolation walked
+/// that the point was evaluated on, which through a junction is the connector rather than either
+/// reported lane. Through a lane change -- inside an edge, or onto the lane beside the one a connector
+/// feeds -- it is whichever of the two lanes the sideways blend is nearer, and the two run alongside
+/// each other on one road. Empty where the vehicle is on no lane: parked off it, or pulling into or out
+/// of the stop.
+/// </param>
+/// <param name="LanePositionMetres">
+/// How far along <paramref name="LaneId"/> the front bumper is, against the lane's declared length as
+/// TraCI reports a lane position.
+/// </param>
+/// <remarks>
+/// The lane is carried because the pose's height comes from the road the vehicle is on, and SUMO's
+/// position alone does not say which road that is where two cross at different levels: the deck and
+/// the road beneath it share their plan position.
+/// </remarks>
 public readonly record struct InterpolatedState(
     double X,
     double Y,
     double HeadingDegrees,
     double SpeedMetresPerSecond,
-    LaneInterpolationCase Case);
+    LaneInterpolationCase Case,
+    string LaneId = "",
+    double LanePositionMetres = 0.0);

@@ -345,6 +345,49 @@ public sealed class LaneArcInterpolatorTests
         Assert.DoesNotContain("ticks", lines[1]);
     }
 
+    [Fact]
+    public void TheLaneTheBumperIsOnAndHowFarAlongItAreCarriedThroughEveryCase()
+    {
+        // The pose's height comes from the road the vehicle is on, so every interpolated state names the
+        // lane it was evaluated on and where along it -- not the two reported lanes.
+        var interpolator = Interpolator();
+
+        InterpolatedState along = interpolator.Interpolate(On("approach_0", 10.0), On("approach_0", 30.0), 0.5, 1.0);
+        Assert.Equal(("approach_0", 20.0), (along.LaneId, Math.Round(along.LanePositionMetres, 6)));
+
+        // A lane change within an edge: the lane the sideways blend is nearer, at the shared position.
+        InterpolatedState early = interpolator.Interpolate(On("approach_0", 40.0), On("approach_1", 65.0), 0.25, 1.0);
+        InterpolatedState late = interpolator.Interpolate(On("approach_0", 40.0), On("approach_1", 65.0), 0.75, 1.0);
+        Assert.Equal("approach_0", early.LaneId);
+        Assert.Equal("approach_1", late.LaneId);
+        Assert.Equal(46.25, early.LanePositionMetres, 6);
+
+        // Across a junction: on the connector in the middle of the step, at its own position.
+        CoSimVehicleFrame from = On("approach_0", 92.65 - 2.0, speed: 10.0);
+        CoSimVehicleFrame to = On("turn_east_0", 2.0, speed: 10.0);
+        double route = interpolator.RouteDistance(from, to)!.Value;
+        InterpolatedState inside = interpolator.Interpolate(from, to, 0.5, 1.0);
+        Assert.Equal(LaneInterpolationCase.CrossedEdges, inside.Case);
+        Assert.Equal(":centre_0_0", inside.LaneId);
+        Assert.Equal((0.5 * route) - 2.0, inside.LanePositionMetres, 6);
+        Assert.Equal("approach_0", interpolator.Interpolate(from, to, 0.0, 1.0).LaneId);
+        Assert.Equal("turn_east_0", interpolator.Interpolate(from, to, 1.0, 1.0).LaneId);
+
+        // Out of a junction onto the lane beside the one the connector feeds.
+        var exit = new LaneArcInterpolator(SumoRoadNetwork.Parse(ExitWithASecondLane));
+        InterpolatedState leaving = exit.Interpolate(On("approach_0", 35.0, speed: 20.0),
+                                                     On("exit_1", 5.0, speed: 20.0), 1.0, 1.0);
+        Assert.Equal(("exit_1", 5.0), (leaving.LaneId, Math.Round(leaving.LanePositionMetres, 6)));
+
+        // A discontinuity is placed at the later frame, on its lane.
+        InterpolatedState jumped = interpolator.Interpolate(On("turn_east_0", 10.0), On("approach_0", 12.0), 0.5, 1.0);
+        Assert.Equal(("approach_0", 12.0), (jumped.LaneId, jumped.LanePositionMetres));
+
+        // And a vehicle parked off its lane is on none.
+        InterpolatedState parked = interpolator.Interpolate(Parked(728.47, 1394.75), Parked(728.47, 1394.75), 0.5, 1.0);
+        Assert.Equal(string.Empty, parked.LaneId);
+    }
+
     private static LaneArcInterpolator Interpolator() =>
         new(SumoRoadNetwork.Load(CoSimFixtures.RightAngleTurnNetwork));
 
