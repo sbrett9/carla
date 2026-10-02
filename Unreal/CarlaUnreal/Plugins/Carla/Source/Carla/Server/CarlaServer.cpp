@@ -28,8 +28,10 @@
 #include "Carla/Actor/RenderSetMembership.h"
 #include "CarlaServerResponse.h"
 #include "Carla/Util/BoundingBoxCalculator.h"
+#include "Components/LightComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "GameFramework/Actor.h"
 
 #include <util/disable-ue4-macros.h>
 #include <carla/Functional.h>
@@ -1594,6 +1596,82 @@ void FCarlaServer::FPimpl::BindActions()
       Lent.VehicleTypeId = vehicle_type_ids[Index];
       Lent.AdmittedFrame = bSameVehicle ? Held.AdmittedFrame : NextFrame;
       View->SetRenderSetMembership(Lent);
+      ++Found;
+    }
+
+    return Found;
+  };
+
+  // Set how far from a camera the actors named are drawn: the max draw distance of every primitive
+  // component of each actor and of every actor attached to it, and of their light components, so
+  // nothing of a body farther than that from a view is rendered in that view, the light its lamps
+  // cast included. The renderer culls each primitive per view, by its own bounds, so the one setting
+  // applies to every camera at once: a primitive is not drawn in a view whose origin is farther than
+  // the distance from the nearest point of its bounding sphere, and a light is not drawn where its
+  // bounding sphere's centre is farther than it. r.ViewDistanceScale and
+  // r.LightMaxDrawDistanceScale, both 1 at the engine's defaults, scale the two.
+  //
+  // Rendering only: an actor keeps its transform, its collision and every other state, and the world
+  // observer reports it as before. A cull distance volume never touches these components, since it
+  // affects static primitives only and a vehicle's are movable.
+  //
+  // The distance is in metres, and zero clears it, so the components are drawn at any range. A
+  // co-simulation session sends it for the bodies its pool spawns, once each, and for every body
+  // when the distance changes. Answers how many of the named actors were found with an actor in the
+  // world to set it on.
+  BIND_SYNC(set_actors_max_draw_distance) << [this](
+      const std::vector<FCarlaActor::IdType> &actor_ids,
+      double max_draw_distance_m) -> R<uint32_t>
+  {
+    REQUIRE_CARLA_EPISODE();
+    if (!FMath::IsFinite(max_draw_distance_m) || max_draw_distance_m < 0.0)
+    {
+      RESPOND_ERROR("set_actors_max_draw_distance: the distance is zero, for no limit, or a positive number of metres");
+    }
+
+    // Unreal measures in centimetres.
+    const float DistanceCm = static_cast<float>(max_draw_distance_m * 100.0);
+    uint32_t Found = 0u;
+    for (const FCarlaActor::IdType Id : actor_ids)
+    {
+      FCarlaActor* View = Episode->FindCarlaActor(Id);
+      AActor* Actor = View != nullptr ? View->GetActor() : nullptr;
+      if (!IsValid(Actor))
+      {
+        continue;
+      }
+
+      // The actor and everything attached to it, which travels with it and is drawn with it.
+      TArray<AActor*> Drawn;
+      Actor->GetAttachedActors(Drawn, true, true);
+      Drawn.Add(Actor);
+      for (AActor* Each : Drawn)
+      {
+        if (!IsValid(Each))
+        {
+          continue;
+        }
+
+        TArray<UPrimitiveComponent*> Primitives;
+        Each->GetComponents<UPrimitiveComponent>(Primitives);
+        for (UPrimitiveComponent* Primitive : Primitives)
+        {
+          if (Primitive != nullptr)
+          {
+            Primitive->SetCullDistance(DistanceCm);
+          }
+        }
+
+        TArray<ULightComponent*> Lights;
+        Each->GetComponents<ULightComponent>(Lights);
+        for (ULightComponent* Light : Lights)
+        {
+          if (Light != nullptr)
+          {
+            Light->SetMaxDrawDistance(DistanceCm);
+          }
+        }
+      }
       ++Found;
     }
 

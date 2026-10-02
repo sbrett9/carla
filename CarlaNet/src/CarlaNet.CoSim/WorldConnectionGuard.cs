@@ -62,12 +62,24 @@ internal sealed class WorldConnectionGuard : ICarlaWorld
         Guard(nameof(WriteRenderSet), () => _world.WriteRenderSet(lent, parked));
 
     /// <inheritdoc/>
+    public DrawDistanceWrite WriteDrawDistance(IReadOnlyList<ActorId> bodies, double metres) =>
+        Guard(nameof(WriteDrawDistance), () => _world.WriteDrawDistance(bodies, metres));
+
+    /// <inheritdoc/>
     public Transform? ObservedTransform(ActorId actor) =>
         Guard(nameof(ObservedTransform), () => _world.ObservedTransform(actor));
 
     /// <inheritdoc/>
     public Vector3D? ObservedVelocity(ActorId actor) =>
         Guard(nameof(ObservedVelocity), () => _world.ObservedVelocity(actor));
+
+    /// <inheritdoc/>
+    public Transform? ObservedTransformAt(ActorId actor, ulong frame) =>
+        Guard(nameof(ObservedTransformAt), () => _world.ObservedTransformAt(actor, frame));
+
+    /// <inheritdoc/>
+    public CameraOptics? DescribeCamera(ActorId camera) =>
+        Guard(nameof(DescribeCamera), () => _world.DescribeCamera(camera));
 
     /// <inheritdoc/>
     public ulong? Tick() => Guard(nameof(Tick), _world.Tick);

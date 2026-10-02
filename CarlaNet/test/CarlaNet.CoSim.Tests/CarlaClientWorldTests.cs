@@ -105,6 +105,94 @@ public sealed class CarlaClientWorldTests : IAsyncLifetime
     }
 
     [Fact]
+    public void A_Draw_Distance_Reaches_The_Server_As_The_Bodies_Named_And_A_Double_Of_Metres()
+    {
+        // The server binds (std::vector<uint32>, double): the ids as an array of unsigned integers and
+        // the distance as a msgpack float64, which is what a C# double is written as.
+        List<(uint[] Bodies, object Metres)> sent = [];
+        _server!.RegisterHandler<uint[], object, SuccessResponse<uint>>(
+            "set_actors_max_draw_distance", (bodies, metres) =>
+            {
+                sent.Add((bodies, metres));
+                return Ok((uint)bodies.Length - 1);
+            });
+        CarlaClientWorld world = CarlaClientWorld.Attach(_client!, startWorldObserver: false);
+
+        DrawDistanceWrite written = world.WriteDrawDistance([7u, 9u, 11u], 250.0);
+
+        Assert.True(written.Taken);
+        Assert.Equal(2, written.BodiesFound);
+        (uint[] bodies, object metres) = Assert.Single(sent);
+        Assert.Equal([7u, 9u, 11u], bodies);
+        Assert.Equal(250.0, Assert.IsType<double>(metres));
+
+        // Zero clears it, and goes as a double too.
+        world.WriteDrawDistance([7u], 0.0);
+        Assert.Equal(0.0, Assert.IsType<double>(sent[^1].Metres));
+    }
+
+    [Fact]
+    public void A_Server_Without_The_Draw_Distance_Call_Is_A_Refusal_Carrying_Its_Words()
+    {
+        // A server built before it carried the call: the stand-in has no handler for it, and answers
+        // with an error as the CARLA server does.
+        CarlaClientWorld world = CarlaClientWorld.Attach(_client!, startWorldObserver: false);
+
+        DrawDistanceWrite written = world.WriteDrawDistance([7u], 250.0);
+
+        Assert.False(written.Taken);
+        Assert.Equal(0, written.BodiesFound);
+        Assert.Contains("set_actors_max_draw_distance", written.Refusal);
+    }
+
+    [Fact]
+    public void A_Draw_Distance_That_Is_Not_Zero_Or_Positive_Is_Never_Sent()
+    {
+        int calls = 0;
+        _server!.RegisterHandler<uint[], double, SuccessResponse<uint>>(
+            "set_actors_max_draw_distance", (_, _) =>
+            {
+                calls++;
+                return Ok(0u);
+            });
+        CarlaClientWorld world = CarlaClientWorld.Attach(_client!, startWorldObserver: false);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => world.WriteDrawDistance([7u], -1.0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => world.WriteDrawDistance([7u], double.NaN));
+        Assert.Equal(0, calls);
+    }
+
+    [Fact]
+    public void A_Camera_Is_Described_From_The_Attributes_The_Server_Gives_It()
+    {
+        // The session reads a camera it is told to follow with one get_actors_by_id, asked with a
+        // collection expression -- which once failed at serialisation and refused a capture run placing
+        // its first camera, and now reaches the server as the ids given.
+        List<uint[]> asked = [];
+        _server!.RegisterHandler<uint[], SuccessResponse<Actor[]>>("get_actors_by_id", ids =>
+        {
+            asked.Add(ids);
+            return Ok(ids.Where(id => id is 41u or 42u).Select(id => new Actor(
+                id, 0u,
+                new ActorDescription(id, id == 41u ? "sensor.camera.rgb" : "vehicle.fuso.mitsubishi",
+                    id == 41u
+                        ? [
+                            new ActorAttributeValue("image_size_x", ActorAttributeType.Int, "1280"),
+                            new ActorAttributeValue("image_size_y", ActorAttributeType.Int, "720"),
+                            new ActorAttributeValue("fov", ActorAttributeType.Float, "90"),
+                        ]
+                        : [new ActorAttributeValue("number_of_wheels", ActorAttributeType.Int, "4")]),
+                new BoundingBox(), [], [])).ToArray());
+        });
+        CarlaClientWorld world = CarlaClientWorld.Attach(_client!, startWorldObserver: false);
+
+        Assert.Equal(new CameraOptics(1280, 720, 90.0), world.DescribeCamera(41u));
+        Assert.Null(world.DescribeCamera(42u));
+        Assert.Null(world.DescribeCamera(43u));
+        Assert.Equal([[41u], [42u], [43u]], asked);
+    }
+
+    [Fact]
     public void A_Body_Is_Spawned_Under_The_Role_It_Is_Given_In_Place_Of_The_Blueprint_s_Default()
     {
         CarlaClientWorld world = CarlaClientWorld.Attach(_client!, startWorldObserver: false);

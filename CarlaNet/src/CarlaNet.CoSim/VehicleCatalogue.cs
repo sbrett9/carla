@@ -90,6 +90,24 @@ public sealed class VehicleCatalogue
     /// <summary>Every blueprint the catalogue holds a successful measurement for.</summary>
     public IReadOnlyCollection<string> MeasuredBlueprintIds => _measured.Keys;
 
+    /// <summary>
+    /// The longest measured body, metres; zero where nothing was measured. The length a camera's range
+    /// cap is computed for under the optional render set that follows the cameras.
+    /// </summary>
+    public double LongestBodyMetres =>
+        _measured.Count == 0 ? 0.0 : _measured.Values.Max(extent => extent.LengthMetres);
+
+    /// <summary>
+    /// The farthest any measured body reaches from the centre of its front bumper, the point SUMO
+    /// reports a vehicle at: its rear corners, a length back and half a width across. Zero where nothing
+    /// was measured.
+    /// </summary>
+    public double BodyReachMetres =>
+        _measured.Count == 0
+            ? 0.0
+            : _measured.Values.Max(extent => Math.Sqrt((extent.LengthMetres * extent.LengthMetres)
+                                                       + (extent.WidthMetres * extent.WidthMetres / 4.0)));
+
     /// <summary>Read a catalogue from disk, as the blueprint sweep wrote it.</summary>
     public static VehicleCatalogue Load(string path)
     {

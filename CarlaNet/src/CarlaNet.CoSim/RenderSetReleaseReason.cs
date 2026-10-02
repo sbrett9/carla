@@ -2,9 +2,12 @@ namespace CarlaNet.CoSim;
 
 /// <summary>Why a vehicle stopped holding a rendered actor.</summary>
 /// <remarks>
-/// Recorded rather than inferred. Every vehicle SUMO has is rendered, so a track ends only because
-/// SUMO removed the vehicle or the session stopped rendering, and a consumer has to know which: a
-/// vehicle that reached its destination and a capture that ended around it look alike in the imagery.
+/// Recorded rather than inferred. By default every vehicle SUMO has is rendered, so a track ends only
+/// because SUMO removed the vehicle or the session stopped rendering, and a consumer has to know which:
+/// a vehicle that reached its destination and a capture that ended around it look alike in the
+/// imagery. Under an optional limit a track can also end because the vehicle left the circle or every
+/// camera's footprint, or ranked out under a capacity -- each its own reason, because a track that
+/// stops mid-scene for the limit means something different from one whose vehicle arrived.
 /// </remarks>
 public enum RenderSetReleaseReason
 {
@@ -28,4 +31,17 @@ public enum RenderSetReleaseReason
     /// its own reason so a consumer can count the tracks that end that way rather than infer them.
     /// </remarks>
     Vanished,
+
+    /// <summary>
+    /// Under an optional limit, the render-set predicate stopped holding for it: it left the circle, or
+    /// every camera's footprint and its margin, and stayed out for the policy's release lag. SUMO still
+    /// has it; it holds no body from here.
+    /// </summary>
+    LeftTheRegion,
+
+    /// <summary>
+    /// Under an optional capacity, more vehicles passed the predicate than the capacity allows, and
+    /// this one ranked out. SUMO still has it; it holds no body from here.
+    /// </summary>
+    Capacity,
 }

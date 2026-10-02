@@ -13,8 +13,10 @@ session stood in for:
 * the session is handed no per-vehicle callback it does not need, in either view: the worst
   divergence comes off the session's report, so nothing crosses into Python per vehicle per tick
   while a window thread in the same process holds the interpreter;
-* nothing the session is handed limits which vehicles are rendered, and the options that once did
-  are gone from the command line: every vehicle SUMO has is drawn.
+* by default nothing the session is handed limits which vehicles are rendered: every vehicle SUMO
+  has is drawn. The optional limits -- a circle, the cameras, a capacity -- reach the session only
+  when asked for, the flown camera is registered with the session only under the cameras, and a free
+  view over a circle smaller than the world is told so.
 """
 from __future__ import annotations
 
@@ -213,21 +215,115 @@ def test_the_session_is_handed_no_per_vehicle_divergence_callback(drive, monkeyp
     assert (world.drive_arguments["on_pose"] is None) == (view == "free")
 
 
+def test_no_draw_distance_is_handed_to_the_session_unless_one_is_given(drive, monkeypatch, tmp_path):
+    # An optional performance control, off unless asked for.
+    world = _run_main(drive, monkeypatch, tmp_path)
+    assert world.drive_arguments["draw_distance_m"] is None
+    world = _run_main(drive, monkeypatch, tmp_path, "--draw-distance", "400")
+    assert world.drive_arguments["draw_distance_m"] == 400.0
+
+
+def test_the_launch_says_what_a_draw_distance_does_and_what_it_leaves_alone(drive):
+    assert drive.describe_draw_distance(None) == "none; every body is drawn at any range"
+    said = drive.describe_draw_distance(400.0)
+    assert said.startswith("400 m, rendering only: every vehicle has its body, is posed and is in "
+                           "the truth")
+    assert "each capture's sidecar marks it" in said
+
+
 def test_a_world_with_no_staging_bounds_starts_the_flown_rig_over_carla_s_origin(drive):
     assert drive.world_centre(_StagedWorld(None)) == (0.0, 0.0)
 
 
-def test_nothing_the_session_is_handed_limits_which_vehicles_are_rendered(drive, monkeypatch,
-                                                                           tmp_path):
+def test_by_default_nothing_the_session_is_handed_limits_which_vehicles_are_rendered(
+        drive, monkeypatch, tmp_path):
     for view in ("fixed", "free"):
-        world = _run_main(drive, monkeypatch, tmp_path, "--view", view)
-        assert not {"region_centre", "admit_radius_m", "hysteresis_m", "capacity", "maximum_bodies",
-                    "render_set", "render_min_pixels", "render_admit_lead_s",
-                    "render_release_lag_s"} & set(world.drive_arguments), view
+        handed = _run_main(drive, monkeypatch, tmp_path, "--view", view).drive_arguments
+        assert handed["render_set"] == "all", view
+        assert (handed["capacity"], handed["region_radius_m"]) == (None, None), view
 
 
-@pytest.mark.parametrize("option", ["--capacity", "--maximum-bodies", "--region-radius",
-                                    "--render-set", "--render-release-lag"])
-def test_the_options_that_once_limited_the_render_set_are_gone(drive, monkeypatch, option):
+def test_an_optional_limit_reaches_the_session_as_given(drive, monkeypatch, tmp_path):
+    handed = _run_main(drive, monkeypatch, tmp_path, "--render-set", "cameras", "--region-x", "120",
+                       "--region-y", "-45", "--region-radius", "300", "--region-hysteresis", "25",
+                       "--capacity", "96", "--render-min-pixels", "3", "--render-admit-lead", "4",
+                       "--render-release-lag", "6").drive_arguments
+    assert handed["render_set"] == "cameras"
+    assert handed["region_centre"] == (120.0, -45.0)
+    assert (handed["region_radius_m"], handed["region_hysteresis_m"], handed["capacity"]) == \
+        (300.0, 25.0, 96)
+    assert (handed["render_min_pixels"], handed["render_admit_lead_s"],
+            handed["render_release_lag_s"]) == (3.0, 4.0, 6.0)
+
+
+@pytest.mark.parametrize("option", ["--maximum-bodies", "--render-max-speed"])
+def test_a_body_ceiling_and_a_speed_bound_are_not_options(drive, monkeypatch, option):
     with pytest.raises(SystemExit):
         _arguments(drive, monkeypatch, option, "1")
+
+
+def test_the_render_set_chooses_from_all_circle_and_cameras(drive, monkeypatch):
+    assert _arguments(drive, monkeypatch).render_set == "all"
+    assert _arguments(drive, monkeypatch, "--render-set", "circle").render_set == "circle"
+    with pytest.raises(SystemExit):
+        _arguments(drive, monkeypatch, "--render-set", "nearest")
+
+
+class _Following:
+    """A session's camera registration, as the free view uses it."""
+
+    def __init__(self) -> None:
+        self.added: list[int] = []
+        self.removed: list[int] = []
+
+    def AddCamera(self, camera: int) -> None:  # noqa: N802 -- the .NET member name
+        self.added.append(camera)
+
+    def RemoveCamera(self, camera: int) -> bool:  # noqa: N802 -- the .NET member name
+        self.removed.append(camera)
+        return True
+
+
+def test_the_flown_camera_is_followed_under_the_cameras_and_let_go_before_it_is_destroyed(drive):
+    session = _Following()
+    parts = drive.FreeViewParts()
+    torn_down: list[str] = []
+    parts.rig = SimpleNamespace(camera=SimpleNamespace(id=4121),
+                                cleanup=lambda: torn_down.append(f"rig, followed {session.removed}"))
+
+    parts.follow(session)
+    assert session.added == [4121]
+    parts.close()
+
+    assert session.removed == [4121]
+    assert torn_down == ["rig, followed [4121]"]
+
+
+def test_a_free_view_over_a_circle_smaller_than_the_world_is_told_how_to_take_it_all_in(
+        drive, monkeypatch, tmp_path, caplog):
+    package = tmp_path / "Gardnerville_Centerville_Lane.cwp"
+    with zipfile.ZipFile(package, "w") as archive:
+        archive.writestr("world.json", json.dumps(GARDNERVILLE))
+    args = _arguments(drive, monkeypatch, "--view", "free", "--render-set", "circle",
+                      "--region-radius", "400", package=package)
+
+    with caplog.at_level("INFO", logger="run_sumo_drive"):
+        drive.warn_of_an_uncovered_world(args)
+    assert "--region-x 0 --region-y -1 --region-radius 956" in caplog.text
+
+    caplog.clear()
+    with caplog.at_level("INFO", logger="run_sumo_drive"):
+        drive.warn_of_an_uncovered_world(_arguments(drive, monkeypatch, "--view", "free",
+                                                    package=package))
+    assert caplog.text == ""
+
+
+def test_the_launch_says_plainly_that_vehicles_outside_a_limit_are_not_in_carla(drive):
+    every = SimpleNamespace(RenderSetLimits=False, RenderSetPolicy="every vehicle SUMO has",
+                            SumoSeed=42)
+    circle = SimpleNamespace(RenderSetLimits=True, SumoSeed=42,
+                             RenderSetPolicy="circle of 300 m around (0, 0) in SUMO metres")
+    assert drive.describe_render_set(every) == "every vehicle SUMO has; SUMO runs under seed 42"
+    said = drive.describe_render_set(circle)
+    assert said.startswith("circle of 300 m around (0, 0) in SUMO metres; SUMO runs under seed 42")
+    assert "a vehicle outside it is simulated by SUMO and is not in CARLA" in said

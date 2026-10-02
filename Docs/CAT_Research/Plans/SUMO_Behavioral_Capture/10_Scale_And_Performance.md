@@ -18,6 +18,7 @@
 | 2026-09-21 | A subscription is charged inside the step unread, so the subscribed set is its own budget line (§4.5, `D10.6`). |
 | 2026-09-30 | Removed the render cap (`render_cap` 128, hard 192) and everything built on it: the render region and its radial-concentration analysis (§4.3.1, `D10.5`), the lead, lag and halo parameters (§8), and vehicle shedding (§7 rows 1–3, `shedding[]`, the rendered-fraction floor). The cap was never measured — M2 never ran — and the scenario is the only arbiter of population: every vehicle SUMO has is drawn, and a heavier scenario runs slower, never thinner. Added the compiled Bahonar scenario's measured population (§3.1.5); per-vehicle costs re-expressed against the measured populations; light-state cost taken from the whole-map rate; M2 redefined as the pace of a drive at Arapahoe's full population. |
 | 2026-10-01 | §4.3: a vehicle SUMO inserts is drawn from the frame SUMO first reports it in, where SUMO inserted it and moving, and on no frame before (`03` D3.6). |
+| 2026-10-02 | §4.3.2, `D10.12`, `D10.20`, `D10.21`: two optional performance controls an operator may choose to trade fidelity for speed, both off by default and neither a sizing rule nor a recommendation -- a draw distance, which changes only how far from a camera a body is drawn, and a limit on which vehicles get a body (a circle, the cameras' footprints, a capacity). Neither has a measured speed-up yet; `D10.4` and `D10.5` stay withdrawn. |
 
 ---
 
@@ -802,7 +803,8 @@ on no frame before (`03` D3.6). The population is the scenario's, and it is meas
 **170** with a median of **42** (§3.1.5); Arapahoe Underpass peaks at **437** with a median of **336**
 (§3.2). The only vehicles SUMO has in a window that are not drawn are those whose vType has no measured
 body (`no_blueprint`, `unknown_extent`): they are simulated and their truth is recorded, and they are
-never placed at a guessed size.
+never placed at a guessed size. That is the default and the only behaviour no run has to ask for; a run
+may choose one of two optional performance controls that trade fidelity for pace (§4.3.2).
 
 **What is demonstrated**, as information rather than as a limit.
 `carla/Build/SCTMV_recordings/SCTMV_2026.09.16_14.44.31.487.xml` — a file on disk, written by a real run —
@@ -847,6 +849,26 @@ per-actor terms to stay small against the camera, not a claim that they do.
 
 > **D10.5 — withdrawn 2026-09-30.** There is no render region: every vehicle SUMO has is drawn, wherever
 > it is.
+
+#### 4.3.2 Two optional performance controls
+
+Drives at Arapahoe's full population -- 350 to 460 vehicles -- have been seen to run at about 0.43× real
+time, an operator's observation rather than M2's measurement. That is the cost of drawing what the
+scenario holds, and it stays the default. For a run whose operator would rather have speed than every
+vehicle in every picture, two controls trade some fidelity for it. Both are off unless a run sets
+them, neither is recommended for any scenario, and neither is sized here: this section owns the cost
+of what is drawn, and **no measured speed-up from either exists yet**, so none is claimed.
+
+| Control | What it saves | What it costs the corpus |
+|---|---|---|
+| **Draw distance** (`capture.draw_distance_m`, `run_sumo_drive.py --draw-distance`; [`03`](03_CoSimulation_Runtime.md) §8.3.3, D3.41) | The renderer's work on every mesh and lamp of a body farther than the distance from each camera -- its draw calls, its shadow casting, its lamps' light -- per view, every camera at once. Nothing else: every body is still posed in the batch every tick and serialised by the world observer, and SUMO's step is unchanged | Nothing in the truth: every vehicle keeps its body, pose and record. A camera's image lacks the vehicles beyond the distance, and that camera's sidecar marks each one ([`06`](06_Truth_And_Annotation.md) D6.39) |
+| **A limit on which vehicles get a body** (`capture.render_set` circle or cameras, `capture.render_cap`; `run_sumo_drive.py --render-set`, `--capacity`; [`03`](03_CoSimulation_Runtime.md) §8.3.2, D3.42) | Per left-out vehicle and per tick, everything the per-drawn-actor table above charges: its transform and velocity writes in the batch, its world-observer entry, its rendering; and the bodies the pool never has to spawn. SUMO's step is unchanged: every vehicle stays subscribed (`D10.6`), so a vehicle admitted part-way through its drive is drawn where it would be with no limit | A vehicle outside the limit has no body and no imagery-side truth, and is counted ([`06`](06_Truth_And_Annotation.md) D6.40). Under a binding capacity the scene's density is the limit's, not the scenario's |
+
+**Measure before relying on either.** The pace each buys on Arapahoe is M2's measurement taken again
+with the control set; until it is taken, a run that sets one is a run whose speed is unknown and
+whose content is known to be reduced. Whether the per-actor game-thread terms or the pixels dominate
+a full-population tick decides which of the two can help, and that is exactly what M2 has not yet
+measured.
 
 ### 4.4 RPC round trips per tick
 
@@ -1889,7 +1911,7 @@ and M2's drive at full population already contains them.
 | **D10.9** | **The bare-earth plane is read as `array.array('f')` or a `numpy` view, not a tuple of Python floats.** Measured: 243.6 MB → 32.3 MB, 5.61 s → 0.011 s, identical semantics, one line at `SumoCotBridge.py:112` (§3.4). |
 | **D10.10** | **A capture window runs in synchronous mode with no other polling client attached.** In sync mode the server drains every client's pending requests on the game thread before advancing (`CarlaEngine.cpp:331-343`), so a second client's service time is added directly to the tick. A consumer needing world state reads the world-observer push stream, which costs no RPC (§4.4). |
 | **D10.11** | **The live CoT feed does not run on the tick thread in a SUMO-drive session.** [Issue #14](https://github.com/sbrett9/carla/issues/14) is a prerequisite of drawing every vehicle, not an adjacent concern: at Arapahoe's peak of 437 vehicles and 5 Hz it would put 2,185 serialisations and sends per second inside the tick (scaled; §4.3, M4). |
-| **D10.12** | **Every window records its achieved ticks per wall-second, its `sumo_population` beside the number of bodies drawn per admission pass, and its capture rate.** The clock ratio is measured to be non-constant (84%, 99%, 29.5% across sessions) and is recoverable today only by differencing PNG metadata against file timestamps; the two counts differ only by vehicles of a type with no measured body (§7). |
+| **D10.12** | **Every window records its achieved ticks per wall-second, its `sumo_population` beside the number of bodies drawn per admission pass, and its capture rate.** The clock ratio is measured to be non-constant (84%, 99%, 29.5% across sessions) and is recoverable today only by differencing PNG metadata against file timestamps; the two counts differ only by vehicles of a type with no measured body (§7), and, under an optional render-set limit a run chose, by the vehicles the limit left out, which each pass counts (§4.3.2). |
 | **D10.13** | **The analytic population model of §3.1.4 is the estimator for a scenario that has not been run; a scenario that will be captured is run.** At `κ = 1.5` it is an upper bound on peak concurrency and costs seconds; the run costs 140 s and is exact (§3.1.4). |
 | **D10.14** | **The recommended window plan for the sizing scenario is five imagery windows and one truth-only window, and the date is an explicit part of each window's declaration.** The 23:00 population regime is demoted to truth-only because the sun is 38–79° below the horizon there on **every** date; its imagery regime is re-placed onto 17:00 and 06:00, and the 07:00 peak is captured twice — on 21 December at +5.0° and on 21 June at +25.9° — because the date is a 21-degree illumination axis at constant population. **2.5 wall-clock hours and 90 GB at 1920 × 1080 ×2**, against 3.0 h and 108 GB for six imagery windows with no truth-only demotion at the same camera, spanning +1.8° to +37.6° of sun elevation instead of whatever noon happened to give (§4.2.4). |
 | **D10.15** | **Vehicle light state rides the existing per-tick `apply_batch` as deltas, and the batch cost of doing so is negligible.** Measured: ≈ 40 changed vehicles per tick over the whole map at 417 live on Arapahoe Underpass, the heaviest scenario → **+2.4% of batch bytes, zero extra round trips** (derived); the signals variable costs +0.12 ms of TraCI per step at 133 vehicles and +0.56 ms at 410. The per-actor RPC alternative is the vehicle-fade shape the team brief records as the heaviest client load on the server, and at ≈ 40 changes per tick it is ≈ 8 ms of a 50 ms tick spent on latency alone (§4.8). |
@@ -1897,6 +1919,8 @@ and M2's drive at full population already contains them.
 | **D10.17** | **A window whose sun is below the renderable threshold is demoted to a truth-only window, not rendered at reduced quality and not silently rendered dark.** SUMO runs the span alone at the measured 4,307× real time — 0.42 s of wall clock for 1,800 simulated seconds and zero bytes — and the behavioural truth is complete while the record states that the imagery is absent. Rendering it instead costs close to a lit window (the tick is pixel-rate work) and returns a frame with 8 of 256 tonal levels (§4.6, §7.1). |
 | **D10.18** | **The frozen solar policy is free and the advancing policy is not, and the difference is on the render thread.** Setting the sun does not stall the game thread (`RendererScene.cpp:3490-3495` is an enqueue), but this project enables virtual shadow maps (`DefaultEngine.ini:54`) whose directional clipmap cache keys on light direction (`VirtualShadowMapCacheManager.cpp:311`), so a sun whose direction changes is re-rendered uncached. Under a SUMO drive the written clock, and so the direction, changes once per whole second (once per 20 ticks at 0.05 s and rate 1); whether a rewrite of an unchanged clock keeps the cache is unmeasured. Magnitude unmeasured; **M7** is a two-value cvar sweep (§4.7.3). |
 | **D10.19** | **A window records its declared date, solar policy, sun elevation at open and close, and `vehicle_lights` setting alongside its achieved clock ratio.** Two windows identical in length, population, camera and resolution can legitimately differ in wall clock by an unattributable amount if the solar policy is not in the record. All four fields are already available at zero cost (§7). |
+| **D10.20** | **A draw distance is an optional performance control, off by default, and no sizing rule.** It saves rendering beyond the distance from each camera and nothing else, changes no vehicle's body, pose or truth, and is recorded with the run; this section recommends no value and claims no speed-up until one is measured (§4.3.2). |
+| **D10.21** | **A limit on which vehicles get a body is an optional performance control, off by default, and no sizing rule.** `D10.4` and `D10.5` stay withdrawn: every vehicle SUMO has is drawn unless a run chooses a circle, the cameras' footprints or a capacity, and a run that does is recorded as having chosen it, with what it left out counted. It saves per-drawn-actor work and none of SUMO's step; this section recommends no limit and claims no speed-up until one is measured (§4.3.2). |
 
 ---
 

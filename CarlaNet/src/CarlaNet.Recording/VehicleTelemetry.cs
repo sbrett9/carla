@@ -57,6 +57,21 @@ public sealed record VehicleTelemetry(
     public int ApparentHeightPx { get; init; }
 
     /// <summary>
+    /// Where the vehicle stood against the draw distance the recording camera's image was rendered
+    /// under: inside it, which is every vehicle of a run with none; partly beyond it; or wholly beyond
+    /// it, so the image does not show it although it is in the world (<see cref="DrawDistanceReach"/>).
+    /// Camera-relative, like <see cref="Occlusion"/>, so meaningful only on a record that travels with
+    /// a sensor pose.
+    /// </summary>
+    public DrawDistanceReach DrawDistance { get; init; }
+
+    /// <summary>
+    /// How far the centre of the vehicle's bounding box was from the recording camera, metres, where
+    /// a draw distance was in force; NaN otherwise. What <see cref="DrawDistance"/> rests on.
+    /// </summary>
+    public double CameraRangeMetres { get; init; } = double.NaN;
+
+    /// <summary>
     /// The direction the body points, degrees clockwise from true north: its transform's yaw, so the
     /// heading the imagery shows. Not <see cref="CourseDeg"/>, the direction it moves, which differs while
     /// a vehicle turns or changes lane. NaN where no transform was read.

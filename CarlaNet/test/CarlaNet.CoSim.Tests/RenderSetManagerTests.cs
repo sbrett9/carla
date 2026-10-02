@@ -123,6 +123,110 @@ public sealed class RenderSetManagerTests
         Assert.Equal(forwards.RenderedVehicleIds.ToArray(), backwards.RenderedVehicleIds.ToArray());
     }
 
+    [Fact]
+    public void TheDefaultPolicyIsEveryVehicleWithNoLimitAndLeavesNothingOut()
+    {
+        var manager = new RenderSetManager();
+
+        manager.ReconcileRenderSet(0.0, Frames(At("a", 10.0, 0.0), At("b", 90_000.0, 0.0)));
+
+        Assert.IsType<EveryVehicleRenderSetPolicy>(manager.Policy);
+        Assert.Null(manager.Policy.Capacity);
+        Assert.False(manager.Policy.Limits);
+        Assert.Equal((2, 2, 0, 0), (manager.LastPopulation, manager.LastEligible, manager.LastShed, manager.LastHeld));
+        Assert.Equal((0L, 0L), (manager.VehiclePassesOutsideThePolicy, manager.CapacityDeclines));
+    }
+
+    [Fact]
+    public void ACircleAdmitsInsideItsRadiusKeepsItsVehiclesToTheWiderOneAndCountsTheRest()
+    {
+        List<RenderedVehicleInterval> released = [];
+        var manager = new RenderSetManager(
+            new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 100.0, hysteresisMetres: 20.0), released.Add);
+
+        manager.ReconcileRenderSet(0.0, Frames(At("inside", 90.0, 0.0), At("outside", 110.0, 0.0)));
+        Assert.Equal(["inside"], manager.RenderedVehicleIds);
+        Assert.Equal((2, 1, 1L), (manager.LastPopulation, manager.LastEligible, manager.VehiclePassesOutsideThePolicy));
+
+        // Beyond the admit radius and inside the release radius: kept; and the other still out.
+        manager.ReconcileRenderSet(1.0, Frames(At("inside", 115.0, 0.0), At("outside", 110.0, 0.0)));
+        Assert.Equal(["inside"], manager.RenderedVehicleIds);
+        Assert.Empty(released);
+
+        manager.ReconcileRenderSet(2.0, Frames(At("inside", 125.0, 0.0), At("outside", 110.0, 0.0)));
+        Assert.Empty(manager.RenderedVehicleIds);
+        Assert.Equal(RenderSetReleaseReason.LeftTheRegion, Assert.Single(released).ReleaseReason);
+        Assert.Equal(4L, manager.VehiclePassesOutsideThePolicy);
+    }
+
+    [Fact]
+    public void UnderACircleWithACapacityTheNearestAreDrawnAndANearerNewcomerTakesTheFarthestPlace()
+    {
+        List<RenderedVehicleInterval> released = [];
+        var manager = new RenderSetManager(
+            new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 100.0, hysteresisMetres: 20.0, capacity: 3),
+            released.Add);
+
+        manager.ReconcileRenderSet(0.0, Frames(At("d10", 10.0, 0.0), At("d20", 20.0, 0.0), At("d30", 30.0, 0.0),
+                                               At("d40", 40.0, 0.0), At("d50", 50.0, 0.0)));
+        Assert.Equal(["d10", "d20", "d30"], manager.RenderedVehicleIds.Order(StringComparer.Ordinal));
+        Assert.Equal((5, 2), (manager.LastEligible, manager.LastShed));
+
+        manager.ReconcileRenderSet(1.0, Frames(At("d10", 10.0, 0.0), At("d20", 20.0, 0.0), At("d30", 30.0, 0.0),
+                                               At("d40", 40.0, 0.0), At("d50", 50.0, 0.0), At("d05", 5.0, 0.0)));
+        Assert.Equal(["d05", "d10", "d20"], manager.RenderedVehicleIds.Order(StringComparer.Ordinal));
+        RenderedVehicleInterval shed = Assert.Single(released);
+        Assert.Equal(("d30", RenderSetReleaseReason.Capacity), (shed.VehicleId, shed.ReleaseReason));
+        Assert.Equal(2L + 3L, manager.CapacityDeclines);
+    }
+
+    [Fact]
+    public void EveryVehicleUnderACapacityKeepsTheVehiclesDrawnAndFillsAFreePlaceInTheSeedsOrder()
+    {
+        List<RenderedVehicleInterval> released = [];
+        var policy = new EveryVehicleRenderSetPolicy(capacity: 3);
+        var manager = new RenderSetManager(policy, released.Add);
+        string[] ids = [.. Enumerable.Range(0, 8).Select(index => $"v{index}")];
+        string[] bySeed = [.. ids.OrderBy(id => SeededOrder.Of(42, id))];
+
+        Pass(manager, 42, 0.0, ids);
+        Assert.Equal(bySeed.Take(3).Order(StringComparer.Ordinal), manager.RenderedVehicleIds.Order(StringComparer.Ordinal));
+        Assert.Equal((8, 8, 5), (manager.LastPopulation, manager.LastEligible, manager.LastShed));
+
+        // A newcomer that comes first in the seed's order takes no place from a vehicle drawn.
+        string newcomer = Enumerable.Range(100, 400).Select(index => $"n{index}")
+            .First(id => SeededOrder.Of(42, id) < SeededOrder.Of(42, bySeed[0]));
+        Pass(manager, 42, 1.0, [.. ids, newcomer]);
+        Assert.DoesNotContain(newcomer, manager.RenderedVehicleIds);
+        Assert.Empty(released);
+
+        // One drawn leaves the simulation: its place goes to the first of the rest in the seed's order.
+        string leaving = bySeed[1];
+        Pass(manager, 42, 2.0, [.. ids.Where(id => id != leaving), newcomer]);
+        Assert.Contains(newcomer, manager.RenderedVehicleIds);
+        Assert.Equal(RenderSetReleaseReason.LeftTheSimulation, Assert.Single(released).ReleaseReason);
+        Assert.DoesNotContain(released, interval => interval.ReleaseReason == RenderSetReleaseReason.Capacity);
+    }
+
+    [Fact]
+    public void VehiclesLeavingALimitAreReleasedInAnOrderThatDoesNotDependOnADictionary()
+    {
+        List<string> forwards = [];
+        List<string> backwards = [];
+        foreach ((List<string> order, string[] ids) in new[] { (forwards, new[] { "a", "b", "c" }),
+                                                               (backwards, new[] { "c", "b", "a" }) })
+        {
+            var manager = new RenderSetManager(
+                new RegionRenderSetPolicy(0.0, 0.0, admitRadiusMetres: 100.0, hysteresisMetres: 20.0),
+                interval => order.Add(interval.VehicleId));
+            manager.ReconcileRenderSet(0.0, Frames([.. ids.Select(id => At(id, 10.0, 0.0))]));
+            manager.ReconcileRenderSet(1.0, Frames([.. ids.Select(id => At(id, 500.0, 0.0))]));
+        }
+
+        Assert.Equal(["a", "b", "c"], forwards);
+        Assert.Equal(forwards, backwards);
+    }
+
     [RequiresSumoFact]
     public void TheRenderSetIsEveryVehicleSumoHasAcrossARunningSimulation()
     {
@@ -151,4 +255,11 @@ public sealed class RenderSetManagerTests
 
     private static Dictionary<string, CoSimVehicleFrame> Frames(params CoSimVehicleFrame[] frames) =>
         frames.ToDictionary(frame => frame.Id);
+
+    /// <summary>One pass under a seed, every vehicle standing at the origin.</summary>
+    private static void Pass(RenderSetManager manager, long seed, double seconds, string[] ids)
+    {
+        manager.BeginPass(new RenderSetPass(seconds, 1.0, seed, 10.0, 10.0, [], (_, _) => 0.0));
+        manager.ReconcileRenderSet(seconds, Frames([.. ids.Select(id => At(id, 0.0, 0.0))]));
+    }
 }

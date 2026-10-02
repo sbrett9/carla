@@ -26,6 +26,8 @@ public sealed class CoSimRunReport
     private readonly Dictionary<UnrenderableReason, long> _refusedTypes = [];
     private readonly Dictionary<RenderSetReleaseReason, long> _releases = [];
     private readonly Dictionary<GroundSeatReason, long> _groundSeats = [];
+    private readonly Dictionary<RenderSetRule, long> _passesByRule = [];
+    private readonly SortedDictionary<uint, CameraFootprint> _footprints = [];
 
     /// <summary>The clock the session resolved.</summary>
     public required CoSimClock Clock { get; init; }
@@ -190,9 +192,63 @@ public sealed class CoSimRunReport
 
     /// <summary>
     /// Render-set releases, by why each vehicle stopped holding a place -- SUMO listing it as arrived,
-    /// it vanishing without being listed, or the session ending.
+    /// it vanishing without being listed, or the session ending; and under an optional limit, the
+    /// policy no longer admitting it or a capacity ranking it out.
     /// </summary>
     public IReadOnlyDictionary<RenderSetReleaseReason, long> Releases => _releases;
+
+    /// <summary>
+    /// The render-set policy the session was given, in its own words: every vehicle SUMO has, the
+    /// default, or the optional limit chosen.
+    /// </summary>
+    public string RenderSetPolicy { get; init; } = "every vehicle SUMO has";
+
+    /// <summary>
+    /// Whether the policy can leave a vehicle SUMO has without a body: an optional limit -- a circle,
+    /// the cameras' footprints or a capacity -- was chosen. False for the default, every vehicle.
+    /// </summary>
+    /// <remarks>
+    /// A vehicle a limit leaves out is still simulated by SUMO, so the traffic is the scenario's; it is
+    /// in no frame and in no truth record. <see cref="VehiclePassesOutsideThePolicy"/>,
+    /// <see cref="CapacityDeclines"/>, <see cref="Releases"/> and each <see cref="AdmissionPass"/> count
+    /// what was left out.
+    /// </remarks>
+    public bool RenderSetLimits { get; init; }
+
+    /// <summary>The render set's capacity, or null for no limit on the count.</summary>
+    public int? RenderSetCapacity { get; init; }
+
+    /// <summary>
+    /// Vehicles a capacity declined, counted per pass per vehicle, as of the last pass. Zero with no
+    /// capacity.
+    /// </summary>
+    public long CapacityDeclines { get; internal set; }
+
+    /// <summary>
+    /// Vehicles the policy's circle or cameras did not admit, summed over the passes, as of the last
+    /// pass: each a vehicle SUMO had that held no body for the step that pass decided. Zero with no
+    /// limit.
+    /// </summary>
+    public long VehiclePassesOutsideThePolicy { get; internal set; }
+
+    /// <summary>
+    /// Admission passes by the rule each decided by: every vehicle, the circle, or the registered
+    /// cameras' footprints.
+    /// </summary>
+    public IReadOnlyDictionary<RenderSetRule, long> PassesByRule => _passesByRule;
+
+    /// <summary>
+    /// Every camera the render set followed, by actor, with its footprint and range cap as of the last
+    /// pass that followed it -- a camera removed during the run keeps its last. Empty under every
+    /// policy but the cameras'.
+    /// </summary>
+    public IReadOnlyDictionary<uint, CameraFootprint> CameraFootprints => _footprints;
+
+    /// <summary>
+    /// Passes at which a registered camera's pose was not in the snapshot -- a camera destroyed without
+    /// being removed -- and so was left out.
+    /// </summary>
+    public long CameraPosesUnread { get; internal set; }
 
     /// <summary>
     /// The seed the scenario's configuration runs SUMO under, or SUMO's own default where it declares
@@ -296,8 +352,9 @@ public sealed class CoSimRunReport
     public long VehicleTicksWithNoMeasuredBody { get; internal set; }
 
     /// <summary>
-    /// Admissions to the render set since the session started, as of the last pass: one for each
-    /// vehicle SUMO had while the session read it.
+    /// Admissions to the render set since the session started, as of the last pass: with no limit, one
+    /// for each vehicle SUMO had while the session read it; under an optional limit, a vehicle released
+    /// and admitted again counts each time.
     /// </summary>
     public long Admissions { get; internal set; }
 
@@ -342,6 +399,39 @@ public sealed class CoSimRunReport
     /// process either way, and only the truth other processes read lists every vehicle actor again.
     /// </summary>
     public string? RenderSetRefused { get; internal set; }
+
+    /// <summary>
+    /// How far from a camera, in metres, the run asked for its bodies to be drawn -- the optional
+    /// performance control, as it stands now -- or null for no limit, which is the default: every body
+    /// drawn at any range.
+    /// </summary>
+    /// <remarks>
+    /// Rendering only. Every vehicle keeps its body, its pose and its truth whatever this is; a body
+    /// farther than this from a camera is not in that camera's image, and the recorder marks it so in
+    /// that camera's sidecar. Read with <see cref="DrawDistanceRefused"/>: a server that refused it drew
+    /// every body at any range.
+    /// </remarks>
+    public double? DrawDistanceMetres { get; internal set; }
+
+    /// <summary>
+    /// Round trips that set the draw distance: one for each tick on which the pool spawned a body, and
+    /// one for each change of the distance during the run; none where no distance was asked for.
+    /// </summary>
+    public long DrawDistanceWrites { get; internal set; }
+
+    /// <summary>
+    /// Bodies the draw distance was sent for that the server did not find, summed over the writes.
+    /// Zero in a healthy run.
+    /// </summary>
+    public long DrawDistanceBodiesNotFound { get; internal set; }
+
+    /// <summary>
+    /// Why the server refused the draw distance, in its words, or <see langword="null"/> where it took
+    /// every write or none was sent. A server built before it carried the call refuses the first, and
+    /// the session sends nothing more: every body is then drawn at any range, as with no limit, and
+    /// the frames record no distance.
+    /// </summary>
+    public string? DrawDistanceRefused { get; internal set; }
 
     /// <summary>
     /// Round trips spent writing poses: one per world tick that had a pose to write, never more.
@@ -550,6 +640,11 @@ public sealed class CoSimRunReport
     internal void CountRelease(RenderSetReleaseReason reason) =>
         _releases[reason] = _releases.GetValueOrDefault(reason) + 1;
 
+    internal void CountPass(RenderSetRule rule) =>
+        _passesByRule[rule] = _passesByRule.GetValueOrDefault(rule) + 1;
+
+    internal void RecordFootprint(CameraFootprint footprint) => _footprints[footprint.Actor] = footprint;
+
     internal void SampleCollision(in CollisionSpan span)
     {
         if (_collisions.Count < CollisionSampleLimit)
@@ -695,6 +790,73 @@ public sealed class CoSimRunReport
     private static string Seconds(double value) =>
         value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// The render set's lines: the policy, and under an optional limit what it left out and why, then
+    /// the admissions and the last pass.
+    /// </summary>
+    private void AppendRenderSet(StringBuilder text)
+    {
+        text.AppendLine($"render set         {RenderSetPolicy}");
+        if (!RenderSetLimits)
+        {
+            text.AppendLine($"admissions         {Admissions}, every vehicle SUMO had");
+        }
+        else
+        {
+            text.AppendLine("  limit            optional, chosen for speed: a vehicle outside it is simulated by "
+                            + "SUMO and has no body, no frame and no truth record");
+            text.AppendLine($"  left out         {VehiclePassesOutsideThePolicy} vehicle-passes outside the "
+                            + $"policy, {CapacityDeclines} declined for the capacity"
+                            + (RenderSetCapacity is { } capacity ? $" of {capacity}" : string.Empty)
+                            + $"; released {_releases.GetValueOrDefault(RenderSetReleaseReason.LeftTheRegion)} "
+                            + $"leaving the policy, {_releases.GetValueOrDefault(RenderSetReleaseReason.Capacity)} "
+                            + "for the capacity");
+            text.AppendLine("  passes           "
+                            + string.Join(", ", Enum.GetValues<RenderSetRule>()
+                                .Select(rule => $"{rule.ToString().ToLowerInvariant()} "
+                                                + _passesByRule.GetValueOrDefault(rule))));
+            foreach (CameraFootprint footprint in _footprints.Values)
+            {
+                text.AppendLine($"  {footprint}");
+            }
+
+            if (CameraPosesUnread > 0)
+            {
+                text.AppendLine($"  not in snapshot  {CameraPosesUnread} camera pose(s) left out of their pass");
+            }
+
+            text.AppendLine($"admissions         {Admissions}");
+        }
+
+        if (LastAdmissionPass is { } pass)
+        {
+            text.AppendLine($"  last pass        {pass}");
+        }
+    }
+
+    /// <summary>The draw distance line: none, the distance and what it means, or its refusal.</summary>
+    private string DescribeDrawDistance()
+    {
+        if (DrawDistanceMetres is not { } metres)
+        {
+            return "none: every body drawn at any range"
+                   + (DrawDistanceWrites > 0
+                       ? $" now; one was set during the run and cleared, over {DrawDistanceWrites} write(s)"
+                       : string.Empty);
+        }
+
+        string distance = metres.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+        if (DrawDistanceRefused is { } refused)
+        {
+            return $"{distance} m asked for and refused, so every body was drawn at any range: {refused}";
+        }
+
+        return $"{distance} m, rendering only: every vehicle has its body, is posed and is in the truth; a body "
+               + "farther than that from a camera is not in that camera's image, and its sidecar says so; "
+               + $"{DrawDistanceWrites} write(s)"
+               + (DrawDistanceBodiesNotFound > 0 ? $", {DrawDistanceBodiesNotFound} body(ies) not found" : string.Empty);
+    }
+
     /// <summary>The bridge's own cost per world tick, in milliseconds.</summary>
     public double BridgeMillisecondsPerTick =>
         Ticks == 0 ? 0.0 : BridgeSecondsOnTicks * 1000.0 / Ticks;
@@ -769,11 +931,7 @@ public sealed class CoSimRunReport
         {
             text.AppendLine($"road mapping       {mapping}");
         }
-        text.AppendLine($"admissions         {Admissions}, every vehicle SUMO had");
-        if (LastAdmissionPass is { } pass)
-        {
-            text.AppendLine($"  last pass        {pass}");
-        }
+        AppendRenderSet(text);
 
         if (_releases.Count > 0)
         {
@@ -804,6 +962,7 @@ public sealed class CoSimRunReport
         text.AppendLine($"render set         {RenderSetUpdates} change(s) named to the server"
                         + (RenderSetBodiesNotFound > 0 ? $", {RenderSetBodiesNotFound} body(ies) not found" : string.Empty)
                         + (RenderSetRefused is { } refused ? $"; refused, so other processes list every vehicle actor: {refused}" : string.Empty));
+        text.AppendLine($"draw distance      {DescribeDrawDistance()}");
         text.AppendLine("lamps              "
                         + (!VehicleLampsDriven
                             ? "not driven; every body kept the lamps it was spawned with"

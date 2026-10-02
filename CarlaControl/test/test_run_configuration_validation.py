@@ -35,7 +35,10 @@ from RunCaptureFixture import (  # noqa: E402
 from carlacontrol.LaunchEcho import LaunchEcho  # noqa: E402
 from carlacontrol.RunConfiguration import RunConfiguration  # noqa: E402
 from carlacontrol.RunConfigurationCheckCatalogue import RunConfigurationCheckCatalogue  # noqa: E402
-from carlacontrol.RunConfigurationFindings import RunConfigurationFindings  # noqa: E402
+from carlacontrol.RunConfigurationFindings import (  # noqa: E402
+    RunConfigurationFindings,
+    RunConfigurationRefusedError,
+)
 from carlacontrol.RunConfigurationResolver import RunConfigurationResolver  # noqa: E402
 from carlacontrol.RunConfigurationValidator import (  # noqa: E402
     PNG_BYTES_PER_PIXEL,
@@ -209,14 +212,151 @@ def test_two_channels_must_name_distinct_sensors(layout):
 
 # -- render, pacing, mode ------------------------------------------------------------------------
 
-def test_no_field_bounds_the_rendered_population_and_its_checks_are_retired(layout):
-    # The session renders every vehicle SUMO has: the fixture names no render region or cap, and the
-    # checks that compared them (20, 21 and 33) cite nothing and are never given to another check.
-    assert not [path for path in RunConfiguration.FIELDS if path.startswith("capture.render_")]
+def test_by_default_no_field_limits_the_rendered_population_and_the_old_checks_stay_retired(layout):
+    # The session renders every vehicle SUMO has unless an optional limit is chosen: by default the
+    # render set is every vehicle, with no region and no cap, and the checks that once compared a
+    # mandatory region and cap (20, 21 and 33) stay retired -- the optional limits are checked under a
+    # number of their own (53).
+    effective, *_ = offline(layout)
+    assert effective.value("capture.render_set") == "all"
+    assert (effective.value("capture.render_region"), effective.value("capture.render_cap")) == \
+        (None, None)
     assert launch(layout).findings == []
     for retired in (20, 21, 33):
         with pytest.raises(KeyError, match="retired"):
             RunConfigurationCheckCatalogue.get(retired)
+    assert RunConfigurationCheckCatalogue.get(53).status == "run_capture"
+
+
+REGION = 'capture.render_region={"x_m": 120, "y_m": -340, "radius_m": 300}'
+
+
+def test_a_circle_with_no_region_is_refused(layout):
+    *_, findings, _, _ = offline(layout, overrides=["capture.render_set=circle"])
+    finding = only(findings, 53)
+    assert finding.subject == "capture.render_region"
+    assert "leave capture.render_set at all to draw every vehicle SUMO has" in finding.message
+
+
+def test_a_region_given_to_every_vehicle_is_refused_rather_than_dropped(layout):
+    *_, findings, _, _ = offline(layout, overrides=[REGION])
+    assert "reads no region" in only(findings, 53).message
+
+
+@pytest.mark.parametrize("overrides", [
+    ["capture.render_set=circle", REGION],
+    ["capture.render_set=cameras"],
+    ["capture.render_set=cameras", REGION, "capture.render_cap=40"],
+    ["capture.render_cap=1"],
+])
+def test_a_usable_optional_limit_launches_clean(layout, overrides):
+    assert launch(layout, overrides=overrides).findings == []
+
+
+@pytest.mark.parametrize("document", [
+    {"capture": {"render_cap": 0}},
+    {"capture": {"render_cap": 2.5}},
+    {"capture": {"render_set": "nearest"}},
+    {"capture": {"render_region": {"x_m": 0, "y_m": 0}}},
+    {"capture": {"render_region": {"x_m": 0, "y_m": 0, "radius_m": 0}}},
+    {"capture": {"render_hysteresis_m": 0}},
+    {"capture": {"render_min_pixels": 0}},
+    {"capture": {"render_admit_lead_s": -1}},
+])
+def test_an_unusable_render_set_value_is_refused_by_the_schema(document):
+    with pytest.raises(RunConfigurationRefusedError) as raised:
+        RunConfiguration.from_document(document, "test.run.json")
+    assert {finding.check_id for finding in raised.value.findings.refusals} == {1}
+
+
+def test_the_echo_says_plainly_that_vehicles_outside_a_limit_are_not_in_carla(layout):
+    effective, validator, findings, result_path, capture = offline(
+        layout, overrides=["capture.render_set=cameras", "capture.render_cap=40"])
+    assert not findings.refused
+    free, headroom = validator.headroom(effective, capture)
+    echo = LaunchEcho.compute(effective, "cap-test", capture, result_path, free, headroom,
+                              validator.bytes_per_captured_second(effective), [])
+    render = echo.to_dict()["render"]
+    assert (render["set"], render["cap"], render["limited"]) == ("cameras", 40, True)
+    assert render["vehicles"].startswith("the vehicles in or approaching a channel camera's view")
+    assert render["vehicles"].endswith("every vehicle until the cameras are placed, at most 40 at once")
+    assert "is not in CARLA -- no body, no frame, no truth record" in echo.render()
+
+    effective, validator, _findings, result_path, capture = offline(layout)
+    unlimited = LaunchEcho.compute(effective, "cap-test", capture, result_path, free, headroom,
+                                   validator.bytes_per_captured_second(effective), []).to_dict()
+    assert (unlimited["render"]["vehicles"], unlimited["render"]["limited"],
+            unlimited["render"]["left_out"]) == ("every vehicle SUMO has", False, None)
+
+
+def test_no_draw_distance_is_set_unless_asked_for(layout):
+    # An optional performance control, off by default: every body drawn at any range.
+    effective, _validator, findings, _, _ = offline(layout)
+    assert effective.value("capture.draw_distance_m") is None
+    assert 52 not in checks(findings)
+
+
+def test_a_draw_distance_that_reaches_every_channel_s_point_launches_clean(layout):
+    # The fixture's stare stands 400 m back and 300 m up: 500 m from the point it looks at.
+    assert launch(layout, overrides=["capture.draw_distance_m=500"]).findings == []
+
+
+def test_a_draw_distance_short_of_a_stare_s_point_is_refused_naming_the_range(layout):
+    *_, findings, _, _ = offline(layout, overrides=["capture.draw_distance_m=499"])
+    finding = only(findings, 52)
+    assert finding.subject == "capture.draw_distance_m"
+    assert "channel OVERWATCH-1's camera stands 500.0 m from the point it is aimed at" in \
+        finding.message
+    assert "leave it unset to draw every body at any range" in finding.message
+
+
+def test_a_draw_distance_short_of_an_orbit_s_centre_is_refused(layout):
+    # An orbit flies 200 m out and 518.2 m up: 555.5 m from its centre.
+    document = run_document()
+    document["capture"]["channels"] = [AN_ORBIT]
+    *_, findings, _, _ = offline(layout, document, overrides=["occlusion.enabled=false",
+                                                              "capture.draw_distance_m=550"])
+    assert "555.5 m" in only(findings, 52).message
+    *_, findings, _, _ = offline(layout, document, overrides=["occlusion.enabled=false",
+                                                              "capture.draw_distance_m=560"])
+    assert findings.findings == []
+
+
+def test_a_stare_given_as_a_pose_names_no_point_and_is_not_judged(layout):
+    document = run_document()
+    document["capture"]["channels"] = [{"sensor_id": "POSE-1", "stare_x_m": 0.0, "stare_y_m": 0.0,
+                                        "stare_z_m": 3000.0, "stare_pitch_deg": -90.0,
+                                        "stare_yaw_deg": 0.0}]
+    *_, findings, _, _ = offline(layout, document, overrides=["capture.draw_distance_m=50"])
+    assert 52 not in checks(findings)
+
+
+@pytest.mark.parametrize("metres", [0, -10])
+def test_a_draw_distance_that_is_not_a_positive_number_is_refused_by_the_schema(metres):
+    with pytest.raises(RunConfigurationRefusedError) as raised:
+        RunConfiguration.from_document({"capture": {"draw_distance_m": metres}}, "test.run.json")
+    [finding] = raised.value.findings.refusals
+    assert (finding.check_id, finding.subject) == (1, "capture.draw_distance_m")
+
+
+def test_the_echo_states_the_draw_distance_and_what_it_leaves_alone(layout):
+    effective, validator, findings, result_path, capture = offline(
+        layout, overrides=["capture.draw_distance_m=750"])
+    assert not findings.refused
+    free, headroom = validator.headroom(effective, capture)
+    echo = LaunchEcho.compute(effective, "cap-test", capture, result_path, free, headroom,
+                              validator.bytes_per_captured_second(effective), [])
+    render = echo.to_dict()["render"]
+    assert render["draw_distance_m"] == 750
+    assert render["draw_distance"].startswith("750 m, rendering only: every vehicle keeps its body")
+    assert "draw distance 750 m, rendering only" in echo.render()
+    assert echo.values()["launch_echo.render.draw_distance_m"] == 750
+
+    effective, validator, _findings, result_path, capture = offline(layout)
+    unset = LaunchEcho.compute(effective, "cap-test", capture, result_path, free, headroom,
+                               validator.bytes_per_captured_second(effective), [])
+    assert unset.to_dict()["render"]["draw_distance_m"] is None
+    assert "draw distance none: every body is drawn at any range" in unset.render()
 
 
 def test_the_disk_estimate_counts_the_pictures_and_says_it_leaves_the_sidecars_out(layout):

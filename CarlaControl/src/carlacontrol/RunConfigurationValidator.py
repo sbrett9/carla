@@ -14,6 +14,8 @@ by construction, and which have nothing in the tree to compare.
   `CarlaNet.CoSim.CoSimClock.ForSession`, the illumination object is `IlluminationPolicy.FromJson`,
   and the epoch is `SolarEpoch` through `ScenarioEpoch`. Where the pre-roll's wait for each view
   could not possibly be met, the prewarm is refused here (check 51) rather than there (check 50).
+  The optional draw distance, where one is set, has to reach the point every channel looks at
+  (check 52), and an optional render-set limit has to be one the session can draw (check 53).
 * **The server checks** (`validate_against_server`) read what the rig and the scenario need from
   the server --
   the sun, the camera blueprints' attributes, the vehicle blueprints -- before anything is spawned.
@@ -30,6 +32,7 @@ refusal says so.
 from __future__ import annotations
 
 import json
+import math
 import os
 import shutil
 from collections.abc import Callable
@@ -39,6 +42,7 @@ from typing import Any
 import carlanet  # noqa: F401  -- loads the CarlaNet assemblies the next import names
 from CarlaNet.CoSim import CoSimClock, CoSimSessionRefusedException, IlluminationPolicy
 
+from carlacontrol.ChannelDescription import ChannelDescription
 from carlacontrol.EffectiveRunConfiguration import (
     EffectiveRunConfiguration,
     WindowResolutionError,
@@ -91,6 +95,8 @@ class RunConfigurationValidator:
         window_ok = self._window(effective, findings)
         self._clock(effective, findings)
         self._channels(effective, findings)
+        self._draw_distance(effective, findings)
+        self._render_set(effective, findings)
         if window_ok:
             self._readiness_prewarm(effective, findings)
         self._epoch(effective, findings)
@@ -317,6 +323,73 @@ class RunConfigurationValidator:
                             f"the window's begin) and one SUMO step is {float(step):g} s, so no "
                             "frame would be rendered to measure it on. Give a prewarm of at least "
                             "one SUMO step, or aim the channel at a point or a pose")
+
+    # -- check 52 ---------------------------------------------------------------------------------
+    @staticmethod
+    def _draw_distance(effective: EffectiveRunConfiguration,
+                       findings: RunConfigurationFindings) -> None:
+        """A draw distance, where one is set, reaches the point every channel is aimed at.
+
+        The draw distance is an optional performance control: no camera draws a body farther than it
+        from the camera. One shorter than the range from a channel's camera to the point it looks at
+        leaves the middle of that channel's picture with no vehicle drawn, which is a run nobody
+        meant. A stare given as an explicit pose names no point to measure to, and is not judged; a
+        channel check 47 refuses is left to it.
+        """
+        distance = effective.value("capture.draw_distance_m")
+        if distance is None:
+            return
+        for index in range(effective.channel_count):
+            try:
+                description = effective.channel_description(index)
+            except ValueError:
+                continue
+            reach = RunConfigurationValidator.aim_range_m(description)
+            if reach is None or reach <= float(distance):
+                continue
+            label = description.sensor_id or f"capture.channels[{index}]"
+            findings.refuse(52, "capture.draw_distance_m", f"capture.draw_distance_m is "
+                            f"{float(distance):g} m, and channel {label}'s camera stands {reach:.1f} m "
+                            f"from the point it is aimed at, so no vehicle there would be drawn in "
+                            "its images: a body farther than the draw distance from a camera is not "
+                            f"in that camera's picture. Raise the draw distance above {reach:.1f} m, "
+                            "bring the camera nearer, or leave it unset to draw every body at any "
+                            "range")
+
+    # -- check 53 ---------------------------------------------------------------------------------
+    @staticmethod
+    def _render_set(effective: EffectiveRunConfiguration,
+                    findings: RunConfigurationFindings) -> None:
+        """An optional render-set limit, where one is chosen, is one the session can draw.
+
+        A circle needs its region. A region given to a render set that reads none -- every vehicle,
+        the default -- would be a limit the operator believes is in force and is not, so it is refused
+        rather than dropped. Every value's type and range is the schema's (check 1).
+        """
+        render_set = effective.value("capture.render_set")
+        region = effective.value("capture.render_region")
+        if render_set == "circle" and region is None:
+            findings.refuse(53, "capture.render_region", "capture.render_set is circle and "
+                            "capture.render_region has no value: give x_m, y_m and radius_m in "
+                            "CARLA's frame, or leave capture.render_set at all to draw every vehicle "
+                            "SUMO has")
+        elif render_set == "all" and region is not None:
+            findings.refuse(53, "capture.render_region", "capture.render_region is given and "
+                            "capture.render_set is all, which draws every vehicle SUMO has and reads "
+                            "no region. Set capture.render_set to circle or cameras to limit the "
+                            "render set to it, or drop the region")
+
+    @staticmethod
+    def aim_range_m(description: ChannelDescription) -> float | None:
+        """The slant range from a channel's camera to the point it is aimed at, metres, or None for a
+        stare given as an explicit pose, which names no point. A stare aimed at a point or at the
+        rendered traffic stands its standoff back and its altitude above that point; an orbit flies
+        its radius out and its altitude above its centre."""
+        if description.pattern == ChannelDescription.ORBIT:
+            return math.hypot(description.orbit_radius_m, description.orbit_altitude_m)
+        if description.declares_pose():
+            return None
+        return math.hypot(description.stare_standoff_m, description.stare_altitude_m)
 
     # -- check 51 ---------------------------------------------------------------------------------
     @staticmethod

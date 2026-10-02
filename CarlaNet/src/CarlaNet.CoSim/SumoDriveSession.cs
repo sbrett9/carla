@@ -3,6 +3,7 @@ using System.Globalization;
 using CarlaNet.Map.WorldPackage;
 using CarlaNet.Recording;
 using CarlaNet.Sumo;
+using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Commands;
 using CarlaNet.Types.Rpc.Lighting;
 
@@ -28,12 +29,25 @@ namespace CarlaNet.CoSim;
 /// caller supplied, so the session owns the advance of simulated time on both sides exactly as it
 /// will when it drives.</para>
 ///
-/// <para><b>Every vehicle SUMO has is drawn.</b> The scenario is the only arbiter of population: a
-/// vehicle holds a body from the frame SUMO first reports it in until SUMO removes it or the session
-/// ends, parked vehicles included. One SUMO inserts during the run is drawn first at the position SUMO
-/// first reported, moving from there, and never on a frame before SUMO inserted it. Nothing here
-/// limits how many; a scenario heavier than the machine is comfortable with makes a synchronous run
-/// slower on the wall clock, never different in content.</para>
+/// <para><b>By default every vehicle SUMO has is drawn.</b> The scenario is the only arbiter of
+/// population: a vehicle holds a body from the frame SUMO first reports it in until SUMO removes it or
+/// the session ends, parked vehicles included. One SUMO inserts during the run is drawn first at the
+/// position SUMO first reported, moving from there, and never on a frame before SUMO inserted it.
+/// Nothing limits how many unless the caller asks for a limit; a scenario heavier than the machine is
+/// comfortable with makes a synchronous run slower on the wall clock, never different in content.</para>
+///
+/// <para><b>A limit on which vehicles get a body, where one is asked for.</b> An optional performance
+/// control, off by default (<see cref="SumoDriveSessionOptions.RenderSet"/>): a circle, the footprints
+/// of the cameras registered with <see cref="AddCamera"/>, or a capacity. A vehicle outside the limit is
+/// still simulated by SUMO and has no body, no frame and no truth record; every one inside it is
+/// posed, seated, turned and named to the server exactly as with no limit, and the report states the
+/// policy and counts what it left out.</para>
+///
+/// <para><b>A draw distance, where one is asked for.</b> An optional performance control, off by
+/// default (<see cref="SumoDriveSessionOptions.DrawDistanceMetres"/>): each body is set, once, to be
+/// drawn no farther than that from any camera. Every vehicle keeps its body, its pose and its truth;
+/// a camera simply does not draw a body beyond the distance, and each frame's render set says what
+/// distance it was drawn under so a recorder marks those vehicles in that camera's sidecar.</para>
 /// </remarks>
 public sealed class SumoDriveSession : IDisposable
 {
@@ -92,6 +106,13 @@ public sealed class SumoDriveSession : IDisposable
     private readonly Dictionary<string, (ActorId Actor, VehicleLightStateFlags Lamps)> _lampsWritten = [];
     private readonly PathHeading _headings = new();
     private readonly Dictionary<string, double> _sumoAngles = [];
+    private readonly List<ActorId> _drawDistanceBodies = [];
+    private readonly GroundSurface _ground;
+    private readonly SortedDictionary<ActorId, CameraOptics> _cameras = [];
+    private readonly List<CameraView> _cameraViews = [];
+    private readonly long _seed;
+    private readonly double _longestBody;
+    private readonly double _bodyReach;
 
     private readonly (double Latitude, double Longitude) _origin;
     private SolarLease? _sun;
@@ -101,6 +122,10 @@ public sealed class SumoDriveSession : IDisposable
     private double? _lastCompleteSeconds;
     private double? _reportedSunElevation;
     private RenderSet? _renderSetNow;
+    private double? _drawDistanceAsked;
+    private double? _drawDistanceApplied;
+    private int _bodiesGivenTheDrawDistance;
+    private ulong? _lastFrame;
     private bool _disposed;
 
     private SumoDriveSession(SumoDriveSessionOptions options,
@@ -129,6 +154,10 @@ public sealed class SumoDriveSession : IDisposable
         _options = options;
         _world = world;
         _origin = origin;
+        _ground = ground;
+        _seed = seed;
+        _longestBody = catalogue.LongestBodyMetres;
+        _bodyReach = catalogue.BodyReachMetres;
         _sumo = sumo;
         _console = console;
         _collisionHandling = collisionHandling;
@@ -138,6 +167,7 @@ public sealed class SumoDriveSession : IDisposable
         _settings = settings;
         _layers = layers;
         _pool = pool;
+        _drawDistanceAsked = options.DrawDistanceMetres;
         // A delegate that only counts has no frames of its own, so its ticks are numbered by the
         // session; nothing records a frame of a world that does not exist.
         Func<bool> counted = options.TickWorld ?? (() => true);
@@ -145,7 +175,7 @@ public sealed class SumoDriveSession : IDisposable
             ? driven.Tick
             : () => counted() ? (ulong)(_tickIndex + 1) : null;
         _population = new SubscribedPopulation(sumo.TraCI);
-        _renderSet = new RenderSetManager(Release);
+        _renderSet = new RenderSetManager(options.RenderSet, Release);
         _binder = new VehicleTypeBinder(sumo.TraCI, catalogue);
         _converter = new PoseConverter(ground, options.MeasuredSeatHeights, roads);
         _interpolator = new LaneArcInterpolator(network);
@@ -177,6 +207,10 @@ public sealed class SumoDriveSession : IDisposable
             Illumination = options.Illumination,
             SumoSeed = seed,
             RoadMapping = roads.Mapping,
+            DrawDistanceMetres = options.DrawDistanceMetres,
+            RenderSetPolicy = options.RenderSet.Description,
+            RenderSetLimits = options.RenderSet.Limits,
+            RenderSetCapacity = options.RenderSet.Capacity,
         };
     }
 
@@ -204,8 +238,8 @@ public sealed class SumoDriveSession : IDisposable
 
     /// <summary>
     /// The vehicles in the render set as of the SUMO frame last read, one step ahead of the rendered
-    /// clock: every vehicle SUMO has. One SUMO inserted at that frame holds its body from that frame
-    /// on, once the rendered clock reaches it.
+    /// clock: every vehicle SUMO has, or under an optional limit the ones it admits. One SUMO inserted at
+    /// that frame holds its body from that frame on, once the rendered clock reaches it.
     /// </summary>
     public IReadOnlyCollection<string> RenderedVehicleIds => _renderSet.RenderedVehicleIds;
 
@@ -241,6 +275,122 @@ public sealed class SumoDriveSession : IDisposable
     /// frames are held.
     /// </remarks>
     public IRenderSetSource RenderSet => _renderSets;
+
+    /// <summary>The cameras registered with the session, in actor order.</summary>
+    public IReadOnlyCollection<ActorId> Cameras => _cameras.Keys;
+
+    /// <summary>
+    /// Register a camera whose view the render set follows: from the next admission pass, a policy that
+    /// follows cameras renders the vehicles inside and approaching its ground footprint.
+    /// </summary>
+    /// <param name="camera">The camera's actor id, spawned by the caller.</param>
+    /// <remarks>
+    /// <para>Only a policy that follows the cameras (<see cref="CameraFootprintRenderSetPolicy"/>, an
+    /// optional performance control) reads them; under any other a registered camera changes
+    /// nothing. The camera's image size and field of view are read from its attributes now, in one
+    /// round trip; its pose is read at every pass from the client's snapshot of the last frame
+    /// rendered, so a camera flown or orbited between passes is followed wherever it goes.
+    /// Registering one already registered reads its attributes again and changes nothing else.</para>
+    ///
+    /// <para>Cameras come and go during a run -- a free view opened late, a rig taken down -- and each
+    /// pass decides from the ones registered then. With none registered the policy's fallback decides.
+    /// Registered between advances, from the thread that advances the session, as every other call on
+    /// it is.</para>
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The session renders no world to read a camera from.</exception>
+    /// <exception cref="ArgumentException">The world has no such actor, or the actor is not a camera.</exception>
+    public void AddCamera(ActorId camera)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_world is not { } world)
+        {
+            throw new InvalidOperationException(
+                "The session renders no world, so it has no camera to follow: a camera is read from the "
+                + "world it was spawned in.");
+        }
+
+        _cameras[camera] = world.DescribeCamera(camera)
+                           ?? throw new ArgumentException(
+                               $"Actor {camera} is not a camera the world knows: it has no image_size_x, "
+                               + "image_size_y and fov to take a footprint from.", nameof(camera));
+    }
+
+    /// <summary>
+    /// Stop following a camera, from the next admission pass. Answers whether it was registered.
+    /// </summary>
+    /// <remarks>
+    /// Call it before destroying the camera: a registered camera the world no longer has is left out of
+    /// every pass, and counted on the report, but it is still registered.
+    /// </remarks>
+    public bool RemoveCamera(ActorId camera)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _cameras.Remove(camera);
+    }
+
+    /// <summary>
+    /// How far from a camera, in metres, the bodies are drawn now, or null where every body is drawn
+    /// at any range: no draw distance was asked for, the server refused it, or no world is driven.
+    /// </summary>
+    /// <remarks>
+    /// The distance the bodies actually carry, which is what each frame's render set records
+    /// (<see cref="CarlaNet.Recording.RenderSet.DrawDistanceMetres"/>). What was asked for is on the
+    /// report (<see cref="CoSimRunReport.DrawDistanceMetres"/>), with the server's refusal where it
+    /// refused.
+    /// </remarks>
+    public double? DrawDistanceMetres => _drawDistanceApplied;
+
+    /// <summary>
+    /// Change how far from a camera the bodies are drawn, in metres, or draw every body at any range
+    /// again with null; it holds from the next tick's frame on.
+    /// </summary>
+    /// <remarks>
+    /// <para>An optional performance control, rendering only: every vehicle keeps its body, its pose
+    /// and its truth. Every body the pool holds is set in one round trip, now, and every body spawned
+    /// later as it is spawned. Called between advances, from the thread that advances the session,
+    /// as every other call on it is.</para>
+    ///
+    /// <para>A server built before it carried the call refuses it; the bodies are then drawn as they
+    /// were, the report names the refusal, and nothing more is sent.</para>
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">The distance is not a positive number of metres.</exception>
+    public void SetDrawDistance(double? metres)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (metres is { } asked && (!double.IsFinite(asked) || asked <= 0.0))
+        {
+            throw new ArgumentOutOfRangeException(nameof(metres), asked,
+                                                  "A draw distance is a positive number of metres, or null for none.");
+        }
+
+        _drawDistanceAsked = metres;
+        Report.DrawDistanceMetres = metres;
+        if (_world is not { } world || _pool is not { } pool || Report.DrawDistanceRefused is not null
+            || (metres is null && _drawDistanceApplied is null))
+        {
+            // No world to draw in, a server that refused, or nothing set to clear.
+            return;
+        }
+
+        _drawDistanceBodies.Clear();
+        foreach (PooledBody body in pool.Bodies)
+        {
+            _drawDistanceBodies.Add(body.Actor);
+        }
+
+        if (_drawDistanceBodies.Count == 0)
+        {
+            // Nothing to set yet: the bodies spawned from here on are set as they are spawned.
+            _drawDistanceApplied = null;
+            return;
+        }
+
+        if (WriteTheDrawDistance(world, metres ?? 0.0))
+        {
+            _drawDistanceApplied = metres;
+            _bodiesGivenTheDrawDistance = _drawDistanceBodies.Count;
+        }
+    }
 
     /// <summary>
     /// The SUMO this session drives, for a test that has to act on it as something outside the
@@ -350,6 +500,8 @@ public sealed class SumoDriveSession : IDisposable
         RequireOneWayToAdvanceTheWorld(options);
         RequireAWindowTheSessionRenders(options);
         RequireABoundOnSumoSAnswers(options);
+        RequireAUsableDrawDistance(options);
+        RequireARenderSetPolicy(options);
         HeadlightRule? headlights = options.VehicleLampsDriven
             ? new HeadlightRule(options.HeadlightOnBelowDegrees, options.HeadlightOffAboveDegrees)
             : null;
@@ -644,6 +796,7 @@ public sealed class SumoDriveSession : IDisposable
             double fraction = Clock.InterpolationFraction(tick);
             ComputePoses(fraction);
             WriteTheBatch();
+            ApplyTheDrawDistance();
             NameTheRenderSet();
             WriteTheSun();
             _bridgeClock.Stop();
@@ -661,6 +814,7 @@ public sealed class SumoDriveSession : IDisposable
                 };
             }
 
+            _lastFrame = frame;
             RecordTheRenderSet(frame);
             AuditTheSun(frame);
             MeasureDivergence();
@@ -701,6 +855,8 @@ public sealed class SumoDriveSession : IDisposable
         Attempt(failures, "complete the report", () =>
         {
             Report.Admissions = _renderSet.Admissions;
+            Report.CapacityDeclines = _renderSet.CapacityDeclines;
+            Report.VehiclePassesOutsideThePolicy = _renderSet.VehiclePassesOutsideThePolicy;
             foreach (UnrenderableReason reason in _binder.RefusedTypes.Values)
             {
                 Report.CountRefusedType(reason);
@@ -858,11 +1014,15 @@ public sealed class SumoDriveSession : IDisposable
         }
 
         // The membership changes only when a body is lent or given back; SUMO's angle changes every
-        // frame, so each frame's set carries this tick's.
+        // frame, so each frame's set carries this tick's, and the draw distance the frame was drawn
+        // under, which a recorder marks every vehicle beyond in its camera's sidecar against.
         _renderSets.Record(frame, new RenderSet(_renderSetNow.ByActor.Values.Select(rendered =>
             _sumoAngles.TryGetValue(rendered.SumoId, out double angle)
                 ? rendered with { SumoAngleDegrees = angle }
-                : rendered)));
+                : rendered))
+        {
+            DrawDistanceMetres = _drawDistanceApplied,
+        });
     }
 
     /// <summary>
@@ -953,6 +1113,59 @@ public sealed class SumoDriveSession : IDisposable
 
         Report.RenderSetUpdates++;
         Report.RenderSetBodiesNotFound += Math.Max(0, _lentSinceNamed.Count + _parkedSinceNamed.Count - written.BodiesFound);
+    }
+
+    /// <summary>
+    /// Set the draw distance on every body the pool has spawned since the last tick, before the cue
+    /// of the tick it is first drawn in.
+    /// </summary>
+    /// <remarks>
+    /// <para>A body is spawned during the tick's poses, parked or lent, and set here in the same
+    /// drain, so no frame draws it unset. One round trip for every body spawned since the last, and
+    /// none on a tick that spawned none, which in a steady scene is nearly every tick: a pooled body
+    /// keeps the distance across every vehicle it is lent to.</para>
+    ///
+    /// <para>Nothing is sent where no distance was asked for, which leaves every body exactly as it
+    /// is spawned, drawn at any range. A server that refuses the first is sent nothing more, and the
+    /// report says why.</para>
+    /// </remarks>
+    private void ApplyTheDrawDistance()
+    {
+        if (_world is not { } world || _pool is not { } pool || _drawDistanceAsked is not { } metres
+            || Report.DrawDistanceRefused is not null || pool.Bodies.Count == _bodiesGivenTheDrawDistance)
+        {
+            return;
+        }
+
+        _drawDistanceBodies.Clear();
+        for (int index = _bodiesGivenTheDrawDistance; index < pool.Bodies.Count; index++)
+        {
+            _drawDistanceBodies.Add(pool.Bodies[index].Actor);
+        }
+
+        if (WriteTheDrawDistance(world, metres))
+        {
+            _drawDistanceApplied = metres;
+            _bodiesGivenTheDrawDistance = pool.Bodies.Count;
+        }
+    }
+
+    /// <summary>
+    /// Send the draw distance for the bodies gathered, counting what the server made of it; answer
+    /// whether it took it.
+    /// </summary>
+    private bool WriteTheDrawDistance(ICarlaWorld world, double metres)
+    {
+        DrawDistanceWrite written = world.WriteDrawDistance(_drawDistanceBodies, metres);
+        if (!written.Taken)
+        {
+            Report.DrawDistanceRefused = written.Refusal;
+            return false;
+        }
+
+        Report.DrawDistanceWrites++;
+        Report.DrawDistanceBodiesNotFound += Math.Max(0, _drawDistanceBodies.Count - written.BodiesFound);
+        return true;
     }
 
     /// <summary>
@@ -1069,12 +1282,65 @@ public sealed class SumoDriveSession : IDisposable
         IReadOnlyList<string> departed = _sumo.Simulation.DepartedVehicleIds;
         _population.Reconcile(departed, _sumo.Simulation.ArrivedVehicleIds);
         _population.ReadFrames(_next);
+        BeginThePass();
         _renderSet.ReconcileRenderSet(_frameSeconds, _next, _population.LastVanished);
         Report.Admissions = _renderSet.Admissions;
+        Report.CapacityDeclines = _renderSet.CapacityDeclines;
+        Report.VehiclePassesOutsideThePolicy = _renderSet.VehiclePassesOutsideThePolicy;
         PublishTheAdmissionPass();
         RecordCollisions();
         return departed;
     }
+
+    /// <summary>
+    /// Tell the render-set policy what the session holds for the pass about to be made: the frame the
+    /// pass decides, SUMO's step, the seed, the bodies' reach and every registered camera's pose on the
+    /// last frame rendered.
+    /// </summary>
+    /// <remarks>
+    /// <para>A camera's pose comes from the client's snapshot of that frame, a read with no round trip.
+    /// Before the first tick there is no frame, and the newest snapshot is read. A registered camera the
+    /// snapshot does not hold -- destroyed without being removed -- is left out and counted: it has no
+    /// view to follow. Under every policy but the cameras' this is all read and nothing in it decides
+    /// anything, and with no camera registered nothing is read at all.</para>
+    ///
+    /// <para>What the policy made of the pass -- the rule in force and every camera's footprint and
+    /// range cap -- goes on the report as it is made.</para>
+    /// </remarks>
+    private void BeginThePass()
+    {
+        _cameraViews.Clear();
+        if (_world is { } world)
+        {
+            foreach ((ActorId camera, CameraOptics optics) in _cameras)
+            {
+                Transform? pose = _lastFrame is { } frame
+                    ? world.ObservedTransformAt(camera, frame)
+                    : world.ObservedTransform(camera);
+                if (pose is { } seen)
+                {
+                    _cameraViews.Add(new CameraView(camera, seen, optics));
+                }
+                else
+                {
+                    Report.CameraPosesUnread++;
+                }
+            }
+        }
+
+        _renderSet.BeginPass(new RenderSetPass(_frameSeconds, Clock.SumoStepSeconds, _seed, _longestBody,
+                                               _bodyReach, [.. _cameraViews], GroundHeightAt));
+        IRenderSetPolicy policy = _renderSet.Policy;
+        Report.CountPass(policy.ActiveRule);
+        foreach (CameraFootprint footprint in policy.Footprints)
+        {
+            Report.RecordFootprint(footprint);
+        }
+    }
+
+    /// <summary>The ground surface's CARLA-local height under a CARLA-frame position, or null off the grid.</summary>
+    private double? GroundHeightAt(double carlaX, double carlaY) =>
+        _ground.Sample(carlaX, carlaY) is { } surface ? surface - _ground.OriginHeightMetres : null;
 
     /// <summary>
     /// The seed the scenario's configuration runs SUMO under, or SUMO's own default where it declares
@@ -1226,8 +1492,9 @@ public sealed class SumoDriveSession : IDisposable
     }
 
     /// <summary>
-    /// Publish the pass just made -- the population, and the vehicles admitted and released -- on the
-    /// report and to the caller's writer, as it happens.
+    /// Publish the pass just made -- the population, the vehicles admitted and released, and under an
+    /// optional limit the eligible, the drawn and the shed -- on the report and to the caller's writer,
+    /// as it happens.
     /// </summary>
     /// <remarks>
     /// Once per SUMO step, not per tick: the render set is decided when SUMO's state is read and holds
@@ -1237,13 +1504,24 @@ public sealed class SumoDriveSession : IDisposable
     /// </remarks>
     private void PublishTheAdmissionPass()
     {
+        IRenderSetPolicy policy = _renderSet.Policy;
         var pass = new AdmissionPass(
             _tickIndex,
             _frameSeconds,
             _population.SubscribedVehicleIds.Count,
             _renderSet.LastNewlyAdmitted,
             _renderSet.LastReleased,
-            _renderSet.Admissions);
+            _renderSet.Admissions)
+        {
+            Eligible = _renderSet.LastEligible,
+            Admitted = _renderSet.RenderedVehicleIds.Count,
+            Shed = _renderSet.LastShed,
+            Held = _renderSet.LastHeld,
+            Capacity = policy.Capacity,
+            Rule = policy.ActiveRule,
+            Cameras = policy.Footprints.Count,
+            Limited = policy.Limits,
+        };
         Report.LastAdmissionPass = pass;
         _options.OnAdmissionPass?.Invoke(pass);
     }
@@ -1645,6 +1923,41 @@ public sealed class SumoDriveSession : IDisposable
                 + "long the session waits for SUMO to answer one command, a step included, before it "
                 + "decides SUMO has stopped answering and stops the run, so it has to be a positive "
                 + "number of seconds longer than the slowest step the scenario produces.");
+        }
+    }
+
+    /// <summary>
+    /// Refuse a draw distance that is not a positive number of metres.
+    /// </summary>
+    /// <remarks>
+    /// No limit is null, never zero or a negative number standing in for it: a value that means
+    /// something other than what it says is one a report would record as declared.
+    /// </remarks>
+    private static void RequireAUsableDrawDistance(SumoDriveSessionOptions options)
+    {
+        if (options.DrawDistanceMetres is { } metres && (!double.IsFinite(metres) || metres <= 0.0))
+        {
+            throw new CoSimSessionRefusedException(
+                $"The draw distance is {metres} m. It is how far from a camera a vehicle's body is "
+                + "drawn, so it has to be a positive number of metres; leave it unset to draw every "
+                + "body at any range.");
+        }
+    }
+
+    /// <summary>
+    /// Refuse a session given no render-set policy.
+    /// </summary>
+    /// <remarks>
+    /// The default draws every vehicle SUMO has, so a session with none is one whose caller cleared it,
+    /// and what that was meant to draw is not something to guess.
+    /// </remarks>
+    private static void RequireARenderSetPolicy(SumoDriveSessionOptions options)
+    {
+        if (options.RenderSet is null)
+        {
+            throw new CoSimSessionRefusedException(
+                "The session was given no render-set policy. Leave it at its default to draw every vehicle "
+                + "SUMO has, or give a circle, the cameras or a capacity as a limit.");
         }
     }
 

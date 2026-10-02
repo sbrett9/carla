@@ -199,6 +199,59 @@ public sealed class LiveTruthRenderSetTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_Recorder_Given_A_Draw_Distance_Marks_Every_Vehicle_Its_Camera_Did_Not_Draw()
+    {
+        // A recorder in another process, told the distance the drive's bodies are drawn under. The
+        // camera hangs 49 m above the lent body and 87 m from the vehicle no session named, whose
+        // 3.3 m bounding sphere lies wholly beyond 60 m.
+        await Observe(100, Block(new Entry(BodyA, ObservedBodyState.Lent, 96, "escort_0", "military_truck"),
+                                 new Entry(BodyB, ObservedBodyState.Parked, 0, "", "")),
+                      (BodyA, OnTheRoad), (BodyB, InItsParkingSlot), (Ambient, ElsewhereOnTheRoad));
+        var camera = new Transform(new Location(100f, 200f, 50f), new Rotation(-90f, 0f, 0f));
+
+        (FrameRecorder recorder, XElement events) = await RecordOneImage(100, camera, drawDistance: 60.0);
+
+        Assert.Equal("60", (string?)events.Attribute("draw_distance_m"));
+        Dictionary<string, XElement> extras = events.Elements("event")
+            .ToDictionary(e => (string)e.Attribute("uid")!, e => e.Element("detail")!.Element("_carla")!);
+        // Both are listed: each is in the world, with its truth.
+        Assert.Equal(["CARLA-TRUTH-23", "CARLA-TRUTH-SUMO-escort_0"], extras.Keys.Order(StringComparer.Ordinal));
+        Assert.Null(extras["CARLA-TRUTH-SUMO-escort_0"].Attribute("beyond_draw_distance"));
+        Assert.Equal("wholly", (string?)extras["CARLA-TRUTH-23"].Attribute("beyond_draw_distance"));
+        Assert.Equal("87.2", (string?)extras["CARLA-TRUTH-23"].Attribute("camera_range_m"));
+        Assert.Equal(1, recorder.DrawDistanceCaptures);
+        Assert.Equal(1, recorder.VehiclesBeyondDrawDistance);
+        Assert.Equal(0, recorder.VehiclesPartlyBeyondDrawDistance);
+    }
+
+    [Fact]
+    public async Task A_Recorder_Paired_With_The_Session_Marks_By_The_Distance_Each_Frame_Was_Drawn_Under()
+    {
+        // The session's own frames say what each was drawn under, a distance the server refused
+        // included: then nothing was culled, and nothing is marked, whatever the recorder was told.
+        await Observe(100, Block(new Entry(BodyA, ObservedBodyState.Lent, 96, "escort_0", "military_truck"),
+                                 new Entry(BodyB, ObservedBodyState.Parked, 0, "", "")),
+                      (BodyA, OnTheRoad), (BodyB, InItsParkingSlot), (Ambient, ElsewhereOnTheRoad));
+        var high = new Transform(new Location(100f, 200f, 500f), new Rotation(-90f, 0f, 0f));
+        RenderedVehicle escort = new(BodyA, "escort_0", "military_truck", 96);
+
+        (FrameRecorder limited, XElement drawn) = await RecordOneImage(
+            100, high, source: new OneFrame(100, new RenderSet([escort]) { DrawDistanceMetres = 60.0 }));
+        XElement extras = Assert.Single(drawn.Elements("event")).Element("detail")!.Element("_carla")!;
+        Assert.Equal("60", (string?)drawn.Attribute("draw_distance_m"));
+        Assert.Equal("wholly", (string?)extras.Attribute("beyond_draw_distance"));
+        Assert.Equal(1, limited.VehiclesBeyondDrawDistance);
+
+        (FrameRecorder refused, XElement unlimited) = await RecordOneImage(
+            100, high, drawDistance: 60.0, source: new OneFrame(100, new RenderSet([escort])),
+            stream: CameraStream + 1);
+        Assert.Null(unlimited.Attribute("draw_distance_m"));
+        Assert.Null(Assert.Single(unlimited.Elements("event")).Element("detail")!.Element("_carla")!
+                        .Attribute("beyond_draw_distance"));
+        Assert.Equal(0, refused.DrawDistanceCaptures);
+    }
+
+    [Fact]
     public async Task A_Change_Is_Named_To_The_Server_As_Given_Whatever_Collection_Carries_It()
     {
         uint found = await _client!.UpdateRenderSetAsync([BodyA], ["escort_0"], ["military_truck"], [BodyB]);
@@ -227,6 +280,41 @@ public sealed class LiveTruthRenderSetTests : IAsyncLifetime
         await client.StartWorldObserverAsync();
         await _streams.SendAsync(ObserverStream, frame, frame * DeltaSeconds, default, Snapshot(block, actors));
         await Until(() => client.LatestObservedFrame == frame, $"the observer reaching frame {frame}");
+    }
+
+    /// Records a camera under a draw distance or with a render-set source, streams it one image of
+    /// <paramref name="frame"/> taken from <paramref name="camera"/>, and returns the recorder and the
+    /// sidecar.
+    private async Task<(FrameRecorder Recorder, XElement Events)> RecordOneImage(
+        ulong frame, Transform camera, double? drawDistance = null, IRenderSetSource? source = null,
+        uint stream = CameraStream)
+    {
+        string directory = Path.Combine(_dir, Guid.NewGuid().ToString("N"));
+        var recorder = new FrameRecorder(_client!, _streams.Token(stream), directory, 2.0,
+                                         renderSet: source, drawDistanceMetres: drawDistance);
+        try
+        {
+            await _streams.SendAsync(stream, frame, frame * DeltaSeconds, camera, Image());
+            await Until(() => recorder.Saved == 1, "the capture being written");
+        }
+        finally
+        {
+            recorder.Dispose();
+        }
+
+        return (recorder, XDocument.Load(Directory.GetFiles(directory, "*.xml").Single()).Root!);
+    }
+
+    /// <summary>A render-set source holding one frame, as a session holds the frames it rendered.</summary>
+    private sealed class OneFrame(ulong held, RenderSet renderSet) : IRenderSetSource
+    {
+        public ulong? NewestFrame => held;
+
+        public bool TryGetRenderSet(ulong frame, out RenderSet answered)
+        {
+            answered = renderSet;
+            return frame == held;
+        }
     }
 
     /// Records a camera, streams it one image of <paramref name="frame"/>, and returns the sidecar.

@@ -120,14 +120,33 @@ are in, waiting up to 90 s for them, and only from the capture window's opening.
 the window ends the drive. The window runs on a thread of its own and never ticks the world, so the
 drive keeps its clock and its pace; the pacing lines say what it held.
 
-Every vehicle SUMO has is rendered, wherever it is and however many there are: the scenario is the
-only arbiter of population, so a camera flown anywhere over the world finds the traffic SUMO has
-there. A scenario heavier than the machine is comfortable with makes the drive slower on the wall
-clock, never thinner; the pacing lines say what pace it held. A free view over the whole of
-Gardnerville at the pace of real traffic:
+By default every vehicle SUMO has is rendered, wherever it is and however many there are
+(`--render-set all`): the scenario is the only arbiter of population, so a camera flown anywhere over
+the world finds the traffic SUMO has there. A scenario heavier than the machine is comfortable with
+makes the drive slower on the wall clock, never thinner; the pacing lines say what pace it held. A free
+view over the whole of Gardnerville at the pace of real traffic:
 
     python run_sumo_drive.py --scenario ... --world-package ... --epoch ... \\
         --illumination freeze_at_window_start --real-time-factor 1.0 --steps 0 --view free
+
+Two optional performance controls trade fidelity for speed, and both are off unless asked for.
+`--render-set` limits which vehicles get a body at all: `circle` only those inside the circle of
+`--region-radius` around `--region-x`, `--region-y` (SUMO's projected metres), released
+`--region-hysteresis` beyond it; `cameras` those inside or about to enter the ground footprint of the
+camera this drive spawns or flies -- placed `--render-admit-lead` seconds of their own travel ahead of
+the view and taken away `--render-release-lag` seconds after they leave it, a view reaching the horizon
+capped where the catalogue's longest body covers fewer than `--render-min-pixels` pixels -- with the
+circle deciding while no camera is registered where a radius is given, and every vehicle where none
+is. `--capacity` caps how many hold a body at once, under any render set. A vehicle a limit leaves out
+is still simulated by SUMO, so the traffic is the scenario's, but it is not in CARLA: no body, no
+frame and no truth record; the launch says so, the pacing lines count what was left out and the report
+counts it again with the reasons each track ended. Under `circle` a free view is told when the circle is
+smaller than the world, with the arguments that take all of it in.
+
+`--draw-distance METRES` is the other: no camera draws a vehicle's body farther than that from it. Rendering only -- every vehicle still gets its body, is
+posed and is in the truth -- and each capture's sidecar marks the vehicles its camera did not draw
+(`beyond_draw_distance`), so none is read as a vehicle the image shows. A server built before it
+carried the call refuses it, and the drive goes on drawing every body at any range and says so.
 
 Flying: hold the right mouse button and move the mouse to look; W/S A/D E/Q to fly; the wheel sets
 the speed, Shift triples it; Ctrl+click measures a point; B/M draw the perimeter and margin; Space
@@ -232,6 +251,45 @@ def parse_args() -> argparse.Namespace:
                         help="override the scenario's SUMO step length (behaviour-changing)")
     parser.add_argument("--fixed-delta", type=float, default=0.05,
                         help="simulated seconds per CARLA tick")
+    parser.add_argument("--render-set", choices=("all", "circle", "cameras"), default="all",
+                        help="which vehicles get a body, an optional performance control: 'all' "
+                             "(default) every vehicle SUMO has; 'circle' those inside the region "
+                             "circle; 'cameras' those inside or approaching the ground footprint of the "
+                             "camera this drive spawns or flies, with the circle deciding while no "
+                             "camera is registered where --region-radius is given, and every vehicle "
+                             "where it is not. A vehicle left out is simulated by SUMO and is not in "
+                             "CARLA: no body, no frame, no truth record")
+    parser.add_argument("--region-x", type=float, default=0.0,
+                        help="circle and cameras: centre of the region circle, SUMO easting in metres")
+    parser.add_argument("--region-y", type=float, default=0.0,
+                        help="circle and cameras: centre of the region circle, SUMO northing in metres")
+    parser.add_argument("--region-radius", type=float, default=None,
+                        help="circle: inside this a vehicle gets a body; required. cameras: the circle "
+                             "that decides while no camera is registered; without it every vehicle "
+                             "does then")
+    parser.add_argument("--region-hysteresis", type=float, default=60.0,
+                        help="circle: how much further out than the radius a vehicle keeps its body; "
+                             "cameras: the band beyond a view's admission threshold it is kept in "
+                             "(default 60)")
+    parser.add_argument("--render-min-pixels", type=float, default=2.0,
+                        help="cameras: a view is capped at the range beyond which the catalogue's "
+                             "longest body covers fewer than this many pixels along its length, "
+                             "anywhere in the picture (default 2)")
+    parser.add_argument("--render-admit-lead", type=float, default=3.0,
+                        help="cameras: simulated seconds of its own travel ahead of a camera's view a "
+                             "vehicle is placed, so it appears out of sight (default 3)")
+    parser.add_argument("--render-release-lag", type=float, default=5.0,
+                        help="cameras: simulated seconds a vehicle is held after it last was near a "
+                             "camera's view, before it is taken away (default 5)")
+    parser.add_argument("--capacity", type=int, default=None,
+                        help="how many vehicles may hold a body at once, under any render set. "
+                             "Default: no limit")
+    parser.add_argument("--draw-distance", type=float, default=None, metavar="METRES",
+                        help="an optional performance control, off unless given: how far from a "
+                             "camera a vehicle's body is drawn. Rendering only: every vehicle still "
+                             "has its body, is posed and is in the truth, and each capture marks "
+                             "the vehicles its camera did not draw. Default: every body drawn at "
+                             "any range")
 
     parser.add_argument("--show-road-mesh", action="store_true",
                         help="draw the generated road surface. Hidden by default: it is a flat grey "
@@ -512,10 +570,66 @@ class PacingProgress:
                     session.Report.WorstPositionDivergenceMetres,
                     session.Report.WorstVelocityDivergenceMetresPerSecond)
         admission = session.Report.LastAdmissionPass
-        if admission is not None:
+        if admission is None:
+            return
+        if not admission.Limited:
             logger.info("  sumo population %d, all in the render set; %d admitted and %d released at "
                         "the last pass, %d admitted in all", admission.Population,
                         admission.NewlyAdmitted, admission.Released, admission.TotalAdmissions)
+            return
+        logger.info("  sumo population %d, eligible %d, drawn %d, shed %d%s; %d without a body; %s",
+                    admission.Population, admission.Eligible, admission.Admitted, admission.Shed,
+                    "" if admission.Capacity is None else f", capacity {admission.Capacity}",
+                    admission.Population - admission.Admitted, self.rule(admission))
+
+    @staticmethod
+    def rule(admission) -> str:
+        """Which rule the pass decided by, as the log says it."""
+        if str(admission.Rule) == "Cameras":
+            return (f"by {admission.Cameras} camera footprint(s), {admission.Held} held by the "
+                    "release lag")
+        if str(admission.Rule) == "Circle":
+            return "by the circle"
+        return "every vehicle, up to the capacity"
+
+
+class CameraFootprints:
+    """Says each camera's footprint and range cap once, the first time the session follows it.
+
+    The session measures a camera's footprint at the first step after it is registered, so this reads
+    the report after every step; a camera it has already said is not said again. Only a render set
+    that follows the cameras measures one.
+    """
+
+    def __init__(self) -> None:
+        self.said: set[int] = set()
+
+    def after_step(self, session) -> None:
+        footprints = session.Report.CameraFootprints
+        if footprints.Count == len(self.said):
+            return
+        for footprint in footprints.Values:
+            if int(footprint.Actor) not in self.said:
+                self.said.add(int(footprint.Actor))
+                logger.info("render set follows %s", footprint)
+
+
+def describe_render_set(report) -> str:
+    """The render set as the launch states it: every vehicle, or the limit and what it leaves out."""
+    if not report.RenderSetLimits:
+        return f"{report.RenderSetPolicy}; SUMO runs under seed {report.SumoSeed}"
+    return (f"{report.RenderSetPolicy}; SUMO runs under seed {report.SumoSeed}. An optional limit, "
+            "chosen for speed: a vehicle outside it is simulated by SUMO and is not in CARLA -- no "
+            "body, no frame, no truth record")
+
+
+def describe_draw_distance(metres: float | None) -> str:
+    """The draw distance as the launch states it: none, or what it does and does not change."""
+    if metres is None:
+        return "none; every body is drawn at any range"
+    return (f"{metres:g} m, rendering only: every vehicle has its body, is posed and is in the "
+            "truth; a body farther than that from a camera is not drawn in that camera's image, and "
+            "each capture's sidecar marks it")
 
 
 def camera_transform(args: argparse.Namespace, centre: tuple[float, float]) -> carla.Transform:
@@ -562,6 +676,13 @@ def report_captures(recorder) -> None:
     logger.info("captures           %s written, %s dropped; %s carry their frame's "
                 "illumination declaration, %s do not", recorder.Saved, recorder.Dropped,
                 recorder.IlluminationPaired, recorder.IlluminationUnpaired)
+    drawn_under = getattr(recorder, "DrawDistanceCaptures", 0)
+    if drawn_under:
+        # Vehicles in the world and in the truth that a capture's image did not show, each marked in
+        # its sidecar so none is read as seen.
+        logger.info("draw distance      %s captures drawn under it; %s vehicle records marked "
+                    "wholly beyond it, %s partly", drawn_under, recorder.VehiclesBeyondDrawDistance,
+                    recorder.VehiclesPartlyBeyondDrawDistance)
     # A capture whose frame's render set the session no longer held lists no vehicle rather
     # than a guessed set, so any such capture is truth missing, and is said louder.
     (logger.warning if recorder.RenderSetUnpaired or recorder.RenderSetBodiesMissing
@@ -610,6 +731,38 @@ def use_carlacontrol() -> None:
     os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 
+def warn_of_an_uncovered_world(args: argparse.Namespace) -> None:
+    """Say what a free view will find rendered under a limit: under the cameras, whatever it flies
+    over; under the circle, only the circle, and then whether the circle is smaller than the world.
+
+    A circle is fixed and a free camera can go anywhere, so the operator is told before the drive
+    starts, with the region that would take in the whole world package. With no limit there is
+    nothing to say: every vehicle SUMO has is rendered.
+    """
+    if args.render_set == "all":
+        return
+    if args.render_set == "cameras":
+        logger.info("free view: vehicles are rendered where the flown camera looks, placed %g s of "
+                    "their travel ahead of its view and taken away %g s after they leave it; until "
+                    "the camera is registered %s decides", args.render_admit_lead,
+                    args.render_release_lag,
+                    "the region circle" if args.region_radius is not None else "every vehicle")
+        return
+    use_carlacontrol()
+    from carlacontrol.RenderRegionCoverage import RenderRegionCoverage
+    from carlacontrol.WorldPackageReader import WorldPackageReader
+
+    coverage = RenderRegionCoverage.from_manifest(WorldPackageReader(args.world_package).manifest)
+    if coverage is None:
+        logger.info("free view: the world package records no extent to check the region against")
+        return
+    advice = coverage.advice(args.region_x, args.region_y, args.region_radius, args.capacity)
+    if advice is None:
+        logger.info("free view: the render region takes in the whole world")
+    else:
+        logger.warning("free view: %s", advice)
+
+
 def free_view_settings(args: argparse.Namespace, centre: tuple[float, float], feet_per_metre: float,
                        depth_range_m: float) -> argparse.Namespace:
     """The flight window's settings, in the shape `SensorRig` and `PygameInterface` read them, with
@@ -643,6 +796,7 @@ class FreeViewParts:
         self.rig = None
         self.recorder = None
         self.view = None
+        self.session = None
 
     @property
     def closed(self) -> bool:
@@ -662,6 +816,8 @@ class FreeViewParts:
         # Spawned with the world already the session's, so every frame either camera delivers is of
         # a tick the session issued.
         self.rig = SensorRig(world=world, args=settings, client=client)
+        if args.render_set == "cameras":
+            self.follow(session)
         controller = PyGameSensorController(self.rig, world, self.rig.get_initial_pose(),
                                             speed=args.flight_speed)
         if not args.no_record:
@@ -708,8 +864,25 @@ class FreeViewParts:
             may_record=window_open,
             on_closed=lambda handle, _directory: report_captures(handle))
 
+    def follow(self, session) -> None:
+        """Register the flown camera with the session, so a render set that follows the cameras
+        follows its view from the next step on. Its depth camera shares its pose and view, so it is
+        not registered as well."""
+        session.AddCamera(self.rig.camera.id)
+        self.session = session
+
     def close(self) -> None:
-        """Take down what was made. Each part is tried whatever the ones before it did."""
+        """Take down what was made. Each part is tried whatever the ones before it did.
+
+        The session stops following the camera first: a camera destroyed while still registered is
+        left out of every step after, and counted, rather than followed.
+        """
+        if self.session is not None and self.rig is not None:
+            try:
+                self.session.RemoveCamera(self.rig.camera.id)
+            except Exception as failure:
+                logger.error("could not stop the session following the free view's camera: %r",
+                             failure)
         for part, take_down in ((self.recorder, "close"), (self.view, "close"),
                                 (self.rig, "cleanup")):
             if part is None:
@@ -733,6 +906,8 @@ def main() -> int:
     sun = SunDeclaration(args)
     sumo = SessionSumo(args.sumo_home)
     sumo.announce(args.sumo_gui)
+    if args.view == "free":
+        warn_of_an_uncovered_world(args)
 
     client = carla.Client(args.host, args.port)
     client.set_timeout(RUN_TIMEOUT_S)
@@ -746,6 +921,7 @@ def main() -> int:
     run_id = f"run-{datetime.now(UTC):%Y%m%d-%H%M%S}"
     aim = RenderedVehicleCentre()
     progress = PacingProgress()
+    footprints = CameraFootprints()
     aims_at_traffic = args.view == "fixed" and args.camera_aim == "traffic" and not args.no_record
 
     try:
@@ -770,6 +946,15 @@ def main() -> int:
             vehicle_lamps=not args.no_vehicle_lamps,
             headlight_on_below_deg=args.headlight_on_below,
             headlight_off_above_deg=args.headlight_off_above,
+            draw_distance_m=args.draw_distance,
+            render_set=args.render_set,
+            region_centre=(args.region_x, args.region_y),
+            region_radius_m=args.region_radius,
+            region_hysteresis_m=args.region_hysteresis,
+            capacity=args.capacity,
+            render_min_pixels=args.render_min_pixels,
+            render_admit_lead_s=args.render_admit_lead,
+            render_release_lag_s=args.render_release_lag,
             # Bound only where the aim needs it: the session hands out a pose per rendered
             # vehicle per tick, and a callback that spends the whole run declining them is a
             # crossing into Python per vehicle per tick for nothing. No divergence callback for
@@ -804,8 +989,8 @@ def main() -> int:
         logger.info("layers: %s", ", ".join(
             f"{layer} {'drawn' if session.Report.LayerVisibility[layer] else 'hidden'}"
             for layer in session.Report.LayerVisibility.Keys))
-        logger.info("render set: every vehicle SUMO has; SUMO runs under seed %d",
-                    session.Report.SumoSeed)
+        logger.info("render set: %s", describe_render_set(session.Report))
+        logger.info("draw distance: %s", describe_draw_distance(session.Report.DrawDistanceMetres))
 
         steps = 0
         # Everything up to the recorder starting happens with the world already in synchronous mode:
@@ -838,6 +1023,9 @@ def main() -> int:
                     centre = aim.centre()
                     logger.info("aimed at %d rendered vehicles", aim.count)
             camera = spawn_camera(world, args, centre)
+            if args.render_set == "cameras":
+                # From the next step a render set that follows the cameras follows this one's view.
+                session.AddCamera(camera.id)
 
             # The prewarm is ticked with the camera in the world, so its tiles stream, and recorded by
             # nothing: the window's first capture is the frame at the instant it opens.
@@ -871,6 +1059,7 @@ def main() -> int:
         try:
             while session.Advance():
                 steps += 1
+                footprints.after_step(session)
                 if args.steps and steps >= args.steps:
                     break
                 progress.after_step(session, steps)
@@ -917,6 +1106,9 @@ def main() -> int:
             report_captures(recorder)
         if camera is not None:
             try:
+                # A session following the camera stops before the camera leaves the world.
+                if session is not None and args.render_set == "cameras":
+                    session.RemoveCamera(camera.id)
                 camera.destroy()
             except Exception as failure:
                 logger.error("could not destroy the camera: %r", failure)

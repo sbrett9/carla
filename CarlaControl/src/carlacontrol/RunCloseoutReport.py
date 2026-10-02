@@ -6,7 +6,8 @@ newest frame's illumination declaration, its latest admission pass, and the comp
 teleporting checks it made before SUMO started), the window's admission passes (`WindowAdmissions`),
 the wait for each channel's view before the window opened (`ViewReadinessGate`) and each channel's
 recorder (`FrameRecorder`: captures written, captures dropped, illumination
-pairing, render-set pairing, occlusion pairing, and where each capture's pose came from) -- never at
+pairing, render-set pairing, occlusion pairing, where each capture's pose came from, and the vehicles
+it marked beyond the draw distance) -- never at
 the end only, so a run stopped at minute nine has everything it knew at minute nine. `snapshot()` is
 the one computation: the live monitor renders it (D12.14), the loud conditions are read from it, and
 the run result carries the last one taken. Nothing here measures anything of its own.
@@ -32,8 +33,10 @@ tree does not publish is recorded as `skipped` with the reason, so *not measured
 | `supervision.manifest_closing_record` | -- | skipped: no run manifest is written |
 
 **One loud condition interrupts every run** (D12.15): a recorder's `Dropped` becoming non-zero; a live
-run adds the achieved factor falling below its floor. A participant is always drawn, because every
-vehicle SUMO has is drawn, so nothing else interrupts.
+run adds the achieved factor falling below its floor. With no render-set limit -- the default -- a
+participant is always drawn, because every vehicle SUMO has is drawn. Under an optional limit a
+vehicle outside it is not in CARLA or the truth; the snapshot states the limit and counts what it left
+out, and nothing interrupts for it, since the operator chose it.
 """
 from __future__ import annotations
 
@@ -161,7 +164,18 @@ class RunCloseoutReport:
         snapshot["render"] = {"rendered_now": int(session.RenderedVehicleIds.Count),
                               "ticks": int(report.Ticks), "sumo_steps": int(report.SumoSteps),
                               "poses_computed": int(report.PosesComputed),
-                              "batch_failures": int(report.BatchFailures)}
+                              "batch_failures": int(report.BatchFailures),
+                              "draw_distance_m": self._number(report.DrawDistanceMetres),
+                              "draw_distance_in_force_m": self._number(session.DrawDistanceMetres),
+                              "draw_distance_refused": None if report.DrawDistanceRefused is None
+                              else str(report.DrawDistanceRefused),
+                              "render_set": str(report.RenderSetPolicy),
+                              "render_set_limits": bool(report.RenderSetLimits),
+                              "vehicle_passes_outside_the_policy":
+                                  int(report.VehiclePassesOutsideThePolicy),
+                              "capacity_declines": int(report.CapacityDeclines),
+                              "releases": {str(reason): int(report.Releases[reason])
+                                           for reason in report.Releases.Keys}}
         snapshot["admission"] = WindowAdmissions.describe(report.LastAdmissionPass)
         audit = session.SunAudit
         snapshot["solar_audit"] = None if audit is None else {
@@ -203,7 +217,9 @@ class RunCloseoutReport:
                  "occlusion_measured": None, "occlusion_unmatched": None,
                  "sensor_pose_from_snapshot": None, "sensor_pose_header_disagreed": None,
                  "sensor_pose_from_header": None,
-                 "depth_pose_header_disagreed": None, "depth_pose_from_header": None}
+                 "depth_pose_header_disagreed": None, "depth_pose_from_header": None,
+                 "draw_distance_captures": None, "vehicles_beyond_draw_distance": None,
+                 "vehicles_partly_beyond_draw_distance": None}
         if recorder is None:
             return entry
         entry.update({"written": int(recorder.Saved), "recorder_dropped": int(recorder.Dropped),
@@ -212,7 +228,11 @@ class RunCloseoutReport:
                       "render_set_paired": int(recorder.RenderSetPaired),
                       "render_set_unpaired": int(recorder.RenderSetUnpaired),
                       "occlusion_measured": int(recorder.OcclusionMeasured),
-                      "occlusion_unmatched": int(recorder.OcclusionUnmatched)})
+                      "occlusion_unmatched": int(recorder.OcclusionUnmatched),
+                      "draw_distance_captures": int(recorder.DrawDistanceCaptures),
+                      "vehicles_beyond_draw_distance": int(recorder.VehiclesBeyondDrawDistance),
+                      "vehicles_partly_beyond_draw_distance":
+                          int(recorder.VehiclesPartlyBeyondDrawDistance)})
         if recorder.ChecksSensorPose:
             entry.update({"sensor_pose_from_snapshot": int(recorder.SensorPoseFromSnapshot),
                           "sensor_pose_header_disagreed": int(recorder.SensorPoseHeaderDisagreed),
@@ -338,15 +358,41 @@ class RunCloseoutReport:
                 lines.append(f"    routed by {lock['routed_by']}")
                 lines.append(f"    compiled for {lock['compiled_for']}")
             lines.append(f"  teleporting: {checks['teleporting']['statement']}")
+        render = snapshot.get("render")
+        if render is not None and render.get("render_set_limits"):
+            releases = render.get("releases") or {}
+            lines.append(f"  render set {render['render_set']}: an optional limit; a vehicle outside "
+                         f"it is simulated by SUMO and is not in CARLA or the truth -- "
+                         f"{render['vehicle_passes_outside_the_policy']} vehicle-passes outside the "
+                         f"policy, {render['capacity_declines']} declined for the capacity, released "
+                         f"{releases.get('LeftTheRegion', 0)} leaving the policy and "
+                         f"{releases.get('Capacity', 0)} for the capacity")
         admissions = snapshot.get("admissions")
         if admissions:
             opening = admissions["at_window_open"]
-            if opening is not None:
+            if opening is not None and opening.get("limited"):
+                lines.append(f"  admission at the window's begin, t={opening['sim_time_s']:g}: "
+                             f"population {opening['population']}, eligible {opening['eligible']}, "
+                             f"drawn {opening['admitted']}, shed {opening['shed']}; "
+                             f"{opening['left_out']} without a body")
+            elif opening is not None:
                 lines.append(f"  admission at the window's begin, t={opening['sim_time_s']:g}: "
                              f"population {opening['population']}, all rendered")
             window = admissions["window"]
             lines.append(f"  admission passes in the window: {window['passes']}; most population "
                          f"{window['most_population']}")
+            if window.get("limited"):
+                lines.append(f"    {window['passes_leaving_out']} of them left vehicles without a "
+                             f"body, at most {window['most_left_out']} at once and "
+                             f"{window['most_shed']} shed for the capacity")
+        render = snapshot.get("render")
+        if render is not None and render.get("draw_distance_m") is not None:
+            refused = render.get("draw_distance_refused")
+            lines.append(f"  draw distance {render['draw_distance_m']:g} m"
+                         + (f": refused by the server, so every body was drawn at any range "
+                            f"({refused})" if refused is not None
+                            else ", rendering only: vehicles beyond it from a camera are in the "
+                                 "truth and marked in that camera's sidecars"))
         readiness = snapshot.get("readiness")
         for view in (readiness or {}).get("channels", []):
             lines.append(f"  view {view['sensor_id']}: {describe_view(view)}")
@@ -355,6 +401,11 @@ class RunCloseoutReport:
                          f"recorder-dropped {channel['recorder_dropped']}, illumination unpaired "
                          f"{channel['illumination_unpaired']}, render set unpaired "
                          f"{channel['render_set_unpaired']}  -> {channel['directory']}")
+            if channel.get("draw_distance_captures"):
+                lines.append(f"    under the draw distance {channel['draw_distance_captures']} "
+                             f"captures: {channel['vehicles_beyond_draw_distance']} vehicle records "
+                             f"marked wholly beyond it, "
+                             f"{channel['vehicles_partly_beyond_draw_distance']} partly")
             if channel.get("sensor_pose_from_snapshot") is not None:
                 lines.append(f"    pose from its own frame's snapshot "
                              f"{channel['sensor_pose_from_snapshot']}, header disagreed "

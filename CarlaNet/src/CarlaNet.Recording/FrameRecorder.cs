@@ -47,7 +47,7 @@ public sealed class FrameRecorder : IDisposable
     private sealed record Job(DateTime CapturedUtc, int Width, int Height,
                               ReadOnlyMemory<byte> Bgra, IReadOnlyList<VehicleTelemetry> Telemetry,
                               IReadOnlyList<double> Solar, SensorPose? Sensor,
-                              CaptureIdentity Capture, SidecarVehicles Vehicles);
+                              CaptureIdentity Capture, SidecarVehicles Vehicles, double? DrawDistance);
 
     private readonly CarlaClient _client;
     private readonly string _dir;
@@ -65,6 +65,7 @@ public sealed class FrameRecorder : IDisposable
     private readonly IIlluminationSource? _illumination;
     private readonly RenderSetPairing? _renderSet;
     private readonly SensorPoseCheck? _sensorPose;
+    private readonly double? _drawDistance;
 
     private readonly Channel<Arrival> _arrivals;
     private readonly Task _preparation;
@@ -79,6 +80,7 @@ public sealed class FrameRecorder : IDisposable
     private long _saved, _dropped;
     private long _telemetryExact, _telemetryOffset, _telemetryWorstOffset;
     private long _illuminationPaired, _illuminationUnpaired;
+    private long _drawDistanceCaptures, _beyondDrawDistance, _partlyBeyondDrawDistance;
 
     /// <summary>
     /// How long a capture waits for the declaration of its own frame when it arrives before the
@@ -128,6 +130,24 @@ public sealed class FrameRecorder : IDisposable
     /// <summary>Bodies a paired capture's render set held that no truth record described, summed
     /// over the captures.</summary>
     public long RenderSetBodiesMissing => _renderSet?.BodiesMissing ?? 0;
+
+    /// <summary>
+    /// Captures whose image was rendered under a draw distance, and whose sidecar therefore states it
+    /// and marks every vehicle beyond it.
+    /// </summary>
+    public long DrawDistanceCaptures => Interlocked.Read(ref _drawDistanceCaptures);
+
+    /// <summary>
+    /// Vehicle records marked wholly beyond the draw distance, summed over the captures: vehicles in
+    /// the world and in the truth that the image does not show.
+    /// </summary>
+    public long VehiclesBeyondDrawDistance => Interlocked.Read(ref _beyondDrawDistance);
+
+    /// <summary>
+    /// Vehicle records the draw distance fell across, summed over the captures: vehicles the image may
+    /// show without the parts of them beyond it.
+    /// </summary>
+    public long VehiclesPartlyBeyondDrawDistance => Interlocked.Read(ref _partlyBeyondDrawDistance);
 
     /// <summary>Whether captures carry a per-vehicle occlusion measurement.</summary>
     public bool MeasuresOcclusion => _occlusion is not null;
@@ -209,16 +229,26 @@ public sealed class FrameRecorder : IDisposable
     /// counted (<see cref="SensorPoseCheck"/>). Null takes the pose from the header unchecked.</param>
     /// <param name="depthActorId">The depth camera actor, for the same check on the depth capture
     /// occlusion is measured against. Used only with <paramref name="depthStreamToken"/>.</param>
+    /// <param name="drawDistanceMetres">The draw distance the run's vehicle bodies are drawn under,
+    /// metres, for a recorder given no <paramref name="renderSet"/> source: each capture then states
+    /// it and marks every vehicle beyond it, seen from the capture's camera, so a vehicle in the world
+    /// that the image does not show is never listed as seen. Where a source is given, each frame's own
+    /// set says what it was drawn under -- including that the server refused a distance, so nothing
+    /// was culled -- and this is not read. Null marks nothing.</param>
     public FrameRecorder(CarlaClient client, byte[] streamToken, string dir, double hz,
                          string affiliation = "n", double staleSeconds = 3.0,
                          SensorPlatformOptions? platform = null, int workers = 0,
                          string? runId = null, string? scenarioId = null, long? seed = null,
                          byte[]? depthStreamToken = null, OcclusionOptions? occlusion = null,
                          IIlluminationSource? illumination = null, IRenderSetSource? renderSet = null,
-                         ActorId? cameraActorId = null, ActorId? depthActorId = null)
+                         ActorId? cameraActorId = null, ActorId? depthActorId = null,
+                         double? drawDistanceMetres = null)
     {
         if (streamToken is not { Length: 24 })
             throw new ArgumentException("streamToken must be a 24-byte sensor stream token", nameof(streamToken));
+        if (drawDistanceMetres is { } limit && (!double.IsFinite(limit) || limit <= 0.0))
+            throw new ArgumentOutOfRangeException(nameof(drawDistanceMetres), limit,
+                                                  "a draw distance is a positive number of metres, or null for none");
 
         _client = client;
         _dir = dir;
@@ -245,6 +275,7 @@ public sealed class FrameRecorder : IDisposable
         _illumination = illumination;
         _renderSet = renderSet is null ? null : new RenderSetPairing(renderSet);
         _sensorPose = cameraActorId is { } camera ? new SensorPoseCheck(client.GetSnapshotFrame, camera) : null;
+        _drawDistance = drawDistanceMetres;
 
         int n = workers > 0 ? workers : Math.Max(2, Environment.ProcessorCount / 2);
         _channel = Channel.CreateBounded<Job>(new BoundedChannelOptions(Math.Max(4, n * 2))
@@ -358,11 +389,15 @@ public sealed class FrameRecorder : IDisposable
         // own frame rendered, each named by its vehicle, before anything is measured against the
         // imagery -- a parked body is neither reported nor measured.
         SidecarVehicles vehicles = SidecarVehicles.World;
+        double? drawDistance = _drawDistance;
         if (_renderSet is not null && telemetryTick is { } described)
         {
             PairedTruth paired = _renderSet.Pair(recs, described);
             recs = paired.Records;
             vehicles = paired.Vehicles;
+            // The frame's own set says what it was drawn under, so a distance the server refused,
+            // or one changed during the run, is the one the image was rendered with.
+            drawDistance = paired.DrawDistanceMetres;
         }
         else if (!servedRenderSet.IsEmpty)
         {
@@ -378,6 +413,18 @@ public sealed class FrameRecorder : IDisposable
         // below that places the camera works from this one pose.
         Transform cameraPose = _sensorPose?.Resolve(arrival.Frame, arrival.HeaderTransform)
                                ?? arrival.HeaderTransform;
+
+        // A body farther than the draw distance from this camera is in the world and in the truth,
+        // and not in this image: each record says where it stood against the distance, seen from the
+        // pose the pixels were taken from, so none beyond it is read as a vehicle the image shows.
+        if (drawDistance is not null)
+        {
+            Interlocked.Increment(ref _drawDistanceCaptures);
+            recs = DrawDistanceCheck.Mark(recs, cameraPose.Location, drawDistance, out int beyond,
+                                          out int partly);
+            Interlocked.Add(ref _beyondDrawDistance, beyond);
+            Interlocked.Add(ref _partlyBeyondDrawDistance, partly);
+        }
 
         // How much of each vehicle this camera can actually see. Occlusion belongs to the
         // (vehicle, camera) pair, so it is measured against the depth capture of THIS frame from THIS
@@ -410,7 +457,7 @@ public sealed class FrameRecorder : IDisposable
         var capture = new CaptureIdentity(arrival.Frame, arrival.SimTimeSeconds, _runId, _scenarioId, _seed,
                                           telemetryTick);
         return new Job(arrival.CapturedUtc, arrival.Width, arrival.Height, arrival.Bgra, recs, arrival.Solar,
-                       sensor, capture, vehicles);
+                       sensor, capture, vehicles, drawDistance);
     }
 
     private IReadOnlyList<VehicleTelemetry> MeasureOcclusion(
@@ -419,8 +466,13 @@ public sealed class FrameRecorder : IDisposable
         var depth = _occlusion!.MatchTo(tick, simTime, cameraTransform);
         if (depth is null) return recs;
 
+        // A vehicle wholly beyond the draw distance is drawn in neither this image nor the depth
+        // capture, which would read the ground behind it as an unobstructed view of it; it is left
+        // unmeasured rather than reported visible.
         var boxes = new List<VehicleBox>(recs.Count);
-        foreach (var r in recs) boxes.Add(new VehicleBox(r.Id, r.ActorTransform, r.BoundingBox));
+        foreach (var r in recs)
+            if (DrawDistanceCheck.MayBeMeasuredForOcclusion(r))
+                boxes.Add(new VehicleBox(r.Id, r.ActorTransform, r.BoundingBox));
         var measured = _occlusion.Estimate(depth, boxes);
         if (measured.Count == 0) return recs;
 
@@ -460,7 +512,8 @@ public sealed class FrameRecorder : IDisposable
                                                    .Concat(job.Capture.PngTextChunks()));
                     CotWriter.WriteToFile(Path.Combine(_dir, stem + ".xml"),
                                           job.CapturedUtc, job.Telemetry, _affiliation, _stale,
-                                          job.Solar, job.Sensor, job.Capture, illumination, job.Vehicles);
+                                          job.Solar, job.Sensor, job.Capture, illumination, job.Vehicles,
+                                          job.DrawDistance);
                     Interlocked.Increment(ref _saved);
                 }
                 catch (Exception ex)

@@ -1711,6 +1711,34 @@ public sealed class CarlaClient : IAsyncDisposable
         return _rpc.CallAsync<uint>("update_render_set", lentIds, vehicleIds, vehicleTypeIds, parkedIds);
     }
 
+    /// <summary>
+    /// Set how far from a camera the named actors are drawn, in metres: the max draw distance of
+    /// every mesh and lamp of each actor and of whatever is attached to it, so that no camera draws
+    /// any of it from farther away. Zero clears the limit, so they are drawn at any range. Answers
+    /// how many of the named actors the server found.
+    /// </summary>
+    /// <remarks>
+    /// <para>Rendering only. The renderer culls each component per view by its own bounds, so the
+    /// limit applies to every camera at once, and the actor keeps its transform, its collision and
+    /// everything the world observer reports of it: a body beyond the distance is still in the world
+    /// and in the truth, and simply not in that camera's image.</para>
+    ///
+    /// <para>A server built before it carried the call refuses it, with an error naming it.</para>
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">The distance is negative or not a number.</exception>
+    public Task<uint> SetActorsMaxDrawDistanceAsync(IReadOnlyList<ActorId> actorIds, double maxDrawDistanceMetres)
+    {
+        ArgumentNullException.ThrowIfNull(actorIds);
+        if (!double.IsFinite(maxDrawDistanceMetres) || maxDrawDistanceMetres < 0.0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(maxDrawDistanceMetres), maxDrawDistanceMetres,
+                "A draw distance is zero, for no limit, or a positive number of metres.");
+        }
+
+        return _rpc.CallAsync<uint>("set_actors_max_draw_distance", actorIds, maxDrawDistanceMetres);
+    }
+
     // ── §8.8 Actor Transform and Physics ──────────────────────────────────────
 
     public Task SetActorLocationAsync(ActorId id, Location location)

@@ -49,6 +49,17 @@ public sealed class RenderSet
     /// <summary>How many bodies the frame rendered.</summary>
     public int Count => _byActor.Count;
 
+    /// <summary>
+    /// How far from a camera, in metres, the frame drew a body, or null where it drew every body at
+    /// any range: no draw distance was set, or the server refused it.
+    /// </summary>
+    /// <remarks>
+    /// A body farther than this from a camera is in the set -- it is posed and in the world -- and is
+    /// not in that camera's image, so a recorder marks it in that camera's sidecar rather than listing
+    /// it as seen (<see cref="DrawDistanceReach"/>).
+    /// </remarks>
+    public double? DrawDistanceMetres { get; init; }
+
     /// <summary>Every body the frame rendered, by actor id.</summary>
     public IReadOnlyDictionary<uint, RenderedVehicle> ByActor => _byActor;
 

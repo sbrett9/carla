@@ -9,7 +9,10 @@ real run's would. Nothing here opens a socket.
 The session publishes its admission passes as the real one does (`SumoDriveSessionAdmissionTests`
 holds that): two while it starts -- the fast-forward's frame and the step of lookahead -- and then one
 per `Advance`, each for the frame one step ahead of the rendered clock, handed to
-`on_admission_pass` and left on `Report.LastAdmissionPass`. Where `on_pose` is given it hands over a
+`on_admission_pass` and left on `Report.LastAdmissionPass`. Under a `capacity` it is handed, a pass
+draws at most that many and sheds the rest, as the real session's every-vehicle policy does; under the
+cameras it records each camera registered with `AddCamera` and let go with `RemoveCamera`. Where
+`on_pose` is given it hands over a
 pose record per vehicle per tick, from `FakeServer.traffic_at`. The records carry the member names
 of `CarlaNet.CoSim.AdmissionPass` and `CoSimPoseRecord`; the tests that read the real types hold
 the names equal.
@@ -161,6 +164,9 @@ class FakeRecorder:
         self.ChecksDepthPose = False
         self.OcclusionDepthPoseHeaderDisagreed = 0
         self.OcclusionDepthPoseFromHeader = 0
+        self.DrawDistanceCaptures = 0
+        self.VehiclesBeyondDrawDistance = 0
+        self.VehiclesPartlyBeyondDrawDistance = 0
         self.stopped = False
         self.drop_every_step = 0
 
@@ -356,13 +362,23 @@ class FakeAdmissionPass:
     """An AdmissionPass: the render set's row for one SUMO frame."""
 
     def __init__(self, world_tick: int, frame_s: float, population: int, newly_admitted: int,
-                 released: int, total_admissions: int) -> None:
+                 released: int, total_admissions: int, *, limited: bool = False,
+                 admitted: int | None = None, capacity: int | None = None,
+                 rule: str = "Every") -> None:
         self.WorldTick = world_tick
         self.SimulatedTimeSeconds = frame_s
         self.Population = population
         self.NewlyAdmitted = newly_admitted
         self.Released = released
         self.TotalAdmissions = total_admissions
+        self.Limited = limited
+        self.Eligible = population
+        self.Admitted = population if admitted is None else admitted
+        self.Shed = self.Eligible - self.Admitted
+        self.Held = 0
+        self.Capacity = capacity
+        self.Rule = rule
+        self.Cameras = 0
 
 
 class _Position:
@@ -395,6 +411,14 @@ class _Report:
         self.BatchFailures = 0
         self.Admissions = 0
         self.LastAdmissionPass = None
+        self.DrawDistanceMetres = None
+        self.DrawDistanceRefused = None
+        self.RenderSetPolicy = "every vehicle SUMO has"
+        self.RenderSetLimits = False
+        self.RenderSetCapacity = None
+        self.VehiclePassesOutsideThePolicy = 0
+        self.CapacityDeclines = 0
+        self.Releases = _Keyed()
         self.WorstSolarResidualDegrees = 0.002
         self.WorstSolarClockResidualSeconds = 0.1
 
@@ -431,6 +455,17 @@ class FakeSession:
         self.Illumination = _Illumination()
         self.RenderSet = _RenderSet(world)
         self.RenderedVehicleIds = _RenderedIds()
+        # The draw distance the session was asked for, which the bodies carry from their spawn.
+        self.Report.DrawDistanceMetres = kwargs.get("draw_distance_m")
+        self.DrawDistanceMetres = kwargs.get("draw_distance_m")
+        # The render set it was asked for: every vehicle by default, or the limit chosen.
+        self.render_set = kwargs.get("render_set", "all")
+        self.capacity = kwargs.get("capacity")
+        self.Report.RenderSetLimits = self.render_set != "all" or self.capacity is not None
+        self.Report.RenderSetCapacity = self.capacity
+        if self.Report.RenderSetLimits:
+            self.Report.RenderSetPolicy = f"{self.render_set}, capacity {self.capacity}"
+        self.Cameras: list[int] = []
         self.disposed = False
         self.advances = 0
         self.ticks = 0
@@ -451,8 +486,13 @@ class FakeSession:
         self._population = population
         report = self.Report
         report.Admissions += admitted
+        drawn = population if self.capacity is None else min(population, self.capacity)
+        report.CapacityDeclines += population - drawn
         admission = FakeAdmissionPass(self.ticks, frame_s, population, admitted, released,
-                                      report.Admissions)
+                                      report.Admissions, limited=report.RenderSetLimits,
+                                      admitted=drawn, capacity=self.capacity,
+                                      rule={"circle": "Circle", "cameras": "Cameras"}.get(
+                                          self.render_set, "Every"))
         report.LastAdmissionPass = admission
         if self.on_admission_pass is not None:
             self.on_admission_pass(admission)
@@ -490,6 +530,17 @@ class FakeSession:
         if self.world.on_advance is not None:
             self.world.on_advance(self)
         return self.RenderedTimeSeconds < self.world.scenario_end_s
+
+    def AddCamera(self, camera: int) -> None:  # noqa: N802 -- the .NET member name
+        self.Cameras.append(int(camera))
+        self.world.events.add("add_camera", int(camera))
+
+    def RemoveCamera(self, camera: int) -> bool:  # noqa: N802 -- the .NET member name
+        self.world.events.add("remove_camera", int(camera))
+        if int(camera) in self.Cameras:
+            self.Cameras.remove(int(camera))
+            return True
+        return False
 
     def Dispose(self) -> None:  # noqa: N802 -- the .NET member name
         self.disposed = True
