@@ -128,6 +128,9 @@ PLACES = {
     # vehicle northbound is held to.
     "i25_north_short_of_arapahoe": {"edge": "907700111"},
     "i25_north_past_arapahoe": {"edge": "1001791386"},
+    # The stretch between them, where the Arapahoe Road loop ramp joins as the rightmost lane: a
+    # driver on it is told of the incident too (INCIDENT_NOTIFY).
+    "i25_north_at_loop_merge": {"edge": "1342047649"},
     # East Arapahoe Road at the map's east and west edges.
     "arapahoe_east_in": {"edge": "131933384"},
     "arapahoe_east_out": {"edge": "427819527"},
@@ -199,6 +202,18 @@ PLACES = {
 # The marked vehicle's anchors, in driving order.
 DWELL_VIA = ("arapahoe_westbound_west_of_i25", "arapahoe_westbound_at_yosemite",
              "yosemite_northbound_from_arapahoe", "underpass_westbound")
+
+# Where drivers learn of the incident: northbound I-25 short of the interchange, and the stretch the
+# loop ramp joins just short of the closure. The second is not optional. A rerouter's edges are also
+# where SUMO refreshes a driver's choice of lanes when a closure begins and ends, and a driver
+# standing on any other edge keeps the choice it made while the lanes were shut. With the ramp
+# meters the world build gives this map, the loop ramp no longer reaches I-25 through a signal that
+# fanned it across every lane: it joins as the rightmost lane, so during the closure its drivers
+# stop at the end of that lane, and once the lanes reopened they stayed stopped, the ramp behind
+# them and the queue back along Arapahoe Road for the rest of the run. Measured on the metered
+# network: 732 live vehicles and climbing at the end with the stretch left out, peak 435 and median
+# 324 with it named.
+INCIDENT_NOTIFY = ("i25_north_short_of_arapahoe", "i25_north_at_loop_merge")
 
 
 @dataclass(frozen=True)
@@ -590,7 +605,7 @@ def main() -> int:
     end_s = args.end or int(round((args.depart + dwell_seconds + 700) / 60.0 + 1) * 60)
     incident = None if args.no_incident else {
         "id": "incident", "place": "i25_north_past_arapahoe",
-        "lanes": list(range(args.incident_lanes)), "notify": ["i25_north_short_of_arapahoe"],
+        "lanes": list(range(args.incident_lanes)), "notify": list(INCIDENT_NOTIFY),
         "begin": args.incident_start, "end": args.incident_start + args.incident_seconds}
     out_dir = Path(args.out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
