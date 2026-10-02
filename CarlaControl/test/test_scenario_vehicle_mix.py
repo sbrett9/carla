@@ -153,9 +153,33 @@ def test_every_emitted_type_carries_the_measurement_verbatim(catalogue, car_clas
     root = ElementTree.fromstring(f"<routes>{xml}</routes>")
     for element in root.findall("vType"):
         entry = measured[SumoVehicleTypeWriter.blueprint_of(element)]
-        for attribute, field in (("length", "length_m"), ("width", "width_m"),
+        for attribute, field in (("length", "length_m"), ("width", "body_width_m"),
                                  ("height", "height_m")):
             assert float(element.get(attribute)) == pytest.approx(entry[field], abs=0.01)
+
+
+def test_sumo_is_given_the_body_width_without_mirrors_and_not_the_box(catalogue):
+    """The box spans the mirrors: the Fuso bus's is 3.93 m wide, wider than a 3.35 m lane, where its
+    body is 3.23 m. SUMO's width is the body's."""
+    bus = VehicleClassSpec(class_id="bus", blueprints=("vehicle.fuso.mitsubishi",), sumo_vclass="bus",
+                           behaviour={"maxSpeed": "25"}, share=1.0)
+    root = ElementTree.fromstring(f"<routes>{ScenarioVehicleMix(catalogue, [bus]).to_xml()}</routes>")
+    element = root.find("vType")
+    extent = catalogue.extent_of("vehicle.fuso.mitsubishi")
+    assert float(element.get("width")) == pytest.approx(extent.body_width_m, abs=1e-4)
+    assert extent.width_m - extent.body_width_m > 0.6
+
+
+def test_a_body_with_no_width_without_mirrors_is_refused(tmp_path):
+    """A catalogue that measured no body width cannot give SUMO one, and the box would carry the
+    mirrors, so a class drawing that body is refused rather than given the box's width."""
+    document = json.loads(open(CATALOGUE_PATH, encoding="utf-8").read())
+    for entry in document["vehicles"]:
+        entry.pop("body_width_m", None)
+    car = VehicleClassSpec(class_id="car", blueprints=(A_MEASURED_CAR,), sumo_vclass="passenger",
+                           behaviour={"maxSpeed": "55"}, share=1.0)
+    with pytest.raises(ValueError, match="no body width without the mirrors"):
+        ScenarioVehicleMix(VehicleCatalogue(document), [car])
 
 
 @pytest.mark.skipif(not os.path.exists(SCHEMA_PATH), reason="the staged SUMO schema is not present")

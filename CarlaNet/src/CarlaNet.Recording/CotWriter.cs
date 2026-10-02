@@ -208,6 +208,11 @@ public static class CotWriter
             w.WriteAttributeString("vx", F(r.Vx, "0.00"));
             w.WriteAttributeString("vy", F(r.Vy, "0.00"));
             w.WriteAttributeString("vz", F(r.Vz, "0.00"));
+            // The direction the body points, where the track's course is the direction it moves.
+            if (!double.IsNaN(r.HeadingDeg))
+            {
+                w.WriteAttributeString("heading_deg", F(r.HeadingDeg, "0.0"));
+            }
             // How much of this vehicle the camera cannot see, and that fraction as a coarse band, so
             // a consumer drawing training boxes can drop the hidden ones and label the partials.
             // Written only when it was measured: an absent attribute means unknown, which is not the
@@ -237,6 +242,12 @@ public static class CotWriter
                 w.WriteAttributeString("vtype_id", rendered.VehicleTypeId);
                 w.WriteAttributeString("admitted_tick",
                                        rendered.AdmittedTick.ToString(CultureInfo.InvariantCulture));
+                // The angle SUMO reported for the vehicle at this frame, for audit beside the body's
+                // own heading, which comes from the path it took. Known to a recorder beside the session.
+                if (rendered.SumoAngleDegrees is { } sumoAngle)
+                {
+                    w.WriteAttributeString("sumo_angle_deg", F(sumoAngle, "0.0"));
+                }
             }
             w.WriteEndElement(); // _carla
 

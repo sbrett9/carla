@@ -228,6 +228,26 @@ public class CotWriterTests
     }
 
     [Fact]
+    public void The_Truth_Carries_The_Bodys_Heading_Beside_Its_Course_And_Sumos_Angle_For_Audit()
+    {
+        // During a SUMO drive the body's heading comes from the path it took, its course from its
+        // velocity, and SUMO's own reported angle rides beside them where the session supplied it.
+        string xml = Write(Saloon() with
+        {
+            HeadingDeg = 176.25,
+            Rendered = new RenderedVehicle(7, "12", "passenger", 260001) { SumoAngleDegrees = 179.94 },
+        });
+        Assert.Contains("course=\"182.4\"", xml);
+        Assert.Contains("heading_deg=\"176.3\"", xml);
+        Assert.Contains("sumo_angle_deg=\"179.9\"", xml);
+
+        // A render set from the server knows no SUMO angle, and a record with no transform no heading.
+        string fromTheServer = Write(Saloon() with { Rendered = new RenderedVehicle(7, "12", "passenger", 260001) });
+        Assert.DoesNotContain("sumo_angle_deg", fromTheServer);
+        Assert.DoesNotContain("heading_deg", fromTheServer);
+    }
+
+    [Fact]
     public void The_Vehicle_Track_Still_Carries_Its_Contracted_Fields()
     {
         string xml = Write(Saloon() with { Occlusion = 0.0, OcclusionLevel = 0 });

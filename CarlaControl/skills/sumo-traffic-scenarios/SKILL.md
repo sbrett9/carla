@@ -316,10 +316,14 @@ same one. That is what the **vehicle mapping contract** fixes
   `<param key="carla:blueprint" value="vehicle.mini.cooper"/>` child — never by its id, its `vClass`,
   its `guiShape` or any resemblance between them. Variety within a kind of vehicle comes from a
   `<vTypeDistribution>` over several such types, not from one type standing for several vehicles.
-- **The type's `length`, `width` and `height` are the blueprint's measured bounding box**, copied
-  verbatim from the vehicle catalogue. The catalogue is produced by spawning each blueprint against a
-  running server and measuring it, because a blueprint carries no dimension until it is spawned. SUMO's
-  own class defaults are large and silent — declare all three rather than letting them apply.
+- **The type's `length` and `height` are the blueprint's measured bounding box, and its `width` the
+  body's without its wing mirrors**, copied verbatim from the vehicle catalogue. The catalogue is
+  produced by spawning each blueprint against a running server and measuring it, because a blueprint
+  carries no dimension until it is spawned; the box spans the mirrors, so the body width is measured
+  separately from the mesh in the editor and carried beside it (`body_width_m`). SUMO's width is the
+  body's: with its mirrors the Fuso bus is wider than a lane and deadlocks traffic behind it. SUMO's
+  own class defaults are large and silent — declare all three rather than letting them apply. The
+  compiler writes them; a class whose body has no measured body width is refused.
 - **A `vType` with no catalogue entry is not rendered.** No blueprint named, a blueprint the catalogue
   could not measure, or a name the catalogue does not hold: the vehicle stays in SUMO and in the
   behavioural truth record, and CARLA draws nothing for it. There is no nearest match and no

@@ -90,6 +90,8 @@ public sealed class SumoDriveSession : IDisposable
     private readonly HashSet<string> _stillAwaiting = [];
     private readonly HeadlightRule? _headlights;
     private readonly Dictionary<string, (ActorId Actor, VehicleLightStateFlags Lamps)> _lampsWritten = [];
+    private readonly PathHeading _headings = new();
+    private readonly Dictionary<string, double> _sumoAngles = [];
 
     private readonly (double Latitude, double Longitude) _origin;
     private SolarLease? _sun;
@@ -110,6 +112,7 @@ public sealed class SumoDriveSession : IDisposable
                              TeleportingCheck teleporting,
                              RouteErrorCheck routeErrors,
                              SumoCollisionHandling collisionHandling,
+                             SumoLaneChangeDuration laneChanges,
                              HeadlightRule? headlights,
                              CoSimClock clock,
                              SumoRoadNetwork network,
@@ -164,6 +167,7 @@ public sealed class SumoDriveSession : IDisposable
             Teleporting = teleporting,
             RouteErrors = routeErrors,
             CollisionHandling = collisionHandling,
+            LaneChanges = laneChanges,
             VehicleLampsDriven = options.VehicleLampsDriven,
             Console = console,
             SumoStepOverrideSeconds = options.SumoStepOverrideSeconds,
@@ -411,6 +415,11 @@ public sealed class SumoDriveSession : IDisposable
         // there is anything to ask SUMO for on each step.
         SumoCollisionHandling collisionHandling = SumoCollisionHandling.Read(options.ScenarioPath);
 
+        // How long SUMO takes over a lane change, which the report carries: spread over time, the
+        // interpolation puts the vehicle where SUMO has it across the lanes; made inside one step, it can
+        // only slide it a lane width within that step.
+        SumoLaneChangeDuration laneChanges = SumoLaneChangeDuration.Read(options.ScenarioPath);
+
         // The seed SUMO will run under, which the report names so the run's traffic can be reproduced.
         long seed = ReadTheSeed(options.ScenarioPath);
 
@@ -479,7 +488,8 @@ public sealed class SumoDriveSession : IDisposable
                     ? new VehicleBodyPool(bodies, VehicleParking.BeyondTheSurface(ground))
                     : null;
                 session = new SumoDriveSession(options, world, sumo, console, release, compiled,
-                                               teleporting, routeErrors, collisionHandling, headlights, clock,
+                                               teleporting, routeErrors, collisionHandling, laneChanges,
+                                               headlights, clock,
                                                network, ground, roads, catalogue, lease, settings, layers,
                                                pool, (manifest.OriginLatitude, manifest.OriginLongitude),
                                                seed);
@@ -847,7 +857,23 @@ public sealed class SumoDriveSession : IDisposable
             _renderSetNow = new RenderSet(vehicles);
         }
 
-        _renderSets.Record(frame, _renderSetNow);
+        // The membership changes only when a body is lent or given back; SUMO's angle changes every
+        // frame, so each frame's set carries this tick's.
+        _renderSets.Record(frame, new RenderSet(_renderSetNow.ByActor.Values.Select(rendered =>
+            _sumoAngles.TryGetValue(rendered.SumoId, out double angle)
+                ? rendered with { SumoAngleDegrees = angle }
+                : rendered)));
+    }
+
+    /// <summary>
+    /// An angle a fraction of the way from one to another, the shorter way round, degrees clockwise from
+    /// north: SUMO's reported angle between two frames.
+    /// </summary>
+    private static double AngleBetween(double fromDegrees, double toDegrees, double fraction)
+    {
+        double turn = Math.IEEERemainder(toDegrees - fromDegrees, 360.0);
+        double angle = (fromDegrees + (turn * fraction)) % 360.0;
+        return angle < 0.0 ? angle + 360.0 : angle;
     }
 
     /// <summary>
@@ -1229,6 +1255,7 @@ public sealed class SumoDriveSession : IDisposable
         // vehicle's pose and velocity once the batch has been applied.
         _batch.Begin();
         _commanded.Clear();
+        _sumoAngles.Clear();
         VehicleLightStateFlags headlights = HeadlightsForThisTick();
 
         foreach (string vehicleId in _renderSet.RenderedVehicleIds)
@@ -1261,12 +1288,27 @@ public sealed class SumoDriveSession : IDisposable
                 Report.SampleDiscontinuity(from, to, _interpolator.RouteDistance(from, to));
             }
 
+            // SUMO's reported angle at this instant, recorded beside the pose; and the body's own
+            // heading and velocity, from the path its bumper takes (PathHeading). The bumper stays where
+            // SUMO put it: the heading only turns the body about it.
+            double sumoAngle = AngleBetween(from.HeadingDegrees, to.HeadingDegrees, fraction);
+            _sumoAngles[vehicleId] = sumoAngle;
+            PathHeading.Step path = _headings.Advance(
+                vehicleId, _tickIndex, state.X, state.Y, state.SpeedMetresPerSecond, Clock.WorldDeltaSeconds,
+                PathHeading.RearAxleMetres(extent), sumoAngle,
+                restart: state.Case == LaneInterpolationCase.Discontinuous);
+            if (path.Held)
+            {
+                Report.HeadingsHeldAcrossAJump++;
+            }
+
             // The lane the interpolation walked names the road the body is on, and where along it:
             // SUMO's position alone does not, where a deck and the road beneath it share it.
             VehiclePose? pose = _converter.Convert(vehicleId, extent, state.X, state.Y,
-                                                   state.HeadingDegrees,
+                                                   path.HeadingDegrees,
                                                    state.SpeedMetresPerSecond,
-                                                   state.LaneId, state.LanePositionMetres);
+                                                   state.LaneId, state.LanePositionMetres,
+                                                   path.Velocity);
             if (pose is not { } applied)
             {
                 Report.PosesRefusedForMissingGround++;
@@ -1312,7 +1354,7 @@ public sealed class SumoDriveSession : IDisposable
 
             _options.OnPose?.Invoke(new CoSimPoseRecord(
                 _tickIndex, RenderedTimeSeconds, Clock.IsCaptureTick(_tickIndex), actor, applied,
-                state.Case, state.X, state.Y, state.HeadingDegrees, from.Signals, lamps,
+                state.Case, state.X, state.Y, sumoAngle, from.Signals, lamps,
                 state.LaneId, state.LanePositionMetres));
         }
 
@@ -1391,6 +1433,7 @@ public sealed class SumoDriveSession : IDisposable
         }
 
         _lampsWritten.Remove(interval.VehicleId);
+        _headings.Forget(interval.VehicleId);
         if (_renderedSpans.Remove(interval.VehicleId))
         {
             // Parked at the head of the next tick's batch, so absent from that tick's frame on.
@@ -1757,7 +1800,9 @@ public sealed class SumoDriveSession : IDisposable
     /// <remarks>
     /// Taken at the frames themselves rather than between them, so what it measures is whether the
     /// network in the world package is the network SUMO is driving on -- not how good the
-    /// interpolation is. A network from a different netconvert run answers here and nowhere else.
+    /// interpolation is. A network from a different netconvert run answers here and nowhere else. The
+    /// lane's point is moved across by the frame's lateral offset, which SUMO's position includes part-way
+    /// through a lane change spread over time, so a lane change does not answer here.
     /// </remarks>
     private void MeasureLaneGeometry()
     {
@@ -1769,7 +1814,10 @@ public sealed class SumoDriveSession : IDisposable
                 continue;
             }
 
-            (double x, double y, _, _) = lane.PointAt(frame.LanePositionMetres);
+            (double x, double y, double directionX, double directionY) =
+                lane.PointAt(frame.LanePositionMetres);
+            x -= directionY * frame.LateralOffsetMetres;
+            y += directionX * frame.LateralOffsetMetres;
             Report.AddLaneGeometryResidual(
                 Math.Sqrt(Math.Pow(x - frame.X, 2) + Math.Pow(y - frame.Y, 2)));
         }

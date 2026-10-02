@@ -57,6 +57,13 @@ public sealed record VehicleTelemetry(
     public int ApparentHeightPx { get; init; }
 
     /// <summary>
+    /// The direction the body points, degrees clockwise from true north: its transform's yaw, so the
+    /// heading the imagery shows. Not <see cref="CourseDeg"/>, the direction it moves, which differs while
+    /// a vehicle turns or changes lane. NaN where no transform was read.
+    /// </summary>
+    public double HeadingDeg { get; init; } = double.NaN;
+
+    /// <summary>
     /// The vehicle's staging opacity: 1 = fully opaque, below 1 = part-way through the dissolve that
     /// fades boundary-aware traffic in and out at the scene edge.
     /// </summary>

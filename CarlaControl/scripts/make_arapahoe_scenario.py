@@ -44,7 +44,8 @@ The content build has no articulated lorry, so the semitrailer is the heaviest r
 vehicle as it entered, on travel times that follow the congestion. Ten flows are therefore held, by
 a via, to the way most of their vehicles took when SUMO routed them one by one; without that the map
 fills behind a deadlocked ramp. Measured in SUMO with the holds, the population is the one the
-scenario was tuned to: peak 440 live vehicles and median 338, against 437 and 336.
+scenario was tuned to: peak 440 live vehicles and median 338, against 437 and 336; with the
+compiler's three-second lane changes, peak 441 and median 345.
 
 **Time.** Simulated second zero is 07:00 Mountain Daylight Time on 29 September 2026, the date of the
 Bahonar pattern of life, in the morning peak; the run lasts 45 minutes.

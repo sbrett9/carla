@@ -140,17 +140,28 @@ Remedies:
 ## Supervision
 
 
+## Traffic
+
+SUMO seed 42, step 0.05 s, end 2220 s. The processing options, each written into the configuration rather than left to SUMO's default:
+
+| Option | Value |
+|---|---|
+| `time-to-teleport` | -1 |
+| `max-depart-delay` | 900 |
+| `collision.action` | warn |
+| `lanechange.duration` | 3 |
+
 ## Lock
 
 ```json
 {
   "routes": {
     "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.rou.xml",
-    "sha256": "36663363c98beeb0c28b116520b7ab155612913ad930fdfebb4f76ab3be82f6d"
+    "sha256": "948937c47d9be280a42e083a56160f22440a94a74b448bc69acd0d34e85d8449"
   },
   "config": {
     "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg",
-    "sha256": "34304150fb6f4406a61c0e863c7a9b6d074bc352742f0d737640011c9a47d980"
+    "sha256": "92b5d3164960164610cb50e98f147d35c150801da749ce606d9419e3193023de"
   },
   "network": {
     "path": "Gardnerville_Centerville_Lane.net.xml",
@@ -158,7 +169,7 @@ Remedies:
   },
   "supervision": {
     "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.supervision.json",
-    "sha256": "2ec3edbaf01efa029262f9fa25b91bfa2c729f7a32efddec3546753c5472ae7d"
+    "sha256": "4528c23f91c4677ef69f8997f12b7407acde6df3a94dec5af843a58111c4d93e"
   }
 }
 ```

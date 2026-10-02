@@ -20,6 +20,7 @@
         <time-to-teleport value="-1"/>
         <max-depart-delay value="900"/>
         <collision.action value="warn"/>
+        <lanechange.duration value="3"/>
     </processing>
     <report>
         <no-step-log value="true"/>

@@ -100,7 +100,28 @@ class VehicleCatalogueValidator:
                 found.append(
                     f"V1.2: {blueprint_id!r} has no three-component bbox_centre_m, without which "
                     "the bumper-to-origin shift cannot be computed")
+            found += self._check_body_width(entry, blueprint_id)
+        if (any("body_width_m" in entry for entry in self.document.get("vehicles", []))
+                and not str((self.document.get("body_width") or {}).get("method", "")).strip()):
+            found.append("V1.2: body widths are given and the header's body_width does not say how "
+                         "they were measured")
         return found
+
+    @staticmethod
+    def _check_body_width(entry: dict, blueprint_id: str) -> list[str]:
+        """V1.2 for the body width without mirrors: present, a dimension, and no wider than the box."""
+        if "body_width_m" not in entry:
+            return [f"V1.2: {blueprint_id!r} has no body_width_m. SUMO is given the body's width "
+                    "without its mirrors, which the editor measures (measure_vehicle_body_widths.py) "
+                    "and vehicle_body_widths.json carries; the bounding box includes the mirrors"]
+        body, width = entry["body_width_m"], entry.get("width_m")
+        if not isinstance(body, int | float) or not MINIMUM_DIMENSION_M < float(body) < MAXIMUM_DIMENSION_M:
+            return [f"V1.2: {blueprint_id!r} body_width_m is {body!r}, not a dimension between "
+                    f"{MINIMUM_DIMENSION_M} and {MAXIMUM_DIMENSION_M} m"]
+        if isinstance(width, int | float) and float(body) > float(width) + 1e-6:
+            return [f"V1.2: {blueprint_id!r} body_width_m {body} m exceeds width_m {width} m; the body "
+                    "without its mirrors cannot be wider than the whole mesh"]
+        return []
 
     def _check_colours(self) -> list[str]:
         """V1.3 palette form, V1.4 the colour verdict, and V1.15 the two colour spellings."""

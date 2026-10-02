@@ -205,6 +205,17 @@ public sealed class ScenarioLockCheck
               + $"'{Shown(locked.RoutedAgainstConverter)}' ({Shown(locked.RoutingAgreement)}"
               + (locked.RoutingMismatchAccepted == true ? ", accepted explicitly" : string.Empty) + ")";
 
+    /// <summary>
+    /// The SUMO processing options the lock records the compiler wrote, in the report's words. The
+    /// configuration's digest already binds them; they are restated so a run report says what the
+    /// scenario was compiled to do without opening its files.
+    /// </summary>
+    public string ProcessingText =>
+        Lock is not { } locked
+            ? "not recorded: an uncompiled scenario"
+            : $"{TeleportingCheck.OptionName} '{Shown(locked.TimeToTeleport)}', "
+              + $"{SumoLaneChangeDuration.OptionName} '{Shown(locked.LaneChangeDuration)}'";
+
     /// <summary>The world the lock records the scenario was compiled for, in the report's words.</summary>
     public string WorldText =>
         Lock is not { } locked

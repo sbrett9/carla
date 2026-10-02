@@ -180,21 +180,32 @@ Remedies:
 ## Supervision
 
 
+## Traffic
+
+SUMO seed 42, step 0.05 s, end 2700 s. The processing options, each written into the configuration rather than left to SUMO's default:
+
+| Option | Value |
+|---|---|
+| `time-to-teleport` | -1 |
+| `max-depart-delay` | 900 |
+| `collision.action` | warn |
+| `lanechange.duration` | 3 |
+
 ## Lock
 
 ```json
 {
   "routes": {
     "path": "Arapahoe_I25_UnderpassDwell.rou.xml",
-    "sha256": "1715bb1d4cc2504f6c3794081e4dcc7da9e3b35d4be9aeb7ce3275d1caccfea9"
+    "sha256": "cb639883eacc8c504c7811c3846694440298200e208cd5aee6c8aaa2f3215edd"
   },
   "config": {
     "path": "Arapahoe_I25_UnderpassDwell.sumocfg",
-    "sha256": "e299b2929262e50bfd5301dea2984e42377549933d53fff877e6b23bf623c01b"
+    "sha256": "ead68759a136dddff82943cdcc2d7d897638d4f515a68c9fd346e4ca1b2b56ed"
   },
   "network": {
     "path": "Arapahoe_I25.net.xml",
-    "sha256": "11e2bba84b33514e37249ce67d05275df7d9166ea4685c4ddeaa5ce5b29e16ba"
+    "sha256": "bdba54a97a1b996ccf08f61def4dcd019c985a7f3efff2d13de1f31479940312"
   },
   "additional": {
     "path": "Arapahoe_I25_UnderpassDwell.add.xml",
@@ -202,7 +213,7 @@ Remedies:
   },
   "supervision": {
     "path": "Arapahoe_I25_UnderpassDwell.supervision.json",
-    "sha256": "679acda6c161b94c37ceac8d4a40ec654ad347a6d5b92264343b36736bc26f75"
+    "sha256": "e0b9fee134b626810acbce3026ef7b045d3966158c84be5353ba3000fa6b40e9"
   }
 }
 ```

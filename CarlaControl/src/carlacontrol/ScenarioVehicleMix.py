@@ -11,9 +11,10 @@ This is the authoring half of that contract. A scenario declares what kinds of v
 made of and how each kind drives; this class supplies the bodies, from the measured catalogue and
 from nowhere else:
 
-  * one `<vType>` per named blueprint, its `length`, `width` and `height` copied verbatim from the
-    sweep that measured that body, and the blueprint named in a `<param key="carla:blueprint"/>` so
-    the bridge reads a binding rather than parsing a convention out of an id;
+  * one `<vType>` per named blueprint, its `length` and `height` copied verbatim from the sweep that
+    measured that body and its `width` the body's without its mirrors (`VehicleExtent.sumo_width_m`),
+    and the blueprint named in a `<param key="carla:blueprint"/>` so the bridge reads a binding
+    rather than parsing a convention out of an id;
   * one `<vTypeDistribution>` per declared class, so the variety inside a class is SUMO's own seeded
     draw, recorded in the behavioural simulation, rather than a choice made at playback;
   * one `<vTypeDistribution>` over every class that takes part in the scenario's traffic mix, each
@@ -241,7 +242,7 @@ class ScenarioVehicleMix:
             ("id", self.type_id(entry.class_id, blueprint_id)),
             ("vClass", entry.sumo_vclass),
             ("length", self._number(extent.length_m)),
-            ("width", self._number(extent.width_m)),
+            ("width", self._number(extent.sumo_width_m)),
             ("height", self._number(extent.height_m)),
         ]
         declared.extend(sorted(entry.behaviour.items()))
@@ -317,7 +318,7 @@ class ScenarioVehicleMix:
                     problems.append(f"class {entry.class_id!r} names {blueprint_id!r} twice")
                 seen_type_ids.add(type_id)
                 try:
-                    self.catalogue.extent_of(blueprint_id)
+                    self.catalogue.extent_of(blueprint_id).sumo_width_m  # noqa: B018 -- refuses a body with no width without mirrors
                 except LookupError as refused:
                     problems.append(f"class {entry.class_id!r}: {refused}")
         if self.mix_id and not self.member_probabilities():
@@ -388,7 +389,8 @@ class ScenarioVehicleMix:
 
           * every `<vType>` names a blueprint through `carla:blueprint`, and that blueprint has a
             successful measurement in this catalogue;
-          * its `length`, `width` and `height` equal that measurement, to the tolerance that absorbs
+          * its `length` and `height` equal that measurement, and its `width` the body's width
+            without its mirrors where the catalogue measured one, to the tolerance that absorbs
             decimal serialisation;
           * every `type=` on a flow, trip or vehicle names a type or distribution the file declares;
           * no type declares a two-wheeler vehicle class.
@@ -443,10 +445,11 @@ class ScenarioVehicleMix:
             return problems
         try:
             extent = catalogue.extent_of(blueprint_id)
+            extent.sumo_width_m  # noqa: B018 -- refuses a body with no width without mirrors
         except LookupError as refused:
             problems.append(f"vType {type_id!r}: {refused}")
             return problems
-        measured = {"length": extent.length_m, "width": extent.width_m, "height": extent.height_m}
+        measured = {"length": extent.length_m, "width": extent.sumo_width_m, "height": extent.height_m}
         for attribute, value in measured.items():
             declared = element.get(attribute)
             if declared is None:
@@ -458,7 +461,8 @@ class ScenarioVehicleMix:
             if difference > DIMENSION_TOLERANCE_M:
                 extra = (f", which would place every such body {difference / 2:.2f} m from where "
                          "SUMO believes it is" if attribute == "length" else "")
+                what = "body width without mirrors" if attribute == "width" else attribute
                 problems.append(
-                    f"vType {type_id!r} declares {attribute} {declared} against a measured "
-                    f"{value:.4g} m for {blueprint_id}{extra}")
+                    f"vType {type_id!r} declares {attribute} {declared} against a measured {what} "
+                    f"of {value:.4g} m for {blueprint_id}{extra}")
         return problems

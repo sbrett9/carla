@@ -168,6 +168,9 @@ class CotUdpEmitter:
         carla["vx"] = f"{rec['vx']:.2f}"
         carla["vy"] = f"{rec['vy']:.2f}"
         carla["vz"] = f"{rec['vz']:.2f}"
+        # The direction the body points, beside the track's course, the direction it moves.
+        if "heading_deg" in rec:
+            carla["heading_deg"] = f"{rec['heading_deg']:.1f}"
         # Who a pooled body was drawing: the SUMO vehicle that joins the record to the scenario's
         # supervision, its declared type, and the frame its rendered span began on.
         if sumo_id is not None:

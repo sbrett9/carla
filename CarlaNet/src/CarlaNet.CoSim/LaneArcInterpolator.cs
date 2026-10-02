@@ -15,6 +15,16 @@ namespace CarlaNet.CoSim;
 /// <para>The buffered pair of frames is what makes this possible: SUMO runs one step ahead of the
 /// rendered clock, so both ends of every interpolation are known rather than extrapolated. The cost
 /// is a constant, known step of simulated latency, which nothing in a stored capture can notice.</para>
+///
+/// <para><b>Where SUMO has the vehicle across its lane.</b> A lane change SUMO spreads over time
+/// (<c>lanechange.duration</c> above the step) moves the vehicle sideways at a steady rate while SUMO
+/// keeps reporting the lane it started on, then -- past halfway -- the lane it is moving to, with the
+/// lateral offset carried over to that lane's centre line. Every point is therefore put the frame's
+/// lateral offset to the left of its lane, the offset taken linearly in time between the two frames
+/// as SUMO moves it, so the pose is SUMO's position at every frame and moves sideways between frames as
+/// SUMO moved it, and the step in which the reported lane changes is a few centimetres of that movement
+/// rather than a lane width. The heading stays the lane's tangent; the session turns a body by the
+/// path its bumper takes instead (<see cref="PathHeading"/>).</para>
 /// </remarks>
 public sealed class LaneArcInterpolator
 {
@@ -83,7 +93,8 @@ public sealed class LaneArcInterpolator
                                               fraction);
             double along = from.LanePositionMetres
                            + ((to.LanePositionMetres - from.LanePositionMetres) * covered);
-            return Evaluate(fromLane, along, speed, LaneInterpolationCase.SameLane);
+            return Evaluate(fromLane, along, Lateral(from, to, fraction), speed,
+                            LaneInterpolationCase.SameLane);
         }
 
         if (from.EdgeId == to.EdgeId)
@@ -187,7 +198,11 @@ public sealed class LaneArcInterpolator
                                           double speed)
     {
         // Two lanes of one edge run alongside each other, so a lane position means the same distance
-        // on both. The vehicle advances along each of them and the two points are blended sideways.
+        // on both. The vehicle advances along each of them, each point at its own frame's offset from
+        // its lane, and the two points are blended sideways. Where SUMO moved the vehicle across in
+        // this one step the offsets are zero and the blend carries it a lane width; where it spreads
+        // the change over time this is the step SUMO starts reporting the new lane in, the two points
+        // are a step's sideways movement apart, and the blend carries it that far.
         double covered = DistanceFraction(from.SpeedMetresPerSecond, to.SpeedMetresPerSecond,
                                           fraction);
         double along = from.LanePositionMetres
@@ -195,6 +210,8 @@ public sealed class LaneArcInterpolator
         (double fromX, double fromY, double fromDirectionX, double fromDirectionY) =
             fromLane.PointAt(along);
         (double toX, double toY, double toDirectionX, double toDirectionY) = toLane.PointAt(along);
+        (fromX, fromY) = Beside(fromX, fromY, fromDirectionX, fromDirectionY, from.LateralOffsetMetres);
+        (toX, toY) = Beside(toX, toY, toDirectionX, toDirectionY, to.LateralOffsetMetres);
 
         // Smoothstep rather than a straight blend, so the sideways movement starts and ends at rest
         // instead of beginning and ending with a corner in the path.
@@ -244,6 +261,14 @@ public sealed class LaneArcInterpolator
             ? LaneInterpolationCase.CrossedEdges
             : LaneInterpolationCase.CrossedEdgesWithLaneChange;
 
+        // The offset across the lanes walked: where the route arrives on the reported lane, SUMO
+        // carried the offset from each lane onto the next, so it is taken between the two frames' in
+        // time; where it arrives beside it, the earlier frame's holds along the route and the later
+        // frame's is the sideways blend's.
+        double lateral = arrival is null
+            ? Lateral(from, to, fraction)
+            : from.LateralOffsetMetres;
+
         // Walk the concatenated shape: the tail of the lane the vehicle started on, then each lane
         // of the route in turn, then the head of the one it arrives on.
         double travelled = distance * DistanceFraction(from.SpeedMetresPerSecond,
@@ -251,7 +276,7 @@ public sealed class LaneArcInterpolator
         double remainingOnFirst = fromLane.DeclaredLengthMetres - from.LanePositionMetres;
         if (travelled <= remainingOnFirst)
         {
-            return Evaluate(fromLane, from.LanePositionMetres + travelled, speed, which);
+            return Evaluate(fromLane, from.LanePositionMetres + travelled, lateral, speed, which);
         }
 
         travelled -= remainingOnFirst;
@@ -259,7 +284,7 @@ public sealed class LaneArcInterpolator
         {
             if (travelled <= path[index].DeclaredLengthMetres)
             {
-                return Evaluate(path[index], travelled, speed, which);
+                return Evaluate(path[index], travelled, lateral, speed, which);
             }
 
             travelled -= path[index].DeclaredLengthMetres;
@@ -271,13 +296,15 @@ public sealed class LaneArcInterpolator
         SumoLane last = arrival ?? toLane;
         if (arrival is null)
         {
-            return Evaluate(last, travelled, speed, which);
+            return Evaluate(last, travelled, lateral, speed, which);
         }
 
         (double alongX, double alongY, double alongDirectionX, double alongDirectionY) =
             last.PointAt(travelled);
         (double sideX, double sideY, double sideDirectionX, double sideDirectionY) =
             toLane.PointAt(travelled);
+        (alongX, alongY) = Beside(alongX, alongY, alongDirectionX, alongDirectionY, lateral);
+        (sideX, sideY) = Beside(sideX, sideY, sideDirectionX, sideDirectionY, to.LateralOffsetMetres);
         double blend = fraction * fraction * (3.0 - (2.0 * fraction));
         return new InterpolatedState(
             alongX + ((sideX - alongX) * blend),
@@ -323,13 +350,31 @@ public sealed class LaneArcInterpolator
 
     private static InterpolatedState Evaluate(SumoLane lane,
                                               double lanePosition,
+                                              double lateralOffset,
                                               double speed,
                                               LaneInterpolationCase which)
     {
         (double x, double y, double directionX, double directionY) = lane.PointAt(lanePosition);
+        (x, y) = Beside(x, y, directionX, directionY, lateralOffset);
         return new InterpolatedState(x, y, Heading(directionX, directionY), speed, which,
                                      lane.Id, lanePosition);
     }
+
+    /// <summary>
+    /// The offset across one lane at a fraction of the way between two frames on it: SUMO moves a
+    /// vehicle across at a steady rate, so linearly in time.
+    /// </summary>
+    private static double Lateral(in CoSimVehicleFrame from, in CoSimVehicleFrame to, double fraction) =>
+        from.LateralOffsetMetres + ((to.LateralOffsetMetres - from.LateralOffsetMetres) * fraction);
+
+    /// <summary>
+    /// The point <paramref name="left"/> metres to the left of a point on a lane whose forward direction
+    /// is the unit vector given, as SUMO puts a vehicle off its lane's centre line: the reported position
+    /// is the lane's point at the lane position, moved across by the lateral lane position.
+    /// </summary>
+    private static (double X, double Y) Beside(double x, double y, double directionX, double directionY,
+                                               double left) =>
+        left == 0.0 ? (x, y) : (x - (directionY * left), y + (directionX * left));
 
     /// <summary>
     /// A step with an end off every lane: parked there, or pulling into or out of the stop. The

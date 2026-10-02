@@ -54,6 +54,8 @@ advancement policy, the headlight predicate),
 | 2026-10-01 | §7.5: the pitch and roll signs confirmed live against the visible surface; bodies at two-level crossings measured seated on the wrong level. |
 | 2026-10-01 | §8.9, D3.39: the render set is named to the server on each change and carried on every world-observer snapshot, so the live pull, the CoT feed and a recorder in any process list only the bodies a frame drew, each by its SUMO vehicle. §8.2: every body is spawned with `role_name` `sumo`. Written; the plugin awaits a build. |
 | 2026-10-01 | §7.5, D3.8: a body is seated on the ground grid where its road is at grade and on the road's OpenDRIVE profile where the road is a structure — height, pitch and roll by one weight from the road's departure from the ground at its reference line at the body's s, blended between, held to change no faster than a smoothstep over 10 m, and made to meet the carriageways at a junction connector's ends; the grid alone off every road, counted by reason. The profile is the reference line's height built flat across: measured against the photoreal at grade, it stands a median 0.35 m above the visible road at a cambered road's outer lanes, where the grid agrees to 0.02 m. Every lane of Arapahoe and Bahonar joined to its road; measured offline on the Arapahoe dwell, I-25's deck bodies up to 6.8 m above where the grid seated them and East Arapahoe Road's 4.5 m below, every body at grade on the grid seat exactly, and the whole as continuous as the grid seat alone, for about 0.25 ms a tick. Built and tested offline; the live check is the owner's to run. |
+| 2026-10-01 | §6.4, Q3.1, Q3.11: every pose is put at the frame's lateral offset from its lane, so a lane change SUMO spreads over time is rendered where SUMO has it; the session's report states the lane-change duration; the heading through junctions and lane changes is measured and open. |
+| 2026-10-02 | §5.4, §5.5, §6.4, Q3.11, D3.40: a body's heading follows the path its bumper takes, the rear axle trailing it, turned only by forward travel and held across a jump; its velocity is the path's; SUMO's reported angle is recorded beside the pose and in the render set. |
 
 ---
 
@@ -1200,7 +1202,7 @@ the transform is written in. **Built**: `CarlaNet.CoSim/TickBatch.cs` composes e
 
 | When | Command | Value | Where |
 |---|---|---|---|
-| every tick, per body whose pose is written | `ApplyTargetVelocityCommand(actor, v)` straight **after** that body's `ApplyTransformCommand` | `v.x = VelocityX`, `v.y = VelocityY` of the same `VehiclePose` — the interpolated speed times the forward vector of the applied yaw — and `v.z = VelocityZ`, the speed times the along-heading gradient the pose's pitch came from, so the velocity is tangent to the draped path the body moves along | `TickBatch.Pose` (`TickBatch.cs:65`); `v.z` from `PoseConverter.Tilt` (`PoseConverter.cs:128`, `:193`) |
+| every tick, per body whose pose is written | `ApplyTargetVelocityCommand(actor, v)` straight **after** that body's `ApplyTransformCommand` | `v.x = VelocityX`, `v.y = VelocityY` of the same `VehiclePose` — since 2026-10-02 the path's velocity, the bumper's movement over the tick with any lateral movement in it (§6.4, D3.40), and on a body's first pose or across a jump the interpolated speed times the forward vector of the applied yaw — and `v.z = VelocityZ`, the horizontal speed times the along-heading gradient the pose's pitch came from, so the body climbs as it is pitched | `TickBatch.Pose` (`TickBatch.cs:65`); `v.z` from `PoseConverter.Tilt` (`PoseConverter.cs:128`, `:193`) |
 | the first tick after check-out | the same pair | nothing extra: the vehicle's current speed from its first tick, because the parked body's velocity is zero | as above |
 | a tick in which a held body gets no pose | `ApplyTargetVelocityCommand(actor, 0)`, and no transform | the body stands where its last pose left it, so it reports zero. The one path on which a body is held and gets no pose is no ground under the vehicle: every vehicle in the render set has a frame, and a vehicle whose type has no measured body is never lent one | `TickBatch.HoldStill`, called from `SumoDriveSession.cs:585` |
 | check-in to the parking slot | `ApplyTargetVelocityCommand(actor, 0)` after the parking `ApplyTransformCommand` | a parked body is not moving; otherwise it would report its last speed from beyond the sandbox for as long as it is parked | `TickBatch.Park` (`TickBatch.cs:50`), called from `Release` |
@@ -1267,8 +1269,10 @@ Measured on the same run, and for [`05_CarlaNet_Capability_Audit.md`](05_CarlaNe
   per tick.** `FWorldObserver_GetAcceleration` differences the reported velocity
   (`WorldObserver.cpp:264-277`). Measured on continuing ticks, the reported acceleration equals the
   commanded velocity's own per-tick difference to 6.9 × 10⁻⁵ m/s² over 3,981 vehicle-ticks, with a
-  median of 0.742 m/s². Ten exceed 10 m/s²; the largest, 117.9 m/s², is SUMO's heading turning 25.6°
-  in one 0.05 s step at a junction, and the vertical component reaches 4.7 m/s² where the ground
+  median of 0.742 m/s². Ten exceed 10 m/s²; the largest, 117.9 m/s², is the commanded heading turning
+  25.6° in one 0.05 s step at a junction -- the lane tangent the velocity was then pointed along, which
+  stepped at a connector's corner; since 2026-10-02 the velocity is the path's and the heading turns at
+  most `v / L` (§6.4, D3.40) -- and the vertical component reaches 4.7 m/s² where the ground
   gradient changes under a vehicle at 21.8 m/s. On the first tick of each of the 15 lendings it is the
   whole admission speed over one tick — at most 434.9 m/s² — because the parked body's velocity was
   zero. At a SUMO step equal to the world delta every tick is a step boundary; at a coarser step the
@@ -1400,15 +1404,28 @@ and against an unrenderable vehicle's ticks counted from the step before its ins
 ### 6.4 The interpolator
 
 Inputs per vehicle for frames k and k+1, from one subscription: position, angle, speed, road id, lane
-id, lane position. Cases, in order:
+id, lane position, lateral lane position. Cases, in order:
 
 1. **Same lane.** Advance the *lane position* by the step's distance and evaluate the lane's polyline
    at that distance. The lane shape comes from the `.net.xml` the **world package** carries, read
    once at session start by `CarlaNet.CoSim.SumoRoadNetwork`. Exact on curves by construction.
-2. **Lane change on the same edge.** Advance along-lane as in (1) on each lane, then blend the two
-   resulting points laterally with a smoothstep over the step. SUMO's lane change is instantaneous in
-   the data; a linear lateral blend across 1.0 s at 3.35 m is a 3.35 m/s lateral rate, which is
-   brisk but not absurd. Consider a shorter blend window as a tuning knob.
+2. **Lane change on the same edge.** Advance along-lane as in (1) on each lane, each point at its
+   frame's lateral offset from its lane, then blend the two points laterally with a smoothstep over
+   the step. At SUMO's default `lanechange.duration` of 0 the change is instantaneous in the data and
+   the blend carries the vehicle a lane width inside one step. The scenario compiler writes 3 s
+   ([`04`](04_Contracts.md) D4.42), and then SUMO moves the vehicle across at a steady rate, reports
+   the lane it started on until it is past halfway and then the lane it is moving to, with the lateral
+   offset carried over to that lane; its reported position includes the offset and its reported angle
+   turns with the movement (`MSLaneChanger::continueChange`, `MSVehicle::computeAngle`). **As built,
+   every case puts its points the frame's lateral offset to the left of the lane** (the subscribed
+   `VAR_LANEPOSITION_LAT`), taken linearly in time between the two frames, so the pose is SUMO's
+   position at every frame and this case is only the step in which the reported lane changes: a few
+   centimetres of sideways movement, not a lane width. **Measured 2026-10-01** through the bridge's
+   subscription on the fixture network at 3 s: the lateral offset grows 0.056 m a step for sixty
+   0.05 s steps, the lane switches at +1.675 m to −1.619 m, and the pose is SUMO's position at every
+   frame to under a millimetre; over 300 s of Arapahoe in a world-less session, to 15 mm (the
+   floating-car output's rounding) against up to 1.675 m on the lane's centre line. The body turns
+   with the change: its heading follows the bumper's path, sideways movement included (D3.40).
 3. **Crossed one or more edges.** Walk the route from lane(k) to lane(k+1) through the connecting
    internal lanes, accumulate arc length, and place the vehicle at the interpolated arc distance along
    that concatenated polyline. This is the case the corner-cut number is about, and it is the common
@@ -1446,10 +1463,44 @@ that. Integrating a linear ramp between the two reported speeds — three multip
 length cancels so it is a *fraction of the distance travelled* rather than a distance — takes the
 same measurement under **0.10 m**.
 
-Yaw is interpolated as the tangent of the evaluated polyline, not by blending the two reported
-angles — the polyline tangent is already correct through a turn and a blended angle is not. Speed is
-interpolated linearly and is what feeds `ApplyTargetVelocityCommand` (D3.5), so reported speed ramps
-the way SUMO's did.
+**The heading is the heading of the body's own path** (D3.40, decided 2026-10-02, issue #38). It was
+the tangent of the evaluated polyline, which steps at every corner: SUMO draws a junction's connectors
+in five points, a turning connector's largest corner a median 31–35° and up to 98°, and every yaw step
+measured fell at a vertex — 21,230 on Gardnerville and 49,455 on Arapahoe, 24–25° at the 99th
+percentile of ticks moving through a junction and 53° and 178° at worst; through a lane change the
+tangent did not turn at all. Now the rear axle, 0.75 of the measured body's length behind the bumper,
+trails the bumper along the path the interpolation put it on, and the heading obeys
+`dθ/ds = sin(φ − θ) / L` over the forward travel, taken exactly per tick (`PathHeading`): the yaw rate
+can never exceed `v / L`, and the path's direction includes a lane change's sideways movement. Only
+forward travel — SUMO's speed times the time — turns it, so a standing body holds its heading and one
+SUMO moves sideways in a queue slides without turning; a bumper that moves more than its forward travel
+plus 1 m holds it (16 such moves in 300 s of Arapahoe, every one SUMO switching a changing vehicle onto
+a lane that is not parallel); a body's first pose and the first after a discontinuity start from SUMO's
+angle. The bumper is never moved: the heading only turns the body about it. **Measured** in world-less
+sessions on the recompiled scenarios, against the tangent: the junction step at the 99th percentile
+falls from 24.1° to 3.5° on Gardnerville and from 25.0° to 4.7° on Arapahoe, the worst from 53.2° and
+177.8° to 4.9° and 19.5°, ticks turning faster than `v / 5 m` from 4.7 % and 5.2 % of junction ticks
+to 0.7 % and 0.2 %, steps over 15° while moving from 6,573 and 4,719 to 0 and 18; no standing body
+turns; through a lane change the heading is 0.1° from the body's course at the median and 13.7° at
+the 99th percentile. Three alternatives were measured against it and not taken: finer junction
+shapes at world build (`--junctions.internal-link-detail` 10 or 20) halve or quarter a connector's
+corners but change the network, so every world is rebuilt, change SUMO's traffic -- Gardnerville
+deadlocks at 20 -- and leave the corners of ordinary lanes (up to 82–88°) and lane changes as they
+were; smoothing the tangent over a time constant lags the turn and keeps turning a body after it stops;
+and the OpenDRIVE connector's tangent, smooth inside one connector, steps where one road meets the next
+(47–72° at the 99th percentile), netconvert's reference lines being the carriageways' left edges.
+
+**The velocity is the path's**, the bumper's movement since the body's last pose over the time since
+it, lateral movement included, so the truth's course and speed are the motion the imagery shows; on a
+first pose and across a jump it is the interpolated speed along the heading. **SUMO's reported angle is
+recorded beside the pose** for audit — interpolated the shorter way round between the two frames, so
+SUMO's own at a frame (`CoSimPoseRecord.SumoAngleDegrees`, each frame's render set, `sumo_angle_deg` in
+the truth sidecar of a recorder beside the session). While moving the heading is within 10.3° and
+10.9° of it at the 99th percentile: SUMO's angle is the chord from the vehicle's back to its front,
+which trails the path about as a rear axle at half the length would, and it steps by more than 15° 30
+and 363 times over the same runs, 184 of the 335 on Arapahoe as the back crosses a lane's joint and 47
+as a spread lane change starts, where SUMO's back position falls back to a few centimetres behind the
+front. Speed is interpolated linearly, so reported speed ramps the way SUMO's did.
 
 ---
 
@@ -3980,6 +4031,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.38** | **Withdrawn 2026-09-30.** No policy chooses which vehicles are drawn: every vehicle SUMO has is drawn, so the render set no longer follows the cameras (§8.3). |
 | **D3.37** | **Each frame's render set is published for the truth, keyed by the frame the tick produced** — every body lent, the SUMO vehicle it rendered, its vType and the first frame of its rendered span, read from the pool as the tick left it and recorded as the tick returns, the last 256 frames held (`SumoDriveSession.RenderSet`, `IRenderSetSource`). The recorder lists exactly the set of the frame its truth describes, named by SUMO vehicle, and no parked body; a frame whose set is no longer held is written with no vehicles, marked `vehicles="unknown"`, and counted, never guessed. With no source the recorder is unchanged (§8.9). |
 | **D3.39** | **The render set is also published on the server, for every reader** — the session names each change (bodies lent, with their SUMO vehicles and vTypes, and bodies given back) in one `update_render_set` before the tick cue of the frame it is drawn in, the server holds it on each actor's record so it ends with the actor, and the world observer carries every named body on each snapshot. Every client's truth leaves out a body parked on its frame and names a lent one by its SUMO vehicle; a world no session named a body in is unchanged; a server that refuses is recorded and told nothing more (§8.9). |
+| **D3.40** | **A body's heading is the heading of its own path, and its velocity the path's.** The rear axle, 0.75 of the measured body's length behind the bumper, trails the bumper along the path the interpolation put it on, taken exactly per tick; only forward travel turns it, a move no vehicle drives holds it, and SUMO's angle starts it. The bumper stays where SUMO put it, the truth's heading is the body's, its course and speed the path's, and SUMO's reported angle is recorded beside them for audit (§5.4, §6.4). |
 
 ---
 
@@ -3989,7 +4041,8 @@ renumbered and a number is never reused; a new decision takes the next free numb
 
 | # | Question | Options | Recommendation |
 |---|---|---|---|
-| **Q3.1** | Is the sub-step **lateral blend** for a lane change (§6.4 case 2) right at 1.0 s? A full 3.35 m lane change spread over one second is a 3.35 m/s lateral rate. | (a) blend over the whole step; (b) blend over a fixed 0.4 s window inside the step; (c) derive from the vType's `lcSublane` parameters | (b), with the window as a recorded knob. Measure against imagery before fixing it. |
+| **Q3.1** | Is the sub-step **lateral blend** for a lane change (§6.4 case 2) right at 1.0 s? A full 3.35 m lane change spread over one second is a 3.35 m/s lateral rate. | (a) blend over the whole step; (b) blend over a fixed 0.4 s window inside the step; (c) derive from the vType's `lcSublane` parameters | **Superseded 2026-10-01:** the compiler writes `lanechange.duration` 3 ([`04`](04_Contracts.md) D4.42), SUMO spreads the change over 3 s itself, and the bridge follows SUMO's lateral position (§6.4 case 2); the blend now spans only SUMO's own sideways movement in the step its reported lane changes. |
+| **Q3.11** | *Decided 2026-10-02 by the owner: the heading of the body's own path, built (D3.40).* What heading does a body take where the lane's polyline turns — at a junction, whose connectors netconvert draws in five points with a median largest corner of 31–35° — and through a lane change, where the lane tangent does not turn at all? ([issue #38](https://github.com/sbrett9/carla/issues/38)) | (a) finer junction shapes at world build; (b) smooth the rendered heading in the bridge; (c) the OpenDRIVE connector's tangent; (d) the heading of the body's own path, lateral movement included; and SUMO's reported angle as a fifth | (d), with the truth's heading the body's, its course and velocity the path's, and SUMO's angle recorded beside them. Every yaw step of the lane-tangent heading fell at a polyline vertex (all 21,230 on Gardnerville, all 49,455 on Arapahoe). |
 | **Q3.2** | Should the bridge also push CARLA's real poses **back** into SUMO with `moveToXY`, as doc 23 §4.1 step 1 does? | (a) no — under teleport CARLA has no independent pose, so the push is a no-op that costs an RPC per vehicle; (b) yes, for scenario actors that CARLA *does* drive independently (doc 23 §6.9) | (a) for pure SUMO drive; (b) becomes necessary the moment a storyboard actor shares the world, which is doc 23's Phase 5 and not this section's. |
 | **Q3.3** | Does a scenario ever need a **different** SUMO step at playback than at authoring? | (a) never — refuse; (b) allow with a manifest entry and a loud warning | (b), given the measured 62% change in mean time loss (§6.3) is a behaviour change and not a rendering one. The knob must be visible in the truth manifest so a corpus can be filtered on it. |
 | **Q3.4** | How is the **one-step lookahead latency** expressed in the truth record? | (a) invisible — everything is stamped `t_render`; (b) an explicit `lookahead_s` field in the run manifest | (b). It costs one field and it is the difference between a reader being able to reconstruct the pipeline and guessing at it. Belongs to [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md). |

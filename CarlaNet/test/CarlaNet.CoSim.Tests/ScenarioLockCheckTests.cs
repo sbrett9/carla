@@ -227,8 +227,11 @@ public sealed class ScenarioLockCheckTests
         Assert.Equal("Gardnerville_Centerville_Lane.cwp", check.Lock.WorldPackage);
         Assert.StartsWith("a50ac545", check.Lock.WorldNetworkFingerprint);
 
-        // And it disables teleporting, in the lock and in the configuration it binds.
+        // And it disables teleporting and spreads a lane change over three seconds, in the lock and in
+        // the configuration it binds.
         Assert.Equal("-1", check.Lock.TimeToTeleport);
+        Assert.Equal("3", check.Lock.LaneChangeDuration);
+        Assert.Equal("time-to-teleport '-1', lanechange.duration '3'", check.ProcessingText);
     }
 
     [Fact]
@@ -253,6 +256,7 @@ public sealed class ScenarioLockCheckTests
         Assert.Equal("Arapahoe_I25.cwp", check.Lock.WorldPackage);
         Assert.StartsWith("ac83aa8b", check.Lock.WorldNetworkFingerprint);
         Assert.Equal("-1", check.Lock.TimeToTeleport);
+        Assert.Equal("3", check.Lock.LaneChangeDuration);
     }
 
     private static CoSimSessionRefusedException Refusal(CompiledFixture compiled) =>

@@ -58,6 +58,15 @@ def test_a_record_naming_a_sumo_vehicle_is_that_vehicles_track():
     assert extras.get("role_name") == "sumo"
 
 
+def test_the_body_s_heading_rides_beside_the_course_it_moves_on():
+    """During a SUMO drive a body points along its path while its course is its velocity's, and the
+    two differ through a turn or a lane change; the live pull carries both, as the sidecar does."""
+    extras = event(record(heading_deg=86.25, sumo_id="escort_0")).find("detail/_carla")
+
+    assert extras.get("heading_deg") == "86.2"
+    assert event(record()).find("detail/_carla").get("heading_deg") is None
+
+
 def test_a_numeric_sumo_id_is_never_read_as_an_actor_id():
     named = event(record(sumo_id="17", vtype_id="passenger", admitted_tick=3))
     actor = event(record(id=17))

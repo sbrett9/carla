@@ -870,25 +870,36 @@ Remedies:
 - cohort **ferry_out_d7_h6**: annotated, labels bahonar:cleared_gate_transit
 - series **tower_relief**: 336 slots, members nominal
 
+## Traffic
+
+SUMO seed 42, step 1 s, end 604800 s. The processing options, each written into the configuration rather than left to SUMO's default:
+
+| Option | Value |
+|---|---|
+| `time-to-teleport` | -1 |
+| `max-depart-delay` | 900 |
+| `collision.action` | warn |
+| `lanechange.duration` | 3 |
+
 ## Lock
 
 ```json
 {
   "routes": {
     "path": "Shahid_Bahonar_Port_PatternOfLife.rou.xml",
-    "sha256": "a3cfed40482e402e5af7a2626f10dc0ca1f681edccf8bba33d604587e640d6e6"
+    "sha256": "75d800404a046bccceaf48c012439a514effeab259ce0c427c3d698b1aa00928"
   },
   "config": {
     "path": "Shahid_Bahonar_Port_PatternOfLife.sumocfg",
-    "sha256": "5490e15ab64dff1603c1eafe03e3c2de0a56a6844e1080f087671ad35f9bcaed"
+    "sha256": "05d90f198b0d2b6e2e05d5df44a8f1c5ea7329a0f0982891ec157607ebe22d1f"
   },
   "network": {
     "path": "Shahid_Bahonar_Port.net.xml",
-    "sha256": "83ac68c9f184c7de1f7df69e520435fc05db8741f3ec30e4b2e86e403f8593fb"
+    "sha256": "c4a92ccaa51bd04f6011b683aea5f82026a1f96c7b99782b06eb7ee2b714d0bd"
   },
   "supervision": {
     "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
-    "sha256": "6b7388c46752c833f1acb7b1b13a02f46df81f0081b5327932e876744e440186"
+    "sha256": "836c2a73c54901e58027dc8c7f966df74a5734a85367a7b826dd458bb3d7ec5c"
   }
 }
 ```

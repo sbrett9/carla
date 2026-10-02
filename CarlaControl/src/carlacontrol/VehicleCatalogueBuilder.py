@@ -21,6 +21,12 @@ The sweep has three passes over the same blueprint set:
   * **Lamps.** The optical pass in `VehicleLampProbe`, which renders the vehicle and counts pixels,
     because the light-state read-back returns the command rather than the vehicle.
 
+The box is the whole mesh, wing mirrors included, and SUMO's width is the body's. The body width
+without the mirrors needs the mesh's vertices, which a server cannot see, so it is measured in the
+editor (`measure_vehicle_body_widths.py`) and merged here from `vehicle_body_widths.json` as a measured
+input, its method and date in the catalogue's header (`apply_body_widths`). A measured blueprint the
+table has no width for leaves the catalogue unwritten, as any other missing measurement does.
+
 Nothing here infers a dimension, falls back to a default, or drops a blueprint that failed to spawn: a
 failure is written into the catalogue as a failure, with its reason, and the consumers refuse to use
 that entry rather than guessing what it would have measured.
@@ -52,6 +58,12 @@ CATALOGUE_FILENAME = "vehicles.catalogue.json"
 VEHICLE_TYPES_FILENAME = "vehicles.vtypes.rou.xml"
 REPORT_FILENAME = "vehicle_catalogue_report.txt"
 CORRECTED_PARAMETERS_FILENAME = "VehicleParameters.corrected.json"
+BODY_WIDTHS_FILENAME = "vehicle_body_widths.json"
+BODY_WIDTHS_VERSION = 1
+
+# How far the editor's full width may sit from the sweep's measured width and the two still be of one
+# mesh. Both are the plain vertex extent across the vehicle, measured to 0.1 mm.
+FULL_WIDTH_AGREEMENT_M = 0.001
 
 # Height above the map's first spawn point at which every blueprint is measured. The bounding box is
 # actor-local, so the pose does not enter the measurement; the altitude only guarantees that nothing
@@ -123,8 +135,10 @@ class VehicleCatalogueBuilder:
     def __init__(self, client, world, *, catalogue_id: str | None = None,
                  content_build_id: str | None = None, server_log: Path | None = None,
                  assignment: VehicleClassAssignment | None = None,
-                 lamp_probe: VehicleLampProbe | None = None) -> None:
+                 lamp_probe: VehicleLampProbe | None = None,
+                 body_widths: dict | None = None) -> None:
         self.client = client
+        self.body_widths = body_widths
         self.world = world
         self.server_version = client.get_server_version()
         default_id = f"carla-{self.server_version}-{platform.system().lower()}"
@@ -175,10 +189,50 @@ class VehicleCatalogueBuilder:
             "vehicles": vehicles,
             "classes": classes,
         }
+        if self.body_widths is not None:
+            self.apply_body_widths(document, self.body_widths)
         VehicleCatalogueValidator(document).validate()
         document["catalogue_digest"] = VehicleCatalogue.digest_of(document)
         self.lamp_result = lamp_result
         return document
+
+    @staticmethod
+    def load_body_widths(path: Path) -> dict:
+        """The editor-side body-width table, refused when it is not a version this reader knows."""
+        table = json.loads(Path(path).read_text(encoding="utf-8"))
+        if table.get("body_widths_version") != BODY_WIDTHS_VERSION:
+            raise ValueError(f"{path} declares body_widths_version {table.get('body_widths_version')!r}, "
+                             f"and {BODY_WIDTHS_VERSION} is the only one this reader implements")
+        return table
+
+    @staticmethod
+    def apply_body_widths(document: dict, table: dict, source: str = BODY_WIDTHS_FILENAME) -> None:
+        """Put each measured blueprint's body width without its mirrors beside its box, and the
+        measurement's method and date in the header.
+
+        The table's full width is the same vertex extent the sweep's `width_m` is, so a full width
+        that disagrees means the two measured different meshes, and the table is refused rather than
+        merged. A measured blueprint the table has no row for is left without a body width, which the
+        validator then refuses.
+        """
+        rows = table["vehicles"]
+        problems = []
+        for entry in document["vehicles"]:
+            entry.pop("body_width_m", None)
+            row = rows.get(entry["blueprint_id"])
+            if entry.get("measurement") != "measured" or row is None:
+                continue
+            if abs(float(row["full_width_m"]) - float(entry["width_m"])) > FULL_WIDTH_AGREEMENT_M:
+                problems.append(f"{entry['blueprint_id']}: the table's full width {row['full_width_m']} m "
+                                f"is not the sweep's width_m {entry['width_m']} m, so the two measured "
+                                "different meshes")
+                continue
+            entry["body_width_m"] = round(float(row["body_width_m"]), 4)
+        if problems:
+            raise ValueError("the body-width table does not describe this catalogue's meshes:\n  "
+                             + "\n  ".join(problems))
+        document["body_width"] = {"method": table["method"], "measured": table["measured"],
+                                  "source": source}
 
     def write(self, document: dict, output_directory: Path, schema_path: Path | None = None,
               vehicle_parameters: Path | None = None) -> dict[str, Path]:
@@ -397,10 +451,11 @@ class VehicleCatalogueBuilder:
             f"  blueprint set digest {document['blueprint_set_digest']}",
             "",
             "Measured bodies. length, width and height are twice the spawned actor's bounding-box",
-            "extent; the box centre is in the actor's own frame and is what the bumper-to-origin",
-            "shift is computed from.",
+            "extent, wing mirrors included; the box centre is in the actor's own frame and is what the",
+            "bumper-to-origin shift is computed from. body is the width without the mirrors, measured",
+            "in the editor, which SUMO is given.",
             "",
-            f"{'blueprint':32s} {'length':>7} {'width':>7} {'height':>7} {'centre x':>9}"
+            f"{'blueprint':32s} {'length':>7} {'width':>7} {'body':>7} {'height':>7} {'centre x':>9}"
             f" {'centre y':>9} {'bumper':>7}  colour",
         ]
         for entry in document["vehicles"]:
@@ -408,9 +463,10 @@ class VehicleCatalogueBuilder:
                 lines.append(f"{entry['blueprint_id']:32s}  FAILED: {entry['measurement_note']}")
                 continue
             bumper = entry["length_m"] / 2.0 + entry["bbox_centre_m"][0]
+            body = f"{entry['body_width_m']:7.3f}" if "body_width_m" in entry else f"{'-':>7}"
             lines.append(
                 f"{entry['blueprint_id']:32s} {entry['length_m']:7.3f} {entry['width_m']:7.3f}"
-                f" {entry['height_m']:7.3f} {entry['bbox_centre_m'][0]:9.3f}"
+                f" {body} {entry['height_m']:7.3f} {entry['bbox_centre_m'][0]:9.3f}"
                 f" {entry['bbox_centre_m'][1]:9.3f} {bumper:7.3f}  {entry['colour_applied']}")
         lines += ["",
                   "Where the content's own metadata disagrees with the measurement. A copy of the",

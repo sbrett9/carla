@@ -15,9 +15,12 @@ public enum LaneInterpolationCase
 
     /// <summary>
     /// Both frames on one edge, on different lanes. Each lane is evaluated at the interpolated
-    /// along-lane distance and the two points blended sideways, because SUMO's lane change is
-    /// instantaneous in the data and a rendered vehicle teleporting sideways by a lane width is not
-    /// something a tracker should be trained on.
+    /// along-lane distance, each point at its frame's offset across its lane, and the two blended
+    /// sideways. At SUMO's default the lane change is instantaneous in the data, and the blend spreads
+    /// the lane width over the step, because a rendered vehicle teleporting sideways by a lane width is
+    /// not something a tracker should be trained on; where the change is spread over time
+    /// (<c>lanechange.duration</c>), this is the step SUMO starts reporting the new lane in, the two
+    /// points are one step's sideways movement apart, and the blend carries it no further than that.
     /// </summary>
     LaneChange,
 

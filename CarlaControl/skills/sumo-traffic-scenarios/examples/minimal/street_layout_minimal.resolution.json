@@ -350,7 +350,7 @@
     "catalogue": {
       "path": "vehicles.catalogue.json",
       "catalogue_id": "carla-0.10.0-windows",
-      "catalogue_digest": "c31294d8410a313d21b9e1f4343f293b9d590f51f3eba4843de4950ecf4a9850",
+      "catalogue_digest": "6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d",
       "blueprint_set_digest": "a51cfaacc5ceb15351f445575e8d3208e47dfe5c4c239c9805717be6cc9770b4"
     },
     "classes": [
@@ -371,24 +371,28 @@
         "blueprint": "vehicle.lincoln.mkz",
         "length_m": 4.892,
         "width_m": 1.8356,
+        "body_width_m": 1.8335,
         "height_m": 1.5241
       },
       "car.vehicle.dodge.charger": {
         "blueprint": "vehicle.dodge.charger",
         "length_m": 5.006,
         "width_m": 1.881,
+        "body_width_m": 1.854,
         "height_m": 1.5403
       },
       "car.vehicle.mini.cooper": {
         "blueprint": "vehicle.mini.cooper",
         "length_m": 4.5526,
         "width_m": 2.0956,
+        "body_width_m": 2.0897,
         "height_m": 1.7725
       },
       "saloon.vehicle.lincoln.mkz": {
         "blueprint": "vehicle.lincoln.mkz",
         "length_m": 4.892,
         "width_m": 1.8356,
+        "body_width_m": 1.8335,
         "height_m": 1.5241
       }
     }
@@ -418,11 +422,11 @@
     "files": {
       "routes": {
         "path": "street_layout_minimal.rou.xml",
-        "sha256": "fc6360c3b2f1a7c82e41450602f0ac65dd78537eda01eec8f9b0e1eccc8de033"
+        "sha256": "d3db99088cd1f6d166a519d6481d6c4531d5c4dad0e4e28d32ec5786d29428b7"
       },
       "config": {
         "path": "street_layout_minimal.sumocfg",
-        "sha256": "f149fdc950c8aff66560ad7f76b336c857280b47eb9d02cadbe97ab8be713954"
+        "sha256": "056879483ab71d83371c9f488a9e7f49b8be8aa6fd312b961ed306392ce06c66"
       },
       "network": {
         "path": "StreetLayout.net.xml",
@@ -430,7 +434,7 @@
       },
       "supervision": {
         "path": "street_layout_minimal.supervision.json",
-        "sha256": "4c648b6f6ecffb1f9189e9a296042010ee4164fb1d193d4efac8e71619d0e604"
+        "sha256": "ac7568b33994881b3c33f0825c629f4e279a0641d7a00910635c2bedbd3fa52f"
       }
     },
     "world": {
@@ -481,7 +485,7 @@
     },
     "catalogue": {
       "catalogue_id": "carla-0.10.0-windows",
-      "catalogue_digest": "c31294d8410a313d21b9e1f4343f293b9d590f51f3eba4843de4950ecf4a9850",
+      "catalogue_digest": "6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d",
       "blueprint_set_digest": "a51cfaacc5ceb15351f445575e8d3208e47dfe5c4c239c9805717be6cc9770b4",
       "content_build_id": "carla-0.10.0-windows"
     },
@@ -497,7 +501,8 @@
       "processing": {
         "time-to-teleport": "-1",
         "max-depart-delay": "900",
-        "collision.action": "warn"
+        "collision.action": "warn",
+        "lanechange.duration": "3"
       },
       "routed_by": {
         "tool": "duarouter",

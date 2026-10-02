@@ -66,8 +66,9 @@ def test_every_type_names_its_blueprint_in_a_param(document):
         assert blueprint in measured, f"{element.get('id')} names no known blueprint"
 
 
-def test_every_declared_length_equals_the_measurement(document):
-    """A vType whose length disagrees with the body biases every pose by half the difference."""
+def test_every_declared_dimension_equals_the_measurement(document):
+    """A vType whose length disagrees with the body biases every pose by half the difference; its width
+    is the body's without its mirrors, which SUMO's width is, and not the box's."""
     from xml.etree import ElementTree
 
     measured = {entry["blueprint_id"]: entry for entry in document["vehicles"]
@@ -75,7 +76,7 @@ def test_every_declared_length_equals_the_measurement(document):
     root = ElementTree.parse(VEHICLE_TYPES_PATH).getroot()
     for element in root.findall("vType"):
         entry = measured[SumoVehicleTypeWriter.blueprint_of(element)]
-        for attribute, field in (("length", "length_m"), ("width", "width_m"),
+        for attribute, field in (("length", "length_m"), ("width", "body_width_m"),
                                  ("height", "height_m")):
             assert abs(float(element.get(attribute)) - entry[field]) <= 0.01
 

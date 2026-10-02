@@ -81,6 +81,12 @@ public sealed class CoSimRunReport
     public required SumoCollisionHandling CollisionHandling { get; init; }
 
     /// <summary>
+    /// How long a lane change takes in this run -- spread over time, the vehicle moving across at a
+    /// steady rate, or made inside one step -- as the configuration sets it or SUMO's default leaves it.
+    /// </summary>
+    public required SumoLaneChangeDuration LaneChanges { get; init; }
+
+    /// <summary>
     /// Which rendering layers the session wrote before its first tick, and what it wrote them to.
     /// </summary>
     /// <remarks>
@@ -239,6 +245,12 @@ public sealed class CoSimRunReport
 
     /// <summary>Poses whose height rested on the bounding box rather than on a settled measurement.</summary>
     public long PosesOnAnApproximatedSeatHeight { get; internal set; }
+
+    /// <summary>
+    /// Poses whose heading was held rather than turned along the bumper's path, because the bumper
+    /// moved further than its forward travel allows (<see cref="PathHeading"/>).
+    /// </summary>
+    public long HeadingsHeldAcrossAJump { get; internal set; }
 
     /// <summary>Vehicle-ticks where the ground surface had no height under the vehicle.</summary>
     public long PosesRefusedForMissingGround { get; internal set; }
@@ -716,11 +728,13 @@ public sealed class CoSimRunReport
         {
             text.AppendLine($"  routed by        {CompileLock.RoutedByText}");
             text.AppendLine($"  compiled for     {CompileLock.WorldText}");
+            text.AppendLine($"  processing       {CompileLock.ProcessingText}");
         }
 
         text.AppendLine($"teleporting        {Teleporting}");
         text.AppendLine($"route errors       {RouteErrors}");
         text.AppendLine($"collisions         {CollisionHandling}");
+        text.AppendLine($"lane changes       {LaneChanges.Describe(Clock.SumoStepSeconds)}");
         text.AppendLine($"clock              {Clock}");
         if (SumoStepOverrideSeconds is { } forced)
         {
@@ -739,6 +753,8 @@ public sealed class CoSimRunReport
         text.AppendLine($"ticks              {Ticks} over {SumoSteps} SUMO steps");
         text.AppendLine($"poses computed     {PosesComputed}");
         text.AppendLine($"  approximated Z   {PosesOnAnApproximatedSeatHeight}");
+        text.AppendLine($"  heading          from the bumper's path, the rear axle {PathHeading.RearAxleFractionOfLength:0.##} "
+                        + $"of the body's length behind it; held across {HeadingsHeldAcrossAJump} jump(s)");
         text.AppendLine($"  no ground        {PosesRefusedForMissingGround}");
         text.AppendLine($"  no measured body {VehicleTicksWithNoMeasuredBody} vehicle-ticks");
         text.AppendLine($"  on the road      {PosesSeatedOnTheRoad}: {PosesAtGrade} at grade, {PosesOnAnApproach} "

@@ -31,6 +31,8 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 20 | 2026-10-02. `C1`: the catalogue carries each body's width without its mirrors (`body_width_m`, §3.2b), measured from the mesh in the editor, beside the box's full extent; SUMO is given the body width (D4.3). `C3`: Bahonar is recompiled with 3 s lane changes and runs as before (§5.2a). `C7`: a body's heading is its own path's, its truth velocity the path's, and SUMO's angle is recorded beside them (§9.1, D4.13) |
+| 19 | 2026-10-01. `C3`: a lane change takes 3 s for every vehicle — the compiler writes `lanechange.duration` 3 into every configuration and the lock records it (§5.2a, D4.42). Measured on the three shipped scenarios; Bahonar deadlocks behind a body wider than its lanes and is not recompiled with it |
 | 18 | 2026-10-01. `C4`: every pooled body is spawned with `role_name` `sumo` (D4.9, as built). `capture:sumo_id` is not stamped, because a pooled body draws a succession of vehicles; the vehicle a body draws is named per frame instead, on the world-observer snapshot for every reader (§6.4; [`03`](03_CoSimulation_Runtime.md) D3.39) |
 | 17 | 2026-10-01. `C3`: a scenario that declares lane closures carries a fifth file, the rerouter `.add.xml`, named by its configuration and digested in its lock |
 | 16 | 2026-10-01. `C2`: a vehicle SUMO inserts is drawn from the frame SUMO first reports it in, at that position and moving, and never before SUMO inserted it, and its admission instant is that frame (§4.2, §4.3). A vehicle SUMO has when rendering begins is drawn on the first rendered frame |
@@ -703,6 +705,45 @@ consistent. All three cases are unreachable in a package that passed `C1` V1.5, 
 time; the runtime behaviour exists so that a validator bug degrades into a recorded absence rather than
 into a silently wrong corpus.
 
+### 3.2b The body's width without its mirrors — measured, because SUMO's width is the body's
+
+The box the sweep reads is the spawned actor's bounding box, which spans the whole mesh, wing mirrors
+included. That is the right box for the truth record and for seating -- it is what the imagery shows --
+and the wrong width for SUMO, whose width is the body's: it is the room the vehicle takes in its lane
+and, under a lane change spread over time, decides which neighbouring lanes it overlaps. Measured with
+its mirrors, `vehicle.fuso.mitsubishi` is **3.93 m** wide, wider than every 3.35 m lane on the shipped
+networks; under three-second lane changes the Bahonar pattern of life deadlocked behind it at the first
+junction it had to change lanes for (§5.2a). Its body is **3.23 m**.
+
+A server cannot see vertices, so the body width is measured from the mesh in the editor, and the
+catalogue carries it as a measured input. **Method** (2026-10-02, UE 5.7.4 editor, all nineteen
+blueprints): each blueprint's own skeletal mesh is exported as ASCII FBX at LOD0; its vertices are
+binned along the vehicle's length in 5 cm bins, each side's widest vertex from the centre line kept per
+bin; a side's body half-width is the largest half-width held over at least 0.6 m of length -- a
+morphological opening that removes mirrors and any other protrusion shorter than that -- and the body
+width is the two sides' sum (`CarlaControl/scripts/measure_vehicle_body_widths.py`, the export step
+documented there). The plain vertex extent across equals the sweep's `width_m` to 0.1 mm on every
+blueprint, which is how the table is held to the catalogue's meshes: a table whose full width disagrees
+is refused as another mesh's. The table, `CarlaControl/catalogue/vehicle_body_widths.json`, is merged
+by the sweep, or into the catalogue in the tree by `apply_vehicle_body_widths.py` with no server.
+
+| Blueprint | Box width (`width_m`) | Body width (`body_width_m`) |
+|---|---|---|
+| `vehicle.fuso.mitsubishi` | 3.928 | 3.233 |
+| `vehicle.ue4.chevrolet.impala` | 2.033 | 1.779 |
+| `vehicle.carlacola.actors` | 2.912 | 2.787 |
+| `vehicle.ue4.bmw.grantourer` | 2.242 | 2.144 |
+| `vehicle.carlamotors.european_hgv` | 2.865 | 2.787 |
+| `vehicle.dodgecop.charger` | 1.924 | 1.854 |
+| `vehicle.ambulance.ford` | 2.351 | 2.286 |
+| the other twelve | within 0.06 m of their boxes | `vehicle.nissan.patrol` unchanged |
+
+> **D4.43 — SUMO is given each body's width without its mirrors; the truth box and the seating keep
+> the full extent.** The body width is a measurement with its method and date in the catalogue's
+> header (`body_width`), never a guess or a scale factor applied to the box: no model is rescaled. A
+> catalogue with a measured blueprint that has no body width is not written, and a scenario class that
+> draws a body the catalogue has none for is refused under check 14.
+
 ### 3.3 Artifact and format
 
 > **D4.2 — the catalogue has one serialisation, `vehicles.catalogue.json`, and it is authoritative.
@@ -742,6 +783,7 @@ rule of §1 to be well defined.
 | `generated_at_utc` | string | — | yes | ISO-8601 UTC, millisecond precision |
 | `generator` | string | — | yes | `carlacontrol.VehicleCatalogueBuilder` and its version |
 | `server_version` | string | — | yes | The server the sweep measured against |
+| `body_width` | object | — | yes | How the body widths were measured: `{ method, measured, source }` -- the editor-side method, its date and the table merged (§3.2b) |
 | `lamp_probe` | object | — | yes | The lamp pass's own conditions, so the measurement is repeatable: `{ ran, solar_date, solar_time_hours, sun_elevation_deg, camera_poses, image_size, luminance_threshold, region, minimum_lit_pixels, drift_margin, average_frames, positive_control_pixels }`. `camera_poses` is a list because front and rear lamps need two of them (§3.2a). `ran: false` with a reason when the pass could not run, in which case every `lamp_capability` value is `unknown` |
 | `vehicles` | array | — | yes | §3.4.2 |
 | `classes` | array | — | yes | §3.4.3 |
@@ -756,7 +798,8 @@ rule of §1 to be well defined.
 | `measurement` | string | — | yes | `measured` or `failed` |
 | `measurement_note` | string | — | no | Present only when `measurement == "failed"` |
 | `length_m` | number | m | yes if measured | `2 × bounding_box.extent.x` |
-| `width_m` | number | m | yes if measured | `2 × bounding_box.extent.y` |
+| `width_m` | number | m | yes if measured | `2 × bounding_box.extent.y`: the whole mesh, wing mirrors included; the truth box's width |
+| `body_width_m` | number | m | yes if measured | The body's width without its mirrors, measured from the mesh in the editor (§3.2b); SUMO's `width` |
 | `height_m` | number | m | yes if measured | `2 × bounding_box.extent.z` |
 | `bbox_centre_m` | `[x,y,z]` | m | yes if measured | `bounding_box.location`, actor-local. Needed for the bumper-shift of `C7` and for any projected box |
 | `declared_base_type` | string | — | yes | The blueprint's own `base_type` attribute, **verbatim and untrusted** — a hand-edited value, measured wrong or absent for 7 of 17 when first swept (§3.1) |
@@ -996,8 +1039,9 @@ The `.rou.xml` the scenario builder emits from that class — **generated, never
 The brief's question — does the vType derive from the blueprint, or is the blueprint chosen to fit the
 vType? — has a third answer that dissolves the tolerance problem entirely.
 
-> **D4.3 — one `vType` per catalogue blueprint, with `length`, `width` and `height` copied verbatim
-> from the measurement; one `vTypeDistribution` per catalogue class. The author asks for a class; SUMO
+> **D4.3 — one `vType` per catalogue blueprint, with `length` and `height` copied verbatim from the
+> measurement and `width` the body's without its mirrors (§3.2b, D4.43); one `vTypeDistribution` per
+> catalogue class. The author asks for a class; SUMO
 > draws the member; the member *is* the blueprint.**
 
 Neither pure direction works:
@@ -1569,6 +1613,56 @@ Three findings from that measurement:
   vehicle type by `carla:catalogue_digest`; and the areas of interest, which are the world package's own
   published table (`C5` §7.2) and which the supervision plan names by id.
 
+### 5.2a The processing options, and how long a lane change takes
+
+The compiler writes the SUMO options that decide how the traffic moves into every configuration and
+records them in the lock's `traffic.processing`, rather than leaving any to SUMO's default:
+`time-to-teleport` −1, `max-depart-delay` 900, `collision.action` warn, and `lanechange.duration` 3.
+Why each of the first three is fixed is [`07`](07_Scenario_Authoring.md) §7.1's; the value of the last is this contract's.
+
+> **D4.42 — a lane change takes 3 s, for every vehicle.** SUMO's default `lanechange.duration` is 0
+> (`MSFrame.cpp:489`): a vehicle crosses a lane width inside one step, which renders as a sideways jump
+> and spikes the reconciliation residual ([`06`](06_Truth_And_Annotation.md) §6.2, which sets it above
+> zero and leaves the value here). The value is a physical one: a passenger car takes about 3 to 5 s to
+> change lanes, and 3 s is taken for every vehicle until a value per vehicle class is decided.
+
+**What SUMO does with it, read from SUMO 1.27.0 and measured through TraCI.** A change is spread over
+time only where the duration is longer than the step (`MSAbstractLaneChangeModel::startLaneChangeManeuver`).
+The vehicle moves across at half the two lanes' widths per duration — 1.117 m/s between 3.35 m lanes —
+and SUMO keeps reporting the lane it started on until it is past halfway, then the lane it is moving to,
+its lateral offset carried over to that lane (`MSLaneChanger::continueChange`). The reported position
+includes the offset, and the reported angle turns with the movement (`MSVehicle::computeAngle`). The
+lane-change model caps the sideways rate at 1.0 m/s plus the forward speed (the vType's
+`lcMaxSpeedLatStanding` and `lcMaxSpeedLatFactor` at their defaults), so a vehicle standing in a queue
+still moves across at 1.0 m/s: 5.2 % of Arapahoe's lane-change vehicle-steps are below 0.5 m/s. The
+bridge renders the vehicle where SUMO has it ([`03`](03_CoSimulation_Runtime.md) §6.4).
+
+**What it does to the shipped scenarios, measured 2026-10-01** in SUMO 1.27.0 alone over each whole run:
+
+| Scenario | Live vehicles at 0 s: peak / median / p99 | At 3 s |
+|---|---|---|
+| Arapahoe underpass dwell | 440 / 338 / 427 | 441 / 345 / 431, all 7,433 inserted, none waiting |
+| Gardnerville orbit | 50 / 39 / 48 | 49 / 39 / 47 |
+| Bahonar pattern of life | 170 / 42 / 159 | **deadlocked** with the box widths: 457 live at 1 h against 54, 1,820 at 6 h, 7,034 vehicles discarded by `max-depart-delay` by day 2. With the body widths (2026-10-02): **170 / 42 / 159**, all 69,245 inserted |
+
+Recompiled with the body widths without mirrors (§3.2b) on 2026-10-02, Arapahoe peaks at 461, median
+344, p99 449, every vehicle inserted, none waiting, no collision; Gardnerville at 49, 39, 47.
+
+Over 300 s of Arapahoe's morning peak, SUMO's own position jumps by more than a step's travel plus 1 m
+3,667 times at 0 s — the instantaneous changes — and 16 times at 3 s, every one at the step a spread
+change switches lanes between two lanes that are not parallel, eight of them inside a junction, the
+largest 15.9 m.
+
+**Why Bahonar deadlocks, measured.** The catalogue measures `vehicle.fuso.mitsubishi` at 3.93 m wide,
+wider than every lane on the three networks (3.35 m). Under a spread lane change SUMO holds a vehicle on
+every lane it overlaps: at 388 s the bus stops at the end of the right-hand lane of edge `168434252`,
+needing the left lane for its turn, "blocked by left leader, overlapping", while the head of the left
+lane holds the bus as its own leader 0.10 m ahead, and with teleporting forbidden the queue never
+clears. Every duration from 1.5 s to 5 s deadlocks it, at steps from 0.05 s to 1 s; the control, the
+same run at 3 s with the bus 2.5 m wide, does not (peak 157, 56 live at 1 h). The 3.93 m was the box,
+mirrors included; SUMO is now given the body's 3.23 m (D4.43), and Bahonar is recompiled with D4.42 and
+runs as it did before lane changes were spread.
+
 ### 5.3 Lock fields
 
 `<scenario_id>.lock.json`, as `ScenarioCompiler._lock` writes it:
@@ -1583,7 +1677,7 @@ Three findings from that measurement:
 | **`world`** | `package`, `map_name`, `network_fingerprint`, `netconvert_argv`, `netconvert_version`, `opendrive_sha256`, `source_osm_sha256`, `origin_latitude`, `origin_longitude`, `georeference` — copied from the world package the specification was compiled against |
 | **`catalogue`** | `catalogue_id`, `catalogue_digest`, `blueprint_set_digest`, `content_build_id` (`C1` §3.11) |
 | **`vocabulary`** | `core_version`, `namespaces` with their versions, and `vocabulary_digest`, the digest of the vocabulary document the supervision plan carries |
-| **`traffic`** | `sumo_seed`, `step_length_s`, `end_s`, `processing` (the SUMO options that decide how traffic moves), and `routed_by`: the `duarouter` release that routed, the world's converter, how the two stand by release number and whether a mismatch was accepted ([`07`](07_Scenario_Authoring.md) check 6) |
+| **`traffic`** | `sumo_seed`, `step_length_s`, `end_s`, `processing` (the SUMO options that decide how traffic moves, §5.2a), and `routed_by`: the `duarouter` release that routed, the world's converter, how the two stand by release number and whether a mismatch was accepted ([`07`](07_Scenario_Authoring.md) check 6) |
 | `epoch`, `epoch_block_sha256` | The `C9` epoch object verbatim, and its digest canonicalised per §1 |
 | `illumination` | The authored `C9` illumination default. An operator may override it at run start (`C9` §11.8); the run manifest records which won |
 | `capture_windows` | The authored candidate windows: id, begin and end seconds, civil begin, end and date |
@@ -2431,8 +2525,8 @@ stop moving.
 | Traffic-manager registration | **never**; lockout is run-level, not a warning | [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3.4 |
 | Storyboard control | **never** in this mode | |
 | Pose | written every world sub-step by the driver | `set_actor_transform` (`CarlaClient.cs:1497`) |
-| X, Y | SUMO's, negated in Y, shifted back by `length / 2` along the heading and by the bounding-box centre — **the exact formula and its catalogue dependency are `C1` §3.2** | [doc 23 §6.7](../../Findings/23_SUMO_Traffic_Integration.md), `D4.17` |
-| Yaw | `sumoAngle − 90` | same |
+| X, Y | SUMO's front bumper exactly, negated in Y, shifted back by the measured bumper-to-origin distance along the heading and by the bounding-box centre — **the exact formula and its catalogue dependency are `C1` §3.2** | [doc 23 §6.7](../../Findings/23_SUMO_Traffic_Integration.md), `D4.17` |
+| Yaw | the heading of the body's own path, less 90: the rear axle, 0.75 of the body's length behind the bumper, trails the bumper along its path, turned only by forward travel ([`03`](03_CoSimulation_Runtime.md) §6.4, D3.40). SUMO's reported angle is recorded beside it for audit, never written as the yaw. Before 2026-10-02, `sumoAngle − 90` in the plan and the lane tangent in the bridge | |
 | Z | the drape ground height at (x, y), **not** SUMO's — the SUMO network is flat, measured zero distinct `z` in any lane shape | doc 23 §2, §6.5 |
 | Bounding box | the blueprint's, unchanged; equal to the vType's by `C1` §3.6 | |
 | Colour | drawn per `C1` §3.8, set at spawn, immutable | |
@@ -2465,9 +2559,12 @@ out of the truth record.
 
 > **D4.13 — truth velocity for a SUMO-driven actor is a contract obligation of the producer, not a
 > property recovered from the engine.** The truth record's `speed`, `course`, `vx`, `vy`, `vz` for an
-> actor with `role_name = "sumo"` **must** be SUMO's own velocity for that vehicle, converted to the
-> CARLA frame (`vx = speed·sin(heading)`, `vy = −speed·cos(heading)`, `vz = 0`), and **must not** be
-> read from the world-observer snapshot.
+> actor with `role_name = "sumo"` **must** be the vehicle's own motion as SUMO moved it -- since
+> 2026-10-02 the velocity of the path the bridge renders it along, the front bumper's movement over the
+> tick with a lane change's sideways movement in it, so the speed is SUMO's along the lane plus the
+> sideways rate, and the course the direction the body moves -- and **must not** be recovered from
+> physics. Its heading is the body's (`heading_deg`), which differs from the course through a turn and
+> a lane change, and SUMO's reported angle rides beside both (`sumo_angle_deg`) for audit.
 
 The conversion is already implemented and measured on the SUMO-only path
 (`CarlaControl/src/carlacontrol/SumoCotBridge.py:311-318`), which exists precisely because the SUMO
@@ -4733,7 +4830,7 @@ Stated as properties needed, not as requests.
 |---|---|
 | **D4.1** | **The vehicle catalogue is generated by a build-time spawn-and-measure sweep against a running server; it cannot be a projection of the blueprint library.** Measured: dimensions do not exist on `rpc::ActorDefinition`, on `FVehicleParameters`, or in any attribute `MakeVehicleDefinition` emits; the bounding box first exists on the spawned actor (§3.2). Upstream's static `vtypes.json` is the same conclusion reached once and frozen; our blueprint set differs, so ours is new work |
 | **D4.2** | **The catalogue has one serialisation, `vehicles.catalogue.json`, and it is authoritative; the sweep emits no second projection of it.** Most of the payload — `vClass`, `guiShape`, `sigma`, `speedDev`, class membership, colour palette, lamp capability — has no home in a vehicle-description standard except vendor extensions, so a second serialisation would be a vendor document in a standard's clothing and a second artifact to keep in step (§3.3) |
-| **D4.3** | **One `vType` per catalogue blueprint with dimensions copied verbatim; one `vTypeDistribution` per catalogue class.** The author asks for a class, SUMO draws the member, the member *is* the blueprint. No matching, no nearest neighbour, tolerance 0.01 m for rounding only (§3.6) |
+| **D4.3** | **One `vType` per catalogue blueprint with dimensions copied verbatim -- the width the body's without its mirrors (D4.43); one `vTypeDistribution` per catalogue class.** The author asks for a class, SUMO draws the member, the member *is* the blueprint. No matching, no nearest neighbour, tolerance 0.01 m for rounding only (§3.6) |
 | **D4.4** | **Colours are `#RRGGBB` in every SUMO artifact and `"R,G,B"` 0–255 in every CARLA artifact.** SUMO reinterprets an all-≤1 integer triple as fractions (`RGBColor.cpp:308-311`); hex removes the ambiguity (§3.7) |
 | **D4.5** | **`vType@color` is a `sumo-gui` property and is never rendered.** Measured: Bahonar's four anomaly types are the only conspicuous colours in the file and cover all nine marked vehicles, so carrying colour through would make it a perfect separator of the positive class. The rendered colour is drawn from the blueprint's own palette by a seeded rule, identically for marked and unmarked vehicles of one class (§3.7.1) |
 | **D4.6** | **A participant in an open interval is drawn throughout it, by construction** — every vehicle SUMO has in a window is drawn, from its departure or its window's prewarm until SUMO removes it or the window closes, so nothing can displace a participant. The one way it could go without a body, a vehicle type with no measured body, is refused before a run starts (07 check 14, 12 check 25) (§4.4) |
@@ -4743,7 +4840,7 @@ Stated as properties needed, not as requests.
 | **D4.10** | **An area resolves to a lane-and-position table, not to a list of edge ids**, because `laneId`/`startPos`/`endPos` is what a `<stop>` needs and an edge id is not. Positions are SUMO lane positions, not arc lengths along the shape — measured, the two differ by up to 5.76 m (§7.3) |
 | **D4.11** | **The co-simulation driver is the sole owner of the advance of simulated time** (§8.1) |
 | **D4.12** | **If either side stalls, the driver stops advancing both and fails the run.** A world that ticks without SUMO produces a plausible lie (§8.5) |
-| **D4.13** | **Truth velocity for a SUMO-driven actor is SUMO's, converted to the CARLA frame — never `GetActor()->GetVelocity()`.** Verified: the observer reads the physics velocity (`WorldObserver.cpp:373`) and `SetActorTargetVelocity` writes `SetPhysicsLinearVelocity` (`CarlaActor.cpp:392-411`), which is inert with simulation off, so the obvious workaround does not work either (§9.2) |
+| **D4.13** | **Truth velocity for a SUMO-driven actor is the vehicle's own motion as SUMO moved it -- since 2026-10-02 the velocity of the path the bridge renders it along, lateral movement included -- never recovered from physics.** The body's heading rides beside it (`heading_deg`) and SUMO's reported angle with both (`sumo_angle_deg`) for audit (§9.2). Verified: the observer reads the physics velocity (`WorldObserver.cpp:373`) and `SetActorTargetVelocity` writes `SetPhysicsLinearVelocity` (`CarlaActor.cpp:392-411`), which is inert with simulation off, so the obvious workaround does not work either (§9.2) |
 | **D4.14** | **Authority is written at spawn and is immutable; a handover is destroy-and-respawn, never a mutation** (§9.3) |
 | **D4.15** | **Only area *definitions* may be placed in the `OBSERVATION` root; area *relations* are derived from truth positions and live in the `TRUTH` root** (§10.4). An observation-side `<_aoi>` would state exact containment that no observer measured |
 | **D4.16** | **The `OBSERVATION` root is written by a component that holds no reference to any truth artifact, and the two roots are written as separate files by separate writers from the first byte.** A structural guarantee, not a policy (§10.5). No join between truth and model output is produced here at all, which is `D4.27` |
@@ -4771,6 +4868,8 @@ Stated as properties needed, not as requests.
 | **D4.38** | **Nothing in this contract requires a run to have a declared length.** A convenience limit may exist on the invocation surface; no field, rule, gate or reader here may assume one was set, and reaching the end of a limit is one ordinary way a run can end among several. The caller stops us, so a contract that needed a duration would be a contract that only worked for callers who did not want to use it that way (§12.9) |
 | **D4.39** | **The annotation vocabulary travels inside the scenario package and is bound by digest at the refuse tier, exactly as the annotation set and the epoch are.** A package that carries terms and not their definitions is a package whose labels only the author can read, and a vocabulary bound by nothing can be edited after the annotation set was compiled against it — after which every label still resolves, to a meaning nobody declared. The resolved vocabulary document is carried in the supervision plan, `<scenario_id>.supervision.json`; `vocabulary_digest` in the plan and in the lock binds it; and V3.15 refuses a mismatch. The **content** of the document — what the core holds, how an author term declares itself, how a namespace is versioned — is [`06`](06_Truth_And_Annotation.md) §3.7, §3.8 and §8.7's; this contract owns only that it travels, where, and what binds it (§5.2, §5.3, §5.4) |
 | **D4.40** | **Motorcycles, mopeds and bicycles are outside the vehicle mapping contract.** No catalogue class names one, no `vType` declares one, and an author asking for one is refused rather than substituted. A two-wheeler carries a rider and riders are not rendered; and the content build registers no two-wheeled blueprint for the sweep to measure (§3.1, V1.20) |
+| **D4.42** | **A lane change takes 3 s, for every vehicle**: the compiler writes `lanechange.duration` 3 and the lock records it. SUMO's default of 0 crosses a lane width inside one step; a passenger car takes about 3 to 5 s, and one value holds for every vehicle until a value per class is decided. A body wider than its lane deadlocks a spread lane change -- the Fuso bus did with its mirrors counted -- so SUMO is given body widths (D4.43) (§5.2a) |
+| **D4.43** | **SUMO is given each body's width without its mirrors; the truth box and seating keep the full extent.** Measured from each blueprint's mesh in the editor, carried in the catalogue as `body_width_m` with its method; no model rescaled; a body without one is refused (§3.2b) |
 
 ---
 

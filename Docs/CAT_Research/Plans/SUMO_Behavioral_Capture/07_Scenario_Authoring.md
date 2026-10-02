@@ -74,6 +74,8 @@ choice. §3.9 draws the boundary.
 | 2026-09-29 | The Bahonar generator writes a specification on the rebuilt world's own network under a 07:00 epoch, with named vehicle mixes, areas of interest and its six anomalies as supervision (§3.4.1, D7.34–D7.36); its compile waits on the catalogue measuring the European heavy goods vehicle. |
 | 2026-09-30 | The out-of-scope notes no longer ask whether a scenario is renderable at all: the render cap (128, hard 192) was never measured — M2 never ran — and the scenario is the arbiter of population, so every vehicle SUMO has is drawn and a heavier scenario runs slower, never thinner. Scale is now its wall-clock cost (doc 10). |
 | 2026-10-01 | The Arapahoe generator writes a specification compiled against the regenerated world with measured bodies, its incident a lane closure (§3.4.2); lane closures are a specification block compiled into an additional file the lock binds, and check 55 refuses one that breaks a route (D7.37). |
+| 2026-10-01 | The compiler writes `lanechange.duration` 3 beside the other processing options (§5.1, §7.1; [`04`](04_Contracts.md) D4.42), the lock records it and the resolution report lists every processing option; Gardnerville and Arapahoe are recompiled with it, and Bahonar, which deadlocks with it behind a body wider than its lanes, is not. |
+| 2026-10-02 | The compiler gives SUMO each body's width without its mirrors and refuses a class whose body has none measured (§7.1; [`04`](04_Contracts.md) D4.43); all three shipped scenarios are recompiled with it and with 3 s lane changes, Bahonar included, which runs as before (§3.4.1, §3.4.2). |
 
 ---
 
@@ -831,6 +833,12 @@ covered 10.3 km and its shadow 9.6 km: the world admits `authority` and not `arm
 service connector (way 26413344) the access-keyed fence had opened to both, so the naval routes to the
 western towers go round (§12 question 14).
 
+**Recompiled on 2026-10-02** with three-second lane changes ([`04`](04_Contracts.md) D4.42) and each
+body's width without its mirrors (D4.43), the routes unchanged: peak 170, median 42, p99 159, all
+69 245 inserted -- the population of the run before lane changes were spread. With the bus's box width
+of 3.93 m, mirrors included, the same lane changes had deadlocked it within the first hour behind the
+bus at the end of edge `168434252` ([`04`](04_Contracts.md) §5.2a); its body is 3.23 m.
+
 **The compile.** Refused by check 14 alone, naming `vehicle.carlamotors.european_hgv` for `civ_truck`,
 `port_truck` and `mil_truck`: catalogue `carla-0.10.0-windows` (digest `771fa431…`) has not measured
 it. Every other check of the resolution stage passes, and with that body replaced by a measured one the
@@ -901,7 +909,11 @@ same one at 901.95 s. Live vehicles: **peak 440** at 1 146.7 s, **median 338**, 
 rerun on the same SUMO. The incident backs the freeway up — halting peaks at 107 at 1 024.9 s — and
 drains: halting is back to 35 by 1 800 s. The marked vehicle departs at 120 s, parks at 88.63 m from
 455.6 s to 2 255.6 s, and leaves at the northern end at 2 493.7 s over 5 961.6 m. Every vehicle type the
-route file declares names a measured body (check 15; `test_arapahoe_generator.py`).
+route file declares names a measured body (check 15; `test_arapahoe_generator.py`). Recompiled the same
+day with 3 s lane changes ([`04`](04_Contracts.md) D4.42), the routes unchanged: peak 441, median 345,
+p99 431, every vehicle inserted, none waiting, no collision. Recompiled on 2026-10-02 with each body's
+width without its mirrors ([`04`](04_Contracts.md) D4.43): peak 461, median 344, p99 449, every vehicle
+inserted, none waiting, no collision.
 
 **What the specification does not carry.** The opposite-lane pairs, a network edit (§6 gotcha 4). They
 matter only to a vehicle stopped in the running lane: under `--stop-in-lane` no lane lets a driver cross
@@ -1547,7 +1559,7 @@ place index, area table and solar frame — and the vehicle catalogue. Nothing e
 | File | Content |
 |---|---|
 | `<scenario_id>.rou.xml` | the vehicle types, one per measured body, and every actor and flow, **already routed** (§5.5), **departure-sorted** with entries that depart together in the specification's order, flows before actors — SUMO inserts, and draws its random numbers, in the order it reads, so that order decides the traffic as the seed does — times in **plain seconds**, and no supervision (§3.6) |
-| `<scenario_id>.sumocfg` | the run configuration: the network and route files, `begin` 0, `end` and `step-length` in plain seconds with the epoch restated as a comment above them, the SUMO seed, and the processing options that decide how the traffic moves — `time-to-teleport` −1, `max-depart-delay` 900, `collision.action` warn |
+| `<scenario_id>.sumocfg` | the run configuration: the network and route files, `begin` 0, `end` and `step-length` in plain seconds with the epoch restated as a comment above them, the SUMO seed, and the processing options that decide how the traffic moves — `time-to-teleport` −1, `max-depart-delay` 900, `collision.action` warn, `lanechange.duration` 3 |
 | `<scenario_id>.add.xml` | written only when the specification declares `lane_closures`: one rerouter per closure, its lanes closed to all but `authority` for the closure's window, times in plain seconds; the configuration names it in `additional-files`. The route file cannot carry a closure (D7.37) |
 | `<MapName>.net.xml` | the world package's own network, **byte for byte**, so the network SUMO runs is the world's; nothing about it is scenario-specific |
 | `<scenario_id>.supervision.json` | the supervision plan (§3.6), in the form of [`06`](06_Truth_And_Annotation.md) §8.1: instance ids `<scenario_id>/<name>`, intervals in seconds and civil time, every entity and cohort explicit, the vocabulary resolved with its digest, and the digests of the route file, network and configuration it was compiled against |
@@ -1993,8 +2005,8 @@ or fixed by the compiler, written into the scenario files, and bound in the lock
 | **The routes** | routed at compile time and written into the route file (§5.5), so no routing happens at load |
 | **The network** | the world's own, written byte for byte beside the configuration and digested in the lock |
 | **The step length and the end** | `simulation.step_length_s` and `simulation.end`, in the `.sumocfg` and the lock |
-| **The processing options** | `time-to-teleport` −1 — a teleport is a position jump nothing downstream can reproduce — `max-depart-delay` 900 and `collision.action` warn, fixed by the compiler and recorded |
-| **The vehicle types** | one per measured body, from the catalogue, whose digests are in the lock |
+| **The processing options** | `time-to-teleport` −1 — a teleport is a position jump nothing downstream can reproduce — `max-depart-delay` 900, `collision.action` warn, and `lanechange.duration` 3 — a lane change spread over three seconds rather than made inside one step, its value [`04`](04_Contracts.md) D4.42's — fixed by the compiler, recorded in the lock and listed in the resolution report's Traffic section |
+| **The vehicle types** | one per measured body, from the catalogue, whose digests are in the lock; length and height the body's box, width the body's without its mirrors ([`04`](04_Contracts.md) D4.43), which a class drawing a body with none measured is refused for under check 14 |
 | **The SUMO release that routed** | recorded in the lock; a release other than the one that built the world is refused unless explicitly accepted, and an acceptance is recorded in the lock (check 6) |
 
 Two seeds doc 20 anticipated are not declared, because nothing consumes them: an **appearance seed**

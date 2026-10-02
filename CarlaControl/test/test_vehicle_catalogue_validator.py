@@ -56,6 +56,28 @@ def test_an_implausible_dimension_is_refused(document):
     assert any(failure.startswith("V1.2:") for failure in broken(document, stretch))
 
 
+def test_a_measured_entry_without_a_body_width_is_refused(document):
+    """SUMO is given the body's width without its mirrors; the box would carry them."""
+    def forget_the_body(copied):
+        del copied["vehicles"][0]["body_width_m"]
+
+    assert any("has no body_width_m" in failure for failure in broken(document, forget_the_body))
+
+
+def test_a_body_wider_than_its_box_is_refused(document):
+    def widen(copied):
+        copied["vehicles"][0]["body_width_m"] = copied["vehicles"][0]["width_m"] + 0.1
+
+    assert any("cannot be wider than the whole mesh" in failure for failure in broken(document, widen))
+
+
+def test_body_widths_without_their_method_are_refused(document):
+    def forget_the_method(copied):
+        copied["body_width"]["method"] = ""
+
+    assert any("does not say how" in failure for failure in broken(document, forget_the_method))
+
+
 def test_a_missing_lamp_key_is_refused_rather_than_read_as_unmeasured(document):
     """An absent key and a key reading `unknown` must not collapse into the same thing."""
     def drop_a_lamp(copied):

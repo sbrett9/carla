@@ -17,9 +17,16 @@ namespace CarlaNet.CoSim;
 /// </param>
 /// <param name="Pose">The transform and velocity that went into the batch.</param>
 /// <param name="Case">How the sub-step pose was produced.</param>
-/// <param name="SumoX">Where SUMO said the front bumper was, for a reader checking the conversion.</param>
+/// <param name="SumoX">
+/// Where the front bumper was, as the interpolation put it between SUMO's two frames -- SUMO's own
+/// position at a frame -- for a reader checking the conversion.
+/// </param>
 /// <param name="SumoY">The same, northing.</param>
-/// <param name="SumoHeadingDegrees">And the heading SUMO reported, clockwise from north.</param>
+/// <param name="SumoAngleDegrees">
+/// The angle SUMO reported, degrees clockwise from north, taken the shorter way round between its two
+/// frames, so SUMO's own at a frame. Recorded for audit beside the body's heading, which is the pose's
+/// yaw and comes from the path the bumper takes (<see cref="PathHeading"/>).
+/// </param>
 /// <param name="Signals">
 /// SUMO's signal word for the vehicle at the SUMO frame this tick is rendered from -- the raw word, so a
 /// reader can tell what the simulation said from what the rendering made of it.
@@ -42,7 +49,7 @@ public readonly record struct CoSimPoseRecord(
     LaneInterpolationCase Case,
     double SumoX,
     double SumoY,
-    double SumoHeadingDegrees,
+    double SumoAngleDegrees,
     SumoVehicleSignals Signals = SumoVehicleSignals.None,
     VehicleLightStateFlags Lamps = VehicleLightStateFlags.None,
     string LaneId = "",
