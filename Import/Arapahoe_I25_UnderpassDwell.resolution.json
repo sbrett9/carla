@@ -4408,11 +4408,11 @@
       },
       "config": {
         "path": "Arapahoe_I25_UnderpassDwell.sumocfg",
-        "sha256": "e299b2929262e50bfd5301dea2984e42377549933d53fff877e6b23bf623c01b"
+        "sha256": "ead68759a136dddff82943cdcc2d7d897638d4f515a68c9fd346e4ca1b2b56ed"
       },
       "network": {
         "path": "Arapahoe_I25.net.xml",
-        "sha256": "11e2bba84b33514e37249ce67d05275df7d9166ea4685c4ddeaa5ce5b29e16ba"
+        "sha256": "bdba54a97a1b996ccf08f61def4dcd019c985a7f3efff2d13de1f31479940312"
       },
       "additional": {
         "path": "Arapahoe_I25_UnderpassDwell.add.xml",
@@ -4420,7 +4420,7 @@
       },
       "supervision": {
         "path": "Arapahoe_I25_UnderpassDwell.supervision.json",
-        "sha256": "679acda6c161b94c37ceac8d4a40ec654ad347a6d5b92264343b36736bc26f75"
+        "sha256": "c39d2b56e3c4908fff6672de0c64bb9b2705603040e15d59854885790f37e79f"
       }
     },
     "world": {
@@ -4463,7 +4463,7 @@
         "true"
       ],
       "netconvert_version": "Eclipse SUMO netconvert 1.27.0",
-      "opendrive_sha256": "b6bb52668042454cc936e23ada2e8692a3759bd7ac17b1281937b895736614bb",
+      "opendrive_sha256": "e4d4c7dfa78c969846794b6cf583b509374d61e3ca469c48e9ed570ec780c448",
       "source_osm_sha256": "f366f0d0e615ad4a663d93d672b8a95589ed3d8e58bdb60b146a423aabf2cecc",
       "origin_latitude": 39.59431,
       "origin_longitude": -104.88449,
@@ -4487,7 +4487,8 @@
       "processing": {
         "time-to-teleport": "-1",
         "max-depart-delay": "900",
-        "collision.action": "warn"
+        "collision.action": "warn",
+        "lanechange.duration": "3"
       },
       "routed_by": {
         "tool": "duarouter",
