@@ -19,10 +19,11 @@ the real scenario artifacts. No code changed, no build run.
 | 11 · 2026-10-01 | A body is seated on the ground where its road is at grade and on the road's profile where the road is a structure, so at grade its `hae` is the ground's as before, and on a bridge deck the deck's altitude, with `hae_dtm` the ground beneath it and their difference the deck's height plus the pivot, not a body in the air (§4.2). |
 | 12 · 2026-10-01 | §6.2's instantaneous lane change is set above zero as ruled: the compiler writes `lanechange.duration` 3, the value [04](04_Contracts.md) D4.42 owns, the lock records it and the session's report states it, and the bridge renders a changing vehicle where SUMO has it. Bahonar is not yet recompiled with it. The heading a body takes through a lane change and a junction is measured and open. |
 | 13 · 2026-10-02 | A driven body's heading is the heading of its own path, and the truth carries it as `heading_deg` beside the course; course and speed are the path's, lateral movement included; SUMO's reported angle rides beside them as `sumo_angle_deg` for audit (§8.2). Through a lane change the body now turns with its sideways movement (§6.2). Bahonar is recompiled with 3 s lane changes once SUMO is given body widths without mirrors (§2.5). |
+| 14 · 2026-10-02 | Two optional performance controls, off by default and recommended for no scenario, and what each does to the truth. A draw distance keeps every vehicle's body, pose and record; a camera does not draw a vehicle beyond it, and that camera's sidecar says so -- `draw_distance_m` on the container, `beyond_draw_distance` (`wholly` or `partly`) and `camera_range_m` on the vehicle -- and a vehicle wholly beyond it is neither observed nor measured for occlusion by that camera, a sixth observability outcome that exists only under a draw distance (§5.1, §8.2, D6.39). A limit on which vehicles get a body -- a circle, the cameras' footprints or a capacity -- leaves a vehicle outside it simulated, in no sidecar and `not_rendered` with reason `outside_limit`, counted, and its drawn vehicles a sample a consumer must treat as one (§4.4, §10.4, D6.40). D6.16 stays withdrawn. |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
-field. Decisions are numbered D6.1 to D6.38 and are stable — sibling documents cite them.
+field. Decisions are numbered D6.1 to D6.40 and are stable — sibling documents cite them.
 **Scope:** How an author's assertion about what a vehicle is doing reaches the truth record when the
 authoring surface is a SUMO scenario rather than an OpenSCENARIO storyboard; how positional truth,
 behavioural truth and **the illumination the frame was rendered under** are produced by different
@@ -1334,6 +1335,22 @@ still simulated and its truth recorded, and the run counts the refused types by 
 scenario cannot reach it: the scenario compiler refuses a vehicle class naming a blueprint the
 catalogue did not measure ([07](07_Scenario_Authoring.md) check 14).
 
+**A run that chooses an optional limit adds a third, and says so** (D6.40). A circle, the cameras'
+footprints or a capacity is a performance control an operator may choose, never a default
+([03](03_CoSimulation_Runtime.md) §8.3.2, D3.42): (c) the part of a vehicle's life the chosen limit
+left it out is in this row too. Such a vehicle is still simulated -- its behaviour is the scenario's --
+and has no body, so it is absent from every capture sidecar, as the first row says, and the manifest
+marks those spans `not_rendered` with the reason `outside_limit` ([04](04_Contracts.md) §4.5, D4.44).
+Its absence is never the carrier of that fact: the run's effective configuration names the limit, the
+launch echo said a vehicle outside it is not in CARLA, and the run's record counts the vehicle-passes
+it left out and the releases it caused (`left_the_region`, `capacity`). A vehicle inside the limit is
+in the second row exactly as with none.
+
+**A draw distance adds no row** (D6.39). Under that other optional control every vehicle keeps its body
+and is in the second row; a camera simply does not draw one farther than the distance from it. So the
+vehicle is listed in that camera's sidecar, because it is in the world, and marked there as not drawn
+by that camera (§8.2); what it is to that camera's observability is §5.1's sixth outcome.
+
 The third row is where [issue #18](https://github.com/sbrett9/carla/issues/18) bites — two subsystems
 already destroy vehicles with different signals, and SUMO's arrival and removal make a third. The
 truth requirement is narrow and firm: **a CARLA-side destruction never closes a supervision interval.**
@@ -1452,7 +1469,8 @@ opacity, on an arrival latch or on any fade notion, because vehicles appear full
 | `observed` | Inside the rendered span, in at least one sensor's frustum, occlusion below the cutoff, apparent size above the cutoff | admission/release instants + sensor pose and intrinsics (`CotWriter.cs:112-124`) + `OcclusionEstimator` |
 | `out_of_frame` | Inside the rendered span, but outside every collection sensor's frustum | sensor geometry |
 | `occluded` | Inside the rendered span and in frustum, but hidden past the cutoff, or too few pixels to be a usable example ([17 §7](../../Findings/17_Photoreal_Occlusion_Metric.md); [09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md) on reading the fraction against the sample count) | `occlusion`, `occlusion_samples`, `apparent_width_px` |
-| `not_rendered` | **Outside the rendered span: no CARLA actor existed at that tick.** The question is undefined, not answered "no" | the recorded admission and release instants, from `RenderedVehicleRegistry` |
+| `not_rendered` | **Outside the rendered span: no CARLA actor existed at that tick.** The question is undefined, not answered "no". Under an optional render-set limit this includes the spans the limit left out (§4.4, reason `outside_limit`) | the recorded admission and release instants, from `RenderedVehicleRegistry` |
+| `beyond_draw_distance` | **Only under an optional draw distance**: inside the rendered span, but wholly beyond the draw distance from that sensor, so its image does not show the vehicle at all | `beyond_draw_distance="wholly"` in that sensor's sidecar, with `camera_range_m` (§8.2) |
 | `site_unobserved` | For an absence: the site was not under observation during the window | area of interest + sensor geometry (§5.2) |
 
 An interval can carry more than one outcome across its length — admitted part way through, observed,
@@ -1478,6 +1496,18 @@ report separately:
 - **Render coverage** — of the authored intervals, what fraction had a rendered participant at all.
   This is a quality gate on **the data**: it says how much of the supervision plan the corpus actually
   backs with imagery.
+
+**`beyond_draw_distance` belongs with `not_rendered`, not with the collection geometry** (D6.39). A
+fielded sensor would have seen the vehicle, small; this corpus did not draw it because a run chose to
+save rendering. So it is a corpus-construction fact, reported under render coverage as an exclusion
+for that sensor rather than under collection coverage, and never counted as `out_of_frame` or
+`occluded`: the vehicle was not tested against the frustum or the depth capture at all, and its
+occlusion is left unmeasured rather than computed against a depth capture that did not draw it either.
+It is sensor-scoped, as `out_of_frame` is: the same vehicle at the same tick may be observed by a
+nearer camera. A vehicle the distance falls across (`beyond_draw_distance="partly"`) is drawn, perhaps
+without its far parts, and takes the ordinary outcome its tests give it, with the flag beside it for a
+consumer that wants to drop it. With no draw distance -- the default -- the outcome never occurs and the
+five above are the whole set.
 
 An annotated interval that is entirely `not_rendered` is **reported as an exclusion and is not counted
 among the intervals the corpus contains.** It is a row in the plan with no pixels behind it. Recording
@@ -2240,6 +2270,24 @@ body's heading is within 10.3° (Gardnerville) and 10.9° (Arapahoe) of SUMO's a
 percentile: SUMO's angle is the chord from the vehicle's back to its front, and over 300 s of Arapahoe
 it steps by more than 15° 363 times where the path heading does 18 times. This is the `heading_separation_deg`
 the reconciler above will report; until it exists, the two angles side by side are the record of it.
+
+**As built (2026-10-02): the optional draw distance, marked per camera.** Where a run sets a draw
+distance ([03](03_CoSimulation_Runtime.md) §8.3.3, D3.41), each frame's render set records the distance
+the frame was drawn under, and the recorder marks every record against it from the capture's own
+camera pose, by the vehicle's bounding sphere as the renderer uses each primitive's: `<events>` gains
+`draw_distance_m`, and the `_carla` block of a vehicle the distance reached gains
+`beyond_draw_distance` -- `wholly` where the whole sphere lies beyond it, so the image shows nothing of
+the vehicle, `partly` where the distance falls across the sphere -- and `camera_range_m`, the range from
+the camera to the centre of the vehicle's box that the mark rests on. The vehicle is listed all the
+same, with its full truth, because it is in the world; a vehicle wholly beyond the distance carries no
+occlusion attributes, which here as everywhere means unmeasured. A capture with no draw distance, and
+every capture of a run whose server refused the distance, carries none of the three. The renderer's
+`r.ViewDistanceScale`, 1 at the server's default quality, multiplies every draw distance; the mark is
+taken at 1.
+
+**Under an optional render-set limit the sidecar is unchanged in shape.** It lists exactly the bodies
+its frame drew, as always; a vehicle the limit left out has no body and so no record, and the manifest,
+not the sidecar, says why (§4.4).
 
 ### 8.3 The world truth track
 
@@ -3149,14 +3197,23 @@ Three properties, each load-bearing:
   stops. There is no artifact here that is a function of a model having run, and no code path that
   consumes one.
 
-### 10.4 The render set is not a label leak, because every vehicle is drawn
+### 10.4 The render set is not a label leak, because nothing that chooses it reads supervision
 
-Inside a capture window `RenderSetSelector` draws every vehicle SUMO has
+By default, inside a capture window, `RenderSetSelector` draws every vehicle SUMO has
 ([01 D1.14](01_Architecture.md)) and reads no supervision to do it: an annotated participant and the
 ambient vehicle beside it are admitted by the same rule at the same tick. So "this vehicle was
 rendered" carries nothing about "this vehicle is annotated", and the density of a scene is the
 scenario's, never a function of the label. The only vehicles a window does not draw are those of a
 type with no measured body, refused per type whatever their supervision (§4.4).
+
+**An optional limit reads no supervision either, and it can still thin a scene** (D6.40). A circle and
+the cameras' footprints admit by place and a capacity by place or by the scenario seed's order, so
+membership still says nothing about a label. But a capacity that binds makes a scene's density the
+limit's rather than the scenario's, and any limit can leave a participant out. Neither is hidden: the
+pass counts say when a capacity shed vehicles, the manifest marks every left-out span `outside_limit`,
+and a run that left a participant out of an open interval is marked invalid ([04](04_Contracts.md)
+V2.6). No span is withheld automatically (D6.16 stays withdrawn); a consumer wanting the scenario's
+own density excludes the frames whose passes shed.
 
 Render-set membership and the admission and release instants stay out of the training export (§10.2)
 because they are build-time facts a fielded system never holds, not because they leak a label. No span
@@ -3324,6 +3381,8 @@ owner acts on it rather than rediscovers it.
 | **D6.36** | **The gates are emitted as areas of interest at world build, derived from the private-road restriction.** `restrict_private_roads` reads the OSM access tag per way (`CarlaControl/src/carlacontrol/SumoScenarioBuilder.py:547-551`), rewrites the permission list on every restricted edge (`:571-576`) and reports the count (`:582`); the junctions where a restricted edge meets an unrestricted one fall out of the same pass and become areas whose `kind` names a gate. That converts a hand-found literal into a build artifact (`make_bahonar_scenario.py:90`, `PORT_GATE_APPROACH = "-431672573#2"`, measured), satisfies D6.7's hard area prerequisite for any gate-sited absence at no authoring cost, and puts the fence — the structure the whole sizing scenario rests on and that no label mentions — into the corpus. It is derived context of §3.6 point 5's class: computed identically for every vehicle, from the network's own state, never a label (§3.9) |
 | **D6.37** | **The training export's copy of the vocabulary carries a term's definitional fields only.** `exemplar_instances[]`, and a `counterfactual` whose `kind` is `instance`, `cohort` or `series`, name subjects of this scenario by `instance_id`, `series_id` or `slot_key` — the identifiers §10.2 withholds from the training export as build-time join keys. Publishing the document verbatim would reintroduce them through a different door. The full-truth copy carries every field; the training copy drops the pointers, and the release step checks that it did, in the mechanical style of §9.4. A `counterfactual` with `kind: term` is definitional and stays — it names another term, not a subject (§10.2) |
 | **D6.38** | **Supervision reaches the training export per image, attached to the box**: the three-valued state, the labels in force and the phase at that instant. The pattern-instance *structure* — participants, phase sequences, interval bounds, series and slot membership — does not. It is joinable only through `instance_id` and its siblings, which §10.2 withholds; shipping the structure without them yields rows that cannot be assembled, and shipping the identifiers to make them assemblable yields a handle constant across every frame of an instance — the memorisation defect [04](04_Contracts.md) D4.20 excluded `scenario_id` for. Assembling supervision onto tracks is the consumer's step, performed on **its own** tracks through the transfer rule §10.1 publishes (§10.2) |
+| **D6.39** | **Under an optional draw distance, a vehicle a camera did not draw is listed in that camera's sidecar and marked, never counted as seen.** The draw distance is a performance control, off by default: every vehicle keeps its body, pose and record. The sidecar states `draw_distance_m`, and a vehicle the distance reached carries `beyond_draw_distance` (`wholly` or `partly`) and `camera_range_m`, judged from the capture's own camera pose by the vehicle's bounding sphere as the renderer judges each primitive; a vehicle wholly beyond it is a sixth observability outcome, `beyond_draw_distance`, reported with render coverage as a sensor-scoped exclusion, and is never measured for occlusion. With no draw distance the outcome does not occur (§5.1, §8.2) |
+| **D6.40** | **Under an optional render-set limit, a vehicle outside it is `not_rendered` with the reason `outside_limit`, absent from every sidecar, and counted.** A circle, the cameras' footprints or a capacity is a performance control, off by default and recommended for no scenario; a vehicle it leaves out is simulated and has behavioural truth, no imagery-side truth, and no sidecar record. The drawn vehicles are then a sample of the simulated ones, chosen by place or by the seed, and a consumer treats them so; no limit reads supervision, and none is a default (§4.4, §10.4) |
 
 ---
 

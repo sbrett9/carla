@@ -21,6 +21,14 @@
 > the path's, so course and speed are the motion the imagery shows; a recorder beside the session also
 > writes `sumo_angle_deg`, SUMO's reported angle, for audit (§5).
 
+> **Revision (2026-10-02):** A SUMO drive offers two optional performance controls, both off by
+> default. Under a draw distance every vehicle is still reported, and a recorded sidecar states the
+> distance and marks each vehicle its camera did not draw with `beyond_draw_distance` and
+> `camera_range_m` (§5.3); the live pull and the live feed, which have no camera, are unchanged. Under
+> a limit on which vehicles get a body, a vehicle outside it has no body and is in no truth record,
+> live or recorded, exactly as any vehicle the session did not draw (§5.2). With neither, nothing
+> changes.
+
 ## 1. Purpose
 
 One CoT event schema emitted by **both** producers so they are directly comparable in WinTAK and in a
@@ -177,6 +185,41 @@ when the session destroys its bodies; a world no session has named a body in —
 traffic, scenario entities — is reported exactly as above. Against a server built before this, the
 session records the server's refusal on its report and the live pull lists every vehicle actor, as
 it did before.
+
+**Under an optional render-set limit the set is smaller, and the shape is the same (2026-10-02).** By
+default a SUMO drive draws every vehicle SUMO has. A run may choose to draw fewer -- those inside a
+circle, those inside or approaching a registered camera's ground footprint, or no more than a
+capacity ([03 §8.3.2, D3.42](../Plans/SUMO_Behavioral_Capture/03_CoSimulation_Runtime.md)) -- and a
+vehicle outside the limit has no body, so no frame draws it and no reader, live or recorded, reports
+it: the rule above, "exactly the bodies its frame drew", is unchanged. Its absence is not the record
+of it: the run that chose the limit names it, and counts the vehicles it left out, in its own report
+and manifest ([06 §4.4, D6.40](../Plans/SUMO_Behavioral_Capture/06_Truth_And_Annotation.md)). A
+consumer counting vehicles from these events under a limit is counting the drawn vehicles, not the
+scenario's.
+
+### 5.3 Draw distance (recorded captures only)
+
+A SUMO drive may set a draw distance, an optional performance control that is off by default
+([03 §8.3.3, D3.41](../Plans/SUMO_Behavioral_Capture/03_CoSimulation_Runtime.md)): no camera draws a
+body farther than the distance from it. Every vehicle keeps its body and its pose, and is reported
+everywhere exactly as with no distance; what changes is that a camera's image may lack it. A recorded
+sidecar says so:
+
+| Attribute | Where | Meaning |
+|---|---|---|
+| `draw_distance_m` | on the sidecar's `<events>` container | The distance, in metres, the frame was drawn under. Absent where none was in force, which is the default, or where the server refused it: the image then drew every vehicle at any range. |
+| `beyond_draw_distance` | in a vehicle's `_carla` | `wholly` -- the whole of the vehicle's bounding sphere lies beyond the distance from **this capture's camera**, so the image shows nothing of it; `partly` -- the distance falls across the sphere, so the image may lack the vehicle's far parts. Absent where the vehicle lies wholly inside the distance. |
+| `camera_range_m` | in a vehicle's `_carla`, beside `beyond_draw_distance` | The range in metres from the camera to the centre of the vehicle's box that the mark rests on. |
+
+The renderer culls each primitive by the nearest point of its bounding sphere, so the sidecar judges
+the vehicle the same way, by the sphere around its box, from the camera pose of the capture's own
+frame; the mark is taken at the server's default `r.ViewDistanceScale`, 1, which multiplies every draw
+distance. **A vehicle marked `wholly` is listed but was not seen**: a consumer building image labels
+drops it, and its occlusion attributes are absent, which here as in §5.1 means unmeasured, because the
+depth capture did not draw it either. One marked `partly` is drawn, perhaps without its far parts,
+and measured as usual. Like occlusion, the mark is camera-relative -- the same vehicle on the same
+frame may be drawn by a nearer camera -- so it is written only in the recorded sidecar and never on
+the live pull or the UDP feed, which have no camera.
 
 ## 6. Producers
 

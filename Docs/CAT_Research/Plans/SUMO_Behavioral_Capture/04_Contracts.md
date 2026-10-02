@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 21 | 2026-10-02. `C2`: two optional performance controls, off by default and recommended for no scenario (§4.2, D4.44, D4.45). A limit on which vehicles get a body -- a circle, the cameras' footprints or a capacity, chosen by the run -- adds `in_limit` to the admission predicate, two eviction rows (E5, E6) under new numbers and the reason `outside_limit`; a vehicle outside it is simulated, has no body and no imagery-side truth, and is counted. A draw distance changes no admission: every vehicle keeps its body and its truth, and each camera's sidecar marks the vehicles beyond it, which are not observed by that camera (§4.5). The participant guarantee holds with no limit, the default (§4.4). E2, E4, V2.3 and V2.4 stay withdrawn |
 | 20 | 2026-10-02. `C1`: the catalogue carries each body's width without its mirrors (`body_width_m`, §3.2b), measured from the mesh in the editor, beside the box's full extent; SUMO is given the body width (D4.3). `C3`: Bahonar is recompiled with 3 s lane changes and runs as before (§5.2a). `C7`: a body's heading is its own path's, its truth velocity the path's, and SUMO's angle is recorded beside them (§9.1, D4.13) |
 | 19 | 2026-10-01. `C3`: a lane change takes 3 s for every vehicle — the compiler writes `lanechange.duration` 3 into every configuration and the lock records it (§5.2a, D4.42). Measured on the three shipped scenarios; Bahonar deadlocks behind a body wider than its lanes and is not recompiled with it |
 | 18 | 2026-10-01. `C4`: every pooled body is spawned with `role_name` `sumo` (D4.9, as built). `capture:sumo_id` is not stamped, because a pooled body draws a succession of vehicles; the vehicle a body draws is named per frame instead, on the world-observer snapshot for every reader (§6.4; [`03`](03_CoSimulation_Runtime.md) D3.39) |
@@ -1354,9 +1355,11 @@ The sizing case is seven simulated days at one-second steps with 245 flows
 span SUMO creates far more distinct vehicles than are alive at any one time, and most of the span lies
 outside every capture window. What `C2` fixes is that every vehicle alive in a capture window is drawn,
 the instant it is admitted and the instant it is released, and what the truth record says about one
-SUMO simulated and CARLA did not draw. Nothing limits how many are drawn at once: the scenario decides
-the population, and a heavier population makes a synchronous run slower on the wall clock, never
-different in content ([`10`](10_Scale_And_Performance.md) §4.3).
+SUMO simulated and CARLA did not draw. By default nothing limits how many are drawn at once: the
+scenario decides the population, and a heavier population makes a synchronous run slower on the wall
+clock, never different in content ([`10`](10_Scale_And_Performance.md) §4.3). Two optional performance
+controls trade fidelity for speed where a run chooses them, and neither is a default: a limit on which
+vehicles get a body (D4.44) and a draw distance (D4.45).
 
 ### 4.1 Artifact
 
@@ -1365,8 +1368,11 @@ Two halves, both named:
 - **Input** — `capture_windows[]` and `prewarm_s`, typed in §4.2. The authored candidate windows are
   carried in the lock (`C3` §5.3), and the operator chooses which a run captures
   ([`12`](12_Operator_Control_Surface.md) D12.4). `prewarm_s` is given at run start and valued in
-  [`10`](10_Scale_And_Performance.md) §8. Nothing else is input: no parameter chooses which vehicles
-  are drawn.
+  [`10`](10_Scale_And_Performance.md) §8. By default nothing else is input and no parameter chooses
+  which vehicles are drawn. A run may choose an optional limit -- `render_set` `circle` with its
+  region, `cameras`, and a capacity under either or under every vehicle -- and an optional draw
+  distance; both are given at run start, recorded in the run's effective configuration, and absent
+  unless chosen ([`12`](12_Operator_Control_Surface.md) §5.2).
 - **Output** — a `render_states[]` array in the run manifest, written by the render-set controller as
   append-only rows: an admission row when a vehicle is admitted, a release row when it is released. A
   vehicle still rendered when the run stops has an admission row and no release row, which is exactly
@@ -1383,6 +1389,7 @@ admit(v, t) ⟺  in_window(t)
            ∧  alive(v, t)
            ∧  ¬ rendered(v)
            ∧  measured_body(v)
+           ∧  in_limit(v, t)
 ```
 
 with the terms defined as:
@@ -1393,9 +1400,10 @@ with the terms defined as:
 | **`alive`** | SUMO holds `v` at `t`, moving or parked | — |
 | **`rendered`** | `v` already has a body | — |
 | **`measured_body`** | `v`'s vType names a catalogue blueprint whose extent the catalogue measured (`C1` §3.2, `D4.17`) | — |
+| **`in_limit`** | True for every vehicle unless the run chose an optional limit (D4.44). Under one: `v` lies inside the circle's admit radius, or inside or within its lead of a registered camera's ground footprint, and ranks within the capacity by the limit's order | `render_set`, its region and settings, the capacity: chosen by the run, valued nowhere in this plan as a recommendation |
 
-Every vehicle SUMO has in a window is drawn, wherever it is and whether or not any sensor can see it;
-there is no region, no priority order and no capacity. A vehicle SUMO inserts is drawn from the frame
+With no limit, the default, every vehicle SUMO has in a window is drawn, wherever it is and whether or
+not any sensor can see it; there is no region, no priority order and no capacity. A vehicle SUMO inserts is drawn from the frame
 SUMO first reports it in: where SUMO inserted it, moving from then, and never on a frame before SUMO
 inserted it ([`03`](03_CoSimulation_Runtime.md) D3.6). A vehicle SUMO already has when the session
 starts rendering is drawn on the first rendered frame. No vehicle waits for a body: bodies
@@ -1403,7 +1411,17 @@ are spawned or reused as the population needs, with no ceiling ([`03`](03_CoSimu
 §8.2), and what a larger population costs is wall-clock time ([`10`](10_Scale_And_Performance.md)
 §4.3).
 
-**`measured_body` is the one exclusion, and it is per type, not per vehicle.** A vType that names no
+**An optional limit leaves vehicles out, and says so** (D4.44). Under a circle, the cameras or a
+capacity, a vehicle `in_limit` rejects is still simulated by SUMO -- its behaviour is the scenario's --
+and has no body, so it is in no frame and no imagery-side truth record, and it is counted (§4.5). One
+inside the limit is drawn exactly as with none: every vehicle stays subscribed, so a vehicle the limit
+admits part-way through its drive is drawn from that admission at its interpolated position, and one
+SUMO inserts inside it from the frame SUMO first reports it in ([`03`](03_CoSimulation_Runtime.md)
+§8.3.2). **A draw distance does not enter the predicate** (D4.45): every vehicle it applies to keeps
+its body, pose and truth, and a camera simply does not draw one farther than the distance from it, so
+it is a fact about each camera's view, marked in that camera's sidecar (§4.5).
+
+**`measured_body` is the one exclusion with no limit, and it is per type, not per vehicle.** A vType that names no
 blueprint, or names one the catalogue holds no measurement for, is refused the first time it is seen
 and the answer is kept for the run: its vehicles are simulated and their behavioural truth recorded,
 and they are never placed at a guessed size (`C1` §3.2). The scenario compiler refuses to write a
@@ -1421,6 +1439,8 @@ A rendered vehicle is released when any of:
 | E2 | *Withdrawn 2026-09-30* with the render region: there is no region for a vehicle to leave | — |
 | E3 | The capture window closed and no window opens within `prewarm_s` | |
 | E4 | *Withdrawn 2026-09-30* with the render cap: there is no capacity to exceed | — |
+| E5 | Under an optional limit only: the circle or every registered camera's reach stopped admitting the vehicle, beyond its hysteresis and, under the cameras, for the release lag | reason `left_the_region`; never met with no limit. A new number: E2 stays withdrawn |
+| E6 | Under an optional capacity only: more vehicles passed the limit than the capacity allows and this one ranked out | reason `capacity`; never met with no capacity. A new number: E4 stays withdrawn |
 
 A vehicle still drawn when the run stops is not released; §4.1 says what its rows then show.
 
@@ -1449,8 +1469,17 @@ instant is recorded and that exactly one component decides it.
 
 > **D4.6 — a vehicle participating in an open annotated or nominal interval is drawn throughout it:
 > from its departure, or from `window.begin_s − prewarm_s` if it departed earlier, until SUMO removes
-> it (E1) or the window closes (E3). This holds by construction — every vehicle SUMO has in a window
-> is drawn (§4.2), so nothing can displace a participant and there is no limit to refuse it under.**
+> it (E1) or the window closes (E3). This holds by construction with no limit, the default — every
+> vehicle SUMO has in a window is drawn (§4.2), so nothing can displace a participant.**
+
+**Under an optional limit the guarantee does not hold, and nothing pretends it does.** A run that
+chooses a circle, the cameras or a capacity (D4.44) may leave a participant without a body for part
+or all of its interval. That is recorded rather than prevented: the participant's `render_states[]`
+entry carries `outside_limit` for the spans the limit left out (§4.5), V2.6 marks a run invalid that
+ends orderly with a participant undrawn in an open interval, exactly as for any other cause, and
+`run_capture`'s launch echo has already said that a vehicle outside the limit is not in CARLA. A draw
+distance never displaces a participant: it keeps its body, and only a camera beyond the distance does
+not show it (§4.5).
 
 The reasoning is the whole point of the capture: an authored subject that was never rendered produced
 no imagery, so the run has no evidence for the very thing it was built to produce, and a run that
@@ -1481,10 +1510,10 @@ window:
 | `class_id` | string | — | yes | The catalogue class |
 | `entity_id` | string | — | no | Present for authored vehicles only |
 | `render_state` | string | — | yes | `rendered` \| `partially_rendered` \| `simulated_only` |
-| `reason` | string | — | yes when not `rendered` | `outside_window` \| `no_blueprint` \| `unknown_extent` \| `spawn_failed`. `outside_window` covers the part of a vehicle's life outside every window CARLA was attached for, a truth-only window included; `no_blueprint` and `unknown_extent` are `C1` §3.2's runtime cases (`D4.17`) |
+| `reason` | string | — | yes when not `rendered` | `outside_window` \| `no_blueprint` \| `unknown_extent` \| `spawn_failed` \| `outside_limit`. `outside_window` covers the part of a vehicle's life outside every window CARLA was attached for, a truth-only window included; `no_blueprint` and `unknown_extent` are `C1` §3.2's runtime cases (`D4.17`); `outside_limit` is the part an optional render-set limit left out (D4.44) and is never written with no limit |
 | `sumo_span_s` | `[begin, end]` | s | yes | Simulated seconds of the vehicle's whole life in SUMO |
 | `rendered_spans` | array of `{ begin_s, end_s, actor_id }` | s | yes | Empty for `simulated_only`. One entry per *rendering* — a vehicle released and re-admitted has two, with two different `actor_id`s (`C4`) |
-| `observed_spans` | array of `{ sensor_id, begin_s, end_s }` | s | yes | In-frustum coverage per collection sensor. Empty is meaningful and must be written |
+| `observed_spans` | array of `{ sensor_id, begin_s, end_s }` | s | yes | In-frustum coverage per collection sensor, and drawn by it: a span where the vehicle stood wholly beyond an optional draw distance from that sensor is not observed by it (D4.45). Empty is meaningful and must be written |
 | `observed_union_s` | number | s | yes | Total simulated seconds observed by at least one sensor |
 
 **The accounting rules that follow, stated so a consumer cannot get them wrong:**
@@ -1497,10 +1526,20 @@ window:
   honest one, not about what any consumer would be charged for.)*
 - `observed_union_s` and the per-sensor `observed_spans` are the honest denominators. `sumo_span_s` is
   not.
-- Inside a window CARLA was attached for, a vehicle goes undrawn for exactly two causes: its type has
-  no measured body (`no_blueprint`, `unknown_extent`), or the server refused its spawn
-  (`spawn_failed`). Neither is a choice about which vehicles to draw, so no consumer has to treat the
-  drawn vehicles as a sample of the simulated ones.
+- Inside a window CARLA was attached for and with no limit, a vehicle goes undrawn for exactly two
+  causes: its type has no measured body (`no_blueprint`, `unknown_extent`), or the server refused its
+  spawn (`spawn_failed`). Neither is a choice about which vehicles to draw, so no consumer has to treat
+  the drawn vehicles as a sample of the simulated ones.
+- **Under an optional limit there is a third cause, and it is a choice** (`outside_limit`, D4.44).
+  The drawn vehicles are then a sample of the simulated ones -- chosen by place under the circle or the
+  cameras, by the scenario seed's order under a capacity on every vehicle -- and a consumer must treat
+  them so: any count over imagery is over the drawn, and any count over behaviour still takes every
+  vehicle from the manifest. The run's effective configuration names the limit, and its record counts
+  the vehicle-passes it left out and the releases it caused.
+- **An optional draw distance leaves every vehicle drawn and some unseen** (D4.45). A vehicle wholly
+  beyond the distance from a sensor is listed in that sensor's sidecar with `beyond_draw_distance`,
+  is not in its image and is not observed by it; one partly beyond it is marked `partly`, may be drawn
+  without its far parts, and is observed by the usual tests where they find it.
 - A vehicle with `render_state = partially_rendered` has a behavioural interval that is only partly
   evidenced; an interval clipped to `rendered_spans ∩ observed_spans` is the supervisable part.
 
@@ -1512,6 +1551,7 @@ window:
 | V2.2 | Every window lies within the SUMO config's `[begin, end]` | refuse |
 | V2.3 | *Withdrawn 2026-09-30* with the render region: there is no region to resolve | — |
 | V2.4 | *Withdrawn 2026-09-30* with the render cap: there is no cap to compare | — |
+| V2.8 | An optional limit, where chosen, is one the session can draw: a circle has a region, and a region is given only to a limit that reads one ([`12`](12_Operator_Control_Surface.md) check 53); a draw distance reaches the point every channel is aimed at (check 52) | refuse at launch. A new number: V2.3 and V2.4 stay withdrawn |
 | V2.5 | Every participant's interval lies within some capture window | refuse — an annotated interval nobody could render is an authoring error, not a runtime outcome |
 | V2.6 | At an orderly run end, no `render_states[]` entry has `render_state != "rendered"` with an `entity_id` and an open interval. **Evaluated at closeout only**: a run the caller stops leaves intervals open by construction, which is a fact about when it was stopped and not a violation (`C10` §12.5, §12.7) | run is marked invalid |
 | V2.7 | `render_states[]` covers every SUMO vehicle that existed in a window | run is marked incomplete |
@@ -1535,7 +1575,9 @@ The input has no version of its own: the windows travel in the lock under its `l
 - **The imagery's traffic stops being the scenario's.** A rule that drew fewer vehicles than SUMO has
   would make what the imagery holds depend on the machine rather than on the scenario, and the first
   vehicle it left out could be the one the run was built for — after which the run looks
-  superficially fine. `D4.6` holds because nothing chooses.
+  superficially fine. `D4.6` holds because, by default, nothing chooses. This is why a limit is never a
+  default (D4.44): one a run chooses is named in its configuration, said at launch and counted in its
+  record, so the run cannot look fine while it left its subject out.
 - **An abrupt appearance becomes unaccounted for.** Vehicles appear and vanish at full opacity by
   decision, which is acceptable — but only because `rendered_spans[]` records exactly when. Without it,
   a body that pops into frame is indistinguishable from a detection artifact, and the observability
@@ -4870,6 +4912,8 @@ Stated as properties needed, not as requests.
 | **D4.40** | **Motorcycles, mopeds and bicycles are outside the vehicle mapping contract.** No catalogue class names one, no `vType` declares one, and an author asking for one is refused rather than substituted. A two-wheeler carries a rider and riders are not rendered; and the content build registers no two-wheeled blueprint for the sweep to measure (§3.1, V1.20) |
 | **D4.42** | **A lane change takes 3 s, for every vehicle**: the compiler writes `lanechange.duration` 3 and the lock records it. SUMO's default of 0 crosses a lane width inside one step; a passenger car takes about 3 to 5 s, and one value holds for every vehicle until a value per class is decided. A body wider than its lane deadlocks a spread lane change -- the Fuso bus did with its mirrors counted -- so SUMO is given body widths (D4.43) (§5.2a) |
 | **D4.43** | **SUMO is given each body's width without its mirrors; the truth box and seating keep the full extent.** Measured from each blueprint's mesh in the editor, carried in the catalogue as `body_width_m` with its method; no model rescaled; a body without one is refused (§3.2b) |
+| **D4.44** | **A limit on which vehicles get a body is an optional performance control, off by default and recommended for no scenario.** With none every vehicle SUMO has in a window is drawn. A run may choose a circle, the registered cameras' footprints, or a capacity under any of them (`in_limit`, §4.2); a vehicle the limit leaves out is simulated, has no body and no imagery-side truth, and carries `outside_limit` in `render_states[]`; E5 and E6 release for it under new numbers, and the participant guarantee D4.6 holds only with no limit (§4.4). The limit is named in the run's configuration, said at launch and counted in its record |
+| **D4.45** | **A draw distance is an optional performance control, off by default, and changes no admission.** Every vehicle keeps its body, its pose and its truth; a camera does not draw a body farther than the distance from it, and that camera's sidecar marks such a vehicle `beyond_draw_distance` (`wholly` or `partly`), so it is never counted as observed by that camera (§4.2, §4.5; [`06`](06_Truth_And_Annotation.md) §8.2) |
 
 ---
 
