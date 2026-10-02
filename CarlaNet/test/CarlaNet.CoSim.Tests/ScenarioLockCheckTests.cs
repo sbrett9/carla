@@ -254,7 +254,8 @@ public sealed class ScenarioLockCheckTests
         Assert.Equal(epoch.Digest, check.Lock.EpochDigest);
         Assert.Equal("1.27.0", check.Lock.RoutedByRelease);
         Assert.Equal("Arapahoe_I25.cwp", check.Lock.WorldPackage);
-        Assert.StartsWith("ac83aa8b", check.Lock.WorldNetworkFingerprint);
+        // The world rebuilt with its ramp meters on their own ramps (2026-10-02).
+        Assert.StartsWith("ffe490b1", check.Lock.WorldNetworkFingerprint);
         Assert.Equal("-1", check.Lock.TimeToTeleport);
         Assert.Equal("3", check.Lock.LaneChangeDuration);
     }
