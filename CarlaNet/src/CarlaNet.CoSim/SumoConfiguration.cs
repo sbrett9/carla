@@ -105,4 +105,36 @@ public sealed class SumoConfiguration
 
     /// <summary>A path the configuration names, as a full path, taken against its directory.</summary>
     public string Resolve(string named) => System.IO.Path.GetFullPath(named, Directory);
+
+    /// <summary>
+    /// A SUMO time in seconds: seconds, or <c>hh:mm:ss</c>, or <c>dd:hh:mm:ss</c>, as
+    /// <c>string2time</c> reads it; false where the text is none of them, which SUMO refuses too.
+    /// </summary>
+    internal static bool TryParseTime(string text, out double seconds)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        string[] parts = text.Split(':');
+        double[] numbers = new double[parts.Length];
+        bool parsed = parts.Length is 1 or 3 or 4;
+        for (int index = 0; parsed && index < parts.Length; index++)
+        {
+            parsed = double.TryParse(parts[index].Trim(), System.Globalization.NumberStyles.Float,
+                                     System.Globalization.CultureInfo.InvariantCulture, out numbers[index])
+                     && double.IsFinite(numbers[index]);
+        }
+
+        seconds = !parsed
+            ? 0.0
+            : parts.Length switch
+            {
+                1 => numbers[0],
+                3 => (3600.0 * numbers[0]) + (60.0 * numbers[1]) + numbers[2],
+                _ => (86400.0 * numbers[0]) + (3600.0 * numbers[1]) + (60.0 * numbers[2]) + numbers[3],
+            };
+        return parsed;
+    }
+
+    /// <summary>SUMO's <c>TIME2STEPS</c>: a time in milliseconds, rounded half away from zero.</summary>
+    internal static long Milliseconds(double seconds) =>
+        (long)((seconds * 1000.0) + (seconds >= 0.0 ? 0.5 : -0.5));
 }

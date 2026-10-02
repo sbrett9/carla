@@ -121,32 +121,15 @@ public sealed class TeleportingCheck
     /// </summary>
     private static double ParseTime(string text, string scenarioPath)
     {
-        string[] parts = text.Split(':');
-        double[] numbers = new double[parts.Length];
-        bool parsed = parts.Length is 1 or 3 or 4;
-        for (int index = 0; parsed && index < parts.Length; index++)
-        {
-            parsed = double.TryParse(parts[index].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture,
-                                     out numbers[index])
-                     && double.IsFinite(numbers[index]);
-        }
-
-        if (!parsed)
+        if (!SumoConfiguration.TryParseTime(text, out double seconds))
         {
             throw new CoSimSessionRefusedException(
                 $"The scenario {scenarioPath} sets {OptionName} to '{text}', which is not a time SUMO "
                 + "reads -- seconds, hh:mm:ss or dd:hh:mm:ss -- so SUMO would refuse it too.");
         }
 
-        return parts.Length switch
-        {
-            1 => numbers[0],
-            3 => (3600.0 * numbers[0]) + (60.0 * numbers[1]) + numbers[2],
-            _ => (86400.0 * numbers[0]) + (3600.0 * numbers[1]) + (60.0 * numbers[2]) + numbers[3],
-        };
+        return seconds;
     }
 
-    /// <summary>SUMO's <c>TIME2STEPS</c>: a time in milliseconds, rounded half away from zero.</summary>
-    private static long Milliseconds(double seconds) =>
-        (long)((seconds * 1000.0) + (seconds >= 0.0 ? 0.5 : -0.5));
+    private static long Milliseconds(double seconds) => SumoConfiguration.Milliseconds(seconds);
 }

@@ -36,6 +36,36 @@ public sealed class SumoDriveSessionLockTests
         Assert.Contains("  compiled for     SyntheticSurface.cwp, map SyntheticSurface, network "
                         + CompiledFixture.WorldFingerprint, report);
         Assert.Contains("teleporting        disabled (time-to-teleport '-1')", report);
+
+        // The fixture's lock predates the compiler fixing a lane-change duration, and its configuration
+        // leaves SUMO's instantaneous default; the report says both.
+        Assert.Contains("  processing       time-to-teleport '-1', lanechange.duration '(not recorded)'", report);
+        Assert.Contains("lane changes       INSTANTANEOUS: a lane width crossed inside one 0.05 s step "
+                        + "(lanechange.duration not set, so SUMO's default of 0 s)", report);
+    }
+
+    [RequiresSumoFact]
+    public void ASessionRecordsTheLaneChangeDurationItsScenarioWasCompiledWithAndRuns()
+    {
+        string configuration = File.ReadAllText(CoSimFixtures.RightAngleTurnScenario).Replace(
+            "<time-to-teleport value=\"-1\"/>",
+            "<time-to-teleport value=\"-1\"/>\n        <lanechange.duration value=\"3\"/>",
+            StringComparison.Ordinal);
+        using CompiledFixture compiled = CompiledFixture.Write(configuration: configuration);
+        JsonObject document = compiled.LockDocument(SolarLeaseTests.PortEpoch());
+        document["traffic"]!["processing"]!["lanechange.duration"] = "3";
+        compiled.WriteLock(document);
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        using SumoDriveSession session = SumoDriveSession.Start(Options(compiled.Scenario, world));
+        Assert.True(session.Advance());
+
+        string report = session.Report.ToString();
+        _output.WriteLine(report);
+        Assert.Equal(3.0, session.Report.LaneChanges.Seconds);
+        Assert.Contains("  processing       time-to-teleport '-1', lanechange.duration '3'", report);
+        Assert.Contains("lane changes       spread over 3 s, moving across at a steady rate, at a 0.05 s step "
+                        + "(lanechange.duration '3')", report);
     }
 
     [RequiresSumoFact]

@@ -87,6 +87,12 @@ public sealed class ScenarioLock
     /// <summary>The <c>time-to-teleport</c> the compiler wrote into the configuration.</summary>
     public string? TimeToTeleport { get; private init; }
 
+    /// <summary>
+    /// The <c>lanechange.duration</c> the compiler wrote into the configuration; absent from a lock
+    /// compiled before the compiler fixed it, whose configuration left SUMO's instantaneous default.
+    /// </summary>
+    public string? LaneChangeDuration { get; private init; }
+
     /// <summary>Read a lock, refusing one that is not a version this reader implements or lacks a compared field.</summary>
     /// <exception cref="CoSimSessionRefusedException">
     /// The file is not JSON, is not a lock of <see cref="SupportedVersion"/>, or lacks a field the
@@ -166,6 +172,8 @@ public sealed class ScenarioLock
                 WorldConverter = Text(root, missing, required: false, "world", "netconvert_version"),
                 TimeToTeleport = Text(root, missing, required: false, "traffic", "processing",
                                       "time-to-teleport"),
+                LaneChangeDuration = Text(root, missing, required: false, "traffic", "processing",
+                                          SumoLaneChangeDuration.OptionName),
             };
 
             if (missing.Count > 0)

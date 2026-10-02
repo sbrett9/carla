@@ -110,6 +110,7 @@ public sealed class SumoDriveSession : IDisposable
                              TeleportingCheck teleporting,
                              RouteErrorCheck routeErrors,
                              SumoCollisionHandling collisionHandling,
+                             SumoLaneChangeDuration laneChanges,
                              HeadlightRule? headlights,
                              CoSimClock clock,
                              SumoRoadNetwork network,
@@ -164,6 +165,7 @@ public sealed class SumoDriveSession : IDisposable
             Teleporting = teleporting,
             RouteErrors = routeErrors,
             CollisionHandling = collisionHandling,
+            LaneChanges = laneChanges,
             VehicleLampsDriven = options.VehicleLampsDriven,
             Console = console,
             SumoStepOverrideSeconds = options.SumoStepOverrideSeconds,
@@ -411,6 +413,11 @@ public sealed class SumoDriveSession : IDisposable
         // there is anything to ask SUMO for on each step.
         SumoCollisionHandling collisionHandling = SumoCollisionHandling.Read(options.ScenarioPath);
 
+        // How long SUMO takes over a lane change, which the report carries: spread over time, the
+        // interpolation puts the vehicle where SUMO has it across the lanes; made inside one step, it can
+        // only slide it a lane width within that step.
+        SumoLaneChangeDuration laneChanges = SumoLaneChangeDuration.Read(options.ScenarioPath);
+
         // The seed SUMO will run under, which the report names so the run's traffic can be reproduced.
         long seed = ReadTheSeed(options.ScenarioPath);
 
@@ -479,7 +486,8 @@ public sealed class SumoDriveSession : IDisposable
                     ? new VehicleBodyPool(bodies, VehicleParking.BeyondTheSurface(ground))
                     : null;
                 session = new SumoDriveSession(options, world, sumo, console, release, compiled,
-                                               teleporting, routeErrors, collisionHandling, headlights, clock,
+                                               teleporting, routeErrors, collisionHandling, laneChanges,
+                                               headlights, clock,
                                                network, ground, roads, catalogue, lease, settings, layers,
                                                pool, (manifest.OriginLatitude, manifest.OriginLongitude),
                                                seed);

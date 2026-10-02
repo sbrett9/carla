@@ -81,6 +81,12 @@ public sealed class CoSimRunReport
     public required SumoCollisionHandling CollisionHandling { get; init; }
 
     /// <summary>
+    /// How long a lane change takes in this run -- spread over time, the vehicle moving across at a
+    /// steady rate, or made inside one step -- as the configuration sets it or SUMO's default leaves it.
+    /// </summary>
+    public required SumoLaneChangeDuration LaneChanges { get; init; }
+
+    /// <summary>
     /// Which rendering layers the session wrote before its first tick, and what it wrote them to.
     /// </summary>
     /// <remarks>
@@ -716,11 +722,13 @@ public sealed class CoSimRunReport
         {
             text.AppendLine($"  routed by        {CompileLock.RoutedByText}");
             text.AppendLine($"  compiled for     {CompileLock.WorldText}");
+            text.AppendLine($"  processing       {CompileLock.ProcessingText}");
         }
 
         text.AppendLine($"teleporting        {Teleporting}");
         text.AppendLine($"route errors       {RouteErrors}");
         text.AppendLine($"collisions         {CollisionHandling}");
+        text.AppendLine($"lane changes       {LaneChanges.Describe(Clock.SumoStepSeconds)}");
         text.AppendLine($"clock              {Clock}");
         if (SumoStepOverrideSeconds is { } forced)
         {
