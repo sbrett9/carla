@@ -63,6 +63,7 @@ Remedies:
 | i25_south_out | `{"gateway": "south", "travel": "out", "street": "South Valley Highway"}` | 908324823 | South Valley Highway |
 | i25_north_short_of_arapahoe | `{"edge": "907700111"}` | 907700111 | South Valley Highway |
 | i25_north_past_arapahoe | `{"edge": "1001791386"}` | 1001791386 | South Valley Highway |
+| i25_north_at_loop_merge | `{"edge": "1342047649"}` | 1342047649 | South Valley Highway |
 | arapahoe_east_in | `{"edge": "131933384"}` | 131933384 | East Arapahoe Road |
 | arapahoe_east_out | `{"edge": "427819527"}` | 427819527 | East Arapahoe Road |
 | arapahoe_west_in | `{"edge": "427819540#0"}` | 427819540#0 | East Arapahoe Road |
@@ -175,7 +176,7 @@ Remedies:
 
 | Id | Edge | Closed lanes | Open lanes | From | To | Notified on |
 |---|---|---|---|---|---|---|
-| incident | 1001791386 South Valley Highway | 1001791386_0 1001791386_1 1001791386_2 1001791386_3 1001791386_4 | 1 | 2026-09-29T07:15:00-06:00 | 2026-09-29T07:18:00-06:00 | 907700111 |
+| incident | 1001791386 South Valley Highway | 1001791386_0 1001791386_1 1001791386_2 1001791386_3 1001791386_4 | 1 | 2026-09-29T07:15:00-06:00 | 2026-09-29T07:18:00-06:00 | 907700111 1342047649 |
 
 ## Supervision
 
@@ -205,11 +206,11 @@ SUMO seed 42, step 0.05 s, end 2700 s. The processing options, each written into
   },
   "network": {
     "path": "Arapahoe_I25.net.xml",
-    "sha256": "bdba54a97a1b996ccf08f61def4dcd019c985a7f3efff2d13de1f31479940312"
+    "sha256": "d119b924ee54a872396b9b7a30b70d9f5156fca136886431eda2b3cb1d4c68cc"
   },
   "additional": {
     "path": "Arapahoe_I25_UnderpassDwell.add.xml",
-    "sha256": "6f05aef7af30d1aa3077236f3d710d2ca83431499c3b88229a02dd29d87d0654"
+    "sha256": "e36c37f8c6e183e8338f395621d8380743c62ee9a8c3fd8145e3c4187fc78d76"
   },
   "supervision": {
     "path": "Arapahoe_I25_UnderpassDwell.supervision.json",

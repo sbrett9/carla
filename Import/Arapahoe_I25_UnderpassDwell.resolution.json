@@ -6,7 +6,7 @@
     "scenario_name": "Arapahoe I-25 underpass dwell",
     "description": "One marked vehicle enters northbound on I-25, leaves at the Arapahoe interchange, runs west on Arapahoe Road and north up South Yosemite Street, waits 30 minutes under the Yosemite Street bridge and leaves north on I-25, among heavy freeway traffic with a wide spread of speeds, dense arterial traffic heavy in vans and trucks, residential commuters on the west and south edges, and an incident closing 5 of the 6 northbound lanes for 3 minutes. Written by CarlaControl/scripts/make_arapahoe_scenario.py; edit that, not this.",
     "specification": "Arapahoe_I25_UnderpassDwell.scenario.json",
-    "specification_sha256": "436bc7f2c8cdf693416ecc5231ed89e14cbf5e454897f0147702ab7d43f1d469",
+    "specification_sha256": "38b4e0b1c5436865c24cc69a79bd05b5c203f7007183e6551a9da2b9eeb8ac8e",
     "spec_version": 1
   },
   "findings": [
@@ -318,6 +318,29 @@
           "edge": "1001791386",
           "street": "South Valley Highway",
           "length_m": 242.07,
+          "speed_mps": 29.06
+        }
+      ]
+    },
+    "i25_north_at_loop_merge": {
+      "name": "i25_north_at_loop_merge",
+      "authored": {
+        "edge": "1342047649"
+      },
+      "form": "edge",
+      "edges": [
+        "1342047649"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "South Valley Highway",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "1342047649",
+          "street": "South Valley Highway",
+          "length_m": 106.59,
           "speed_mps": 29.06
         }
       ]
@@ -3870,7 +3893,8 @@
       ],
       "open_lanes": 1,
       "notify": [
-        "907700111"
+        "907700111",
+        "1342047649"
       ],
       "allow": "authority",
       "begin": {
@@ -4419,7 +4443,7 @@
     "scenario_name": "Arapahoe I-25 underpass dwell",
     "spec_version": 1,
     "specification": "Arapahoe_I25_UnderpassDwell.scenario.json",
-    "specification_sha256": "436bc7f2c8cdf693416ecc5231ed89e14cbf5e454897f0147702ab7d43f1d469",
+    "specification_sha256": "38b4e0b1c5436865c24cc69a79bd05b5c203f7007183e6551a9da2b9eeb8ac8e",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
       "version": "1.0.0"
@@ -4435,11 +4459,11 @@
       },
       "network": {
         "path": "Arapahoe_I25.net.xml",
-        "sha256": "bdba54a97a1b996ccf08f61def4dcd019c985a7f3efff2d13de1f31479940312"
+        "sha256": "d119b924ee54a872396b9b7a30b70d9f5156fca136886431eda2b3cb1d4c68cc"
       },
       "additional": {
         "path": "Arapahoe_I25_UnderpassDwell.add.xml",
-        "sha256": "6f05aef7af30d1aa3077236f3d710d2ca83431499c3b88229a02dd29d87d0654"
+        "sha256": "e36c37f8c6e183e8338f395621d8380743c62ee9a8c3fd8145e3c4187fc78d76"
       },
       "supervision": {
         "path": "Arapahoe_I25_UnderpassDwell.supervision.json",

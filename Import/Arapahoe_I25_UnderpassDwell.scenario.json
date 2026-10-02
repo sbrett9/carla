@@ -240,6 +240,9 @@
     "i25_north_past_arapahoe": {
       "edge": "1001791386"
     },
+    "i25_north_at_loop_merge": {
+      "edge": "1342047649"
+    },
     "arapahoe_east_in": {
       "edge": "131933384"
     },
@@ -1036,7 +1039,8 @@
         4
       ],
       "notify": [
-        "i25_north_short_of_arapahoe"
+        "i25_north_short_of_arapahoe",
+        "i25_north_at_loop_merge"
       ],
       "begin": 900.0,
       "end": 1080.0

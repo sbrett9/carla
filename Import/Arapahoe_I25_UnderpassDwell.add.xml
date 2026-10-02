@@ -2,7 +2,7 @@
 <!-- Arapahoe I-25 underpass dwell: the lane closures, compiled by carlacontrol.ScenarioCompiler 1.0.0 from the specification of Arapahoe_I25_UnderpassDwell; edit that, not this. Every time in this file is simulated seconds from t = 0; the epoch that gives them their civil meaning is stated in Arapahoe_I25_UnderpassDwell.sumocfg. -->
 <additional xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/additional_file.xsd">
     <!-- incident: 5 of the 6 lanes of 1001791386 (South Valley Highway) closed from 2026-09-29T07:15:00-06:00 to 2026-09-29T07:18:00-06:00. -->
-    <rerouter id="incident" edges="907700111">
+    <rerouter id="incident" edges="907700111 1342047649">
         <interval begin="900.00" end="1080.00">
             <closingLaneReroute id="1001791386_0" allow="authority"/>
             <closingLaneReroute id="1001791386_1" allow="authority"/>
