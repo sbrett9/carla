@@ -1757,7 +1757,9 @@ public sealed class SumoDriveSession : IDisposable
     /// <remarks>
     /// Taken at the frames themselves rather than between them, so what it measures is whether the
     /// network in the world package is the network SUMO is driving on -- not how good the
-    /// interpolation is. A network from a different netconvert run answers here and nowhere else.
+    /// interpolation is. A network from a different netconvert run answers here and nowhere else. The
+    /// lane's point is moved across by the frame's lateral offset, which SUMO's position includes part-way
+    /// through a lane change spread over time, so a lane change does not answer here.
     /// </remarks>
     private void MeasureLaneGeometry()
     {
@@ -1769,7 +1771,10 @@ public sealed class SumoDriveSession : IDisposable
                 continue;
             }
 
-            (double x, double y, _, _) = lane.PointAt(frame.LanePositionMetres);
+            (double x, double y, double directionX, double directionY) =
+                lane.PointAt(frame.LanePositionMetres);
+            x -= directionY * frame.LateralOffsetMetres;
+            y += directionX * frame.LateralOffsetMetres;
             Report.AddLaneGeometryResidual(
                 Math.Sqrt(Math.Pow(x - frame.X, 2) + Math.Pow(y - frame.Y, 2)));
         }

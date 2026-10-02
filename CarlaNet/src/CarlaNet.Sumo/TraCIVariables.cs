@@ -45,6 +45,20 @@ public static class TraCIVariables
     /// </remarks>
     public const int LanePosition = TraCIConstants.VAR_LANEPOSITION;
 
+    /// <summary>
+    /// How far the vehicle's centre line is to the left of its lane's centre line, in metres.
+    /// </summary>
+    /// <remarks>
+    /// <para>Zero on every step but those of a lane change SUMO spreads over time
+    /// (<c>lanechange.duration</c> above the step): then it grows at a steady rate towards the lane
+    /// being moved to, is carried over to that lane -- jumping by a lane width -- once the vehicle is
+    /// past halfway and SUMO starts reporting that lane, and returns to zero. The reported position
+    /// includes it. Not in <see cref="VehicleState"/> for the reason <see cref="LanePosition"/> is not:
+    /// only a bridge that evaluates a lane's polyline needs it, to put the vehicle where SUMO has it
+    /// rather than on the lane's centre line.</para>
+    /// </remarks>
+    public const int LateralLanePosition = TraCIConstants.VAR_LANEPOSITION_LAT;
+
     /// <summary>The vehicle type identifier, which a catalogue maps to a renderable blueprint.</summary>
     public const int TypeId = TraCIConstants.VAR_TYPE;
 

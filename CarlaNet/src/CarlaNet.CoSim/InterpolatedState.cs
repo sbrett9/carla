@@ -4,7 +4,10 @@ namespace CarlaNet.CoSim;
 /// A vehicle's state at an instant between two SUMO frames, in SUMO's own frame and units, so it
 /// converts to a pose exactly as a reported state does.
 /// </summary>
-/// <param name="X">Projected easting of the front-bumper centre, metres.</param>
+/// <param name="X">
+/// Projected easting of the front-bumper centre, metres: on the lane's centre line, or as far across
+/// it as SUMO has the vehicle part-way through a lane change spread over time.
+/// </param>
 /// <param name="Y">Projected northing of the same point, metres.</param>
 /// <param name="HeadingDegrees">
 /// Degrees clockwise from north, taken from the tangent of the shape the vehicle is on rather than

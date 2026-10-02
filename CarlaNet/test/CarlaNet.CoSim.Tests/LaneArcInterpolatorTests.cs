@@ -84,6 +84,48 @@ public sealed class LaneArcInterpolatorTests
         Assert.Equal(-100.0 + 52.5, middle.Y, 2);             // and half way along in the meantime
     }
 
+    [Fact]
+    public void PartWayThroughALaneChangeSpreadOverTimeThePoseIsBesideItsLaneWhereSumoHasIt()
+    {
+        // SUMO reports the lane the change started on, with the vehicle 1.0 m and then 1.056 m to the
+        // left of its centre line: the approach runs north, so left is west, towards smaller x.
+        var interpolator = Interpolator();
+        CoSimVehicleFrame from = On("approach_0", 40.0) with { LateralOffsetMetres = 1.0 };
+        CoSimVehicleFrame to = On("approach_0", 41.0) with { LateralOffsetMetres = 1.056 };
+
+        InterpolatedState start = interpolator.Interpolate(from, to, 0.0, 0.05);
+        InterpolatedState middle = interpolator.Interpolate(from, to, 0.5, 0.05);
+        InterpolatedState end = interpolator.Interpolate(from, to, 1.0, 0.05);
+
+        Assert.Equal(LaneInterpolationCase.SameLane, middle.Case);
+        Assert.Equal(5.03 - 1.0, start.X, 6);
+        Assert.Equal(5.03 - 1.028, middle.X, 6);
+        Assert.Equal(5.03 - 1.056, end.X, 6);
+        Assert.Equal(-100.0 + 40.5, middle.Y, 6);
+        Assert.Equal("approach_0", middle.LaneId);
+        Assert.Equal(0.0, middle.HeadingDegrees, 6);          // the lane's tangent, as before
+    }
+
+    [Fact]
+    public void TheStepInWhichSumoStartsReportingTheNewLaneMovesTheVehicleCentimetresNotALaneWidth()
+    {
+        // Measured through TraCI on this network at a 3 s lane change: half way across, SUMO moves the
+        // vehicle onto approach_1 and its lateral offset from +1.675 m to -1.619 m, which is the same
+        // place one step further across.
+        var interpolator = Interpolator();
+        CoSimVehicleFrame from = On("approach_0", 60.31) with { LateralOffsetMetres = 1.675 };
+        CoSimVehicleFrame to = On("approach_1", 60.96) with { LateralOffsetMetres = -1.619 };
+
+        InterpolatedState start = interpolator.Interpolate(from, to, 0.0, 0.05);
+        InterpolatedState middle = interpolator.Interpolate(from, to, 0.5, 0.05);
+        InterpolatedState end = interpolator.Interpolate(from, to, 1.0, 0.05);
+
+        Assert.Equal(LaneInterpolationCase.LaneChange, middle.Case);
+        Assert.Equal(5.03 - 1.675, start.X, 6);
+        Assert.Equal(1.68 + 1.619, end.X, 6);
+        Assert.InRange(middle.X, end.X, start.X);
+    }
+
     /// <summary>
     /// One 40 m approach, a 10 m connector, and a two-lane exit the connector feeds only the right
     /// lane of. Written out here rather than built with netconvert because the whole point of it is
@@ -252,13 +294,85 @@ public sealed class LaneArcInterpolatorTests
                     + $"{worstFollowed:0.000} m, which is not the separation this rests on");
     }
 
+    [RequiresSumoFact]
+    public void SumoSpreadsALaneChangeOverItsDurationAndSwitchesTheReportedLaneHalfWay()
+    {
+        // What SUMO 1.27.0 reports while a lane change is spread over time, read through the bridge's
+        // own subscription: `changer` departs on the right-hand lane of the approach and has to move
+        // left to turn left.
+        List<CoSimVehicleFrame> track = RecordTrack("changer", steps: 400, LaneChangeOverThreeSeconds);
+        List<int> changing = Enumerable.Range(0, track.Count)
+            .Where(index => Math.Abs(track[index].LateralOffsetMetres) > 1e-9).ToList();
+        Assert.NotEmpty(changing);
+
+        // It takes the duration: sixty 0.05 s steps from the last step on the centre line to the first
+        // back on it.
+        Assert.Equal(60, (changing[^1] + 1) - (changing[0] - 1));
+        Assert.True(changing.Zip(changing.Skip(1)).All(pair => pair.Second == pair.First + 1),
+                    "the lateral offset returned to zero part-way through the change");
+
+        // The reported lane changes once, from the lane it started on to the one it moves to, at the
+        // step the offset passes half the two lanes' widths and is carried over to the new lane.
+        List<int> switches = changing.Where(index => track[index].LaneId != track[index - 1].LaneId).ToList();
+        int flip = Assert.Single(switches);
+        Assert.Equal("approach_0", track[flip - 1].LaneId);
+        Assert.Equal("approach_1", track[flip].LaneId);
+        Assert.Equal(3.35 / 2.0, track[flip - 1].LateralOffsetMetres, 0.06);
+        Assert.Equal(-3.35 / 2.0, track[flip].LateralOffsetMetres, 0.06);
+
+        // The reported position includes the offset, and moves across at a steady 3.35 m over 3 s.
+        foreach (int index in changing.Skip(1))
+        {
+            double across = track[index - 1].X - track[index].X;   // the approach runs north: left is -x
+            Assert.Equal(3.35 / 3.0 * 0.05, across, 0.001);
+        }
+
+        // And SUMO's angle turns with the sideways movement, where the lane runs due north.
+        double furthest = changing.Max(index => 360.0 - track[index].HeadingDegrees);
+        Assert.True(furthest > 3.0, $"SUMO's angle turned only {furthest:0.00} degrees from the lane");
+    }
+
+    [RequiresSumoFact]
+    public void ThroughALaneChangeSpreadOverTimeThePoseIsSumoSPositionAndNeverJumps()
+    {
+        List<CoSimVehicleFrame> track = RecordTrack("changer", steps: 400, LaneChangeOverThreeSeconds);
+        var interpolator = Interpolator();
+        double worstAtFrames = 0.0;
+        double worstStep = 0.0;
+
+        for (int index = 1; index < track.Count; index++)
+        {
+            CoSimVehicleFrame from = track[index - 1];
+            CoSimVehicleFrame to = track[index];
+            InterpolatedState start = interpolator.Interpolate(from, to, 0.0, 0.05);
+            InterpolatedState end = interpolator.Interpolate(from, to, 1.0, 0.05);
+            Assert.NotEqual(LaneInterpolationCase.Discontinuous, end.Case);
+            worstAtFrames = Math.Max(worstAtFrames, Math.Max(Distance(start.X, start.Y, from),
+                                                             Distance(end.X, end.Y, to)));
+            worstStep = Math.Max(worstStep, Distance(end.X, end.Y, from) - from.SpeedMetresPerSecond * 0.05);
+        }
+
+        // Measured: SUMO's own position at every frame to well under a millimetre -- through the step
+        // its reported lane changes, which on the lane's centre line alone was a lane width of
+        // sideways jump -- and no step further than SUMO's own movement plus a few centimetres.
+        Assert.True(worstAtFrames < 1e-3, $"the pose left SUMO's position by {worstAtFrames:0.0000} m");
+        Assert.True(worstStep < 0.1, $"a step moved {worstStep:0.000} m further than SUMO's speed");
+    }
+
+    private static readonly SumoLaunchOptions LaneChangeOverThreeSeconds = new()
+    {
+        ExtraArguments = ["--lanechange.duration", "3"],
+        Output = _ => { },
+    };
+
     private static double Distance(double x, double y, in CoSimVehicleFrame truth) =>
         Math.Sqrt(Math.Pow(x - truth.X, 2) + Math.Pow(y - truth.Y, 2));
 
     /// <summary>Every step of one vehicle's life, read through the bridge's own subscription.</summary>
-    private static List<CoSimVehicleFrame> RecordTrack(string vehicleId, int steps)
+    private static List<CoSimVehicleFrame> RecordTrack(string vehicleId, int steps,
+                                                       SumoLaunchOptions? options = null)
     {
-        using SumoConnection sumo = CoSimFixtures.Open(CoSimFixtures.RightAngleTurnScenario);
+        using SumoConnection sumo = CoSimFixtures.Open(CoSimFixtures.RightAngleTurnScenario, options);
         var population = new SubscribedPopulation(sumo.TraCI);
         List<CoSimVehicleFrame> track = [];
 

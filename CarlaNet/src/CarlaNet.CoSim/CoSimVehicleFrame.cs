@@ -20,12 +20,18 @@ namespace CarlaNet.CoSim;
 /// </param>
 /// <param name="TypeId">The vehicle type id the scenario's <c>vType</c> declared.</param>
 /// <param name="Signals">SUMO's signal word for this step.</param>
+/// <param name="LateralOffsetMetres">
+/// How far the vehicle is to the left of <paramref name="LaneId"/>'s centre line, which is where
+/// SUMO's reported position is. Zero but during a lane change SUMO spreads over time
+/// (<c>lanechange.duration</c>): then it grows steadily towards the lane being moved to, jumps by a
+/// lane width when SUMO starts reporting that lane, past halfway, and returns to zero.
+/// </param>
 /// <remarks>
 /// Separate from <see cref="SumoVehicleState"/> rather than an extension of it. That record is the
 /// TraCI client's fixed seven-variable read, differenced against SUMO's own client to establish it;
-/// lane position is an eighth variable only a bridge that interpolates needs, and every subscribed
-/// variable is charged to every SUMO step for every subscribed vehicle. Putting it in the client's
-/// state record would charge it to every reader.
+/// lane position and lateral offset are variables only a bridge that interpolates needs, and every
+/// subscribed variable is charged to every SUMO step for every subscribed vehicle. Putting them in the
+/// client's state record would charge them to every reader.
 /// </remarks>
 public readonly record struct CoSimVehicleFrame(
     string Id,
@@ -37,13 +43,16 @@ public readonly record struct CoSimVehicleFrame(
     string LaneId,
     double LanePositionMetres,
     string TypeId,
-    SumoVehicleSignals Signals)
+    SumoVehicleSignals Signals,
+    double LateralOffsetMetres = 0.0)
 {
     /// <summary>Whether the vehicle is inside a junction, which SUMO marks by the edge's name.</summary>
     public bool IsOnInternalEdge => EdgeId.Length > 0 && EdgeId[0] == ':';
 
-    /// <summary>The frame a TraCI client state plus a lane position make.</summary>
-    public static CoSimVehicleFrame From(in SumoVehicleState state, double lanePositionMetres) =>
+    /// <summary>The frame a TraCI client state plus a lane position and lateral offset make.</summary>
+    public static CoSimVehicleFrame From(in SumoVehicleState state, double lanePositionMetres,
+                                         double lateralOffsetMetres = 0.0) =>
         new(state.Id, state.X, state.Y, state.HeadingDegrees, state.SpeedMetresPerSecond,
-            state.EdgeId, state.LaneId, lanePositionMetres, state.TypeId, state.Signals);
+            state.EdgeId, state.LaneId, lanePositionMetres, state.TypeId, state.Signals,
+            lateralOffsetMetres);
 }

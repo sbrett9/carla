@@ -9,8 +9,8 @@ namespace CarlaNet.CoSim;
 /// <para><b>Every vehicle SUMO has is subscribed, because every one of them is rendered.</b> A
 /// subscription is charged inside SUMO's step whether or not anyone reads it -- measured at 388 live
 /// vehicles on the Arapahoe network, 3.73 ms per step with nothing subscribed and 9.26 ms with the
-/// eight-variable bridge set subscribed and never read -- so a heavier scenario costs SUMO more time
-/// per step. That is the price of drawing what the scenario holds, and it is paid in wall clock, never
+/// eight-variable bridge set subscribed and never read (before the lateral offset was added to it) --
+/// so a heavier scenario costs SUMO more time per step. That is the price of drawing what the scenario holds, and it is paid in wall clock, never
 /// in content.</para>
 ///
 /// <para>A subscription delivers its results immediately: SUMO answers a subscribe command with the
@@ -26,7 +26,8 @@ public sealed class SubscribedPopulation
 {
     /// <summary>
     /// What every vehicle delivers: the client's seven-variable state plus the lane position the
-    /// lane-geometry interpolation is evaluated at.
+    /// lane-geometry interpolation is evaluated at and the lateral offset from the lane's centre line,
+    /// which puts the vehicle where SUMO has it while a lane change is spread over time.
     /// </summary>
     public static readonly int[] StateVariables =
     [
@@ -36,6 +37,7 @@ public sealed class SubscribedPopulation
         TraCIVariables.RoadId,
         TraCIVariables.LaneId,
         TraCIVariables.LanePosition,
+        TraCIVariables.LateralLanePosition,
         TraCIVariables.TypeId,
         TraCIVariables.Signals,
     ];
@@ -162,6 +164,19 @@ public sealed class SubscribedPopulation
         return into.Count;
     }
 
+    /// <summary>
+    /// SUMO's lateral lane position as an offset from the lane's centre line: zero where SUMO reports
+    /// none, which it does for a vehicle on no lane -- parked off it at a stop.
+    /// </summary>
+    private static double LateralOffset(double reported) =>
+        double.IsFinite(reported) && Math.Abs(reported) < InvalidLateralOffset ? reported : 0.0;
+
+    /// <summary>
+    /// SUMO's <c>INVALID_DOUBLE_VALUE</c> is -2^30; anything this far from a lane is not an offset across
+    /// it.
+    /// </summary>
+    private const double InvalidLateralOffset = 1.0e6;
+
     /// <summary>One vehicle's state from the last step, where it delivered all of it.</summary>
     public bool TryReadFrame(string vehicleId, out CoSimVehicleFrame frame)
     {
@@ -183,7 +198,8 @@ public sealed class SubscribedPopulation
             values[TraCIVariables.LaneId].AsString,
             values[TraCIVariables.LanePosition].AsDouble,
             values[TraCIVariables.TypeId].AsString,
-            (SumoVehicleSignals)values[TraCIVariables.Signals].AsInt);
+            (SumoVehicleSignals)values[TraCIVariables.Signals].AsInt,
+            LateralOffset(values[TraCIVariables.LateralLanePosition].AsDouble));
         return true;
     }
 }
