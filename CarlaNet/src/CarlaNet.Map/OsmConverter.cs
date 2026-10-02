@@ -6,6 +6,10 @@
 // OSM2ODRSettings): default lane width 3.35 m, default sidewalk width 2.80 m,
 // proj string "+proj=tmerc", centred map, generated traffic lights.
 //
+// Ramp meters (OSM traffic_signals=ramp_meter) are the one kind of signal handled apart: kept out
+// of junction joining and given a metering programme rather than a junction's (OsmRampMeters,
+// RampMeterProgram). An extract with none gets exactly the invocation it always got.
+//
 // CRITICAL: PROJ needs its proj.db data file. When a proj.db directory is
 // supplied we set PROJ_LIB and PROJ_DATA on the child process so libproj can
 // find it; otherwise reprojection fails at runtime.
@@ -114,6 +118,22 @@ public sealed record OsmConversionOptions
     /// </summary>
     public string TrafficLightDefaultType { get; init; } = "actuated";
 
+    /// <summary>
+    /// Treat the extract's ramp meters -- nodes tagged <c>traffic_signals=ramp_meter</c> -- as meters
+    /// rather than as junctions: keep them out of junction joining (<c>--junctions.join-exclude</c>)
+    /// and give each the metering programme of <see cref="RampMeterProgram"/>
+    /// (<c>--tllogic-files</c>). Applies only when <see cref="GenerateTrafficLights"/> is on, and adds
+    /// nothing to the invocation of an extract that has no ramp meter.
+    /// </summary>
+    /// <remarks>
+    /// Without it netconvert joins a meter standing near a merge with the merge and with the freeway
+    /// beside it, and the joined signal puts the freeway on a red light every cycle; and it gives every
+    /// meter a junction's 80 s green, which meters nothing. Measured on Arapahoe I-25: meter 582785322
+    /// was joined into a two-phase signal alternating its loop ramp with five lanes of I-25, each held
+    /// for up to 56 s.
+    /// </remarks>
+    public bool MeterRamps { get; init; } = true;
+
     /// <summary>Escape hatch: extra raw netconvert arguments appended verbatim, for tuning
     /// without code changes. Each entry is passed as a single argument token.</summary>
     public IReadOnlyList<string> ExtraArgs { get; init; } = [];
@@ -129,12 +149,16 @@ public sealed record OsmConversionOptions
 /// <param name="NetconvertPath">The executable that ran, resolved.</param>
 /// <param name="NetconvertVersion">Its self-reported version, read from the executable that ran
 /// rather than inferred from a path or a pin.</param>
+/// <param name="RampMeters">What became of the extract's ramp meters: which were given the metering
+/// programme, which kept netconvert's and why, and the <c>--tllogic-files</c> document the recorded
+/// invocation read. Null when the extract has no ramp meter or metering is off.</param>
 public sealed record OsmConversionResult(
     string OpenDrive,
     string Network,
     IReadOnlyList<string> NetconvertArgv,
     string NetconvertPath,
-    string NetconvertVersion);
+    string NetconvertVersion,
+    RampMeterPlan? RampMeters = null);
 
 /// <summary>
 /// Converts OpenStreetMap data to OpenDRIVE (.xodr) by invoking the native SUMO
@@ -161,8 +185,12 @@ public sealed class OsmConverter
             $"carlanet_osm_{Guid.NewGuid():N}.xodr");
         try
         {
+            // The meters are kept out of junction joining here too, so the OpenDRIVE is the one a
+            // world build with a network makes. Their programmes are not needed: they live only in
+            // the network, and the OpenDRIVE is measured byte-identical with and without them.
             await RunNetconvertAsync(ResolveNetconvertPath(),
-                                     BuildArguments(osmPath, xodrPath), xodrPath, ct)
+                                     BuildArguments(osmPath, xodrPath, rampMeters: RampMetersOf(osmPath)),
+                                     xodrPath, ct)
                 .ConfigureAwait(false);
             return await File.ReadAllTextAsync(xodrPath, ct).ConfigureAwait(false);
         }
@@ -190,6 +218,18 @@ public sealed class OsmConverter
     /// <para>The network also carries the guessed traffic-light <c>&lt;tlLogic&gt;</c> phase programs
     /// <c>TrafficLightInjector</c> reads to build per-phase controllers. That is why it was first
     /// produced, and it is now produced whether or not traffic lights are generated.</para>
+    /// <para><b>An extract with ramp meters is converted twice</b> (<see cref="OsmConversionOptions.MeterRamps"/>).
+    /// A metering programme names every link of its signal, and which links a meter has -- one per
+    /// lane, or two where a lane fans out, on whichever edge netconvert made of the ramp -- is known
+    /// only once netconvert has built the network. So the first run, with the meters kept out of
+    /// junction joining, is read for the meters' links; the programmes are written for them; and the
+    /// second run is the first one again with <c>--tllogic-files</c> naming that file. The second run
+    /// is the one recorded and the one whose outputs are returned, so the package still holds the
+    /// network and OpenDRIVE of the invocation it records. Measured on Arapahoe I-25: the two runs'
+    /// networks differ in the four meters' programmes and nothing else, and their OpenDRIVE documents
+    /// are identical but for netconvert's timestamped header. The result is checked against the
+    /// programmes written, so a netconvert that read them differently fails the build rather than
+    /// shipping a world whose meters run something else.</para>
     /// </remarks>
     public async Task<OsmConversionResult> ConvertFileWithNetworkAsync(
         string osmPath, CancellationToken ct = default)
@@ -201,29 +241,67 @@ public sealed class OsmConverter
 
         var xodrPath = Path.Combine(Path.GetTempPath(), $"carlanet_osm_{Guid.NewGuid():N}.xodr");
         var netPath = Path.Combine(Path.GetTempPath(), $"carlanet_osm_{Guid.NewGuid():N}.net.xml");
+        string? programsPath = null;
         try
         {
             var exe = ResolveNetconvertPath();
-            var argv = BuildArguments(osmPath, xodrPath, netPath);
-            await RunNetconvertAsync(exe, argv, xodrPath, ct).ConfigureAwait(false);
-            if (!File.Exists(netPath))
-                throw new InvalidOperationException(
-                    "netconvert reported success but produced no SUMO network at "
-                    + $"'{netPath}'. A world cannot be built without one: the network is what a "
-                    + "scenario is authored against and it cannot be reproduced afterwards.");
+            var meters = RampMetersOf(osmPath);
+            var argv = BuildArguments(osmPath, xodrPath, netPath, meters);
+            string network = await RunForNetworkAsync(exe, argv, xodrPath, netPath, ct).ConfigureAwait(false);
+
+            RampMeterPlan? plan = null;
+            if (meters.Count > 0)
+            {
+                plan = RampMeterProgram.Plan(network, meters);
+                if (plan.Metered.Count > 0)
+                {
+                    programsPath = Path.Combine(Path.GetTempPath(), $"carlanet_osm_{Guid.NewGuid():N}.tll.xml");
+                    await File.WriteAllTextAsync(programsPath, plan.ProgramFile, new UTF8Encoding(false), ct)
+                        .ConfigureAwait(false);
+                    argv = BuildArguments(osmPath, xodrPath, netPath, meters, programsPath);
+                    network = await RunForNetworkAsync(exe, argv, xodrPath, netPath, ct).ConfigureAwait(false);
+                    var problems = RampMeterProgram.Verify(network, plan);
+                    if (problems.Count > 0)
+                        throw new InvalidOperationException(
+                            "netconvert did not give the ramp meters the programmes it was given:\n  "
+                            + string.Join("\n  ", problems));
+                }
+            }
 
             return new OsmConversionResult(
                 OpenDrive: await File.ReadAllTextAsync(xodrPath, ct).ConfigureAwait(false),
-                Network: await File.ReadAllTextAsync(netPath, ct).ConfigureAwait(false),
-                NetconvertArgv: RecordedArguments(argv, xodrPath, netPath),
+                Network: network,
+                NetconvertArgv: RecordedArguments(argv, xodrPath, netPath, programsPath),
                 NetconvertPath: exe,
-                NetconvertVersion: ResolveNetconvertVersion(exe));
+                NetconvertVersion: ResolveNetconvertVersion(exe),
+                RampMeters: plan);
         }
         finally
         {
             TryDelete(xodrPath);
             TryDelete(netPath);
+            if (programsPath != null)
+                TryDelete(programsPath);
         }
+    }
+
+    /// <summary>
+    /// The ramp meters this conversion treats as meters: the extract's, when metering is on and
+    /// signals are generated at all; otherwise none.
+    /// </summary>
+    internal IReadOnlyList<string> RampMetersOf(string osmPath)
+        => _options.MeterRamps && _options.GenerateTrafficLights ? OsmRampMeters.Read(osmPath) : [];
+
+    private async Task<string> RunForNetworkAsync(
+        string exe, IReadOnlyList<string> argv, string xodrPath, string netPath, CancellationToken ct)
+    {
+        await RunNetconvertAsync(exe, argv, xodrPath, ct).ConfigureAwait(false);
+        if (!File.Exists(netPath))
+            throw new InvalidOperationException(
+                "netconvert reported success but produced no SUMO network at "
+                + $"'{netPath}'. A world cannot be built without one: the network is what a "
+                + "scenario is authored against and it cannot be reproduced afterwards.");
+        return await File.ReadAllTextAsync(netPath, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -309,7 +387,17 @@ public sealed class OsmConverter
     /// Mirrors CARLA osm2odr defaults; <see cref="OsmConversionOptions.ExtraArgs"/> appends
     /// extra raw flags for experimentation without touching this method.
     /// </summary>
-    internal IReadOnlyList<string> BuildArguments(string osmPath, string xodrPath, string? netPath = null)
+    /// <param name="osmPath">The extract.</param>
+    /// <param name="xodrPath">Where the OpenDRIVE is written.</param>
+    /// <param name="netPath">Where the SUMO network is written, or null for none.</param>
+    /// <param name="rampMeters">The extract's ramp meters (<see cref="RampMetersOf"/>), kept out of
+    /// junction joining. Empty or null adds nothing, so an extract with no meter gets exactly the
+    /// invocation it got before meters were handled at all.</param>
+    /// <param name="programsPath">The meters' programme file (<see cref="RampMeterProgram"/>), or null
+    /// before it has been written.</param>
+    internal IReadOnlyList<string> BuildArguments(string osmPath, string xodrPath, string? netPath = null,
+                                                  IReadOnlyList<string>? rampMeters = null,
+                                                  string? programsPath = null)
     {
         var inv = System.Globalization.CultureInfo.InvariantCulture;
 
@@ -386,6 +474,25 @@ public sealed class OsmConverter
                 args.Add("--tls.default-type");
                 args.Add(_options.TrafficLightDefaultType);
             }
+
+            // Ramp meters are meters, not junctions. Kept out of joining, a meter controls its ramp
+            // alone and the merge beyond it stays an unsignalised priority merge, so no meter can
+            // put the freeway on a red light; and the programme file gives each its metering cycle
+            // in place of the junction programme netconvert would guess. netconvert reads each of
+            // these options once, so a caller passing either through ExtraArgs is refused rather
+            // than having one list silently replace the other.
+            if (rampMeters is { Count: > 0 })
+            {
+                RefuseExtraArgument("--junctions.join-exclude");
+                RefuseExtraArgument("--tllogic-files", "-i");
+                args.Add("--junctions.join-exclude");
+                args.Add(string.Join(",", rampMeters));
+                if (programsPath != null)
+                {
+                    args.Add("--tllogic-files");
+                    args.Add(programsPath);
+                }
+            }
         }
         else
         {
@@ -416,6 +523,23 @@ public sealed class OsmConverter
 
         args.AddRange(_options.ExtraArgs);
         return args;
+    }
+
+    /// <summary>Refuses an extra argument the ramp meters already set.</summary>
+    private void RefuseExtraArgument(params string[] spellings)
+    {
+        foreach (string argument in _options.ExtraArgs)
+        {
+            foreach (string option in spellings)
+            {
+                if (argument == option || argument.StartsWith(option + "=", StringComparison.Ordinal))
+                    throw new ArgumentException(
+                        $"the extra netconvert arguments set {option}, which the conversion sets for "
+                        + "the extract's ramp meters, and netconvert reads it once. Leave it out of the "
+                        + "extra arguments, or turn ramp metering off (MeterRamps = false) to pass it "
+                        + "yourself.");
+            }
+        }
     }
 
     /// <summary>
@@ -513,16 +637,25 @@ public sealed class OsmConverter
     public const string RecordedNetworkOutput = "<output-file>";
 
     /// <summary>
-    /// The arguments as a build records them: the two output files are this run's scratch files,
-    /// named at random, and where netconvert writes changes nothing it produces, so they are
-    /// recorded by fixed names. Recorded as passed, every build of an identical world differed from
-    /// the last, and a scenario compiled against the first looked stale against the second.
+    /// What the ramp meters' programme file is recorded as in the build's arguments. Its content is
+    /// carried in the world package beside the network (<c>WorldPackage.TrafficLightProgramsEntry</c>).
+    /// </summary>
+    public const string RecordedProgramsInput = "<tllogic-files>";
+
+    /// <summary>
+    /// The arguments as a build records them: the output files, and the ramp meters' programme file
+    /// when there is one, are this run's scratch files, named at random, and where they sit changes
+    /// nothing netconvert produces, so they are recorded by fixed names. Recorded as passed, every
+    /// build of an identical world differed from the last, and a scenario compiled against the first
+    /// looked stale against the second.
     /// </summary>
     internal static IReadOnlyList<string> RecordedArguments(IReadOnlyList<string> argv,
                                                             string openDrivePath,
-                                                            string networkPath) =>
+                                                            string networkPath,
+                                                            string? programsPath = null) =>
         [.. argv.Select(argument => argument == openDrivePath ? RecordedOpenDriveOutput
                                     : argument == networkPath ? RecordedNetworkOutput
+                                    : programsPath != null && argument == programsPath ? RecordedProgramsInput
                                     : argument)];
 
     private static void TryDelete(string path)

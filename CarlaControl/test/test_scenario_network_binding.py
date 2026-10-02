@@ -157,6 +157,43 @@ def test_a_differently_phased_world_is_refused(tmp_path):
         SumoScenarioBuilder().build_network(package, tmp_path / "out.net.xml", settings())
 
 
+def metered(argv: list[str], meters: str) -> list[str]:
+    """The argument list of a world whose extract has ramp meters, as the world build records it:
+    the meters kept out of junction joining and their programme file named by its fixed name, after
+    the signal type (NetconvertArgumentsTests.RampMetersAreKeptOutOfJoiningAndGivenTheirProgrammes)."""
+    argv = list(argv)
+    after = argv.index("--tls.default-type") + 2
+    argv[after:after] = ["--junctions.join-exclude", meters, "--tllogic-files", "<tllogic-files>"]
+    return argv
+
+
+def test_a_scenario_stating_the_worlds_ramp_meters_binds_to_it(tmp_path):
+    argv = metered(WORLD_BUILD_ARGV, "2279085566,582784737,582785322,9559187336")
+    stated = settings(ramp_meters=("9559187336", "582785322", "582784737", "2279085566"))
+
+    assert stated.differences_from(argv) == []
+    SumoScenarioBuilder().build_network(write_package(tmp_path, argv=argv),
+                                        tmp_path / "out.net.xml", stated)
+
+
+def test_a_world_with_ramp_meters_is_refused_by_a_scenario_that_does_not_state_them(tmp_path):
+    """Kept out of joining, a meter no longer signals the freeway beside it, and the merge the scenario
+    routes through is a different junction: the two networks differ, so the flag sets must too."""
+    package = write_package(tmp_path, argv=metered(WORLD_BUILD_ARGV, "582785322"))
+
+    with pytest.raises(ValueError) as refusal:
+        SumoScenarioBuilder().build_network(package, tmp_path / "out.net.xml", settings())
+
+    assert "--junctions.join-exclude" in str(refusal.value)
+    assert "--tllogic-files" in str(refusal.value)
+
+
+def test_a_world_without_ramp_meters_reads_as_it_always_did():
+    """The shipped flag set is unchanged for a world whose extract has no meter."""
+    assert "--junctions.join-exclude" not in settings().to_arguments(Path("m.osm"), Path("m.net.xml"))
+    assert "--tllogic-files" not in WORLD_BUILD_ARGV
+
+
 def test_a_scenario_may_require_a_different_flag_set_and_say_so(tmp_path):
     """The refusal is symmetric: an author who needs the private roads kept must build the world
     that way, and is told which flag stands between them."""
