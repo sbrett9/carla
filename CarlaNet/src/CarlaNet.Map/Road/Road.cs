@@ -32,6 +32,16 @@ public sealed class Road
     public RoadId SuccessorRoadId { get; internal set; }
     public RoadId PredecessorRoadId { get; internal set; }
 
+    /// <summary>
+    /// The road's own <c>&lt;userData code="…" value="…"/&gt;</c> entries, by code; the first value
+    /// where a code repeats. netconvert writes <c>sumoId</c> on every road that is not a junction
+    /// connector, naming the SUMO edge the road was converted from, which is the only record in the
+    /// OpenDRIVE of which simulated edge a road carries. Upstream CARLA ignores userData; nothing
+    /// here changes how a road is built from it.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> UserData { get; internal set; } =
+        new Dictionary<string, string>();
+
     // -- back-pointer to owning map data (filled by MapBuilder) --------------
 
     public MapData? MapData { get; internal set; }

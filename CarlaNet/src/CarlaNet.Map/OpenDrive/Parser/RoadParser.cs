@@ -3,8 +3,9 @@
 // Parses every <road> element: metadata (id/name/length/junction), link
 // (predecessor/successor at the road level), road-type/speed records, lane
 // offsets, lane-section structure (left/center/right lane lists with
-// per-lane link info). Lane-internal records (width, mark, etc.) come later
-// from LaneParser.
+// per-lane link info), and the road's own <userData> entries (netconvert's
+// sumoId among them), which upstream does not read. Lane-internal records
+// (width, mark, etc.) come later from LaneParser.
 using System.Xml.Linq;
 using CarlaNet.Map.Road;
 
@@ -40,6 +41,18 @@ internal static class RoadParser
             }
 
             var road = builder.AddRoad(id, name, length, junctionId, predecessor, successor, isRht);
+
+            // userData on the road itself (not on its lanes or objects). netconvert names the SUMO
+            // edge a road came from here, and nothing else in the file records it.
+            Dictionary<string, string>? userData = null;
+            foreach (var entry in roadNode.Elements("userData"))
+            {
+                var code = XmlExt.AsString(entry.Attribute("code"));
+                if (code.Length == 0) continue;
+                userData ??= new Dictionary<string, string>();
+                userData.TryAdd(code, XmlExt.AsString(entry.Attribute("value")));
+            }
+            if (userData != null) road.UserData = userData;
 
             // type / speed entries
             foreach (var typeNode in roadNode.Elements("type"))
