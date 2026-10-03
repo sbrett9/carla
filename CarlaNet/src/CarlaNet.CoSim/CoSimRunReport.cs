@@ -191,6 +191,39 @@ public sealed class CoSimRunReport
     public int VehiclesAwaitingInsertion { get; internal set; }
 
     /// <summary>
+    /// Emergency stops SUMO made while the session read it: a vehicle that could not brake in time,
+    /// stopped dead at the end of its lane, counted once for each step SUMO listed it.
+    /// </summary>
+    /// <remarks>
+    /// A deceleration no vehicle can make, which reaches the imagery and the truth's kinematics alike.
+    /// Harmless to the population and not to the behaviour being captured, so it is recorded rather than
+    /// refused. Read from SUMO's own list of them, which arrives with each step at no cost.
+    /// </remarks>
+    public long EmergencyStops { get; private set; }
+
+    /// <summary>The first few emergency stops, each with TraCI's clock for its step.</summary>
+    public IReadOnlyList<SumoVehicleEvent> EmergencyStopSamples => _emergencyStops;
+
+    /// <summary>
+    /// Teleports SUMO began while the session read it: a vehicle taken off the network to be put further
+    /// along its route.
+    /// </summary>
+    /// <remarks>
+    /// Zero for a run the session admitted on its teleport check alone, since SUMO could not teleport in
+    /// it (<see cref="Teleporting"/>). One that accepted teleporting explicitly records each jump here.
+    /// </remarks>
+    public long Teleports { get; private set; }
+
+    /// <summary>The first few teleports, each with TraCI's clock for its step.</summary>
+    public IReadOnlyList<SumoVehicleEvent> TeleportSamples => _teleports;
+
+    /// <summary>
+    /// Per-vehicle questions put to SUMO on demand for an observer, each one round trip
+    /// (<see cref="SumoVehicleQueries"/>). Zero where nothing observes the run or nothing asked.
+    /// </summary>
+    public long VehicleQueries { get; internal set; }
+
+    /// <summary>
     /// Render-set releases, by why each vehicle stopped holding a place -- SUMO listing it as arrived,
     /// it vanishing without being listed, or the session ending; and under an optional limit, the
     /// policy no longer admitting it or a capacity ranking it out.
@@ -264,8 +297,10 @@ public sealed class CoSimRunReport
     /// <summary>How many warnings SUMO wrote to its console, the fast-forward's included.</summary>
     /// <remarks>
     /// SUMO says on its console, and nowhere a client can ask, when it reroutes a vehicle it could not
-    /// route, teleports one, registers a collision or stops one in an emergency. Counted and sampled
-    /// rather than interpreted. Read live; a warning arrives a moment after the step that caused it.
+    /// route; it says there too when it teleports one, registers a collision or stops one in an
+    /// emergency, which are also counted from its own per-step lists (<see cref="Teleports"/>,
+    /// <see cref="Collisions"/>, <see cref="EmergencyStops"/>). Counted and sampled rather than
+    /// interpreted. Read live; a warning arrives a moment after the step that caused it.
     /// </remarks>
     public long SumoWarnings => Console?.WarningCount ?? 0;
 
@@ -557,11 +592,14 @@ public sealed class CoSimRunReport
     private const int BatchFailureSampleLimit = 10;
     private const int CollisionSampleLimit = 10;
     private const int NotInsertedSampleLimit = 10;
+    private const int VehicleEventSampleLimit = 10;
 
     private readonly List<string> _batchFailures = [];
     private readonly DiscontinuitySampler _discontinuities = new(DiscontinuitySampleLimit);
     private readonly List<CollisionSpan> _collisions = [];
     private readonly List<VehicleNotInserted> _notInserted = [];
+    private readonly List<SumoVehicleEvent> _emergencyStops = [];
+    private readonly List<SumoVehicleEvent> _teleports = [];
     private double _positionDivergenceTotal;
     private double _velocityDivergenceTotal;
     private double _commandedSpeedTotal;
@@ -659,6 +697,24 @@ public sealed class CoSimRunReport
         if (_notInserted.Count < NotInsertedSampleLimit)
         {
             _notInserted.Add(vehicle);
+        }
+    }
+
+    internal void AddEmergencyStop(in SumoVehicleEvent stop)
+    {
+        EmergencyStops++;
+        if (_emergencyStops.Count < VehicleEventSampleLimit)
+        {
+            _emergencyStops.Add(stop);
+        }
+    }
+
+    internal void AddTeleport(in SumoVehicleEvent teleport)
+    {
+        Teleports++;
+        if (_teleports.Count < VehicleEventSampleLimit)
+        {
+            _teleports.Add(teleport);
         }
     }
 
@@ -951,6 +1007,23 @@ public sealed class CoSimRunReport
         foreach (VehicleNotInserted dropped in _notInserted)
         {
             text.AppendLine($"  not inserted     {dropped}");
+        }
+
+        text.AppendLine($"emergency stops    {EmergencyStops}, each a vehicle SUMO stopped dead at the end of a lane");
+        foreach (SumoVehicleEvent stop in _emergencyStops)
+        {
+            text.AppendLine($"  emergency stop   {stop}");
+        }
+
+        text.AppendLine($"teleports          {Teleports} begun");
+        foreach (SumoVehicleEvent teleport in _teleports)
+        {
+            text.AppendLine($"  teleport         {teleport}");
+        }
+
+        if (VehicleQueries > 0)
+        {
+            text.AppendLine($"vehicle queries    {VehicleQueries} asked of SUMO on demand, one round trip each");
         }
 
         text.AppendLine($"sumo warnings      {SumoWarnings}");

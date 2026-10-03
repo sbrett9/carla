@@ -14,6 +14,12 @@ internal static class SumoFixtures
     /// <summary>The same network with two vehicles on it.</summary>
     public static string TwoVehicles => Configuration("SingleEdgeTraffic.sumocfg");
 
+    /// <summary>
+    /// The same network at a whole-second step, with one vehicle that stops on its lane and then parks,
+    /// and one SUMO can only insert late.
+    /// </summary>
+    public static string Stops => Configuration("SingleEdgeStops.sumocfg");
+
     /// <summary>A path that exists but is not a SUMO configuration.</summary>
     public static string NotAConfiguration => Configuration("SingleEdge.nod.xml");
 

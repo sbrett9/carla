@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Two vehicles on the single edge, used by the event-list and stop tests. `dweller` halts on its lane
+     for two seconds and then leaves the lane to park for two more; `waiter` is declared to depart at
+     the same instant from the same place, so SUMO can only insert it once `dweller` has moved off, and
+     inserts it late. -->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+    <vType id="car" vClass="passenger" length="4.60" maxSpeed="13.89" accel="2.60" decel="4.50"/>
+    <route id="eastbound" edges="west_to_east"/>
+    <vehicle id="dweller" type="car" route="eastbound" depart="0.00" departSpeed="0.00">
+        <stop lane="west_to_east_0" endPos="60.00" duration="2.00"/>
+        <stop lane="west_to_east_0" endPos="150.00" duration="2.00" parking="true"/>
+    </vehicle>
+    <vehicle id="waiter" type="car" route="eastbound" depart="0.00" departSpeed="0.00"/>
+</routes>
