@@ -5,8 +5,10 @@ namespace CarlaNet.CoSim;
 /// The scenario's SUMO configuration. The network it names must be the one the world package
 /// carries, compared by canonical fingerprint before SUMO is started (<see cref="ScenarioNetworkCheck"/>);
 /// where a compile lock sits beside it, the files it runs must be the ones the lock binds
-/// (<see cref="ScenarioLockCheck"/>); and it must not let SUMO teleport a blocked vehicle unless
-/// <see cref="AllowTeleporting"/> (<see cref="TeleportingCheck"/>).
+/// (<see cref="ScenarioLockCheck"/>); it must not let SUMO teleport a waiting vehicle unless
+/// <see cref="AllowTeleporting"/> (<see cref="TeleportingCheck"/>, <see cref="SumoDistributionEditCheck"/>);
+/// and it must not let SUMO move or remove a vehicle at a collision, offset its departures at random or
+/// seed itself from the wall clock (<see cref="SumoDistributionEditCheck"/>).
 /// </param>
 /// <param name="WorldPackagePath">
 /// The world package: the ground surface the poses are seated on, and the road network they are
@@ -130,13 +132,17 @@ public sealed record SumoDriveSessionOptions(
     public bool SumoGui { get; set; }
 
     /// <summary>
-    /// Run a scenario whose configuration lets SUMO teleport a blocked vehicle, rather than refusing.
+    /// Run a scenario whose configuration lets SUMO teleport a waiting vehicle, rather than refusing: by
+    /// <c>time-to-teleport</c>, by any of the other teleport options or by a vehicle type's own attribute.
     /// </summary>
     /// <remarks>
     /// A teleport moves a vehicle straight to a lane further along its route, which renders as a body
     /// dragged across the map; the runtime jump detector releases and re-admits such a vehicle rather
     /// than interpolating across the gap, whether or not this is set. Not silent: the report records
-    /// the wait SUMO teleports after and that it was accepted (<see cref="TeleportingCheck"/>).
+    /// the wait SUMO teleports after and that it was accepted (<see cref="TeleportingCheck"/>), and every
+    /// other trigger with the value it ran under (<see cref="SumoDistributionEditCheck"/>). It accepts no
+    /// collision action that teleports: a collision is constrained to <c>warn</c> or <c>none</c> whatever
+    /// this says.
     /// </remarks>
     public bool AllowTeleporting { get; set; }
 

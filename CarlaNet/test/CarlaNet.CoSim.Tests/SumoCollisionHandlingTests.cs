@@ -34,7 +34,7 @@ public sealed class SumoCollisionHandlingTests : IDisposable
     [Fact]
     public void AConfigurationThatNamesNoActionGetsSumoSDefault()
     {
-        SumoCollisionHandling handling = SumoCollisionHandling.Read(CoSimFixtures.RightAngleTurnScenario);
+        SumoCollisionHandling handling = SumoCollisionHandling.Read(Configuration("<seed value=\"42\"/>"));
 
         Assert.Null(handling.Declared);
         Assert.Equal("teleport", handling.Action);

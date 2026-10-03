@@ -2367,7 +2367,11 @@ class World:
         The session also refuses a scenario whose configuration lets SUMO teleport a blocked vehicle:
         a positive `time-to-teleport`, or none, which SUMO takes as 300 s. `-1` and `0` disable it,
         as the scenario compiler writes. `allow_teleporting` runs anyway, and
-        `session.Report.Teleporting` records that it was accepted. It refuses, with no override, a
+        `session.Report.Teleporting` records that it was accepted. SUMO's other teleport triggers are
+        refused and accepted the same way; a `collision.action` other than `warn` or `none`, a positive
+        `random-depart-offset` and `random` are refused with no override; and
+        `session.Report.DistributionEdits` names each as the run ran it, with the demand scale and the
+        insertion limits. It refuses, with no override, a
         scenario that sets `ignore-route-errors`: SUMO then keeps a vehicle it cannot route standing at
         the end of the last edge it can reach and says nothing, where by default it stops at the route
         and names it, and the run stops with it. `session.Report.LaneChanges` says how long SUMO

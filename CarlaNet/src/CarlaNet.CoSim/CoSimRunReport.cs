@@ -77,6 +77,21 @@ public sealed class CoSimRunReport
     public required RouteErrorCheck RouteErrors { get; init; }
 
     /// <summary>
+    /// How SUMO edited its own population in this run, each setting as the configuration and the vehicle
+    /// types in its files set it or SUMO's default leaves it: the collision action in force, every teleport
+    /// trigger besides <c>time-to-teleport</c>, departures and seeding, the demand scale, the cap on vehicles
+    /// running and when a vehicle not inserted is discarded.
+    /// </summary>
+    /// <remarks>
+    /// Checked before SUMO was started, so a run that has a report moved and removed no vehicle at a
+    /// collision, offset no departure and was seeded from its seed, and teleported by none of these
+    /// triggers unless it accepted teleporting explicitly, which this says. The scale and the insertion
+    /// limits change the population too and are named rather than refused: two runs of one scenario under
+    /// different values are different traffic, and only the report says so.
+    /// </remarks>
+    public required SumoDistributionEditCheck DistributionEdits { get; init; }
+
+    /// <summary>
     /// What SUMO does about a collision in this run -- whether it registers one, and what it does to the
     /// two vehicles -- as the configuration sets it or SUMO's default leaves it.
     /// </summary>
@@ -209,8 +224,9 @@ public sealed class CoSimRunReport
     /// along its route.
     /// </summary>
     /// <remarks>
-    /// Zero for a run the session admitted on its teleport check alone, since SUMO could not teleport in
-    /// it (<see cref="Teleporting"/>). One that accepted teleporting explicitly records each jump here.
+    /// Zero for a run the session admitted without accepting teleporting, since SUMO could not teleport in
+    /// it (<see cref="Teleporting"/>, <see cref="DistributionEdits"/>). One that accepted teleporting
+    /// explicitly records each jump here.
     /// </remarks>
     public long Teleports { get; private set; }
 
@@ -951,6 +967,14 @@ public sealed class CoSimRunReport
 
         text.AppendLine($"teleporting        {Teleporting}");
         text.AppendLine($"route errors       {RouteErrors}");
+        text.AppendLine($"distribution edits {DistributionEdits}");
+        text.AppendLine($"  collision action {DistributionEdits.CollisionText}");
+        text.AppendLine($"  teleport paths   {DistributionEdits.TeleportText}");
+        text.AppendLine($"  depart offset    {DistributionEdits.DepartOffsetText}");
+        text.AppendLine($"  seeding          {DistributionEdits.SeedingText}");
+        text.AppendLine($"  demand scale     {DistributionEdits.ScaleText}");
+        text.AppendLine($"  vehicle limit    {DistributionEdits.VehicleLimitText}");
+        text.AppendLine($"  depart delay     {DistributionEdits.DepartDelayText}");
         text.AppendLine($"collisions         {CollisionHandling}");
         text.AppendLine($"lane changes       {LaneChanges.Describe(Clock.SumoStepSeconds)}");
         text.AppendLine($"clock              {Clock}");

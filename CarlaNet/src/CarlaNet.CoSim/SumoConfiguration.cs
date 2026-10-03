@@ -137,4 +137,22 @@ public sealed class SumoConfiguration
     /// <summary>SUMO's <c>TIME2STEPS</c>: a time in milliseconds, rounded half away from zero.</summary>
     internal static long Milliseconds(double seconds) =>
         (long)((seconds * 1000.0) + (seconds >= 0.0 ? 0.5 : -0.5));
+
+    /// <summary>
+    /// A SUMO boolean, as <c>StringUtils::toBool</c> reads one: true for <c>1</c>, <c>yes</c>,
+    /// <c>true</c>, <c>on</c>, <c>x</c> or <c>t</c>, false for <c>0</c>, <c>no</c>, <c>false</c>,
+    /// <c>off</c>, <c>-</c> or <c>f</c>, in any case; false where the text is neither. Measured, SUMO 1.27.0
+    /// meets such a value in a configuration with an error on its console and runs on under the option's
+    /// default.
+    /// </summary>
+    internal static bool TryParseBoolean(string text, out bool value)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        string word = text.Trim().ToLowerInvariant();
+        value = TrueWords.Contains(word);
+        return value || FalseWords.Contains(word);
+    }
+
+    private static readonly string[] TrueWords = ["1", "yes", "true", "on", "x", "t"];
+    private static readonly string[] FalseWords = ["0", "no", "false", "off", "-", "f"];
 }

@@ -4,8 +4,8 @@ using Xunit.Abstractions;
 namespace CarlaNet.CoSim.Tests;
 
 /// <summary>
-/// A session checks its scenario's compile lock and its teleport setting before SUMO is started,
-/// and records both on the run report.
+/// A session checks its scenario's compile lock, its teleport setting and how SUMO would edit its
+/// population before SUMO is started, and records each on the run report.
 /// </summary>
 public sealed class SumoDriveSessionLockTests
 {
@@ -150,6 +150,68 @@ public sealed class SumoDriveSessionLockTests
 
         // Started this time, and it said so: the empty console above was a SUMO never launched.
         Assert.Contains(console, line => line.Contains("Starting server", StringComparison.Ordinal));
+    }
+
+    [RequiresSumoFact]
+    public void ASessionOnAScenarioThatLetsSumoRemoveVehiclesIsRefusedBeforeSumoStartsAcceptedOrNot()
+    {
+        string removing = VerboseConfiguration().Replace(
+            "<collision.action value=\"warn\"/>", "<collision.action value=\"remove\"/>", StringComparison.Ordinal);
+        using CompiledFixture compiled = CompiledFixture.Write(configuration: removing);
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        List<string> console = [];
+        SumoDriveSessionOptions options = Options(compiled.Scenario, world);
+        options.SumoOutput = console.Add;
+
+        // Accepting teleporting accepts no collision action.
+        options.AllowTeleporting = true;
+
+        CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+            () => SumoDriveSession.Start(options));
+        _output.WriteLine(refused.Message);
+        Assert.Contains("collision.action is 'remove', under which SUMO takes both vehicles out", refused.Message);
+        Assert.Equal(CoSimSessionStage.Validation, refused.Stage);
+        Assert.Empty(console);
+    }
+
+    [RequiresSumoFact]
+    public void ASessionNamesTheDistributionEditsItRanUnderOnItsReport()
+    {
+        string configuration = File.ReadAllText(CoSimFixtures.RightAngleTurnScenario).Replace(
+            "<time-to-teleport value=\"-1\"/>",
+            "<time-to-teleport value=\"-1\"/>\n        <time-to-teleport.highways value=\"5\"/>\n"
+            + "        <max-depart-delay value=\"900\"/>",
+            StringComparison.Ordinal);
+        using CompiledFixture compiled = CompiledFixture.Write(configuration: configuration);
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        SumoDriveSessionOptions options = Options(compiled.Scenario, world);
+
+        CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+            () => SumoDriveSession.Start(options));
+        Assert.Contains("time-to-teleport.highways is '5'", refused.Message);
+
+        options.AllowTeleporting = true;
+        using SumoDriveSession session = SumoDriveSession.Start(options);
+        Assert.True(session.Advance());
+
+        string report = session.Report.ToString();
+        _output.WriteLine(report);
+        Assert.True(session.Report.DistributionEdits.TeleportingAccepted);
+        Assert.Contains("distribution edits collision.action 'warn'; a teleport trigger ENABLED, accepted "
+                        + "explicitly; departures as declared, from the seed; demand as written; no vehicle "
+                        + "limit; a vehicle not inserted within 900 s discarded", report);
+        Assert.Contains("  collision action 'warn' (collision.action 'warn'); a run may carry warn or none", report);
+        Assert.Contains("  teleport paths   ENABLED, accepted explicitly: time-to-teleport.highways '5', ENABLED "
+                        + "after 5 s; time-to-teleport.disconnected not set, so SUMO's default of -1 s; ", report);
+        Assert.Contains("  depart offset    none: no departure moved by a random offset (random-depart-offset "
+                        + "not set, so SUMO's default of 0 s)", report);
+        Assert.Contains("  seeding          from the seed, so the traffic can be run again (random not set)", report);
+        Assert.Contains("  demand scale     1, the demand as written (scale not set, so SUMO's default of 1); no "
+                        + "vehicle type scales its own", report);
+        Assert.Contains("  vehicle limit    none (max-num-vehicles not set, so SUMO's default of -1)", report);
+        Assert.Contains("  depart delay     a vehicle not inserted within 900 s of its departure is DISCARDED, and "
+                        + "recorded as not inserted (max-depart-delay '900')", report);
     }
 
     /// <summary>

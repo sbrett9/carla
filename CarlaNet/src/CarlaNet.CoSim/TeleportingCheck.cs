@@ -25,11 +25,12 @@ namespace CarlaNet.CoSim;
 /// and run. The value is read as SUMO reads a time: seconds, or <c>hh:mm:ss</c>, or
 /// <c>dd:hh:mm:ss</c>, to the millisecond.</para>
 ///
-/// <para><b>What it cannot see.</b> A vehicle type's own <c>timeToTeleport</c> attribute overrides
-/// the option for vehicles of that type, and route files are not read for it. The other teleport
-/// triggers -- <c>time-to-teleport.highways</c>, <c>.disconnected</c>, <c>.bidi</c> and
-/// <c>.railsignal-deadlock</c>, all off by default -- and a <c>collision.action</c> of
-/// <c>teleport</c>, which is SUMO's default, are not checked here.</para>
+/// <para><b>What it leaves to another check.</b> A vehicle type's own <c>timeToTeleport</c> attribute
+/// overrides the option for vehicles of that type; the other teleport triggers --
+/// <c>time-to-teleport.highways</c>, <c>.disconnected</c>, <c>.bidi</c> and
+/// <c>.railsignal-deadlock</c>, all off at SUMO's defaults, though <c>.disconnected</c> is on from zero
+/// up -- and a <c>collision.action</c> of <c>teleport</c>, which is SUMO's default, are
+/// <see cref="SumoDistributionEditCheck"/>'s, which honours the same acceptance for the triggers.</para>
 /// </remarks>
 public sealed class TeleportingCheck
 {

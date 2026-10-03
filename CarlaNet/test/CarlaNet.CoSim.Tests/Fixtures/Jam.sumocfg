@@ -17,6 +17,9 @@
         <!-- Fixed so the tests see the same vehicle states on every run. -->
         <seed value="42"/>
         <time-to-teleport value="5"/>
+        <!-- Accepting teleporting accepts no collision action that teleports; a capture scenario
+             carries warn. -->
+        <collision.action value="warn"/>
     </processing>
     <report>
         <no-step-log value="true"/>
