@@ -4,7 +4,8 @@
 from a published contingency table (610 route entries, 9 annotated, by departure hour). The statistic
 does not care what its buckets are, so feeding it that table must give that number; a computation
 that did not would be computing something other than what the plan measured. The band function is
-pinned at the edges doc 11 §4.4 names.
+pinned at the edges doc 11 §4.4 names, and is the table in `CarlaNet.Types` the recorder writes every
+capture's band from.
 """
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
 from carlacontrol.AnnotationVocabulary import CORE_TERMS  # noqa: E402
-from carlacontrol.IlluminationBand import IlluminationBand  # noqa: E402
+from carlacontrol.IlluminationBand import BAND_SOURCE, IlluminationBand  # noqa: E402
 from carlacontrol.IlluminationLabelAssociation import IlluminationLabelAssociation  # noqa: E402
 
 # 07 §5.6.1: hour -> (annotated, total), the shipped sizing scenario's 610 route entries.
@@ -78,3 +79,30 @@ def test_the_vocabulary_spells_the_bands_the_statistic_buckets_by():
     assert CORE_TERMS["illumination_band"] == IlluminationBand.names() == [
         "day", "golden", "civil_twilight", "nautical_twilight", "astronomical_twilight", "night"]
     assert {IlluminationBand.of(e) for e in range(-90, 91)} == set(IlluminationBand.names())
+
+
+def test_the_bands_are_the_table_the_recorder_writes_every_capture_s_band_from():
+    """One table in both languages: the band function here is `CarlaNet.Types`'s, read through
+    `carlanet`, the one `CotWriter` and `SolarMetadata` write each capture's band with, so the two
+    agree at every edge and on either side of each."""
+    import carlanet  # noqa: F401
+    from CarlaNet.Types.Illumination import IlluminationBands
+
+    assert IlluminationBand.edges() == [
+        {"band": str(edge.Name),
+         "above_deg": None if edge.AboveDegrees is None else float(edge.AboveDegrees)}
+        for edge in IlluminationBands.Table] == [
+        {"band": "day", "above_deg": 6.0}, {"band": "golden", "above_deg": 0.0},
+        {"band": "civil_twilight", "above_deg": -6.0}, {"band": "nautical_twilight", "above_deg": -12.0},
+        {"band": "astronomical_twilight", "above_deg": -18.0}, {"band": "night", "above_deg": None}]
+    assert BAND_SOURCE == str(IlluminationBands.Source) == "11_Time_And_Illumination.md §4.4"
+    for edge in (6.0, 0.0, -6.0, -12.0, -18.0):
+        for elevation in (edge - 1e-9, edge, edge + 1e-9):
+            assert IlluminationBand.of(elevation) == str(IlluminationBands.NameOf(elevation))
+
+
+@pytest.mark.parametrize("elevation", [-180.0, 90.5, float("nan")])
+def test_an_elevation_that_is_not_a_sun_s_has_no_band(elevation):
+    """-180 is the engine's sun for an impossible date (doc 11 F4): below -18, and not a night."""
+    with pytest.raises(ValueError, match="not a sun's elevation"):
+        IlluminationBand.of(elevation)

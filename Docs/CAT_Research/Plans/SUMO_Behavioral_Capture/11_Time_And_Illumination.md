@@ -1,9 +1,9 @@
 # 11 — Time and illumination
 
 **Status:** Plan. The epoch, the per-window sun binding, the session's per-frame write of an advancing
-sun, the asserted policy, the per-tick solar audit and the per-frame record are built in
-`CarlaNet.CoSim` and `CarlaNet.Recording`; the night work, the
-lamps and the bands are not. Claims about existing behaviour are cited to `path:line`; measurements
+sun, the asserted policy, the per-tick solar audit, the per-frame record and every capture's
+illumination band are built in `CarlaNet.CoSim`, `CarlaNet.Recording` and `CarlaNet.Types`; the night
+work and the lamps are not. Claims about existing behaviour are cited to `path:line`; measurements
 say how they were taken; inferences are labelled.
 **Scope:** The mapping from a scenario's simulated seconds to a civil date, time and zone; how the
 solar clock is driven during a capture window; the freeze-versus-advance policy; what is actually
@@ -18,6 +18,7 @@ possible. Assumes familiarity with the fork but not with the conversation that p
 | 2026-09-25 | Under `advance` the session writes the sun every tick, engine advance off (D11.19); audit tolerances rate-independent. |
 | 2026-09-28 | §8.3: a sun absent from a snapshot after binding stops the run as built, and the shutdown does not fail for it. |
 | 2026-09-30 | The render cap (128, hard 192) is removed: never measured, since M2 never ran, and the scenario is the arbiter of population. Every vehicle SUMO has is drawn and a heavier scenario runs slower, never thinner, so lamp-command and solar-sweep costs are stated on the whole live population from [`10`](10_Scale_And_Performance.md) §4.8.1's map-wide measurements (§6.6, §9, D11.11). |
+| 2026-10-02 | The bands are built: one table in `CarlaNet.Types` (`IlluminationBands`), read by Python through `carlanet`. Every capture's `<_solar>` and `carla:solar` carry `illumination_band`, cut from the achieved sun's refraction-corrected elevation where the block carries it, and `illumination_band_elevation` naming the elevation used; an elevation that is not a sun's has none. A capture written without a solar block is counted per recorder and gated at zero at closeout (§4.4, §8.2-§8.4, F8). |
 
 Capture windows are placed in simulated time, and the sun must be bound to them. This section owns the
 epoch that maps simulated seconds to civil time, the policy governing whether the sun is frozen or
@@ -703,6 +704,16 @@ shared function — `day` above +6°, `golden` +6° to 0°, `civil_twilight` 0°
 so a corpus can be stratified without every consumer re-deriving a threshold, and §7 governs what it
 may and may not be used for.
 
+As built, the function is `CarlaNet.Types.Illumination.IlluminationBands`, and it is the only
+definition in the tree. Each band holds its upper edge — `golden` is (0°, +6°], `night` −18° and
+below — and an elevation that is not a sun's, outside −90° to +90° or the −180° of F4, has no band
+rather than reading as `night`. The recorder writes each capture's band from it (§8.2), and Python
+reads it through `carlanet` (`carlacontrol.IlluminationBand`) for the association statistic and the
+closed core of the annotation vocabulary, so a band in a capture's truth, a band a statistic counts and
+a band a vocabulary names are one table. The edges are declared elevations, so they mean the
+refraction-corrected sun (§12, question 7): `IlluminationBands.Elevation` states it, and a test holds it
+to `DeclaredSunElevation.Kind`, so reversing that ruling moves the bands with the declarations.
+
 ---
 
 ## 5. Night
@@ -1220,7 +1231,9 @@ the side of that boundary where the area relations already are. The concrete req
 implementation is narrow and checkable: **no assembly that computes solar or illumination state may
 be referenced by the supervision-plan compiler**, and the plan compiler must not link anything that
 can read a solar value. That is an assembly-reference rule, and
-[`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §4's `CarlaNet.Types` layering already makes it expressible.
+[`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §4's `CarlaNet.Types` layering already makes it expressible. The
+band table sits in `CarlaNet.Types` because the vocabulary spells its terms (§4.4); it maps a number
+to a name and holds no solar value, so a compiler that reads the band names reads no sun.
 
 ---
 
@@ -1244,8 +1257,8 @@ The solar block is **already in every sidecar and every PNG**, and it already co
   (`:183, 227, 232`).
 - `CotWriter` writes `<_solar solar_time date time_zone lat lon sun_elevation_deg sun_azimuth_deg
   advancing rate>` **before the per-vehicle events**, so a vehicle-free frame still carries the sun,
-  plus `sun_corrected_elevation_deg` where the block carries it. `SolarMetadata.ToJson` writes the same
-  fields as a `carla:solar` PNG tEXt chunk.
+  plus `sun_corrected_elevation_deg` where the block carries it, and the sun's band (§8.2).
+  `SolarMetadata.ToJson` writes the same fields as a `carla:solar` PNG tEXt chunk.
 
 This is exactly the publication mechanism [`08`](08_Collection_And_EPoL.md) D8.3 chose for
 world-scoped state, already working for this payload. **Nothing about the transport needs building.**
@@ -1277,9 +1290,28 @@ wrote the sun from, `advance` and `1`. Measured on a capture of a `SumoDriveSess
 at Gardnerville: `declared_civil` 10:01:00.05, `<_solar>` holding 10:01:00.001 (`solar_time`
 10.0167 h), `residual_clock_s` −0.049.
 
-A run that declared nothing writes no `<_illumination>` at all. The two §4.4 fields that depend on
-the lamps and the band — `illumination_band` and `headlights_asserted` — are not written, because
-neither the band function nor the headlight rule is built.
+A run that declared nothing writes no `<_illumination>` at all. Of the two §4.4 fields that depend on
+the lamps and the band, `headlights_asserted` is not written, because the headlight rule is not built.
+`illumination_band` is written, and with the achieved sun rather than the declaration: on `<_solar>`
+and in `carla:solar`, after the attributes those always carried, because the band comes from the sun
+the frame was lit by and never from the time the run declared ([`06`](06_Truth_And_Annotation.md)
+D6.23). It is cut from the block's refraction-corrected elevation, the one the light is rotated by and
+the one §4.4's edges are stated against (question 7); a block from a server that carries only the
+geometric elevation is banded by that. Either way `illumination_band_elevation` names the elevation
+the band was cut from, so a record written under either ruling, or from either server, says what it
+is. A sun the engine reports at −180° (F4) carries no band. At the sizing site at 06:00, a sun just
+below the horizon whose light refraction lifts just above it:
+
+```xml
+<_solar solar_time="6" date="2026-03-21" time_zone="3.5" lat="27.1501200" lon="56.1806500"
+        sun_elevation_deg="-0.25" sun_corrected_elevation_deg="0.31" sun_azimuth_deg="95.4"
+        advancing="false" rate="0" illumination_band="golden"
+        illumination_band_elevation="refraction_corrected" />
+```
+
+and in the PNG, `"rate":0,"sun_corrected_elevation_deg":0.31,"illumination_band":"golden",
+"illumination_band_elevation":"refraction_corrected"}` closing the `carla:solar` chunk. Banded by its
+geometric elevation, the same frame would read `civil_twilight`.
 
 ### 8.3 The residual, and why it fails a run
 
@@ -1355,7 +1387,10 @@ a run. As built, the observer marks a snapshot that carries a sun (`SolarStateVa
 an empty block and stops the run on that tick; under `advance` the world refuses the sun written for the
 frame first, before the frame renders. Either way the refusal names the cause `solar-state-disagreement`,
 and on the way out the session records that no sun was left to give back rather than failing for it
-([`03`](03_CoSimulation_Runtime.md) §11.7).
+([`03`](03_CoSimulation_Runtime.md) §11.7). The recorder does not leave the omission silent either: it
+counts every capture it writes without a solar block (`FrameRecorder.SolarBlockMissing`), whether or not
+a session is auditing the sun, and the run's closeout records the count as a gate whose threshold is
+zero (§8.4).
 
 **What the audit cannot see.** It reads the sun's state, not the light: a second directional light
 added to the level, a sky re-lit, or exposure that compensated the change away all leave the sun
@@ -1372,7 +1407,10 @@ The run manifest belongs to stage J and is not built. Until it is, the co-simula
 (`CoSimRunReport`) carries the run-level record: the epoch and its digest, the policy, the sun the
 world was found holding, the sun bound at window open with its declared elevation — refraction-corrected,
 with the geometric one beside it — and the audit's ticks, tolerances and worst clock, direction and
-corrected-elevation residuals, each with the tick it occurred on.
+corrected-elevation residuals, each with the tick it occurred on. `captures_missing_solar_block` is
+counted per channel by its recorder (`FrameRecorder.SolarBlockMissing`), and the run's closeout records
+it as the gate `capture.solar_block_missing[<sensor>]`, threshold 0, not met at the first capture written
+without a sun ([`12`](12_Operator_Control_Surface.md) §7.2).
 
 ---
 
@@ -1427,12 +1465,12 @@ exists or would silently corrupt data that is about to.
 | **F5** | **An advancing clock that only wraps never rolls the calendar over**, so a window crossing midnight returns to 00:00 of the *same* day | A modulo-24 wrap with `Day` untouched | Closed in the engine: `ACesiumTimeOfDayController` carries whole days onto the date (`RollSolarDate`). The session does not use that advance: under `advance` it writes the date with every frame's clock, carried or held by D11.2. The audit compares the whole instant, so a missed rollover would be a whole day out and stop the run |
 | **F6** | **The solar date defaults to the host system date and the time defaults to noon**, applied unconditionally including in `--no-build` attach mode | `WorldBuilder.py:227-232`; `run_SCTMV.py:138`, whose comment at `:137` — "the sun is respawned on each world build" — is false for attach mode | Two runs of the same scenario on different days render under different seasonal sun angles, with nothing recording that the date was not chosen. Measured seasonal range at the sizing site: peak elevation 39.41° to 86.29°. **Every capture and every shipped CoT dataset this pipeline has produced is therefore noon on an arbitrary date** |
 | **F7** | **Setting the sun is two RPCs and two `UpdateSun()` calls**, so between them the world holds the new time on the old date | `WorldBuilder.py:238-239`; `CesiumHeightSampler.cpp:731, 749` | Harmless if no frame is captured between, which is not guaranteed. The session uses D11.5's atomic call |
-| **F8** | **The `_solar` block is silently omitted when the cache is unpopulated**, rather than failing | `CotWriter.cs`; `SolarMetadata.cs` | Right for a frame, wrong for a run. The session's audit stops a run whose snapshot carries no sun after one was bound (§8.3) |
+| **F8** | **The `_solar` block is silently omitted when the cache is unpopulated**, rather than failing | `CotWriter.cs`; `SolarMetadata.cs` | Right for a frame, wrong for a run. The session's audit stops a run whose snapshot carries no sun after one was bound (§8.3), and each recorder counts a capture written without a block, gated at zero by the run's closeout (§8.4) |
 | **F9** | **The camera exposure API is implemented and never published to clients**, so `--ev` is inert and exposure is uncontrolled auto | `ActorBlueprintFunctionLibrary.cpp:313-410` lists no exposure attribute and `:1359-1382` applies none, while the full API exists at `SceneCaptureSensor.h:237, 240, 255, 351, 357, 363, 369` (implemented `SceneCaptureSensor.cpp:108-399`, override bits at `:1057-1090`); `SensorRig.py:66-67` guards on `has_attribute` | An omitted publication, not a missing capability. The one night lever [`Findings/13`](../../Findings/13_Usable_Night_Lighting.md) §2 relied on is unreachable, **and auto-exposure across a dusk window compensates away the illumination change the corpus is recording** — so this blocks the daylight corpus too (D11.17). Confirms [`08`](08_Collection_And_EPoL.md) §2.8 |
 | **F10** | **`Findings/13` §2's claim that no time-of-day RPC exists is now stale.** Its Phase 0 was built | `CarlaServer.cpp:614-680`; `CesiumHeightSampler.cpp:718-845`; `CesiumTimeOfDayController.cpp` | Not a code defect, a documentation one. [`Findings/13`](../../Findings/13_Usable_Night_Lighting.md) should be amended to mark Phase 0 done and to correct §2's `--ev` claim per F9 |
 | **F11** | **A world inherits the previous session's date.** Configuring the georeference applies noon, DST-off and the longitude zone to a spawned or found sun, but not the date, which the scenario declares | `CesiumHeightSampler.cpp`, the sun block of `ConfigureCesiumForOrigin`; measured in stage C, a world reaching a session with no epoch holds 2019-09-21 | **A capture's illumination is a function of session history** unless something binds the date — including a still-true `advancing` flag. Closed by D11.16: the session binds everything and records the sun it found |
 | **F12** | **`--time-rate` is a silent no-op without `--time-advance`** | `WorldBuilder.py:246-247` — the rate is read only inside `if args.time_advance:` | An operator asks for accelerated sun and gets a frozen one, with no message. Closed by D11.18, which makes the combination a refusal |
-| **F13** | **The solar state reports the geometric sun elevation while the scene is lit by the refraction-corrected one.** `ACesiumSunSky::UpdateSun_Implementation` computes `Elevation` and `CorrectedElevation` and rotates the sun directional light by `-CorrectedElevation` (`CesiumSunSky.cpp:436-441`), but the bridge reads back `Elevation` alone | `CesiumSunSky.cpp:436-441`; `CesiumHeightSampler.cpp` `GetSunElevationDeg`. Measured at the Arapahoe site: the two differ by **+0.089° to +0.284°** near the horizon | Every threshold in this section - D11.9's +3.0°/+6.0° headlight band, D11.7's -6° corpus floor, §4.4's illumination bands and any declared window elevation - is stated against the geometric value while the imagery is lit by the corrected one. Near the horizon that is **5 to 25 per cent of the elevation itself**, which is exactly where the capture windows sit. `get_solar_state` reports both, the corrected value appended last, and the per-tick episode-state header carries both from a server built with the widened header (§8.1). Declarations are made against the corrected value, with the geometric carried beside it (§12, question 7) |
+| **F13** | **The solar state reports the geometric sun elevation while the scene is lit by the refraction-corrected one.** `ACesiumSunSky::UpdateSun_Implementation` computes `Elevation` and `CorrectedElevation` and rotates the sun directional light by `-CorrectedElevation` (`CesiumSunSky.cpp:436-441`), but the bridge reads back `Elevation` alone | `CesiumSunSky.cpp:436-441`; `CesiumHeightSampler.cpp` `GetSunElevationDeg`. Measured at the Arapahoe site: the two differ by **+0.089° to +0.284°** near the horizon | Every threshold in this section - D11.9's +3.0°/+6.0° headlight band, D11.7's -6° corpus floor, §4.4's illumination bands and any declared window elevation - is stated against the geometric value while the imagery is lit by the corrected one. Near the horizon that is **5 to 25 per cent of the elevation itself**, which is exactly where the capture windows sit. `get_solar_state` reports both, the corrected value appended last, and the per-tick episode-state header carries both from a server built with the widened header (§8.1). Declarations are made against the corrected value, with the geometric carried beside it (§12, question 7), and a capture's band is cut from the corrected value wherever its block carries it (§8.2) |
 
 
 ---

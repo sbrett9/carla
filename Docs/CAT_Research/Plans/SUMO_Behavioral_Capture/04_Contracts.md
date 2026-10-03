@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 25 | 2026-10-02. `C9`: every capture's `<_solar>` and `carla:solar` carry `illumination_band`, from the achieved sun and never the declared time, and `illumination_band_elevation`, the elevation it was cut from — refraction-corrected wherever the block carries it (§11.8.3). The manifest's `captures_missing_solar_block` is stated, zero in a healthy run; until the manifest exists each recorder counts it and the closeout gates it at zero. `C8`: the observation writer strips both band fields and V8.7 refuses them, so the frozen field set is unchanged (§10.4a) |
 | 24 | 2026-10-02. `C3`: the supervision plan carries `additional_digest`, the lane closures' additional file's SHA-256 as the lock's `files` records it, null where a scenario closes no lane, beside the routes', configuration's and network's (§5.2, §5.3). The lock's `files` table names `additional` where there is one. The plan's other completions — checked parameters, projected `hard_negative_for`, resolved exemplars, an absence's site — are [`06`](06_Truth_And_Annotation.md) §8.1's |
 | 23 | 2026-10-02. `C4`: a `sensor_id` is the camera's name, and every camera has one (§6.1, §6.3). Every capture is named after it, `<sensor_id>_<local capture time>`, where every capture was `SCTMV_<local capture time>`, and the platform track's callsign is it, where it defaulted to `OVERWATCH` for every camera given none; a camera given none is `CARLA-SENSOR-<actor id>`. Its grammar loses `:`, which no Windows file name holds, and a name is used as given or refused, never rewritten. It is unique within a process and, spawned as the camera's `role_name`, refused where another camera in the world holds it, case aside. The platform track's uid stays `CARLA-SENSOR-<actor id>` |
 | 22 | 2026-10-02. `C1`: the truth record's `special_type` is the catalogue's `cot_special_type`, as the owner ruled ([`06`](06_Truth_And_Annotation.md) D6.18): a vehicle whose body's blueprint a class draws carries that class's kind, empty where the class curates none, whatever the blueprint declares, and a blueprint no class draws keeps its own. A drive session hands its catalogue's table to the client it drives through, so the capture sidecar and the live pull of that process report it; the standalone producer writes it when given the catalogue (§3.4.2, §3.4.3) |
@@ -270,7 +271,7 @@ flowchart TB
 | `run_record.jsonl` — identity and bindings, the gate record, the stop, what was produced | the component that owns the run manifest, appended from before the first capture | an automated caller; an operator; a corpus builder | `C10` |
 | `epoch` block in the scenario package's lock | scenario author, through the compiler | co-simulation driver, solar clock, truth producer, corpus auditor, **and the observation writer** (`C8` §10.4a) | `C9` |
 | `illumination` block in the scenario package's lock, and the run override | scenario author, through the compiler; operator at run start | solar clock | `C9` |
-| `<_solar>` sidecar element and the `carla:solar` PNG chunk | frame recorder — **already written today** (`CotWriter.cs:52-65`, `SolarMetadata.cs:19`) | truth consumers, corpus auditor, observation writer | `C9` |
+| `<_solar>` sidecar element and the `carla:solar` PNG chunk, each with the capture's `illumination_band` | frame recorder — **already written today** (`CotWriter.cs:52-65`, `SolarMetadata.cs:19`), the band since 2026-10-02 (`C9` §11.8.3) | truth consumers, corpus auditor, observation writer | `C9` |
 | `epoch`, `illumination_in_force`, `solar_achieved[]`, `solar_residual` in the run manifest | the solar clock, closed at run end | corpus auditor, corpus stratification | `C9` |
 
 ---
@@ -3107,6 +3108,7 @@ exists:
 | `lat`, `lon` | **yes** | `<_solar>@lat`, `@lon` (`:59-60`). These are the **georeference origin**, not any vehicle's position. A fielded sensor knows where it is |
 | `epoch.civil_datetime`, `epoch.utc_offset_hours`, `epoch.utc_datetime` | **yes** | the `epoch` block, copied by the observation writer from the scenario package, not from the manifest |
 | `advancing`, `rate` | **no** | `<_solar>@advancing`, `@rate` are present in the sidecar but are statements about *how the capture was produced*, not about the world. They fail test 2: two corpora of identical scenes differ in them. The observation writer strips them |
+| `illumination_band`, `illumination_band_elevation` | **no** | `<_solar>@illumination_band`, `@illumination_band_elevation` (`C9` §11.8.3) are the corpus's stratification key ([`06`](06_Truth_And_Annotation.md) D6.23, V8.6), cut from the elevation by a convention ([`11`](11_Time_And_Illumination.md) §4.4) rather than measured. They add nothing a model could not derive from the elevation, and the set is not widened for them. The observation writer strips them |
 | `illumination.policy`, `solar_residual`, `lamp_gaps[]`, `lamp_probe` | **no** | manifest-only; they fail test 4 and, for the residual, test 2 |
 
 **Why `advancing` and `rate` are excluded even though they sit in the same element.** They describe the
@@ -3636,7 +3638,7 @@ own is refused and recorded, and never fails our run.
 | V8.4 | Every truth event in the `TRUTH` root carries the label-quality block of §10.7 — `occlusion`, `visible_signature`, `label_crowding`, `nearest_label_px`, `supervision_transfer_ambiguous` | refuse to publish. The quality attaches to the label rather than to an assignment, which is where it is computable without a model |
 | V8.5 | Prevalence is reported per sensor **and** unioned, never as one unlabelled number | refuse to publish a corpus summary without both |
 | V8.6 | A corpus summary reports supervision prevalence **per solar bin** as well as per sensor. The bin edges are a declared parameter, valued in [`10`](10_Scale_And_Performance.md); solar elevation is the binning variable, because it is what an electro-optical sensor actually experiences | refuse to publish a summary without it. This is the check that makes an illumination–supervision correlation visible **in the corpus's own description** (§10.4a) |
-| V8.7 | The `OBSERVATION` root contains `advancing`, `rate`, any `illumination.*` field, any residual, or any field read from the run manifest | refuse to publish — §10.4a's excluded list, and test 4 of `D4.20` |
+| V8.7 | The `OBSERVATION` root contains `advancing`, `rate`, `illumination_band`, `illumination_band_elevation`, any `illumination.*` field, any residual, or any field read from the run manifest | refuse to publish — §10.4a's excluded list, and test 4 of `D4.20` |
 | V8.8 | Every field in the observation root's `solar` and `epoch` blocks appears in §10.4a's "in `OBSERVATION`: yes" list | refuse to publish. An allow-list, not a deny-list: a new field stays out until the contract admits it |
 | V8.9 | The corpus manifest declares every partition whose truth is not released, and every capture window, sensor and vehicle the corpus does not cover | refuse to publish. An undeclared omission is indistinguishable from data loss |
 | V8.10 | The observation writer's build carries no reference to any truth type (`D4.16` property 1) | fail the build, not the run |
@@ -4015,6 +4017,30 @@ append-only rows, so what was already true survives a kill at any instant (`D4.3
 A run that stayed in tolerance still writes every field. "The residual was 0.4 s" and "the residual was
 never measured" must not look alike, which is why `audit_skipped` is a separate field from
 `within_tolerance` rather than a value of it.
+
+#### 11.8.3 Per capture: the sun's band, and a capture without a sun
+
+`C9`'s per-capture record is not the solar clock's: it is the `<_solar>` element and the `carla:solar`
+chunk the frame recorder writes from the world-observer snapshot nearest the pixels, and it is stated
+here because the manifest counts the captures that lack it. Beside the sun it carries two derived
+fields, written after every attribute the element already carried:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `illumination_band` | string | One of `day`, `golden`, `civil_twilight`, `nautical_twilight`, `astronomical_twilight`, `night`, by [`11`](11_Time_And_Illumination.md) §4.4's edges, each band holding its upper edge. Derived from this block and nothing else, so from the sun the world **achieved** on the capture's tick and never from the declared time ([`06`](06_Truth_And_Annotation.md) D6.23). Absent where the block's elevation is not a sun's — the −180° the engine reports for an impossible date ([`11`](11_Time_And_Illumination.md) F4) |
+| `illumination_band_elevation` | string | `refraction_corrected`, the elevation the band's edges are stated against, wherever the block carries it; `geometric` from a server that carries only that. Written wherever the band is |
+
+The edges are one table, `CarlaNet.Types.Illumination.IlluminationBands`, which every reader of a band
+uses. Like everything derived from illumination, the band is context and never supervision
+([`11`](11_Time_And_Illumination.md) D11.12).
+
+| Field | Type | Unit | Meaning |
+|---|---|---|---|
+| `captures_missing_solar_block` | integer | — | Captures written with no `<_solar>` and no `carla:solar`, because the snapshot nearest the pixels carried no sun. **Zero in a healthy run**, and anything else is a gate not met: such a capture can be neither stratified nor replayed ([`11`](11_Time_And_Illumination.md) §8.4) |
+
+Until the run manifest exists, each channel's recorder counts `captures_missing_solar_block`
+(`FrameRecorder.SolarBlockMissing`) and the run's closeout records it as the gate
+`capture.solar_block_missing[<sensor>]`, threshold 0 ([`12`](12_Operator_Control_Surface.md) §7.2).
 
 ### 11.9 Worked example
 

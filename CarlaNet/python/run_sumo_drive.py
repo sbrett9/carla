@@ -698,6 +698,11 @@ def report_captures(recorder) -> None:
     logger.info("captures           %s written, %s dropped; %s carry their frame's "
                 "illumination declaration, %s do not", recorder.Saved, recorder.Dropped,
                 recorder.IlluminationPaired, recorder.IlluminationUnpaired)
+    # A capture whose snapshot carried no sun was written with no _solar and no carla:solar: a still
+    # with no recorded illumination and no band, so any is said louder.
+    missing_sun = recorder.SolarBlockMissing
+    (logger.warning if missing_sun else logger.info)(
+        "sun                %s captures were written without a solar block", missing_sun)
     drawn_under = getattr(recorder, "DrawDistanceCaptures", 0)
     if drawn_under:
         # Vehicles in the world and in the truth that a capture's image did not show, each marked in

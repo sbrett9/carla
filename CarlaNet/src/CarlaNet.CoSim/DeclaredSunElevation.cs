@@ -1,3 +1,5 @@
+using CarlaNet.Types.Illumination;
+
 namespace CarlaNet.CoSim;
 
 /// <summary>
@@ -17,8 +19,9 @@ namespace CarlaNet.CoSim;
 /// corpus is for; the geometric one is recorded beside it under its own name, so nothing that
 /// reproduces the sun from an ephemeris loses it. This was ruled for the capture work pending the
 /// plan owner's confirmation (<c>11_Time_And_Illumination.md</c> open question 7), and reversing it
-/// is this one constant: every record names the kind it used, so records written under either
-/// ruling stay readable.</para>
+/// is this constant and the illumination bands' (<see cref="IlluminationBands.Elevation"/>), whose
+/// edges are declared elevations; a test fails until both move. Every record names the kind it used,
+/// so records written under either ruling stay readable.</para>
 /// </remarks>
 public static class DeclaredSunElevation
 {
@@ -26,9 +29,7 @@ public static class DeclaredSunElevation
     public const SolarElevationKind Kind = SolarElevationKind.RefractionCorrected;
 
     /// <summary>The kind as a record writes it.</summary>
-    public static string Name => Kind == SolarElevationKind.RefractionCorrected
-        ? "refraction_corrected"
-        : "geometric";
+    public static string Name => SolarElevationKinds.Name(Kind);
 
     /// <summary>The declared elevation of a sun.</summary>
     public static double Of(SunPosition sun) => Kind == SolarElevationKind.RefractionCorrected
