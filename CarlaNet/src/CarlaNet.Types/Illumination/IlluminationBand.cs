@@ -120,6 +120,30 @@ public static class IlluminationBands
         return true;
     }
 
+    /// <summary>
+    /// The band of a sun as the world reports it, with both its elevations, and the elevation the band
+    /// was cut from: the one the edges are stated against (<see cref="Elevation"/>) where the reading
+    /// carries it, and the geometric one from a server that carries only that. False where the elevation
+    /// it is cut from is not a sun's.
+    /// </summary>
+    /// <param name="geometricDegrees">The geometric elevation the reading carries.</param>
+    /// <param name="correctedDegrees">The refraction-corrected one, or null where the reading carries none.</param>
+    /// <param name="band">The band.</param>
+    /// <param name="cutFrom">Which of the two it was cut from.</param>
+    /// <remarks>
+    /// The one rule for every record that writes a band beside a reported sun -- a capture's solar block
+    /// and the world truth track alike -- so the two cannot cut one sun into two bands.
+    /// </remarks>
+    public static bool TryOfReported(double geometricDegrees, double? correctedDegrees,
+                                     out IlluminationBand band, out SolarElevationKind cutFrom)
+    {
+        cutFrom = Elevation == SolarElevationKind.RefractionCorrected && correctedDegrees is not null
+            ? SolarElevationKind.RefractionCorrected
+            : SolarElevationKind.Geometric;
+        return TryOf(cutFrom == SolarElevationKind.RefractionCorrected ? correctedDegrees!.Value : geometricDegrees,
+                     out band);
+    }
+
     /// <summary>A band's name, as every record writes it.</summary>
     public static string Name(IlluminationBand band)
     {

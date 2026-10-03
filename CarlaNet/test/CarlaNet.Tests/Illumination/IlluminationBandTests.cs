@@ -54,6 +54,29 @@ public class IlluminationBandTests
         Assert.Throws<ArgumentOutOfRangeException>(() => IlluminationBands.Of(elevation));
     }
 
+    [Theory]
+    [InlineData(5.4, 6.0, "golden", SolarElevationKind.RefractionCorrected)]
+    [InlineData(5.4, 6.0001, "day", SolarElevationKind.RefractionCorrected)]
+    [InlineData(-0.6, 0.0, "civil_twilight", SolarElevationKind.RefractionCorrected)]
+    [InlineData(6.0, null, "golden", SolarElevationKind.Geometric)]
+    [InlineData(6.0001, null, "day", SolarElevationKind.Geometric)]
+    public void A_Reported_Sun_Is_Cut_From_Its_Corrected_Elevation_And_From_Its_Geometric_One_Only_Without(
+        double geometric, double? corrected, string band, SolarElevationKind cutFrom)
+    {
+        // The rule every record that writes a band beside a reported sun follows: a capture's solar block
+        // and the world truth track.
+        Assert.True(IlluminationBands.TryOfReported(geometric, corrected, out IlluminationBand found,
+                                                    out SolarElevationKind from));
+        Assert.Equal((band, cutFrom), (IlluminationBands.Name(found), from));
+    }
+
+    [Fact]
+    public void A_Reported_Sun_The_Engine_Could_Not_Compute_Has_No_Band()
+    {
+        Assert.False(IlluminationBands.TryOfReported(-180.0, -180.0, out _, out _));
+        Assert.False(IlluminationBands.TryOfReported(-180.0, null, out _, out _));
+    }
+
     [Fact]
     public void The_Bands_Are_Stated_Against_The_Elevation_The_Light_Is_Rotated_By()
     {

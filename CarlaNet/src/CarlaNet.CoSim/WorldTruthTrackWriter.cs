@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using CarlaNet.Recording;
 using CarlaNet.Types.Geom;
+using CarlaNet.Types.Illumination;
 
 namespace CarlaNet.CoSim;
 
@@ -38,9 +39,13 @@ namespace CarlaNet.CoSim;
 /// <para><b>Columns.</b> The standalone producer's CSV (<c>SumoCotBridge.py</c>) without
 /// <c>marked</c> -- an author's marking never travels in this track; labels join from the supervision
 /// plan by vehicle id (D6.18) -- and then <c>sumo_id</c>, <c>entity_id</c> (the SUMO id, D6.13),
-/// <c>frame</c>, <c>render_state</c>, <c>render_reason</c>, <c>actor_id</c>, <c>in_window</c> and
-/// <c>sun_elevation_deg</c>. The uid is the one a capture sidecar gives the same vehicle,
-/// <c>CARLA-TRUTH-SUMO-&lt;sumo_id&gt;</c>. <c>render_state</c> is <c>rendered</c> where a body drew the
+/// <c>frame</c>, <c>render_state</c>, <c>render_reason</c>, <c>actor_id</c>, <c>in_window</c>, and the
+/// sun in the order a capture's <c>_solar</c> block writes it: <c>sun_elevation_deg</c>, the geometric
+/// elevation the world reported on the frame's tick; <c>sun_corrected_elevation_deg</c>, the
+/// refraction-corrected one, where the world's reading carries it; <c>illumination_band</c>, cut from the
+/// corrected one by the bands' table, or from the geometric one where the reading carries no other; and
+/// <c>illumination_band_elevation</c>, naming which. The uid is the one a capture sidecar gives the same
+/// vehicle, <c>CARLA-TRUTH-SUMO-&lt;sumo_id&gt;</c>. <c>render_state</c> is <c>rendered</c> where a body drew the
 /// vehicle on the frame, with its <c>actor_id</c>, and <c>simulated_only</c> where none did, with the
 /// reason, the first of these that holds:</para>
 /// <list type="table">
@@ -72,7 +77,7 @@ namespace CarlaNet.CoSim;
 public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
 {
     /// <summary>The format of the track and its summary, written in the summary.</summary>
-    public const int FormatVersion = 1;
+    public const int FormatVersion = 2;
 
     /// <summary>A body drew the vehicle on the frame.</summary>
     public const string RenderedState = "rendered";
@@ -89,6 +94,12 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
     private const string NoGround = "no_ground";
     private const string NotDrawn = "not_drawn";
 
+    /// <summary>
+    /// A sun elevation to a millionth of a degree, the solar block's precision, so a band read back from
+    /// the written elevation is the band written beside it everywhere but within that of an edge.
+    /// </summary>
+    private const string ElevationFormat = "0.######";
+
     private static readonly string[] ColumnNames =
     [
         "time_utc", "sim_time_s", "uid", "callsign", "cot_type", "how",
@@ -97,7 +108,7 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
         "base_type", "type_id", "special_type", "length_m", "width_m", "height_m", "color",
         "role_name", "edge", "lane", "sumo_x", "sumo_y", "carla_x", "carla_y",
         "sumo_id", "entity_id", "frame", "render_state", "render_reason", "actor_id", "in_window",
-        "sun_elevation_deg",
+        "sun_elevation_deg", "sun_corrected_elevation_deg", "illumination_band", "illumination_band_elevation",
     ];
 
     private readonly FileStream _file;
@@ -416,17 +427,19 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
             }
         }
 
-        string timeUtc = _epoch is { } epoch ? Iso(epoch.CivilInstantAt(sample.FrameSeconds)) : string.Empty;
-        string simTime = F(sample.FrameSeconds, "0.###");
-        string frameNumber = frame.Frame.ToString(CultureInfo.InvariantCulture);
-        string sun = frame.SunElevationDegrees is { } elevation ? F(elevation, "0.###") : string.Empty;
+        var instant = new Instant(
+            _epoch is { } epoch ? Iso(epoch.CivilInstantAt(sample.FrameSeconds)) : string.Empty,
+            F(sample.FrameSeconds, "0.###"),
+            frame.Frame.ToString(CultureInfo.InvariantCulture),
+            frame.RenderSet is not null,
+            Sun.Of(frame));
 
         // In the order of their ids, so two runs of one seed write their rows alike: a frame's vehicles
         // arrive in a hash table's order.
         sample.Vehicles.Sort(static (left, right) => string.CompareOrdinal(left.Id, right.Id));
         foreach (CoSimVehicleFrame vehicle in sample.Vehicles)
         {
-            WriteVehicle(vehicle, next, frame.RenderSet is not null, timeUtc, simTime, frameNumber, sun);
+            WriteVehicle(vehicle, next, instant);
         }
 
         Samples++;
@@ -434,8 +447,7 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
         LastSampleSeconds = sample.FrameSeconds;
     }
 
-    private void WriteVehicle(in CoSimVehicleFrame vehicle, Sample? next, bool drawsAWorld, string timeUtc,
-                              string simTime, string frameNumber, string sun)
+    private void WriteVehicle(in CoSimVehicleFrame vehicle, Sample? next, Instant instant)
     {
         WorldTruthVehicleType type = _types[vehicle.TypeId];
         double course = ((vehicle.HeadingDegrees % 360.0) + 360.0) % 360.0;
@@ -446,12 +458,13 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
         // converted at the ground's height where it is known.
         GeoLocation where = Geodesy.CarlaLocalToGeodetic(
             _origin, vehicle.X, -vehicle.Y, bareEarth is { } ground ? ground - _origin.Altitude : 0.0);
-        (string state, string reason, string actor) = RenderStateOf(vehicle, type, bareEarth, next, drawsAWorld);
+        (string state, string reason, string actor) = RenderStateOf(vehicle, type, bareEarth, next,
+                                                                    instant.DrawsAWorld);
         int flowEnd = vehicle.Id.LastIndexOf('.');
 
         _row.Clear();
-        Field(timeUtc, first: true);
-        Field(simTime);
+        Field(instant.TimeUtc, first: true);
+        Field(instant.SimTime);
         Field("CARLA-TRUTH-SUMO-" + vehicle.Id);
         Field(type.BaseType + "-" + vehicle.Id);
         Field("a-n-G-E-V");
@@ -484,12 +497,15 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
         Field(F(-vehicle.Y, "0.00"));
         Field(vehicle.Id);
         Field(vehicle.Id);
-        Field(frameNumber);
+        Field(instant.Frame);
         Field(state);
         Field(reason);
         Field(actor);
         Field("1");
-        Field(sun);
+        Field(instant.Sun.Elevation);
+        Field(instant.Sun.CorrectedElevation);
+        Field(instant.Sun.Band);
+        Field(instant.Sun.BandElevation);
         WriteRow();
         Rows++;
     }
@@ -645,6 +661,39 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
         (value == 0.0 ? 0.0 : value).ToString(format, CultureInfo.InvariantCulture);
 
     private static string Seconds(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+
+    /// <summary>What every row of one sample shares: its two clocks, its frame and its sun.</summary>
+    private readonly record struct Instant(string TimeUtc, string SimTime, string Frame, bool DrawsAWorld, Sun Sun);
+
+    /// <summary>
+    /// The sun the world reported on a frame's tick, as the track writes it: both elevations, and the
+    /// band with the elevation it was cut from, each empty where the frame carries none.
+    /// </summary>
+    private readonly record struct Sun(string Elevation, string CorrectedElevation, string Band, string BandElevation)
+    {
+        /// <summary>
+        /// The frame's sun, its band cut by the rule every record that writes a band beside a reported sun
+        /// follows (<see cref="IlluminationBands.TryOfReported"/>): from the refraction-corrected
+        /// elevation, from the geometric one only where the world's reading carries no other, and none for
+        /// a sun the engine could not compute.
+        /// </summary>
+        public static Sun Of(RenderedFrameRecord frame)
+        {
+            if (frame.SunElevationDegrees is not { } geometric)
+            {
+                return new Sun(string.Empty, string.Empty, string.Empty, string.Empty);
+            }
+
+            string elevation = F(geometric, ElevationFormat);
+            string corrected = frame.SunCorrectedElevationDegrees is { } refracted
+                ? F(refracted, ElevationFormat)
+                : string.Empty;
+            return IlluminationBands.TryOfReported(geometric, frame.SunCorrectedElevationDegrees,
+                                                   out IlluminationBand band, out SolarElevationKind cutFrom)
+                ? new Sun(elevation, corrected, IlluminationBands.Name(band), SolarElevationKinds.Name(cutFrom))
+                : new Sun(elevation, corrected, string.Empty, string.Empty);
+        }
+    }
 
     /// <summary>
     /// One SUMO frame as the track keeps it until the frame that renders it: every vehicle's state, and

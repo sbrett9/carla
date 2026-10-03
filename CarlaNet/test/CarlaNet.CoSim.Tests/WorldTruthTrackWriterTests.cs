@@ -2,6 +2,8 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using CarlaNet.Recording;
+using CarlaNet.Sumo;
+using CarlaNet.Types.Illumination;
 using Xunit.Abstractions;
 
 namespace CarlaNet.CoSim.Tests;
@@ -125,10 +127,13 @@ public sealed class WorldTruthTrackWriterTests : IDisposable
             Assert.Equal(catalogue.SpecialTypes["vehicle.fuso.mitsubishi"], row["special_type"]);
             Assert.Matches(@"^\d+,\d+,\d+$", row["color"]);
 
-            // No world: nothing drawn, no sun, and with no epoch no civil instant.
-            Assert.Equal(("simulated_only", "no_world", string.Empty, "1", string.Empty, string.Empty),
+            // No world: nothing drawn, no sun and so no band, and with no epoch no civil instant.
+            Assert.Equal(("simulated_only", "no_world", string.Empty, "1", string.Empty),
                          (row["render_state"], row["render_reason"], row["actor_id"], row["in_window"],
-                          row["sun_elevation_deg"], row["time_utc"]));
+                          row["time_utc"]));
+            Assert.Equal(["", "", "", ""],
+                         (string[])[row["sun_elevation_deg"], row["sun_corrected_elevation_deg"],
+                                    row["illumination_band"], row["illumination_band_elevation"]]);
         }
 
         // A vehicle's first row is at the clock its departure was listed at, a step after SUMO's own stamp.
@@ -144,8 +149,11 @@ public sealed class WorldTruthTrackWriterTests : IDisposable
         // The summary: the rate, what the track holds, and that SUMO had nothing left.
         using JsonDocument summary = ReadSummary(track);
         JsonElement root = summary.RootElement;
-        Assert.Equal(1, root.GetProperty("world_truth_track_version").GetInt32());
+        Assert.Equal(2, root.GetProperty("world_truth_track_version").GetInt32());
         Assert.Equal("world_truth_track.csv", root.GetProperty("track").GetString());
+        Assert.Equal(WorldTruthTrackWriter.Columns,
+                     root.GetProperty("columns").EnumerateArray().Select(column => column.GetString()));
+        Assert.Contains("illumination_band", WorldTruthTrackWriter.Columns);
         Assert.Equal(StepSeconds, root.GetProperty("sumo_step_s").GetDouble());
         Assert.Equal(StepSeconds, root.GetProperty("interval_s").GetDouble());
         Assert.Equal(1, root.GetProperty("every_sumo_steps").GetInt32());
@@ -325,8 +333,16 @@ public sealed class WorldTruthTrackWriterTests : IDisposable
                          (row["render_state"], row["render_reason"], row["actor_id"]));
 
             // The sun the world reported on the frame's tick, and the frame's civil instant in UTC.
+            // Both elevations the world reported on the frame's tick, and the band the table gives the
+            // refraction-corrected one, which the bands are stated against.
             Assert.NotNull(frame.SunElevationDegrees);
-            Assert.Equal(F(frame.SunElevationDegrees!.Value, "0.###"), row["sun_elevation_deg"]);
+            Assert.NotNull(frame.SunCorrectedElevationDegrees);
+            Assert.Equal(F(frame.SunElevationDegrees!.Value, "0.######"), row["sun_elevation_deg"]);
+            Assert.Equal(F(frame.SunCorrectedElevationDegrees!.Value, "0.######"), row["sun_corrected_elevation_deg"]);
+            Assert.Equal(IlluminationBands.NameOf(frame.SunCorrectedElevationDegrees.Value), row["illumination_band"]);
+            Assert.Equal(IlluminationBands.NameOf(Elevation(row, "sun_corrected_elevation_deg")),
+                         row["illumination_band"]);
+            Assert.Equal("refraction_corrected", row["illumination_band_elevation"]);
             Assert.Equal(SolarLeaseTests.PortEpoch().CivilInstantAt(frame.SimulatedTimeSeconds).UtcDateTime
                              .ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture) + "Z",
                          row["time_utc"]);
@@ -360,6 +376,100 @@ public sealed class WorldTruthTrackWriterTests : IDisposable
         // The body the first vehicle gave back drew the second.
         Assert.Equal(rows.First(row => row["sumo_id"] == "first")["actor_id"],
                      rows.First(row => row["sumo_id"] == "second")["actor_id"]);
+    }
+
+    [RequiresSumoFact]
+    public void AWorldThatReportsOnlyTheGeometricElevationHasItsBandCutFromThatAndSaysSo()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        string track = Path.Combine(_directory, "track.csv");
+        var watcher = new Watcher();
+        var options = new SumoDriveSessionOptions(
+            CoSimFixtures.SuccessionScenario, world.PackagePath, CoSimFixtures.VehicleCatalogue,
+            "test://" + Guid.NewGuid().ToString("n"))
+        {
+            World = new RecordedWorld { Loaded = world.AsLoaded(), ObserverCarriesCorrectedElevation = false },
+            Epoch = SolarLeaseTests.PortEpoch(),
+            Illumination = IlluminationPolicy.FreezeAtWindowStart(),
+            WorldTruthTrackPath = track,
+        };
+        options.StepObservers.Add(watcher);
+
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            for (int step = 0; step < 100 && session.Advance(); step++)
+            {
+            }
+        }
+
+        List<Row> rows = ReadRows(File.ReadAllText(track), out _);
+        Assert.NotEmpty(rows);
+        Assert.All(watcher.Frames, frame => Assert.Null(frame.SunCorrectedElevationDegrees));
+        Assert.All(rows, row =>
+        {
+            Assert.Equal(string.Empty, row["sun_corrected_elevation_deg"]);
+            Assert.Equal(IlluminationBands.NameOf(Elevation(row, "sun_elevation_deg")), row["illumination_band"]);
+            Assert.Equal("geometric", row["illumination_band_elevation"]);
+        });
+    }
+
+    [Fact]
+    public void TheBandIsTheTableSForTheElevationItIsCutFromEdgesIncluded()
+    {
+        // Driven by hand with the records the session would tell it, so the sun can stand on each edge:
+        // a session's own sun is audited against its declaration and stands where the epoch puts it.
+        string track = Path.Combine(_directory, "track.csv");
+        CoSimClock clock = CoSimClock.ForSession(1.0, 0.05, 2.0, true);
+        (double Geometric, double? Corrected, string Band, string CutFrom)[] suns =
+        [
+            (5.5, 6.0, "golden", "refraction_corrected"),
+            (5.5, 6.000001, "day", "refraction_corrected"),
+            (-0.4, 0.0, "civil_twilight", "refraction_corrected"),
+            (-0.4, 0.000001, "golden", "refraction_corrected"),
+            (-6.3, -6.0, "nautical_twilight", "refraction_corrected"),
+            (-18.2, -18.0, "night", "refraction_corrected"),
+            (-18.2, -17.999999, "astronomical_twilight", "refraction_corrected"),
+            (6.0, null, "golden", "geometric"),
+            (-180.0, -180.0, string.Empty, string.Empty),
+        ];
+
+        using (WorldTruthTrackWriter writer = WorldTruthTrackWriter.Open(
+                   track, 1, clock,
+                   _ => new WorldTruthVehicleType("passenger", "car", 4.6, 1.8, 1.5, "255,255,0", string.Empty, null),
+                   SyntheticWorld.Build(_ => 0.0), (0.0, 0.0), null))
+        {
+            writer.OnSumoStep(OneVehicleAt(0.0));
+            writer.OnSumoStep(OneVehicleAt(1.0));
+            for (int index = 0; index < suns.Length; index++)
+            {
+                writer.OnFrameRendered(new RenderedFrameRecord(
+                    (ulong)(index * clock.WorldTicksPerSumoStep) + 1, index * clock.WorldTicksPerSumoStep, index,
+                    true, true, null, null)
+                {
+                    SunElevationDegrees = suns[index].Geometric,
+                    SunCorrectedElevationDegrees = suns[index].Corrected,
+                });
+                writer.OnSumoStep(OneVehicleAt(index + 2.0));
+            }
+        }
+
+        List<Row> rows = ReadRows(File.ReadAllText(track), out _);
+        Assert.Equal(suns.Length, rows.Count);
+        for (int index = 0; index < suns.Length; index++)
+        {
+            Row row = rows[index];
+            (double geometric, double? corrected, string band, string cutFrom) = suns[index];
+            Assert.Equal((F(geometric, "0.######"), corrected is { } refracted ? F(refracted, "0.######") : string.Empty),
+                         (row["sun_elevation_deg"], row["sun_corrected_elevation_deg"]));
+            Assert.Equal((band, cutFrom), (row["illumination_band"], row["illumination_band_elevation"]));
+            if (band.Length > 0)
+            {
+                // The table's band for the elevation the row says it was cut from, read back as written.
+                Assert.Equal(IlluminationBands.NameOf(Elevation(
+                                 row, cutFrom == "geometric" ? "sun_elevation_deg" : "sun_corrected_elevation_deg")),
+                             row["illumination_band"]);
+            }
+        }
     }
 
     [RequiresSumoFact]
@@ -539,6 +649,21 @@ public sealed class WorldTruthTrackWriterTests : IDisposable
         return [.. fields];
     }
 
+    /// <summary>One SUMO frame with one vehicle standing at the origin, as the session would tell it.</summary>
+    private static SumoStepRecord OneVehicleAt(double frameSeconds)
+    {
+        var standing = new CoSimVehicleFrame("parked", 0.0, 0.0, 90.0, 0.0, "ahead", "ahead_0", 10.0, "car",
+                                             default);
+        return new SumoStepRecord(
+            0, frameSeconds, false, SumoStepEvents.None(frameSeconds), [], [], [],
+            new Dictionary<string, CoSimVehicleFrame> { [standing.Id] = standing }, [standing.Id],
+            new AdmissionPass(0, frameSeconds, 1, 0, 0, 1), null!);
+    }
+
+    /// <summary>An elevation column of a row, read back as written.</summary>
+    private static double Elevation(Row row, string column) =>
+        double.Parse(row[column], CultureInfo.InvariantCulture);
+
     private static string Seconds(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 
     private static string F(double value, string format) =>
@@ -564,7 +689,7 @@ public sealed class WorldTruthTrackWriterTests : IDisposable
 
     /// <summary>A rendered frame as an observer beside the track was told of it.</summary>
     private sealed record FrameSeen(string Frame, double SimulatedTimeSeconds, Dictionary<string, uint> Bodies,
-                                    double? SunElevationDegrees);
+                                    double? SunElevationDegrees, double? SunCorrectedElevationDegrees);
 
     /// <summary>
     /// An observer registered beside the track, keeping what the session told it: each SUMO frame's
@@ -599,7 +724,8 @@ public sealed class WorldTruthTrackWriterTests : IDisposable
                 frame.SimulatedTimeSeconds,
                 frame.RenderSet?.ByActor.Values.ToDictionary(vehicle => vehicle.SumoId, vehicle => vehicle.ActorId)
                     ?? [],
-                frame.SunElevationDegrees));
+                frame.SunElevationDegrees,
+                frame.SunCorrectedElevationDegrees));
 
         public void OnSessionEnded(SessionEndRecord end)
         {
