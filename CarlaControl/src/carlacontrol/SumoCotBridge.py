@@ -33,7 +33,9 @@ author called them. The XML and CSV are the truth sidecar and are written from t
 datagram feed is a moving-map display and is given what a display needs, which leaves out the fields
 named in `AUTHORED_TRUTH_FIELDS`. A field means one thing in every sink: `special_type` is the
 vehicle's kind as the contract spells it and never the author's marking, which the sidecar carries
-in `marked`, a field of its own and not of the contract (`06_Truth_And_Annotation.md` D6.18). A
+in `marked`, a field of its own and not of the contract (`06_Truth_And_Annotation.md` D6.18). SUMO
+reports no kind, so the kind is the measured vehicle catalogue's for the CARLA blueprint a vehicle's
+type names, where the bridge is given the catalogue, exactly as the capture path's truth takes it. A
 compiled scenario marks nothing here; its labels are its `*.supervision.json`, joined to the
 sidecar by vehicle id.
 """
@@ -54,7 +56,12 @@ from pathlib import Path
 
 from carlacontrol.CotUdpEmitter import CotUdpEmitter
 from carlacontrol.SumoInstallation import SumoInstallation
-from carlacontrol.VehicleCatalogue import CLASS_PARAM
+from carlacontrol.VehicleCatalogue import (
+    BLUEPRINT_PARAM,
+    CATALOGUE_DIGEST_PARAM,
+    CLASS_PARAM,
+    VehicleCatalogue,
+)
 
 # SUMO's own vehicle classes carry enough to fill the contract's base_type without a per-scenario
 # lookup table. Anything unlisted is reported as it comes.
@@ -86,7 +93,9 @@ CSV_COLUMNS = [
 #   `marked` says that this vehicle is one the author planted, which is the whole question a
 #       behavioural model is being given. It is the sidecar's own field and not the contract's;
 #   `special_type` is the contract's vehicle kind -- emergency, taxi, electric -- which SUMO does
-#       not report, so a record carries it empty whatever the vehicle is, planted or not;
+#       not report. A record carries the kind the vehicle catalogue curates for the blueprint the
+#       vehicle's type names, where the bridge is given a catalogue, and an empty one otherwise:
+#       the same for a planted vehicle as for any other of its blueprint;
 #   `type_id` is the SUMO vehicle-type id and `role_name` the flow the vehicle was generated from,
 #       which are the author's own names for their populations. A planted vehicle needs a vehicle
 #       type of its own to carry its behaviour -- a reduced speed factor, say -- so its type id is
@@ -254,15 +263,23 @@ class SumoCotBridge:
 
     def __init__(self, installation: SumoInstallation, config_path: str | Path,
                  bare_earth: BareEarthGrid | None = None, constant_hae: float = 0.0,
-                 use_gui: bool = False):
+                 use_gui: bool = False, catalogue: VehicleCatalogue | None = None):
         self.installation = installation
         self.config_path = Path(config_path)
         self.bare_earth = bare_earth
         self.constant_hae = constant_hae
         self.use_gui = use_gui
+        # The measured vehicle catalogue each vehicle's kind is read from, by the blueprint its type
+        # names. None reports every vehicle's kind empty, which is all SUMO alone can say.
+        self.catalogue = catalogue
         self.off_grid_heights = 0
         # The population each vehicle type belongs to, read once per type per run.
         self._population_of: dict[str, str] = {}
+        # The kind each vehicle type's blueprint has, read once per type per run.
+        self._special_type_of: dict[str, str] = {}
+        # Catalogue digests vehicle types were written from that are not the catalogue's own,
+        # each warned about once.
+        self._foreign_catalogues: set[str] = set()
         self.logger = logging.getLogger(__name__)
 
     def run(self, settings: CotOutputSettings, end_time: float | None = None,
@@ -280,6 +297,8 @@ class SumoCotBridge:
         report = RunReport()
         self.off_grid_heights = 0
         self._population_of = {}
+        self._special_type_of = {}
+        self._foreign_catalogues = set()
         epoch = settings.epoch or datetime.now(UTC)
         report.epoch = epoch
 
@@ -429,9 +448,10 @@ class SumoCotBridge:
             "vz": 0.0,
             "base_type": BASE_TYPE_BY_VEHICLE_CLASS.get(vehicle_class, vehicle_class),
             "type_id": type_id,
-            # The contract's vehicle kind, which SUMO does not report: empty for every vehicle.
-            # Whether the author planted this one is `marked`, never this (06 D6.18).
-            "special_type": "",
+            # The contract's vehicle kind, which SUMO does not report: the catalogue's for the
+            # blueprint the type names. Whether the author planted this one is `marked`, never
+            # this (06 D6.18).
+            "special_type": self._special_type(traci, type_id),
             "marked": marked,
             "length_m": traci.vehicle.getLength(vehicle_id),
             "width_m": traci.vehicle.getWidth(vehicle_id),
@@ -445,6 +465,45 @@ class SumoCotBridge:
             "x": x,
             "y": y,
         }
+
+    def _special_type(self, traci, type_id: str) -> str:
+        """The vehicle's kind: the catalogue's for the blueprint its type names, or empty.
+
+        SUMO reports no kind. A compiled scenario's vType names the CARLA blueprint it was measured
+        from in its `carla:blueprint` parameter, and the catalogue curates a kind for every blueprint
+        its classes draw, so a bridge given the catalogue reports the kind the capture path reports
+        for the same body (`06_Truth_And_Annotation.md` D6.18). A type that names no blueprint, one
+        that names a blueprint the catalogue does not curate, and every type on a bridge given no
+        catalogue have no kind to report and are written empty. Whether the author planted the
+        vehicle never enters into it. A type's parameters do not change during a run, so each type
+        is asked once.
+        """
+        if self.catalogue is None:
+            return ""
+        kind = self._special_type_of.get(type_id)
+        if kind is None:
+            blueprint = traci.vehicletype.getParameter(type_id, BLUEPRINT_PARAM)
+            kind = (self.catalogue.special_type_of(blueprint) or "") if blueprint else ""
+            self._special_type_of[type_id] = kind
+            self._check_catalogue(traci, type_id)
+        return kind
+
+    def _check_catalogue(self, traci, type_id: str) -> None:
+        """Say so, once per catalogue, when a type was written from a catalogue other than this one.
+
+        A compiled type records the digest of the catalogue it was written from. Read against
+        another, a blueprint whose class has changed between the two is reported with this
+        catalogue's kind, and nothing in the record would show it.
+        """
+        written_from = traci.vehicletype.getParameter(type_id, CATALOGUE_DIGEST_PARAM)
+        if (not written_from or written_from == self.catalogue.catalogue_digest
+                or written_from in self._foreign_catalogues):
+            return
+        self._foreign_catalogues.add(written_from)
+        self.logger.warning(
+            "vehicle type %r was written from catalogue %s, and kinds are read from catalogue %s "
+            "(%s): a blueprint whose class differs between the two is reported with the latter's",
+            type_id, written_from, self.catalogue.catalogue_digest, self.catalogue.catalogue_id)
 
     def _affiliation(self, traci, type_id: str, settings: CotOutputSettings) -> str:
         """The affiliation the run's display convention gives a vehicle of this type.

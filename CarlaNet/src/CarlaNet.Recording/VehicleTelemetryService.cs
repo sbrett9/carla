@@ -20,6 +20,12 @@ namespace CarlaNet.Recording;
 /// (<see cref="ObservedRenderSet"/>), so the truth here -- the live pull of any process as much as a
 /// recorder beside the session -- leaves out a body parked on the frame it describes and names a lent
 /// one by its SUMO vehicle. An actor no session named is reported as it always was.
+///
+/// `special_type` is the vehicle catalogue's kind for the vehicle's blueprint wherever this
+/// connection adopted a catalogue that curates one (<see cref="CarlaClient.CatalogueSpecialTypes"/>),
+/// which a SUMO drive session does when it starts: an empty kind where the blueprint's class curates
+/// none, whatever the blueprint declares. A blueprint no adopted catalogue curates keeps the kind it
+/// declares itself (doc 06 D6.18).
 /// </summary>
 public sealed class VehicleTelemetryService
 {
@@ -100,6 +106,9 @@ public sealed class VehicleTelemetryService
         if (drape) EnsureDrapeGrids();
         var dtmSamples = _client.LastGroundDtmSamples;
 
+        // Read once, so every record of this frame takes its kind from the same table.
+        IReadOnlyDictionary<string, string> curatedKinds = _client.CatalogueSpecialTypes;
+
         var outp = new List<VehicleTelemetry>(ids.Count);
         foreach (var id in ids)
         {
@@ -145,10 +154,15 @@ public sealed class VehicleTelemetryService
             string baseType = Attr(attrs, "base_type", "");
             if (baseType.Length == 0)
                 baseType = Attr(attrs, "number_of_wheels", "4") == "2" ? "motorcycle" : "car";
+            // The kind the catalogue curates for this blueprint, an empty one included, and only for
+            // a blueprint it does not curate the kind the blueprint declares.
+            string specialType = curatedKinds.TryGetValue(typeId, out string? curated)
+                ? curated
+                : Attr(attrs, "special_type", "");
             var ext = meta.BoundingBox.Extent;
 
             outp.Add(new VehicleTelemetry(
-                id, typeId, baseType, Attr(attrs, "special_type", ""),
+                id, typeId, baseType, specialType,
                 Attr(attrs, "color", ""), Attr(attrs, "role_name", ""),
                 geo.Latitude, geo.Longitude, hae, haeDtm,
                 speed, course, vx, vy, vz,

@@ -35,6 +35,10 @@ BLUEPRINT_PARAM = "carla:blueprint"
 # several bodies, one type each, so this is what tells a reader which population a vehicle belongs to.
 CLASS_PARAM = "carla:class_id"
 
+# The `<param>` on the same `<vType>` recording the digest of the catalogue the type was written from,
+# so a reader holding a catalogue can tell whether it is that one.
+CATALOGUE_DIGEST_PARAM = "carla:catalogue_digest"
+
 # Schema shape this reader implements. A catalogue declaring anything else is refused rather than
 # read on a best-effort basis, because a field that moved silently is worse than one that is absent.
 SUPPORTED_CATALOGUE_VERSION = 1
@@ -174,6 +178,11 @@ class VehicleCatalogue:
                 body_width_m=(float(entry["body_width_m"]) if "body_width_m" in entry else None),
             )
         self.classes: dict[str, dict] = {c["class_id"]: c for c in document.get("classes", [])}
+        # What kind of vehicle each blueprint is: the kind its class curates, or the empty kind
+        # where the class curates none.
+        self._special_types: dict[str, str] = {
+            member["blueprint_id"]: entry.get("cot_special_type", "")
+            for entry in self.classes.values() for member in entry.get("members", [])}
 
     @classmethod
     def load(cls, path: str | Path) -> VehicleCatalogue:
@@ -201,6 +210,17 @@ class VehicleCatalogue:
     def blueprint_ids(self) -> list[str]:
         """Every blueprint the catalogue measured successfully, in document order."""
         return list(self._extents)
+
+    def special_type_of(self, blueprint_id: str) -> str | None:
+        """The truth record's `special_type` for a blueprint, or None where no class draws it.
+
+        The kind is the curated `cot_special_type` of the class whose members include the blueprint,
+        and the empty string where that class curates none. Truth takes a vehicle's kind from here
+        rather than from what its blueprint declares (`06_Truth_And_Annotation.md` D6.18). None is
+        the catalogue saying nothing about the blueprint, and a caller that holds the blueprint's own
+        declaration keeps it.
+        """
+        return self._special_types.get(blueprint_id)
 
     def extent_of(self, blueprint_id: str) -> VehicleExtent:
         """The measured extent of one blueprint, by its CARLA definition id."""

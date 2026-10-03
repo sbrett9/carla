@@ -21,10 +21,13 @@ import pytest
 _REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 sys.path.insert(0, os.path.join(_REPO, "CarlaControl", "src"))
 
+from carlacontrol.VehicleCatalogue import VehicleCatalogue  # noqa: E402
 from carlacontrol.VehicleClassAssignment import (  # noqa: E402
     VehicleClassAssignment,
     VehicleClassOverride,
 )
+
+CATALOGUE_PATH = os.path.join(_REPO, "CarlaControl", "catalogue", "vehicles.catalogue.json")
 
 # Measured by the sweep against the shipped content: length, width, height in metres.
 MEASURED = {
@@ -113,6 +116,18 @@ def test_the_emergency_vehicles_carry_a_special_type(records):
                          "vehicle.firetruck.actors"):
         assert records[blueprint_id].special_type == "emergency"
     assert records["vehicle.taxi.ford"].special_type == "taxi"
+
+
+def test_the_published_catalogue_answers_each_blueprint_s_kind_as_the_curation_assigns_it(records):
+    """Truth reads a vehicle's kind from the published catalogue (06 D6.18), so it must be this one.
+
+    The reader answers every swept blueprint with the kind its class curates, which is the kind the
+    curation assigns the blueprint, and answers nothing for a blueprint no class draws.
+    """
+    catalogue = VehicleCatalogue.load(CATALOGUE_PATH)
+    assert {blueprint_id: catalogue.special_type_of(blueprint_id) for blueprint_id in MEASURED} == \
+        {blueprint_id: record.special_type for blueprint_id, record in records.items()}
+    assert catalogue.special_type_of("vehicle.bmw.isetta") is None
 
 
 def test_a_sport_utility_is_curated_back_out_of_the_van_band(records):

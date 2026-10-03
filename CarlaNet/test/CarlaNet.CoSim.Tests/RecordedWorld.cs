@@ -11,7 +11,7 @@ namespace CarlaNet.CoSim.Tests;
 /// A CARLA world that records what was asked of it and answers as a server would.
 /// </summary>
 /// <remarks>
-/// <para>Everything the bridge does to a world is eighteen operations wide, so a world that keeps a
+/// <para>Everything the bridge does to a world is nineteen operations wide, so a world that keeps a
 /// dictionary of actors, a list of batches and a simulated sun exercises the whole driving path --
 /// the check of which world is loaded, the pool, the batch, the render set named to the server, the
 /// draw distance set on the bodies, the read-back, the tick, the settings restoration, the sun's
@@ -245,6 +245,19 @@ internal class RecordedWorld : ICarlaWorld
         Connected(nameof(AdoptBareEarthGrids));
         Adoptions.Add((packagePath, Descriptions));
         return true;
+    }
+
+    /// <summary>
+    /// The vehicle kinds the world's truth telemetry was given, in order, each as a copy of the table
+    /// handed over, with the number of descriptions the world had given when it was handed over.
+    /// </summary>
+    public List<(IReadOnlyDictionary<string, string> SpecialTypes, int AfterDescriptions)> SpecialTypeAdoptions { get; } = [];
+
+    /// <inheritdoc/>
+    public void AdoptCatalogueSpecialTypes(IReadOnlyDictionary<string, string> specialTypes)
+    {
+        Connected(nameof(AdoptCatalogueSpecialTypes));
+        SpecialTypeAdoptions.Add((new Dictionary<string, string>(specialTypes), Descriptions));
     }
 
     /// <inheritdoc/>

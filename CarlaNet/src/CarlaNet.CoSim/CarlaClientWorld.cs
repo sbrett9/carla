@@ -118,6 +118,10 @@ public sealed class CarlaClientWorld : ICarlaWorld
     public bool AdoptBareEarthGrids(string packagePath) => _client.AdoptBareEarthReference(packagePath);
 
     /// <inheritdoc/>
+    public void AdoptCatalogueSpecialTypes(IReadOnlyDictionary<string, string> specialTypes) =>
+        _client.AdoptCatalogueSpecialTypes(specialTypes);
+
+    /// <inheritdoc/>
     public EpisodeSettings ReadSettings() =>
         _client.GetEpisodeSettingsAsync().GetAwaiter().GetResult();
 

@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 22 | 2026-10-02. `C1`: the truth record's `special_type` is the catalogue's `cot_special_type`, as the owner ruled ([`06`](06_Truth_And_Annotation.md) D6.18): a vehicle whose body's blueprint a class draws carries that class's kind, empty where the class curates none, whatever the blueprint declares, and a blueprint no class draws keeps its own. A drive session hands its catalogue's table to the client it drives through, so the capture sidecar and the live pull of that process report it; the standalone producer writes it when given the catalogue (§3.4.2, §3.4.3) |
 | 21 | 2026-10-02. `C2`: two optional performance controls, off by default and recommended for no scenario (§4.2, D4.44, D4.45). A limit on which vehicles get a body -- a circle, the cameras' footprints or a capacity, chosen by the run -- adds `in_limit` to the admission predicate, two eviction rows (E5, E6) under new numbers and the reason `outside_limit`; a vehicle outside it is simulated, has no body and no imagery-side truth, and is counted. A draw distance changes no admission: every vehicle keeps its body and its truth, and each camera's sidecar marks the vehicles beyond it, which are not observed by that camera (§4.5). The participant guarantee holds with no limit, the default (§4.4). E2, E4, V2.3 and V2.4 stay withdrawn |
 | 20 | 2026-10-02. `C1`: the catalogue carries each body's width without its mirrors (`body_width_m`, §3.2b), measured from the mesh in the editor, beside the box's full extent; SUMO is given the body width (D4.3). `C3`: Bahonar is recompiled with 3 s lane changes and runs as before (§5.2a). `C7`: a body's heading is its own path's, its truth velocity the path's, and SUMO's angle is recorded beside them (§9.1, D4.13) |
 | 19 | 2026-10-01. `C3`: a lane change takes 3 s for every vehicle — the compiler writes `lanechange.duration` 3 into every configuration and the lock records it (§5.2a, D4.42). Measured on the three shipped scenarios; Bahonar deadlocks behind a body wider than its lanes and is not recompiled with it |
@@ -804,7 +805,7 @@ rule of §1 to be well defined.
 | `height_m` | number | m | yes if measured | `2 × bounding_box.extent.z` |
 | `bbox_centre_m` | `[x,y,z]` | m | yes if measured | `bounding_box.location`, actor-local. Needed for the bumper-shift of `C7` and for any projected box |
 | `declared_base_type` | string | — | yes | The blueprint's own `base_type` attribute, **verbatim and untrusted** — a hand-edited value, measured wrong or absent for 7 of 17 when first swept (§3.1) |
-| `declared_special_type` | string | — | yes | The blueprint's own `special_type` attribute, verbatim. Measured empty for all 17 when first swept |
+| `declared_special_type` | string | — | yes | The blueprint's own `special_type` attribute, verbatim. Measured empty for all 17 when first swept. Carried as data: truth gives a blueprint a class draws its class's `cot_special_type` instead (§3.4.3) |
 | `number_of_wheels` | integer | — | yes | Verbatim. `3` for `vehicle.lincoln.mkz` when first swept, which was wrong; `6` for `vehicle.carlamotors.european_hgv`. Carried as data, never used to classify |
 | `generation` | integer | — | yes | Verbatim |
 | `settable_attributes` | array of object | — | yes | `{ id, type, restrict_to_recommended, recommended_values[] }` for every *variation* the definition declares |
@@ -825,7 +826,7 @@ become SUMO `<vType>`s.
 | `description` | string | — | yes | One human sentence. This is what an assistant author reads to choose |
 | `sumo_vclass` | string | — | yes | A SUMO vehicle class, e.g. `passenger`, `truck`, `bus`, `delivery`, `taxi`, `authority`, `army`. **Curated, never taken from `declared_base_type`** |
 | `cot_base_type` | string | — | yes | The truth record's `base_type` for members of this class — `car`, `truck`, `van`, `bus`, `motorcycle`, `bicycle`. Curated, and it **overrides** the blueprint's declared `base_type` in truth |
-| `cot_special_type` | string | — | no | The truth record's `special_type`, e.g. `emergency`, `taxi`. Curated, because the content build declares none |
+| `cot_special_type` | string | — | no | The truth record's `special_type` for members of this class, e.g. `emergency`, `taxi`; absent is the empty kind. Curated, because the content build declared none when first swept, and **truth takes it from here** by the owner's ruling ([`06`](06_Truth_And_Annotation.md) D6.18): a vehicle of a member blueprint carries this kind, an empty one included, whatever the blueprint declares, in the capture sidecar and the live pull of the process running the drive (`VehicleTelemetryService.cs:159-161`) and in the standalone producer's XML and CSV (`SumoCotBridge.py:469-489`) |
 | `members` | array of object | — | yes | `{ blueprint_id, weight }`; `weight` is a positive number, normalised across the class |
 | `max_speed_mps` | number | m/s | yes | SUMO `maxSpeed` |
 | `accel_mps2` | number | m/s² | yes | SUMO `accel`. Explicit, never defaulted (§3.6) |

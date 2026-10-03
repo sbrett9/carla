@@ -24,10 +24,17 @@ as a run display convention, and deletes the half that gave every anomaly type `
   a found file behaves as a named one, so it wins over a labels file's affiliations and is refused
   when it does not read; a named file wins over a found one; with neither, the run says so.
 * **A planted vehicle is marked in the files and nowhere else** (06 D6.18, 08 D8.23). Its
-  `special_type` is its kind, empty as every SUMO vehicle's is, in every sink. The XML and CSV
-  carry `marked`; the datagrams carry neither field, and draw a planted vehicle apart only when
-  `--marked-affiliation` asks, which never reaches a file. A compiled scenario marks none, and its
-  planted vehicles are the supervision plan's, found in the sidecar by vehicle id.
+  `special_type` is its kind, in every sink: empty on a bridge given no catalogue, as every SUMO
+  vehicle's then is. The XML and CSV carry `marked`; the datagrams carry neither field, and draw a
+  planted vehicle apart only when `--marked-affiliation` asks, which never reaches a file. A
+  compiled scenario marks none, and its planted vehicles are the supervision plan's, found in the
+  sidecar by vehicle id.
+* **A vehicle's kind is the catalogue's for the blueprint its type names** (06 D6.18). A bridge
+  given the catalogue writes, into the XML and CSV, the kind the catalogue curates for the blueprint
+  a compiled type names in `carla:blueprint`, and an empty one for a type that names none or names a
+  blueprint the catalogue does not curate; each type is asked once. Over the compiled Bahonar
+  traffic no kind is carried by the planted vehicles alone. A type written from another catalogue is
+  warned about once. `sumo_cot_telemetry.py` reads the catalogue it is given, or this repository's.
 """
 from __future__ import annotations
 
@@ -55,7 +62,12 @@ from carlacontrol.ScenarioVehicleMix import (  # noqa: E402  (needs the path abo
     VehicleMixSpec,
 )
 from carlacontrol.SumoCotBridge import CotOutputSettings, SumoCotBridge  # noqa: E402
-from carlacontrol.VehicleCatalogue import CLASS_PARAM, VehicleCatalogue  # noqa: E402
+from carlacontrol.VehicleCatalogue import (  # noqa: E402
+    BLUEPRINT_PARAM,
+    CATALOGUE_DIGEST_PARAM,
+    CLASS_PARAM,
+    VehicleCatalogue,
+)
 
 SCENARIO = "Shahid_Bahonar_Port_PatternOfLife"
 SPECIFICATION = _REPO / "Import" / f"{SCENARIO}.scenario.json"
@@ -277,13 +289,14 @@ class _Listener:
 
 def _run(tmp_path: Path, roster, table, affiliation_by_type: dict[str, str],
          source: str = "", affiliation: str = "n", udp: bool = False,
-         marked_ids: frozenset[str] = frozenset(), marked_affiliation: str | None = None):
+         marked_ids: frozenset[str] = frozenset(), marked_affiliation: str | None = None,
+         catalogue: VehicleCatalogue | None = None):
     """Drive the bridge over the roster; return the report, the rows, the XML and the datagrams."""
     playback = _Playback(roster, table)
     listener = _Listener() if udp else None
     csv_path, xml_path = tmp_path / "corpus.csv", tmp_path / "corpus.xml"
     report = SumoCotBridge(_Installation(playback), tmp_path / f"{SCENARIO}.sumocfg",
-                           constant_hae=12.0).run(CotOutputSettings(
+                           constant_hae=12.0, catalogue=catalogue).run(CotOutputSettings(
         csv_path=csv_path, xml_path=xml_path, uid_prefix=UID_PREFIX, marked_vehicle="",
         marked_ids=marked_ids, marked_affiliation=marked_affiliation,
         affiliation=affiliation, affiliation_by_type=affiliation_by_type,
@@ -700,3 +713,107 @@ def test_a_compiled_scenario_marks_nothing_and_its_plan_names_the_planted_by_id(
                  for participant in instance.get("participants", [])}
     assert annotated == _planted(specification)
     assert annotated <= {row["uid"].removeprefix(f"{UID_PREFIX}-") for row in rows}
+
+
+# ---- the kind, from the catalogue ----------------------------------------------------------------
+
+def _kinds(records: list[dict]) -> dict[str, str]:
+    """Each vehicle's `special_type`, by its id."""
+    return {record["uid"].removeprefix(f"{UID_PREFIX}-"): record["special_type"]
+            for record in records}
+
+
+def test_a_compiled_vehicle_s_kind_is_the_catalogue_s_for_its_blueprint(tmp_path, caplog,
+                                                                       specification, compiled):
+    """Bahonar compiled, the bridge given the catalogue: each vehicle carries its blueprint's kind.
+
+    In the XML and the CSV every vehicle's `special_type` is the kind the catalogue curates for the
+    blueprint its type names -- `taxi` for the cabs and empty for every other body Bahonar draws --
+    and no kind is carried by the planted vehicles alone. The datagrams still carry none, nothing is
+    marked, each type's blueprint is asked for once, and types written from this catalogue draw no
+    warning.
+    """
+    roster, table = compiled
+    catalogue = VehicleCatalogue.load(CATALOGUE)
+    with caplog.at_level(logging.WARNING):
+        report, rows, xml_path, datagrams, playback = _run(
+            tmp_path, roster, table, {}, udp=True, catalogue=catalogue)
+
+    blueprint_of = {type_id: entry["params"].get(BLUEPRINT_PARAM, "")
+                    for type_id, entry in table.types.items()}
+    expected = {vehicle_id: catalogue.special_type_of(blueprint_of[type_id]) or ""
+                for vehicle_id, type_id in roster}
+    assert set(expected.values()) == {"", "taxi"}
+    for name, records in {"csv": rows, "xml": _xml_records(xml_path)}.items():
+        assert len(records) == report.events, name
+        assert _kinds(records) == expected, name
+        findings = _identifying(_planted(specification), records, "special_type")
+        assert findings == [], f"{name}: {CorpusLeakValidator.describe(findings)}"
+        assert _values(records, "marked") == {"0"}, name
+    assert _values(_datagram_records(tmp_path, datagrams), "special_type") == {"<absent>"}
+    assert sorted(read for read in playback.parameter_reads if read[1] == BLUEPRINT_PARAM) == \
+        sorted((type_id, BLUEPRINT_PARAM) for type_id in set(dict(roster).values()))
+    assert [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING] == []
+
+
+def test_only_a_blueprint_the_catalogue_curates_has_a_kind_and_another_catalogue_is_named(tmp_path,
+                                                                                       caplog):
+    """The catalogue decides the kind, and a type written from another catalogue is warned about.
+
+    The ambulance's type names a curated blueprint and carries `emergency`. A type naming a
+    blueprint no class draws, and a hand-written type naming none, carry the empty kind. A cab type
+    written from an older catalogue that drew the Crown as a taxi carries the kind this catalogue
+    gives the Crown, which is none; the two types from that catalogue draw one warning naming both
+    digests, and the type from this one draws none.
+    """
+    digest = VehicleCatalogue.load(CATALOGUE).catalogue_digest
+    table = _TypeTable(f"""
+        <vType id="ambulance.vehicle.ambulance.ford" vClass="emergency">
+            <param key="{BLUEPRINT_PARAM}" value="vehicle.ambulance.ford"/>
+            <param key="{CATALOGUE_DIGEST_PARAM}" value="{digest}"/></vType>
+        <vType id="cab.vehicle.taxi.ford" vClass="taxi">
+            <param key="{BLUEPRINT_PARAM}" value="vehicle.taxi.ford"/>
+            <param key="{CATALOGUE_DIGEST_PARAM}" value="0ldcatalogue"/></vType>
+        <vType id="cab.vehicle.ue4.ford.crown" vClass="taxi">
+            <param key="{BLUEPRINT_PARAM}" value="vehicle.ue4.ford.crown"/>
+            <param key="{CATALOGUE_DIGEST_PARAM}" value="0ldcatalogue"/></vType>
+        <vType id="microcar.vehicle.bmw.isetta" vClass="passenger">
+            <param key="{BLUEPRINT_PARAM}" value="vehicle.bmw.isetta"/></vType>
+        <vType id="civ_car" vClass="passenger"/>""")
+    roster = [("ambulance", "ambulance.vehicle.ambulance.ford"),
+              ("cab_a", "cab.vehicle.taxi.ford"), ("cab_b", "cab.vehicle.ue4.ford.crown"),
+              ("isetta", "microcar.vehicle.bmw.isetta"), ("saloon", "civ_car")]
+
+    with caplog.at_level(logging.WARNING):
+        _, rows, xml_path, _, _ = _run(tmp_path, roster, table, {},
+                                       catalogue=VehicleCatalogue.load(CATALOGUE))
+
+    expected = {"ambulance": "emergency", "cab_a": "taxi", "cab_b": "", "isetta": "", "saloon": ""}
+    assert _kinds(rows) == _kinds(_xml_records(xml_path)) == expected
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "0ldcatalogue" in warnings[0] and digest in warnings[0]
+
+
+def test_the_script_reads_kinds_from_the_catalogue_it_is_given_or_else_this_repository_s(tmp_path,
+                                                                                      caplog):
+    """A named catalogue, else the repository's, else none; one that does not read stops the run."""
+    script = _script()
+    with caplog.at_level(logging.INFO):
+        found = script.vehicle_catalogue(argparse.Namespace(catalogue=None))
+    assert found.catalogue_digest == VehicleCatalogue.load(CATALOGUE).catalogue_digest
+    assert f"vehicle kinds from catalogue {CATALOGUE}" in _info(caplog)
+
+    named = tmp_path / "other.catalogue.json"
+    named.write_text(json.dumps({"catalogue_version": 1, "catalogue_id": "other", "classes": []}),
+                     encoding="utf-8")
+    assert script.vehicle_catalogue(argparse.Namespace(catalogue=named)).catalogue_id == "other"
+
+    with pytest.raises(ValueError, match="cannot be read"):
+        script.vehicle_catalogue(argparse.Namespace(catalogue=tmp_path / "missing.json"))
+
+    script.DEFAULT_CATALOGUE = tmp_path / "no.catalogue.json"
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        assert script.vehicle_catalogue(argparse.Namespace(catalogue=None)) is None
+    assert "no vehicle catalogue: every vehicle's special_type is empty" in _info(caplog)
