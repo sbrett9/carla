@@ -251,12 +251,50 @@ public sealed class TraCIConnection : IDisposable
     }
 
     /// <summary>
+    /// Read one variable that takes an integer argument and whose value needs a decoder written for
+    /// it, answering the reader positioned at the value's type byte.
+    /// </summary>
+    /// <param name="getCommandId">The domain's get command.</param>
+    /// <param name="variableId">The variable within that domain.</param>
+    /// <param name="objectId">Which object.</param>
+    /// <param name="argument">
+    /// The integer the variable is asked with, sent behind the object id as a typed integer -- for a
+    /// vehicle's stops, how many and which way (<see cref="SumoVehicleDomain.Stops"/>).
+    /// </param>
+    /// <remarks>
+    /// The reader is the connection's own and is overwritten by the next exchange, so the caller
+    /// decodes the whole value before it sends anything else.
+    /// </remarks>
+    internal TraCIReader GetVariableForDedicatedDecoder(int getCommandId, int variableId, string objectId,
+                                                        int argument)
+    {
+        ArgumentNullException.ThrowIfNull(objectId);
+        if (TraCIVariables.IsDecodable(getCommandId, variableId))
+        {
+            throw new ArgumentException(
+                $"TraCI variable 0x{variableId:x2} of domain 0x{getCommandId:x2} is read generically; "
+                + "GetVariable is the way to read it.", nameof(variableId));
+        }
+
+        return ExchangeGet(getCommandId, variableId, objectId, argument);
+    }
+
+    /// <summary>
     /// Send a get command and check the answer names the command, the variable and the object asked
     /// about, leaving the reader at the value's type byte.
     /// </summary>
-    private TraCIReader ExchangeGet(int getCommandId, int variableId, string objectId)
+    /// <param name="getCommandId">The domain's get command.</param>
+    /// <param name="variableId">The variable within that domain.</param>
+    /// <param name="objectId">Which object, or the empty string for a domain-wide variable.</param>
+    /// <param name="argument">An integer to send behind the object id as a typed integer, or none.</param>
+    private TraCIReader ExchangeGet(int getCommandId, int variableId, string objectId, int? argument = null)
     {
         _writer.BeginCommand(getCommandId, variableId, objectId);
+        if (argument is { } value)
+        {
+            _writer.WriteInt(value);
+        }
+
         TraCIReader reader = Exchange(getCommandId);
         reader.ReadLength();
         int response = reader.ReadUnsignedByte();

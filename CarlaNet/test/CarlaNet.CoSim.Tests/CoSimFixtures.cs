@@ -17,6 +17,18 @@ internal static class CoSimFixtures
     /// </summary>
     public static string SuccessionScenario => Fixture("Succession.sumocfg");
 
+    /// <summary>
+    /// The same cross with two measured vehicles that each make one stop: one halts on its lane, the
+    /// other leaves its lane to park.
+    /// </summary>
+    public static string DwellScenario => Fixture("Dwell.sumocfg");
+
+    /// <summary>
+    /// The same cross with one vehicle halted on the exit and one stuck behind it, in a configuration that
+    /// lets SUMO teleport the one stuck.
+    /// </summary>
+    public static string JamScenario => Fixture("Jam.sumocfg");
+
     /// <summary>The same network on its own, for reading lane geometry with no simulation running.</summary>
     public static string RightAngleTurnNetwork => Fixture("RightAngleTurn.net.xml");
 

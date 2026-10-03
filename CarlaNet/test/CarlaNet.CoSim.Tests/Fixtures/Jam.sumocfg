@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The cross, with the jam of Jam.rou.xml on it, and teleporting left on: a vehicle that has stood
+     still for five seconds is teleported. A capture scenario forbids this, and the session refuses it
+     unless told to accept it; this is the run that is told to, so a teleport is there to record. -->
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
+    <input>
+        <net-file value="RightAngleTurn.net.xml"/>
+        <route-files value="Jam.rou.xml"/>
+    </input>
+    <time>
+        <begin value="0"/>
+        <end value="3600"/>
+        <step-length value="0.05"/>
+    </time>
+    <processing>
+        <!-- Fixed so the tests see the same vehicle states on every run. -->
+        <seed value="42"/>
+        <time-to-teleport value="5"/>
+    </processing>
+    <report>
+        <no-step-log value="true"/>
+    </report>
+</configuration>

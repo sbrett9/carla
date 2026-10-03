@@ -48,6 +48,11 @@ namespace CarlaNet.CoSim;
 /// drawn no farther than that from any camera. Every vehicle keeps its body, its pose and its truth;
 /// a camera simply does not draw a body beyond the distance, and each frame's render set says what
 /// distance it was drawn under so a recorder marks those vehicles in that camera's sidecar.</para>
+///
+/// <para><b>Observers, where any are registered.</b> What follows the run from inside it -- a truth
+/// track, a manifest, an interval binder -- is told of every SUMO frame read, with what SUMO did to its
+/// vehicles in that step at TraCI's clock, of every frame rendered, and of the session's end
+/// (<see cref="SumoDriveSessionOptions.StepObservers"/>), rather than being written into the loop.</para>
 /// </remarks>
 public sealed class SumoDriveSession : IDisposable
 {
@@ -70,6 +75,9 @@ public sealed class SumoDriveSession : IDisposable
     private readonly SumoDriveSessionOptions _options;
     private readonly ICarlaWorld? _world;
     private readonly SumoConnection _sumo;
+    private readonly SumoSimulationSubscription _simulation;
+    private readonly SumoVehicleQueries _vehicleQueries;
+    private readonly ISumoStepObserver[] _observers;
     private readonly SumoConsoleTail _console;
     private readonly SumoCollisionHandling _collisionHandling;
     private readonly SubscribedPopulation _population;
@@ -102,6 +110,7 @@ public sealed class SumoDriveSession : IDisposable
     private readonly List<(string Collider, string Victim)> _collisionsOver = [];
     private readonly HashSet<string> _awaitingInsertion = [];
     private readonly HashSet<string> _stillAwaiting = [];
+    private readonly List<VehicleNotInserted> _notInsertedThisFrame = [];
     private readonly HeadlightRule? _headlights;
     private readonly Dictionary<string, (ActorId Actor, VehicleLightStateFlags Lamps)> _lampsWritten = [];
     private readonly PathHeading _headings = new();
@@ -119,7 +128,11 @@ public sealed class SumoDriveSession : IDisposable
     private SolarAudit? _sunAudit;
     private long _tickIndex;
     private double _frameSeconds;
+    private SumoStepEvents _events = SumoStepEvents.None(0.0);
+    private IReadOnlyList<SumoCollision> _collisionsThisFrame = [];
+    private bool _scenarioFinished;
     private double? _lastCompleteSeconds;
+    private ulong? _lastCompleteFrame;
     private double? _reportedSunElevation;
     private RenderSet? _renderSetNow;
     private double? _drawDistanceAsked;
@@ -159,6 +172,11 @@ public sealed class SumoDriveSession : IDisposable
         _longestBody = catalogue.LongestBodyMetres;
         _bodyReach = catalogue.BodyReachMetres;
         _sumo = sumo;
+        _simulation = sumo.Simulation.Subscription;
+
+        // Read once, as the pace is: an observer added to the options after the start is told nothing,
+        // rather than part of a run.
+        _observers = options.StepObservers is { } observers ? [.. observers] : [];
         _console = console;
         _collisionHandling = collisionHandling;
         _headlights = headlights;
@@ -212,6 +230,7 @@ public sealed class SumoDriveSession : IDisposable
             RenderSetLimits = options.RenderSet.Limits,
             RenderSetCapacity = options.RenderSet.Capacity,
         };
+        _vehicleQueries = new SumoVehicleQueries(sumo.Vehicles, Report);
     }
 
     /// <summary>The three rates the session resolved and validated.</summary>
@@ -825,6 +844,8 @@ public sealed class SumoDriveSession : IDisposable
             AuditTheSun(frame);
             MeasureDivergence();
             _lastCompleteSeconds = RenderedTimeSeconds;
+            _lastCompleteFrame = frame;
+            PublishTheRenderedFrame(frame);
             _tickIndex++;
             Report.Ticks++;
             RenderedTimeSeconds += Clock.WorldDeltaSeconds;
@@ -875,6 +896,17 @@ public sealed class SumoDriveSession : IDisposable
                 Report.BodiesSpawned = counted.Bodies.Count;
             }
         });
+
+        // Before SUMO is stopped, so an observer closing what it holds can still ask SUMO about it; each
+        // told whatever the one before it did.
+        var end = new SessionEndRecord(_frameSeconds, _lastCompleteSeconds, _lastCompleteFrame,
+                                       _scenarioFinished, Report.Stopped);
+        foreach (ISumoStepObserver observer in _observers)
+        {
+            Attempt(failures, $"tell an observer ({observer.GetType().Name}) the session has ended",
+                    () => observer.OnSessionEnded(end));
+        }
+
         Attempt(failures, "give back the world's sun", () => _sun?.Dispose());
         Attempt(failures, "destroy the bodies the session spawned", () => _pool?.DestroyAll());
         Attempt(failures, "draw the rendering layers again", () => _layers?.Dispose());
@@ -895,20 +927,25 @@ public sealed class SumoDriveSession : IDisposable
     /// pose is interpolated between two known states rather than extrapolated from one.
     /// </summary>
     /// <remarks>
-    /// Every vehicle SUMO has at the fast-forward's frame is subscribed there and delivers its state on
-    /// that frame, so each has both frames and is drawn on the first rendered frame. A vehicle SUMO
+    /// <para>Every vehicle SUMO has at the fast-forward's frame is subscribed there and delivers its state
+    /// on that frame, so each has both frames and is drawn on the first rendered frame. A vehicle SUMO
     /// inserts in the step of lookahead after it has only the later frame, and is drawn from that one,
-    /// as any vehicle SUMO inserts later is.
+    /// as any vehicle SUMO inserts later is.</para>
+    ///
+    /// <para>The simulation domain is subscribed first, with one round trip: from then on every step's
+    /// answer carries its own clock, the departures, arrivals and insertion queue, and the step's event
+    /// lists, so neither the fast-forward nor a step of the run asks for any of them separately.</para>
     /// </remarks>
     private void Prime()
     {
-        while (_sumo.Time < _options.WarmUpToSimulatedSecond)
+        _simulation.Subscribe();
+        while (_simulation.Time < _options.WarmUpToSimulatedSecond)
         {
             _sumo.Step();
         }
 
         _population.Seed(_sumo.Vehicles.Ids);
-        _frameSeconds = _sumo.Time;
+        _frameSeconds = _simulation.Time;
         IReadOnlyList<string> departed = ReconcileAndRead();
 
         // The queue as the fast-forward left it: what SUMO gives up on from here is noticed against it.
@@ -920,6 +957,7 @@ public sealed class SumoDriveSession : IDisposable
         WindowOpensAtSeconds = _options.WindowOpensAtSimulatedSecond ?? RenderedTimeSeconds;
         Report.FirstRenderedSeconds = FirstRenderedSeconds;
         Report.WindowOpensAtSeconds = WindowOpensAtSeconds;
+        PublishTheSumoStep(afterFastForward: true);
         AdvanceSumo();
     }
 
@@ -1266,27 +1304,35 @@ public sealed class SumoDriveSession : IDisposable
         _sumoClock.Start();
         _sumo.Step();
         Report.SumoSteps++;
-        int remaining = _sumo.Simulation.ExpectedVehicleCount;
+        int remaining = _simulation.ExpectedVehicleCount;
         _sumoClock.Stop();
 
         double waitingAt = _frameSeconds;
-        _frameSeconds = _sumo.Time;
+        _frameSeconds = _simulation.Time;
         CopyFrames(_next, _previous);
         IReadOnlyList<string> departed = ReconcileAndRead();
         NoticeTheInsertionQueue(departed, seeding: false, waitingAt);
         MeasureLaneGeometry();
+        _scenarioFinished = remaining <= 0;
+        PublishTheSumoStep(afterFastForward: false);
         return remaining > 0;
     }
 
     /// <summary>
-    /// Read the SUMO frame just stepped to: who departed and arrived, every vehicle's state, the render
-    /// set that follows, and the collisions SUMO registered. Answers the departures, which the insertion
-    /// queue is compared against.
+    /// Read the SUMO frame just stepped to: what happened to SUMO's vehicles in the step, who departed and
+    /// arrived, every vehicle's state, the render set that follows, and the collisions SUMO registered.
+    /// Answers the departures, which the insertion queue is compared against.
     /// </summary>
+    /// <remarks>
+    /// The event lists and the clock come from the step's own answer, through the simulation domain's
+    /// subscription, so they cost nothing here; the collisions are one round trip where SUMO registers
+    /// any, because SUMO writes them as a compound only a decoder of their own reads.
+    /// </remarks>
     private IReadOnlyList<string> ReconcileAndRead()
     {
-        IReadOnlyList<string> departed = _sumo.Simulation.DepartedVehicleIds;
-        _population.Reconcile(departed, _sumo.Simulation.ArrivedVehicleIds);
+        _events = _simulation.ReadEvents();
+        IReadOnlyList<string> departed = _events.Departed;
+        _population.Reconcile(departed, _events.Arrived);
         _population.ReadFrames(_next);
         BeginThePass();
         _renderSet.ReconcileRenderSet(_frameSeconds, _next, _population.LastVanished);
@@ -1295,7 +1341,73 @@ public sealed class SumoDriveSession : IDisposable
         Report.VehiclePassesOutsideThePolicy = _renderSet.VehiclePassesOutsideThePolicy;
         PublishTheAdmissionPass();
         RecordCollisions();
+        RecordTheStepEvents();
         return departed;
+    }
+
+    /// <summary>
+    /// Count on the report the step's events that change the behaviour being captured -- the emergency
+    /// stops, and the teleports a run that accepted teleporting lets SUMO make -- each at TraCI's clock for
+    /// the step that listed it.
+    /// </summary>
+    private void RecordTheStepEvents()
+    {
+        foreach (string vehicleId in _events.EmergencyStops)
+        {
+            Report.AddEmergencyStop(new SumoVehicleEvent(vehicleId, _events.TimeSeconds));
+        }
+
+        foreach (string vehicleId in _events.TeleportsStarted)
+        {
+            Report.AddTeleport(new SumoVehicleEvent(vehicleId, _events.TimeSeconds));
+        }
+    }
+
+    /// <summary>
+    /// Tell every observer of the SUMO frame just read, once the session has made what it makes of it:
+    /// the step's events at TraCI's clock, the collisions, the vehicles SUMO gave up inserting, every
+    /// vehicle's state and the render set.
+    /// </summary>
+    /// <param name="afterFastForward">Whether the frame is the one SUMO was fast-forwarded to.</param>
+    private void PublishTheSumoStep(bool afterFastForward)
+    {
+        if (_observers.Length == 0)
+        {
+            return;
+        }
+
+        var step = new SumoStepRecord(_tickIndex, _frameSeconds, afterFastForward, _events, _collisionsThisFrame,
+                                      [.. _notInsertedThisFrame], _population.LastVanished, _next,
+                                      _renderSet.RenderedVehicleIds, Report.LastAdmissionPass!, _vehicleQueries);
+        foreach (ISumoStepObserver observer in _observers)
+        {
+            observer.OnSumoStep(step);
+        }
+    }
+
+    /// <summary>
+    /// Tell every observer of the frame this tick produced, once the tick is complete: its render set and
+    /// its illumination as a recorder is answered with them.
+    /// </summary>
+    private void PublishTheRenderedFrame(ulong frame)
+    {
+        if (_observers.Length == 0)
+        {
+            return;
+        }
+
+        var rendered = new RenderedFrameRecord(
+            frame,
+            _tickIndex,
+            RenderedTimeSeconds,
+            Clock.IsCaptureTick(_tickIndex),
+            StageOfTheTickBeingRendered() == CoSimSessionStage.Window,
+            _renderSets.TryGetRenderSet(frame, out RenderSet set) ? set : null,
+            _illumination.TryGetDeclaration(frame, out IlluminationDeclaration declared) ? declared : null);
+        foreach (ISumoStepObserver observer in _observers)
+        {
+            observer.OnFrameRendered(rendered);
+        }
     }
 
     /// <summary>
@@ -1389,7 +1501,8 @@ public sealed class SumoDriveSession : IDisposable
         }
 
         _collisionsReported.Clear();
-        foreach (SumoCollision collision in _sumo.Simulation.Collisions)
+        _collisionsThisFrame = _sumo.Simulation.Collisions;
+        foreach (SumoCollision collision in _collisionsThisFrame)
         {
             (string Collider, string Victim) pair = (collision.ColliderId, collision.VictimId);
             _collisionsReported.Add(pair);
@@ -1472,7 +1585,8 @@ public sealed class SumoDriveSession : IDisposable
                                          double waitingAtSeconds = 0.0)
     {
         _stillAwaiting.Clear();
-        foreach (string vehicleId in _sumo.Simulation.PendingVehicleIds)
+        _notInsertedThisFrame.Clear();
+        foreach (string vehicleId in _simulation.PendingVehicleIds)
         {
             _stillAwaiting.Add(vehicleId);
         }
@@ -1488,6 +1602,7 @@ public sealed class SumoDriveSession : IDisposable
 
                 var dropped = new VehicleNotInserted(vehicleId, waitingAtSeconds, _frameSeconds);
                 Report.AddNotInserted(dropped);
+                _notInsertedThisFrame.Add(dropped);
                 _options.OnVehicleNotInserted?.Invoke(dropped);
             }
         }

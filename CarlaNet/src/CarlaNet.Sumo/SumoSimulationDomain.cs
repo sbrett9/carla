@@ -12,6 +12,10 @@ namespace CarlaNet.Sumo;
 /// <summary>
 /// TraCI's simulation domain: the clock, and what changed in the population this step.
 /// </summary>
+/// <remarks>
+/// Each getter here is a round trip. A caller that reads these every step subscribes them instead
+/// (<see cref="Subscription"/>), and they then arrive with the step's own answer.
+/// </remarks>
 public sealed class SumoSimulationDomain
 {
     private readonly TraCIConnection _connection;
@@ -19,7 +23,14 @@ public sealed class SumoSimulationDomain
     internal SumoSimulationDomain(TraCIConnection connection)
     {
         _connection = connection;
+        Subscription = new SumoSimulationSubscription(connection);
     }
+
+    /// <summary>
+    /// The simulation variables SUMO delivers with every step, once subscribed: the clock, the
+    /// departures and arrivals, and the step's event lists.
+    /// </summary>
+    public SumoSimulationSubscription Subscription { get; }
 
     /// <summary>Simulated seconds since the configuration's begin.</summary>
     public double Time => Read(TraCIConstants.VAR_TIME).AsDouble;

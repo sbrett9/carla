@@ -1,5 +1,6 @@
 // Ported from Eclipse SUMO's reference TraCI client, tools/traci/_vehicle.py -- getIDList,
-// getIDCount, the scalar getters, remove (_vehicle.py:1479-1482) and moveToXY (:1485-1499).
+// getIDCount, the scalar getters, getDeparture and getDepartDelay (:333-345), getStops (:785-804)
+// with its reader _readStopData (:103-127), remove (_vehicle.py:1479-1482) and moveToXY (:1485-1499).
 //
 //   Upstream:      https://github.com/eclipse-sumo/sumo
 //   Pinned commit: e238ea04b7150ba23a348a285d3048919fa4830b (Eclipse SUMO 1.27.0)
@@ -74,9 +75,140 @@ public sealed class SumoVehicleDomain
     public SumoVehicleSignals Signals(string vehicleId) =>
         (SumoVehicleSignals)Read(vehicleId, TraCIVariables.Signals).AsInt;
 
+    /// <summary>
+    /// SUMO's own stamp for when it inserted the vehicle, in simulated seconds, or null for a vehicle
+    /// not yet inserted.
+    /// </summary>
+    /// <remarks>
+    /// One step before the TraCI clock of the step that listed the vehicle as departed
+    /// (<see cref="SumoStepEvents"/>): SUMO stamps the insertion with the step's opening second and
+    /// reports its clock once it has advanced. Measured on SUMO 1.27.0: a vehicle listed at 1.0 s
+    /// answers 0.0 s here. A question asked once per vehicle, not per step.
+    /// </remarks>
+    public double? Departure(string vehicleId) =>
+        SumoStop.Seconds(Read(vehicleId, TraCIConstants.VAR_DEPARTURE).AsDouble);
+
+    /// <summary>
+    /// How many simulated seconds after the time the route declared SUMO inserted the vehicle: zero for
+    /// one inserted on time, the length of the wait for one SUMO had to hold back. For a vehicle not yet
+    /// inserted, how long it has waited so far.
+    /// </summary>
+    /// <remarks>
+    /// The gap between the declared and the committed entry, which is congestion and so is part of what
+    /// a run captures. A question asked once per vehicle, not per step.
+    /// </remarks>
+    public double DepartDelay(string vehicleId) => Read(vehicleId, TraCIConstants.VAR_DEPART_DELAY).AsDouble;
+
+    /// <summary>
+    /// A vehicle's stops: those still ahead of it, or those it has made.
+    /// </summary>
+    /// <param name="vehicleId">The vehicle.</param>
+    /// <param name="limit">
+    /// SUMO's own argument. Zero for every stop still ahead, the one under way included; a positive
+    /// number for at most that many of them, nearest first; a negative number for at most that many of
+    /// the stops already made, oldest first, ending with the one most recently left.
+    /// </param>
+    /// <remarks>
+    /// One round trip. SUMO writes the answer as a compound whose declared member count is not the number
+    /// of members that follow -- one plus four per stop, over one plus sixteen -- so it is read field by
+    /// field, as SUMO's own client reads it (<see cref="ReadStops"/>). For a question asked when an event
+    /// says the answer has changed, not on every step.
+    /// </remarks>
+    public IReadOnlyList<SumoStop> Stops(string vehicleId, int limit = 0)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(vehicleId);
+        TraCIReader reader = _connection.GetVariableForDedicatedDecoder(
+            TraCIConstants.CMD_GET_VEHICLE_VARIABLE, TraCIConstants.VAR_NEXT_STOPS2, vehicleId, limit);
+        return ReadStops(reader);
+    }
+
+    /// <summary>
+    /// Every stop a vehicle has made, oldest first: the one most recently left last.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Stops"/> with the largest negative limit an integer holds, which SUMO answers with all
+    /// of them (<c>libsumo::Vehicle::getStops</c>). A stop under way is not among them until it ends. One
+    /// round trip.
+    /// </remarks>
+    public IReadOnlyList<SumoStop> CompletedStops(string vehicleId) => Stops(vehicleId, -int.MaxValue);
+
     /// <summary>One variable of one vehicle, with the type the wire gave it.</summary>
     public TraCIValue Read(string vehicleId, int variableId) =>
         _connection.GetVariable(TraCIConstants.CMD_GET_VEHICLE_VARIABLE, variableId, vehicleId);
+
+    /// <summary>
+    /// Decode a vehicle's stops from a reader positioned at the value's type byte: a compound, SUMO's
+    /// member count, the number of stops as a typed integer, then sixteen typed fields for each.
+    /// </summary>
+    /// <remarks>
+    /// The field order is the server's (<c>TraCIServer::wrapNextStopDataVector</c>) and its client's
+    /// (<c>_readStopData</c>): lane, end position, stopping place, flags, duration, until, start
+    /// position, intended arrival, arrival, departure, split, join, act type, trip id, line, speed.
+    /// </remarks>
+    internal static IReadOnlyList<SumoStop> ReadStops(TraCIReader reader)
+    {
+        int type = reader.ReadUnsignedByte();
+        if (type != TraCIConstants.TYPE_COMPOUND)
+        {
+            throw new FatalTraCIError(
+                $"SUMO answered a vehicle's stops with value type 0x{type:x2} rather than a compound.");
+        }
+
+        // SUMO's declared member count, which counts four per stop where sixteen follow.
+        reader.ReadInt();
+        int count = StopField(reader, TraCIValueKind.Integer).AsInt;
+        if (count < 0)
+        {
+            throw new FatalTraCIError($"SUMO reported {count} stops.");
+        }
+
+        var stops = new List<SumoStop>(count);
+        for (int index = 0; index < count; index++)
+        {
+            string lane = StopField(reader, TraCIValueKind.String).AsString;
+            double endPosition = StopField(reader, TraCIValueKind.Double).AsDouble;
+            string stoppingPlace = StopField(reader, TraCIValueKind.String).AsString;
+            int flags = StopField(reader, TraCIValueKind.Integer).AsInt;
+            double duration = StopField(reader, TraCIValueKind.Double).AsDouble;
+            double until = StopField(reader, TraCIValueKind.Double).AsDouble;
+            double startPosition = StopField(reader, TraCIValueKind.Double).AsDouble;
+            double intendedArrival = StopField(reader, TraCIValueKind.Double).AsDouble;
+            double arrival = StopField(reader, TraCIValueKind.Double).AsDouble;
+            double departure = StopField(reader, TraCIValueKind.Double).AsDouble;
+            stops.Add(new SumoStop(
+                lane,
+                startPosition,
+                endPosition,
+                stoppingPlace,
+                (SumoStopFlags)flags,
+                SumoStop.Seconds(duration),
+                SumoStop.Seconds(until),
+                SumoStop.Seconds(intendedArrival),
+                SumoStop.Seconds(arrival),
+                SumoStop.Seconds(departure),
+                StopField(reader, TraCIValueKind.String).AsString,
+                StopField(reader, TraCIValueKind.String).AsString,
+                StopField(reader, TraCIValueKind.String).AsString,
+                StopField(reader, TraCIValueKind.String).AsString,
+                StopField(reader, TraCIValueKind.String).AsString,
+                StopField(reader, TraCIValueKind.Double).AsDouble));
+        }
+
+        return stops;
+    }
+
+    private static TraCIValue StopField(TraCIReader reader, TraCIValueKind expected)
+    {
+        TraCIValue value = reader.ReadTypedValue(TraCIConstants.VAR_NEXT_STOPS2);
+        if (value.Kind != expected)
+        {
+            throw new FatalTraCIError(
+                $"A field of a vehicle's stops arrived as {value.Kind} where {expected} belongs, so the "
+                + "value is being read at the wrong offset.");
+        }
+
+        return value;
+    }
 
     /// <summary>
     /// Ask SUMO for one vehicle's whole state directly, without a subscription.

@@ -404,4 +404,20 @@ public sealed record SumoDriveSessionOptions(
     /// thread; it must not block.
     /// </remarks>
     public Action<VehicleNotInserted>? OnVehicleNotInserted { get; set; }
+
+    /// <summary>
+    /// What follows the run from inside the session: each observer is told of every SUMO frame the
+    /// session reads, every frame it renders and completes, and the session's end
+    /// (<see cref="ISumoStepObserver"/>). None by default.
+    /// </summary>
+    /// <remarks>
+    /// <para>Read once, when the session starts, like the real-time factor: an observer added afterwards
+    /// is told nothing, and the session tells the ones it started with, in the order they were added.
+    /// From the tick thread; none may block.</para>
+    ///
+    /// <para>A list to add to rather than a callback to set, because more than one thing follows a run
+    /// at once -- a truth track, a manifest, an interval binder -- and none should have to know of the
+    /// others. From Python, add to it.</para>
+    /// </remarks>
+    public IList<ISumoStepObserver> StepObservers { get; set; } = new List<ISumoStepObserver>();
 }
