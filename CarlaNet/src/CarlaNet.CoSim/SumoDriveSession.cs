@@ -526,6 +526,12 @@ public sealed class SumoDriveSession : IDisposable
             // session takes them from the package instead of fetching them. It writes nothing to the
             // server, and a world that declines is only slower: the telemetry then fetches as before.
             loaded.AdoptBareEarthGrids(options.WorldPackagePath);
+
+            // And what kind of vehicle each body is: every body the pool lends is one of the
+            // catalogue's blueprints, and its truth carries the special type its catalogue class
+            // curates rather than the one the blueprint declares (doc 06 D6.18). Client-side, like
+            // the grids.
+            loaded.AdoptCatalogueSpecialTypes(catalogue.SpecialTypes);
         }
 
         // The roads every body is seated on, joined once to the lanes SUMO drives. Read from the

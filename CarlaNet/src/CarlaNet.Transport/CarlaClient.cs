@@ -3,6 +3,7 @@
 // Default port: 2000.
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
+using System.Collections.Frozen;
 using System.Globalization;
 using System.Reflection;
 using CarlaNet.Map.WorldPackage;
@@ -1380,6 +1381,37 @@ public sealed class CarlaClient : IAsyncDisposable
         LastHeightAlignOffset = 0.0;   // the per-cell field is authoritative when draped
         LastDrapeActive = true;
         HasBareEarthReference = true;
+    }
+
+    // The vehicle catalogue's kinds, by blueprint id, as last adopted on this connection. Replaced
+    // whole, never edited, so a truth reader on another thread reads one table or the other.
+    private volatile IReadOnlyDictionary<string, string> _catalogueSpecialTypes =
+        FrozenDictionary<string, string>.Empty;
+
+    /// <summary>
+    /// The truth record's <c>special_type</c> for every blueprint a vehicle catalogue curates one for,
+    /// by blueprint id, as last adopted on this connection (<see cref="AdoptCatalogueSpecialTypes"/>);
+    /// empty where none was. The truth telemetry reports a vehicle of a blueprint held here with this
+    /// kind, an empty one included, and a vehicle of any other blueprint with the kind its own
+    /// blueprint declares.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> CatalogueSpecialTypes => _catalogueSpecialTypes;
+
+    /// <summary>
+    /// Adopt a vehicle catalogue's <c>special_type</c> for each blueprint it curates, in place of
+    /// whatever was adopted before. A SUMO drive session adopts its own catalogue's when it starts, so
+    /// the truth this connection reports -- the recorder beside the session and the live pull alike --
+    /// takes each body's kind from the catalogue, as doc 06 D6.18 rules.
+    /// </summary>
+    /// <remarks>
+    /// Client-side only, and held for the life of the connection: a kind belongs to a blueprint, and a
+    /// blueprint to the content build, so loading another world leaves it as true as it was. A copy is
+    /// taken, so the caller's dictionary may change afterwards without changing what is reported.
+    /// </remarks>
+    public void AdoptCatalogueSpecialTypes(IReadOnlyDictionary<string, string> specialTypes)
+    {
+        ArgumentNullException.ThrowIfNull(specialTypes);
+        _catalogueSpecialTypes = specialTypes.ToFrozenDictionary(StringComparer.Ordinal);
     }
 
     /// <summary>

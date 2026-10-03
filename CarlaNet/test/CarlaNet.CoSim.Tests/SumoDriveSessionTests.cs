@@ -1045,8 +1045,10 @@ public sealed class SumoDriveSessionTests
         Assert.Empty(carla.SolarWrites);
         Assert.Empty(carla.Spawned);
 
-        // And its grids are not handed to the world's truth telemetry: they are not the world's.
+        // And its grids are not handed to the world's truth telemetry: they are not the world's. Nor
+        // is the catalogue's table of kinds, from a session that never started.
         Assert.Empty(carla.Adoptions);
+        Assert.Empty(carla.SpecialTypeAdoptions);
     }
 
     [RequiresSumoFact]
@@ -1074,6 +1076,37 @@ public sealed class SumoDriveSessionTests
         Assert.Single(carla.Adoptions);
     }
 
+    [RequiresSumoFact]
+    public void TheCatalogueSKindsAreHandedToTheTruthTelemetryOnceThePackageIsAdmitted()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+
+        using SumoDriveSession session = SumoDriveSession.Start(options);
+
+        // Once, the session's own catalogue's whole table, and only after the world had described
+        // itself: a body's truth then carries the kind its catalogue class curates (doc 06 D6.18).
+        (IReadOnlyDictionary<string, string> kinds, int afterDescriptions) =
+            Assert.Single(carla.SpecialTypeAdoptions);
+        Assert.Equal(1, afterDescriptions);
+        VehicleCatalogue catalogue = VehicleCatalogue.Load(CoSimFixtures.VehicleCatalogue);
+        Assert.Equal(catalogue.SpecialTypes.OrderBy(pair => pair.Key, StringComparer.Ordinal),
+                     kinds.OrderBy(pair => pair.Key, StringComparer.Ordinal));
+        // The body the fixture scenario draws is the Fuso, whose bus class curates no kind.
+        Assert.Equal(string.Empty, kinds["vehicle.fuso.mitsubishi"]);
+        Assert.Equal("emergency", kinds["vehicle.ambulance.ford"]);
+
+        for (int step = 0; step < 10 && session.Advance(); step++)
+        {
+        }
+
+        Assert.Single(carla.SpecialTypeAdoptions);
+    }
+
     [Fact]
     public void ASessionRefusesAWorldThatCarriesNoBareEarthRecord()
     {
@@ -1091,6 +1124,7 @@ public sealed class SumoDriveSessionTests
         Assert.Contains("carries no bare-earth reference record", refused.Message);
         Assert.Empty(carla.SettingsWrites);
         Assert.Empty(carla.Adoptions);
+        Assert.Empty(carla.SpecialTypeAdoptions);
     }
 
     private static SumoDriveSessionOptions Options(SyntheticWorld world,

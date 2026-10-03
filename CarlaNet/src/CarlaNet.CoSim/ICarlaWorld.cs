@@ -10,8 +10,9 @@ namespace CarlaNet.CoSim;
 /// Everything the playback bridge asks of a CARLA world, and nothing else.
 /// </summary>
 /// <remarks>
-/// <para>Eighteen operations. The bridge asks which world is loaded, hands the world's truth
-/// telemetry the package's ground once the package is established as that world's, places bodies,
+/// <para>Nineteen operations. The bridge asks which world is loaded, hands the world's truth
+/// telemetry the package's ground and the catalogue's vehicle kinds once the package is established
+/// as that world's, places bodies,
 /// writes their poses and velocities in one batch, names to the server which bodies are lent and
 /// which parked, sets how far from a camera the bodies are drawn, reads back where the world says
 /// they went and how
@@ -58,6 +59,23 @@ public interface ICarlaWorld
     /// slower, never wrong, and the session does not refuse it.</para>
     /// </remarks>
     bool AdoptBareEarthGrids(string packagePath);
+
+    /// <summary>
+    /// Give the world's truth telemetry the vehicle catalogue's <c>special_type</c> for every
+    /// blueprint a class of it draws, by blueprint id, so that a vehicle of such a blueprint is
+    /// reported with the catalogue's kind rather than the one its blueprint declares.
+    /// </summary>
+    /// <remarks>
+    /// <para>The session gives them once, when the package has been admitted: the bodies it lends are
+    /// the catalogue's blueprints, and the recorder that captures beside it and the live pull of the
+    /// same process report them through the truth telemetry of this connection. The kind is the
+    /// catalogue's by ruling (doc 06 D6.18): the content build's own is hand-edited, and was empty for
+    /// every blueprint when first swept.</para>
+    ///
+    /// <para>Nothing is written to the server, so nothing is given back, and a truth reader on another
+    /// connection still reports each vehicle with the kind its blueprint declares.</para>
+    /// </remarks>
+    void AdoptCatalogueSpecialTypes(IReadOnlyDictionary<string, string> specialTypes);
 
     /// <summary>The episode settings as the server currently holds them.</summary>
     EpisodeSettings ReadSettings();

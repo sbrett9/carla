@@ -15,6 +15,10 @@ namespace CarlaNet.CoSim;
 /// <para>Read once at session start and asked on every vehicle placed, so the index is a dictionary
 /// built at load rather than a scan of the document. This is the read side of the same artifact the
 /// catalogue's Python reader reads, and it makes the same refusals for the same reasons.</para>
+///
+/// <para>It also says what kind of vehicle each body is. The truth record's <c>special_type</c> comes
+/// from the catalogue (doc 06 D6.18): each class curates one for its members, because the content
+/// build's own is hand-edited and was empty for every blueprint when first swept.</para>
 /// </remarks>
 public sealed class VehicleCatalogue
 {
@@ -33,6 +37,7 @@ public sealed class VehicleCatalogue
 
     private readonly Dictionary<string, VehicleExtent> _measured = [];
     private readonly Dictionary<string, string> _failed = [];
+    private readonly Dictionary<string, string> _specialTypes = [];
 
     private VehicleCatalogue(JsonElement document)
     {
@@ -49,29 +54,46 @@ public sealed class VehicleCatalogue
         BlueprintSetDigest = Text(document, "blueprint_set_digest");
         ContentBuildId = Text(document, "content_build_id");
 
-        if (!document.TryGetProperty("vehicles", out JsonElement vehicles))
+        if (document.TryGetProperty("vehicles", out JsonElement vehicles))
         {
-            return;
+            foreach (JsonElement entry in vehicles.EnumerateArray())
+            {
+                string blueprintId = Text(entry, "blueprint_id");
+                if (Text(entry, "measurement") != "measured")
+                {
+                    _failed[blueprintId] = Text(entry, "measurement_note") is { Length: > 0 } note
+                        ? note
+                        : "measurement failed";
+                    continue;
+                }
+
+                JsonElement centre = entry.GetProperty("bbox_centre_m");
+                _measured[blueprintId] = new VehicleExtent(
+                    blueprintId,
+                    entry.GetProperty("length_m").GetDouble(),
+                    entry.GetProperty("width_m").GetDouble(),
+                    entry.GetProperty("height_m").GetDouble(),
+                    (centre[0].GetDouble(), centre[1].GetDouble(), centre[2].GetDouble()));
+            }
         }
 
-        foreach (JsonElement entry in vehicles.EnumerateArray())
+        // A class's kind belongs to every body it draws. `cot_special_type` is optional, and a class
+        // without one curates the empty kind for its members rather than leaving them undecided.
+        if (document.TryGetProperty("classes", out JsonElement classes))
         {
-            string blueprintId = Text(entry, "blueprint_id");
-            if (Text(entry, "measurement") != "measured")
+            foreach (JsonElement entry in classes.EnumerateArray())
             {
-                _failed[blueprintId] = Text(entry, "measurement_note") is { Length: > 0 } note
-                    ? note
-                    : "measurement failed";
-                continue;
-            }
+                string specialType = Text(entry, "cot_special_type");
+                if (!entry.TryGetProperty("members", out JsonElement members))
+                {
+                    continue;
+                }
 
-            JsonElement centre = entry.GetProperty("bbox_centre_m");
-            _measured[blueprintId] = new VehicleExtent(
-                blueprintId,
-                entry.GetProperty("length_m").GetDouble(),
-                entry.GetProperty("width_m").GetDouble(),
-                entry.GetProperty("height_m").GetDouble(),
-                (centre[0].GetDouble(), centre[1].GetDouble(), centre[2].GetDouble()));
+                foreach (JsonElement member in members.EnumerateArray())
+                {
+                    _specialTypes[Text(member, "blueprint_id")] = specialType;
+                }
+            }
         }
     }
 
@@ -89,6 +111,14 @@ public sealed class VehicleCatalogue
 
     /// <summary>Every blueprint the catalogue holds a successful measurement for.</summary>
     public IReadOnlyCollection<string> MeasuredBlueprintIds => _measured.Keys;
+
+    /// <summary>
+    /// The truth record's <c>special_type</c> for every blueprint a class of the catalogue draws, by
+    /// blueprint id: the class's curated <c>cot_special_type</c>, or an empty string where the class
+    /// curates none. A blueprint no class draws is absent, and its truth keeps the kind its own
+    /// blueprint declares.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> SpecialTypes => _specialTypes;
 
     /// <summary>
     /// The longest measured body, metres; zero where nothing was measured. The length a camera's range

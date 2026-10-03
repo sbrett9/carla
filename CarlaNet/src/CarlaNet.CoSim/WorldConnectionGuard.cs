@@ -43,6 +43,10 @@ internal sealed class WorldConnectionGuard : ICarlaWorld
         Guard(nameof(AdoptBareEarthGrids), () => _world.AdoptBareEarthGrids(packagePath));
 
     /// <inheritdoc/>
+    public void AdoptCatalogueSpecialTypes(IReadOnlyDictionary<string, string> specialTypes) =>
+        Guard(nameof(AdoptCatalogueSpecialTypes), () => _world.AdoptCatalogueSpecialTypes(specialTypes));
+
+    /// <inheritdoc/>
     public EpisodeSettings ReadSettings() => Guard(nameof(ReadSettings), _world.ReadSettings);
 
     /// <inheritdoc/>

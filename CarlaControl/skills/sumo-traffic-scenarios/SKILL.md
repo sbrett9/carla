@@ -478,8 +478,9 @@ emitted identically to UDP, an XML file, and a 31-column CSV (one row per vehicl
 `_carla` detail block name is kept even though the source is SUMO, so the two producers are directly
 comparable. The XML and CSV are the truth sidecar: they say which vehicles were planted in `marked`
 (`1`/`0`, a `_carla` attribute in the XML and a column in the CSV, not a contract field), and
-`special_type` is the vehicle's kind and nothing else, empty for every SUMO vehicle (06 D6.18). The
-UDP feed carries neither. A compiled scenario's ground truth is its `.supervision.json` (instances,
+`special_type` is the vehicle's kind and nothing else: the kind the measured vehicle catalogue
+(`--catalogue`, this repository's by default) curates for the CARLA blueprint a compiled vehicle
+type names, and empty for a type that names none (06 D6.18). The UDP feed carries neither. A compiled scenario's ground truth is its `.supervision.json` (instances,
 series, absences, cohorts), which this tool does not read and which joins to the sidecar by vehicle
 id. A legacy scenario's rides in the `.labels.json` the telemetry tool reads:
 
