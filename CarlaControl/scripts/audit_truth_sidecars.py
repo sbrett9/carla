@@ -5,7 +5,10 @@ Reads every truth sidecar under a capture directory -- one channel's, or a whole
 counts the vehicle records standing below the ground band the moving vehicles draw (the pool's
 parked bodies, about 300 m under the ground), the records that carry no SUMO vehicle id, the uids
 that name more than one SUMO vehicle over the capture, and the SUMO vehicles that appear under more
-than one uid. See `carlacontrol.TruthSidecarAudit` for how the band is drawn.
+than one uid. See `carlacontrol.TruthSidecarAudit` for how the band is drawn. A sidecar is known by
+what it holds, not by its name -- `<camera name>_<capture time>.xml`, or `SCTMV_<capture time>.xml`
+from before cameras were named -- so a directory holding either, or several cameras' stills, is read
+whole.
 
 Any of those is a defect and the exit status is 1. A capture of traffic-manager traffic carries no
 SUMO id by design: pass `--traffic-manager` and only the ground band and the uid checks apply.

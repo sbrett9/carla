@@ -19,12 +19,12 @@ Usage:
     # Using CARLA coordinates:
     python orbiting_drone.py [--x M --y M --z FEET] [--radius M] [--altitude FEET] [--orbit-speed SEC]
         [--fov DEG] [--ev EV] [--width PX --height PX] [--host H --port P]
-        [--record-dir DIR] [--record-hz HZ]
+        [--record-dir DIR] [--record-hz HZ] [--camera-name NAME]
     
     # Using lat/lon (requires georeferenced world):
     python orbiting_drone.py [--lat LAT --lon LON --z FEET] [--radius M] [--orbit-speed SEC]
         [--fov DEG] [--ev EV] [--width PX --height PX] [--host H --port P]
-        [--record-dir DIR] [--record-hz HZ]
+        [--record-dir DIR] [--record-hz HZ] [--camera-name NAME]
 """
 import argparse
 import math
@@ -67,6 +67,14 @@ rec.add_argument("--record-dir", default=os.path.join(_REPO, "Build", "drone_rec
 rec.add_argument("--record-hz", type=float, default=2.0,
                  help="capture rate in Hz (captures per second; may be fractional, e.g. 0.5). "
                       "Default 2.0.")
+rec.add_argument("--camera-name", default=None, metavar="NAME",
+                 help="the drone camera's name: every capture is written as "
+                      "<NAME>_<local capture time>.png and .xml, and it is the callsign of the "
+                      "camera's platform track. Default: CARLA-SENSOR-<camera id>. Used as given or "
+                      "refused, never rewritten (1 to 63 printable ASCII characters, none of "
+                      "< > : \" / \\ | ? *, no space at either end or dot at the end, not a Windows "
+                      "device name, not CARLA-SENSOR-<number>, and not a name another camera in the "
+                      "world holds).")
 
 args = ap.parse_args()
 
@@ -218,6 +226,11 @@ def _draw_compass(display, font, cx, cy, r, bearing_deg):
 
 
 def main() -> int:
+    if args.camera_name is not None:
+        refused = carla.camera_name_problem(args.camera_name)
+        if refused is not None:
+            print(f"ERROR: --camera-name: {refused}", file=sys.stderr)
+            return 2
     client = carla.Client(args.host, args.port)
     client.set_timeout(15.0)
     print(f"server version: {client.get_server_version()}")
@@ -294,8 +307,10 @@ def main() -> int:
     pitch = math.degrees(math.atan2(dz, horizontal_dist))
     yaw = math.degrees(math.atan2(dy, dx))
 
-    camera = world.spawn_actor(bp, make_tf(cam_x, cam_y, cam_z, pitch, yaw))
-    print(f"spawned orbital drone camera id={camera.id}")
+    # Spawned under its name, which every client reads as the camera's role_name; every capture is
+    # named after it.
+    camera = world.spawn_camera(bp, make_tf(cam_x, cam_y, cam_z, pitch, yaw), name=args.camera_name)
+    print(f"spawned orbital drone camera {world.camera_name(camera)} id={camera.id}")
     print(f"orbit center: ({center_x:.1f}, {center_y:.1f}) at altitude {cam_altitude * FT_PER_M:.0f} ft")
     print(f"orbit radius: {radius * FT_PER_M:.0f} ft ({radius:.1f} m), orbit_speed: {orbit_speed:.1f} s")
     

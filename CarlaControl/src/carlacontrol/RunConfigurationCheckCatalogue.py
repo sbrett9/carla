@@ -113,8 +113,8 @@ _CHECKS: tuple[RunCheck, ...] = (
              "validator, called offline"),
     RunCheck(10, OFFLINE, "sensor_tick is consistent with capture_hz", (), BY_CONSTRUCTION,
              "sensor_tick is not a field; every camera's is set to 1 / capture_hz"),
-    RunCheck(11, OFFLINE, "Every channel's sensor_id is present and unique when there is more than "
-             "one channel", _R, RUN_CAPTURE, "RunConfigurationValidator"),
+    RunCheck(11, OFFLINE, "Every channel's sensor_id is present and unique, case aside, when there "
+             "is more than one channel", _R, RUN_CAPTURE, "RunConfigurationValidator"),
     RunCheck(12, OFFLINE, "The scenario declares a solar epoch", _R, RUN_CAPTURE,
              "RunConfigurationValidator"),
     RunCheck(13, OFFLINE, "The window's civil span is computable from the epoch", _R, RUN_CAPTURE,

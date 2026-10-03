@@ -16,7 +16,10 @@ session stood in for:
 * by default nothing the session is handed limits which vehicles are rendered: every vehicle SUMO
   has is drawn. The optional limits -- a circle, the cameras, a capacity -- reach the session only
   when asked for, the flown camera is registered with the session only under the cameras, and a free
-  view over a circle smaller than the world is told so.
+  view over a circle smaller than the world is told so;
+* the camera, fixed or flown, is spawned under `--camera-name`, and its stills and span folders are
+  named after it, or after its default `CARLA-SENSOR-<camera id>`; a name the rule refuses is
+  refused before the drive connects to anything.
 """
 from __future__ import annotations
 
@@ -24,6 +27,7 @@ import importlib.util
 import json
 import sys
 import zipfile
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -100,15 +104,24 @@ def test_the_flown_rig_starts_over_the_world_s_centre_and_measures_depth_as_far_
     assert (settings.width, settings.height, settings.fov) == (1280, 720, 90.0)
     assert settings.asynchronous is True
     assert settings.ev is None
+    # No name given: the rig's camera is its default.
+    assert settings.camera_name is None
+    named = _arguments(drive, monkeypatch, "--view", "free", "--camera-name", "DECK-I25")
+    assert drive.free_view_settings(named, centre, SensorRig.FT_PER_M, 20000.0).camera_name == \
+        "DECK-I25"
 
 
 class _RecordingWorld:
     """The world a span records through: what it was asked to record, and about which camera."""
 
-    def __init__(self) -> None:
+    def __init__(self, names: dict[int, str] | None = None) -> None:
         self.recorded: list[tuple[tuple, dict]] = []
         self.stops = 0
         self.asked_about: list = []
+        self.names = names or {}
+
+    def camera_name(self, camera) -> str:
+        return self.names.get(camera.id, f"CARLA-SENSOR-{camera.id}")
 
     def start_recording(self, *args, **kwargs):
         self.recorded.append((args, kwargs))
@@ -121,6 +134,71 @@ class _RecordingWorld:
     def get_view_readiness(self, camera) -> dict:
         self.asked_about.append(camera)
         return {"frame": 7, "published": True, "tilesets": []}
+
+
+def test_a_span_of_a_named_camera_is_written_to_a_folder_named_after_it(drive, monkeypatch,
+                                                                       tmp_path):
+    args = _arguments(drive, monkeypatch, "--view", "free", "--record-dir", str(tmp_path),
+                      "--camera-name", "DECK-I25")
+    recording = _RecordingWorld(names={4121: "DECK-I25"})
+    session = SimpleNamespace(Illumination=None, RenderSet=None, WindowOpensAtSeconds=0.0,
+                              RenderedTimeSeconds=0.0)
+    parts = drive.FreeViewParts()
+    parts.rig = SimpleNamespace(camera=SimpleNamespace(id=4121), depth_cam=None)
+
+    recorder = parts.span_recorder(SimpleNamespace(get_world=lambda: recording), session, args,
+                                   "run-20260930-142233")
+
+    assert recorder.sensor_id == "DECK-I25"
+    started = datetime(2026, 10, 2, 14, 7, 22, tzinfo=UTC)
+    assert recorder.span_directory(tmp_path, recorder.sensor_id, started) == \
+        tmp_path / "DECK-I25-20261002T140722Z"
+
+
+class _SpawningWorld:
+    """A world a fixed camera is spawned into: the name it was spawned under."""
+
+    def __init__(self) -> None:
+        self.spawned: list[tuple[str, str | None]] = []
+
+    def get_blueprint_library(self):
+        blueprint = SimpleNamespace(id="sensor.camera.rgb", set_attribute=lambda *_: None,
+                                    has_attribute=lambda _name: True)
+        return SimpleNamespace(find=lambda _id: blueprint)
+
+    def spawn_camera(self, blueprint, transform, name=None):
+        self.spawned.append((blueprint.id, name))
+        return SimpleNamespace(id=4121)
+
+    def camera_name(self, camera) -> str:
+        return self.spawned[-1][1] or f"CARLA-SENSOR-{camera.id}"
+
+
+def test_the_fixed_camera_is_spawned_under_its_name_or_left_its_default(drive, monkeypatch):
+    world = _SpawningWorld()
+    drive.spawn_camera(world, _arguments(drive, monkeypatch, "--camera-name", "DECK-I25"), (0, 0))
+    drive.spawn_camera(world, _arguments(drive, monkeypatch), (0, 0))
+    assert world.spawned == [("sensor.camera.rgb", "DECK-I25"), ("sensor.camera.rgb", None)]
+
+
+def test_a_camera_name_the_rule_refuses_ends_the_drive_before_it_connects(drive, monkeypatch,
+                                                                         tmp_path, caplog):
+    from carlacontrol.CameraName import CameraName
+
+    for name in ("s.sumocfg", "w.cwp", "vehicles.catalogue.json"):
+        (tmp_path / name).write_text("{}", encoding="utf-8")
+    connected: list = []
+    monkeypatch.setattr(drive, "carla", SimpleNamespace(
+        camera_name_problem=CameraName.problem, Client=lambda *a: connected.append(a)))
+    monkeypatch.setattr(sys, "argv", [
+        "run_sumo_drive.py", "--scenario", str(tmp_path / "s.sumocfg"),
+        "--world-package", str(tmp_path / "w.cwp"),
+        "--catalogue", str(tmp_path / "vehicles.catalogue.json"), "--camera-name", "DECK:I25"])
+
+    with caplog.at_level("ERROR", logger="run_sumo_drive"):
+        assert drive.main() == 2
+    assert connected == []
+    assert "--camera-name: camera name 'DECK:I25' holds ':'" in caplog.text
 
 
 def test_a_span_records_the_flown_camera_as_the_fixed_camera_records(drive, monkeypatch, tmp_path):

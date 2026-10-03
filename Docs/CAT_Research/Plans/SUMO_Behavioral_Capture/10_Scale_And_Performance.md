@@ -20,6 +20,7 @@
 | 2026-10-01 | §4.3: a vehicle SUMO inserts is drawn from the frame SUMO first reports it in, where SUMO inserted it and moving, and on no frame before (`03` D3.6). |
 | 2026-10-02 | §4.3.2, `D10.12`, `D10.20`, `D10.21`: two optional performance controls an operator may choose to trade fidelity for speed, both off by default and neither a sizing rule nor a recommendation -- a draw distance, which changes only how far from a camera a body is drawn, and a limit on which vehicles get a body (a circle, the cameras' footprints, a capacity). Neither has a measured speed-up yet; `D10.4` and `D10.5` stay withdrawn. |
 | 2026-10-02 | §4.3.3: the full-population tick measured on the owner's workstation -- what the camera, the vehicles and each optional control cost, the machine's power mode moving the pace more than any control, what is not yet known, and the options recorded but not pursued. M2 measured. |
+| 2026-10-02 | §4.1: a still is named after its camera, `<camera name>_<local capture time>`, where every still was `SCTMV_<local capture time>`; the time is written as before, so the clock ratio is read from either name. |
 
 ---
 
@@ -540,8 +541,10 @@ a lit scene and an unlit one. High sun forgives it; the low-sun windows this sec
 **Measured, from files already on disk.** `carla/Build/SCTMV_recordings` holds 54 captures from four
 recorder runs on 2026-09-16. Every PNG carries a `carla:capture` `tEXt` chunk written by
 `CaptureMetadata.cs:35`, `CaptureIdentity.PngTextChunks` with the **tick and the simulated time** that produced those pixels, and
-the filename carries local wall-clock time to the millisecond (`FrameRecorder.cs:223-224`). Dividing one
-by the other gives the clock ratio of a real capture session with no instrumentation and no new run.
+the filename carries local wall-clock time to the millisecond. Dividing one by the other gives the clock
+ratio of a real capture session with no instrumentation and no new run. These 54 are named
+`SCTMV_<time>`; since 2026-10-02 a still is named after its camera, `<camera name>_<time>`
+(`CameraName.StillStem`), with the time written exactly as before, so the method reads either.
 
 Every capture interval in every run is **exactly 10 ticks / 0.500 simulated seconds** — the configured
 2 Hz, with **no dropped captures anywhere**.

@@ -10,9 +10,10 @@ namespace CarlaNet.Recording;
 
 /// <summary>
 /// Native capture-to-disk recorder. Subscribes to a camera's sensor stream, decimates to a target rate,
-/// and for each captured frame writes a lossless PNG of the imagery plus a CoT-XML telemetry sidecar
-/// (paired by filename stem). All decoding/encoding/IO happens on the .NET thread pool — the frame
-/// buffer never crosses to Python and the GIL is never held, so the viewer stays smooth while recording.
+/// and for each captured frame writes a lossless PNG of the imagery plus a CoT-XML telemetry sidecar,
+/// paired by a filename stem that begins with the camera's name (<see cref="CameraName.StillStem"/>).
+/// All decoding/encoding/IO happens on the .NET thread pool — the frame buffer never crosses to Python
+/// and the GIL is never held, so the viewer stays smooth while recording.
 ///
 /// Construction starts recording; <see cref="Dispose"/> stops it (flushes pending captures).
 /// </summary>
@@ -51,6 +52,8 @@ public sealed class FrameRecorder : IDisposable
 
     private readonly CarlaClient _client;
     private readonly string _dir;
+    private readonly string _name;
+    private readonly IDisposable _nameHeld;
     private readonly double _periodSeconds;
     private readonly string _affiliation;
     private readonly double _stale;
@@ -94,6 +97,10 @@ public sealed class FrameRecorder : IDisposable
     public long Dropped => Interlocked.Read(ref _dropped);
     public bool HaveTelemetryOrigin => _haveOrigin;
     public string Directory => _dir;
+
+    /// <summary>The recorded camera's name: every still's file name begins with it, and it is the
+    /// callsign of the camera's platform track (<see cref="CameraName"/>).</summary>
+    public string Name => _name;
 
     /// <summary>Captures whose truth records came from the very frame that produced the pixels.</summary>
     public long TelemetryTickExact => Interlocked.Read(ref _telemetryExact);
@@ -235,6 +242,13 @@ public sealed class FrameRecorder : IDisposable
     /// that the image does not show is never listed as seen. Where a source is given, each frame's own
     /// set says what it was drawn under -- including that the server refused a distance, so nothing
     /// was culled -- and this is not read. Null marks nothing.</param>
+    /// <param name="cameraName">The recorded camera's name (<see cref="CameraName"/>): every still is
+    /// written as <c>&lt;name&gt;_&lt;local capture time&gt;.png</c> and <c>.xml</c>, and the platform
+    /// track's callsign is the name, so a <paramref name="platform"/> with another callsign is refused.
+    /// Null takes the platform's callsign, or with no platform the default of
+    /// <paramref name="cameraActorId"/>, <c>CARLA-SENSOR-&lt;id&gt;</c>; a recorder given none of the
+    /// three is refused. A name the rule refuses is refused here, and so is one another recorder in
+    /// this process holds: the recorder holds its name until it is disposed.</param>
     public FrameRecorder(CarlaClient client, byte[] streamToken, string dir, double hz,
                          string affiliation = "n", double staleSeconds = 3.0,
                          SensorPlatformOptions? platform = null, int workers = 0,
@@ -242,7 +256,7 @@ public sealed class FrameRecorder : IDisposable
                          byte[]? depthStreamToken = null, OcclusionOptions? occlusion = null,
                          IIlluminationSource? illumination = null, IRenderSetSource? renderSet = null,
                          ActorId? cameraActorId = null, ActorId? depthActorId = null,
-                         double? drawDistanceMetres = null)
+                         double? drawDistanceMetres = null, string? cameraName = null)
     {
         if (streamToken is not { Length: 24 })
             throw new ArgumentException("streamToken must be a 24-byte sensor stream token", nameof(streamToken));
@@ -250,55 +264,79 @@ public sealed class FrameRecorder : IDisposable
             throw new ArgumentOutOfRangeException(nameof(drawDistanceMetres), limit,
                                                   "a draw distance is a positive number of metres, or null for none");
 
-        _client = client;
-        _dir = dir;
-        _periodSeconds = 1.0 / Math.Max(0.01, hz);
-        _affiliation = affiliation;
-        _stale = staleSeconds;
-        _platform = platform;
-        // A run identifier is always present, so captures can be gathered back into a run even when the
-        // caller supplied nothing. Derived from the start instant, which is unique enough per recorder
-        // and reads plainly in a directory listing.
-        _runId = string.IsNullOrEmpty(runId)
-            ? "run-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)
-            : runId;
-        _scenarioId = scenarioId;
-        _seed = seed;
-        System.IO.Directory.CreateDirectory(dir);
+        string name = cameraName ?? platform?.Callsign
+                      ?? (cameraActorId is { } unnamed
+                          ? CameraName.Default(unnamed)
+                          : throw new ArgumentException(
+                              "a recorder names every still after its camera: give the camera's name, or "
+                              + "the camera actor to take its default name from", nameof(cameraName)));
+        if (CameraName.Problem(name, cameraActorId) is { } refused)
+            throw new ArgumentException(refused, nameof(cameraName));
+        if (platform is not null && platform.Callsign != name)
+            throw new ArgumentException($"the platform track's callsign is the camera's name, and "
+                                        + $"'{platform.Callsign}' is not '{name}'", nameof(platform));
 
-        _telemetry = new VehicleTelemetryService(client);
-        try { _origin = _telemetry.GetOrigin(); _haveOrigin = true; }
-        catch { _haveOrigin = false; }
-
-        if (depthStreamToken is not null)
-            _occlusion = new OcclusionEstimator(client, depthStreamToken, occlusion, depthActorId);
-        _illumination = illumination;
-        _renderSet = renderSet is null ? null : new RenderSetPairing(renderSet);
-        _sensorPose = cameraActorId is { } camera ? new SensorPoseCheck(client.GetSnapshotFrame, camera) : null;
-        _drawDistance = drawDistanceMetres;
-
-        int n = workers > 0 ? workers : Math.Max(2, Environment.ProcessorCount / 2);
-        _channel = Channel.CreateBounded<Job>(new BoundedChannelOptions(Math.Max(4, n * 2))
+        _name = name;
+        _nameHeld = CameraName.Hold(name, cameraActorId, dir);
+        try
         {
-            FullMode = BoundedChannelFullMode.DropWrite,
-            SingleReader = false,
-            SingleWriter = true,
-        });
-        _workers = new Task[n];
-        for (int i = 0; i < n; i++) _workers[i] = Task.Run(WorkerLoopAsync);
+            _client = client;
+            _dir = dir;
+            _periodSeconds = 1.0 / Math.Max(0.01, hz);
+            _affiliation = affiliation;
+            _stale = staleSeconds;
+            _platform = platform;
+            // A run identifier is always present, so captures can be gathered back into a run even when
+            // the caller supplied nothing. Derived from the start instant, which is unique enough per
+            // recorder and reads plainly in a directory listing.
+            _runId = string.IsNullOrEmpty(runId)
+                ? "run-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)
+                : runId;
+            _scenarioId = scenarioId;
+            _seed = seed;
+            System.IO.Directory.CreateDirectory(dir);
 
-        // Between the stream thread and the preparation task. Dropping when full is what keeps the
-        // stream thread from ever blocking; a dropped frame is counted.
-        _arrivals = Channel.CreateBounded<Arrival>(new BoundedChannelOptions(Math.Max(4, n * 2))
+            _telemetry = new VehicleTelemetryService(client);
+            try { _origin = _telemetry.GetOrigin(); _haveOrigin = true; }
+            catch { _haveOrigin = false; }
+
+            if (depthStreamToken is not null)
+                _occlusion = new OcclusionEstimator(client, depthStreamToken, occlusion, depthActorId);
+            _illumination = illumination;
+            _renderSet = renderSet is null ? null : new RenderSetPairing(renderSet);
+            _sensorPose = cameraActorId is { } camera ? new SensorPoseCheck(client.GetSnapshotFrame, camera) : null;
+            _drawDistance = drawDistanceMetres;
+
+            int n = workers > 0 ? workers : Math.Max(2, Environment.ProcessorCount / 2);
+            _channel = Channel.CreateBounded<Job>(new BoundedChannelOptions(Math.Max(4, n * 2))
+            {
+                FullMode = BoundedChannelFullMode.DropWrite,
+                SingleReader = false,
+                SingleWriter = true,
+            });
+            _workers = new Task[n];
+            for (int i = 0; i < n; i++) _workers[i] = Task.Run(WorkerLoopAsync);
+
+            // Between the stream thread and the preparation task. Dropping when full is what keeps the
+            // stream thread from ever blocking; a dropped frame is counted.
+            _arrivals = Channel.CreateBounded<Arrival>(new BoundedChannelOptions(Math.Max(4, n * 2))
+            {
+                FullMode = BoundedChannelFullMode.DropWrite,
+                SingleReader = true,
+                SingleWriter = true,
+            });
+            _preparation = Task.Run(PreparationLoopAsync);
+
+            // Independent subscription to the camera stream (does not disturb the display listener).
+            _subscription = client.SubscribeToStream(streamToken, OnFrame);
+        }
+        catch
         {
-            FullMode = BoundedChannelFullMode.DropWrite,
-            SingleReader = true,
-            SingleWriter = true,
-        });
-        _preparation = Task.Run(PreparationLoopAsync);
-
-        // Independent subscription to the camera stream (does not disturb the display listener).
-        _subscription = client.SubscribeToStream(streamToken, OnFrame);
+            // A recorder that never started gives its camera's name back, or no later recorder in
+            // this process could take it.
+            _nameHeld.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
@@ -502,8 +540,7 @@ public sealed class FrameRecorder : IDisposable
                 {
                     IlluminationDeclaration? illumination = await DeclarationForAsync(job.Capture.Tick)
                         .ConfigureAwait(false);
-                    string stem = "SCTMV_" + job.CapturedUtc.ToLocalTime()
-                        .ToString("yyyy.MM.dd_HH.mm.ss.fff", CultureInfo.InvariantCulture);
+                    string stem = CameraName.StillStem(_name, job.CapturedUtc);
                     PngEncoder.WriteBgraToFile(job.Bgra, job.Width, job.Height,
                                                Path.Combine(_dir, stem + ".png"),
                                                SolarMetadata.PngTextChunks(job.Solar)
@@ -565,5 +602,8 @@ public sealed class FrameRecorder : IDisposable
         _channel.Writer.TryComplete();
         _occlusion?.Dispose();
         try { Task.WaitAll(_workers, TimeSpan.FromSeconds(10)); } catch { /* best-effort flush */ }
+        // Given back once the stills written under it are flushed, so a recorder started next under the
+        // same name does not write while this one still is.
+        _nameHeld.Dispose();
     }
 }

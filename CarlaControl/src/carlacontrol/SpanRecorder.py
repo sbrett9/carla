@@ -29,11 +29,12 @@ class SpanRecorder:
     that cannot answer (built before the call existed) is said so, and the span starts without the
     wait, as recording from a flown camera always did: the operator is watching the view it writes.
 
-    Each span is written to its own folder under the record directory, named by the camera and the
-    instant the span started (`<sensor id>-<UTC>`, see `span_directory`); the file names inside are
-    the recorder's own. While a span records, the view's readiness is asked again once per capture
-    period, so the heads-up display can say whether the ground in view has finished streaming and
-    the log says when it stops and starts being so. That answer is the view as of the last tick, not
+    Each span is written to its own folder under the record directory, named by the camera's name
+    and the instant the span started (`<camera name>-<UTC>`, see `span_directory`); the stills
+    inside are the recorder's, named after the camera too (`<camera name>_<local capture time>`).
+    While a span records, the view's readiness is asked again once per capture period, so the
+    heads-up display can say whether the ground in view has finished streaming and the log says when
+    it stops and starts being so. That answer is the view as of the last tick, not
     as of a capture's own frame -- an image reaches the recorder several ticks after its frame and
     the camera may have moved in between -- so it is shown and logged, never written into a capture.
 
@@ -73,7 +74,8 @@ class SpanRecorder:
         """
         Args:
             record_dir: Where each span's folder is made.
-            sensor_id: The camera's name, which opens every span folder's name.
+            sensor_id: The camera's name -- the one it was spawned under, or its default
+                `CARLA-SENSOR-<camera id>` -- which opens every span folder's name.
             record_hz: Captures per second, which is also how often the tiles are asked about
                 while a span records.
             start_recording: Starts the native recorder into the directory given and returns its
@@ -330,7 +332,7 @@ class SpanRecorder:
     # -- helpers ------------------------------------------------------------------------------------
     @staticmethod
     def span_directory(record_dir: Path, sensor_id: str, started: datetime) -> Path:
-        """The folder a span starting at `started` is written to: `<sensor id>-<UTC>`.
+        """The folder a span starting at `started` is written to: `<camera name>-<UTC>`.
 
         The one place a span's name is decided. A second span started within the same second gets
         a numbered suffix rather than sharing the first one's folder.

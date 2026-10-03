@@ -38,7 +38,12 @@ class SensorRig:
 
         Args:
             world: CARLA world object
-            args: Parsed arguments with x, y, z, width, height, fov, ev, asynchronous
+            args: Parsed arguments with x, y, z, width, height, fov, ev, asynchronous, and
+                optionally camera_name: the RGB camera's name, which every capture recorded from
+                it is written under and its platform track is called by. Spawned under it, so a
+                name another camera in the world holds is refused here; without one the camera is
+                CARLA-SENSOR-<actor id>. The depth camera rides the RGB camera's pose and is not
+                named.
             client: The client the world came from. Needed to move the rig's cameras as one
                 batch, which is what keeps them at the same pose in the same frame; without it
                 they are moved one call each, and can be captured a frame apart.
@@ -91,12 +96,14 @@ class SensorRig:
 
         # Spawn cameras
         tf = self.initial_pose.to_carla_transform()
-        self.camera = world.spawn_actor(bp, tf)
+        self.camera = world.spawn_camera(bp, tf, name=getattr(args, "camera_name", None))
+        self.camera_name = world.camera_name(self.camera)
         self.depth_cam = world.spawn_actor(dbp, tf)
         self.spectator = world.get_spectator()
         self.spectator.set_transform(tf)
 
-        self.logger.info(f"spawned RGB camera id={self.camera.id}, depth camera id={self.depth_cam.id}")
+        self.logger.info(f"spawned RGB camera {self.camera_name} id={self.camera.id}, "
+                         f"depth camera id={self.depth_cam.id}")
         if self._client is None:
             self.logger.warning(
                 "no client given: the rig's cameras will be moved one call each, so under a "

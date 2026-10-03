@@ -17,6 +17,11 @@ pose record per vehicle per tick, from `FakeServer.traffic_at`. The records carr
 of `CarlaNet.CoSim.AdmissionPass` and `CoSimPoseRecord`; the tests that read the real types hold
 the names equal.
 
+A camera is spawned under a name as the shim spawns it (`spawn_camera`): the name set as its
+`role_name`, and refused where a camera in the world already holds it, in any case --
+`FakeServer.cameras_of_other_clients` stands for the cameras other clients spawned; without one it is
+named `CARLA-SENSOR-<actor id>`, and `camera_name` answers either.
+
 Every tick of a step advances the server's frame counter and its wall clock, and a camera being
 listened to is handed an image on each frame its `sensor_tick` renders, from its spawn frame on --
 a uniform grey from `FakeServer.picture_at` unless a test says otherwise. `get_view_readiness`
@@ -607,6 +612,24 @@ class FakeWorld:
         self.server.events.add("spawn", blueprint.id, actor.id)
         return actor
 
+    def spawn_camera(self, blueprint: FakeBlueprint, transform: Any,
+                     name: str | None = None) -> FakeActor:
+        if name is not None:
+            held = dict(self.server.cameras_of_other_clients)
+            held.update({actor.id: actor.attributes["role_name"] for actor in self.server.actors
+                         if not actor.destroyed and "role_name" in actor.attributes})
+            for holder, taken in held.items():
+                if taken.upper() == name.upper():
+                    raise ValueError(f"camera name '{name}' is already held in this world by "
+                                     f"camera {holder} (sensor.camera.rgb)")
+            blueprint.set_attribute("role_name", name)
+        camera = self.spawn_actor(blueprint, transform)
+        self.server.camera_names[camera.id] = name or f"CARLA-SENSOR-{camera.id}"
+        return camera
+
+    def camera_name(self, camera) -> str:
+        return self.server.camera_names.get(camera.id, f"CARLA-SENSOR-{camera.id}")
+
     def start_sumo_drive(self, scenario, world_package, catalogue, **kwargs):
         self.server.events.add("start_sumo_drive", scenario, world_package, catalogue, kwargs)
         if self.server.start_raises is not None:
@@ -645,6 +668,10 @@ class FakeServer:
         self.sun: dict | None = {"solar_time": 12.0}
         self.scenario_end_s = scenario_end_s
         self.actors: list[FakeActor] = []
+        # The names this client's cameras were spawned under, and the cameras of other clients
+        # holding a name in the world, by actor id.
+        self.camera_names: dict[int, str] = {}
+        self.cameras_of_other_clients: dict[int, str] = {}
         self.recorders: list[FakeRecorder] = []
         self.session: FakeSession | None = None
         self.next_actor = 100

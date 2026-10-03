@@ -261,7 +261,8 @@ def test_a_stare_camera_is_placed_where_its_description_aims_it(layout, server):
     assert (location.x, location.y, location.z) == pytest.approx((aim.x_m, aim.y_m, aim.z_m))
     assert (rotation.pitch, rotation.yaw) == pytest.approx((aim.pitch_deg, aim.yaw_deg))
     assert rgb.attributes == {"image_size_x": "1280", "image_size_y": "720", "fov": "90.0",
-                              "sensor_tick": "0.5", "post_process_profile": "Default"}
+                              "sensor_tick": "0.5", "post_process_profile": "Default",
+                              "role_name": "OVERWATCH-1"}
 
 
 def test_a_stare_measuring_occlusion_has_a_depth_camera_at_its_pose(layout, server):
@@ -298,9 +299,50 @@ def test_each_channel_records_through_its_own_handle_with_the_session_s_identity
         # SUMO id and none of the bodies parked between loans.
         assert start[4]["render_set"] is server.session.RenderSet
         assert "scenario_id" not in start[4] and "seed" not in start[4]
-    assert {start[4]["platform_callsign"] for start in starts} == {"OVERWATCH-1", "OVERWATCH-2"}
+    # Each records under its camera's name, which its platform track carries as its callsign.
+    assert {start[4]["camera_name"] for start in starts} == {"OVERWATCH-1", "OVERWATCH-2"}
+    assert all("platform_callsign" not in start[4] for start in starts)
     # 1,800 s at 2 Hz on each: neither recorder was stopped by the other starting.
     assert [recorder.Saved for recorder in server.recorders] == [3600, 3600]
+
+
+def test_each_channel_s_camera_is_spawned_under_its_sensor_id_for_every_client_to_read(
+        layout, server):
+    document = run_document()
+    document["capture"]["channels"] = [A_STARE, dict(A_STARE, sensor_id="OVERWATCH-2",
+                                                     stare_bearing_deg=90.0)]
+    capture(layout, server, document)
+    rgb = [actor for actor in server.actors if actor.type_id == "sensor.camera.rgb"]
+    assert [camera.attributes["role_name"] for camera in rgb] == ["OVERWATCH-1", "OVERWATCH-2"]
+    # The depth camera rides its channel's camera and holds no name of its own.
+    assert all("role_name" not in actor.attributes for actor in server.actors
+               if actor.type_id == "sensor.camera.depth")
+
+
+def test_a_single_channel_with_no_sensor_id_is_named_after_its_camera(layout, server):
+    document = run_document()
+    unnamed = dict(A_STARE)
+    unnamed.pop("sensor_id")
+    document["capture"]["channels"] = [unnamed]
+    session, result = capture(layout, server, document)
+    assert result.outcome == "run_finished"
+    [camera] = [actor for actor in server.actors if actor.type_id == "sensor.camera.rgb"]
+    name = f"CARLA-SENSOR-{camera.id}"
+    [start] = server.events.of("start_recording")
+    assert start[2] == layout.capture_root / SESSION_ID / name
+    assert start[4]["camera_name"] == name
+    assert [rig.sensor_id for rig in session.channels] == [name]
+    assert session.channels[0].aim_record["sensor_id"] == name
+
+
+def test_a_sensor_id_another_client_s_camera_holds_refuses_at_preroll(layout, server):
+    # Another client's camera in the same world was spawned under the name, in another case.
+    server.cameras_of_other_clients = {7: "overwatch-1"}
+    _, result = capture(layout, server)
+    assert (result.outcome, result.closed_by) == ("refused_preroll", "aborted_at_preroll")
+    assert "channel OVERWATCH-1: its camera could not be placed" in result.detail
+    assert "already held in this world by camera 7" in result.detail
+    assert server.events.of("start_recording") == []
 
 
 def test_an_orbit_is_flown_and_carries_no_depth_camera(layout, server):
