@@ -426,4 +426,34 @@ public sealed record SumoDriveSessionOptions(
     /// others. From Python, add to it.</para>
     /// </remarks>
     public IList<ISumoStepObserver> StepObservers { get; set; } = new List<ISumoStepObserver>();
+
+    /// <summary>
+    /// Where the session writes the world truth track: every vehicle SUMO has, at each sampled SUMO
+    /// frame inside the capture window, drawn or not (<see cref="WorldTruthTrackWriter"/>). Null, the
+    /// default, writes none.
+    /// </summary>
+    /// <remarks>
+    /// <para>The record of what the world contained, as against what a camera could see: a base rate
+    /// taken over the capture sidecars alone is taken over the vehicles that were drawn. A capture run
+    /// writes one; a session driven for any other purpose writes one only when asked.</para>
+    ///
+    /// <para>A CSV, appended a row at a time and flushed with each, with a summary beside it
+    /// (<see cref="WorldTruthTrackWriter.SummaryPathFor"/>). A file already there is refused rather
+    /// than written over, before anything is started: a run writes a track of its own and never over
+    /// another run's. The directory is made if it does not exist.</para>
+    /// </remarks>
+    public string? WorldTruthTrackPath { get; set; }
+
+    /// <summary>
+    /// Simulated seconds between the SUMO frames the world truth track samples, counted from the
+    /// window's opening; null, the default, samples every SUMO frame.
+    /// </summary>
+    /// <remarks>
+    /// A whole number of SUMO steps, or the session is refused once SUMO's step is known, before
+    /// anything is rendered: a sample between two SUMO frames would be a state nobody simulated.
+    /// Every SUMO frame is the default because the base rate is computed from the track and a coarser
+    /// one leaves the shortest-lived vehicles out of its denominator. Refused without
+    /// <see cref="WorldTruthTrackPath"/>: a rate with no track to write is a setting that does nothing.
+    /// </remarks>
+    public double? WorldTruthTrackIntervalSeconds { get; set; }
 }

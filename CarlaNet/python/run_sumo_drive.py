@@ -150,6 +150,16 @@ posed and is in the truth -- and each capture's sidecar marks the vehicles its c
 (`beyond_draw_distance`), so none is read as a vehicle the image shows. A server built before it
 carried the call refuses it, and the drive goes on drawing every body at any range and says so.
 
+`--world-truth-track PATH` writes the world truth track there: every vehicle SUMO has, drawn or not,
+at each SUMO frame inside the capture window, one CSV row per vehicle at TraCI's clock, saying whether
+a body drew it on the frame stamped with that instant and, where none did, why. It is the record of
+what the world contained -- a camera's sidecars list only what was drawn -- and it is off unless asked
+for here; `run_capture` always writes one. Rows are flushed one at a time, so a drive cut off leaves
+every row written before the cut, and `<name>.summary.json` beside it states the rate and, once the
+drive ends, what the track holds and why it ended. `--world-truth-track-interval SECONDS` samples
+every so many simulated seconds instead of every SUMO frame, a whole number of SUMO steps. A path that
+already holds a track is refused before anything starts.
+
 Every still is named after its camera, `<camera name>_<local capture time>.png` and `.xml`, and the
 camera's platform track carries the name as its callsign. `--camera-name` names the camera, fixed or
 free, so that cameras sharing a world -- this drive's and another client's -- are told apart in their
@@ -304,6 +314,16 @@ def parse_args() -> argparse.Namespace:
                              "has its body, is posed and is in the truth, and each capture marks "
                              "the vehicles its camera did not draw. Default: every body drawn at "
                              "any range")
+    parser.add_argument("--world-truth-track", default=None, metavar="PATH",
+                        help="write the world truth track to PATH: every vehicle SUMO has, drawn or "
+                             "not, at each SUMO frame inside the capture window, one CSV row per "
+                             "vehicle, with a summary beside it. Refused where PATH already holds a "
+                             "track. Default: none written")
+    parser.add_argument("--world-truth-track-interval", type=float, default=None,
+                        metavar="SECONDS",
+                        help="with --world-truth-track: simulated seconds between its samples, from "
+                             "the window's opening, a whole number of SUMO steps. Default: every SUMO "
+                             "frame")
 
     parser.add_argument("--show-road-mesh", action="store_true",
                         help="draw the generated road surface. Hidden by default: it is a flat grey "
@@ -655,6 +675,16 @@ def describe_draw_distance(metres: float | None) -> str:
             "each capture's sidecar marks it")
 
 
+def describe_world_truth_track(track) -> str:
+    """The world truth track as the launch states it: none, or where it goes and how often."""
+    if track is None:
+        return "none written; give --world-truth-track to write one"
+    every = ("every SUMO frame" if track.SumoStepsPerSample == 1
+             else f"every {track.IntervalSeconds:g} s")
+    return (f"{track.Path}, {every} inside the capture window, every vehicle SUMO has, drawn or not; "
+            f"summary {track.SummaryPath}")
+
+
 def camera_transform(args: argparse.Namespace, centre: tuple[float, float]) -> carla.Transform:
     """An oblique view of a point, standing off along a bearing and looking back at it."""
     centre_x, centre_y = centre
@@ -996,6 +1026,8 @@ def main() -> int:
             render_min_pixels=args.render_min_pixels,
             render_admit_lead_s=args.render_admit_lead,
             render_release_lag_s=args.render_release_lag,
+            world_truth_track=args.world_truth_track,
+            world_truth_track_interval_s=args.world_truth_track_interval,
             # Bound only where the aim needs it: the session hands out a pose per rendered
             # vehicle per tick, and a callback that spends the whole run declining them is a
             # crossing into Python per vehicle per tick for nothing. No divergence callback for
@@ -1032,6 +1064,7 @@ def main() -> int:
             for layer in session.Report.LayerVisibility.Keys))
         logger.info("render set: %s", describe_render_set(session.Report))
         logger.info("draw distance: %s", describe_draw_distance(session.Report.DrawDistanceMetres))
+        logger.info("world truth track: %s", describe_world_truth_track(session.WorldTruthTrack))
 
         steps = 0
         # Everything up to the recorder starting happens with the world already in synchronous mode:
@@ -1121,6 +1154,11 @@ def main() -> int:
         logger.info("\n%d SUMO steps in %.1f s wall clock; pace %s: %s\n", steps, elapsed,
                     PacingProgress.declared(pacing), PacingProgress.achieved(pacing))
         logger.info("%s", session.Report)
+        track = session.WorldTruthTrack
+        if track is not None:
+            # Its summary is written as the session ends, below, saying why the track ended.
+            logger.info("world truth track  %d rows over %d samples -> %s", track.Rows, track.Samples,
+                        track.Path)
         worst = session.Report.WorstDivergence
         if worst is not None and worst.PositionMetres > 0.0:
             logger.info("\nworst divergence %.6f m on %s at tick %d",

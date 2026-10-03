@@ -35,4 +35,12 @@ public sealed record RenderedFrameRecord(
     bool IsCaptureTick,
     bool InWindow,
     RenderSet? RenderSet,
-    IlluminationDeclaration? Illumination);
+    IlluminationDeclaration? Illumination)
+{
+    /// <summary>
+    /// The geometric elevation of the sun the world reported on the frame's tick, degrees: the
+    /// achieved sun, read from the same snapshot as the <c>_solar</c> block a recorder writes beside
+    /// the frame's capture, rather than the one declared for it. Null where the session audits no sun.
+    /// </summary>
+    public double? SunElevationDegrees { get; init; }
+}

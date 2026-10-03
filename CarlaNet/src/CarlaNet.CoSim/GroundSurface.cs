@@ -113,6 +113,27 @@ public sealed class GroundSurface
     /// </summary>
     public double? SampleForSumoPosition(double sumoX, double sumoY) => Sample(sumoX, -sumoY);
 
+    /// <summary>
+    /// The bare-earth elevation in ellipsoidal metres under a SUMO position -- the ground with the
+    /// drape's offset left off, the datum the truth's heights are in -- or <see langword="null"/>
+    /// outside the grid.
+    /// </summary>
+    /// <remarks>
+    /// The height a vehicle no body was seated for is recorded at: the grid's own bare-earth plane,
+    /// read where the standalone producer reads it, so its records and the session's agree.
+    /// </remarks>
+    public double? SampleBareEarthForSumoPosition(double sumoX, double sumoY)
+    {
+        double fx = (sumoX - _minX) / _cellSize;
+        double fy = (-sumoY - _minY) / _cellSize;
+        if (fx < 0.0 || fy < 0.0 || fx > _columns - 1.0 || fy > _rows - 1.0)
+        {
+            return null;
+        }
+
+        return Bilinear(_dtm, fx, fy);
+    }
+
     private double Bilinear(float[] grid, double fx, double fy)
     {
         int c0 = Math.Clamp((int)Math.Floor(fx), 0, _columns - 1);

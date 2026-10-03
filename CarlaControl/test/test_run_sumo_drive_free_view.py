@@ -19,7 +19,9 @@ session stood in for:
   view over a circle smaller than the world is told so;
 * the camera, fixed or flown, is spawned under `--camera-name`, and its stills and span folders are
   named after it, or after its default `CARLA-SENSOR-<camera id>`; a name the rule refuses is
-  refused before the drive connects to anything.
+  refused before the drive connects to anything;
+* a world truth track reaches the session only where `--world-truth-track` asks for one, with the
+  interval `--world-truth-track-interval` gives.
 """
 from __future__ import annotations
 
@@ -299,6 +301,30 @@ def test_no_draw_distance_is_handed_to_the_session_unless_one_is_given(drive, mo
     assert world.drive_arguments["draw_distance_m"] is None
     world = _run_main(drive, monkeypatch, tmp_path, "--draw-distance", "400")
     assert world.drive_arguments["draw_distance_m"] == 400.0
+
+
+def test_a_world_truth_track_reaches_the_session_only_when_asked_for(drive, monkeypatch, tmp_path):
+    # Off unless asked for: a drive is not a capture run, which always writes one.
+    world = _run_main(drive, monkeypatch, tmp_path)
+    assert world.drive_arguments["world_truth_track"] is None
+    assert world.drive_arguments["world_truth_track_interval_s"] is None
+    track = str(tmp_path / "truth" / "world_truth_track.csv")
+    world = _run_main(drive, monkeypatch, tmp_path, "--world-truth-track", track,
+                      "--world-truth-track-interval", "2")
+    assert world.drive_arguments["world_truth_track"] == track
+    assert world.drive_arguments["world_truth_track_interval_s"] == 2.0
+
+
+def test_the_launch_says_where_the_world_truth_track_goes_and_how_often(drive):
+    assert drive.describe_world_truth_track(None) == \
+        "none written; give --world-truth-track to write one"
+    every_frame = SimpleNamespace(Path="t.csv", SummaryPath="t.summary.json", SumoStepsPerSample=1,
+                                  IntervalSeconds=0.1)
+    assert drive.describe_world_truth_track(every_frame).startswith(
+        "t.csv, every SUMO frame inside the capture window, every vehicle SUMO has, drawn or not")
+    sampled = SimpleNamespace(Path="t.csv", SummaryPath="t.summary.json", SumoStepsPerSample=10,
+                              IntervalSeconds=1.0)
+    assert drive.describe_world_truth_track(sampled).startswith("t.csv, every 1 s inside")
 
 
 def test_the_launch_says_what_a_draw_distance_does_and_what_it_leaves_alone(drive):
